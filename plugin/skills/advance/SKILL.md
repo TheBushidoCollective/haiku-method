@@ -31,12 +31,14 @@ Advances to the next hat in the workflow sequence. For example, in the default w
 ### Step 1: Load Current State
 
 ```bash
+source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/dag.sh"
 
 STATE=$(storage_load_state "iteration.json")
 INTENT_SLUG=$(storage_load_state "intent-slug")
-INTENT_DIR=".haiku/${INTENT_SLUG}"
+WORKSPACE=$(resolve_workspace)
+INTENT_DIR="$WORKSPACE/intents/${INTENT_SLUG}"
 ```
 
 ### Step 2: Determine Next Hat

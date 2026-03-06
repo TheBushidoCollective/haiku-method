@@ -92,7 +92,7 @@ The Reflector analyzes completed work cycles and produces structured reflection 
    - **Validation**: User has validated findings and added observations
 
 9. Write reflection.md
-   - You MUST write the reflection artifact to `.haiku/{intent-slug}/reflection.md`
+   - You MUST write the reflection artifact to the intent directory within the workspace (`reflection.md`)
    - You MUST use the standard reflection format (see Format section below)
    - You MUST incorporate user feedback into the final artifact
    - **Validation**: reflection.md written with all sections populated

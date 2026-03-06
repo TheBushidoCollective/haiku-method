@@ -1,11 +1,12 @@
 #!/bin/bash
 # inject-context.sh - SessionStart hook for HAIKU Method
 #
-# Injects iteration context from storage:
+# Injects iteration context from workspace:
 # - Current hat and instructions
 # - Intent and completion criteria
 # - Previous scratchpad/blockers
 # - Iteration number and workflow
+# - Organizational memory (with hierarchical inheritance)
 
 set -e
 
@@ -19,7 +20,13 @@ else
   SOURCE="startup"
 fi
 
-# Source storage and config libraries
+# Source libraries
+WORKSPACE_LIB="${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
+if [ -f "$WORKSPACE_LIB" ]; then
+  # shellcheck source=/dev/null
+  source "$WORKSPACE_LIB"
+fi
+
 STORAGE_LIB="${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
 if [ -f "$STORAGE_LIB" ]; then
   # shellcheck source=/dev/null
@@ -38,28 +45,77 @@ if [ -f "$DAG_LIB" ]; then
   source "$DAG_LIB"
 fi
 
-# Determine storage mode
-STORAGE_MODE=$(detect_storage_mode 2>/dev/null || echo "folder")
+MEMORY_LIB="${CLAUDE_PLUGIN_ROOT}/lib/memory.sh"
+if [ -f "$MEMORY_LIB" ]; then
+  # shellcheck source=/dev/null
+  source "$MEMORY_LIB"
+fi
 
-# Load workflows from plugin and project
+# Resolve workspace
+WORKSPACE=$(resolve_workspace 2>/dev/null) || {
+  echo "## HAIKU Method Available"
+  echo ""
+  echo "No workspace configured. Set \`HAIKU_WORKSPACE\` or create \`.haiku.yml\` with a \`workspace:\` field."
+  echo ""
+  echo "Run \`/elaborate\` to start a new task."
+  exit 0
+}
+INTENTS_DIR="$WORKSPACE/intents"
+
+# Load workflows from plugin and workspace
 PLUGIN_WORKFLOWS="${CLAUDE_PLUGIN_ROOT}/workflows.yml"
-PROJECT_WORKFLOWS=".haiku/workflows.yml"
+WORKSPACE_WORKFLOWS="$WORKSPACE/workflows.yml"
 
 parse_all_workflows() {
   local file="$1"
   [ -f "$file" ] || return
-  local content
-  content=$(cat "$file" 2>/dev/null) || return
-  local names
-  names=$(echo "$content" | grep -E '^[a-z][a-z0-9_-]*:' | sed 's/:.*//')
-  for name in $names; do
-    local desc hats
-    if command -v han &>/dev/null; then
-      desc=$(echo "$content" | han parse yaml "${name}.description" -r 2>/dev/null || echo "")
-      hats=$(echo "$content" | han parse yaml "${name}.hats" 2>/dev/null | sed 's/^- //' | tr '\n' '|' | sed 's/|$//; s/|/ -> /g' || echo "")
+
+  local current_name="" current_desc="" current_hats="" in_hats=false
+  while IFS= read -r line; do
+    # New top-level workflow key
+    if [[ "$line" =~ ^([a-z][a-z0-9_-]*): ]]; then
+      # Emit previous workflow if complete
+      if [ -n "$current_name" ] && [ -n "$current_desc" ] && [ -n "$current_hats" ]; then
+        echo "$current_name|$current_desc|$current_hats"
+      fi
+      current_name="${BASH_REMATCH[1]}"
+      current_desc=""
+      current_hats=""
+      in_hats=false
+      continue
     fi
-    [ -n "$desc" ] && [ -n "$hats" ] && echo "$name|$desc|$hats"
-  done
+    # Description field
+    if [[ "$line" =~ ^[[:space:]]+description:[[:space:]]*(.+)$ ]]; then
+      current_desc="${BASH_REMATCH[1]}"
+      current_desc="${current_desc#\"}"
+      current_desc="${current_desc%\"}"
+      in_hats=false
+      continue
+    fi
+    # Hats array start
+    if [[ "$line" =~ ^[[:space:]]+hats: ]]; then
+      in_hats=true
+      continue
+    fi
+    # Hat item
+    if $in_hats && [[ "$line" =~ ^[[:space:]]*-[[:space:]]*(.+)$ ]]; then
+      local hat="${BASH_REMATCH[1]}"
+      if [ -n "$current_hats" ]; then
+        current_hats="$current_hats -> $hat"
+      else
+        current_hats="$hat"
+      fi
+      continue
+    fi
+    # Non-indented line ends hats
+    if $in_hats && [[ ! "$line" =~ ^[[:space:]] ]]; then
+      in_hats=false
+    fi
+  done < "$file"
+  # Emit last workflow
+  if [ -n "$current_name" ] && [ -n "$current_desc" ] && [ -n "$current_hats" ]; then
+    echo "$current_name|$current_desc|$current_hats"
+  fi
 }
 
 # Build workflow list
@@ -78,7 +134,7 @@ while IFS='|' read -r name desc hats; do
   if ! echo "$KNOWN_WORKFLOWS" | grep -qw "$name"; then
     KNOWN_WORKFLOWS="$KNOWN_WORKFLOWS $name"
   fi
-done < <(parse_all_workflows "$PROJECT_WORKFLOWS")
+done < <(parse_all_workflows "$WORKSPACE_WORKFLOWS")
 
 AVAILABLE_WORKFLOWS=""
 for name in $KNOWN_WORKFLOWS; do
@@ -101,22 +157,26 @@ if [ -z "$ITERATION_JSON" ]; then
   FOUND_INTENTS=0
   INTENT_LIST=""
 
-  for intent_file in .haiku/*/intent.md; do
-    [ -f "$intent_file" ] || continue
-    dir=$(dirname "$intent_file")
-    slug=$(basename "$dir")
-    status=$(_yaml_get_simple "status" "active" < "$intent_file" 2>/dev/null || echo "active")
-    [ "$status" = "active" ] || continue
-    FOUND_INTENTS=$((FOUND_INTENTS + 1))
-    workflow=$(_yaml_get_simple "workflow" "default" < "$intent_file" 2>/dev/null || echo "default")
-    INTENT_LIST="${INTENT_LIST}
+  if [ -d "$INTENTS_DIR" ]; then
+    for intent_file in "$INTENTS_DIR"/*/intent.md; do
+      [ -f "$intent_file" ] || continue
+      dir=$(dirname "$intent_file")
+      slug=$(basename "$dir")
+      status=$(_yaml_get_simple "status" "active" < "$intent_file" 2>/dev/null || echo "active")
+      [ "$status" = "active" ] || continue
+      FOUND_INTENTS=$((FOUND_INTENTS + 1))
+      workflow=$(_yaml_get_simple "workflow" "default" < "$intent_file" 2>/dev/null || echo "default")
+      INTENT_LIST="${INTENT_LIST}
 - **$slug** (workflow: $workflow)"
-  done
+    done
+  fi
 
   if [ "$FOUND_INTENTS" -gt 0 ]; then
     echo "## HAIKU: Resumable Intents Found"
     echo ""
-    echo "### In Current Directory"
+    echo "**Workspace:** \`$WORKSPACE\`"
+    echo ""
+    echo "### Active Intents"
     echo "$INTENT_LIST"
     echo ""
     echo "**To resume:** \`/resume <slug>\` or \`/resume\` if only one"
@@ -124,7 +184,7 @@ if [ -z "$ITERATION_JSON" ]; then
   else
     echo "## HAIKU Method Available"
     echo ""
-    echo "**Storage mode:** $STORAGE_MODE"
+    echo "**Workspace:** \`$WORKSPACE\`"
     echo ""
     echo "No active HAIKU task. Run \`/elaborate\` to start a new task."
     echo ""
@@ -136,6 +196,17 @@ if [ -z "$ITERATION_JSON" ]; then
     echo ""
   fi
 
+  # Show organizational memory even when no active task
+  if type memory_context &>/dev/null; then
+    MEMORY=$(memory_context 40 2>/dev/null || echo "")
+    if [ -n "$MEMORY" ]; then
+      echo "### Organizational Memory"
+      echo ""
+      echo "$MEMORY"
+      echo ""
+    fi
+  fi
+
   exit 0
 fi
 
@@ -145,16 +216,17 @@ HAT="planner"
 STATUS="active"
 WORKFLOW_NAME="default"
 
-if command -v han &>/dev/null; then
-  ITERATION=$(echo "$ITERATION_JSON" | han parse json iteration -r --default 1 2>/dev/null || echo "1")
-  HAT=$(echo "$ITERATION_JSON" | han parse json hat -r --default planner 2>/dev/null || echo "planner")
-  STATUS=$(echo "$ITERATION_JSON" | han parse json status -r --default active 2>/dev/null || echo "active")
-  WORKFLOW_NAME=$(echo "$ITERATION_JSON" | han parse json workflowName -r --default default 2>/dev/null || echo "default")
-elif command -v jq &>/dev/null; then
+if command -v jq &>/dev/null; then
   ITERATION=$(echo "$ITERATION_JSON" | jq -r '.iteration // 1')
   HAT=$(echo "$ITERATION_JSON" | jq -r '.hat // "planner"')
   STATUS=$(echo "$ITERATION_JSON" | jq -r '.status // "active"')
   WORKFLOW_NAME=$(echo "$ITERATION_JSON" | jq -r '.workflowName // "default"')
+else
+  # Fallback: regex extraction from JSON
+  [[ "$ITERATION_JSON" =~ \"iteration\":([0-9]+) ]] && ITERATION="${BASH_REMATCH[1]}"
+  [[ "$ITERATION_JSON" =~ \"hat\":\"([^\"]+)\" ]] && HAT="${BASH_REMATCH[1]}"
+  [[ "$ITERATION_JSON" =~ \"status\":\"([^\"]+)\" ]] && STATUS="${BASH_REMATCH[1]}"
+  [[ "$ITERATION_JSON" =~ \"workflowName\":\"([^\"]+)\" ]] && WORKFLOW_NAME="${BASH_REMATCH[1]}"
 fi
 
 # If task is complete, show completion message
@@ -167,15 +239,14 @@ fi
 
 echo "## HAIKU Context"
 echo ""
+echo "**Workspace:** \`$WORKSPACE\`"
 echo "**Iteration:** $ITERATION | **Hat:** $HAT | **Workflow:** $WORKFLOW_NAME"
-echo "**Storage mode:** $STORAGE_MODE"
-echo ""
 
 # Load and display intent
 INTENT_SLUG=$(storage_load_state "intent-slug" 2>/dev/null || echo "")
 INTENT_DIR=""
 if [ -n "$INTENT_SLUG" ]; then
-  INTENT_DIR=".haiku/${INTENT_SLUG}"
+  INTENT_DIR="$INTENTS_DIR/${INTENT_SLUG}"
 fi
 
 if [ -n "$INTENT_DIR" ] && [ -f "${INTENT_DIR}/intent.md" ]; then
@@ -238,24 +309,26 @@ if [ -n "$INTENT_DIR" ] && [ -d "$INTENT_DIR" ] && ls "$INTENT_DIR"/unit-*.md 1>
   fi
 fi
 
-# Load hat instructions
-HAT_FILE=""
-if [ -f ".haiku/hats/${HAT}.md" ]; then
-  HAT_FILE=".haiku/hats/${HAT}.md"
-elif [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "${CLAUDE_PLUGIN_ROOT}/hats/${HAT}.md" ]; then
-  HAT_FILE="${CLAUDE_PLUGIN_ROOT}/hats/${HAT}.md"
+# Load organizational memory
+if type memory_context &>/dev/null; then
+  MEMORY=$(memory_context 80 2>/dev/null || echo "")
+  if [ -n "$MEMORY" ]; then
+    echo "### Organizational Memory"
+    echo ""
+    echo "$MEMORY"
+    echo ""
+  fi
 fi
+
+# Load hat instructions
+HAT_FILE=$(resolve_hat_file "$HAT" 2>/dev/null || echo "")
 
 echo "### Current Hat Instructions"
 echo ""
 
 if [ -n "$HAT_FILE" ] && [ -f "$HAT_FILE" ]; then
-  NAME=""
-  DESC=""
-  if command -v han &>/dev/null; then
-    NAME=$(han parse yaml name -r --default "" < "$HAT_FILE" 2>/dev/null || echo "")
-    DESC=$(han parse yaml description -r --default "" < "$HAT_FILE" 2>/dev/null || echo "")
-  fi
+  NAME=$(_yaml_get_simple "name" "" < "$HAT_FILE")
+  DESC=$(_yaml_get_simple "description" "" < "$HAT_FILE")
 
   INSTRUCTIONS=$(sed '1,/^---$/d' "$HAT_FILE" | sed '1,/^---$/d')
 
@@ -271,7 +344,7 @@ if [ -n "$HAT_FILE" ] && [ -f "$HAT_FILE" ]; then
 else
   echo "**$HAT** (Custom hat -- no instructions found)"
   echo ""
-  echo "Create a hat definition at \`.haiku/hats/${HAT}.md\`"
+  echo "Create a hat definition in your workspace at \`hats/${HAT}.md\`"
 fi
 
 echo ""

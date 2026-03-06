@@ -30,7 +30,13 @@ export function Header() {
 					href="/"
 					className="text-xl font-semibold tracking-tight text-stone-900"
 				>
-					<span className="text-teal-600">HAIKU</span>
+					<span className="text-teal-600">H</span>
+					<span className="text-stone-300">&middot;</span>
+					<span className="text-teal-600">AI</span>
+					<span className="text-stone-300">&middot;</span>
+					<span className="text-teal-600">K</span>
+					<span className="text-stone-300">&middot;</span>
+					<span className="text-teal-600">U</span>
 				</Link>
 
 				{/* Desktop nav */}

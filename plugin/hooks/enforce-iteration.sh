@@ -9,6 +9,12 @@
 set -e
 
 # Source libraries
+WORKSPACE_LIB="${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
+if [ -f "$WORKSPACE_LIB" ]; then
+  # shellcheck source=/dev/null
+  source "$WORKSPACE_LIB"
+fi
+
 STORAGE_LIB="${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
 if [ -f "$STORAGE_LIB" ]; then
   # shellcheck source=/dev/null
@@ -27,14 +33,14 @@ STATUS="active"
 CURRENT_ITERATION="1"
 HAT="executor"
 
-if command -v han &>/dev/null; then
-  STATUS=$(echo "$ITERATION_JSON" | han parse json status -r --default active 2>/dev/null || echo "active")
-  CURRENT_ITERATION=$(echo "$ITERATION_JSON" | han parse json iteration -r --default 1 2>/dev/null || echo "1")
-  HAT=$(echo "$ITERATION_JSON" | han parse json hat -r --default executor 2>/dev/null || echo "executor")
-elif command -v jq &>/dev/null; then
+if command -v jq &>/dev/null; then
   STATUS=$(echo "$ITERATION_JSON" | jq -r '.status // "active"')
   CURRENT_ITERATION=$(echo "$ITERATION_JSON" | jq -r '.iteration // 1')
   HAT=$(echo "$ITERATION_JSON" | jq -r '.hat // "executor"')
+else
+  [[ "$ITERATION_JSON" =~ \"status\":\"([^\"]+)\" ]] && STATUS="${BASH_REMATCH[1]}"
+  [[ "$ITERATION_JSON" =~ \"iteration\":([0-9]+) ]] && CURRENT_ITERATION="${BASH_REMATCH[1]}"
+  [[ "$ITERATION_JSON" =~ \"hat\":\"([^\"]+)\" ]] && HAT="${BASH_REMATCH[1]}"
 fi
 
 # If task is complete, don't enforce iteration
@@ -49,7 +55,8 @@ IN_PROGRESS_COUNT=0
 ALL_COMPLETE="false"
 
 if [ -n "$INTENT_SLUG" ]; then
-  INTENT_DIR=".haiku/${INTENT_SLUG}"
+  WORKSPACE=$(resolve_workspace 2>/dev/null) || exit 0
+  INTENT_DIR="$WORKSPACE/intents/${INTENT_SLUG}"
 
   DAG_LIB="${CLAUDE_PLUGIN_ROOT}/lib/dag.sh"
   if [ -f "$DAG_LIB" ] && [ -d "$INTENT_DIR" ]; then

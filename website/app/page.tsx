@@ -83,7 +83,13 @@ export default function Home() {
 				<div className="absolute inset-0 -z-10 bg-[radial-gradient(45%_40%_at_50%_40%,rgba(20,184,166,0.08),transparent)]" />
 				<div className="mx-auto max-w-3xl text-center">
 					<h1 className="mb-4 text-5xl font-bold tracking-tight sm:text-6xl lg:text-7xl">
-						<span className="text-teal-600">HAIKU</span>
+						<span className="text-teal-600">H</span>
+						<span className="text-stone-300">&middot;</span>
+						<span className="text-teal-600">AI</span>
+						<span className="text-stone-300">&middot;</span>
+						<span className="text-teal-600">K</span>
+						<span className="text-stone-300">&middot;</span>
+						<span className="text-teal-600">U</span>
 					</h1>
 					<p className="mb-2 text-lg font-medium text-stone-500 sm:text-xl">
 						Human AI Knowledge Unification

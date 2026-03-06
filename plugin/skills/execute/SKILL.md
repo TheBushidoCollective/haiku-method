@@ -45,6 +45,7 @@ If you encounter ambiguity:
 
 ```bash
 # Source HAIKU libraries
+source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/dag.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/config.sh"
@@ -52,6 +53,7 @@ source "${CLAUDE_PLUGIN_ROOT}/lib/config.sh"
 # Load state
 STATE=$(storage_load_state "iteration.json")
 INTENT_SLUG=$(storage_load_state "intent-slug")
+WORKSPACE=$(resolve_workspace)
 ```
 
 If no state found:
@@ -68,7 +70,7 @@ Task already complete! Run /elaborate to start a new task.
 ### Step 1: Find Next Unit
 
 ```bash
-INTENT_DIR=".haiku/${INTENT_SLUG}"
+INTENT_DIR="$WORKSPACE/intents/${INTENT_SLUG}"
 
 # If targeting a specific unit, use it; otherwise find next ready unit
 if [ -n "$TARGET_UNIT" ]; then
@@ -100,11 +102,11 @@ Based on `state.hat`, spawn the appropriate subagent:
 | `reflector` | Analyzes outcomes and captures learnings |
 | `reviewer` | Verifies completion criteria |
 
-Load hat instructions from `hats/{hat}.md` and include in the subagent prompt.
+Load hat instructions from the workspace or plugin hats directory and include in the subagent prompt.
 
 ### Step 4: Run Quality Gates
 
-Before advancing, check quality gates from settings:
+Before advancing, check quality gates from workspace settings:
 
 ```bash
 source "${CLAUDE_PLUGIN_ROOT}/lib/config.sh"

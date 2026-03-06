@@ -37,7 +37,7 @@ You are the **Elaborator** starting the HAIKU Method elaboration process. Your j
 3. **Success Criteria** - How do we know when it's done?
 4. **Units** - Independent pieces of work, each with enough detail that an executor with zero prior context produces the right result
 
-Then you'll write these as files in `.haiku/{intent-slug}/` for the execution phase.
+Then you'll write these as files in the workspace for the execution phase.
 
 ## Phase 1: Gather Context
 
@@ -48,6 +48,23 @@ Ask the user what they want to accomplish. Listen for:
 - **Constraints**: Any technical, time, resource, or domain constraints?
 
 Use `AskUserQuestion` to gather this interactively.
+
+## Phase 1.5: Load Organizational Memory
+
+Resolve the workspace and check for prior learnings:
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
+source "${CLAUDE_PLUGIN_ROOT}/lib/memory.sh"
+
+WORKSPACE=$(resolve_workspace)
+```
+
+Read any files in the workspace's memory directory — especially `learnings.md` and `patterns.md`. These contain insights from prior HAIKU cycles that should inform decomposition, criteria definition, and workflow selection.
+
+Memory is hierarchical — if the workspace is nested within a parent workspace, memory from parent levels is also available and should be considered.
+
+If `memory.mcp` is configured in the workspace's `settings.yml`, also query that MCP server for relevant organizational knowledge (e.g., Notion pages, shared documents).
 
 ## Phase 2: Domain Discovery
 
@@ -89,13 +106,19 @@ Present available workflows and ask user to choose:
 - **operational**: planner -> executor -> operator -> reviewer
 - **reflective**: planner -> executor -> operator -> reflector -> reviewer
 
-Check `.haiku/workflows.yml` and plugin `workflows.yml` for available options.
+Check the workspace's `workflows.yml` and plugin `workflows.yml` for available options.
 
 ## Phase 6: Write Artifacts
 
-Create the following files:
+Resolve the workspace and create files:
 
-### `.haiku/{intent-slug}/intent.md`
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
+WORKSPACE=$(resolve_workspace)
+INTENT_DIR="$WORKSPACE/intents/{intent-slug}"
+```
+
+### `{workspace}/intents/{intent-slug}/intent.md`
 
 ```yaml
 ---
@@ -122,7 +145,7 @@ workflow: default
 - {item}
 ```
 
-### `.haiku/{intent-slug}/unit-NN-slug.md` (one per unit)
+### `{workspace}/intents/{intent-slug}/unit-NN-slug.md` (one per unit)
 
 ```yaml
 ---
@@ -139,7 +162,7 @@ depends_on: []
 {technical details the executor needs}
 ```
 
-### `.haiku/{intent-slug}/completion-criteria.md`
+### `{workspace}/intents/{intent-slug}/completion-criteria.md`
 
 Consolidated list of all criteria across the intent.
 
@@ -165,6 +188,7 @@ Output a summary:
 
 **Intent:** {title}
 **Slug:** {slug}
+**Workspace:** {workspace}
 **Workflow:** {workflow}
 **Units:** {count}
 

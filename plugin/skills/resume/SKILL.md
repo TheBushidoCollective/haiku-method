@@ -15,7 +15,7 @@ argument-hint: "[intent-slug]"
 
 ## Description
 
-**User-facing command** - Resume work on an intent when iteration state is lost but `.haiku/` artifacts exist.
+**User-facing command** - Resume work on an intent when iteration state is lost but workspace artifacts exist.
 
 This happens when:
 - Session context was cleared unexpectedly
@@ -26,12 +26,16 @@ This happens when:
 
 ### Step 1: Find Resumable Intents
 
-If no slug provided, scan for active intents:
+If no slug provided, scan for active intents in the workspace:
 
 ```bash
+source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
 
-for intent_file in .haiku/*/intent.md; do
+WORKSPACE=$(resolve_workspace)
+INTENTS_DIR="$WORKSPACE/intents"
+
+for intent_file in "$INTENTS_DIR"/*/intent.md; do
   [ -f "$intent_file" ] || continue
   dir=$(dirname "$intent_file")
   slug=$(basename "$dir")
@@ -48,12 +52,12 @@ done
 
 ### Step 2: Load Intent Metadata
 
-Read from `.haiku/{slug}/intent.md`:
+Read from the workspace:
 
 ```bash
 source "${CLAUDE_PLUGIN_ROOT}/lib/dag.sh"
-WORKFLOW=$(han parse yaml workflow -r --default "default" < ".haiku/${slug}/intent.md")
-TITLE=$(han parse yaml title -r --default "$slug" < ".haiku/${slug}/intent.md")
+WORKFLOW=$(_yaml_get_simple "workflow" "default" < "$INTENTS_DIR/${slug}/intent.md")
+TITLE=$(_yaml_get_simple "title" "$slug" < "$INTENTS_DIR/${slug}/intent.md")
 ```
 
 ### Step 3: Determine Starting Hat
@@ -61,7 +65,7 @@ TITLE=$(han parse yaml title -r --default "$slug" < ".haiku/${slug}/intent.md")
 Use DAG analysis:
 
 ```bash
-starting_hat=$(get_recommended_hat ".haiku/${slug}" "${WORKFLOW}")
+starting_hat=$(get_recommended_hat "$INTENTS_DIR/${slug}" "${WORKFLOW}")
 ```
 
 **Hat selection logic:**
@@ -85,6 +89,7 @@ storage_save_state "iteration.json" '{"iteration":1,"hat":"'"$STARTING_HAT"'","w
 
 **Intent:** {title}
 **Slug:** {slug}
+**Workspace:** {workspace}
 **Workflow:** {workflow}
 **Starting Hat:** {startingHat}
 

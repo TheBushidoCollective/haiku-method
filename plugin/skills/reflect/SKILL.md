@@ -20,7 +20,7 @@ argument-hint: "[intent-slug]"
 The reflect skill:
 1. Reads all unit specs, execution state, and operational outcomes for the intent
 2. Analyzes the full cycle: execution metrics, what worked, what didn't, patterns
-3. Produces a `reflection.md` artifact in `.haiku/{intent-slug}/`
+3. Produces a `reflection.md` artifact in the intent's workspace directory
 4. Presents findings for user validation and augmentation
 5. Offers two paths: **Iterate** (create intent v2 with learnings) or **Close** (capture organizational memory and archive)
 
@@ -30,11 +30,13 @@ The reflect skill:
 
 ```bash
 # Source HAIKU libraries
+source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/dag.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/config.sh"
 
-# Determine intent slug
+# Resolve workspace and determine intent slug
+WORKSPACE=$(resolve_workspace)
 INTENT_SLUG="${1:-$(storage_load_state "intent-slug")}"
 ```
 
@@ -47,7 +49,7 @@ Run /elaborate to start a new task, or provide an intent slug: /reflect my-inten
 ### Step 1: Load Intent and Unit Data
 
 ```bash
-INTENT_DIR=".haiku/${INTENT_SLUG}"
+INTENT_DIR="$WORKSPACE/intents/${INTENT_SLUG}"
 INTENT_FILE="$INTENT_DIR/intent.md"
 ```
 
@@ -59,7 +61,7 @@ Read the following artifacts:
 
 If `intent.md` does not exist:
 ```
-No intent found at .haiku/{intent-slug}/intent.md
+No intent found at {workspace}/intents/{intent-slug}/intent.md
 
 Run /elaborate to create a new intent.
 ```
@@ -109,7 +111,7 @@ Ground all analysis in evidence from the artifacts. Do not speculate without dat
 
 ### Step 4: Produce reflection.md
 
-Write the reflection artifact to `.haiku/{intent-slug}/reflection.md`:
+Write the reflection artifact to the intent directory:
 
 ```markdown
 ---
@@ -197,7 +199,7 @@ Create a new version of this intent with learnings pre-loaded.
 ### Option B: Close
 Capture organizational learnings and archive this intent.
 - Distills key learnings into organizational memory
-- Writes patterns to configurable memory location
+- Syncs to MCP server if `memory.mcp` is configured
 - Archives the intent
 ```
 
@@ -215,22 +217,14 @@ NEXT_VERSION=$((CURRENT_VERSION + 1))
 
 2. **Archive current intent**:
 ```bash
-MODE=$(detect_storage_mode)
-
-case "$MODE" in
-  git)
-    # Tag the current state
-    git tag "haiku/${INTENT_SLUG}/v${CURRENT_VERSION}" 2>/dev/null || true
-    ;;
-  folder)
-    # Rename directory
-    mv ".haiku/${INTENT_SLUG}" ".haiku/${INTENT_SLUG}-v${CURRENT_VERSION}"
-    ;;
-esac
+# Tag in git if available
+git tag "haiku/${INTENT_SLUG}/v${CURRENT_VERSION}" 2>/dev/null || true
+# Archive directory
+mv "$WORKSPACE/intents/${INTENT_SLUG}" "$WORKSPACE/intents/${INTENT_SLUG}-v${CURRENT_VERSION}"
 ```
 
 3. **Seed new intent**:
-Create a new `.haiku/{intent-slug}/` directory with:
+Create a new `{workspace}/intents/{intent-slug}/` directory with:
 - A new `intent.md` that references the reflection learnings
 - Pre-loaded recommendations as constraints in the intent frontmatter
 - Link to the archived version for reference
@@ -247,8 +241,8 @@ storage_save_state "reflection-status.json" "$REFLECTION_STATE"
 ```markdown
 ## Intent Archived and Ready for v{NEXT_VERSION}
 
-**Archived:** .haiku/{intent-slug}-v{CURRENT_VERSION}/ (folder) or tag haiku/{intent-slug}/v{CURRENT_VERSION} (git)
-**New intent:** .haiku/{intent-slug}/
+**Archived:** {workspace}/intents/{intent-slug}-v{CURRENT_VERSION}/
+**New intent:** {workspace}/intents/{intent-slug}/
 
 The new intent has been seeded with learnings from the reflection.
 Run `/elaborate` to begin the next iteration with pre-loaded context.
@@ -258,26 +252,15 @@ Run `/elaborate` to begin the next iteration with pre-loaded context.
 
 If user chooses to close:
 
-1. **Distill learnings** into concise, reusable patterns:
-```bash
-MODE=$(detect_storage_mode)
+1. **Distill learnings** into concise, reusable patterns.
 
-case "$MODE" in
-  git)
-    # Write to .claude/memory/ or project CLAUDE.md
-    MEMORY_DIR=".claude/memory"
-    mkdir -p "$MEMORY_DIR"
-    ;;
-  folder)
-    # Write to .haiku/memory/
-    MEMORY_DIR=".haiku/memory"
-    mkdir -p "$MEMORY_DIR"
-    ;;
-esac
+2. **Write organizational memory** using the memory library:
+
+```bash
+source "${CLAUDE_PLUGIN_ROOT}/lib/memory.sh"
 ```
 
-2. **Write organizational memory**:
-Create or append to `$MEMORY_DIR/learnings.md`:
+Append to `learnings.md` in the workspace's memory directory:
 ```markdown
 ## {Intent Title} ({ISO date})
 
@@ -291,10 +274,15 @@ Create or append to `$MEMORY_DIR/learnings.md`:
 - {Process improvement that applies broadly}
 ```
 
+Use `memory_write "learnings" "$CONTENT" "append"` to save.
+
+If the workspace's `settings.yml` has `memory.mcp` configured (e.g., `notion`, `filesystem`), also write the learnings to that MCP server so they are accessible to the broader team. Use the MCP server's write/create tools to store the content.
+
 3. **Archive intent**:
+
 ```bash
-# Update intent status
-# Use sed or han to set status: archived in intent.md frontmatter
+sed -i.bak 's/^status:.*$/status: archived/' "$WORKSPACE/intents/${INTENT_SLUG}/intent.md"
+rm -f "$WORKSPACE/intents/${INTENT_SLUG}/intent.md.bak"
 ```
 
 4. **Output**:
@@ -303,7 +291,7 @@ Create or append to `$MEMORY_DIR/learnings.md`:
 
 **Intent:** {title}
 **Status:** archived
-**Learnings saved to:** {memory_dir}/learnings.md
+**Learnings saved to:** {workspace}/memory/learnings.md
 
 ### Key Learnings Captured
 {summary of what was written to memory}

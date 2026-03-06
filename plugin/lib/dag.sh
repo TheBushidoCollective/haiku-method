@@ -408,8 +408,28 @@ get_recommended_hat() {
   local hats_file="${CLAUDE_PLUGIN_ROOT}/workflows.yml"
   local hats=""
 
-  if command -v han &>/dev/null && [ -f "$hats_file" ]; then
-    hats=$(han parse yaml "${workflow_name}.hats" < "$hats_file" 2>/dev/null | sed 's/^- //' | tr '\n' ' ')
+  if [ -f "$hats_file" ]; then
+    # Parse hats array from the workflow YAML block
+    local in_workflow=false in_hats=false
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^${workflow_name}: ]]; then
+        in_workflow=true
+        continue
+      fi
+      if $in_workflow && [[ "$line" =~ ^[a-z] ]]; then
+        break  # Next top-level key
+      fi
+      if $in_workflow && [[ "$line" =~ ^[[:space:]]+hats: ]]; then
+        in_hats=true
+        continue
+      fi
+      if $in_hats && [[ "$line" =~ ^[[:space:]]*-[[:space:]]*(.+)$ ]]; then
+        hats="$hats ${BASH_REMATCH[1]}"
+      elif $in_hats && [[ ! "$line" =~ ^[[:space:]] ]]; then
+        break
+      fi
+    done < "$hats_file"
+    hats="${hats# }"
   fi
 
   [ -z "$hats" ] && hats="planner executor reviewer"
@@ -486,13 +506,8 @@ update_unit_status() {
       ;;
   esac
 
-  if command -v han &>/dev/null; then
-    han parse yaml-set status "$new_status" < "$unit_file" > "$unit_file.tmp" && mv "$unit_file.tmp" "$unit_file"
-  else
-    # Fallback: sed-based replacement
-    sed -i.bak "s/^status:.*$/status: $new_status/" "$unit_file"
-    rm -f "$unit_file.bak"
-  fi
+  sed -i.bak "s/^status:.*$/status: $new_status/" "$unit_file"
+  rm -f "$unit_file.bak"
 }
 
 # Validate DAG structure (check for cycles and missing deps)

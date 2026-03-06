@@ -8,9 +8,15 @@ export function Footer() {
 					<div>
 						<Link
 							href="/"
-							className="text-lg font-semibold text-teal-600"
+							className="text-lg font-semibold"
 						>
-							HAIKU
+							<span className="text-teal-600">H</span>
+							<span className="text-stone-300">&middot;</span>
+							<span className="text-teal-600">AI</span>
+							<span className="text-stone-300">&middot;</span>
+							<span className="text-teal-600">K</span>
+							<span className="text-stone-300">&middot;</span>
+							<span className="text-teal-600">U</span>
 						</Link>
 						<p className="mt-3 text-sm text-stone-500">
 							Human AI Knowledge Unification. A universal framework

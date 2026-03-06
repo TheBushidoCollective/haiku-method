@@ -17,7 +17,7 @@ argument-hint: "[intent-slug]"
 
 **User-facing command** - Manage operational tasks for a completed or in-progress intent.
 
-The operate skill reads the operational plan from `.haiku/{intent-slug}/operations.md` and:
+The operate skill reads the operational plan from the intent's directory in the workspace and:
 - Displays the operational plan overview
 - Executes `owner: agent` tasks directly (runs commands, scripts)
 - Provides guidance, checklists, and reminders for `owner: human` tasks
@@ -30,10 +30,12 @@ The operate skill reads the operational plan from `.haiku/{intent-slug}/operatio
 
 ```bash
 # Source HAIKU libraries
+source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/config.sh"
 
-# Determine intent slug
+# Resolve workspace and determine intent slug
+WORKSPACE=$(resolve_workspace)
 INTENT_SLUG="${1:-$(storage_load_state "intent-slug")}"
 ```
 
@@ -46,13 +48,13 @@ Run /elaborate to start a new task, or provide an intent slug: /operate my-inten
 ### Step 1: Load Operational Plan
 
 ```bash
-INTENT_DIR=".haiku/${INTENT_SLUG}"
+INTENT_DIR="$WORKSPACE/intents/${INTENT_SLUG}"
 OPS_FILE="$INTENT_DIR/operations.md"
 ```
 
 If `operations.md` does not exist:
 ```
-No operational plan found at .haiku/{intent-slug}/operations.md
+No operational plan found at {workspace}/intents/{intent-slug}/operations.md
 
 The operational plan is produced during the Execution phase when using
 the 'operational' or 'reflective' workflow.

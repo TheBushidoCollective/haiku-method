@@ -3,108 +3,84 @@
 #
 # Provides configuration loading with precedence:
 # 1. Intent frontmatter (highest priority)
-# 2. Project settings (.haiku/settings.yml)
+# 2. Workspace settings ({workspace}/settings.yml)
 # 3. Built-in defaults (lowest priority)
 #
 # Usage:
 #   source config.sh
 #   config=$(get_haiku_config "$intent_dir")
 
-# Source storage abstraction
+# Source workspace resolution
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! type resolve_workspace &>/dev/null; then
+  # shellcheck source=workspace.sh
+  source "$SCRIPT_DIR/workspace.sh"
+fi
 # shellcheck source=storage.sh
 source "$SCRIPT_DIR/storage.sh"
 
 # Default configuration values
 HAIKU_DEFAULT_WORKFLOW="default"
 
-# Find project root directory
-# Works in both git and folder mode
-# Usage: find_project_root [directory]
-find_project_root() {
-  local dir="${1:-.}"
+# Source dag.sh for _yaml_get_simple if not already loaded
+if ! type _yaml_get_simple &>/dev/null; then
+  DAG_LIB="$SCRIPT_DIR/dag.sh"
+  if [ -f "$DAG_LIB" ]; then
+    # shellcheck source=dag.sh
+    source "$DAG_LIB"
+  fi
+fi
 
-  local mode
-  mode=$(detect_storage_mode)
-
-  case "$mode" in
-    git)
-      git -C "$dir" rev-parse --show-toplevel 2>/dev/null || echo ""
-      ;;
-    folder)
-      # Walk up looking for .haiku directory
-      local current
-      current=$(cd "$dir" && pwd)
-      while [ "$current" != "/" ]; do
-        if [ -d "$current/.haiku" ]; then
-          echo "$current"
-          return
-        fi
-        current=$(dirname "$current")
-      done
-      # Fallback to current directory
-      echo "$dir"
-      ;;
-  esac
-}
-
-# Load project settings from .haiku/settings.yml
-# Usage: load_haiku_settings [project_root]
-# Returns: JSON object or '{}'
-load_haiku_settings() {
-  local project_root="${1:-$(find_project_root)}"
-  local settings_file="$project_root/.haiku/settings.yml"
+# Load a single setting from workspace settings.yml
+# Usage: load_haiku_setting <key> [default]
+load_haiku_setting() {
+  local key="$1"
+  local default="${2:-}"
+  local settings_file
+  settings_file=$(workspace_settings_file)
 
   if [ ! -f "$settings_file" ]; then
-    echo "{}"
+    echo "$default"
     return
   fi
 
-  if command -v han &>/dev/null; then
-    han parse yaml --json < "$settings_file" 2>/dev/null || echo "{}"
-  else
-    echo "{}"
-  fi
+  _yaml_get_simple "$key" "$default" < "$settings_file"
 }
 
-# Load quality gates from settings
-# Usage: load_gates [project_root]
+# Load quality gates from workspace settings
+# Usage: load_gates
 # Returns: JSON array of gate configurations
 load_gates() {
-  local project_root="${1:-$(find_project_root)}"
-  local settings
-  settings=$(load_haiku_settings "$project_root")
+  local workspace
+  workspace=$(resolve_workspace)
+  local gates_file="$workspace/gates.json"
 
-  if [ "$settings" = "{}" ]; then
-    echo "[]"
+  if [ -f "$gates_file" ] && command -v jq &>/dev/null; then
+    jq -c '.' "$gates_file" 2>/dev/null || echo "[]"
     return
   fi
 
-  local gates
-  gates=$(echo "$settings" | jq -c '.gates // []' 2>/dev/null || echo "[]")
-  echo "$gates"
+  echo "[]"
 }
 
 # Get enabled gates for a specific event
-# Usage: get_event_gates <event> [project_root]
+# Usage: get_event_gates <event>
 # Returns: JSON array of matching gate configs
 get_event_gates() {
   local event="$1"
-  local project_root="${2:-$(find_project_root)}"
   local gates
-  gates=$(load_gates "$project_root")
+  gates=$(load_gates)
 
   echo "$gates" | jq -c "[.[] | select(.enabled != false and (.event // \"Stop\") == \"$event\")]" 2>/dev/null || echo "[]"
 }
 
 # Run command-type quality gates for an event
-# Usage: run_gates <event> [project_root]
+# Usage: run_gates <event>
 # Returns: 0 if all pass, 1 if any fail
 run_gates() {
   local event="$1"
-  local project_root="${2:-$(find_project_root)}"
   local gates
-  gates=$(get_event_gates "$event" "$project_root")
+  gates=$(get_event_gates "$event")
 
   local count
   count=$(echo "$gates" | jq 'length' 2>/dev/null || echo "0")
@@ -142,62 +118,43 @@ run_gates() {
 }
 
 # Get merged HAIKU configuration
-# Usage: get_haiku_config [intent_dir] [project_root]
+# Usage: get_haiku_config [intent_dir]
 # Returns: JSON object
 get_haiku_config() {
   local intent_dir="${1:-}"
-  local project_root="${2:-$(find_project_root)}"
-  local mode
-  mode=$(detect_storage_mode)
 
-  # Start with defaults
-  local config
-  config=$(cat <<EOF
-{
-  "storage_mode": "$mode",
-  "workflow": "$HAIKU_DEFAULT_WORKFLOW"
-}
-EOF
-)
+  local workflow="$HAIKU_DEFAULT_WORKFLOW"
 
-  # Layer: Project settings
-  if [ -n "$project_root" ]; then
-    local settings
-    settings=$(load_haiku_settings "$project_root")
-    if [ "$settings" != "{}" ]; then
-      local workflow
-      workflow=$(echo "$settings" | jq -r '.workflow // empty' 2>/dev/null)
-      if [ -n "$workflow" ]; then
-        config=$(echo "$config" | jq --arg w "$workflow" '.workflow = $w')
-      fi
-    fi
+  # Layer: Workspace settings
+  local workspace_workflow
+  workspace_workflow=$(load_haiku_setting "workflow" "")
+  if [ -n "$workspace_workflow" ]; then
+    workflow="$workspace_workflow"
   fi
 
   # Layer: Intent overrides (highest priority)
   if [ -n "$intent_dir" ] && [ -f "$intent_dir/intent.md" ]; then
     local intent_workflow
-    if command -v han &>/dev/null; then
-      intent_workflow=$(han parse yaml workflow -r --default "" < "$intent_dir/intent.md" 2>/dev/null || echo "")
-    fi
+    intent_workflow=$(_yaml_get_simple "workflow" "" < "$intent_dir/intent.md")
     if [ -n "$intent_workflow" ]; then
-      config=$(echo "$config" | jq --arg w "$intent_workflow" '.workflow = $w')
+      workflow="$intent_workflow"
     fi
   fi
 
-  echo "$config"
+  printf '{"workflow":"%s"}\n' "$workflow"
 }
 
 # Export config as environment variables
-# Usage: export_haiku_config [intent_dir] [project_root]
+# Usage: export_haiku_config [intent_dir]
 export_haiku_config() {
   local intent_dir="${1:-}"
-  local project_root="${2:-}"
   local config
-  config=$(get_haiku_config "$intent_dir" "$project_root")
-
-  export HAIKU_STORAGE_MODE
-  HAIKU_STORAGE_MODE=$(echo "$config" | jq -r '.storage_mode')
+  config=$(get_haiku_config "$intent_dir")
 
   export HAIKU_WORKFLOW
-  HAIKU_WORKFLOW=$(echo "$config" | jq -r '.workflow')
+  if command -v jq &>/dev/null; then
+    HAIKU_WORKFLOW=$(echo "$config" | jq -r '.workflow')
+  else
+    HAIKU_WORKFLOW=$(echo "$config" | sed -n 's/.*"workflow":"\([^"]*\)".*/\1/p')
+  fi
 }

@@ -63,7 +63,7 @@ The Executor implements the plan to satisfy the Unit's Completion Criteria, usin
    - **Validation**: Blockers documented with context
 
 6. Produce operational plan (when using operational or reflective workflow)
-   - If the workflow includes an Operator hat, you MUST produce `operations.md` in the intent directory (`.haiku/{intent-slug}/operations.md`)
+   - If the workflow includes an Operator hat, you MUST produce `operations.md` in the intent directory within the workspace
    - The operational plan should document recurring tasks, reactive tasks, and manual tasks needed to maintain or monitor the deliverables
    - For each task, specify: name, owner (agent or human), schedule/trigger/frequency, and either a command (agent) or checklist (human)
    - If `operations.md` already exists from a prior unit, append new tasks rather than overwriting

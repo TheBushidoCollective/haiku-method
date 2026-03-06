@@ -10,6 +10,12 @@
 set -e
 
 # Source libraries
+WORKSPACE_LIB="${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
+if [ -f "$WORKSPACE_LIB" ]; then
+  # shellcheck source=/dev/null
+  source "$WORKSPACE_LIB"
+fi
+
 STORAGE_LIB="${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
 if [ -f "$STORAGE_LIB" ]; then
   # shellcheck source=/dev/null
@@ -35,29 +41,30 @@ HAT=""
 STATUS="active"
 WORKFLOW_NAME="default"
 
-if command -v han &>/dev/null; then
-  ITERATION=$(echo "$ITERATION_JSON" | han parse json iteration -r --default 1 2>/dev/null || echo "1")
-  HAT=$(echo "$ITERATION_JSON" | han parse json hat -r --default "" 2>/dev/null || echo "")
-  STATUS=$(echo "$ITERATION_JSON" | han parse json status -r --default active 2>/dev/null || echo "active")
-  WORKFLOW_NAME=$(echo "$ITERATION_JSON" | han parse json workflowName -r --default default 2>/dev/null || echo "default")
-elif command -v jq &>/dev/null; then
+if command -v jq &>/dev/null; then
   ITERATION=$(echo "$ITERATION_JSON" | jq -r '.iteration // 1')
   HAT=$(echo "$ITERATION_JSON" | jq -r '.hat // ""')
   STATUS=$(echo "$ITERATION_JSON" | jq -r '.status // "active"')
   WORKFLOW_NAME=$(echo "$ITERATION_JSON" | jq -r '.workflowName // "default"')
+else
+  [[ "$ITERATION_JSON" =~ \"iteration\":([0-9]+) ]] && ITERATION="${BASH_REMATCH[1]}"
+  [[ "$ITERATION_JSON" =~ \"hat\":\"([^\"]+)\" ]] && HAT="${BASH_REMATCH[1]}"
+  [[ "$ITERATION_JSON" =~ \"status\":\"([^\"]+)\" ]] && STATUS="${BASH_REMATCH[1]}"
+  [[ "$ITERATION_JSON" =~ \"workflowName\":\"([^\"]+)\" ]] && WORKFLOW_NAME="${BASH_REMATCH[1]}"
 fi
 
 if [ "$STATUS" = "complete" ] || [ -z "$HAT" ]; then
   exit 0
 fi
 
-# Get intent slug
+# Get intent slug and resolve paths
 INTENT_SLUG=$(storage_load_state "intent-slug" 2>/dev/null || echo "")
 if [ -z "$INTENT_SLUG" ]; then
   exit 0
 fi
 
-INTENT_DIR=".haiku/${INTENT_SLUG}"
+WORKSPACE=$(resolve_workspace 2>/dev/null) || exit 0
+INTENT_DIR="$WORKSPACE/intents/${INTENT_SLUG}"
 INTENT_FILE="${INTENT_DIR}/intent.md"
 
 if [ ! -f "$INTENT_FILE" ]; then
@@ -94,12 +101,7 @@ if [ -d "$INTENT_DIR" ] && ls "$INTENT_DIR"/unit-*.md 1>/dev/null 2>&1; then
 fi
 
 # Load hat instructions
-HAT_FILE=""
-if [ -f ".haiku/hats/${HAT}.md" ]; then
-  HAT_FILE=".haiku/hats/${HAT}.md"
-elif [ -n "$CLAUDE_PLUGIN_ROOT" ] && [ -f "${CLAUDE_PLUGIN_ROOT}/hats/${HAT}.md" ]; then
-  HAT_FILE="${CLAUDE_PLUGIN_ROOT}/hats/${HAT}.md"
-fi
+HAT_FILE=$(resolve_hat_file "$HAT" 2>/dev/null || echo "")
 
 echo "### Current Role: $HAT"
 echo ""

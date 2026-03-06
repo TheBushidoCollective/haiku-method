@@ -143,6 +143,53 @@ This creates a self-documenting workflow. Every phase both consumes and produces
 
 The filesystem remains the simplest, most robust persistence mechanism. Files committed to version control, stored in shared drives, or maintained in knowledge bases provide durable memory that survives session boundaries, team transitions, and tool changes.
 
+### The Workspace: Where Knowledge Lives
+
+HAIKU artifacts live in a **workspace** — a standalone knowledge base that is not tied to any single project or repository. The workspace is where intents, memory, and organizational knowledge accumulate over time.
+
+A workspace can be:
+- A local directory
+- A shared cloud drive folder (Google Drive, Dropbox, OneDrive)
+- Backed by a knowledge management system via MCP (Notion, etc.)
+
+The workspace is structurally simple:
+
+```
+workspace/
+  memory/              # Organizational memory (compounds over time)
+    learnings.md       # Accumulated learnings from reflection
+    patterns.md        # Established patterns and anti-patterns
+    domain/            # Domain models and vocabulary
+  intents/             # All initiatives
+    {intent-slug}/     # A specific initiative
+      intent.md        # Intent definition and success criteria
+      unit-*.md        # Unit specifications
+      state/           # Iteration state
+  settings.yml         # Configuration (workflows, gates)
+  workflows.yml        # Custom workflow definitions
+```
+
+Projects point to their workspace through a simple configuration file or environment variable. This decouples knowledge from any single codebase — the workspace is the organization's evolving knowledge base, not a hidden directory in a repository.
+
+### Hierarchical Knowledge
+
+Workspaces can nest hierarchically. A company workspace contains team workspaces, which may contain project-level workspaces:
+
+```
+company/
+  memory/              # Company-wide learnings
+  engineering/
+    memory/            # Engineering-specific patterns
+    intents/           # Engineering initiatives
+  marketing/
+    memory/            # Marketing-specific patterns
+    intents/           # Marketing initiatives
+```
+
+**Memory inherits upward.** When working within `engineering/`, the system sees engineering-specific memory plus company-wide memory. Siblings are isolated — marketing memory is not visible to engineering, and vice versa.
+
+This hierarchy mirrors how organizations actually structure knowledge: company-wide policies, team-specific conventions, and project-level decisions. Each level compounds its own learnings while inheriting broader organizational wisdom.
+
 ### Iterative Refinement Through Bolts
 
 Work progresses through **bolts** — iteration cycles within units. Each bolt advances the work and produces a reviewable increment. Small cycles with frequent feedback prevent drift and compound learning.
@@ -1039,6 +1086,15 @@ Once a team has adopted HAIKU successfully, the pattern spreads naturally:
 
 The profile model supports this scaling. Each domain creates or adopts a profile that fits its needs while sharing the universal lifecycle, principles, and operating modes. Cross-domain collaboration becomes easier because everyone shares the same fundamental structure, even if the domain-specific details differ.
 
+The workspace hierarchy enables this scaling structurally. A company creates a root workspace with shared memory — domain models, brand guidelines, organizational patterns. Teams create nested workspaces that inherit this foundation while accumulating their own domain-specific knowledge. As teams learn through reflection, their insights compound at the appropriate level: team-specific learnings stay local, while broadly applicable patterns propagate upward to the company workspace.
+
+This creates a natural knowledge architecture:
+- **Company level**: Shared vocabulary, cross-cutting patterns, organizational policies
+- **Team level**: Domain-specific conventions, team workflows, technical patterns
+- **Initiative level**: Intent-specific artifacts, execution state, unit specifications
+
+Each level is self-contained — a team workspace works independently — but the hierarchy ensures that institutional knowledge flows where it's needed.
+
 ---
 
 ## Glossary
@@ -1062,4 +1118,6 @@ The profile model supports this scaling. Each domain creates or adopts a profile
 | **Reflection** | The fourth phase: learning from what happened and feeding forward |
 | **Success Criteria** | Measurable conditions that define when work is done |
 | **Unit** | A discrete piece of work within an intent |
+| **Workspace** | A standalone knowledge base where HAIKU artifacts live — can be local, cloud-synced, or MCP-backed, and can nest hierarchically |
+| **Workspace Memory** | Organizational knowledge stored in a workspace's memory directory — learnings, patterns, and domain models that compound across intents and inherit upward through workspace hierarchy |
 | **Workflow** | An ordered sequence of hats that defines how a unit progresses |

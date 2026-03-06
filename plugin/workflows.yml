@@ -1,7 +1,7 @@
 # HAIKU Method Workflows
 #
 # Each workflow is a named sequence of hats. Override or extend
-# by creating .haiku/workflows.yml in your project root.
+# by creating workflows.yml in your workspace root.
 #
 # Format:
 #   workflow-name:

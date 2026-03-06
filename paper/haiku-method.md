@@ -19,11 +19,13 @@ HAIKU builds on foundational work in human-AI collaboration methodology, general
 
 ### Key Influences
 
-**Geoffrey Huntley** — The Ralph Wiggum autonomous loop methodology and the principle of backpressure over prescription.
+**Geoffrey Huntley** — The Ralph Wiggum autonomous loop methodology and the principle of backpressure over prescription. [9]
 
-**Steve Wilson (OWASP)** — Human-on-the-Loop governance frameworks and the articulation of supervision modes for AI systems.
+**Steve Wilson (OWASP)** — Human-on-the-Loop governance frameworks and the articulation of supervision modes for AI systems. [10]
 
-**paddo.dev** — Analysis of phase collapse in traditional workflows and the insight that sequential handoffs become friction rather than quality control in AI-driven environments.
+**paddo.dev** — Analysis of phase collapse in traditional workflows, the 19-agent trap, and the insight that sequential handoffs become friction rather than quality control in AI-driven environments. [7]
+
+**HumanLayer** — 12 Factor Agents principles and the articulation of governance-as-code patterns for autonomous systems. [15]
 
 ---
 
@@ -89,7 +91,76 @@ The methodology is domain-agnostic by design. Domain specifics are handled throu
 
 ---
 
-## 2. Core Principles
+## 2. The State of the Art
+
+### The Landscape Shift
+
+The landscape of human-AI collaboration has shifted dramatically in eighteen months:
+
+| Dimension | 2024 | Mid-2025 | Early 2026 |
+|---|---|---|---|
+| **Model Capability** | Code completion, simple tasks | Complete features with guidance | Sustained multi-hour autonomous reasoning |
+| **Human Role** | Direct every step | Validate major decisions | Define success criteria; AI iterates to convergence |
+| **Iteration Cycles** | Measured in days | Measured in hours | Measured in minutes |
+| **Context Windows** | 8K-32K tokens | 100K-200K tokens | 200K-1M+ tokens (quality-sensitive) |
+| **Memory Systems** | Conversation history | Conversation-based, ephemeral | File-based persistence, organizational memory, MCP-enabled knowledge |
+| **Multi-Agent** | Experimental research | Promising theoretical approach | Simple loops outperform complex orchestrations |
+| **Protocol Ecosystem** | None | MCP emerging | MCP + A2A + AGENTS.md under Linux Foundation governance |
+| **Governance** | Ad-hoc | HITL/HOTL discussion | EU AI Act enforceable, NIST AI RMF, OWASP Agentic Top 10 |
+
+This acceleration has created a gap between capability and methodology. Organizations have access to increasingly powerful AI systems but lack structured approaches for deploying them effectively.
+
+### The Evidence for Structure
+
+Empirical data makes a clear case that unstructured AI usage creates organizational risk:
+
+- **Google's 2025 DORA Report** found that 90% AI adoption correlated with a 9% increase in bug rates, 91% increase in code review time, and 154% increase in PR size. AI amplifies existing capability — it does not compensate for weak practices. [1]
+- **Veracode's 2025 GenAI Code Security Report** found that 45% of AI-generated code contains security vulnerabilities — and critically, security quality does not improve with larger or more capable models. Models get better at syntax without getting better at security. [2]
+- **Anthropic's 2026 research** found that developers use AI in 60% of their work but can fully delegate only 0-20% of tasks. Users grant more autonomy over time (20% auto-approve initially, rising to 40%+ after 750 sessions) but experienced users also interrupt more strategically. [3]
+
+The pattern is consistent: AI without structure amplifies both capability and risk. Structure — quality gates, success criteria, oversight modes, learning loops — is what separates productive AI collaboration from expensive AI experimentation.
+
+### The "Vibe Coding" Moment
+
+Collins Dictionary named "vibe coding" its 2025 Word of the Year. The term describes ad-hoc AI-driven development where developers prompt their way through implementation without specifications, tests, or structured oversight.
+
+The cultural moment has been followed by a reckoning. Red Hat published "The Uncomfortable Truth About Vibe Coding." Stack Overflow's 2025 Developer Survey found 45% of developers say debugging AI-generated code takes longer than expected. The emerging consensus is "structured vibes" — rapid prototyping followed by architectural discipline, with strategic decomposition replacing mega-prompts. [4]
+
+HAIKU provides the structured counter-narrative. The framework doesn't reject AI speed — it channels it through disciplined form, just as the poetic tradition channels creative expression through constraint.
+
+### Competing Approaches
+
+Multiple methodologies have emerged to address AI-driven work, each solving a piece of the puzzle:
+
+| Methodology | Focus | Limitation |
+|---|---|---|
+| **Spec-Driven Development** (GitHub Spec Kit, Amazon Kiro) | Specifications before code; intent as source of truth | Software-only; no lifecycle beyond implementation |
+| **Intent-Driven Development** | Specification quality determines outcome quality | Software-only; no operational or learning phases |
+| **ADLC** (EPAM, Arthur AI) | Agentic development lifecycle with behavioral metrics | Software/product-only; no cross-domain applicability |
+| **"From Sprints to Swarms"** (P3 Group) | Autonomous agent swarms replacing sprint ceremonies | Speculative; no governance or learning model |
+| **MetaGPT** | SOPs encoded into multi-agent prompt sequences | Implementation framework, not methodology; no reflection |
+
+HAIKU is distinguished by three properties none of these approaches share:
+
+1. **Domain-agnostic by design** — the same lifecycle applies to software, marketing, operations, research, and strategy
+2. **Full lifecycle coverage** — Elaboration, Execution, Operation, and Reflection, where competing approaches stop at delivery
+3. **Compounding organizational memory** — hierarchical workspaces with learning loops that feed forward, creating institutional knowledge that survives team changes and tool migrations
+
+### The Protocol Ecosystem
+
+Two complementary protocols are shaping how AI systems interact with the world:
+
+**Model Context Protocol (MCP)** — Anthropic's protocol for connecting AI agents to tools and data sources, now under Linux Foundation governance with 97 million monthly SDK downloads and 10,000+ active servers. MCP provides the vertical integration layer: how an agent accesses databases, APIs, file systems, and knowledge bases. [5]
+
+**Agent-to-Agent Protocol (A2A)** — Google's protocol for agent-to-agent collaboration, with 100+ enterprise partners. A2A provides the horizontal integration layer: how agents discover each other's capabilities, delegate tasks, and coordinate work. [6]
+
+Both protocols are now governed by the Agentic AI Foundation (AAIF) under the Linux Foundation, co-founded by Anthropic, OpenAI, and Block. A joint interoperability specification is expected Q3 2026.
+
+HAIKU is designed to operate within this ecosystem. Workspaces can be backed by MCP servers. Profiles can define MCP integrations for their domain. The hat-based workflow model maps naturally to A2A's task lifecycle, enabling cross-agent collaboration within a structured methodology.
+
+---
+
+## 3. Core Principles
 
 ### Reimagine Rather Than Retrofit
 
@@ -100,6 +171,25 @@ With AI, iteration costs approach zero. You try something, it fails, you adjust,
 **Traditional phase boundaries existed because iteration was expensive.** When changing deliverables meant weeks of rework, sequential phases with approval gates made economic sense. Each phase required handoffs between specialized roles, documentation to transfer context, approval gates to validate progress, and wait times for reviews.
 
 With AI, that economic calculus inverts. Iteration is nearly free. Context loss from handoffs becomes the dominant cost. HAIKU models work as **continuous flow with strategic checkpoints** rather than discrete phases separated by gates.
+
+### Context Engineering Over Context Stuffing
+
+Modern language models offer context windows ranging from 200K to over 1 million tokens. This abundance changes how we think about AI workflows — but not in the ways that might be obvious.
+
+**The 19-Agent Trap.** Early enthusiasm for AI led to complex multi-agent architectures that mapped agents to traditional org charts — an Analyst agent, PM agent, Architect agent, Developer agent, QA agent. This approach consistently performs worse than simpler alternatives because each handoff between agents loses context, orchestration overhead consumes attention budget, and debugging multi-agent failures is exponentially harder. [7]
+
+Research shows model performance degrades when context windows exceed 40-60% utilization. Information "lost in the middle" of large contexts receives less attention than information at the beginning or end.
+
+**The insight:** Abundant context windows don't mean we should fill them. They mean we can be **selective about high-quality context** rather than compressed summaries. HAIKU favors:
+
+- **Small, focused agents** with relevant context over comprehensive agents with scattered information
+- **Quality over quantity** in context selection — artifacts carry structured, high-signal context
+- **Strategic context engineering** rather than context stuffing
+- **Simple loops** with clear objectives over complex multi-agent orchestrations
+
+Anthropic's engineering team describes this as treating context as a "finite resource with an attention budget" — finding "the smallest set of high-signal tokens that maximize the likelihood of your desired outcome." [8]
+
+HAIKU's artifact-based approach is context engineering by design. Each phase produces structured artifacts that carry exactly the context the next phase needs. Quality gates provide automated feedback without consuming human attention budget. The workspace persists high-value context across sessions, and hierarchical memory ensures the right context is available at the right scope.
 
 ### Quality Enforcement Over Prescription
 
@@ -127,6 +217,10 @@ This approach offers multiple benefits:
 - **Enables iteration** — Each failure provides signal; each attempt refines the approach
 
 The skill shifts from directing AI step-by-step to defining criteria that converge toward correct outcomes.
+
+**Why this is safety-critical:** Veracode's 2025 analysis of 100+ LLMs found that 45% of AI-generated code contains security vulnerabilities — and crucially, security quality does not improve with model size or capability. Models get better at syntax without getting better at security. [2] Quality gates that enforce security scanning, dependency auditing, and vulnerability detection are not optional — they are the primary mechanism for preventing AI-generated vulnerabilities from reaching production.
+
+This reinforces the HAIKU principle: the quality of the gates determines the quality of the output, not the quality of the model.
 
 ### Context Preservation Through Artifacts
 
@@ -190,6 +284,22 @@ company/
 
 This hierarchy mirrors how organizations actually structure knowledge: company-wide policies, team-specific conventions, and project-level decisions. Each level compounds its own learnings while inheriting broader organizational wisdom.
 
+### Memory Layers
+
+Within the workspace hierarchy, knowledge is accessed at different speeds for different purposes. HAIKU recognizes five memory layers:
+
+| Layer | Location | Speed | Purpose |
+|---|---|---|---|
+| **Rules** | Project configuration files (CLAUDE.md, .cursor/rules, AGENTS.md) | Instant | Conventions, patterns, constraints — loaded at session start |
+| **Session** | Working files, scratchpads, iteration state | Fast | Current task context, progress notes, active hat state |
+| **Workspace** | Workspace intents, settings, workflows | Indexed | Intent history, workflow definitions, quality gate configurations |
+| **Organizational** | Workspace memory hierarchy | Query | Learnings, patterns, domain models — compounds across intents and inherits upward |
+| **External** | Connected systems via MCP | Query | Ticket systems, knowledge bases, monitoring, institutional knowledge |
+
+The filesystem remains the simplest, most robust foundation for the first four layers. Git history shows what was attempted. Modified files persist across iterations. The workspace compounds memory across intents. But these aren't the only options — MCP-backed workspaces can connect to external organizational memory (Notion, Confluence, Jira, custom knowledge bases), dramatically expanding what agents can know.
+
+The industry has converged on project-level configuration files as a pattern — CLAUDE.md, AGENTS.md, .cursor/rules — each providing instant context at session start. HAIKU's workspace model represents the next evolution: not just rules for a single project, but hierarchical organizational knowledge that compounds across teams, domains, and time.
+
 ### Iterative Refinement Through Bolts
 
 Work progresses through **bolts** — iteration cycles within units. Each bolt advances the work and produces a reviewable increment. Small cycles with frequent feedback prevent drift and compound learning.
@@ -202,6 +312,10 @@ This structure applies universally:
 - In marketing: a bolt might draft content, run it through brand review, and refine based on feedback
 - In research: a bolt might design an experiment, collect data, and analyze preliminary results
 - In operations: a bolt might draft a runbook, simulate execution, and adjust procedures
+
+This pattern — iterate, check against quality gates, adjust, repeat — has emerged independently across the AI development community. Geoffrey Huntley's Ralph Wiggum methodology named it explicitly: "deterministically bad in an undeterministic world." Rather than trying to be perfect on the first attempt, the agent tries, fails, learns from failures, and iterates until success. [9] Sophisticated behavior emerges from simple loops with good backpressure, not from complex multi-agent architectures.
+
+HAIKU's bolt model generalizes this pattern beyond software. The loop structure is the same whether the quality gate is a test suite, a brand review, a statistical significance threshold, or an SLA compliance check. The domain changes; the iteration mechanics don't.
 
 ### Human Oversight at Strategic Moments
 
@@ -216,6 +330,14 @@ Three collaboration modes define the spectrum of human involvement:
 | **Autonomous** | Defines boundaries and reviews outcomes | Executes independently within constraints |
 
 The appropriate mode depends on risk, complexity, novelty, and organizational trust. HAIKU supports fluid movement between modes as context changes — even within a single unit of work.
+
+These modes correspond to the governance models now standardized across the industry: Human-in-the-Loop (HITL), Human-on-the-Loop (HOTL), and Human-in-Command (HIC). [10] The Google Maps analogy captures the distinction intuitively:
+
+- **Supervised:** You tell the GPS each turn to make; it confirms; you approve; it executes.
+- **Observed:** GPS drives while you watch the route; you can say "not that way" at any moment.
+- **Autonomous:** You set the destination, define constraints (no toll roads), and check when you arrive.
+
+**The core principle: default to more supervision when uncertain.** It is easier to loosen control than to recover from autonomous mistakes. Anthropic's research confirms this progression is natural — users start with high supervision and grant more autonomy as they build trust, but experienced users also develop sharper instincts for when to intervene. [3]
 
 **The human doesn't disappear. The human's function changes** — from micromanaging execution to defining outcomes, setting quality gates, and reviewing results.
 
@@ -235,7 +357,7 @@ Ad-hoc approaches don't compound — each session starts fresh, each prompt is o
 
 ---
 
-## 3. The 4-Phase Lifecycle
+## 4. The 4-Phase Lifecycle
 
 ### Overview
 
@@ -288,11 +410,21 @@ flowchart LR
 
 Elaboration transforms a broad intent into a structured plan. This phase produces the shared understanding that all subsequent work depends on. It is the most collaborative phase — humans and AI working together to surface assumptions, resolve ambiguity, and establish measurable conditions for success.
 
+Elaboration is HAIKU's implementation of what the industry has begun calling **Spec-Driven Development** — the practice of producing well-crafted specifications before execution, using AI as an active collaborator in the specification process rather than just a recipient of instructions. [11] Tools like GitHub's Spec Kit and Amazon's Kiro formalize this for software; HAIKU generalizes it across domains. The quality of the specification determines the quality of the outcome — not velocity, team size, or model capability.
+
 #### Activities
 
 **Define Intent.** Articulate the goal, scope, and desired outcome. An intent is the top-level statement of purpose — the thing being accomplished. Every initiative begins with a clear intent.
 
 **Decompose into Units.** Break the intent into discrete, addressable pieces of work. Each unit is cohesive (internally related), loosely coupled (minimal dependencies on other units), and independently completable. Units can declare dependencies on other units, forming a Directed Acyclic Graph (DAG) that enables parallel execution where possible and sequential execution where necessary.
+
+```
+unit-01 ─────────────────┐
+                         ├──→ unit-04 ──→ unit-05
+unit-02 ──→ unit-03 ────┘
+```
+
+In this example, unit-01 and unit-02 start in parallel (no dependencies). Unit-03 waits for unit-02. Unit-04 waits for both unit-01 and unit-03 (fan-in). Unit-05 waits for unit-04. This DAG structure enables maximum parallelism while respecting genuine dependencies — critical when multiple AI agents or team members work concurrently.
 
 **Set Success Criteria.** Establish measurable conditions that define completion — for both individual units and the overall intent. Good success criteria are specific, measurable, verifiable, and implementation-independent. They define *what* success looks like without prescribing *how* to achieve it.
 
@@ -581,7 +713,7 @@ Without Reflection, organizations repeat mistakes, miss patterns, and fail to bu
 
 ---
 
-## 4. Operating Modes
+## 5. Operating Modes
 
 HAIKU defines three operating modes that govern how humans and AI collaborate. These modes are not fixed per initiative — they can be configured per phase, per unit, or even adjusted mid-execution as context evolves.
 
@@ -713,7 +845,7 @@ Teams typically start with supervised mode and progress toward autonomous as the
 
 ---
 
-## 5. The Profile Model
+## 6. The Profile Model
 
 ### Universal Core, Domain Adaptation
 
@@ -729,6 +861,12 @@ A profile customizes HAIKU by defining:
 - **Terminology mappings** — domain vocabulary layered onto HAIKU's universal terms
 
 The core lifecycle and principles remain constant across all profiles. Profiles add specificity without altering the foundation.
+
+#### Profiles and the Protocol Ecosystem
+
+Profiles can define **MCP server integrations** that connect HAIKU workflows to domain-specific tools. A software profile might integrate with GitHub, CI/CD systems, and monitoring platforms. A marketing profile might integrate with analytics dashboards, CMS systems, and social media APIs. A research profile might integrate with data collection platforms, statistical tools, and literature databases.
+
+As the A2A protocol matures, profiles could also publish **Agent Cards** — capability descriptors that enable other agents to discover and delegate work to HAIKU-governed agents. A marketing team's HAIKU-governed content agent could accept tasks from an engineering team's release announcement workflow, with both sides operating within their respective profiles and quality gates.
 
 ### AI-DLC: The Software Development Profile
 
@@ -854,7 +992,7 @@ The profile model means HAIKU can grow with an organization. Start with one prof
 
 ---
 
-## 6. Practical Examples
+## 7. Practical Examples
 
 ### Example 1: Software Feature Using the AI-DLC Profile
 
@@ -976,7 +1114,7 @@ After the first year, the team reflects on Phase 1 of the strategy. Two of five 
 
 ---
 
-## 7. Adoption
+## 8. Adoption
 
 ### Start Where You Are
 
@@ -1097,6 +1235,85 @@ Each level is self-contained — a team workspace works independently — but th
 
 ---
 
+## 9. Measuring Effectiveness
+
+HAIKU's value compounds over time, but "compounding" is meaningless without measurement. Teams need concrete metrics to verify that the methodology is delivering results and to identify where to invest in improvement.
+
+### Core Metrics
+
+| Metric | What It Measures | Why It Matters |
+|---|---|---|
+| **Cycle Time** | Time from intent definition to delivered outcome | Measures end-to-end efficiency; should decrease as organizational memory compounds |
+| **Bolt Success Rate** | Percentage of bolts that complete without human rescue | Indicates quality of success criteria and quality gates; higher rates validate autonomous operation |
+| **Churn Rate** | Number of iterations per bolt | High churn suggests poorly defined criteria or insufficient quality gates |
+| **Criteria Escape Rate** | Defects, issues, or failures discovered after a unit passes its quality gates | Measures the effectiveness of quality gates; high escape rates indicate blind spots |
+| **Feed-Forward Rate** | Percentage of completed intents that produce actionable learnings fed into organizational memory | Measures whether the learning loop is actually closing |
+
+### What Not to Measure
+
+HAIKU intentionally avoids traditional activity metrics:
+
+- **Lines of code / content volume** — AI makes output volume a meaningless measure of productivity
+- **Story points / effort estimates** — when iteration costs approach zero, effort estimation loses predictive value
+- **Velocity** — measures throughput of activity, not delivery of value
+
+Instead, measure **outcomes against intent**. Did the initiative achieve its goal? How efficiently? What was learned? These are the metrics that compound.
+
+### The DORA Connection
+
+Google's DORA research demonstrates that AI amplifies existing capability — teams with strong engineering practices get stronger; teams with weak practices get worse. [1] HAIKU's metrics framework is designed to identify and strengthen foundational practices:
+
+- Low bolt success rate → improve success criteria definition (strengthen Elaboration)
+- High churn rate → improve quality gates (strengthen Execution)
+- High criteria escape rate → improve gate coverage (add missing verification)
+- Low feed-forward rate → improve reflection discipline (close the learning loop)
+
+The compounding advantage is real but not automatic. It requires disciplined measurement and intentional improvement.
+
+---
+
+## 10. Governance and Compliance
+
+### The Regulatory Landscape
+
+AI governance frameworks are materializing rapidly:
+
+- **EU AI Act** — high-risk AI obligations become fully enforceable August 2026, requiring technical documentation, risk management, and human oversight procedures [12]
+- **NIST AI Risk Management Framework** — four pillars (Govern, Map, Measure, Manage) increasingly used as procurement criteria in the US [13]
+- **ISO/IEC 42001** — international standard for AI management systems, being combined with NIST AI RMF for cross-jurisdictional compliance
+- **OWASP Top 10 for Agentic Applications** — released December 2025, the first security standard specifically addressing autonomous agent risks, distinct from the LLM-focused Top 10 [14]
+
+### HAIKU as a Governance Framework
+
+HAIKU's lifecycle naturally produces the artifacts and audit trails that governance frameworks require:
+
+| Governance Requirement | HAIKU Mechanism |
+|---|---|
+| **Human oversight** | Collaboration modes (Supervised, Observed, Autonomous) with documented mode selection rationale |
+| **Risk assessment** | Elaboration phase captures risk per unit; mode selection reflects risk tolerance |
+| **Technical documentation** | Intent documents, unit specifications, domain models — produced as a natural part of the workflow |
+| **Audit trail** | Quality gate results, bolt progression, checkpoint artifacts — the workflow IS the audit trail |
+| **Incident response** | Operation phase defines reactive triggers and response protocols |
+| **Continuous improvement** | Reflection phase analyzes outcomes and feeds forward into organizational memory |
+
+### Quality Gates as Governance-as-Code
+
+The emerging enterprise pattern of **governance-as-code** — embedding security guardrails and approval logic directly into the execution path — maps precisely to HAIKU's quality gates. [15]
+
+High-impact actions can be configured with hard interrupts that make execution impossible without verified human approval. Low-risk, well-defined actions proceed autonomously with automated verification. The quality gate configuration itself becomes a versioned, auditable artifact that documents the organization's risk governance decisions.
+
+### Compliance Patterns
+
+Two patterns support regulated environments:
+
+1. **Auditable Checkpoints** — Human audit points at strategic boundaries (elaboration sign-off, execution review, operational approval) with autonomous work between them. The lifecycle phases provide natural audit boundaries.
+
+2. **Automated Compliance Gates** — Quality gates configured as compliance verification with audit logging. Security scans, data protection checks, regulatory requirement validation — all execute as standard quality gates with results persisted as compliance evidence.
+
+The key insight: audit trails emerge naturally from the HAIKU workflow rather than being bolted on afterward. The workflow *is* the audit trail.
+
+---
+
 ## Glossary
 
 | Term | Definition |
@@ -1118,6 +1335,51 @@ Each level is self-contained — a team workspace works independently — but th
 | **Reflection** | The fourth phase: learning from what happened and feeding forward |
 | **Success Criteria** | Measurable conditions that define when work is done |
 | **Unit** | A discrete piece of work within an intent |
+| **Unit DAG** | The Directed Acyclic Graph formed by unit dependencies, enabling parallel execution (fan-out) and convergence (fan-in) |
 | **Workspace** | A standalone knowledge base where HAIKU artifacts live — can be local, cloud-synced, or MCP-backed, and can nest hierarchically |
 | **Workspace Memory** | Organizational knowledge stored in a workspace's memory directory — learnings, patterns, and domain models that compound across intents and inherit upward through workspace hierarchy |
 | **Workflow** | An ordered sequence of hats that defines how a unit progresses |
+
+---
+
+## References
+
+1. **Google DORA Team.** *Accelerate State of DevOps Report 2025: The State of AI-Assisted Software Development.* Google, 2025. https://dora.dev/research/2025/dora-report/
+
+2. **Veracode.** *2025 GenAI Code Security Report.* Veracode, 2025. https://www.veracode.com/resources/analyst-reports/2025-genai-code-security-report/
+
+3. **Anthropic.** *Measuring AI Agent Autonomy in Practice.* Anthropic Research, 2026. https://www.anthropic.com/research/measuring-agent-autonomy
+
+4. **Red Hat.** *The Uncomfortable Truth About Vibe Coding.* Red Hat Developer, February 2026. https://developers.redhat.com/articles/2026/02/17/uncomfortable-truth-about-vibe-coding
+
+5. **Anthropic.** *Model Context Protocol Specification.* 2025. https://modelcontextprotocol.io/specification/2025-11-25
+
+6. **Google.** *A2A: A New Era of Agent Interoperability.* Google Developers Blog, April 2025. https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/
+
+7. **paddo.dev.** *The 19-Agent Trap.* January 2026.
+
+8. **Anthropic.** *Effective Context Engineering for AI Agents.* Anthropic Engineering Blog, 2025. https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+
+9. **Geoffrey Huntley.** *Ralph Wiggum Software Development Technique.* 2025. https://ghuntley.com/ralph/
+
+10. **Steve Wilson.** *Human-on-the-Loop: The New AI Control Model That Actually Works.* The New Stack, August 2025.
+
+11. **GitHub.** *Spec-Driven Development with AI: Get Started with a New Open-Source Toolkit.* GitHub Blog, September 2025. https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/
+
+12. **European Parliament.** *Regulation (EU) 2024/1689 — The AI Act.* Official Journal of the European Union, 2024.
+
+13. **NIST.** *AI Risk Management Framework (AI RMF 1.0).* National Institute of Standards and Technology, 2023. https://www.nist.gov/itl/ai-risk-management-framework
+
+14. **OWASP.** *Top 10 for Agentic Applications 2026.* OWASP GenAI, December 2025. https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/
+
+15. **HumanLayer.** *12 Factor Agents.* 2025.
+
+16. **Raja SP.** *AI-Driven Development Lifecycle (AI-DLC) Method Definition.* Amazon Web Services, July 2025. https://aws.amazon.com/blogs/devops/ai-driven-development-life-cycle/
+
+17. **Anthropic.** *2026 Agentic Coding Trends Report.* Anthropic, 2026. https://resources.anthropic.com/2026-agentic-coding-trends-report
+
+---
+
+*HAIKU is an open methodology maintained by The Bushido Collective. Contributions and adaptations are welcome.*
+
+**[View source on GitHub →](https://github.com/thebushidocollective/haiku-method)**

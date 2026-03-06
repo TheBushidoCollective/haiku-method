@@ -4,7 +4,7 @@ import Link from "next/link"
 export const metadata: Metadata = {
 	title: "Getting Started",
 	description:
-		"Start using HAIKU incrementally. Begin with Elaboration and grow into the full lifecycle.",
+		"Install the H·AI·K·U plugin for Claude Code and start using structured human-AI collaboration.",
 }
 
 export default function GettingStartedPage() {
@@ -12,80 +12,148 @@ export default function GettingStartedPage() {
 		<div className="mx-auto max-w-3xl px-4 py-12">
 			<h1 className="mb-4 text-4xl font-bold">Getting Started</h1>
 			<p className="mb-10 text-lg text-stone-600">
-				You don't need to adopt the entire HAIKU framework at once. Start small,
-				build confidence, and expand as the value becomes clear.
+				Get up and running with H·AI·K·U in Claude Code. Install the plugin,
+				configure your workspace, and start your first intent.
 			</p>
 
-			{/* Incremental Adoption */}
+			{/* Install the Plugin */}
 			<section className="mb-12">
-				<h2 className="mb-6 text-2xl font-bold">Incremental Adoption Path</h2>
-
-				<div className="space-y-6">
-					<div className="rounded-xl border border-teal-200 bg-teal-50 p-6">
-						<div className="mb-1 text-xs font-semibold uppercase tracking-wider text-teal-500">
-							Step 1
+				<h2 className="mb-4 text-2xl font-bold">1. Install the Plugin</h2>
+				<p className="mb-4 text-stone-600">
+					H·AI·K·U is available as a Claude Code plugin. Install it from the
+					marketplace:
+				</p>
+				<div className="space-y-4">
+					<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
+						<div className="text-stone-400">
+							# Add the H·AI·K·U marketplace
 						</div>
-						<h3 className="mb-2 text-lg font-semibold text-teal-900">
-							Start with Elaboration
-						</h3>
-						<p className="mb-3 text-sm text-teal-800">
-							Before your next initiative, spend time defining intent, breaking
-							work into units, and setting success criteria. This alone
-							transforms how you work with AI.
-						</p>
-						<div className="rounded-lg border border-teal-200 bg-white p-4 text-sm text-teal-700">
-							<strong>Try this:</strong> Take your next project idea. Write a
-							clear intent statement. Break it into 3-5 units. Define what
-							"done" looks like for each unit. You've just completed your first
-							Elaboration.
+						<div>/install haikumethod.ai/marketplace.json</div>
+					</div>
+					<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
+						<div className="text-stone-400">
+							# Install the haiku-method plugin
+						</div>
+						<div>/install haiku-method</div>
+					</div>
+				</div>
+				<p className="mt-3 text-sm text-stone-500">
+					This installs the core H·AI·K·U framework with the 4-phase lifecycle,
+					hat-based workflows, quality gates, and organizational memory.
+				</p>
+			</section>
+
+			{/* Configure Your Workspace */}
+			<section className="mb-12">
+				<h2 className="mb-4 text-2xl font-bold">
+					2. Configure Your Workspace
+				</h2>
+				<p className="mb-4 text-stone-600">
+					H·AI·K·U artifacts live in a workspace — a standalone knowledge base
+					that accumulates intents, memory, and organizational knowledge over
+					time. Point your project to a workspace:
+				</p>
+				<div className="space-y-4">
+					<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
+						<div className="text-stone-400">
+							# Option A: Environment variable
+						</div>
+						<div>export HAIKU_WORKSPACE=~/haiku-workspace</div>
+					</div>
+					<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
+						<div className="text-stone-400">
+							# Option B: Pointer file in your project root
+						</div>
+						<div>
+							echo &quot;workspace: ~/haiku-workspace&quot; &gt; .haiku.yml
 						</div>
 					</div>
+				</div>
+				<p className="mt-3 text-sm text-stone-500">
+					Workspaces can be local directories, shared cloud drive folders, or
+					backed by a knowledge management system via MCP. They nest
+					hierarchically — a company workspace contains team workspaces, which
+					contain project workspaces. Memory inherits upward.
+				</p>
+			</section>
 
-					<div className="rounded-xl border border-indigo-200 bg-indigo-50 p-6">
-						<div className="mb-1 text-xs font-semibold uppercase tracking-wider text-indigo-500">
-							Step 2
+			{/* Start Your First Intent */}
+			<section className="mb-12">
+				<h2 className="mb-4 text-2xl font-bold">3. Start Your First Intent</h2>
+				<p className="mb-4 text-stone-600">
+					With the plugin installed and workspace configured, use the built-in
+					skills to begin:
+				</p>
+				<div className="space-y-4">
+					<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
+						<div className="text-stone-400">
+							# Elaborate your first intent
 						</div>
-						<h3 className="mb-2 text-lg font-semibold text-indigo-900">
-							Add Structured Execution
-						</h3>
-						<p className="mb-3 text-sm text-indigo-800">
-							Use hats to structure your work. Even just separating planning from
-							executing from reviewing creates clarity. Choose your collaboration
-							mode per unit.
-						</p>
-						<div className="rounded-lg border border-indigo-200 bg-white p-4 text-sm text-indigo-700">
-							<strong>Try this:</strong> For each unit, explicitly plan before
-							building, and review after building. Use quality gates — define
-							what must be true before marking a unit complete.
-						</div>
+						<div>/elaborate</div>
 					</div>
+				</div>
+				<p className="mt-3 text-sm text-stone-500">
+					The Elaboration skill guides you through defining your intent, breaking
+					it into units, setting success criteria, and building a domain model.
+					When you're ready, use <code className="text-stone-300">/execute</code>{" "}
+					to begin structured execution with hat-based workflows.
+				</p>
+			</section>
 
-					<div className="rounded-xl border border-amber-200 bg-amber-50 p-6">
-						<div className="mb-1 text-xs font-semibold uppercase tracking-wider text-amber-500">
-							Step 3
-						</div>
-						<h3 className="mb-2 text-lg font-semibold text-amber-900">
-							Include Operation
-						</h3>
-						<p className="text-sm text-amber-800">
-							During execution, produce an operational plan alongside
-							deliverables. Define recurring tasks, reactive responses, and
-							ongoing monitoring. This ensures delivery doesn't mean
-							abandonment.
+			{/* Available Skills */}
+			<section className="mb-12">
+				<h2 className="mb-4 text-2xl font-bold">Plugin Skills</h2>
+				<div className="space-y-3">
+					<div className="rounded-lg border border-stone-200 p-4">
+						<code className="text-sm font-semibold text-teal-600">
+							/elaborate
+						</code>
+						<p className="mt-1 text-sm text-stone-600">
+							Define intent, decompose into units, set success criteria, build
+							domain model.
 						</p>
 					</div>
-
-					<div className="rounded-xl border border-rose-200 bg-rose-50 p-6">
-						<div className="mb-1 text-xs font-semibold uppercase tracking-wider text-rose-500">
-							Step 4
-						</div>
-						<h3 className="mb-2 text-lg font-semibold text-rose-900">
-							Close the Loop with Reflection
-						</h3>
-						<p className="text-sm text-rose-800">
-							After completing an initiative, analyze what happened. Capture
-							learnings. Feed them forward. This is where HAIKU's compounding
-							advantage begins.
+					<div className="rounded-lg border border-stone-200 p-4">
+						<code className="text-sm font-semibold text-teal-600">
+							/execute
+						</code>
+						<p className="mt-1 text-sm text-stone-600">
+							Execute work through hat-based workflows with iterative bolts and
+							quality gates.
+						</p>
+					</div>
+					<div className="rounded-lg border border-stone-200 p-4">
+						<code className="text-sm font-semibold text-teal-600">
+							/operate
+						</code>
+						<p className="mt-1 text-sm text-stone-600">
+							Manage delivered outcomes with recurring tasks, reactive responses,
+							and AI guidance.
+						</p>
+					</div>
+					<div className="rounded-lg border border-stone-200 p-4">
+						<code className="text-sm font-semibold text-teal-600">
+							/reflect
+						</code>
+						<p className="mt-1 text-sm text-stone-600">
+							Analyze outcomes, capture learnings, feed forward into
+							organizational memory.
+						</p>
+					</div>
+					<div className="rounded-lg border border-stone-200 p-4">
+						<code className="text-sm font-semibold text-teal-600">
+							/resume
+						</code>
+						<p className="mt-1 text-sm text-stone-600">
+							Resume work on an existing intent from where you left off.
+						</p>
+					</div>
+					<div className="rounded-lg border border-stone-200 p-4">
+						<code className="text-sm font-semibold text-teal-600">
+							/advance
+						</code>
+						<p className="mt-1 text-sm text-stone-600">
+							Advance a unit to its next hat in the workflow.
 						</p>
 					</div>
 				</div>
@@ -95,17 +163,19 @@ export default function GettingStartedPage() {
 			<section className="mb-12">
 				<h2 className="mb-4 text-2xl font-bold">For Software Teams</h2>
 				<p className="mb-4 text-stone-600">
-					If you're building software, the AI-DLC profile gives you a
-					ready-made implementation of HAIKU with deep toolchain integration.
+					If you're building software, install the AI-DLC profile — it extends
+					H·AI·K·U with git integration, test suites, PR workflows, CI/CD
+					pipelines, and deployment gates.
 				</p>
 				<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
-					<div className="text-stone-400"># Install the HAIKU plugin for Claude Code</div>
-					<div>/plugin marketplace add thebushidocollective/ai-dlc</div>
-					<div>/plugin install ai-dlc@thebushidocollective-ai-dlc --scope project</div>
+					<div className="text-stone-400">
+						# Install AI-DLC from the H·AI·K·U marketplace
+					</div>
+					<div>/install ai-dlc</div>
 				</div>
 				<p className="mt-3 text-sm text-stone-500">
-					The plugin provides the AI-DLC profile with hats, workflows, and
-					quality gates pre-configured for software development.
+					AI-DLC provides software-specific hats, workflows, and quality gates
+					pre-configured for iterative development.
 				</p>
 				<div className="mt-4">
 					<a
@@ -121,43 +191,51 @@ export default function GettingStartedPage() {
 
 			{/* For Other Teams */}
 			<section className="mb-12">
-				<h2 className="mb-4 text-2xl font-bold">For Other Teams</h2>
+				<h2 className="mb-4 text-2xl font-bold">For Any Domain</h2>
 				<p className="mb-4 text-stone-600">
-					HAIKU works for any domain. You don't need a plugin to start — the
-					methodology is the value. Here's how to begin:
+					H·AI·K·U works for any domain — marketing, operations, research,
+					strategy. The core plugin gives you the full methodology. Here's the
+					lifecycle:
 				</p>
-				<ol className="space-y-4 text-stone-600">
-					<li>
-						<strong>1. Read the methodology.</strong> Understand the 4-phase
-						lifecycle and core principles.{" "}
-						<Link
-							href="/methodology"
-							className="text-teal-600 hover:text-teal-700"
-						>
-							Methodology overview &rarr;
-						</Link>
-					</li>
-					<li>
-						<strong>2. Define your first intent.</strong> Pick a real initiative.
-						Write a clear intent statement with scope and desired outcome.
-					</li>
-					<li>
-						<strong>3. Decompose into units.</strong> Break the intent into
-						discrete pieces of work with clear boundaries and success criteria.
-					</li>
-					<li>
-						<strong>4. Choose collaboration modes.</strong> For each unit, decide
-						whether to work in supervised, observed, or autonomous mode.
-					</li>
-					<li>
-						<strong>5. Execute with structure.</strong> Use hats to separate
-						planning, execution, and review. Let quality gates enforce standards.
-					</li>
-					<li>
-						<strong>6. Reflect and feed forward.</strong> After the initiative,
-						capture learnings and apply them to the next cycle.
-					</li>
-				</ol>
+				<div className="space-y-6">
+					<div className="rounded-xl border border-teal-200 bg-teal-50 p-6">
+						<h3 className="mb-2 text-lg font-semibold text-teal-900">
+							Elaboration
+						</h3>
+						<p className="text-sm text-teal-800">
+							Define intent, decompose into units, set success criteria. This
+							alone transforms how you work with AI.
+						</p>
+					</div>
+					<div className="rounded-xl border border-indigo-200 bg-indigo-50 p-6">
+						<h3 className="mb-2 text-lg font-semibold text-indigo-900">
+							Execution
+						</h3>
+						<p className="text-sm text-indigo-800">
+							Work through hat-based workflows in iterative bolts. Quality gates
+							ensure standards before progressing.
+						</p>
+					</div>
+					<div className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+						<h3 className="mb-2 text-lg font-semibold text-amber-900">
+							Operation
+						</h3>
+						<p className="text-sm text-amber-800">
+							Manage delivered outcomes with recurring tasks, reactive responses,
+							and AI-guided manual activities.
+						</p>
+					</div>
+					<div className="rounded-xl border border-rose-200 bg-rose-50 p-6">
+						<h3 className="mb-2 text-lg font-semibold text-rose-900">
+							Reflection
+						</h3>
+						<p className="text-sm text-rose-800">
+							Analyze outcomes, capture learnings, feed forward into
+							organizational memory. This is where H·AI·K·U's compounding
+							advantage begins.
+						</p>
+					</div>
+				</div>
 			</section>
 
 			{/* Mode Selection */}

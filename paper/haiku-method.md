@@ -430,6 +430,19 @@ In this example, unit-01 and unit-02 start in parallel (no dependencies). Unit-0
 
 **Build Domain Model.** Capture the vocabulary, constraints, and relationships of the problem space. This shared model ensures that humans and AI use the same language and operate from the same understanding. The domain model persists as an artifact that informs all subsequent phases.
 
+#### Organizational Discovery
+
+When a workspace has no organizational context — no prior memory, no domain models, no established patterns — Elaboration includes a **bootstrap discovery** step before decomposition begins. The AI surveys every available source to learn about the organization:
+
+- **Project artifacts** — documentation, configuration files, existing code
+- **Connected tools** — MCP resources reveal organizational knowledge bases (Notion wikis, shared drives, databases)
+- **User context** — the human's role, team structure, domain vocabulary, quality standards
+- **Activity history** — recent work patterns, contributors, conventions
+
+What the AI learns is synthesized and persisted to workspace memory — the organization's identity, team structure, tech stack, conventions, and domain vocabulary. This runs once per workspace. Every subsequent elaboration (and every other phase) starts with this foundational context, ensuring the AI never approaches the organization as a stranger.
+
+This is how organizational memory begins to compound. The first elaboration bootstraps understanding. Each reflection enriches it. Over time, the AI's model of the organization deepens — not through manual configuration, but through the natural rhythm of the HAIKU lifecycle.
+
 #### Elaboration Across Domains
 
 Elaboration is not limited to software requirements. The same pattern — intent, decomposition, criteria, domain model — applies universally:

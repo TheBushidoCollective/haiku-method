@@ -64,7 +64,7 @@ Uses the Google Drive MCP server to read/write memory documents in a configured 
 
 | Phase | Read | Write |
 |-------|------|-------|
-| **Elaboration** | Prior learnings inform decomposition and criteria | - |
+| **Elaboration** | Prior learnings inform decomposition and criteria | Organizational context bootstrapped on first run (organization.md) |
 | **Execution** | Patterns inform approach selection | Scratchpad captures per-iteration learnings |
 | **Operation** | Operational patterns guide responses | Operational insights recorded |
 | **Reflection** | All prior memory provides analysis context | Learnings, patterns, and anti-patterns saved |
@@ -73,11 +73,14 @@ Uses the Google Drive MCP server to read/write memory documents in a configured 
 
 ```
 {workspace}/memory/
+  organization.md   # Organizational context — team, tools, conventions (bootstrapped on first elaboration)
   learnings.md      # Accumulated learnings from reflection phases
   patterns.md       # Established patterns and anti-patterns
   domain/           # Domain models and vocabulary
     {domain}.md
 ```
+
+`organization.md` is bootstrapped during the first elaboration in a workspace (Phase 1.75: Organizational Discovery). It captures the team, tech stack, conventions, and domain vocabulary — everything needed for HAIKU to produce contextually appropriate output from the first interaction.
 
 Each file is plain markdown that accumulates over time. New entries are appended with a date header.
 

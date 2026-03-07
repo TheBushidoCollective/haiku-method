@@ -58,13 +58,95 @@ source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
 source "${CLAUDE_PLUGIN_ROOT}/lib/memory.sh"
 
 WORKSPACE=$(resolve_workspace)
+MEMORY_DIR="$(memory_dir)"
 ```
 
-Read any files in the workspace's memory directory — especially `learnings.md` and `patterns.md`. These contain insights from prior HAIKU cycles that should inform decomposition, criteria definition, and workflow selection.
+Read any files in the workspace's memory directory — especially `organization.md`, `learnings.md`, and `patterns.md`. These contain insights from prior HAIKU cycles that should inform decomposition, criteria definition, and workflow selection.
 
 Memory is hierarchical — if the workspace is nested within a parent workspace, memory from parent levels is also available and should be considered.
 
 If `memory.mcp` is configured in the workspace's `settings.yml`, also query that MCP server for relevant organizational knowledge (e.g., Notion pages, shared documents).
+
+**If memory is empty or missing `organization.md`, proceed to Phase 1.75. Otherwise skip to Phase 2.**
+
+## Phase 1.75: Organizational Discovery (Bootstrap)
+
+This phase runs when the workspace has no organizational context — no `organization.md` in memory, or memory is entirely empty. The goal is to learn enough about the organization, team, domain, and conventions to produce high-quality elaborations, then persist that knowledge so future sessions start informed.
+
+**This phase runs ONCE per workspace.** Once `organization.md` exists in memory, this phase is skipped.
+
+### Step 1: Survey Available Context
+
+Gather context from every source available — in parallel where possible:
+
+**Project files** — Read any of these that exist:
+- `README.md`, `CLAUDE.md`, `CONTRIBUTING.md`
+- `package.json`, `Cargo.toml`, `pyproject.toml`, `go.mod`, `Gemfile`, `.tool-versions`
+- `.github/`, `Makefile`, `docker-compose.yml`
+- Any docs directory (`docs/`, `documentation/`, `wiki/`)
+
+**Git history** — Learn from recent activity:
+```bash
+# Recent contributors and activity patterns
+git log --format='%an' --since='3 months ago' 2>/dev/null | sort | uniq -c | sort -rn | head -10
+# Recent commit messages reveal what the team works on
+git log --oneline -20 2>/dev/null
+```
+
+**MCP resources** — Discover what organizational tools are connected:
+- Use `ListMcpResourcesTool` to discover available resources
+- Read any organizational docs, wikis, or knowledge bases accessible via MCP
+- The presence of specific MCP servers itself reveals the org's tooling (Notion = docs in Notion, Google Drive = shared drives, Slack = team communication)
+
+**Workspace settings** — Read `settings.yml` if it exists for any configured integrations, profiles, or conventions.
+
+### Step 2: Ask the User
+
+After reviewing available context, ask the user to fill gaps. Use `AskUserQuestion`:
+
+```json
+{
+  "questions": [
+    {
+      "question": "Tell me about your organization and this project so I can tailor my approach. What does your team/company do, and what's your role?",
+      "header": "Organizational Context"
+    }
+  ]
+}
+```
+
+Based on what was already gathered from project files and MCP resources, ask targeted follow-up questions about anything still unclear:
+- Team structure and disciplines involved
+- Domain vocabulary and conventions
+- Quality standards and review processes
+- Preferred tools and workflows
+- Any organizational patterns or anti-patterns to be aware of
+
+**Keep it conversational — don't interrogate.** 2-3 focused questions based on gaps, not a form to fill out.
+
+### Step 3: Synthesize and Persist
+
+Write what you've learned to workspace memory so future elaborations (and all other phases) start with this context:
+
+```bash
+memory_write "organization" "$CONTENT" "overwrite"
+```
+
+The `organization.md` file should capture:
+- **Organization**: What the company/team does, mission, domain
+- **Team**: Who's involved, roles, disciplines
+- **Tech stack / Tools**: Languages, frameworks, platforms, integrations
+- **Conventions**: Naming patterns, code style, review process, branching strategy
+- **Domain vocabulary**: Key terms and their meanings in this context
+- **Quality standards**: What "good" looks like here
+
+If domain-specific models were discovered, also write:
+```bash
+mkdir -p "$(memory_dir)/domain"
+memory_write "domain/{domain-name}" "$DOMAIN_CONTENT" "overwrite"
+```
+
+**Keep memory files concise and factual.** They'll be loaded into context on every session. Prefer structured lists over prose.
 
 ## Phase 2: Domain Discovery
 
@@ -75,6 +157,8 @@ Explore the project/domain to understand:
 - Domain-specific terminology and concepts
 
 Read relevant files and documentation. Use search tools to understand the landscape.
+
+**If Phase 1.75 just ran**, much of this context is already gathered. Focus on details specific to the current intent rather than re-surveying the entire project.
 
 ## Phase 3: Define Success Criteria
 

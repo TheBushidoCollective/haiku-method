@@ -362,7 +362,7 @@ Ad-hoc approaches don't compound — each session starts fresh, each prompt is o
 ### Overview
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph E["ELABORATION"]
         direction TB
         E1["Define Intent"]
@@ -693,7 +693,7 @@ Reflection closes the loop. It analyzes outcomes against original intent, captur
 Reflection is what distinguishes HAIKU from one-off project management. The feed-forward loop creates organizational learning that compounds over time:
 
 ```mermaid
-flowchart LR
+flowchart TB
     R["Reflection"] -->|"Sharper criteria"| E["Elaboration"]
     R -->|"Better quality gates"| X["Execution"]
     R -->|"Improved operational plans"| O["Operation"]
@@ -1192,23 +1192,13 @@ Reflection completes the lifecycle and creates the compounding advantage that di
 
 Teams naturally progress through adoption stages as they build confidence:
 
-```
-Elaboration only
-     |
-     v
-Elaboration + Execution
-     |
-     v
-Elaboration + Execution + Operation
-     |
-     v
-Full lifecycle (all 4 phases)
-     |
-     v
-Full lifecycle + custom profile
-     |
-     v
-Full lifecycle + multiple profiles across domains
+```mermaid
+flowchart TB
+    A["Elaboration only"] --> B["Elaboration + Execution"]
+    B --> C["Elaboration + Execution + Operation"]
+    C --> D["Full lifecycle (all 4 phases)"]
+    D --> E["Full lifecycle + custom profile"]
+    E --> F["Full lifecycle + multiple profiles across domains"]
 ```
 
 Each stage builds on the previous one. There is no pressure to reach the final stage — even "Elaboration only" delivers significant value. The methodology meets you where you are.

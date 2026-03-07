@@ -74,7 +74,7 @@ Elaboration --> Execution --> Operation --> Reflection
 3. **Operation** — Manage what was delivered
 4. **Reflection** — Learn from what happened
 
-These phases are not rigid sequential gates. They represent a continuous flow with strategic checkpoints. The same initiative may cycle through phases multiple times as understanding deepens and context evolves.
+These phases are not rigid sequential gates. They represent a continuous flow with strategic checkpoints. The same initiative may cycle through phases multiple times as understanding deepens and context evolves. When cross-functional work is needed, **iteration passes** provide structured re-entry into Elaboration and Execution through different disciplinary lenses.
 
 ### Who This Is For
 
@@ -481,6 +481,66 @@ Elaboration is complete when every unit has clear success criteria and the decom
 - Domain model capturing vocabulary and relationships
 - Mode recommendations (supervised, observed, autonomous) per unit
 - Execution plan with workflow assignments
+- Pass structure (if multi-disciplinary iteration is needed)
+
+#### Iteration Passes
+
+Some intents require contributions from multiple disciplines — each bringing different expertise, producing different artifacts, and refining the intent through a different lens. HAIKU supports this through **iteration passes**: typed iterations through Elaboration and Execution within a single intent.
+
+A **pass** is a disciplinary iteration through the Elaboration → Execution cycle. Each pass operates through a specific lens, and the output of one pass becomes input context for the next:
+
+```mermaid
+flowchart TB
+    INTENT["Intent"] --> P1
+
+    subgraph P1["PASS 1"]
+        direction TB
+        E1["Elaborate"] --> X1["Execute"]
+        X1 --> R1["Review"]
+        R1 -->|"Gaps"| E1
+        R1 -->|"Done"| A1["Pass Artifacts"]
+    end
+
+    A1 --> P2
+
+    subgraph P2["PASS 2"]
+        direction TB
+        E2["Elaborate"] --> X2["Execute"]
+        X2 --> R2["Review"]
+        R2 -->|"Gaps"| E2
+        R2 -.->|"Earlier pass gap"| E1
+        R2 -->|"Done"| A2["Pass Artifacts"]
+    end
+
+    A2 --> P3
+
+    subgraph P3["PASS 3"]
+        direction TB
+        E3["Elaborate"] --> X3["Execute"]
+        X3 --> R3["Review"]
+        R3 -->|"Gaps"| E3
+        R3 -.->|"Earlier pass gap"| E2
+        R3 -->|"Done"| A3["Final Deliverable"]
+    end
+```
+
+**Key properties of iteration passes:**
+
+- **Each pass uses the same lifecycle** — Elaboration (define units, set criteria) → Execution (do the work through hat workflows) → Review (validate output). The structure is identical; the discipline and artifacts differ.
+- **Pass artifacts become input context.** Completed pass outputs are available as context for the next pass's elaboration, preserving institutional knowledge that traditional handoffs lose.
+- **Backward flow is expected.** When a later pass discovers an issue that requires earlier-pass work — a constraint that invalidates an assumption, a gap in the prior pass's output — work flows back. This is normal iteration, not failure.
+- **Passes are optional.** Most intents need only a single pass (the default). Passes add value when cross-functional collaboration produces artifacts that subsequent disciplines depend on.
+
+**Passes across domains:**
+
+| Domain | Example Passes | What Each Produces |
+|---|---|---|
+| **Software** | Design → Product → Dev | Mockups → Behavioral specs → Working code |
+| **Marketing** | Research → Strategy → Creative | Market analysis → Campaign plan → Campaign assets |
+| **Research** | Literature → Methodology → Collection | Literature review → Study protocol → Collected data |
+| **Operations** | Assessment → Design → Implementation | Current-state analysis → Process design → Deployed process |
+
+Pass types are defined by profiles. HAIKU provides the universal mechanism — typed, sequential iterations through Elaboration and Execution within a single intent — while profiles define the specific passes appropriate to their domain.
 
 ### Phase 2: Execution
 
@@ -856,6 +916,7 @@ A profile customizes HAIKU by defining:
 - **Domain-specific hats** — behavioral roles tailored to the field
 - **Domain-specific workflows** — ordered hat sequences appropriate to the work
 - **Domain-specific quality gates** — verification mechanisms relevant to the domain
+- **Domain-specific pass types** — disciplinary iterations appropriate to the domain (e.g., design → product → dev for software)
 - **Tooling integrations** — connections to the systems and platforms used in the domain
 - **Artifact types** — the specific deliverables the domain produces
 - **Terminology mappings** — domain vocabulary layered onto HAIKU's universal terms
@@ -877,6 +938,7 @@ As the A2A protocol matures, profiles could also publish **Agent Cards** — cap
 | HAIKU Concept | AI-DLC Implementation |
 |---|---|
 | Quality gates | Tests, type checks, linting, security scans, build verification |
+| Iteration passes | Design → Product → Dev (optional, for cross-functional features) |
 | Checkpoints | Git commits |
 | Versioning | Git branches |
 | Review | Pull/merge requests |
@@ -927,6 +989,7 @@ For the full specification of the AI-DLC profile, see the *AI-DLC 2026* paper.
 | HAIKU Concept | SWARM Implementation |
 |---|---|
 | Quality gates | Brand review, legal compliance, performance targets, channel requirements |
+| Iteration passes | Research → Strategy → Creative (optional, for full-funnel campaigns) |
 | Checkpoints | Draft reviews, stakeholder sign-offs |
 | Versioning | Document versions, asset revisions |
 | Review | Stakeholder approval workflows |
@@ -969,9 +1032,10 @@ Organizations can create profiles for any domain while inheriting HAIKU's lifecy
 1. **Hats** — What behavioral roles does your domain need?
 2. **Workflows** — In what order should hats operate?
 3. **Quality gates** — What verifiable standards must deliverables meet?
-4. **Tooling** — What systems and platforms does your domain use?
-5. **Artifacts** — What does your domain produce?
-6. **Terminology** — What domain-specific vocabulary maps to HAIKU's universal terms?
+4. **Pass types** — What disciplinary iterations does your domain use? (optional)
+5. **Tooling** — What systems and platforms does your domain use?
+6. **Artifacts** — What does your domain produce?
+7. **Terminology** — What domain-specific vocabulary maps to HAIKU's universal terms?
 
 **Example: Research Profile**
 
@@ -1319,6 +1383,7 @@ The key insight: audit trails emerge naturally from the HAIKU workflow rather th
 | **Intent** | The top-level goal or initiative — the thing being accomplished |
 | **Operation** | The third phase: managing what was delivered |
 | **Operational Plan** | An artifact produced during execution that defines how the deliverable should be managed |
+| **Pass** | A typed iteration through Elaboration and Execution within a single intent, refining work through a specific disciplinary lens; passes are optional and profile-defined; output of one pass becomes input to the next |
 | **Phase** | A stage in the lifecycle: Elaboration, Execution, Operation, or Reflection |
 | **Profile** | A domain-specific implementation of HAIKU (e.g., AI-DLC for software, SWARM for marketing) |
 | **Quality Gate** | A configurable verification checkpoint that provides enforcement |

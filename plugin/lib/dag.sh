@@ -94,6 +94,18 @@ parse_unit_deps() {
   _yaml_get_array "depends_on" < "$unit_file"
 }
 
+# Parse unit pass from frontmatter (fast - no subprocess)
+# Returns the pass type or empty for single-pass units
+# Usage: parse_unit_pass <unit_file>
+parse_unit_pass() {
+  local unit_file="$1"
+  if [ ! -f "$unit_file" ]; then
+    echo ""
+    return
+  fi
+  _yaml_get_simple "pass" "" < "$unit_file"
+}
+
 # Check if all dependencies of a unit are completed
 # Returns 0 (true) if all deps completed, 1 (false) otherwise
 # Usage: are_deps_completed <intent_dir> <unit_file>
@@ -187,6 +199,73 @@ find_ready_units() {
       basename "$unit_file" .md
     fi
   done
+}
+
+# Find ready units filtered by pass
+# When active_pass is set, only returns units belonging to that pass
+# When active_pass is empty, returns all ready units (backward compatible)
+# Usage: find_ready_units_for_pass <intent_dir> <active_pass>
+find_ready_units_for_pass() {
+  local intent_dir="$1"
+  local active_pass="$2"
+
+  if [ ! -d "$intent_dir" ]; then
+    return
+  fi
+
+  for unit_file in "$intent_dir"/unit-*.md; do
+    [ -f "$unit_file" ] || continue
+
+    # Filter by pass if active_pass is set
+    if [ -n "$active_pass" ]; then
+      local unit_pass
+      unit_pass=$(parse_unit_pass "$unit_file")
+      [ "$unit_pass" != "$active_pass" ] && continue
+    fi
+
+    local unit_status
+    unit_status=$(parse_unit_status "$unit_file")
+
+    # Only consider pending units
+    [ "$unit_status" != "pending" ] && continue
+
+    # Check if all deps are completed
+    if are_deps_completed "$intent_dir" "$unit_file"; then
+      basename "$unit_file" .md
+    fi
+  done
+}
+
+# Check if all units for a given pass are completed
+# Returns 0 if complete, 1 if not
+# Usage: is_pass_complete <intent_dir> <pass_name>
+is_pass_complete() {
+  local intent_dir="$1"
+  local pass_name="$2"
+
+  if [ ! -d "$intent_dir" ]; then
+    return 1
+  fi
+
+  local found_units=false
+  for unit_file in "$intent_dir"/unit-*.md; do
+    [ -f "$unit_file" ] || continue
+
+    local unit_pass
+    unit_pass=$(parse_unit_pass "$unit_file")
+    [ "$unit_pass" != "$pass_name" ] && continue
+
+    found_units=true
+    local unit_status
+    unit_status=$(parse_unit_status "$unit_file")
+
+    if [ "$unit_status" != "completed" ]; then
+      return 1
+    fi
+  done
+
+  # If no units found for this pass, consider it not complete
+  $found_units && return 0 || return 1
 }
 
 # Find in-progress units

@@ -99,6 +99,34 @@ Units should be:
 
 Present units to user for approval via `AskUserQuestion`.
 
+## Phase 4.5: Iteration Passes
+
+Ask the user if this intent needs multi-disciplinary iteration passes. Most intents only need a single pass (the default). Cross-functional teams may benefit from multiple passes where each discipline refines the intent through a different lens.
+
+Use `AskUserQuestion`:
+```json
+{
+  "questions": [{
+    "question": "Does this intent need cross-functional iteration passes?",
+    "header": "Iteration Passes",
+    "options": [
+      {"label": "Single pass", "description": "One pass — elaborate and execute (default for most work)"},
+      {"label": "Custom passes", "description": "Define discipline-specific passes for this intent"}
+    ],
+    "multiSelect": false
+  }]
+}
+```
+
+If "Custom passes" is selected, ask the user to define their pass types (e.g., "design, dev" or "research, methodology, collection"). The specific pass types are domain-dependent — profiles may define standard passes, but users can always specify custom ones.
+
+When passes are configured:
+- Add `passes` array to intent frontmatter (e.g., `passes: [design, dev]`)
+- Set `active_pass` to the first pass
+- Units elaborated in this session belong to the active pass (set `pass` field in unit frontmatter)
+
+When the active pass completes during execution, the next pass triggers a new elaboration cycle for its discipline-specific units.
+
 ## Phase 5: Select Workflow
 
 Present available workflows and ask user to choose:
@@ -125,6 +153,8 @@ INTENT_DIR="$WORKSPACE/intents/{intent-slug}"
 title: "Intent Title"
 status: active
 workflow: default
+passes: []  # Optional: e.g., [design, product, dev] — omit or leave empty for single-pass (default)
+active_pass: ""  # Current pass being worked on (auto-managed during execution)
 ---
 
 ## Problem
@@ -151,6 +181,7 @@ workflow: default
 ---
 status: pending
 depends_on: []
+pass: ""  # Which pass this unit belongs to — empty for single-pass intents
 ---
 
 # Unit NN: Title

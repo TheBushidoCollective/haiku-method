@@ -72,13 +72,20 @@ Task already complete! Run /elaborate to start a new task.
 ```bash
 INTENT_DIR="$WORKSPACE/intents/${INTENT_SLUG}"
 
+# Read active pass from intent frontmatter (empty for single-pass intents)
+ACTIVE_PASS=$(_yaml_get_simple "active_pass" "" < "$INTENT_DIR/intent.md")
+
 # If targeting a specific unit, use it; otherwise find next ready unit
 if [ -n "$TARGET_UNIT" ]; then
   UNIT_FILE="$INTENT_DIR/${TARGET_UNIT}.md"
   # Validate and check deps
 else
-  # Find next ready unit from DAG
-  READY=$(find_ready_units "$INTENT_DIR")
+  # Find next ready unit from DAG, filtered by active pass
+  if [ -n "$ACTIVE_PASS" ]; then
+    READY=$(find_ready_units_for_pass "$INTENT_DIR" "$ACTIVE_PASS")
+  else
+    READY=$(find_ready_units "$INTENT_DIR")
+  fi
   UNIT_NAME=$(echo "$READY" | head -1)
   UNIT_FILE="$INTENT_DIR/${UNIT_NAME}.md"
 fi

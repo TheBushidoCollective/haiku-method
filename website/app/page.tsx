@@ -132,12 +132,12 @@ export default function Home() {
 
 					{/* Lifecycle visual */}
 					<div className="mb-8 flex items-center justify-center">
-						<div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-0">
+						<div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-0">
 							{phases.map((phase, i) => (
 								<div key={phase.name} className="flex items-center">
 									<Link
 										href={phase.href}
-										className={`group flex items-center gap-3 rounded-xl border px-5 py-3 transition hover:shadow-md ${phase.color}`}
+										className={`group flex w-full items-center gap-3 rounded-xl border px-5 py-3 transition hover:shadow-md sm:w-auto ${phase.color}`}
 									>
 										{phase.icon}
 										<div>

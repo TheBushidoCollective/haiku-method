@@ -15,7 +15,7 @@
       "description": "H·AI·K·U Method — structured human-AI collaboration with elaboration, execution, operation, and reflection phases, configurable workflows, and compounding organizational memory",
       "source": {
         "source": "github",
-        "repo": "TheBushidoCollective"
+        "repo": "TheBushidoCollective/haiku-method"
       },
       "category": "Pattern",
       "keywords": [

@@ -95,19 +95,61 @@ Metrics to extract:
 - **Quality gate pass/fail history** (from state if recorded)
 - **Operational task status** (from operation-status.json)
 
+### Step 2b: Load Session Transcript (if available)
+
+Check if the session transcript is accessible. The `HAIKU_TRANSCRIPT_PATH` environment variable is set by the SessionStart hook when the session provides a transcript path.
+
+```bash
+TRANSCRIPT_PATH="${HAIKU_TRANSCRIPT_PATH:-}"
+HAS_TRANSCRIPT=false
+
+if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
+  HAS_TRANSCRIPT=true
+  echo "Session transcript available at: $TRANSCRIPT_PATH"
+fi
+```
+
+If the transcript is available, read it to extract conversation-level insights that artifacts alone cannot capture:
+
+```bash
+if [ "$HAS_TRANSCRIPT" = "true" ]; then
+  # The transcript is a JSONL file — each line is a JSON object representing
+  # a conversation turn (user messages, assistant responses, tool calls/results).
+  # Read the full transcript for analysis.
+  cat "$TRANSCRIPT_PATH"
+fi
+```
+
+When analyzing the transcript, look for:
+- **Decision points** — where the user made choices or changed direction
+- **Confusion or rework** — repeated attempts, corrections, or misunderstandings
+- **Implicit feedback** — user satisfaction signals, frustration, or surprise
+- **Collaboration dynamics** — how initiative was shared between human and AI
+- **Tool usage patterns** — which tools were effective, which caused friction
+- **Context loss** — moments where the AI lost track or needed reminding
+
+**This step is optional.** If `HAIKU_TRANSCRIPT_PATH` is not set or the file doesn't exist, skip transcript analysis and rely solely on artifacts and state. Note in the reflection that transcript analysis was not available.
+
 ### Step 3: Don the Reflector Hat
 
 Load and follow the Reflector hat instructions from `hats/reflector.md`.
 
 As the Reflector, analyze:
 
-1. **Execution patterns** - Which units went smoothly? Which required retries?
-2. **Criteria satisfaction** - How well were success criteria met? Any partial satisfaction?
-3. **Process observations** - What approaches worked? What was painful?
-4. **Operational outcomes** - How did operational tasks perform? Any gaps?
-5. **Blocker analysis** - Were blockers systemic or one-off? Could they be prevented?
+1. **Execution patterns** — Which units went smoothly? Which required retries?
+2. **Criteria satisfaction** — How well were success criteria met? Any partial satisfaction?
+3. **Process observations** — What approaches worked? What was painful?
+4. **Operational outcomes** — How did operational tasks perform? Any gaps?
+5. **Blocker analysis** — Were blockers systemic or one-off? Could they be prevented?
 
-Ground all analysis in evidence from the artifacts. Do not speculate without data.
+If the session transcript was loaded in Step 2b, also analyze:
+
+6. **Collaboration quality** — How well did human and AI work together? Were handoffs smooth?
+7. **Decision archaeology** — What decisions were made during the session? Were any revisited or reversed?
+8. **Process friction** — Where did the workflow create friction? Where was it smooth?
+9. **Implicit learnings** — What did the conversation reveal that the artifacts don't capture?
+
+Ground all analysis in evidence from the artifacts and transcript. Do not speculate without data.
 
 ### Step 4: Produce reflection.md
 
@@ -137,6 +179,12 @@ status: complete
 
 ## Operational Outcomes
 - {How operational tasks performed, if applicable}
+
+## Collaboration Insights
+{Only include this section if transcript analysis was available}
+- **Decision points**: {Key decisions and their outcomes}
+- **Process friction**: {Where the workflow helped or hindered}
+- **Collaboration dynamics**: {How human-AI interaction evolved}
 
 ## Key Learnings
 - {Distilled actionable insight}

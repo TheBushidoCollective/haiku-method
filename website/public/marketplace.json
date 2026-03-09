@@ -2,6 +2,9 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "haiku-method",
   "description": "H·AI·K·U — Universal framework for structured human-AI collaboration with 4-phase lifecycle, hat-based workflows, hierarchical workspaces, and organizational memory.",
+  "metadata": {
+    "description": "H·AI·K·U — Universal framework for structured human-AI collaboration with 4-phase lifecycle, hat-based workflows, hierarchical workspaces, and organizational memory."
+  },
   "owner": {
     "name": "The Bushido Collective",
     "email": "hello@thebushido.co"

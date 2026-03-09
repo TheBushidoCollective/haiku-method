@@ -1,4 +1,5 @@
 ---
+name: advance
 description: (Internal) Advance to the next hat in the HAIKU workflow
 user-invocable: false
 ---

@@ -1,4 +1,5 @@
 ---
+name: setup
 description: Configure H·AI·K·U for this project — set up workspace, discover organizational context, and configure settings.
 disable-model-invocation: true
 allowed-tools:

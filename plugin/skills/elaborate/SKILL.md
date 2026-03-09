@@ -1,4 +1,5 @@
 ---
+name: elaborate
 description: Start HAIKU elaboration to collaboratively define intent, success criteria, and decompose into units. Use when starting a new task or project.
 allowed-tools:
   - Read

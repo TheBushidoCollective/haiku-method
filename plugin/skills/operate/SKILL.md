@@ -1,4 +1,5 @@
 ---
+name: operate
 description: Manage the operation phase - read operational plans, execute agent tasks, guide human tasks, and track operational status
 argument-hint: "[intent-slug]"
 ---

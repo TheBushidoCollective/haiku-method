@@ -1,4 +1,5 @@
 ---
+name: execute
 description: Continue the HAIKU execution loop - autonomous execute/review cycles until completion
 argument-hint: "[intent-slug] [unit-name]"
 disable-model-invocation: true

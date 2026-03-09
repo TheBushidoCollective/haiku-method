@@ -1,4 +1,5 @@
 ---
+name: reflect
 description: Analyze a completed HAIKU intent cycle and produce reflection artifacts with learnings, metrics, and recommendations
 argument-hint: "[intent-slug]"
 ---

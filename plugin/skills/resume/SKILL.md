@@ -1,4 +1,5 @@
 ---
+name: resume
 description: Resume work on an existing HAIKU intent when state is lost
 argument-hint: "[intent-slug]"
 ---

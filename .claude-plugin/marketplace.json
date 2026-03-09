@@ -13,8 +13,7 @@
       "name": "haiku-method",
       "description": "H·AI·K·U Method — structured human-AI collaboration with elaboration, execution, operation, and reflection phases, configurable workflows, and compounding organizational memory",
       "source": {
-        "source": "git-subdir",
-        "url": "TheBushidoCollective/haiku-method",
+        "source": "path",
         "path": "plugin"
       },
       "category": "Pattern",
@@ -27,26 +26,6 @@
         "domain-agnostic",
         "organizational-memory",
         "workspace"
-      ]
-    },
-    {
-      "name": "ai-dlc",
-      "description": "AI-DLC — the software development profile of H·AI·K·U. Iterative AI-driven development with git integration, test suites, PR workflows, CI/CD pipelines, and deployment gates.",
-      "source": {
-        "source": "git-subdir",
-        "url": "TheBushidoCollective/ai-dlc",
-        "path": "plugin"
-      },
-      "category": "Pattern",
-      "keywords": [
-        "ai-dlc",
-        "software-development",
-        "haiku-profile",
-        "git",
-        "ci-cd",
-        "testing",
-        "code-review",
-        "deployment"
       ]
     }
   ]

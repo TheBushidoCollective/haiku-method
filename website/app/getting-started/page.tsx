@@ -28,55 +28,19 @@ export default function GettingStartedPage() {
 						claude.ai (Recommended for Teams)
 					</h3>
 					<p className="mb-4 text-sm text-teal-800">
-						Install H·AI·K·U as a claude.ai plugin for your entire organization,
-						a team, or individual projects.
+						Install H·AI·K·U as a claude.ai plugin for your organization or
+						individual projects.
 					</p>
 
-					<div className="space-y-4">
+					<div className="space-y-6">
 						<div>
 							<p className="mb-2 text-sm font-medium text-teal-900">
 								Organization-wide
 							</p>
-							<p className="mb-2 text-sm text-teal-800">
-								An admin adds H·AI·K·U to the organization's plugin library,
-								making it available to every project and team member:
-							</p>
-							<ol className="mb-3 list-inside list-decimal space-y-1 text-sm text-teal-800">
-								<li>Go to <strong>Organization Settings &rarr; Plugins</strong></li>
-								<li>Click <strong>Add Plugin</strong></li>
-								<li>Enter the marketplace URL below</li>
-								<li>Select <strong>haiku-method</strong> and approve</li>
-							</ol>
-						</div>
-
-						<div className="rounded-lg border border-teal-300 bg-white p-4 font-mono text-sm text-stone-800">
-							<div className="text-stone-400">
-								Marketplace URL
-							</div>
-							<div>https://haikumethod.ai/marketplace.json</div>
-						</div>
-
-						<div>
-							<p className="mb-2 text-sm font-medium text-teal-900">
-								Individual project
-							</p>
-							<p className="mb-2 text-sm text-teal-800">
-								Add H·AI·K·U to a single project from within a claude.ai conversation:
-							</p>
-							<div className="rounded-lg border border-teal-300 bg-white p-4 font-mono text-sm text-stone-800">
-								<div className="text-stone-400">
-									# In a claude.ai project conversation
-								</div>
-								<div>/install haikumethod.ai/marketplace.json</div>
-							</div>
-						</div>
-
-						<div>
-							<p className="mb-2 text-sm font-medium text-teal-900">
-								Download alternative
-							</p>
-							<p className="mb-2 text-sm text-teal-800">
-								Download the plugin and upload it manually to your claude.ai project:
+							<p className="mb-3 text-sm text-teal-800">
+								Download the plugin zip and upload it through your organization's
+								admin settings. This makes H·AI·K·U available to every project
+								and team member.
 							</p>
 							<a
 								href="/haiku-method-plugin.zip"
@@ -88,6 +52,19 @@ export default function GettingStartedPage() {
 								</svg>
 								Download Plugin (.zip)
 							</a>
+						</div>
+
+						<div>
+							<p className="mb-2 text-sm font-medium text-teal-900">
+								Internal use via GitHub
+							</p>
+							<p className="mb-2 text-sm text-teal-800">
+								Add the GitHub repository URL to your organization's plugin
+								configuration to install directly:
+							</p>
+							<div className="rounded-lg border border-teal-300 bg-white p-4 font-mono text-sm text-stone-800">
+								https://github.com/TheBushidoCollective/haiku-method.git
+							</div>
 						</div>
 					</div>
 				</div>

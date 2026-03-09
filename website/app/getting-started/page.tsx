@@ -94,37 +94,26 @@ export default function GettingStartedPage() {
 				</div>
 			</section>
 
-			{/* Configure Your Workspace */}
+			{/* Run Setup */}
 			<section className="mb-12">
 				<h2 className="mb-4 text-2xl font-bold">
-					2. Configure Your Workspace
+					2. Run Setup
 				</h2>
 				<p className="mb-4 text-stone-600">
-					H·AI·K·U artifacts live in a workspace — a standalone knowledge base
-					that accumulates intents, memory, and organizational knowledge over
-					time. Point your project to a workspace:
+					The setup skill configures your workspace, discovers organizational
+					context, and writes your settings. Run it once per project:
 				</p>
-				<div className="space-y-4">
-					<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
-						<div className="text-stone-400">
-							# Option A: Environment variable
-						</div>
-						<div>export HAIKU_WORKSPACE=~/haiku-workspace</div>
+				<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
+					<div className="text-stone-400">
+						# Configure workspace and organizational context
 					</div>
-					<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
-						<div className="text-stone-400">
-							# Option B: Pointer file in your project root
-						</div>
-						<div>
-							echo &quot;workspace: ~/haiku-workspace&quot; &gt; .haiku.yml
-						</div>
-					</div>
+					<div>/setup</div>
 				</div>
 				<p className="mt-3 text-sm text-stone-500">
-					Workspaces can be local directories, shared cloud drive folders, or
-					backed by a knowledge management system via MCP. They nest
-					hierarchically — a company workspace contains team workspaces, which
-					contain project workspaces. Memory inherits upward.
+					Setup walks you through choosing a workspace location, discovering your
+					team's tools and conventions, selecting a default workflow, and
+					configuring quality gates. It's idempotent — re-run anytime to update
+					settings.
 				</p>
 			</section>
 
@@ -132,16 +121,14 @@ export default function GettingStartedPage() {
 			<section className="mb-12">
 				<h2 className="mb-4 text-2xl font-bold">3. Start Your First Intent</h2>
 				<p className="mb-4 text-stone-600">
-					With the plugin installed and workspace configured, use the built-in
-					skills to begin:
+					With the plugin installed and workspace configured, elaborate your
+					first intent:
 				</p>
-				<div className="space-y-4">
-					<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
-						<div className="text-stone-400">
-							# Elaborate your first intent
-						</div>
-						<div>/elaborate</div>
+				<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
+					<div className="text-stone-400">
+						# Elaborate your first intent
 					</div>
+					<div>/elaborate</div>
 				</div>
 				<p className="mt-3 text-sm text-stone-500">
 					The Elaboration skill guides you through defining your intent, breaking
@@ -155,6 +142,15 @@ export default function GettingStartedPage() {
 			<section className="mb-12">
 				<h2 className="mb-4 text-2xl font-bold">Plugin Skills</h2>
 				<div className="space-y-3">
+					<div className="rounded-lg border border-stone-200 p-4">
+						<code className="text-sm font-semibold text-teal-600">
+							/setup
+						</code>
+						<p className="mt-1 text-sm text-stone-600">
+							Configure workspace, discover organizational context, set default
+							workflow and quality gates.
+						</p>
+					</div>
 					<div className="rounded-lg border border-stone-200 p-4">
 						<code className="text-sm font-semibold text-teal-600">
 							/elaborate

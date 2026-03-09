@@ -4,7 +4,7 @@ import Link from "next/link"
 export const metadata: Metadata = {
 	title: "Getting Started",
 	description:
-		"Install the H·AI·K·U plugin for Claude Code and start using structured human-AI collaboration.",
+		"Install the H·AI·K·U plugin for claude.ai or Claude Code and start using structured human-AI collaboration.",
 }
 
 export default function GettingStartedPage() {
@@ -12,57 +12,106 @@ export default function GettingStartedPage() {
 		<div className="mx-auto max-w-3xl px-4 py-12">
 			<h1 className="mb-4 text-4xl font-bold">Getting Started</h1>
 			<p className="mb-10 text-lg text-stone-600">
-				Get up and running with H·AI·K·U in Claude Code. Install the plugin,
-				configure your workspace, and start your first intent.
+				H·AI·K·U works with both claude.ai and Claude Code. Choose the
+				installation method that fits your team.
 			</p>
 
-			{/* Install the Plugin */}
+			{/* claude.ai Installation */}
 			<section className="mb-12">
-				<h2 className="mb-4 text-2xl font-bold">1. Install the Plugin</h2>
-				<p className="mb-4 text-stone-600">
-					H·AI·K·U is available as a Claude Code plugin. Install it from the
-					marketplace:
-				</p>
-				<div className="space-y-4">
-					<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
-						<div className="text-stone-400">
-							# Add the H·AI·K·U marketplace
+				<h2 className="mb-4 text-2xl font-bold">
+					1. Install the Plugin
+				</h2>
+
+				{/* claude.ai */}
+				<div className="mb-6 rounded-xl border border-teal-200 bg-teal-50 p-6">
+					<h3 className="mb-3 text-lg font-semibold text-teal-900">
+						claude.ai (Recommended for Teams)
+					</h3>
+					<p className="mb-4 text-sm text-teal-800">
+						Install H·AI·K·U as a claude.ai plugin for your entire organization,
+						a team, or individual projects.
+					</p>
+
+					<div className="space-y-4">
+						<div>
+							<p className="mb-2 text-sm font-medium text-teal-900">
+								Organization-wide
+							</p>
+							<p className="mb-2 text-sm text-teal-800">
+								An admin adds H·AI·K·U to the organization's plugin library,
+								making it available to every project and team member:
+							</p>
+							<ol className="mb-3 list-inside list-decimal space-y-1 text-sm text-teal-800">
+								<li>Go to <strong>Organization Settings &rarr; Plugins</strong></li>
+								<li>Click <strong>Add Plugin</strong></li>
+								<li>Enter the marketplace URL below</li>
+								<li>Select <strong>haiku-method</strong> and approve</li>
+							</ol>
 						</div>
-						<div>/install haikumethod.ai/marketplace.json</div>
-					</div>
-					<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
-						<div className="text-stone-400">
-							# Install the haiku-method plugin
+
+						<div className="rounded-lg border border-teal-300 bg-white p-4 font-mono text-sm text-stone-800">
+							<div className="text-stone-400">
+								Marketplace URL
+							</div>
+							<div>https://haikumethod.ai/marketplace.json</div>
 						</div>
-						<div>/install haiku-method</div>
+
+						<div>
+							<p className="mb-2 text-sm font-medium text-teal-900">
+								Individual project
+							</p>
+							<p className="mb-2 text-sm text-teal-800">
+								Add H·AI·K·U to a single project from within a claude.ai conversation:
+							</p>
+							<div className="rounded-lg border border-teal-300 bg-white p-4 font-mono text-sm text-stone-800">
+								<div className="text-stone-400">
+									# In a claude.ai project conversation
+								</div>
+								<div>/install haikumethod.ai/marketplace.json</div>
+							</div>
+						</div>
+
+						<div>
+							<p className="mb-2 text-sm font-medium text-teal-900">
+								Download alternative
+							</p>
+							<p className="mb-2 text-sm text-teal-800">
+								Download the plugin and upload it manually to your claude.ai project:
+							</p>
+							<a
+								href="/haiku-method-plugin.zip"
+								download
+								className="inline-flex items-center gap-2 rounded-lg border border-teal-300 bg-white px-4 py-2 text-sm font-medium text-teal-700 transition hover:bg-teal-50"
+							>
+								<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+								</svg>
+								Download Plugin (.zip)
+							</a>
+						</div>
 					</div>
 				</div>
-				<p className="mt-3 text-sm text-stone-500">
-					This installs the core H·AI·K·U framework with the 4-phase lifecycle,
-					hat-based workflows, quality gates, and organizational memory.
-				</p>
-				<div className="mt-6 rounded-lg border border-stone-200 bg-stone-50 p-4">
-					<p className="mb-2 text-sm font-medium text-stone-700">
-						Alternative: Manual Install
+
+				{/* Claude Code */}
+				<div className="rounded-xl border border-stone-200 bg-stone-50 p-6">
+					<h3 className="mb-3 text-lg font-semibold text-stone-900">
+						Claude Code (CLI)
+					</h3>
+					<p className="mb-4 text-sm text-stone-600">
+						Point Claude Code at the GitHub repository or install via the CLI:
 					</p>
-					<p className="mb-3 text-sm text-stone-600">
-						Download the plugin zip, extract it into your project, and point Claude
-						Code to it:
-					</p>
-					<div className="space-y-3">
-						<a
-							href="/haiku-method-plugin.zip"
-							download
-							className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-50"
-						>
-							<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-							</svg>
-							Download Plugin (.zip)
-						</a>
+					<div className="space-y-4">
 						<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
-							<div className="text-stone-400"># Extract and add to your project</div>
-							<div>unzip haiku-method-plugin.zip -d .claude</div>
+							<div className="text-stone-400">
+								# Install from the marketplace
+							</div>
+							<div>/install haikumethod.ai/marketplace.json</div>
+						</div>
+						<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
+							<div className="text-stone-400">
+								# Or point directly at the repo
+							</div>
+							<div>/install TheBushidoCollective/haiku-method</div>
 						</div>
 					</div>
 				</div>

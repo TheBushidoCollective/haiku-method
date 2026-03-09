@@ -3,6 +3,7 @@
 	"version": "0.1.0",
 	"private": true,
 	"scripts": {
+		"prebuild": "cd .. && zip -r website/public/haiku-method-plugin.zip plugin/ -x 'plugin/.git/*' 'plugin/__pycache__/*' 'plugin/*.pyc'",
 		"dev": "next dev",
 		"build": "next build",
 		"start": "next start"

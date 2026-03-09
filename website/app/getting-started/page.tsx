@@ -41,6 +41,31 @@ export default function GettingStartedPage() {
 					This installs the core H·AI·K·U framework with the 4-phase lifecycle,
 					hat-based workflows, quality gates, and organizational memory.
 				</p>
+				<div className="mt-6 rounded-lg border border-stone-200 bg-stone-50 p-4">
+					<p className="mb-2 text-sm font-medium text-stone-700">
+						Alternative: Manual Install
+					</p>
+					<p className="mb-3 text-sm text-stone-600">
+						Download the plugin zip, extract it into your project, and point Claude
+						Code to it:
+					</p>
+					<div className="space-y-3">
+						<a
+							href="/haiku-method-plugin.zip"
+							download
+							className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-50"
+						>
+							<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+							</svg>
+							Download Plugin (.zip)
+						</a>
+						<div className="rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-sm text-stone-100">
+							<div className="text-stone-400"># Extract and add to your project</div>
+							<div>unzip haiku-method-plugin.zip -d .claude</div>
+						</div>
+					</div>
+				</div>
 			</section>
 
 			{/* Configure Your Workspace */}

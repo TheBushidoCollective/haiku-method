@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 depends_on: [unit-02-google-oauth]
 branch: ai-dlc/haiku-web-mcp/03-drive-client
 discipline: backend

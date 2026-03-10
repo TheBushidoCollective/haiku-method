@@ -41,9 +41,9 @@ variable "web_root_directory" {
 }
 
 variable "web_custom_domain" {
-  description = "Custom domain for production (e.g., haiku.example.com)"
+  description = "Custom domain for production"
   type        = string
-  default     = ""
+  default     = "mcp.haikumethod.ai"
 }
 
 # -----------------------------------------------------------------------------

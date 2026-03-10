@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 depends_on: [unit-03-drive-client, unit-04-workspace-provisioning]
 branch: ai-dlc/haiku-web-mcp/05-mcp-server
 discipline: backend

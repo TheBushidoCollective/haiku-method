@@ -3,11 +3,6 @@ variable "name" {
   type        = string
 }
 
-variable "workspace_id" {
-  description = "Railway workspace/team ID"
-  type        = string
-}
-
 variable "description" {
   description = "Description of the project"
   type        = string

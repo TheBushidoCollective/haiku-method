@@ -8,7 +8,6 @@ module "project" {
   name           = var.project_name
   description    = "HAIKU Method - Web dashboard and MCP server for shared workspace memory"
   has_pr_deploys = var.enable_pr_environments
-  workspace_id   = var.railway_workspace_id
 }
 
 module "postgres" {

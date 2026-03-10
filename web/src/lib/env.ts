@@ -9,4 +9,20 @@ const envSchema = z.object({
   NEXTAUTH_URL: z.string().url().optional(),
 });
 
-export const env = envSchema.parse(process.env);
+// Lazily validate env so that `next build` can compile pages without
+// requiring every runtime env var to be present at build time.
+let _env: z.infer<typeof envSchema> | undefined;
+
+export function getEnv(): z.infer<typeof envSchema> {
+  if (!_env) {
+    _env = envSchema.parse(process.env);
+  }
+  return _env;
+}
+
+/** @deprecated — prefer `getEnv()` for lazy validation. Kept for existing imports. */
+export const env = new Proxy({} as z.infer<typeof envSchema>, {
+  get(_target, prop: string) {
+    return getEnv()[prop as keyof z.infer<typeof envSchema>];
+  },
+});

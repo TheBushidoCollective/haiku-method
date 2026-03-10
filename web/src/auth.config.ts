@@ -7,6 +7,7 @@ import type { NextAuthConfig } from "next-auth";
  * database-dependent callbacks.
  */
 export const authConfig = {
+  trustHost: true,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,

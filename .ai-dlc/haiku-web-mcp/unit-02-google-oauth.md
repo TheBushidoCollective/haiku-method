@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 depends_on: [unit-01-project-scaffolding]
 branch: ai-dlc/haiku-web-mcp/02-google-oauth
 discipline: backend

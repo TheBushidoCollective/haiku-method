@@ -50,6 +50,11 @@ variable "web_custom_domain" {
 # Secrets (sensitive - pass via TF_VAR_* or terraform.tfvars)
 # -----------------------------------------------------------------------------
 
+variable "railway_workspace_id" {
+  description = "Railway workspace/team ID (required for project creation)"
+  type        = string
+}
+
 variable "google_client_id" {
   description = "Google OAuth client ID"
   type        = string

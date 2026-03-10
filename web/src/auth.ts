@@ -13,7 +13,6 @@ declare module "next-auth" {
       name: string;
       image?: string | null;
     };
-    accessToken: string;
   }
 }
 
@@ -60,7 +59,7 @@ async function refreshAccessToken(token: CustomJWT): Promise<CustomJWT> {
   };
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const nextAuth = NextAuth({
   ...authConfig,
   callbacks: {
     async signIn({ account, profile }) {
@@ -121,8 +120,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       const t = token as unknown as CustomJWT;
       session.user.id = t.userId;
-      session.accessToken = t.accessToken;
       return session;
     },
   },
 });
+
+export const { handlers, auth, signIn, signOut } = nextAuth;
+
+/**
+ * Server-only helper to retrieve the Google access token from the JWT.
+ * Never exposed to the client — call this only in server components,
+ * server actions, or route handlers.
+ */
+export async function getAccessToken(): Promise<string | null> {
+  const session = await nextAuth.auth();
+  if (!session) return null;
+  // auth() on the server returns the full token via the jwt callback.
+  // We access it through the internal token property.
+  // Use unstable_getServerSession alternative: decode JWT directly.
+  const { cookies } = await import("next/headers");
+  const { decode } = await import("next-auth/jwt");
+  const cookieStore = await cookies();
+  const secureCookie = process.env.NODE_ENV === "production";
+  const cookieName = secureCookie
+    ? "__Secure-authjs.session-token"
+    : "authjs.session-token";
+  const tokenValue = cookieStore.get(cookieName)?.value;
+  if (!tokenValue) return null;
+
+  const decoded = (await decode({
+    token: tokenValue,
+    secret: env.NEXTAUTH_SECRET,
+    salt: cookieName,
+  })) as CustomJWT | null;
+
+  return decoded?.accessToken ?? null;
+}

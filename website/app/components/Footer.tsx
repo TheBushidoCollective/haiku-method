@@ -104,9 +104,19 @@ export function Footer() {
 					</div>
 				</div>
 
-				<div className="mt-12 border-t border-stone-200 pt-8 text-center text-sm text-stone-400">
-					&copy; {new Date().getFullYear()} The Bushido Collective. MIT
-					License.
+				<div className="mt-12 flex flex-col items-center gap-3 border-t border-stone-200 pt-8 text-sm text-stone-400">
+					<div className="flex gap-4">
+						<Link href="/privacy" className="hover:text-stone-600">
+							Privacy Policy
+						</Link>
+						<Link href="/terms" className="hover:text-stone-600">
+							Terms of Service
+						</Link>
+					</div>
+					<div>
+						&copy; {new Date().getFullYear()} The Bushido Collective. MIT
+						License.
+					</div>
 				</div>
 			</div>
 		</footer>

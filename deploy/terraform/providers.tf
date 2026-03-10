@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.0"
     }
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
   }
 
   # Terraform Cloud for remote state and VCS-triggered runs
@@ -25,4 +29,9 @@ terraform {
 provider "railway" {
   # Token is read from RAILWAY_TOKEN environment variable
   # Get a token from: https://railway.app/account/tokens
+}
+
+provider "google" {
+  # Credentials via GOOGLE_CREDENTIALS or Workload Identity
+  # Project set via variable
 }

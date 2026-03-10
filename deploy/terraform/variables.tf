@@ -47,6 +47,34 @@ variable "web_custom_domain" {
 }
 
 # -----------------------------------------------------------------------------
+# GCP DNS Configuration (optional)
+# -----------------------------------------------------------------------------
+
+variable "gcp_project_id" {
+  description = "GCP project ID for Cloud DNS (empty to skip DNS)"
+  type        = string
+  default     = ""
+}
+
+variable "gcp_dns_zone_name" {
+  description = "Name of the Cloud DNS managed zone"
+  type        = string
+  default     = "haikumethod-ai"
+}
+
+variable "domain" {
+  description = "Base domain"
+  type        = string
+  default     = "haikumethod.ai"
+}
+
+variable "mcp_domain_verify_txt" {
+  description = "Railway domain verification TXT value for mcp subdomain"
+  type        = string
+  default     = ""
+}
+
+# -----------------------------------------------------------------------------
 # Secrets (sensitive - pass via TF_VAR_* or terraform.tfvars)
 # -----------------------------------------------------------------------------
 

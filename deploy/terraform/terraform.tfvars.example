@@ -10,6 +10,12 @@ enable_pr_environments = true
 web_root_directory = "web"
 web_custom_domain  = "mcp.haikumethod.ai"
 
+# GCP DNS (optional - set gcp_project_id to enable)
+gcp_project_id        = ""
+gcp_dns_zone_name     = "haikumethod-ai"
+domain                = "haikumethod.ai"
+mcp_domain_verify_txt = ""
+
 # Google OAuth (required - set via TF_VAR_* env vars or here)
 google_client_id     = ""
 google_client_secret = ""

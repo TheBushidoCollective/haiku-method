@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/queries";
 import { AddMemberForm } from "./add-member-form";
 import { MemberActions } from "./member-actions";
+import { CopyButton } from "./copy-button";
 
 type Params = {
   params: Promise<{ orgSlug: string; teamSlug: string }>;
@@ -161,9 +162,12 @@ export default async function TeamPage({ params }: Params) {
           Run this command in your terminal to connect Claude Code to the HAIKU
           MCP server:
         </p>
-        <pre className="mt-3 overflow-x-auto rounded-md bg-zinc-100 p-3 text-sm text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
-          <code>{mcpCommand}</code>
-        </pre>
+        <div className="mt-3 flex items-center gap-2">
+          <pre className="flex-1 overflow-x-auto rounded-md bg-zinc-100 p-3 text-sm text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
+            <code>{mcpCommand}</code>
+          </pre>
+          <CopyButton text={mcpCommand} />
+        </div>
       </div>
     </div>
   );

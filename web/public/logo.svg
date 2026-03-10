@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <!-- Background: rounded square -->
+  <rect x="0" y="0" width="120" height="120" rx="24" fill="#1c1917"/>
+
+  <!-- Kanji 和 (wa - harmony/unity) in blue -->
+  <text x="60" y="64"
+        font-family="'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic', sans-serif"
+        font-size="64"
+        font-weight="700"
+        fill="#14b8a6"
+        text-anchor="middle"
+        dominant-baseline="central">和</text>
+</svg>

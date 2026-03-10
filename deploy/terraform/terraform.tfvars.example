@@ -1,0 +1,15 @@
+# Project Configuration
+project_name      = "haiku-web"
+github_repo       = "TheBushidoCollective/haiku-method"
+production_branch = "main"
+
+# PR Environments
+enable_pr_environments = true
+
+# Web Service
+web_root_directory = "web"
+web_custom_domain  = "mcp.haikumethod.ai"
+
+# Google OAuth (required - set via TF_VAR_* env vars or here)
+google_client_id     = ""
+google_client_secret = ""

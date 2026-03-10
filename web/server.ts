@@ -1,5 +1,10 @@
 import express from "express";
 import next from "next";
+import {
+  handleMcpRequest,
+  handleMcpGet,
+  handleMcpDelete,
+} from "./src/mcp/server";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -10,10 +15,10 @@ const handle = nextApp.getRequestHandler();
 nextApp.prepare().then(() => {
   const app = express();
 
-  // Placeholder for MCP route (unit-05)
-  app.use("/mcp", (_req, res) => {
-    res.json({ status: "MCP endpoint placeholder" });
-  });
+  // MCP endpoint — parse JSON body for POST requests
+  app.post("/mcp", express.json(), handleMcpRequest);
+  app.get("/mcp", handleMcpGet);
+  app.delete("/mcp", handleMcpDelete);
 
   // Delegate all other routes to Next.js
   app.all("*", (req, res) => {
@@ -21,6 +26,8 @@ nextApp.prepare().then(() => {
   });
 
   app.listen(port, () => {
-    console.log(`> Ready on http://localhost:${port} (${dev ? "development" : "production"})`);
+    console.log(
+      `> Ready on http://localhost:${port} (${dev ? "development" : "production"})`
+    );
   });
 });

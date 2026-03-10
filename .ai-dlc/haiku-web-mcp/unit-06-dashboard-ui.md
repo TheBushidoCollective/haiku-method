@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 depends_on: [unit-02-google-oauth, unit-04-workspace-provisioning]
 branch: ai-dlc/haiku-web-mcp/06-dashboard-ui
 discipline: frontend

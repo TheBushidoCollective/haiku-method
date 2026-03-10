@@ -5,6 +5,7 @@ branch: ai-dlc/haiku-web-mcp/06-dashboard-ui
 discipline: frontend
 workflow: ""
 ticket: ""
+wireframe: mockups/unit-06-dashboard-ui-wireframe.html
 ---
 
 # unit-06: Dashboard UI — Org & Team Management

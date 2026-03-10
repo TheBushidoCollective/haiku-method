@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wireframe: Dashboard UI — Org &amp; Team Management</title>
+<style>
+  /* === BASE === */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #333; padding: 40px 20px; }
+  h1 { text-align: center; font-size: 18px; color: #666; margin-bottom: 8px; }
+  .subtitle { text-align: center; font-size: 13px; color: #999; margin-bottom: 40px; }
+
+  /* === LAYOUT === */
+  .flow { display: flex; gap: 32px; justify-content: center; align-items: flex-start; flex-wrap: wrap; }
+  .arrow { display: flex; align-items: center; font-size: 28px; color: #bbb; padding-top: 160px; }
+
+  /* === SCREEN CARDS === */
+  .screen { width: 340px; background: #fff; border: 2px solid #ddd; border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+  .screen-header {
+    background: #e8e8e8; padding: 12px 16px; font-size: 11px; font-weight: 600;
+    color: #888; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #ddd;
+  }
+  .screen-body { padding: 24px 20px; }
+  .screen-title { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .screen-desc { font-size: 13px; color: #888; margin-bottom: 24px; line-height: 1.4; }
+
+  /* === FORM FIELDS === */
+  .field { border: 2px dashed #ccc; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; font-size: 14px; color: #aaa; }
+  .field.filled { border-style: solid; color: #333; }
+  .field-label { font-size: 12px; font-weight: 600; color: #666; margin-bottom: 4px; }
+
+  /* === BUTTONS === */
+  .btn {
+    width: 100%; padding: 14px; border-radius: 8px; border: none;
+    font-size: 15px; font-weight: 600; cursor: default; margin-bottom: 8px; text-align: center;
+  }
+  .btn-primary { background: #888; color: #fff; }
+  .btn-secondary { background: #f0f0f0; color: #666; }
+  .btn-text { background: none; color: #666; font-size: 13px; }
+  .btn-sm { padding: 8px 16px; font-size: 13px; width: auto; display: inline-block; }
+
+  /* === DIVIDERS === */
+  .divider { text-align: center; font-size: 12px; color: #bbb; margin: 16px 0; position: relative; }
+
+  /* === NAV BAR === */
+  .navbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #e8e8e8; border-bottom: 2px solid #ddd; }
+  .navbar-brand { font-weight: 700; font-size: 16px; color: #555; }
+  .navbar-user { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #666; }
+  .placeholder { background: #e0e0e0; border-radius: 8px; height: 40px; margin-bottom: 12px; }
+  .placeholder.avatar { width: 32px; height: 32px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+  /* === CARDS === */
+  .card {
+    border: 2px solid #e0e0e0; border-radius: 8px; padding: 14px 16px;
+    margin-bottom: 8px;
+  }
+  .card-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+  .card-meta { font-size: 12px; color: #999; }
+  .card-row { display: flex; justify-content: space-between; align-items: center; }
+
+  /* === TABLE === */
+  .table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .table th { text-align: left; padding: 8px 0; border-bottom: 2px solid #ddd; font-size: 11px; text-transform: uppercase; color: #999; letter-spacing: 0.5px; }
+  .table td { padding: 8px 0; border-bottom: 1px solid #eee; }
+  .table .actions { text-align: right; }
+  .table .actions a { color: #888; text-decoration: underline; margin-left: 8px; font-size: 12px; }
+
+  /* === BADGE === */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: #e8f5e9; color: #4a7; }
+  .badge-yellow { background: #fff8e1; color: #a87; }
+  .badge-gray { background: #f0f0f0; color: #888; }
+
+  /* === CODE BLOCK === */
+  .code-block { background: #f0f0f0; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; color: #555; word-break: break-all; margin-bottom: 8px; }
+
+  /* === FLOW NOTES === */
+  .note {
+    background: #fffde7; border: 1px solid #fff176; border-radius: 6px;
+    padding: 10px 12px; font-size: 12px; color: #666; margin-top: 16px; line-height: 1.4;
+  }
+  .note strong { color: #333; }
+
+  /* === SECTION === */
+  .section-title { font-size: 14px; font-weight: 700; color: #555; margin-bottom: 12px; margin-top: 20px; }
+  .section-title:first-child { margin-top: 0; }
+
+  /* === COPY NOTE === */
+  .copy-note { font-size: 11px; color: #e65100; font-style: italic; margin-top: 4px; }
+
+  /* === FLOW SECTION === */
+  .flow-section { margin-bottom: 48px; }
+  .flow-label { text-align: center; font-size: 14px; font-weight: 600; color: #888; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+
+<h1>HAIKU Web App + MCP Server</h1>
+<p class="subtitle">Wireframe &mdash; Unit 06: Dashboard UI &mdash; AI-DLC Elaboration Artifact</p>
+
+<!-- ============ FLOW 1: Login ============ -->
+<div class="flow-section">
+  <div class="flow-label">Authentication Flow</div>
+  <div class="flow">
+
+    <div class="screen">
+      <div class="screen-header">Screen 1 &mdash; Login</div>
+      <div class="screen-body">
+        <div style="text-align: center; margin-bottom: 32px; margin-top: 24px;">
+          <div style="font-size: 24px; font-weight: 700; color: #555;">HAIKU</div>
+          <div style="font-size: 13px; color: #999;">Workspace Management</div>
+        </div>
+        <div class="btn btn-primary" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <span>G</span> Sign in with Google
+        </div>
+        <div style="text-align: center; margin-top: 16px; font-size: 12px; color: #aaa;">
+          Connects your Google account for Drive workspace access
+        </div>
+        <div class="note">
+          <strong>OAuth scopes:</strong> openid, email, profile, drive.file
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">&rarr;</div>
+
+    <div class="screen">
+      <div class="screen-header">Screen 2 &mdash; Dashboard Home (Empty)</div>
+      <div class="screen-body">
+        <div class="navbar">
+          <div class="navbar-brand">HAIKU</div>
+          <div class="navbar-user">
+            <span>jason@bushido.co</span>
+            <div class="placeholder avatar"></div>
+          </div>
+        </div>
+        <div style="padding-top: 20px;">
+          <div class="screen-title">Organizations</div>
+          <div style="text-align: center; padding: 40px 0; color: #bbb; font-size: 14px;">
+            You don't belong to any organizations yet.<br>Create one to get started.
+          </div>
+          <div class="btn btn-primary">+ Create Organization</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============ FLOW 2: Create Org ============ -->
+<div class="flow-section">
+  <div class="flow-label">Organization Creation</div>
+  <div class="flow">
+
+    <div class="screen">
+      <div class="screen-header">Screen 3 &mdash; Create Organization</div>
+      <div class="screen-body">
+        <div class="navbar">
+          <div class="navbar-brand">HAIKU</div>
+          <div class="navbar-user">
+            <div class="placeholder avatar"></div>
+          </div>
+        </div>
+        <div style="padding-top: 20px;">
+          <div class="screen-title">Create Organization</div>
+          <div class="screen-desc">An organization is a top-level workspace. It creates a Google Drive folder for shared memory.</div>
+          <div class="field-label">Organization Name</div>
+          <div class="field filled">The Bushido Collective</div>
+          <div class="field-label">Slug</div>
+          <div class="field filled">the-bushido-collective</div>
+          <div class="copy-note">^ Auto-generated from name, editable</div>
+          <div style="margin-top: 16px;">
+            <div class="btn btn-primary">Create Organization</div>
+            <div class="btn btn-text">Cancel</div>
+          </div>
+        </div>
+        <div class="note">
+          <strong>On submit:</strong> Creates org in DB, provisions Drive folder (root + memory/ + settings.yml), redirects to org page
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">&rarr;</div>
+
+    <div class="screen">
+      <div class="screen-header">Screen 4 &mdash; Dashboard Home (With Org)</div>
+      <div class="screen-body">
+        <div class="navbar">
+          <div class="navbar-brand">HAIKU</div>
+          <div class="navbar-user">
+            <div class="placeholder avatar"></div>
+          </div>
+        </div>
+        <div style="padding-top: 20px;">
+          <div class="screen-title">Organizations</div>
+          <div class="card">
+            <div class="card-row">
+              <div>
+                <div class="card-title">The Bushido Collective</div>
+                <div class="card-meta">2 teams &middot; Admin</div>
+              </div>
+              <span class="badge badge-green">Active</span>
+            </div>
+          </div>
+          <div class="card" style="border-style: dashed; text-align: center; color: #bbb; padding: 20px;">
+            + Create Organization
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============ FLOW 3: Org Detail + Team Creation ============ -->
+<div class="flow-section">
+  <div class="flow-label">Organization &amp; Team Management</div>
+  <div class="flow">
+
+    <div class="screen">
+      <div class="screen-header">Screen 5 &mdash; Organization Detail</div>
+      <div class="screen-body">
+        <div class="navbar">
+          <div class="navbar-brand">HAIKU</div>
+          <div class="navbar-user">
+            <div class="placeholder avatar"></div>
+          </div>
+        </div>
+        <div style="padding-top: 20px;">
+          <div style="font-size: 12px; color: #999; margin-bottom: 4px;">Organization</div>
+          <div class="screen-title">The Bushido Collective</div>
+
+          <div class="section-title">Teams</div>
+          <div class="card">
+            <div class="card-row">
+              <div>
+                <div class="card-title">Engineering</div>
+                <div class="card-meta">4 members</div>
+              </div>
+              <span class="badge badge-green">Provisioned</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-row">
+              <div>
+                <div class="card-title">Design</div>
+                <div class="card-meta">2 members</div>
+              </div>
+              <span class="badge badge-yellow">Provisioning...</span>
+            </div>
+          </div>
+          <div class="btn btn-secondary btn-sm" style="margin-top: 8px;">+ Create Team</div>
+
+          <div class="section-title">Settings</div>
+          <div style="font-size: 13px; color: #666;">
+            <div>Slug: <code>the-bushido-collective</code></div>
+            <div>Drive Folder: <span class="badge badge-green">Connected</span></div>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Admin only:</strong> Settings section and "Create Team" only visible to admins
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">&rarr;</div>
+
+    <div class="screen">
+      <div class="screen-header">Screen 6 &mdash; Team Detail</div>
+      <div class="screen-body">
+        <div class="navbar">
+          <div class="navbar-brand">HAIKU</div>
+          <div class="navbar-user">
+            <div class="placeholder avatar"></div>
+          </div>
+        </div>
+        <div style="padding-top: 20px;">
+          <div style="font-size: 12px; color: #999; margin-bottom: 4px;">The Bushido Collective &rsaquo; Teams</div>
+          <div class="screen-title">Engineering</div>
+
+          <div class="section-title">Members</div>
+          <table class="table">
+            <thead>
+              <tr><th>Name</th><th>Role</th><th class="actions">Actions</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Jason Waldrip</td><td><span class="badge badge-gray">Admin</span></td><td class="actions"><a>Remove</a></td></tr>
+              <tr><td>Alex Chen</td><td><span class="badge badge-gray">Member</span></td><td class="actions"><a>Make Admin</a> <a>Remove</a></td></tr>
+              <tr><td>Sam Rivera</td><td><span class="badge badge-gray">Member</span></td><td class="actions"><a>Make Admin</a> <a>Remove</a></td></tr>
+            </tbody>
+          </table>
+          <div style="margin-top: 12px;">
+            <div class="field" style="display: inline-block; width: 60%;">Add by email...</div>
+            <div class="btn btn-primary btn-sm" style="display: inline-block; width: 35%; vertical-align: top;">Add Member</div>
+          </div>
+
+          <div class="section-title">Workspace Status</div>
+          <div style="font-size: 13px; color: #666;">
+            <div>Drive Folder: <span class="badge badge-green">Provisioned</span></div>
+            <div>Memory Files: organization.md, learnings.md</div>
+            <div>Settings: <span class="badge badge-green">Present</span></div>
+          </div>
+
+          <div class="section-title">Connect to Claude Code</div>
+          <div class="code-block">claude mcp add --transport http haiku https://haiku.railway.app/mcp</div>
+          <div class="btn btn-secondary btn-sm">Copy Command</div>
+        </div>
+        <div class="note">
+          <strong>Connect section:</strong> Shows users how to connect Claude Code to this workspace's MCP server
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

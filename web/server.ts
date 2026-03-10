@@ -21,7 +21,7 @@ nextApp.prepare().then(() => {
   app.delete("/mcp", handleMcpDelete);
 
   // Delegate all other routes to Next.js
-  app.all("*", (req, res) => {
+  app.all("/{*path}", (req, res) => {
     return handle(req, res);
   });
 

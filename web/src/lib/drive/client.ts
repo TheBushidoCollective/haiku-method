@@ -44,6 +44,7 @@ export class DriveClient {
           parents: parentId ? [parentId] : undefined,
         },
         fields: "id",
+        supportsAllDrives: true,
       });
       return res.data.id!;
     } catch (err) {
@@ -62,6 +63,8 @@ export class DriveClient {
           fields: "nextPageToken, files(id, name, mimeType, modifiedTime)",
           pageToken,
           pageSize: 1000,
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
         });
         for (const f of res.data.files ?? []) {
           files.push({
@@ -90,6 +93,8 @@ export class DriveClient {
         q: `'${parentId}' in parents and name = '${name}' and mimeType = '${FOLDER_MIME}' and trashed = false`,
         fields: "files(id)",
         pageSize: 1,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
       });
       return res.data.files?.[0]?.id ?? null;
     } catch (err) {
@@ -117,6 +122,7 @@ export class DriveClient {
           body: Readable.from(content),
         },
         fields: "id",
+        supportsAllDrives: true,
       });
       return res.data.id!;
     } catch (err) {
@@ -128,7 +134,7 @@ export class DriveClient {
     const drive = getDrive(token);
     try {
       const res = await drive.files.get(
-        { fileId, alt: "media" },
+        { fileId, alt: "media", supportsAllDrives: true },
         { responseType: "text" }
       );
       return res.data as string;
@@ -150,6 +156,7 @@ export class DriveClient {
           mimeType: "text/plain",
           body: Readable.from(content),
         },
+        supportsAllDrives: true,
       });
     } catch (err) {
       wrapDriveError(err);
@@ -167,6 +174,8 @@ export class DriveClient {
         q: `'${parentId}' in parents and name = '${name}' and mimeType != '${FOLDER_MIME}' and trashed = false`,
         fields: "files(id)",
         pageSize: 1,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
       });
       return res.data.files?.[0]?.id ?? null;
     } catch (err) {
@@ -177,7 +186,7 @@ export class DriveClient {
   static async deleteFile(token: string, fileId: string): Promise<void> {
     const drive = getDrive(token);
     try {
-      await drive.files.delete({ fileId });
+      await drive.files.delete({ fileId, supportsAllDrives: true });
     } catch (err) {
       wrapDriveError(err);
     }

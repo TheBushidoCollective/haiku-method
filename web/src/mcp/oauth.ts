@@ -22,7 +22,7 @@ export function handleOAuthMetadata(req: Request, res: Response) {
       "openid",
       "email",
       "profile",
-      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/drive",
     ],
   });
 }
@@ -55,7 +55,7 @@ export function handleOAuthAuthorize(req: Request, res: Response) {
   // Force required scopes
   params.set(
     "scope",
-    "openid email profile https://www.googleapis.com/auth/drive.file"
+    "openid email profile https://www.googleapis.com/auth/drive"
   );
   params.set("access_type", "offline");
   params.set("prompt", "consent");

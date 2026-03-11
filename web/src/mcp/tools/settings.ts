@@ -4,17 +4,27 @@ import { readSettings, writeSettings } from "../../lib/drive/workspace";
 import { resolveWorkspace } from "../workspace-resolver";
 import type { McpUser } from "../auth";
 
+const workspaceParams = {
+  workspace_type: z
+    .enum(["user", "team", "org"])
+    .describe("Type of workspace: user (personal), team, or org"),
+  slug: z
+    .string()
+    .optional()
+    .describe("Team or org slug. Required for team/org workspaces, ignored for user."),
+};
+
 export function registerSettingsTools(
   server: McpServer,
   getUser: () => McpUser
 ) {
   server.tool(
     "settings_read",
-    "Read workspace settings for the team",
-    { team_slug: z.string() },
-    async ({ team_slug }) => {
+    "Read workspace settings",
+    { ...workspaceParams },
+    async ({ workspace_type, slug }) => {
       const user = getUser();
-      const workspace = await resolveWorkspace(user.id, team_slug);
+      const workspace = await resolveWorkspace(user.id, user.accessToken, workspace_type, slug);
       const content = await readSettings(
         user.accessToken,
         workspace.driveFolderId
@@ -36,11 +46,11 @@ export function registerSettingsTools(
 
   server.tool(
     "settings_write",
-    "Write workspace settings for the team",
-    { team_slug: z.string(), content: z.string() },
-    async ({ team_slug, content }) => {
+    "Write workspace settings",
+    { ...workspaceParams, content: z.string() },
+    async ({ workspace_type, slug, content }) => {
       const user = getUser();
-      const workspace = await resolveWorkspace(user.id, team_slug);
+      const workspace = await resolveWorkspace(user.id, user.accessToken, workspace_type, slug);
       await writeSettings(
         user.accessToken,
         workspace.driveFolderId,

@@ -12,6 +12,13 @@ allowed-tools:
   - ToolSearch
   - ListMcpResourcesTool
   - ReadMcpResourceTool
+  # HAIKU MCP tools
+  - mcp__haiku__workspace_info
+  - mcp__haiku__settings_read
+  - mcp__haiku__settings_write
+  - mcp__haiku__memory_read
+  - mcp__haiku__memory_write
+  - mcp__haiku__memory_list
   # MCP read-only tool patterns (discovery only, no writes)
   - "mcp__*__read*"
   - "mcp__*__get*"
@@ -30,7 +37,7 @@ allowed-tools:
 
 # HAIKU Setup
 
-You are the **Setup Assistant** for H·AI·K·U. Your job is to configure a workspace for this project by resolving or creating the workspace, discovering organizational context, and writing settings.
+You are the **Setup Assistant** for H·AI·K·U. Your job is to configure a workspace for this project by provisioning a cloud-backed workspace via the HAIKU MCP server, discovering organizational context, and writing settings.
 
 This skill is **idempotent** — re-running `/setup` preserves existing settings as defaults.
 
@@ -38,26 +45,16 @@ This skill is **idempotent** — re-running `/setup` preserves existing settings
 
 ## Phase 0: Check Existing Configuration
 
-1. Check if a workspace is already configured:
+1. Call `mcp__haiku__workspace_info` with `workspace_type: "user"` to check if a workspace already exists.
 
-```bash
-source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
-source "${CLAUDE_PLUGIN_ROOT}/lib/memory.sh"
+2. If the call succeeds (workspace exists):
+   - Read current settings via `mcp__haiku__settings_read` with the returned workspace_type and slug.
+   - Check for existing organizational memory via `mcp__haiku__memory_read` with `name: "organization"`.
 
-WORKSPACE=$(resolve_workspace 2>/dev/null) || WORKSPACE=""
-echo "workspace=$WORKSPACE"
-
-if [ -n "$WORKSPACE" ]; then
-  if [ -f "$WORKSPACE/settings.yml" ]; then
-    cat "$WORKSPACE/settings.yml"
-  fi
-fi
-```
-
-2. Store:
-   - `EXISTING_WORKSPACE`: resolved path or empty
+3. Store:
+   - `EXISTING_WORKSPACE`: workspace_type and slug from the response, or empty
    - `EXISTING_SETTINGS`: parsed settings or empty `{}`
-   - `HAS_ORGANIZATION_MD`: whether `{workspace}/memory/organization.md` exists
+   - `HAS_ORGANIZATION`: whether organization memory was found
 
 ---
 
@@ -65,17 +62,17 @@ fi
 
 ### If no workspace is configured
 
-Ask where the workspace should live using `AskUserQuestion`:
+Ask the user what level of workspace they need using `AskUserQuestion`:
 
 ```json
 {
   "questions": [{
-    "question": "Where should the H·AI·K·U workspace live?",
-    "header": "Workspace Location",
+    "question": "What level of H·AI·K·U workspace do you want to set up?",
+    "header": "Workspace Level",
     "options": [
-      {"label": "Project-local", "description": ".haiku/ directory in this project (simple, single-project use)"},
-      {"label": "Shared directory", "description": "A standalone directory that can be shared across projects"},
-      {"label": "Custom path", "description": "Specify an exact path"}
+      {"label": "User", "description": "Personal workspace for your own projects"},
+      {"label": "Team", "description": "Shared workspace for a team (requires a team slug)"},
+      {"label": "Organization", "description": "Organization-wide workspace (requires an org slug)"}
     ],
     "multiSelect": false
   }]
@@ -84,35 +81,23 @@ Ask where the workspace should live using `AskUserQuestion`:
 
 Based on the answer:
 
-- **Project-local**: Set `WORKSPACE=.haiku` and write `.haiku.yml`:
-  ```yaml
-  workspace: .haiku
-  ```
+- **User**: Set `workspace_type: "user"`, no slug needed.
+- **Team**: Ask for team slug via `AskUserQuestion`. Set `workspace_type: "team"` and store the slug.
+- **Organization**: Ask for org slug via `AskUserQuestion`. Set `workspace_type: "org"` and store the slug.
 
-- **Shared directory**: Ask for the path via `AskUserQuestion`. Default suggestion: `~/haiku-workspace`. Write `.haiku.yml`:
-  ```yaml
-  workspace: ~/haiku-workspace
-  ```
+Then call `mcp__haiku__workspace_info` with the chosen `workspace_type` (and `slug` if team/org) to provision or verify the workspace.
 
-- **Custom path**: Ask for the exact path via `AskUserQuestion`. Write `.haiku.yml` with the provided path.
-
-Then create the workspace directory structure:
-
-```bash
-source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
-WORKSPACE=$(resolve_workspace)
-mkdir -p "$WORKSPACE/intents" "$WORKSPACE/memory"
-```
+Store `workspace_type` and `slug` for all subsequent MCP calls in this session.
 
 ### If workspace already exists
 
-Show the current workspace path and ask if they want to keep it:
+Show the current workspace type and slug and ask if they want to keep it:
 
 Use `AskUserQuestion`:
-- "Workspace is configured at `{path}`. Keep this location?"
-- Options: "Yes, keep it" / "Change location"
+- "Workspace is configured as `{workspace_type}` (slug: `{slug}`). Keep this configuration?"
+- Options: "Yes, keep it" / "Change configuration"
 
-If **"Change location"** → run the workspace creation flow above.
+If **"Change configuration"** -> run the workspace creation flow above.
 
 ---
 
@@ -136,9 +121,9 @@ Build a detection results map of what's available. This informs which integratio
 
 ## Phase 3: Organizational Discovery
 
-**If `organization.md` already exists in workspace memory**, read it and show a summary. Ask if they want to update it or keep it.
+**If organization memory already exists** (found in Phase 0), read it via `mcp__haiku__memory_read` with `name: "organization"` and show a summary. Ask if they want to update it or keep it.
 
-**If `organization.md` does not exist**, run discovery:
+**If organization memory does not exist**, run discovery:
 
 ### Step 1: Survey Available Context
 
@@ -187,14 +172,16 @@ Based on what was already gathered, ask targeted follow-up questions about anyth
 
 ### Step 3: Synthesize and Persist
 
-Write what you've learned to workspace memory:
+Write what you've learned to workspace memory via MCP:
 
-```bash
-source "${CLAUDE_PLUGIN_ROOT}/lib/memory.sh"
-memory_write "organization" "$CONTENT" "overwrite"
-```
+Call `mcp__haiku__memory_write` with:
+- `workspace_type`: the configured workspace type
+- `slug`: the configured slug (if team/org)
+- `name`: `"organization"`
+- `content`: the synthesized organizational context
+- `mode`: `"overwrite"`
 
-The `organization.md` file should capture:
+The organization memory should capture:
 - **Organization**: What the company/team does, mission, domain
 - **Team**: Who's involved, roles, disciplines
 - **Tech stack / Tools**: Languages, frameworks, platforms, integrations
@@ -219,9 +206,9 @@ Use `AskUserQuestion`:
     "question": "What default workflow should new intents use?",
     "header": "Default Workflow",
     "options": [
-      {"label": "default", "description": "planner → executor → reviewer (standard for most work)"},
-      {"label": "operational", "description": "planner → executor → operator → reviewer (includes operational handoff)"},
-      {"label": "reflective", "description": "planner → executor → operator → reflector → reviewer (full lifecycle with reflection)"}
+      {"label": "default", "description": "planner -> executor -> reviewer (standard for most work)"},
+      {"label": "operational", "description": "planner -> executor -> operator -> reviewer (includes operational handoff)"},
+      {"label": "reflective", "description": "planner -> executor -> operator -> reflector -> reviewer (full lifecycle with reflection)"}
     ],
     "multiSelect": false
   }]
@@ -272,9 +259,9 @@ If **"Custom"**: ask the user to describe their gate(s), then configure accordin
 
 ---
 
-## Phase 5: Write Settings File
+## Phase 5: Write Settings
 
-1. Read existing `settings.yml` if it exists to preserve manual edits.
+1. Read existing settings via `mcp__haiku__settings_read` (if workspace existed) to preserve manual edits.
 
 2. Merge new values over existing. Build the YAML structure:
 
@@ -296,7 +283,10 @@ Rules:
 - Preserve any fields not covered by this wizard
 - Output must validate against `plugin/schemas/settings.schema.json`
 
-3. Write the file using the `Write` tool to `{workspace}/settings.yml`.
+3. Write settings via `mcp__haiku__settings_write` with:
+   - `workspace_type`: the configured workspace type
+   - `slug`: the configured slug (if team/org)
+   - `settings`: the YAML content string
 
 ---
 
@@ -309,19 +299,20 @@ Display a final summary:
 
 | Setting | Value |
 |---------|-------|
-| Workspace | ~/haiku-workspace |
+| Workspace Type | user |
+| Workspace Slug | — |
 | Default Workflow | default |
 | Memory Backend | filesystem |
 | Quality Gates | none |
-| Organization | ✓ discovered |
+| Organization | discovered |
 
-Settings written to `{workspace}/settings.yml`.
+Settings written via HAIKU MCP server (cloud-backed).
 ```
 
 If organizational context was discovered or updated, note it:
 
 ```
-Organizational context saved to `{workspace}/memory/organization.md`.
+Organizational context saved to workspace memory via MCP.
 ```
 
 List detected MCP integrations if any:

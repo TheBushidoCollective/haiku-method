@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "haiku": {
+      "type": "http",
+      "url": "https://mcp.haikumethod.ai/mcp"
+    }
+  }
+}

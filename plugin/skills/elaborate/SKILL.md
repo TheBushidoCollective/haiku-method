@@ -28,6 +28,28 @@ allowed-tools:
   - "mcp__*__describe*"
   - "mcp__*__explain*"
   - "mcp__*__memory"
+  # HAIKU MCP tools
+  - mcp__haiku__workspace_info
+  - mcp__haiku__settings_read
+  - mcp__haiku__settings_write
+  - mcp__haiku__memory_read
+  - mcp__haiku__memory_write
+  - mcp__haiku__memory_list
+  - mcp__haiku__memory_context
+  - mcp__haiku__memory_delete
+  - mcp__haiku__state_read
+  - mcp__haiku__state_write
+  - mcp__haiku__state_list
+  - mcp__haiku__state_delete
+  - mcp__haiku__intent_create
+  - mcp__haiku__intent_read
+  - mcp__haiku__intent_write
+  - mcp__haiku__intent_list
+  - mcp__haiku__unit_create
+  - mcp__haiku__unit_read
+  - mcp__haiku__unit_write
+  - mcp__haiku__unit_list
+  - mcp__haiku__unit_delete
 ---
 
 # HAIKU Elaboration
@@ -38,7 +60,38 @@ You are the **Elaborator** starting the HAIKU Method elaboration process. Your j
 3. **Success Criteria** - How do we know when it's done?
 4. **Units** - Independent pieces of work, each with enough detail that an executor with zero prior context produces the right result
 
-Then you'll write these as files in the workspace for the execution phase.
+Then you'll write these as artifacts via the HAIKU MCP tools for the execution phase.
+
+## Mode Detection
+
+Detect the operating mode from environment and capabilities:
+
+1. **Code mode** (full Claude Code session):
+   - `CLAUDE_PLUGIN_ROOT` env var is set
+   - Has access to Bash, Read, Write, Edit, Glob, Grep tools
+   - Full quality gates, git operations, local DAG
+   - Use local `dag.sh` for DAG operations via Bash tool
+
+2. **Cowork mode** (Claude Code with limited tools):
+   - MCP tools available (`mcp__haiku__*`)
+   - Limited local file access
+   - Skip git operations, limited quality gates
+
+3. **Chat mode** (no local tools):
+   - Only MCP tools available
+   - No Bash, Read, Write, etc.
+   - All data via MCP
+
+The practical detection: If you can call `Bash`, you're in code mode. If you have MCP but no Bash, you're in cowork mode. If only MCP, chat mode.
+
+## Workspace Coordinates
+
+Before any MCP calls, read the workspace coordinates from session state:
+
+1. Call `mcp__haiku__state_read("workspace_type")` -> ws_type (default: "user")
+2. Call `mcp__haiku__state_read("workspace_slug")` -> ws_slug (may be empty for user workspaces)
+3. If not found, call `mcp__haiku__workspace_info(workspace_type: "user")` to discover/provision the workspace.
+4. Use ws_type and ws_slug for all subsequent MCP calls.
 
 ## Phase 1: Gather Context
 
@@ -52,41 +105,35 @@ Use `AskUserQuestion` to gather this interactively.
 
 ## Phase 1.5: Load Organizational Memory
 
-Resolve the workspace and check for prior learnings:
+Check for prior learnings using MCP:
 
-```bash
-source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
-source "${CLAUDE_PLUGIN_ROOT}/lib/memory.sh"
+1. Call `mcp__haiku__memory_context(ws_type, ws_slug)` to get hierarchical memory from all workspace levels.
+2. Call `mcp__haiku__memory_read(ws_type, ws_slug, "organization")` to check for organizational context.
+3. Read any available memory files — especially `organization`, `learnings`, and `patterns`.
 
-WORKSPACE=$(resolve_workspace)
-MEMORY_DIR="$(memory_dir)"
-```
+Memory is hierarchical — if the workspace is nested within a parent workspace, `memory_context` returns merged memory from all levels.
 
-Read any files in the workspace's memory directory — especially `organization.md`, `learnings.md`, and `patterns.md`. These contain insights from prior HAIKU cycles that should inform decomposition, criteria definition, and workflow selection.
+If `memory.mcp` is configured in the workspace settings (check via `mcp__haiku__settings_read(ws_type, ws_slug)`), also query that MCP server for relevant organizational knowledge (e.g., Notion pages, shared documents).
 
-Memory is hierarchical — if the workspace is nested within a parent workspace, memory from parent levels is also available and should be considered.
-
-If `memory.mcp` is configured in the workspace's `settings.yml`, also query that MCP server for relevant organizational knowledge (e.g., Notion pages, shared documents).
-
-**If memory is empty or missing `organization.md`, proceed to Phase 1.75. Otherwise skip to Phase 2.**
+**If memory is empty or missing `organization`, proceed to Phase 1.75. Otherwise skip to Phase 2.**
 
 ## Phase 1.75: Organizational Discovery (Bootstrap)
 
-This phase runs when the workspace has no organizational context — no `organization.md` in memory, or memory is entirely empty. The goal is to learn enough about the organization, team, domain, and conventions to produce high-quality elaborations, then persist that knowledge so future sessions start informed.
+This phase runs when the workspace has no organizational context — no `organization` in memory, or memory is entirely empty. The goal is to learn enough about the organization, team, domain, and conventions to produce high-quality elaborations, then persist that knowledge so future sessions start informed.
 
-**This phase runs ONCE per workspace.** Once `organization.md` exists in memory, this phase is skipped.
+**This phase runs ONCE per workspace.** Once `organization` exists in memory, this phase is skipped.
 
 ### Step 1: Survey Available Context
 
 Gather context from every source available — in parallel where possible:
 
-**Project files** — Read any of these that exist:
+**Project files** (code mode only) — Read any of these that exist:
 - `README.md`, `CLAUDE.md`, `CONTRIBUTING.md`
 - `package.json`, `Cargo.toml`, `pyproject.toml`, `go.mod`, `Gemfile`, `.tool-versions`
 - `.github/`, `Makefile`, `docker-compose.yml`
 - Any docs directory (`docs/`, `documentation/`, `wiki/`)
 
-**Git history** — Learn from recent activity:
+**Git history** (code mode only) — Learn from recent activity:
 ```bash
 # Recent contributors and activity patterns
 git log --format='%an' --since='3 months ago' 2>/dev/null | sort | uniq -c | sort -rn | head -10
@@ -99,7 +146,7 @@ git log --oneline -20 2>/dev/null
 - Read any organizational docs, wikis, or knowledge bases accessible via MCP
 - The presence of specific MCP servers itself reveals the org's tooling (Notion = docs in Notion, Google Drive = shared drives, Slack = team communication)
 
-**Workspace settings** — Read `settings.yml` if it exists for any configured integrations, profiles, or conventions.
+**Workspace settings** — Read via `mcp__haiku__settings_read(ws_type, ws_slug)` for any configured integrations, profiles, or conventions.
 
 ### Step 2: Ask the User
 
@@ -127,13 +174,13 @@ Based on what was already gathered from project files and MCP resources, ask tar
 
 ### Step 3: Synthesize and Persist
 
-Write what you've learned to workspace memory so future elaborations (and all other phases) start with this context:
+Write what you've learned to workspace memory via MCP:
 
-```bash
-memory_write "organization" "$CONTENT" "overwrite"
+```
+mcp__haiku__memory_write(ws_type, ws_slug, "organization", content, "overwrite")
 ```
 
-The `organization.md` file should capture:
+The `organization` memory file should capture:
 - **Organization**: What the company/team does, mission, domain
 - **Team**: Who's involved, roles, disciplines
 - **Tech stack / Tools**: Languages, frameworks, platforms, integrations
@@ -142,9 +189,8 @@ The `organization.md` file should capture:
 - **Quality standards**: What "good" looks like here
 
 If domain-specific models were discovered, also write:
-```bash
-mkdir -p "$(memory_dir)/domain"
-memory_write "domain/{domain-name}" "$DOMAIN_CONTENT" "overwrite"
+```
+mcp__haiku__memory_write(ws_type, ws_slug, "domain/{domain-name}", domain_content, "overwrite")
 ```
 
 **Keep memory files concise and factual.** They'll be loaded into context on every session. Prefer structured lists over prose.
@@ -157,7 +203,7 @@ Explore the project/domain to understand:
 - Related work that might be affected
 - Domain-specific terminology and concepts
 
-Read relevant files and documentation. Use search tools to understand the landscape.
+In code mode, read relevant files and documentation using Read/Glob/Grep tools. In chat/cowork mode, use available MCP resources.
 
 **If Phase 1.75 just ran**, much of this context is already gathered. Focus on details specific to the current intent rather than re-surveying the entire project.
 
@@ -219,19 +265,15 @@ Present available workflows and ask user to choose:
 - **operational**: planner -> executor -> operator -> reviewer
 - **reflective**: planner -> executor -> operator -> reflector -> reviewer
 
-Check the workspace's `workflows.yml` and plugin `workflows.yml` for available options.
+In code mode, check the workspace's `workflows.yml` and plugin `workflows.yml` for available options. In chat/cowork mode, present the standard options above.
 
 ## Phase 6: Write Artifacts
 
-Resolve the workspace and create files:
+Write the intent and units using MCP tools:
 
-```bash
-source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
-WORKSPACE=$(resolve_workspace)
-INTENT_DIR="$WORKSPACE/intents/{intent-slug}"
-```
+### Intent
 
-### `{workspace}/intents/{intent-slug}/intent.md`
+Call `mcp__haiku__intent_create(ws_type, ws_slug, intent_slug, content)` with the full intent markdown:
 
 ```yaml
 ---
@@ -260,7 +302,9 @@ active_pass: ""  # Current pass being worked on (auto-managed during execution)
 - {item}
 ```
 
-### `{workspace}/intents/{intent-slug}/unit-NN-slug.md` (one per unit)
+### Units
+
+For each unit, call `mcp__haiku__unit_create(ws_type, ws_slug, intent_slug, unit_name, content)`:
 
 ```yaml
 ---
@@ -278,21 +322,24 @@ pass: ""  # Which pass this unit belongs to — empty for single-pass intents
 {technical details the executor needs}
 ```
 
-### `{workspace}/intents/{intent-slug}/completion-criteria.md`
+The `unit_name` should follow the pattern `unit-NN-slug` (e.g., `unit-01-setup`, `unit-02-api`).
 
-Consolidated list of all criteria across the intent.
+### Completion Criteria
+
+Store consolidated criteria as a special unit named `completion-criteria`:
+```
+mcp__haiku__unit_create(ws_type, ws_slug, intent_slug, "completion-criteria", content)
+```
 
 ## Phase 7: Initialize State
 
-```bash
-# Source HAIKU storage
-source "${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
+Store session state via MCP:
 
-# Save intent slug
-storage_save_state "intent-slug" "{slug}"
-
-# Initialize iteration state
-storage_save_state "iteration.json" '{"iteration":1,"hat":"planner","workflowName":"{workflow}","workflow":[{hats}],"status":"active"}'
+```
+mcp__haiku__state_write("intent-slug", slug)
+mcp__haiku__state_write("workspace_type", ws_type)
+mcp__haiku__state_write("workspace_slug", ws_slug)
+mcp__haiku__state_write("iteration", '{"iteration":1,"hat":"planner","workflowName":"{workflow}","workflow":[{hats}],"status":"active"}')
 ```
 
 ## Phase 8: Confirm
@@ -304,7 +351,7 @@ Output a summary:
 
 **Intent:** {title}
 **Slug:** {slug}
-**Workspace:** {workspace}
+**Workspace:** {ws_type}/{ws_slug}
 **Workflow:** {workflow}
 **Units:** {count}
 

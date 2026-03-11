@@ -8,9 +8,11 @@ export default auth((req) => {
   const isLoginPage = req.nextUrl.pathname.startsWith("/login");
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
   const isMcp = req.nextUrl.pathname.startsWith("/mcp");
+  const isOAuth = req.nextUrl.pathname.startsWith("/oauth") ||
+    req.nextUrl.pathname.startsWith("/.well-known/");
 
-  // Allow auth API routes and MCP endpoint through
-  if (isAuthApi || isMcp) return;
+  // Allow auth API routes, MCP endpoint, and OAuth endpoints through
+  if (isAuthApi || isMcp || isOAuth) return;
 
   // Redirect authenticated users away from login
   if (isAuthenticated && isLoginPage) {

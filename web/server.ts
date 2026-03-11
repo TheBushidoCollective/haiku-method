@@ -5,6 +5,11 @@ import {
   handleMcpGet,
   handleMcpDelete,
 } from "./src/mcp/server";
+import {
+  handleOAuthMetadata,
+  handleOAuthAuthorize,
+  handleOAuthToken,
+} from "./src/mcp/oauth";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = parseInt(process.env.PORT || "3000", 10);
@@ -14,6 +19,11 @@ const handle = nextApp.getRequestHandler();
 
 nextApp.prepare().then(() => {
   const app = express();
+
+  // OAuth 2.0 discovery and endpoints (for MCP clients)
+  app.get("/.well-known/oauth-authorization-server", handleOAuthMetadata);
+  app.get("/oauth/authorize", handleOAuthAuthorize);
+  app.post("/oauth/token", express.urlencoded({ extended: false }), handleOAuthToken);
 
   // MCP endpoint — parse JSON body for POST requests
   app.post("/mcp", express.json(), handleMcpRequest);

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Request, Response } from "express";
@@ -6,18 +7,25 @@ import type { McpUser } from "./auth";
 import { registerMemoryTools } from "./tools/memory";
 import { registerSettingsTools } from "./tools/settings";
 import { registerWorkspaceTools } from "./tools/workspace";
+import { registerStateTools } from "./tools/state";
+import { registerIntentTools } from "./tools/intents";
+import { registerUnitTools } from "./tools/units";
 
-function createMcpServer(user: McpUser): McpServer {
+function createMcpServer(user: McpUser, sessionId: string): McpServer {
   const server = new McpServer({
     name: "haiku-method",
     version: "1.0.0",
   });
 
   const getUser = () => user;
+  const getSessionId = () => sessionId;
 
   registerMemoryTools(server, getUser);
   registerSettingsTools(server, getUser);
   registerWorkspaceTools(server, getUser);
+  registerStateTools(server, getSessionId);
+  registerIntentTools(server, getUser);
+  registerUnitTools(server, getUser);
 
   return server;
 }
@@ -38,10 +46,13 @@ export async function handleMcpRequest(req: Request, res: Response) {
     throw err;
   }
 
-  const server = createMcpServer(user);
+  const sessionId =
+    (req.headers["mcp-session-id"] as string) || crypto.randomUUID();
+
+  const server = createMcpServer(user, sessionId);
 
   const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined, // stateless mode
+    sessionIdGenerator: () => sessionId,
   });
 
   await server.connect(transport);
@@ -60,7 +71,6 @@ export async function handleMcpGet(_req: Request, res: Response) {
 }
 
 export async function handleMcpDelete(_req: Request, res: Response) {
-  // Stateless mode — no sessions to clean up
   res.status(200).json({
     jsonrpc: "2.0",
     result: {},

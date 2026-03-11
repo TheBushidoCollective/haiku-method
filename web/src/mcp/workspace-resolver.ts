@@ -73,6 +73,32 @@ async function resolveUserWorkspace(
   };
 }
 
+export async function resolveWorkspaceHierarchy(
+  userId: string,
+  accessToken: string,
+  workspaceType: WorkspaceType,
+  slug?: string
+): Promise<ResolvedWorkspace[]> {
+  switch (workspaceType) {
+    case "user":
+      return [await resolveUserWorkspace(userId, accessToken)];
+    case "org":
+      return [await resolveOrgWorkspace(userId, slug)];
+    case "team": {
+      const teamWs = await resolveTeamWorkspace(userId, slug);
+      // Get the org slug from the team label (format: "orgSlug/teamSlug")
+      const orgSlug = teamWs.label.split("/")[0];
+      try {
+        const orgWs = await resolveOrgWorkspace(userId, orgSlug);
+        return [teamWs, orgWs];
+      } catch {
+        // Org workspace may not be provisioned
+        return [teamWs];
+      }
+    }
+  }
+}
+
 async function resolveTeamWorkspace(
   userId: string,
   slug?: string

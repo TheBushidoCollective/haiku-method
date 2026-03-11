@@ -1,7 +1,12 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { readMemory, writeMemory, listMemory } from "../../lib/drive/workspace";
-import { resolveWorkspace } from "../workspace-resolver";
+import {
+  readMemory,
+  writeMemory,
+  listMemory,
+  deleteMemory,
+} from "../../lib/drive/workspace";
+import { resolveWorkspace, resolveWorkspaceHierarchy } from "../workspace-resolver";
 import type { McpUser } from "../auth";
 
 const workspaceParams = {
@@ -100,6 +105,96 @@ export function registerMemoryTools(
         content: [
           { type: "text" as const, text: files.join("\n") },
         ],
+      };
+    }
+  );
+
+  server.tool(
+    "memory_delete",
+    "Delete a memory file from a workspace",
+    { ...workspaceParams, name: z.string() },
+    async ({ workspace_type, slug, name }) => {
+      const user = getUser();
+      const workspace = await resolveWorkspace(
+        user.id,
+        user.accessToken,
+        workspace_type,
+        slug
+      );
+      const deleted = await deleteMemory(
+        user.accessToken,
+        workspace.driveFolderId,
+        name
+      );
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: deleted
+              ? `Memory file "${name}" deleted.`
+              : `Memory file "${name}" not found.`,
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
+    "memory_context",
+    "Read merged memory from all parent workspace levels (e.g., team + org)",
+    {
+      ...workspaceParams,
+      max_entries: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .default(50)
+        .describe("Maximum number of memory files to return across all levels"),
+    },
+    async ({ workspace_type, slug, max_entries }) => {
+      const user = getUser();
+      const hierarchy = await resolveWorkspaceHierarchy(
+        user.id,
+        user.accessToken,
+        workspace_type,
+        slug
+      );
+
+      const sections: string[] = [];
+      let remaining = max_entries;
+
+      for (const ws of hierarchy) {
+        if (remaining <= 0) break;
+
+        const files = await listMemory(user.accessToken, ws.driveFolderId);
+
+        for (const fileName of files) {
+          if (remaining <= 0) break;
+
+          const content = await readMemory(
+            user.accessToken,
+            ws.driveFolderId,
+            fileName
+          );
+          if (content) {
+            sections.push(`## [${ws.type}: ${ws.label}] ${fileName}\n${content}`);
+            remaining--;
+          }
+        }
+      }
+
+      if (sections.length === 0) {
+        return {
+          content: [
+            { type: "text" as const, text: "No memory files found in workspace hierarchy." },
+          ],
+        };
+      }
+
+      return {
+        content: [{ type: "text" as const, text: sections.join("\n\n") }],
       };
     }
   );

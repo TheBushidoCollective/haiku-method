@@ -3,6 +3,29 @@ name: execute
 description: Continue the HAIKU execution loop - autonomous execute/review cycles until completion
 argument-hint: "[intent-slug] [unit-name]"
 disable-model-invocation: true
+allowed-tools:
+  # HAIKU MCP tools
+  - mcp__haiku__workspace_info
+  - mcp__haiku__settings_read
+  - mcp__haiku__settings_write
+  - mcp__haiku__memory_read
+  - mcp__haiku__memory_write
+  - mcp__haiku__memory_list
+  - mcp__haiku__memory_context
+  - mcp__haiku__memory_delete
+  - mcp__haiku__state_read
+  - mcp__haiku__state_write
+  - mcp__haiku__state_list
+  - mcp__haiku__state_delete
+  - mcp__haiku__intent_create
+  - mcp__haiku__intent_read
+  - mcp__haiku__intent_write
+  - mcp__haiku__intent_list
+  - mcp__haiku__unit_create
+  - mcp__haiku__unit_read
+  - mcp__haiku__unit_write
+  - mcp__haiku__unit_list
+  - mcp__haiku__unit_delete
 ---
 
 ## Name
@@ -40,67 +63,93 @@ If you encounter ambiguity:
 2. Document the assumption in your work
 3. Let the reviewer hat catch issues on the next pass
 
+## Mode Detection
+
+Detect the operating mode from environment and capabilities:
+
+1. **Code mode** (full Claude Code session):
+   - `CLAUDE_PLUGIN_ROOT` env var is set
+   - Has access to Bash, Read, Write, Edit, Glob, Grep tools
+   - Full quality gates, git operations, local DAG via `dag.sh`
+
+2. **Cowork mode** (Claude Code with limited tools):
+   - MCP tools available (`mcp__haiku__*`)
+   - Limited local file access
+   - Skip git operations, limited quality gates
+
+3. **Chat mode** (no local tools):
+   - Only MCP tools available
+   - No Bash, Read, Write, etc.
+   - Skip quality gates, all data via MCP
+
+The practical detection: If you can call `Bash`, you're in code mode. If you have MCP but no Bash, you're in cowork mode. If only MCP, chat mode.
+
 ## Implementation
 
 ### Step 0: Load State
 
-```bash
-# Source HAIKU libraries
-source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
-source "${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
-source "${CLAUDE_PLUGIN_ROOT}/lib/dag.sh"
-source "${CLAUDE_PLUGIN_ROOT}/lib/config.sh"
+Read workspace coordinates and session state from MCP:
 
-# Load state
-STATE=$(storage_load_state "iteration.json")
-INTENT_SLUG=$(storage_load_state "intent-slug")
-WORKSPACE=$(resolve_workspace)
-```
+1. Call `mcp__haiku__state_read("workspace_type")` -> ws_type (default: "user")
+2. Call `mcp__haiku__state_read("workspace_slug")` -> ws_slug
+3. Call `mcp__haiku__state_read("iteration")` -> STATE (JSON string)
+4. Call `mcp__haiku__state_read("intent-slug")` -> INTENT_SLUG
 
-If no state found:
+If no state found (state_read returns empty or "not found"):
 ```
 No HAIKU state found.
 Run /elaborate to start a new task, or /resume to continue an existing one.
 ```
 
-If status is "complete":
+Parse the iteration JSON. If `status` is "complete":
 ```
 Task already complete! Run /elaborate to start a new task.
 ```
 
 ### Step 1: Find Next Unit
 
+**Code mode** — Use `dag.sh` via Bash for local DAG operations:
 ```bash
+source "${CLAUDE_PLUGIN_ROOT}/lib/dag.sh"
 INTENT_DIR="$WORKSPACE/intents/${INTENT_SLUG}"
-
-# Read active pass from intent frontmatter (empty for single-pass intents)
 ACTIVE_PASS=$(_yaml_get_simple "active_pass" "" < "$INTENT_DIR/intent.md")
-
-# If targeting a specific unit, use it; otherwise find next ready unit
-if [ -n "$TARGET_UNIT" ]; then
-  UNIT_FILE="$INTENT_DIR/${TARGET_UNIT}.md"
-  # Validate and check deps
+if [ -n "$ACTIVE_PASS" ]; then
+  READY=$(find_ready_units_for_pass "$INTENT_DIR" "$ACTIVE_PASS")
 else
-  # Find next ready unit from DAG, filtered by active pass
-  if [ -n "$ACTIVE_PASS" ]; then
-    READY=$(find_ready_units_for_pass "$INTENT_DIR" "$ACTIVE_PASS")
-  else
-    READY=$(find_ready_units "$INTENT_DIR")
-  fi
-  UNIT_NAME=$(echo "$READY" | head -1)
-  UNIT_FILE="$INTENT_DIR/${UNIT_NAME}.md"
+  READY=$(find_ready_units "$INTENT_DIR")
 fi
 ```
 
+**Chat/Cowork mode** — Use MCP tools to find the next ready unit:
+
+1. Read the intent to get `active_pass`: Call `mcp__haiku__intent_read(ws_type, ws_slug, intent_slug)`, parse the `active_pass` field from frontmatter.
+2. List all units: Call `mcp__haiku__unit_list(ws_type, ws_slug, intent_slug)`.
+3. For each unit, call `mcp__haiku__unit_read(ws_type, ws_slug, intent_slug, unit_name)` to get its content.
+4. Parse frontmatter from each unit to extract `status`, `depends_on`, and `pass`.
+5. Apply DAG logic: A unit is **ready** if:
+   - `status` is `pending`
+   - All units listed in `depends_on` have `status: completed`
+   - If `active_pass` is set, the unit's `pass` field matches `active_pass`
+6. Pick the first ready unit (lowest number).
+
+If targeting a specific unit (argument provided), validate it exists and check its dependencies.
+
+If no ready units and no in-progress units:
+- If all units are completed, the intent is done.
+- Otherwise, all remaining units are blocked — alert the user.
+
 ### Step 2: Mark Unit In Progress
 
-```bash
-update_unit_status "$UNIT_FILE" "in_progress"
-```
+**Code mode**: Use `update_unit_status` from dag.sh.
+
+**Chat/Cowork mode**: Update the unit status via MCP:
+1. Call `mcp__haiku__unit_read(ws_type, ws_slug, intent_slug, unit_name)` to get full content.
+2. In the returned markdown, find `status: pending` in the frontmatter and replace with `status: in_progress`.
+3. Call `mcp__haiku__unit_write(ws_type, ws_slug, intent_slug, unit_name, updated_content)` with the modified content.
 
 ### Step 3: Execute Hat Workflow
 
-Based on `state.hat`, spawn the appropriate subagent:
+Based on the `hat` field in the iteration state, spawn the appropriate subagent:
 
 | Role | Description |
 |------|-------------|
@@ -114,17 +163,13 @@ Load hat instructions from the workspace or plugin hats directory and include in
 
 ### Step 4: Run Quality Gates
 
-Before advancing, check quality gates from workspace settings:
+**Code mode only** — Before advancing, check quality gates:
 
-```bash
-source "${CLAUDE_PLUGIN_ROOT}/lib/config.sh"
+1. Read settings via `mcp__haiku__settings_read(ws_type, ws_slug)`.
+2. Extract the `gates` configuration from settings (JSON array).
+3. Source `${CLAUDE_PLUGIN_ROOT}/lib/config.sh` and call `run_gates "Stop" "$gates_json"`.
 
-# Run gates for the current event
-if ! run_gates "Stop"; then
-  echo "Quality gates failed. Fix issues before continuing."
-  exit 1
-fi
-```
+**Chat/Cowork mode**: Skip command-type gates (cannot execute commands). If settings contain manual-type gates, report them as checklist items for the user.
 
 ### Step 5: Handle Result
 

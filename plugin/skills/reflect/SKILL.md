@@ -2,6 +2,30 @@
 name: reflect
 description: Analyze a completed HAIKU intent cycle and produce reflection artifacts with learnings, metrics, and recommendations
 argument-hint: "[intent-slug]"
+allowed-tools:
+  # HAIKU MCP tools
+  - mcp__haiku__workspace_info
+  - mcp__haiku__settings_read
+  - mcp__haiku__settings_write
+  - mcp__haiku__memory_read
+  - mcp__haiku__memory_write
+  - mcp__haiku__memory_list
+  - mcp__haiku__memory_context
+  - mcp__haiku__memory_delete
+  - mcp__haiku__state_read
+  - mcp__haiku__state_write
+  - mcp__haiku__state_list
+  - mcp__haiku__state_delete
+  - mcp__haiku__intent_create
+  - mcp__haiku__intent_read
+  - mcp__haiku__intent_write
+  - mcp__haiku__intent_list
+  - mcp__haiku__intent_delete
+  - mcp__haiku__unit_create
+  - mcp__haiku__unit_read
+  - mcp__haiku__unit_write
+  - mcp__haiku__unit_list
+  - mcp__haiku__unit_delete
 ---
 
 ## Name
@@ -21,25 +45,36 @@ argument-hint: "[intent-slug]"
 The reflect skill:
 1. Reads all unit specs, execution state, and operational outcomes for the intent
 2. Analyzes the full cycle: execution metrics, what worked, what didn't, patterns
-3. Produces a `reflection.md` artifact in the intent's workspace directory
+3. Produces a `reflection` artifact in the intent
 4. Presents findings for user validation and augmentation
 5. Offers two paths: **Iterate** (create intent v2 with learnings) or **Close** (capture organizational memory and archive)
+
+## Mode Detection
+
+Detect the operating mode from environment and capabilities:
+
+1. **Code mode**: `CLAUDE_PLUGIN_ROOT` env var is set, Bash tool available. Can use `dag.sh`, git operations.
+2. **Cowork mode**: MCP tools available, limited local file access.
+3. **Chat mode**: Only MCP tools available.
+
+The practical detection: If you can call `Bash`, you're in code mode. Otherwise cowork/chat.
+
+## Workspace Coordinates
+
+Before any MCP calls, read the workspace coordinates from session state:
+
+1. Call `mcp__haiku__state_read("workspace_type")` -> ws_type (default: "user")
+2. Call `mcp__haiku__state_read("workspace_slug")` -> ws_slug
+3. Use ws_type and ws_slug for all subsequent MCP calls.
 
 ## Implementation
 
 ### Step 0: Load State
 
-```bash
-# Source HAIKU libraries
-source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
-source "${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
-source "${CLAUDE_PLUGIN_ROOT}/lib/dag.sh"
-source "${CLAUDE_PLUGIN_ROOT}/lib/config.sh"
+Read the intent slug from state or argument:
 
-# Resolve workspace and determine intent slug
-WORKSPACE=$(resolve_workspace)
-INTENT_SLUG="${1:-$(storage_load_state "intent-slug")}"
-```
+1. If an argument was provided, use it as INTENT_SLUG.
+2. Otherwise, call `mcp__haiku__state_read("intent-slug")` -> INTENT_SLUG.
 
 If no intent slug found:
 ```
@@ -49,79 +84,45 @@ Run /elaborate to start a new task, or provide an intent slug: /reflect my-inten
 
 ### Step 1: Load Intent and Unit Data
 
-```bash
-INTENT_DIR="$WORKSPACE/intents/${INTENT_SLUG}"
-INTENT_FILE="$INTENT_DIR/intent.md"
-```
+Read all artifacts via MCP:
 
-Read the following artifacts:
-- `intent.md` - Intent definition, success criteria, scope
-- All `unit-*.md` files - Unit specs with statuses and completion criteria
-- `operations.md` - Operational plan (if exists)
-- `completion-criteria.md` - Consolidated criteria list (if exists)
+1. Call `mcp__haiku__intent_read(ws_type, ws_slug, intent_slug)` for the intent definition, success criteria, and scope.
+2. Call `mcp__haiku__unit_list(ws_type, ws_slug, intent_slug)` to get all unit names.
+3. For each unit, call `mcp__haiku__unit_read(ws_type, ws_slug, intent_slug, unit_name)` to get content with status.
+4. Call `mcp__haiku__unit_read(ws_type, ws_slug, intent_slug, "operations")` for the operational plan (if exists).
+5. Call `mcp__haiku__unit_read(ws_type, ws_slug, intent_slug, "completion-criteria")` for consolidated criteria (if exists).
 
-If `intent.md` does not exist:
+If intent does not exist:
 ```
-No intent found at {workspace}/intents/{intent-slug}/intent.md
+No intent found: {intent-slug}
 
 Run /elaborate to create a new intent.
 ```
 
 ### Step 2: Gather Execution Metrics
 
-Collect data from state storage and artifacts:
+Collect data from session state via MCP:
 
-```bash
-# Load iteration state
-STATE=$(storage_load_state "iteration.json")
-OP_STATUS=$(storage_load_state "operation-status.json")
+1. Call `mcp__haiku__state_read("iteration")` for iteration state.
+2. Call `mcp__haiku__state_read("operation-status")` for operational task status.
 
-# Get DAG summary
-SUMMARY=$(get_dag_summary "$INTENT_DIR")
-
-# Parse per-unit data
-for unit_file in "$INTENT_DIR"/unit-*.md; do
-  UNIT_NAME=$(basename "$unit_file" .md)
-  UNIT_STATUS=$(parse_unit_status "$unit_file")
-  # Load unit-level state if available
-  UNIT_STATE=$(storage_load_unit_state "$UNIT_NAME" "scratchpad.md")
-done
-```
+3. **Build DAG summary**:
+   - **Code mode**: Use `dag.sh` via Bash — `get_dag_summary "$INTENT_DIR"`.
+   - **Chat/Cowork mode**: From the unit data already loaded in Step 1, count units by status (completed, pending, in_progress, blocked). For each pending unit, check if all `depends_on` units are completed to determine ready vs blocked.
 
 Metrics to extract:
 - **Units completed** vs total
-- **Total iterations** (from iteration.json)
-- **Workflow used** (from iteration.json)
+- **Total iterations** (from iteration state)
+- **Workflow used** (from iteration state)
 - **Blockers encountered** (from unit scratchpads and state)
 - **Quality gate pass/fail history** (from state if recorded)
-- **Operational task status** (from operation-status.json)
+- **Operational task status** (from operation-status state)
 
 ### Step 2b: Load Session Transcript (if available)
 
-Check if the session transcript is accessible. The `HAIKU_TRANSCRIPT_PATH` environment variable is set by the SessionStart hook when the session provides a transcript path.
+**Code mode only**: Check if the session transcript is accessible via `HAIKU_TRANSCRIPT_PATH` environment variable.
 
-```bash
-TRANSCRIPT_PATH="${HAIKU_TRANSCRIPT_PATH:-}"
-HAS_TRANSCRIPT=false
-
-if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
-  HAS_TRANSCRIPT=true
-  echo "Session transcript available at: $TRANSCRIPT_PATH"
-fi
-```
-
-If the transcript is available, read it to extract conversation-level insights that artifacts alone cannot capture:
-
-```bash
-if [ "$HAS_TRANSCRIPT" = "true" ]; then
-  # The transcript is a JSONL file — each line is a JSON object representing
-  # a conversation turn (user messages, assistant responses, tool calls/results).
-  # Read the full transcript for analysis.
-  cat "$TRANSCRIPT_PATH"
-fi
-```
-
-When analyzing the transcript, look for:
+If the transcript is available, read it to extract conversation-level insights that artifacts alone cannot capture. Look for:
 - **Decision points** — where the user made choices or changed direction
 - **Confusion or rework** — repeated attempts, corrections, or misunderstandings
 - **Implicit feedback** — user satisfaction signals, frustration, or surprise
@@ -152,9 +153,11 @@ If the session transcript was loaded in Step 2b, also analyze:
 
 Ground all analysis in evidence from the artifacts and transcript. Do not speculate without data.
 
-### Step 4: Produce reflection.md
+### Step 4: Produce reflection artifact
 
-Write the reflection artifact to the intent directory:
+Write the reflection as a unit within the intent:
+
+Call `mcp__haiku__unit_create(ws_type, ws_slug, intent_slug, "reflection", content)` with:
 
 ```markdown
 ---
@@ -206,28 +209,19 @@ Output the reflection summary and ask the user to:
 
 Use `AskUserQuestion` to gather user input.
 
-Update `reflection.md` with any user corrections or additions.
+Update the reflection via `mcp__haiku__unit_write(ws_type, ws_slug, intent_slug, "reflection", updated_content)` with any user corrections or additions.
 
 ### Step 6: Update State
 
-```bash
-# Update reflection status in state
-REFLECTION_STATE=$(cat <<EOF
-{
-  "phase": "reflection",
-  "reflectionStatus": "awaiting-input",
-  "version": 1,
-  "previousVersions": []
-}
-EOF
-)
-storage_save_state "reflection-status.json" "$REFLECTION_STATE"
+Update reflection status in session state:
+
+```
+mcp__haiku__state_write("reflection-status", '{"phase":"reflection","reflectionStatus":"awaiting-input","version":1,"previousVersions":[]}')
 ```
 
 After user validates:
-```bash
-REFLECTION_STATE=$(echo "$REFLECTION_STATE" | jq '.reflectionStatus = "complete"')
-storage_save_state "reflection-status.json" "$REFLECTION_STATE"
+```
+mcp__haiku__state_write("reflection-status", '{"phase":"reflection","reflectionStatus":"complete","version":1,"previousVersions":[]}')
 ```
 
 ### Step 7: Offer Next Steps
@@ -258,44 +252,31 @@ Use `AskUserQuestion` to get the user's choice.
 
 If user chooses to iterate:
 
-1. **Determine version number**:
-```bash
-CURRENT_VERSION=$(storage_load_state "reflection-status.json" | jq -r '.version // 1')
-NEXT_VERSION=$((CURRENT_VERSION + 1))
-```
+1. **Determine version number**: Parse from reflection-status state.
 
-2. **Archive current intent**:
-```bash
-# Tag in git if available
-git tag "haiku/${INTENT_SLUG}/v${CURRENT_VERSION}" 2>/dev/null || true
-# Archive directory
-mv "$WORKSPACE/intents/${INTENT_SLUG}" "$WORKSPACE/intents/${INTENT_SLUG}-v${CURRENT_VERSION}"
-```
+2. **Archive current intent** (code mode only):
+   - Git tag: `git tag "haiku/${INTENT_SLUG}/v${CURRENT_VERSION}" 2>/dev/null || true`
 
-3. **Seed new intent**:
-Create a new `{workspace}/intents/{intent-slug}/` directory with:
-- A new `intent.md` that references the reflection learnings
-- Pre-loaded recommendations as constraints in the intent frontmatter
-- Link to the archived version for reference
+3. **Update intent status**: Read intent via `mcp__haiku__intent_read`, change `status: active` to `status: archived` in frontmatter, write back via `mcp__haiku__intent_write`.
 
-4. **Update state**:
-```bash
-REFLECTION_STATE=$(echo "$REFLECTION_STATE" | jq \
-  --arg v "$CURRENT_VERSION" \
-  '.previousVersions += [$v | tonumber] | .version = (.version + 1)')
-storage_save_state "reflection-status.json" "$REFLECTION_STATE"
-```
+4. **Seed new intent**: Call `mcp__haiku__intent_create(ws_type, ws_slug, intent_slug + "-v" + next_version, new_content)` with a new intent that references the reflection learnings and pre-loads recommendations as constraints.
 
-5. **Output**:
-```markdown
-## Intent Archived and Ready for v{NEXT_VERSION}
+5. **Update state**:
+   ```
+   mcp__haiku__state_write("intent-slug", new_intent_slug)
+   mcp__haiku__state_write("reflection-status", updated_json)
+   ```
 
-**Archived:** {workspace}/intents/{intent-slug}-v{CURRENT_VERSION}/
-**New intent:** {workspace}/intents/{intent-slug}/
+6. **Output**:
+   ```markdown
+   ## Intent Archived and Ready for v{NEXT_VERSION}
 
-The new intent has been seeded with learnings from the reflection.
-Run `/elaborate` to begin the next iteration with pre-loaded context.
-```
+   **Archived:** {intent-slug} (status: archived)
+   **New intent:** {new-intent-slug}
+
+   The new intent has been seeded with learnings from the reflection.
+   Run `/elaborate` to begin the next iteration with pre-loaded context.
+   ```
 
 ### Step 7b: Close Path
 
@@ -303,47 +284,37 @@ If user chooses to close:
 
 1. **Distill learnings** into concise, reusable patterns.
 
-2. **Write organizational memory** using the memory library:
+2. **Write organizational memory** via MCP:
 
-```bash
-source "${CLAUDE_PLUGIN_ROOT}/lib/memory.sh"
-```
+   Call `mcp__haiku__memory_write(ws_type, ws_slug, "learnings", content, "append")` with:
 
-Append to `learnings.md` in the workspace's memory directory:
-```markdown
-## {Intent Title} ({ISO date})
+   ```markdown
+   ## {Intent Title} ({ISO date})
 
-### Patterns
-- {Reusable pattern from this intent}
+   ### Patterns
+   - {Reusable pattern from this intent}
 
-### Anti-Patterns
-- {What to avoid, with context}
+   ### Anti-Patterns
+   - {What to avoid, with context}
 
-### Process Insights
-- {Process improvement that applies broadly}
-```
+   ### Process Insights
+   - {Process improvement that applies broadly}
+   ```
 
-Use `memory_write "learnings" "$CONTENT" "append"` to save.
+   If the workspace settings (via `mcp__haiku__settings_read`) has `memory.mcp` configured, also write the learnings to that MCP server so they are accessible to the broader team.
 
-If the workspace's `settings.yml` has `memory.mcp` configured (e.g., `notion`, `filesystem`), also write the learnings to that MCP server so they are accessible to the broader team. Use the MCP server's write/create tools to store the content.
-
-3. **Archive intent**:
-
-```bash
-sed -i.bak 's/^status:.*$/status: archived/' "$WORKSPACE/intents/${INTENT_SLUG}/intent.md"
-rm -f "$WORKSPACE/intents/${INTENT_SLUG}/intent.md.bak"
-```
+3. **Archive intent**: Read intent via `mcp__haiku__intent_read`, change `status: active` to `status: archived` in frontmatter, write back via `mcp__haiku__intent_write`.
 
 4. **Output**:
-```markdown
-## Intent Closed
+   ```markdown
+   ## Intent Closed
 
-**Intent:** {title}
-**Status:** archived
-**Learnings saved to:** {workspace}/memory/learnings.md
+   **Intent:** {title}
+   **Status:** archived
+   **Learnings saved to:** workspace memory (learnings)
 
-### Key Learnings Captured
-{summary of what was written to memory}
+   ### Key Learnings Captured
+   {summary of what was written to memory}
 
-The intent has been archived. Learnings are available for future intents.
-```
+   The intent has been archived. Learnings are available for future intents.
+   ```

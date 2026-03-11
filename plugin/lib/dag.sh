@@ -9,10 +9,7 @@
 #
 # All functions work from filesystem alone - no git branch queries required.
 
-# Source storage abstraction
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=storage.sh
-source "$SCRIPT_DIR/storage.sh"
 
 # Fast YAML extraction for simple scalar values (avoids subprocess)
 # Usage: _yaml_get_simple "field" "default" < file

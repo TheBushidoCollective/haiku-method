@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 depends_on: []
 branch: ai-dlc/haiku-mcp-refactor/01-workspace-hierarchy
 discipline: backend

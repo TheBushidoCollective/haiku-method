@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 depends_on: [unit-02-state-and-memory, unit-03-plugin-setup]
 branch: ai-dlc/haiku-mcp-refactor/04-skill-rewrite
 discipline: backend

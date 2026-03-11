@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "drive_folder_id" text;

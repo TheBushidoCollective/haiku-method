@@ -2,6 +2,24 @@
 name: resume
 description: Resume work on an existing HAIKU intent when state is lost
 argument-hint: "[intent-slug]"
+allowed-tools:
+  # HAIKU MCP tools
+  - mcp__haiku__workspace_info
+  - mcp__haiku__settings_read
+  - mcp__haiku__memory_read
+  - mcp__haiku__memory_context
+  - mcp__haiku__state_read
+  - mcp__haiku__state_write
+  - mcp__haiku__state_list
+  - mcp__haiku__state_delete
+  - mcp__haiku__intent_create
+  - mcp__haiku__intent_read
+  - mcp__haiku__intent_write
+  - mcp__haiku__intent_list
+  - mcp__haiku__unit_create
+  - mcp__haiku__unit_read
+  - mcp__haiku__unit_write
+  - mcp__haiku__unit_list
 ---
 
 ## Name
@@ -23,79 +41,114 @@ This happens when:
 - Starting fresh session after previous work
 - State lost but artifacts preserved
 
+## Mode Detection
+
+Detect the operating mode from environment and capabilities:
+
+1. **Code mode**: `CLAUDE_PLUGIN_ROOT` env var is set, Bash tool available. Can use `dag.sh` for local DAG operations.
+2. **Cowork mode**: MCP tools available, limited local file access.
+3. **Chat mode**: Only MCP tools available.
+
+The practical detection: If you can call `Bash`, you're in code mode. Otherwise cowork/chat.
+
+## Workspace Coordinates
+
+Before any MCP calls, read the workspace coordinates from session state (they may already be set from a previous session):
+
+1. Call `mcp__haiku__state_read("workspace_type")` -> ws_type (default: "user")
+2. Call `mcp__haiku__state_read("workspace_slug")` -> ws_slug
+3. If not found, call `mcp__haiku__workspace_info(workspace_type: "user")` to discover/provision the workspace.
+4. Store coordinates: `mcp__haiku__state_write("workspace_type", ws_type)` and `mcp__haiku__state_write("workspace_slug", ws_slug)`.
+
 ## Implementation
 
 ### Step 1: Find Resumable Intents
 
-If no slug provided, scan for active intents in the workspace:
+If no slug provided as argument, scan for active intents:
 
-```bash
-source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
-source "${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
-
-WORKSPACE=$(resolve_workspace)
-INTENTS_DIR="$WORKSPACE/intents"
-
-for intent_file in "$INTENTS_DIR"/*/intent.md; do
-  [ -f "$intent_file" ] || continue
-  dir=$(dirname "$intent_file")
-  slug=$(basename "$dir")
-  # Check status from frontmatter
-  status=$(_yaml_get_simple "status" "active" < "$intent_file")
-  [ "$status" = "active" ] && echo "$slug"
-done
-```
+1. Call `mcp__haiku__intent_list(ws_type, ws_slug)` to get all intent slugs.
+2. For each intent, call `mcp__haiku__intent_read(ws_type, ws_slug, intent_slug)` and parse the `status` field from frontmatter.
+3. Filter for intents with `status: active`.
 
 **Selection logic:**
 - 1 intent found -> auto-select
 - Multiple intents -> list and prompt user
 - 0 intents -> error, suggest `/elaborate`
 
+If a slug was provided as argument, use it directly.
+
 ### Step 2: Load Intent Metadata
 
-Read from the workspace:
+Read the intent to extract metadata:
 
-```bash
-source "${CLAUDE_PLUGIN_ROOT}/lib/dag.sh"
-WORKFLOW=$(_yaml_get_simple "workflow" "default" < "$INTENTS_DIR/${slug}/intent.md")
-TITLE=$(_yaml_get_simple "title" "$slug" < "$INTENTS_DIR/${slug}/intent.md")
-```
+1. Call `mcp__haiku__intent_read(ws_type, ws_slug, intent_slug)`.
+2. Parse frontmatter to extract:
+   - `workflow` (default: "default")
+   - `title` (default: the slug)
+   - `passes` and `active_pass` (if multi-pass)
 
 ### Step 3: Determine Starting Hat
 
-Use DAG analysis:
+Analyze unit statuses to determine where to resume:
 
+**Code mode** — Use `dag.sh` via Bash:
 ```bash
-starting_hat=$(get_recommended_hat "$INTENTS_DIR/${slug}" "${WORKFLOW}")
+source "${CLAUDE_PLUGIN_ROOT}/lib/dag.sh"
+starting_hat=$(get_recommended_hat "$INTENT_DIR" "${WORKFLOW}")
 ```
 
-**Hat selection logic:**
-- No units exist -> `planner`
-- All units completed -> `reviewer`
-- Any units in_progress or ready -> `executor`
-- All units blocked -> `planner`
+**Chat/Cowork mode** — Use MCP tools:
+
+1. Call `mcp__haiku__unit_list(ws_type, ws_slug, intent_slug)` to get all units.
+2. For each unit, call `mcp__haiku__unit_read(ws_type, ws_slug, intent_slug, unit_name)` and parse `status` from frontmatter.
+3. Count units by status: completed, in_progress, pending, blocked.
+4. For pending units, check `depends_on` to determine if they're ready or blocked.
+5. Apply hat selection logic:
+   - **No units exist** -> `planner` (2nd hat if workflow has 3+ hats, else 1st)
+   - **All units completed** -> last hat (reviewer)
+   - **Any units in_progress or ready** -> `executor` (3rd hat if workflow has 3+ hats)
+   - **All units blocked** -> `planner`
 
 ### Step 4: Initialize State
 
-```bash
-# Save to storage
-storage_save_state "intent-slug" "$SLUG"
-storage_save_state "iteration.json" '{"iteration":1,"hat":"'"$STARTING_HAT"'","workflowName":"'"$WORKFLOW"'","workflow":'"$WORKFLOW_HATS_JSON"',"status":"active"}'
-```
+Store session state via MCP:
+
+1. Resolve the workflow hats array. In code mode, read from `workflows.yml`. In chat/cowork mode, use standard mappings:
+   - `default`: `["planner", "executor", "reviewer"]`
+   - `operational`: `["planner", "executor", "operator", "reviewer"]`
+   - `reflective`: `["planner", "executor", "operator", "reflector", "reviewer"]`
+
+2. Write state:
+   ```
+   mcp__haiku__state_write("intent-slug", slug)
+   mcp__haiku__state_write("workspace_type", ws_type)
+   mcp__haiku__state_write("workspace_slug", ws_slug)
+   mcp__haiku__state_write("iteration", '{"iteration":1,"hat":"starting_hat","workflowName":"workflow","workflow":["hat1","hat2","hat3"],"status":"active"}')
+   ```
 
 ### Step 5: Output Confirmation
+
+Build a DAG status table:
+
+**Code mode**: Use `get_dag_status_table` from dag.sh.
+
+**Chat/Cowork mode**: From the unit data already loaded, build a table showing each unit's name, status, and blocking dependencies.
 
 ```markdown
 ## HAIKU Intent Resumed
 
 **Intent:** {title}
 **Slug:** {slug}
-**Workspace:** {workspace}
+**Workspace:** {ws_type}/{ws_slug}
 **Workflow:** {workflow}
 **Starting Hat:** {startingHat}
 
 ### Unit Status
-{get_dag_status_table output}
+| Unit | Status | Blocked By |
+|------|--------|------------|
+| unit-01-setup | completed | |
+| unit-02-api | in_progress | |
+| unit-03-ui | pending | unit-02-api |
 
 **Summary:** {completed}/{total} units completed
 

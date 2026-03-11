@@ -2,6 +2,29 @@
 name: operate
 description: Manage the operation phase - read operational plans, execute agent tasks, guide human tasks, and track operational status
 argument-hint: "[intent-slug]"
+allowed-tools:
+  # HAIKU MCP tools
+  - mcp__haiku__workspace_info
+  - mcp__haiku__settings_read
+  - mcp__haiku__settings_write
+  - mcp__haiku__memory_read
+  - mcp__haiku__memory_write
+  - mcp__haiku__memory_list
+  - mcp__haiku__memory_context
+  - mcp__haiku__memory_delete
+  - mcp__haiku__state_read
+  - mcp__haiku__state_write
+  - mcp__haiku__state_list
+  - mcp__haiku__state_delete
+  - mcp__haiku__intent_create
+  - mcp__haiku__intent_read
+  - mcp__haiku__intent_write
+  - mcp__haiku__intent_list
+  - mcp__haiku__unit_create
+  - mcp__haiku__unit_read
+  - mcp__haiku__unit_write
+  - mcp__haiku__unit_list
+  - mcp__haiku__unit_delete
 ---
 
 ## Name
@@ -18,27 +41,39 @@ argument-hint: "[intent-slug]"
 
 **User-facing command** - Manage operational tasks for a completed or in-progress intent.
 
-The operate skill reads the operational plan from the intent's directory in the workspace and:
+The operate skill reads the operational plan from the intent and:
 - Displays the operational plan overview
-- Executes `owner: agent` tasks directly (runs commands, scripts)
+- Executes `owner: agent` tasks directly (runs commands, scripts) in code mode
 - Provides guidance, checklists, and reminders for `owner: human` tasks
-- Tracks operational status in intent state
+- Tracks operational status in session state
 - Can trigger a new Elaboration if operational findings suggest changes
+
+## Mode Detection
+
+Detect the operating mode from environment and capabilities:
+
+1. **Code mode**: `CLAUDE_PLUGIN_ROOT` env var is set, Bash tool available. Can execute agent commands directly.
+2. **Cowork mode**: MCP tools available, limited local file access. Cannot execute commands; report what would need to be run.
+3. **Chat mode**: Only MCP tools available. Cannot execute commands; report what would need to be run.
+
+The practical detection: If you can call `Bash`, you're in code mode. Otherwise cowork/chat.
+
+## Workspace Coordinates
+
+Before any MCP calls, read the workspace coordinates from session state:
+
+1. Call `mcp__haiku__state_read("workspace_type")` -> ws_type (default: "user")
+2. Call `mcp__haiku__state_read("workspace_slug")` -> ws_slug
+3. Use ws_type and ws_slug for all subsequent MCP calls.
 
 ## Implementation
 
 ### Step 0: Load State
 
-```bash
-# Source HAIKU libraries
-source "${CLAUDE_PLUGIN_ROOT}/lib/workspace.sh"
-source "${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
-source "${CLAUDE_PLUGIN_ROOT}/lib/config.sh"
+Read the intent slug from state or argument:
 
-# Resolve workspace and determine intent slug
-WORKSPACE=$(resolve_workspace)
-INTENT_SLUG="${1:-$(storage_load_state "intent-slug")}"
-```
+1. If an argument was provided, use it as INTENT_SLUG.
+2. Otherwise, call `mcp__haiku__state_read("intent-slug")` -> INTENT_SLUG.
 
 If no intent slug found:
 ```
@@ -48,25 +83,23 @@ Run /elaborate to start a new task, or provide an intent slug: /operate my-inten
 
 ### Step 1: Load Operational Plan
 
-```bash
-INTENT_DIR="$WORKSPACE/intents/${INTENT_SLUG}"
-OPS_FILE="$INTENT_DIR/operations.md"
-```
+Read the operations plan stored as a unit within the intent:
 
-If `operations.md` does not exist:
+Call `mcp__haiku__unit_read(ws_type, ws_slug, intent_slug, "operations")`.
+
+If the operations unit does not exist:
 ```
-No operational plan found at {workspace}/intents/{intent-slug}/operations.md
+No operational plan found for intent: {intent-slug}
 
 The operational plan is produced during the Execution phase when using
 the 'operational' or 'reflective' workflow.
 
-To create one now, create operations.md in the intent directory with
-recurring, reactive, and manual task sections.
+To create one now, use /elaborate to define operational tasks.
 ```
 
 ### Step 2: Parse Operational Plan
 
-Read `operations.md` and parse its frontmatter and task sections:
+The operations content is markdown with frontmatter and task sections:
 
 **Frontmatter fields:**
 - `intent` - Intent slug
@@ -122,21 +155,15 @@ Output a summary of the operational plan:
 
 For tasks where `owner: agent`:
 
+**Code mode**: Execute commands directly via Bash tool:
 1. **Recurring tasks with a command**: Execute the command and report results
 2. **Reactive tasks with a command**: Check if the trigger condition is met, then execute
 3. Report execution results including exit code and output
 
-```bash
-# Example: execute an agent task
-if [ -n "$TASK_COMMAND" ]; then
-  echo "Executing: $TASK_NAME"
-  if eval "$TASK_COMMAND"; then
-    echo "Task completed successfully."
-  else
-    echo "Task failed with exit code $?."
-  fi
-fi
-```
+**Chat/Cowork mode**: Cannot execute commands. Instead:
+1. List each agent task with its command
+2. Report what commands would need to be run
+3. Provide the commands as copyable text for the user to execute manually
 
 ### Step 5: Handle Human-Owned Tasks
 
@@ -160,39 +187,24 @@ For tasks where `owner: human`:
 
 ### Step 6: Track Operational Status
 
-Update operation status in intent state using the storage abstraction:
+Update operation status in session state via MCP:
 
-```bash
-source "${CLAUDE_PLUGIN_ROOT}/lib/storage.sh"
-
-# Load or initialize operation status
-OP_STATUS=$(storage_load_state "operation-status.json")
-
-if [ -z "$OP_STATUS" ]; then
-  OP_STATUS='{"phase":"operation","operationStatus":"active","operationalTasks":{}}'
-fi
-
-# Update task status after execution
-# Example: mark a task as run
-UPDATED=$(echo "$OP_STATUS" | jq --arg name "$TASK_NAME" --arg time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '.operationalTasks[$name] = {"lastRun": $time, "status": "on-track"}')
-
-storage_save_state "operation-status.json" "$UPDATED"
-```
-
-**State schema:**
-```json
-{
-  "phase": "operation",
-  "operationStatus": "active|monitoring|complete",
-  "operationalTasks": {
-    "task-name": {
-      "lastRun": "2026-03-06T12:00:00Z",
-      "status": "on-track|needs-attention|failed"
-    }
-  }
-}
-```
+1. Call `mcp__haiku__state_read("operation-status")` to load existing status.
+2. If empty, initialize: `{"phase":"operation","operationStatus":"active","operationalTasks":{}}`
+3. After executing tasks, update the status:
+   ```json
+   {
+     "phase": "operation",
+     "operationStatus": "active",
+     "operationalTasks": {
+       "task-name": {
+         "lastRun": "2026-03-06T12:00:00Z",
+         "status": "on-track"
+       }
+     }
+   }
+   ```
+4. Call `mcp__haiku__state_write("operation-status", updated_json_string)`.
 
 ### Step 7: Trigger Re-Elaboration (If Needed)
 

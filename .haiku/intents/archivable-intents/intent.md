@@ -11,6 +11,11 @@ stages:
   - development
   - operations
   - security
+skip_stages:
+  - design
+  - product
+  - operations
+  - security
 active_stage: design
 intent_reviewed: true
 ---

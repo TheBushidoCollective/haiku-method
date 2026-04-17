@@ -13,6 +13,7 @@ outputs:
   - stages/design/artifacts/feedback-lifecycle-transitions.html
   - stages/design/artifacts/feedback-card-states.html
   - stages/design/artifacts/comments-list-with-agent-toggle.html
+  - stages/design/artifacts/unit-05-design-review.md
 status: active
 bolt: 1
 hat: designer

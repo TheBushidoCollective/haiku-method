@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iteration Timeline — Stage Banner · High-Fidelity Mock</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: {} }
+    };
+  </script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+
+    /* Tooltip */
+    .iter-tip {
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 240px;
+      max-width: 320px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+      z-index: 20;
+      white-space: normal;
+    }
+    .iter-node:hover .iter-tip,
+    .iter-node:focus-visible .iter-tip,
+    .iter-node.is-open .iter-tip {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .iter-tip::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: rgb(17 24 39);
+    }
+
+    /* Active iteration — pulsing ring */
+    @keyframes pulse-ring {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.5); }
+      50%      { box-shadow: 0 0 0 6px rgba(20, 184, 166, 0); }
+    }
+    .iter-active .iter-dot {
+      animation: pulse-ring 2s infinite;
+    }
+
+    /* Focus ring */
+    .iter-node:focus-visible {
+      outline: 2px solid rgb(20 184 166);
+      outline-offset: 4px;
+      border-radius: 4px;
+    }
+
+    /* Collapsed stack (when 4+ iterations) */
+    .stack-indicator {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Empty-legacy callout subtle stripe */
+    .legacy-stripe {
+      background-image: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 4px,
+        rgba(245, 158, 11, 0.08) 4px,
+        rgba(245, 158, 11, 0.08) 8px
+      );
+    }
+  </style>
+</head>
+<body class="dark bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+
+  <div class="max-w-[1400px] mx-auto px-4 py-12 space-y-14">
+
+    <header class="space-y-2">
+      <div class="flex items-center gap-3">
+        <span class="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded bg-teal-600/20 text-teal-400 border border-teal-600/30">High-fidelity</span>
+        <span class="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded bg-slate-700/40 text-slate-300 border border-slate-600/40">unit-09</span>
+        <span class="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded bg-slate-700/40 text-slate-300 border border-slate-600/40">closes FB-05, FB-06, FB-08, FB-09</span>
+      </div>
+      <h1 class="text-2xl font-semibold text-gray-100">Iteration Timeline — Stage Banner</h1>
+      <p class="text-sm text-gray-400 max-w-3xl">
+        The review UI stage banner reads <code class="text-teal-400">state.json.iterations[]</code> and renders the history inline. Active iteration (the one with <code class="text-teal-400">ended_at: null</code>) gets an accent outline + pulsing dot. Each record exposes a hover tooltip with <code>outcome</code>, <code>triggered_by</code>, and <code>feedback_scope</code>. Empty / missing <code>iterations</code> hydrates from legacy fields (FB-08) and renders a single Iteration 1 entry.
+      </p>
+    </header>
+
+    <!-- ============================================================ -->
+    <!-- DESKTOP — 1280px breakpoint                                    -->
+    <!-- ============================================================ -->
+    <section class="space-y-4">
+      <div class="flex items-baseline justify-between">
+        <h2 class="text-lg font-semibold text-gray-100">Desktop · 1280px</h2>
+        <span class="text-[11px] font-mono text-gray-500">stage banner · top of review UI</span>
+      </div>
+
+      <!-- ------- Variant A · 2 iterations, second active ----------- -->
+      <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span class="text-sm font-semibold text-gray-100">Design</span>
+            <span class="text-xs text-gray-500">·</span>
+            <span class="text-xs text-gray-400 font-mono">elaborate</span>
+          </div>
+          <span class="text-[11px] font-mono text-gray-500">universal-feedback-model-and-review-recovery</span>
+          <div class="ml-auto flex items-center gap-2">
+            <span class="text-[11px] text-amber-400 font-medium">Iteration 2 of 2</span>
+            <span class="text-[11px] text-gray-500">· started 2026-04-16 21:04</span>
+          </div>
+        </div>
+
+        <!-- Timeline rail -->
+        <div class="px-6 py-5">
+          <ol class="relative flex items-center justify-start gap-0" aria-label="Iteration history">
+
+            <!-- Iteration 1 — closed, outcome: revisited -->
+            <li class="iter-node relative flex flex-col items-center group" tabindex="0" aria-label="Iteration 1, closed, revisited">
+              <div class="iter-tip">
+                <div class="rounded-md bg-gray-900 border border-gray-700 shadow-xl px-3 py-2.5 text-left">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[11px] font-mono font-semibold text-amber-300">Iteration 1</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40">revisited</span>
+                  </div>
+                  <dl class="text-[11px] text-gray-300 space-y-0.5">
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">triggered by</dt><dd class="font-mono text-gray-200">initial</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">started</dt><dd class="font-mono text-gray-200">2026-04-15 20:53</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">ended</dt><dd class="font-mono text-gray-200">2026-04-16 14:06</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">feedback_scope</dt><dd class="text-gray-400 italic">—</dd></div>
+                  </dl>
+                </div>
+              </div>
+              <div class="iter-dot w-3 h-3 rounded-full bg-amber-700 border-2 border-amber-600"></div>
+              <div class="mt-2 flex flex-col items-center">
+                <span class="text-[11px] font-mono font-semibold text-gray-300">i1</span>
+                <span class="text-[10px] text-gray-500">revisited</span>
+              </div>
+            </li>
+
+            <!-- Connector -->
+            <li aria-hidden="true" class="h-0.5 flex-1 bg-gradient-to-r from-amber-600 to-teal-500 mt-[-30px] mx-1 min-w-[64px]"></li>
+
+            <!-- Iteration 2 — active -->
+            <li class="iter-node iter-active relative flex flex-col items-center group" tabindex="0" aria-label="Iteration 2, active">
+              <div class="iter-tip">
+                <div class="rounded-md bg-gray-900 border border-teal-600/60 shadow-xl px-3 py-2.5 text-left">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[11px] font-mono font-semibold text-teal-300">Iteration 2</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-teal-900/50 text-teal-300 border border-teal-700/50">active</span>
+                  </div>
+                  <dl class="text-[11px] text-gray-300 space-y-0.5">
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">triggered by</dt><dd class="font-mono text-gray-200">revisit</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">started</dt><dd class="font-mono text-gray-200">2026-04-16 21:04</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">ended</dt><dd class="font-mono text-gray-500 italic">—</dd></div>
+                    <div class="flex flex-col gap-1 pt-1">
+                      <dt class="text-gray-500">feedback_scope</dt>
+                      <dd class="flex flex-wrap gap-1">
+                        <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-700/60 text-slate-200 border border-slate-600/50">FB-05</span>
+                        <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-700/60 text-slate-200 border border-slate-600/50">FB-06</span>
+                        <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-700/60 text-slate-200 border border-slate-600/50">FB-08</span>
+                        <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-700/60 text-slate-200 border border-slate-600/50">FB-09</span>
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+              <div class="iter-dot w-3.5 h-3.5 rounded-full bg-teal-500 border-2 border-teal-400 ring-2 ring-teal-500/30"></div>
+              <div class="mt-2 flex flex-col items-center">
+                <span class="text-[11px] font-mono font-semibold text-teal-300">i2</span>
+                <span class="text-[10px] text-teal-400/80">active</span>
+              </div>
+            </li>
+
+          </ol>
+        </div>
+      </div>
+
+      <!-- ------- Variant B · 3 iterations, feedback-rollback mid-stream ------- -->
+      <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span class="text-sm font-semibold text-gray-100">Development</span>
+            <span class="text-xs text-gray-500">·</span>
+            <span class="text-xs text-gray-400 font-mono">elaborate</span>
+          </div>
+          <span class="text-[11px] font-mono text-gray-500">example — three-iteration history</span>
+          <div class="ml-auto flex items-center gap-2">
+            <span class="text-[11px] text-amber-400 font-medium">Iteration 3 of 3</span>
+            <span class="text-[11px] text-gray-500">· started 2026-04-17 09:21</span>
+          </div>
+        </div>
+
+        <div class="px-6 py-5">
+          <ol class="relative flex items-center justify-start gap-0" aria-label="Iteration history">
+
+            <!-- i1 -->
+            <li class="iter-node relative flex flex-col items-center" tabindex="0" aria-label="Iteration 1 revisited">
+              <div class="iter-tip">
+                <div class="rounded-md bg-gray-900 border border-gray-700 shadow-xl px-3 py-2.5 text-left">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[11px] font-mono font-semibold text-amber-300">Iteration 1</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40">revisited</span>
+                  </div>
+                  <dl class="text-[11px] text-gray-300 space-y-0.5">
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">triggered by</dt><dd class="font-mono text-gray-200">initial</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">started</dt><dd class="font-mono text-gray-200">2026-04-14 11:02</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">ended</dt><dd class="font-mono text-gray-200">2026-04-15 18:40</dd></div>
+                  </dl>
+                </div>
+              </div>
+              <div class="iter-dot w-3 h-3 rounded-full bg-amber-700 border-2 border-amber-600"></div>
+              <div class="mt-2 flex flex-col items-center">
+                <span class="text-[11px] font-mono font-semibold text-gray-300">i1</span>
+                <span class="text-[10px] text-gray-500">revisited</span>
+              </div>
+            </li>
+
+            <li aria-hidden="true" class="h-0.5 flex-1 bg-amber-600 mt-[-30px] mx-1 min-w-[48px]"></li>
+
+            <!-- i2 (feedback_rollback) -->
+            <li class="iter-node relative flex flex-col items-center" tabindex="0" aria-label="Iteration 2 revisited via feedback rollback">
+              <div class="iter-tip">
+                <div class="rounded-md bg-gray-900 border border-gray-700 shadow-xl px-3 py-2.5 text-left">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[11px] font-mono font-semibold text-amber-300">Iteration 2</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-orange-900/40 text-orange-300 border border-orange-700/40">revisited · rollback</span>
+                  </div>
+                  <dl class="text-[11px] text-gray-300 space-y-0.5">
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">triggered by</dt><dd class="font-mono text-orange-300">feedback_rollback</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">started</dt><dd class="font-mono text-gray-200">2026-04-15 19:05</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">ended</dt><dd class="font-mono text-gray-200">2026-04-17 09:20</dd></div>
+                    <div class="flex flex-col gap-1 pt-1">
+                      <dt class="text-gray-500">feedback_scope</dt>
+                      <dd class="flex flex-wrap gap-1">
+                        <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-700/60 text-slate-200 border border-slate-600/50">FB-11</span>
+                        <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-700/60 text-slate-200 border border-slate-600/50">FB-12</span>
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              </div>
+              <div class="iter-dot w-3 h-3 rounded-full bg-orange-600 border-2 border-orange-500"></div>
+              <div class="mt-2 flex flex-col items-center">
+                <span class="text-[11px] font-mono font-semibold text-gray-300">i2</span>
+                <span class="text-[10px] text-orange-400/80">rollback</span>
+              </div>
+            </li>
+
+            <li aria-hidden="true" class="h-0.5 flex-1 bg-gradient-to-r from-orange-600 to-teal-500 mt-[-30px] mx-1 min-w-[48px]"></li>
+
+            <!-- i3 active -->
+            <li class="iter-node iter-active relative flex flex-col items-center" tabindex="0" aria-label="Iteration 3 active">
+              <div class="iter-tip">
+                <div class="rounded-md bg-gray-900 border border-teal-600/60 shadow-xl px-3 py-2.5 text-left">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[11px] font-mono font-semibold text-teal-300">Iteration 3</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-teal-900/50 text-teal-300 border border-teal-700/50">active</span>
+                  </div>
+                  <dl class="text-[11px] text-gray-300 space-y-0.5">
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">triggered by</dt><dd class="font-mono text-gray-200">revisit</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">started</dt><dd class="font-mono text-gray-200">2026-04-17 09:21</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">ended</dt><dd class="font-mono text-gray-500 italic">—</dd></div>
+                  </dl>
+                </div>
+              </div>
+              <div class="iter-dot w-3.5 h-3.5 rounded-full bg-teal-500 border-2 border-teal-400 ring-2 ring-teal-500/30"></div>
+              <div class="mt-2 flex flex-col items-center">
+                <span class="text-[11px] font-mono font-semibold text-teal-300">i3</span>
+                <span class="text-[10px] text-teal-400/80">active</span>
+              </div>
+            </li>
+
+          </ol>
+        </div>
+      </div>
+
+      <!-- ------- Variant C · Single iteration (first pass, no revisits) ------- -->
+      <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-teal-400"></span>
+            <span class="text-sm font-semibold text-gray-100">Inception</span>
+            <span class="text-xs text-gray-500">·</span>
+            <span class="text-xs text-gray-400 font-mono">elaborate</span>
+          </div>
+          <span class="text-[11px] font-mono text-gray-500">first-pass — no revisits yet</span>
+          <div class="ml-auto flex items-center gap-2">
+            <span class="text-[11px] text-teal-400 font-medium">Iteration 1 of 1</span>
+            <span class="text-[11px] text-gray-500">· started 2026-04-17 08:00</span>
+          </div>
+        </div>
+
+        <div class="px-6 py-5">
+          <ol class="relative flex items-center justify-start gap-0" aria-label="Iteration history">
+            <li class="iter-node iter-active relative flex flex-col items-center" tabindex="0" aria-label="Iteration 1 active">
+              <div class="iter-tip">
+                <div class="rounded-md bg-gray-900 border border-teal-600/60 shadow-xl px-3 py-2.5 text-left">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[11px] font-mono font-semibold text-teal-300">Iteration 1</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-teal-900/50 text-teal-300 border border-teal-700/50">active</span>
+                  </div>
+                  <dl class="text-[11px] text-gray-300 space-y-0.5">
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">triggered by</dt><dd class="font-mono text-gray-200">initial</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">started</dt><dd class="font-mono text-gray-200">2026-04-17 08:00</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">ended</dt><dd class="font-mono text-gray-500 italic">—</dd></div>
+                  </dl>
+                </div>
+              </div>
+              <div class="iter-dot w-3.5 h-3.5 rounded-full bg-teal-500 border-2 border-teal-400 ring-2 ring-teal-500/30"></div>
+              <div class="mt-2 flex flex-col items-center">
+                <span class="text-[11px] font-mono font-semibold text-teal-300">i1</span>
+                <span class="text-[10px] text-teal-400/80">active</span>
+              </div>
+            </li>
+            <li aria-hidden="true" class="flex-1 min-w-[64px]"></li>
+            <li class="text-[11px] text-gray-500 italic">first iteration — no revisits yet</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- ------- Variant D · Legacy-hydrated state (FB-08 shim) ------- -->
+      <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+            <span class="text-sm font-semibold text-gray-100">Product</span>
+            <span class="text-xs text-gray-500">·</span>
+            <span class="text-xs text-gray-400 font-mono">elaborate</span>
+          </div>
+          <span class="text-[11px] font-mono text-gray-500">legacy intent — hydrated from <code>visits: 2</code></span>
+          <div class="ml-auto flex items-center gap-2">
+            <span class="text-[11px] text-slate-400 font-medium">Iteration 2 of 2 <span class="text-slate-500">(hydrated)</span></span>
+          </div>
+        </div>
+
+        <div class="legacy-stripe px-6 py-5">
+          <div class="flex items-center gap-2 mb-3 text-[11px] text-amber-300/90">
+            <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 1v7M6 10v1"/><circle cx="6" cy="6" r="5"/></svg>
+            <span>Hydrated from legacy <code class="font-mono text-amber-200">visits: 2</code>. Best-effort timestamps; precise boundaries not recoverable.</span>
+          </div>
+          <ol class="relative flex items-center justify-start gap-0" aria-label="Iteration history">
+            <li class="iter-node relative flex flex-col items-center" tabindex="0" aria-label="Iteration 1 hydrated">
+              <div class="iter-tip">
+                <div class="rounded-md bg-gray-900 border border-gray-700 shadow-xl px-3 py-2.5 text-left">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[11px] font-mono font-semibold text-slate-300">Iteration 1</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/40 text-slate-300 border border-slate-600/40">hydrated</span>
+                  </div>
+                  <dl class="text-[11px] text-gray-300 space-y-0.5">
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">triggered by</dt><dd class="font-mono text-gray-200">initial</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">started</dt><dd class="font-mono text-gray-200">from <code>stage.started_at</code></dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">ended</dt><dd class="font-mono text-gray-500 italic">unrecoverable</dd></div>
+                    <div class="pt-1 text-[10px] text-gray-500 italic">Legacy record — no per-visit timestamps in v1 state.json.</div>
+                  </dl>
+                </div>
+              </div>
+              <div class="iter-dot w-3 h-3 rounded-full bg-slate-600 border-2 border-slate-500 border-dashed"></div>
+              <div class="mt-2 flex flex-col items-center">
+                <span class="text-[11px] font-mono font-semibold text-gray-400">i1</span>
+                <span class="text-[10px] text-slate-400">hydrated</span>
+              </div>
+            </li>
+            <li aria-hidden="true" class="h-0.5 flex-1 border-t border-dashed border-slate-500/60 mt-[-30px] mx-1 min-w-[48px]"></li>
+            <li class="iter-node iter-active relative flex flex-col items-center" tabindex="0" aria-label="Iteration 2 active">
+              <div class="iter-tip">
+                <div class="rounded-md bg-gray-900 border border-teal-600/60 shadow-xl px-3 py-2.5 text-left">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[11px] font-mono font-semibold text-teal-300">Iteration 2</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-teal-900/50 text-teal-300 border border-teal-700/50">active · hydrated</span>
+                  </div>
+                  <dl class="text-[11px] text-gray-300 space-y-0.5">
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">triggered by</dt><dd class="font-mono text-gray-200">revisit</dd></div>
+                    <div class="pt-1 text-[10px] text-gray-500 italic">Next legitimate write will persist the canonical record.</div>
+                  </dl>
+                </div>
+              </div>
+              <div class="iter-dot w-3.5 h-3.5 rounded-full bg-teal-500 border-2 border-teal-400 ring-2 ring-teal-500/30"></div>
+              <div class="mt-2 flex flex-col items-center">
+                <span class="text-[11px] font-mono font-semibold text-teal-300">i2</span>
+                <span class="text-[10px] text-teal-400/80">active</span>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- ------- Variant E · Collapsed stack (4+ iterations) ------- -->
+      <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span class="text-sm font-semibold text-gray-100">Security</span>
+            <span class="text-xs text-gray-500">·</span>
+            <span class="text-xs text-gray-400 font-mono">review</span>
+          </div>
+          <span class="text-[11px] font-mono text-gray-500">example — 5 iterations, collapsed older ones</span>
+          <div class="ml-auto flex items-center gap-2">
+            <span class="text-[11px] text-amber-400 font-medium">Iteration 5 of 5</span>
+            <span class="text-[11px] text-gray-500">· started 2026-04-17 14:10</span>
+          </div>
+        </div>
+
+        <div class="px-6 py-5">
+          <ol class="relative flex items-center justify-start gap-0" aria-label="Iteration history with collapse">
+
+            <!-- Collapsed stack for i1-i3 -->
+            <li class="iter-node relative flex flex-col items-center" tabindex="0" role="button" aria-label="Expand earlier iterations 1 through 3">
+              <div class="iter-tip">
+                <div class="rounded-md bg-gray-900 border border-gray-700 shadow-xl px-3 py-2.5 text-left">
+                  <div class="text-[11px] font-mono font-semibold text-gray-300 mb-1.5">Earlier iterations (click to expand)</div>
+                  <ul class="text-[11px] text-gray-300 space-y-0.5">
+                    <li class="flex justify-between gap-3 font-mono"><span class="text-gray-500">i1</span><span>initial → revisited</span></li>
+                    <li class="flex justify-between gap-3 font-mono"><span class="text-gray-500">i2</span><span>revisit → revisited</span></li>
+                    <li class="flex justify-between gap-3 font-mono"><span class="text-gray-500">i3</span><span>feedback_rollback → revisited</span></li>
+                  </ul>
+                </div>
+              </div>
+              <div class="iter-dot w-3 h-3 rounded-full bg-gray-600 border-2 border-gray-500 flex items-center justify-center">
+                <span class="text-[8px] font-bold text-white stack-indicator">3</span>
+              </div>
+              <div class="mt-2 flex flex-col items-center">
+                <span class="text-[11px] font-mono font-semibold text-gray-400">i1–i3</span>
+                <span class="text-[10px] text-gray-500">expand</span>
+              </div>
+            </li>
+
+            <li aria-hidden="true" class="h-0.5 flex-1 bg-amber-700 mt-[-30px] mx-1 min-w-[48px]"></li>
+
+            <!-- i4 most-recent closed -->
+            <li class="iter-node relative flex flex-col items-center" tabindex="0" aria-label="Iteration 4 revisited">
+              <div class="iter-tip">
+                <div class="rounded-md bg-gray-900 border border-gray-700 shadow-xl px-3 py-2.5 text-left">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[11px] font-mono font-semibold text-amber-300">Iteration 4</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40">revisited</span>
+                  </div>
+                  <dl class="text-[11px] text-gray-300 space-y-0.5">
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">triggered by</dt><dd class="font-mono text-gray-200">revisit</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">started</dt><dd class="font-mono text-gray-200">2026-04-17 12:30</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">ended</dt><dd class="font-mono text-gray-200">2026-04-17 14:09</dd></div>
+                  </dl>
+                </div>
+              </div>
+              <div class="iter-dot w-3 h-3 rounded-full bg-amber-700 border-2 border-amber-600"></div>
+              <div class="mt-2 flex flex-col items-center">
+                <span class="text-[11px] font-mono font-semibold text-gray-300">i4</span>
+                <span class="text-[10px] text-gray-500">revisited</span>
+              </div>
+            </li>
+
+            <li aria-hidden="true" class="h-0.5 flex-1 bg-gradient-to-r from-amber-600 to-teal-500 mt-[-30px] mx-1 min-w-[48px]"></li>
+
+            <!-- i5 active -->
+            <li class="iter-node iter-active relative flex flex-col items-center" tabindex="0" aria-label="Iteration 5 active">
+              <div class="iter-tip">
+                <div class="rounded-md bg-gray-900 border border-teal-600/60 shadow-xl px-3 py-2.5 text-left">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <span class="text-[11px] font-mono font-semibold text-teal-300">Iteration 5</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-teal-900/50 text-teal-300 border border-teal-700/50">active</span>
+                  </div>
+                  <dl class="text-[11px] text-gray-300 space-y-0.5">
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">triggered by</dt><dd class="font-mono text-gray-200">feedback_rollback</dd></div>
+                    <div class="flex justify-between gap-3"><dt class="text-gray-500">started</dt><dd class="font-mono text-gray-200">2026-04-17 14:10</dd></div>
+                  </dl>
+                </div>
+              </div>
+              <div class="iter-dot w-3.5 h-3.5 rounded-full bg-teal-500 border-2 border-teal-400 ring-2 ring-teal-500/30"></div>
+              <div class="mt-2 flex flex-col items-center">
+                <span class="text-[11px] font-mono font-semibold text-teal-300">i5</span>
+                <span class="text-[10px] text-teal-400/80">active</span>
+              </div>
+            </li>
+
+          </ol>
+          <div class="mt-3 text-[10px] text-gray-500 italic">Collapse threshold: 4+ iterations. Older records fold into a stack indicator showing the count; hover/click expands inline.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- TABLET — 768px breakpoint                                      -->
+    <!-- ============================================================ -->
+    <section class="space-y-4">
+      <div class="flex items-baseline justify-between">
+        <h2 class="text-lg font-semibold text-gray-100">Tablet · 768px</h2>
+        <span class="text-[11px] font-mono text-gray-500">banner wraps under stage label</span>
+      </div>
+
+      <div class="max-w-[768px] bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-5 py-3 flex flex-col gap-1.5">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span class="text-sm font-semibold text-gray-100">Design</span>
+            <span class="text-xs text-gray-500">·</span>
+            <span class="text-xs text-gray-400 font-mono">elaborate</span>
+            <span class="ml-auto text-[11px] text-amber-400 font-medium">Iteration 2 of 2</span>
+          </div>
+          <span class="text-[11px] text-gray-500">started 2026-04-16 21:04 · triggered by revisit</span>
+        </div>
+        <div class="px-5 py-5">
+          <ol class="relative flex items-center justify-start gap-0">
+            <li class="iter-node relative flex flex-col items-center" tabindex="0" aria-label="Iteration 1 revisited">
+              <div class="iter-dot w-3 h-3 rounded-full bg-amber-700 border-2 border-amber-600"></div>
+              <div class="mt-2"><span class="text-[11px] font-mono text-gray-300">i1</span></div>
+            </li>
+            <li aria-hidden="true" class="h-0.5 flex-1 bg-gradient-to-r from-amber-600 to-teal-500 mt-[-22px] mx-1 min-w-[48px]"></li>
+            <li class="iter-node iter-active relative flex flex-col items-center" tabindex="0" aria-label="Iteration 2 active">
+              <div class="iter-dot w-3.5 h-3.5 rounded-full bg-teal-500 border-2 border-teal-400 ring-2 ring-teal-500/30"></div>
+              <div class="mt-2"><span class="text-[11px] font-mono font-semibold text-teal-300">i2</span></div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- MOBILE — 375px breakpoint                                      -->
+    <!-- ============================================================ -->
+    <section class="space-y-4">
+      <div class="flex items-baseline justify-between">
+        <h2 class="text-lg font-semibold text-gray-100">Mobile · 375px</h2>
+        <span class="text-[11px] font-mono text-gray-500">vertical accordion · tap to expand</span>
+      </div>
+
+      <div class="max-w-[375px] bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-4 py-3">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span class="text-sm font-semibold text-gray-100">Design</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-mono text-gray-500">elaborate</span>
+            <span class="text-[11px] text-amber-400 font-medium">Iter 2 of 2</span>
+          </div>
+        </div>
+        <div class="px-4 py-4 space-y-3">
+          <!-- Active iteration - expanded by default -->
+          <details open class="group">
+            <summary class="flex items-center gap-3 cursor-pointer min-h-[44px] py-1 focus-visible:outline-2 focus-visible:outline-teal-500 rounded">
+              <div class="w-3.5 h-3.5 rounded-full bg-teal-500 border-2 border-teal-400 ring-2 ring-teal-500/30 shrink-0"></div>
+              <div class="flex-1 min-w-0">
+                <div class="text-[13px] font-semibold text-teal-300">Iteration 2</div>
+                <div class="text-[11px] text-gray-500">active · revisit · started 2026-04-16 21:04</div>
+              </div>
+              <svg class="w-4 h-4 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="mt-2 ml-6 pl-3 border-l border-teal-700/40 space-y-1.5">
+              <div class="text-[11px]"><span class="text-gray-500">triggered by</span> <span class="font-mono text-gray-200">revisit</span></div>
+              <div class="text-[11px]"><span class="text-gray-500">ended</span> <span class="text-gray-500 italic">—</span></div>
+              <div class="text-[11px]">
+                <div class="text-gray-500 mb-1">feedback_scope</div>
+                <div class="flex flex-wrap gap-1">
+                  <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-700/60 text-slate-200 border border-slate-600/50">FB-05</span>
+                  <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-700/60 text-slate-200 border border-slate-600/50">FB-06</span>
+                  <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-700/60 text-slate-200 border border-slate-600/50">FB-08</span>
+                  <span class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-700/60 text-slate-200 border border-slate-600/50">FB-09</span>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- Closed iteration - collapsed -->
+          <details class="group">
+            <summary class="flex items-center gap-3 cursor-pointer min-h-[44px] py-1 focus-visible:outline-2 focus-visible:outline-teal-500 rounded">
+              <div class="w-3 h-3 rounded-full bg-amber-700 border-2 border-amber-600 shrink-0"></div>
+              <div class="flex-1 min-w-0">
+                <div class="text-[13px] font-semibold text-gray-300">Iteration 1</div>
+                <div class="text-[11px] text-gray-500">revisited · initial · 2026-04-15 → 04-16</div>
+              </div>
+              <svg class="w-4 h-4 text-gray-500 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </summary>
+            <div class="mt-2 ml-6 pl-3 border-l border-gray-700 space-y-1.5">
+              <div class="text-[11px]"><span class="text-gray-500">triggered by</span> <span class="font-mono text-gray-200">initial</span></div>
+              <div class="text-[11px]"><span class="text-gray-500">outcome</span> <span class="font-mono text-amber-300">revisited</span></div>
+              <div class="text-[11px]"><span class="text-gray-500">started</span> <span class="font-mono text-gray-200">2026-04-15 20:53</span></div>
+              <div class="text-[11px]"><span class="text-gray-500">ended</span> <span class="font-mono text-gray-200">2026-04-16 14:06</span></div>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- STATES REFERENCE                                               -->
+    <!-- ============================================================ -->
+    <section class="space-y-4">
+      <div class="flex items-baseline justify-between">
+        <h2 class="text-lg font-semibold text-gray-100">Iteration states · reference</h2>
+        <span class="text-[11px] font-mono text-gray-500">dot + label + connector pairings</span>
+      </div>
+
+      <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+
+          <!-- default / active -->
+          <div class="flex flex-col items-start gap-2">
+            <div class="flex items-center gap-3">
+              <div class="w-3.5 h-3.5 rounded-full bg-teal-500 border-2 border-teal-400 ring-2 ring-teal-500/30"></div>
+              <span class="text-[11px] font-mono font-semibold text-teal-300">active</span>
+            </div>
+            <div class="text-[11px] text-gray-400">ended_at === null · latest entry · pulsing ring · teal-500</div>
+          </div>
+
+          <!-- revisited -->
+          <div class="flex flex-col items-start gap-2">
+            <div class="flex items-center gap-3">
+              <div class="w-3 h-3 rounded-full bg-amber-700 border-2 border-amber-600"></div>
+              <span class="text-[11px] font-mono font-semibold text-amber-300">revisited</span>
+            </div>
+            <div class="text-[11px] text-gray-400">closed via revisit or rollback · amber-700 · muted</div>
+          </div>
+
+          <!-- rollback -->
+          <div class="flex flex-col items-start gap-2">
+            <div class="flex items-center gap-3">
+              <div class="w-3 h-3 rounded-full bg-orange-600 border-2 border-orange-500"></div>
+              <span class="text-[11px] font-mono font-semibold text-orange-300">rollback</span>
+            </div>
+            <div class="text-[11px] text-gray-400">closed via feedback_rollback · orange-600 · distinct from user revisit</div>
+          </div>
+
+          <!-- hydrated -->
+          <div class="flex flex-col items-start gap-2">
+            <div class="flex items-center gap-3">
+              <div class="w-3 h-3 rounded-full bg-slate-600 border-2 border-slate-500 border-dashed"></div>
+              <span class="text-[11px] font-mono font-semibold text-slate-300">hydrated</span>
+            </div>
+            <div class="text-[11px] text-gray-400">synthesized from legacy visits scalar · dashed border · slate-600</div>
+          </div>
+
+          <!-- advanced (final) -->
+          <div class="flex flex-col items-start gap-2">
+            <div class="flex items-center gap-3">
+              <div class="w-3 h-3 rounded-full bg-teal-700 border-2 border-teal-600"></div>
+              <span class="text-[11px] font-mono font-semibold text-teal-200">advanced</span>
+            </div>
+            <div class="text-[11px] text-gray-400">stage closed via gate approval · final iteration only · teal-700</div>
+          </div>
+
+          <!-- abandoned -->
+          <div class="flex flex-col items-start gap-2">
+            <div class="flex items-center gap-3">
+              <div class="w-3 h-3 rounded-full bg-gray-600 border-2 border-gray-500 opacity-50"></div>
+              <span class="text-[11px] font-mono font-semibold text-gray-400">abandoned</span>
+            </div>
+            <div class="text-[11px] text-gray-400">intent archived mid-iteration · gray-600 · 50% opacity</div>
+          </div>
+
+          <!-- focus state -->
+          <div class="flex flex-col items-start gap-2">
+            <div class="flex items-center gap-3">
+              <div class="w-3.5 h-3.5 rounded-full bg-teal-500 border-2 border-teal-400 outline outline-2 outline-teal-400 outline-offset-2"></div>
+              <span class="text-[11px] font-mono font-semibold text-teal-200">focus</span>
+            </div>
+            <div class="text-[11px] text-gray-400">keyboard focus ring · teal-400 · offset 2px</div>
+          </div>
+
+          <!-- stack -->
+          <div class="flex flex-col items-start gap-2">
+            <div class="flex items-center gap-3">
+              <div class="w-3 h-3 rounded-full bg-gray-600 border-2 border-gray-500 flex items-center justify-center">
+                <span class="text-[8px] font-bold text-white">3</span>
+              </div>
+              <span class="text-[11px] font-mono font-semibold text-gray-300">collapsed</span>
+            </div>
+            <div class="text-[11px] text-gray-400">4+ iterations fold into a stack · count shown · click/tap to expand</div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- DESIGN TOKENS & SPECS                                          -->
+    <!-- ============================================================ -->
+    <section class="space-y-4">
+      <div class="flex items-baseline justify-between">
+        <h2 class="text-lg font-semibold text-gray-100">Design tokens + specs</h2>
+        <span class="text-[11px] font-mono text-gray-500">named tokens only · no raw hex</span>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
+          <h3 class="text-sm font-semibold text-gray-100 mb-3">Color tokens</h3>
+          <dl class="text-[12px] space-y-1.5 font-mono">
+            <div class="flex justify-between"><dt class="text-gray-500">active-accent</dt><dd class="text-teal-300">teal-500 / teal-400 / teal-500/30</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">revisited-accent</dt><dd class="text-amber-300">amber-700 / amber-600</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">rollback-accent</dt><dd class="text-orange-300">orange-600 / orange-500</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">hydrated-accent</dt><dd class="text-slate-300">slate-600 / slate-500 (dashed)</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">advanced-accent</dt><dd class="text-teal-200">teal-700 / teal-600</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">surface</dt><dd class="text-gray-300">gray-900 (dark) / white (light)</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">border</dt><dd class="text-gray-300">gray-700 (dark) / gray-200 (light)</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">text-primary</dt><dd class="text-gray-300">gray-100 (dark) / gray-900 (light)</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">text-muted</dt><dd class="text-gray-300">gray-500</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">tooltip-surface</dt><dd class="text-gray-300">gray-900 + shadow-xl</dd></div>
+          </dl>
+        </div>
+
+        <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
+          <h3 class="text-sm font-semibold text-gray-100 mb-3">Sizing + layout</h3>
+          <dl class="text-[12px] space-y-1.5 font-mono">
+            <div class="flex justify-between"><dt class="text-gray-500">dot-active</dt><dd class="text-gray-300">3.5 (14px) w/h · ring 2</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">dot-closed</dt><dd class="text-gray-300">3 (12px) w/h</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">connector-thickness</dt><dd class="text-gray-300">0.5 (2px)</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">connector-min-width</dt><dd class="text-gray-300">48px (tablet+) · 64px (desktop)</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">tooltip-min-width</dt><dd class="text-gray-300">240px · max 320px</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">banner-padding-desktop</dt><dd class="text-gray-300">px-6 py-5</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">banner-padding-mobile</dt><dd class="text-gray-300">px-4 py-4</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">touch-target-mobile</dt><dd class="text-gray-300">min-h-[44px] on details/summary</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">font-family</dt><dd class="text-gray-300">system-ui, -apple-system</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">font-mono-numbers</dt><dd class="text-gray-300">tabular-nums for iteration n + timestamps</dd></div>
+          </dl>
+        </div>
+
+        <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-5 md:col-span-2">
+          <h3 class="text-sm font-semibold text-gray-100 mb-3">Interaction + accessibility</h3>
+          <ul class="text-[12px] text-gray-300 space-y-2 list-disc pl-5">
+            <li><strong>Hover:</strong> tooltip fades in over 150ms ease. Connector line does not change; dot does not grow (prevents layout shift).</li>
+            <li><strong>Focus:</strong> 2px teal-400 outline offset 4px, rounded 4px. Keyboard-reachable via tab; Enter / Space opens the tooltip (is-open class) for sticky inspection.</li>
+            <li><strong>Active:</strong> 2s pulse-ring animation on the active iteration only. Respects <code>prefers-reduced-motion</code> — animation disabled, ring stays static.</li>
+            <li><strong>Mobile:</strong> tooltip replaced by accordion (<code>details</code>/<code>summary</code>). Active iteration expanded by default. Summary row is 44px min tap target.</li>
+            <li><strong>Collapsed stack (4+ iterations):</strong> desktop shows hover-to-peek summary; tap/click expands inline, preserving order. Mobile: earlier iterations rendered as individual collapsible rows (no double-nested collapse).</li>
+            <li><strong>Screen reader:</strong> each iteration node has <code>aria-label</code> with number + outcome + triggered_by. The active iteration also gets <code>aria-current="step"</code>. The ordered list uses <code>aria-label="Iteration history"</code>.</li>
+            <li><strong>Color contrast:</strong> all text meets WCAG AA 4.5:1 against surface. State is never carried by color alone — every state also has a label (active / revisited / rollback / hydrated).</li>
+            <li><strong>Empty state (iterations=[] or missing):</strong> no crash. Render "Iteration 1 · hydrated" pulled from legacy <code>started_at</code> + the legacy stripe backdrop + inline amber warning (see Variant D).</li>
+            <li><strong>Tooltip positioning:</strong> bottom (over the rail) on desktop/tablet; inline expansion on mobile. Tooltip arrow points down at the dot.</li>
+            <li><strong>Feedback_scope chips:</strong> each FB-NN chip is clickable → opens the feedback detail drawer (handoff to unit-01/02 feedback panel).</li>
+          </ul>
+        </div>
+
+        <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-5 md:col-span-2">
+          <h3 class="text-sm font-semibold text-gray-100 mb-3">Data binding — reads from <code class="text-teal-400">state.json</code></h3>
+          <pre class="text-[11px] text-gray-300 font-mono bg-gray-950 rounded p-3 overflow-x-auto border border-gray-800"><code>state.iterations?.map((rec, idx) =&gt; ({
+  n:             rec.n,              // header &amp; dot label
+  started_at:    rec.started_at,     // tooltip row
+  ended_at:      rec.ended_at,       // tooltip row; null =&gt; active
+  outcome:       rec.outcome,        // dot color mapping
+                                     //   active (ended_at==null) -&gt; teal
+                                     //   revisited -&gt; amber
+                                     //   advanced -&gt; teal-dark
+                                     //   abandoned -&gt; gray/50%
+  triggered_by:  rec.triggered_by,   // tooltip row; also overrides
+                                     //   outcome color for
+                                     //   feedback_rollback -&gt; orange
+  feedback_scope:rec.feedback_scope, // chips under the tooltip
+  hydrated:      !rec.started_at || !rec.ended_at &amp;&amp; idx &lt; iterations.length - 1,
+                                     // dashed border + legacy-stripe backdrop
+}))
+
+// Banner header text:
+`Iteration ${iterations.length} of ${iterations.length} · started ${fmt(active.started_at)}`
+</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <footer class="text-[11px] text-gray-500 font-mono pt-4 border-t border-gray-800">
+      unit-09 · closes FB-05 FB-06 FB-08 FB-09 · hi-fi mock · paired with architecture-diagram-diff-spec.md
+    </footer>
+
+  </div>
+
+  <script>
+    // Toggle is-open on iteration nodes via keyboard for sticky tooltip inspection
+    document.querySelectorAll('.iter-node').forEach((el) => {
+      el.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          el.classList.toggle('is-open');
+        }
+        if (ev.key === 'Escape') {
+          el.classList.remove('is-open');
+        }
+      });
+      el.addEventListener('blur', () => el.classList.remove('is-open'));
+    });
+  </script>
+</body>
+</html>

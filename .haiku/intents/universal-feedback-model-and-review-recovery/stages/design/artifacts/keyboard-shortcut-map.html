@@ -483,9 +483,9 @@
           <li>Module-level state: <code>gPending: boolean</code>, <code>gPendingTimer: number | null</code>, <code>focusedFbId: string | null</code>.</li>
           <li>Per-feedback-card: <code>tabIndex={0}</code>, <code>data-fb-id</code>, <code>role="button"</code>, <code>aria-pressed</code> reflecting focus.</li>
           <li>Focus ring: CSS classes <code>.fb-card</code> + <code>.fb-card.is-focused</code>; no inline styles. See <em>focus-ring-spec.html</em>.</li>
-          <li>Guard ordering in <code>keydown</code>: (1) <code>Escape</code> — layered dismiss; (2) early-return if <code>inInput</code>; (3) resolve <code>gPending</code>; (4) switch on <code>e.key</code>.</li>
+          <li>Guard ordering in <code>keydown</code>: (1) <code>Escape</code> — layered dismiss; (2) early-return if <code>inInput</code>; (3) early-return if <code>e.metaKey || e.ctrlKey || e.altKey</code> (<strong>addition to mockup</strong> — the mockup does not guard modifiers); (4) resolve <code>gPending</code>; (5) switch on <code>e.key</code>.</li>
           <li>All app shortcuts call <code>e.preventDefault()</code> on match so browser defaults do not fire.</li>
-          <li>Reference behavior lives verbatim in <code>review-ui-mockup.html</code> lines 1826–1910.</li>
+          <li>Reference behavior lives verbatim in <code>review-ui-mockup.html</code> lines 1826–1910. Intentional deltas from the mockup: (a) modifier guard above, (b) context-dependent <kbd class="k">r</kbd> (reopen closed/rejected when a feedback card is focused; otherwise open Request Changes), (c) polite live-region announcement on focus change, (d) ring class renamed <code>.fb-focused</code> → <code>.fb-card.is-focused</code>.</li>
         </ul>
       </div>
     </section>

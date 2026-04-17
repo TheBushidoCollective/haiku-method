@@ -9,6 +9,21 @@
     tailwind.config = { darkMode: 'class' };
   </script>
   <style>
+    /* ----------------------------------------------------------------
+       Token-bound custom properties. Every color below is a mirror of
+       a value in knowledge/DESIGN-TOKENS.md. When dev wires this up in
+       the React app they use the equivalent Tailwind class (listed in
+       the Token provenance section at the bottom) — the CSS here is
+       demonstration-only so a static HTML file can approximate the
+       theme without the whole Tailwind token pipeline.
+    ---------------------------------------------------------------- */
+    :root {
+      --token-teal-300:  rgb(94, 234, 212);   /* border accent — open popover */
+      --token-teal-600:  rgb(13, 148, 136);   /* ghost pin + focus ring primary */
+      --token-teal-800:  rgb(17, 94, 89);     /* dark-mode border accent */
+      --token-stone-900: rgb(28, 25, 23);     /* dark-mode popover fill */
+    }
+
     /* Fake "artifact" backdrops to show the popover in context */
     .stage-backdrop {
       background-image:
@@ -32,13 +47,13 @@
       width: 288px;
       background: white;
       border-radius: 12px;
-      border: 1px solid rgb(94, 234, 212); /* teal-300 */
+      border: 1px solid var(--token-teal-300);
       box-shadow: 0 20px 40px -12px rgba(0,0,0,0.25);
       padding: 12px;
     }
     .dark .popover {
-      background: rgb(28, 25, 23); /* stone-900 */
-      border-color: rgb(17, 94, 89); /* teal-800 */
+      background: var(--token-stone-900);
+      border-color: var(--token-teal-800);
     }
 
     /* Small viewport override — popover fills the screen */
@@ -61,19 +76,19 @@
       justify-content: center;
       box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
-    .dark .pin { border-color: rgb(28, 25, 23); }
+    .dark .pin { border-color: var(--token-stone-900); }
 
     .ghost {
       width: 28px; height: 28px;
       border-radius: 9999px;
-      border: 2px dashed rgba(13, 148, 136, 0.75);
-      background: rgba(13, 148, 136, 0.1);
+      border: 2px dashed color-mix(in srgb, var(--token-teal-600) 75%, transparent);
+      background: color-mix(in srgb, var(--token-teal-600) 10%, transparent);
     }
 
     /* Connector line from popover to its anchor pin */
     .anchor-line {
       position: absolute;
-      border-top: 1px dashed rgb(94, 234, 212);
+      border-top: 1px dashed var(--token-teal-300);
       transform-origin: left center;
       pointer-events: none;
     }
@@ -89,6 +104,19 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
+    }
+
+    /* Spinner — used in the "saving" state (State 2B) */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 12px; height: 12px;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: white;
+      border-radius: 9999px;
+      animation: spin 800ms linear infinite;
+      display: inline-block;
+      vertical-align: -2px;
+      margin-right: 6px;
     }
   </style>
 </head>
@@ -121,11 +149,25 @@
       This file renders the popover in each distinct state so development
       can match pixel-for-pixel without guessing.
     </p>
-    <p class="text-sm text-stone-700 dark:text-stone-300">
+    <p class="text-sm text-stone-700 dark:text-stone-300 mb-2">
       Popover dimensions are fixed at <strong>288px × auto</strong> in
       desktop/tablet (matches current <code>w-72</code> in the reference
       mockup). On small viewports (&lt; 480px) the popover promotes to a
-      <strong>bottom-sheet</strong> that spans full width.
+      <strong>bottom-sheet</strong> that spans full width. On
+      narrow-desktop / wide-tablet widths (≈ 640–900px with the sidebar
+      present), the popover <em>docks</em> above or below the artifact
+      when neither left nor right placement fits — see State 1.
+    </p>
+    <p class="text-sm text-stone-700 dark:text-stone-300">
+      <strong>State inventory</strong>: 1 (empty), 2 (filled), 2B
+      (saving), 3 (iframe fallback two-step), 4 (error), 5 (mobile
+      bottom sheet), 6 (dark parity). All states set
+      <code>role="dialog" aria-modal="true"</code> and
+      <code>aria-labelledby</code> pointing at the location-label
+      paragraph rendered inside the popover header (contract enforced
+      in gesture spec § 8). Click-outside-to-cancel applies to every
+      desktop state (same semantics as ESC); mobile uses drag-handle
+      or backdrop-tap.
     </p>
   </section>
 
@@ -170,15 +212,15 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
         <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-1">Create button</p>
-        <p>Disabled while both title and body are empty. Becomes primary teal as soon as either field has trimmed content.</p>
+        <p>Disabled until <strong>body</strong> has trimmed content. This mirrors the server's invariant that <code>body</code> MUST be non-empty markdown (feedback data contract § 3.5) — gating on "either field" would let the user post a 400 at the server. Title is optional at the UI layer; the server derives a title from the first line of body when none is supplied.</p>
       </div>
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
         <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-1">Location label</p>
-        <p>Spatial: <code>&lt;x%&gt;, &lt;y%&gt;</code>. Line: <code>L&lt;n&gt;</code>. Iframe: <code>Page &lt;n&gt; · &lt;region&gt;</code> or just <code>&lt;region&gt;</code>.</p>
+        <p>Spatial: <code>&lt;x%&gt;, &lt;y%&gt;</code>. Line: <code>L&lt;n&gt;</code>. PDF iframe: <code>Page &lt;n&gt; · &lt;region&gt;</code>. HTML iframe: just <code>&lt;region&gt;</code> (no page).</p>
       </div>
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-1">Edge clipping</p>
-        <p>Compute <code>{left, top}</code> with an 8px safety margin. If overflowing horizontally, flip to the left of the click.</p>
+        <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-1">Edge clipping — flip <em>or dock</em></p>
+        <p>Compute <code>{left, top}</code> with an 8px safety margin. If overflowing horizontally, flip to the left of the click. If <strong>neither</strong> left nor right placement fits (narrow-desktop / wide-tablet ≈ 640–900px, sidebar present), <em>dock</em> the popover to a fixed position above or below the artifact wrapper instead. Never leave the popover in a mid-viewport clipped state.</p>
       </div>
     </div>
   </section>
@@ -201,9 +243,9 @@
         <div class="grid grid-cols-[2.5rem_1fr]"><span class="text-stone-400 text-right pr-2 select-none bg-stone-50 dark:bg-stone-900">4</span><span class="px-3 py-0.5">Each agent writes feedback files to disk.</span></div>
       </div>
       <!-- popover anchored right of line 3 -->
-      <div class="popover absolute" style="left: 420px; top: 38px;" role="dialog" aria-modal="true">
+      <div class="popover absolute" style="left: 420px; top: 38px;" role="dialog" aria-modal="true" aria-labelledby="p2-label">
         <div class="flex items-center justify-between mb-2">
-          <p class="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">New feedback @ <span>L3</span></p>
+          <p id="p2-label" class="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">New feedback @ <span>L3</span></p>
           <button class="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-sm leading-none" aria-label="Close">&times;</button>
         </div>
         <input type="text" value="Reviewer dispatcher unclear" aria-required="true"
@@ -218,6 +260,53 @@
           </div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       STATE 2B — SAVING (between filled + error/success)
+  ============================================================ -->
+  <section id="state-saving" class="space-y-4">
+    <div class="flex items-baseline gap-3">
+      <span class="label-pill bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">State 2B</span>
+      <h2 class="text-lg font-semibold">Saving — transient between Create click and server response</h2>
+    </div>
+    <p class="text-sm text-stone-700 dark:text-stone-300">
+      While the <code>haiku_feedback</code> call is in flight, the Create
+      button is replaced by a spinner + "Saving…" label, and the entire
+      popover's inputs go <code>aria-busy="true"</code> + <code>disabled</code>
+      so the reviewer can't double-submit or mutate the payload mid-write.
+      Cancel is suppressed (the write either succeeds, at which point the
+      popover closes, or errors into State 4). Typical duration is well
+      under 200ms — this state is visible mostly on slow networks.
+    </p>
+
+    <div class="relative h-64 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 stage-backdrop overflow-hidden">
+      <div class="ghost absolute" style="left: 160px; top: 120px; transform: translate(-50%, -50%);"></div>
+      <div class="popover absolute" style="left: 180px; top: 130px;" role="dialog" aria-modal="true" aria-labelledby="p2b-label" aria-busy="true">
+        <div class="flex items-center justify-between mb-2">
+          <p id="p2b-label" class="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">New feedback @ <span>34%, 58%</span></p>
+          <button class="text-stone-300 dark:text-stone-600 text-sm leading-none cursor-not-allowed" aria-label="Close" disabled>&times;</button>
+        </div>
+        <input type="text" value="Review gate timing unclear" disabled
+               class="w-full text-xs p-2 mb-1.5 border border-stone-300 dark:border-stone-600 rounded-md bg-stone-50 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 opacity-70"/>
+        <textarea rows="3" disabled
+                  class="w-full text-xs p-2 mb-2 border border-stone-300 dark:border-stone-600 rounded-md bg-stone-50 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 opacity-70 resize-none">Gate rolls back to elaborate but enforce-iteration flags it completed anyway.</textarea>
+        <div class="flex items-center justify-end gap-1.5">
+          <button class="px-2.5 py-1 text-[10px] font-semibold rounded-md bg-teal-600 text-white cursor-wait" disabled>
+            <span class="spinner" aria-hidden="true"></span>Saving…
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60 text-xs">
+      <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-2">Transitions</p>
+      <ul class="list-disc pl-5 space-y-1 text-stone-700 dark:text-stone-300">
+        <li><strong>On success</strong>: popover closes, pin renders over the anchor, live-region announces "Feedback FB-NN created at &lt;location&gt;".</li>
+        <li><strong>On error</strong>: transitions to State 4 (error banner inline, Retry + Discard buttons).</li>
+        <li><strong>On user ESC during save</strong>: ignored. The write is a single transactional call — we don't abort mid-flight.</li>
+      </ul>
     </div>
   </section>
 
@@ -256,9 +345,9 @@
       <div>
         <p class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Step B — popover opens</p>
         <div class="relative h-64 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 stage-backdrop overflow-hidden">
-          <div class="popover absolute" style="left: 20px; top: 20px;" role="dialog" aria-modal="true">
+          <div class="popover absolute" style="left: 20px; top: 20px;" role="dialog" aria-modal="true" aria-labelledby="p3-label">
             <div class="flex items-center justify-between mb-2">
-              <p class="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">New feedback @ <span>Page 3 · Opening paragraph</span></p>
+              <p id="p3-label" class="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">New feedback @ <span>Page 3 · Opening paragraph</span></p>
               <button class="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-sm leading-none">&times;</button>
             </div>
             <input type="text" placeholder="Title…" aria-required="true"
@@ -300,12 +389,12 @@
 
     <div class="relative h-80 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 stage-backdrop overflow-hidden">
       <div class="ghost absolute" style="left: 200px; top: 140px; transform: translate(-50%, -50%);"></div>
-      <div class="popover absolute" style="left: 220px; top: 150px;" role="dialog" aria-modal="true">
+      <div class="popover absolute" style="left: 220px; top: 150px;" role="dialog" aria-modal="true" aria-labelledby="p4-label">
         <div class="mb-2 p-2 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-[11px] text-red-700 dark:text-red-300">
           <strong>Couldn't save.</strong> Server returned 500. Your draft is preserved.
         </div>
         <div class="flex items-center justify-between mb-2">
-          <p class="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">New feedback @ <span>42%, 60%</span></p>
+          <p id="p4-label" class="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">New feedback @ <span>42%, 60%</span></p>
           <button class="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-sm leading-none">&times;</button>
         </div>
         <input type="text" value="Review gate timing unclear"
@@ -349,11 +438,11 @@
         </div>
 
         <!-- bottom sheet -->
-        <div class="popover sv absolute bottom-0 left-0 right-0" role="dialog" aria-modal="true">
+        <div class="popover sv absolute bottom-0 left-0 right-0" role="dialog" aria-modal="true" aria-labelledby="p5-label">
           <!-- drag handle -->
           <div class="w-10 h-1 rounded-full bg-stone-300 dark:bg-stone-600 mx-auto mb-3" aria-hidden="true"></div>
           <div class="flex items-center justify-between mb-2">
-            <p class="text-[11px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">New feedback @ <span>38%, 52%</span></p>
+            <p id="p5-label" class="text-[11px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">New feedback @ <span>38%, 52%</span></p>
             <button class="w-11 h-11 flex items-center justify-center text-stone-400 hover:text-stone-600 text-lg" aria-label="Close">&times;</button>
           </div>
           <input type="text" placeholder="Title…"
@@ -401,9 +490,9 @@
     <div class="dark">
       <div class="relative h-80 rounded-xl border border-stone-700 bg-stone-900 stage-backdrop overflow-hidden">
         <div class="ghost absolute" style="left: 180px; top: 140px; transform: translate(-50%, -50%);"></div>
-        <div class="popover absolute" style="left: 200px; top: 150px;" role="dialog" aria-modal="true">
+        <div class="popover absolute" style="left: 200px; top: 150px;" role="dialog" aria-modal="true" aria-labelledby="p6-label">
           <div class="flex items-center justify-between mb-2">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-teal-400">New feedback @ <span>52%, 48%</span></p>
+            <p id="p6-label" class="text-[10px] font-bold uppercase tracking-widest text-teal-400">New feedback @ <span>52%, 48%</span></p>
             <button class="text-stone-400 hover:text-stone-200 text-sm leading-none">&times;</button>
           </div>
           <input type="text" value="Dark mode contrast check"
@@ -462,7 +551,7 @@
             <td class="py-2 pr-4"><code>bg-teal-700</code></td>
             <td class="py-2 pr-4"><code>ring-2 ring-teal-500 ring-offset-2</code></td>
             <td class="py-2 pr-4"><code>bg-teal-800</code></td>
-            <td class="py-2 pr-4"><code>bg-stone-200 text-stone-500</code></td>
+            <td class="py-2 pr-4"><code>bg-stone-200 text-stone-500</code> (when body empty); <code>bg-teal-600 cursor-wait</code> + spinner (while saving)</td>
             <td class="py-2"><code>bg-red-600</code> (retry variant)</td>
           </tr>
           <tr>
@@ -504,19 +593,30 @@
     <h2 class="text-lg font-semibold mb-3">Token provenance — all values above</h2>
     <p class="text-sm text-stone-700 dark:text-stone-300 mb-3">
       Every color, spacing, and typography value comes from the intent's
-      <code>knowledge/DESIGN-TOKENS.md</code>. No raw hex values. No
-      magic numbers.
+      <code>knowledge/DESIGN-TOKENS.md</code>. The demonstration CSS in
+      this static HTML file binds through named CSS custom properties
+      (<code>--token-teal-300</code>, <code>--token-teal-600</code>,
+      <code>--token-teal-800</code>, <code>--token-stone-900</code>) so
+      there are <strong>no raw hex values in rules</strong>. Production
+      code uses the equivalent Tailwind class names listed below.
     </p>
     <ul class="text-xs text-stone-700 dark:text-stone-300 space-y-1 list-disc pl-5">
       <li>Popover shell — <code>rounded-xl border border-stone-200 dark:border-stone-700 shadow-2xl</code> (matches existing Modal overlay token).</li>
-      <li>Popover border accent — <code>border-teal-300 dark:border-teal-800</code> (accent, applied only when open).</li>
+      <li>Popover border accent — <code>border-teal-300 dark:border-teal-800</code> (accent, applied only when open). Demo CSS: <code>var(--token-teal-300)</code> / <code>var(--token-teal-800)</code>.</li>
       <li>Title / body input — <code>text-xs p-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:ring-2 focus:ring-teal-500</code> (standard Input token).</li>
       <li>Create button — primary teal token (<code>bg-teal-600 hover:bg-teal-700</code>).</li>
       <li>Cancel button — secondary outline token.</li>
-      <li>Ghost pin color — <code>rgba(13, 148, 136, 0.6)</code> == <code>teal-600 / 60</code>.</li>
+      <li>Ghost pin color — <code>teal-600 / 60</code> (via <code>color-mix(in srgb, var(--token-teal-600) 75%, transparent)</code> in demo CSS, <code>bg-teal-600/60</code> in Tailwind).</li>
       <li>Bottom sheet touch targets — <code>h-11</code> (44px) min, <code>text-sm</code> per mobile-breakpoint discipline.</li>
       <li>Error banner — <code>bg-red-50 border-red-200 text-red-700</code> (existing semantic Error token).</li>
+      <li>Saving-state spinner — neutral white-on-teal; uses the existing primary-button fill (<code>bg-teal-600</code>) with a 12px spinning ring overlay.</li>
     </ul>
+    <p class="text-xs text-stone-500 dark:text-stone-400 mt-3">
+      <strong>Dev handoff note:</strong> The CSS in this mockup is
+      demonstration-only. Production uses the Tailwind classes above
+      directly — do not copy the <code>var(--token-*)</code> bindings
+      into production code.
+    </p>
   </section>
 
 </main>

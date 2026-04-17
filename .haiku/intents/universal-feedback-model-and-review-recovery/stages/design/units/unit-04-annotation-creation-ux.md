@@ -35,3 +35,10 @@ The deliverables must be concrete enough for the development stage to wire up wi
 - Keyboard equivalent for annotation creation specified (ties to unit-07 shortcut map — e.g. focused-line + key opens popover at line; focused-artifact-wrapper + key opens popover centered).
 - Accessibility: focused popover traps focus, returns focus on close, exposes `aria-label`, ESC cancels creation. Touch targets on the popover footer are ≥ 44px.
 - Storage contract written: annotation location lives on `feedback.target.annotation` alongside `target.kind` and `target.{unit,knowledge,output,file}Name`. Document the exact shape the CRUD tool must accept and persist.
+
+## Handoff notes (bolt 2)
+
+Two cross-unit follow-ups that fall out of this unit's design and must be closed in their respective owners' scopes, not in this unit:
+
+- **unit-07 keyboard-shortcut-map**: annotation-open is bound to `c` (not `a`) to avoid colliding with unit-07's global `a` → Approve. unit-07 must add a row for `c` so both documents tell the same story. Tracked as a small edit to `stages/design/artifacts/keyboard-shortcut-map.html` in unit-07's worktree.
+- **knowledge/DATA-CONTRACTS.md § 3.3**: the feedback frontmatter has no `target.annotation` field documented today. Downstream (development stage, or the product stage revisit) must add the three-shape union documented in `annotation-gesture-spec.html` § 9 before the persistence contract can claim to cover this feature. Out of scope for the design hat — flagged here so it isn't lost.

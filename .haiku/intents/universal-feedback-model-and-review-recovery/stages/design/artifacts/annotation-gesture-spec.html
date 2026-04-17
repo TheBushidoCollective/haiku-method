@@ -123,7 +123,7 @@
             <td class="py-3 pr-4 font-medium">Markdown / text</td>
             <td class="py-3 pr-4 font-mono text-xs text-stone-500">text/markdown · text/plain</td>
             <td class="py-3 pr-4"><code class="text-xs">cursor-pointer</code> on hover row</td>
-            <td class="py-3 pr-4">Click a line (or focus + <kbd class="text-[10px] font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">A</kbd>)</td>
+            <td class="py-3 pr-4">Click a line (or focus + <kbd class="text-[10px] font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">c</kbd>)</td>
             <td class="py-3 font-mono text-xs text-stone-600 dark:text-stone-400">{ line } (1-indexed)</td>
           </tr>
           <tr>
@@ -131,14 +131,14 @@
             <td class="py-3 pr-4 font-mono text-xs text-stone-500">text/html (sandboxed)</td>
             <td class="py-3 pr-4">iframe is non-interactive for annotation; adjacent form is keyboard reachable</td>
             <td class="py-3 pr-4">Use "Add feedback on this preview" button beside the iframe → fills location form</td>
-            <td class="py-3 font-mono text-xs text-stone-600 dark:text-stone-400">{ region } (user string)</td>
+            <td class="py-3 font-mono text-xs text-stone-600 dark:text-stone-400">{ region } <span class="text-stone-400">(page FORBIDDEN)</span></td>
           </tr>
           <tr>
             <td class="py-3 pr-4 font-medium">PDF embed</td>
             <td class="py-3 pr-4 font-mono text-xs text-stone-500">application/pdf</td>
             <td class="py-3 pr-4">iframe is non-interactive; adjacent form is keyboard reachable</td>
             <td class="py-3 pr-4">Use "Add feedback on this preview" button → fills location form</td>
-            <td class="py-3 font-mono text-xs text-stone-600 dark:text-stone-400">{ page, region }</td>
+            <td class="py-3 font-mono text-xs text-stone-600 dark:text-stone-400">{ page, region } <span class="text-stone-400">(page REQUIRED)</span></td>
           </tr>
         </tbody>
       </table>
@@ -242,7 +242,9 @@
       Each line is a row in a 2-column grid (gutter + content). Hover
       highlights the entire row in teal; click anywhere on the row opens
       the popover anchored near the click. Keyboard path: arrow-keys
-      focus a line, <kbd class="text-[10px] font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">A</kbd> opens popover at that line.
+      focus a line, <kbd class="text-[10px] font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">c</kbd> opens popover at that line
+      (mnemonic: <em>c</em>reate). <code>a</code> is reserved for Approve
+      in unit-07's shortcut map — see §7.
     </p>
 
     <div class="text-[12px] font-mono text-stone-700 dark:text-stone-300 leading-relaxed bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md overflow-hidden"
@@ -316,17 +318,17 @@
       <!-- Location form -->
       <div class="p-3 rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50/40 dark:bg-teal-900/10">
         <p class="text-[10px] font-bold uppercase tracking-widest text-teal-700 dark:text-teal-300 mb-3">Add feedback on this preview</p>
-        <label class="block text-[10px] font-medium text-stone-500 dark:text-stone-400 mb-1">Page (optional — PDF only)</label>
+        <label class="block text-[10px] font-medium text-stone-500 dark:text-stone-400 mb-1">Page <span class="text-stone-400">— required for PDF, hidden for HTML</span></label>
         <input type="number" min="1" placeholder="3"
                class="w-full text-xs p-2 mb-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-teal-500 focus:outline-none"/>
-        <label class="block text-[10px] font-medium text-stone-500 dark:text-stone-400 mb-1">Region / where to look</label>
-        <input type="text" placeholder='e.g. "top-right CTA" or "§ 3.2"'
+        <label class="block text-[10px] font-medium text-stone-500 dark:text-stone-400 mb-1">Region / where to look <span class="text-red-600 dark:text-red-400">*</span></label>
+        <input type="text" placeholder='e.g. "top-right CTA" or "§ 3.2"' required
                class="w-full text-xs p-2 mb-3 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-teal-500 focus:outline-none"/>
         <button class="w-full px-3 py-2 text-xs font-semibold rounded-md bg-teal-600 hover:bg-teal-700 text-white transition-colors">
           Continue to popover →
         </button>
         <p class="mt-2 text-[10px] text-stone-500 dark:text-stone-400">
-          The popover opens with the captured <code>{page, region}</code> preselected so the reviewer only types title + body.
+          The popover opens with the captured <code>{page, region}</code> (PDF) or <code>{region}</code> (HTML) preselected so the reviewer only types title + body. The Page field is hidden entirely when the preview's MIME is <code>text/html</code>.
         </p>
       </div>
     </div>
@@ -348,7 +350,13 @@
     <h2 class="text-lg font-semibold mb-2">7. Keyboard equivalent</h2>
     <p class="text-sm text-stone-700 dark:text-stone-300 mb-4">
       Full parity with unit-07's shortcut map. Creation is always
-      reachable without a pointer.
+      reachable without a pointer. The annotation-open key is
+      <kbd class="text-[10px] font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">c</kbd>
+      (mnemonic: <em>c</em>reate) — deliberately NOT
+      <kbd class="text-[10px] font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">a</kbd>,
+      which unit-07 binds globally to <strong>Approve</strong>. Using
+      <code>c</code> avoids the collision and leaves <code>a</code> as
+      the top-level decision key with preserved muscle memory.
     </p>
     <div class="overflow-x-auto">
       <table class="w-full text-sm border-collapse">
@@ -363,19 +371,19 @@
         <tbody class="divide-y divide-stone-100 dark:divide-stone-800">
           <tr>
             <td class="py-2 pr-4">Line row (text / md)</td>
-            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">A</kbd></td>
+            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">c</kbd></td>
             <td class="py-2 pr-4">Open popover at focused line</td>
             <td class="py-2 text-xs text-stone-500">left edge of row + gutter offset</td>
           </tr>
           <tr>
             <td class="py-2 pr-4">Artifact wrapper (image / svg)</td>
-            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">A</kbd></td>
+            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">c</kbd></td>
             <td class="py-2 pr-4">Open popover centered on artifact, <code>{x:0.5, y:0.5}</code></td>
             <td class="py-2 text-xs text-stone-500">center of artifact bounds</td>
           </tr>
           <tr>
             <td class="py-2 pr-4">Iframe wrapper (html / pdf)</td>
-            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">A</kbd></td>
+            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">c</kbd></td>
             <td class="py-2 pr-4">Focus the location form's <em>region</em> input</td>
             <td class="py-2 text-xs text-stone-500">n/a (form first, popover after)</td>
           </tr>
@@ -410,7 +418,8 @@
     <ul class="space-y-2 text-sm text-stone-700 dark:text-stone-300 list-disc pl-5">
       <li><strong>Focus trap</strong>: once the popover opens, focus is trapped between title → body → Cancel → Create → (loop).</li>
       <li><strong>Focus return</strong>: closing the popover (save, cancel, ESC, click-outside) returns focus to the element that triggered creation — the artifact wrapper, the line row, or the iframe form's submit button.</li>
-      <li><strong>ARIA</strong>: popover is <code>role="dialog"</code> <code>aria-modal="true"</code> <code>aria-labelledby="ann-popover-label"</code>; title input has <code>aria-required="true"</code>.</li>
+      <li><strong>ARIA</strong>: popover is <code>role="dialog"</code> <code>aria-modal="true"</code>; <code>aria-labelledby</code> points at the location-label paragraph rendered inside the popover header (e.g. <em>"New feedback @ L3"</em>). Every popover instance — every state — renders this label with a stable id of the form <code>ann-popover-label-{uuid}</code> and matches its <code>aria-labelledby</code> to that id. Title input has <code>aria-required="true"</code>.</li>
+      <li><strong>Click-outside cancel</strong>: clicking anywhere outside the popover on desktop is treated as <em>Cancel</em> — same semantics as ESC (fields discarded, focus restored). On mobile, the bottom sheet cancels on drag-handle swipe-down <em>or</em> tap on the dimmed backdrop. This matches the existing Modal overlay pattern in the review app.</li>
       <li><strong>Live-region announcement</strong>: on save, a <code>role="status" aria-live="polite"</code> region announces <em>"Feedback FB-NN created at &lt;location label&gt;"</em>.</li>
       <li><strong>Touch targets</strong>: every button in the popover footer is ≥ 44×44px on mobile (see <code>annotation-popover-states.html</code> → small-viewport state).</li>
       <li><strong>Cursor affordance</strong>: <code>cursor-crosshair</code> on spatial wrappers and <code>cursor-pointer</code> on line rows is a visual hint — screen readers get <code>role="button"</code> or equivalent regardless.</li>
@@ -426,8 +435,39 @@
     <p class="text-sm text-stone-700 dark:text-stone-300 mb-4">
       All created annotations persist through <code>haiku_feedback</code>
       with the exact shape below. The CRUD tool MUST accept this payload;
-      the reviewer MUST produce it from the gesture data.
+      the reviewer MUST produce it from the gesture data. There are
+      <strong>exactly three</strong> canonical discriminants — no fourth
+      shape, no ambiguous omissions.
     </p>
+
+    <div class="overflow-x-auto mb-4">
+      <table class="w-full text-sm border-collapse">
+        <thead>
+          <tr class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-700">
+            <th class="text-left py-2 pr-4">Artifact kind</th>
+            <th class="text-left py-2 pr-4">Annotation shape</th>
+            <th class="text-left py-2">Notes</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-stone-100 dark:divide-stone-800">
+          <tr>
+            <td class="py-2 pr-4 font-medium">image · svg</td>
+            <td class="py-2 pr-4 font-mono text-xs">{ x, y }</td>
+            <td class="py-2 text-xs text-stone-600 dark:text-stone-400">both ∈ [0, 1]; server clamps</td>
+          </tr>
+          <tr>
+            <td class="py-2 pr-4 font-medium">markdown · text</td>
+            <td class="py-2 pr-4 font-mono text-xs">{ line }</td>
+            <td class="py-2 text-xs text-stone-600 dark:text-stone-400">integer ≥ 1</td>
+          </tr>
+          <tr>
+            <td class="py-2 pr-4 font-medium">html · pdf</td>
+            <td class="py-2 pr-4 font-mono text-xs">{ page?, region }</td>
+            <td class="py-2 text-xs text-stone-600 dark:text-stone-400"><code>region</code> always required; <code>page</code> REQUIRED when MIME is <code>application/pdf</code>, FORBIDDEN otherwise (HTML iframe)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
 <pre class="text-[12px] font-mono bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg p-4 overflow-x-auto"><span class="text-teal-600 dark:text-teal-400">// Feedback payload — annotation creation</span>
 {
@@ -444,11 +484,11 @@
       x: <span class="text-sky-600 dark:text-sky-400">0.42</span>, y: <span class="text-sky-600 dark:text-sky-400">0.60</span>     <span class="text-stone-500">// both ∈ [0, 1]</span>
 
       <span class="text-stone-500">// (b) line — markdown, text</span>
-      <span class="text-stone-500">// line: 3                 // 1-indexed</span>
+      <span class="text-stone-500">// line: 3                      // integer ≥ 1</span>
 
-      <span class="text-stone-500">// (c) region — html, pdf</span>
-      <span class="text-stone-500">// page: 3,                // optional, PDF only</span>
-      <span class="text-stone-500">// region: "top-right CTA" // required when no page/line/x</span>
+      <span class="text-stone-500">// (c) iframe — html, pdf</span>
+      <span class="text-stone-500">// region: "top-right CTA",     // always required for iframe kinds</span>
+      <span class="text-stone-500">// page:   3                    // REQUIRED for PDF · FORBIDDEN for HTML</span>
     }
   }
 }</pre>
@@ -457,11 +497,25 @@
       <p class="font-bold uppercase tracking-widest text-[10px] text-amber-700 dark:text-amber-300 mb-2">Invariants the server MUST enforce</p>
       <ul class="list-disc pl-5 space-y-1 text-amber-900 dark:text-amber-100">
         <li><code>target.annotation</code> is <strong>required</strong> for <code>origin: "user-visual"</code>. Reject the request without it.</li>
-        <li>Exactly one of <code>{x,y}</code>, <code>{line}</code>, <code>{page,region}</code>, or <code>{region}</code> must be present. Mixing shapes is rejected.</li>
-        <li><code>x</code> and <code>y</code> MUST be clamped to [0,1] on the server side too — never trust the client.</li>
+        <li>Exactly one of three shapes MUST be present: <code>{x, y}</code> (spatial), <code>{line}</code> (text), or <code>{page?, region}</code> (iframe). Mixing shapes is rejected.</li>
+        <li><code>x</code> and <code>y</code> MUST be clamped to [0, 1] on the server side too — never trust the client.</li>
         <li><code>line</code> MUST be a positive integer ≥ 1.</li>
-        <li><code>region</code> MUST be a non-empty string when present (trim-then-check).</li>
+        <li><code>region</code> MUST be a non-empty string (trim-then-check) when the shape is the iframe shape.</li>
+        <li><code>page</code> MUST be present and an integer ≥ 1 when the target artifact's MIME is <code>application/pdf</code>; MUST be absent when the MIME is <code>text/html</code>. Rejecting a payload with <code>page</code> on an HTML target (or without <code>page</code> on a PDF target) is the server's responsibility.</li>
+        <li><code>body</code> MUST be non-empty markdown (per the feedback data contract § 3.5). The UI's Create button is gated on this too — see State 1 in <code>annotation-popover-states.html</code>.</li>
       </ul>
+    </div>
+
+    <div class="mt-3 p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60 text-xs text-stone-700 dark:text-stone-300">
+      <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-1">Follow-up for downstream stages</p>
+      <p>
+        Today's <code>knowledge/DATA-CONTRACTS.md</code> § 3.3 has no
+        <code>target.annotation</code> field documented. When this unit
+        advances, a follow-up edit to § 3.3 MUST add the three-shape
+        union above — otherwise the persistence contract still reads
+        "no annotation field" and dev will have to guess. Tracked in
+        the unit's <code>depends_on</code> / handoff notes.
+      </p>
     </div>
   </section>
 
@@ -478,7 +532,7 @@
       <div class="flex items-center justify-center md:w-8 text-stone-400">→</div>
       <div class="flex-1 p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
         <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-1">② Capture</p>
-        <p>Compute <code>{x,y}</code> | <code>{line}</code> | <code>{page,region}</code>. Stash in <code>annContext</code>.</p>
+        <p>Compute one of the three canonical shapes — <code>{x,y}</code>, <code>{line}</code>, or <code>{page?, region}</code>. Stash in <code>annContext</code>.</p>
       </div>
       <div class="flex items-center justify-center md:w-8 text-stone-400">→</div>
       <div class="flex-1 p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">

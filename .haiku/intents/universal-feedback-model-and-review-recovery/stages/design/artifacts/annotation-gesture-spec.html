@@ -320,10 +320,10 @@
         <p class="text-[10px] font-bold uppercase tracking-widest text-teal-700 dark:text-teal-300 mb-3">Add feedback on this preview</p>
         <label class="block text-[10px] font-medium text-stone-500 dark:text-stone-400 mb-1">Page <span class="text-stone-400">— required for PDF, hidden for HTML</span></label>
         <input type="number" min="1" placeholder="3"
-               class="w-full text-xs p-2 mb-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-teal-500 focus:outline-none"/>
+               class="w-full text-xs p-2 mb-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-teal-500 focus:outline-none"/>
         <label class="block text-[10px] font-medium text-stone-500 dark:text-stone-400 mb-1">Region / where to look <span class="text-red-600 dark:text-red-400">*</span></label>
         <input type="text" placeholder='e.g. "top-right CTA" or "§ 3.2"' required
-               class="w-full text-xs p-2 mb-3 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-teal-500 focus:outline-none"/>
+               class="w-full text-xs p-2 mb-3 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-teal-500 focus:outline-none"/>
         <button class="w-full px-3 py-2 text-xs font-semibold rounded-md bg-teal-600 hover:bg-teal-700 text-white transition-colors">
           Continue to popover →
         </button>
@@ -418,7 +418,7 @@
     <ul class="space-y-2 text-sm text-stone-700 dark:text-stone-300 list-disc pl-5">
       <li><strong>Focus trap</strong>: once the popover opens, focus is trapped between title → body → Cancel → Create → (loop).</li>
       <li><strong>Focus return</strong>: closing the popover (save, cancel, ESC, click-outside) returns focus to the element that triggered creation — the artifact wrapper, the line row, or the iframe form's submit button.</li>
-      <li><strong>ARIA</strong>: popover is <code>role="dialog"</code> <code>aria-modal="true"</code>; <code>aria-labelledby</code> points at the location-label paragraph rendered inside the popover header (e.g. <em>"New feedback @ L3"</em>). Every popover instance — every state — renders this label with a stable id of the form <code>ann-popover-label-{uuid}</code> and matches its <code>aria-labelledby</code> to that id. Title input has <code>aria-required="true"</code>.</li>
+      <li><strong>ARIA</strong>: popover is <code>role="dialog"</code> <code>aria-modal="true"</code>; <code>aria-labelledby</code> points at the location-label paragraph rendered inside the popover header (e.g. <em>"New feedback @ L3"</em>). Every popover instance — every state — renders this label with a stable id of the form <code>ann-popover-label-{uuid}</code> and matches its <code>aria-labelledby</code> to that id. The <strong>body</strong> textarea carries <code>aria-required="true"</code> (it is the server-side required field per data contract § 3.5); the <strong>title</strong> input is optional at the UI layer and does NOT carry <code>aria-required</code> — the server derives a title from the first line of body when none is supplied.</li>
       <li><strong>Click-outside cancel</strong>: clicking anywhere outside the popover on desktop is treated as <em>Cancel</em> — same semantics as ESC (fields discarded, focus restored). On mobile, the bottom sheet cancels on drag-handle swipe-down <em>or</em> tap on the dimmed backdrop. This matches the existing Modal overlay pattern in the review app.</li>
       <li><strong>Live-region announcement</strong>: on save, a <code>role="status" aria-live="polite"</code> region announces <em>"Feedback FB-NN created at &lt;location label&gt;"</em>.</li>
       <li><strong>Touch targets</strong>: every button in the popover footer is ≥ 44×44px on mobile (see <code>annotation-popover-states.html</code> → small-viewport state).</li>

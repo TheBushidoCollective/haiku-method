@@ -12,6 +12,7 @@ inputs:
 outputs:
   - stages/design/artifacts/annotation-gesture-spec.html
   - stages/design/artifacts/annotation-popover-states.html
+  - stages/design/artifacts/annotation-design-review.md
 status: active
 bolt: 1
 hat: designer

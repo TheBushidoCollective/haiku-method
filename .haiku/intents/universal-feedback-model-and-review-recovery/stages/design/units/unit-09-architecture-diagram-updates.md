@@ -22,6 +22,7 @@ inputs:
 outputs:
   - stages/design/artifacts/architecture-diagram-diff-spec.md
   - stages/design/artifacts/iteration-timeline-ui.html
+  - stages/design/artifacts/design-review-findings.md
 status: active
 bolt: 1
 hat: designer

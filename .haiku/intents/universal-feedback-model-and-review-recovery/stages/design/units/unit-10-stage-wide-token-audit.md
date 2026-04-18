@@ -45,7 +45,6 @@ outputs:
   - stages/design/audit-sweep-log.md
   - stages/design/DESIGN-BRIEF.md
   - knowledge/DESIGN-TOKENS.md
-  - stages/design/artifacts/*.html
 quality_gates:
   - >-
     grep -rn 'gray-' stages/design/artifacts/ returns 0 matches (palette sweep

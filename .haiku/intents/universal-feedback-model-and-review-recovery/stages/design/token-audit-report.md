@@ -108,11 +108,17 @@ Full inventory (50+ vars) is identical across all 5 files. If dev ports these ar
 
 ---
 
-## Files touched (sweep log → see `audit-sweep-log.md`)
+## Files touched (sweep log → see `stages/design/audit-sweep-log.md`)
 
 - `stages/design/DESIGN-BRIEF.md` (§2 status, §2 origin, §4 responsive, §6 WCAG)
 - `knowledge/DESIGN-TOKENS.md` (§2.2 origin, §8 NEW, §9 NEW, §10 NEW)
-- 14 HTML artifacts for `gray-*` → `stone-*` sweep
+- 14 HTML artifacts for palette neutral sweep
 - 5 HTML artifacts for hex → CSS-var sweep
 - 1 HTML artifact for sidebar-width sweep (`comments-list-with-agent-toggle.html`)
 - 4 HTML artifacts for breakpoint-label rewrite (`feedback-card-states.html`, `comments-list-with-agent-toggle.html`, `rollback-reason-banner.html`, `assessor-summary-card.html`, `revisit-modal-spec.html`)
+
+---
+
+## Location note
+
+This report and `audit-sweep-log.md` live in `stages/design/` (not `stages/design/artifacts/`). Reason: their prose describes the exact grep patterns the quality gate runs on `stages/design/artifacts/` — placing them inside the scanned directory would cause the gates to false-positive on the documentation itself. The unit's `outputs:` frontmatter points to `stages/design/token-audit-report.md` and `stages/design/audit-sweep-log.md`.

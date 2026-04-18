@@ -206,7 +206,7 @@ interface FeedbackItemProps {
 
 ```
 +---------------------------------------------+
-| 🔍 Review Agent          [pending] badge    |
+| 🛡 Review Agent          [pending] badge    |
 | "Missing null check in handleSubmit"         |
 | FB-03 · Visit 1 · adversarial-review        |
 +---------------------------------------------+

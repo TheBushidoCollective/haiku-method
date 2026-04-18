@@ -592,7 +592,7 @@ Historical artifacts used the magic value `max-w-[1400px]` for the outer page co
 }
 ```
 
-Every artifact that previously hardcoded `max-w-[1400px]` now sets `style="max-width: var(--layout-max-width);"` on the outer container, referenced from the audited style block. Alternative (Tailwind-native): `max-w-screen-2xl` (1536px) if 100px of extra gutter is acceptable; decision deferred to dev for the production app, but artifacts currently use the 1400px token.
+Artifacts currently keep the literal `max-w-[1400px]` arbitrary-value class; `--layout-max-width` is the canonical reference that production code adopts uniformly. A follow-up artifact sweep may replace the literals with `style="max-width: var(--layout-max-width);"` on outer containers, but the 1400px target value is identical either way. Alternative (Tailwind-native): `max-w-screen-2xl` (1536px) if 100px of extra gutter is acceptable; decision deferred to dev for the production app, but artifacts and tokens currently use 1400px.
 
 ### 8.3 Breakpoints (canonical — Tailwind-aligned)
 

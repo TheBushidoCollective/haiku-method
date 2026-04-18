@@ -516,7 +516,7 @@ No artifact may declare `w-96` without the `w-80` fallback. This is the canonica
 
 ### Canonical page max-width (DESIGN-TOKENS §8.2)
 
-Page container sets `max-width: var(--layout-max-width)` (= 1400px). Artifacts that used the literal `max-w-[1400px]` arbitrary-value class have been replaced with a `style="max-width: var(--layout-max-width)"` attribute plus the shared `:root` CSS variable declaration.
+Page container target is 1400px, declared as the named token `--layout-max-width` in DESIGN-TOKENS §8.2. Artifacts currently keep the literal `max-w-[1400px]` arbitrary-value class; production code adopts `var(--layout-max-width)` uniformly (identical value).
 
 ### Canonical footer button heights (DESIGN-TOKENS §8.4)
 

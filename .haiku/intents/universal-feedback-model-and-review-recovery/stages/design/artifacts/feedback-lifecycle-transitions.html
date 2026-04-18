@@ -84,7 +84,7 @@
     </div>
     <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
       <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"><span class="w-2 h-2 rounded-full bg-teal-600 dark:bg-teal-400"></span>Agent-owned</span>
-      <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"><span class="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400"></span>Human-owned</span>
+      <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"><span class="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400"></span>Human-owned</span>
     </div>
   </div>
 </header>
@@ -224,21 +224,21 @@
             <td class="px-3 py-2 font-semibold bg-amber-50 dark:bg-amber-900/20">pending</td>
             <td class="px-3 py-2 text-stone-400">— (self)</td>
             <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 font-semibold">AGENT</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T1 · fix lands</span></td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T4 · Dismiss</span></td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T4 · Dismiss</span></td>
             <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 font-semibold">AGENT</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T3 · quality gate</span></td>
             <td class="px-3 py-2 text-stone-500 dark:text-stone-400">User can dismiss a pending item. Only the agent can mark it addressed or close it via gate verification. <em>Not</em> user-initiable: <code>pending → addressed</code>, <code>pending → closed</code>.</td>
           </tr>
           <tr>
             <td class="px-3 py-2 font-semibold bg-blue-50 dark:bg-blue-900/20">addressed</td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T7 · Re-open</span></td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T7 · Re-open</span></td>
             <td class="px-3 py-2 text-stone-400">— (self)</td>
             <td class="px-3 py-2 text-stone-400">—</td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T2 · Verify &amp; Close</span></td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T2 · Verify &amp; Close</span></td>
             <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Reviewer verifies the fix or re-opens if the fix is wrong. <em>Not</em> possible: <code>addressed → rejected</code> (dismiss only applies to pending).</td>
           </tr>
           <tr>
             <td class="px-3 py-2 font-semibold bg-stone-100 dark:bg-stone-800/60">rejected</td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T5 · Re-open</span></td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T5 · Re-open</span></td>
             <td class="px-3 py-2 text-stone-400">—</td>
             <td class="px-3 py-2 text-stone-400">— (self)</td>
             <td class="px-3 py-2 text-stone-400">—</td>
@@ -246,7 +246,7 @@
           </tr>
           <tr>
             <td class="px-3 py-2 font-semibold bg-green-50 dark:bg-green-900/20">closed</td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T6 · Re-open</span></td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-[10px] text-stone-500 dark:text-stone-400">T6 · Re-open</span></td>
             <td class="px-3 py-2 text-stone-400">—</td>
             <td class="px-3 py-2 text-stone-400">—</td>
             <td class="px-3 py-2 text-stone-400">— (self)</td>
@@ -263,7 +263,7 @@
     <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">This is the definitive list the review-app must render. If a transition is not on this list, the UI <strong>MUST NOT</strong> expose a button for it — even if the backing tool call would technically accept it.</p>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="bg-white dark:bg-stone-900 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
-        <h3 class="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400"></span>User-initiable (MUST render as footer buttons)</h3>
+        <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400"></span>User-initiable (MUST render as footer buttons)</h3>
         <ul class="space-y-1.5 text-xs text-stone-700 dark:text-stone-300">
           <li><code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800">pending → rejected</code> · <strong>Dismiss</strong> · secondary button</li>
           <li><code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800">addressed → closed</code> · <strong>Verify &amp; Close</strong> · primary-green button</li>

@@ -112,15 +112,15 @@
             </div>
           </div>
           <ul class="text-[11px] text-stone-600 space-y-1 max-h-32 overflow-y-auto">
-            <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span><span><span class="font-mono text-[10px] text-blue-700">FB-02</span> · addressed by unit-02-comment-to-feedback-flow</span></li>
-            <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span><span><span class="font-mono text-[10px] text-blue-700">FB-03</span> · addressed by unit-03-review-package-unification</span></li>
-            <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span><span><span class="font-mono text-[10px] text-blue-700">FB-06</span> · addressed by unit-06-revisit-confirmation-modal</span></li>
-            <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span><span><span class="font-mono text-[10px] text-blue-700">FB-07</span> · addressed by unit-08-feedback-assessor-ux-and-flow-diagram</span></li>
+            <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span><span><span class="font-mono text-[10px] text-blue-800">FB-02</span> · addressed by unit-02-comment-to-feedback-flow</span></li>
+            <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span><span><span class="font-mono text-[10px] text-blue-800">FB-03</span> · addressed by unit-03-review-package-unification</span></li>
+            <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span><span><span class="font-mono text-[10px] text-blue-800">FB-06</span> · addressed by unit-06-revisit-confirmation-modal</span></li>
+            <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span><span><span class="font-mono text-[10px] text-blue-800">FB-07</span> · addressed by unit-08-feedback-assessor-ux-and-flow-diagram</span></li>
             <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-stone-400 shrink-0"></span><span class="text-stone-500"><span class="font-mono text-[10px] text-stone-700">FB-04</span> · already closed (prior visit)</span></li>
           </ul>
           <div class="flex items-center justify-between pt-2 border-t border-stone-200">
-            <span class="text-[11px] text-green-700 font-medium">user gate unlocked — review &amp; approve</span>
-            <button class="text-[11px] font-medium px-2 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors">view details</button>
+            <span class="text-[11px] text-green-800 font-medium">user gate unlocked — review &amp; approve</span>
+            <button class="text-[11px] font-medium px-2 py-1 rounded-md bg-blue-50 text-blue-800 hover:bg-blue-100 transition-colors">view details</button>
           </div>
         </div>
       </div>
@@ -200,7 +200,7 @@
             <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span><span><span class="font-mono text-[10px] text-amber-800">FB-05</span> · still pending — no unit cites closes: [FB-05]</span></li>
             <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span><span><span class="font-mono text-[10px] text-amber-800">FB-07</span> · still pending — artifact missing (review-flow diagram)</span></li>
             <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span><span><span class="font-mono text-[10px] text-amber-800">FB-08</span> · still pending — spec-only fix not yet committed</span></li>
-            <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span><span><span class="font-mono text-[10px] text-blue-700">FB-02</span> · addressed by unit-02-comment-to-feedback-flow</span></li>
+            <li class="flex items-start gap-2"><span class="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span><span><span class="font-mono text-[10px] text-blue-800">FB-02</span> · addressed by unit-02-comment-to-feedback-flow</span></li>
           </ul>
           <div class="flex items-center justify-between pt-2 border-t border-amber-300">
             <span class="text-[11px] text-amber-800 font-medium">user gate blocked — 3 items pending</span>
@@ -297,9 +297,9 @@
     <h2 class="text-sm font-semibold mb-3">Responsive · breakpoints</h2>
     <div class="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-4 text-xs text-stone-600 dark:text-stone-400">
       <ul class="space-y-1 list-disc ml-5">
-        <li><strong class="text-stone-900 dark:text-stone-100">mobile (375px)</strong> — sidebar is bottom sheet; assessor card becomes the sticky sheet header. Stat row stacks 3×1 → remains 3 columns (width fits), bullet list collapses by default, "view details" opens modal.</li>
-        <li><strong class="text-stone-900 dark:text-stone-100">tablet (768px)</strong> — sidebar + card widths match existing ReviewSidebar tokens (<code class="px-1 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">w-80</code>). No layout change.</li>
-        <li><strong class="text-stone-900 dark:text-stone-100">desktop (1280px)</strong> — sidebar <code class="px-1 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">lg:w-96</code>, bullet list expanded by default up to 4 items + scroll.</li>
+        <li><strong class="text-stone-900 dark:text-stone-100">mobile (&lt; 768px)</strong> — sidebar is bottom sheet; assessor card becomes the sticky sheet header. Stat row stacks 3×1 → remains 3 columns (width fits), bullet list collapses by default, "view details" opens modal.</li>
+        <li><strong class="text-stone-900 dark:text-stone-100">tablet (768-1023px, <code class="px-1 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">md:</code>)</strong> — sidebar width collapses to <code class="px-1 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">w-80</code>. No other layout change.</li>
+        <li><strong class="text-stone-900 dark:text-stone-100">desktop (&ge; 1024px, <code class="px-1 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">lg:</code>)</strong> — sidebar <code class="px-1 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">w-80 lg:w-96</code>, bullet list expanded by default up to 4 items + scroll.</li>
       </ul>
     </div>
   </section>

@@ -131,13 +131,13 @@
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">design → elaborate</span>
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-white border border-amber-200 text-stone-700">visits 2 → 3</span>
               </div>
-              <button class="text-amber-700 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500 rounded p-1" aria-label="Dismiss banner">
+              <button class="text-amber-800 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500 rounded p-1" aria-label="Dismiss banner">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
             </div>
             <p class="text-xs text-amber-900/90 mb-3">The feedback-assessor reviewed 7 items and found 3 still unresolved. A new additive-elaborate cycle is required — add units that cite <code class="px-1 py-0.5 bg-amber-100 rounded font-mono text-[10px] text-amber-900">closes: [FB-NN]</code> for each item below.</p>
             <div class="rounded-md bg-white border border-amber-200 p-2.5 mb-3">
-              <div class="text-[10px] font-semibold uppercase tracking-wider text-amber-700 mb-1">assessor note</div>
+              <div class="text-[10px] font-semibold uppercase tracking-wider text-amber-800 mb-1">assessor note</div>
               <p class="text-[11px] font-mono text-stone-700 leading-relaxed">3 items still status: pending after this pass. FB-05 has no unit that cites closes:[FB-05]. FB-07 artifact missing. FB-08 spec not committed.</p>
             </div>
             <ul class="space-y-1.5 mb-3">
@@ -261,7 +261,7 @@
         <div class="p-4 space-y-3">
           <div class="flex items-center gap-2">
             <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-100">
-              <svg class="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m0 0v.01M12 5l9 14H3L12 5z"/></svg>
+              <svg class="w-3.5 h-3.5 text-amber-800" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m0 0v.01M12 5l9 14H3L12 5z"/></svg>
             </span>
             <div class="flex-1">
               <div class="text-xs font-semibold text-stone-900">Approve gate not yet reachable</div>
@@ -329,9 +329,9 @@
           <li>Contrast: amber-200/amber-900/15 &gt; 7:1 (dark), amber-900/amber-50 &gt; 7:1 (light).</li>
           <li>Icons are <code>aria-hidden="true"</code>; meaning comes from pill text and heading.</li>
           <li>Touch targets: dismiss + "view log" buttons are 28×28 visible, 44×44 hit area via <code>::before</code> extension.</li>
-          <li><strong>mobile 375px</strong> — banner stacks badge + visit counter below headline; action buttons remain 2-col.</li>
-          <li><strong>tablet 768px</strong> — banner at full width of main content; sidebar bottom sheet hosts blocked-gate panel.</li>
-          <li><strong>desktop 1280px</strong> — banner centered within <code>max-w-[1400px]</code>; blocked-gate panel fits within <code>w-96</code> sidebar.</li>
+          <li><strong>mobile (&lt; 768px)</strong> — banner stacks badge + visit counter below headline; action buttons remain 2-col.</li>
+          <li><strong>tablet (768-1023px, <code>md:</code>)</strong> — banner at full width of main content; sidebar bottom sheet hosts blocked-gate panel.</li>
+          <li><strong>desktop (&ge; 1024px, <code>lg:</code>)</strong> — banner centered within <code>max-w-[1400px]</code> (see DESIGN-TOKENS §8.2); blocked-gate panel fits within <code>w-80 lg:w-96</code> sidebar.</li>
         </ul>
       </div>
     </div>

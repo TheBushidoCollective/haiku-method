@@ -10,15 +10,74 @@
   body { font-family: system-ui, -apple-system, sans-serif; }
 
   /* Diagram typography / node labels (SVG-only — kept minimal) */
-  .node-label { font: 600 13px system-ui; fill: #fff; }
+  .node-label { font: 600 13px system-ui; fill: var(--color-white); }
   .node-sub { font: 11px system-ui; fill: rgba(255,255,255,.90); }
-  .node-sub-dim { font: 11px system-ui; fill: #cbd5e1; }
-  .phase-label { font: 600 11px system-ui; fill: #94a3b8; text-transform: uppercase; letter-spacing: .12em; }
-  .edge-label { font: 10px system-ui; fill: #94a3b8; }
-  .edge-label-amber { font: 600 10px system-ui; fill: #f59e0b; }
-  .edge-label-rose { font: 600 10px system-ui; fill: #f43f5e; }
-  .edge-label-green { font: 600 10px system-ui; fill: #22c55e; }
+  .node-sub-dim { font: 11px system-ui; fill: var(--color-slate-300); }
+  .phase-label { font: 600 11px system-ui; fill: var(--color-slate-400); text-transform: uppercase; letter-spacing: .12em; }
+  .edge-label { font: 10px system-ui; fill: var(--color-slate-400); }
+  .edge-label-amber { font: 600 10px system-ui; fill: var(--color-amber-500); }
+  .edge-label-rose { font: 600 10px system-ui; fill: var(--color-rose-500); }
+  .edge-label-green { font: 600 10px system-ui; fill: var(--color-green-500); }
 </style>
+  <style data-haiku-token-audit="true">
+    /* Audited token set (FB-16) — hex values declared as rgb triplets,
+       referenced via var() throughout SVG/CSS. See knowledge/DESIGN-TOKENS.md §1.10. */
+    :root {
+      --color-white: rgb(255 255 255);
+      --color-slate-50:  rgb(248 250 252);
+      --color-slate-100: rgb(241 245 249);
+      --color-slate-200: rgb(226 232 240);
+      --color-slate-300: rgb(203 213 225);
+      --color-slate-400: rgb(148 163 184);
+      --color-slate-500: rgb(100 116 139);
+      --color-slate-700: rgb(51 65 85);
+      --color-slate-900: rgb(15 23 42);
+      --color-slate-950: rgb(11 18 32);
+      --color-stone-50:  rgb(250 250 249);
+      --color-stone-200: rgb(231 229 228);
+      --color-stone-500: rgb(120 113 108);
+      --color-stone-700: rgb(68 64 60);
+      --color-stone-900: rgb(28 25 23);
+      --color-stone-950: rgb(12 10 9);
+      --color-stone-200-alt: rgb(229 231 235);
+      --color-stone-400-alt: rgb(156 163 175);
+      --color-stone-600-alt: rgb(75 85 99);
+      --color-stone-700-alt: rgb(55 65 81);
+      --color-blue-50:   rgb(239 246 255);
+      --color-blue-100:  rgb(219 234 254);
+      --color-blue-400:  rgb(96 165 250);
+      --color-blue-500:  rgb(59 130 246);
+      --color-blue-600:  rgb(37 99 235);
+      --color-blue-700:  rgb(29 78 216);
+      --color-blue-900:  rgb(30 58 138);
+      --color-teal-50:   rgb(240 253 250);
+      --color-teal-100:  rgb(204 251 241);
+      --color-teal-400:  rgb(45 212 191);
+      --color-teal-500:  rgb(20 184 166);
+      --color-teal-600:  rgb(13 148 136);
+      --color-teal-700:  rgb(15 118 110);
+      --color-green-100: rgb(220 252 231);
+      --color-green-400: rgb(74 222 128);
+      --color-green-500: rgb(34 197 94);
+      --color-green-600: rgb(22 163 74);
+      --color-green-800: rgb(22 101 52);
+      --color-green-900: rgb(20 83 45);
+      --color-amber-50:  rgb(255 251 235);
+      --color-amber-100: rgb(254 243 199);
+      --color-amber-400: rgb(251 191 36);
+      --color-amber-500: rgb(245 158 11);
+      --color-amber-800: rgb(146 64 14);
+      --color-amber-900: rgb(120 53 15);
+      --color-rose-200:  rgb(254 205 211);
+      --color-rose-500:  rgb(244 63 94);
+      --color-sky-300:   rgb(125 211 252);
+      --color-sky-500:   rgb(14 165 233);
+      --color-purple-200: rgb(233 213 255);
+      --color-purple-500: rgb(168 85 247);
+      --color-violet-600: rgb(124 58 237);
+      --color-purple-900: rgb(88 28 135);
+    }
+  </style>
 </head>
 <body class="bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 min-h-screen">
 
@@ -50,16 +109,16 @@
     <svg viewBox="0 0 1360 780" xmlns="http://www.w3.org/2000/svg" class="w-full h-auto" role="img" aria-label="Review flow with feedback-assessor and rollback edge">
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-          <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--color-slate-500)"/>
         </marker>
         <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-          <path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"/>
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--color-amber-500)"/>
         </marker>
         <marker id="arrow-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-          <path d="M0,0 L10,5 L0,10 z" fill="#f43f5e"/>
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--color-rose-500)"/>
         </marker>
         <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-          <path d="M0,0 L10,5 L0,10 z" fill="#22c55e"/>
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--color-green-500)"/>
         </marker>
       </defs>
 
@@ -69,28 +128,28 @@
 
         <!-- execute -->
         <g transform="translate(40, 20)">
-          <rect width="170" height="70" rx="10" fill="#14b8a6"/>
+          <rect width="170" height="70" rx="10" fill="var(--color-teal-500)"/>
           <text x="85" y="28" text-anchor="middle" class="node-label">execute</text>
           <text x="85" y="48" text-anchor="middle" class="node-sub">all units complete</text>
         </g>
 
         <!-- quality gates -->
         <g transform="translate(260, 20)">
-          <rect width="170" height="70" rx="10" fill="#0d9488"/>
+          <rect width="170" height="70" rx="10" fill="var(--color-teal-600)"/>
           <text x="85" y="28" text-anchor="middle" class="node-label">quality gates</text>
           <text x="85" y="48" text-anchor="middle" class="node-sub">typecheck · tests · build</text>
         </g>
 
         <!-- review -->
         <g transform="translate(480, 20)">
-          <rect width="170" height="70" rx="10" fill="#14b8a6"/>
+          <rect width="170" height="70" rx="10" fill="var(--color-teal-500)"/>
           <text x="85" y="28" text-anchor="middle" class="node-label">review</text>
           <text x="85" y="48" text-anchor="middle" class="node-sub">adversarial agent fan-out</text>
         </g>
 
         <!-- feedback frontmatter check (structural gate) -->
         <g transform="translate(700, 20)" id="node-frontmatter-check">
-          <rect width="230" height="70" rx="10" fill="#f59e0b"/>
+          <rect width="230" height="70" rx="10" fill="var(--color-amber-500)"/>
           <text x="115" y="26" text-anchor="middle" class="node-label">feedback frontmatter check</text>
           <text x="115" y="46" text-anchor="middle" class="node-sub">re-read all feedback/*.md</text>
           <text x="115" y="60" text-anchor="middle" class="node-sub">refuse if any status: pending</text>
@@ -98,25 +157,25 @@
 
         <!-- user gate -->
         <g transform="translate(970, 20)">
-          <rect width="170" height="70" rx="10" fill="#22c55e"/>
+          <rect width="170" height="70" rx="10" fill="var(--color-green-500)"/>
           <text x="85" y="28" text-anchor="middle" class="node-label">user gate</text>
           <text x="85" y="48" text-anchor="middle" class="node-sub">human approve · request changes</text>
         </g>
 
         <!-- advance (terminal) -->
         <g transform="translate(1170, 20)">
-          <rect width="150" height="70" rx="10" fill="#64748b"/>
+          <rect width="150" height="70" rx="10" fill="var(--color-slate-500)"/>
           <text x="75" y="28" text-anchor="middle" class="node-label">advance</text>
           <text x="75" y="48" text-anchor="middle" class="node-sub">next stage</text>
         </g>
 
         <!-- forward edges -->
-        <line x1="210" y1="55" x2="260" y2="55" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
-        <line x1="430" y1="55" x2="480" y2="55" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
-        <line x1="650" y1="55" x2="700" y2="55" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
-        <line x1="930" y1="55" x2="970" y2="55" stroke="#f59e0b" stroke-width="2.5" marker-end="url(#arrow-amber)"/>
+        <line x1="210" y1="55" x2="260" y2="55" stroke="var(--color-slate-500)" stroke-width="2" marker-end="url(#arrow)"/>
+        <line x1="430" y1="55" x2="480" y2="55" stroke="var(--color-slate-500)" stroke-width="2" marker-end="url(#arrow)"/>
+        <line x1="650" y1="55" x2="700" y2="55" stroke="var(--color-slate-500)" stroke-width="2" marker-end="url(#arrow)"/>
+        <line x1="930" y1="55" x2="970" y2="55" stroke="var(--color-amber-500)" stroke-width="2.5" marker-end="url(#arrow-amber)"/>
         <text x="933" y="48" class="edge-label-amber">all terminal</text>
-        <line x1="1140" y1="55" x2="1170" y2="55" stroke="#22c55e" stroke-width="2" marker-end="url(#arrow-green)"/>
+        <line x1="1140" y1="55" x2="1170" y2="55" stroke="var(--color-green-500)" stroke-width="2" marker-end="url(#arrow-green)"/>
         <text x="1145" y="48" class="edge-label-green">approve</text>
       </g>
 
@@ -126,14 +185,14 @@
 
         <!-- declared agents (example: accessibility, consistency) -->
         <g transform="translate(350, 30)">
-          <rect width="170" height="70" rx="10" fill="#7c3aed"/>
+          <rect width="170" height="70" rx="10" fill="var(--color-violet-600)"/>
           <text x="85" y="22" text-anchor="middle" class="node-label">accessibility</text>
           <text x="85" y="40" text-anchor="middle" class="node-sub">declared subagent</text>
           <text x="85" y="58" text-anchor="middle" class="node-sub">stages/{s}/review-agents/</text>
         </g>
 
         <g transform="translate(540, 30)">
-          <rect width="170" height="70" rx="10" fill="#7c3aed"/>
+          <rect width="170" height="70" rx="10" fill="var(--color-violet-600)"/>
           <text x="85" y="22" text-anchor="middle" class="node-label">consistency</text>
           <text x="85" y="40" text-anchor="middle" class="node-sub">declared subagent</text>
           <text x="85" y="58" text-anchor="middle" class="node-sub">stages/{s}/review-agents/</text>
@@ -141,7 +200,7 @@
 
         <!-- AUTO-INJECTED feedback-assessor (distinguished: rose fill + dashed light ring) -->
         <g transform="translate(730, 30)">
-          <rect width="230" height="70" rx="10" fill="#f43f5e" stroke="#fecdd3" stroke-width="2" stroke-dasharray="4 3"/>
+          <rect width="230" height="70" rx="10" fill="var(--color-rose-500)" stroke="var(--color-rose-200)" stroke-width="2" stroke-dasharray="4 3"/>
           <text x="115" y="22" text-anchor="middle" class="node-label">feedback-assessor</text>
           <text x="115" y="40" text-anchor="middle" class="node-sub">AUTO-INJECTED · always runs</text>
           <text x="115" y="58" text-anchor="middle" class="node-sub">reads &amp; writes feedback frontmatter</text>
@@ -149,26 +208,26 @@
 
         <!-- fan-out edges: review node (row 1, center ~565, bottom y=90 in row-1 frame = absolute 120) → each agent box top -->
         <!-- Row-2 group is translated y=170, so local y=0 is absolute 170. Review bottom absolute = 120, local y in row-2 frame = -50 -->
-        <path d="M 565,-50 C 475,-10 435,20 435,30" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
-        <path d="M 565,-50 C 625,-20 625,20 625,30" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
-        <path d="M 565,-50 C 680,-30 845,10 845,30" fill="none" stroke="#f43f5e" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arrow-rose)"/>
+        <path d="M 565,-50 C 475,-10 435,20 435,30" fill="none" stroke="var(--color-slate-500)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+        <path d="M 565,-50 C 625,-20 625,20 625,30" fill="none" stroke="var(--color-slate-500)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+        <path d="M 565,-50 C 680,-30 845,10 845,30" fill="none" stroke="var(--color-rose-500)" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arrow-rose)"/>
 
         <!-- callout: orchestrator always appends -->
         <g transform="translate(985, 40)">
-          <rect width="270" height="60" rx="8" fill="#0b1220" stroke="#f43f5e" stroke-width="1.5"/>
+          <rect width="270" height="60" rx="8" fill="var(--color-slate-950)" stroke="var(--color-rose-500)" stroke-width="1.5"/>
           <text x="12" y="22" class="edge-label-rose">orchestrator always appends</text>
           <text x="12" y="40" class="node-sub-dim">agents cannot opt-in or opt-out</text>
           <text x="12" y="54" class="node-sub-dim">identical across every studio / stage</text>
         </g>
-        <line x1="960" y1="60" x2="985" y2="70" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="3 2" marker-end="url(#arrow-rose)"/>
+        <line x1="960" y1="60" x2="985" y2="70" stroke="var(--color-rose-500)" stroke-width="1.5" stroke-dasharray="3 2" marker-end="url(#arrow-rose)"/>
       </g>
 
       <!-- ROW 3: Assessor contract + rollback-conditions cards -->
       <g transform="translate(0, 330)">
         <text x="40" y="0" class="phase-label">③ feedback-assessor contract (per feedback item) · rollback conditions (any one fires)</text>
         <g transform="translate(40, 20)">
-          <rect width="620" height="140" rx="10" fill="#0b1220" stroke="#f43f5e" stroke-width="1.5"/>
-          <text x="18" y="28" class="node-label" fill="#fbbf24">for each feedback/*.md with status: pending</text>
+          <rect width="620" height="140" rx="10" fill="var(--color-slate-950)" stroke="var(--color-rose-500)" stroke-width="1.5"/>
+          <text x="18" y="28" class="node-label" fill="var(--color-amber-400)">for each feedback/*.md with status: pending</text>
           <text x="18" y="52" class="node-sub-dim">1. assess: does the current stage's artifacts + committed work resolve this concern?</text>
           <text x="18" y="72" class="node-sub-dim">2. on yes → write status: addressed · addressed_by · addressed_at (ISO)</text>
           <text x="18" y="92" class="node-sub-dim">3. on no  → leave status: pending · annotate reason in body ("assessor note: …")</text>
@@ -177,8 +236,8 @@
         </g>
 
         <g transform="translate(690, 20)">
-          <rect width="630" height="140" rx="10" fill="#0b1220" stroke="#f59e0b" stroke-width="1.5"/>
-          <text x="18" y="28" class="node-label" fill="#fbbf24">rollback conditions — any one rolls stage back to elaborate</text>
+          <rect width="630" height="140" rx="10" fill="var(--color-slate-950)" stroke="var(--color-amber-500)" stroke-width="1.5"/>
+          <text x="18" y="28" class="node-label" fill="var(--color-amber-400)">rollback conditions — any one rolls stage back to elaborate</text>
           <text x="18" y="52" class="node-sub-dim">• assessor errors / times out → fail-closed (NEVER advances to user gate)</text>
           <text x="18" y="72" class="node-sub-dim">• any feedback item still status: pending after assessor pass</text>
           <text x="18" y="92" class="node-sub-dim">• frontmatter write fails (parse error, file lock, missing field)</text>
@@ -193,7 +252,7 @@
 
         <!-- elaborate (rollback target) -->
         <g transform="translate(40, 30)">
-          <rect width="190" height="90" rx="10" fill="#14b8a6" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4 3"/>
+          <rect width="190" height="90" rx="10" fill="var(--color-teal-500)" stroke="var(--color-amber-500)" stroke-width="2" stroke-dasharray="4 3"/>
           <text x="95" y="26" text-anchor="middle" class="node-label">elaborate</text>
           <text x="95" y="46" text-anchor="middle" class="node-sub">additive mode</text>
           <text x="95" y="64" text-anchor="middle" class="node-sub">new unit: closes: [FB-NN]</text>
@@ -202,8 +261,8 @@
 
         <!-- narrative middle card -->
         <g transform="translate(270, 30)">
-          <rect width="540" height="90" rx="10" fill="#0b1220" stroke="#f59e0b" stroke-width="1.5"/>
-          <text x="18" y="26" class="node-label" fill="#fbbf24">orchestrator rolls back the FSM phase</text>
+          <rect width="540" height="90" rx="10" fill="var(--color-slate-950)" stroke="var(--color-amber-500)" stroke-width="1.5"/>
+          <text x="18" y="26" class="node-label" fill="var(--color-amber-400)">orchestrator rolls back the FSM phase</text>
           <text x="18" y="46" class="node-sub-dim">action: additive_elaborate · intent.visits++ · emits unresolved FB-NN list</text>
           <text x="18" y="66" class="node-sub-dim">required next: new unit with closes: [FB-NN] for each unresolved item</text>
           <text x="18" y="82" class="node-sub-dim">after re-execute + re-review → re-enters frontmatter check</text>
@@ -211,22 +270,22 @@
 
         <!-- mirror of frontmatter-check (the rollback source) -->
         <g transform="translate(850, 30)">
-          <rect width="240" height="90" rx="10" fill="#f59e0b" fill-opacity="0.15" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 3"/>
-          <text x="120" y="26" text-anchor="middle" class="node-label" fill="#f59e0b">feedback frontmatter check</text>
+          <rect width="240" height="90" rx="10" fill="var(--color-amber-500)" fill-opacity="0.15" stroke="var(--color-amber-500)" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="120" y="26" text-anchor="middle" class="node-label" fill="var(--color-amber-500)">feedback frontmatter check</text>
           <text x="120" y="46" text-anchor="middle" class="node-sub-dim">any status: pending → fail</text>
           <text x="120" y="66" text-anchor="middle" class="node-sub-dim">(mirror of row-① node)</text>
           <text x="120" y="82" text-anchor="middle" class="node-sub-dim">belt-and-suspenders re-read</text>
         </g>
 
         <!-- rollback arrows -->
-        <line x1="850" y1="75" x2="810" y2="75" stroke="#f59e0b" stroke-width="2.5" marker-end="url(#arrow-amber)"/>
+        <line x1="850" y1="75" x2="810" y2="75" stroke="var(--color-amber-500)" stroke-width="2.5" marker-end="url(#arrow-amber)"/>
         <text x="812" y="68" class="edge-label-amber">fail</text>
-        <line x1="270" y1="75" x2="230" y2="75" stroke="#f59e0b" stroke-width="2.5" marker-end="url(#arrow-amber)"/>
+        <line x1="270" y1="75" x2="230" y2="75" stroke="var(--color-amber-500)" stroke-width="2.5" marker-end="url(#arrow-amber)"/>
         <text x="234" y="68" class="edge-label-amber">visits++</text>
 
         <!-- cross-row connector: actual frontmatter-check node (row 1) → mirror -->
         <!-- Row-1 frontmatter-check is at translate(700,20)+(115,70) = (815, 90); with the top group at y=30 → absolute (815, 120). We're currently in ROW 4 translated y=520, so absolute y=520 maps to local y=0. Row-1 bottom absolute y=120 maps to local y = 120-520 = -400 in row-4 frame. Mirror top is at (850+120=970, 30 in row-4 local). -->
-        <path d="M 815,-400 C 1240,-400 1240,30 1090,70" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow-amber)"/>
+        <path d="M 815,-400 C 1240,-400 1240,30 1090,70" fill="none" stroke="var(--color-amber-500)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow-amber)"/>
         <text x="1195" y="-210" class="edge-label-amber">if any check fails</text>
       </g>
 
@@ -234,8 +293,8 @@
       <g transform="translate(0, 660)">
         <text x="40" y="0" class="phase-label">⑤ development-stage sync obligations — architecture-prototype-sync</text>
         <g transform="translate(40, 20)">
-          <rect width="1280" height="100" rx="10" fill="#0b1220" stroke="#334155" stroke-width="1"/>
-          <text x="18" y="24" class="node-label" fill="#7dd3fc">website/public/prototype-stage-flow.html</text>
+          <rect width="1280" height="100" rx="10" fill="var(--color-slate-950)" stroke="var(--color-slate-700)" stroke-width="1"/>
+          <text x="18" y="24" class="node-label" fill="var(--color-sky-300)">website/public/prototype-stage-flow.html</text>
           <text x="18" y="44" class="node-sub-dim">• add feedback-assessor to per-stage review-agents block (auto-injected — NOT declared in stages/{s}/review-agents/)</text>
           <text x="18" y="60" class="node-sub-dim">• insert phase transitions: review → feedback_frontmatter_check → gate</text>
           <text x="18" y="76" class="node-sub-dim">• add rollback edge: feedback_frontmatter_check (fail) → elaborate · annotate visits++</text>

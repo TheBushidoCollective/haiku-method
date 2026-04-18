@@ -8,11 +8,70 @@
   <script>tailwind.config = { darkMode: 'class' }</script>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; }
-    .arrow-human { stroke: #2563eb; } /* blue-600 */
-    .arrow-human-dark { stroke: #60a5fa; } /* blue-400 */
-    .arrow-agent { stroke: #0d9488; } /* teal-600 */
-    .arrow-agent-dark { stroke: #2dd4bf; } /* teal-400 */
+    .arrow-human { stroke: var(--color-blue-600); } /* blue-600 */
+    .arrow-human-dark { stroke: var(--color-blue-400); } /* blue-400 */
+    .arrow-agent { stroke: var(--color-teal-600); } /* teal-600 */
+    .arrow-agent-dark { stroke: var(--color-teal-400); } /* teal-400 */
     .dashed { stroke-dasharray: 6 4; }
+  </style>
+  <style data-haiku-token-audit="true">
+    /* Audited token set (FB-16) — hex values declared as rgb triplets,
+       referenced via var() throughout SVG/CSS. See knowledge/DESIGN-TOKENS.md §1.10. */
+    :root {
+      --color-white: rgb(255 255 255);
+      --color-slate-50:  rgb(248 250 252);
+      --color-slate-100: rgb(241 245 249);
+      --color-slate-200: rgb(226 232 240);
+      --color-slate-300: rgb(203 213 225);
+      --color-slate-400: rgb(148 163 184);
+      --color-slate-500: rgb(100 116 139);
+      --color-slate-700: rgb(51 65 85);
+      --color-slate-900: rgb(15 23 42);
+      --color-slate-950: rgb(11 18 32);
+      --color-stone-50:  rgb(250 250 249);
+      --color-stone-200: rgb(231 229 228);
+      --color-stone-500: rgb(120 113 108);
+      --color-stone-700: rgb(68 64 60);
+      --color-stone-900: rgb(28 25 23);
+      --color-stone-950: rgb(12 10 9);
+      --color-stone-200-alt: rgb(229 231 235);
+      --color-stone-400-alt: rgb(156 163 175);
+      --color-stone-600-alt: rgb(75 85 99);
+      --color-stone-700-alt: rgb(55 65 81);
+      --color-blue-50:   rgb(239 246 255);
+      --color-blue-100:  rgb(219 234 254);
+      --color-blue-400:  rgb(96 165 250);
+      --color-blue-500:  rgb(59 130 246);
+      --color-blue-600:  rgb(37 99 235);
+      --color-blue-700:  rgb(29 78 216);
+      --color-blue-900:  rgb(30 58 138);
+      --color-teal-50:   rgb(240 253 250);
+      --color-teal-100:  rgb(204 251 241);
+      --color-teal-400:  rgb(45 212 191);
+      --color-teal-500:  rgb(20 184 166);
+      --color-teal-600:  rgb(13 148 136);
+      --color-teal-700:  rgb(15 118 110);
+      --color-green-100: rgb(220 252 231);
+      --color-green-400: rgb(74 222 128);
+      --color-green-500: rgb(34 197 94);
+      --color-green-600: rgb(22 163 74);
+      --color-green-800: rgb(22 101 52);
+      --color-green-900: rgb(20 83 45);
+      --color-amber-50:  rgb(255 251 235);
+      --color-amber-100: rgb(254 243 199);
+      --color-amber-400: rgb(251 191 36);
+      --color-amber-500: rgb(245 158 11);
+      --color-amber-800: rgb(146 64 14);
+      --color-amber-900: rgb(120 53 15);
+      --color-rose-200:  rgb(254 205 211);
+      --color-rose-500:  rgb(244 63 94);
+      --color-sky-300:   rgb(125 211 252);
+      --color-sky-500:   rgb(14 165 233);
+      --color-purple-200: rgb(233 213 255);
+      --color-purple-500: rgb(168 85 247);
+      --color-violet-600: rgb(124 58 237);
+      --color-purple-900: rgb(88 28 135);
+    }
   </style>
 </head>
 <body class="bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 min-h-screen">
@@ -42,92 +101,92 @@
         <!-- Arrow marker defs -->
         <defs>
           <marker id="arrow-agent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" fill="#0d9488" />
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--color-teal-600)" />
           </marker>
           <marker id="arrow-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" fill="#2563eb" />
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--color-blue-600)" />
           </marker>
         </defs>
 
         <!-- pending node (top-left) -->
         <g>
           <rect x="60"  y="60"  width="180" height="70" rx="14"
-                fill="#fef3c7" stroke="#f59e0b" stroke-width="2" class="dark:[fill:rgb(120_53_15_/_0.35)] dark:[stroke:rgb(251_191_36)]"/>
-          <text x="150" y="92" text-anchor="middle" font-size="16" font-weight="700" fill="#78350f" class="dark:[fill:rgb(253_230_138)]">pending</text>
-          <text x="150" y="112" text-anchor="middle" font-size="11" fill="#92400e" class="dark:[fill:rgb(251_191_36)]">attention needed</text>
+                fill="var(--color-amber-100)" stroke="var(--color-amber-500)" stroke-width="2" class="dark:[fill:rgb(120_53_15_/_0.35)] dark:[stroke:rgb(251_191_36)]"/>
+          <text x="150" y="92" text-anchor="middle" font-size="16" font-weight="700" fill="var(--color-amber-900)" class="dark:[fill:rgb(253_230_138)]">pending</text>
+          <text x="150" y="112" text-anchor="middle" font-size="11" fill="var(--color-amber-800)" class="dark:[fill:rgb(251_191_36)]">attention needed</text>
         </g>
 
         <!-- addressed node (top-right) -->
         <g>
           <rect x="720" y="60" width="200" height="70" rx="14"
-                fill="#dbeafe" stroke="#3b82f6" stroke-width="2" class="dark:[fill:rgb(30_58_138_/_0.35)] dark:[stroke:rgb(96_165_250)]"/>
-          <text x="820" y="92" text-anchor="middle" font-size="16" font-weight="700" fill="#1e3a8a" class="dark:[fill:rgb(191_219_254)]">addressed</text>
-          <text x="820" y="112" text-anchor="middle" font-size="11" fill="#1d4ed8" class="dark:[fill:rgb(96_165_250)]">fix landed · awaits verify</text>
+                fill="var(--color-blue-100)" stroke="var(--color-blue-500)" stroke-width="2" class="dark:[fill:rgb(30_58_138_/_0.35)] dark:[stroke:rgb(96_165_250)]"/>
+          <text x="820" y="92" text-anchor="middle" font-size="16" font-weight="700" fill="var(--color-blue-900)" class="dark:[fill:rgb(191_219_254)]">addressed</text>
+          <text x="820" y="112" text-anchor="middle" font-size="11" fill="var(--color-blue-700)" class="dark:[fill:rgb(96_165_250)]">fix landed · awaits verify</text>
         </g>
 
         <!-- rejected node (bottom-left) -->
         <g>
           <rect x="60"  y="300" width="180" height="70" rx="14"
-                fill="#e5e7eb" stroke="#9ca3af" stroke-width="2" class="dark:[fill:rgb(31_41_55_/_0.6)] dark:[stroke:rgb(107_114_128)]"/>
-          <text x="150" y="332" text-anchor="middle" font-size="16" font-weight="700" fill="#374151" class="dark:[fill:rgb(229_231_235)]">rejected</text>
-          <text x="150" y="352" text-anchor="middle" font-size="11" fill="#4b5563" class="dark:[fill:rgb(156_163_175)]">dismissed · not actionable</text>
+                fill="var(--color-stone-200-alt)" stroke="var(--color-stone-400-alt)" stroke-width="2" class="dark:[fill:rgb(31_41_55_/_0.6)] dark:[stroke:rgb(107_114_128)]"/>
+          <text x="150" y="332" text-anchor="middle" font-size="16" font-weight="700" fill="var(--color-stone-700-alt)" class="dark:[fill:rgb(229_231_235)]">rejected</text>
+          <text x="150" y="352" text-anchor="middle" font-size="11" fill="var(--color-stone-600-alt)" class="dark:[fill:rgb(156_163_175)]">dismissed · not actionable</text>
         </g>
 
         <!-- closed node (bottom-right) -->
         <g>
           <rect x="720" y="300" width="200" height="70" rx="14"
-                fill="#dcfce7" stroke="#22c55e" stroke-width="2" class="dark:[fill:rgb(20_83_45_/_0.35)] dark:[stroke:rgb(74_222_128)]"/>
-          <text x="820" y="332" text-anchor="middle" font-size="16" font-weight="700" fill="#14532d" class="dark:[fill:rgb(187_247_208)]">closed</text>
-          <text x="820" y="352" text-anchor="middle" font-size="11" fill="#166534" class="dark:[fill:rgb(74_222_128)]">resolved · verified</text>
+                fill="var(--color-green-100)" stroke="var(--color-green-500)" stroke-width="2" class="dark:[fill:rgb(20_83_45_/_0.35)] dark:[stroke:rgb(74_222_128)]"/>
+          <text x="820" y="332" text-anchor="middle" font-size="16" font-weight="700" fill="var(--color-green-900)" class="dark:[fill:rgb(187_247_208)]">closed</text>
+          <text x="820" y="352" text-anchor="middle" font-size="11" fill="var(--color-green-800)" class="dark:[fill:rgb(74_222_128)]">resolved · verified</text>
         </g>
 
         <!-- T1: pending -> addressed (agent) -->
         <g>
           <path d="M240 80 Q480 40 720 80" fill="none" class="arrow-agent dark:arrow-agent-dark" stroke-width="2.5" marker-end="url(#arrow-agent)"/>
-          <rect x="420" y="12" width="140" height="28" rx="6" fill="#f0fdfa" stroke="#14b8a6" class="dark:[fill:rgb(19_78_74_/_0.45)] dark:[stroke:rgb(45_212_191)]"/>
-          <text x="490" y="30" text-anchor="middle" font-size="11" font-weight="600" fill="#0f766e" class="dark:[fill:rgb(153_246_228)]">T1 · agent · fix lands</text>
+          <rect x="420" y="12" width="140" height="28" rx="6" fill="var(--color-teal-50)" stroke="var(--color-teal-500)" class="dark:[fill:rgb(19_78_74_/_0.45)] dark:[stroke:rgb(45_212_191)]"/>
+          <text x="490" y="30" text-anchor="middle" font-size="11" font-weight="600" fill="var(--color-teal-700)" class="dark:[fill:rgb(153_246_228)]">T1 · agent · fix lands</text>
         </g>
 
         <!-- T2: addressed -> closed (human) -->
         <g>
           <path d="M820 130 L820 300" fill="none" class="arrow-human dark:arrow-human-dark" stroke-width="2.5" marker-end="url(#arrow-human)"/>
-          <rect x="830" y="200" width="130" height="28" rx="6" fill="#eff6ff" stroke="#3b82f6" class="dark:[fill:rgb(30_58_138_/_0.45)] dark:[stroke:rgb(96_165_250)]"/>
-          <text x="895" y="218" text-anchor="middle" font-size="11" font-weight="600" fill="#1d4ed8" class="dark:[fill:rgb(191_219_254)]">T2 · user · Verify &amp; Close</text>
+          <rect x="830" y="200" width="130" height="28" rx="6" fill="var(--color-blue-50)" stroke="var(--color-blue-500)" class="dark:[fill:rgb(30_58_138_/_0.45)] dark:[stroke:rgb(96_165_250)]"/>
+          <text x="895" y="218" text-anchor="middle" font-size="11" font-weight="600" fill="var(--color-blue-700)" class="dark:[fill:rgb(191_219_254)]">T2 · user · Verify &amp; Close</text>
         </g>
 
         <!-- T3: pending -> closed (agent, quality gate) -->
         <g>
           <path d="M240 110 Q460 220 720 320" fill="none" class="arrow-agent dark:arrow-agent-dark" stroke-width="2.5" marker-end="url(#arrow-agent)"/>
-          <rect x="360" y="200" width="190" height="28" rx="6" fill="#f0fdfa" stroke="#14b8a6" class="dark:[fill:rgb(19_78_74_/_0.45)] dark:[stroke:rgb(45_212_191)]"/>
-          <text x="455" y="218" text-anchor="middle" font-size="11" font-weight="600" fill="#0f766e" class="dark:[fill:rgb(153_246_228)]">T3 · agent · quality gate passes</text>
+          <rect x="360" y="200" width="190" height="28" rx="6" fill="var(--color-teal-50)" stroke="var(--color-teal-500)" class="dark:[fill:rgb(19_78_74_/_0.45)] dark:[stroke:rgb(45_212_191)]"/>
+          <text x="455" y="218" text-anchor="middle" font-size="11" font-weight="600" fill="var(--color-teal-700)" class="dark:[fill:rgb(153_246_228)]">T3 · agent · quality gate passes</text>
         </g>
 
         <!-- T4: pending -> rejected (human) -->
         <g>
           <path d="M150 130 L150 300" fill="none" class="arrow-human dark:arrow-human-dark" stroke-width="2.5" marker-end="url(#arrow-human)"/>
-          <rect x="22" y="200" width="110" height="28" rx="6" fill="#eff6ff" stroke="#3b82f6" class="dark:[fill:rgb(30_58_138_/_0.45)] dark:[stroke:rgb(96_165_250)]"/>
-          <text x="77" y="218" text-anchor="middle" font-size="11" font-weight="600" fill="#1d4ed8" class="dark:[fill:rgb(191_219_254)]">T4 · user · Dismiss</text>
+          <rect x="22" y="200" width="110" height="28" rx="6" fill="var(--color-blue-50)" stroke="var(--color-blue-500)" class="dark:[fill:rgb(30_58_138_/_0.45)] dark:[stroke:rgb(96_165_250)]"/>
+          <text x="77" y="218" text-anchor="middle" font-size="11" font-weight="600" fill="var(--color-blue-700)" class="dark:[fill:rgb(191_219_254)]">T4 · user · Dismiss</text>
         </g>
 
         <!-- T5: rejected -> pending (human, re-open, dashed) -->
         <g>
           <path d="M180 300 Q290 240 200 135" fill="none" class="arrow-human dark:arrow-human-dark dashed" stroke-width="2" marker-end="url(#arrow-human)"/>
-          <rect x="245" y="214" width="110" height="24" rx="6" fill="#eff6ff" stroke="#3b82f6" class="dark:[fill:rgb(30_58_138_/_0.45)] dark:[stroke:rgb(96_165_250)]"/>
-          <text x="300" y="230" text-anchor="middle" font-size="10" font-weight="600" fill="#1d4ed8" class="dark:[fill:rgb(191_219_254)]">T5 · user · Re-open</text>
+          <rect x="245" y="214" width="110" height="24" rx="6" fill="var(--color-blue-50)" stroke="var(--color-blue-500)" class="dark:[fill:rgb(30_58_138_/_0.45)] dark:[stroke:rgb(96_165_250)]"/>
+          <text x="300" y="230" text-anchor="middle" font-size="10" font-weight="600" fill="var(--color-blue-700)" class="dark:[fill:rgb(191_219_254)]">T5 · user · Re-open</text>
         </g>
 
         <!-- T6: closed -> pending (human, re-open, dashed) -->
         <g>
           <path d="M780 300 Q680 190 770 135" fill="none" class="arrow-human dark:arrow-human-dark dashed" stroke-width="2" marker-end="url(#arrow-human)"/>
-          <rect x="640" y="154" width="110" height="24" rx="6" fill="#eff6ff" stroke="#3b82f6" class="dark:[fill:rgb(30_58_138_/_0.45)] dark:[stroke:rgb(96_165_250)]"/>
-          <text x="695" y="170" text-anchor="middle" font-size="10" font-weight="600" fill="#1d4ed8" class="dark:[fill:rgb(191_219_254)]">T6 · user · Re-open</text>
+          <rect x="640" y="154" width="110" height="24" rx="6" fill="var(--color-blue-50)" stroke="var(--color-blue-500)" class="dark:[fill:rgb(30_58_138_/_0.45)] dark:[stroke:rgb(96_165_250)]"/>
+          <text x="695" y="170" text-anchor="middle" font-size="10" font-weight="600" fill="var(--color-blue-700)" class="dark:[fill:rgb(191_219_254)]">T6 · user · Re-open</text>
         </g>
 
         <!-- T7: addressed -> pending (human re-open, dashed) -->
         <g>
           <path d="M720 95 Q490 140 240 95" fill="none" class="arrow-human dark:arrow-human-dark dashed" stroke-width="2" marker-end="url(#arrow-human)"/>
-          <rect x="420" y="132" width="140" height="24" rx="6" fill="#eff6ff" stroke="#3b82f6" class="dark:[fill:rgb(30_58_138_/_0.45)] dark:[stroke:rgb(96_165_250)]"/>
-          <text x="490" y="148" text-anchor="middle" font-size="10" font-weight="600" fill="#1d4ed8" class="dark:[fill:rgb(191_219_254)]">T7 · user · Re-open</text>
+          <rect x="420" y="132" width="140" height="24" rx="6" fill="var(--color-blue-50)" stroke="var(--color-blue-500)" class="dark:[fill:rgb(30_58_138_/_0.45)] dark:[stroke:rgb(96_165_250)]"/>
+          <text x="490" y="148" text-anchor="middle" font-size="10" font-weight="600" fill="var(--color-blue-700)" class="dark:[fill:rgb(191_219_254)]">T7 · user · Re-open</text>
         </g>
       </svg>
 

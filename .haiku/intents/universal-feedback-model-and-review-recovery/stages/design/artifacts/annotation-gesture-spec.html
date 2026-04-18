@@ -40,11 +40,70 @@
     /* Section card — consistent with DESIGN-BRIEF */
     .card {
       background: white;
-      border: 1px solid #e7e5e4;
+      border: 1px solid var(--color-stone-200);
       border-radius: 12px;
       box-shadow: 0 1px 2px 0 rgba(0,0,0,0.04);
     }
-    .dark .card { background: #1c1917; border-color: #44403c; }
+    .dark .card { background: var(--color-stone-900); border-color: var(--color-stone-700); }
+  </style>
+  <style data-haiku-token-audit="true">
+    /* Audited token set (FB-16) — hex values declared as rgb triplets,
+       referenced via var() throughout SVG/CSS. See knowledge/DESIGN-TOKENS.md §1.10. */
+    :root {
+      --color-white: rgb(255 255 255);
+      --color-slate-50:  rgb(248 250 252);
+      --color-slate-100: rgb(241 245 249);
+      --color-slate-200: rgb(226 232 240);
+      --color-slate-300: rgb(203 213 225);
+      --color-slate-400: rgb(148 163 184);
+      --color-slate-500: rgb(100 116 139);
+      --color-slate-700: rgb(51 65 85);
+      --color-slate-900: rgb(15 23 42);
+      --color-slate-950: rgb(11 18 32);
+      --color-stone-50:  rgb(250 250 249);
+      --color-stone-200: rgb(231 229 228);
+      --color-stone-500: rgb(120 113 108);
+      --color-stone-700: rgb(68 64 60);
+      --color-stone-900: rgb(28 25 23);
+      --color-stone-950: rgb(12 10 9);
+      --color-stone-200-alt: rgb(229 231 235);
+      --color-stone-400-alt: rgb(156 163 175);
+      --color-stone-600-alt: rgb(75 85 99);
+      --color-stone-700-alt: rgb(55 65 81);
+      --color-blue-50:   rgb(239 246 255);
+      --color-blue-100:  rgb(219 234 254);
+      --color-blue-400:  rgb(96 165 250);
+      --color-blue-500:  rgb(59 130 246);
+      --color-blue-600:  rgb(37 99 235);
+      --color-blue-700:  rgb(29 78 216);
+      --color-blue-900:  rgb(30 58 138);
+      --color-teal-50:   rgb(240 253 250);
+      --color-teal-100:  rgb(204 251 241);
+      --color-teal-400:  rgb(45 212 191);
+      --color-teal-500:  rgb(20 184 166);
+      --color-teal-600:  rgb(13 148 136);
+      --color-teal-700:  rgb(15 118 110);
+      --color-green-100: rgb(220 252 231);
+      --color-green-400: rgb(74 222 128);
+      --color-green-500: rgb(34 197 94);
+      --color-green-600: rgb(22 163 74);
+      --color-green-800: rgb(22 101 52);
+      --color-green-900: rgb(20 83 45);
+      --color-amber-50:  rgb(255 251 235);
+      --color-amber-100: rgb(254 243 199);
+      --color-amber-400: rgb(251 191 36);
+      --color-amber-500: rgb(245 158 11);
+      --color-amber-800: rgb(146 64 14);
+      --color-amber-900: rgb(120 53 15);
+      --color-rose-200:  rgb(254 205 211);
+      --color-rose-500:  rgb(244 63 94);
+      --color-sky-300:   rgb(125 211 252);
+      --color-sky-500:   rgb(14 165 233);
+      --color-purple-200: rgb(233 213 255);
+      --color-purple-500: rgb(168 85 247);
+      --color-violet-600: rgb(124 58 237);
+      --color-purple-900: rgb(88 28 135);
+    }
   </style>
 </head>
 <body class="bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-sans">
@@ -168,22 +227,22 @@
          onmouseleave="ghostHide('ghost-img')">
       <!-- Stand-in artifact: architecture diagram rendered as inline SVG so we don't need external assets -->
       <svg viewBox="0 0 600 300" class="block max-w-full max-h-96 rounded-lg border border-stone-200 dark:border-stone-700 bg-white pointer-events-none">
-        <rect width="600" height="300" fill="#ffffff" />
+        <rect width="600" height="300" fill="var(--color-white)" />
         <g font-family="system-ui" font-size="12">
-          <rect x="40" y="40" width="140" height="60" rx="8" fill="#ccfbf1" stroke="#14b8a6" stroke-width="1.5"/>
-          <text x="110" y="74" text-anchor="middle" fill="#0f766e" font-weight="700">Review UI</text>
-          <rect x="230" y="40" width="140" height="60" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
-          <text x="300" y="74" text-anchor="middle" fill="#92400e" font-weight="700">haiku_feedback</text>
-          <rect x="420" y="40" width="140" height="60" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
-          <text x="490" y="74" text-anchor="middle" fill="#1e3a8a" font-weight="700">feedback/*.md</text>
-          <line x1="180" y1="70" x2="230" y2="70" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
-          <line x1="370" y1="70" x2="420" y2="70" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
-          <rect x="230" y="180" width="140" height="60" rx="8" fill="#e9d5ff" stroke="#a855f7" stroke-width="1.5"/>
-          <text x="300" y="214" text-anchor="middle" fill="#581c87" font-weight="700">orchestrator</text>
-          <line x1="300" y1="100" x2="300" y2="180" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <rect x="40" y="40" width="140" height="60" rx="8" fill="var(--color-teal-100)" stroke="var(--color-teal-500)" stroke-width="1.5"/>
+          <text x="110" y="74" text-anchor="middle" fill="var(--color-teal-700)" font-weight="700">Review UI</text>
+          <rect x="230" y="40" width="140" height="60" rx="8" fill="var(--color-amber-100)" stroke="var(--color-amber-500)" stroke-width="1.5"/>
+          <text x="300" y="74" text-anchor="middle" fill="var(--color-amber-800)" font-weight="700">haiku_feedback</text>
+          <rect x="420" y="40" width="140" height="60" rx="8" fill="var(--color-blue-100)" stroke="var(--color-blue-500)" stroke-width="1.5"/>
+          <text x="490" y="74" text-anchor="middle" fill="var(--color-blue-900)" font-weight="700">feedback/*.md</text>
+          <line x1="180" y1="70" x2="230" y2="70" stroke="var(--color-stone-500)" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <line x1="370" y1="70" x2="420" y2="70" stroke="var(--color-stone-500)" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <rect x="230" y="180" width="140" height="60" rx="8" fill="var(--color-purple-200)" stroke="var(--color-purple-500)" stroke-width="1.5"/>
+          <text x="300" y="214" text-anchor="middle" fill="var(--color-purple-900)" font-weight="700">orchestrator</text>
+          <line x1="300" y1="100" x2="300" y2="180" stroke="var(--color-stone-500)" stroke-width="1.5" marker-end="url(#arrow)"/>
           <defs>
             <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-              <path d="M0,0 L8,4 L0,8 Z" fill="#78716c"/>
+              <path d="M0,0 L8,4 L0,8 Z" fill="var(--color-stone-500)"/>
             </marker>
           </defs>
         </g>

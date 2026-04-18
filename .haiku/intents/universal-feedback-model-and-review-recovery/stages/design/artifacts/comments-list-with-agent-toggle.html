@@ -408,25 +408,25 @@
     <h2 id="sec-responsive" class="text-base font-semibold mb-3">7. Responsive Behavior</h2>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-4">
-        <div class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Mobile (375px)</div>
+        <div class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Mobile (&lt; 768px)</div>
         <ul class="text-xs text-stone-700 dark:text-stone-300 space-y-1.5 list-disc pl-4">
           <li>Sidebar becomes a slide-in panel from the right, covering 85vw.</li>
           <li>Toggle sticks to top; Comments list scrolls below.</li>
           <li>Origin and status badges stack when the card width drops under 280px.</li>
-          <li>Toggle min-height 44px (touch target).</li>
+          <li>Toggle <code>min-h-[44px]</code> (touch target).</li>
         </ul>
       </div>
       <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-4">
-        <div class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Tablet (768px)</div>
+        <div class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Tablet (768-1023px, <code>md:</code>)</div>
         <ul class="text-xs text-stone-700 dark:text-stone-300 space-y-1.5 list-disc pl-4">
-          <li>Sidebar is 320px wide, always visible.</li>
+          <li>Sidebar is 320px wide (<code>w-80</code>), always visible.</li>
           <li>Cards show full badge row on one line at this width.</li>
         </ul>
       </div>
       <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-4">
-        <div class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Desktop (1280px+)</div>
+        <div class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Desktop (&ge; 1024px, <code>lg:</code>)</div>
         <ul class="text-xs text-stone-700 dark:text-stone-300 space-y-1.5 list-disc pl-4">
-          <li>Sidebar is 384px wide (<code>lg:w-96</code>).</li>
+          <li>Sidebar is 384px wide (<code>w-80 lg:w-96</code>).</li>
           <li>Toggle shows long-form helper text under the switch.</li>
           <li>Keyboard-nav annotations visible (<kbd>A</kbd> to toggle agent feedback).</li>
         </ul>

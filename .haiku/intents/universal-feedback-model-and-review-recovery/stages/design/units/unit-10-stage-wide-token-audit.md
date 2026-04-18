@@ -41,8 +41,11 @@ inputs:
   - >-
     stages/design/feedback/29-breakpoint-thresholds-inconsistent-between-design-brief-and.md
 outputs:
-  - stages/design/artifacts/token-audit-report.md
-  - stages/design/artifacts/audit-sweep-log.md
+  - stages/design/token-audit-report.md
+  - stages/design/audit-sweep-log.md
+  - stages/design/DESIGN-BRIEF.md
+  - knowledge/DESIGN-TOKENS.md
+  - stages/design/artifacts/*.html
 quality_gates:
   - >-
     grep -rn 'gray-' stages/design/artifacts/ returns 0 matches (palette sweep

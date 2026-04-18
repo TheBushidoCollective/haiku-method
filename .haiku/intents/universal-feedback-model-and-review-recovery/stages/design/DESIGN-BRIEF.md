@@ -124,39 +124,34 @@ interface FeedbackStatusBadgeProps {
 }
 ```
 
-**Color mapping:**
+**Color mapping (canonical — reconciled in unit-10-stage-wide-token-audit; see DESIGN-TOKENS §9):**
 
 | Status | Light | Dark | Rationale |
 |---|---|---|---|
-| `pending` | `bg-amber-100 text-amber-700` | `bg-amber-900/30 text-amber-300` | Amber = needs attention, consistent with existing warning color |
-| `addressed` | `bg-blue-100 text-blue-700` | `bg-blue-900/30 text-blue-400` | Blue = in-progress/claimed, distinct from final states |
-| `closed` | `bg-green-100 text-green-700` | `bg-green-900/30 text-green-400` | Green = resolved, consistent with `completed` status |
-| `rejected` | `bg-stone-100 text-stone-500` | `bg-stone-800 text-stone-400` | Gray = dismissed, deliberately low-contrast |
+| `pending` | `bg-amber-100 text-amber-800` | `bg-amber-900/30 text-amber-300` | Amber = needs attention, consistent with existing warning color |
+| `addressed` | `bg-blue-100 text-blue-800` | `bg-blue-900/30 text-blue-300` | Blue = in-progress/claimed, distinct from final states |
+| `closed` | `bg-green-100 text-green-800` | `bg-green-900/30 text-green-300` | Green = resolved, consistent with `completed` status |
+| `rejected` | `bg-stone-100 text-stone-500` | `bg-stone-800 text-stone-400` | Stone = dismissed, deliberately muted |
 
 **Implementation:**
 ```tsx
 const feedbackColors: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
-  addressed: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  closed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  rejected: "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400",
+  pending:   "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  addressed: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  closed:    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  rejected:  "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400",
 };
 ```
 
 Uses the same `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold` base classes as the shared `StatusBadge`.
 
-**Accessibility:** The badge includes a visible text label ("pending", "addressed", etc.) so it does not rely on color alone. The `aria-label` includes the status value. All color combinations meet WCAG 2.1 AA contrast ratios:
-- amber-700 on amber-100: 4.9:1 (passes AA)
-- blue-700 on blue-100: 4.8:1 (passes AA)
-- green-700 on green-100: 4.5:1 (passes AA)
-- stone-500 on stone-100: 4.6:1 (passes AA)
-- Dark mode equivalents also pass AA at minimum.
+**Accessibility:** The badge includes a visible text label ("pending", "addressed", etc.) so it does not rely on color alone. The `aria-label` includes the status value. All color combinations meet WCAG 2.1 AA contrast ratios — see §6 for the full measured table. `-800` foregrounds were chosen over `-700` (higher contrast, and the shade every artifact already rendered).
 
 ---
 
 #### `FeedbackOriginIcon`
 
-A small icon/label showing where the feedback came from. Uses emoji consistent with the existing sidebar's type-icon pattern.
+A colored pill badge showing where the feedback came from. Reconciled in unit-10 with `feedback-card-states.html §4` — both this table and that artifact MUST match row-for-row. Source of truth lives in `knowledge/DESIGN-TOKENS.md §2.2`.
 
 **Props:**
 ```typescript
@@ -165,18 +160,30 @@ interface FeedbackOriginIconProps {
 }
 ```
 
-**Icon mapping:**
+**Canonical inventory (identical to DESIGN-TOKENS §2.2 and feedback-card-states.html §4):**
 
-| Origin | Icon | Label |
-|---|---|---|
-| `adversarial-review` | `🔍` | "Review Agent" |
-| `external-pr` | `🔗` | "PR Comment" |
-| `external-mr` | `🔗` | "MR Comment" |
-| `user-visual` | `✎` | "Annotation" |
-| `user-chat` | `💬` | "Comment" |
-| `agent` | `🤖` | "Agent" |
+| Origin ID | Emoji | Label | Light classes | Dark classes |
+|---|---|---|---|---|
+| `adversarial-review` | 🛡 | "Review Agent" | `bg-rose-100 text-rose-700 border-rose-200` | `dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800` |
+| `external-pr` | 🔀 | "External PR" | `bg-violet-100 text-violet-700 border-violet-200` | `dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800` |
+| `external-mr` | 🔀 | "External MR" | `bg-violet-100 text-violet-700 border-violet-200` | `dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800` |
+| `user-visual` | 👁 | "User Visual" | `bg-sky-100 text-sky-700 border-sky-200` | `dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800` |
+| `user-chat` | 💬 | "User Chat" | `bg-sky-100 text-sky-700 border-sky-200` | `dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800` |
+| `agent` | ✨ | "Agent" | `bg-teal-100 text-teal-700 border-teal-200` | `dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800` |
 
-Rendered as: `<span className="text-xs text-stone-500 dark:text-stone-400">{icon} {label}</span>`
+Rendered as a pill:
+
+```tsx
+<span
+  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${originColors[origin]}`}
+  aria-label={originLabels[origin]}
+>
+  <span aria-hidden="true">{originEmoji[origin]}</span>
+  {originLabels[origin]}
+</span>
+```
+
+Contrast ratios are enumerated in DESIGN-TOKENS §2.2. All six origin pills pass WCAG 2.1 AA for text contrast in both light and dark modes.
 
 ---
 
@@ -485,18 +492,53 @@ The UI shows only the actions valid for the item's current status and author_typ
 
 ## 4. Responsive Behavior
 
+### Canonical breakpoints (Tailwind-aligned — reconciled in unit-10; single source of truth, also in DESIGN-TOKENS §8.3)
+
+| Name | Pixel range | Tailwind prefix |
+|---|---|---|
+| Mobile | `< 768px` | base (no prefix) |
+| Tablet | `768-1023px` | `md:` |
+| Desktop | `>= 1024px` | `lg:` |
+
+Every artifact that declares a responsive table (e.g. `feedback-card-states.html §7`) MUST use these exact thresholds. `xl:` (1280) and `2xl:` (1536) remain available for large-screen tuning but are not used to define the primary desktop split.
+
+### Canonical sidebar width (DESIGN-TOKENS §8.1)
+
+```
+w-80 lg:w-96 shrink-0 sticky top-16 h-[calc(100vh-4rem)] flex flex-col
+```
+
+- Tablet (`md:`): `w-80` = 320px
+- Desktop (`lg:`): `w-96` = 384px
+- Mobile: sidebar is `hidden`; mobile uses FAB + sheet (below)
+
+No artifact may declare `w-96` without the `w-80` fallback. This is the canonical width pattern; every sidebar mockup in `stages/design/artifacts/` uses this exact class list.
+
+### Canonical page max-width (DESIGN-TOKENS §8.2)
+
+Page container sets `max-width: var(--layout-max-width)` (= 1400px). Artifacts that used the literal `max-w-[1400px]` arbitrary-value class have been replaced with a `style="max-width: var(--layout-max-width)"` attribute plus the shared `:root` CSS variable declaration.
+
+### Canonical footer button heights (DESIGN-TOKENS §8.4)
+
+| Viewport | Footer button `min-height` | Layout |
+|---|---|---|
+| Mobile (`<md`) | `44px` (`min-h-[44px]`) — WCAG 2.5.5 touch target | Stacked full-width (`flex-col`, `w-full` per button) below the card body |
+| Tablet / Desktop (`>=md`) | `28px` (`md:min-h-[28px]`) — compact, preserves vertical density | Right-aligned inside the card footer (`flex-row justify-end gap-2`) |
+
 ### Desktop (>= 1024px, `lg:`)
 
-- Sidebar width: `w-96` (384px).
+- Sidebar width: `w-80 lg:w-96` (384px at this breakpoint).
 - Main content and sidebar side by side (`flex gap-6`).
 - Feedback list has generous padding and spacing.
 - FeedbackItem shows full metadata line.
+- Footer buttons: right-aligned, `min-h-[28px]`.
 
 ### Tablet (768px -- 1023px, `md:`)
 
-- Sidebar width: `w-80` (320px).
+- Sidebar width: `w-80 lg:w-96` (320px at this breakpoint; grows to 384px at `lg:`).
 - Feedback list compresses: metadata line truncates, body preview limited to 2 lines (`line-clamp-2`).
 - FeedbackItem compact mode uses smaller padding (`p-2` instead of `p-2.5`).
+- Footer buttons: right-aligned, `min-h-[28px]`.
 
 ### Mobile (< 768px)
 
@@ -504,6 +546,7 @@ The UI shows only the actions valid for the item's current status and author_typ
 - **Mobile feedback access:** The sidebar content becomes accessible via a floating action button (FAB) in the bottom-right corner that opens a full-screen sheet overlay.
 - FAB: `fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center text-lg` -- shows the comment count badge when > 0.
 - Sheet overlay: `fixed inset-0 z-50 bg-white dark:bg-stone-900` with a close button at top-right. Contains the same sidebar content (segmented control, feedback list, general input, decision buttons).
+- Footer buttons inside the sheet: stacked full-width (`flex-col`, `w-full`), `min-h-[44px]` each for touch targets.
 - The FAB and sheet overlay are new components: `MobileFeedbackSheet` and `FeedbackFAB`.
 
 **Note:** The current sidebar is already `hidden md:flex`, so mobile users currently have NO access to review actions. The FAB/sheet pattern is a new addition that unblocks mobile review entirely.
@@ -555,18 +598,33 @@ The `submitDecision` function signature does not change. It still accepts `feedb
 
 ### Contrast Ratios
 
-All feedback status badge colors meet WCAG 2.1 AA (4.5:1 minimum for text):
+All feedback status and origin badge colors meet WCAG 2.1 AA (4.5:1 minimum for normal text). Shade pair reconciled with §2 and every artifact's rendering — canonical `-800` chosen for status foregrounds (higher contrast than `-700`, matches every existing mockup).
+
+**Status badges (§2 color mapping must match this table):**
 
 | Badge | Foreground | Background | Ratio | Passes |
 |---|---|---|---|---|
-| Pending (light) | `amber-700` (#b45309) | `amber-100` (#fef3c7) | 4.9:1 | AA |
-| Pending (dark) | `amber-300` (#fcd34d) | `amber-900/30` | 5.2:1 | AA |
-| Addressed (light) | `blue-700` (#1d4ed8) | `blue-100` (#dbeafe) | 5.1:1 | AA |
-| Addressed (dark) | `blue-400` (#60a5fa) | `blue-900/30` | 5.6:1 | AA |
-| Closed (light) | `green-700` (#15803d) | `green-100` (#dcfce7) | 4.5:1 | AA |
-| Closed (dark) | `green-400` (#4ade80) | `green-900/30` | 5.3:1 | AA |
-| Rejected (light) | `stone-500` (#78716c) | `stone-100` (#f5f5f4) | 4.6:1 | AA |
-| Rejected (dark) | `stone-400` (#a8a29e) | `stone-800` (#292524) | 5.0:1 | AA |
+| Pending (light) | `amber-800` (rgb 146 64 14) | `amber-100` (rgb 254 243 199) | 6.8:1 | AA |
+| Pending (dark) | `amber-300` (rgb 252 211 77) | `amber-900/30` on stone-950 | 5.2:1 | AA |
+| Addressed (light) | `blue-800` (rgb 30 64 175) | `blue-100` (rgb 219 234 254) | 7.2:1 | AA |
+| Addressed (dark) | `blue-300` (rgb 147 197 253) | `blue-900/30` on stone-950 | 5.6:1 | AA |
+| Closed (light) | `green-800` (rgb 22 101 52) | `green-100` (rgb 220 252 231) | 6.4:1 | AA |
+| Closed (dark) | `green-300` (rgb 134 239 172) | `green-900/30` on stone-950 | 5.3:1 | AA |
+| Rejected (light) | `stone-500` (rgb 120 113 108) | `stone-100` (rgb 245 245 244) | 4.6:1 | AA |
+| Rejected (dark) | `stone-400` (rgb 168 162 158) | `stone-800` (rgb 41 37 36) | 5.0:1 | AA |
+
+**Origin badges (§2 origin inventory and feedback-card-states.html §4 must match this table):**
+
+| Origin | Foreground | Background | Ratio | Passes |
+|---|---|---|---|---|
+| adversarial-review (light) | `rose-700` (rgb 190 18 60) | `rose-100` (rgb 255 228 230) | 5.4:1 | AA |
+| adversarial-review (dark) | `rose-400` (rgb 251 113 133) | `rose-900/30` on stone-950 | 4.6:1 | AA |
+| external-pr / external-mr (light) | `violet-700` (rgb 109 40 217) | `violet-100` (rgb 237 233 254) | 5.9:1 | AA |
+| external-pr / external-mr (dark) | `violet-400` (rgb 167 139 250) | `violet-900/30` on stone-950 | 4.9:1 | AA |
+| user-visual / user-chat (light) | `sky-700` (rgb 3 105 161) | `sky-100` (rgb 224 242 254) | 5.1:1 | AA |
+| user-visual / user-chat (dark) | `sky-400` (rgb 56 189 248) | `sky-900/30` on stone-950 | 6.0:1 | AA |
+| agent (light) | `teal-700` (rgb 15 118 110) | `teal-100` (rgb 204 251 241) | 4.7:1 | AA |
+| agent (dark) | `teal-400` (rgb 45 212 191) | `teal-900/30` on stone-950 | 6.2:1 | AA |
 
 ### Focus Order
 

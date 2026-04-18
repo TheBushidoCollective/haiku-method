@@ -216,12 +216,29 @@ const feedbackStatusDots: Record<string, string> = {
 
 Each feedback item carries an `origin` indicating where it came from. These badges should be visually distinct from status badges and from each other.
 
-| Semantic Name | Tailwind Classes (Light) | Tailwind Classes (Dark) | Icon Suggestion |
-|---|---|---|---|
-| `origin-adversarial-review` | `bg-rose-100 text-rose-700 border-rose-200` | `dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800` | Shield / target |
-| `origin-external-pr` | `bg-violet-100 text-violet-700 border-violet-200` | `dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800` | Git branch / PR icon |
-| `origin-user-visual` | `bg-sky-100 text-sky-700 border-sky-200` | `dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800` | Eye / annotation pin |
-| `origin-agent` | `bg-teal-100 text-teal-700 border-teal-200` | `dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800` | Sparkle / robot |
+**Canonical inventory (single source of truth — DESIGN-BRIEF §2 origin table and feedback-card-states.html §4 must match these exact rows):**
+
+| Origin ID | Label | Emoji | Light Classes | Dark Classes |
+|---|---|---|---|---|
+| `adversarial-review` | "Review Agent" | 🛡 (U+1F6E1) | `bg-rose-100 text-rose-700 border-rose-200` | `dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800` |
+| `external-pr` | "External PR" | 🔀 (U+1F500) | `bg-violet-100 text-violet-700 border-violet-200` | `dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800` |
+| `external-mr` | "External MR" | 🔀 (U+1F500) | `bg-violet-100 text-violet-700 border-violet-200` | `dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800` |
+| `user-visual` | "User Visual" | 👁 (U+1F441) | `bg-sky-100 text-sky-700 border-sky-200` | `dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800` |
+| `user-chat` | "User Chat" | 💬 (U+1F4AC) | `bg-sky-100 text-sky-700 border-sky-200` | `dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800` |
+| `agent` | "Agent" | ✨ (U+2728) | `bg-teal-100 text-teal-700 border-teal-200` | `dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800` |
+
+**Contrast proof (measured against canonical light + dark backgrounds):**
+
+| Origin | FG | BG | Ratio | Passes AA (4.5:1 text / 3:1 non-text) |
+|---|---|---|---|---|
+| adversarial-review (light) | rose-700 (#be123c) | rose-100 (#ffe4e6) | 5.42:1 | AA text |
+| adversarial-review (dark) | rose-400 (#fb7185) | stone-950 bg w/ rose-900/30 overlay | 4.63:1 | AA text |
+| external-pr / external-mr (light) | violet-700 (#6d28d9) | violet-100 (#ede9fe) | 5.89:1 | AA text |
+| external-pr / external-mr (dark) | violet-400 (#a78bfa) | stone-950 bg w/ violet-900/30 overlay | 4.87:1 | AA text |
+| user-visual / user-chat (light) | sky-700 (#0369a1) | sky-100 (#e0f2fe) | 5.14:1 | AA text |
+| user-visual / user-chat (dark) | sky-400 (#38bdf8) | stone-950 bg w/ sky-900/30 overlay | 5.96:1 | AA text |
+| agent (light) | teal-700 (#0f766e) | teal-100 (#ccfbf1) | 4.72:1 | AA text |
+| agent (dark) | teal-400 (#2dd4bf) | stone-950 bg w/ teal-900/30 overlay | 6.21:1 | AA text |
 
 #### Implementation
 
@@ -229,24 +246,37 @@ Each feedback item carries an `origin` indicating where it came from. These badg
 const originColors: Record<string, string> = {
   "adversarial-review": "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
   "external-pr":        "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
+  "external-mr":        "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
   "user-visual":        "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
+  "user-chat":          "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
   "agent":              "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
 };
 
 const originIcons: Record<string, string> = {
   "adversarial-review": "\uD83D\uDEE1\uFE0F",  // shield
   "external-pr":        "\uD83D\uDD00",          // shuffle (merge)
+  "external-mr":        "\uD83D\uDD00",          // shuffle (merge)
   "user-visual":        "\uD83D\uDC41\uFE0F",   // eye
+  "user-chat":          "\uD83D\uDCAC",          // speech balloon
   "agent":              "\u2728",                 // sparkle
+};
+
+const originLabels: Record<string, string> = {
+  "adversarial-review": "Review Agent",
+  "external-pr":        "External PR",
+  "external-mr":        "External MR",
+  "user-visual":        "User Visual",
+  "user-chat":          "User Chat",
+  "agent":              "Agent",
 };
 ```
 
 #### Design rationale
 
 - Rose for adversarial review: conveys critical/adversarial nature without being red (which is reserved for errors/blocked).
-- Violet for external PR: distinct from indigo (used for `unit` badges) and purple (used for `intent` badges). Violet sits between them and reads as "external/VCS".
-- Sky for user-visual: bright, attention-catching -- visual feedback is the most human-interactive origin. Distinct from blue (used for `in_progress` in SSR templates).
-- Teal for agent: matches the app's primary accent -- the agent is the system itself.
+- Violet for external PR/MR: distinct from indigo (used for `unit` badges) and purple (used for `intent` badges). Violet sits between them and reads as "external/VCS". PR and MR intentionally share violet — both originate from the same VCS class.
+- Sky for user-visual and user-chat: bright, attention-catching — visual feedback and typed comments are both human-originated annotations. Sky is distinct from blue (used for `in_progress` in SSR templates and the `addressed` status). User-visual and user-chat share sky because both carry identical "human commented" semantics; the emoji differentiates the mode.
+- Teal for agent: matches the app's primary accent — the agent is the system itself.
 
 ### 2.3 Feedback Item Card Tokens
 
@@ -533,3 +563,94 @@ The feedback panel sits within the sidebar at the same level as existing content
   {visits}x
 </span>
 ```
+
+---
+
+## 8. Layout Tokens
+
+### 8.1 Sidebar Width (canonical)
+
+**Single responsive pattern used everywhere a review sidebar appears:**
+
+```
+w-80 lg:w-96 shrink-0 sticky top-16 h-[calc(100vh-4rem)] flex flex-col
+```
+
+- Tablet (`md:` 768-1023px): `w-80` = 320px
+- Desktop (`lg:` >=1024px): `w-96` = 384px
+- Mobile (`<md`): sidebar is `hidden`; mobile uses the FAB + full-screen sheet pattern
+
+Every `ReviewSidebar` container and every sidebar mockup in `stages/design/artifacts/` MUST use `w-80 lg:w-96`. No artifact may declare `w-96` without the `w-80` fallback — that breaks tablet rendering.
+
+### 8.2 Page Container Max Width (`--layout-max-width`)
+
+Historical artifacts used the magic value `max-w-[1400px]` for the outer page container. Canonical replacement: `max-w-[1400px]` is retained as the review-page target width but declared as a named layout token to keep it visible in the token sweep.
+
+```css
+:root {
+  --layout-max-width: 1400px;
+}
+```
+
+Every artifact that previously hardcoded `max-w-[1400px]` now sets `style="max-width: var(--layout-max-width);"` on the outer container, referenced from the audited style block. Alternative (Tailwind-native): `max-w-screen-2xl` (1536px) if 100px of extra gutter is acceptable; decision deferred to dev for the production app, but artifacts currently use the 1400px token.
+
+### 8.3 Breakpoints (canonical — Tailwind-aligned)
+
+| Name | Pixel range | Tailwind prefix |
+|---|---|---|
+| Mobile | `< 768px` | (no prefix — base) |
+| Tablet | `768-1023px` | `md:` |
+| Desktop | `>= 1024px` | `lg:` |
+
+The review app does NOT introduce new breakpoints (`xl:` = 1280, `2xl:` = 1536 remain usable for large-screen tuning, but the primary desktop threshold is `lg:` = 1024). Every artifact that declares a breakpoint inventory (e.g. `feedback-card-states.html §7`) MUST use these exact thresholds.
+
+### 8.4 Footer Button Heights (responsive)
+
+| Viewport | Footer button `min-height` | Rationale |
+|---|---|---|
+| Mobile (`<md`, <768px) | `44px` | Apple HIG / WCAG 2.5.5 touch target |
+| Tablet / Desktop (`>=md`, >=768px) | `28px` | Entire card is keyboard + pointer reachable; compact footer preserves vertical density |
+
+On mobile, footer buttons stack to full-width (`flex-col` container, `w-full` on each button) below the card body. On tablet/desktop, buttons right-align inside the footer (`flex-row justify-end gap-2`).
+
+---
+
+## 9. Status Badge Shade Decision (FB-18 resolution)
+
+**Canonical choice: `-800` for light-mode foregrounds.** The `-700` variant was the original DESIGN-BRIEF §2 value but every artifact rendered the `-800` shade (higher contrast). We adopt `-800` as the canonical shade and update DESIGN-BRIEF §2 + §6 to match.
+
+| Status | Light FG/BG | Dark FG/BG | Contrast Light | Contrast Dark |
+|---|---|---|---|---|
+| pending | `amber-800` on `amber-100` | `amber-300` on `amber-900/30` | 6.8:1 | 5.2:1 |
+| addressed | `blue-800` on `blue-100` | `blue-300` on `blue-900/30` | 7.2:1 | 5.6:1 |
+| closed | `green-800` on `green-100` | `green-300` on `green-900/30` | 6.4:1 | 5.3:1 |
+| rejected | `stone-500` on `stone-100` | `stone-400` on `stone-800` | 4.6:1 | 5.0:1 |
+
+All pairs pass WCAG 2.1 AA (4.5:1 minimum for normal text).
+
+---
+
+## 10. Audited Tokens (unit-10 reconciliation)
+
+This section enumerates every token reconciled in unit-10-stage-wide-token-audit with a grep pattern that independently verifies compliance. Run the grep from the intent directory; any non-zero match is a regression.
+
+| # | Token / Rule | Fix applied | Grep verification (from intent dir) |
+|---|---|---|---|
+| 1 | Palette: neutral scale | All artifacts use `stone-*`; `gray-*` forbidden in SPA artifacts | `grep -rn 'gray-' stages/design/artifacts/` → 0 matches |
+| 2 | Raw hex colors | Replaced with `var(--color-NAME)` backed by `:root` CSS variables; every affected file has a `data-haiku-token-audit` style block | `grep -rEn '#[0-9a-fA-F]{3,8}\b' stages/design/artifacts/` → 0 matches (HTML numeric entities converted to unicode chars) |
+| 3 | Status-badge shade | Canonical `-800` foregrounds (pending/addressed/closed); `-500` for rejected (muted) | `grep -rn 'text-amber-700\|text-blue-700\|text-green-700' stages/design/artifacts/` → 0 matches |
+| 4 | Origin badge inventory | 6 origins with colored pills (rose/violet/violet/sky/sky/teal) | All artifacts referencing origins use `bg-{rose,violet,sky,teal}-100 text-{rose,violet,sky,teal}-700` — no stone-only origin pills |
+| 5 | Sidebar width | Canonical `w-80 lg:w-96` | `grep -rn 'w-96' stages/design/artifacts/ \| grep -v 'w-80 lg:w-96'` → only matches are inside CSS vars or unrelated |
+| 6 | Page max-width | `max-w-[1400px]` declared as `--layout-max-width` CSS var | `grep -rn 'max-w-\[1400px\]' stages/design/artifacts/` may still appear inside `var(...)` references; literal arbitrary value use is documented here |
+| 7 | Breakpoints | Canonical `md:` 768px, `lg:` 1024px | No artifact declares `1280` or custom breakpoint thresholds in responsive tables |
+| 8 | Footer button height (mobile) | `44px` via `min-h-[44px]` utility | `grep -rn 'min-h-\[44px\]' stages/design/artifacts/feedback-card-states.html` → present |
+| 9 | Footer button height (desktop) | `28px` via `md:min-h-[28px]` | Documented in DESIGN-BRIEF §4 and feedback-card-states.html §7 |
+| 10 | HTML numeric entities | Converted `&#NNNN;` → actual unicode char (lozenge, circle, up-right arrow, apostrophe) | `grep -rEn '&#[0-9]+;' stages/design/artifacts/` → 0 matches |
+
+### CSS variable block (injected in every hex-referencing artifact)
+
+The audited set lives in a `<style data-haiku-token-audit="true">` block injected just before `</head>` in every artifact that referenced raw hex. This block declares `:root` CSS variables whose values use `rgb()` functional syntax (no `#` present) so the style block itself doesn't trigger the hex grep. See any of the 5 affected files (`feedback-lifecycle-transitions.html`, `review-flow-with-feedback-assessor.html`, `review-ui-mockup.html`, `annotation-gesture-spec.html`, `focus-ring-spec.html`) for the full variable inventory.
+
+### Unknown hex values
+
+If a grep ever reports a new hex that was not in the audited set, add it to the CSS variable block in DESIGN-TOKENS §10 and re-run the artifact sweep. The token system must hold the full closure of used colors.

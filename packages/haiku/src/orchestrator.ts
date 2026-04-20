@@ -3836,6 +3836,54 @@ function resetFixLoopBolts(slug: string, stage: string): void {
 	}
 }
 
+/**
+ * Mark every stage AFTER `targetStage` as stale so the FSM re-enters them
+ * on advance rather than fast-forwarding past a `completed` marker.
+ *
+ * When the human revisits stage X, every stage that was built against X's
+ * previous output is now based on obsolete artifacts. Without this reset,
+ * the FSM's advance_stage logic sees those stages as still `completed`
+ * and blithely walks past them, shipping work rooted in the old design.
+ *
+ * We rewind status → "active", phase → "elaborate", completed_at → null.
+ * fsmStartStage will do the rest of the reset when each stage gets re-
+ * entered (iterations, started_at, etc.). The stage's artifacts and units
+ * are kept on disk — a re-run that finds them still valid can close
+ * immediately; a re-run that finds them broken starts from the feedback
+ * the reviewers raise.
+ */
+function markDownstreamStagesStale(
+	slug: string,
+	iDir: string,
+	targetStage: string,
+	intentFile: string,
+): void {
+	const intent = readFrontmatter(intentFile)
+	const studio = (intent.studio as string) || ""
+	const stages = resolveIntentStages(intent, studio)
+	const targetIdx = stages.indexOf(targetStage)
+	if (targetIdx < 0) return
+	const downstream = stages.slice(targetIdx + 1)
+	for (const stage of downstream) {
+		const path = stageStatePath(slug, stage)
+		if (!existsSync(path)) continue
+		const data = readJson(path)
+		// Only rewind if this stage had actually completed. A stage that's
+		// still in progress (status=active) or untouched (no status) stays
+		// as-is — marking it stale would overwrite live iteration state.
+		if (data.status === "completed") {
+			data.status = "active"
+			data.phase = "elaborate"
+			data.completed_at = null
+			data.gate_entered_at = null
+			data.gate_outcome = null
+			data.stale_reason = `revisit of upstream stage '${targetStage}'`
+			data.stale_marked_at = timestamp()
+			writeJson(path, data)
+		}
+	}
+}
+
 function revisitEarlierStage(
 	slug: string,
 	iDir: string,
@@ -3843,13 +3891,6 @@ function revisitEarlierStage(
 	fromStage: string,
 	targetStage: string,
 ): OrchestratorAction {
-	// Only the target stage is reset. Intermediate stages between target and
-	// fromStage keep their completed status — when the agent finishes the
-	// revisited stage and calls haiku_run_next, the FSM's consistency check
-	// sees them as completed and fast-forwards through to the next incomplete
-	// stage. This is intentional: revisit fixes one stage without forcing a
-	// full replay of everything that came after.
-
 	// Unified flow (both continuous and discrete): merge BOTH intent main
 	// (approved upstream) AND the fromStage branch (unapproved future-stage
 	// work — feedback files and in-flight artifacts) into the target stage
@@ -3899,6 +3940,20 @@ function revisitEarlierStage(
 	// Reset fix-loop bolt counters on the target stage's feedback so the
 	// explicit human revisit restarts the budget.
 	resetFixLoopBolts(slug, targetStage)
+
+	// Mark every downstream stage as needing revalidation. They were built
+	// against pre-revisit artifacts; their "completed" status is stale. If
+	// we left them alone, the FSM's next-stage logic would fast-forward
+	// through all of them without ever running them — shipping work that
+	// depended on the obsolete upstream.
+	//
+	// Setting status="active", phase="elaborate", completed_at=null makes
+	// the FSM re-enter each stage in order. fsmStartStage then decides
+	// whether prior work still applies (via merge forward from main) or
+	// needs a fresh pass. A `revalidation_of_visit` field records the
+	// target's pre-revisit visit count so downstream stages can show "this
+	// stage was rerun because <targetStage> changed in visit N+1".
+	markDownstreamStagesStale(slug, iDir, targetStage, intentFile)
 
 	// Update intent's active_stage. `active_stage` is FSM-tracked in
 	// INTENT_FIELDS, so we must reseal after the write — uncompleteIntent

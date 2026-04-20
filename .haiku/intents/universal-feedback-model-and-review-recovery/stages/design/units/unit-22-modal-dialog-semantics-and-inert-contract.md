@@ -64,10 +64,10 @@ quality_gates:
     ≥ 1. unit-19's completion-criteria grep is updated to include these two
     checks so the pattern is enforced stage-wide, not only at this unit's close.
 status: active
-bolt: 1
-hat: feedback-assessor
+bolt: 2
+hat: designer
 started_at: '2026-04-20T05:08:23Z'
-hat_started_at: '2026-04-20T05:20:05Z'
+hat_started_at: '2026-04-20T08:54:06Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:23Z'
@@ -79,6 +79,21 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T05:20:05Z'
+    completed_at: '2026-04-20T08:54:06Z'
+    result: reject
+    reason: >-
+      FB-80 still-pending — script wiring at feedback-inline-mobile.html:374-435
+      is correct, but FB-80's body explicitly requires a visible
+      head-of-document comment pointing at aria-landmark-spec.md §3.7 so
+      dev-stage inherits the contract; no such head-comment pointer exists in
+      the artifact (`grep -n 'a11y contract\|§3.7' feedback-inline-mobile.html`
+      returns zero). Additionally, aria-landmark-spec.md §3.7 was never authored
+      (spec has no §3.7 section). FB-74 is CLOSED — all four modal shells (error
+      L438, loading L531, empty L580, long-content L628) carry the full
+      role=dialog + aria-modal + aria-labelledby contract with matching heading
+      ids.
+  - hat: designer
+    started_at: '2026-04-20T08:54:06Z'
     completed_at: null
     result: null
 ---

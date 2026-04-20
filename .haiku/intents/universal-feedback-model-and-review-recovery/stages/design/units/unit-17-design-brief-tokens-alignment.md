@@ -1,5 +1,7 @@
 ---
-title: 'DESIGN-BRIEF / DESIGN-TOKENS alignment — retire legacy components, canonicalize copy and icon set'
+title: >-
+  DESIGN-BRIEF / DESIGN-TOKENS alignment — retire legacy components,
+  canonicalize copy and icon set
 type: design
 closes:
   - FB-40
@@ -18,50 +20,49 @@ outputs:
   - knowledge/DESIGN-TOKENS.md
 quality_gates:
   - >-
-    FeedbackStatusBadge text shade is consistent across DESIGN-BRIEF §2
-    and DESIGN-TOKENS.md §2.1 — pick ONE shade per status pair, document
-    it in both places, verify contrast ≥ 4.5:1 in light and dark modes.
-    `diff <(grep -E 'text-amber|text-blue|text-green|text-stone'
-    DESIGN-BRIEF.md | sort) <(grep -E 'text-amber|text-blue|text-green|text-stone'
-    DESIGN-TOKENS.md | sort)` — no divergence on the badge text-shade rows.
+    FeedbackStatusBadge text shade is consistent across DESIGN-BRIEF §2 and
+    DESIGN-TOKENS.md §2.1 — pick ONE shade per status pair, document it in both
+    places, verify contrast ≥ 4.5:1 in light and dark modes. `diff <(grep -E
+    'text-amber|text-blue|text-green|text-stone' DESIGN-BRIEF.md | sort) <(grep
+    -E 'text-amber|text-blue|text-green|text-stone' DESIGN-TOKENS.md | sort)` —
+    no divergence on the badge text-shade rows.
   - >-
     DESIGN-BRIEF contains NO references to the retired components —
     `SidebarSegmentedControl`, `Mine` tab (identity split), `FeedbackFAB`
-    (desktop floating button, mobile FAB stays), `MobileFeedbackSheet`
-    (the standalone sheet wrapper, superseded by the unified
-    `MobileFeedbackPanel` inside the bottom sheet). `grep -nE
+    (desktop floating button, mobile FAB stays), `MobileFeedbackSheet` (the
+    standalone sheet wrapper, superseded by the unified `MobileFeedbackPanel`
+    inside the bottom sheet). `grep -nE
     'SidebarSegmentedControl|\bMine\b|FeedbackFAB(?!-pulse|\.)|MobileFeedbackSheet'
-    DESIGN-BRIEF.md` returns 0.
-    `AgentFeedbackToggle` MUST be documented in §2 as a first-class
-    component (per unit-13 / FB-32 ARIA spec).
+    DESIGN-BRIEF.md` returns 0. `AgentFeedbackToggle` MUST be documented in §2
+    as a first-class component (per unit-13 / FB-32 ARIA spec).
   - >-
-    Footer-button copy canonical matrix present in DESIGN-BRIEF §2 AND
-    identical to footer-button-copy-spec.md:
-    pending → "Dismiss" (single button, agent+human origins identical);
-    addressed → "Verify & Close" (primary) + "Reopen" (secondary);
-    closed → "Reopen" (single button);
-    rejected → "Reopen" (single button).
-    `Reject`, `Close` (standalone, distinct from "Verify & Close") MUST
-    NOT appear as footer button labels in any artifact or DESIGN-BRIEF.
-    `grep -EnW '(Reject|Close)( |$)' stages/design/artifacts/*.html |
-    grep -E 'button|footer'` — every match audited and
-    none is a footer-button label.
+    Footer-button copy canonical matrix present in DESIGN-BRIEF §2 AND identical
+    to footer-button-copy-spec.md: pending → "Dismiss" (single button,
+    agent+human origins identical); addressed → "Verify & Close" (primary) +
+    "Reopen" (secondary); closed → "Reopen" (single button); rejected → "Reopen"
+    (single button). `Reject`, `Close` (standalone, distinct from "Verify &
+    Close") MUST NOT appear as footer button labels in any artifact or
+    DESIGN-BRIEF. `grep -EnW '(Reject|Close)( |$)'
+    stages/design/artifacts/*.html | grep -E 'button|footer'` — every match
+    audited and none is a footer-button label.
+  - "Origin-icon emoji mapping is identical across DESIGN-BRIEF §2, DESIGN-TOKENS.md §2.2, and aria-landmark-spec.md §6. Canonical set: `\U0001F50D U+1F50D` (adversarial-review), `\U0001F517 U+1F517` (external-pr / external-mr), `✎ U+270E` (user-visual), `\U0001F4AC U+1F4AC` (user-chat), `\U0001F916 U+1F916` (agent). All three specs cite the SAME codepoints in the SAME order. Diffing the three mapping tables yields zero discrepancies."
   - >-
-    Origin-icon emoji mapping is identical across DESIGN-BRIEF §2,
-    DESIGN-TOKENS.md §2.2, and aria-landmark-spec.md §6. Canonical set:
-    `🔍 U+1F50D` (adversarial-review), `🔗 U+1F517` (external-pr /
-    external-mr), `✎ U+270E` (user-visual), `💬 U+1F4AC` (user-chat),
-    `🤖 U+1F916` (agent). All three specs cite the SAME codepoints in the
-    SAME order. Diffing the three mapping tables yields zero
-    discrepancies.
-  - >-
-    DESIGN-BRIEF §2 declares itself the authoritative component
-    inventory, with a "Retired components" subsection listing the
-    retired names above and the rationale (one line each) so future
-    readers don't resurrect them. component-inventory.md cross-links
-    back to DESIGN-BRIEF §2 rather than duplicating component specs.
+    DESIGN-BRIEF §2 declares itself the authoritative component inventory, with
+    a "Retired components" subsection listing the retired names above and the
+    rationale (one line each) so future readers don't resurrect them.
+    component-inventory.md cross-links back to DESIGN-BRIEF §2 rather than
+    duplicating component specs.
+status: active
+bolt: 1
+hat: designer
+started_at: '2026-04-20T01:54:22Z'
+hat_started_at: '2026-04-20T01:54:22Z'
+iterations:
+  - hat: designer
+    started_at: '2026-04-20T01:54:22Z'
+    completed_at: null
+    result: null
 ---
-
 # DESIGN-BRIEF / DESIGN-TOKENS alignment
 
 ## Scope

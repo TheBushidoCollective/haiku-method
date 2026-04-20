@@ -15,6 +15,11 @@ outputs:
   - stages/design/artifacts/feedback-inline-mobile.html
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
   - stages/design/artifacts/unit-30-design-review.md
+  - stages/design/artifacts/agent-feedback-toggle-spec.html
+  - stages/design/artifacts/assessor-summary-card.html
+  - stages/design/artifacts/comments-list-with-agent-toggle.html
+  - stages/design/artifacts/review-package-structure.html
+  - stages/design/artifacts/rollback-reason-banner.html
 quality_gates:
   - name: feedback-inline-mobile-has-reduced-motion-guard
     command: >-
@@ -34,12 +39,16 @@ quality_gates:
       .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/motion-and-reduced-motion-spec.md
 status: active
 bolt: 1
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T19:38:59Z'
-hat_started_at: '2026-04-20T19:38:59Z'
+hat_started_at: '2026-04-20T19:45:22Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T19:38:59Z'
+    completed_at: '2026-04-20T19:45:22Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T19:45:22Z'
     completed_at: null
     result: null
 ---

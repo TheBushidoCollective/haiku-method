@@ -37,7 +37,7 @@ quality_gates:
     command: >-
       grep -E 'feedback-inline-mobile'
       .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/motion-and-reduced-motion-spec.md
-status: active
+status: completed
 bolt: 1
 hat: feedback-assessor
 started_at: '2026-04-20T19:38:59Z'
@@ -53,8 +53,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T19:48:24Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T19:50:45Z'
+    result: advance
+completed_at: '2026-04-20T19:50:45Z'
 ---
 # feedback-inline-mobile reduced-motion guard
 
@@ -135,9 +136,9 @@ motion-spec.md §Cross-file policy) is the landing pattern.
 
 ## Completion criteria
 
-- [ ] feedback-inline-mobile.html has prefers-reduced-motion guard block
-- [ ] Stage-wide motion-audit script returns empty output
-- [ ] FAB pulse stops under reduced-motion; sheet still opens
-- [ ] motion-and-reduced-motion-spec.md cites the specific guard
-- [ ] Motion-audit script added to design-reviewer gate list
-- [ ] FB-143 closes on live-grep verification
+- [x] feedback-inline-mobile.html has prefers-reduced-motion guard block
+- [x] Stage-wide motion-audit script returns empty output
+- [x] FAB pulse stops under reduced-motion; sheet still opens
+- [x] motion-and-reduced-motion-spec.md cites the specific guard
+- [x] Motion-audit script added to design-reviewer gate list
+- [x] FB-143 closes on live-grep verification

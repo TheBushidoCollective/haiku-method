@@ -2,7 +2,7 @@
 title: >-
   feedback-inline-mobile.html 2 keyframes with 0 prefers-reduced-motion — FB-86
   falsely closed — 2.3.3 FAIL
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T17:52:06Z'
 iteration: 5
 visit: 5
 source_ref: null
-closed_by: null
+closed_by: unit-30-feedback-inline-mobile-reduced-motion-guard
 bolt: 0
 upstream_stage: null
 ---

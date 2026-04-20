@@ -118,9 +118,9 @@ quality_gates:
     match the post-sweep state.
 status: active
 bolt: 1
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T01:54:01Z'
-hat_started_at: '2026-04-20T02:09:53Z'
+hat_started_at: '2026-04-20T02:11:37Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:01Z'
@@ -128,6 +128,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T02:09:53Z'
+    completed_at: '2026-04-20T02:11:37Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T02:11:37Z'
     completed_at: null
     result: null
 ---

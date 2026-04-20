@@ -1,7 +1,8 @@
 ---
 title: >-
   Modal dialog semantics + inert/aria-hidden contract — revisit-modal-states
-  dialog markup, feedback-inline-mobile open/close handlers wired (not commented)
+  dialog markup, feedback-inline-mobile open/close handlers wired (not
+  commented)
 type: design
 closes:
   - FB-74
@@ -21,12 +22,12 @@ quality_gates:
     Every modal-shell `<div>` in `revisit-modal-states.html` (compact default,
     loading, error, empty, focus, hover, active, disabled — every enumerated
     state) renders as `<div role="dialog" aria-modal="true"
-    aria-labelledby="{unique-id}">` with a visible heading element carrying
-    that id. The rollback toast at L407 retains its correct `role="status"
+    aria-labelledby="{unique-id}">` with a visible heading element carrying that
+    id. The rollback toast at L407 retains its correct `role="status"
     aria-live="polite"` (it is a toast, not a dialog). `grep -cE
     'role="dialog"|aria-modal="true"|aria-labelledby='
-    stages/design/artifacts/revisit-modal-states.html` returns ≥ 9 (matching
-    the sibling `revisit-modal-spec.html` coverage).
+    stages/design/artifacts/revisit-modal-states.html` returns ≥ 9 (matching the
+    sibling `revisit-modal-spec.html` coverage).
   - >-
     `feedback-inline-mobile.html` has a first-class `<script>` block at the
     bottom of `<body>` that, on FAB click, sets `document.getElementById
@@ -34,34 +35,43 @@ quality_gates:
     `document.getElementById('main-content').setAttribute('aria-hidden',
     'true')`, does the same for `<header>`, then moves focus to
     `#sheet-first-tab`. The close handler reverses both (removes `inert`,
-    removes `aria-hidden`, returns focus to `#feedback-fab`). These
-    behaviors live in the script, NOT in HTML comments. The FAB and
-    close-button `onclick=` attributes no longer carry `/* dev stage: ... */`
-    narration — they call the named script functions instead.
+    removes `aria-hidden`, returns focus to `#feedback-fab`). These behaviors
+    live in the script, NOT in HTML comments. The FAB and close-button
+    `onclick=` attributes no longer carry `/* dev stage: ... */` narration —
+    they call the named script functions instead.
   - >-
     `feedback-inline-mobile.html` head-of-document comment block carries a
     visible pointer: `<!-- a11y contract: see aria-landmark-spec.md §3.7 for
-    dialog-open/close inert+aria-hidden semantics + focus-trap-react
-    wrapper. -->`. The sheet root retains the `role="dialog" aria-modal="true"
+    dialog-open/close inert+aria-hidden semantics + focus-trap-react wrapper.
+    -->`. The sheet root retains the `role="dialog" aria-modal="true"
     aria-labelledby="sheet-title"` attributes already in place; the
-    `data-focus-trap` marker attribute is added to the sheet root so dev
-    stage can wire `<FocusTrap>` without searching.
+    `data-focus-trap` marker attribute is added to the sheet root so dev stage
+    can wire `<FocusTrap>` without searching.
   - >-
     `aria-landmark-spec.md §3.7` documents the dialog-open / dialog-close
-    lifecycle end-to-end with a concrete before/after code snippet and names
-    the specific DOM elements that receive `inert` + `aria-hidden` when any
-    dialog in the app opens (`<main id="main-content">` and `<header>` at
-    minimum; skip-link + live regions are exempt). §3.7 also carries the
-    rationale: `aria-modal="true"` alone is insufficient on NVDA + JAWS with
-    virtual cursor — inert + aria-hidden is the belt-and-suspenders fix.
+    lifecycle end-to-end with a concrete before/after code snippet and names the
+    specific DOM elements that receive `inert` + `aria-hidden` when any dialog
+    in the app opens (`<main id="main-content">` and `<header>` at minimum;
+    skip-link + live regions are exempt). §3.7 also carries the rationale:
+    `aria-modal="true"` alone is insufficient on NVDA + JAWS with virtual cursor
+    — inert + aria-hidden is the belt-and-suspenders fix.
   - >-
     `grep -nE 'main.*\.inert\s*=|setAttribute\(.aria-hidden.,.true.'
     stages/design/artifacts/feedback-inline-mobile.html` returns ≥ 2 matches
     (one in the open handler, one in the close handler). `grep -cE
-    'role="dialog"' stages/design/artifacts/feedback-inline-mobile.html`
-    returns ≥ 1. unit-19's completion-criteria grep is updated to include
-    these two checks so the pattern is enforced stage-wide, not only at this
-    unit's close.
+    'role="dialog"' stages/design/artifacts/feedback-inline-mobile.html` returns
+    ≥ 1. unit-19's completion-criteria grep is updated to include these two
+    checks so the pattern is enforced stage-wide, not only at this unit's close.
+status: active
+bolt: 1
+hat: designer
+started_at: '2026-04-20T05:08:23Z'
+hat_started_at: '2026-04-20T05:08:23Z'
+iterations:
+  - hat: designer
+    started_at: '2026-04-20T05:08:23Z'
+    completed_at: null
+    result: null
 ---
 # Modal dialog semantics + inert/aria-hidden contract
 

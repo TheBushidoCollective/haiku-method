@@ -39,6 +39,7 @@ The desktop review page is the primary surface. Tab walks the DOM in reading ord
 ### Notes
 
 - **Tablist pattern (rows 8–11).** One active tab is tab-focusable; inactive tabs are reachable via **Arrow Left/Right** within the tablist, not via Tab. This is the standard ARIA tablist roving-tabindex pattern and is NOT a violation of "every interactive element reachable" — the tablist itself is a single focus stop, and arrow keys move focus among tabs inside it.
+- **Roving tabindex requires a keydown handler (closes FB-84).** `tabindex="-1"` on inactive tabs WITHOUT an attached arrow-key / Home / End handler is a WCAG 2.1.1 failure, not a safe default — inactive tabs become completely unreachable by keyboard. Every `[role="tablist"]` in the artifact set MUST ship a `keydown` listener implementing the WAI-ARIA APG Tabs contract: ArrowRight/Down → next, ArrowLeft/Up → prev, Home → first, End → last, Enter/Space → activate. The canonical implementation lives inline at the bottom of `feedback-inline-desktop.html` and `feedback-inline-mobile.html`; dev-stage React components MUST reproduce the same keyboard contract (or import a library that does, e.g. `@reach/tabs` / Headless UI `<Tab.Group>`).
 - **Pin markers (row 13).** Per FB-17, pins now live in the natural reading order of the main content, not as a separate overlay tabstop. When an artifact has three pins at 25%/30%, 65%/55%, 40%/75%, the Tab order walks them in DOM order (which mirrors the visual overlay order from top to bottom in most cases; exceptions documented per artifact). Pin Enter expands the linked sidebar card and scrolls it into view (`crossFlash(fbId)` helper). Sidebar card Enter cross-flashes the pin (same helper, reverse direction).
 - **Skip links (rows 1–2).** Rendered with `class="sr-only focus:not-sr-only …"` so they are visually hidden until focused, then appear in the top-left of the viewport. See `skip-link-spec.html` for exact styling.
 - **Sidebar (rows N−7 … N).** When a user activates the "Skip to feedback list" link, focus jumps to `#feedback-list` which is the `<aside>` (or sidebar container). The first Tab inside the aside focuses the filter pills; subsequent Tabs walk the card list.
@@ -143,4 +144,7 @@ Unit-07's `keyboard-shortcut-map.html §6` is updated in unit-12 to reference th
 - [ ] Tab from the last sidebar element does NOT wrap back to the top — it should leave the sidebar and land on the browser chrome.
 - [ ] Esc closes the help overlay / revisit modal and returns focus to the opener.
 - [ ] The tablist honors arrow-key navigation; Tab skips past the tablist after the active tab.
+- [ ] Inside the tablist, pressing Arrow Right moves focus and updates `aria-selected` on the newly-focused tab (FB-84).
+- [ ] Home / End keys land focus on the first / last enabled tab respectively (FB-84).
+- [ ] Tab key leaves the tablist after the active tab — it does NOT iterate through inactive tabs (roving tabindex holds `tabindex="0"` on exactly one tab at a time) (FB-84).
 - [ ] With a screen reader running in browse mode, the skip links are announced and the pin markers' `aria-label` + coordinates are read correctly.

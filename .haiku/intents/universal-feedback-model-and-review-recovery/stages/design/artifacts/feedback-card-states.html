@@ -1,4 +1,22 @@
 <!DOCTYPE html>
+<!--
+  Feedback Card States — canonical reference for every card status and interaction state.
+
+  Live-region contract (screen-reader announcements for optimistic UI transitions):
+    - The two live regions below (#feedback-live-polite + #feedback-live-assertive) are
+      the canonical announcement surface. See aria-live-sequencing-spec.md for the
+      three-phase (in-flight → success | failure) announcement template.
+    - Polite and assertive regions are NON-INTERCHANGEABLE. Per
+      aria-landmark-spec.md §1 "Two live regions, not one": the in-flight "marking…"
+      text lives in the polite region and the rollback/failure text lives in the
+      assertive region so neither overwrites the other before it is read out.
+    - Demo wiring at the bottom of this file writes the sequence when users click
+      card footer buttons (Dismiss, Verify & Close, Reopen). This is a wireframe;
+      the dev stage inherits the same contract (see useFeedback hook section of
+      aria-live-sequencing-spec.md §5).
+
+  Unit 24 closes FB-83 (no live-region markup in the optimistic-UI states reference).
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -92,7 +110,7 @@
           <div class="flex items-center gap-1 mt-2 pt-2 border-t border-stone-200">
             <span class="text-xs text-stone-600 italic">agent marks addressed when fix lands</span>
             <span class="flex-1"></span>
-            <button class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-300 text-stone-700 bg-white">Dismiss</button>
+            <button type="button" data-fb-id="FB-12" data-fb-verb="reject" data-fb-from="pending" data-fb-to="rejected" class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-300 text-stone-700 bg-white">Dismiss</button>
           </div>
         </article>
       </div>
@@ -129,8 +147,8 @@
           <p class="text-xs text-stone-500 mt-0.5">Visit 2 · user-visual · annotation · addressed_by commit <code>ab12c3</code></p>
           <div class="flex items-center gap-1 mt-2 pt-2 border-t border-stone-200">
             <span class="flex-1"></span>
-            <button class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-300 text-stone-700 bg-white">Reopen</button>
-            <button class="text-[11px] font-semibold px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white">Verify &amp; Close</button>
+            <button type="button" data-fb-id="FB-08" data-fb-verb="reopen" data-fb-from="addressed" data-fb-to="pending" class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-300 text-stone-700 bg-white">Reopen</button>
+            <button type="button" data-fb-id="FB-08" data-fb-verb="close" data-fb-from="addressed" data-fb-to="closed" class="text-[11px] font-semibold px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white">Verify &amp; Close</button>
           </div>
         </article>
       </div>
@@ -628,6 +646,85 @@
   </section>
 
 </main>
+
+<!--
+  Live regions — canonical two-node wiring per aria-landmark-spec.md §1 and
+  aria-live-sequencing-spec.md §2. Matches feedback-inline-desktop.html:518-519
+  and feedback-inline-mobile.html end-of-body. Closes FB-83.
+
+  These MUST remain separate nodes. The polite region carries the in-flight
+  "marking…" message; the assertive region carries the rollback/failure
+  message. A single shared node would cause the failure string to overwrite
+  the in-flight string before the screen reader finished speaking it.
+-->
+<div id="feedback-live-polite" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+<div id="feedback-live-assertive" role="alert" aria-live="assertive" aria-atomic="true" class="sr-only"></div>
+
+<!--
+  Demo wiring — three-phase announcement template (aria-live-sequencing-spec.md §3).
+  Buttons with data-fb-id / data-fb-verb / data-fb-from / data-fb-to attributes
+  write the polite "FB-XX {progressive} to {to}…" string immediately, then
+  resolve to either the success "FB-XX {past}." or the failure assertive
+  "FB-XX {verb} failed; reverted to {from}." roughly 1 second later.
+
+  This matches the contract the dev-stage useFeedback hook will implement
+  (aria-live-sequencing-spec.md §5). The 10% failure path exercises the
+  assertive region so manual testing confirms both branches work.
+-->
+<script>
+  (function () {
+    // Map of verbs → progressive / past / failure-root forms per spec §3 table.
+    var VERBS = {
+      close:       { progressive: "marking as closed",     past: "closed",               root: "close" },
+      verifyClose: { progressive: "verifying and closing", past: "verified and closed", root: "verify and close" },
+      reopen:      { progressive: "reopening",             past: "reopened",             root: "reopen" },
+      reject:      { progressive: "rejecting",             past: "rejected",             root: "reject" },
+      address:     { progressive: "marking as addressed",  past: "addressed",            root: "mark as addressed" }
+    };
+
+    function writeRegion(id, message) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      // Clear first so identical messages re-announce (most AT swallow dupes).
+      el.textContent = "";
+      // requestAnimationFrame ensures the empty string flushes before the new one.
+      requestAnimationFrame(function () { el.textContent = message; });
+    }
+
+    function announcePolite(message)    { writeRegion("feedback-live-polite", message); }
+    function announceAssertive(message) { writeRegion("feedback-live-assertive", message); }
+
+    function onTransitionClick(event) {
+      var btn = event.currentTarget;
+      var id  = btn.getAttribute("data-fb-id");
+      var from = btn.getAttribute("data-fb-from");
+      var to   = btn.getAttribute("data-fb-to");
+      var verbKey = btn.getAttribute("data-fb-verb");
+      var verb = VERBS[verbKey] || VERBS.close;
+
+      // Phase 1 — in-flight polite announcement.
+      announcePolite(id + " " + verb.progressive + " to " + to + "…");
+
+      // Phase 2 — simulate the tool call. 90% success, 10% failure so the
+      // assertive region is exercised in demo sessions. Deterministic in
+      // CI via ?force=success|failure query parameter.
+      var forced = new URLSearchParams(window.location.search).get("force");
+      var willFail = forced === "failure" || (forced !== "success" && Math.random() < 0.1);
+
+      window.setTimeout(function () {
+        if (willFail) {
+          announceAssertive(id + " " + verb.root + " failed; reverted to " + from + ".");
+        } else {
+          announcePolite(id + " " + verb.past + ".");
+        }
+      }, 900);
+    }
+
+    document.querySelectorAll("button[data-fb-verb]").forEach(function (btn) {
+      btn.addEventListener("click", onTransitionClick);
+    });
+  })();
+</script>
 
 </body>
 </html>

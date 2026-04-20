@@ -20,7 +20,6 @@ outputs:
   - stages/design/artifacts/comments-list-with-agent-toggle.html
   - stages/design/artifacts/review-package-structure.html
   - stages/design/artifacts/rollback-reason-banner.html
-  - stages/design/artifacts/unit-30-design-review.md
 quality_gates:
   - >-
     `grep -c 'prefers-reduced-motion'

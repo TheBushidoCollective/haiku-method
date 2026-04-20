@@ -23,6 +23,22 @@ outputs:
   - stages/design/artifacts/revisit-modal-states.html
   - stages/design/artifacts/revisit-unit-list.html
   - stages/design/artifacts/unit-21-design-review.md
+  - stages/design/artifacts/annotation-gesture-spec.html
+  - stages/design/artifacts/comment-to-feedback-flow.html
+  - stages/design/artifacts/comments-list-with-agent-toggle.html
+  - stages/design/artifacts/feedback-card-states.html
+  - stages/design/artifacts/feedback-inline-desktop.html
+  - stages/design/artifacts/feedback-inline-mobile.html
+  - stages/design/artifacts/feedback-lifecycle-transitions.html
+  - stages/design/artifacts/focus-ring-spec.html
+  - stages/design/artifacts/review-context-header.html
+  - stages/design/artifacts/review-flow-with-feedback-assessor.html
+  - stages/design/artifacts/review-package-structure.html
+  - stages/design/artifacts/review-ui-mockup.html
+  - stages/design/artifacts/revisit-modal-spec.html
+  - stages/design/artifacts/rollback-reason-banner.html
+  - stages/design/artifacts/skip-link-spec.html
+  - stages/design/artifacts/stage-progress-strip.html
 quality_gates:
   - >-
     `annotation-popover-states.html:394` no longer carries `opacity-50` on the
@@ -74,9 +90,9 @@ quality_gates:
     loop in each unit's post-sweep note).
 status: active
 bolt: 2
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T05:08:18Z'
-hat_started_at: '2026-04-20T08:55:27Z'
+hat_started_at: '2026-04-20T09:05:04Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:18Z'
@@ -89,6 +105,10 @@ iterations:
     reason: "Sweep is not stage-wide. B1: QG3 aria-disabled walker returns 4 violations repo-wide (review-ui-mockup.html:{136,153,856}, revisit-modal-states.html:461) vs audit's claimed 0. B2: dark:text-stone-500 (banned, 2.36:1 on bg-stone-950) still present across 9 artifacts — only 3 files were swept despite unit title committing to stage-wide. B3: opacity-60 on text-carrying card/button roots non-zero (review-ui-mockup stage-strip + JS dim literal; 9 revisit-unit-list locked cards; comment-to-feedback-flow collapsed card preview). B4: audit §4 Bolt-4 / §6.3 Bolt-5 prose describes remediations that were not performed. B5: revisit-unit-list \U0001F512 glyph dark:text-stone-600 on stone-900 ~3.25:1 fails AA. Narrow QGs (opacity-50/70, bg-stone-200+text-stone-500, type-scale) do pass. See stages/design/artifacts/unit-21-design-review.md for per-site line numbers and remediation plan."
   - hat: designer
     started_at: '2026-04-20T08:55:27Z'
+    completed_at: '2026-04-20T09:05:04Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T09:05:04Z'
     completed_at: null
     result: null
 ---

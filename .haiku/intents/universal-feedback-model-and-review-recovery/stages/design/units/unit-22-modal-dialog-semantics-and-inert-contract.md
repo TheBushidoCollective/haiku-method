@@ -65,9 +65,9 @@ quality_gates:
     checks so the pattern is enforced stage-wide, not only at this unit's close.
 status: active
 bolt: 2
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T05:08:23Z'
-hat_started_at: '2026-04-20T08:57:02Z'
+hat_started_at: '2026-04-20T09:00:01Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:23Z'
@@ -98,6 +98,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T08:57:02Z'
+    completed_at: '2026-04-20T09:00:01Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T09:00:01Z'
     completed_at: null
     result: null
 ---

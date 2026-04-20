@@ -9,7 +9,9 @@ closes:
   - FB-95
   - FB-97
   - FB-102
-depends_on: []
+  - FB-126
+depends_on:
+  - unit-28-canonical-token-normalization-sweep
 inputs:
   - stages/design/artifacts/contrast-and-type-audit.md
   - stages/design/artifacts/revisit-unit-list.html
@@ -117,10 +119,29 @@ quality_gates:
     (FB-92, FB-94, FB-95, FB-97, FB-102) so future adversarial reviews can
     spot-check the claim against reality.
   - >-
-    feedback-assessor re-runs the FB-92 / FB-94 / FB-95 / FB-97 / FB-102 grep
-    recipes literally (all listed inline in each feedback body) and confirms
-    each returns 0 hits. The assessor additionally compares each artifact
-    against its corresponding audit row and flags any remaining
+    State-coverage reference-tile rewrites in `revisit-unit-list.html:345` and
+    `:393` are verified by executable grep (closes FB-126). The post-fix
+    reference tiles describe the bolt-3 canonical muted-background treatment
+    (dashed border, muted surface, hover/focus in token colors) and are free
+    of the phrase "opacity 60%" or numeric opacity mentions in the tile
+    prose. `grep -nE 'Default \(locked, opacity' stages/design/artifacts/revisit-unit-list.html`
+    returns 0 hits; `grep -nE 'bg-stone-50.*dashed|dashed.*bg-stone-50'
+    stages/design/artifacts/revisit-unit-list.html` returns ≥ 2 hits (one per
+    reference tile).
+  - >-
+    This unit **owns the `contrast-and-type-audit.md §N.bolt-5` opacity-removal
+    section exclusively** (no overlap with unit-28 or unit-31). That section
+    contains only the five audit/file divergences closed by this unit's FBs
+    (FB-92, FB-94, FB-95, FB-97, FB-102) plus the FB-126 reference-tile
+    remediation. Unit-28 writes canonical-token entries elsewhere in the audit;
+    unit-31 rewrites §3 Type Scale. `grep -n '§N.bolt-5'
+    stages/design/artifacts/contrast-and-type-audit.md` returns a match pointing
+    at this unit's section.
+  - >-
+    feedback-assessor re-runs the FB-92 / FB-94 / FB-95 / FB-97 / FB-102 / FB-126
+    grep recipes literally (all listed inline in each feedback body) and
+    confirms each returns 0 hits. The assessor additionally compares each
+    artifact against its corresponding audit row and flags any remaining
     audit-vs-file divergence.
 status: pending
 ---

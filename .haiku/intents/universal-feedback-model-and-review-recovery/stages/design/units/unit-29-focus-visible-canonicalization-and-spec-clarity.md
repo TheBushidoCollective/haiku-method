@@ -8,7 +8,10 @@ closes:
   - FB-93
   - FB-107
   - FB-110
-depends_on: []
+  - FB-113
+  - FB-130
+depends_on:
+  - unit-26-artifact-opacity-ban-enforcement
 inputs:
   - stages/design/artifacts/focus-ring-spec.html
   - stages/design/artifacts/review-ui-mockup.html
@@ -67,9 +70,23 @@ quality_gates:
     "this is the selected stage." `focus:outline-none` remains on each button
     (suppresses default outline); the new `:focus-visible` rule provides the
     replacement. (a) `grep -n ':focus-visible' stages/design/artifacts/review-ui-mockup.html`
-    returns ≥ 2 hits (the new rule + dark counterpart). (b) Manual walk of the
-    six `.stage-btn` buttons confirms the teal focus ring paints on Tab, not
-    on mouse click.
+    returns ≥ 2 hits (the new rule + dark counterpart). (b) Structural grep
+    confirms the teal focus color is distinct from the sky selection color
+    (closes FB-113): `grep -A1 'stage-btn:focus-visible'
+    stages/design/artifacts/review-ui-mockup.html | grep -cE 'rgb\(20 184
+    166\)|teal-500|teal-400'` returns ≥ 1, AND `grep -A1
+    'stage-btn.stage-active'
+    stages/design/artifacts/review-ui-mockup.html | grep -cE 'rgb\(56 189
+    248\)|sky-400|sky-300'` returns ≥ 1 — the two outlines use different
+    color families, making focus visually distinguishable from selection.
+    Token cross-ref (closes FB-130): the teal focus color is documented as
+    the canonical focus-ring token per `focus-ring-spec.html §1` and
+    `DESIGN-TOKENS.md §N.focus-ring` (teal-500 in light, teal-400 in dark).
+    The style block carries an inline comment: `/* focus-ring canonical per
+    focus-ring-spec.html §1 + DESIGN-TOKENS.md §N; teal-500 is distinct from
+    the sky-400 selection color by design */`. `grep -nE 'focus-ring
+    canonical per focus-ring-spec'
+    stages/design/artifacts/review-ui-mockup.html` returns ≥ 1.
   - >-
     `focus-ring-spec.html:108` code sample rewritten for unambiguity. The
     single `<code>` block is split into two labeled sections: (1) "Canonical
@@ -88,8 +105,9 @@ quality_gates:
     stages/design/artifacts/focus-ring-spec.html` returns 0 hits on the §1
     canonical code sample at line 108.
   - >-
-    feedback-assessor re-runs each of FB-93, FB-107, FB-110 against its literal
-    grep recipe and confirms each returns 0 hits.
+    feedback-assessor re-runs each of FB-93, FB-107, FB-110, FB-113, FB-130
+    against its literal grep recipe and confirms each passes (0 hits for
+    negative greps; ≥ 1 for positive greps).
 status: pending
 ---
 # Focus-visible canonicalization + spec clarity

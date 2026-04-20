@@ -7,7 +7,14 @@ type: design
 closes:
   - FB-103
   - FB-104
-depends_on: []
+  - FB-115
+  - FB-116
+  - FB-121
+  - FB-122
+  - FB-128
+  - FB-131
+depends_on:
+  - unit-29-focus-visible-canonicalization-and-spec-clarity
 inputs:
   - stages/design/artifacts/stage-progress-strip.html
   - stages/design/artifacts/aria-landmark-spec.md
@@ -20,6 +27,8 @@ outputs:
   - stages/design/artifacts/revisit-modal-states.html
   - stages/design/artifacts/comment-to-feedback-flow.html
   - stages/design/artifacts/revisit-unit-list.html
+  - stages/design/artifacts/aria-landmark-spec.md
+  - stages/design/artifacts/aria-live-sequencing-spec.md
   - stages/design/artifacts/unit-30-design-review.md
 quality_gates:
   - >-
@@ -75,19 +84,105 @@ quality_gates:
     `aria-live-sequencing-spec.md §2.2`; each artifact's script references
     that spec in a top-of-file comment.
   - >-
-    Design-reviewer walks the rewritten `stage-progress-strip.html` with a
-    screen reader (VoiceOver or NVDA equivalent) and confirms: (a) each
-    stage anchor is announced as "link, Stage N" on focus; (b) Enter
-    activates the focused stage; (c) arrow keys move focus between stages
-    without activating. Reviewer also confirms the rewritten page-level
-    live-region pair in each of the three artifacts renders invisibly
-    (class="sr-only" effective).
+    Structural verification replaces screen-reader walk (closes FB-115).
+    Design-reviewer runs the following executable checks on
+    `stage-progress-strip.html` and confirms each: (a) `grep -cE
+    '<a href="#stage-[0-9]+"[^>]*data-stage='
+    stages/design/artifacts/stage-progress-strip.html` returns ≥ 10 (one
+    per stage anchor). (b) `grep -cE 'role="link"'
+    stages/design/artifacts/stage-progress-strip.html` returns 0. (c) The
+    arrow-key handler query selector is updated to target the new anchors:
+    `grep -nE 'querySelectorAll\("a\[data-stage\]"\)|\[data-stage\]'
+    stages/design/artifacts/stage-progress-strip.html` returns ≥ 1 match
+    inside the keydown handler. (d) The spec row at 380–385 still lists
+    "Enter / Space activates the focused stage" and the pseudocode at
+    400–447 documents that Enter is native for `<a>` (no custom handler
+    needed); `grep -nE 'Enter is native|native anchor activation'
+    stages/design/artifacts/stage-progress-strip.html` returns ≥ 1. The
+    feedback-assessor runs these greps directly; no manual screen-reader
+    walk is required to close FB-103.
   - >-
-    feedback-assessor re-runs FB-103 (`grep 'role="link"'` on
-    `stage-progress-strip.html` returns 0) and FB-104 (all five `grep`
-    recipes in the feedback body each return ≥ 1). Assessor additionally
-    confirms the native-anchor path preserves all behavior the old
-    `<div role="link">` pseudocode claimed (focus, arrow, Enter).
+    announce() wiring verification (closes FB-116). Each of
+    `revisit-modal-states.html`, `comment-to-feedback-flow.html`,
+    `revisit-unit-list.html` contains at least one call to
+    `announce('feedback-live-polite', …)` and at least one call to
+    `announce('feedback-live-assertive', …)` inside its `<script>` block,
+    wired to the shared helper documented in `aria-live-sequencing-spec.md
+    §2.2`. Greps (each must return ≥ 1): `grep -c
+    "announce\('feedback-live-polite'"
+    stages/design/artifacts/revisit-modal-states.html`; `grep -c
+    "announce\('feedback-live-assertive'"
+    stages/design/artifacts/revisit-modal-states.html`; and the same two
+    greps against `comment-to-feedback-flow.html` and `revisit-unit-list.html`.
+    A top-of-file inline `<script>`-block comment cross-references the
+    helper: `// announce() helper contract: see aria-live-sequencing-spec.md
+    §2.2`. Cross-ref grep: `grep -c 'aria-live-sequencing-spec.md §2.2'
+    stages/design/artifacts/revisit-modal-states.html
+    stages/design/artifacts/comment-to-feedback-flow.html
+    stages/design/artifacts/revisit-unit-list.html` returns ≥ 3 (closes
+    FB-131).
+  - >-
+    aria-*.md coverage updates (closes FB-121). Because this unit's edits
+    touch `aria-landmark-spec.md` (new coverage rows for the three newly-
+    wired artifacts' page-level regions) and `aria-live-sequencing-spec.md`
+    (reference to the now-wired announce() call-sites), both files appear
+    in this unit's `outputs:` list (not just `inputs:`). Specifically: (a)
+    `aria-landmark-spec.md §2` coverage table gains a "✓ canonical live-
+    region pair" entry for each of `revisit-modal-states.html`,
+    `comment-to-feedback-flow.html`, `revisit-unit-list.html`; `grep -cE
+    'revisit-modal-states.html.*live-region|live-region.*revisit-modal-states'
+    stages/design/artifacts/aria-landmark-spec.md` returns ≥ 1 (and same
+    for the other two artifacts). (b) `aria-live-sequencing-spec.md` adds
+    a §N "Canonical call-sites" subsection listing the three artifacts now
+    wired to `announce()`; `grep -cE 'Canonical call-sites'
+    stages/design/artifacts/aria-live-sequencing-spec.md` returns ≥ 1.
+  - >-
+    Anchor state-coverage matrix (closes FB-128). When `<div role="link">`
+    converts to native `<a>`, the post-fix anchor must carry class strings
+    for every interactive state: default, hover, focus-visible, active
+    (current stage), visited is treated the same as default (no separate
+    styling — URLs point at same-page anchors), disabled is represented
+    via `aria-disabled="true"` + pointer-events guard. Verification greps:
+    (a) `grep -cE '<a[^>]*href="#stage-[^"]+"[^>]*class="[^"]*hover:'
+    stages/design/artifacts/stage-progress-strip.html` returns ≥ 10. (b)
+    `grep -cE '<a[^>]*href="#stage-[^"]+"[^>]*class="[^"]*focus-visible:'
+    stages/design/artifacts/stage-progress-strip.html` returns ≥ 10. (c)
+    `grep -cE 'aria-current="(page|step)"'
+    stages/design/artifacts/stage-progress-strip.html` returns ≥ 1 (for
+    the active stage). (d) A §N "State coverage" section inside the
+    artifact documents each state's canonical class string; grep for the
+    section header: `grep -c 'State coverage (FB-128)'
+    stages/design/artifacts/stage-progress-strip.html` returns 1. Sibling
+    serialization: this unit's `depends_on: [unit-29]` ensures unit-29's
+    focus-visible sweep completes before this unit rewrites the anchors;
+    unit-28's gray→stone sweep also completes first because unit-29 chains
+    back through unit-26 → unit-28 → unit-27.
+  - >-
+    Sibling write serialization on shared artifacts (closes FB-122).
+    `revisit-unit-list.html` is written by unit-26 (opacity ban) and this
+    unit (live-region pair); `revisit-modal-states.html` is written by
+    unit-27 (prose ban) and this unit (live-region pair). Because this
+    unit's `depends_on: [unit-29]` chains through unit-26 → unit-28 →
+    unit-27, both of those units complete before this unit runs. The edits
+    are additive (unit-26/unit-27 modify existing elements; this unit
+    adds new elements at body level), so no conflict arises at merge. A
+    post-execute grep confirms both earlier units' contributions survived
+    this unit's write: `grep -c 'opacity-60'
+    stages/design/artifacts/revisit-unit-list.html` returns 0 (unit-26 fix
+    held); `grep -c 'disabled:opacity-50'
+    stages/design/artifacts/revisit-modal-states.html` returns 0 (unit-27
+    fix held); AND `grep -c 'id="feedback-live-polite"'
+    stages/design/artifacts/revisit-unit-list.html
+    stages/design/artifacts/revisit-modal-states.html` returns ≥ 2 (this
+    unit's addition landed).
+  - >-
+    feedback-assessor re-runs FB-103, FB-104, FB-115, FB-116, FB-121,
+    FB-122, FB-128, FB-131 against the literal grep recipes above and
+    confirms each passes (0 hits for negative greps; ≥ 1 for positive
+    greps). Assessor additionally confirms the native-anchor path
+    preserves all behavior the old `<div role="link">` pseudocode claimed
+    (focus, arrow, Enter) via the structural greps — no manual screen-
+    reader walk is required.
 status: pending
 ---
 # Native keyboard activation + live-region landmarks

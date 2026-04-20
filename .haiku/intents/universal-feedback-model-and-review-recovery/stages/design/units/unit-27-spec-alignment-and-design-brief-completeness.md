@@ -8,6 +8,8 @@ closes:
   - FB-98
   - FB-100
   - FB-108
+  - FB-125
+  - FB-127
 depends_on: []
 inputs:
   - stages/design/DESIGN-BRIEF.md
@@ -45,6 +47,18 @@ quality_gates:
     paired with the `ban` keyword — `grep -nE 'opacity[^"]*ban|ban[^"]*opacity'
     stages/design/artifacts/state-coverage-grid.md` returns each such mention).
   - >-
+    Palette-substitution note (closes FB-125): FB-100 feedback body references
+    the historical banned disabled pattern using `gray-*` tokens (e.g.
+    "`bg-gray-200 ... text-gray-700 dark:text-gray-300`"). The rewritten
+    `state-coverage-grid.md` rows use the canonical `stone-*` palette
+    (`bg-stone-100`, `text-stone-600 dark:text-stone-300`, `bg-stone-200`,
+    `border-stone-400`). A one-line inline comment immediately above each
+    rewritten row or at the top of the affected §7 section documents the
+    palette substitution: "Note: FB-100 body used `gray-*` historical tokens;
+    canonical rewrite uses `stone-*` per DESIGN-TOKENS.md §1.1 SPA palette."
+    `grep -nE 'FB-100.*stone-\*|palette substitution'
+    stages/design/artifacts/state-coverage-grid.md` returns ≥ 1 hit.
+  - >-
     `revisit-modal-states.html:101` prose no longer cites
     `disabled:opacity-50` as the canonical disabled pattern. Replacement reads:
     `<p class="text-xs text-stone-500 dark:text-stone-400 font-mono">disabled:
@@ -69,7 +83,15 @@ quality_gates:
     canonical Tailwind base `bg-white dark:bg-stone-900 rounded-xl border
     border-stone-200 dark:border-stone-700 shadow-sm p-6`; accessibility contract
     cross-refs `aria-live-sequencing-spec.md §2` (polite region for "assessor
-    completed" announcement). (b) `StageProgressStrip` Props include
+    completed" announcement). **Text-color contract (closes FB-127):** the
+    `AssessorSummaryCard` Props spec documents that every text child MUST
+    use a canonical stone-token pair — `text-stone-600 dark:text-stone-300`
+    for body copy, `text-stone-500 dark:text-stone-400` for secondary
+    metadata, `text-stone-900 dark:text-stone-100` for the verdict headline.
+    Bare `text-stone-400` / `text-stone-500` / `text-stone-600` without a
+    `dark:` companion is banned. Unit-31 enforces the contract via grep;
+    this spec is the source of truth the enforcement cites. (b)
+    `StageProgressStrip` Props include
     `stages: StageDescriptor[]`, `currentStageSlug: string`, `onStageSelect:
     (slug: string) => void`; canonical base `flex items-center gap-2
     overflow-x-auto`; accessibility contract mandates native `<a>` or `<button>`

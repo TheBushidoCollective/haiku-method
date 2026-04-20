@@ -12,7 +12,11 @@ closes:
   - FB-96
   - FB-99
   - FB-101
-depends_on: []
+  - FB-114
+  - FB-117
+  - FB-124
+depends_on:
+  - unit-27-spec-alignment-and-design-brief-completeness
 inputs:
   - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/assessor-summary-card.html
@@ -22,6 +26,8 @@ inputs:
   - stages/design/artifacts/feedback-inline-mobile.html
   - stages/design/artifacts/feedback-card-states.html
   - stages/design/artifacts/state-coverage-grid.md
+  - stages/design/artifacts/aria-landmark-spec.md
+  - stages/design/artifacts/aria-live-sequencing-spec.md
   - knowledge/DESIGN-TOKENS.md
 outputs:
   - stages/design/DESIGN-BRIEF.md
@@ -108,10 +114,17 @@ quality_gates:
     of `state-coverage-grid.md §0` ("Component-name canonical") that pins
     `FeedbackSheet` as the one live name and instructs reviewers to read
     past unit-19/unit-22 references to `MobileFeedbackPanel` as legacy.
-    (d) Grep gate (excluding frozen unit docs): `grep -rn
-    'MobileFeedbackPanel' stages/design/ knowledge/ | grep -v
+    (d) Grep gate (excluding frozen unit docs + new-unit references):
+    `grep -rn 'MobileFeedbackPanel' stages/design/ knowledge/ | grep -v
     'stages/design/units/unit-19' | grep -v 'stages/design/units/unit-22' |
-    grep -v 'stages/design/feedback/'` returns 0 hits.
+    grep -v 'stages/design/feedback/' | grep -v 'stages/design/units/unit-27' |
+    grep -v 'stages/design/units/unit-28'` returns 0 hits. The exclusion on
+    `unit-27`/`unit-28` covers any transitional references the sibling
+    units make while documenting the canonical-name pin (closes FB-124).
+    A separate positive grep confirms `FeedbackSheet` appears ≥ 3 times in
+    live authored files (DESIGN-BRIEF §2, §9, state-coverage-grid §7.8):
+    `grep -rn 'FeedbackSheet' stages/design/DESIGN-BRIEF.md
+    stages/design/artifacts/state-coverage-grid.md | wc -l` returns ≥ 3.
   - >-
     Bare `rounded` class (no shade) replaced with explicit DESIGN-TOKENS §1.5
     tokens in `feedback-card-states.html`. (a) Status-pill spans in the
@@ -124,9 +137,30 @@ quality_gates:
     'class="[^"]*\brounded\b(?!-)' stages/design/artifacts/*.html` returns 0
     hits.
   - >-
+    Inputs completeness (closes FB-114): `aria-landmark-spec.md` and
+    `aria-live-sequencing-spec.md` are declared in this unit's `inputs:` list
+    because the FB-96 component-name sweep touches both (the `MobileFeedbackPanel`
+    references in aria-landmark-spec + aria-live-sequencing rewrite to
+    `FeedbackSheet`). The corresponding `outputs:` list likewise includes both
+    files. `grep -A2 '^inputs:'
+    .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/units/unit-28-canonical-token-normalization-sweep.md
+    | grep -c 'aria-landmark-spec.md\|aria-live-sequencing-spec.md'` returns 2.
+  - >-
+    Sibling-write serialization (closes FB-117): this unit's
+    `depends_on: [unit-27-spec-alignment-and-design-brief-completeness]` makes
+    unit-27 run first — unit-27 establishes the §2 component spec + §9 file
+    inventory baseline; this unit then applies canonical-token edits to the
+    same files without colliding. Post-fix, both units' contributions to
+    `DESIGN-BRIEF.md` and `state-coverage-grid.md` are additive and
+    section-scoped (unit-27 adds §2 spec blocks + §9 rows; unit-28 rewrites
+    existing class strings in §2 patterns + §7 state rows). `grep -A2
+    '^depends_on:'
+    .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/units/unit-28-canonical-token-normalization-sweep.md
+    | grep -c 'unit-27'` returns ≥ 1.
+  - >-
     feedback-assessor re-runs each of FB-87, FB-88, FB-89, FB-90, FB-91, FB-96,
-    FB-99, FB-101 against its literal grep recipe and confirms each returns 0
-    hits.
+    FB-99, FB-101, FB-114, FB-117, FB-124 against its literal grep recipe and
+    confirms each returns 0 hits (or ≥ 1 for positive greps).
 status: pending
 ---
 # Canonical-token normalization sweep

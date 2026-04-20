@@ -7,7 +7,15 @@ closes:
   - FB-105
   - FB-106
   - FB-109
-depends_on: []
+  - FB-111
+  - FB-112
+  - FB-118
+  - FB-119
+  - FB-120
+  - FB-123
+  - FB-129
+depends_on:
+  - unit-30-native-activation-and-live-region-landmarks
 inputs:
   - stages/design/artifacts/contrast-and-type-audit.md
   - stages/design/artifacts/assessor-summary-card.html
@@ -16,6 +24,7 @@ inputs:
   - stages/design/artifacts/keyboard-shortcut-map.html
   - stages/design/artifacts/feedback-lifecycle-transitions.html
   - stages/design/artifacts/review-package-structure.html
+  - stages/design/artifacts/focus-ring-spec.html
 outputs:
   - stages/design/artifacts/assessor-summary-card.html
   - stages/design/artifacts/annotation-popover-states.html
@@ -42,12 +51,16 @@ quality_gates:
     `annotation-popover-states.html:381` popover close ✕ button passes WCAG
     1.4.3 in dark mode. (a) Default color rewritten from `text-stone-500` to
     the pair `text-stone-500 dark:text-stone-400`. (b) Size lifted from
-    `text-sm` to `text-base` OR `font-semibold` added to preserve glyph
-    legibility at sub-pixel densities. (c) Hover state preserves the existing
+    `text-sm` to `text-base` (16px) — canonical choice per user decision;
+    closes FB-120's disjunction ambiguity with a committed single class
+    string. (c) Hover state preserves the existing
     `dark:hover:text-stone-200`; default state in dark now reaches ≥ 7:1
     (`text-stone-400` #a8a29e on `dark:bg-stone-800` #292524 = 7.1:1). (d)
-    Manual walk confirms the ✕ remains clearly visible on `dark:bg-stone-800`
-    and `dark:bg-stone-900` surfaces.
+    Verification grep replaces manual walk: `grep -nE 'aria-label="Close
+    popover"[^>]*class="[^"]*text-base[^"]*dark:text-stone-400'
+    stages/design/artifacts/annotation-popover-states.html` returns ≥ 1 hit;
+    `grep -nE 'aria-label="Close popover"[^>]*class="[^"]*text-sm\b'
+    stages/design/artifacts/annotation-popover-states.html` returns 0 hits.
   - >-
     `text-[11px]` type-scale floor enforced stage-wide. Per-instance
     remediation per FB-105: (a) `review-ui-mockup.html:43` session-id span
@@ -69,10 +82,13 @@ quality_gates:
     `focus-ring-spec.html:108` — already covered by **unit-29** (lifted to
     `text-xs`); this unit does not re-touch it. (k)
     `review-package-structure.html:545, 666, 697, 725, 767, 805, 839, 870`
-    eight code-block rows either lifted from `text-[11px]` to `text-xs font-mono`
-    OR paired with `font-semibold` (designer's call per readability of each
-    specific block; mixing is fine as long as the §3 rule — every `text-[11px]`
-    pairs with `font-semibold` or `font-bold` — holds). (l)
+    eight code-block rows all lifted from `text-[11px]` to `text-xs font-mono`
+    — canonical choice per user decision; closes FB-129's unfalsifiable
+    "designer's call" gate with a committed single class string applied
+    uniformly. Grep: `grep -cE 'code-block text-\[11px\]'
+    stages/design/artifacts/review-package-structure.html` returns 0; `grep
+    -cE 'code-block text-xs font-mono'
+    stages/design/artifacts/review-package-structure.html` returns ≥ 8. (l)
     `review-package-structure.html:802` lifted to `text-xs`. (m) Stage-wide
     grep gate: `grep -rEn 'text-\[11px\]' stages/design/artifacts/` — every
     surviving hit must pair with `font-semibold` or `font-bold` on the same
@@ -91,10 +107,73 @@ quality_gates:
     updated to reflect the actual post-fix class strings (no stale "was
     text-[11px]" rows claiming a fix that didn't land).
   - >-
-    feedback-assessor re-runs the FB-105 / FB-106 / FB-109 per-line grep
-    recipes and confirms each call-out line now uses the remediated class
-    string. Assessor also runs the §3 one-liner audit script and confirms
-    empty output.
+    Executable contrast verification (closes FB-112). Prose contrast claims
+    (e.g. "≥ 7:1", "≥ 10:1", "≥ 4.5:1") are backed by a canonical token-pair
+    grep recipe rather than manual measurement. For each remediated line,
+    the post-fix class pair must match one of the canonical WCAG-passing
+    pairs documented in `DESIGN-TOKENS.md §2.contrast-pairs`:
+    `text-stone-600 dark:text-stone-300`, `text-stone-400 dark:text-stone-300`,
+    `text-stone-700 dark:text-stone-200`, `text-stone-900 dark:text-stone-100`.
+    Grep recipe: `for pair in 'text-stone-600 dark:text-stone-300'
+    'text-stone-400 dark:text-stone-300' 'text-stone-700 dark:text-stone-200'
+    'text-stone-900 dark:text-stone-100'; do grep -c "$pair"
+    stages/design/artifacts/assessor-summary-card.html
+    stages/design/artifacts/annotation-popover-states.html
+    stages/design/artifacts/review-ui-mockup.html; done` returns ≥ 1 per
+    artifact across the allowed pairs. Any line that violates the pair
+    (bare stone without dark companion or a bare `text-stone-{500,600}`
+    without the matching canonical pair) is flagged: `grep -rEn
+    'text-stone-(500|600)\b(?![^"]*dark:)'
+    stages/design/artifacts/assessor-summary-card.html
+    stages/design/artifacts/annotation-popover-states.html
+    stages/design/artifacts/review-ui-mockup.html` returns 0 hits in this
+    unit's output scope.
+  - >-
+    Inputs completeness (closes FB-118). `focus-ring-spec.html` is declared
+    in this unit's `inputs:` list because FB-105 lists
+    `focus-ring-spec.html:108` as one of the `text-[11px]` violations. The
+    `:108` line itself is owned by unit-29 (which lifts it to `text-xs` as
+    part of the focus-ring-spec code-sample rewrite for FB-110); this
+    unit's scope is reading that line to verify the coordinated fix, not
+    re-writing it. `grep -A2 '^inputs:'
+    .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/units/unit-31-contrast-and-type-scale-fixes.md
+    | grep -c 'focus-ring-spec.html'` returns ≥ 1.
+  - >-
+    Cross-unit coordination for FB-105 (closes FB-123). The focus-ring-spec.html:108
+    instance is rewritten by unit-29 (which handles the §1 canonical code-
+    sample clarity fix and lifts the `text-[11px]` to `text-xs` in the same
+    edit). This unit's `depends_on: [unit-30]` chains through
+    unit-30 → unit-29 → unit-26 → unit-28 → unit-27, so unit-29's lift
+    completes before this unit's stage-wide `text-[11px]` verification
+    script runs. The verification script (see gate 3(m)) is therefore
+    expected to pass for focus-ring-spec.html:108 as a side effect of
+    unit-29's edit. A grep confirms the dependency is wired: `grep -A2
+    '^depends_on:'
+    .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/units/unit-31-contrast-and-type-scale-fixes.md
+    | grep -c 'unit-30'` returns 1.
+  - >-
+    Sibling-write serialization (closes FB-111 + FB-119). `review-ui-mockup.html`
+    is written by unit-26 (opacity ban on stage buttons + `dim` JS),
+    unit-29 (focus-visible ring on `.stage-btn`), and this unit (text-[11px]
+    rewrites + dark-mode contrast fixes). The linear `depends_on` chain
+    `unit-27 → unit-28 → unit-26 → unit-29 → unit-30 → unit-31` serializes
+    writes to that file. `contrast-and-type-audit.md` is written by unit-26
+    (§N.bolt-5 opacity section), unit-28 (canonical-token normalization
+    rows), and this unit (§3 Type Scale verification + per-artifact rows).
+    This unit **owns the `contrast-and-type-audit.md §3 Type Scale`
+    verification section and the per-artifact rows for its outputs
+    exclusively** — no overlap with unit-26's §N.bolt-5 (opacity) or
+    unit-28's canonical-token entries. Audit grep: `grep -cE '§3 Type
+    Scale.*Verification|§3 Type Scale verification'
+    stages/design/artifacts/contrast-and-type-audit.md` returns ≥ 1. The
+    rows this unit writes carry an inline marker: `<!-- unit-31 owns -->`;
+    `grep -c 'unit-31 owns'
+    stages/design/artifacts/contrast-and-type-audit.md` returns ≥ 1.
+  - >-
+    feedback-assessor re-runs the FB-105, FB-106, FB-109, FB-111, FB-112,
+    FB-118, FB-119, FB-120, FB-123, FB-129 per-line grep recipes and
+    confirms each call-out passes. Assessor also runs the §3 one-liner
+    audit script and confirms empty output.
 status: pending
 ---
 # Contrast + type-scale specific fixes

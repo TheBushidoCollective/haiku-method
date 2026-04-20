@@ -116,7 +116,24 @@ The sidebar header is a single **"Comments"** heading with an adjacent **AgentFe
 
 > **State-coverage requirement (added in unit-15 / FB-25; extended in unit-19 / FB-56).** Every new component in this intent — and every new component introduced in downstream stages — **MUST** ship with a six-state grid (default / hover / focus / active / disabled / error) rendered alongside its component spec. Use `stages/design/artifacts/state-coverage-grid.md` as the template. Components whose element cannot reach a given state (e.g. a non-focusable label) **MUST** mark the state `N/A` with a one-line rationale; silently omitting a state is not acceptable. The design-reviewer hat walks this grid row-by-row before approval.
 >
-> **FB-56 extension**: every component named in §2 of THIS brief — including `FeedbackStatusBadge`, `FeedbackOriginIcon`, `FeedbackItem` (compact + expanded), `FeedbackList`, `FeedbackSummaryBar`, `AgentFeedbackToggle`, `FeedbackSheet` (aka `MobileFeedbackPanel`), `FeedbackFloatingButton`, `AssessorSummaryCard`, `StageProgressStrip`, `RevisitModal` — MUST have an explicit row in `state-coverage-grid.md` §7. Adding a new component to §2 without simultaneously adding a row in the grid is a hard fail at the design-reviewer gate.
+> **FB-56 extension**: every component named in §2 of THIS brief — including `FeedbackStatusBadge`, `FeedbackOriginIcon`, `FeedbackItem` (compact + expanded), `FeedbackList`, `FeedbackSummaryBar`, `AgentFeedbackToggle`, `FeedbackSheet` (aka `MobileFeedbackPanel`), `FeedbackFloatingButton`, `FeedbackFloatingButton.pulse` (the pulse-animation variant), `AssessorSummaryCard`, `StageProgressStrip`, `RevisitModal` — MUST have an explicit row in `state-coverage-grid.md` §7. Adding a new component to §2 without simultaneously adding a row in the grid is a hard fail at the design-reviewer gate.
+>
+> **State-coverage cross-reference index (FB-75).** Every §2 component spec below carries an inline `see state-coverage-grid.md §X` pointer in its subheading so a reviewer walking §2 top-to-bottom can jump straight to the matching state grid without searching. The authoritative index:
+>
+> | §2 spec | State-grid section |
+> |---|---|
+> | `FeedbackStatusBadge` | `state-coverage-grid.md §7.1` (4-status × 2-theme matrix) |
+> | `FeedbackOriginIcon` | `state-coverage-grid.md §7.2` (six-origin variants) |
+> | `FeedbackItem` compact | `state-coverage-grid.md §2` + `§7.3` |
+> | `FeedbackItem` expanded | `state-coverage-grid.md §2` + `§7.4` |
+> | `FeedbackList` | `state-coverage-grid.md §7.5` (+ empty / loading / error) |
+> | `FeedbackSummaryBar` | `state-coverage-grid.md §7.6` (per-chip six-state) |
+> | `AgentFeedbackToggle` | `state-coverage-grid.md §7.7` (on / off × focus / disabled / error) |
+> | `FeedbackSheet` | `state-coverage-grid.md §3` + `§7.8` (+ empty / loading / error) |
+> | `FeedbackFloatingButton` | `state-coverage-grid.md §3` + `§7.9` (+ pulse variant) |
+> | `AssessorSummaryCard` | `state-coverage-grid.md §7.10` |
+> | `StageProgressStrip` | `state-coverage-grid.md §5` + `§7.11` |
+> | `RevisitModal` | `state-coverage-grid.md §4` + `§7.12` |
 
 ### Typography Floor (unit-11)
 
@@ -154,6 +171,8 @@ WCAG 2.2 1.4.11 Non-Text Contrast requires ≥ 3:1 for disabled-state indicators
 ### New Components
 
 #### `FeedbackStatusBadge`
+
+*See `state-coverage-grid.md §7.1` — 4-status × 2-theme render matrix.*
 
 A specialized badge for feedback status values. Extends the existing `StatusBadge` pattern with feedback-specific colors.
 
@@ -196,6 +215,8 @@ Uses the same `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-
 
 #### `FeedbackOriginIcon`
 
+*See `state-coverage-grid.md §7.2` — six-origin variant render.*
+
 A small icon/label showing where the feedback came from. Uses emoji consistent with the existing sidebar's type-icon pattern.
 
 **Props:**
@@ -227,6 +248,8 @@ Rendered as: `<span className="text-xs text-stone-500 dark:text-stone-400" aria-
 ---
 
 #### `FeedbackItem`
+
+*See `state-coverage-grid.md §2` (compact + expanded rows) and `§7.3` / `§7.4` (DESIGN-BRIEF §2 cross-references).*
 
 A single feedback item in the feedback list. Two visual variants: **compact** (in the sidebar list) and **expanded** (when clicked).
 
@@ -281,6 +304,8 @@ The item expands in-place to show:
 
 #### `FeedbackList`
 
+*See `state-coverage-grid.md §7.5` — container-level empty / loading / error coverage in addition to the per-item states in §2.*
+
 The scrollable list of feedback items within the sidebar.
 
 **Props:**
@@ -319,6 +344,8 @@ Group header: `text-[10px] font-semibold uppercase tracking-wider text-stone-400
 
 #### `FeedbackSummaryBar`
 
+*See `state-coverage-grid.md §7.6` — each count chip is a toggleable filter button with its own default / hover / focus / active / disabled / error row.*
+
 A compact summary strip at the top of the feedback list showing aggregate counts by status. Appears only when feedback items exist.
 
 ```
@@ -335,6 +362,8 @@ A compact summary strip at the top of the feedback list showing aggregate counts
 ---
 
 #### `AgentFeedbackToggle`
+
+*See `state-coverage-grid.md §7.7` — on / off × focus / disabled / error matrix with the `role="switch" aria-checked="{on|off}"` ARIA contract.*
 
 A single switch (default **OFF**) that reveals agent-origin feedback (`adversarial-review`, `agent`) inline within the unified **Comments** list. H·AI·K·U has no user identity, so an identity-based split (an earlier identity-segmented control) is undefined — see the Retired Components subsection at the end of §2 and `comments-list-with-agent-toggle.html`.
 
@@ -678,7 +707,7 @@ The UI shows only the actions valid for the item's current status. Invalid actio
 ### Mobile (< 768px)
 
 - Sidebar is hidden entirely (`hidden md:flex` -- existing behavior on `ReviewSidebar`).
-- **Mobile feedback access:** The sidebar content becomes accessible via a `FeedbackFloatingButton` in the bottom-right corner that opens a full-screen `FeedbackSheet` overlay.
+- **Mobile feedback access:** The sidebar content becomes accessible via a `FeedbackFloatingButton` in the bottom-right corner that opens a full-screen `FeedbackSheet` overlay. State coverage: `FeedbackFloatingButton` in `state-coverage-grid.md §3` + `§7.9` (including the `.feedback-floating-button-pulse` variant); `FeedbackSheet` in `state-coverage-grid.md §3` + `§7.8` (sheet-level `empty` / `loading` / `error`).
 - `FeedbackFloatingButton`: `fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center text-lg` -- shows the comment count badge when > 0. Full-word name matches the review-app PascalCase full-word convention (e.g. `AnnotationCanvas`, not `AnnotCanv`). The `.feedback-floating-button-pulse` animation class (see §7) briefly pulses the button when new agent feedback arrives; the CSS class name is stable.
 - `FeedbackSheet`: `fixed inset-0 z-50 bg-white dark:bg-stone-900` with a close button at top-right. Contains the same sidebar content (AgentFeedbackToggle, unified Comments list, status filter pills, general input, decision buttons). Responsive behavior is baked into the single `FeedbackSheet` component — no `Mobile` prefix is needed since the sheet only renders on mobile breakpoints anyway.
 - Both components are canonicalized in `component-inventory.md` and §9.
@@ -825,28 +854,72 @@ The sidebar focus order follows the DOM order, which matches the visual top-to-b
 
 ## 7. CSS Additions
 
-New styles to add to `packages/haiku/review-app/src/index.css`:
+New styles to add to `packages/haiku/review-app/src/index.css`.
+
+> **Opacity-on-root policy (enforced by unit-18 + unit-20 / FB-70).** The
+> CSS strip below MUST NOT apply `opacity:` to any feedback card root —
+> the §2 "Banned Text-on-Surface Pairs" table forbids `opacity-70` on
+> closed card roots and `opacity-50` on rejected card roots. Status
+> signaling uses the **three-signal rule** (colored left border + status
+> glyph inside a 16px status-color circle + text prefix on the title)
+> plus a background-color token. The closed card pairs `bg-green-50/60`
+> with a `✓` glyph and a "Closed ·" prefix; the rejected card pairs
+> `bg-stone-100` with a `×` glyph, a "Rejected ·" prefix, and a
+> full-opacity strikethrough on `.feedback-title`.
+>
+> **No-raw-hex policy (enforced by unit-16 stage-wide token audit + unit-20 /
+> FB-70).** Raw hex literals inside this CSS block are banned. Every
+> color value uses either a Tailwind utility class applied on the
+> component (preferred) or the canonical `@theme`-declared CSS custom
+> properties (`var(--color-blue-400)`, `var(--color-green-400)`,
+> `var(--color-teal-600)`) that Tailwind v4 emits in the project's
+> generated stylesheet. The blue-400 / green-400 / teal-600 literals
+> that shipped in earlier drafts are replaced below with those token
+> references. Inline hex swatches in §2 remediation prose stay as-is
+> — they are descriptive (showing a measured contrast pair), not live
+> code.
 
 ```css
 /* Feedback item status indicators -- left border */
 .feedback-item-addressed {
-  border-left: 2px solid #60a5fa; /* blue-400 */
+  border-left: 2px solid var(--color-blue-400);
 }
 .feedback-item-closed {
-  border-left: 2px solid #4ade80; /* green-400 */
-  opacity: 0.7;
+  border-left: 2px solid var(--color-green-400);
+  /* Opacity on the card root is BANNED (§2 "Banned Text-on-Surface
+     Pairs"). The closed card achieves visual muting via a status-color
+     background token + a "Closed ·" title prefix + a ✓ glyph inside a
+     16px green-600 status circle — three signals, zero opacity. Apply
+     `bg-green-50/60` (light) and `dark:bg-green-950/25` (dark) with the
+     `.closed` compound selector below. */
+}
+.feedback-item-closed .feedback-title::before {
+  content: "Closed · ";
+  font-weight: 600;
 }
 .feedback-item-rejected {
-  opacity: 0.5;
+  /* Opacity on the card root is BANNED (§2 "Banned Text-on-Surface
+     Pairs") — 50% opacity makes the strikethrough itself invisible and
+     collapses metadata contrast below AA. The rejected card uses the
+     `bg-stone-100` token background + a "Rejected ·" title prefix + a ×
+     glyph + full-opacity strikethrough on `.feedback-title` instead. */
 }
 .feedback-item-rejected .feedback-title {
   text-decoration: line-through;
+  text-decoration-color: var(--color-stone-500);
+  /* Title text stays at full opacity; the strikethrough is the
+     primary muting signal and it must be perceivable. */
+}
+.feedback-item-rejected .feedback-title::before {
+  content: "Rejected · ";
+  font-weight: 600;
+  text-decoration: none; /* prefix stays un-struck so it reads clearly */
 }
 
 /* FeedbackFloatingButton pulse animation for new items (mobile only) */
 @keyframes feedback-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(13, 148, 136, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-teal-600) 40%, transparent); }
+  50%      { box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-teal-600) 0%, transparent); }
 }
 .feedback-floating-button-pulse {
   animation: feedback-pulse 2s ease-in-out 3;
@@ -856,7 +929,7 @@ New styles to add to `packages/haiku/review-app/src/index.css`:
 }
 ```
 
-Most styling uses Tailwind utility classes directly on components. The CSS additions are only for states that require descendant selectors or animations that are cumbersome in inline Tailwind.
+Most styling uses Tailwind utility classes directly on components (`bg-green-50/60`, `bg-stone-100`, `dark:bg-green-950/25`, `dark:bg-stone-800/50`, `bg-teal-600` for the FAB, etc.). The CSS additions above are only for descendant selectors (e.g. muting the `.feedback-title` inside a `.feedback-item-closed`) and the pulse keyframe animation that is cumbersome to express inline. Every color value is a token reference — no raw hex literals.
 
 ---
 

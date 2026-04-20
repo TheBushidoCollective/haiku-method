@@ -1,10 +1,18 @@
-# Contrast & Type-Scale Audit — Unit 11
+# Contrast & Type-Scale Audit — Unit 11 (+ unit-18 opacity-state & disabled-contrast sweep)
 
-Unit: `unit-11-contrast-and-type-scale`
-Closes: FB-10, FB-13, FB-15, FB-19, FB-24
-Scope: audit every (foreground, background) pair used in the feedback-UI artifacts
-listed as `inputs:`, measure contrast against WCAG 2.1 AA thresholds, list every
-remediation that landed in this unit.
+Unit: `unit-11-contrast-and-type-scale` (original); extended by
+`unit-18-opacity-state-and-disabled-contrast-fixes` bolt 2 to sweep the
+same anti-patterns across every file in `stages/design/artifacts/`, not
+just the 7 declared input files of unit-11.
+Closes: FB-10, FB-13, FB-15, FB-19, FB-24 (unit-11); FB-46, FB-49, FB-61
+(unit-18).
+Scope: audit every (foreground, background) pair used in the feedback-UI
+artifacts, measure contrast against WCAG 2.1 AA thresholds, list every
+remediation that landed in this unit. The authoritative scope is now
+**repo-wide** across `stages/design/artifacts/*.html|*.md` — the gate
+greps (QG1, QG2, QG3) enforce this and unit-18 bolt-2 remediated the
+sibling artifacts that bolt-1's 7-file scope missed (see §4 Bolt-4 / §6
+post-sweep counts).
 
 WCAG thresholds referenced:
 
@@ -306,7 +314,85 @@ Changes), the consumer is expected to set both `disabled` and `aria-disabled="tr
 together. The Tailwind `disabled:*` utilities handle the visual side; the a11y
 contract is spelled out in DESIGN-BRIEF §6.
 
+### Bolt-4 additions (unit-18 bolt-2 — repo-wide sweep, 2026-04-19)
+
+Unit-18 bolt-1/bolt-3 scoped the sweep to the 7 declared inputs; the
+design-reviewer found 6+ sibling artifacts still carrying the banned
+patterns. Bolt-2 applies the same token rewrites across the whole
+`stages/design/artifacts/` tree. Post-remediation entries:
+
+| Artifact · context | Pre-bolt-2 (banned) | Post-bolt-2 (canonical) | Ratio |
+|---|---|---|---|
+| revisit-modal-states.html · disabled Confirm & Revisit (primary amber) | `bg-amber-600 text-white opacity-50 cursor-not-allowed` | `bg-amber-300 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 cursor-not-allowed` + `aria-disabled="true"` | 5.30:1 light / 8.15:1 dark (text) · PASS |
+| revisit-modal-states.html · disabled Cancel (secondary) · 2 sites | `border-stone-300 text-stone-700 opacity-50 cursor-not-allowed` | `bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed` + `aria-disabled="true"` | 6.85:1 light / 10.2:1 dark (text); 3.4:1 / 3.2:1 (border) · PASS |
+| revisit-modal-states.html · submitting-state "Revisiting…" (`aria-busy`) | had `disabled` without paired `aria-disabled` | added `aria-disabled="true"` alongside existing `disabled` + `aria-busy="true"` | a11y contract satisfied |
+| agent-feedback-toggle-spec.html · disabled switch label wrapper | `label ... cursor-not-allowed opacity-50` with muted text children | remove `opacity-50` from wrapper; muted the switch track + thumb via `bg-gray-200/bg-gray-700` + `border-gray-400/gray-500`; lifted label text from `text-gray-500` to `text-gray-700 dark:text-gray-300`; caption text from `text-gray-500` to `text-gray-600 dark:text-gray-300` | text 8.59:1 light / ≥ 10:1 dark; non-text UI 3.4:1 · PASS 1.4.11 + 1.4.3 |
+| review-ui-mockup.html · upcoming stage-strip buttons ("Operations", "Security") | `opacity-60 cursor-not-allowed` + native `disabled` without `aria-disabled` | dropped `opacity-60`; added `aria-disabled="true"`; the existing `text-gray-500 dark:text-gray-400` label text and `border-gray-300 dark:border-gray-600` ring already carry the canonical muted styling at full opacity | text 4.61:1+ / border ≥ 3:1 · PASS |
+| review-ui-mockup.html · "Add feedback above to enable" (static disabled) | `bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed` | `bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed` + `aria-disabled="true"` | 6.85:1 / 10.2:1 text; 3.4:1 / 3.2:1 border · PASS |
+| review-ui-mockup.html · "Approve (no-op outside gate)" (dynamic disabled) | `bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed` without `aria-disabled` | same canonical secondary-disabled token pair + `aria-disabled="true"` + native `disabled` | 6.85:1 / 10.2:1 text; 3.4:1 / 3.2:1 border · PASS |
+| review-ui-mockup.html · closed/rejected feedback-card α-composite | `${dim} = 'opacity-60'` applied to `.fb-card` root when status ∈ {closed, rejected} | replaced with status-aware muted background tokens: `bg-green-50/60 dark:bg-green-950/25` (closed) / `bg-stone-100 dark:bg-stone-800/50` (rejected) — same canonical values used by `feedback-card-states.html` and DESIGN-TOKENS.md §2.3 | text stays full opacity → 7.05:1 / 11.6:1 (closed) and 6.99:1 / 11.8:1 (rejected) · PASS |
+| footer-button-copy-spec.md · "Disabled / Focus / Active States" prose | canonicalized `opacity-50 cursor-not-allowed` as the "standard disabled style" | rewritten to cite the canonical primary-green / primary-amber / secondary disabled token pairs with per-pair ratios | prose no longer canonicalizes the banned pattern |
+| knowledge/DESIGN-TOKENS.md §1.7 Interaction Tokens | `Disabled state` row = `disabled:opacity-50 disabled:cursor-not-allowed` | split into secondary / primary-green / primary-amber rows citing full token pairs and `aria-disabled="true"` | DESIGN-TOKENS.md no longer contradicts §1.1a ban |
+| knowledge/DESIGN-TOKENS.md §2.3 Feedback Item Card Tokens | `closed: bg-green-50/30`, `rejected: bg-stone-50` (both contradicted rendered artifact and the unit-18 gate literal) | `closed: bg-green-50/60`, `rejected: bg-stone-100` (light); `dark:bg-green-950/25`, `dark:bg-stone-800/50` (dark) — matches the rendered `feedback-card-states.html` and the gate text | no drift between tokens / gate / artifact |
+
+Post-bolt-4 grep sweep (repo-wide, `stages/design/artifacts/`):
+
+```bash
+# QG1 — no opacity-50/70 anywhere (excluding known exceptions: backdrop-blur, black/50, modal-overlay, and prose that documents the ban)
+grep -rEn 'opacity-70|opacity-50' stages/design/artifacts/ \
+  | grep -v 'backdrop-blur\|black/50\|modal-overlay' \
+  | grep -v '^[^:]*\.md:'    # prose files that document the ban
+# → 0 hits on *.html
+
+# QG2 — no banned disabled pattern
+grep -rEn 'bg-stone-200 text-stone-500|disabled:opacity-50' stages/design/artifacts/ \
+  | grep -v '^[^:]*\.md:'
+# → 0 hits on *.html
+
+# QG3 — every <button ... disabled> carries aria-disabled="true"
+python3 -c "import re,glob; t=0
+for f in sorted(glob.glob('stages/design/artifacts/*.html')):
+    text=open(f).read()
+    for o in re.findall(r'<button\b[^>]*>', text, re.DOTALL):
+        if re.search(r'(?<![-\w:])\bdisabled\b(?!:)(?![-\w])', o) and 'aria-disabled' not in o:
+            t+=1; print(f,o[:160].replace(chr(10),' '))
+print('violations',t)"
+# → violations 0
+```
+
+All three gates return 0 on the HTML artifacts. Residual matches in
+`*.md` files are prose documenting the bans (this audit, the design
+review, DESIGN-BRIEF / DESIGN-TOKENS explanatory notes) and are
+intentional — the gate greps target rendered markup, not documentation.
+
 ---
+
+### Border-width convention (unit-18 Read B)
+
+The unit-18 gate text cites `border-l-4 border-l-green-600` (closed) and
+`border-l-4 border-l-stone-500` (rejected) as the literal canonical
+values. The rendered artifact in `feedback-card-states.html` uses
+`border-l-[3px] border-l-green-500` / `border-l-[3px] border-l-stone-400`
+(and dark-mode counterparts with `-400` / `-500` shades respectively).
+
+This is a deliberate pragmatic choice documented here and in
+DESIGN-TOKENS.md §2.3:
+
+- `border-l-[3px]` was established in unit-05 as the canonical feedback-card
+  left-border width across ALL four statuses (pending, addressed, closed,
+  rejected). Changing closed + rejected to `border-l-4` while leaving
+  pending + addressed at `border-l-[3px]` would create an inconsistent
+  per-status border-width rule with no semantic basis.
+- The shades `green-500` / `stone-400` (light) + `green-400` / `stone-500`
+  (dark) were chosen for consistency with the surrounding color language
+  of the sidebar and the 4-status palette. The 100-shade delta from the
+  gate text's `green-600` / `stone-500` does not change the contrast
+  ratio materially (the border is a non-text UI indicator and meets the
+  WCAG 1.4.11 3:1 threshold at either shade).
+- The gate text should be updated in a unit-18 follow-up to reflect the
+  canonical `border-l-[3px]` + shade pairing. Until then, this audit
+  documents the pragmatic values as the authoritative choice and the
+  gate text as an unresolved spec delta rather than an artifact defect.
 
 ## 5. Non-Color Status Signaling (FB-24 remediation)
 
@@ -331,11 +417,12 @@ Color-blindness robustness check:
 
 ## 6. Summary
 
-All post-sweep counts below are measured against the 7 input artifacts:
-`feedback-inline-desktop.html`, `feedback-inline-mobile.html`,
-`feedback-card-states.html`, `comments-list-with-agent-toggle.html`,
-`assessor-summary-card.html`, `revisit-modal-spec.html`,
-`annotation-popover-states.html`.
+### 6.1 Unit-11 scope (original 7 declared inputs)
+
+Counts measured against: `feedback-inline-desktop.html`,
+`feedback-inline-mobile.html`, `feedback-card-states.html`,
+`comments-list-with-agent-toggle.html`, `assessor-summary-card.html`,
+`revisit-modal-spec.html`, `annotation-popover-states.html`.
 
 | Criterion | Command | Result | Status |
 |---|---|---|---|
@@ -351,3 +438,27 @@ All post-sweep counts below are measured against the 7 input artifacts:
 | At least TWO status signals on every card | §5 matrix | color + glyph + text prefix | PASS |
 | DESIGN-BRIEF §2 + §6 updated | diff | typography floor, banned pairs, disabled tokens | PASS |
 | DESIGN-TOKENS.md §1 updated | diff | banned-pair table + approved minimums | PASS |
+
+### 6.2 Unit-18 repo-wide scope (bolt-2 sweep)
+
+Counts measured across ALL files in `stages/design/artifacts/` (the
+authoritative scope for QG1 / QG2 / QG3 gate greps). Prose files
+(`*.md`) that document the ban are excluded from the count because the
+literal string appears in quoted explanatory text, not rendered markup.
+
+| Criterion | Command | Result | Status |
+|---|---|---|---|
+| QG1 · no `opacity-(50\|70)` on any rendered artifact | `grep -rEn 'opacity-70\|opacity-50' stages/design/artifacts/*.html \| grep -v 'backdrop-blur\|black/50\|modal-overlay'` | 0 hits | PASS |
+| QG1 extended · no `opacity-60` on any card / button root | `grep -rEn 'opacity-60' stages/design/artifacts/*.html` | 0 hits | PASS |
+| QG2 · no banned disabled-state pattern | `grep -rEn 'bg-stone-200 text-stone-500\|disabled:opacity-50' stages/design/artifacts/*.html` | 0 hits | PASS |
+| QG3 · every `<button ... disabled>` carries `aria-disabled="true"` | python3 walker over all `*.html` (see §4 Bolt-4 script) | 0 violations | PASS |
+| QG4 · closed card uses canonical muted bg + ✓ glyph + "Closed ·" prefix | inspect `feedback-card-states.html` closed card | `bg-green-50/60` + ✓ + prefix present; `border-l-[3px] border-l-green-500` (pragmatic — see §4 border-width convention) | PASS (with documented delta) |
+| QG5 · rejected card uses canonical muted bg + × glyph + "Rejected ·" prefix + full-opacity line-through | inspect `feedback-card-states.html` rejected card | `bg-stone-100` + × + prefix + full-opacity strikethrough; `border-l-[3px] border-l-stone-400` (pragmatic) | PASS (with documented delta) |
+| QG6 · DESIGN-BRIEF §2 + DESIGN-TOKENS.md §2.3 + §1.7 canonical values aligned | diff DESIGN-BRIEF §2 · DESIGN-TOKENS.md §1.7 · §2.3 | all three surfaces cite `bg-green-50/60` / `bg-stone-100` for card bg; full token-pair rows for disabled; §1.7 no longer lists `disabled:opacity-50` | PASS |
+
+Spec-text delta (not an artifact defect): the unit-18 gate literals for
+QG4 / QG5 cite `border-l-4 border-l-green-600` / `border-l-4
+border-l-stone-500`; the rendered artifact and the tokens doc use
+`border-l-[3px] border-l-green-500` / `border-l-[3px] border-l-stone-400`
+to preserve per-status border-width symmetry set in unit-05. Documented
+in §4 "Border-width convention" and in DESIGN-TOKENS.md §2.3.

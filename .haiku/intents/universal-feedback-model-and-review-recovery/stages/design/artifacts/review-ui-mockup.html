@@ -133,7 +133,7 @@
 
           <!-- Operations — upcoming -->
           <li class="w-24">
-            <button type="button" data-stage="operations" data-disabled="true" class="stage-btn group w-full flex flex-col items-center focus:outline-none opacity-60 cursor-not-allowed" disabled aria-label="Operations — not yet started">
+            <button type="button" data-stage="operations" data-disabled="true" class="stage-btn group w-full flex flex-col items-center focus:outline-none cursor-not-allowed" disabled aria-disabled="true" aria-label="Operations — not yet started">
               <div class="flex items-center w-full h-10">
                 <div class="flex-1 h-0.5 bg-gray-300 dark:bg-gray-700"></div>
                 <div class="stage-icon relative w-10 h-10 flex items-center justify-center shrink-0">
@@ -150,7 +150,7 @@
 
           <!-- Security — upcoming -->
           <li class="w-24">
-            <button type="button" data-stage="security" data-disabled="true" class="stage-btn group w-full flex flex-col items-center focus:outline-none opacity-60 cursor-not-allowed" disabled aria-label="Security — not yet started">
+            <button type="button" data-stage="security" data-disabled="true" class="stage-btn group w-full flex flex-col items-center focus:outline-none cursor-not-allowed" disabled aria-disabled="true" aria-label="Security — not yet started">
               <div class="flex items-center w-full h-10">
                 <div class="flex-1 h-0.5 bg-gray-300 dark:bg-gray-700"></div>
                 <div class="stage-icon relative w-10 h-10 flex items-center justify-center shrink-0">
@@ -787,7 +787,8 @@
             ${byVisit[v].map((f, idx) => {
               const st = STATUS_STYLES[f.status];
               const origin = ORIGIN_STYLES[f.origin] || '';
-              const dim = (f.status === 'closed' || f.status === 'rejected') ? 'opacity-60' : '';
+              // Muted finality for closed/rejected cards is conveyed by status-specific bg tokens + glyph + text prefix (DESIGN-BRIEF §2) — NOT by opacity on the card root (banned by unit-11 / unit-18). The status-specific bg token is already emitted via `st.badge`/`st.border`; here we apply a muted card surface instead of α-composite opacity.
+              const dim = f.status === 'closed' ? 'bg-green-50/60 dark:bg-green-950/25' : (f.status === 'rejected' ? 'bg-stone-100 dark:bg-stone-800/50' : '');
               const markerNum = s.feedback.indexOf(f) + 1;
               const targetLabel = f.target ? f.target.label : '';
               const targetIconMap = { file: '&#x1F4C4;', unit: '&#x1F4E6;', knowledge: '&#x1F9E0;', output: '&#x1F4E4;' };
@@ -846,14 +847,15 @@
         const gateActive = reviewMode === 'gate';
         const approveClasses = gateActive
           ? 'bg-green-600 hover:bg-green-700 text-white focus:ring-green-500'
-          : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed focus:ring-gray-400';
+          : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-400 dark:border-stone-500 cursor-not-allowed focus:ring-stone-400';
         const approveLabel = gateActive ? 'Approve' : 'Approve (no-op outside gate)';
+        const approveAria = gateActive ? '' : 'aria-disabled="true" disabled';
         actions.innerHTML = `
-          <button onclick="onApprove()" class="w-full px-3 py-2 text-xs font-semibold rounded-lg ${approveClasses} transition-colors focus:ring-2 focus:outline-none" title="${gateActive ? 'Advance FSM to next stage' : 'No gate active'}">${approveLabel}</button>`;
+          <button onclick="onApprove()" ${approveAria} class="w-full px-3 py-2 text-xs font-semibold rounded-lg ${approveClasses} transition-colors focus:ring-2 focus:outline-none" title="${gateActive ? 'Advance FSM to next stage' : 'No gate active'}">${approveLabel}</button>`;
       } else {
         // Non-current stage, nothing pending, nothing typed — disabled Request Changes with hint
         actions.innerHTML = `
-          <button disabled class="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed">Add feedback above to enable</button>`;
+          <button disabled aria-disabled="true" class="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed">Add feedback above to enable</button>`;
       }
 
       // Hint line reflects current action

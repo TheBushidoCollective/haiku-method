@@ -97,8 +97,8 @@
           </div>
           <div class="space-y-2">
             <p class="text-[10px] font-semibold uppercase tracking-widest text-stone-400">disabled</p>
-            <button class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 text-white opacity-50 cursor-not-allowed" disabled>Confirm &amp; Revisit</button>
-            <p class="text-[10px] text-stone-500 dark:text-stone-400 font-mono">disabled:opacity-50</p>
+            <button class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-300 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 cursor-not-allowed" disabled aria-disabled="true">Confirm &amp; Revisit</button>
+            <p class="text-[10px] text-stone-500 dark:text-stone-400 font-mono">bg-amber-300 text-amber-900 (+dark pair) · aria-disabled="true"</p>
           </div>
           <div class="space-y-2">
             <p class="text-[10px] font-semibold uppercase tracking-widest text-stone-400">loading</p>
@@ -152,8 +152,8 @@
           </div>
           <div class="space-y-2">
             <p class="text-[10px] font-semibold uppercase tracking-widest text-stone-400">disabled</p>
-            <button class="px-3 py-1.5 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 opacity-50 cursor-not-allowed" disabled>Cancel</button>
-            <p class="text-[10px] text-stone-500 dark:text-stone-400 font-mono">never disabled in normal flow — shown only for completeness</p>
+            <button class="px-3 py-1.5 text-xs font-semibold rounded-md bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed" disabled aria-disabled="true">Cancel</button>
+            <p class="text-[10px] text-stone-500 dark:text-stone-400 font-mono">bg-stone-100 text-stone-600 border-stone-400 (+dark pair) · never disabled in normal flow; shown only for completeness</p>
           </div>
         </div>
       </div>
@@ -457,8 +457,8 @@
               Rewriting state · pushing branch…
             </p>
             <div class="flex items-center gap-2">
-              <button disabled class="px-3 py-1.5 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 opacity-50 cursor-not-allowed">Cancel</button>
-              <button aria-busy="true" disabled class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 text-white flex items-center gap-1.5 cursor-progress">
+              <button disabled aria-disabled="true" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed">Cancel</button>
+              <button aria-busy="true" aria-disabled="true" disabled class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 text-white flex items-center gap-1.5 cursor-progress">
                 <svg class="w-3.5 h-3.5 spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="9" class="opacity-30"/><path stroke-linecap="round" d="M21 12a9 9 0 0 1-9 9"/></svg>
                 Revisiting…
               </button>

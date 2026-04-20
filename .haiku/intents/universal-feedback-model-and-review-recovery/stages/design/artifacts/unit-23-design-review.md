@@ -1,11 +1,11 @@
 ---
-title: Design review — unit-23 focus-visible + activable element semantics (bolt 1)
+title: Design review — unit-23 focus-visible + activable element semantics (bolt 1 + bolt 2)
 unit: unit-23-focus-visible-and-activable-element-semantics
 reviewer: design-reviewer
-bolt: 1
+bolt: 2
 status: approved
 created_at: '2026-04-20T03:10:00Z'
-updated_at: '2026-04-20T03:10:00Z'
+updated_at: '2026-04-20T09:15:00Z'
 artifacts_reviewed:
   - stages/design/artifacts/assessor-summary-card.html
   - stages/design/artifacts/stage-progress-strip.html
@@ -212,3 +212,38 @@ FB-76 (assessor-summary-card missing applied focus rings) and FB-82
 closed by this unit.
 
 Advance to feedback-assessor.
+
+---
+
+## Bolt 2 addendum — design-reviewer re-verification
+
+Scope of bolt 2: the feedback-assessor in bolt 1 rejected not because the
+artifact work was wrong (it wasn't — bolt 1 correctly closed FB-76 and
+FB-82), but because the designer/reviewer hats did not tick the unit's
+completion criteria before handoff. advance_hat returned
+`criteria_not_met: 8 unchecked completion criteria`. Bolt 2 is therefore
+a bookkeeping cycle: tick the criteria on the unit spec to reflect work
+the reviewer already verified.
+
+Designer bolt 2 (`f2c58907`) checked off 7 of 8 criteria. Criterion 8 is
+feedback-assessor's own deliverable, correctly left unchecked. No
+artifact files changed in bolt 2.
+
+Reviewer re-verification (bolt 2), rerun each designer/reviewer-verifiable
+criterion against the current HEAD tree:
+
+| # | Criterion | Verify | Result |
+|---|---|---|---|
+| 1 | `assessor-summary-card.html` ≥ 4 buttons with `focus-visible:ring-2` | `grep -c 'class="[^"]*focus-visible:ring-2' assessor-summary-card.html` | **4** (pass) |
+| 2 | `stage-progress-strip.html` has 0 `role="link"` | `grep -c 'role="link"' stage-progress-strip.html` | **0** (pass) |
+| 3 | Every stage-node is `<a href>` or `<button type="button">` | `grep -c 'href="#stage-' stage-progress-strip.html` | **10** (pass, all 10 nodes in the 2 interactive nav variants) |
+| 4 | Every converted node carries the canonical focus-visible ring | Line-by-line grep of the 10 `stage-node` anchors (L91/105/119/138/152/191/201/216/230/243) | All 10 carry `focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900` (pass) |
+| 5 | `aria-current="step"` retained on active; `tabindex="-1"` + `aria-disabled="true"` on future | `grep -c 'aria-current="step"'` → 2; `grep -c 'aria-disabled="true"'` → 7; `grep -c 'tabindex="-1"'` → 11 | pass (2 active across 2 nav variants; 7 future nodes across both variants + 2 more on nested decor; 11 `tabindex="-1"` includes the 5 future stage nodes + 6 roving-tabindex reference mentions — consistent with the roving-tabindex policy at L392–L439) |
+| 6 | `focus-ring-spec.html §1` carries the div-role=link footgun rule | Read `focus-ring-spec.html` §1b + §3 + §4 | §1b callout block L111–L117 codifies the native-element mandate; §3 L175 lists `<div role="link">` as forbidden; §4 L188 adds the enforcement grep (pass) |
+| 7 | Stage-wide `<div role="link">` in HTML = 0 | `grep -rE --include="*.html" '<div[^>]*role="link"' stages/design/artifacts/` | **0** HTML matches (the only match is in this review artifact itself, inside code spans documenting the fix — not applied HTML) (pass) |
+
+All 7 ticked criteria are honest. Criterion 8 remains appropriately
+unchecked for the feedback-assessor to close.
+
+Bolt-2 Verdict: **approved**. No artifact regressions, ticks are
+accurate. Advance to feedback-assessor.

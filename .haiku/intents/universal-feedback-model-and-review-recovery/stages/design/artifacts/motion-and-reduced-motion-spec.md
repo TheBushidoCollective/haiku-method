@@ -18,8 +18,8 @@ WCAG reference: **2.3.3 Animation from Interactions (AAA)** and **2.2.2 Pause, S
 | File | `@keyframes` | Duration / cadence | Reduced-motion fallback | Rationale |
 |---|---|---|---|---|
 | `DESIGN-BRIEF.md §7` | `feedback-pulse` | 2s · 3 iterations | `animation: none` (documented via amber badge count as the alternative signal) | Pulse is a "new-item" cue; the amber badge count already communicates "unread > 0" |
-| `feedback-inline-mobile.html:22-24` | `sheet-up` | 0.3s ease-out (open) | `animation: none` — sheet appears in-place; focus move + `aria-live` announce state change | Sheet open is a location change, not decoration; announcement covers SR users |
-| `feedback-inline-mobile.html:31-34` | `feedback-pulse` | 2s ease-in-out · 3 iterations | `animation: none` — count badge remains | Matches DESIGN-BRIEF §7 |
+| `feedback-inline-mobile.html:58-65` | `sheet-up` | 0.3s ease-out (open) | Global 0.01ms guard at `feedback-inline-mobile.html:100` — sheet still paints final position; focus move + `aria-live` announce state change | Sheet open is a location change, not decoration; 0.01ms keeps the state change visible to visual users, announcement covers SR users |
+| `feedback-inline-mobile.html:67-74` | `feedback-pulse` | 2s ease-in-out · 3 iterations | Per-component `animation: none` at `feedback-inline-mobile.html:100` (inside the same `@media (prefers-reduced-motion: reduce)` block) — count badge remains | FAB pulse is the single most-called-out vestibular trigger; decorative only; amber badge count is the "unread > 0" signal. Closes FB-143. |
 | `feedback-inline-desktop.html:18-25` | `feedback-status-change` | 0.4s ease-in-out | `animation: none` — card border / color still changes (static final state) | Status change is communicated by the badge + border, not the flash |
 | `feedback-inline-desktop.html:46-50` | `review-pulse` | 0.6s ease-in-out · 2 iterations | `animation: none` — focus ring + scroll-into-view still fire | Scroll target is what matters; the pulse is decoration |
 | `annotation-gesture-spec.html:34-38` | `pop-in` | 140ms ease-out (popover entrance) | `animation: none` — popover appears in-place, focus moves to the first field | Focus move signals "here it is"; slide is redundant |
@@ -41,6 +41,32 @@ WCAG reference: **2.3.3 Animation from Interactions (AAA)** and **2.2.2 Pause, S
 - **Status-change animations.** Any animation that communicates a state transition (`feedback-status-change`, `review-pulse`, `fbFlash`) **MUST** preserve the static end-state (border / background / outline) so the final visual cue remains. The animation is the decoration; the end state is the information.
 
 ## Verification
+
+**Per-file live grep (FB-143 closure contract):**
+
+```sh
+# feedback-inline-mobile.html carries the guard on line 100 (inside the head <style>
+# block, after .touch-target). Closes FB-143; see §Audit table rows for sheet-up (58-65)
+# and feedback-pulse (67-74). This live grep is the canonical FB-143 closure signal —
+# audit prose alone does NOT close FB-143.
+grep -c prefers-reduced-motion stages/design/artifacts/feedback-inline-mobile.html  # → ≥ 1
+```
+
+**Stage-wide audit (canonical — design-reviewer gate list):**
+
+```sh
+# Every artifact declaring animations or transitions MUST ship a prefers-reduced-motion
+# guard. Empty output = pass. MISSING lines = gate fail.
+for f in stages/design/artifacts/*.html; do
+  anim=$(grep -cE '@keyframes|animation:|animate-pulse|animate-spin|transition-' "$f")
+  guard=$(grep -cE 'prefers-reduced-motion' "$f")
+  if [ "$anim" -gt 0 ] && [ "$guard" -eq 0 ]; then
+    echo "MISSING: $f"
+  fi
+done
+```
+
+**Narrower keyframes-only variant (legacy, pre-unit-25):**
 
 ```sh
 # Every @keyframes has a sibling prefers-reduced-motion block in the same file.

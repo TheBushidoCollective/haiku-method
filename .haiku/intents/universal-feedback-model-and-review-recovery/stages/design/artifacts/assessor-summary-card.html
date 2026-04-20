@@ -6,7 +6,22 @@
   <title>Feedback-assessor summary card — design spec</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' }</script>
-  <style>body { font-family: system-ui, -apple-system, sans-serif; }</style>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+
+    /* Reduced-motion guard — closes FB-86 / FB-143 regression window.
+       Canonical stage-wide pattern (motion-and-reduced-motion-spec.md §Cross-file policy).
+       Spinner on loading state pairs with a visible text label per §Spinner replacement rule. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .animate-spin, .animate-pulse, [class*="feedback-pulse"] { animation: none !important; }
+    }
+  </style>
 </head>
 <body class="bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 min-h-screen">
 

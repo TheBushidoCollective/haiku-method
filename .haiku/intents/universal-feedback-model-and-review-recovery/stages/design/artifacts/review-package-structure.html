@@ -86,6 +86,18 @@
 
     /* Toggle for light/dark preview */
     .theme-toggle { cursor: pointer; user-select: none; }
+
+    /* Reduced-motion guard — closes FB-86 / FB-143 regression window.
+       Canonical stage-wide pattern (motion-and-reduced-motion-spec.md §Cross-file policy). */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .animate-pulse, [class*="feedback-pulse"] { animation: none !important; }
+    }
   </style>
 </head>
 <body class="dark bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100">

@@ -2,7 +2,7 @@
 title: >-
   assessor-summary-card.html:78 text-stone-600 on bg-stone-900 at 2.56:1 — 1.4.3
   FAIL
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent

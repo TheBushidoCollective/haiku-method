@@ -22,10 +22,9 @@ outputs:
 quality_gates:
   - >-
     `feedback-card-states.html` contains the canonical two-region live-region
-    block at the bottom of `<body>`:
-    `<div id="feedback-live-polite" role="status" aria-live="polite"
-    aria-atomic="true" class="sr-only"></div>` and
-    `<div id="feedback-live-assertive" role="alert" aria-live="assertive"
+    block at the bottom of `<body>`: `<div id="feedback-live-polite"
+    role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>`
+    and `<div id="feedback-live-assertive" role="alert" aria-live="assertive"
     aria-atomic="true" class="sr-only"></div>`, matching the contract in
     `aria-landmark-spec.md §1` and already present in
     `feedback-inline-desktop.html:514-515` and `feedback-inline-mobile.html`.
@@ -34,45 +33,52 @@ quality_gates:
   - >-
     Each interactive button in `feedback-card-states.html` (Close, Reject,
     Approve, Re-open on every card variant) carries an inline `<script>` hook
-    (or calls a page-level function) that writes the three-phase sequence
-    from `aria-live-sequencing-spec.md §2` into the appropriate region: a
-    pending-phase `"FB-XX marking as closed…"` into
-    `#feedback-live-polite`, a success-phase `"FB-XX closed."` into the same,
-    and any rollback error into `#feedback-live-assertive`. Minimum demo-level
-    wiring: `el.textContent = '…'` mutations on the live region. The script
-    MUST actually execute in the wireframe (not be left as a comment), so
-    manual testing of the artifact reads announcements aloud via any
-    screen reader.
+    (or calls a page-level function) that writes the three-phase sequence from
+    `aria-live-sequencing-spec.md §2` into the appropriate region: a
+    pending-phase `"FB-XX marking as closed…"` into `#feedback-live-polite`, a
+    success-phase `"FB-XX closed."` into the same, and any rollback error into
+    `#feedback-live-assertive`. Minimum demo-level wiring: `el.textContent =
+    '…'` mutations on the live region. The script MUST actually execute in the
+    wireframe (not be left as a comment), so manual testing of the artifact
+    reads announcements aloud via any screen reader.
   - >-
     `feedback-card-states.html` head-of-document comment block points at
     `aria-live-sequencing-spec.md` as the canonical contract for the
-    announcement sequence, and names
-    `aria-landmark-spec.md §1 "Two live regions, not one"` as the rule
-    that polite and assertive regions are non-interchangeable. This makes
-    the spec discoverable alongside the visual reference for anyone opening
-    the states file first.
+    announcement sequence, and names `aria-landmark-spec.md §1 "Two live
+    regions, not one"` as the rule that polite and assertive regions are
+    non-interchangeable. This makes the spec discoverable alongside the visual
+    reference for anyone opening the states file first.
   - >-
-    `feedback-inline-desktop.html` and `feedback-inline-mobile.html` each
-    carry a `<script>` block implementing the WAI-ARIA APG tablist
-    roving-tabindex keyboard contract for the tab strip at L109-112 /
-    L68-71 respectively. Events wired: Arrow Right (or Down) → focus next,
-    skip disabled, wrap to first; Arrow Left (or Up) → focus previous, wrap
-    to last; Home → first tab; End → last tab; Enter / Space on focused tab
-    → set `aria-selected="true"` and reveal matching `<tabpanel>`. The
-    script updates `tabindex` to `0` on the newly-focused tab and `-1` on
-    all others so Tab key leaves the tablist after the active tab (does not
-    iterate through inactive tabs). `grep -cE 'addEventListener\(.keydown'
+    `feedback-inline-desktop.html` and `feedback-inline-mobile.html` each carry
+    a `<script>` block implementing the WAI-ARIA APG tablist roving-tabindex
+    keyboard contract for the tab strip at L109-112 / L68-71 respectively.
+    Events wired: Arrow Right (or Down) → focus next, skip disabled, wrap to
+    first; Arrow Left (or Up) → focus previous, wrap to last; Home → first tab;
+    End → last tab; Enter / Space on focused tab → set `aria-selected="true"`
+    and reveal matching `<tabpanel>`. The script updates `tabindex` to `0` on
+    the newly-focused tab and `-1` on all others so Tab key leaves the tablist
+    after the active tab (does not iterate through inactive tabs). `grep -cE
+    'addEventListener\(.keydown'
     stages/design/artifacts/feedback-inline-desktop.html
     stages/design/artifacts/feedback-inline-mobile.html` returns ≥ 2.
   - >-
-    `focus-order-spec.md §10 "Test checklist"` carries three new bullet
-    items: (a) "Inside the tablist, pressing Arrow Right moves focus and
-    updates `aria-selected`"; (b) "Home/End keys land on first/last tab";
-    (c) "Tab key leaves the tablist after the active tab (does NOT iterate
-    through inactive tabs)". A spec-level note is added clarifying that
-    `tabindex="-1"` WITHOUT an arrow-key handler is a violation, not a
-    safe default — this prevents future designers from repeating the
-    static-tabindex-only pattern.
+    `focus-order-spec.md §10 "Test checklist"` carries three new bullet items:
+    (a) "Inside the tablist, pressing Arrow Right moves focus and updates
+    `aria-selected`"; (b) "Home/End keys land on first/last tab"; (c) "Tab key
+    leaves the tablist after the active tab (does NOT iterate through inactive
+    tabs)". A spec-level note is added clarifying that `tabindex="-1"` WITHOUT
+    an arrow-key handler is a violation, not a safe default — this prevents
+    future designers from repeating the static-tabindex-only pattern.
+status: active
+bolt: 1
+hat: designer
+started_at: '2026-04-20T05:08:28Z'
+hat_started_at: '2026-04-20T05:08:28Z'
+iterations:
+  - hat: designer
+    started_at: '2026-04-20T05:08:28Z'
+    completed_at: null
+    result: null
 ---
 # Live-region wiring + tablist roving-tabindex keyboard contract
 

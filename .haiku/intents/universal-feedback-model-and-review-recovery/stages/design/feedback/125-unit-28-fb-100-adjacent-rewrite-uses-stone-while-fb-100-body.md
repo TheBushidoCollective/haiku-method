@@ -2,7 +2,7 @@
 title: >-
   unit-28 FB-100-adjacent rewrite uses stone-* while FB-100 body still
   references gray-* banned tokens
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:32:39Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-27-spec-alignment-and-design-brief-completeness.md
-closed_by: null
+closed_by: unit-27-spec-alignment-and-design-brief-completeness
 bolt: 0
 upstream_stage: null
 ---

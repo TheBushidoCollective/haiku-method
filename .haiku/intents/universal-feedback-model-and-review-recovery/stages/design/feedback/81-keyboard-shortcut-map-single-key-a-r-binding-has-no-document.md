@@ -2,7 +2,7 @@
 title: >-
   keyboard-shortcut-map single-key "a"/"r" binding has no documented opt-out
   default for SR users
-status: pending
+status: rejected
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -33,3 +33,7 @@ closed_by: null
 The spec §3b currently concedes the conflict and says "Documented in help overlay; also offered as a remappable shortcut via the modifier-key setting below." That is documentation, not remediation. WCAG 2.1.4 requires the remediation be wired in by default OR on detection, not gated behind discovery.
 
 **Also:** the `?` help-overlay shortcut itself is announced as `aria-keyshortcuts="?"`. For SR users the `?` key is QuickNav "show help" in some configurations but is also intercepted by NVDA's help. Consider adding `Alt+?` as an alternate binding so the help overlay is reachable even when browse-mode is on.
+
+---
+
+**Rejection reason:** Deferred to development stage: single-key shortcut opt-out is an implementation-time UX policy (the keybinding handler has to read the preference and the preference UI has to live somewhere in the settings pane). Documented as a dev-stage requirement in keyboard-shortcut-map.html §5.

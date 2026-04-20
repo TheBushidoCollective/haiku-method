@@ -249,11 +249,11 @@ listed in the gate prose.
 
 ## Completion criteria
 
-- [ ] DESIGN-BRIEF.md §7 CSS strip has zero `opacity: 0.7` / `opacity: 0.5`
-- [ ] DESIGN-BRIEF.md §7 CSS strip has zero raw hex literals
-- [ ] state-coverage-grid.md has dedicated sections for all DESIGN-BRIEF §2
+- [x] DESIGN-BRIEF.md §7 CSS strip has zero `opacity: 0.7` / `opacity: 0.5`
+- [x] DESIGN-BRIEF.md §7 CSS strip has zero raw hex literals
+- [x] state-coverage-grid.md has dedicated sections for all DESIGN-BRIEF §2
       components (badge, origin icon, item compact/expanded, list,
       summary bar, agent toggle, sheet, FAB, FAB pulse)
-- [ ] Every grid cell is either a concrete state spec or `— (N/A: reason)`
-- [ ] DESIGN-BRIEF §2 cross-references the grid for each component
-- [ ] feedback-assessor verifies FB-70 and FB-75 against their original claims
+- [x] Every grid cell is either a concrete state spec or `— (N/A: reason)`
+- [x] DESIGN-BRIEF §2 cross-references the grid for each component
+- [x] feedback-assessor verifies FB-70 and FB-75 against their original claims

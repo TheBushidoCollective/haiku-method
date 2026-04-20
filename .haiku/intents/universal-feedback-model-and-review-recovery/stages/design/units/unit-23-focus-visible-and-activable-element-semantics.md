@@ -259,13 +259,13 @@ cited.
 
 ## Completion criteria
 
-- [ ] `assessor-summary-card.html` has ≥ 4 buttons with
+- [x] `assessor-summary-card.html` has ≥ 4 buttons with
       `focus-visible:ring-2` in their class attribute
-- [ ] `stage-progress-strip.html` has 0 `role="link"` occurrences
-- [ ] Every stage-node is `<a href>` or `<button type="button">`
-- [ ] Every converted node carries the canonical focus-visible ring
-- [ ] Active stage retains `aria-current="step"`, disabled/future
+- [x] `stage-progress-strip.html` has 0 `role="link"` occurrences
+- [x] Every stage-node is `<a href>` or `<button type="button">`
+- [x] Every converted node carries the canonical focus-visible ring
+- [x] Active stage retains `aria-current="step"`, disabled/future
       stages retain `tabindex="-1"` + `aria-disabled="true"`
-- [ ] `focus-ring-spec.html §1` carries the div-role=link footgun rule
-- [ ] Stage-wide grep: 0 `<div role="link">` across all artifacts
-- [ ] feedback-assessor verifies FB-76 and FB-82 against their concrete claims
+- [x] `focus-ring-spec.html §1` carries the div-role=link footgun rule
+- [x] Stage-wide grep: 0 `<div role="link">` across all artifacts
+- [x] feedback-assessor verifies FB-76 and FB-82 against their concrete claims

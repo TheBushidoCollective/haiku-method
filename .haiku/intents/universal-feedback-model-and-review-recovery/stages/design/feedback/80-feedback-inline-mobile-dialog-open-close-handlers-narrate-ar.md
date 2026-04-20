@@ -2,7 +2,7 @@
 title: >-
   feedback-inline-mobile dialog open/close handlers narrate aria-hidden+inert in
   comments — not actually wired
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T02:58:34Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-22-modal-dialog-semantics-and-inert-contract
 ---
 
 `feedback-inline-mobile.html` describes the mobile bottom-sheet modal pattern but only *comments* the critical accessibility behavior, leaving the markup without an actual implementation hook that dev can copy.

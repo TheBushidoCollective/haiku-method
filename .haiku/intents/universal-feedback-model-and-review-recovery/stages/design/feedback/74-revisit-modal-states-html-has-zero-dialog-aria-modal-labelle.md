@@ -2,7 +2,7 @@
 title: >-
   revisit-modal-states.html has zero dialog/aria-modal/labelledby markup —
   violates aria-landmark-spec §3
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T02:56:54Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-22-modal-dialog-semantics-and-inert-contract
 ---
 
 `aria-landmark-spec.md §3` mandates that every modal carry `role="dialog" aria-modal="true" aria-labelledby="…"` and be wrapped in a focus trap. The `revisit-modal-states.html` artifact — the "interactive states" companion that enumerates every modal state (default, hover, focus, active, disabled, loading, error, empty) — ships **0** occurrences of `role="dialog"`, `aria-modal`, or `aria-labelledby`. Verification:

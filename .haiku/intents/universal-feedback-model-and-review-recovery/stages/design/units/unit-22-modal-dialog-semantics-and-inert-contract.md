@@ -65,7 +65,7 @@ quality_gates:
     'role="dialog"' stages/design/artifacts/feedback-inline-mobile.html` returns
     ≥ 1. unit-19's completion-criteria grep is updated to include these two
     checks so the pattern is enforced stage-wide, not only at this unit's close.
-status: active
+status: completed
 bolt: 4
 hat: feedback-assessor
 started_at: '2026-04-20T05:08:23Z'
@@ -161,8 +161,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T09:15:45Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T09:18:06Z'
+    result: advance
+completed_at: '2026-04-20T09:18:06Z'
 ---
 # Modal dialog semantics + inert/aria-hidden contract
 
@@ -223,14 +224,14 @@ not in comments).
 
 ## Completion criteria
 
-- [ ] `revisit-modal-states.html` modal shells carry `role="dialog"
+- [x] `revisit-modal-states.html` modal shells carry `role="dialog"
       aria-modal="true" aria-labelledby` (≥ 9 occurrences)
-- [ ] Rollback toast retains `role="status" aria-live="polite"`
-- [ ] `feedback-inline-mobile.html` has a `<script>` block implementing
+- [x] Rollback toast retains `role="status" aria-live="polite"`
+- [x] `feedback-inline-mobile.html` has a `<script>` block implementing
       `openSheet()` / `closeSheet()` that wire inert + aria-hidden
-- [ ] FAB + close-button `onclick=` attributes call the script functions
+- [x] FAB + close-button `onclick=` attributes call the script functions
       (no `/* dev stage: ... */` narration left)
-- [ ] Sheet root carries `data-focus-trap` marker attribute
-- [ ] `aria-landmark-spec.md §3.7` documents the dialog-open/close lifecycle
+- [x] Sheet root carries `data-focus-trap` marker attribute
+- [x] `aria-landmark-spec.md §3.7` documents the dialog-open/close lifecycle
       with before/after code and NVDA/JAWS rationale
-- [ ] feedback-assessor verifies FB-74 and FB-80 against their concrete claims
+- [x] feedback-assessor verifies FB-74 and FB-80 against their concrete claims

@@ -63,7 +63,7 @@ quality_gates:
     `<div role="link">` usages in any other artifact, the fix is applied
     consistently (convert to `<a>` or `<button>`) within this unit's scope. The
     final audit count is reported in the design-reviewer's verification note.
-status: active
+status: completed
 bolt: 2
 hat: designer
 started_at: '2026-04-20T05:08:26Z'
@@ -96,6 +96,7 @@ iterations:
     started_at: '2026-04-20T08:51:19Z'
     completed_at: null
     result: null
+completed_at: '2026-04-20T09:20:38Z'
 ---
 # Focus-visible rings + activable-element semantics
 
@@ -169,4 +170,4 @@ cited.
 - [x] Stage-wide grep: 0 `<div role="link">` across all artifacts in HTML
       (review-artifact markdown mentions the pattern inside code spans,
       documenting the fix — not applied HTML)
-- [ ] feedback-assessor verifies FB-76 and FB-82 against their concrete claims
+- [x] feedback-assessor verifies FB-76 and FB-82 against their concrete claims

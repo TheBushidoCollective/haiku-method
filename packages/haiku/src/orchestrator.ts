@@ -2018,6 +2018,80 @@ export function runNext(slug: string): OrchestratorAction {
 			}
 		}
 
+		// ── Pre-execution adversarial review (2026-04-19) ────────────────
+		//
+		// Before advancing elaborate → execute, run adversarial review
+		// against the unit SPECS (not artifacts — those don't exist yet).
+		// Catches: missing inputs, unfalsifiable criteria, sibling conflicts,
+		// prose-only gates. Fixing spec bugs BEFORE execute avoids the much
+		// larger cost of execute → post-review → reject cycles.
+		//
+		// State machine (two-pass):
+		//   First pass  (no dispatch flag): emit `pre_review` action; flag
+		//     set so agent runs reviewers once.
+		//   Second pass (flag set, pending feedback): emit `pre_review_revisit`
+		//     with spec-edit instructions.
+		//   Second pass (flag set, no pending feedback): fall through to
+		//     normal execute advance.
+		{
+			const preReviewDispatched =
+				(stageState.pre_review_dispatched as boolean) || false
+
+			if (!preReviewDispatched) {
+				// Skip pre-review if no applicable review agents exist — avoids
+				// spurious pre_review actions on stages/studios without agents.
+				const agentPaths = filterReviewAgentsByScope(
+					readReviewAgentPaths(studio, currentStage),
+					join(iDir, "stages", currentStage, "artifacts"),
+				)
+				if (Object.keys(agentPaths).length === 0) {
+					stageState.pre_review_dispatched = true
+					stageState.pre_review_dispatched_at = timestamp()
+					stageState.pre_review_skipped_no_agents = true
+					writeJson(
+						join(iDir, "stages", currentStage, "state.json"),
+						stageState,
+					)
+					// Fall through to the normal auto/ask-review path.
+				} else {
+					stageState.pre_review_dispatched = true
+					stageState.pre_review_dispatched_at = timestamp()
+					writeJson(
+						join(iDir, "stages", currentStage, "state.json"),
+						stageState,
+					)
+					gitCommitState(
+						`haiku: dispatch pre-execute review on ${currentStage} unit specs`,
+					)
+					return {
+						action: "pre_review",
+						intent: slug,
+						studio,
+						stage: currentStage,
+						units_dir: `.haiku/intents/${slug}/stages/${currentStage}/units/`,
+						message:
+							"Pre-execute adversarial review of unit SPECS. Spawn conditional review agents against every unit.md file and log findings via haiku_feedback. When all findings are resolved (closed or rejected), call haiku_run_next to advance.",
+					}
+				}
+			}
+
+			const pendingPreReviewFb = readFeedbackFiles(slug, currentStage).filter(
+				(item) => item.status === "pending",
+			)
+			if (pendingPreReviewFb.length > 0) {
+				return {
+					action: "pre_review_revisit",
+					intent: slug,
+					studio,
+					stage: currentStage,
+					pending_count: pendingPreReviewFb.length,
+					pending_items: pendingPreReviewFb.map(summarizeFeedback),
+					units_dir: `.haiku/intents/${slug}/stages/${currentStage}/units/`,
+					message: `${pendingPreReviewFb.length} pending feedback item(s) on unit specs. Resolve by EDITING the affected unit.md files (NOT by drafting new units — that's additive-elaboration, a different mode). After each edit, close the feedback via haiku_feedback_update status=closed closed_by=<unit-name>. When all spec feedback is closed/rejected, call haiku_run_next to advance elaborate → execute.`,
+				}
+			}
+		}
+
 		// All units valid — either auto-advance or open review gate before execution.
 		//
 		// For stages with review: auto, skip the gate
@@ -2327,6 +2401,10 @@ export function runNext(slug: string): OrchestratorAction {
 			const statePath = stageStatePath(slug, currentStage)
 			const gateState = readJson(statePath)
 			gateState.phase = "elaborate"
+			// Reset pre-review state so post-execute revisits re-audit the
+			// (potentially edited) unit specs before re-entering execute.
+			gateState.pre_review_dispatched = false
+			gateState.pre_review_dispatched_at = null
 			writeJson(statePath, gateState)
 			const iterResult = appendStageIteration(
 				slug,
@@ -2910,6 +2988,9 @@ function revisitCurrentStage(
 	stageState.phase = "elaborate"
 	stageState.gate_entered_at = null
 	stageState.gate_outcome = null
+	// Reset pre-review state so the revisit re-audits the (edited) unit specs.
+	stageState.pre_review_dispatched = false
+	stageState.pre_review_dispatched_at = null
 	writeJson(path, stageState)
 
 	// If the intent was marked completed, revisit reactivates it
@@ -4925,6 +5006,112 @@ function buildRunInstructions(
 
 		case "spec_validation_failed": {
 			sections.push(`## Spec Validation Failed\n\n${action.message}`)
+			break
+		}
+
+		case "pre_review": {
+			const stage = action.stage as string
+			const unitsDir = (action.units_dir as string) || ""
+			// Conditional review agents — same filter used for post-execute review.
+			let agentPaths: Record<string, string> = readReviewAgentPaths(
+				studio,
+				stage,
+			)
+			agentPaths = filterReviewAgentsByScope(
+				agentPaths,
+				join(findHaikuRoot(), "intents", slug, "stages", stage, "artifacts"),
+			)
+
+			sections.push(`## Pre-Execute Adversarial Review: ${stage}`)
+			sections.push(
+				`**Review target:** unit SPECS (the .md files in \`${unitsDir}\`), NOT artifacts — artifacts haven't been produced yet. You are auditing the PLAN.`,
+			)
+			sections.push(
+				"**Why before execute?** Catching spec bugs now (missing inputs, unfalsifiable criteria, sibling conflicts, prose-only gates) avoids an execute → post-review → reject cycle. The cost of this review is tiny compared to what it prevents.",
+			)
+
+			if (Object.keys(agentPaths).length === 0) {
+				sections.push(
+					"_No review agents apply to this stage's output types — skipping pre-execute review. Call `haiku_run_next` to advance._",
+				)
+				break
+			}
+
+			sections.push(
+				"### Review Agent Fan-Out (REQUIRED)\n\n**Spawn exactly one subagent per review agent in parallel — no duplicates.** Each subagent's prompt is below.",
+			)
+
+			for (const [name, mandatePath] of Object.entries(agentPaths)) {
+				const reviewLines: string[] = [
+					`You are the **${name}** review agent running in PRE-EXECUTE mode for stage "${stage}" of intent "${slug}".`,
+					"",
+					"## Required context (inlined below)",
+					"Your general review mandate is embedded in this prompt, but your scope for THIS pass is unit SPECS, not artifacts.",
+					"",
+					inlineFile(mandatePath, `Mandate: ${name}`),
+					"",
+					"## Pre-Execute Scope (SPEC REVIEW)",
+					"Artifacts do NOT exist yet. Review the unit .md files listed below and find **spec-level bugs that would cause a rejection cycle after execute**:",
+					"",
+					"- **Missing inputs**: unit declares a sweep/audit but its `inputs:` list only covers a subset of files the rule must apply to. Flag when enforcement scope < rule scope.",
+					"- **Prose-only gates**: `quality_gates:` entries that are strings instead of executable `{name, command}` objects. These won't actually enforce anything — the FSM skips them.",
+					"- **Unfalsifiable criteria**: 'responsive design done' vs 'breakpoints at 375/768/1280 with screenshots'. Gates must be measurable.",
+					"- **Sibling conflicts**: two units claim to produce or modify the same output with different rules.",
+					"- **Missing `closes:`**: on revisit cycles, every new unit MUST reference at least one pending FB via `closes: [FB-NN]`.",
+					"",
+					"## Write scope (STRICT)",
+					"**You MUST NOT edit any file.** Your ONLY output channel is the `haiku_feedback` MCP tool.",
+					"",
+					"## Instructions",
+					"",
+					`1. Read every unit file under \`${unitsDir}\`.`,
+					`2. For each concrete spec issue, call \`haiku_feedback({ intent: "${slug}", stage: "${stage}", title: "<short title>", body: "<file:line reference + proposed concrete fix (diff-level, not vague)>", origin: "adversarial-review", author: "${name}", source_ref: "<unit file path>" })\`.`,
+					"3. Concrete fixes accelerate resolution: don't write 'scope too narrow' — write 'Replace `inputs: [7 files]` with `inputs: stages/.../artifacts/`'.",
+					`4. When you've logged every concrete finding, return a short summary of counts.`,
+				]
+
+				sections.push(
+					`#### Subagent: \`${name}\`\n\n<subagent type="general-purpose">\n${reviewLines.join("\n")}\n</subagent>`,
+				)
+			}
+
+			sections.push(
+				`### Parent Instructions\n\nSpawn all review subagents in parallel. After they complete, call \`haiku_run_next { intent: "${slug}" }\`. If findings exist, the FSM will return a \`pre_review_revisit\` action with spec-edit instructions. If findings are zero, elaborate → execute advances.`,
+			)
+			break
+		}
+
+		case "pre_review_revisit": {
+			const stage = action.stage as string
+			const unitsDir = (action.units_dir as string) || ""
+			const pendingCount = (action.pending_count as number) || 0
+			const pendingItems =
+				(action.pending_items as Array<{
+					feedback_id: string
+					title: string
+					file: string
+					origin: string
+					author: string
+				}>) || []
+
+			sections.push(`## Pre-Execute Spec Revisit: ${stage}`)
+			sections.push(
+				`**${pendingCount} pending spec-level feedback item(s) block the advance to execute.**`,
+			)
+			sections.push(
+				`**Resolution mode: SPEC EDIT (not new units).** This is NOT additive-elaboration. The findings are about bugs in existing unit specs — fix them by editing the unit.md files in \`${unitsDir}\`. Do not draft new units.`,
+			)
+			sections.push(
+				`### Pending Spec Findings\n\n${pendingItems
+					.map(
+						(f) =>
+							`- **${f.feedback_id}** — ${f.title}\n  - file: \`${f.file}\`\n  - origin: ${f.origin} · author: ${f.author}`,
+					)
+					.join("\n")}`,
+			)
+			sections.push(
+				`### Mechanics\n\n1. Read each pending feedback file IN FULL — the body carries the concrete spec edit the reviewer proposed.\n2. Apply the edit to the referenced unit.md file (frontmatter or body as appropriate).\n3. Close the feedback via \`haiku_feedback_update { intent: "${slug}", stage: "${stage}", feedback_id: "FB-NN", status: "closed", closed_by: "<unit-name>" }\`. If you disagree with a finding, reject it with \`haiku_feedback_reject\` and a concrete reason.\n4. When zero pending feedback remains, call \`haiku_run_next\` to advance to execute.`,
+			)
 			break
 		}
 

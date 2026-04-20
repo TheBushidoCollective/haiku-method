@@ -306,17 +306,21 @@ try {
 			active_stage: "plan",
 			stageConfig: { plan: { review: "auto" } },
 		})
-		createStageState(intentDirPath, "plan", { phase: "gate", visits: 2 })
+		// Start at visits: 0 so the first rollback lands at visits: 1, still
+		// within MAX_STAGE_ITERATIONS (2). Previously this test started at
+		// visits: 2, but the cap was dropped from 5 → 2 to force spec rigor
+		// rather than repeated execute cycles.
+		createStageState(intentDirPath, "plan", { phase: "gate", visits: 0 })
 		createFeedbackFile(intentDirPath, slug, "plan", "Pending item")
 
 		process.chdir(projDir)
 		const result = runNext(slug)
 
 		assert.strictEqual(result.action, "feedback_revisit")
-		assert.strictEqual(result.visits, 3)
+		assert.strictEqual(result.visits, 1)
 
 		const state = readJson(join(intentDirPath, "stages", "plan", "state.json"))
-		assert.strictEqual(state.visits, 3)
+		assert.strictEqual(state.visits, 1)
 	})
 
 	test("missing feedback directory treated as zero pending", () => {

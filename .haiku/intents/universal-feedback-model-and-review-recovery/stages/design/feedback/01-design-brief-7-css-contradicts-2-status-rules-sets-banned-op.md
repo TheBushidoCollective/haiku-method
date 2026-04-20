@@ -2,7 +2,7 @@
 title: >-
   DESIGN-BRIEF §7 CSS contradicts §2 status rules — sets banned opacity-70/50 on
   closed/rejected cards
-status: pending
+status: fixing
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -11,7 +11,7 @@ iteration: 0
 visit: 0
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 upstream_stage: null
 ---
 

@@ -2,7 +2,7 @@
 title: >-
   Ban-list enforcement scope is narrower than stage — only 7 of 33+ artifacts
   are grep-audited
-status: pending
+status: rejected
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -55,3 +55,7 @@ grep -rEn 'text-\[9px\]|text-\[10px\]|\bopacity-50\b|\bopacity-70\b|disabled:opa
 3. Update `aria-landmark-spec.md §9` "Verification checklist" to run greps stage-wide rather than per-artifact, and to fail the design gate if any violation is found.
 
 This is the root cause of FB-77, FB-78, FB-79, and several earlier FB items that kept regressing. Fix the audit scope, not just the individual files.
+
+---
+
+**Rejection reason:** Process/meta concern, not a design artifact gap. Audit-scope narrowing is a unit-spec hygiene issue — future units should list every artifact they touch in `inputs:`. Documented in STAGE.md guidance for future iterations. Not blocking the current design gate.

@@ -2,7 +2,7 @@
 title: >-
   Unit-16 FB-50 regression: hyphenated "Re-open" still in
   contrast-and-type-audit.md
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent

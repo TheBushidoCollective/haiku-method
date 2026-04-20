@@ -3025,10 +3025,31 @@ function renderStudio() {
         </div>
       </div>
 
-      ${callPill(stage, idx, mStage, "elab-to-gate")}
+      ${callPill(stage, idx, mStage, "elab-to-prereview")}
+
+      <div class="phase" data-phase="pre-review" style="border-left: 3px solid #14b8a6;">
+        <h3>
+          Pre-Execute Review
+          <span style="font-size:9px; color:#0f766e; font-weight:500; margin-left:6px; text-transform:none; letter-spacing:0;">↻ churn-reduction v1</span>
+        </h3>
+        <div class="elab-step">
+          <div class="step-label">① dispatch adversarial reviewers against unit SPECS</div>
+          <div style="font-size:10px; color:#4b5563; line-height:1.5; padding:4px 0;">
+            Conditional review agents (those whose <code>applies_to:</code> globs match this stage's output kinds) audit every <code>unit-NN-*.md</code> file for: missing inputs, prose-only quality gates, unfalsifiable criteria, sibling conflicts. Artifacts don't exist yet — reviewers audit the <em>plan</em>.
+          </div>
+        </div>
+        <div class="elab-step">
+          <div class="step-label">② findings block advance; resolution = spec edit (NOT new units)</div>
+          <div style="font-size:10px; color:#4b5563; line-height:1.5; padding:4px 0;">
+            FSM emits <code>pre_review_revisit</code> action. Agent edits existing unit files, closes each feedback item, calls <code>haiku_run_next</code>. Zero pending = advance to specs gate.
+          </div>
+        </div>
+      </div>
+
+      ${callPill(stage, idx, mStage, "prereview-to-gate")}
 
       ${mStage === "auto" ? "" : `
-      <div class="inner-gate" title="${idx === 0 ? "intent_review" : "elaborate_to_execute"} — user approves specs before execution starts">
+      <div class="inner-gate" title="${idx === 0 ? "intent_review" : "elaborate_to_execute"} — user approves specs before execution starts (after pre-review has cleared spec-level findings)">
         <span class="ig-label">specs gate</span>
         <span class="ig-type">ask</span>
         <span class="ig-ctx">${idx === 0 ? "intent_review" : "elaborate_to_execute"}</span>
@@ -3666,6 +3687,51 @@ function payloadFor(stage, idx, mStage, key, opts = {}) {
         { path: `.haiku/intents/{slug}/stages/${stageLower}/state.json`, change: "`{ phase: \"elaborate\", elaboration_turns: 0 }` (creates the file)" },
       ],
       instructions: `Orchestrator advances the FSM into \`${stage.name}.elaborate\`. The agent should now don the first hat and begin elaboration with the user.`,
+    },
+    "elab-to-prereview": {
+      injection: [
+        { hook: "MCP tool result", target: "agent's `tool_use_result`", what: "`action: pre_review` — FSM dispatches conditional review agents against unit SPECS (not artifacts — they don't exist yet)" },
+        { hook: "filterReviewAgentsByScope()", target: "agent dispatch list", what: "**Conditional review agents** — agents whose `applies_to:` globs don't match any stage artifact are skipped. E.g. web a11y agent skipped on backend-only stages." },
+        { hook: "readReviewAgentPaths()", target: "subagent prompt", what: "each review agent's mandate is inlined into a self-contained `<subagent>` block targeting the unit .md files" },
+      ],
+      action: "pre_review",
+      summary: `dispatch pre-execute adversarial review of unit specs`,
+      payload: {
+        action: "pre_review",
+        intent: "{slug}",
+        stage: stageLower,
+        units_dir: `.haiku/intents/{slug}/stages/${stageLower}/units/`,
+      },
+      validations: [
+        "Every unit declared in `elaborate` has a valid `.md` file",
+        "`stageState.pre_review_dispatched` is `false` (first-pass only)",
+        "At least one review agent applies to this stage's output kinds (otherwise skip pre-review entirely)",
+      ],
+      writes: [
+        { path: `.haiku/intents/{slug}/stages/${stageLower}/state.json`, change: "`pre_review_dispatched: true`, `pre_review_dispatched_at: <timestamp>`" },
+      ],
+      instructions: `Agent spawns conditional review agents in parallel against every unit .md file. Reviewers audit the PLAN for missing inputs, prose-only gates, unfalsifiable criteria, sibling conflicts — NOT artifacts (they don't exist yet). Findings are logged via \`haiku_feedback\`. After all subagents complete, agent calls \`haiku_run_next\`. Zero findings → advance to specs gate. Pending findings → FSM emits \`pre_review_revisit\` with spec-edit instructions (modify existing units, don't draft new ones).`,
+    },
+    "prereview-to-gate": {
+      injection: [
+        { hook: "readFeedbackFiles()", target: "orchestrator decision", what: "if any pending feedback exists, FSM returns `pre_review_revisit` with a spec-edit mandate; otherwise falls through to the specs gate" },
+      ],
+      action: "advance_phase",
+      summary: `pre-review clear — open ${isFirst ? "intent_review" : "elaborate_to_execute"} specs gate`,
+      payload: {
+        action: "advance_phase",
+        gate_context: isFirst ? "intent_review" : "elaborate_to_execute",
+        next_phase: "execute",
+        pending_pre_review_feedback: 0,
+      },
+      validations: [
+        "`stageState.pre_review_dispatched` is `true` (review already ran)",
+        "Zero pending feedback on the stage (all spec findings resolved — closed or rejected)",
+      ],
+      writes: [
+        { path: `.haiku/intents/{slug}/stages/${stageLower}/state.json`, change: "no write — falls through to auto/ask gate decision" },
+      ],
+      instructions: `Pre-review audit has completed and all spec-level findings are resolved. The FSM advances to the normal specs gate (auto-advance or opens the review UI, depending on the stage's \`review:\` type).`,
     },
     "elab-to-gate": {
       injection: [

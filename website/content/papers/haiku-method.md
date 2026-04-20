@@ -272,12 +272,17 @@ A stage declares five things:
 
 ### The Stage Loop
 
-Each stage executes through a fixed four-step loop:
+Each stage executes through a fixed five-step loop:
 
 1. **Elaborate** — Resolve inputs from prior stages, checking freshness metadata for staleness. If the stage has no units yet, decompose the work into discrete units with completion criteria and a dependency graph. If an upstream output has a small gap (e.g., a missing screen in a design brief), the agent can run a *stage-scoped refinement* — a targeted side-trip that adds a single unit to the upstream stage, executes it through that stage's hats, and persists the updated output, all without resetting the current stage's progress. Full stage-backs (resetting `active_stage` to a prior stage) are always human-initiated.
-2. **Execute** — For each unit in dependency order, run the bolt loop: cycle through the hat sequence. Each hat runs in isolation, produces output for the next hat, and quality gates verify the result.
-3. **Adversarial review** — Spawn the stage's review agents in parallel. Each agent evaluates the stage's work against its specific mandate (correctness, security, accessibility, etc.). Agents from other stages included via `review-agents-include` run alongside the stage's own agents. High-severity findings trigger targeted fixes before the stage can proceed.
-4. **Gate** — Evaluate the review gate and either advance, pause for approval, block for external review, or await an external event.
+2. **Pre-execution adversarial review** — Before any execute cycle burns resources, the stage's review agents audit the *unit specs themselves*. They look for missing inputs (unit claims a sweep but lists only a subset of target files), prose-only quality gates (strings where executable commands were expected), unfalsifiable criteria, and sibling-unit conflicts. Findings are logged as spec-level feedback; resolution happens via *spec edits to existing units*, not by drafting new ones. Only when no spec feedback is pending does the loop advance to execute. This front-loaded review catches plan bugs at the cost of a text review instead of the much larger cost of an execute → post-review → reject cycle.
+3. **Execute** — For each unit in dependency order, run the bolt loop: cycle through the hat sequence. Each hat runs in isolation, produces output for the next hat, and quality gates verify the result.
+4. **Adversarial review** — Spawn the stage's review agents in parallel against the *produced artifacts*. Each agent evaluates the stage's work against its specific mandate (correctness, security, accessibility, etc.). Agents from other stages included via `review-agents-include` run alongside the stage's own agents. High-severity findings trigger targeted fixes before the stage can proceed.
+5. **Gate** — Evaluate the review gate and either advance, pause for approval, block for external review, or await an external event.
+
+Review agents can declare an `applies_to:` scope (a list of file globs). An agent whose declared scope matches no artifact the stage produces skips itself automatically — for example, a web accessibility agent does not run on a backend-only stage whose outputs are API specs and CLI docs. Agents without `applies_to:` always run (the backward-compatible default).
+
+A stage's retry budget is tight by design: agent-invoked rejection cycles are capped at two iterations. Beyond that, the framework escalates to the human rather than burn another execute wave — repeated rejections indicate a spec problem the adversarial reviewers should have caught up front, and the correct response is to fix the plan, not to keep building against a broken plan. Human-invoked revisits are uncapped.
 
 Persistence is not a separate step — artifacts are committed to git automatically as they are produced during elaboration and execution. Each MCP state transition (stage start, unit completion, etc.) auto-commits to the persistence layer.
 
@@ -329,6 +334,8 @@ Bad criteria are vague and subjective:
 - "Research is thorough"
 
 The distinction matters because criteria that can be checked by running a command (test suites, linters, type checkers) become **quality gates** — automated checks that run when the agent attempts to finish. Criteria that require judgment (argument quality, design coherence) are verified through adversarial review by subsequent hats.
+
+Quality gates are declared as structured, executable entries in the unit's frontmatter — each with a `name`, a shell `command`, and optionally a working `dir`. The framework runs each gate at advance_hat time; a non-zero exit blocks the advance. Prose-only gate descriptions belong in the unit body, not in the frontmatter, because the framework cannot enforce prose. Critically, gate commands must scope to the *full stage artifact directory* (the rule domain), not only to the files the unit declares in its `inputs:` list (the unit's read scope). When enforcement scope is narrower than rule scope, regressions accumulate on files no single unit audited — a pattern the adversarial reviewer catches and the pre-execution review catches earlier still.
 
 ### Backpressure
 
@@ -517,8 +524,9 @@ The framework is intentionally extensible through studios rather than through co
 | **Hat** | A behavioral role scoped to a stage. Each hat runs in a fresh agent context with instructions loaded from `stages/{stage}/hats/{hat}.md`. |
 | **Intent** | The top-level initiative being pursued. Contains units organized by stages. Stored at `.haiku/intents/{slug}/intent.md`. |
 | **Persistence Adapter** | Backend that handles how work is stored and delivered. Implementations: git (branches, commits, pull requests) and filesystem (local directories). |
-| **Quality Gate** | A machine-verifiable check (test, lint, typecheck, build) enforced by the Stop hook. Blocks the agent from stopping until gates pass. |
-| **Review Agent** | A specialized adversarial agent that evaluates stage output against a specific mandate (e.g., correctness, security, accessibility). Defined per-stage in `review-agents/{name}.md`. Stages can include review agents from other stages via `review-agents-include`. |
+| **Pre-Execution Review** | Adversarial review of unit *specs* (not artifacts) between elaborate and execute. Agents audit the plan for missing inputs, prose-only gates, unfalsifiable criteria, and sibling conflicts. Resolution path is spec edits to existing units, not new units. Shifts failures left at spec-text cost instead of execute-cycle cost. |
+| **Quality Gate** | A machine-verifiable check (test, lint, typecheck, build, grep) enforced at advance_hat time. Declared as an executable `{name, command, dir?}` entry in unit frontmatter; commands must scope to the full stage artifact directory, not only the unit's declared inputs. Blocks the hat from advancing until the gate returns exit 0. |
+| **Review Agent** | A specialized adversarial agent that evaluates stage output against a specific mandate (e.g., correctness, security, accessibility). Defined per-stage in `review-agents/{name}.md`. Agents can declare `applies_to:` (a list of file globs) to scope themselves to matching output kinds — e.g. a web accessibility agent only runs when the stage produces HTML/TSX/JSX. Stages can include review agents from other stages via `review-agents-include`. |
 | **Review Gate** | A checkpoint between stages that controls advancement. Types: `auto` (advance when quality gates pass — no human involved), `ask` (open local review UI for human approval — signal is the MCP response), `external` (block until an external review system like GitHub/GitLab approves — signal detected primarily by branch merge detection, with URL-based CLI probing as fallback), `await` (block until an external event outside the review process occurs — e.g., customer response, contract signature). Compound gates like `[external, ask]` let the human choose between paths. |
 | **Stage** | A lifecycle phase within a studio. Contains hat definitions, review gate, input/output contracts, and unit type constraints. |
 | **Studio** | A named lifecycle template mapping the four-phase model to domain-specific stages. Defines stage order, persistence type, and delivery mechanism. |

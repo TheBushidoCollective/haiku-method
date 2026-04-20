@@ -237,6 +237,39 @@ Every page-level artifact **MUST** include a skip link as the first focusable el
 
 The target `<main id="main-content">` **MUST** have `tabindex="-1"` so the browser can move focus to it programmatically when the skip link is activated (not required on all browsers, but adds nothing bad and closes the long-tail edge cases).
 
+## 7a. Canonical component aria-labels (closes FB-10)
+
+Component-level `aria-label` strings drift easily (reviewers shorten, designers copy-paste older drafts, implementations fall back to the visible text). The row below is the **authoritative accessible name** for the `AgentFeedbackToggle` component — enforced by §9 and closing FB-10.
+
+| Component | Canonical `aria-label` | Why this exact string | Source of truth |
+|---|---|---|---|
+| `AgentFeedbackToggle` (role=`switch`) | `"Show agent feedback inline"` | The visible "Comments" heading sits **outside** the switch, so the switch needs its own name. The word **"inline"** communicates the opt-in overlay semantics (agent items interleaved in the same list) vs. a separate tab/panel. SR users hearing just "Show agent feedback, switch, off" would not know the effect is inline interleaving. | DESIGN-BRIEF §2 line 385; §6 line 802 |
+
+### Banned variants for `AgentFeedbackToggle` (enforced by §9 grep)
+
+The following shorter / drifted forms **MUST NOT** appear in any artifact for this component. Each of them changes the user's mental model by dropping the word that distinguishes the behavior from a plausible alternative.
+
+| Banned string | Why banned | Replace with |
+|---|---|---|
+| `aria-label="Show agent feedback"` | Drops "inline" — SR users cannot tell the effect is inline interleaving vs. a separate tab/panel. | `aria-label="Show agent feedback inline"` |
+| `aria-label="Toggle agent feedback"` | Drops the direction of the action (show vs. hide); the `role="switch"` + `aria-checked` already expose the binary state, so the label names the **destination**, not the action. | `aria-label="Show agent feedback inline"` |
+| `aria-label="Agent feedback"` (as the switch's label, not as a section heading) | Describes the subject, not the action. `role="switch"` expects a verb-phrase label. | `aria-label="Show agent feedback inline"` |
+
+If a reviewer finds any of these on an `AgentFeedbackToggle` `role="switch"` button, the fix is to replace with the canonical string from the table above. The verification checklist in §9 enforces this via grep.
+
+> **Scope note for other components.** Other accessible names (`FeedbackFloatingButton`, `FeedbackSheet` close, `<main>`, `<aside>`, etc.) are defined in DESIGN-BRIEF §6 and in §§1–2 of this spec and are audited by their own rows in §9. FB-10 is scoped to `AgentFeedbackToggle` drift only; do not bundle unrelated aria-label clean-ups into this closure.
+
+### Default-state contract for `AgentFeedbackToggle`
+
+Per DESIGN-BRIEF §2 line 337 (`default OFF`) and `AgentFeedbackToggleProps.showAgent: false`, every mockup that renders the component in its **first-paint / default** state **MUST** render:
+
+- `aria-checked="false"`
+- track in neutral stone color (not teal)
+- thumb positioned **left** (not translated right)
+- count chip styled as "hidden" (muted), not "inline" (active)
+
+Mockups that intentionally demonstrate the ON state (e.g. `comments-list-with-agent-toggle.html` has both a default-off and a checked-on variant; `agent-feedback-toggle-spec.html` §2 enumerates all states) MAY render `aria-checked="true"` — but those renderings MUST be captioned with a state label (e.g. "Checked (on)") so a reviewer can tell the demo from the default. A bare toggle in a flow-diagram or preview panel is presumed to be the default and MUST render OFF.
+
 ## 8. unit-01 amendment (body text reference, NOT FSM field)
 
 unit-01's completion-criteria body text (not frontmatter) is amended to require:
@@ -258,5 +291,7 @@ This is a body-text amendment only — unit-01's FSM fields (status, hat, iterat
 - [ ] `grep -rEn 'role="alert" aria-live="assertive"' stages/design/artifacts/` shows ≥ 1 match per page-level artifact
 - [ ] Origin emoji audit: `grep -rEn '&#x(1F6E&#49;|1F5&#48;&#48;|27&#50;8|1F44&#49;)' stages/design/` returns 0 matches (these code points — shield `U+1F6E1`, shuffle `U+1F500`, sparkles `U+2728`, eye `U+1F441` — are the forbidden / drifted emoji from the old drafts; the grep pattern in this line is HTML-entity-escaped and the forbidden codepoints are referenced by U-notation so the audit stays clean when it scans this spec itself)
 - [ ] Skip link present: `grep -rEn 'href="#main-content"' stages/design/artifacts/` shows ≥ 1 match per page-level artifact
+- [ ] `AgentFeedbackToggle` aria-label drift (FB-10): `grep -rEn 'aria-label="(Show agent feedback|Toggle agent feedback|Agent feedback)"' stages/design/artifacts/ | grep -v aria-landmark-spec.md` returns **0 matches** (the banned-variants table in `aria-landmark-spec.md` §7a documents the forbidden strings and is excluded from the audit; canonical is `"Show agent feedback inline"` — see §7a)
+- [ ] `AgentFeedbackToggle` aria-label canonical present: `grep -rEn 'aria-label="Show agent feedback inline"' stages/design/artifacts/` shows ≥ 1 match for every artifact that renders the component (`agent-feedback-toggle-spec.html`, `feedback-inline-desktop.html`, `feedback-inline-mobile.html`, `comments-list-with-agent-toggle.html`, `comment-to-feedback-flow.html`, `review-package-structure.html`)
 
 Any gate item that fails blocks hat advancement; assessor rejects with the specific line reference.

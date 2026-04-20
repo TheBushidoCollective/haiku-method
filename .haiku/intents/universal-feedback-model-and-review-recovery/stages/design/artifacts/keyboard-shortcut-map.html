@@ -62,9 +62,9 @@
     <!-- ===== Header ===== -->
     <header class="flex items-start justify-between border-b border-stone-200 dark:border-stone-700 pb-4">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500">universal-feedback-model-and-review-recovery · stage: design · unit-07</p>
+        <p class="text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300">universal-feedback-model-and-review-recovery · stage: design · unit-07</p>
         <h1 class="text-2xl font-semibold text-stone-900 dark:text-stone-100 mt-1">Keyboard Shortcut Map &amp; Help Overlay</h1>
-        <p class="text-sm text-stone-500 dark:text-stone-400 mt-2 max-w-3xl">
+        <p class="text-sm text-stone-600 dark:text-stone-300 mt-2 max-w-3xl">
           Canonical keyboard contract for the review UI. Closes <strong>FB-04</strong>. Reference behavior:
           <code class="text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">review-ui-mockup.html</code> global <code class="text-xs bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded">keydown</code> handler.
         </p>
@@ -77,7 +77,7 @@
     <!-- ===== 1. Shortcut Table ===== -->
     <section>
       <h2 class="text-lg font-semibold text-stone-900 dark:text-stone-100 mb-1">1. Shortcut table (canonical)</h2>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
+      <p class="text-xs text-stone-600 dark:text-stone-300 mb-4">
         This table is the single source of truth. Developers wire 1:1. Every row specifies: chord, action, scope (where the key is captured), guards (conditions), and input-capture behavior.
       </p>
 
@@ -96,36 +96,36 @@
             <tr>
               <td class="px-3 py-2"><kbd class="k" aria-keyshortcuts="j">j</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Focus next feedback card (sidebar)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Only if sidebar has ≥1 feedback item. Scroll focused card into view (block: nearest).</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Only if sidebar has ≥1 feedback item. Scroll focused card into view (block: nearest).</td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k" aria-keyshortcuts="k">k</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Focus previous feedback card</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Clamped at top/bottom; no wrap.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Clamped at top/bottom; no wrap.</td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k" aria-keyshortcuts="[">[</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Previous stage</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Stages with <code>status === 'upcoming'</code> are skipped. Clamped at first reachable stage.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Stages with <code>status === 'upcoming'</code> are skipped. Clamped at first reachable stage.</td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k" aria-keyshortcuts="]">]</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Next stage</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Upcoming stages skipped. Clamped at last reachable.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Upcoming stages skipped. Clamped at last reachable.</td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
             </tr>
             <tr>
-              <td class="px-3 py-2 whitespace-nowrap"><kbd class="k" aria-keyshortcuts="g o">g</kbd> <span class="text-stone-500">then</span> <kbd class="k" aria-keyshortcuts="g o">o</kbd></td>
+              <td class="px-3 py-2 whitespace-nowrap"><kbd class="k" aria-keyshortcuts="g o">g</kbd> <span class="text-stone-600 dark:text-stone-300">then</span> <kbd class="k" aria-keyshortcuts="g o">o</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Jump to <strong>O</strong>verview tab</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global (2-key sequence)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global (2-key sequence)</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 Gmail-style. <code>g</code> primes a latch; next key must arrive within <strong>1000 ms</strong> or latch expires silently.
               </td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
@@ -133,29 +133,29 @@
             <tr>
               <td class="px-3 py-2 whitespace-nowrap"><kbd class="k" aria-keyshortcuts="g u">g</kbd> <kbd class="k" aria-keyshortcuts="g u">u</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Jump to <strong>U</strong>nits tab</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global (2-key)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Same 1 s latch. Arming triggers no visual; only the completing key acts.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global (2-key)</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Same 1 s latch. Arming triggers no visual; only the completing key acts.</td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
             </tr>
             <tr>
               <td class="px-3 py-2 whitespace-nowrap"><kbd class="k" aria-keyshortcuts="g k">g</kbd> <kbd class="k" aria-keyshortcuts="g k">k</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Jump to <strong>K</strong>nowledge tab</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global (2-key)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">The latched <code>g</code> takes precedence over bare <code>k</code> (previous-feedback).</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global (2-key)</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">The latched <code>g</code> takes precedence over bare <code>k</code> (previous-feedback).</td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
             </tr>
             <tr>
               <td class="px-3 py-2 whitespace-nowrap"><kbd class="k" aria-keyshortcuts="g p">g</kbd> <kbd class="k" aria-keyshortcuts="g p">p</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Jump to out<strong>P</strong>uts tab</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global (2-key)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Preserves current stage selection.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global (2-key)</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Preserves current stage selection.</td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k" aria-keyshortcuts="Enter">Enter</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Cross-flash focused feedback ↔ target artifact (bidirectional: pin Enter expands linked sidebar card and scrolls it into view)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global (when <code>focusedFbId !== null</code>)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global (when <code>focusedFbId !== null</code>)</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 Applies <code>.fb-flash</code> to the card and <code>.unit-flash</code> to the target row (see <em>focus-ring-spec.html</em> §3). Also scrolls target into view.
               </td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
@@ -163,8 +163,8 @@
             <tr>
               <td class="px-3 py-2"><kbd class="k" aria-keyshortcuts="n">n</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Next unseen artifact in active tab</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 Only fires when active tab is Units / Knowledge / Outputs. Overview tab: no-op.
               </td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
@@ -172,8 +172,8 @@
             <tr>
               <td class="px-3 py-2"><kbd class="k" aria-keyshortcuts="a">a</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Approve</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 Only when an active approve button is rendered in the sidebar actions (non-no-op state). <strong>Bound to Approve only</strong> — annotation-create uses <kbd class="k" aria-keyshortcuts="c">c</kbd> (unit-04, annotation-gesture-spec.html).
               </td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
@@ -181,8 +181,8 @@
             <tr>
               <td class="px-3 py-2"><kbd class="k" aria-keyshortcuts="c">c</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200"><strong>Create</strong> annotation at focused artifact / line</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 When focus is on a line-row (text / markdown), artifact wrapper (image / svg), or iframe wrapper (html / pdf), opens the annotation popover at the focused location. See <code>annotation-gesture-spec.html §7</code> for popover-anchor rules. Renamed from <kbd class="k">a</kbd> to resolve the Approve-collision reported in FB-14.
               </td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
@@ -192,8 +192,8 @@
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">
                 <strong>Context-dependent</strong> — Reopen or Request changes
               </td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 <span class="font-semibold">If a focused feedback card has <code>status ∈ { closed, rejected }</code>:</span>
                 reopen it (transition status → <code>pending</code>, emit status-change animation).
                 <span class="font-semibold">Otherwise:</span> open the Request Changes flow (revisit modal per unit-06).
@@ -203,8 +203,8 @@
             <tr>
               <td class="px-3 py-2"><kbd class="k" aria-keyshortcuts="/">/</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Focus feedback textarea (sidebar general-comment)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 Calls <code>.focus()</code> on <code>#sb-comment</code>. See §3 for browser-conflict notes.
               </td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
@@ -212,8 +212,8 @@
             <tr>
               <td class="px-3 py-2"><kbd class="k" aria-keyshortcuts="Escape">Esc</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Dismiss (precedence: modal → popover → help overlay → blur input)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global (always active)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global (always active)</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 Exactly <strong>one</strong> level dismissed per press. Precedence is strict top-to-bottom; never double-fires.
               </td>
               <td class="px-3 py-2"><span class="text-teal-600 dark:text-teal-400">blurs input</span></td>
@@ -221,8 +221,8 @@
             <tr>
               <td class="px-3 py-2"><kbd class="k" aria-keyshortcuts="?">?</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Toggle shortcuts help overlay</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">global</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 Idempotent: re-pressing closes. Backdrop click also closes.
               </td>
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
@@ -235,7 +235,7 @@
     <!-- ===== 2. Esc precedence diagram ===== -->
     <section>
       <h2 class="text-lg font-semibold text-stone-900 dark:text-stone-100 mb-1">2. <kbd class="k">Esc</kbd> precedence ladder</h2>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
+      <p class="text-xs text-stone-600 dark:text-stone-300 mb-4">
         Exactly one rung is consumed per press. Earlier rungs short-circuit later ones.
       </p>
       <ol class="space-y-2">
@@ -243,35 +243,35 @@
           <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 text-xs font-bold">1</span>
           <div class="text-sm">
             <p class="text-stone-800 dark:text-stone-200 font-medium">Modal open (e.g. revisit modal)</p>
-            <p class="text-xs text-stone-500 dark:text-stone-400">Close the modal. Focus returns to the element that opened it.</p>
+            <p class="text-xs text-stone-600 dark:text-stone-300">Close the modal. Focus returns to the element that opened it.</p>
           </div>
         </li>
         <li class="flex items-start gap-3 p-3 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900">
           <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 text-xs font-bold">2</span>
           <div class="text-sm">
             <p class="text-stone-800 dark:text-stone-200 font-medium">Annotation popover open</p>
-            <p class="text-xs text-stone-500 dark:text-stone-400">Close popover; any unsaved draft is discarded (matches mockup behavior).</p>
+            <p class="text-xs text-stone-600 dark:text-stone-300">Close popover; any unsaved draft is discarded (matches mockup behavior).</p>
           </div>
         </li>
         <li class="flex items-start gap-3 p-3 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900">
           <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 text-xs font-bold">3</span>
           <div class="text-sm">
             <p class="text-stone-800 dark:text-stone-200 font-medium">Help overlay open</p>
-            <p class="text-xs text-stone-500 dark:text-stone-400">Toggles overlay closed (same as pressing <kbd class="k">?</kbd> again).</p>
+            <p class="text-xs text-stone-600 dark:text-stone-300">Toggles overlay closed (same as pressing <kbd class="k">?</kbd> again).</p>
           </div>
         </li>
         <li class="flex items-start gap-3 p-3 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900">
           <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 text-xs font-bold">4</span>
           <div class="text-sm">
             <p class="text-stone-800 dark:text-stone-200 font-medium">Focus inside an input / textarea / contenteditable</p>
-            <p class="text-xs text-stone-500 dark:text-stone-400">Call <code>target.blur()</code>. Do <em>not</em> also dismiss an outer layer — return early.</p>
+            <p class="text-xs text-stone-600 dark:text-stone-300">Call <code>target.blur()</code>. Do <em>not</em> also dismiss an outer layer — return early.</p>
           </div>
         </li>
         <li class="flex items-start gap-3 p-3 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 opacity-80">
           <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300 text-xs font-bold">—</span>
           <div class="text-sm">
             <p class="text-stone-800 dark:text-stone-200 font-medium">No layer to dismiss</p>
-            <p class="text-xs text-stone-500 dark:text-stone-400">No-op. Do not steal the native browser behavior (e.g. canceling pending forms).</p>
+            <p class="text-xs text-stone-600 dark:text-stone-300">No-op. Do not steal the native browser behavior (e.g. canceling pending forms).</p>
           </div>
         </li>
       </ol>
@@ -280,7 +280,7 @@
     <!-- ===== 3. Browser / OS / Screen-reader conflict analysis ===== -->
     <section>
       <h2 class="text-lg font-semibold text-stone-900 dark:text-stone-100 mb-1">3. Browser, OS &amp; screen-reader conflict analysis</h2>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
+      <p class="text-xs text-stone-600 dark:text-stone-300 mb-4">
         Every single-key shortcut is checked against the Chrome, Firefox, and Safari default bindings <strong>and</strong> against the virtual-cursor ("browse-mode") single-key navigation shortcuts of NVDA, JAWS, and VoiceOver. Any chord using a modifier (<kbd class="k">Cmd</kbd>/<kbd class="k">Ctrl</kbd>/<kbd class="k">Alt</kbd>/<kbd class="k">Shift</kbd>) is explicitly avoided so we never intercept platform bindings.
       </p>
 
@@ -298,59 +298,59 @@
           <tbody class="bg-white dark:bg-stone-900 divide-y divide-stone-200 dark:divide-stone-700">
             <tr>
               <td class="px-3 py-2"><kbd class="k">/</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Chrome / Firefox: "quick find in page". Safari: no default at the top level.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Chrome / Firefox: "quick find in page". Safari: no default at the top level.</td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Focus feedback textarea</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 Accepted. Industry-standard for "focus search" (GitHub, Slack, Linear). We call <code>preventDefault()</code> so the browser's quick-find does not open.
               </td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">?</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No browser default (Shift+/). Some OS screen readers intercept.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No browser default (Shift+/). Some OS screen readers intercept.</td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Toggle help overlay</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 Accepted. <strong>Must</strong> be suppressed while focus is in an input (otherwise the user typing "?" would open the overlay). Enforced by the <code>inInput</code> guard.
               </td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">j</kbd> <kbd class="k">k</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No defaults. Vim muscle-memory convention.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No defaults. Vim muscle-memory convention.</td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Focus next / previous feedback</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Accepted.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Accepted.</td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">[</kbd> <kbd class="k">]</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No browser defaults. Some IME layouts map these to accents (deadkey).</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No browser defaults. Some IME layouts map these to accents (deadkey).</td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Prev / next stage</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Accepted. IME deadkey users can switch stages via the visible stage strip (mouse / <kbd class="k">Tab</kbd>).</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Accepted. IME deadkey users can switch stages via the visible stage strip (mouse / <kbd class="k">Tab</kbd>).</td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">a</kbd> <kbd class="k">r</kbd> <kbd class="k">n</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No browser defaults.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No browser defaults.</td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Approve / Reopen-or-Request / Next-unseen</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Accepted.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Accepted.</td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">g</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No browser default. Gmail-style two-key leader.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No browser default. Gmail-style two-key leader.</td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Latch; awaits <kbd class="k">o</kbd>/<kbd class="k">u</kbd>/<kbd class="k">k</kbd>/<kbd class="k">p</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 A bare <kbd class="k">g</kbd> with no completion within 1 s is silently discarded (no visual arming indicator — low-signal and non-intrusive). If the user hits <kbd class="k">g</kbd> twice, the second press resets the 1 s timer.
               </td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">Enter</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Native: activate focused button / submit form.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Native: activate focused button / submit form.</td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Cross-flash focused feedback</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 Accepted only when a feedback card is focused <em>and</em> no input is active. Native button / form submit is <strong>not</strong> intercepted — the focused-feedback path short-circuits before native activation because <code>document.activeElement</code> is the feedback card (not a button).
               </td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">Esc</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Native: cancel dialog / exit fullscreen / blur.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Native: cancel dialog / exit fullscreen / blur.</td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Layered dismiss (see §2)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">
                 We do not call <code>preventDefault()</code> on the no-op rung so fullscreen and native dialogs still exit cleanly when no app layer is open.
               </td>
             </tr>
@@ -360,7 +360,7 @@
 
       <!-- FB-28: Screen-reader browse-mode conflict analysis -->
       <h3 class="text-sm font-semibold text-stone-800 dark:text-stone-200 mb-1 mt-6">3b. Screen-reader browse-mode conflicts</h3>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
+      <p class="text-xs text-stone-600 dark:text-stone-300 mb-3">
         Screen readers expose a <strong>virtual cursor</strong> ("browse mode" in NVDA/JAWS, "QuickNav" in VoiceOver) that intercepts bare single-key presses for structural navigation (jump to next heading, link, region, etc.) before the page's <code>keydown</code> handler ever sees them. The page <em>cannot</em> detect browse mode from JavaScript — the input-capture rule (§4) does <strong>not</strong> cover it. This table names the specific conflicts so development knows what to test.
       </p>
       <div class="overflow-x-auto rounded-xl border border-stone-200 dark:border-stone-700 shadow-sm">
@@ -377,52 +377,52 @@
           <tbody class="bg-white dark:bg-stone-900 divide-y divide-stone-200 dark:divide-stone-700">
             <tr>
               <td class="px-3 py-2"><kbd class="k">j</kbd> / <kbd class="k">k</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Safe.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Safe.</td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">r</kbd></td>
               <td class="px-3 py-2 text-rose-600 dark:text-rose-400">Next region (landmark)</td>
               <td class="px-3 py-2 text-rose-600 dark:text-rose-400">Next region (landmark)</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400"><strong>Conflict.</strong> In browse mode the app never sees <kbd class="k">r</kbd> — the user moves between landmarks instead. In focus mode the app captures it. Users must switch modes manually (NVDA: <kbd class="k">Insert</kbd>+<kbd class="k">Space</kbd>). Documented in help overlay; also offered as a remappable shortcut via the modifier-key setting below.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300"><strong>Conflict.</strong> In browse mode the app never sees <kbd class="k">r</kbd> — the user moves between landmarks instead. In focus mode the app captures it. Users must switch modes manually (NVDA: <kbd class="k">Insert</kbd>+<kbd class="k">Space</kbd>). Documented in help overlay; also offered as a remappable shortcut via the modifier-key setting below.</td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">n</kbd></td>
               <td class="px-3 py-2 text-amber-600 dark:text-amber-400">Next non-linked text</td>
               <td class="px-3 py-2 text-amber-600 dark:text-amber-400">Next non-linked text</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Minor conflict in browse mode; app semantics ("next unseen artifact") are a visual-hierarchy concept so browse-mode intercept is acceptable. Modifier-key setting remaps to <kbd class="k">Alt</kbd>+<kbd class="k">n</kbd>.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Minor conflict in browse mode; app semantics ("next unseen artifact") are a visual-hierarchy concept so browse-mode intercept is acceptable. Modifier-key setting remaps to <kbd class="k">Alt</kbd>+<kbd class="k">n</kbd>.</td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">a</kbd> / <kbd class="k">c</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Safe. All three readers reserve capital-letter variants (e.g. <kbd class="k">Shift</kbd>+<kbd class="k">a</kbd> for "previous annotation" in JAWS); we only bind the lowercase form.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Safe. All three readers reserve capital-letter variants (e.g. <kbd class="k">Shift</kbd>+<kbd class="k">a</kbd> for "previous annotation" in JAWS); we only bind the lowercase form.</td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">/</kbd></td>
               <td class="px-3 py-2 text-rose-600 dark:text-rose-400">Next form field</td>
               <td class="px-3 py-2 text-rose-600 dark:text-rose-400">Next form field</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400"><strong>Conflict.</strong> The screen-reader shortcut actually <em>does what the user wanted</em> (jumps to the sidebar textarea is roughly equivalent to "next form field"), so the conflict is benign. Documented.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300"><strong>Conflict.</strong> The screen-reader shortcut actually <em>does what the user wanted</em> (jumps to the sidebar textarea is roughly equivalent to "next form field"), so the conflict is benign. Documented.</td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">?</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
               <td class="px-3 py-2 text-amber-600 dark:text-amber-400">Rarely intercepted</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Mostly safe. VoiceOver users with custom commander bindings can collide; documented as known-caveat in help overlay.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Mostly safe. VoiceOver users with custom commander bindings can collide; documented as known-caveat in help overlay.</td>
             </tr>
             <tr>
               <td class="px-3 py-2"><kbd class="k">[</kbd> / <kbd class="k">]</kbd></td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">No default</td>
-              <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Safe.</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">No default</td>
+              <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Safe.</td>
             </tr>
           </tbody>
         </table>
@@ -477,7 +477,7 @@
     <!-- ===== 5. Help overlay wireframe ===== -->
     <section>
       <h2 class="text-lg font-semibold text-stone-900 dark:text-stone-100 mb-1">5. Help overlay (<kbd class="k">?</kbd>) — wireframe</h2>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
+      <p class="text-xs text-stone-600 dark:text-stone-300 mb-4">
         Two-column grid of <code>&lt;kbd&gt;</code> chips + descriptions. Backdrop blur + muted overlay. Dismiss: <kbd class="k">Esc</kbd>, <kbd class="k">?</kbd>, or backdrop click.
       </p>
 
@@ -500,15 +500,15 @@
               <header class="flex items-start justify-between mb-4">
                 <div>
                   <h3 id="kbd-help-title" class="text-base font-semibold text-stone-900 dark:text-stone-100">Keyboard shortcuts</h3>
-                  <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Press <kbd class="k">?</kbd> or <kbd class="k">Esc</kbd> to close.</p>
+                  <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5">Press <kbd class="k">?</kbd> or <kbd class="k">Esc</kbd> to close.</p>
                 </div>
-                <button class="text-stone-500 hover:text-stone-600 dark:hover:text-stone-200 text-xl leading-none" aria-label="Close help">×</button>
+                <button type="button" class="inline-flex items-center justify-center min-w-[44px] min-h-[44px] p-2 -m-2 text-stone-600 hover:text-stone-800 dark:text-stone-300 dark:hover:text-stone-100 text-xl leading-none focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 rounded-sm" aria-label="Close help">×</button>
               </header>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-xs">
                 <!-- Navigation group -->
                 <div class="space-y-2">
-                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-1">Navigation</h4>
+                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300 mt-1">Navigation</h4>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Next feedback</span><kbd class="k">j</kbd></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Previous feedback</span><kbd class="k">k</kbd></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Previous stage</span><kbd class="k">[</kbd></div>
@@ -518,7 +518,7 @@
 
                 <!-- Tabs group -->
                 <div class="space-y-2">
-                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-1">Jump to tab</h4>
+                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300 mt-1">Jump to tab</h4>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Overview</span><span class="flex gap-1"><kbd class="k">g</kbd><kbd class="k">o</kbd></span></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Units</span><span class="flex gap-1"><kbd class="k">g</kbd><kbd class="k">u</kbd></span></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Knowledge</span><span class="flex gap-1"><kbd class="k">g</kbd><kbd class="k">k</kbd></span></div>
@@ -527,30 +527,30 @@
 
                 <!-- Actions group -->
                 <div class="space-y-2 mt-3">
-                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-1">Actions</h4>
+                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300 mt-1">Actions</h4>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Cross-flash target / open pin</span><kbd class="k">Enter</kbd></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Approve</span><kbd class="k">a</kbd></div>
-                  <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Create annotation <span class="text-stone-500">(on focused artifact / line)</span></span><kbd class="k">c</kbd></div>
-                  <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Reopen / Request changes <span class="text-stone-500">(context)</span></span><kbd class="k">r</kbd></div>
+                  <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Create annotation <span class="text-stone-600 dark:text-stone-300">(on focused artifact / line)</span></span><kbd class="k">c</kbd></div>
+                  <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Reopen / Request changes <span class="text-stone-600 dark:text-stone-300">(context)</span></span><kbd class="k">r</kbd></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Focus feedback textarea</span><kbd class="k">/</kbd></div>
                 </div>
 
                 <!-- Dismiss group -->
                 <div class="space-y-2 mt-3">
-                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-1">Dismiss</h4>
+                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300 mt-1">Dismiss</h4>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Close layer / blur input</span><kbd class="k">Esc</kbd></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Toggle this help</span><kbd class="k">?</kbd></div>
                 </div>
               </div>
 
-              <footer class="mt-5 pt-4 border-t border-stone-200 dark:border-stone-700 text-[11px] text-stone-500 dark:text-stone-400 space-y-2">
+              <footer class="mt-5 pt-4 border-t border-stone-200 dark:border-stone-700 text-[11px] text-stone-600 dark:text-stone-300 space-y-2">
                 <p>Shortcuts are suppressed while typing in an input. <kbd class="k">Esc</kbd> blurs the input instead of closing this overlay.</p>
                 <!-- FB-28: Require-modifier-key setting inside the help overlay -->
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" class="h-3.5 w-3.5 rounded border-stone-300 dark:border-stone-600 text-teal-600 focus:ring-teal-500" aria-describedby="req-mod-help" />
                   <span class="text-stone-600 dark:text-stone-300">Require <kbd class="k">Alt</kbd> for single-key shortcuts</span>
                 </label>
-                <p id="req-mod-help" class="text-xs text-stone-500 dark:text-stone-500 pl-5">Recommended for screen-reader users. Remaps <kbd class="k">j</kbd> → <kbd class="k">Alt</kbd>+<kbd class="k">j</kbd>, etc. See §3b for the conflict analysis.</p>
+                <p id="req-mod-help" class="text-xs text-stone-600 dark:text-stone-300 pl-5">Recommended for screen-reader users. Remaps <kbd class="k">j</kbd> → <kbd class="k">Alt</kbd>+<kbd class="k">j</kbd>, etc. See §3b for the conflict analysis.</p>
               </footer>
             </div>
           </div>
@@ -560,13 +560,13 @@
       <!-- Light / dark variants callout -->
       <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-4">
-          <p class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mb-2">Light variant</p>
+          <p class="text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300 mb-2">Light variant</p>
           <p class="text-xs text-stone-600 dark:text-stone-300">
             Backdrop <code>bg-black/50 backdrop-blur-sm</code>; card <code>bg-white</code>, border <code>border-stone-200</code>, shadow <code>shadow-2xl</code>; <code>&lt;kbd&gt;</code> chips use <code>stone-100/stone-300/stone-900</code>.
           </p>
         </div>
         <div class="rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-4">
-          <p class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mb-2">Dark variant</p>
+          <p class="text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300 mb-2">Dark variant</p>
           <p class="text-xs text-stone-600 dark:text-stone-300">
             Same backdrop; card <code>dark:bg-stone-900</code>, border <code>dark:border-stone-700</code>; <code>&lt;kbd&gt;</code> chips use <code>stone-800/stone-600/stone-200</code>. Both variants meet WCAG AA (contrast ≥ 4.5:1 between chip text and background).
           </p>
@@ -577,7 +577,7 @@
     <!-- ===== 6. Focus order ===== -->
     <section>
       <h2 class="text-lg font-semibold text-stone-900 dark:text-stone-100 mb-1">6. Tab focus order</h2>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
+      <p class="text-xs text-stone-600 dark:text-stone-300 mb-3">
         <kbd class="k">Tab</kbd> / <kbd class="k">Shift</kbd>+<kbd class="k">Tab</kbd> walk the DOM in reading order. No manual <code>tabindex</code> values above 0. Every visible interactive element is reachable. See the full specification in <code>focus-order-spec.md</code>.
       </p>
       <ol class="text-sm text-stone-700 dark:text-stone-300 list-decimal pl-6 space-y-1">
@@ -632,7 +632,7 @@
       </ul>
     </section>
 
-    <footer class="text-[11px] text-stone-500 dark:text-stone-500 pt-6 border-t border-stone-200 dark:border-stone-700">
+    <footer class="text-[11px] text-stone-600 dark:text-stone-300 pt-6 border-t border-stone-200 dark:border-stone-700">
       Closes <strong>FB-04</strong> · Companion: <code>focus-ring-spec.html</code> · Reference: <code>review-ui-mockup.html</code> lines 1826–1950.
     </footer>
   </div>

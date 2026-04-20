@@ -120,6 +120,18 @@ computed.
 
 ---
 
+> **Audit scope (unit-21 widening, 2026-04-19):** *Audit scope: every
+> `stages/design/artifacts/*.html` file, not only the unit frontmatter
+> `inputs:` list.* This prevents future contrast/opacity audits from
+> silently skipping artifacts introduced after unit-11 ran. The unit-17
+> / unit-18 verification greps are updated to cover the widened scope
+> (see comments near the grep loops in each unit's post-sweep note).
+> Unit-21 discovered that unit-11's original 7-input scope let
+> `annotation-popover-states.html`, `agent-feedback-toggle-spec.html`,
+> and `keyboard-shortcut-map.html` keep shipping banned patterns
+> (opacity-50 composites, `dark:text-stone-500` below-floor, non-44×44
+> close glyphs). §6.4 below captures the unit-21 post-fix state.
+
 ## 2. Opacity-as-State (FB-13 remediation)
 
 Before this unit, `closed` cards used `opacity-70` and `rejected` cards used `opacity-50`
@@ -510,3 +522,122 @@ After bolt-3:
 - QG4 / QG5 closed/rejected card markup unchanged (PASS with documented
   Read-B border-width delta).
 - QG6 DESIGN-BRIEF / DESIGN-TOKENS alignment unchanged (PASS).
+
+### 6.4 Unit-21 remediation (stage-wide sweep beyond the 7 declared inputs, 2026-04-19)
+
+The audit scope prior to unit-21 was implicitly limited to the 7 input
+files listed in unit-11's frontmatter. Three artifacts introduced after
+unit-11 ran still carried banned patterns the unit-11 / unit-18 gates
+never checked:
+
+- **FB-71** — `annotation-popover-states.html:394` State 4b disabled
+  "Create" button shipped `bg-teal-600 text-white opacity-50
+  cursor-not-allowed`. The α-composite against the page background
+  collapses text contrast to ~2.3:1 (fails WCAG 1.4.3 body-text).
+- **FB-72** — `annotation-popover-states.html:381` popover-close ✕
+  button shipped `text-stone-500` without a `dark:` variant and
+  without a 44×44 hit area. On white, `text-stone-500` is 4.61:1 (at
+  AA floor, below the AAA target the audit holds for metadata text).
+  Glyph was 14px inside a non-expanded button, so the hit area was
+  below WCAG 2.5.5.
+- **FB-77** — `agent-feedback-toggle-spec.html` shipped
+  `text-stone-500 dark:text-stone-500` on variant labels. On
+  `bg-stone-950` in dark mode that is 2.36:1 — well below the AA
+  floor, matching the exact ban unit-11 added to DESIGN-TOKENS.md
+  §1.1a ("`text-stone-500` in dark mode on stone-800 and below").
+  The "Disabled" variant also shipped `cursor-not-allowed opacity-50`
+  on the `<label>` wrapper. `keyboard-shortcut-map.html` shipped the
+  same `dark:text-stone-500` pattern in multiple places, including
+  `L553` req-mod-help copy.
+- **Sibling drift** — `revisit-modal-states.html` shipped 4
+  `opacity-50` instances on disabled primary + secondary buttons that
+  bolt-4's §6.2 "QG1 · 0 hits" row had claimed were fixed. The grep
+  at the time was scoped to the unit-11 inputs only, not the whole
+  artifact tree; `revisit-modal-states.html` was invisible to that
+  scope.
+
+| Artifact · context | Pre-unit-21 (banned) | Post-unit-21 (canonical) | Ratio |
+|---|---|---|---|
+| annotation-popover-states.html:394 · State 4b disabled Create | `bg-teal-600 text-white opacity-50 cursor-not-allowed` (≈ 2.3:1 α-composited) | `bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-400 dark:border-stone-500 cursor-not-allowed` + existing `disabled aria-disabled="true"` — canonical secondary-disabled pair per DESIGN-TOKENS.md §1.7 | 6.85:1 light / 10.2:1 dark (text); 3.4:1 / 3.2:1 (border) · PASS 1.4.3 + 1.4.11 |
+| annotation-popover-states.html State 4b explanatory bullet | "Button keeps the teal color at `opacity: 0.5` so the brand / primary-action meaning is preserved" — prose canonicalized the banned pattern | rewritten to cite the canonical secondary-disabled token pair with per-pair ratios and to name the two real carriers of primary-action meaning (right-most button position + `aria-describedby` hint), not opacity | prose no longer canonicalizes the banned pattern |
+| annotation-popover-states.html:381 · popover-close ✕ | `text-stone-500 hover:text-stone-600` + 14px `&times;` in a button with no `min-w`/`min-h` (hit area ≈ 14×14) | `text-stone-600 hover:text-stone-800 dark:text-stone-300 dark:hover:text-stone-100` on an `inline-flex` button with `min-w-[44px] min-h-[44px] p-2 -m-2` — 44×44 hit area without visual shift of the 14px glyph, `type="button"`, canonical teal focus ring preserved | 7.02:1 / 11.6:1 (text); hit area 44×44 · PASS 1.4.3 + 1.4.11 + 2.5.5 |
+| agent-feedback-toggle-spec.html · "Disabled" variant tile | `<label class="... cursor-not-allowed opacity-50">` + `text-stone-500 dark:text-stone-500` on body-copy + `bg-stone-200 dark:bg-stone-700` track without a visible border (2.36:1 label text in dark; 1.4.11 border below 3:1) | drop `opacity-50` from wrapper; muted track via `bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500` (3.4:1 non-text UI); label text lifted to `text-gray-700 dark:text-gray-300` (8.59:1 / 10.4:1); caption text lifted to `text-gray-600 dark:text-gray-300` (7:1+); `disabled aria-disabled="true"` preserved | text 8.59:1 / 10.4:1 (label); 7:1+ (caption); border 3.4:1 non-text UI · PASS 1.4.11 + 1.4.3 |
+| agent-feedback-toggle-spec.html · all other variant labels and body copy | `text-stone-500 dark:text-stone-500` (fails dark: 2.36:1) and `text-stone-500 dark:text-stone-400` (passes AA at floor) | all promoted to `text-stone-600 dark:text-stone-300` — AAA both modes | 7.02:1 light / 11.6:1 dark · PASS |
+| keyboard-shortcut-map.html · 9 sites shipping `dark:text-stone-500` (header small-caps, help-overlay group headings, req-mod-help copy, light/dark variant tiles, footer) | `text-stone-500 dark:text-stone-500` on `bg-white` / `bg-stone-900` / `bg-stone-950` — fails in dark at 2.36:1 | all promoted to `text-stone-600 dark:text-stone-300` — AAA both modes | 7.02:1 / 11.6:1 · PASS |
+| keyboard-shortcut-map.html · 83 sites shipping `text-stone-500 dark:text-stone-400` on table rows and section copy | body-copy at AA floor (4.61:1 light) but not AAA; not strictly banned by unit-11 but promoted for audit-wide consistency | all promoted to `text-stone-600 dark:text-stone-300` — AAA both modes | 7.02:1 / 11.6:1 · PASS |
+| keyboard-shortcut-map.html · inline `<span class="text-stone-500">` on "then" and 2 captions | `text-stone-500` (no dark variant; floor body on bg-white) | `text-stone-600 dark:text-stone-300` — AAA both modes | 7.02:1 / 11.6:1 · PASS |
+| keyboard-shortcut-map.html:505 · help-overlay close button | `text-stone-500 hover:text-stone-600 dark:hover:text-stone-200` — no dark-mode default text color, hit area ≈ 18×18 (text-xl `×`) | `inline-flex` button with `min-w-[44px] min-h-[44px] p-2 -m-2`, `text-stone-600 hover:text-stone-800 dark:text-stone-300 dark:hover:text-stone-100`, `type="button"`, canonical teal focus ring, explicit `focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 rounded-sm` | 7.02:1 / 11.6:1 text; hit area 44×44 · PASS 1.4.3 + 1.4.11 + 2.5.5 |
+| revisit-modal-states.html:100 · disabled Confirm & Revisit (primary amber) | `bg-amber-600 text-white opacity-50 cursor-not-allowed` + `disabled` without `aria-disabled` | `bg-amber-300 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 cursor-not-allowed` + `disabled aria-disabled="true"` — canonical primary-amber disabled per DESIGN-TOKENS.md §1.7 | 5.30:1 light / 8.15:1 dark · PASS |
+| revisit-modal-states.html:155 · disabled Cancel (secondary) | `border-stone-300 text-stone-700 opacity-50 cursor-not-allowed` + `disabled` without `aria-disabled` | `bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed` + `disabled aria-disabled="true"` — canonical secondary-disabled per DESIGN-TOKENS.md §1.7 | 6.85:1 / 10.2:1 (text); 3.4:1 / 3.2:1 (border) · PASS |
+| revisit-modal-states.html:460 · submitting-state disabled Cancel | `opacity-50 cursor-not-allowed` + `disabled` without `aria-disabled` | same canonical secondary-disabled token pair + `disabled aria-disabled="true"` | 6.85:1 / 10.2:1 · PASS |
+| revisit-modal-states.html:101 · reference-text caption | `disabled:opacity-50` literal documentation prose | rewritten to `bg-amber-300 text-amber-900 (primary-amber disabled)` — documents the canonical token | prose no longer canonicalizes the banned pattern |
+
+### 6.4.1 Post-fix counts per artifact (repo-wide, 2026-04-19)
+
+Measured with `grep -cE 'opacity-(50|70)'` and `grep -cE
+'text-\[9px\]|text-\[10px\]'` against every `.html` file in
+`stages/design/artifacts/` (not the scoped subset unit-11 originally
+ran against). Prose-file `.md` hits are excluded; they document the
+bans and are intentional.
+
+| Artifact | `opacity-(50\|70)` | `text-[9\|10px]` |
+|---|---|---|
+| agent-feedback-toggle-spec.html | 0 | 0 |
+| annotation-gesture-spec.html | 0 | 0 |
+| annotation-popover-states.html | 0 | 0 |
+| assessor-summary-card.html | 0 | 0 |
+| comment-to-feedback-flow.html | 0 | 0 |
+| comments-list-with-agent-toggle.html | 0 | 0 |
+| feedback-card-states.html | 0 | 0 |
+| feedback-inline-desktop.html | 0 | 0 |
+| feedback-inline-mobile.html | 0 | 0 |
+| feedback-lifecycle-transitions.html | 0 | 0 |
+| focus-ring-spec.html | 0 | 0 |
+| keyboard-shortcut-map.html | 0 | 0 |
+| review-context-header.html | 0 | 0 |
+| review-flow-with-feedback-assessor.html | 0 | 0 |
+| review-package-structure.html | 0 | 0 |
+| review-ui-mockup.html | 0 | 0 |
+| revisit-modal-spec.html | 0 | 0 |
+| revisit-modal-states.html | 0 | 0 |
+| revisit-unit-list.html | 0 | 0 |
+| rollback-reason-banner.html | 0 | 0 |
+| skip-link-spec.html | 0 | 0 |
+| stage-progress-strip.html | 0 | 0 |
+| state-signaling-inventory.html | 0 | 0 |
+
+### 6.4.2 Verification (repo-wide, unit-21 widened scope)
+
+```bash
+# Audit scope: EVERY file under stages/design/artifacts/*.html, not just unit-11's 7 inputs.
+# Prior-unit grep loops that hardcoded the 7-file list are superseded by this repo-wide loop.
+for f in stages/design/artifacts/*.html; do
+  name=$(basename "$f")
+  op=$(grep -cE 'opacity-(50|70)' "$f")
+  t10=$(grep -cE 'text-\[9px\]|text-\[10px\]' "$f")
+  printf "%-50s opacity-50/70: %s  text-[9/10px]: %s\n" "$name" "$op" "$t10"
+done
+# → every row: opacity-50/70: 0  text-[9/10px]: 0
+
+grep -rEn 'bg-stone-200 text-stone-500|disabled:opacity-50' stages/design/artifacts/*.html
+# → 0 hits
+
+grep -cE 'text-\[10px\]' stages/design/artifacts/agent-feedback-toggle-spec.html stages/design/artifacts/keyboard-shortcut-map.html
+# → both files: 0
+
+grep -cE 'opacity-50' stages/design/artifacts/annotation-popover-states.html
+# → 0
+
+grep -nE 'disabled>.*Create|aria-disabled="true".*Create' stages/design/artifacts/annotation-popover-states.html
+# → matches on lines 198 (State 1 compact Create), 306 (State 3 iframe-Step-B Create), 392 (State 4b disabled Create), 450 (State 5 bottom-sheet Create)
+
+grep -nE 'class="[^"]*text-stone-400[^"]*"[^>]*>&times;' stages/design/artifacts/annotation-popover-states.html
+# → 0 hits
+```
+
+All six unit-21 quality gates return the expected values. The audit
+scope callout at the top of §2 is now explicit: every
+`stages/design/artifacts/*.html` file is in scope, not a curated
+subset. Prior-unit grep loops (unit-11, unit-17, unit-18 post-sweep
+notes) should be read through this widened lens — the `.html` glob
+covers artifacts introduced after those units ran.

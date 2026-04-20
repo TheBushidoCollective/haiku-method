@@ -73,10 +73,10 @@ quality_gates:
       re.search(r'<(button|input|select|textarea|fieldset|label|a)\b[^>]*\bdisabled\b',
       line) and 'aria-disabled' not in line]; sys.exit(1 if bad else 0)"
 status: active
-bolt: 1
-hat: feedback-assessor
+bolt: 2
+hat: designer
 started_at: '2026-04-20T19:39:02Z'
-hat_started_at: '2026-04-20T19:54:37Z'
+hat_started_at: '2026-04-20T19:58:07Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T19:39:02Z'
@@ -88,6 +88,21 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T19:54:37Z'
+    completed_at: '2026-04-20T19:58:07Z'
+    result: reject
+    reason: >-
+      FB-141 still-pending: review-ui-mockup.html Operations (line ~146) and
+      Security (line ~163) stage-button label <span>s still carry
+      `text-stone-500 dark:text-stone-400`. FB-141 Fix #1 and the unit's own
+      per-file QG for review-ui-mockup.html explicitly require lifting these
+      labels to `text-stone-600 dark:text-stone-300` at full opacity. Opacity-60
+      was removed and aria-disabled pairing landed, but the required text-color
+      lift was skipped — grep `text-stone-500
+      dark:text-stone-400.*leading-none.*Operations|Security` confirms the old
+      tokens still render. FB-134, FB-139, FB-140, FB-145, FB-146, FB-150 all
+      verified closed.
+  - hat: designer
+    started_at: '2026-04-20T19:58:07Z'
     completed_at: null
     result: null
 ---

@@ -55,12 +55,17 @@ import {
 	appendStageIteration,
 	closeCurrentStageIteration,
 	countPendingFeedback,
+	findFeedbackFile,
 	findHaikuRoot,
 	getStageIterationCount,
 	gitCommitState,
+	incrementFeedbackBolt,
+	intentFromCurrentBranch,
+	listVisibleIntents,
 	intentDir,
 	intentTitleNeedsRepair,
 	isGitRepo,
+	MAX_FIX_LOOP_BOLTS,
 	MAX_STAGE_ITERATIONS,
 	parseFrontmatter,
 	readFeedbackFiles,
@@ -84,6 +89,8 @@ import {
 	readStageArtifactDefs,
 	readStageDef,
 	readStudio,
+	readStudioFixHatPaths,
+	readStudioReviewAgentPaths,
 	resolveStageInputs,
 	resolveStudio,
 	studioSearchPaths,
@@ -185,7 +192,18 @@ const FSM_CONTRACTS_REVIEW_BLOCK = [
 	"- Review agents MUST NOT write, edit, or create any file. Their ONLY output channel is `haiku_feedback`. Any file write is a scope violation.",
 	"- Conditional review: each agent's `applies_to:` frontmatter (glob list) scopes it to matching output kinds. The FSM filters agents whose scope doesn't match; agents without `applies_to:` always run.",
 	'- Findings with concrete reproducible claims (file:line + gate command + proposed fix) accelerate resolution. Vague concerns ("looks wrong") are less actionable — prefer concrete.',
+	"- **Scope routing is mandatory.** If a finding's root cause is in a different stage than the one being reviewed (e.g. a design reviewer notices an inception assumption is wrong), pass `upstream_stage: \"<stage-name>\"` to `haiku_feedback`. The FSM surfaces cross-stage findings to the human rather than routing them through this stage's fix loop — the wrong hats cannot fix a different stage's artifacts.",
 	`- A stage's retry budget is TIGHT: agent-invoked rejection cycles are capped at ${MAX_STAGE_ITERATIONS} iterations (\`MAX_STAGE_ITERATIONS=${MAX_STAGE_ITERATIONS}\`). Beyond that, the framework escalates to the human — repeated rejections indicate a spec problem the pre-execute review should have caught, and the correct response is to fix the plan, not keep building against a broken plan.`,
+].join("\n")
+
+const FSM_CONTRACTS_FIX_LOOP_BLOCK = [
+	"### FSM Contracts (REQUIRED — reminder during fix loop)",
+	"",
+	"- The fix loop runs the stage's `fix_hats:` sequence directly against an open feedback finding. The feedback file IS the scope — do NOT synthesize a new unit spec.",
+	'- Every hat in the sequence reads the feedback body + the flagged artifact path and acts within its mandate. The sequence typically ends with a `feedback-assessor` hat that independently verifies the fix and, if satisfied, calls `haiku_feedback_update { status: "closed", closed_by: "fix-loop:<bolt-id>" }`.',
+	"- If the feedback-assessor is NOT satisfied, it leaves the feedback open (no `closed_by`, no status change). The FSM increments the bolt counter and may dispatch another loop, up to 3 bolts per finding. Exceeding 3 escalates to the human.",
+	"- A fix-loop hat is NOT a unit hat. Do NOT call `haiku_unit_advance_hat` or `haiku_unit_reject_hat` — those are for unit execution. The fix-loop is orchestrated by the parent; each fix hat completes its work and returns, and the parent calls `haiku_run_next` to advance.",
+	'- If a fix hat discovers the finding is actually invalid or already addressed, call `haiku_feedback_reject { reason: "<concrete reason>" }` instead of editing artifacts. A stale finding should be rejected, not silently dropped.',
 ].join("\n")
 
 /**
@@ -232,7 +250,7 @@ function maybeEscalate(
 	trigger: "feedback" | "external-changes",
 	pendingItems: Array<{ feedback_id: string; title: string }> = [],
 ): OrchestratorAction | null {
-	if (!iter.exceeded && !iter.loopDetected) return null
+	if (!(iter.exceeded || iter.loopDetected)) return null
 
 	const reason = iter.exceeded ? "iteration_limit" : "loop_detected"
 	const message = iter.exceeded
@@ -301,11 +319,11 @@ function buildElaboratorInstruction(opts: {
 		"",
 		"- **Each turn MUST ask a meaningful question.** A meaningful question is one whose answer changes what you draft — trade-offs, scope boundaries, acceptance criteria, architectural choices with two-plus viable options, priorities between conflicting requirements, or requirement ambiguities that can't be resolved from the intent body alone. Use `AskUserQuestion` with a pre-populated `options[]` array.",
 		"- **NEVER ask about things covered elsewhere in the flow.** The following are handled by other parts of the system — asking about them here duplicates work:",
-		"  - Unit-set approval (\"how do these units look\", \"does this scope work\", \"are these acceptable\", \"should I proceed\", \"do you approve\") — handled by the review gate UI after drafting completes",
+		'  - Unit-set approval ("how do these units look", "does this scope work", "are these acceptable", "should I proceed", "do you approve") — handled by the review gate UI after drafting completes',
 		"  - Per-unit feedback (reject / request-changes on specific units) — handled by the review gate's annotation + changes-requested path",
-		"  - Feedback closure verification (\"did my unit address FB-N\") — handled by the feedback-assessor hat during execution",
-		"  - Gate decisions (\"should we advance the stage\") — handled by the gate itself",
-		"  - Quality-gate results (\"did tests pass\") — handled by advance_hat",
+		'  - Feedback closure verification ("did my unit address FB-N") — handled by the feedback-assessor hat during execution',
+		'  - Gate decisions ("should we advance the stage") — handled by the gate itself',
+		'  - Quality-gate results ("did tests pass") — handled by advance_hat',
 		"- **Use `AskUserQuestion` with `questions[]` when several decisions are related** so the user answers them in one UI exchange. Independent questions can still be separate turns — collaboration is the point.",
 		"- **When information is genuinely absent from the intent and there are no viable defaults, ask.** When you have reasonable inference based on intent goals + stage scope + prior units, draft it and let the review gate surface disagreements.",
 	].join("\n")
@@ -321,6 +339,37 @@ function readFrontmatter(filePath: string): Record<string, unknown> {
 }
 
 // ── Studio resolution ──────────────────────────────────────────────────────
+
+/**
+ * Compute the effective stage list for an intent.
+ *
+ * Resolution order:
+ *   1. Start with the studio's full stage list (from STUDIO.md).
+ *   2. If `intent.stages` is an explicit non-empty array, intersect with
+ *      studio stages (preserves studio order; rejects unknown stages).
+ *      This is how `/haiku:quick` restricts a multi-stage studio to a
+ *      single stage without having to enumerate skip_stages.
+ *   3. Apply `intent.skip_stages` filter on the result.
+ *
+ * Callers that need the full studio list (not intent-filtered) should call
+ * `resolveStudioStages` directly.
+ */
+function resolveIntentStages(
+	intent: Record<string, unknown>,
+	studio: string,
+): string[] {
+	const studioStages = resolveStudioStages(studio)
+	const explicit = Array.isArray(intent.stages)
+		? (intent.stages as string[])
+		: []
+	const allowed = explicit.length > 0 ? new Set(explicit) : null
+	const skipStages = (intent.skip_stages as string[]) || []
+	return studioStages.filter((s) => {
+		if (allowed && !allowed.has(s)) return false
+		if (skipStages.includes(s)) return false
+		return true
+	})
+}
 
 function resolveStudioStages(studio: string): string[] {
 	// Accept any identifier (dir, name, slug, alias); falls back to direct lookup
@@ -355,6 +404,34 @@ function resolveStageHats(studio: string, stage: string): string[] {
 		if (existsSync(stageFile)) {
 			const fm = readFrontmatter(stageFile)
 			return (fm.hats as string[]) || []
+		}
+	}
+	return []
+}
+
+/**
+ * Read the ordered `fix_hats:` list declared on a stage. When set, pending
+ * feedback findings are routed through this sequence instead of the legacy
+ * "draft new units that close feedback" path. Empty list (or missing
+ * field) keeps the legacy behavior. Each named hat must have a real
+ * `hats/{hat}.md` mandate file (validated at dispatch time); fix hats
+ * may live OUTSIDE the main `hats:` rotation so a `feedback-assessor` hat
+ * can exist solely for fix-mode use without intruding on the execute loop.
+ */
+function resolveStageFixHats(studio: string, stage: string): string[] {
+	const info = resolveStudio(studio)
+	const dir = info ? info.dir : studio
+	const pluginRoot = resolvePluginRoot()
+	for (const base of [
+		join(process.cwd(), ".haiku", "studios"),
+		join(pluginRoot, "studios"),
+	]) {
+		const stageFile = join(base, dir, "stages", stage, "STAGE.md")
+		if (existsSync(stageFile)) {
+			const fm = readFrontmatter(stageFile)
+			const fixHats = fm.fix_hats
+			if (Array.isArray(fixHats)) return fixHats as string[]
+			return []
 		}
 	}
 	return []
@@ -888,7 +965,9 @@ function writeReviewFeedbackFiles(
 
 	if (createdIds.length > 0) {
 		gitCommitState(
-			`feedback: create ${createdIds.join(", ")} from review UI in ${stage}`,
+			stage
+				? `feedback: create ${createdIds.join(", ")} from review UI in ${stage}`
+				: `feedback: create ${createdIds.join(", ")} from review UI (intent-scope)`,
 		)
 	}
 
@@ -1266,9 +1345,7 @@ function resolveEffectiveBranchMode(
 	// hybrid: check continuous_from threshold
 	const continuousFrom = (intent.continuous_from as string) || ""
 	if (!continuousFrom) return "discrete"
-	const allStages = resolveStudioStages(studio)
-	const skipStages = (intent.skip_stages as string[]) || []
-	const studioStages = allStages.filter((s) => !skipStages.includes(s))
+	const studioStages = resolveIntentStages(intent, studio)
 	const thresholdIdx = studioStages.indexOf(continuousFrom)
 	const stageIdx = studioStages.indexOf(stage)
 	return stageIdx >= thresholdIdx ? "continuous" : "discrete"
@@ -1279,9 +1356,7 @@ function findPreviousStage(slug: string, stage: string): string | undefined {
 	const intentFile = join(intentDir(slug), "intent.md")
 	const intent = readFrontmatter(intentFile)
 	const studio = (intent.studio as string) || ""
-	const allStages = resolveStudioStages(studio)
-	const skipStages = (intent.skip_stages as string[]) || []
-	const studioStages = allStages.filter((s) => !skipStages.includes(s))
+	const studioStages = resolveIntentStages(intent, studio)
 	const idx = studioStages.indexOf(stage)
 	return idx > 0 ? studioStages[idx - 1] : undefined
 }
@@ -1353,9 +1428,7 @@ function fsmStartStage(slug: string, stage: string): void {
 			// mirrors how a server-side PR merge would land the work, without
 			// requiring a pull from the remote.
 			const studio = (intent.studio as string) || ""
-			const allStages = resolveStudioStages(studio)
-			const skipStages = (intent.skip_stages as string[]) || []
-			const studioStages = allStages.filter((s) => !skipStages.includes(s))
+			const studioStages = resolveIntentStages(intent, studio)
 			const stageIdx = studioStages.indexOf(stage)
 			const previousBranchedStages = studioStages
 				.slice(0, stageIdx)
@@ -1509,11 +1582,14 @@ function completeOrReviewIntent(
 ): OrchestratorAction {
 	const intentFile = join(intentDir(slug), "intent.md")
 	const intent = existsSync(intentFile) ? readFrontmatter(intentFile) : {}
-	// Opt-IN: the final intent-completion review only fires when the intent
-	// explicitly sets `intent_completion_review: true`. Default behavior
-	// (flag absent or false) fires intent_complete directly, matching the
-	// pre-existing contract every external-review/test caller relies on.
-	const reviewOnCompletion = intent.intent_completion_review === true
+	// Opt-OUT: the studio-level intent-completion review is on by default.
+	// Authors can disable it per-intent with `intent_completion_review: false`
+	// on intent frontmatter — useful for tight delivery loops, legacy
+	// intents predating the review layer, or studios without reviewers.
+	// Absent field = enabled. The goal is to measure findings over time:
+	// if the studio-level review consistently produces fewer findings, the
+	// specs and stage-level reviews upstream have gotten sharper.
+	const reviewOnCompletion = intent.intent_completion_review !== false
 	if (!reviewOnCompletion) {
 		fsmIntentComplete(slug)
 		return {
@@ -1524,9 +1600,217 @@ function completeOrReviewIntent(
 		}
 	}
 	fsmEnterIntentCompletionReview(slug)
-	// Reuse the gate_review action so the existing review UI / elicitation
-	// path handles the approval. Distinguished by gate_context so the
-	// approval handler knows to fire intent_complete rather than advance_stage.
+	// Next `haiku_run_next` tick enters the `awaiting_completion_review`
+	// handler, which dispatches studio-level review agents (if any),
+	// orchestrates the intent-scope fix loop, and only opens the final
+	// gate_review once every finding is closed or rejected. We don't
+	// jump straight to gate_review here — the extra hop lets the
+	// studio-level review layer run before the user sees the gate.
+	return {
+		action: "advance_phase",
+		intent: slug,
+		stage: null,
+		from_phase: (intent.phase as string) || "active",
+		to_phase: "awaiting_completion_review",
+		message: `${sourceMessage} All stages passed — entering intent-completion review phase. Call \`haiku_run_next { intent: "${slug}" }\` to dispatch studio-level review agents (if any) and the final gate.`,
+	}
+}
+
+/**
+ * Orchestrate the intent-scope adversarial review layer. Fires only when
+ * `intent_completion_review: true` is set on the intent AND the phase is
+ * `awaiting_completion_review`. Mirrors the stage-level fix loop in
+ * structure: dispatch review agents once, then loop through findings via
+ * studio fix-hats until every finding is closed or rejected, then open
+ * the human gate. Cross-stage findings (upstream_stage != null) are
+ * SURFACED — this layer explicitly forbids auto-revisiting stages.
+ */
+function runIntentCompletionReview(
+	slug: string,
+	studio: string,
+	intent: Record<string, unknown>,
+): OrchestratorAction {
+	const intentFile = join(intentDir(slug), "intent.md")
+
+	// Classify pending intent-scope feedback. Findings here were authored
+	// by studio-level review agents; `stage: ""` in the storage path.
+	const allFeedback = readFeedbackFiles(slug, "")
+	const pendingItems = allFeedback.filter((item) => {
+		if (item.closed_by) return false
+		return (
+			item.status !== "closed" &&
+			item.status !== "addressed" &&
+			item.status !== "rejected"
+		)
+	})
+
+	// Upstream findings at the intent layer are advisory — a studio-level
+	// reviewer flagging a specific stage must be surfaced to the human.
+	// We NEVER auto-revisit stages from this layer (that's the whole point
+	// of the "surface, don't route" contract for cross-stage findings).
+	const upstreamItems = pendingItems.filter(
+		(item) => item.upstream_stage !== null,
+	)
+	if (upstreamItems.length > 0) {
+		emitTelemetry("haiku.intent.upstream_finding_surfaced", {
+			intent: slug,
+			count: String(upstreamItems.length),
+		})
+		return {
+			action: "upstream_finding_surfaced",
+			intent: slug,
+			studio,
+			stage: null,
+			upstream_items: upstreamItems.map((item) => ({
+				feedback_id: item.id,
+				title: item.title,
+				status: item.status,
+				origin: item.origin,
+				author: item.author,
+				file: item.file,
+				upstream_stage: item.upstream_stage as string,
+			})),
+			message: `Intent '${slug}' has ${upstreamItems.length} cross-stage finding(s) from the studio-level review. These will NOT be auto-fixed. Present them to the user; they can revisit upstream via \`haiku_revisit\`, reject via \`haiku_feedback_reject\`, or accept manually. Do NOT call \`haiku_run_next\` until the user decides.`,
+		}
+	}
+
+	// Dispatch the studio-level review agents exactly once per completion
+	// phase. The flag lives on the intent frontmatter so a post-fix-loop
+	// re-tick doesn't re-dispatch the agents — they already flagged their
+	// concerns; the fix loop addresses them.
+	const reviewDispatched =
+		(intent.completion_review_dispatched as boolean) === true
+	if (!reviewDispatched) {
+		const agentPaths = readStudioReviewAgentPaths(studio)
+		if (Object.keys(agentPaths).length === 0) {
+			// No studio-level agents → skip straight to the gate so we don't
+			// loop forever in this phase. Mark dispatched so the next tick
+			// sees no pending + dispatched=true and opens the gate.
+			setFrontmatterField(intentFile, "completion_review_dispatched", true)
+			setFrontmatterField(intentFile, "completion_review_skipped", true)
+			sealIntentState(slug)
+		} else {
+			setFrontmatterField(intentFile, "completion_review_dispatched", true)
+			setFrontmatterField(
+				intentFile,
+				"completion_review_dispatched_at",
+				timestamp(),
+			)
+			sealIntentState(slug)
+			emitTelemetry("haiku.intent.completion_review_dispatched", {
+				intent: slug,
+				agents: String(Object.keys(agentPaths).length),
+			})
+			return {
+				action: "intent_completion_review",
+				intent: slug,
+				studio,
+				agents: Object.keys(agentPaths),
+				message: `Dispatching ${Object.keys(agentPaths).length} studio-level review agent(s) for intent '${slug}'. Each reviews the whole-intent artifacts and logs findings at intent scope via \`haiku_feedback\` (with stage omitted).`,
+			}
+		}
+	}
+
+	// Pending in-scope findings → dispatch studio fix hat sequence
+	const inScopePending = pendingItems.filter(
+		(item) => item.upstream_stage === null,
+	)
+	if (inScopePending.length > 0) {
+		const fixHatPaths = readStudioFixHatPaths(studio)
+		const fixHatNames = Object.keys(fixHatPaths)
+		if (fixHatNames.length === 0) {
+			return {
+				action: "error",
+				intent: slug,
+				message: `Intent '${slug}' has ${inScopePending.length} pending intent-scope finding(s) but studio '${studio}' defines no fix-hats in \`plugin/studios/${studio}/fix-hats/\`. Either add fix hats, reject the findings, or close them manually.`,
+			}
+		}
+
+		// Deterministic order: pick the lowest-numbered pending item. A
+		// previous bolt may have left status="fixing" on the same item —
+		// that's fine, we just increment the bolt and dispatch again.
+		const inProgress = inScopePending.find((i) => i.status === "fixing")
+		const target =
+			inProgress ?? [...inScopePending].sort((a, b) => a.num - b.num)[0]
+
+		// Escalation check BEFORE increment: stop pumping the counter on
+		// repeated escalate returns.
+		if (target.bolt >= MAX_FIX_LOOP_BOLTS) {
+			emitTelemetry("haiku.intent.fix_loop_escalate", {
+				intent: slug,
+				feedback_id: target.id,
+				bolt: String(target.bolt),
+			})
+			// Surface the full intent-scope pending queue so the human can
+			// see every finding blocked behind the escalated one.
+			const queue = [
+				{
+					feedback_id: target.id,
+					title: target.title,
+					status: target.status,
+					origin: target.origin,
+					author: target.author,
+					file: target.file,
+				},
+				...inScopePending
+					.filter((i) => i.id !== target.id)
+					.map((i) => ({
+						feedback_id: i.id,
+						title: i.title,
+						status: i.status,
+						origin: i.origin,
+						author: i.author,
+						file: i.file,
+					})),
+			]
+			return {
+				action: "escalate",
+				intent: slug,
+				stage: null,
+				reason: "fix_loop_cap_exceeded",
+				iteration: target.bolt,
+				max_iterations: MAX_FIX_LOOP_BOLTS,
+				message:
+					`Intent-scope feedback ${target.id} ("${target.title}") has exceeded the fix-loop cap of ${MAX_FIX_LOOP_BOLTS} bolts. Present the finding to the user; they can reject, edit, or close it manually. ${inScopePending.length - 1 > 0 ? `${inScopePending.length - 1} other finding(s) are queued behind this one.` : ""}`.trim(),
+				pending_items: queue,
+			}
+		}
+
+		const bumped = incrementFeedbackBolt(slug, "", target.id)
+		if (!bumped) {
+			return {
+				action: "error",
+				intent: slug,
+				message: `Failed to increment fix-loop bolt on intent-scope ${target.id} — feedback file may have been deleted mid-tick.`,
+			}
+		}
+
+		gitCommitState(
+			`haiku: intent_completion_fix ${target.id} bolt ${bumped.bolt}`,
+		)
+		emitTelemetry("haiku.intent.completion_fix_dispatch", {
+			intent: slug,
+			feedback_id: target.id,
+			bolt: String(bumped.bolt),
+		})
+		return {
+			action: "intent_completion_fix",
+			intent: slug,
+			studio,
+			feedback_id: target.id,
+			feedback_file: target.file,
+			feedback_title: target.title,
+			fix_hats: fixHatNames,
+			bolt: bumped.bolt,
+			max_bolts: MAX_FIX_LOOP_BOLTS,
+			remaining_pending: inScopePending.length,
+			message: `Dispatching intent-completion fix loop for ${target.id} ("${target.title}") — bolt ${bumped.bolt}/${MAX_FIX_LOOP_BOLTS}. Studio fix-hats: ${fixHatNames.join(" → ")}.`,
+		}
+	}
+
+	// All findings resolved (or none produced) → open the human gate. This
+	// is the terminal bookend; `fsmIntentComplete` only fires after
+	// approval.
 	return {
 		action: "gate_review",
 		intent: slug,
@@ -1534,7 +1818,7 @@ function completeOrReviewIntent(
 		stage: null,
 		gate_type: "ask",
 		gate_context: "intent_completion",
-		message: `${sourceMessage} All stages passed — opening final intent review (intent_completion_review=true). Approval completes the intent; changes_requested routes back to a stage you specify.`,
+		message: `Intent '${slug}' has passed all stages and all studio-level review checks${(intent.completion_review_skipped as boolean) ? " (no studio-level reviewers configured)" : ""}. Opening final review gate.`,
 	}
 }
 
@@ -1553,9 +1837,7 @@ function fsmIntentComplete(slug: string): void {
 	// left behind.
 	const intent = existsSync(intentFile) ? readFrontmatter(intentFile) : {}
 	const studio = (intent.studio as string) || ""
-	const skipStages = (intent.skip_stages as string[]) || []
-	const allStages = studio ? resolveStudioStages(studio) : []
-	const stages = allStages.filter((s) => !skipStages.includes(s))
+	const stages = studio ? resolveIntentStages(intent, studio) : []
 	if (stages.length > 0) {
 		const finalized = finalizeIntentBranches(slug, stages)
 		if (!finalized.success) {
@@ -1613,19 +1895,19 @@ export function runNext(slug: string): OrchestratorAction {
 	const activeStage = (intent.active_stage as string) || ""
 	const intentPhase = (intent.phase as string) || "active"
 
-	// Intent is in the final-completion-review phase — re-open the review
-	// gate on every run_next call until the user approves or requests
-	// changes. This is the terminal bookend before fsmIntentComplete fires.
+	// Intent is in the final-completion-review phase. Before opening the
+	// human-facing gate, we run the studio-level adversarial review:
+	//   1. If review agents exist and haven't dispatched yet → dispatch them
+	//   2. If their findings produced pending intent-scope feedback → loop
+	//      through the studio-level fix hats (one finding per tick) until
+	//      every finding is closed or rejected
+	//   3. Only then open the gate_review UI for human approval
+	//
+	// This is the symmetric intent-scope counterpart of the stage-level
+	// fix loop: same review → fix → re-review mechanics, different scope
+	// (intent-wide artifacts, studio-level hats with studio-wide mandates).
 	if (intentPhase === "awaiting_completion_review" && status !== "completed") {
-		return {
-			action: "gate_review",
-			intent: slug,
-			studio,
-			stage: null,
-			gate_type: "ask",
-			gate_context: "intent_completion",
-			message: `Intent '${slug}' has all stages approved and is awaiting final review. Opening review gate.`,
-		}
+		return runIntentCompletionReview(slug, studio, intent)
 	}
 
 	if (status === "completed") {
@@ -1659,9 +1941,10 @@ export function runNext(slug: string): OrchestratorAction {
 		return { action: "error", message: `Studio '${studio}' has no stages` }
 	}
 
-	// Filter out skipped stages
-	const skipStages = (intent.skip_stages as string[]) || []
-	const studioStages = allStudioStages.filter((s) => !skipStages.includes(s))
+	// Resolve effective stages: honors `intent.stages` as an allow-list (used
+	// by /haiku:quick to restrict a multi-stage studio to a single stage) and
+	// `intent.skip_stages` as a deny-list. Either, both, or neither.
+	const studioStages = resolveIntentStages(intent, studio)
 
 	// Determine current stage — with consistency check
 	let currentStage = activeStage
@@ -1838,12 +2121,15 @@ export function runNext(slug: string): OrchestratorAction {
 		}
 	}
 
-	// If current stage was skipped, advance to next non-skipped stage
-	if (skipStages.includes(currentStage)) {
+	// If current stage is no longer in the effective stage list (either
+	// explicitly skipped or excluded by `intent.stages` allow-list), hop
+	// forward to the next included stage.
+	const effectiveStageSet = new Set(studioStages)
+	if (!effectiveStageSet.has(currentStage)) {
 		const idx = allStudioStages.indexOf(currentStage)
 		const next = allStudioStages
 			.slice(idx + 1)
-			.find((s) => !skipStages.includes(s))
+			.find((s) => effectiveStageSet.has(s))
 		if (!next) {
 			return completeOrReviewIntent(
 				slug,
@@ -1906,6 +2192,17 @@ export function runNext(slug: string): OrchestratorAction {
 			existsSync(unitsDir) &&
 			readdirSync(unitsDir).filter((f) => f.endsWith(".md")).length > 0
 
+		// Legacy cleanup: pre-execute stages must have no feedback files.
+		// Intents created before pre-exec-feedback was removed may have FB
+		// files left over. Wipe them here so the invariant holds and the
+		// FSM never re-enters stale pre-review code paths.
+		const cleanedPreExecFb = cleanupPreExecuteFeedback(iDir, currentStage)
+		if (cleanedPreExecFb.length > 0) {
+			console.error(
+				`[haiku] cleaned ${cleanedPreExecFb.length} legacy pre-execute feedback file(s) from ${slug}/${currentStage}: ${cleanedPreExecFb.join(", ")}`,
+			)
+		}
+
 		// Read elaboration mode from STAGE.md
 		const pluginRoot = resolvePluginRoot()
 		let elaborationMode = "collaborative"
@@ -1941,11 +2238,15 @@ export function runNext(slug: string): OrchestratorAction {
 			}
 		}
 
-		// ── Additive elaborate mode (iteration > 1) ───────────────────────
-		// When we're revisiting a stage after feedback, return a special action
-		// that lists completed units as read-only and pending feedback to address.
+		// ── Additive elaborate mode (iteration > 1, post-execute only) ─────
+		// Fires ONLY when we're revisiting a stage after real work has landed
+		// (at least one unit completed). Pre-execute stages — even on
+		// iteration > 1 — go through the plain elaborate path: edit the
+		// existing unstarted unit specs directly, no `closes:` requirement,
+		// no per-feedback validation. Nothing has been built, so there is no
+		// feedback model to enforce.
 		const iteration = getStageIterationCount(stageState)
-		if (iteration > 1) {
+		if (iteration > 1 && !isStagePreExecute(iDir, currentStage)) {
 			const allUnits = listUnits(iDir, currentStage)
 			const completedUnits = allUnits.filter((u) => u.status === "completed")
 			const pendingUnits = allUnits.filter((u) => u.status !== "completed")
@@ -2169,7 +2470,7 @@ export function runNext(slug: string): OrchestratorAction {
 		// Read the STAGE.md body — if it mentions pick_design_direction (RFC 2119 MUST),
 		// enforce that design_direction_selected is set in state.json.
 		const designDirectionSelected =
-			(stageState.design_direction_selected as boolean) || false
+			stageState.design_direction_selected as boolean
 		if (!designDirectionSelected) {
 			const stageMetaForDesign = resolveStageMetadata(studio, currentStage)
 			if (stageMetaForDesign?.body?.includes("pick_design_direction")) {
@@ -2212,8 +2513,7 @@ export function runNext(slug: string): OrchestratorAction {
 		//   Second pass (flag set, no pending feedback): fall through to
 		//     normal execute advance.
 		{
-			const preReviewDispatched =
-				(stageState.pre_review_dispatched as boolean) || false
+			const preReviewDispatched = stageState.pre_review_dispatched as boolean
 
 			if (!preReviewDispatched) {
 				// Skip pre-review if no applicable review agents exist — avoids
@@ -2254,21 +2554,13 @@ export function runNext(slug: string): OrchestratorAction {
 				}
 			}
 
-			const pendingPreReviewFb = readFeedbackFiles(slug, currentStage).filter(
-				(item) => item.status === "pending",
-			)
-			if (pendingPreReviewFb.length > 0) {
-				return {
-					action: "pre_review_revisit",
-					intent: slug,
-					studio,
-					stage: currentStage,
-					pending_count: pendingPreReviewFb.length,
-					pending_items: pendingPreReviewFb.map(summarizeFeedback),
-					units_dir: `.haiku/intents/${slug}/stages/${currentStage}/units/`,
-					message: `${pendingPreReviewFb.length} pending feedback item(s) on unit specs. Resolve by EDITING the affected unit.md files (NOT by drafting new units — that's additive-elaboration, a different mode). After each edit, close the feedback via haiku_feedback_update status=closed closed_by=<unit-name>. When all spec feedback is closed/rejected, call haiku_run_next to advance elaborate → execute.`,
-				}
-			}
+			// Note: the `pre_review_revisit` path used to fire here when pending
+			// feedback existed on pre-exec unit specs. That path was removed —
+			// pre-execute reviews (both adversarial and user gate_review) now
+			// return findings INLINE in their action payloads, and the agent
+			// edits unit specs directly. The `cleanupPreExecuteFeedback` call
+			// at the top of this phase handler wipes any stale FB files from
+			// legacy intents so the old path can't re-trigger.
 
 			// TOCTOU mitigation for BUG 4 (fast-retry race): if reviewer
 			// dispatch was recent AND we see zero pending feedback, reviewer
@@ -2332,7 +2624,7 @@ export function runNext(slug: string): OrchestratorAction {
 		// during the review phase, so the user sees validated specs.
 		// Note: if the user rejects and the agent revises, this re-presents
 		// with intent_review context until intent_reviewed is set to true.
-		const intentReviewed = (intent.intent_reviewed as boolean) || false
+		const intentReviewed = intent.intent_reviewed as boolean
 		const isIntentReview = currentStage === studioStages[0] && !intentReviewed
 		const stageReviewType = resolveStageReview(studio, currentStage)
 
@@ -2610,8 +2902,17 @@ export function runNext(slug: string): OrchestratorAction {
 	if (phase === "gate") {
 		// ── Pending feedback check ─────────────────────────────────────────
 		// Before any gate logic, check if there are unresolved feedback items.
-		// If pending feedback exists, roll back to elaborate so the agent
-		// addresses findings before the stage can advance.
+		// When pending feedback exists we have three routes, in priority order:
+		//   1. Cross-stage findings (upstream_stage != currentStage) are
+		//      SURFACED to the human via `upstream_finding_surfaced` — we do
+		//      not attempt to fix upstream artifacts with downstream hats.
+		//   2. If the stage declares `fix_hats:`, dispatch that sequence
+		//      directly against one pending finding via `review_fix`. The
+		//      feedback body replaces the unit spec as scope — no new unit
+		//      synthesis, no "telephone game" of feedback → unit → execute.
+		//   3. Legacy path: no `fix_hats:` → roll back to elaborate and ask
+		//      the agent to draft units that close each finding (the
+		//      additive-elaboration model that `fix_hats:` is replacing).
 		const pendingCount = countPendingFeedback(slug, currentStage)
 		if (pendingCount > 0) {
 			// Blocking = items countPendingFeedback counts: no closed_by AND
@@ -2627,6 +2928,141 @@ export function runNext(slug: string): OrchestratorAction {
 					)
 				},
 			)
+
+			// ── Route 1: cross-stage findings ─────────────────────────────
+			// A reviewer in stage X can flag root causes in stage Y — e.g. the
+			// design reviewer notices the inception brief assumed a constraint
+			// that's actually wrong. We cannot fix that with stage X's hats;
+			// the user must decide whether to revisit Y, reject the finding,
+			// or accept it. Never auto-revisit upstream without explicit
+			// human approval.
+			const upstreamItems = pendingItems.filter(
+				(item) =>
+					item.upstream_stage !== null && item.upstream_stage !== currentStage,
+			)
+			if (upstreamItems.length > 0) {
+				emitTelemetry("haiku.gate.upstream_finding_surfaced", {
+					intent: slug,
+					stage: currentStage,
+					count: String(upstreamItems.length),
+				})
+				return {
+					action: "upstream_finding_surfaced",
+					intent: slug,
+					studio,
+					stage: currentStage,
+					upstream_items: upstreamItems.map((item) => ({
+						...summarizeFeedback(item),
+						upstream_stage: item.upstream_stage as string,
+					})),
+					message: `Stage '${currentStage}' has ${upstreamItems.length} cross-stage finding(s) whose root cause is in a DIFFERENT stage. These will NOT be auto-fixed by this stage's hats. Present them to the user and ask how to proceed — revisit the upstream stage via \`haiku_revisit\`, reject the finding with \`haiku_feedback_reject\`, or accept as-is. Do NOT call \`haiku_run_next\` until the user decides.`,
+				}
+			}
+
+			// ── Route 2: fix_hats fix loop ────────────────────────────────
+			// When the stage declares fix_hats, dispatch the sequence
+			// directly against ONE pending finding per tick. Serial (not
+			// parallel) because findings may conflict — fixing one can
+			// invalidate another. The final fix hat validates closure and
+			// calls haiku_feedback_update status=closed. The FSM loops
+			// (one feedback per run_next) until every finding is closed or
+			// rejected, then re-enters gate.
+			const fixHats = resolveStageFixHats(studio, currentStage)
+			if (fixHats.length > 0 && pendingItems.length > 0) {
+				// Ensure each fix-hat has a real mandate file. Fix-mode hats
+				// may live outside the primary `hats:` rotation (e.g. a
+				// `feedback-assessor` hat that only runs during fix loops),
+				// so we check `hats/{hat}.md` existence, not the `hats:`
+				// list. A ghost mandate blocks dispatch with a concrete error.
+				const hatDefs = readHatDefs(studio, currentStage)
+				const missing = fixHats.filter((h) => !hatDefs[h])
+				if (missing.length > 0) {
+					return {
+						action: "error",
+						intent: slug,
+						message: `Stage '${currentStage}' declares fix_hats: [${fixHats.join(", ")}] but [${missing.join(", ")}] have no mandate file in plugin/studios/<studio>/stages/${currentStage}/hats/. Create the missing files or remove them from fix_hats.`,
+					}
+				}
+
+				// Pick the next feedback to fix: prefer items already in
+				// "fixing" state (mid-loop resumption), else the lowest-numbered
+				// pending item. Deterministic so re-entries are stable.
+				const inProgress = pendingItems.find((i) => i.status === "fixing")
+				const target =
+					inProgress ?? [...pendingItems].sort((a, b) => a.num - b.num)[0]
+
+				// Escalation check BEFORE increment: if this finding has
+				// already burned its bolt budget, stop incrementing and
+				// surface the escalation. Incrementing first would let a
+				// misbehaving agent keep calling haiku_run_next and pump the
+				// counter arbitrarily high across escalate hops.
+				if (target.bolt >= MAX_FIX_LOOP_BOLTS) {
+					emitTelemetry("haiku.feedback.fix_loop_escalate", {
+						intent: slug,
+						stage: currentStage,
+						feedback_id: target.id,
+						bolt: String(target.bolt),
+					})
+					// Surface the WHOLE pending queue — the escalated finding
+					// is at the front, followed by any still-unaddressed
+					// items. Without this, the human sees only FB-N and
+					// has no visibility that FB-M, FB-M+1, ... are
+					// queued behind it waiting on this block.
+					const queue = [
+						summarizeFeedback(target),
+						...pendingItems
+							.filter((i) => i.id !== target.id)
+							.map(summarizeFeedback),
+					]
+					return {
+						action: "escalate",
+						intent: slug,
+						stage: currentStage,
+						reason: "fix_loop_cap_exceeded",
+						iteration: target.bolt,
+						max_iterations: MAX_FIX_LOOP_BOLTS,
+						message:
+							`Feedback ${target.id} ("${target.title}") has exceeded the fix-loop cap of ${MAX_FIX_LOOP_BOLTS} bolts. The fix hats cannot resolve this finding autonomously — the finding itself, the spec it's flagging, or the hat mandates likely need human intervention. Present the finding to the user; they can revisit upstream, reject the finding, edit the spec, or mark it resolved manually. ${pendingItems.length - 1 > 0 ? `${pendingItems.length - 1} other finding(s) are queued behind this one.` : ""}`.trim(),
+						pending_items: queue,
+					}
+				}
+
+				// Increment bolt counter and mark status "fixing".
+				const bumped = incrementFeedbackBolt(slug, currentStage, target.id)
+				if (!bumped) {
+					return {
+						action: "error",
+						intent: slug,
+						message: `Failed to increment fix-loop bolt on ${target.id} — feedback file may have been deleted mid-tick.`,
+					}
+				}
+
+				gitCommitState(
+					`haiku: review_fix dispatch ${target.id} bolt ${bumped.bolt} in ${currentStage}`,
+				)
+				emitTelemetry("haiku.gate.review_fix", {
+					intent: slug,
+					stage: currentStage,
+					feedback_id: target.id,
+					bolt: String(bumped.bolt),
+				})
+				return {
+					action: "review_fix",
+					intent: slug,
+					studio,
+					stage: currentStage,
+					feedback_id: target.id,
+					feedback_file: target.file,
+					feedback_title: target.title,
+					fix_hats: fixHats,
+					bolt: bumped.bolt,
+					max_bolts: MAX_FIX_LOOP_BOLTS,
+					remaining_pending: pendingItems.length,
+					message: `Dispatching fix loop for ${target.id} ("${target.title}") — bolt ${bumped.bolt}/${MAX_FIX_LOOP_BOLTS}. Hat sequence: ${fixHats.join(" → ")}. Each hat reads the feedback body at ${target.file} directly; no new unit is synthesized.`,
+				}
+			}
+
+			// ── Route 3: legacy feedback_revisit (no fix_hats) ────────────
 			const statePath = stageStatePath(slug, currentStage)
 			const gateState = readJson(statePath)
 			gateState.phase = "elaborate"
@@ -2742,7 +3178,14 @@ export function runNext(slug: string): OrchestratorAction {
 			// confirm approval.
 		}
 
-		const reviewType = resolveStageReview(studio, currentStage)
+		const rawReviewType = resolveStageReview(studio, currentStage)
+		// Autopilot promotion: if the intent is in autopilot and the stage's
+		// review type is `ask`, treat it as `auto`. External gates are NEVER
+		// promoted — they represent structural signals (PR/MR merge) the FSM
+		// can't synthesize. Compound gates with external stay external.
+		const autopilot = intent.autopilot === true
+		const reviewType =
+			autopilot && rawReviewType === "ask" ? "auto" : rawReviewType
 		const stageIdx = studioStages.indexOf(currentStage)
 		const nextStage =
 			stageIdx < studioStages.length - 1 ? studioStages[stageIdx + 1] : null
@@ -3002,6 +3445,47 @@ interface UnitInfo {
 	depsComplete: boolean
 }
 
+/**
+ * Pre-execute means no unit in the stage has ever reached `completed`.
+ * Semantically: "nothing has been built yet." Feedback files do not apply
+ * here — they track defects on artifacts that exist, and pre-exec has no
+ * artifacts. Any review rejection at this phase goes inline, not through
+ * the persistent feedback model.
+ */
+function isStagePreExecute(intentDirPath: string, stage: string): boolean {
+	const units = listUnits(intentDirPath, stage)
+	if (units.length === 0) return true
+	return !units.some((u) => u.status === "completed")
+}
+
+/**
+ * Clean up any legacy feedback files in a pre-execute stage's feedback/
+ * directory. Intents created before pre-exec-feedback was removed may have
+ * FB-NN.md files left behind; deleting them makes the state consistent with
+ * the new invariant (no FB persistence pre-execute) and prevents the FSM
+ * from re-triggering old pre-review code paths.
+ */
+function cleanupPreExecuteFeedback(
+	intentDirPath: string,
+	stage: string,
+): string[] {
+	if (!isStagePreExecute(intentDirPath, stage)) return []
+	const feedbackDir = join(intentDirPath, "stages", stage, "feedback")
+	if (!existsSync(feedbackDir)) return []
+	const removed: string[] = []
+	for (const f of readdirSync(feedbackDir)) {
+		if (f.endsWith(".md") && /^\d+-/.test(f)) {
+			try {
+				rmSync(join(feedbackDir, f), { force: true })
+				removed.push(f)
+			} catch {
+				/* best-effort */
+			}
+		}
+	}
+	return removed
+}
+
 function listUnits(intentDirPath: string, stage: string): UnitInfo[] {
 	const unitsDir = join(intentDirPath, "stages", stage, "units")
 	if (!existsSync(unitsDir)) return []
@@ -3125,9 +3609,7 @@ function revisit(slug: string, requestedStage?: string): OrchestratorAction {
 		return { action: "error", message: "No active stage to revisit from" }
 	}
 
-	const allStages = resolveStudioStages(studio)
-	const skipStages = (intent.skip_stages as string[]) || []
-	const studioStages = allStages.filter((s) => !skipStages.includes(s))
+	const studioStages = resolveIntentStages(intent, studio)
 	const currentIdx = studioStages.indexOf(currentActiveStage)
 
 	if (currentIdx < 0) {
@@ -3194,11 +3676,31 @@ function revisit(slug: string, requestedStage?: string): OrchestratorAction {
 	)
 }
 
-function uncompleteIntent(intentFile: string): void {
+function uncompleteIntent(slug: string, intentFile: string): void {
 	const intent = readFrontmatter(intentFile)
+	let dirty = false
 	if (intent.status === "completed") {
 		setFrontmatterField(intentFile, "status", "active")
 		setFrontmatterField(intentFile, "completed_at", null)
+		dirty = true
+	}
+	// A completed intent may have landed in `awaiting_completion_review`
+	// earlier; reviving it for a revisit must drop out of that phase or
+	// the next `haiku_run_next` tick will re-enter the completion-review
+	// branch instead of the revisited stage.
+	if (
+		intent.phase === "awaiting_completion_review" ||
+		intent.completion_review_dispatched === true
+	) {
+		setFrontmatterField(intentFile, "phase", "active")
+		setFrontmatterField(intentFile, "completion_review_dispatched", false)
+		setFrontmatterField(intentFile, "completion_review_skipped", false)
+		dirty = true
+	}
+	if (dirty) {
+		// All the above fields are FSM-tracked in INTENT_FIELDS; reseal so
+		// the next verifyIntentState() doesn't false-positive as tampering.
+		sealIntentState(slug)
 	}
 }
 
@@ -3223,8 +3725,9 @@ function revisitCurrentStage(
 	stageState.pre_review_reviewers_acknowledged_at = null
 	writeJson(path, stageState)
 
-	// If the intent was marked completed, revisit reactivates it
-	uncompleteIntent(intentFile)
+	// If the intent was marked completed OR in the completion-review
+	// phase, revisit reactivates it (and reseals the integrity checksum).
+	uncompleteIntent(slug, intentFile)
 
 	// In discrete mode, merge main into the current stage branch (non-destructive)
 	// and clean up unit worktrees so the re-queued units start fresh. We keep the
@@ -3262,6 +3765,12 @@ function revisitCurrentStage(
 		}
 	}
 
+	// Reset fix-loop bolt counters on any pending/fixing feedback. Without
+	// this, a revisit that landed at the bolt cap would re-escalate
+	// immediately on the first tick — the human's explicit revisit is a
+	// deliberate "try again" signal that should restart the budget.
+	resetFixLoopBolts(slug, currentActiveStage)
+
 	emitTelemetry("haiku.revisit.phase", {
 		intent: slug,
 		stage: currentActiveStage,
@@ -3276,6 +3785,39 @@ function revisitCurrentStage(
 		stage: currentActiveStage,
 		target_phase: "elaborate",
 		message: `Revisiting elaborate phase in stage '${currentActiveStage}' — all units re-queued`,
+	}
+}
+
+/**
+ * Reset the fix-loop bolt counter (and "fixing" status) on every feedback
+ * file in the given stage that isn't terminal. Called when the human
+ * explicitly revisits a stage — their revisit is a deliberate "try again"
+ * signal, and the fix-loop budget should restart. Terminal items
+ * (closed / addressed / rejected) are left alone.
+ *
+ * Pass stage = "" for intent-scope feedback (used when the intent-completion
+ * review gate is rejected and we re-enter the completion phase).
+ */
+function resetFixLoopBolts(slug: string, stage: string): void {
+	const items = readFeedbackFiles(slug, stage)
+	for (const item of items) {
+		// Terminal findings stay put. `closed_by` is the source of truth
+		// for closure (countPendingFeedback honors it even when status
+		// didn't get flipped by the writer), so resetting status/bolt on
+		// a closed_by-marked item would reopen a finding that was
+		// legitimately closed through the human review UI.
+		if (
+			item.status === "closed" ||
+			item.status === "addressed" ||
+			item.status === "rejected"
+		)
+			continue
+		if (item.closed_by) continue
+		if (item.bolt === 0 && item.status === "pending") continue
+		const full = findFeedbackFile(slug, stage, item.id)
+		if (!full) continue
+		const newData = { ...full.data, bolt: 0, status: "pending" }
+		writeFileSync(full.path, matter.stringify(`\n${full.body}\n`, newData))
 	}
 }
 
@@ -3342,11 +3884,17 @@ function revisitEarlierStage(
 		}
 	}
 
-	// Update intent's active_stage
-	setFrontmatterField(intentFile, "active_stage", targetStage)
+	// Reset fix-loop bolt counters on the target stage's feedback so the
+	// explicit human revisit restarts the budget.
+	resetFixLoopBolts(slug, targetStage)
 
-	// If the intent was marked completed, revisit reactivates it
-	uncompleteIntent(intentFile)
+	// Update intent's active_stage. `active_stage` is FSM-tracked in
+	// INTENT_FIELDS, so we must reseal after the write — uncompleteIntent
+	// only reseals when IT mutates something. Call it first so a single
+	// reseal covers both writes on the completed-intent path.
+	uncompleteIntent(slug, intentFile)
+	setFrontmatterField(intentFile, "active_stage", targetStage)
+	sealIntentState(slug)
 
 	emitTelemetry("haiku.revisit.stage", {
 		intent: slug,
@@ -4987,7 +5535,7 @@ function buildRunInstructions(
 						agents: string[]
 					}>
 					for (const inc of includes) {
-						if (!inc.stage || !Array.isArray(inc.agents)) continue
+						if (!(inc.stage && Array.isArray(inc.agents))) continue
 						const crossPaths = readReviewAgentPaths(studio, inc.stage)
 						for (const agentName of inc.agents) {
 							if (crossPaths[agentName] && !agentPaths[agentName]) {
@@ -5058,6 +5606,338 @@ function buildRunInstructions(
 
 			sections.push(
 				`### Parent Instructions (do NOT include in subagent prompts)\n\nSpawn review subagents in parallel using the \`prompt_file\` attribute — pass \`"Read <prompt_file> and execute its instructions exactly."\` as the spawn prompt. They persist findings directly via haiku_feedback. After all complete, call \`haiku_run_next { intent: "${slug}" }\`.`,
+			)
+			break
+		}
+
+		case "review_fix": {
+			const fixStage = action.stage as string
+			const fbId = action.feedback_id as string
+			const fbFile = action.feedback_file as string
+			const fbTitle = action.feedback_title as string
+			const fixHatsList = (action.fix_hats as string[]) || []
+			const fixBolt = (action.bolt as number) || 1
+			const fixMaxBolts = (action.max_bolts as number) || MAX_FIX_LOOP_BOLTS
+			const remaining = (action.remaining_pending as number) || 1
+			const haikuRoot = findHaikuRoot()
+			const fbAbsPath = join(haikuRoot, fbFile)
+
+			sections.push(FSM_CONTRACTS_FIX_LOOP_BLOCK)
+			sections.push(
+				`## Fix Loop: ${fbId} (bolt ${fixBolt}/${fixMaxBolts})\n\nFeedback finding **${fbId}** — _${fbTitle}_ — will be addressed by dispatching the stage's \`fix_hats:\` sequence directly against the feedback body. The feedback file IS the scope; no new unit spec is synthesized. ${remaining > 1 ? `(${remaining - 1} other finding(s) remain after this one and will dispatch on the next \`haiku_run_next\`.)` : ""}`,
+			)
+
+			// Load each fix hat's mandate. Fix hats reuse the stage's
+			// `hats/{hat}.md` files — when a hat wants to behave differently
+			// in fix mode, it can include a `## Fix-mode scope` section in
+			// its mandate. We do NOT maintain separate fix-mode files to
+			// avoid duplication and drift.
+			const allHats = readHatDefs(studio, fixStage)
+			const studioInfo = resolveStudio(studio)
+			const studioDir = studioInfo ? studioInfo.dir : studio
+			const pluginRoot = resolvePluginRoot()
+			const stageBasePath = resolveStudioFilePath(
+				join(studioDir, "stages", fixStage, "STAGE.md"),
+			)
+
+			sections.push(
+				'### Fix Hat Sequence (SERIAL — one at a time)\n\n**Dispatch hats SEQUENTIALLY — wait for each to complete before the next.** The final hat (typically `feedback-assessor`) validates closure and calls `haiku_feedback_update { status: "closed" }`. If the final hat leaves the feedback open, the FSM will loop again on the next `haiku_run_next` — up to the bolt cap.\n',
+			)
+
+			for (const hat of fixHatsList) {
+				const hatDef = allHats[hat]
+				if (!hatDef) {
+					sections.push(
+						`\n> **Warning:** hat \`${hat}\` declared in \`fix_hats\` has no mandate file in \`hats/${hat}.md\`. The subagent will run without a mandate — this is likely a studio bug.\n`,
+					)
+				}
+				const hatPath = hatDef
+					? join(
+							pluginRoot,
+							"studios",
+							studioDir,
+							"stages",
+							fixStage,
+							"hats",
+							`${hat}.md`,
+						)
+					: null
+
+				const isLast = hat === fixHatsList[fixHatsList.length - 1]
+				const promptLines: string[] = [
+					`You are the **${hat}** hat running in **fix-mode** against feedback **${fbId}** (bolt ${fixBolt} of ${fixMaxBolts}) in stage **${fixStage}** of intent **${slug}**.`,
+					"",
+					"## Required context (inlined below)",
+					"You are NOT wearing this hat to build a new unit. You are wearing it to resolve ONE specific feedback finding on artifacts that already exist.",
+					"",
+				]
+				if (stageBasePath) {
+					promptLines.push(
+						inlineFile(stageBasePath, `Stage scope: ${fixStage}`),
+					)
+				}
+				if (hatPath && existsSync(hatPath)) {
+					promptLines.push(inlineFile(hatPath, `Hat mandate: ${hat}`))
+				}
+				// Inline the feedback body so the subagent reads the finding
+				// directly from its prompt — no fan-out read required.
+				if (existsSync(fbAbsPath)) {
+					promptLines.push(
+						inlineFile(fbAbsPath, `Feedback: ${fbId} — ${fbTitle}`),
+					)
+				}
+				promptLines.push(
+					"",
+					"## Fix-mode scope (STRICT)",
+					`- You are addressing ONE finding: **${fbId}** — _${fbTitle}_.`,
+					`- Read the feedback body (above) carefully. It contains file:line references and the reviewer's concern.`,
+					`- The artifact(s) the feedback flags live in \`.haiku/intents/${slug}/stages/${fixStage}/\` — edit them in place.`,
+					"- Do NOT create a new unit spec. Do NOT modify unit FSM fields. Do NOT touch unrelated artifacts. Stay in scope.",
+					"- Do NOT call `haiku_unit_advance_hat` or `haiku_unit_reject_hat` — this is NOT unit execution.",
+					"",
+					"## Instructions",
+					"",
+				)
+				let step = 1
+				if (isGitRepo()) {
+					promptLines.push(
+						`${step++}. Work on the current branch. Commit the fix with a message like \`haiku: fix ${fbId} bolt ${fixBolt} (${hat})\` — do NOT push.`,
+					)
+				}
+				if (isLast) {
+					promptLines.push(
+						`${step++}. **Assess closure independently.** Read the edited artifact(s) and decide, through the lens of the finding, whether the fix resolves the finding as written.`,
+						`${step++}. If resolved: call \`haiku_feedback_update { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", status: "closed", closed_by: "fix-loop:${fbId}:bolt-${fixBolt}" }\`.`,
+						`${step++}. If NOT resolved: leave the feedback status as-is (the FSM will count this bolt and decide whether to dispatch another).`,
+						`${step++}. If the finding is actually invalid (e.g. the reviewer misread the artifact): call \`haiku_feedback_reject { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", reason: "<concrete reason>" }\` INSTEAD of closing it.`,
+						`${step++}. Return a one-line summary: \`fix-assessor: closed | open | rejected — <reason>\`.`,
+					)
+				} else {
+					promptLines.push(
+						`${step++}. Apply the fix within your hat's mandate. Save changes. Return a one-line summary of what you changed.`,
+					)
+				}
+
+				sections.push(
+					`${emitSubagentDispatchBlock({
+						unit: `fix-${fbId}`,
+						hat,
+						bolt: fixBolt,
+						agentType: hatDef?.agent_type ?? "general-purpose",
+						model: hatDef?.model,
+						promptBody: promptLines.join("\n"),
+						heading: `#### Subagent: \`${hat}\`${isLast ? " (final — validates closure)" : ""}`,
+					})}\n`,
+				)
+			}
+
+			sections.push(
+				`### Parent Instructions (do NOT include in subagent prompts)\n\nDispatch the subagents **serially, in the order listed above**. After the LAST subagent returns (regardless of whether it closed, rejected, or left the feedback open), call \`haiku_run_next { intent: "${slug}" }\` — the FSM decides what happens next (advance, loop, or escalate).`,
+			)
+			break
+		}
+
+		case "intent_completion_review": {
+			const agents = (action.agents as string[]) || []
+			const agentPaths = readStudioReviewAgentPaths(studio)
+			sections.push(
+				[
+					`## Intent-Completion Review: ${slug}`,
+					"",
+					`All stages for intent **${slug}** have passed their gates. Before opening the final human approval gate, the studio-level review agents audit the whole-intent artifacts against studio-wide standards (cross-stage consistency, brand, tokens, architecture patterns, etc.).`,
+					"",
+					"### Review Agent Fan-Out (REQUIRED)",
+					"",
+					`**Spawn exactly one subagent per review agent in parallel — no duplicates.** Findings are logged at **intent scope** (stage omitted) via \`haiku_feedback\`. After every agent completes, call \`haiku_run_next { intent: "${slug}" }\` — the FSM will dispatch the studio fix-hat loop against any findings, or open the final gate if the review is clean.`,
+				].join("\n"),
+			)
+
+			for (const name of agents) {
+				const mandatePath = agentPaths[name]
+				if (!mandatePath) continue
+				const reviewLines: string[] = [
+					`You are the **${name}** studio-level review agent for intent "${slug}".`,
+					"",
+					"## Required context (inlined below)",
+					"Your review mandate is embedded in this prompt. You audit the WHOLE intent — every stage's artifacts — against the studio's standards.",
+					"",
+					inlineFile(mandatePath, `Mandate: ${name}`),
+					"",
+					"## Write scope (STRICT)",
+					"**You MUST NOT write, edit, or create any file.** Your ONLY output channel is the `haiku_feedback` MCP tool. If you're tempted to fix an issue yourself, log it as feedback instead. Any file write is a scope violation.",
+					"",
+					"## Scope routing (CRITICAL)",
+					'Findings whose root cause lives in a **specific stage** MUST include `upstream_stage: "<stage-name>"`. The FSM surfaces those cross-stage findings to the human rather than routing them through the studio fix loop. Whole-intent concerns (inconsistencies across stages, missing integrations, studio-wide standard violations) do NOT have a single upstream stage — omit the field.',
+					"",
+					"## Instructions",
+					"",
+					`1. Read the intent artifacts across every stage: \`.haiku/intents/${slug}/stages/*/\` and \`.haiku/intents/${slug}/knowledge/\`.`,
+					"2. Review through your mandate's lens.",
+					`3. For each issue you find, call \`haiku_feedback({ intent: "${slug}", title: "<short>", body: "<full with file:line refs>", origin: "studio-review", author: "${name}" })\`. Omit \`stage\` to log at intent scope. Include \`upstream_stage: "<name>"\` only if the finding's root cause lives in a single stage.`,
+					"4. Return only a summary count of how many findings you logged.",
+				]
+				const prompt = reviewLines.join("\n")
+				sections.push(
+					`${emitSubagentDispatchBlock({
+						unit: `studio-review-${slug}`,
+						hat: name,
+						bolt: 1,
+						agentType: "general-purpose",
+						promptBody: prompt,
+						heading: `#### Subagent: \`${name}\``,
+					})}\n`,
+				)
+			}
+
+			sections.push(
+				`### Parent Instructions (do NOT include in subagent prompts)\n\nSpawn review subagents in parallel using the \`prompt_file\` attribute. They persist findings directly via \`haiku_feedback\` at intent scope. After every agent returns, call \`haiku_run_next { intent: "${slug}" }\`.`,
+			)
+			break
+		}
+
+		case "intent_completion_fix": {
+			const fbId = action.feedback_id as string
+			const fbFile = action.feedback_file as string
+			const fbTitle = action.feedback_title as string
+			const fixHatsList = (action.fix_hats as string[]) || []
+			const fixBolt = (action.bolt as number) || 1
+			const fixMaxBolts = (action.max_bolts as number) || MAX_FIX_LOOP_BOLTS
+			const remaining = (action.remaining_pending as number) || 1
+			const haikuRoot = findHaikuRoot()
+			const fbAbsPath = join(haikuRoot, fbFile)
+
+			const fixHatPaths = readStudioFixHatPaths(studio)
+
+			sections.push(FSM_CONTRACTS_FIX_LOOP_BLOCK)
+			sections.push(
+				`## Intent-Completion Fix Loop: ${fbId} (bolt ${fixBolt}/${fixMaxBolts})\n\nStudio-level finding **${fbId}** — _${fbTitle}_ — will be addressed by dispatching the studio's \`fix-hats/\` sequence directly against the feedback body. No new unit is synthesized. ${remaining > 1 ? `(${remaining - 1} other finding(s) remain after this one.)` : ""}`,
+			)
+
+			sections.push(
+				'### Fix Hat Sequence (SERIAL — one at a time)\n\n**Dispatch hats SEQUENTIALLY — wait for each to complete before the next.** The final hat validates closure and calls `haiku_feedback_update { status: "closed" }` (omit `stage`). If the final hat leaves the feedback open, the FSM loops again on the next `haiku_run_next` — up to the bolt cap.\n',
+			)
+
+			for (const hat of fixHatsList) {
+				const hatPath = fixHatPaths[hat]
+				if (!hatPath) {
+					sections.push(
+						`\n> **Warning:** studio fix-hat \`${hat}\` has no mandate file in \`plugin/studios/${studio}/fix-hats/${hat}.md\`. The subagent will run without a mandate — this is likely a studio bug.\n`,
+					)
+				}
+				const isLast = hat === fixHatsList[fixHatsList.length - 1]
+
+				const promptLines: string[] = [
+					`You are the **${hat}** studio fix-hat running against intent-scope feedback **${fbId}** (bolt ${fixBolt} of ${fixMaxBolts}) for intent **${slug}**.`,
+					"",
+					"## Required context (inlined below)",
+					"You are addressing ONE whole-intent finding. Your mandate is studio-wide, not stage-specific — you reconcile artifacts across the whole intent against studio standards.",
+					"",
+				]
+				if (hatPath && existsSync(hatPath)) {
+					promptLines.push(inlineFile(hatPath, `Fix-hat mandate: ${hat}`))
+				}
+				if (existsSync(fbAbsPath)) {
+					promptLines.push(
+						inlineFile(fbAbsPath, `Feedback: ${fbId} — ${fbTitle}`),
+					)
+				}
+				promptLines.push(
+					"",
+					"## Fix-mode scope (STRICT)",
+					`- You are addressing ONE finding: **${fbId}** — _${fbTitle}_.`,
+					`- The artifact(s) the feedback flags live under \`.haiku/intents/${slug}/stages/*/\` — edit them in place.`,
+					"- Do NOT create a new unit spec. Do NOT modify unit FSM fields. Do NOT touch unrelated artifacts.",
+					"- Do NOT call `haiku_unit_advance_hat` or `haiku_unit_reject_hat`.",
+					"",
+					"## Instructions",
+					"",
+				)
+				let step = 1
+				if (isGitRepo()) {
+					promptLines.push(
+						`${step++}. Work on the current branch. Commit with a message like \`haiku: intent-fix ${fbId} bolt ${fixBolt} (${hat})\` — do NOT push.`,
+					)
+				}
+				if (isLast) {
+					promptLines.push(
+						`${step++}. **Assess closure independently.** Decide whether the fix resolves the finding as written.`,
+						`${step++}. If resolved: call \`haiku_feedback_update { intent: "${slug}", feedback_id: "${fbId}", status: "closed", closed_by: "intent-fix:${fbId}:bolt-${fixBolt}" }\` — omit \`stage\`.`,
+						`${step++}. If NOT resolved: leave status unchanged.`,
+						`${step++}. If the finding is actually invalid: call \`haiku_feedback_reject { intent: "${slug}", feedback_id: "${fbId}", reason: "<concrete reason>" }\` — omit \`stage\`.`,
+						`${step++}. Return \`fix-assessor: closed | open | rejected — <reason>\`.`,
+					)
+				} else {
+					promptLines.push(
+						`${step++}. Apply the fix within your mandate. Save changes. Return a one-line summary.`,
+					)
+				}
+
+				sections.push(
+					`${emitSubagentDispatchBlock({
+						unit: `intent-fix-${fbId}`,
+						hat,
+						bolt: fixBolt,
+						agentType: "general-purpose",
+						promptBody: promptLines.join("\n"),
+						heading: `#### Subagent: \`${hat}\`${isLast ? " (final — validates closure)" : ""}`,
+					})}\n`,
+				)
+			}
+
+			sections.push(
+				`### Parent Instructions (do NOT include in subagent prompts)\n\nDispatch serially. After the LAST subagent returns, call \`haiku_run_next { intent: "${slug}" }\` — the FSM decides: advance to gate, loop again, or escalate.`,
+			)
+			break
+		}
+
+		case "upstream_finding_surfaced": {
+			const ufsStage = action.stage as string
+			const ufsItems =
+				(action.upstream_items as Array<{
+					feedback_id: string
+					title: string
+					origin: string
+					author: string
+					upstream_stage: string
+					file: string
+				}>) || []
+			const grouped = new Map<string, typeof ufsItems>()
+			for (const item of ufsItems) {
+				const list = grouped.get(item.upstream_stage) ?? []
+				list.push(item)
+				grouped.set(item.upstream_stage, list)
+			}
+			const groupBlocks: string[] = []
+			for (const [upstream, items] of grouped) {
+				const lines = items
+					.map(
+						(i) =>
+							`- **${i.feedback_id}** — ${i.title} (origin: ${i.origin}, author: ${i.author})\n  File: \`${i.file}\``,
+					)
+					.join("\n")
+				groupBlocks.push(`**Upstream stage: \`${upstream}\`**\n\n${lines}`)
+			}
+
+			sections.push(
+				[
+					`## Cross-Stage Findings Surfaced: ${ufsStage}`,
+					"",
+					`Reviewers in stage **${ufsStage}** flagged findings whose root cause lives in a **different stage**. The FSM will NOT fix these with ${ufsStage}'s hats — the wrong hats cannot fix a different stage's artifacts. This is a human decision.`,
+					"",
+					"### Findings by Upstream Stage",
+					"",
+					groupBlocks.join("\n\n"),
+					"",
+					"### Instructions",
+					"",
+					"Present the findings to the user and ask them to pick ONE of the following per finding:",
+					"",
+					`1. **Revisit upstream** — call \`haiku_revisit { intent: "${slug}", stage: "<upstream-stage>" }\` to roll the FSM back to that stage. This re-enters the upstream stage's gate and will dispatch the upstream stage's fix loop against the cross-stage finding (which the FSM re-scopes as same-stage for that stage).`,
+					`2. **Reject the finding** — call \`haiku_feedback_reject { intent: "${slug}", stage: "${ufsStage}", feedback_id: "<FB-XX>", reason: "<concrete reason>" }\` if the finding is stale, invalid, or out-of-scope for this intent.`,
+					`3. **Accept as-is** — the user can manually close the finding via the review UI if they accept the tradeoff.`,
+					"",
+					"**Do NOT call `haiku_run_next` until the user has decided.** Autonomously choosing a path here is the opposite of what this surface is for.",
+				].join("\n"),
 			)
 			break
 		}
@@ -5251,14 +6131,28 @@ function buildRunInstructions(
 					"- **Missing `closes:`**: on revisit cycles, every new unit MUST reference at least one pending FB via `closes: [FB-NN]`.",
 					"",
 					"## Write scope (STRICT)",
-					"**You MUST NOT edit any file.** Your ONLY output channel is the `haiku_feedback` MCP tool.",
+					"**You MUST NOT edit any file, and you MUST NOT call `haiku_feedback`.** Pre-execute review has no artifacts to critique — nothing has been built. Persisted feedback is for post-execute work only. Return your findings INLINE as your subagent response; the parent agent will aggregate findings from all reviewers and edit the unit specs directly.",
+					"",
+					"## Output format (MANDATORY)",
+					"",
+					"Return your findings as markdown with one `## Finding` block per concrete issue:",
+					"",
+					"```",
+					"## Finding: <short-title>",
+					"**Affected unit:** <unit-filename>",
+					"**Location:** <file:line> (if applicable)",
+					"**Issue:** <what's wrong in specific terms>",
+					"**Suggested fix:** <diff-level concrete proposal — not vague>",
+					"```",
+					"",
+					"If you find no issues, return exactly: `No findings.`",
 					"",
 					"## Instructions",
 					"",
 					`1. Read every unit file under \`${unitsDir}\`.`,
-					`2. For each concrete spec issue, call \`haiku_feedback({ intent: "${slug}", stage: "${stage}", title: "<short title>", body: "<file:line reference + proposed concrete fix (diff-level, not vague)>", origin: "adversarial-review", author: "${name}", source_ref: "<unit file path>" })\`.`,
+					"2. Identify concrete spec issues per the mandate above.",
 					"3. Concrete fixes accelerate resolution: don't write 'scope too narrow' — write 'Replace `inputs: [7 files]` with `inputs: stages/.../artifacts/`'.",
-					`4. When you've logged every concrete finding, return a short summary of counts.`,
+					"4. Return findings in the format above. Do NOT call `haiku_feedback` — persistence is not wanted here.",
 				]
 
 				sections.push(
@@ -5267,7 +6161,7 @@ function buildRunInstructions(
 			}
 
 			sections.push(
-				`### Parent Instructions\n\nSpawn all review subagents in parallel. After they complete, call \`haiku_run_next { intent: "${slug}" }\`. If findings exist, the FSM will return a \`pre_review_revisit\` action with spec-edit instructions. If findings are zero, elaborate → execute advances.`,
+				`### Parent Instructions\n\nSpawn all review subagents in parallel. Each returns inline findings as markdown — collect them all. If any reviewer returned findings (anything other than \`No findings.\`), aggregate them by unit file, EDIT the relevant unit.md files directly to address each finding, commit, then call \`haiku_run_next { intent: "${slug}" }\` to re-enter review. If every reviewer returned \`No findings.\`, call \`haiku_run_next { intent: "${slug}" }\` to open the user-facing gate. NO feedback files are created at pre-execute — there is nothing built to critique against.`,
 			)
 			break
 		}
@@ -5324,7 +6218,7 @@ function buildRunInstructions(
 						agents: string[]
 					}>
 					for (const inc of includes) {
-						if (!inc.stage || !Array.isArray(inc.agents)) continue
+						if (!(inc.stage && Array.isArray(inc.agents))) continue
 						const crossPaths = readReviewAgentPaths(studio, inc.stage)
 						for (const agentName of inc.agents) {
 							if (crossPaths[agentName] && !agentPaths[agentName]) {
@@ -5496,7 +6390,7 @@ function buildRunInstructions(
 
 		case "safe_intent_repair": {
 			const synthesizedStages = (action.synthesized_stages as string[]) || []
-			const phaseWasRegressed = (action.phase_regressed as boolean) || false
+			const phaseWasRegressed = action.phase_regressed as boolean
 			sections.push(`## Safe Intent Repair\n\n${action.message}`)
 			if (synthesizedStages.length > 0) {
 				sections.push(`**Synthesized stages:** ${synthesizedStages.join(", ")}`)
@@ -5532,17 +6426,25 @@ export const orchestratorToolDefs = [
 			"Advance an intent through its lifecycle. The FSM reads state, determines the next action, " +
 			"performs the state mutation (start stage, advance phase, complete stage, etc.), and returns " +
 			"the action to the agent. The agent follows the returned action — it never mutates stage or " +
-			"intent state directly.",
+			"intent state directly. " +
+			"When `intent` is omitted, the FSM auto-resolves it from the current git branch " +
+			"(`haiku/<slug>/main` or `haiku/<slug>/<stage>`) — lets pickup/revisit skills be thin " +
+			"one-line redirects without asking the user to pick an intent the checkout already names. " +
+			"If omitted and no branch match exists, falls back to the single active intent; errors " +
+			"when zero or multiple active intents are present.",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
-				intent: { type: "string", description: "Intent slug" },
+				intent: {
+					type: "string",
+					description:
+						"Intent slug. Omit to auto-resolve from the current git branch or the sole active intent.",
+				},
 				external_review_url: {
 					type: "string",
 					description: "URL where stage was submitted for external review",
 				},
 			},
-			required: ["intent"],
 		},
 	},
 	// haiku_gate_approve removed — gates are handled by the FSM (review UI + elicitation fallback)
@@ -5735,7 +6637,50 @@ export async function handleOrchestratorTool(
 	if (validationError) return validationError
 
 	if (name === "haiku_run_next") {
-		const slug = args.intent as string
+		// Auto-resolve `intent` when omitted. Resolution order:
+		//   1. Current git branch (`haiku/<slug>/main` or `haiku/<slug>/<stage>`)
+		//      — the user's checkout already names the intent, so the skill
+		//      surface can stay thin and doesn't need to prompt.
+		//   2. Sole active intent on the filesystem — if there's exactly one,
+		//      use it; zero-or-many yields an error with available slugs.
+		let slug = (args.intent as string) || ""
+		if (!slug) {
+			const branchMatch = intentFromCurrentBranch()
+			if (branchMatch) {
+				slug = branchMatch.slug
+			} else {
+				const root = findHaikuRoot()
+				const intentsDir = join(root, "intents")
+				const active = existsSync(intentsDir)
+					? listVisibleIntents(intentsDir).filter(
+							(i) => (i.data.status as string) !== "completed",
+						)
+					: []
+				if (active.length === 1) {
+					slug = active[0].slug
+				} else if (active.length === 0) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: "No active intents found. Start one with /haiku:start.",
+							},
+						],
+						isError: true,
+					}
+				} else {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Multiple active intents (${active.map((i) => i.slug).join(", ")}). Pass \`intent\` explicitly, or checkout an intent branch (\`git switch haiku/<slug>/main\`) so the FSM can auto-resolve.`,
+							},
+						],
+						isError: true,
+					}
+				}
+			}
+		}
 		const stFile = args.state_file as string | undefined
 
 		// Validate we're on the correct intent branch
@@ -6021,8 +6966,23 @@ export async function handleOrchestratorTool(
 					}
 					return text(withInstructions(gateResult))
 				}
-				// changes_requested — persist all annotations and feedback as durable feedback files
-				const feedbackIds = writeReviewFeedbackFiles(slug, stage, reviewResult)
+				// Feedback files only make sense when there are built artifacts
+				// to critique. If this rejection is happening at pre-execute time
+				// (elaborate phase with no completed units in the stage), persist
+				// nothing — the reviewer's comments go inline in the action and
+				// the agent edits unit specs directly.
+				const intentDirPathAbs = join(process.cwd(), intentDirPath)
+				const preExecute =
+					gateContext === "elaborate_to_execute" ||
+					gateContext === "intent_review"
+						? isStagePreExecute(intentDirPathAbs, stage)
+						: false
+
+				// changes_requested — persist all annotations and feedback as
+				// durable feedback files (post-execute contexts only).
+				const feedbackIds = preExecute
+					? []
+					: writeReviewFeedbackFiles(slug, stage, reviewResult)
 				const feedbackSummary =
 					feedbackIds.length > 0
 						? ` Created ${feedbackIds.length} feedback file(s): ${feedbackIds.join(", ")}.`
@@ -6047,8 +7007,28 @@ export async function handleOrchestratorTool(
 					// phase and route the agent back. Feedback files were written
 					// against the last stage, so the agent can call haiku_revisit
 					// to re-open that stage's elaborate phase and address them.
+					// Reset the dispatched flag so the next time we re-enter the
+					// completion review phase, the studio-level reviewers RE-AUDIT
+					// the fixes instead of short-circuiting to the gate on the
+					// stale "already dispatched" signal. Also reset intent-scope
+					// fix-loop bolt counters so the next completion cycle starts
+					// with a fresh budget. These fields are FSM-tracked in
+					// INTENT_FIELDS, so we must reseal the integrity checksum
+					// after writing or verifyIntentState() will false-positive.
 					const intentFilePath = join(intentDir(slug), "intent.md")
 					setFrontmatterField(intentFilePath, "phase", "active")
+					setFrontmatterField(
+						intentFilePath,
+						"completion_review_dispatched",
+						false,
+					)
+					setFrontmatterField(
+						intentFilePath,
+						"completion_review_skipped",
+						false,
+					)
+					resetFixLoopBolts(slug, "")
+					sealIntentState(slug)
 					gitCommitState(
 						`haiku: intent ${slug} completion-review rejected, reopening for revisit`,
 					)
@@ -6068,14 +7048,22 @@ export async function handleOrchestratorTool(
 				if (gateContext === "elaborate_to_execute") {
 					// Don't advance phase — stay in elaborate so agent can fix
 					syncSessionMetadata(slug, args.state_file as string | undefined)
+					// Pre-execute rejection: no feedback files, inline annotations,
+					// direct the agent to edit existing unstarted unit specs (or
+					// add new unit files). Nothing has been built — there is no
+					// artifact-level feedback to persist.
+					const unstartedUnits = listUnits(intentDirPathAbs, stage)
+						.filter((u) => u.status !== "completed")
+						.map((u) => u.name)
 					const gateResult = {
-						action: "changes_requested",
+						action: "revise_unit_specs",
 						intent: slug,
 						stage,
 						feedback: reviewResult.feedback,
 						annotations: reviewResult.annotations,
-						feedback_ids: feedbackIds,
-						message: `Changes requested on specs: ${reviewResult.feedback || "(see annotations)"}.${feedbackSummary} Fix the specs, then call haiku_run_next { intent: "${slug}" } again.`,
+						unstarted_units: unstartedUnits,
+						units_dir: `.haiku/intents/${slug}/stages/${stage}/units/`,
+						message: `Changes requested on unit specs:\n\n${reviewResult.feedback || "(see annotations)"}\n\nNothing has been built yet — NO feedback files were created. Resolve by EDITING the unstarted unit.md files in \`.haiku/intents/${slug}/stages/${stage}/units/\` directly (or adding new unit files if the scope needs expansion). Do NOT draft a full new wave of units to "close feedback" — that's a post-execute flow. When the edits are done, call \`haiku_run_next { intent: "${slug}" }\` again to re-open the review gate.`,
 					}
 					return text(withInstructions(gateResult))
 				}
@@ -6334,7 +7322,7 @@ export async function handleOrchestratorTool(
 					activeStage,
 					synthesizedStages: (result.synthesized_stages as string[]) || [],
 					needsManualReview: (result.needs_manual_review as string[]) || [],
-					phaseRegressed: (result.phase_regressed as boolean) || false,
+					phaseRegressed: result.phase_regressed as boolean,
 					unitsMissingInputs: (result.units_missing_inputs as string[]) || [],
 				}
 
@@ -6885,13 +7873,56 @@ export async function handleOrchestratorTool(
 	}
 
 	if (name === "haiku_revisit") {
-		const reasons = args.reasons as
-			| Array<{ title: string; body: string }>
-			| undefined
+		// Some MCP clients ship nested array/object args as JSON-encoded
+		// strings. Parse them back before use — otherwise iterating the
+		// "array" yields single characters and the downstream feedback
+		// writer explodes on undefined properties.
+		const rawReasons = args.reasons
+		let reasons: Array<{ title: string; body: string }> | undefined
+		if (typeof rawReasons === "string") {
+			try {
+				const parsed = JSON.parse(rawReasons)
+				if (!Array.isArray(parsed)) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: "Error: reasons must be an array of {title, body} objects — got a non-array JSON value",
+							},
+						],
+						isError: true,
+					}
+				}
+				reasons = parsed
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Error: reasons was a string but failed to parse as JSON: ${err instanceof Error ? err.message : String(err)}`,
+						},
+					],
+					isError: true,
+				}
+			}
+		} else if (rawReasons !== undefined) {
+			if (!Array.isArray(rawReasons)) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Error: reasons must be an array — received ${typeof rawReasons}`,
+						},
+					],
+					isError: true,
+				}
+			}
+			reasons = rawReasons as Array<{ title: string; body: string }>
+		}
 
 		// Validate reasons if provided
 		if (reasons !== undefined) {
-			if (Array.isArray(reasons) && reasons.length === 0) {
+			if (reasons.length === 0) {
 				return {
 					content: [
 						{
@@ -6902,29 +7933,32 @@ export async function handleOrchestratorTool(
 					isError: true,
 				}
 			}
-			if (Array.isArray(reasons)) {
-				for (const reason of reasons) {
-					if (!reason.title || reason.title.trim() === "") {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: "Error: each reason must have a non-empty title",
-								},
-							],
-							isError: true,
-						}
+			for (const reason of reasons) {
+				if (
+					!reason ||
+					typeof reason !== "object" ||
+					typeof reason.title !== "string" ||
+					reason.title.trim() === ""
+				) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: "Error: each reason must have a non-empty title",
+							},
+						],
+						isError: true,
 					}
-					if (!reason.body || reason.body.trim() === "") {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: "Error: each reason must have a non-empty body",
-								},
-							],
-							isError: true,
-						}
+				}
+				if (typeof reason.body !== "string" || reason.body.trim() === "") {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: "Error: each reason must have a non-empty body",
+							},
+						],
+						isError: true,
 					}
 				}
 			}

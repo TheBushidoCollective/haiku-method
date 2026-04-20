@@ -432,6 +432,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 		const sessionCtx = args._session_context as
 			| Record<string, string>
 			| undefined
+
+		// Diagnostic: write a local crash file regardless of Sentry state,
+		// so operators can prove whether the wrapper even fired and inspect
+		// the stack without needing dashboard access.
+		try {
+			const { appendFileSync } = await import("node:fs")
+			const stamp = new Date().toISOString()
+			const stack =
+				err instanceof Error ? err.stack || err.message : String(err)
+			appendFileSync(
+				"/tmp/haiku-mcp-crashes.log",
+				`\n--- ${stamp} tool=${toolName} ---\n${stack}\n`,
+			)
+		} catch {
+			/* diagnostic write best-effort */
+		}
+
 		reportError(
 			err,
 			{
@@ -443,6 +460,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 			},
 			sessionCtx,
 		)
+		// Sentry's HTTP transport is fire-and-forget; force a short flush so
+		// long-running processes don't drop events when the handler returns
+		// before the transport actually ships the envelope.
+		try {
+			const { flush } = await import("./sentry.js")
+			await flush(1000)
+		} catch {
+			/* flush best-effort */
+		}
 		console.error(
 			`[haiku] Tool handler '${toolName}' threw:`,
 			err instanceof Error ? err.stack || err.message : String(err),

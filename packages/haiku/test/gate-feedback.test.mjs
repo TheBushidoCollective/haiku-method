@@ -564,6 +564,49 @@ try {
 		assert.ok(result.content[0].text.includes("non-empty title"))
 	})
 
+	await test("reasons sent as JSON string are parsed, not iterated per-char", async () => {
+		// Some MCP clients serialize nested array args as JSON strings.
+		// Before the parse/guard landed, the handler iterated each character
+		// of the string as a "reason", yielding undefined titles and crashing
+		// inside slugifyTitle. The handler must parse the string first and
+		// either produce a valid array or return a clean error.
+		const { projDir, slug } = createProject("revisit-json-string-reasons", {
+			active_stage: "plan",
+		})
+		process.chdir(projDir)
+
+		const result = await handleOrchestratorTool("haiku_revisit", {
+			intent: slug,
+			reasons: JSON.stringify([{ title: "Title", body: "Body" }]),
+		})
+
+		// Either succeeds (parsed and iterated as one object) or returns a
+		// structured validation error. MUST NOT throw/crash.
+		assert.ok(
+			!result.isError ||
+				!result.content[0].text.includes("Cannot read properties"),
+			`Unexpected crash: ${result.content[0].text}`,
+		)
+	})
+
+	await test("reasons sent as a non-array is rejected with a clear message", async () => {
+		const { projDir, slug } = createProject("revisit-non-array-reasons", {
+			active_stage: "plan",
+		})
+		process.chdir(projDir)
+
+		const result = await handleOrchestratorTool("haiku_revisit", {
+			intent: slug,
+			reasons: { title: "not an array", body: "oops" },
+		})
+
+		assert.ok(result.isError)
+		assert.ok(
+			result.content[0].text.toLowerCase().includes("must be an array"),
+			`Expected "must be an array" error, got: ${result.content[0].text}`,
+		)
+	})
+
 	console.log("\n=== haiku_revisit: reasons create feedback and roll back ===")
 
 	await test("single reason creates feedback and rolls back", async () => {
@@ -899,6 +942,200 @@ try {
 		const origins = new Set(result.pending_items.map((i) => i.origin))
 		assert.ok(origins.has("adversarial-review"))
 		assert.ok(origins.has("user-visual"))
+	})
+
+	// =========================================================================
+	// review_fix dispatch — stages with `fix_hats:` route findings through
+	// the fix-hat sequence instead of the feedback_revisit path. Each finding
+	// dispatches in order, one per tick, with a per-finding bolt counter.
+	// =========================================================================
+
+	console.log("\n=== review_fix dispatch (stage fix_hats) ===")
+
+	test("gate dispatches review_fix when stage has fix_hats + pending feedback", () => {
+		const { projDir, intentDirPath, slug, studio } = createProject(
+			"review-fix-basic",
+			{
+				active_stage: "plan",
+				stageConfig: {
+					plan: {
+						review: "auto",
+						hats: ["worker"],
+					},
+				},
+			},
+		)
+		// Add fix_hats to STAGE.md + create feedback-assessor hat file
+		const stageFile = join(
+			projDir,
+			".haiku/studios",
+			studio,
+			"stages/plan/STAGE.md",
+		)
+		const updated = readFileSync(stageFile, "utf8").replace(
+			"hats: [worker]",
+			"hats: [worker]\nfix_hats: [worker, feedback-assessor]",
+		)
+		writeFileSync(stageFile, updated)
+		const hatsDir = join(projDir, ".haiku/studios", studio, "stages/plan/hats")
+		mkdirSync(hatsDir, { recursive: true })
+		writeFileSync(
+			join(hatsDir, "worker.md"),
+			`---\nname: worker\n---\nProducer mandate.`,
+		)
+		writeFileSync(
+			join(hatsDir, "feedback-assessor.md"),
+			`---\nname: feedback-assessor\n---\nAssessor mandate.`,
+		)
+		createStageState(intentDirPath, "plan", { phase: "gate" })
+		createFeedbackFile(intentDirPath, slug, "plan", "Null guard missing")
+
+		process.chdir(projDir)
+		const result = runNext(slug)
+
+		assert.strictEqual(
+			result.action,
+			"review_fix",
+			`Expected review_fix, got: ${result.action}`,
+		)
+		assert.strictEqual(result.feedback_id, "FB-01")
+		assert.deepStrictEqual(result.fix_hats, ["worker", "feedback-assessor"])
+		assert.strictEqual(result.bolt, 1)
+		assert.strictEqual(result.max_bolts, 3)
+	})
+
+	test("review_fix escalates after 3 bolts without closure", () => {
+		const { projDir, intentDirPath, slug, studio } = createProject(
+			"review-fix-cap",
+			{
+				active_stage: "plan",
+				stageConfig: { plan: { review: "auto", hats: ["worker"] } },
+			},
+		)
+		const stageFile = join(
+			projDir,
+			".haiku/studios",
+			studio,
+			"stages/plan/STAGE.md",
+		)
+		writeFileSync(
+			stageFile,
+			readFileSync(stageFile, "utf8").replace(
+				"hats: [worker]",
+				"hats: [worker]\nfix_hats: [worker, feedback-assessor]",
+			),
+		)
+		const hatsDir = join(projDir, ".haiku/studios", studio, "stages/plan/hats")
+		mkdirSync(hatsDir, { recursive: true })
+		writeFileSync(join(hatsDir, "worker.md"), `---\nname: worker\n---\n.`)
+		writeFileSync(
+			join(hatsDir, "feedback-assessor.md"),
+			`---\nname: feedback-assessor\n---\n.`,
+		)
+		createStageState(intentDirPath, "plan", { phase: "gate" })
+		// Seed a feedback item already at bolt=3 (the cap) — next dispatch escalates.
+		const fbDir = join(intentDirPath, "stages/plan/feedback")
+		mkdirSync(fbDir, { recursive: true })
+		writeFileSync(
+			join(fbDir, "01-stuck-finding.md"),
+			`---
+title: "Stuck finding"
+status: "fixing"
+origin: "adversarial-review"
+author: "agent"
+author_type: "agent"
+created_at: "2026-04-15T00:00:00Z"
+visit: 0
+source_ref: null
+closed_by: null
+bolt: 3
+upstream_stage: null
+---
+
+Cannot be resolved autonomously.`,
+		)
+
+		process.chdir(projDir)
+		const result = runNext(slug)
+
+		assert.strictEqual(result.action, "escalate")
+		assert.strictEqual(result.reason, "fix_loop_cap_exceeded")
+		assert.strictEqual(result.iteration, 3)
+	})
+
+	test("upstream_finding_surfaced when finding's root cause is in another stage", () => {
+		const { projDir, intentDirPath, slug, studio } = createProject(
+			"upstream-finding",
+			{
+				active_stage: "build",
+				stages: ["plan", "build"],
+				stageConfig: {
+					plan: { review: "auto", hats: ["planner"] },
+					build: { review: "auto", hats: ["builder"] },
+				},
+			},
+		)
+		// build stage opts into fix_hats so the finding would otherwise
+		// dispatch there — but the upstream_stage field routes it out.
+		const buildStage = join(
+			projDir,
+			".haiku/studios",
+			studio,
+			"stages/build/STAGE.md",
+		)
+		writeFileSync(
+			buildStage,
+			readFileSync(buildStage, "utf8").replace(
+				"hats: [builder]",
+				"hats: [builder]\nfix_hats: [builder, feedback-assessor]",
+			),
+		)
+		const hatsDir = join(projDir, ".haiku/studios", studio, "stages/build/hats")
+		mkdirSync(hatsDir, { recursive: true })
+		writeFileSync(join(hatsDir, "builder.md"), `---\nname: builder\n---\n.`)
+		writeFileSync(
+			join(hatsDir, "feedback-assessor.md"),
+			`---\nname: feedback-assessor\n---\n.`,
+		)
+
+		// Mark plan as completed so the FSM's consistency check doesn't
+		// rewind to it. Without this, runNext's "all stages before
+		// active_stage are completed" guard would reset us to plan.
+		createStageState(intentDirPath, "plan", {
+			status: "completed",
+			phase: "gate",
+			completed_at: "2026-04-15T00:00:00Z",
+			gate_outcome: "advanced",
+		})
+		createStageState(intentDirPath, "build", { phase: "gate" })
+		const fbDir = join(intentDirPath, "stages/build/feedback")
+		mkdirSync(fbDir, { recursive: true })
+		writeFileSync(
+			join(fbDir, "01-wrong-plan.md"),
+			`---
+title: "Plan contradicts spec"
+status: "pending"
+origin: "adversarial-review"
+author: "reviewer"
+author_type: "agent"
+created_at: "2026-04-15T00:00:00Z"
+visit: 0
+source_ref: null
+closed_by: null
+bolt: 0
+upstream_stage: plan
+---
+
+Plan from upstream stage is wrong.`,
+		)
+
+		process.chdir(projDir)
+		const result = runNext(slug)
+
+		assert.strictEqual(result.action, "upstream_finding_surfaced")
+		assert.strictEqual(result.upstream_items.length, 1)
+		assert.strictEqual(result.upstream_items[0].feedback_id, "FB-01")
+		assert.strictEqual(result.upstream_items[0].upstream_stage, "plan")
 	})
 
 	// ── Cleanup ───────────────────────────────────────────────────────────────

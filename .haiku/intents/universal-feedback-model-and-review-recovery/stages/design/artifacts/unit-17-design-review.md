@@ -1,122 +1,140 @@
-# Design Review — unit-17-design-brief-tokens-alignment (bolt 1)
+# Design Review — unit-17-design-brief-tokens-alignment (bolt 2)
 
 **Reviewer:** design-reviewer
-**Outcome:** reject (one blocking gate fails)
+**Outcome:** advance (all 5 gates pass)
 **Date:** 2026-04-19
+
+Bolt 2 closes the single blocking finding from bolt 1 (gate 3 — banned
+footer-button verbs). No other gates regressed; DESIGN-BRIEF.md,
+DESIGN-TOKENS.md, aria-landmark-spec.md, component-inventory.md, and
+footer-button-copy-spec.md were unchanged in bolt 2, so gates 1/2/4/5
+remain passing from the bolt-1 review. The secondary finding (dangling
+`sheet-mine-panel` tabpanel) was also resolved.
 
 ## Gate-by-gate
 
-### Gate 1 — FeedbackStatusBadge text-shade consistency — PASS
+### Gate 1 — FeedbackStatusBadge text-shade consistency — PASS (stable)
 
-DESIGN-BRIEF §2 `FeedbackStatusBadge` table (lines 169-172) and DESIGN-TOKENS
-§2.1 `feedback-status-*` table (lines 236-239) now agree on
-`text-{amber,blue,green}-800` light and `text-{amber,blue,green,stone}-{300,300,300,400}`
-dark. Contrast assertions match in both files (amber 5.9:1, blue 7.2:1,
-green 5.8:1, stone 4.6:1 light; dark pairs ≥ 4.9:1). Both files restate
-the same palette in identical TS map literals (`feedbackStatusColors`
-and `feedbackColors`).
+DESIGN-BRIEF §2 `FeedbackStatusBadge` table (lines 169-172) and
+DESIGN-TOKENS §2.1 `feedback-status-*` table (lines 236-239) agree:
 
-### Gate 2 — Retired components + AgentFeedbackToggle documented — PASS
-
-The literal `grep -nE 'SidebarSegmentedControl|\bMine\b|FeedbackFAB(?!-pulse|\.)|MobileFeedbackSheet' DESIGN-BRIEF.md`
-returns 4 hits, but all four are inside the authoritative "Retired
-Components (authoritative — do not resurrect)" subsection at the end of
-§2 (lines 587-599), which gate-5 explicitly requires. The unit body's
-resolution policy (line 83-84 of the unit spec) directs the designer to
-"add 'Retired components' subsection to DESIGN-BRIEF §2 explaining what
-each was and why it was retired," which is what shipped. The gate's
-literal grep is in internal tension with gate-5; the spec body is the
-authoritative tiebreaker. The positive assertion — `AgentFeedbackToggle`
-documented as a first-class component — is satisfied by DESIGN-BRIEF §2
-lines 335-388 (props, visual spec, state table, behavior, ARIA contract,
-rationale).
-
-### Gate 3 — Footer-button copy matrix — BLOCKING FAIL
-
-DESIGN-BRIEF §2 (lines 534-585) now carries the full canonical matrix
-(Dismiss / Verify & Close / Reopen) and `footer-button-copy-spec.md` is
-flipped to an alias. That half of the gate passes.
-
-The second half fails: "`Reject`, `Close` (standalone, distinct from
-'Verify & Close') MUST NOT appear as footer button labels in any
-artifact or DESIGN-BRIEF." Live banned-verb buttons exist in three
-artifacts:
-
-| Artifact | Line | Element |
+| Status | Light | Dark |
 |---|---|---|
-| `stages/design/artifacts/comment-to-feedback-flow.html` | 632 | `<button ...>Close</button>` |
-| `stages/design/artifacts/comment-to-feedback-flow.html` | 658 | `<button ...>Reject</button>` |
-| `stages/design/artifacts/comment-to-feedback-flow.html` | 660 | `<button ...>Close</button>` |
-| `stages/design/artifacts/comment-to-feedback-flow.html` | 955 | `<button ...>Reject</button>` |
-| `stages/design/artifacts/comment-to-feedback-flow.html` | 956 | `<button ...>Close</button>` |
-| `stages/design/artifacts/comment-to-feedback-flow.html` | 1023 | `<span ...>Close</span>` (footer-action diagram) |
-| `stages/design/artifacts/comment-to-feedback-flow.html` | 1031 | `<span ...>Reject</span>` (footer-action diagram) |
-| `stages/design/artifacts/comment-to-feedback-flow.html` | 1085 | `<td>Close</td>` (action rules table) |
-| `stages/design/artifacts/comment-to-feedback-flow.html` | 1092 | `<td>Reject</td>` (action rules table) |
-| `stages/design/artifacts/feedback-inline-desktop.html` | 295 | `<button ...>Reject</button>` (pending agent item footer) |
-| `stages/design/artifacts/feedback-inline-desktop.html` | 296 | `<button ...>Close</button>` (pending agent item footer) |
-| `stages/design/artifacts/feedback-inline-mobile.html` | 250 | `<button ...>Reject</button>` (pending agent item footer) |
-| `stages/design/artifacts/feedback-inline-mobile.html` | 251 | `<button ...>Close</button>` (pending agent item footer) |
-| `stages/design/artifacts/feedback-inline-mobile.html` | 235 | HTML comment narrating "agent — shows Reject button" |
+| pending | `bg-amber-100 text-amber-800` | `bg-amber-900/30 text-amber-300` |
+| addressed | `bg-blue-100 text-blue-800` | `bg-blue-900/30 text-blue-300` |
+| closed | `bg-green-100 text-green-800` | `bg-green-900/30 text-green-300` |
+| rejected | `bg-stone-100 text-stone-500` | `bg-stone-800 text-stone-400` |
 
-Required fix: every `Reject` footer-button label → **Dismiss**. Every
-`Close` footer-button label on a `pending` item → **Dismiss** (per
-DESIGN-BRIEF §2, pending items have a single `Dismiss` verb — there is
-no separate Close action on pending). The narration comment at mobile
-line 235 needs to say "Dismiss button" instead of "Reject button".
+Both files carry matching TS map literals (`feedbackStatusColors` in
+DESIGN-TOKENS, `feedbackColors` in DESIGN-BRIEF). No bolt-2 edits
+touched either file.
 
-The rules-table rows at `comment-to-feedback-flow.html` lines 1085 and
-1092 also need review: if the column reads "action name," it should use
-the canonical verbs; if it reads "status transition," the cells should
-read `rejected` and `closed` lowercase to distinguish from verbs.
+### Gate 2 — Retired components + AgentFeedbackToggle documented — PASS (stable)
 
-### Gate 4 — Origin-icon emoji mapping identical across three specs — PASS
+The BSD-`grep`-compatible version of the gate's literal grep
+(`grep -nE 'SidebarSegmentedControl|\bMine\b|FeedbackFAB|MobileFeedbackSheet'`
+against DESIGN-BRIEF.md) returns 4 hits, all inside the authoritative
+"Retired Components (authoritative — do not resurrect)" subsection
+required by gate 5 (lines 593-597). The unit-body resolution policy
+(lines 126-127) is the explicit tiebreaker: "add 'Retired components'
+subsection to DESIGN-BRIEF §2 explaining what each was and why it was
+retired." Reasoning from bolt-1 review stands.
 
-- DESIGN-BRIEF §2 lines 210-215
-- DESIGN-TOKENS §2.2 lines 286-291
-- aria-landmark-spec.md §6 lines 107-112
+`AgentFeedbackToggle` remains documented in DESIGN-BRIEF §2 as a
+first-class component.
 
-All three cite the same codepoints in the same order: adversarial-review
-`U+1F50D` 🔍, external-pr `U+1F517` 🔗, external-mr `U+1F517` 🔗,
-user-visual `U+270E` ✎, user-chat `U+1F4AC` 💬, agent `U+1F916` 🤖.
-DESIGN-TOKENS §2.2 additionally lists the retired emoji set
-(`U+1F6E1` shield, `U+1F500` shuffle, `U+1F441` eye, `U+2728` sparkles)
-with rationale — good preventive documentation.
+### Gate 3 — Footer-button copy matrix — PASS (was blocking fail)
 
-### Gate 5 — DESIGN-BRIEF §2 authoritative + component-inventory alias — PASS
+`grep -En '>(Reject|Close)<'` against
+`stages/design/artifacts/*.html` now returns **zero hits**. Every site
+flagged in the bolt-1 review is fixed with canonical verbs from the
+DESIGN-BRIEF §2 footer-button matrix:
 
-DESIGN-BRIEF §2 "Retired Components (authoritative — do not resurrect)"
-subsection (lines 587-599) lists the three retired names, their live
-replacements, and one-line rationale per row. `component-inventory.md`
-lines 26-36 now carry thin "spec location → DESIGN-BRIEF §2" pointers
-instead of duplicating specs, and lines 53-57 defer retired-components
-to DESIGN-BRIEF §2. `footer-button-copy-spec.md` lines 5-6 carry an
-explicit "alias notice" declaring DESIGN-BRIEF §2 the single source of
-truth.
+| Artifact | Bolt-1 site(s) | Bolt-2 replacement |
+|---|---|---|
+| `comment-to-feedback-flow.html` | L632 user pending `<button>Close</button>` | `Dismiss` (secondary-muted) |
+| `comment-to-feedback-flow.html` | L658-660 agent pending `Reject`+`Close` buttons | single `Dismiss` button |
+| `comment-to-feedback-flow.html` | L955-956 mobile mini preview `Reject`+`Close` | single `Dismiss` button |
+| `comment-to-feedback-flow.html` | L1023, L1031 state-machine `<span>Close</span>`, `<span>Reject</span>` | illegitimate `Close →` arrow removed (no user-initiable pending → closed); `Reject →` → `Dismiss →`; addressed → closed arrow added with `Verify & Close` |
+| `comment-to-feedback-flow.html` | L1085, L1092 action rules table `Close`, `Reject` cells | transition table drops the illegitimate `pending → closed` row; `pending → rejected` uses `Dismiss` with guard "Any pending item the user can see (any origin)"; adds `addressed → closed` row with `Verify & Close`; agent-addresses row marked italic with "no user-facing button" guard |
+| `feedback-inline-desktop.html` | L295-296 adversarial-review pending `Reject`+`Close` | single `Dismiss` button with inline-comment rationale |
+| `feedback-inline-mobile.html` | L235 narration comment "Reject button" | "Dismiss button" (and in-flight aria-live text "marking as closed..." → "marking as rejected..." to match the Dismiss → rejected destination) |
+| `feedback-inline-mobile.html` | L250-251 agent pending `Reject`+`Close` | single `Dismiss` button |
 
-## Secondary findings (non-blocking)
+**Remaining `Close` / `Reject` substring hits** (audited, all legitimate):
 
-- `feedback-inline-mobile.html` line 292 has a dangling
-  `<div id="sheet-mine-panel" role="tabpanel" aria-labelledby="sheet-mine-tab" hidden></div>`
-  pointing at a non-existent `sheet-mine-tab`. The `Mine` tab button
-  itself appears to have been removed, but this hidden tabpanel is dead
-  markup referencing the retired identity split. Recommend removing it
-  in the same fix pass.
+- `annotation-popover-states.html`, `keyboard-shortcut-map.html`,
+  `revisit-modal-spec.html` — `aria-label="Close"` on popover/modal
+  dismiss-X glyph buttons. Scope of gate 3 is **feedback-item footer
+  buttons**; dismiss-X glyphs on modals/popovers are not the regulated
+  surface.
+- `feedback-card-states.html`, `review-ui-mockup.html`,
+  `feedback-lifecycle-transitions.html` — all `Verify & Close` (the
+  canonical approved compound verb, explicitly distinguished from
+  banned standalone `Close` by the gate wording).
+- `feedback-inline-desktop.html` L295, `feedback-inline-mobile.html`
+  L235, L250 — HTML comments explicitly narrating *why* the banned
+  verbs were removed. Meta-documentation, not live UI.
+- `comment-to-feedback-flow.html` L1086 — HTML comment documenting the
+  canonical matrix. Not a button.
+- Status-state labels (`aria-label="Status: closed"`, `"Closed ·"`
+  status headings, `rejected` badge text) across multiple artifacts —
+  these are status-values, not button labels. The gate wording bans
+  `Reject` and `Close` *as footer-button labels*, not as
+  status-state names.
+- aria-live sequencing messages (`"marking as closed…"` etc.) —
+  transition announcements, not button labels. These describe the
+  destination status of the `Verify & Close` transition.
 
-- Gate 2 and gate 5 have a literal tension: gate 2 wants `grep` to
-  return 0 on the four retired names, but gate 5 requires those exact
-  names to appear in a "Retired components" subsection. The designer
-  resolved per the unit-body policy (which is correct), but future unit
-  specs should either (a) scope the grep with a negative-lookahead past
-  the retired-components header, or (b) only grep the "live" portion of
-  the file. Flagged for the feedback-assessor or a followup unit — not a
-  reason to hold this bolt.
+### Gate 4 — Origin-icon emoji mapping identical across three specs — PASS (stable)
 
-## Required before advance
+Unchanged in bolt 2. The three spec surfaces continue to cite the same
+codepoints in the same order:
 
-Fix the 13 banned-verb sites listed under Gate 3 in
-`comment-to-feedback-flow.html`, `feedback-inline-desktop.html`, and
-`feedback-inline-mobile.html`. Canonical replacement per DESIGN-BRIEF
-§2 footer-button matrix: **Dismiss** for both banned verbs when they
-appear on pending items. Re-run the grep (`grep -EnW '>(Reject|Close)<'
-stages/design/artifacts/*.html`) and confirm zero footer-button hits.
+| Origin | Codepoint | Glyph |
+|---|---|---|
+| adversarial-review | `U+1F50D` | 🔍 |
+| external-pr | `U+1F517` | 🔗 |
+| external-mr | `U+1F517` | 🔗 |
+| user-visual | `U+270E` | ✎ |
+| user-chat | `U+1F4AC` | 💬 |
+| agent | `U+1F916` | 🤖 |
+
+DESIGN-BRIEF §2, DESIGN-TOKENS §2.2, `aria-landmark-spec.md` §6 —
+identical.
+
+### Gate 5 — DESIGN-BRIEF §2 authoritative + component-inventory alias — PASS (stable)
+
+Unchanged in bolt 2. DESIGN-BRIEF §2 "Retired Components" subsection
+remains the canonical list (3 retired names + live replacements +
+rationale). `component-inventory.md` defers to DESIGN-BRIEF §2 via
+thin "spec location" pointers. `footer-button-copy-spec.md` carries
+the explicit alias notice.
+
+## Secondary finding resolution
+
+The bolt-1 review flagged a dangling
+`<div id="sheet-mine-panel" role="tabpanel" aria-labelledby="sheet-mine-tab" hidden></div>`
+in `feedback-inline-mobile.html` as dead markup referencing the retired
+identity-segmented control. Bolt 2 removed it cleanly and replaced it
+with an inline comment pointing at DESIGN-BRIEF §2 "Retired Components."
+Nice hygiene call — gates didn't require this but it's the right fix.
+
+`grep -n 'sheet-mine-panel\|sheet-mine-tab' feedback-inline-mobile.html`
+now returns zero hits.
+
+## Lingering cross-gate note (flagged for feedback-assessor, not blocking)
+
+The gate-2 literal grep and gate-5 authoritative-subsection requirement
+remain in literal tension (gate-2 wants 0 hits on the four retired
+names, gate-5 requires those exact names in a subsection). The unit
+body's resolution policy is the tiebreaker, but future unit specs
+should either scope gate-2's grep past the retired-components header
+(e.g. stop at `^## Retired Components`) or grep only the "live" portion
+of the file. Already flagged in bolt-1 review — restated here as a
+known drift for the feedback-assessor hat to decide whether to capture
+as a followup feedback item.
+
+## Outcome
+
+All 5 quality gates pass. Ready to advance.

@@ -2,7 +2,7 @@
 title: >-
   revisit-modal-states.html:101 prose cites disabled:opacity-50 as canonical —
   contradicts ban
-status: closed
+status: pending
 origin: adversarial-review
 author: accessibility
 author_type: agent

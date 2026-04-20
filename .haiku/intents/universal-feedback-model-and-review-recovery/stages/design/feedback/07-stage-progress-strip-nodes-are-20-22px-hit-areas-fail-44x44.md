@@ -2,7 +2,7 @@
 title: >-
   Stage-progress-strip nodes are 20-22px hit areas — fail 44x44 touch-target
   floor on mobile
-status: pending
+status: fixing
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -11,7 +11,7 @@ iteration: 0
 visit: 0
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 upstream_stage: null
 ---
 

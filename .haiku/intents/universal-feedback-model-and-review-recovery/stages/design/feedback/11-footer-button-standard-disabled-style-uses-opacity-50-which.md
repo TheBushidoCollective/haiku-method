@@ -2,7 +2,7 @@
 title: >-
   Footer-button standard disabled style uses opacity-50, which unit-11/18 bans
   repo-wide
-status: pending
+status: fixing
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -11,7 +11,7 @@ iteration: 0
 visit: 0
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 upstream_stage: null
 ---
 

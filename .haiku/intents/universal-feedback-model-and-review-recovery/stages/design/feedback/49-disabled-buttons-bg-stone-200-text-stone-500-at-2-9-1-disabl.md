@@ -2,7 +2,7 @@
 title: >-
   Disabled buttons: bg-stone-200/text-stone-500 at 2.9:1 + disabled:opacity-50
   on text — WCAG 1.4.11 fail
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:52:48Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-18-opacity-state-and-disabled-contrast-fixes
 ---
 
 **WCAG 2.2 SC 1.4.11 Non-Text Contrast (AA)** requires ≥ 3:1 for UI components; where disabled controls show text, text contrast still needs ≥ 4.5:1. Unit-11's gate required (1) removing `bg-green-600/50 text-white/80`-style composites, (2) no `disabled:opacity-50` on text-bearing buttons, (3) `aria-disabled="true"` on every disabled control.

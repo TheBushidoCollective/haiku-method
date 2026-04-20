@@ -74,7 +74,7 @@ quality_gates:
     card roots and `opacity-50` on rejected card roots, with the replacement
     tokens above. DESIGN-TOKENS.md §3 adds the canonical
     closed/rejected/pending/addressed background tokens.
-status: active
+status: completed
 bolt: 3
 hat: feedback-assessor
 started_at: '2026-04-20T01:54:04Z'
@@ -129,8 +129,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T02:41:58Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T02:47:28Z'
+    result: advance
+completed_at: '2026-04-20T02:47:28Z'
 ---
 # Opacity-on-state removal + disabled button contrast
 
@@ -195,10 +196,10 @@ contrast for replacements).
 
 ## Completion criteria
 
-- [ ] All 6 quality_gates pass
-- [ ] Closed/rejected card visual tokens documented in DESIGN-TOKENS.md §3
-- [ ] DESIGN-BRIEF §2 banned-pairs table extended with opacity-on-state
-- [ ] aria-disabled coverage ≥ 100% of disabled controls
-- [ ] feedback-card-states.html renders closed/rejected per new spec
-- [ ] state-signaling-inventory.html updated
-- [ ] contrast-and-type-audit.md §4 and §5 reflect post-sweep reality
+- [x] All 6 quality_gates pass
+- [x] Closed/rejected card visual tokens documented in DESIGN-TOKENS.md §3
+- [x] DESIGN-BRIEF §2 banned-pairs table extended with opacity-on-state
+- [x] aria-disabled coverage ≥ 100% of disabled controls
+- [x] feedback-card-states.html renders closed/rejected per new spec
+- [x] state-signaling-inventory.html updated
+- [x] contrast-and-type-audit.md §4 and §5 reflect post-sweep reality

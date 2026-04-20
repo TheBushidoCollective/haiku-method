@@ -2,7 +2,7 @@
 title: >-
   Closed/rejected feedback cards still use full-card opacity-70/opacity-50 —
   fails state coverage
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:55:15Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-18-opacity-state-and-disabled-contrast-fixes
 ---
 
 unit-11 completion criteria lines 47-51 (marked `[x]`) require: "Closed/rejected cards DO NOT apply `opacity-70` or `opacity-50` to the entire card; state is conveyed by border color + badge + muted background only; `grep -rEn 'opacity-(50|70)' stages/design/artifacts/` on closed/rejected card selectors returns 0 matches; rejected title uses `text-stone-500 line-through decoration-stone-500` at full opacity."

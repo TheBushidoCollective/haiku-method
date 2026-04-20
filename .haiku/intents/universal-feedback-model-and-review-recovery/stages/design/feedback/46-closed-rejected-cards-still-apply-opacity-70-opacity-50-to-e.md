@@ -2,7 +2,7 @@
 title: >-
   Closed/rejected cards still apply opacity-70 / opacity-50 to entire card —
   WCAG 1.4.3 fail + FB-13 regression
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:52:10Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-18-opacity-state-and-disabled-contrast-fixes
 ---
 
 **WCAG 1.4.3 (AA)** compounds with opacity on already-muted text. Unit-11's quality gate required `grep -rEn 'opacity-(50|70)' stages/design/artifacts/` on closed/rejected card selectors to return 0; it claims PASS.

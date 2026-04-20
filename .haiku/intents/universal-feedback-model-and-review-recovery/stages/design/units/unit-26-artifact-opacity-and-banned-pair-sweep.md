@@ -74,9 +74,9 @@ quality_gates:
       line) and 'aria-disabled' not in line]; sys.exit(1 if bad else 0)"
 status: active
 bolt: 2
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T19:39:02Z'
-hat_started_at: '2026-04-20T20:03:39Z'
+hat_started_at: '2026-04-20T20:07:33Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T19:39:02Z'
@@ -107,6 +107,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T20:03:39Z'
+    completed_at: '2026-04-20T20:07:33Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T20:07:33Z'
     completed_at: null
     result: null
 ---

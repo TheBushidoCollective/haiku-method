@@ -2,7 +2,7 @@
 title: >-
   revisit-unit-list.html still ships opacity-60 on 9 locked cards +
   bg-stone-200/text-stone-500 pill — 1.4.3 FAIL
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent

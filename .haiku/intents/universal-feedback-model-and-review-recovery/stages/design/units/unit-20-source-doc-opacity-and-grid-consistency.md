@@ -28,40 +28,51 @@ quality_gates:
   - >-
     DESIGN-BRIEF.md §7 CSS block contains zero raw hex color literals. The two
     previously-inline values (`#60a5fa`, `#4ade80`) are replaced with the
-    canonical token references — `var(--color-blue-400)` / `var(--color-green-400)`
-    or the Tailwind utility classes already defined in DESIGN-TOKENS.md §1.8.
-    `grep -nE '#[0-9a-fA-F]{3,8}\b' stages/design/DESIGN-BRIEF.md` returns 0 hits
-    inside the §7 code fences (inline prose hex references in §2 remediation
-    examples remain as-is; they are descriptive, not code). unit-16's
-    hex-count gate passes stage-wide after this change.
+    canonical token references — `var(--color-blue-400)` /
+    `var(--color-green-400)` or the Tailwind utility classes already defined in
+    DESIGN-TOKENS.md §1.8. `grep -nE '#[0-9a-fA-F]{3,8}\b'
+    stages/design/DESIGN-BRIEF.md` returns 0 hits inside the §7 code fences
+    (inline prose hex references in §2 remediation examples remain as-is; they
+    are descriptive, not code). unit-16's hex-count gate passes stage-wide after
+    this change.
   - >-
-    `stages/design/artifacts/state-coverage-grid.md` has a dedicated section (one
-    table per component) for every component enumerated in DESIGN-BRIEF §2
-    Component Inventory — at minimum: `FeedbackStatusBadge`, `FeedbackOriginIcon`,
-    `FeedbackItem` (compact), `FeedbackItem` (expanded), `FeedbackList`,
-    `FeedbackSummaryBar`, `AgentFeedbackToggle`, `FeedbackSheet`,
-    `FeedbackFloatingButton`, `FeedbackFloatingButton.pulse`. Each row covers
-    the canonical six states (default / hover / focus / active / disabled /
-    error). Cells where a state is genuinely N/A carry `— (N/A: <rationale>)`
-    text, not a bare em-dash. `FeedbackStatusBadge` expands to the four-status ×
-    two-theme matrix (pending / addressed / closed / rejected × light / dark)
-    rather than one "label not a control" row.
+    `stages/design/artifacts/state-coverage-grid.md` has a dedicated section
+    (one table per component) for every component enumerated in DESIGN-BRIEF §2
+    Component Inventory — at minimum: `FeedbackStatusBadge`,
+    `FeedbackOriginIcon`, `FeedbackItem` (compact), `FeedbackItem` (expanded),
+    `FeedbackList`, `FeedbackSummaryBar`, `AgentFeedbackToggle`,
+    `FeedbackSheet`, `FeedbackFloatingButton`, `FeedbackFloatingButton.pulse`.
+    Each row covers the canonical six states (default / hover / focus / active /
+    disabled / error). Cells where a state is genuinely N/A carry `— (N/A:
+    <rationale>)` text, not a bare em-dash. `FeedbackStatusBadge` expands to the
+    four-status × two-theme matrix (pending / addressed / closed / rejected ×
+    light / dark) rather than one "label not a control" row.
   - >-
     `FeedbackList` row in state-coverage-grid.md covers the list container's
     empty state ("No feedback yet…" vs "All feedback addressed!") and loading
     state, not just the enclosed cards. `FeedbackSheet` row covers sheet-level
-    `empty`, `loading`, and `error` (e.g., fetch-failure on open) in addition
-    to open/closed/anim states. `FeedbackSummaryBar` row treats each count chip
-    as a toggleable filter button and enumerates default / hover / focus /
-    active / disabled / error per chip. `AgentFeedbackToggle` row carries the
-    switch ARIA contract (`role="switch" aria-checked="{on|off}"`) with on/off
-    × focus/disabled/error coverage.
+    `empty`, `loading`, and `error` (e.g., fetch-failure on open) in addition to
+    open/closed/anim states. `FeedbackSummaryBar` row treats each count chip as
+    a toggleable filter button and enumerates default / hover / focus / active /
+    disabled / error per chip. `AgentFeedbackToggle` row carries the switch ARIA
+    contract (`role="switch" aria-checked="{on|off}"`) with on/off ×
+    focus/disabled/error coverage.
   - >-
     DESIGN-BRIEF.md §2 explicitly cross-references the expanded state-coverage
     rows — either via an updated table-of-contents line at the top of §2 or via
-    inline "see state-coverage-grid.md §X" pointers on each component spec —
-    so a design-reviewer walking §2 top-to-bottom can find the corresponding
-    state grid for every component without searching.
+    inline "see state-coverage-grid.md §X" pointers on each component spec — so
+    a design-reviewer walking §2 top-to-bottom can find the corresponding state
+    grid for every component without searching.
+status: active
+bolt: 1
+hat: designer
+started_at: '2026-04-20T05:08:33Z'
+hat_started_at: '2026-04-20T05:08:33Z'
+iterations:
+  - hat: designer
+    started_at: '2026-04-20T05:08:33Z'
+    completed_at: null
+    result: null
 ---
 # Source-doc consistency — §7 CSS strip + state-coverage completeness
 

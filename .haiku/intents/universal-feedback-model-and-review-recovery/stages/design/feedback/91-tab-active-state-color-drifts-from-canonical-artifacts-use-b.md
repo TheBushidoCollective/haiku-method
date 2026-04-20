@@ -2,7 +2,7 @@
 title: >-
   Tab active-state color drifts from canonical: artifacts use blue-600,
   DESIGN-BRIEF §2 says teal-600
-status: closed
+status: pending
 origin: adversarial-review
 author: consistency
 author_type: agent

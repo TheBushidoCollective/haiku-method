@@ -2,7 +2,7 @@
 title: >-
   Sidebar width breakpoint inconsistent — brief §1/§3 still uses lg:w-96 after
   unit-16 canonicalized xl:w-96
-status: pending
+status: fixing
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -11,7 +11,7 @@ iteration: 0
 visit: 0
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 upstream_stage: null
 ---
 

@@ -2,7 +2,7 @@
 title: >-
   review-ui-mockup.html .stage-btn has no focus-visible ring — keyboard focus
   invisible (WCAG 2.4.7)
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent

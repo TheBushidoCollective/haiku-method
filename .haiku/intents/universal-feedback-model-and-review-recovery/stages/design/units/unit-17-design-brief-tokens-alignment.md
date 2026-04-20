@@ -1,0 +1,131 @@
+---
+title: 'DESIGN-BRIEF / DESIGN-TOKENS alignment — retire legacy components, canonicalize copy and icon set'
+type: design
+closes:
+  - FB-40
+  - FB-41
+  - FB-43
+  - FB-45
+depends_on: []
+inputs:
+  - stages/design/DESIGN-BRIEF.md
+  - knowledge/DESIGN-TOKENS.md
+  - stages/design/artifacts/footer-button-copy-spec.md
+  - stages/design/artifacts/aria-landmark-spec.md
+  - stages/design/artifacts/component-inventory.md
+outputs:
+  - stages/design/DESIGN-BRIEF.md
+  - knowledge/DESIGN-TOKENS.md
+quality_gates:
+  - >-
+    FeedbackStatusBadge text shade is consistent across DESIGN-BRIEF §2
+    and DESIGN-TOKENS.md §2.1 — pick ONE shade per status pair, document
+    it in both places, verify contrast ≥ 4.5:1 in light and dark modes.
+    `diff <(grep -E 'text-amber|text-blue|text-green|text-stone'
+    DESIGN-BRIEF.md | sort) <(grep -E 'text-amber|text-blue|text-green|text-stone'
+    DESIGN-TOKENS.md | sort)` — no divergence on the badge text-shade rows.
+  - >-
+    DESIGN-BRIEF contains NO references to the retired components —
+    `SidebarSegmentedControl`, `Mine` tab (identity split), `FeedbackFAB`
+    (desktop floating button, mobile FAB stays), `MobileFeedbackSheet`
+    (the standalone sheet wrapper, superseded by the unified
+    `MobileFeedbackPanel` inside the bottom sheet). `grep -nE
+    'SidebarSegmentedControl|\bMine\b|FeedbackFAB(?!-pulse|\.)|MobileFeedbackSheet'
+    DESIGN-BRIEF.md` returns 0.
+    `AgentFeedbackToggle` MUST be documented in §2 as a first-class
+    component (per unit-13 / FB-32 ARIA spec).
+  - >-
+    Footer-button copy canonical matrix present in DESIGN-BRIEF §2 AND
+    identical to footer-button-copy-spec.md:
+    pending → "Dismiss" (single button, agent+human origins identical);
+    addressed → "Verify & Close" (primary) + "Reopen" (secondary);
+    closed → "Reopen" (single button);
+    rejected → "Reopen" (single button).
+    `Reject`, `Close` (standalone, distinct from "Verify & Close") MUST
+    NOT appear as footer button labels in any artifact or DESIGN-BRIEF.
+    `grep -EnW '(Reject|Close)( |$)' stages/design/artifacts/*.html |
+    grep -E 'button|footer'` — every match audited and
+    none is a footer-button label.
+  - >-
+    Origin-icon emoji mapping is identical across DESIGN-BRIEF §2,
+    DESIGN-TOKENS.md §2.2, and aria-landmark-spec.md §6. Canonical set:
+    `🔍 U+1F50D` (adversarial-review), `🔗 U+1F517` (external-pr /
+    external-mr), `✎ U+270E` (user-visual), `💬 U+1F4AC` (user-chat),
+    `🤖 U+1F916` (agent). All three specs cite the SAME codepoints in the
+    SAME order. Diffing the three mapping tables yields zero
+    discrepancies.
+  - >-
+    DESIGN-BRIEF §2 declares itself the authoritative component
+    inventory, with a "Retired components" subsection listing the
+    retired names above and the rationale (one line each) so future
+    readers don't resurrect them. component-inventory.md cross-links
+    back to DESIGN-BRIEF §2 rather than duplicating component specs.
+---
+
+# DESIGN-BRIEF / DESIGN-TOKENS alignment
+
+## Scope
+
+Four consistency findings all point at the same failure: the design spec
+surfaces (DESIGN-BRIEF, DESIGN-TOKENS, the handful of alias specs like
+aria-landmark / footer-button-copy / component-inventory) disagree with
+each other on component lists, icon codepoints, status-badge shades, and
+footer-button labels. A single rationalization pass fixes all four.
+
+**FB-to-fix mapping:**
+
+- **FB-40** (status badge text-shade disagreement): DESIGN-BRIEF §2 uses
+  `-700`, DESIGN-TOKENS.md §2.1 uses `-800`, artifacts use `-800`. Pick
+  one, document in both.
+- **FB-41** (retired components still shipped in BRIEF): remove
+  SidebarSegmentedControl / Mine / FAB-desktop / MobileFeedbackSheet
+  references. Ensure AgentFeedbackToggle is properly documented.
+- **FB-43** (footer-button copy not canonicalized): copy the full
+  status × origin matrix from footer-button-copy-spec.md into
+  DESIGN-BRIEF §2 so there's one source of truth.
+- **FB-45** (origin-icon emoji divergence): rationalize DESIGN-BRIEF §2,
+  DESIGN-TOKENS.md §2.2, aria-landmark-spec.md §6 onto a single emoji
+  mapping with explicit codepoints.
+
+## Approach
+
+The designer hat will:
+
+1. Read all four spec surfaces and identify the correct canonical
+   values. Resolution policy:
+   - **Badge text-shade**: adopt `-800` (matches DESIGN-TOKENS.md §2.1
+     and the artifacts — most-implemented wins, contrast already
+     verified at 4.9–5.1:1 light / ≥ 4.5:1 dark).
+   - **Retired components**: remove references, add "Retired components"
+     subsection to DESIGN-BRIEF §2 explaining what each was and why it
+     was retired (prevents resurrection).
+   - **Footer-button copy**: copy matrix from
+     footer-button-copy-spec.md into DESIGN-BRIEF §2 as the canonical
+     reference, make footer-button-copy-spec.md an alias pointing to
+     DESIGN-BRIEF §2.
+   - **Origin-icon emoji**: reconcile to the canonical 5-emoji set
+     (🔍/🔗/✎/💬/🤖), cite codepoints in all three places identically.
+2. Update DESIGN-BRIEF §2 as the authoritative source.
+3. Update DESIGN-TOKENS.md §2.1 and §2.2 to match.
+4. Update aria-landmark-spec.md §6 to match.
+5. Update component-inventory.md to cross-link to DESIGN-BRIEF §2
+   instead of duplicating specs.
+
+The design-reviewer hat will run the grep/diff commands from the quality
+gates and verify no divergence.
+
+The feedback-assessor hat will verify each FB item's concrete claim
+(e.g., "SidebarSegmentedControl still in DESIGN-BRIEF") is now false.
+
+## Completion criteria
+
+- [ ] All 5 quality_gates pass
+- [ ] DESIGN-BRIEF §2 is the authoritative component inventory with a
+      "Retired components" subsection
+- [ ] DESIGN-TOKENS.md §2.1 (badge shades) and §2.2 (origin emoji)
+      match DESIGN-BRIEF exactly
+- [ ] aria-landmark-spec.md §6 emoji table matches DESIGN-BRIEF §2
+- [ ] footer-button-copy-spec.md is now an alias pointing at
+      DESIGN-BRIEF §2 rather than duplicating specs
+- [ ] component-inventory.md cross-links to DESIGN-BRIEF §2 for each
+      component rather than duplicating

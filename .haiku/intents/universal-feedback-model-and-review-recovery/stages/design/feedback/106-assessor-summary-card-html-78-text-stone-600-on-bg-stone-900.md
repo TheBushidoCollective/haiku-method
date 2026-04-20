@@ -2,7 +2,7 @@
 title: >-
   assessor-summary-card.html:78 text-stone-600 on bg-stone-900 at 2.56:1 — 1.4.3
   FAIL
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:30:31Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: null
+closed_by: unit-31-contrast-and-type-scale-fixes
 ---
 
 `assessor-summary-card.html` is forced to dark mode (`<html lang="en" class="dark">` at L2), and the "already-closed (prior visit)" bullet uses `text-stone-600` on the rendered `bg-stone-900` surface — FAILS WCAG 1.4.3 body text.

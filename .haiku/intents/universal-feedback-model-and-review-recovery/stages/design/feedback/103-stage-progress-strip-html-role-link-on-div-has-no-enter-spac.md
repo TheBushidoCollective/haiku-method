@@ -2,7 +2,7 @@
 title: >-
   stage-progress-strip.html role=link on div has no Enter/Space activation
   handler — keyboard UNREACHABLE
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent

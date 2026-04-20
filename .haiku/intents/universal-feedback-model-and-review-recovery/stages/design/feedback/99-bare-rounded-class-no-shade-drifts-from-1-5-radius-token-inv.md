@@ -2,7 +2,7 @@
 title: >-
   Bare `rounded` class (no shade) drifts from §1.5 radius token inventory —
   inconsistent card/button corner radii
-status: closed
+status: pending
 origin: adversarial-review
 author: consistency
 author_type: agent

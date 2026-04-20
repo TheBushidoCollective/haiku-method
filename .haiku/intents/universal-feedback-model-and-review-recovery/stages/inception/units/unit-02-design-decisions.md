@@ -7,14 +7,14 @@ quality_gates: []
 inputs:
   - intent.md
   - knowledge/DISCOVERY.md
-status: completed
-bolt: 1
-hat: elaborator
-started_at: '2026-04-15T20:39:17Z'
+status: pending
+bolt: 0
+hat: ''
+started_at: null
 hat_started_at: '2026-04-15T20:41:33Z'
 outputs:
   - knowledge/DESIGN-DECISIONS.md
-completed_at: '2026-04-15T20:42:11Z'
+completed_at: null
 ---
 
 # Design Decisions Document

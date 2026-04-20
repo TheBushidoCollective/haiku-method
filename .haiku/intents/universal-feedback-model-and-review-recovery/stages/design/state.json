@@ -6,7 +6,7 @@
   "completed_at": null,
   "gate_entered_at": null,
   "gate_outcome": null,
-  "elaboration_turns": 17,
+  "elaboration_turns": 18,
   "design_direction_selected": true,
   "design_direction": {
     "archetype": "Inline Feedback Annotations",
@@ -60,5 +60,7 @@
       "reason": "24 pending feedback item(s)",
       "feedback_signature": "sig:7ba4b802"
     }
-  ]
+  ],
+  "pre_review_dispatched": true,
+  "pre_review_dispatched_at": "2026-04-20T15:27:59Z"
 }

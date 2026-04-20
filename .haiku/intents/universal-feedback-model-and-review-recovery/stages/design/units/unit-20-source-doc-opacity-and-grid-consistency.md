@@ -64,10 +64,10 @@ quality_gates:
     a design-reviewer walking §2 top-to-bottom can find the corresponding state
     grid for every component without searching.
 status: active
-bolt: 4
-hat: feedback-assessor
+bolt: 5
+hat: designer
 started_at: '2026-04-20T05:08:33Z'
-hat_started_at: '2026-04-20T09:08:04Z'
+hat_started_at: '2026-04-20T09:09:50Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:33Z'
@@ -175,6 +175,26 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T09:08:04Z'
+    completed_at: '2026-04-20T09:09:50Z'
+    result: reject
+    reason: >-
+      FB-70 and FB-75 are factually closed in the artifacts (DESIGN-BRIEF.md §7
+      has zero `opacity: 0.7`/`opacity: 0.5` and zero raw hex inside CSS fences;
+      state-coverage-grid.md §7.1–§7.12 covers every §2 component with the
+      required matrices and inline N/A rationales; DESIGN-BRIEF §2 lines 121–136
+      carry the cross-reference index plus inline `see state-coverage-grid.md
+      §X` pointers on each component subheading). However, advance_hat fails
+      with `criteria_not_met: 6 unchecked` because the designer ticked the 6
+      "Completion criteria" checkboxes in the UNIT WORKTREE copy only
+      (`.haiku/worktrees/.../unit-20.../.haiku/intents/.../units/unit-20-....md`
+      lines 148–178) — the canonical main-tree copy at
+      `.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/units/unit-20-source-doc-opacity-and-grid-consistency.md`
+      lines 224–231 still carries 6 `- [ ]` boxes. The next designer bolt must
+      tick the six checkboxes in the MAIN-TREE unit-spec file (not just the
+      worktree copy) so the harness gate probe sees them checked. The artifacts
+      themselves need no further changes.
+  - hat: designer
+    started_at: '2026-04-20T09:09:50Z'
     completed_at: null
     result: null
 ---

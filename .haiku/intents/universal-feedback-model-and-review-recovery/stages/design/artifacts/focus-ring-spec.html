@@ -107,6 +107,14 @@
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1">Tailwind utilities (preferred when inline)</p>
         <code class="text-[11px] text-stone-700 dark:text-stone-300 break-all">focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 focus:outline-none</code>
       </div>
+
+      <!-- §1b — Native-element mandate (unit-23, FB-82) -->
+      <div class="mt-4 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800">
+        <p class="text-xs font-bold uppercase tracking-widest text-amber-800 dark:text-amber-300 mb-1">§1b — Native elements only (closes FB-82)</p>
+        <p class="text-xs text-amber-900 dark:text-amber-200">
+          Elements that act as links MUST be native <code class="font-mono">&lt;a href&gt;</code>, not <code class="font-mono">&lt;div role="link"&gt;</code>. <code class="font-mono">&lt;div role="link"&gt;</code> requires an explicit <code class="font-mono">onkeydown</code> handler for <kbd>Enter</kbd> activation, does not inherit browser-default key handling, and is a known WCAG 2.1.1 footgun. Use <code class="font-mono">&lt;button type="button"&gt;</code> when the element switches view without a URL. Roving-tabindex interactions (e.g. arrow-key navigation across a stage strip) still work on native <code class="font-mono">&lt;a&gt;</code>; <code class="font-mono">tabindex="-1"</code> + <code class="font-mono">aria-disabled="true"</code> signal "in the a11y tree, not activable yet" without reaching for ARIA roles that shadow native semantics.
+        </p>
+      </div>
     </section>
 
     <!-- §1a — Compact variant -->
@@ -164,6 +172,7 @@
         <li><code>focus:</code> (not <code>focus-visible:</code>) on elements that should not show a ring on mouse click (e.g. all buttons). Use <code>focus-visible:</code> so mouse users don't see a spurious ring.</li>
         <li>Variant-matched rings on anything other than the primary actions listed in §2.</li>
         <li>Non-2px offset except the §1a compact variant (1px offset for dense card stacks).</li>
+        <li><code>&lt;div role="link"&gt;</code> or <code>&lt;span role="button"&gt;</code> (unit-23 / FB-82) — use native <code>&lt;a href&gt;</code> or <code>&lt;button type="button"&gt;</code>; see §1b.</li>
       </ul>
     </section>
 
@@ -176,6 +185,7 @@
         <li>Revisit-modal Cancel button uses §1 teal-500 ring (not left unstyled).</li>
         <li>Revisit-modal Confirm button uses §2 amber-500 variant ring (documented above as an allowed variant).</li>
         <li>Manual test: Tab through every artifact; verify every interactive element shows a 2px teal (or variant) ring. No element shows the default browser outline (it must be suppressed or matched).</li>
+        <li><code>grep -rE '&lt;div[^&gt;]*role="link"' stages/design/artifacts/</code> returns 0 matches (unit-23 / FB-82 — §1b mandates native <code>&lt;a&gt;</code> for link-like elements).</li>
       </ul>
     </section>
 

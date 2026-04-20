@@ -30,39 +30,48 @@ quality_gates:
     retained but matched by applied classes on every interactive element.
   - >-
     Every stage node in `stage-progress-strip.html` (L87, L101, L115, L133,
-    L147, L186, L196, L211 — every `<div class="stage-node">`) converted
-    to either `<a href="#stage-{slug}" class="stage-node">` (preferred, real
-    anchor, real keyboard activation, no JS required) or `<button
-    type="button" class="stage-node">` (if the SPA uses non-hash routing).
-    `role="link"` is removed once the element is a real `<a>` (role is
-    redundant on native anchors). `grep -cE 'role="link"'
+    L147, L186, L196, L211 — every `<div class="stage-node">`) converted to
+    either `<a href="#stage-{slug}" class="stage-node">` (preferred, real
+    anchor, real keyboard activation, no JS required) or `<button type="button"
+    class="stage-node">` (if the SPA uses non-hash routing). `role="link"` is
+    removed once the element is a real `<a>` (role is redundant on native
+    anchors). `grep -cE 'role="link"'
     stages/design/artifacts/stage-progress-strip.html` returns 0.
   - >-
-    Every converted `.stage-node` element in `stage-progress-strip.html`
-    carries `focus-visible:ring-2 focus-visible:ring-teal-500
+    Every converted `.stage-node` element in `stage-progress-strip.html` carries
+    `focus-visible:ring-2 focus-visible:ring-teal-500
     focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900
-    outline-none` (or a named Tailwind utility class that expands to the
-    same), satisfying `focus-ring-spec.html §1`'s canonical-ring mandate.
+    outline-none` (or a named Tailwind utility class that expands to the same),
+    satisfying `focus-ring-spec.html §1`'s canonical-ring mandate.
     Upcoming/disabled stages retain `tabindex="-1"` AND `aria-disabled="true"`
     (already at L133, L147); the active stage retains `aria-current="step"`
     (already at L115, L211); `role="link"` on disabled future-stage divs is
     dropped in favor of `<a aria-disabled="true" tabindex="-1">` semantics.
   - >-
-    `focus-ring-spec.html §1` is amended with a paragraph: *"Elements that
-    act as links MUST be native `<a href>`, not `<div role="link">`. `<div
-    role="link">` requires an explicit `onkeydown` handler for Enter
-    activation, does not inherit browser-default key handling, and is a
-    known WCAG 2.1.1 footgun. Use `<button type="button">` when the element
-    switches view without a URL."* This paragraph gives the dev stage and
-    future designers a normative rule, not just the current fix.
+    `focus-ring-spec.html §1` is amended with a paragraph: *"Elements that act
+    as links MUST be native `<a href>`, not `<div role="link">`. `<div
+    role="link">` requires an explicit `onkeydown` handler for Enter activation,
+    does not inherit browser-default key handling, and is a known WCAG 2.1.1
+    footgun. Use `<button type="button">` when the element switches view without
+    a URL."* This paragraph gives the dev stage and future designers a normative
+    rule, not just the current fix.
   - >-
     unit-23 verification: `grep -nE '<div[^>]*role="link"'
-    stages/design/artifacts/` returns 0 across the entire artifacts
-    directory (not only `stage-progress-strip.html`). If the sweep surfaces
-    additional `<div role="link">` usages in any other artifact, the fix is
-    applied consistently (convert to `<a>` or `<button>`) within this unit's
-    scope. The final audit count is reported in the design-reviewer's
-    verification note.
+    stages/design/artifacts/` returns 0 across the entire artifacts directory
+    (not only `stage-progress-strip.html`). If the sweep surfaces additional
+    `<div role="link">` usages in any other artifact, the fix is applied
+    consistently (convert to `<a>` or `<button>`) within this unit's scope. The
+    final audit count is reported in the design-reviewer's verification note.
+status: active
+bolt: 1
+hat: designer
+started_at: '2026-04-20T05:08:26Z'
+hat_started_at: '2026-04-20T05:08:26Z'
+iterations:
+  - hat: designer
+    started_at: '2026-04-20T05:08:26Z'
+    completed_at: null
+    result: null
 ---
 # Focus-visible rings + activable-element semantics
 

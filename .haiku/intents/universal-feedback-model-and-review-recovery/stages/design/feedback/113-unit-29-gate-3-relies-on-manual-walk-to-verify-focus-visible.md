@@ -2,7 +2,7 @@
 title: >-
   unit-29 gate 3 relies on "Manual walk" to verify focus-visible vs selection —
   WCAG 2.4.7 needs executable selector grep
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:30:16Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-29-focus-visible-canonicalization-and-spec-clarity.md
-closed_by: null
+closed_by: unit-29-focus-visible-canonicalization-and-spec-clarity
 bolt: 0
 upstream_stage: null
 ---

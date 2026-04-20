@@ -355,6 +355,119 @@
     </section>
 
     <!-- ============================================================
+         Arrow-key roving tabindex (FB-65)
+    ============================================================ -->
+    <section>
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Arrow-key roving tabindex (FB-65)</h2>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+        Every stage node inside a <code class="font-mono">&lt;nav aria-label="Stage progress"&gt;</code> is reachable via arrow keys,
+        including <strong>upcoming / never-visited</strong> stages (<code class="font-mono">tabindex="-1"</code> in the Tab order).
+        This satisfies WCAG 2.1.1 Keyboard — even read-only informational affordances must be reachable. It also satisfies
+        WCAG 1.4.13 Content on Hover — focusing a future stage reveals the <strong>same</strong> tooltip that appears on hover,
+        so the tooltip content is not hover-only.
+      </p>
+
+      <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50 dark:bg-gray-800 text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            <tr>
+              <th class="text-left px-3 py-2">Key</th>
+              <th class="text-left px-3 py-2">Action</th>
+              <th class="text-left px-3 py-2">Scope</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 dark:divide-gray-800 text-gray-700 dark:text-gray-300">
+            <tr><td class="px-3 py-2"><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></td><td class="px-3 py-2">Enter / exit the strip at the current stage (roving position)</td><td class="px-3 py-2">Stage progress strip</td></tr>
+            <tr><td class="px-3 py-2"><kbd>ArrowRight</kbd> / <kbd>ArrowDown</kbd></td><td class="px-3 py-2">Move focus to next stage node (wraps to first after last)</td><td class="px-3 py-2">Any stage node</td></tr>
+            <tr><td class="px-3 py-2"><kbd>ArrowLeft</kbd> / <kbd>ArrowUp</kbd></td><td class="px-3 py-2">Move focus to previous stage node (wraps to last before first)</td><td class="px-3 py-2">Any stage node</td></tr>
+            <tr><td class="px-3 py-2"><kbd>Home</kbd></td><td class="px-3 py-2">Move focus to first stage node</td><td class="px-3 py-2">Any stage node</td></tr>
+            <tr><td class="px-3 py-2"><kbd>End</kbd></td><td class="px-3 py-2">Move focus to last stage node</td><td class="px-3 py-2">Any stage node</td></tr>
+            <tr><td class="px-3 py-2"><kbd>Enter</kbd> / <kbd>Space</kbd></td><td class="px-3 py-2">Activate the focused stage (opens stage view). No-op on <code class="font-mono">aria-disabled="true"</code> upcoming stages — focus remains, tooltip remains.</td><td class="px-3 py-2">Focused stage</td></tr>
+            <tr><td class="px-3 py-2"><kbd>Escape</kbd></td><td class="px-3 py-2">Dismiss any open tooltip (WCAG 1.4.13 Dismissible). Focus stays on the stage.</td><td class="px-3 py-2">Focused stage with visible tooltip</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-2">Roving-tabindex algorithm</h3>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        Only ONE stage node is a Tab stop at a time. That node has <code class="font-mono">tabindex="0"</code>; all others have
+        <code class="font-mono">tabindex="-1"</code>. Arrow keys shift the <code class="font-mono">tabindex="0"</code> to the next/prev node
+        and call <code class="font-mono">focus()</code> on the newly-roved node. This pattern is WAI-ARIA Authoring Practices
+        canonical for toolbars, tablists, and stage-like navigations.
+      </p>
+
+      <div class="bg-gray-50 dark:bg-gray-950 rounded-lg p-3 overflow-x-auto">
+        <pre class="text-xs text-gray-800 dark:text-gray-200"><code>// Pseudocode — dev stage implements this in React as StageProgressStrip.tsx
+// DOM shape: &lt;nav aria-label="Stage progress"&gt;&lt;div class="stage-node" ...&gt;&lt;/div&gt; x N &lt;/nav&gt;
+
+function handleArrowNav(ev: KeyboardEvent) {
+  const nav = (ev.currentTarget as HTMLElement).closest('nav[aria-label*="Stage progress"]');
+  if (!nav) return;
+  const nodes = Array.from(nav.querySelectorAll<HTMLElement>('.stage-node'));
+  const currentIdx = nodes.indexOf(document.activeElement as HTMLElement);
+  if (currentIdx === -1) return;
+
+  let nextIdx = currentIdx;
+  switch (ev.key) {
+    case 'ArrowRight':
+    case 'ArrowDown':
+      nextIdx = (currentIdx + 1) % nodes.length;
+      break;
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      nextIdx = (currentIdx - 1 + nodes.length) % nodes.length;
+      break;
+    case 'Home':
+      nextIdx = 0;
+      break;
+    case 'End':
+      nextIdx = nodes.length - 1;
+      break;
+    case 'Escape':
+      // Dismiss any visible tooltip without moving focus
+      nodes[currentIdx].blur();
+      nodes[currentIdx].focus({ preventScroll: true });
+      return;
+    default:
+      return;
+  }
+
+  ev.preventDefault();
+  // Roving tabindex: former current becomes -1, next becomes 0
+  nodes.forEach((n, i) =&gt; n.setAttribute('tabindex', i === nextIdx ? '0' : '-1'));
+  nodes[nextIdx].focus();
+}
+
+// Attach once on the nav element (event delegation):
+nav.addEventListener('keydown', handleArrowNav);
+
+// Initial state: the first "interactive" stage (completed / current / previously-visited) is tabindex="0"
+// and all others (including never-visited future stages) are tabindex="-1". Arrow keys rove through ALL
+// nodes — including future stages — so keyboard users can inspect every stage's tooltip. Enter on a
+// future stage is a no-op because of aria-disabled="true"; the tooltip continues to render on focus.
+</code></pre>
+      </div>
+
+      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-2">Tooltip on focus (WCAG 1.4.13 Content on Hover)</h3>
+      <ul class="text-xs text-gray-700 dark:text-gray-300 space-y-1 list-disc ml-5">
+        <li><strong>Hoverable:</strong> tooltip is a sibling of the node, not inside it, so pointer can enter the tooltip without dismissing.</li>
+        <li><strong>Dismissible:</strong> <kbd>Escape</kbd> dismisses without moving focus (see algorithm above).</li>
+        <li><strong>Persistent:</strong> the tooltip stays visible as long as focus is on the stage node AND the pointer is not moving to a different element. The CSS above (<code class="font-mono">.stage-node:focus .stage-tooltip</code>, <code class="font-mono">.stage-node:focus-visible .stage-tooltip</code>) guarantees this.</li>
+        <li><strong>Tooltip content is not hover-only:</strong> focusing a future stage via arrow keys reveals the SAME tooltip text that hover reveals. No information is gated behind a pointer.</li>
+      </ul>
+
+      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-2">Skip-link z-index verification</h3>
+      <p class="text-xs text-gray-700 dark:text-gray-300 mb-2">
+        The skip link at the top of this document uses <code class="font-mono">focus-visible:z-[100]</code>; the stage nodes' focus outline
+        sits at the element's natural stacking order (no explicit <code class="font-mono">z-*</code>). When the skip link is focused
+        on page load and the first stage simultaneously has <code class="font-mono">tabindex="0"</code>, the skip link's <code class="font-mono">z-100</code>
+        + <code class="font-mono">fixed top-2 left-2</code> positioning places it at the top-left corner — above and to the LEFT of the first
+        stage node's 2px teal focus ring (which cannot bleed past its own 4px offset). Visual verification is in the
+        Arrow-nav mockup below; no overlap.
+      </p>
+    </section>
+
+    <!-- ============================================================
          Focus-order policy — explicit tabindex rule (FB-25)
     ============================================================ -->
     <section>
@@ -398,13 +511,13 @@
               <td class="px-3 py-2 font-semibold">Future, never visited</td>
               <td class="px-3 py-2"><code class="font-mono">-1</code></td>
               <td class="px-3 py-2">tooltip only (no border change)</td>
-              <td class="px-3 py-2"><em class="text-stone-500 dark:text-stone-400">not focusable via Tab</em></td>
-              <td class="px-3 py-2"><em class="text-stone-500 dark:text-stone-400">n/a — no action</em></td>
+              <td class="px-3 py-2">teal outline on focus (FB-65 — reachable via Arrow keys)</td>
+              <td class="px-3 py-2"><em class="text-stone-500 dark:text-stone-400">n/a — no action (aria-disabled)</em></td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mt-3 italic">Future never-visited stages remain in the a11y tree (<code class="font-mono">role="link"</code> + <code class="font-mono">aria-disabled="true"</code>) so assistive tech still announces their existence — they are just not a Tab stop, because there is nothing to activate.</p>
+      <p class="text-xs text-stone-600 dark:text-stone-300 mt-3 italic">Future never-visited stages are <code class="font-mono">tabindex="-1"</code> so they are skipped by the Tab key — but the arrow-key roving handler above (FB-65) moves focus to them, which reveals the same tooltip content that hover shows and satisfies WCAG 2.1.1 Keyboard + 1.4.13 Content on Hover. They remain in the a11y tree (<code class="font-mono">role="link"</code> + <code class="font-mono">aria-disabled="true"</code>) so assistive tech announces their existence; Enter / Space is a no-op because there is nothing to activate yet.</p>
     </section>
 
   </main>

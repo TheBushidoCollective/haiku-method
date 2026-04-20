@@ -90,99 +90,91 @@ When stage-progress-strip is embedded inside review-context-header (or any page)
 - Focusable via `tabindex="0"` (visitable) or omitted (disabled)
 - Focus-visible ring per `focus-ring-spec.html §1`
 
-### 4.1 Tablist ARIA shape (added by unit-16)
+## 5. MobileFeedbackPanel dialog lifecycle (closes FB-51)
 
-Tab surfaces that use `role="tablist"` (e.g. `feedback-inline-desktop.html`, `feedback-inline-mobile.html`) MUST follow the [WAI-ARIA Authoring Practices tab pattern](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/):
+The `MobileFeedbackPanel` (rendered by `FeedbackSheet` on mobile breakpoints, opened by `FeedbackFloatingButton` / the FAB) is the canonical example of the §3 dialog contract. Because it covers the full viewport, the lifecycle below **MUST** be implemented end-to-end; partial compliance is a blocker.
 
-- Wrapper: `<div role="tablist" aria-label="{label}" aria-orientation="horizontal">` (use `vertical` for column-style tab rails)
-- Each tab: `<button role="tab" aria-selected="{bool}" aria-controls="{panelId}" tabindex="{0|-1}">`. Exactly one tab in the set carries `aria-selected="true"` and `tabindex="0"`; every other tab carries `aria-selected="false"` and `tabindex="-1"`. This is the "roving tabindex" contract.
-- Panels: `<div role="tabpanel" id="{panelId}" aria-labelledby="{tabId}" tabindex="0">` (the `tabindex="0"` on the panel lets keyboard users enter the panel body).
+### 5.1 DOM contract (every `MobileFeedbackPanel` render)
 
-### 4.2 Inactive-tab contrast floor (reaffirmed by unit-16 gate)
+```html
+<!-- Opener — always present; sheet-controls attribute binds it to the dialog -->
+<button id="feedback-fab"
+        aria-label="Open feedback panel, 3 pending"
+        aria-haspopup="dialog"
+        aria-expanded="false"
+        aria-controls="feedback-sheet">…</button>
 
-Inactive tabs (those carrying `tabindex="-1"` in the roving set) **MUST** use the stone-500+ text token so they pass AA:
-
-- Light mode: `text-stone-500` (4.61:1 on white — floor) — never use the stone-400 shade on light surfaces (fails 4.5:1 body-text AA on every card background).
-- Dark mode: `dark:text-stone-400` (OK on `stone-800`+).
-
-Forbidden combinations are enumerated in `knowledge/DESIGN-TOKENS.md §1.1a` and re-checked by the `text-(stone|gray)-400` grep in unit-16 gate 4.
-
-### 4.3 Roving tabindex — arrow-key handler (canonical sample)
-
-Tablists **MUST** implement roving tabindex with arrow-key navigation so keyboard users can move between tabs using `←` / `→` (horizontal) or `↑` / `↓` (vertical). Pressing `Home` jumps to the first tab, `End` to the last. Focus visibly moves; `aria-selected` follows focus (activating the panel the newly-focused tab controls).
-
-Canonical JS — the dev stage can adopt this verbatim; names are descriptive and the helper is framework-agnostic:
-
-```js
-/**
- * Attach roving-tabindex arrow-key handling to a tablist.
- *
- * Contract:
- *   - Wrapper element must have role="tablist" and aria-orientation="horizontal" | "vertical".
- *   - Tabs must have role="tab" children with stable ids; exactly one tab starts with
- *     tabindex="0" + aria-selected="true"; the others start tabindex="-1" + aria-selected="false".
- *   - onSelect(tabEl) is invoked whenever the active tab changes (user pressed arrow / Home / End,
- *     or clicked a tab). Use it to update the associated tabpanel's hidden state.
- *
- * WAI-ARIA Authoring Practices reference:
- *   https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
- */
-function attachRovingTabindex(tablistEl, onSelect) {
-  const tabs = Array.from(tablistEl.querySelectorAll('[role="tab"]'));
-  const orientation = tablistEl.getAttribute('aria-orientation') || 'horizontal';
-  const nextKey = orientation === 'vertical' ? 'ArrowDown' : 'ArrowRight';
-  const prevKey = orientation === 'vertical' ? 'ArrowUp'   : 'ArrowLeft';
-
-  function activate(idx) {
-    const wrapped = (idx + tabs.length) % tabs.length;
-    tabs.forEach((t, i) => {
-      const active = i === wrapped;
-      t.setAttribute('aria-selected', String(active));
-      t.setAttribute('tabindex', active ? '0' : '-1');
-      if (active) {
-        t.focus();
-        onSelect && onSelect(t);
-      }
-    });
-  }
-
-  tablistEl.addEventListener('keydown', (e) => {
-    const currentIdx = tabs.indexOf(document.activeElement);
-    if (currentIdx < 0) return;
-    if (e.key === nextKey)      { e.preventDefault(); activate(currentIdx + 1); }
-    else if (e.key === prevKey) { e.preventDefault(); activate(currentIdx - 1); }
-    else if (e.key === 'Home')  { e.preventDefault(); activate(0); }
-    else if (e.key === 'End')   { e.preventDefault(); activate(tabs.length - 1); }
-  });
-
-  tabs.forEach((t, i) => {
-    t.addEventListener('click', () => activate(i));
-  });
-}
-
-// Usage:
-//   const tablist = document.querySelector('[role="tablist"]');
-//   attachRovingTabindex(tablist, (activeTab) => {
-//     const panelId = activeTab.getAttribute('aria-controls');
-//     document.querySelectorAll('[role="tabpanel"]').forEach(p => p.hidden = p.id !== panelId);
-//   });
+<!-- Sheet — rendered conditionally (or always-in-DOM + hidden when closed) -->
+<div id="feedback-sheet"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="sheet-title">
+  <h2 id="sheet-title">Feedback</h2>
+  …
+</div>
 ```
 
-**Behavior summary:**
+Required attributes on the sheet root:
 
-| Key | Horizontal tablist | Vertical tablist |
+| Attribute | Value | Purpose |
 |---|---|---|
-| `→` / `ArrowRight` | next tab (wrap) | — (no-op) |
-| `←` / `ArrowLeft` | previous tab (wrap) | — (no-op) |
-| `↓` / `ArrowDown` | — (no-op) | next tab (wrap) |
-| `↑` / `ArrowUp` | — (no-op) | previous tab (wrap) |
-| `Home` | first tab | first tab |
-| `End` | last tab | last tab |
-| `Tab` (when focus inside tablist) | leaves the tablist and moves to the next focusable element — this is native behavior because only one tab has `tabindex="0"` at any time. | same |
+| `role="dialog"` | required | Landmark |
+| `aria-modal="true"` | required | AT treats background as inert even before `inert` attribute lands |
+| `aria-labelledby` | points at the in-sheet heading `id` (not to an offscreen element) | Accessible name |
+| `id="feedback-sheet"` | required | FAB's `aria-controls` target |
 
-The dev stage SHOULD wire this handler to every tablist rendered by the feedback-UI (desktop + mobile). The sample above is production-ready and matches the WAI-ARIA Authoring Practices reference implementation.
+Required on the FAB (`FeedbackFloatingButton`):
 
-## 5. Origin legend component (closes FB-33)
+| Attribute | Value | Purpose |
+|---|---|---|
+| `aria-haspopup="dialog"` | required | Announces "opens a dialog" to AT on focus |
+| `aria-expanded` | `"true"` when sheet open, `"false"` when closed | Reflects live state |
+| `aria-controls` | `"feedback-sheet"` | Pairs opener → dialog |
+| `aria-label` | descriptive ("Open feedback panel, N pending") | Icon-only button must still have a name |
+
+### 5.2 Open lifecycle (FAB click, Enter, Space)
+
+1. Apply `aria-hidden="true"` **AND** the `inert` attribute to `<main id="main-content">` and `<header role="banner">`. `inert` blocks pointer + keyboard from background content; `aria-hidden` keeps AT from traversing it. Both are required — browsers without `inert` fall back to `aria-hidden`, browsers without `aria-hidden` enforcement fall back to `inert`.
+2. Flip the FAB's `aria-expanded` from `"false"` → `"true"`.
+3. Mount / reveal the sheet. Wrap it in `<FocusTrap active returnFocusOnDeactivate={true}>` (see §3 focus-trap contract — `focus-trap-react` is the canonical library, the same one already used by `annotation-popover-states.html`; do NOT hand-roll a trap).
+4. `FocusTrap` auto-moves focus to the first tabbable inside the sheet (the `AgentFeedbackToggle` switch — `#sheet-first-tab`). No manual `focus()` call from component code.
+5. Attach a keydown listener scoped to the sheet: `Escape` → close (same path as the close button).
+6. The polite live-region (`#feedback-live-polite`) announces `"Feedback panel opened"` (optional but recommended for long sheets). Do NOT double-announce; the dialog role alone is already enough on most ATs.
+
+### 5.3 Close lifecycle (close button, `Escape`, backdrop tap, Approve/Request-Changes submit)
+
+1. Remove the `aria-hidden="true"` + `inert` attributes from `<main>` and `<header>`.
+2. `FocusTrap`'s `returnFocusOnDeactivate` restores focus to the `FeedbackFloatingButton` automatically. Do NOT call `FAB.focus()` manually — it double-fires and can land on the wrong element if the DOM shifts between open and close (e.g., an item was added and the FAB index shifted).
+3. Flip the FAB's `aria-expanded` back to `"false"`.
+4. Unmount or hide the sheet.
+5. No live-region announcement on close — the focus return + visual transition communicates it.
+
+### 5.4 State matrix (what's true in each phase)
+
+| Phase | FAB `aria-expanded` | Sheet DOM | `<main>` inert | `<header>` inert | Focus |
+|---|---|---|---|---|---|
+| Idle (sheet closed) | `"false"` | absent or hidden | no | no | wherever it was |
+| Opening (animation frame 1-N) | `"true"` | present | yes | yes | FAB (about to shift) |
+| Open + interactive | `"true"` | present, focus-trapped | yes | yes | first tabbable inside sheet, then whatever user tabs to |
+| Closing (animation frame 1-N) | `"false"` | present | still yes (until unmount) | still yes | trapped until unmount |
+| Closed | `"false"` | absent or hidden | no | no | back on FAB (`returnFocusOnDeactivate`) |
+
+### 5.5 Escape-hatch cases
+
+- **Backdrop tap** (if the design grows one — v1 is full-viewport, so no backdrop): same close path as §5.3. Do not swallow the tap silently; always run the close lifecycle so `aria-expanded`, `inert`, and focus return all fire.
+- **Form submit from inside the sheet** (Approve / Request Changes): close the sheet *after* the decision completes, using the same §5.3 path. If the submit fails, keep the sheet open and surface the error in `#feedback-live-assertive`.
+- **Route change while sheet is open** (user navigates via keyboard shortcut — e.g. unit-12 `G H` home shortcut): the route handler **MUST** invoke the close lifecycle before navigation; otherwise `inert` + focus state leaks into the next page.
+- **Soft keyboard (mobile)**: when a textarea inside the sheet receives focus, the OS keyboard shrinks the viewport. The sheet's `max-height` must be in `dvh` (dynamic viewport height) to re-flow, not `vh`. Focus-trap is unaffected (it tracks DOM, not viewport).
+
+### 5.6 Verification
+
+- `grep -rEn 'aria-haspopup="dialog"' stages/design/artifacts/feedback-inline-mobile.html` → ≥ 1 match (on the FAB)
+- `grep -rEn 'aria-controls="feedback-sheet"' stages/design/artifacts/feedback-inline-mobile.html` → ≥ 1 match
+- `grep -rEn 'role="dialog" aria-modal="true" aria-labelledby=' stages/design/artifacts/feedback-inline-mobile.html` → ≥ 1 match
+- `grep -rEn 'focus-trap-react' stages/design/artifacts/` → ≥ 1 match (the implementation-contract reference — inline comment or sibling doc)
+- Manual VoiceOver test: Tab to FAB → announced as "Open feedback panel, N pending, button, pop-up dialog collapsed" → Enter opens → focus lands on the Agent-feedback switch → Shift+Tab stays inside the sheet → Escape closes → focus returns to FAB.
+
+## 5a. Origin legend component (closes FB-33)
 
 The `FeedbackOriginIcon` component has a dedicated legend/glossary, placed either:
 - In the sidebar header (`comments-list-with-agent-toggle.html` — small "?"-icon button opens a popover legend), OR
@@ -238,7 +230,7 @@ Every page-level artifact **MUST** include a skip link as the first focusable el
           focus-visible:z-[100] focus-visible:px-3 focus-visible:py-2
           focus-visible:bg-teal-600 focus-visible:text-white focus-visible:rounded-md
           focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2
-          dark:focus-visible:ring-offset-stone-900">
+          dark:focus-visible:ring-offset-gray-900">
   Skip to main content
 </a>
 ```

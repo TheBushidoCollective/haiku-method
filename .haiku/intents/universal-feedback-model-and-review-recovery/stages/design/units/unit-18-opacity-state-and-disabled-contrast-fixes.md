@@ -20,6 +20,7 @@ outputs:
   - stages/design/DESIGN-BRIEF.md
   - knowledge/DESIGN-TOKENS.md
   - stages/design/artifacts/contrast-and-type-audit.md
+  - stages/design/artifacts/annotation-popover-states.html
 quality_gates:
   - >-
     `grep -rEn 'opacity-70|opacity-50' stages/design/artifacts/ | grep -v
@@ -67,12 +68,16 @@ quality_gates:
     closed/rejected/pending/addressed background tokens.
 status: active
 bolt: 1
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T01:54:04Z'
-hat_started_at: '2026-04-20T01:54:04Z'
+hat_started_at: '2026-04-20T02:00:09Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:04Z'
+    completed_at: '2026-04-20T02:00:09Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T02:00:09Z'
     completed_at: null
     result: null
 ---

@@ -65,9 +65,9 @@ quality_gates:
     grid for every component without searching.
 status: active
 bolt: 2
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T05:08:33Z'
-hat_started_at: '2026-04-20T08:51:46Z'
+hat_started_at: '2026-04-20T08:54:39Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:33Z'
@@ -99,6 +99,10 @@ iterations:
       checkboxes so the hard gate passes on the next feedback-assessor pass.
   - hat: designer
     started_at: '2026-04-20T08:51:46Z'
+    completed_at: '2026-04-20T08:54:39Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T08:54:39Z'
     completed_at: null
     result: null
 ---

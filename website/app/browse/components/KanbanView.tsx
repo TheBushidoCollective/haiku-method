@@ -1,24 +1,35 @@
 "use client"
 
-import type { BrowseProvider, HaikuIntent, HaikuIntentDetail } from "@/lib/browse/types"
+import type {
+	BrowseProvider,
+	HaikuIntent,
+	HaikuIntentDetail,
+} from "@/lib/browse/types"
 import { formatDuration } from "@/lib/browse/types"
 
 function titleCase(s: string): string {
-	return s.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
+	return s
+		.split("-")
+		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+		.join(" ")
 }
 
 const statusColors: Record<string, string> = {
-	completed: "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950",
+	completed:
+		"border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950",
 	active: "border-teal-300 bg-teal-50 dark:border-teal-800 dark:bg-teal-950",
 	pending: "border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-900",
 	blocked: "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950",
 }
 
-const phaseColors: Record<string, string> = {
-	elaborate: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-	decompose: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400", // backward compat
+const _phaseColors: Record<string, string> = {
+	elaborate:
+		"bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+	decompose:
+		"bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400", // backward compat
 	execute: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
-	review: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+	review:
+		"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
 	persist: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
 	gate: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
 }
@@ -31,9 +42,16 @@ interface KanbanProps {
 
 // ── Portfolio Kanban: intents across stage columns ─────────────────────────
 
-export function PortfolioKanban({ provider, intents, onSelectIntent }: KanbanProps) {
+export function PortfolioKanban({
+	provider,
+	intents,
+	onSelectIntent,
+}: KanbanProps) {
 	// Group intents by studio, then build per-studio stage columns (swim lanes)
-	const studioMap = new Map<string, { stages: string[]; intents: HaikuIntent[] }>()
+	const studioMap = new Map<
+		string,
+		{ stages: string[]; intents: HaikuIntent[] }
+	>()
 
 	for (const intent of intents) {
 		const studio = intent.studio || "unknown"
@@ -67,13 +85,13 @@ export function PortfolioKanban({ provider, intents, onSelectIntent }: KanbanPro
 
 				for (const intent of studioIntents) {
 					if (intent.status === "completed") {
-						groups.get("Completed")!.push(intent)
+						groups.get("Completed")?.push(intent)
 					} else {
 						const stage = intent.activeStage || "Backlog"
 						if (groups.has(stage)) {
-							groups.get(stage)!.push(intent)
+							groups.get(stage)?.push(intent)
 						} else {
-							groups.get("Backlog")!.push(intent)
+							groups.get("Backlog")?.push(intent)
 						}
 					}
 				}
@@ -91,7 +109,10 @@ export function PortfolioKanban({ provider, intents, onSelectIntent }: KanbanPro
 							</span>
 						</div>
 						<div className="overflow-x-auto pb-4">
-							<div className="flex gap-4" style={{ minWidth: `${columns.length * 280}px` }}>
+							<div
+								className="flex gap-4"
+								style={{ minWidth: `${columns.length * 280}px` }}
+							>
 								{columns.map((stageName) => {
 									const items = groups.get(stageName) || []
 									return (
@@ -109,10 +130,17 @@ export function PortfolioKanban({ provider, intents, onSelectIntent }: KanbanPro
 													</span>
 												</div>
 											</div>
-											<div className="space-y-2 p-3" style={{ minHeight: "100px" }}>
+											<div
+												className="space-y-2 p-3"
+												style={{ minHeight: "100px" }}
+											>
 												{items.map((intent) => (
 													<button
-														key={intent.branch ? `${intent.branch}/${intent.slug}` : intent.slug}
+														key={
+															intent.branch
+																? `${intent.branch}/${intent.slug}`
+																: intent.slug
+														}
 														onClick={() => onSelectIntent?.(intent.slug)}
 														className={`w-full rounded-lg border p-3 text-left transition hover:shadow-sm ${statusColors[intent.status] || statusColors.pending}`}
 													>
@@ -126,26 +154,39 @@ export function PortfolioKanban({ provider, intents, onSelectIntent }: KanbanPro
 																</span>
 															)}
 														</div>
-														{intent.stagesTotal > 0 && intent.stagesComplete > 0 && (
-															<div className="mt-2">
-																<div className="flex items-center justify-between text-xs text-stone-400">
-																	<span>{intent.stagesComplete}/{intent.stagesTotal} stages</span>
-																	{intent.startedAt && (
-																		<span>{formatDuration(intent.startedAt, intent.completedAt)}</span>
-																	)}
+														{intent.stagesTotal > 0 &&
+															intent.stagesComplete > 0 && (
+																<div className="mt-2">
+																	<div className="flex items-center justify-between text-xs text-stone-400">
+																		<span>
+																			{intent.stagesComplete}/
+																			{intent.stagesTotal} stages
+																		</span>
+																		{intent.startedAt && (
+																			<span>
+																				{formatDuration(
+																					intent.startedAt,
+																					intent.completedAt,
+																				)}
+																			</span>
+																		)}
+																	</div>
+																	<div className="mt-1 h-1 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-700">
+																		<div
+																			className="h-full rounded-full bg-teal-500"
+																			style={{
+																				width: `${Math.max(0, (intent.stagesComplete / intent.stagesTotal) * 100)}%`,
+																			}}
+																		/>
+																	</div>
 																</div>
-																<div className="mt-1 h-1 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-700">
-																	<div
-																		className="h-full rounded-full bg-teal-500"
-																		style={{ width: `${Math.max(0, (intent.stagesComplete / intent.stagesTotal) * 100)}%` }}
-																	/>
-																</div>
-															</div>
-														)}
+															)}
 													</button>
 												))}
 												{items.length === 0 && (
-													<div className="py-4 text-center text-xs text-stone-400">No intents</div>
+													<div className="py-4 text-center text-xs text-stone-400">
+														No intents
+													</div>
 												)}
 											</div>
 										</div>
@@ -169,11 +210,29 @@ interface IntentKanbanProps {
 
 export function IntentKanban({ intent, onSelectUnit }: IntentKanbanProps) {
 	// Group units by status, not stage — units don't move between stages
-	const allUnits = intent.stages.flatMap(s => s.units.map(u => ({ ...u, stageName: s.name })))
-	const columns: Array<{ status: string; label: string; units: typeof allUnits }> = [
-		{ status: "pending", label: "Pending", units: allUnits.filter(u => u.status === "pending") },
-		{ status: "active", label: "Active", units: allUnits.filter(u => u.status === "active") },
-		{ status: "completed", label: "Completed", units: allUnits.filter(u => u.status === "completed") },
+	const allUnits = intent.stages.flatMap((s) =>
+		s.units.map((u) => ({ ...u, stageName: s.name })),
+	)
+	const columns: Array<{
+		status: string
+		label: string
+		units: typeof allUnits
+	}> = [
+		{
+			status: "pending",
+			label: "Pending",
+			units: allUnits.filter((u) => u.status === "pending"),
+		},
+		{
+			status: "active",
+			label: "Active",
+			units: allUnits.filter((u) => u.status === "active"),
+		},
+		{
+			status: "completed",
+			label: "Completed",
+			units: allUnits.filter((u) => u.status === "completed"),
+		},
 	]
 
 	return (
@@ -196,12 +255,14 @@ export function IntentKanban({ intent, onSelectUnit }: IntentKanbanProps) {
 						</div>
 						<div className="space-y-2 p-3" style={{ minHeight: "80px" }}>
 							{col.units.map((unit) => {
-								const checked = unit.criteria.filter(c => c.checked).length
+								const checked = unit.criteria.filter((c) => c.checked).length
 								const total = unit.criteria.length
 								return (
 									<button
 										key={`${unit.stageName}-${unit.name}`}
-										onClick={() => onSelectUnit?.({ name: unit.name, stage: unit.stageName })}
+										onClick={() =>
+											onSelectUnit?.({ name: unit.name, stage: unit.stageName })
+										}
 										className={`w-full rounded-lg border p-3 text-left transition hover:shadow-sm ${statusColors[unit.status] || statusColors.pending}`}
 									>
 										<div className="text-sm font-semibold text-stone-900 dark:text-stone-100 line-clamp-2">
@@ -217,9 +278,13 @@ export function IntentKanban({ intent, onSelectUnit }: IntentKanbanProps) {
 										{total > 0 && (
 											<div className="mt-2">
 												<div className="flex items-center justify-between text-xs text-stone-400">
-													<span>{checked}/{total}</span>
+													<span>
+														{checked}/{total}
+													</span>
 													{unit.startedAt && (
-														<span>{formatDuration(unit.startedAt, unit.completedAt)}</span>
+														<span>
+															{formatDuration(unit.startedAt, unit.completedAt)}
+														</span>
 													)}
 												</div>
 												<div className="mt-1 h-1 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-700">
@@ -234,7 +299,9 @@ export function IntentKanban({ intent, onSelectUnit }: IntentKanbanProps) {
 								)
 							})}
 							{col.units.length === 0 && (
-								<div className="py-4 text-center text-xs text-stone-400">No units</div>
+								<div className="py-4 text-center text-xs text-stone-400">
+									No units
+								</div>
 							)}
 						</div>
 					</div>

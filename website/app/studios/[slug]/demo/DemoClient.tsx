@@ -1,10 +1,10 @@
 "use client"
 
-import { useDemoEngine } from "@/lib/demo/engine"
-import type { DemoConfig } from "@/lib/demo/types"
 import { useCallback, useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { useDemoEngine } from "@/lib/demo/engine"
+import type { DemoConfig } from "@/lib/demo/types"
 
 interface Props {
 	config: DemoConfig
@@ -230,10 +230,24 @@ function ArtifactViewer({
 
 // ── Main Component ──
 
-export function DemoClient({ config: initialConfig, artifacts: initialArtifacts, examples, exampleConfigs, exampleArtifacts }: Props) {
-	const [activeExample, setActiveExample] = useState<string | null>(examples?.[0] ?? null)
-	const config = activeExample && exampleConfigs?.[activeExample] ? exampleConfigs[activeExample] : initialConfig
-	const artifacts = activeExample && exampleArtifacts?.[activeExample] !== undefined ? exampleArtifacts![activeExample] : initialArtifacts
+export function DemoClient({
+	config: initialConfig,
+	artifacts: initialArtifacts,
+	examples,
+	exampleConfigs,
+	exampleArtifacts,
+}: Props) {
+	const [activeExample, setActiveExample] = useState<string | null>(
+		examples?.[0] ?? null,
+	)
+	const config =
+		activeExample && exampleConfigs?.[activeExample]
+			? exampleConfigs[activeExample]
+			: initialConfig
+	const artifacts =
+		activeExample && exampleArtifacts?.[activeExample] !== undefined
+			? exampleArtifacts?.[activeExample]
+			: initialArtifacts
 
 	const {
 		state,
@@ -267,7 +281,7 @@ export function DemoClient({ config: initialConfig, artifacts: initialArtifacts,
 		if (terminalRef.current) {
 			terminalRef.current.scrollTop = terminalRef.current.scrollHeight
 		}
-	}, [state.messages.length, state.typing, state.fastForward])
+	}, [])
 
 	// Keyboard shortcuts
 	const handleKeyDown = useCallback(
@@ -327,7 +341,7 @@ export function DemoClient({ config: initialConfig, artifacts: initialArtifacts,
 	}, [handleKeyDown])
 
 	// Handle completion overlay trigger from __SHOW_COMPLETION__ system message
-	const isComplete =
+	const _isComplete =
 		state.messages.some((m) => m.text === "__SHOW_COMPLETION__") ||
 		state.completed
 
@@ -458,7 +472,10 @@ export function DemoClient({ config: initialConfig, artifacts: initialArtifacts,
 						>
 							{examples.map((name) => (
 								<option key={name} value={name}>
-									{name.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
+									{name
+										.split("-")
+										.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+										.join(" ")}
 								</option>
 							))}
 						</select>

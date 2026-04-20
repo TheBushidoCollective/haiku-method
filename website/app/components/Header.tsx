@@ -1,11 +1,11 @@
 "use client"
 
-import { navigation, primaryNavItems } from "@/lib/navigation"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ThemeToggle } from "./ThemeToggle"
+import { navigation, primaryNavItems } from "@/lib/navigation"
 import { BottomNav, MegaMenu, MobileNav } from "./navigation"
+import { ThemeToggle } from "./ThemeToggle"
 
 export function Header() {
 	const pathname = usePathname()
@@ -72,7 +72,7 @@ export function Header() {
 		)
 	}
 
-	const isActiveCategory = (category: (typeof navigation)[0]) => {
+	const _isActiveCategory = (category: (typeof navigation)[0]) => {
 		// Check if any section item matches the current path
 		return category.sections.some((section) =>
 			section.items.some(

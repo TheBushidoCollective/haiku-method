@@ -1,5 +1,5 @@
-import { footerNavigation } from "@/lib/navigation"
 import Link from "next/link"
+import { footerNavigation } from "@/lib/navigation"
 
 export function Footer() {
 	const columns = [
@@ -24,15 +24,37 @@ export function Footer() {
 						</p>
 						<div className="mt-5 space-y-3">
 							<div>
-								<span className="text-[10px] text-stone-400 dark:text-stone-500 lowercase">born at</span>
-								<a href="https://thebushido.co" target="_blank" rel="noopener noreferrer" className="mt-0.5 block">
-									<img src="/images/born-at.svg" alt="The Bushido Collective" className="h-[20px] brightness-0 opacity-40 dark:invert dark:opacity-50 hover:opacity-70 transition-opacity" />
+								<span className="text-[10px] text-stone-400 dark:text-stone-500 lowercase">
+									born at
+								</span>
+								<a
+									href="https://thebushido.co"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="mt-0.5 block"
+								>
+									<img
+										src="/images/born-at.svg"
+										alt="The Bushido Collective"
+										className="h-[20px] brightness-0 opacity-40 dark:invert dark:opacity-50 hover:opacity-70 transition-opacity"
+									/>
 								</a>
 							</div>
 							<div>
-								<span className="text-[10px] text-stone-400 dark:text-stone-500 lowercase tracking-wide">maintained by</span>
-								<a href="https://gigsmart.com" target="_blank" rel="noopener noreferrer" className="mt-0.5 block">
-									<img src="/images/battle-tested-at.svg" alt="GigSmart" className="h-[16px] brightness-0 opacity-40 dark:invert dark:opacity-50 hover:opacity-70 transition-opacity" />
+								<span className="text-[10px] text-stone-400 dark:text-stone-500 lowercase tracking-wide">
+									maintained by
+								</span>
+								<a
+									href="https://gigsmart.com"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="mt-0.5 block"
+								>
+									<img
+										src="/images/battle-tested-at.svg"
+										alt="GigSmart"
+										className="h-[16px] brightness-0 opacity-40 dark:invert dark:opacity-50 hover:opacity-70 transition-opacity"
+									/>
 								</a>
 							</div>
 						</div>
@@ -87,16 +109,34 @@ export function Footer() {
 				{/* Bottom section */}
 				<div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-stone-200 pt-8 dark:border-stone-800 md:flex-row">
 					<p className="text-sm text-stone-500 dark:text-stone-400">
-						&copy; {new Date().getFullYear()} GigSmart, Inc. Apache 2.0
-						License.
+						&copy; {new Date().getFullYear()} GigSmart, Inc. Apache 2.0 License.
 						{" · "}
-						<Link href="/privacy" className="hover:text-stone-900 dark:hover:text-white">Privacy</Link>
+						<Link
+							href="/privacy"
+							className="hover:text-stone-900 dark:hover:text-white"
+						>
+							Privacy
+						</Link>
 						{" · "}
-						<Link href="/terms" className="hover:text-stone-900 dark:hover:text-white">Terms</Link>
+						<Link
+							href="/terms"
+							className="hover:text-stone-900 dark:hover:text-white"
+						>
+							Terms
+						</Link>
 					</p>
-					<a href="https://claude.ai" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 transition-colors">
+					<a
+						href="https://claude.ai"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="flex items-center gap-1.5 text-sm text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 transition-colors"
+					>
 						<span>Powered by</span>
-						<img src="/images/claude-logo.svg" alt="Claude" className="h-[14px] brightness-0 opacity-50 dark:invert dark:opacity-60" />
+						<img
+							src="/images/claude-logo.svg"
+							alt="Claude"
+							className="h-[14px] brightness-0 opacity-50 dark:invert dark:opacity-60"
+						/>
 					</a>
 				</div>
 			</div>

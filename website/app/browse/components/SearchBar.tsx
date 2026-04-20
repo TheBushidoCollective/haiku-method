@@ -1,9 +1,9 @@
 "use client"
 
-import type { SearchDocument } from "@/lib/browse/search"
-import { extractSnippet, highlightMatches } from "@/lib/browse/search"
 import type MiniSearch from "minisearch"
 import { useCallback, useEffect, useRef, useState } from "react"
+import type { SearchDocument } from "@/lib/browse/search"
+import { extractSnippet, highlightMatches } from "@/lib/browse/search"
 
 interface SearchResult {
 	id: string
@@ -49,7 +49,13 @@ const typeBadgeColors: Record<string, string> = {
 	asset: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
 }
 
-export function SearchBar({ index, onSelect, query, onQueryChange, placeholder }: Props) {
+export function SearchBar({
+	index,
+	onSelect,
+	query,
+	onQueryChange,
+	placeholder,
+}: Props) {
 	const [results, setResults] = useState<SearchResult[]>([])
 	const [isOpen, setIsOpen] = useState(false)
 	const [activeIndex, setActiveIndex] = useState(-1)

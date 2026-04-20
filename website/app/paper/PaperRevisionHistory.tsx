@@ -13,7 +13,7 @@ function sectionToAnchor(section: string): string {
 		.trim()
 		.replace(/[^\p{L}\p{N}\s-]/gu, "")
 		.replace(/\s+/g, "-")
-		// Note: Do NOT collapse multiple hyphens - github-slugger preserves them
+	// Note: Do NOT collapse multiple hyphens - github-slugger preserves them
 }
 
 function SectionLink({

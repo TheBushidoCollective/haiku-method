@@ -2,26 +2,30 @@ import matter from "gray-matter"
 
 // Re-export shared types from @haiku/shared
 export type {
-	HaikuIntent,
-	HaikuUnit,
-	HaikuStageState,
-	HaikuAsset,
-	HaikuArtifact,
-	HaikuKnowledgeFile,
-	HaikuIntentDetail,
 	CriterionItem,
+	HaikuArtifact,
+	HaikuAsset,
+	HaikuIntent,
+	HaikuIntentDetail,
+	HaikuKnowledgeFile,
+	HaikuStageState,
+	HaikuUnit,
 } from "@haiku/shared"
 
 // Re-export shared utilities from @haiku/shared
-export { formatDuration, formatDate, titleCase } from "@haiku/shared"
+export { formatDate, formatDuration, titleCase } from "@haiku/shared"
 
 // Website-specific types and utilities remain here
 
 export interface BrowseProvider {
 	/** List all intents in the workspace. If onProgress is provided, call it as each intent loads. */
-	listIntents(onProgress?: (intent: import("@haiku/shared").HaikuIntent) => void): Promise<import("@haiku/shared").HaikuIntent[]>
+	listIntents(
+		onProgress?: (intent: import("@haiku/shared").HaikuIntent) => void,
+	): Promise<import("@haiku/shared").HaikuIntent[]>
 	/** Get full intent detail including stages, units, knowledge */
-	getIntent(slug: string): Promise<import("@haiku/shared").HaikuIntentDetail | null>
+	getIntent(
+		slug: string,
+	): Promise<import("@haiku/shared").HaikuIntentDetail | null>
 	/** Read a raw file from the workspace */
 	readFile(path: string): Promise<string | null>
 	/** List files matching a pattern in a directory */
@@ -38,13 +42,23 @@ export interface BrowseProvider {
 	clearBranchCache?(): void
 }
 
-export function parseFrontmatter(raw: string): { data: Record<string, unknown>; content: string } {
+export function parseFrontmatter(raw: string): {
+	data: Record<string, unknown>
+	content: string
+} {
 	const parsed = matter(raw)
-	return { data: parsed.data as Record<string, unknown>, content: parsed.content.trim() }
+	return {
+		data: parsed.data as Record<string, unknown>,
+		content: parsed.content.trim(),
+	}
 }
 
 /** Parse a unit's frontmatter + content into a HaikuUnit */
-export function parseUnit(unitFile: string, stageName: string, raw: string): import("@haiku/shared").HaikuUnit {
+export function parseUnit(
+	unitFile: string,
+	stageName: string,
+	raw: string,
+): import("@haiku/shared").HaikuUnit {
 	const { data, content } = parseFrontmatter(raw)
 	return {
 		name: unitFile.replace(".md", ""),
@@ -63,7 +77,9 @@ export function parseUnit(unitFile: string, stageName: string, raw: string): imp
 	}
 }
 
-export function parseCriteria(content: string): Array<{ text: string; checked: boolean }> {
+export function parseCriteria(
+	content: string,
+): Array<{ text: string; checked: boolean }> {
 	const criteria: Array<{ text: string; checked: boolean }> = []
 	for (const line of content.split("\n")) {
 		const match = line.match(/^-\s*\[([ xX])\]\s*(.+)$/)
@@ -80,7 +96,12 @@ export function parseCriteria(content: string): Array<{ text: string; checked: b
 /** Normalize status and compute stagesComplete. Handles "complete" vs "completed".
  *  The status field is the source of truth — completed_at is just a timestamp and
  *  does not override an explicit non-complete status (e.g., a reopened intent). */
-export function normalizeIntentStatus(status: string, _completedAt: string | null, stagesComplete: number, stagesTotal: number): { status: string; stagesComplete: number } {
+export function normalizeIntentStatus(
+	status: string,
+	_completedAt: string | null,
+	stagesComplete: number,
+	stagesTotal: number,
+): { status: string; stagesComplete: number } {
 	const isComplete = status === "completed" || status === "complete"
 	return {
 		status: isComplete ? "completed" : status,

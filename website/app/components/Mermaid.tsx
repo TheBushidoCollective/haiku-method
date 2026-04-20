@@ -2,8 +2,8 @@
 
 import mermaid from "mermaid"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { canRenderAsFlow } from "./mermaid-flow/detect"
 import { MermaidFlow } from "./MermaidFlow"
+import { canRenderAsFlow } from "./mermaid-flow/detect"
 
 interface MermaidProps {
 	chart: string
@@ -96,7 +96,14 @@ function darkenColorForDarkMode(hexColor: string): string {
 
 export function Mermaid({ chart, height }: MermaidProps) {
 	const isFlow = useMemo(() => canRenderAsFlow(chart), [chart])
-	if (isFlow) return <MermaidFlow chart={chart} height={height} fallback={<MermaidSvg chart={chart} />} />
+	if (isFlow)
+		return (
+			<MermaidFlow
+				chart={chart}
+				height={height}
+				fallback={<MermaidSvg chart={chart} />}
+			/>
+		)
 	return <MermaidSvg chart={chart} />
 }
 

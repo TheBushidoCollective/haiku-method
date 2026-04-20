@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
+import { useState } from "react"
 
 export default function BrowseError({
 	error,
@@ -36,7 +36,13 @@ export default function BrowseError({
 					<ul className="list-inside list-disc space-y-1">
 						<li>Your authentication token is valid and not expired</li>
 						<li>The repository URL is correct and accessible</li>
-						<li>The repository contains a <code className="rounded bg-stone-100 px-1 py-0.5 text-xs dark:bg-stone-800">.haiku/</code> directory</li>
+						<li>
+							The repository contains a{" "}
+							<code className="rounded bg-stone-100 px-1 py-0.5 text-xs dark:bg-stone-800">
+								.haiku/
+							</code>{" "}
+							directory
+						</li>
 					</ul>
 				</div>
 

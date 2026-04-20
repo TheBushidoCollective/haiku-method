@@ -1,7 +1,12 @@
 "use client"
 
-import { createSearchIndex } from "@/lib/browse/search"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import type { SearchDocument } from "@/lib/browse/search"
+import { createSearchIndex } from "@/lib/browse/search"
 import {
 	type CachedDocument,
 	cacheDocuments,
@@ -17,17 +22,12 @@ import type {
 	HaikuIntentDetail,
 } from "@/lib/browse/types"
 import { formatDate, formatDuration } from "@/lib/browse/types"
-import { buildBrowseUrl } from "@/lib/browse/url"
 import type { BrowseLocation } from "@/lib/browse/url"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
+import { buildBrowseUrl } from "@/lib/browse/url"
 import { IntentDetailView } from "./IntentDetailView"
 import { PortfolioKanban } from "./KanbanView"
-import { SearchBar } from "./SearchBar"
 import type { SearchSelection } from "./SearchBar"
+import { SearchBar } from "./SearchBar"
 
 interface Props {
 	provider: BrowseProvider
@@ -63,7 +63,8 @@ const statusColors: Record<string, string> = {
 
 const prStatusColors: Record<string, string> = {
 	open: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-	merged: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+	merged:
+		"bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
 	closed: "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400",
 }
 
@@ -79,7 +80,7 @@ export function PortfolioView({
 		useState<HaikuIntentDetail | null>(null)
 	const [loading, setLoading] = useState(true)
 	const [loadingMore, setLoadingMore] = useState(false)
-	const [loadingDetail, setLoadingDetail] = useState(false)
+	const [_loadingDetail, setLoadingDetail] = useState(false)
 	const [viewMode, setViewMode] = useState<"list" | "board">(
 		location?.view === "board" ? "board" : "list",
 	)
@@ -239,15 +240,20 @@ export function PortfolioView({
 		if (location?.intent) {
 			// Load the deeplinked intent right away — don't wait for the full list
 			setLoadingDetail(true)
-			provider.getIntent(location.intent).then((detail) => {
-				setSelectedIntent(detail)
-				if (detail) indexIntentDetail(detail)
-				setLoadingDetail(false)
-			}).catch((e) => {
-				console.error("[haiku-browse] Failed to load deeplinked intent:", e)
-				setIntentError(`Failed to load intent "${location.intent}": ${(e as Error).message}`)
-				setLoadingDetail(false)
-			})
+			provider
+				.getIntent(location.intent)
+				.then((detail) => {
+					setSelectedIntent(detail)
+					if (detail) indexIntentDetail(detail)
+					setLoadingDetail(false)
+				})
+				.catch((e) => {
+					console.error("[haiku-browse] Failed to load deeplinked intent:", e)
+					setIntentError(
+						`Failed to load intent "${location.intent}": ${(e as Error).message}`,
+					)
+					setLoadingDetail(false)
+				})
 		}
 	}, [provider, location?.intent, indexIntentDetail])
 
@@ -321,7 +327,9 @@ export function PortfolioView({
 			}
 		}
 		load()
-		return () => { cancelled = true }
+		return () => {
+			cancelled = true
+		}
 	}, [provider, addToIndex, listDeferred])
 
 	// Background deep indexing — fetch all intent details for unit search
@@ -442,10 +450,14 @@ export function PortfolioView({
 
 		const poll = async () => {
 			// Skip polling when tab is hidden
-			if (typeof document !== "undefined" && document.visibilityState === "hidden") return
+			if (
+				typeof document !== "undefined" &&
+				document.visibilityState === "hidden"
+			)
+				return
 
 			try {
-				const changed = await provider.checkForBranchChanges!()
+				const changed = await provider.checkForBranchChanges?.()
 				setLastPolled(new Date())
 				if (changed) {
 					// Clear caches and re-fetch
@@ -735,8 +747,8 @@ export function PortfolioView({
 							</>
 						) : (
 							<>
-								This workspace has no <code>.haiku/intents/</code> directory,
-								or it's empty.
+								This workspace has no <code>.haiku/intents/</code> directory, or
+								it's empty.
 							</>
 						)}
 					</p>
@@ -752,13 +764,25 @@ export function PortfolioView({
 					{[...visibleIntents]
 						.sort((a, b) => {
 							// Chronological, newest first by created date
-							const da = a.createdAt ? new Date(a.createdAt).getTime() : a.startedAt ? new Date(a.startedAt).getTime() : 0
-							const db = b.createdAt ? new Date(b.createdAt).getTime() : b.startedAt ? new Date(b.startedAt).getTime() : 0
+							const da = a.createdAt
+								? new Date(a.createdAt).getTime()
+								: a.startedAt
+									? new Date(a.startedAt).getTime()
+									: 0
+							const db = b.createdAt
+								? new Date(b.createdAt).getTime()
+								: b.startedAt
+									? new Date(b.startedAt).getTime()
+									: 0
 							return db - da
 						})
 						.map((intent) => (
 							<Link
-								key={intent.branch ? `${intent.branch}/${intent.slug}` : intent.slug}
+								key={
+									intent.branch
+										? `${intent.branch}/${intent.slug}`
+										: intent.slug
+								}
 								href={browseUrl({ intent: intent.slug })}
 								onClick={(e) => {
 									e.preventDefault()
@@ -769,7 +793,9 @@ export function PortfolioView({
 								<div className="flex items-center justify-between">
 									<div>
 										<div className="flex items-center gap-3">
-											<h2 className={`text-lg font-bold text-stone-900 dark:text-stone-100 ${intent.archived ? "line-through decoration-stone-400" : ""}`}>
+											<h2
+												className={`text-lg font-bold text-stone-900 dark:text-stone-100 ${intent.archived ? "line-through decoration-stone-400" : ""}`}
+											>
 												{intent.title}
 											</h2>
 											<span
@@ -792,10 +818,20 @@ export function PortfolioView({
 													onClick={(e) => e.stopPropagation()}
 													className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium hover:opacity-80 ${prStatusColors[intent.prStatus] || prStatusColors.open}`}
 												>
-													<svg className="h-3 w-3" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={2}>
+													<svg
+														className="h-3 w-3"
+														fill="none"
+														viewBox="0 0 16 16"
+														stroke="currentColor"
+														strokeWidth={2}
+													>
 														<path d="M5 5.5v5m6-5v5M5 3a2 2 0 100-4 2 2 0 000 4zm6 0a2 2 0 100-4 2 2 0 000 4zM5 14.5a2 2 0 100-4 2 2 0 000 4z" />
 													</svg>
-													{provider.name === "GitLab" ? "MR" : "PR"} {intent.prNumber ? `${provider.name === "GitLab" ? "!" : "#"}${intent.prNumber}` : ""} {intent.prStatus}
+													{provider.name === "GitLab" ? "MR" : "PR"}{" "}
+													{intent.prNumber
+														? `${provider.name === "GitLab" ? "!" : "#"}${intent.prNumber}`
+														: ""}{" "}
+													{intent.prStatus}
 												</a>
 											)}
 										</div>
@@ -821,7 +857,10 @@ export function PortfolioView({
 												</strong>
 											</span>
 											{intent.branch && (
-												<span className="font-mono text-xs text-stone-400 dark:text-stone-500" title={intent.branch}>
+												<span
+													className="font-mono text-xs text-stone-400 dark:text-stone-500"
+													title={intent.branch}
+												>
 													{intent.branch}
 												</span>
 											)}
@@ -885,7 +924,10 @@ export function PortfolioView({
 function PortfolioKnowledge({
 	files,
 	provider,
-}: { files: string[]; provider: BrowseProvider }) {
+}: {
+	files: string[]
+	provider: BrowseProvider
+}) {
 	const [expanded, setExpanded] = useState(false)
 
 	return (
@@ -932,7 +974,10 @@ function PortfolioKnowledge({
 function PortfolioKnowledgeFile({
 	file,
 	provider,
-}: { file: string; provider: BrowseProvider }) {
+}: {
+	file: string
+	provider: BrowseProvider
+}) {
 	const [content, setContent] = useState<string | null>(null)
 	const [expanded, setExpanded] = useState(false)
 

@@ -25,13 +25,7 @@ if (!existsSync(tailwindBin)) {
 // Run Tailwind v4 CLI (no -c flag — config lives in input.css via @theme/@source).
 execFileSync(
 	tailwindBin,
-	[
-		"-i",
-		join(root, "src/templates/input.css"),
-		"-o",
-		cssFile,
-		"--minify",
-	],
+	["-i", join(root, "src/templates/input.css"), "-o", cssFile, "--minify"],
 	{ stdio: ["ignore", "ignore", "inherit"] },
 )
 

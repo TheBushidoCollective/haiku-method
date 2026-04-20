@@ -478,7 +478,7 @@ function generatePaperRevisions(filePath: string): PaperRevisions | null {
 		}
 
 		if (commits.length === 0) {
-			console.log(`  No valid commits found in manifest`)
+			console.log("  No valid commits found in manifest")
 			return null
 		}
 
@@ -497,10 +497,7 @@ function generatePaperRevisions(filePath: string): PaperRevisions | null {
 			if (newContent === null) continue
 
 			const { stats } = computeDiff(oldContent || "", newContent)
-			const sectionChanges = computeSectionChanges(
-				oldContent || "",
-				newContent,
-			)
+			const sectionChanges = computeSectionChanges(oldContent || "", newContent)
 
 			// Only include revisions with actual changes
 			if (stats.linesAdded > 0 || stats.linesRemoved > 0) {

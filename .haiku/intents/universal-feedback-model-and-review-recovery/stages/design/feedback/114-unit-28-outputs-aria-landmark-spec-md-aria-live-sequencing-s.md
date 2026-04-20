@@ -2,7 +2,7 @@
 title: >-
   unit-28 outputs aria-landmark-spec.md + aria-live-sequencing-spec.md but does
   not list them as inputs
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:30:29Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-28-canonical-token-normalization-sweep.md
-closed_by: null
+closed_by: unit-28-canonical-token-normalization-sweep
 bolt: 0
 upstream_stage: null
 ---

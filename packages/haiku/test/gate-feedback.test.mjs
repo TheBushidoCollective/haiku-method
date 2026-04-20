@@ -338,6 +338,68 @@ try {
 		assert.strictEqual(state.visits, 1)
 	})
 
+	test("escalation leaves stage phase unchanged (does not pre-flip to elaborate)", () => {
+		// Regression: the feedback_revisit path used to flip gateState.phase
+		// to "elaborate" and write it to disk BEFORE calling maybeEscalate.
+		// When escalation fired (iteration cap exceeded), the stage state
+		// had already been mutated to elaborate — and a follow-up
+		// haiku_revisit call with no `stage` arg would then read phase
+		// ="elaborate" and route through revisitEarlierStage, silently
+		// jumping active_stage back to the previous stage. The fix: only
+		// flip phase AFTER the escalation check passes. On escalation, the
+		// stage remains in its original phase so the subsequent revisit
+		// correctly stays on the current stage.
+		const { projDir, intentDirPath, slug } = createProject(
+			"gate-fb-escalation-phase",
+			{
+				active_stage: "plan",
+				stageConfig: { plan: { review: "auto" } },
+			},
+		)
+		// Seed a state that already sits at the iteration cap so the next
+		// feedback check triggers escalation rather than revisit.
+		createStageState(intentDirPath, "plan", {
+			phase: "gate",
+			visits: 2,
+			iterations: [
+				{
+					index: 1,
+					trigger: "initial",
+					started_at: "2026-04-20T17:00:00Z",
+					completed_at: "2026-04-20T17:01:00Z",
+					result: "feedback-revisit",
+				},
+				{
+					index: 2,
+					trigger: "feedback",
+					started_at: "2026-04-20T17:01:00Z",
+					completed_at: "2026-04-20T17:02:00Z",
+					result: "feedback-revisit",
+					reason: "1 pending feedback item(s)",
+				},
+			],
+		})
+		createFeedbackFile(intentDirPath, slug, "plan", "Still pending")
+
+		process.chdir(projDir)
+		const result = runNext(slug)
+
+		assert.strictEqual(
+			result.action,
+			"escalate",
+			`Expected escalate at iteration cap, got: ${result.action}`,
+		)
+
+		// The phase must NOT have been pre-flipped to elaborate. Otherwise
+		// a follow-up haiku_revisit would jump back to a prior stage.
+		const state = readJson(join(intentDirPath, "stages", "plan", "state.json"))
+		assert.strictEqual(
+			state.phase,
+			"gate",
+			`Stage phase must stay "gate" on escalation so a follow-up haiku_revisit targets the current stage, got: ${state.phase}`,
+		)
+	})
+
 	test("missing feedback directory treated as zero pending", () => {
 		const { projDir, intentDirPath, slug } = createProject("gate-fb-no-dir", {
 			active_stage: "plan",
@@ -586,6 +648,48 @@ try {
 			!result.isError ||
 				!result.content[0].text.includes("Cannot read properties"),
 			`Unexpected crash: ${result.content[0].text}`,
+		)
+	})
+
+	await test("revisit from elaborate phase requires explicit stage", async () => {
+		// Regression: when the current stage's phase was already "elaborate"
+		// and the caller omitted `stage`, revisit() used to silently jump to
+		// the previous stage. That caused active_stage to flip backwards in
+		// every escalate→revisit flow (the feedback_revisit path had already
+		// pre-flipped phase to elaborate before escalating, so the follow-up
+		// revisit read the lie and rode it back to inception). Now the
+		// handler refuses to infer — the caller MUST pass `stage` to
+		// disambiguate.
+		const { projDir, intentDirPath, slug } = createProject(
+			"revisit-elab-ambiguous",
+			{
+				active_stage: "plan",
+				stages: ["design", "plan", "build"],
+			},
+		)
+		// Pre-populate prior stage so the "first stage" branch isn't what
+		// we're exercising.
+		createStageState(intentDirPath, "design", {
+			status: "completed",
+			phase: "gate",
+		})
+		createStageState(intentDirPath, "plan", {
+			phase: "elaborate",
+			visits: 1,
+		})
+		process.chdir(projDir)
+
+		const result = await handleOrchestratorTool("haiku_revisit", {
+			intent: slug,
+			reasons: [{ title: "ambiguous", body: "no stage passed" }],
+		})
+
+		assert.ok(result.isError || !!result.content[0].text.match(/error/i))
+		const msg = result.content[0].text
+		assert.ok(
+			msg.includes("already in the elaborate phase") ||
+				msg.includes("Pass `stage`"),
+			`Expected explicit-stage error, got: ${msg}`,
 		)
 	})
 

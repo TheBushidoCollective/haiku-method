@@ -3063,17 +3063,16 @@ export function runNext(slug: string): OrchestratorAction {
 			}
 
 			// ── Route 3: legacy feedback_revisit (no fix_hats) ────────────
+			//
+			// Iteration accounting must run BEFORE any FSM state writes so the
+			// escalation check sees the real iteration count. If we're about
+			// to escalate, leave the stage phase as-is (gate/review) — a
+			// follow-up haiku_revisit call will then correctly route through
+			// revisitCurrentStage (phase != elaborate ⇒ same-stage revisit)
+			// instead of falling into the "already in elaborate, jump to
+			// previous stage" branch, which was silently flipping active_stage
+			// back to the previous stage on every escalation.
 			const statePath = stageStatePath(slug, currentStage)
-			const gateState = readJson(statePath)
-			gateState.phase = "elaborate"
-			// Reset pre-review state so post-execute revisits re-audit the
-			// (potentially edited) unit specs before re-entering execute.
-			gateState.pre_review_dispatched = false
-			gateState.pre_review_dispatched_at = null
-			gateState.pre_review_skipped_no_agents = false
-			gateState.pre_review_reviewers_acknowledged = false
-			gateState.pre_review_reviewers_acknowledged_at = null
-			writeJson(statePath, gateState)
 			const iterResult = appendStageIteration(
 				slug,
 				currentStage,
@@ -3083,9 +3082,6 @@ export function runNext(slug: string): OrchestratorAction {
 					feedbackTitles: pendingItems.map((i) => i.title),
 				},
 				"feedback-revisit",
-			)
-			gitCommitState(
-				`haiku: feedback_revisit in ${currentStage} (${pendingCount} pending, iteration ${iterResult.count})`,
 			)
 			emitTelemetry("haiku.gate.feedback_revisit", {
 				intent: slug,
@@ -3103,7 +3099,28 @@ export function runNext(slug: string): OrchestratorAction {
 					title: i.title,
 				})),
 			)
-			if (escalation) return escalation
+			if (escalation) {
+				gitCommitState(
+					`haiku: feedback_revisit escalated in ${currentStage} (${pendingCount} pending, iteration ${iterResult.count})`,
+				)
+				return escalation
+			}
+
+			// Escalation check passed — commit the phase flip so the revisit
+			// actually re-enters elaborate with pre-review state reset.
+			const gateState = readJson(statePath)
+			gateState.phase = "elaborate"
+			// Reset pre-review state so post-execute revisits re-audit the
+			// (potentially edited) unit specs before re-entering execute.
+			gateState.pre_review_dispatched = false
+			gateState.pre_review_dispatched_at = null
+			gateState.pre_review_skipped_no_agents = false
+			gateState.pre_review_reviewers_acknowledged = false
+			gateState.pre_review_reviewers_acknowledged_at = null
+			writeJson(statePath, gateState)
+			gitCommitState(
+				`haiku: feedback_revisit in ${currentStage} (${pendingCount} pending, iteration ${iterResult.count})`,
+			)
 			return {
 				action: "feedback_revisit",
 				intent: slug,
@@ -3648,8 +3665,8 @@ function revisit(slug: string, requestedStage?: string): OrchestratorAction {
 		)
 	}
 
-	// No stage specified — infer target from current position
-	// If in execute/review/gate → revisit elaborate in current stage
+	// No stage specified — infer target from current position.
+	// If in execute/review/gate → revisit elaborate in the current stage.
 	const path = stageStatePath(slug, currentActiveStage)
 	const stageState = readJson(path)
 	const currentPhase = (stageState.phase as string) || "elaborate"
@@ -3658,22 +3675,22 @@ function revisit(slug: string, requestedStage?: string): OrchestratorAction {
 		return revisitCurrentStage(slug, iDir, intentFile, currentActiveStage)
 	}
 
-	// Already in elaborate → revisit previous stage
+	// Already in elaborate — the target is ambiguous. Silently falling back
+	// to "previous stage" has historically caused active_stage to jump
+	// backwards unexpectedly (e.g. after a feedback_revisit escalation that
+	// pre-flipped phase to elaborate). Force the caller to be explicit
+	// about which stage they want to revisit.
 	if (currentIdx <= 0) {
 		return {
 			action: "error",
-			message: `Already at the first stage ('${currentActiveStage}') — cannot revisit further back`,
+			message: `Stage '${currentActiveStage}' is already in the elaborate phase and is the first stage — there is no earlier stage to revisit. If you intend to re-elaborate '${currentActiveStage}', pass \`stage: "${currentActiveStage}"\` explicitly.`,
 		}
 	}
-
-	const targetStage = studioStages[currentIdx - 1]
-	return revisitEarlierStage(
-		slug,
-		iDir,
-		intentFile,
-		currentActiveStage,
-		targetStage,
-	)
+	const prevStage = studioStages[currentIdx - 1]
+	return {
+		action: "error",
+		message: `Stage '${currentActiveStage}' is already in the elaborate phase — \`haiku_revisit\` cannot infer whether you want to re-elaborate '${currentActiveStage}' or jump back to '${prevStage}'. Pass \`stage\` explicitly (\`stage: "${currentActiveStage}"\` to re-elaborate the current stage, \`stage: "${prevStage}"\` to revisit the prior one).`,
+	}
 }
 
 function uncompleteIntent(slug: string, intentFile: string): void {

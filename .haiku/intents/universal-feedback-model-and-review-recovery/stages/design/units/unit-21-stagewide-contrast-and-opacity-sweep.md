@@ -20,6 +20,8 @@ outputs:
   - stages/design/artifacts/agent-feedback-toggle-spec.html
   - stages/design/artifacts/keyboard-shortcut-map.html
   - stages/design/artifacts/contrast-and-type-audit.md
+  - stages/design/artifacts/revisit-modal-states.html
+  - stages/design/artifacts/revisit-unit-list.html
 quality_gates:
   - >-
     `annotation-popover-states.html:394` no longer carries `opacity-50` on the
@@ -71,12 +73,16 @@ quality_gates:
     loop in each unit's post-sweep note).
 status: active
 bolt: 1
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T05:08:18Z'
-hat_started_at: '2026-04-20T05:08:18Z'
+hat_started_at: '2026-04-20T05:18:30Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:18Z'
+    completed_at: '2026-04-20T05:18:30Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T05:18:30Z'
     completed_at: null
     result: null
 ---

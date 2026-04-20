@@ -2,7 +2,7 @@
 title: >-
   unit-28 FB-96 grep exclusion list misses stages/design/units/unit-27 where new
   §2 specs will reference FeedbackSheet
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:32:20Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-28-canonical-token-normalization-sweep.md
-closed_by: null
+closed_by: unit-28-canonical-token-normalization-sweep
 bolt: 0
 upstream_stage: null
 ---

@@ -48,9 +48,9 @@ quality_gates:
       .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/aria-landmark-spec.md
 status: active
 bolt: 1
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T19:39:06Z'
-hat_started_at: '2026-04-20T19:45:20Z'
+hat_started_at: '2026-04-20T19:48:29Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T19:39:06Z'
@@ -58,6 +58,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T19:45:20Z'
+    completed_at: '2026-04-20T19:48:29Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T19:48:29Z'
     completed_at: null
     result: null
 ---

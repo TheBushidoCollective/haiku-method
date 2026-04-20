@@ -2,7 +2,7 @@
 title: >-
   Assessor summary card never applies role=status aria-live=polite to the actual
   card root (FB-35 gate not landed)
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:55:23Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-19-component-a11y-fixes
 ---
 
 **WCAG 4.1.3 Status Messages (AA):** status changes must be announced by AT without focus. Unit-13's gate required `role="status" aria-live="polite"` on the assessor-summary-card root so screen readers pick up "pass clean" / "3 pending" when the assessor finishes.

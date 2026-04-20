@@ -2,7 +2,7 @@
 title: >-
   Mobile bottom sheet missing dialog semantics + focus trap — FB-22 unit-13 gate
   not landed on HEAD
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:53:08Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-19-component-a11y-fixes
 ---
 
 **WCAG 4.1.2 Name, Role, Value (A)** and **ARIA-1.2 dialog pattern** require `role="dialog" aria-modal="true" aria-labelledby` on modal containers, with main-page content marked `inert` + `aria-hidden="true"` while the dialog is open, and focus returned to the opener on close.

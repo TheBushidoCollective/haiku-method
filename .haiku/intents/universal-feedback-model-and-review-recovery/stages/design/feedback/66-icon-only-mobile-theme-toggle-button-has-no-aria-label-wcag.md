@@ -2,7 +2,7 @@
 title: >-
   Icon-only mobile theme-toggle button has no aria-label — WCAG 4.1.2 Name,
   Role, Value fail
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:56:55Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-19-component-a11y-fixes
 ---
 
 **WCAG 4.1.2 Name, Role, Value (A):** every interactive element must expose an accessible name. Icon-only buttons (emoji/SVG/glyph content) need `aria-label` or visually-hidden text.

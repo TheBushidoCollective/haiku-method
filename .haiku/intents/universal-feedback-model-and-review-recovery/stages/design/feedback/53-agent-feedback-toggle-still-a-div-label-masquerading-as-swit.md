@@ -2,7 +2,7 @@
 title: >-
   Agent-feedback toggle still a div-label masquerading as switch — no
   role=switch, no 44px target (FB-32 regression)
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:53:27Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-19-component-a11y-fixes
 ---
 
 **WCAG 4.1.2 (A):** toggle must expose role/state/value. **WCAG 2.5.5 (AAA) / 2.5.8 (AA):** touch targets ≥ 44×44 on mobile / ≥ 24×24 on desktop. Unit-13's gate required replacing the `<label>` + styled `<span>` in `comments-list-with-agent-toggle.html:65-76` with `<button role="switch" aria-checked …>` (or checkbox+peer-checked pattern), native keyboard (Space/Enter) toggle, `focus-visible:ring-2 focus-visible:ring-teal-500`, and a 44px touch hit area.

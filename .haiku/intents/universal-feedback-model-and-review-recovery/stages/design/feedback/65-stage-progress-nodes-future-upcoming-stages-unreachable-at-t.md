@@ -2,7 +2,7 @@
 title: >-
   Stage progress nodes: future/upcoming stages unreachable at tabindex=-1 with
   no alternative path — keyboard a11y gap
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:56:34Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-19-component-a11y-fixes
 ---
 
 **WCAG 2.1.1 Keyboard (A):** all interactive functionality operable via keyboard. `state-coverage-grid.md §Stage progress strip` rows document that "Future, never visited" stages are `tabindex="-1"`, with `aria-disabled="true"` and not in Tab order. Paired with the focus-order-spec Tab order walking `inception → design → product → development`, the user on the `design` stage cannot Tab to `product` or `development` to read their tooltip ("Upcoming").

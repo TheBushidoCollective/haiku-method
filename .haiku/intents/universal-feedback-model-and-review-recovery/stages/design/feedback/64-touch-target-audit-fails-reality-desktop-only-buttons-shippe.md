@@ -2,7 +2,7 @@
 title: >-
   Touch-target audit fails reality: desktop-only buttons shipped on mobile
   viewport still &lt; 44px
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:56:14Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-19-component-a11y-fixes
 ---
 
 **WCAG 2.2 SC 2.5.8 Target Size (Minimum, AA)** and **2.5.5 (AAA)** — touch-activated controls need ≥ 44×44 on mobile. `touch-target-audit.md` claims every surface passes, with a few marked `desktop-ok` on the argument that on mobile they "inherit `.touch-target` or equivalent `py-2.5` padding."

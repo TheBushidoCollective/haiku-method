@@ -2,7 +2,7 @@
 title: >-
   Status conveyed by color alone on mobile filter pills and group headers — WCAG
   1.4.1 fail
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:55:01Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-19-component-a11y-fixes
 ---
 
 **WCAG 1.4.1 Use of Color (A):** information must not be conveyed by color alone. Unit-11's fix gate required "Status is conveyed by AT LEAST TWO signals (color + shape OR color + text prefix)" and `state-signaling-inventory.html` listing the second signal per status.

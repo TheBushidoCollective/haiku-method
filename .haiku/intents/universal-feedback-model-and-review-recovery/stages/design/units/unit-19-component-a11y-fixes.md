@@ -104,7 +104,7 @@ quality_gates:
     z-index/positioning verified not to overlap the focus ring on the first
     stage.
   - "Mobile theme-toggle button has `aria-label` describing the action (\"Switch to light theme\" / \"Switch to dark theme\" — dynamic based on current state). Applies to: feedback-inline-mobile.html, comment-to-feedback-flow.html, any other mobile artifact with an icon-only theme toggle. `grep -rEn '<button[^>]*>\\s*<svg|<button [^>]*\U0001F319|<button[^>]*☀' stages/design/artifacts/` — every match has `aria-label` on the button element."
-status: active
+status: completed
 bolt: 1
 hat: feedback-assessor
 started_at: '2026-04-20T01:54:06Z'
@@ -120,8 +120,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T02:12:44Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T02:21:59Z'
+    result: advance
+completed_at: '2026-04-20T02:21:59Z'
 ---
 # Component-level a11y fixes
 
@@ -195,13 +196,13 @@ target" → verify both are now present).
 
 ## Completion criteria
 
-- [ ] All 8 quality_gates pass
-- [ ] aria-landmark-spec.md §5 documents MobileFeedbackPanel dialog lifecycle
-- [ ] agent-feedback-toggle-spec.html renders canonical switch implementation
-- [ ] state-coverage-grid.md has rows for all DESIGN-BRIEF §2 components
-- [ ] touch-target-audit.md correctly interprets WCAG 2.5.8 and lists
+- [x] All 8 quality_gates pass
+- [x] aria-landmark-spec.md §5 documents MobileFeedbackPanel dialog lifecycle
+- [x] agent-feedback-toggle-spec.html renders canonical switch implementation
+- [x] state-coverage-grid.md has rows for all DESIGN-BRIEF §2 components
+- [x] touch-target-audit.md correctly interprets WCAG 2.5.8 and lists
       measured dimensions for every mobile-viewport control
-- [ ] aria-live-sequencing-spec.md §3 updated for AssessorSummaryCard
-- [ ] stage-progress-strip keyboard arrow-navigation contract documented
+- [x] aria-live-sequencing-spec.md §3 updated for AssessorSummaryCard
+- [x] stage-progress-strip keyboard arrow-navigation contract documented
       (inline or sibling spec file)
-- [ ] Every FB item listed in `closes:` verified by feedback-assessor
+- [x] Every FB item listed in `closes:` verified by feedback-assessor

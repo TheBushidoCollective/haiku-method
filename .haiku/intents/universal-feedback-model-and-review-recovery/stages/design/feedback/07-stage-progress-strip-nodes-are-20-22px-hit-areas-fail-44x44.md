@@ -2,7 +2,7 @@
 title: >-
   Stage-progress-strip nodes are 20-22px hit areas — fail 44x44 touch-target
   floor on mobile
-status: fixing
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T20:19:36Z'
 iteration: 0
 visit: 0
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-07:bolt-1'
 bolt: 1
 upstream_stage: null
 ---

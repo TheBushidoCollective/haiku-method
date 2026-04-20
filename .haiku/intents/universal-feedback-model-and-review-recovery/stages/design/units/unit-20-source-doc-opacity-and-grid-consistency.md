@@ -64,10 +64,10 @@ quality_gates:
     a design-reviewer walking §2 top-to-bottom can find the corresponding state
     grid for every component without searching.
 status: active
-bolt: 3
-hat: feedback-assessor
+bolt: 4
+hat: designer
 started_at: '2026-04-20T05:08:33Z'
-hat_started_at: '2026-04-20T09:02:29Z'
+hat_started_at: '2026-04-20T09:04:35Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:33Z'
@@ -141,6 +141,32 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T09:02:29Z'
+    completed_at: '2026-04-20T09:04:35Z'
+    result: reject
+    reason: >-
+      FB-70 and FB-75 are factually closed in the worktree artifacts —
+      DESIGN-BRIEF.md §7 CSS block (lines 882-930) has zero `opacity: 0.7/0.5`
+      and zero raw hex (uses `var(--color-blue-400)`, `var(--color-green-400)`,
+      `var(--color-stone-500)`, `var(--color-teal-600)`); hex hits at lines
+      774-781 are in §2 contrast-audit prose, explicitly excluded by gate 2.
+      state-coverage-grid.md §7.1–§7.12 covers every §2 component
+      (FeedbackStatusBadge 4-status × 2-theme, FeedbackOriginIcon six origins,
+      FeedbackList/FeedbackSheet/FeedbackSummaryBar/AgentFeedbackToggle full
+      six-state + empty/loading/error with inline `— (N/A: rationale)`);
+      DESIGN-BRIEF §2 cross-ref index at lines 121-136 plus inline pointers at
+      175/218/252/307/347/366. However, `haiku_unit_advance_hat` reports 6
+      unchecked completion-criteria boxes — the worktree copy of the unit file
+      has `[x]` on all 6, but the repo-root copy at
+      `.haiku/intents/.../units/unit-20-*.md` still has `[ ]` on all 6 (lines
+      190-197). Designer ticked the boxes in the worktree but the harness
+      validates against the root path, so the hard gate still blocks. Prior hat
+      must tick the 6 checkboxes at the root path
+      (`.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/units/unit-20-source-doc-opacity-and-grid-consistency.md`
+      lines 190-197) — not just the worktree copy — so advance_hat passes on the
+      next feedback-assessor pass. The FB-70 / FB-75 artifact fixes themselves
+      are sound and do not need re-work.
+  - hat: designer
+    started_at: '2026-04-20T09:04:35Z'
     completed_at: null
     result: null
 ---

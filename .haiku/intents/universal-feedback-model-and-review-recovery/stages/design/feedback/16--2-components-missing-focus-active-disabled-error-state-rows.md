@@ -2,7 +2,7 @@
 title: >-
   §2 components missing focus/active/disabled/error state rows — hard fails the
   six-state grid rule
-status: fixing
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T20:21:55Z'
 iteration: 0
 visit: 0
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-16:bolt-1'
 bolt: 1
 upstream_stage: null
 ---

@@ -2,7 +2,7 @@
 title: >-
   Origin badge quick-copy renders origin slug, not canonical visible label —
   breaks labeling consistency
-status: fixing
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T20:20:40Z'
 iteration: 0
 visit: 0
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-13:bolt-1'
 bolt: 1
 upstream_stage: null
 ---

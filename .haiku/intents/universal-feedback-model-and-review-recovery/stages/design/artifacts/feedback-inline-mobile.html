@@ -77,6 +77,37 @@
       min-height: 44px;
       min-width: 44px;
     }
+
+    /* ==========================================================================
+       Reduced-motion guard — closes FB-143, reinforces FB-86 + FB-20 (WCAG 2.3.3 AAA / 2.2.2 A)
+       --------------------------------------------------------------------------
+       Canonical stage-wide pattern landed by unit-25-stagewide-reduced-motion-guards
+       (see motion-and-reduced-motion-spec.md §Cross-file policy). Belt-and-suspenders:
+
+         1. Global 0.01ms override keeps essential state-conveying transitions
+            (sheet-enter → final position, aria-expanded flip, aria-checked flip)
+            intact — the final frame still paints, so SR + visual users see state.
+         2. Per-component `animation: none` on the FAB pulse because the pulse
+            is decorative; the amber badge count is the alternate "unread > 0"
+            signal per motion-and-reduced-motion-spec.md §Audit table row
+            `feedback-inline-mobile.html:31-34`.
+         3. `scroll-behavior: auto` disables smooth scroll on reduced-motion —
+            tab-strip horizontal scroll and feedback-list scroll jump instantly.
+
+       Vestibular-disorder users (migraines, Ménière's, concussion recovery)
+       report nausea / dizziness from unguarded motion. The FAB pulse was the
+       single most-called-out vestibular trigger in the spec. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      .feedback-fab-pulse,
+      .animate-pulse,
+      [class*="feedback-pulse"] { animation: none !important; }
+    }
   </style>
 </head>
 <body class="dark bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 min-h-screen" style="max-width: 375px; margin: 0 auto;">

@@ -19,6 +19,7 @@ outputs:
   - stages/design/artifacts/feedback-inline-desktop.html
   - stages/design/artifacts/feedback-inline-mobile.html
   - stages/design/artifacts/focus-order-spec.md
+  - stages/design/artifacts/unit-24-design-review.md
 quality_gates:
   - >-
     `feedback-card-states.html` contains the canonical two-region live-region
@@ -71,9 +72,9 @@ quality_gates:
     future designers from repeating the static-tabindex-only pattern.
 status: active
 bolt: 1
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T05:08:28Z'
-hat_started_at: '2026-04-20T05:15:02Z'
+hat_started_at: '2026-04-20T05:18:08Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:28Z'
@@ -81,6 +82,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T05:15:02Z'
+    completed_at: '2026-04-20T05:18:08Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T05:18:08Z'
     completed_at: null
     result: null
 ---

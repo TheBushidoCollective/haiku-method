@@ -16,6 +16,7 @@ outputs:
   - stages/design/artifacts/assessor-summary-card.html
   - stages/design/artifacts/stage-progress-strip.html
   - stages/design/artifacts/focus-ring-spec.html
+  - stages/design/artifacts/unit-23-design-review.md
 quality_gates:
   - >-
     Every interactive `<button>` in `assessor-summary-card.html` (at minimum:
@@ -64,9 +65,9 @@ quality_gates:
     final audit count is reported in the design-reviewer's verification note.
 status: active
 bolt: 1
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T05:08:26Z'
-hat_started_at: '2026-04-20T05:14:44Z'
+hat_started_at: '2026-04-20T05:18:56Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:26Z'
@@ -74,6 +75,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T05:14:44Z'
+    completed_at: '2026-04-20T05:18:56Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T05:18:56Z'
     completed_at: null
     result: null
 ---

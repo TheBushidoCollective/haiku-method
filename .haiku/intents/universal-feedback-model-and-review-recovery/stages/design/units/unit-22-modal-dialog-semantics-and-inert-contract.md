@@ -19,6 +19,7 @@ outputs:
   - stages/design/artifacts/aria-landmark-spec.md
   - stages/design/artifacts/unit-22-review-notes.md
   - stages/design/artifacts/unit-22-review-bolt-3.md
+  - stages/design/artifacts/unit-22-review-bolt-4.md
 quality_gates:
   - >-
     Every modal-shell `<div>` in `revisit-modal-states.html` (compact default,
@@ -66,9 +67,9 @@ quality_gates:
     checks so the pattern is enforced stage-wide, not only at this unit's close.
 status: active
 bolt: 4
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T05:08:23Z'
-hat_started_at: '2026-04-20T09:13:44Z'
+hat_started_at: '2026-04-20T09:15:45Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:23Z'
@@ -156,6 +157,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T09:13:44Z'
+    completed_at: '2026-04-20T09:15:45Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T09:15:45Z'
     completed_at: null
     result: null
 ---

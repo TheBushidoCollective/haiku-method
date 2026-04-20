@@ -2,7 +2,7 @@
 title: >-
   unit-27 AssessorSummaryCard §2 spec Props ignore FB-106 dark-mode contrast
   fixes landing in unit-31
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:33:12Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-27-spec-alignment-and-design-brief-completeness.md
-closed_by: null
+closed_by: unit-27-spec-alignment-and-design-brief-completeness
 bolt: 0
 upstream_stage: null
 ---

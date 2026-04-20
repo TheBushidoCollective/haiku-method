@@ -2,7 +2,7 @@
 title: >-
   Unit-16 FB-38 regression: `gray-*` tokens still in stage-progress-strip.html
   (13 occurrences)
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:26:26Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: null
+closed_by: unit-28-canonical-token-normalization-sweep
 ---
 
 Unit-16 gate 1 (FB-38) requires every `gray-*` Tailwind class to be replaced with its `stone-*` equivalent at the same shade number. Gate command: `grep -rn 'gray-' stages/design/artifacts/ | wc -l` MUST return 0. SPA artifacts use stone; server-rendered templates use gray, but design artifacts target the SPA.

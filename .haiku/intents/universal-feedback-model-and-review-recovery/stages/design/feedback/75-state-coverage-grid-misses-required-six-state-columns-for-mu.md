@@ -2,7 +2,7 @@
 title: >-
   State coverage grid misses required six-state columns for multiple components
   mandated by DESIGN-BRIEF §2
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T02:57:06Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-20-source-doc-opacity-and-grid-consistency
 ---
 
 `DESIGN-BRIEF.md §2 Component Inventory` (lines 115-117) makes state coverage non-negotiable for every new component in this intent:

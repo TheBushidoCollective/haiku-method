@@ -2,7 +2,7 @@
 title: >-
   DESIGN-BRIEF §7 CSS block ships opacity: 0.7 / 0.5 that the same doc
   explicitly bans in §2
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T02:56:04Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-20-source-doc-opacity-and-grid-consistency
 ---
 
 `DESIGN-BRIEF.md` is internally contradictory about full-card opacity on closed/rejected feedback items. The document bans the pattern and then ships the banned pattern 20 sections later.

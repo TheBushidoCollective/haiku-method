@@ -63,7 +63,7 @@ quality_gates:
     inline "see state-coverage-grid.md §X" pointers on each component spec — so
     a design-reviewer walking §2 top-to-bottom can find the corresponding state
     grid for every component without searching.
-status: active
+status: completed
 bolt: 5
 hat: feedback-assessor
 started_at: '2026-04-20T05:08:33Z'
@@ -189,10 +189,10 @@ iterations:
       (`.haiku/worktrees/.../unit-20.../.haiku/intents/.../units/unit-20-....md`
       lines 148–178) — the canonical main-tree copy at
       `.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/units/unit-20-source-doc-opacity-and-grid-consistency.md`
-      lines 224–231 still carries 6 empty-checkbox entries. The next designer bolt must
-      tick the six checkboxes in the MAIN-TREE unit-spec file (not just the
-      worktree copy) so the harness gate probe sees them checked. The artifacts
-      themselves need no further changes.
+      lines 224–231 still carries 6 empty-checkbox entries. The next designer
+      bolt must tick the six checkboxes in the MAIN-TREE unit-spec file (not
+      just the worktree copy) so the harness gate probe sees them checked. The
+      artifacts themselves need no further changes.
   - hat: designer
     started_at: '2026-04-20T09:09:50Z'
     completed_at: '2026-04-20T09:10:48Z'
@@ -203,8 +203,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T09:12:45Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T09:21:29Z'
+    result: advance
+completed_at: '2026-04-20T09:21:29Z'
 ---
 # Source-doc consistency — §7 CSS strip + state-coverage completeness
 

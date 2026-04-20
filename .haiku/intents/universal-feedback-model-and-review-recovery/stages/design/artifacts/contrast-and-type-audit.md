@@ -641,3 +641,138 @@ scope callout at the top of §2 is now explicit: every
 subset. Prior-unit grep loops (unit-11, unit-17, unit-18 post-sweep
 notes) should be read through this widened lens — the `.html` glob
 covers artifacts introduced after those units ran.
+
+### 6.5 Unit-21 bolt-2 remediation (design-reviewer REJECT follow-through, 2026-04-20)
+
+Bolt 1 of unit-21 only swept 4 files (annotation-popover, agent-feedback-
+toggle, keyboard-shortcut-map, plus partial revisit-modal-states and
+revisit-unit-list). The §6.4 prose committed to a "stage-wide" sweep but
+the §6.2 QG1-extended / QG3 rows claimed repo-wide `0 hits` and `0
+violations` that were actually false. The design-reviewer's bolt-1
+review (`unit-21-design-review.md`) flagged B1–B5 as blockers. Bolt-2
+remediation:
+
+**B1 — `<button ... disabled>` without `aria-disabled="true"` (4 sites).**
+
+| Artifact · line | Before | After |
+|---|---|---|
+| review-ui-mockup.html:136 — Operations stage-strip button | `disabled aria-label="Operations…"` without `aria-disabled` | added `aria-disabled="true"`; dropped `opacity-60` from the class list (muted styling now carried by the existing full-opacity `text-stone-600 dark:text-stone-400` + `border-stone-300 dark:border-stone-600` ring) |
+| review-ui-mockup.html:153 — Security stage-strip button | same pattern | same fix |
+| review-ui-mockup.html:856 — "Add feedback above to enable" (non-current-stage disabled Request Changes) | `<button disabled class="bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-500 cursor-not-allowed">` (no `aria-disabled`, banned dark:text-stone-500 pair) | `<button disabled aria-disabled="true" class="bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-400 dark:border-stone-500 cursor-not-allowed">` — canonical secondary-disabled token pair per DESIGN-TOKENS.md §1.7. Text 6.85:1 / 10.2:1; border 3.4:1 / 3.2:1. |
+| review-ui-mockup.html:849 — "Approve (no-op outside gate)" (gate-inactive state) | `bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-500 cursor-not-allowed` (JS literal, applied dynamically) | `bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-400 dark:border-stone-500 cursor-not-allowed` + dynamic `disabled aria-disabled="true"` attributes injected when `gateActive === false`. Canonical secondary-disabled pair. |
+| revisit-modal-states.html:461 — submitting-state "Revisiting…" | `<button aria-busy="true" disabled class="…">` without `aria-disabled` | `<button aria-busy="true" disabled aria-disabled="true" class="…">` — a11y contract satisfied (busy + disabled + aria-disabled all present). |
+
+Post-fix Python walker over all `stages/design/artifacts/*.html` → 0
+violations.
+
+**B2 — stage-wide `dark:text-stone-500` sweep (ban from DESIGN-TOKENS.md §1.1a).**
+
+`dark:text-stone-500` on `bg-stone-950` renders at 2.36:1 (fails WCAG
+1.4.3 body-text AA). Bolt-1 only remediated 3 files. Bolt-2 swept the
+pattern across every `.html` under `stages/design/artifacts/`:
+
+| Artifact | pre-bolt-2 count | post-bolt-2 count |
+|---|---|---|
+| review-context-header.html | 19 | 0 |
+| review-ui-mockup.html | 26 | 0 |
+| revisit-modal-states.html | 21 | 0 |
+| revisit-unit-list.html | 15 | 0 |
+| stage-progress-strip.html | 11 | 0 |
+| skip-link-spec.html | 5 | 0 |
+| review-package-structure.html | 4 | 0 |
+| comment-to-feedback-flow.html | 2 | 0 |
+| focus-ring-spec.html | 1 | 0 |
+
+Transformation rule applied: `dark:text-stone-500` → `dark:text-stone-300`
+(AAA on any dark card surface). Where the class string had a bare
+`text-stone-500` with no `dark:` partner, the promotion was `text-stone-500`
+→ `text-stone-600 dark:text-stone-300` so the light-mode ratio lifts from
+4.61:1 (AA floor) to 7.02:1 (AAA) at the same time. Inline JS string
+literals that render identical class strings were included in the sweep
+(review-ui-mockup.html has several template literals building sidebar
+markup).
+
+Post-fix: `grep -rEn 'dark:text-stone-500' stages/design/artifacts/*.html`
+→ 0 hits.
+
+**B3 — `opacity-60` on text-carrying card/button roots.**
+
+Bolt 1 left 4 classes of offenders in place despite §6.2's QG1-extended
+row claiming otherwise. Bolt-2 remediation:
+
+| Site | Pre-bolt-2 | Post-bolt-2 |
+|---|---|---|
+| review-ui-mockup.html:136, 153 — Operations / Security stage-strip buttons | `opacity-60 cursor-not-allowed` on a text-carrying button root | `cursor-not-allowed` alone; `opacity-60` dropped. Muted semantics carried by the existing text-stone-600 (light) and border-stone-300 (light) / border-stone-600 (dark) tokens at full opacity. `aria-disabled="true"` added (see B1). |
+| review-ui-mockup.html:790 — closed/rejected feedback-card JS literal | `const dim = (f.status === 'closed' \|\| f.status === 'rejected') ? 'opacity-60' : ''` applied to `.fb-card` root | replaced with status-aware muted-bg tokens: `bg-green-50/60 dark:bg-green-950/25` (closed) / `bg-stone-100 dark:bg-stone-800/50` (rejected) — matches `feedback-card-states.html` and DESIGN-TOKENS.md §2.3. The template's hardcoded `bg-white dark:bg-stone-900` was replaced with a `${cardBg}` substitution that picks the status-aware value. Text stays full-opacity (7.05:1 / 11.6:1 closed; 6.99:1 / 11.8:1 rejected). |
+| revisit-unit-list.html:247–319 — 7 rendered "Completed unit" locked cards | `opacity-60 transition-opacity` on card root + `text-stone-700 dark:text-stone-400` h3 title + `text-stone-600 dark:text-stone-600` lock glyph + stylesheet `.locked-card:focus-visible { opacity: 0.95 }` + `.locked-card:hover { opacity: 0.8 }` | card root replaced with `bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4 outline-none`; h3 title lifted to `text-stone-600 dark:text-stone-300` (7.02:1 / 11.6:1 AAA); lock glyph lifted to `text-stone-600 dark:text-stone-300`; stylesheet `:focus-visible` / `:hover` opacity rules removed and replaced with a surface-lift hover (`bg-stone-100 dark:bg-stone-900/80`). Teal focus ring unchanged. |
+| revisit-unit-list.html:345, 393 — State-coverage reference tiles | 4 tiles demonstrated `opacity-60` / `opacity: 0.8` / `opacity: 0.95` / `opacity-60` on the card root — the reference section literally canonicalized the banned pattern | section rewritten to show the non-opacity treatment: Default (muted surface + dashed border) / Hover (surface lifts to `bg-stone-100`) / Focus (teal 2px ring on muted surface) / Semantic-disabled (`aria-disabled="true"` + `read-only` pill). All tiles render at full text opacity on `bg-stone-50 dark:bg-stone-900/60`. Preamble `<p>` rewritten to describe the muted-surface treatment — no opacity language. |
+| comment-to-feedback-flow.html:966 — collapsed card preview | `border-l-[3px] border-l-amber-400 p-2 rounded-lg bg-amber-950/20 border border-stone-700 opacity-60` with `text-xs text-stone-300` child | `opacity-60` stripped from the wrapper. Text stays full-opacity. Inline HTML comment documents the bolt-2 fix. |
+
+After bolt-2, `grep -rEn 'opacity-60' stages/design/artifacts/*.html`
+returns 5 total matches, all classified as prose/comment documentation
+or decorative demo-only overlays (crosshair cursor ring + placeholder
+bars in `comment-to-feedback-flow.html`). Each decorative overlay
+carries an inline `<!-- demo-only: … -->` HTML comment so retention is
+unambiguous to future reviewers. **Zero text-carrying card or button
+roots retain opacity-60.**
+
+**B4 — audit prose synchronized with actual artifact state.** This §6.5
+section is the resync. §6.2's QG1-extended and QG3 rows described an
+aspirational post-state that had not shipped. §6.4 Bolt-4 / §6.3 Bolt-5
+prose listed remediations (review-ui-mockup stage-strip buttons, closed/
+rejected JS literal, revisit-unit-list locked cards) that were never
+applied. Bolt-2 executed those remediations and records the real post-
+fix state here. Going forward, **§6.5 is the authoritative current
+state**; §6.2 / §6.3 / §6.4 prose describes the design intent and the
+bolt-by-bolt history but should be read as a narrative — §6.5's table is
+the matching evidence.
+
+**B5 — `revisit-unit-list.html` lock glyph `dark:text-stone-600` contrast
+failure.** The 🔒 lock glyph on the 7 rendered locked cards (L253, 265,
+277, 289, 301, 313, 325) and the 4 state-coverage reference tiles (L351,
+367, 383, 400) previously paired `text-stone-500 dark:text-stone-600` —
+the dark pair renders at ~3.25:1 on `bg-stone-900`, below AA body-text
+4.5:1 and below the AAA 7:1 target. Bolt-2 lifted every lock glyph to
+`text-stone-600 dark:text-stone-300` (7.02:1 / 11.6:1 — AAA both modes).
+Combined with the B3 removal of `opacity-60` on the parent cards, the
+composite contrast is now at full-opacity AAA.
+
+### 6.5.1 Post-bolt-2 verification (repo-wide, every `stages/design/artifacts/*.html`)
+
+```bash
+# QG1 — opacity-50|70 excluding prose/demo/modal overlays
+grep -rEn 'opacity-(50|70)' stages/design/artifacts/*.html \
+  | grep -v 'backdrop-blur\|black/50\|modal-overlay'
+# → 0 hits
+
+# QG1-extended — opacity-60 is classified, 0 on text-carrying roots
+grep -rEn 'opacity-60' stages/design/artifacts/*.html
+# → 5 matches, all prose/comment or decorative demo-only overlays (crosshair ring + placeholder bars in comment-to-feedback-flow.html)
+
+# QG2 — banned disabled patterns
+grep -rEn 'bg-stone-200 text-stone-500|disabled:opacity-50' stages/design/artifacts/*.html
+# → 0 hits
+
+# QG3 — every <button ... disabled> carries aria-disabled="true"
+python3 -c "import re,glob; t=0
+for f in sorted(glob.glob('stages/design/artifacts/*.html')):
+    text=open(f).read()
+    for o in re.findall(r'<button\\b[^>]*>', text, re.DOTALL):
+        if re.search(r'(?<![-\\w:])\\bdisabled\\b(?!:)(?![-\\w])', o) and 'aria-disabled' not in o:
+            t+=1
+print('violations',t)"
+# → violations 0
+
+# B2 — no dark:text-stone-500 anywhere
+grep -rEn 'dark:text-stone-500' stages/design/artifacts/*.html
+# → 0 hits
+
+# Type-scale floor
+grep -rEn 'text-\[9px\]|text-\[10px\]' stages/design/artifacts/*.html
+# → 0 hits
+```
+
+All six bolt-2 quality gates return the expected values. The audit is
+now fully synchronized with the actual rendered artifact state — §6.5
+replaces the aspirational §6.2 / §6.3 / §6.4 claims that bolt-1 drafts
+shipped before the remediations landed.

@@ -32,7 +32,7 @@
       <div>
         <p class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300">Design Spec · unit-06</p>
         <h1 class="text-xl font-semibold text-stone-900 dark:text-stone-100">Revisit confirmation modal</h1>
-        <p class="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-2xl">
+        <p class="text-xs text-stone-600 dark:text-stone-300 mt-1 max-w-2xl">
           Destructive-action confirmation before <code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono text-xs">haiku_revisit</code> fires. Approve stays single-click (reversible by next gate); Request Changes always routes through this modal.
         </p>
       </div>
@@ -84,7 +84,7 @@
     <section id="anatomy" class="space-y-4">
       <div>
         <h2 class="text-base font-semibold text-stone-900 dark:text-stone-100">Anatomy</h2>
-        <p class="text-sm text-stone-500 dark:text-stone-400 mt-1">Information hierarchy top-to-bottom: <em>target → downstream impact → new feedback preview → open feedback in scope → footer actions</em>. Numbered labels map to the spec IA in the unit definition.</p>
+        <p class="text-sm text-stone-600 dark:text-stone-300 mt-1">Information hierarchy top-to-bottom: <em>target → downstream impact → new feedback preview → open feedback in scope → footer actions</em>. Numbered labels map to the spec IA in the unit definition.</p>
       </div>
 
       <div class="relative grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px] gap-6">
@@ -126,7 +126,7 @@
                   <span class="px-2 py-0.5 rounded-full text-xs font-semibold border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300">Security</span>
                   <span class="px-2 py-0.5 rounded-full text-xs font-semibold border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300">Delivery</span>
                 </div>
-                <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">These will be re-elaborated from the corrected upstream artifact.</p>
+                <p class="text-xs text-stone-600 dark:text-stone-300 mt-1">These will be re-elaborated from the corrected upstream artifact.</p>
               </section>
 
               <!-- (3) New feedback preview -->
@@ -139,7 +139,7 @@
                   </div>
                   <p class="text-xs text-stone-800 dark:text-stone-200 leading-snug">Acceptance criteria miss the mobile breakpoint for annotation pins.</p>
                 </div>
-                <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Will be saved to <span class="font-mono">Product</span> and marked pending.</p>
+                <p class="text-xs text-stone-600 dark:text-stone-300 mt-1">Will be saved to <span class="font-mono">Product</span> and marked pending.</p>
               </section>
 
               <!-- (4) Open feedback in scope -->
@@ -207,7 +207,7 @@
         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-widest bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Variant A</span>
         <h2 class="text-base font-semibold text-stone-900 dark:text-stone-100">Gate-invoked (primary path)</h2>
       </div>
-      <p class="text-sm text-stone-500 dark:text-stone-400 max-w-3xl">FSM is paused at a review gate. Reviewer clicked Request Changes. <code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono text-xs">earliestUnaddressedStage()</code> returns a real stage — it becomes the target.</p>
+      <p class="text-sm text-stone-600 dark:text-stone-300 max-w-3xl">FSM is paused at a review gate. Reviewer clicked Request Changes. <code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono text-xs">earliestUnaddressedStage()</code> returns a real stage — it becomes the target.</p>
 
       <div class="rounded-xl bg-stone-900/80 dark:bg-black/60 p-8 flex items-start justify-center">
         <div role="dialog" aria-modal="true" aria-labelledby="revisit-modal-title-variant-a" class="w-full max-w-md bg-white dark:bg-stone-900 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 overflow-hidden">
@@ -234,7 +234,7 @@
                 <span class="px-2 py-0.5 rounded-full text-xs font-semibold border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300">Security</span>
                 <span class="px-2 py-0.5 rounded-full text-xs font-semibold border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300">Delivery</span>
               </div>
-              <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">These will be re-elaborated from the corrected upstream artifact.</p>
+              <p class="text-xs text-stone-600 dark:text-stone-300 mt-1">These will be re-elaborated from the corrected upstream artifact.</p>
             </section>
             <section>
               <p class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-1">Open feedback in scope (2)</p>
@@ -257,7 +257,7 @@
         </div>
       </div>
 
-      <details class="text-xs text-stone-500 dark:text-stone-400">
+      <details class="text-xs text-stone-600 dark:text-stone-300">
         <summary class="cursor-pointer font-semibold text-stone-700 dark:text-stone-300">Variant A notes</summary>
         <ul class="mt-2 space-y-1 list-disc pl-5">
           <li>Confirm label echoes the target stage and downstream count — the reviewer never clicks confirm blind.</li>
@@ -275,7 +275,7 @@
         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-widest bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300">Variant B</span>
         <h2 class="text-base font-semibold text-stone-900 dark:text-stone-100">User-opened (no active gate)</h2>
       </div>
-      <p class="text-sm text-stone-500 dark:text-stone-400 max-w-3xl">
+      <p class="text-sm text-stone-600 dark:text-stone-300 max-w-3xl">
         Reviewer opened the review app mid-session with nothing structurally paused. If no feedback is pending anywhere, the target falls back to the currently viewed stage. The label is explicit so there's no surprise.
       </p>
 
@@ -309,7 +309,7 @@
                 <span class="px-2 py-0.5 rounded-full text-xs font-semibold border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300">Security</span>
                 <span class="px-2 py-0.5 rounded-full text-xs font-semibold border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300">Delivery</span>
               </div>
-              <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">These will be re-elaborated from the corrected upstream artifact.</p>
+              <p class="text-xs text-stone-600 dark:text-stone-300 mt-1">These will be re-elaborated from the corrected upstream artifact.</p>
             </section>
             <!-- No "open feedback in scope" section when list is empty — suppressed, not shown as empty. -->
           </div>
@@ -320,7 +320,7 @@
         </div>
       </div>
 
-      <details class="text-xs text-stone-500 dark:text-stone-400">
+      <details class="text-xs text-stone-600 dark:text-stone-300">
         <summary class="cursor-pointer font-semibold text-stone-700 dark:text-stone-300">Variant B notes</summary>
         <ul class="mt-2 space-y-1 list-disc pl-5">
           <li>Chip in header flips to "no active gate" and uses neutral stone styling — not warning amber.</li>
@@ -339,7 +339,7 @@
         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-widest bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300">Variant C</span>
         <h2 class="text-base font-semibold text-stone-900 dark:text-stone-100">With typed feedback in the textarea</h2>
       </div>
-      <p class="text-sm text-stone-500 dark:text-stone-400 max-w-3xl">Reviewer typed free-form feedback into the sidebar textarea before clicking Request Changes. The preview card surfaces exactly how it will be stored.</p>
+      <p class="text-sm text-stone-600 dark:text-stone-300 max-w-3xl">Reviewer typed free-form feedback into the sidebar textarea before clicking Request Changes. The preview card surfaces exactly how it will be stored.</p>
 
       <div class="rounded-xl bg-stone-900/80 dark:bg-black/60 p-8 flex items-start justify-center">
         <div role="dialog" aria-modal="true" aria-labelledby="revisit-modal-title-variant-c" class="w-full max-w-md bg-white dark:bg-stone-900 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 overflow-hidden">
@@ -365,7 +365,7 @@
                 <span class="px-2 py-0.5 rounded-full text-xs font-semibold border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300">Security</span>
                 <span class="px-2 py-0.5 rounded-full text-xs font-semibold border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300">Delivery</span>
               </div>
-              <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">These will be re-elaborated from the corrected upstream artifact.</p>
+              <p class="text-xs text-stone-600 dark:text-stone-300 mt-1">These will be re-elaborated from the corrected upstream artifact.</p>
             </section>
             <section>
               <p class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-1">New feedback (from textarea)</p>
@@ -376,7 +376,7 @@
                 </div>
                 <p class="text-xs text-stone-800 dark:text-stone-200 leading-snug">Acceptance criteria needs an explicit mobile annotation-pin target size; also add a "focus visible" note to the a11y criteria.</p>
               </div>
-              <p class="text-xs text-stone-500 dark:text-stone-400 mt-1">Will be saved to <span class="font-mono">Product</span> and marked pending.</p>
+              <p class="text-xs text-stone-600 dark:text-stone-300 mt-1">Will be saved to <span class="font-mono">Product</span> and marked pending.</p>
             </section>
             <section>
               <p class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-1">Open feedback in scope (3)</p>
@@ -403,7 +403,7 @@
         </div>
       </div>
 
-      <details class="text-xs text-stone-500 dark:text-stone-400">
+      <details class="text-xs text-stone-600 dark:text-stone-300">
         <summary class="cursor-pointer font-semibold text-stone-700 dark:text-stone-300">Variant C notes</summary>
         <ul class="mt-2 space-y-1 list-disc pl-5">
           <li>Section 3 (new feedback) is only rendered when the textarea is non-empty. The card uses sky (origin <code class="font-mono">user-visual</code>) as the left accent + background tint, matching <code class="font-mono">DESIGN-TOKENS.md §2.2</code>.</li>
@@ -418,7 +418,7 @@
     <!-- ============================================================ -->
     <section id="theming" class="space-y-3">
       <h2 class="text-base font-semibold text-stone-900 dark:text-stone-100">Light + Dark theming</h2>
-      <p class="text-sm text-stone-500 dark:text-stone-400">The modal follows the SPA palette in <code class="font-mono">DESIGN-TOKENS.md §1</code>: stone neutrals, amber as destructive accent, sky for user-visual feedback preview. Both themes share identical structure; only tokens differ.</p>
+      <p class="text-sm text-stone-600 dark:text-stone-300">The modal follows the SPA palette in <code class="font-mono">DESIGN-TOKENS.md §1</code>: stone neutrals, amber as destructive accent, sky for user-visual feedback preview. Both themes share identical structure; only tokens differ.</p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- Light -->
         <div>
@@ -475,7 +475,7 @@
     <!-- ============================================================ -->
     <section id="mobile" class="space-y-3">
       <h2 class="text-base font-semibold text-stone-900 dark:text-stone-100">Mobile narrow (375px)</h2>
-      <p class="text-sm text-stone-500 dark:text-stone-400 max-w-3xl">
+      <p class="text-sm text-stone-600 dark:text-stone-300 max-w-3xl">
         On narrow viewports the modal inflates to <code class="font-mono">max-w-[calc(100vw-1rem)]</code> with <code class="font-mono">p-2</code> page padding. Footer actions stack full-width with Confirm on top (primary action reachable by thumb on iPhone SE).
       </p>
 
@@ -646,31 +646,31 @@
     <!-- ============================================================ -->
     <section id="copy" class="space-y-3">
       <h2 class="text-base font-semibold text-stone-900 dark:text-stone-100">Copy spec</h2>
-      <p class="text-sm text-stone-500 dark:text-stone-400 max-w-3xl">Exact strings, with dynamic tokens marked <code class="font-mono">{like_this}</code>. Keep copy in a single module for i18n later.</p>
+      <p class="text-sm text-stone-600 dark:text-stone-300 max-w-3xl">Exact strings, with dynamic tokens marked <code class="font-mono">{like_this}</code>. Keep copy in a single module for i18n later.</p>
 
       <div class="overflow-x-auto rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900">
         <table class="min-w-full text-xs">
           <thead class="bg-stone-50 dark:bg-stone-800/60">
             <tr class="text-left">
-              <th class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Region</th>
-              <th class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Copy</th>
-              <th class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Notes</th>
+              <th class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300">Region</th>
+              <th class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300">Copy</th>
+              <th class="px-3 py-2 text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300">Notes</th>
             </tr>
           </thead>
           <tbody class="text-stone-700 dark:text-stone-300">
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">title</td><td class="px-3 py-2">Confirm revisit</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">Sentence case, no exclamation.</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">lede</td><td class="px-3 py-2">This will invoke <code class="font-mono">haiku_revisit</code>, rewriting state and pushing to the main intent branch.</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">Names the tool + effect in one sentence.</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">target_label</td><td class="px-3 py-2">Target stage</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">Section label.</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">target_justify_earliest</td><td class="px-3 py-2">earliest unaddressed</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">Literal.</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">target_justify_viewed</td><td class="px-3 py-2">currently viewed — no earlier unaddressed</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">Literal. Em dash, not hyphen.</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">downstream_label</td><td class="px-3 py-2">Downstream stages (re-run)</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">Section label.</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">downstream_note</td><td class="px-3 py-2">These will be re-elaborated from the corrected upstream artifact.</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">Explains why they re-run.</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">new_feedback_label</td><td class="px-3 py-2">New feedback (from textarea)</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">Only when typed.</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">new_feedback_footer</td><td class="px-3 py-2">Will be saved to {stage} and marked pending.</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">{stage} = target label.</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">open_label</td><td class="px-3 py-2">Open feedback in scope ({n})</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">{n} = count incl. typed if any.</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">cancel_btn</td><td class="px-3 py-2">Cancel</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">Secondary.</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">confirm_btn</td><td class="px-3 py-2">Confirm &amp; Revisit to <strong>{target}</strong> · resets {n} downstream stage{s}</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">{s} pluralizes. When typed: append " · adds 1 new".</td></tr>
-            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">advisory_no_gate</td><td class="px-3 py-2">Nothing is structurally open. The earliest unaddressed stage still determines the target — even though you opened the app manually.</td><td class="px-3 py-2 text-stone-500 dark:text-stone-400">Only shown in Variant B.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">title</td><td class="px-3 py-2">Confirm revisit</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">Sentence case, no exclamation.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">lede</td><td class="px-3 py-2">This will invoke <code class="font-mono">haiku_revisit</code>, rewriting state and pushing to the main intent branch.</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">Names the tool + effect in one sentence.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">target_label</td><td class="px-3 py-2">Target stage</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">Section label.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">target_justify_earliest</td><td class="px-3 py-2">earliest unaddressed</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">Literal.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">target_justify_viewed</td><td class="px-3 py-2">currently viewed — no earlier unaddressed</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">Literal. Em dash, not hyphen.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">downstream_label</td><td class="px-3 py-2">Downstream stages (re-run)</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">Section label.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">downstream_note</td><td class="px-3 py-2">These will be re-elaborated from the corrected upstream artifact.</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">Explains why they re-run.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">new_feedback_label</td><td class="px-3 py-2">New feedback (from textarea)</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">Only when typed.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">new_feedback_footer</td><td class="px-3 py-2">Will be saved to {stage} and marked pending.</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">{stage} = target label.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">open_label</td><td class="px-3 py-2">Open feedback in scope ({n})</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">{n} = count incl. typed if any.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">cancel_btn</td><td class="px-3 py-2">Cancel</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">Secondary.</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">confirm_btn</td><td class="px-3 py-2">Confirm &amp; Revisit to <strong>{target}</strong> · resets {n} downstream stage{s}</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">{s} pluralizes. When typed: append " · adds 1 new".</td></tr>
+            <tr class="border-t border-stone-100 dark:border-stone-800"><td class="px-3 py-2 font-mono">advisory_no_gate</td><td class="px-3 py-2">Nothing is structurally open. The earliest unaddressed stage still determines the target — even though you opened the app manually.</td><td class="px-3 py-2 text-stone-600 dark:text-stone-300">Only shown in Variant B.</td></tr>
           </tbody>
         </table>
       </div>
@@ -681,7 +681,7 @@
     <!-- ============================================================ -->
     <section id="tokens" class="space-y-3">
       <h2 class="text-base font-semibold text-stone-900 dark:text-stone-100">Design tokens used</h2>
-      <p class="text-sm text-stone-500 dark:text-stone-400 max-w-3xl">All references are named tokens from <code class="font-mono">knowledge/DESIGN-TOKENS.md</code>. No raw hex.</p>
+      <p class="text-sm text-stone-600 dark:text-stone-300 max-w-3xl">All references are named tokens from <code class="font-mono">knowledge/DESIGN-TOKENS.md</code>. No raw hex.</p>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="p-4 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900">

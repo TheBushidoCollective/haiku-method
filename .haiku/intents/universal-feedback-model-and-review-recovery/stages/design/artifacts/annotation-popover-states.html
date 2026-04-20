@@ -203,15 +203,15 @@
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-1">Create button</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-600 dark:text-stone-300 mb-1">Create button</p>
         <p>Disabled while both title and body are empty. Becomes primary teal as soon as either field has trimmed content.</p>
       </div>
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-1">Location label</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-600 dark:text-stone-300 mb-1">Location label</p>
         <p>Spatial: <code>&lt;x%&gt;, &lt;y%&gt;</code>. Line: <code>L&lt;n&gt;</code>. Iframe: <code>Page &lt;n&gt; · &lt;region&gt;</code> or just <code>&lt;region&gt;</code>.</p>
       </div>
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-1">Edge clipping</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-600 dark:text-stone-300 mb-1">Edge clipping</p>
         <p>Compute <code>{left, top}</code> with an 8px safety margin. If overflowing horizontally, flip to the left of the click.</p>
       </div>
     </div>
@@ -272,7 +272,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <!-- Step A — location form -->
       <div>
-        <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Step A — location form (inline)</p>
+        <p class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-2">Step A — location form (inline)</p>
         <div class="h-48 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-stone-950 mb-2 flex items-center justify-center text-xs text-stone-600 dark:text-stone-300">PDF preview (iframe)</div>
         <div class="p-3 rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50/40 dark:bg-teal-900/10">
           <p class="text-xs font-bold uppercase tracking-widest text-teal-700 dark:text-teal-300 mb-2">Add feedback on this preview</p>
@@ -288,7 +288,7 @@
 
       <!-- Step B — popover with preselected location -->
       <div>
-        <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Step B — popover opens</p>
+        <p class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-2">Step B — popover opens</p>
         <div class="relative h-64 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 stage-backdrop overflow-hidden">
           <div class="popover absolute" style="left: 20px; top: 20px;" role="dialog" aria-modal="true">
             <div class="flex items-center justify-between mb-2">
@@ -300,7 +300,7 @@
             <textarea rows="3" placeholder="Detail…"
                       class="w-full text-xs p-2 mb-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 focus:ring-2 focus:ring-teal-500 focus:outline-none resize-none"></textarea>
             <div class="flex items-center justify-between">
-              <button class="text-xs text-stone-500 dark:text-stone-400 hover:underline">← Change location</button>
+              <button class="text-xs text-stone-600 dark:text-stone-300 hover:underline">← Change location</button>
               <div class="flex gap-1.5">
                 <button class="px-2.5 py-1 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800">Cancel</button>
                 <button class="px-2.5 py-1 text-xs font-semibold rounded-md bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 cursor-not-allowed border border-stone-400 dark:border-stone-500" disabled aria-disabled="true">Create</button>
@@ -312,7 +312,7 @@
     </div>
 
     <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60 text-xs">
-      <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-2">"Change location" affordance</p>
+      <p class="font-bold uppercase tracking-widest text-xs text-stone-600 dark:text-stone-300 mb-2">"Change location" affordance</p>
       <p class="text-stone-700 dark:text-stone-300">Once in Step B, the popover footer's left side shows <em>← Change location</em>. Clicking it closes the popover and re-focuses the location form's <code>region</code> input — no need to cancel + restart.</p>
     </div>
   </section>
@@ -386,7 +386,7 @@
         <textarea rows="3" placeholder="What's the feedback? (required)"
                   aria-describedby="disabled-hint"
                   class="w-full text-xs p-2 mb-1 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 resize-none placeholder-stone-400 dark:placeholder-stone-500"></textarea>
-        <p id="disabled-hint" class="text-xs text-stone-500 dark:text-stone-400 mb-2">Body is required.</p>
+        <p id="disabled-hint" class="text-xs text-stone-600 dark:text-stone-300 mb-2">Body is required.</p>
         <div class="flex items-center justify-end gap-1.5">
           <button class="px-2.5 py-1 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900">Cancel</button>
           <button disabled aria-disabled="true"
@@ -455,15 +455,15 @@
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-1">Touch targets</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-600 dark:text-stone-300 mb-1">Touch targets</p>
         <p>44×44px minimum per iOS/Material. Bottom sheet buttons are <code>h-11</code> (44px) with <code>text-sm</code>.</p>
       </div>
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-1">Drag-to-dismiss</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-600 dark:text-stone-300 mb-1">Drag-to-dismiss</p>
         <p>Swipe down on the drag handle to cancel. Prevents accidental keyboard-dismiss from closing the sheet on mobile.</p>
       </div>
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-1">Breakpoint</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-600 dark:text-stone-300 mb-1">Breakpoint</p>
         <p>Sheet activates below <code>480px</code> (just under the <code>sm:</code> Tailwind breakpoint). Above that, the popover stays anchored.</p>
       </div>
     </div>
@@ -512,7 +512,7 @@
     <div class="overflow-x-auto">
       <table class="w-full text-sm border-collapse">
         <thead>
-          <tr class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-700">
+          <tr class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 border-b border-stone-200 dark:border-stone-700">
             <th class="text-left py-2 pr-4">Element</th>
             <th class="text-left py-2 pr-4">Default</th>
             <th class="text-left py-2 pr-4">Hover</th>
@@ -606,7 +606,7 @@
 
 </main>
 
-<footer class="max-w-6xl mx-auto px-6 pb-12 text-xs text-stone-500 dark:text-stone-400">
+<footer class="max-w-6xl mx-auto px-6 pb-12 text-xs text-stone-600 dark:text-stone-300">
   <p>Unit 04 — Annotation popover states. Companion to
     <code>annotation-gesture-spec.html</code>. Closes FB-01.</p>
 </footer>

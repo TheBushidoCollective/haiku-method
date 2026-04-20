@@ -108,7 +108,7 @@
   <!-- Section 3: Sidebar — light, toggle ON -->
   <section aria-labelledby="sec-light-on">
     <h2 id="sec-light-on" class="text-base font-semibold mb-3">3. Sidebar — Light Mode, Toggle ON</h2>
-    <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">Agent items appear inline with user items, sorted into the same status groups. Origin badges still tell them apart. No separate tab, no separate list.</p>
+    <p class="text-xs text-stone-600 dark:text-stone-300 mb-3">Agent items appear inline with user items, sorted into the same status groups. Origin badges still tell them apart. No separate tab, no separate list.</p>
     <div class="flex gap-4">
       <div class="flex-1 bg-white border border-stone-200 rounded-lg p-4 min-h-[640px] flex items-center justify-center">
         <p class="text-xs text-stone-600 italic">— Main content area —</p>
@@ -346,17 +346,17 @@
     <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-4">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <p class="text-[11px] font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-widest mb-1">What was in the earlier mockup</p>
+          <p class="text-[11px] font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-widest mb-1">What was in the earlier mockup</p>
           <div class="p-3 rounded border border-dashed border-stone-300 dark:border-stone-600 bg-stone-50/80 dark:bg-stone-800/30">
             <div class="flex rounded-md border border-stone-300 dark:border-stone-600 overflow-hidden mb-2">
               <button class="flex-1 px-3 py-1.5 text-[11px] font-semibold bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200">Mine (2)</button>
-              <button class="flex-1 px-3 py-1.5 text-[11px] font-semibold bg-white dark:bg-stone-900 text-stone-500 dark:text-stone-400">Feedback (11)</button>
+              <button class="flex-1 px-3 py-1.5 text-[11px] font-semibold bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300">Feedback (11)</button>
             </div>
             <p class="text-xs text-stone-600 italic">Two independent lists. User toggles between "my comments" and "everyone else's findings".</p>
           </div>
         </div>
         <div>
-          <p class="text-[11px] font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-widest mb-1">Why it's rejected</p>
+          <p class="text-[11px] font-semibold text-stone-600 dark:text-stone-300 uppercase tracking-widest mb-1">Why it's rejected</p>
           <ul class="text-xs text-stone-700 dark:text-stone-300 space-y-1.5 list-disc pl-4">
             <li><strong>"Mine" is undefined.</strong> No user identity in H·AI·K·U. Every user-origin item is equally "mine" from any local session.</li>
             <li><strong>Hides useful context.</strong> When I'm deciding whether to dismiss my own pending comment, I may want to see a related review-agent finding on the same paragraph. Splitting them buries that.</li>
@@ -373,7 +373,7 @@
     <h2 id="sec-responsive" class="text-base font-semibold mb-3">7. Responsive Behavior</h2>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Mobile (375px)</div>
+        <div class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-2">Mobile (375px)</div>
         <ul class="text-xs text-stone-700 dark:text-stone-300 space-y-1.5 list-disc pl-4">
           <li>Sidebar becomes a slide-in panel from the right, covering 85vw.</li>
           <li>Toggle sticks to top; Comments list scrolls below.</li>
@@ -382,14 +382,14 @@
         </ul>
       </div>
       <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Tablet (768px)</div>
+        <div class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-2">Tablet (768px)</div>
         <ul class="text-xs text-stone-700 dark:text-stone-300 space-y-1.5 list-disc pl-4">
           <li>Sidebar is 320px wide, always visible.</li>
           <li>Cards show full badge row on one line at this width.</li>
         </ul>
       </div>
       <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">Desktop (1280px+)</div>
+        <div class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-2">Desktop (1280px+)</div>
         <ul class="text-xs text-stone-700 dark:text-stone-300 space-y-1.5 list-disc pl-4">
           <li>Sidebar is 384px wide at the <code>xl</code> breakpoint (canonical pair <code>w-80 xl:w-96</code>); 320px below <code>xl</code>.</li>
           <li>Toggle shows long-form helper text under the switch.</li>

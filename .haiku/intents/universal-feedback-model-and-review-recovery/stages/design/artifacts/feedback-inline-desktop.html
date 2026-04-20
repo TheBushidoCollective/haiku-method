@@ -111,16 +111,16 @@
       <div class="sticky top-[53px] z-30 bg-white dark:bg-stone-950 border-b border-stone-200 dark:border-stone-700 mb-4">
         <div role="tablist" aria-label="Review sections" aria-orientation="horizontal" class="flex overflow-x-auto -mx-1">
           <button role="tab" aria-selected="true" tabindex="0" class="px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 focus-visible:ring-2 focus-visible:ring-teal-500">Overview</button>
-          <button role="tab" aria-selected="false" tabindex="-1" class="px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500">Units (12)</button>
-          <button role="tab" aria-selected="false" tabindex="-1" class="px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500">Knowledge</button>
-          <button role="tab" aria-selected="false" tabindex="-1" class="px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500">Outputs (3)</button>
+          <button role="tab" aria-selected="false" tabindex="-1" class="px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 border-transparent text-stone-600 dark:text-stone-300 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500">Units (12)</button>
+          <button role="tab" aria-selected="false" tabindex="-1" class="px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 border-transparent text-stone-600 dark:text-stone-300 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500">Knowledge</button>
+          <button role="tab" aria-selected="false" tabindex="-1" class="px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 border-transparent text-stone-600 dark:text-stone-300 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500">Outputs (3)</button>
         </div>
       </div>
 
       <!-- Overview Card with Inline Annotations (Code) -->
       <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-4 mb-4">
         <h2 class="text-lg font-semibold mb-3">Overview -- Comment on text</h2>
-        <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">Select text to add inline comments.</p>
+        <p class="text-xs text-stone-600 dark:text-stone-300 mb-3">Select text to add inline comments.</p>
 
           <!-- Prose content with inline annotation cards floating adjacent -->
           <div class="relative">
@@ -242,7 +242,7 @@
       <!-- EXPANDED card example — showing full body visible -->
       <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-4 mb-4">
         <h2 class="text-lg font-semibold mb-3">Interaction States Reference</h2>
-        <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">All card states shown below for reference.</p>
+        <p class="text-xs text-stone-600 dark:text-stone-300 mb-4">All card states shown below for reference.</p>
 
           <div class="space-y-3">
             <!-- Default / Collapsed -->
@@ -376,7 +376,7 @@
           <div class="flex items-center justify-between py-1">
             <div class="flex items-center gap-2">
               <h3 class="text-sm font-semibold text-stone-900 dark:text-stone-100">Comments</h3>
-              <span class="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400 px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800">agent · 2</span>
+              <span class="text-xs font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-300 px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800">agent · 2</span>
             </div>
             <button
               role="switch"
@@ -393,15 +393,15 @@
         <!-- Summary bar with filter pills — role="group" wraps filter toggles; dots aria-hidden -->
         <div class="shrink-0 px-3 py-2 bg-stone-50 dark:bg-stone-800/50 border-b border-stone-200 dark:border-stone-700 flex items-center gap-2 flex-wrap" role="group" aria-label="Filter feedback by status">
           <button aria-pressed="true" class="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700 transition-colors focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">All</button>
-          <button aria-pressed="false" aria-label="Pending, 3 items" class="px-2 py-1 text-xs font-medium rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400 hover:border-stone-300 dark:hover:border-stone-600 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
+          <button aria-pressed="false" aria-label="Pending, 3 items" class="px-2 py-1 text-xs font-medium rounded-full border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
             <span aria-hidden="true" class="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1"></span>Pending
             <span aria-hidden="true" class="ml-0.5 font-bold">3</span>
           </button>
-          <button aria-pressed="false" aria-label="Addressed, 1 item" class="px-2 py-1 text-xs font-medium rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400 hover:border-stone-300 dark:hover:border-stone-600 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
+          <button aria-pressed="false" aria-label="Addressed, 1 item" class="px-2 py-1 text-xs font-medium rounded-full border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
             <span aria-hidden="true" class="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1"></span>Addressed
             <span aria-hidden="true" class="ml-0.5 font-bold">1</span>
           </button>
-          <button aria-pressed="false" aria-label="Closed, 1 item" class="px-2 py-1 text-xs font-medium rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400 hover:border-stone-300 dark:hover:border-stone-600 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
+          <button aria-pressed="false" aria-label="Closed, 1 item" class="px-2 py-1 text-xs font-medium rounded-full border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
             <span aria-hidden="true" class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1"></span>Closed
             <span aria-hidden="true" class="ml-0.5 font-bold">1</span>
           </button>

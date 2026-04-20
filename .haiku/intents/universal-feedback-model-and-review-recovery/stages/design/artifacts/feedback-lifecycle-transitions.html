@@ -25,7 +25,7 @@
   <div class="max-w-page mx-auto px-5 py-3 flex items-center justify-between">
     <div>
       <h1 class="text-lg font-semibold">Feedback Lifecycle — Ownership Matrix &amp; Transition Spec</h1>
-      <p class="text-xs text-stone-500 dark:text-stone-400">Unit 05 · FB-02 · Design artifact · Visual state machine + who-owns-what rules</p>
+      <p class="text-xs text-stone-600 dark:text-stone-300">Unit 05 · FB-02 · Design artifact · Visual state machine + who-owns-what rules</p>
     </div>
     <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
       <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"><span class="w-2 h-2 rounded-full bg-teal-600 dark:bg-teal-400"></span>Agent-owned</span>
@@ -39,7 +39,7 @@
   <!-- Section 1: State diagram -->
   <section aria-labelledby="sec-diagram">
     <h2 id="sec-diagram" class="text-base font-semibold mb-3">1. State Machine</h2>
-    <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">Four statuses, seven transitions. Teal edges are agent-driven (FSM / quality gate). Blue edges are user-initiated from the review UI. Dashed edges reopen a terminal state.</p>
+    <p class="text-xs text-stone-600 dark:text-stone-300 mb-3">Four statuses, seven transitions. Teal edges are agent-driven (FSM / quality gate). Blue edges are user-initiated from the review UI. Dashed edges reopen a terminal state.</p>
 
     <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-6 shadow-sm">
       <svg viewBox="0 0 980 420" role="img" aria-label="Feedback status transition diagram" class="w-full h-auto">
@@ -151,10 +151,10 @@
   <!-- Section 2: Ownership matrix -->
   <section aria-labelledby="sec-matrix">
     <h2 id="sec-matrix" class="text-base font-semibold mb-3">2. Ownership Matrix (rows = from · columns = to)</h2>
-    <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">Every cell is either <strong>AGENT</strong>, <strong>USER</strong>, or <strong>—</strong> (not a valid transition). User-initiable cells are the only ones that render as buttons in the review UI.</p>
+    <p class="text-xs text-stone-600 dark:text-stone-300 mb-3">Every cell is either <strong>AGENT</strong>, <strong>USER</strong>, or <strong>—</strong> (not a valid transition). User-initiable cells are the only ones that render as buttons in the review UI.</p>
     <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 overflow-hidden shadow-sm">
       <table class="w-full text-xs">
-        <thead class="bg-stone-50 dark:bg-stone-800/50 text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">
+        <thead class="bg-stone-50 dark:bg-stone-800/50 text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300">
           <tr>
             <th class="text-left px-3 py-2 w-32">from \ to</th>
             <th class="text-left px-3 py-2">pending</th>
@@ -168,34 +168,34 @@
           <tr>
             <td class="px-3 py-2 font-semibold bg-amber-50 dark:bg-amber-900/20">pending</td>
             <td class="px-3 py-2 text-stone-500">— (self)</td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 font-semibold">AGENT</span> <span class="ml-1 text-xs text-stone-500 dark:text-stone-400">T1 · fix lands</span></td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-xs text-stone-500 dark:text-stone-400">T4 · Dismiss</span></td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 font-semibold">AGENT</span> <span class="ml-1 text-xs text-stone-500 dark:text-stone-400">T3 · quality gate</span></td>
-            <td class="px-3 py-2 text-stone-500 dark:text-stone-400">User can dismiss a pending item. Only the agent can mark it addressed or close it via gate verification. <em>Not</em> user-initiable: <code>pending → addressed</code>, <code>pending → closed</code>.</td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 font-semibold">AGENT</span> <span class="ml-1 text-xs text-stone-600 dark:text-stone-300">T1 · fix lands</span></td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-xs text-stone-600 dark:text-stone-300">T4 · Dismiss</span></td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 font-semibold">AGENT</span> <span class="ml-1 text-xs text-stone-600 dark:text-stone-300">T3 · quality gate</span></td>
+            <td class="px-3 py-2 text-stone-600 dark:text-stone-300">User can dismiss a pending item. Only the agent can mark it addressed or close it via gate verification. <em>Not</em> user-initiable: <code>pending → addressed</code>, <code>pending → closed</code>.</td>
           </tr>
           <tr>
             <td class="px-3 py-2 font-semibold bg-blue-50 dark:bg-blue-900/20">addressed</td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-xs text-stone-500 dark:text-stone-400">T7 · Reopen</span></td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-xs text-stone-600 dark:text-stone-300">T7 · Reopen</span></td>
             <td class="px-3 py-2 text-stone-500">— (self)</td>
             <td class="px-3 py-2 text-stone-500">—</td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-xs text-stone-500 dark:text-stone-400">T2 · Verify &amp; Close</span></td>
-            <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Reviewer verifies the fix or reopens if the fix is wrong. <em>Not</em> possible: <code>addressed → rejected</code> (dismiss only applies to pending).</td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-xs text-stone-600 dark:text-stone-300">T2 · Verify &amp; Close</span></td>
+            <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Reviewer verifies the fix or reopens if the fix is wrong. <em>Not</em> possible: <code>addressed → rejected</code> (dismiss only applies to pending).</td>
           </tr>
           <tr>
             <td class="px-3 py-2 font-semibold bg-stone-100 dark:bg-stone-800/60">rejected</td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-xs text-stone-500 dark:text-stone-400">T5 · Reopen</span></td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-xs text-stone-600 dark:text-stone-300">T5 · Reopen</span></td>
             <td class="px-3 py-2 text-stone-500">—</td>
             <td class="px-3 py-2 text-stone-500">— (self)</td>
             <td class="px-3 py-2 text-stone-500">—</td>
-            <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Terminal until reopened. Agent cannot un-reject — only a human reconsiders a dismissal.</td>
+            <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Terminal until reopened. Agent cannot un-reject — only a human reconsiders a dismissal.</td>
           </tr>
           <tr>
             <td class="px-3 py-2 font-semibold bg-green-50 dark:bg-green-900/20">closed</td>
-            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-xs text-stone-500 dark:text-stone-400">T6 · Reopen</span></td>
+            <td class="px-3 py-2"><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-semibold">USER</span> <span class="ml-1 text-xs text-stone-600 dark:text-stone-300">T6 · Reopen</span></td>
             <td class="px-3 py-2 text-stone-500">—</td>
             <td class="px-3 py-2 text-stone-500">—</td>
             <td class="px-3 py-2 text-stone-500">— (self)</td>
-            <td class="px-3 py-2 text-stone-500 dark:text-stone-400">Terminal until reopened. Both agent-closed (gate verify) and human-closed (Verify &amp; Close) collapse into the same <code>closed</code> row.</td>
+            <td class="px-3 py-2 text-stone-600 dark:text-stone-300">Terminal until reopened. Both agent-closed (gate verify) and human-closed (Verify &amp; Close) collapse into the same <code>closed</code> row.</td>
           </tr>
         </tbody>
       </table>
@@ -205,7 +205,7 @@
   <!-- Section 3: User-initiable vs not -->
   <section aria-labelledby="sec-ui-contract">
     <h2 id="sec-ui-contract" class="text-base font-semibold mb-3">3. UI Contract — which transitions surface as buttons</h2>
-    <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">This is the definitive list the review-app must render. If a transition is not on this list, the UI <strong>MUST NOT</strong> expose a button for it — even if the backing tool call would technically accept it.</p>
+    <p class="text-xs text-stone-600 dark:text-stone-300 mb-3">This is the definitive list the review-app must render. If a transition is not on this list, the UI <strong>MUST NOT</strong> expose a button for it — even if the backing tool call would technically accept it.</p>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="bg-white dark:bg-stone-900 rounded-lg border border-blue-200 dark:border-blue-800 p-4">
         <h3 class="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400"></span>User-initiable (MUST render as footer buttons)</h3>
@@ -223,7 +223,7 @@
           <li><code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800">pending → addressed</code> · agent marks when the fix lands during execute</li>
           <li><code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800">pending → closed</code> · quality gate closes structurally (e.g. the feedback references a file that no longer exists)</li>
         </ul>
-        <p class="mt-3 text-[11px] text-stone-500 dark:text-stone-400 italic">These transitions are informational only. The card <strong>MAY</strong> show status advancement as it happens, but <strong>MUST NOT</strong> offer a button for the user to trigger them.</p>
+        <p class="mt-3 text-[11px] text-stone-600 dark:text-stone-300 italic">These transitions are informational only. The card <strong>MAY</strong> show status advancement as it happens, but <strong>MUST NOT</strong> offer a button for the user to trigger them.</p>
       </div>
     </div>
   </section>

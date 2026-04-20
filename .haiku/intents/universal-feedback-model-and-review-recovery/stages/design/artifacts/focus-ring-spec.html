@@ -81,14 +81,14 @@
 
     <header class="mb-8">
       <h1 class="text-2xl font-bold text-stone-900 dark:text-stone-100 mb-2">Focus Ring Specification</h1>
-      <p class="text-sm text-stone-500 dark:text-stone-400 mb-1">Closes FB-37. Canonical rule for every interactive element across every artifact.</p>
-      <p class="text-xs text-stone-500 dark:text-stone-500">Tab through the demos below to see each ring render in place.</p>
+      <p class="text-sm text-stone-600 dark:text-stone-400 mb-1">Closes FB-37. Canonical rule for every interactive element across every artifact.</p>
+      <p class="text-xs text-stone-600 dark:text-stone-300">Tab through the demos below to see each ring render in place.</p>
     </header>
 
     <!-- §1 — Canonical ring -->
     <section class="mb-10 bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-6">
       <h2 class="text-lg font-semibold text-stone-900 dark:text-stone-100 mb-2">§1 — Canonical ring (applies by default)</h2>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
+      <p class="text-xs text-stone-600 dark:text-stone-400 mb-4">
         2px solid ring, 2px offset, color <code class="px-1 py-0.5 bg-stone-200 dark:bg-stone-800 rounded">teal-500 (#14B8A6)</code> in light mode, <code class="px-1 py-0.5 bg-stone-200 dark:bg-stone-800 rounded">teal-400 (#2DD4BF)</code> in dark mode. Triggered by <code>:focus-visible</code> only — no ring on mouse click. <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
       </p>
       <p class="text-xs text-stone-600 dark:text-stone-400 mb-4">Applies to: every <code>&lt;button&gt;</code>, <code>&lt;a&gt;</code>, <code>&lt;input&gt;</code>, <code>&lt;textarea&gt;</code>, <code>&lt;select&gt;</code>, and any element with <code>tabindex="0"</code>.</p>
@@ -104,7 +104,7 @@
       </div>
 
       <div class="mt-3 p-3 rounded-md bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700">
-        <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1">Tailwind utilities (preferred when inline)</p>
+        <p class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-400 mb-1">Tailwind utilities (preferred when inline)</p>
         <code class="text-[11px] text-stone-700 dark:text-stone-300 break-all">focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 focus:outline-none</code>
       </div>
     </section>
@@ -112,7 +112,7 @@
     <!-- §1a — Compact variant -->
     <section class="mb-10 bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-6">
       <h2 class="text-lg font-semibold text-stone-900 dark:text-stone-100 mb-2">§1a — Compact variant (feedback cards)</h2>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
+      <p class="text-xs text-stone-600 dark:text-stone-400 mb-4">
         Same 2px teal ring, but <strong>1px outer offset</strong> instead of 2px. Used only inside dense card stacks (feedback list, agent-mine list) where 2px offset causes the ring to visually merge with the adjacent card's border.
       </p>
       <p class="text-xs text-red-600 dark:text-red-400 mb-4"><strong>Do not use <code>focus&#58;ring-1</code></strong> — the ring width stays 2px. Only the offset changes. Anyone who tries to use <code>focus&#58;ring-1</code> fails this spec; see §3 below.</p>
@@ -130,7 +130,7 @@
     <!-- §2 — Variant-matched rings -->
     <section class="mb-10 bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-6">
       <h2 class="text-lg font-semibold text-stone-900 dark:text-stone-100 mb-2">§2 — Variant-matched focus rings (primary actions ONLY)</h2>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
+      <p class="text-xs text-stone-600 dark:text-stone-400 mb-4">
         The focus ring MAY match the button's background color only when the button is a semantically-loaded primary action. The color choice reinforces what the key press will do. Every other element uses §1.
       </p>
 
@@ -148,7 +148,7 @@
         <button type="button" class="focus-demo-red px-4 py-2 text-sm font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white">Delete feedback</button>
       </div>
 
-      <p class="text-xs text-stone-500 dark:text-stone-400 mt-4"><strong>Revisit modal Cancel button</strong> uses the §1 canonical teal ring — Cancel is not a semantically-loaded primary action.</p>
+      <p class="text-xs text-stone-600 dark:text-stone-400 mt-4"><strong>Revisit modal Cancel button</strong> uses the §1 canonical teal ring — Cancel is not a semantically-loaded primary action.</p>
       <div class="flex flex-wrap gap-3 p-4 mt-2 border border-dashed border-stone-300 dark:border-stone-600 rounded-md">
         <button type="button" class="focus-demo-canonical px-4 py-2 text-sm font-semibold rounded-lg bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-200">Cancel (revisit modal)</button>
         <button type="button" class="focus-demo-amber px-4 py-2 text-sm font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white">Confirm Revisit</button>

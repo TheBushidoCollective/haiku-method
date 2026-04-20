@@ -21,6 +21,9 @@ outputs:
   - stages/design/artifacts/component-inventory.md
   - stages/design/artifacts/footer-button-copy-spec.md
   - stages/design/artifacts/unit-17-design-review.md
+  - stages/design/artifacts/comment-to-feedback-flow.html
+  - stages/design/artifacts/feedback-inline-desktop.html
+  - stages/design/artifacts/feedback-inline-mobile.html
 quality_gates:
   - >-
     FeedbackStatusBadge text shade is consistent across DESIGN-BRIEF §2 and
@@ -57,9 +60,9 @@ quality_gates:
     duplicating component specs.
 status: active
 bolt: 2
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T01:54:22Z'
-hat_started_at: '2026-04-20T02:14:14Z'
+hat_started_at: '2026-04-20T02:23:12Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:22Z'
@@ -78,6 +81,10 @@ iterations:
       stages/design/artifacts/unit-17-design-review.md.
   - hat: designer
     started_at: '2026-04-20T02:14:14Z'
+    completed_at: '2026-04-20T02:23:12Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T02:23:12Z'
     completed_at: null
     result: null
 ---

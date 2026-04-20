@@ -2,7 +2,7 @@
 title: >-
   Status badges in feedback-inline-desktop.html inconsistently apply aria-label;
   breaks scan parity with mobile
-status: fixing
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T20:20:29Z'
 iteration: 0
 visit: 0
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-12:bolt-1'
 bolt: 1
 upstream_stage: null
 ---

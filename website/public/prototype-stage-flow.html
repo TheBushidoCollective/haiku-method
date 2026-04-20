@@ -2602,9 +2602,19 @@
 <p class="subtitle">
   Every actor, every FSM tick, every state write — the software studio's full intent lifecycle on one page.
   Five runtime players at the top, hooks down the left, the intent flow in the middle, the knowledge pool on the right.
-  Inside an intent: pre-elab → six stages (each with its own phase machine: <code>pending → elaborate → execute → review → gate</code>) → final PR/MR gate → delivery → operations.
+  Inside an intent: pre-elab → six stages (each with its own phase machine: <code>pending → elaborate → pre-review → execute → review → gate</code>) → final PR/MR gate → delivery → operations.
   <strong>Hover anything for a tooltip · click for full detail.</strong>
 </p>
+
+<aside style="margin: 1rem auto; max-width: 900px; padding: 1rem; border-left: 4px solid #14b8a6; background: #f0fdfa; font-size: 0.9em;">
+  <strong>Churn-reduction v1 (2026-04-19 — not yet reflected in the per-stage visualizations below):</strong>
+  <ul style="margin: 0.5rem 0 0 1rem;">
+    <li><strong>Pre-execution adversarial review</strong> — new phase <code>pre-review</code> between <code>elaborate</code> and <code>execute</code>. Reviewers audit unit SPECS (not artifacts yet) for missing inputs, prose-only gates, unfalsifiable criteria, sibling conflicts. Fixing spec bugs here costs far less than an execute → post-review → reject cycle. Actions: <code>pre_review</code> (dispatch), <code>pre_review_revisit</code> (spec-edit instructions, not new units).</li>
+    <li><strong>Conditional review agents</strong> — each review-agent.md declares <code>applies_to:</code> (glob list). Agents skip themselves when no stage artifact matches (e.g. web a11y agent doesn't run on backend-only dev). Filter fires at both <code>review</code> and <code>review_elaboration</code> dispatch.</li>
+    <li><strong>Executable quality-gates</strong> — universal guidance now injected into every <code>elaborate</code> action: <code>quality_gates:</code> entries MUST be <code>{name, command}</code> objects (runnable at advance_hat). Commands MUST scope to the full stage artifact directory, not the unit's <code>inputs:</code> list — enforcement scope must match rule scope.</li>
+    <li><strong>Iteration cap dropped</strong>: <code>MAX_STAGE_ITERATIONS</code> 5 → 2. Goal is 0 agent-invoked retries; &gt; 2 indicates a spec problem that escalates to the human.</li>
+  </ul>
+</aside>
 
 <section class="actors-strip" id="actors-strip">
   <h2>Actors</h2>

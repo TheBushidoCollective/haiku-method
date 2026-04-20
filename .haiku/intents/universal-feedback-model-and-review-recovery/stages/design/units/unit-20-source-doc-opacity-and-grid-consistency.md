@@ -64,10 +64,10 @@ quality_gates:
     a design-reviewer walking §2 top-to-bottom can find the corresponding state
     grid for every component without searching.
 status: active
-bolt: 2
-hat: feedback-assessor
+bolt: 3
+hat: designer
 started_at: '2026-04-20T05:08:33Z'
-hat_started_at: '2026-04-20T08:57:25Z'
+hat_started_at: '2026-04-20T08:59:08Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:33Z'
@@ -107,6 +107,32 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T08:57:25Z'
+    completed_at: '2026-04-20T08:59:08Z'
+    result: reject
+    reason: >-
+      FB-70 and FB-75 are both factually closed in the artifacts — DESIGN-BRIEF
+      §7 CSS strip (lines 882-930) has zero `opacity: 0.7`/`0.5` and zero raw
+      hex inside the code fences (uses `var(--color-green-400)`,
+      `var(--color-blue-400)`, `var(--color-stone-500)`,
+      `var(--color-teal-600)`); state-coverage-grid.md §7.1–§7.12 has
+      per-component sections for every DESIGN-BRIEF §2 component, with
+      FeedbackStatusBadge 4-status × 2-theme matrix, FeedbackOriginIcon
+      six-origin variants,
+      FeedbackList/FeedbackSheet/FeedbackSummaryBar/AgentFeedbackToggle full
+      six-state coverage with inline `— (N/A: <rationale>)` text; DESIGN-BRIEF
+      §2 has the cross-reference index block plus inline `see
+      state-coverage-grid.md §X` pointers on each component subheading. However,
+      advance_hat blocks with 6 unchecked completion-criteria checkboxes. The
+      prior hat ticked the checkboxes in the unit-worktree copy
+      (`.haiku/worktrees/universal-feedback-model-and-review-recovery/unit-20-source-doc-opacity-and-grid-consistency/.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/units/unit-20-source-doc-opacity-and-grid-consistency.md`
+      — shows all `[x]`) but the FSM reads the parent-worktree intent copy
+      (`.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/units/unit-20-source-doc-opacity-and-grid-consistency.md`
+      — still shows all `[ ]` on lines 156, 157, 158, 161, 162, 163). Prior hat
+      must tick the 6 checkboxes in the parent-worktree copy (or ensure the
+      unit-worktree edits propagate to it) so the hard gate passes on the next
+      feedback-assessor pass.
+  - hat: designer
+    started_at: '2026-04-20T08:59:08Z'
     completed_at: null
     result: null
 ---

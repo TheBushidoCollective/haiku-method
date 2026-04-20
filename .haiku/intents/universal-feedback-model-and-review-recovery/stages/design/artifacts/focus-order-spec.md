@@ -28,13 +28,15 @@ The desktop review page is the primary surface. Tab walks the DOM in reading ord
 | 14 | Next expand-toggle / artifact link | main | 0 | varies | — |
 | … | … more content-interleaved elements, in DOM order … | | | | |
 | N−7 | Feedback filter pills (Pending / Addressed / All) | aside `#feedback-list` | 0 | "Filter: Pending, 4 items" | — |
-| N−6 | Feedback card 1 | aside | 0 | "Feedback FB-01, pending, adversarial-review" | `j` / `k`, `Enter`, `r`, `a` |
-| N−5 | Feedback card 2 | aside | 0 | ^ | ^ |
-| … | … more feedback cards … | | | | |
+| N−6 | Feedback card 1 | aside (`<li>` inside `<ul aria-label="Feedback items">`) | 0 (on card root `<div>`, not the `<li>`) | "Feedback FB-01, pending, adversarial-review" | `j` / `k`, `Enter`, `r`, `a` |
+| N−5 | Feedback card 2 | aside (`<li>` inside `<ul>`) | 0 | ^ | ^ |
+| … | … more feedback cards, each as `<li>` inside the wrapping `<ul>` … | | | | |
 | N−3 | General-comment textarea | aside footer | 0 | "Add a general comment" | `/` |
 | N−2 | Approve button | aside footer | 0 | "Approve stage" | `a` |
 | N−1 | External Review button | aside footer | 0 | "Submit for external review" | — |
 | N | Request Changes button | aside footer | 0 | "Request changes (opens revisit modal)" | `r` |
+
+> **List-structure required (unit-31 / FB-148).** The sidebar-card rows above (N−6 through the last card row before N−3) are rendered as `<li>` elements inside a wrapping `<ul class="list-none" aria-label="Feedback items">`. This matches mobile's existing `role="list"` + `role="listitem"` structure in `feedback-inline-mobile.html` and satisfies WCAG 1.3.1 Info and Relationships — assistive technology announces the card count (e.g., "5 items in a list") and supports arrow-key list navigation card-to-card. The per-card Tab stop still lives on the card-root `<div>` (where `tabindex="0"` + `focus-visible` are declared); `<li>` wrappers carry `class="list-none"` and do not receive tabindex, so they do not intercept focus. See `aria-landmark-spec.md §2` for the landmark map row and `feedback-card-states.html` §2+§3 for the matching spec gallery.
 
 ### Notes
 
@@ -58,6 +60,8 @@ Mobile drops the sidebar in favor of a FAB + bottom-sheet. The Tab order flatten
 | N | Bottom-sheet close / swipe handle | 0 | Only reachable once the sheet is open |
 
 When the bottom sheet is open, a focus trap is established; Tab cycles through sheet content (filter → cards → general-comment → action buttons). `Esc` closes the sheet and returns focus to the FAB.
+
+> **List-structure required (unit-31 / FB-148).** Inside the bottom sheet, feedback cards render as `role="listitem"` nodes inside a `role="list"` wrapper (`#feedback-list` in `feedback-inline-mobile.html`). Desktop's `<aside role="complementary">` now matches by wrapping its cards in `<ul aria-label="Feedback items">` with each card inside `<li>`. AT parity between the two surfaces is a hard gate.
 
 ## 3. Annotation-gesture-spec — artifact demos
 

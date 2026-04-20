@@ -407,17 +407,25 @@
           </button>
         </div>
 
-        <!-- Feedback list (scrollable) — role="list" aria-label so screen reader announces count -->
-        <div class="flex-1 overflow-y-auto p-3 space-y-2" role="list" aria-label="Feedback items">
+        <!--
+          Feedback list (scrollable) — native <ul class="list-none"> + <li> per
+          unit-31 / FB-148 (aria-landmark-spec.md §2). Native list semantics are
+          more robust across AT than role="list" / role="listitem": no role-
+          flattening edge cases, list-count announcement ("5 items in a list")
+          and arrow-key list-navigation work consistently in VoiceOver, NVDA,
+          and JAWS. Mobile feedback-inline-mobile.html:274 matches — desktop
+          parity with FB-148 closes on this wrapper.
+        -->
+        <ul class="flex-1 overflow-y-auto p-3 space-y-2 list-none" aria-label="Feedback items">
 
-          <!-- Group: Current Visit -->
-          <div class="flex items-center gap-2 px-1 py-1">
+          <!-- Group: Current Visit (decorative separator — aria-hidden from the list-item flow) -->
+          <li aria-hidden="true" class="flex items-center gap-2 px-1 py-1 list-none">
             <span class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300">Current Visit</span>
             <div class="flex-1 border-t border-stone-200 dark:border-stone-700"></div>
-          </div>
+          </li>
 
           <!-- Pending item 1 -->
-          <div role="listitem" tabindex="0" class="fb-card-hover border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-2.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-stone-200 dark:border-stone-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
+          <li class="list-none"><div tabindex="0" class="fb-card-hover border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-2.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-stone-200 dark:border-stone-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
             <div class="flex items-center gap-2 mb-1">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800">
                 <span aria-hidden="true">&#x1F50D;</span> Review Agent
@@ -427,10 +435,10 @@
             </div>
             <p class="text-xs font-medium text-stone-700 dark:text-stone-300 truncate">Missing null check in handleSubmit</p>
             <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5">FB-03 &middot; Visit 2 &middot; adversarial-review</p>
-          </div>
+          </div></li>
 
           <!-- Pending item 2 -->
-          <div role="listitem" tabindex="0" class="fb-card-hover border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-2.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-stone-200 dark:border-stone-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
+          <li class="list-none"><div tabindex="0" class="fb-card-hover border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-2.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-stone-200 dark:border-stone-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
             <div class="flex items-center gap-2 mb-1">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800">
                 <span aria-hidden="true">&#x270E;</span> Annotation
@@ -440,10 +448,10 @@
             </div>
             <p class="text-xs font-medium text-stone-700 dark:text-stone-300 truncate">Header alignment feels off on the pin card</p>
             <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5">FB-05 &middot; Visit 2 &middot; jwaldrip</p>
-          </div>
+          </div></li>
 
           <!-- Pending item 3 (agent) -->
-          <div role="listitem" tabindex="0" class="fb-card-hover border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-2.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-stone-200 dark:border-stone-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
+          <li class="list-none"><div tabindex="0" class="fb-card-hover border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-2.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-stone-200 dark:border-stone-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
             <div class="flex items-center gap-2 mb-1">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800">
                 <span aria-hidden="true">&#x1F916;</span> Agent
@@ -453,16 +461,16 @@
             </div>
             <p class="text-xs font-medium text-stone-700 dark:text-stone-300 truncate">Consider extracting feedback validation</p>
             <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5">FB-06 &middot; Visit 2 &middot; agent</p>
-          </div>
+          </div></li>
 
-          <!-- Group: Visit 1 -->
-          <div class="flex items-center gap-2 px-1 py-1 mt-3">
+          <!-- Group: Visit 1 (decorative separator — aria-hidden from the list-item flow) -->
+          <li aria-hidden="true" class="flex items-center gap-2 px-1 py-1 mt-3 list-none">
             <span class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300">Visit 1</span>
             <div class="flex-1 border-t border-stone-200 dark:border-stone-700"></div>
-          </div>
+          </li>
 
           <!-- Addressed item -->
-          <div role="listitem" tabindex="0" class="fb-card-hover border-l-[3px] border-l-blue-400 dark:border-l-blue-500 p-2.5 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-stone-200 dark:border-stone-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
+          <li class="list-none"><div tabindex="0" class="fb-card-hover border-l-[3px] border-l-blue-400 dark:border-l-blue-500 p-2.5 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-stone-200 dark:border-stone-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
             <div class="flex items-center gap-2 mb-1">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800">
                 <span aria-hidden="true">&#x1F517;</span> PR Comment
@@ -473,10 +481,10 @@
             <p class="text-xs font-medium text-stone-700 dark:text-stone-300 truncate">Lifecycle transitions need validation guards</p>
             <p class="text-xs text-blue-500 dark:text-blue-400 mt-1">Addressed by: unit-04-feedback-crud-api</p>
             <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5">FB-02 &middot; Visit 1 &middot; external-pr</p>
-          </div>
+          </div></li>
 
           <!-- Closed item -->
-          <div role="listitem" tabindex="0" class="fb-card-hover border-l-[3px] border-l-green-500 dark:border-l-green-400 p-2.5 rounded-lg bg-green-50/60 dark:bg-green-950/25 border border-stone-200 dark:border-stone-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-stone-900 outline-none">
+          <li class="list-none"><div tabindex="0" class="fb-card-hover border-l-[3px] border-l-green-500 dark:border-l-green-400 p-2.5 rounded-lg bg-green-50/60 dark:bg-green-950/25 border border-stone-200 dark:border-stone-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-stone-900 outline-none">
             <div class="flex items-center gap-2 mb-1">
               <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-600 dark:bg-green-500 text-white text-xs font-bold leading-none">&check;</span>
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800">
@@ -487,8 +495,8 @@
             </div>
             <p class="text-xs font-medium text-stone-700 dark:text-stone-300 truncate"><span class="text-green-700 dark:text-green-400 font-semibold">Closed &middot;</span> Button spacing inconsistent on tablet</p>
             <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5">FB-04 &middot; Visit 1 &middot; user-visual</p>
-          </div>
-        </div>
+          </div></li>
+        </ul>
 
         <!-- Footer: general comment + decision buttons -->
         <div class="shrink-0 border-t border-stone-200 dark:border-stone-700 p-3 space-y-3 bg-stone-50/50 dark:bg-stone-800/50">

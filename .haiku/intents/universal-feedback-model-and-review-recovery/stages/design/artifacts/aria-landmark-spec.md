@@ -62,6 +62,32 @@ Every artifact must be audited against this table. The dev-stage implementation 
 
 Legend: ✅ required · ❌ intentionally absent · — not applicable for this artifact's role.
 
+### 2.1 List semantics inside `<aside role="complementary">` (closes FB-148)
+
+The feedback-card stack inside the review aside is, visually, a list — consistent card spacing, reading-order top-to-bottom, one row per card. Structural relationships that are visually apparent **MUST** be programmatically determinable per WCAG 1.3.1 Info and Relationships (AA). The `<aside>` landmark alone does not expose list structure; an explicit list wrapper is required inside it.
+
+| Surface | Aside wrapper | Inner list wrapper | Card wrapper | Required attributes | Parity notes |
+|---|---|---|---|---|---|
+| `feedback-inline-desktop.html` | `<aside role="complementary" aria-label="Feedback list">` | `<ul class="list-none" aria-label="Feedback items">` | `<li class="list-none">` per card | `aria-label` on both `<aside>` and `<ul>`; `class="list-none"` on `<ul>` + each `<li>` to suppress default bullets/indent | Mirrors mobile's existing `role="list"` + `role="listitem"` inside the dialog sheet |
+| `feedback-inline-mobile.html` | n/a (sheet replaces aside) | `<div id="feedback-list" role="list" aria-label="Feedback items">` inside `role="dialog"` | `<div role="listitem">` per card | existing — unchanged by unit-31 | Canonical reference surface — desktop conforms to this semantic shape |
+| `feedback-card-states.html` | n/a (spec gallery, no aside) | `<ul class="list-none grid …">` per section (Light, Dark) | `<li class="list-none">` per state tile | `class="list-none"` on `<ul>` + `<li>` so the Tailwind grid layout is preserved | This IS the canonical spec gallery for the `FeedbackItem` component; list semantics here match the render surfaces above |
+
+**Why native `<ul>` / `<li>` over `role="list"` / `role="listitem"` on desktop:**
+
+- Native list elements are not subject to the "role list flattening" behavior some screen readers apply when a `role="list"` container has only a single child or an unusual ancestry. Every AT under test (VoiceOver, NVDA, JAWS, Orca, TalkBack) announces a native `<ul>` list-count + list-nav consistently.
+- `list-none` + matching per-`<li>` class preserves the existing flex / grid / space-y layout unchanged — there is no visual regression.
+- The per-card `tabindex="0"` + `focus-visible` styling stays on the inner card root (the `<div>`), not on the `<li>`. The `<li>` does not intercept focus; Tab behavior is identical to the pre-change artifact.
+- Mobile retains `role="list"` / `role="listitem"` because its feedback-sheet is built on `<div>` containers inside a `role="dialog"` — swapping to native `<ul>` there is a separate body-level change outside the unit-31 scope.
+
+**Decorative separators inside the list.** Group headers ("Current Visit", "Visit 1") are decorative rows; they render as `<li aria-hidden="true" class="list-none">` so the AT list-count does not inflate them into items, and arrow-key list-nav skips them. Use `aria-hidden="true"` — not `role="presentation"` — because the former is a cleaner hint that the row is visually-only.
+
+**Assessor verification (feedback-assessor gate):**
+
+- `grep -cE '<ul|role="list"' stages/design/artifacts/feedback-inline-desktop.html` → ≥ 1 (sidebar list wrapper present)
+- `grep -cE '<li|role="listitem"' stages/design/artifacts/feedback-inline-desktop.html` → ≥ 5 (one per feedback card in the default artifact state; note: this counts HTML-comment mentions too, so the threshold is deliberately low enough to survive copy changes)
+- `grep -cE '<ul|role="list"' stages/design/artifacts/feedback-card-states.html` → ≥ 2 (Light + Dark gallery wrappers)
+- `grep -cE '<ul|role="list"' stages/design/artifacts/feedback-inline-mobile.html` → ≥ 1 (parity regression guard — mobile's existing `role="list"` must remain)
+
 ## 3. Modal / dialog requirements (applies to every dialog surface)
 
 Every surface with `role="dialog"`:
@@ -333,5 +359,10 @@ This is a body-text amendment only — unit-01's FSM fields (status, hat, iterat
 - [ ] `grep -rEn 'role="alert" aria-live="assertive"' stages/design/artifacts/` shows ≥ 1 match per page-level artifact
 - [ ] Origin emoji audit: `grep -rEn '&#x(1F6E&#49;|1F5&#48;&#48;|27&#50;8|1F44&#49;)' stages/design/` returns 0 matches (these code points — shield `U+1F6E1`, shuffle `U+1F500`, sparkles `U+2728`, eye `U+1F441` — are the forbidden / drifted emoji from the old drafts; the grep pattern in this line is HTML-entity-escaped and the forbidden codepoints are referenced by U-notation so the audit stays clean when it scans this spec itself)
 - [ ] Skip link present: `grep -rEn 'href="#main-content"' stages/design/artifacts/` shows ≥ 1 match per page-level artifact
+- [ ] **List semantics inside aside (unit-31 / FB-148 / §2.1).** All four greps below must succeed; any miss blocks hat advancement with a specific line reference:
+  - `grep -cE '<ul|role="list"' stages/design/artifacts/feedback-inline-desktop.html` → ≥ 1 (desktop sidebar feedback-card list wrapper)
+  - `grep -cE '<li|role="listitem"' stages/design/artifacts/feedback-inline-desktop.html` → ≥ 5 (one `<li>` per card in the default artifact state)
+  - `grep -cE '<ul|role="list"' stages/design/artifacts/feedback-card-states.html` → ≥ 2 (Light + Dark gallery wrappers)
+  - `grep -cE '<ul|role="list"' stages/design/artifacts/feedback-inline-mobile.html` → ≥ 1 (regression guard — mobile's existing list structure must remain)
 
 Any gate item that fails blocks hat advancement; assessor rejects with the specific line reference.

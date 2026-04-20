@@ -18,6 +18,8 @@ inputs:
 outputs:
   - stages/design/DESIGN-BRIEF.md
   - knowledge/DESIGN-TOKENS.md
+  - stages/design/artifacts/component-inventory.md
+  - stages/design/artifacts/footer-button-copy-spec.md
 quality_gates:
   - >-
     FeedbackStatusBadge text shade is consistent across DESIGN-BRIEF §2 and
@@ -54,12 +56,16 @@ quality_gates:
     duplicating component specs.
 status: active
 bolt: 1
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T01:54:22Z'
-hat_started_at: '2026-04-20T01:54:22Z'
+hat_started_at: '2026-04-20T02:01:59Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:22Z'
+    completed_at: '2026-04-20T02:01:59Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T02:01:59Z'
     completed_at: null
     result: null
 ---

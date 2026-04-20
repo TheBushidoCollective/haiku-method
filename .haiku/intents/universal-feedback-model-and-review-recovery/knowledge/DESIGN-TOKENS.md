@@ -493,9 +493,13 @@ hover:border-stone-300 dark:hover:border-stone-600
 cursor-pointer transition-colors
 
 // Filter pill (active)
+// FB-06 fix: lifted to primary active treatment to match DESIGN-BRIEF §3 line 617
+// (canonical: "Pill has bg-teal-600 text-white; list filtered by that status").
+// Previous muted teal-100/teal-700 treatment conflicted with the brief's primary
+// active-state rule; unified here so filter pills read identically across surfaces.
 px-2 py-1 text-xs font-medium rounded-full
-bg-teal-100 text-teal-700 border-teal-200
-dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-700
+bg-teal-600 text-white border-transparent
+dark:bg-teal-500 dark:text-white dark:border-transparent
 ```
 
 #### Empty State
@@ -506,33 +510,49 @@ text-xs text-stone-400 dark:text-stone-500 italic p-4 text-center
 
 ### 2.6 Feedback Resolution Actions
 
-Inline action buttons on feedback cards for addressing/rejecting/closing items.
+Footer-button styles for the canonical feedback-status transitions. **DESIGN-BRIEF §2 "Footer Button Copy — Canonical Status × Origin Matrix" (lines 536–586) is the single source of truth** for which verb appears on which status. If this section and DESIGN-BRIEF §2 disagree, the brief wins — update this section to match, not the other way around.
+
+Canonical verb set (no other labels are permitted anywhere in the feedback UI):
+
+- **Dismiss** — `pending → rejected`. Secondary / muted. Replaces the retired `"Reject"` verb.
+- **Verify & Close** — `addressed → closed`. Primary / positive. Replaces the retired standalone `"Close"` verb (which was ambiguous on pending items).
+- **Reopen** — `{addressed,closed,rejected} → pending`. Secondary / muted. Always one word, no hyphen, no spaces.
+
+There is no **Address** button. `addressed` is a system/agent state set via the `addressed_by` claim on the feedback record — no reviewer-facing action produces it, so no button exists for it. Do not reintroduce an "Address" button when implementing.
+
+Banned variants (must not appear in any mockup, component, copy deck, or implemented UI — see DESIGN-BRIEF §2 lines 577–583):
+
+- `"Close"` as a standalone verb (ambiguous with `"Verify & Close"`).
+- `"Reject"` (replaced by `"Dismiss"`).
+- `"Address"` (no such user-facing action — see above).
+- Any hyphenated spelling of the reopen verb.
+- Any space-separated spelling of the reopen verb.
+- `"Dismiss & Close"` or any other compound verb — use only the three verbs in the canonical set.
 
 ```tsx
-// Address button
+// Dismiss button — pending → rejected (Secondary / muted)
 "text-xs font-medium px-2 py-1 rounded-md
- bg-blue-50 text-blue-700 hover:bg-blue-100
- dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40
+ border border-stone-300 dark:border-stone-600
+ text-stone-700 dark:text-stone-300
+ bg-white dark:bg-stone-900
+ hover:bg-stone-50 dark:hover:bg-stone-800
  transition-colors"
 
-// Reject button
+// Verify & Close button — addressed → closed (Primary / positive)
 "text-xs font-medium px-2 py-1 rounded-md
- bg-stone-100 text-stone-500 hover:bg-stone-200
- dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700
+ bg-green-600 hover:bg-green-700 text-white
  transition-colors"
 
-// Close button (verified resolved)
+// Reopen button — {addressed, closed, rejected} → pending (Secondary / muted, same style as Dismiss)
 "text-xs font-medium px-2 py-1 rounded-md
- bg-green-50 text-green-700 hover:bg-green-100
- dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40
- transition-colors"
-
-// Reopen button (revert from closed/rejected to pending)
-"text-xs font-medium px-2 py-1 rounded-md
- bg-amber-50 text-amber-700 hover:bg-amber-100
- dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40
+ border border-stone-300 dark:border-stone-600
+ text-stone-700 dark:text-stone-300
+ bg-white dark:bg-stone-900
+ hover:bg-stone-50 dark:hover:bg-stone-800
  transition-colors"
 ```
+
+All three buttons inherit the standard focus ring (`ring-2 ring-teal-500 ring-offset-2 ring-offset-white dark:ring-offset-stone-900`) and the standard disabled style (`opacity-50 cursor-not-allowed`). No verb-specific deviations — if a different visual treatment is needed, update DESIGN-BRIEF §2 first, then mirror the change here.
 
 ---
 
@@ -630,9 +650,16 @@ The feedback panel sits within the sidebar at the same level as existing content
 ```tsx
 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${originColors[origin]}`}>
   <span aria-hidden="true">{originIcons[origin]}</span>
-  {origin}
+  {originLabels[origin]}
 </span>
 ```
+
+Renders the canonical human label (`originLabels[origin]`, defined in §2.2
+lines 323–330), not the raw origin slug. This matches DESIGN-BRIEF §2
+`FeedbackOriginIcon` (lines 208–225) — e.g. `🔍 Review Agent`, not
+`🔍 adversarial-review`. Every §2 consumer of the origin badge
+(`FeedbackItem`, `FeedbackList`, `AgentFeedbackToggle`) expects the label
+form; the quick-copy template must match.
 
 ### Feedback Card
 

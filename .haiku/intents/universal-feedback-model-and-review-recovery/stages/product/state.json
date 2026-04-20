@@ -1,10 +1,20 @@
 {
-	"stage": "product",
-	"status": "completed",
-	"phase": "gate",
-	"started_at": "2026-04-16T14:07:13Z",
-	"completed_at": "2026-04-16T14:55:42Z",
-	"gate_entered_at": "2026-04-16T14:55:09Z",
-	"gate_outcome": "advanced",
-	"elaboration_turns": 3
+  "stage": "product",
+  "status": "completed",
+  "phase": "gate",
+  "started_at": "2026-04-16T14:07:13Z",
+  "completed_at": "2026-04-20T21:20:59Z",
+  "gate_entered_at": "2026-04-20T21:18:47Z",
+  "gate_outcome": "advanced",
+  "elaboration_turns": 3,
+  "iterations": [
+    {
+      "index": 1,
+      "started_at": "2026-04-20T21:20:59Z",
+      "completed_at": "2026-04-20T21:20:59Z",
+      "trigger": "initial",
+      "result": "advanced"
+    }
+  ],
+  "visits": 1
 }

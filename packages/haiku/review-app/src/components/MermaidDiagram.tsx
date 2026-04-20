@@ -25,7 +25,7 @@ function MermaidSvgDiagram({ definition }: Props) {
 	const [loading, setLoading] = useState(true)
 
 	useEffect(() => {
-		if (!ref.current || !definition.trim()) return
+		if (!(ref.current && definition.trim())) return
 
 		// Load mermaid from CDN dynamically — too large to bundle
 		const script = document.createElement("script")

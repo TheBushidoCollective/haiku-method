@@ -33,6 +33,7 @@ export function Footer() {
 									rel="noopener noreferrer"
 									className="mt-0.5 block"
 								>
+									{/* biome-ignore lint/performance/noImgElement: SVG logo with CSS filters (brightness-0, invert, opacity transitions); next/image doesn't pass through filter-style classes cleanly on the underlying img */}
 									<img
 										src="/images/born-at.svg"
 										alt="The Bushido Collective"
@@ -50,6 +51,7 @@ export function Footer() {
 									rel="noopener noreferrer"
 									className="mt-0.5 block"
 								>
+									{/* biome-ignore lint/performance/noImgElement: SVG logo with CSS filters; see comment on born-at.svg above */}
 									<img
 										src="/images/battle-tested-at.svg"
 										alt="GigSmart"
@@ -132,6 +134,7 @@ export function Footer() {
 						className="flex items-center gap-1.5 text-sm text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 transition-colors"
 					>
 						<span>Powered by</span>
+						{/* biome-ignore lint/performance/noImgElement: SVG logo with CSS filters */}
 						<img
 							src="/images/claude-logo.svg"
 							alt="Claude"

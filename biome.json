@@ -1,5 +1,4 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
@@ -10,18 +9,19 @@
 		"includes": [
 			"packages/**",
 			"website/**",
-			"!**/node_modules/**",
-			"!**/.next/**",
-			"!**/dist/**",
-			"!**/build/**",
-			"!**/review-app/dist/**",
-			"!**/.venv/**",
-			"!**/coverage/**",
-			"!**/.haiku/**",
-			"!**/.claude/**",
-			"!website/content/**",
-			"!website/public/**",
-			"!website/schema/**"
+			"deploy/**",
+			"!**/dist/*",
+			"!**/bin/*",
+			"!.haiku/**/*",
+			"!.claude/**/*",
+			"!**/__generated__",
+			"!**/node_modules",
+			"!**/dist",
+			"!**/.next",
+			"!**/build",
+			"!website/public",
+			"!website/schema/github.graphql",
+			"!website/schema/gitlab.graphql"
 		]
 	},
 	"formatter": {
@@ -29,7 +29,13 @@
 		"indentStyle": "tab",
 		"indentWidth": 2
 	},
-	"assist": { "actions": { "source": { "organizeImports": "on" } } },
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	},
 	"linter": {
 		"enabled": true,
 		"rules": {

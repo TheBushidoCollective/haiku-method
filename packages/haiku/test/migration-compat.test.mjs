@@ -198,7 +198,7 @@ try {
 	})
 
 	test("readFeedbackFiles returns [] for stage with no feedback dir", () => {
-		const { projDir, slug } = createProject("no-feedback-dir-read", {
+		const { projDir } = createProject("no-feedback-dir-read", {
 			slug: "read-fb-test",
 		})
 		createStageState(
@@ -213,7 +213,7 @@ try {
 	})
 
 	test("readFeedbackFiles returns [] for completely nonexistent stage", () => {
-		const { projDir, slug } = createProject("no-stage", {
+		const { projDir } = createProject("no-stage", {
 			slug: "no-stage-slug",
 		})
 		process.chdir(projDir)
@@ -425,12 +425,9 @@ Empty stages.
 	console.log("\n=== (e) haiku_feedback_list on empty stages ===")
 
 	test("haiku_feedback_list returns empty items for stage with no feedback dir", () => {
-		const { projDir, intentDirPath, slug } = createProject(
-			"empty-feedback-list",
-			{
-				slug: "empty-fb-list",
-			},
-		)
+		const { projDir, intentDirPath } = createProject("empty-feedback-list", {
+			slug: "empty-fb-list",
+		})
 		createStageState(intentDirPath, "plan", { phase: "elaborate" })
 		process.chdir(projDir)
 
@@ -449,12 +446,9 @@ Empty stages.
 	})
 
 	test("haiku_feedback_list returns empty items across all stages with no feedback", () => {
-		const { projDir, intentDirPath, slug } = createProject(
-			"empty-feedback-all",
-			{
-				slug: "empty-fb-all",
-			},
-		)
+		const { projDir, intentDirPath } = createProject("empty-feedback-all", {
+			slug: "empty-fb-all",
+		})
 		createStageState(intentDirPath, "plan", { phase: "elaborate" })
 		createStageState(intentDirPath, "build", { phase: "elaborate" })
 		process.chdir(projDir)

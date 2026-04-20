@@ -22,6 +22,7 @@ export function StatusBadge({ label, status }: Props) {
 
 	return (
 		<span
+			role="status"
 			className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${colorClass}`}
 			aria-label={label ? `${label}: ${status}` : status}
 		>

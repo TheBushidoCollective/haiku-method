@@ -270,10 +270,14 @@ export function parseMermaidFlow(rawSource: string): ParsedFlow {
 
 			getOrCreateNode(nextDecl.id, nextDecl.label, nextDecl.shape)
 
+			// lastNodeId is assigned earlier in the loop before any path
+			// that reaches this push. Narrow explicitly so we don't need
+			// a non-null assertion.
+			if (lastNodeId === null) break
 			const edgeId = `e${edgeCounter}`
 			edges.push({
 				id: edgeId,
-				source: lastNodeId!,
+				source: lastNodeId,
 				target: nextDecl.id,
 				label: edge.label,
 				dashed: edge.dashed,

@@ -17,7 +17,7 @@ export function CriteriaChecklist({ criteria }: Props) {
 		<ol className="space-y-2">
 			{criteria.map((c, i) => (
 				<li
-					key={i}
+					key={c.text}
 					className={`flex items-start gap-3 px-5 py-3 rounded-lg ${
 						c.checked
 							? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"

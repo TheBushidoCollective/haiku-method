@@ -2,6 +2,7 @@
 name: measure
 description: Track KPIs, analyze performance, and generate insights and recommendations
 hats: [analyst, report-writer]
+fix_hats: [analyst, feedback-assessor]
 review: auto
 elaboration: autonomous
 inputs:

@@ -30,40 +30,42 @@ export interface DemoState {
 	allStagesComplete: boolean
 }
 
+// Stable initial state — declared outside the hook so the reference is
+// constant across renders and safe as a useCallback/useEffect dependency.
+function makeInitialState(): DemoState {
+	return {
+		messages: [],
+		files: [],
+		highlightedFile: null,
+		cards: [],
+		activeStage: null,
+		completedStages: [],
+		playing: true,
+		speed: 1,
+		stepIndex: 0,
+		typing: false,
+		fastForward: null,
+		review: {
+			visible: false,
+			title: "",
+			intent: "",
+			criteria: [],
+			gateType: "",
+			checkedIndexes: [],
+			approveHighlighted: false,
+			isDesignReview: false,
+		},
+		completed: false,
+		mobileTab: "terminal",
+		allStagesComplete: false,
+	}
+}
+
 export function useDemoEngine(config: DemoConfig) {
-	const [state, setState] = useState<DemoState>(() => initialState())
+	const [state, setState] = useState<DemoState>(() => makeInitialState())
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const stateRef = useRef(state)
 	stateRef.current = state
-
-	function initialState(): DemoState {
-		return {
-			messages: [],
-			files: [],
-			highlightedFile: null,
-			cards: [],
-			activeStage: null,
-			completedStages: [],
-			playing: true,
-			speed: 1,
-			stepIndex: 0,
-			typing: false,
-			fastForward: null,
-			review: {
-				visible: false,
-				title: "",
-				intent: "",
-				criteria: [],
-				gateType: "",
-				checkedIndexes: [],
-				approveHighlighted: false,
-				isDesignReview: false,
-			},
-			completed: false,
-			mobileTab: "terminal",
-			allStagesComplete: false,
-		}
-	}
 
 	const clearTimer = useCallback(() => {
 		if (timerRef.current !== null) {
@@ -256,8 +258,8 @@ export function useDemoEngine(config: DemoConfig) {
 
 	const reset = useCallback(() => {
 		clearTimer()
-		setState(initialState())
-	}, [clearTimer, initialState])
+		setState(makeInitialState())
+	}, [clearTimer])
 
 	// After reset, start playback
 	useEffect(() => {
@@ -303,7 +305,7 @@ export function useDemoEngine(config: DemoConfig) {
 		setState((prev) => {
 			const targetIndex = Math.max(0, prev.stepIndex - 1)
 			// Replay all steps from 0 to targetIndex-1
-			let replayed = initialState()
+			let replayed = makeInitialState()
 			replayed.playing = false
 			for (let i = 0; i < targetIndex; i++) {
 				const step = config.steps[i]
@@ -313,7 +315,7 @@ export function useDemoEngine(config: DemoConfig) {
 			}
 			return { ...replayed, stepIndex: targetIndex, playing: false }
 		})
-	}, [clearTimer, config.steps, applyAction, initialState])
+	}, [clearTimer, config.steps, applyAction])
 
 	const setMobileTab = useCallback(
 		(tab: "terminal" | "artifacts" | "board") => {

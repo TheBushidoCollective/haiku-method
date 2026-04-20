@@ -22,18 +22,6 @@ const statusColors: Record<string, string> = {
 	blocked: "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950",
 }
 
-const _phaseColors: Record<string, string> = {
-	elaborate:
-		"bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-	decompose:
-		"bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400", // backward compat
-	execute: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
-	review:
-		"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-	persist: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-	gate: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
-}
-
 interface KanbanProps {
 	provider: BrowseProvider
 	intents: HaikuIntent[]
@@ -43,7 +31,7 @@ interface KanbanProps {
 // ── Portfolio Kanban: intents across stage columns ─────────────────────────
 
 export function PortfolioKanban({
-	provider,
+	provider: _provider,
 	intents,
 	onSelectIntent,
 }: KanbanProps) {
@@ -58,7 +46,9 @@ export function PortfolioKanban({
 		if (!studioMap.has(studio)) {
 			studioMap.set(studio, { stages: [], intents: [] })
 		}
-		const entry = studioMap.get(studio)!
+		// `studio` was just added to the map above if missing; get is safe.
+		const entry = studioMap.get(studio)
+		if (!entry) continue
 		entry.intents.push(intent)
 		// Collect stage ordering from the first intent that has stages for this studio
 		if (entry.stages.length === 0 && intent.studioStages.length > 0) {
@@ -76,7 +66,10 @@ export function PortfolioKanban({
 	return (
 		<div className="space-y-8">
 			{studioNames.map((studioName) => {
-				const { stages, intents: studioIntents } = studioMap.get(studioName)!
+				// studioName came from studioMap.keys() — guaranteed present.
+				const entry = studioMap.get(studioName)
+				if (!entry) return null
+				const { stages, intents: studioIntents } = entry
 
 				// Build columns: Backlog → stages → Completed
 				const columns = ["Backlog", ...stages, "Completed"]

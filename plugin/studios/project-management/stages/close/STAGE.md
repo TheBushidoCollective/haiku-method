@@ -2,6 +2,7 @@
 name: close
 description: Conduct retrospective, capture lessons learned, and handoff
 hats: [closer, archivist]
+fix_hats: [closer, feedback-assessor]
 review: ask
 elaboration: autonomous
 inputs:

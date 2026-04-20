@@ -197,7 +197,7 @@ export function findUnitFiles(intentDir: string): string[] {
 
 	for (const stage of readdirSync(stagesDir)) {
 		const unitsDir = join(stagesDir, stage, "units")
-		if (!existsSync(unitsDir) || !statSync(unitsDir).isDirectory()) continue
+		if (!(existsSync(unitsDir) && statSync(unitsDir).isDirectory())) continue
 		for (const file of readdirSync(unitsDir)) {
 			if (file.startsWith("unit-") && file.endsWith(".md")) {
 				results.push(join(unitsDir, file))
@@ -245,8 +245,7 @@ export function readFrontmatterArray(
 		if (inField) {
 			// Non-indented line that isn't a continuation = end of field
 			if (
-				!line.startsWith(" ") &&
-				!line.startsWith("\t") &&
+				!(line.startsWith(" ") || line.startsWith("\t")) &&
 				line.trim() !== ""
 			) {
 				break

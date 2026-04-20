@@ -80,6 +80,11 @@ function createProject(name, opts = {}) {
 	const stages = opts.stages || ["plan", "build", "review"]
 
 	mkdirSync(join(intentDirPath, "stages"), { recursive: true })
+	// These tests exercise external-review mechanics (PR approval, merge
+	// detection, etc.) — not the studio-level intent-completion review,
+	// which is on by default. Opting out keeps the final stage's approval
+	// path surfacing `intent_complete` directly instead of routing
+	// through `advance_phase → awaiting_completion_review → gate_review`.
 	writeFileSync(
 		join(intentDirPath, "intent.md"),
 		`---
@@ -89,6 +94,7 @@ mode: ${opts.mode || "continuous"}
 active_stage: ${opts.active_stage || ""}
 status: ${opts.status || "active"}
 intent_reviewed: ${opts.intent_reviewed !== undefined ? opts.intent_reviewed : true}
+intent_completion_review: ${opts.intent_completion_review !== undefined ? opts.intent_completion_review : false}
 started_at: 2026-04-04T18:00:00Z
 completed_at: null
 ---

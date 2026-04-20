@@ -2,6 +2,7 @@
 name: report
 description: Create stakeholder updates and project dashboards
 hats: [reporter, communicator]
+fix_hats: [reporter, feedback-assessor]
 review: ask
 elaboration: autonomous
 inputs:

@@ -53,7 +53,7 @@ export function App() {
 
 function SessionLoader({
 	sessionId,
-	pageType,
+	pageType: _pageType,
 }: {
 	sessionId: string
 	pageType: string

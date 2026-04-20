@@ -2,6 +2,7 @@
 name: certify
 description: Prepare for and support external audit, address findings
 hats: [audit-liaison, finding-resolver]
+fix_hats: [audit-liaison, feedback-assessor]
 review: [external, await]
 elaboration: autonomous
 inputs:

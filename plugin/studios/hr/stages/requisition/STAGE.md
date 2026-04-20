@@ -2,6 +2,7 @@
 name: requisition
 description: Define role requirements and create job description
 hats: [hiring-manager, recruiter]
+fix_hats: [hiring-manager, feedback-assessor]
 review: ask
 elaboration: collaborative
 inputs: []

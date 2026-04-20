@@ -2,6 +2,7 @@
 name: development
 description: Implement the library against the API contract from inception
 hats: [planner, builder, reviewer]
+fix_hats: [planner, feedback-assessor]
 review: [external, ask]
 elaboration: collaborative
 inputs:

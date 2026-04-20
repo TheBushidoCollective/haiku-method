@@ -61,7 +61,7 @@ export function InlineComments({
 
 	function getParagraphIndex(node: Node): number {
 		const el = node.nodeType === 3 ? node.parentElement : (node as HTMLElement)
-		if (!el || !contentRef.current) return 0
+		if (!(el && contentRef.current)) return 0
 		let block: HTMLElement | null = el
 		while (block && block.parentElement !== contentRef.current) {
 			block = block.parentElement
@@ -230,7 +230,7 @@ export function InlineComments({
 
 	return (
 		<div ref={containerRef} className="relative">
-			{/* Content area */}
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: mouseup here is selection-tracking, not a click affordance; keyboard-accessible controls live in the comment popover below */}
 			<div
 				ref={contentRef}
 				className="prose prose-sm prose-stone dark:prose-invert max-w-none
@@ -240,6 +240,7 @@ export function InlineComments({
           prose-td:border prose-td:border-stone-300 prose-td:dark:border-stone-600 prose-td:px-3 prose-td:py-1.5
           selection:bg-amber-200 dark:selection:bg-amber-700/50"
 				onMouseUp={handleMouseUp}
+				// biome-ignore lint/security/noDangerouslySetInnerHtml: htmlContent is sanitized markdown-it output from trusted intent docs
 				dangerouslySetInnerHTML={{ __html: htmlContent }}
 			/>
 
@@ -251,23 +252,16 @@ export function InlineComments({
 					style={{ left: popoverPos.x, top: popoverPos.y }}
 				>
 					{popoverMode === "button" ? (
-						<div
-							className="px-3 py-1.5 cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-700 transition-colors rounded-lg"
-							role="button"
-							tabIndex={0}
+						<button
+							type="button"
+							className="px-3 py-1.5 cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-700 transition-colors rounded-lg text-left"
 							aria-label="Add comment on selected text"
 							onClick={handleShowCommentInput}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									e.preventDefault()
-									handleShowCommentInput()
-								}
-							}}
 						>
 							<span className="text-sm font-medium text-teal-600 dark:text-teal-400">
 								+ Comment
 							</span>
-						</div>
+						</button>
 					) : (
 						<div className="p-3 w-64">
 							<textarea

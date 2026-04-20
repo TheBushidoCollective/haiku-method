@@ -2,6 +2,7 @@
 name: production
 description: Content and systems at scale
 hats: [gameplay-engineer, content-author, systems-designer, reviewer]
+fix_hats: [gameplay-engineer, feedback-assessor]
 review: [external, ask]
 elaboration: collaborative
 inputs:

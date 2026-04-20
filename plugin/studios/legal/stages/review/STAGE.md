@@ -2,6 +2,7 @@
 name: review
 description: Conduct legal review and compliance check
 hats: [reviewer, compliance-officer]
+fix_hats: [reviewer, feedback-assessor]
 review: external
 elaboration: autonomous
 inputs:

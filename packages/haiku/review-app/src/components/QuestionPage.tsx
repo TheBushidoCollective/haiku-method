@@ -148,7 +148,7 @@ export function QuestionPage({ session, sessionId, wsRef }: Props) {
 									const builtIdx = refIdx + 1
 									return (
 										<div
-											key={pairIdx}
+											key={imageUrls[refIdx]}
 											className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"
 										>
 											<div>
@@ -178,6 +178,7 @@ export function QuestionPage({ session, sessionId, wsRef }: Props) {
 								},
 							)
 						: imageUrls.map((url, i) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: imageUrls is a fixed, ordered array for this render; url isn't guaranteed unique
 								<div key={i} className="mb-4">
 									<img
 										src={url}
@@ -197,6 +198,7 @@ export function QuestionPage({ session, sessionId, wsRef }: Props) {
 					const showOther = selected.has("__other__")
 
 					return (
+						// biome-ignore lint/suspicious/noArrayIndexKey: questions is a fixed form ordering for this render; no IDs exposed on questions
 						<Card key={qIdx}>
 							<fieldset>
 								<legend className="text-base font-semibold mb-1 text-stone-900 dark:text-stone-100">

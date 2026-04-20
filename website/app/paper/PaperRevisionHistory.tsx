@@ -127,7 +127,7 @@ export default function PaperRevisionHistory({
 		(s) => s.isNew && !s.isRemoved,
 	)
 	const modifiedSectionsInLatest = latestRevision?.sectionChanges.filter(
-		(s) => !s.isNew && !s.isRemoved,
+		(s) => !(s.isNew || s.isRemoved),
 	)
 	const removedSectionsInLatest = latestRevision?.sectionChanges.filter(
 		(s) => s.isRemoved,

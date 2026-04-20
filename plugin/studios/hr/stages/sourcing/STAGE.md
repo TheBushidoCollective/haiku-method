@@ -2,6 +2,7 @@
 name: sourcing
 description: Identify candidate pools and conduct outreach
 hats: [sourcer, recruiter]
+fix_hats: [sourcer, feedback-assessor]
 review: auto
 elaboration: autonomous
 inputs:

@@ -191,9 +191,18 @@ test("haiku_unit_set requires intent, stage, unit, field, value", () => {
 	])
 })
 
-test("haiku_run_next requires intent", () => {
+test("haiku_run_next: intent is optional (auto-resolved from branch or sole active intent)", () => {
 	const tool = orchestratorToolDefs.find((t) => t.name === "haiku_run_next")
-	assert.deepStrictEqual(tool.inputSchema.required, ["intent"])
+	// `required` should be absent OR not include "intent" — the FSM resolves it.
+	const required = tool.inputSchema.required ?? []
+	assert.ok(
+		!required.includes("intent"),
+		"intent should not be required — FSM auto-resolves from current git branch or sole active intent",
+	)
+	assert.ok(
+		"intent" in tool.inputSchema.properties,
+		"intent should still be declared as a property",
+	)
 })
 
 test("haiku_run_next has optional external_review_url", () => {

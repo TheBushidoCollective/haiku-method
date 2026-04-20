@@ -2,6 +2,7 @@
 name: review
 description: Adversarial quality review of the deliverable
 hats: [critic, fact-checker]
+fix_hats: [critic, feedback-assessor]
 review: ask
 elaboration: autonomous
 inputs:

@@ -2,6 +2,7 @@
 name: postmortem
 description: Document timeline, root cause, action items, and prevention measures
 hats: [postmortem-author, action-item-tracker]
+fix_hats: [postmortem-author, feedback-assessor]
 review: external
 elaboration: autonomous
 inputs:

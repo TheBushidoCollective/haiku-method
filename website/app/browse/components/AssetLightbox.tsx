@@ -44,6 +44,12 @@ export function AssetLightbox({ asset, host, onClose }: Props) {
 			onClick={(e) => {
 				if (e.target === e.currentTarget) onClose()
 			}}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onClose()
+			}}
+			role="dialog"
+			aria-modal="true"
+			aria-label={`Asset preview: ${asset.name}`}
 		>
 			<div className="relative flex max-h-[95vh] max-w-[95vw] flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-stone-900">
 				{/* Header */}

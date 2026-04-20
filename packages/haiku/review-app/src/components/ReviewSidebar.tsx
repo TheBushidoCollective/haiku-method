@@ -116,7 +116,7 @@ export function ReviewSidebar({
 	async function handleRequestChanges() {
 		const pendingText = generalText.trim()
 		// Must have at least one comment or general text
-		if (!hasComments && !pendingText) {
+		if (!(hasComments || pendingText)) {
 			setPromptForComment(true)
 			generalRef.current?.focus()
 			return
@@ -235,11 +235,22 @@ export function ReviewSidebar({
 					</p>
 				)}
 				{comments.map((c) => (
+					// biome-ignore lint/a11y/noStaticElementInteractions: comment card is a scroll-to affordance; nested action button (delete) provides the keyboard path
 					<div
 						key={c.id}
 						className="p-2.5 rounded-lg bg-stone-50 dark:bg-stone-800/50 border border-transparent hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group"
 						onClick={() => {
 							if (editingId !== c.id && c.type !== "general") onScrollTo(c.id)
+						}}
+						onKeyDown={(e) => {
+							if (
+								(e.key === "Enter" || e.key === " ") &&
+								editingId !== c.id &&
+								c.type !== "general"
+							) {
+								e.preventDefault()
+								onScrollTo(c.id)
+							}
 						}}
 					>
 						<div className="flex items-center gap-2 mb-1">
@@ -267,6 +278,8 @@ export function ReviewSidebar({
 						</div>
 
 						{editingId === c.id ? (
+							// biome-ignore lint/a11y/noStaticElementInteractions: stopPropagation wrapper to keep clicks inside the edit textarea from re-triggering the card's scroll-to handler; no user-facing affordance
+							// biome-ignore lint/a11y/useKeyWithClickEvents: same; suppression-only, nested textarea owns keyboard
 							<div onClick={(e) => e.stopPropagation()}>
 								<textarea
 									className="w-full text-xs p-1.5 border border-stone-300 dark:border-stone-600 rounded bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 resize-none focus:ring-1 focus:ring-teal-500"

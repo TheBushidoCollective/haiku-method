@@ -258,7 +258,7 @@ function computeDiff(
  */
 function contentSimilarity(a: string, b: string): number {
 	if (a === b) return 1
-	if (!a || !b) return 0
+	if (!(a && b)) return 0
 
 	const aLines = new Set(a.split("\n").filter((l) => l.trim()))
 	const bLines = new Set(b.split("\n").filter((l) => l.trim()))
@@ -343,8 +343,10 @@ function computeSectionChanges(
 
 	for (const [normalizedName, data] of oldNormalized) {
 		if (
-			!matchedOldSections.has(normalizedName) &&
-			!newNormalized.has(normalizedName)
+			!(
+				matchedOldSections.has(normalizedName) ||
+				newNormalized.has(normalizedName)
+			)
 		) {
 			unmatchedOld.push({
 				normalizedName,

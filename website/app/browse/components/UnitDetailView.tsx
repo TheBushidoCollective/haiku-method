@@ -144,7 +144,7 @@ export function UnitDetailView({
 					<div className="rounded-xl border border-stone-200 dark:border-stone-700">
 						{unit.criteria.map((criterion, i) => (
 							<div
-								key={i}
+								key={criterion.text}
 								className={`flex items-start gap-3 px-5 py-3 ${
 									i < unit.criteria.length - 1
 										? "border-b border-stone-100 dark:border-stone-800"
@@ -576,7 +576,15 @@ function DocModal({
 		<div
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
 			onClick={onClose}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onClose()
+			}}
+			role="dialog"
+			aria-modal="true"
+			aria-label={`File viewer: ${fileName}`}
 		>
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: inner container stops backdrop-close propagation */}
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation is click-capture suppression */}
 			<div
 				className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xl dark:border-stone-700 dark:bg-stone-900"
 				onClick={(e) => e.stopPropagation()}

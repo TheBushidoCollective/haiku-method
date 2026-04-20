@@ -144,12 +144,29 @@ export function AuthenticatedMedia({
 	if (!objectUrl) return null
 
 	if (isImageMime(mime)) {
+		if (onClick) {
+			return (
+				<button
+					type="button"
+					onClick={onClick}
+					className={`${fullSize ? "max-h-[80vh] w-auto" : "h-32 w-full"} p-0 border-0 bg-transparent cursor-pointer`}
+					aria-label={`Open ${name}`}
+				>
+					{/* biome-ignore lint/performance/noImgElement: authenticated blob URL (objectUrl) — next/image cannot access protected resources without a custom loader that replicates auth; keeping <img> preserves the existing flow */}
+					<img
+						src={objectUrl}
+						alt={name}
+						className={`${fullSize ? "max-h-[80vh] w-auto" : "h-32 w-full object-cover"} ${className || ""}`}
+					/>
+				</button>
+			)
+		}
 		return (
+			// biome-ignore lint/performance/noImgElement: authenticated blob URL — next/image is not compatible with the authenticated-fetch + createObjectURL flow
 			<img
 				src={objectUrl}
 				alt={name}
-				onClick={onClick}
-				className={`${fullSize ? "max-h-[80vh] w-auto" : "h-32 w-full object-cover"} ${onClick ? "cursor-pointer" : ""} ${className || ""}`}
+				className={`${fullSize ? "max-h-[80vh] w-auto" : "h-32 w-full object-cover"} ${className || ""}`}
 			/>
 		)
 	}
@@ -165,8 +182,21 @@ export function AuthenticatedMedia({
 			)
 		}
 		return (
+			// biome-ignore lint/a11y/noStaticElementInteractions: role/tabIndex/onKeyDown are wired conditionally (only when onClick is set); static-analysis can't see the conditional so we assert the intent here
 			<div
 				onClick={onClick}
+				onKeyDown={
+					onClick
+						? (e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault()
+									onClick()
+								}
+							}
+						: undefined
+				}
+				role={onClick ? "button" : undefined}
+				tabIndex={onClick ? 0 : undefined}
 				className={`flex flex-col items-center justify-center gap-2 h-32 bg-stone-50 dark:bg-stone-800/50 ${onClick ? "cursor-pointer" : ""} ${className || ""}`}
 			>
 				<svg
@@ -202,8 +232,21 @@ export function AuthenticatedMedia({
 			)
 		}
 		return (
+			// biome-ignore lint/a11y/noStaticElementInteractions: conditional role/tabIndex/onKeyDown wired when onClick is set
 			<div
 				onClick={onClick}
+				onKeyDown={
+					onClick
+						? (e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault()
+									onClick()
+								}
+							}
+						: undefined
+				}
+				role={onClick ? "button" : undefined}
+				tabIndex={onClick ? 0 : undefined}
 				className={`flex flex-col items-center justify-center gap-2 h-32 bg-stone-50 dark:bg-stone-800/50 ${onClick ? "cursor-pointer" : ""} ${className || ""}`}
 			>
 				<svg
@@ -229,8 +272,21 @@ export function AuthenticatedMedia({
 
 	// Other file types — show a generic file icon and download link
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: conditional role/tabIndex/onKeyDown wired when onClick is set
 		<div
 			onClick={onClick}
+			onKeyDown={
+				onClick
+					? (e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault()
+								onClick()
+							}
+						}
+					: undefined
+			}
+			role={onClick ? "button" : undefined}
+			tabIndex={onClick ? 0 : undefined}
 			className={`flex flex-col items-center justify-center gap-2 ${fullSize ? "min-h-[100px]" : "h-32"} bg-stone-50 dark:bg-stone-800/50 ${onClick ? "cursor-pointer" : ""} ${className || ""}`}
 		>
 			<svg

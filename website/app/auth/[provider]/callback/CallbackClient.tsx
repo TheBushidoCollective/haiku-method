@@ -39,7 +39,10 @@ export function CallbackClient({ provider }: { provider: string }) {
 							className="mx-auto h-12 w-12 animate-spin text-teal-500"
 							fill="none"
 							viewBox="0 0 24 24"
+							role="img"
+							aria-label="Loading"
 						>
+							<title>Loading</title>
 							<circle
 								className="opacity-25"
 								cx="12"
@@ -67,7 +70,10 @@ export function CallbackClient({ provider }: { provider: string }) {
 							fill="none"
 							viewBox="0 0 24 24"
 							stroke="currentColor"
+							role="img"
+							aria-label="Success"
 						>
+							<title>Success</title>
 							<path
 								strokeLinecap="round"
 								strokeLinejoin="round"
@@ -89,7 +95,10 @@ export function CallbackClient({ provider }: { provider: string }) {
 							fill="none"
 							viewBox="0 0 24 24"
 							stroke="currentColor"
+							role="img"
+							aria-label="Error"
 						>
+							<title>Error</title>
 							<path
 								strokeLinecap="round"
 								strokeLinejoin="round"

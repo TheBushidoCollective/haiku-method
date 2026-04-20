@@ -119,6 +119,7 @@ export function Header() {
 								const isOpen = openCategory === megaCategory.title
 
 								return (
+									// biome-ignore lint/a11y/noStaticElementInteractions: hover-to-open mega menu wrapper; click-through is handled by the nested button
 									<div
 										key={item.title}
 										className="relative"
@@ -206,6 +207,7 @@ export function Header() {
 
 				{/* Mega Menu Dropdowns */}
 				{navigation.map((category) => (
+					// biome-ignore lint/a11y/noStaticElementInteractions: mega-menu wrapper carries only mouse events; content inside has keyboard affordances
 					<div
 						key={category.title}
 						onMouseEnter={handleMegaMenuMouseEnter}

@@ -2,6 +2,7 @@
 name: roadmap
 description: Create the roadmap with sequencing, dependencies, and milestones
 hats: [roadmap-architect, capacity-planner]
+fix_hats: [roadmap-architect, feedback-assessor]
 review: ask
 elaboration: collaborative
 inputs:

@@ -2,6 +2,7 @@
 name: validation
 description: HIL testing, environmental, and regulatory certification
 hats: [test-engineer, compliance-officer, validation-lead]
+fix_hats: [test-engineer, feedback-assessor]
 review: await
 elaboration: collaborative
 inputs:

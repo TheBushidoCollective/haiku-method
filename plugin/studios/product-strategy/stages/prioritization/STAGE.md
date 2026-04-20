@@ -2,6 +2,7 @@
 name: prioritization
 description: Score and rank opportunities using impact/effort frameworks
 hats: [prioritizer, stakeholder-proxy]
+fix_hats: [prioritizer, feedback-assessor]
 review: ask
 elaboration: collaborative
 inputs:

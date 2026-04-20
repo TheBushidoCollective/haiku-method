@@ -2,6 +2,7 @@
 name: offer
 description: Develop compensation package and extend offer
 hats: [compensator, closer]
+fix_hats: [compensator, feedback-assessor]
 review: external
 elaboration: collaborative
 inputs:

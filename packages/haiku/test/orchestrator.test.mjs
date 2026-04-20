@@ -180,10 +180,21 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 		assert.strictEqual(orchestratorToolDefs.length, 7)
 	})
 
-	test("haiku_run_next tool defined with intent required", () => {
+	test("haiku_run_next tool defined with intent optional (auto-resolved)", () => {
 		const tool = orchestratorToolDefs.find((t) => t.name === "haiku_run_next")
 		assert.ok(tool)
-		assert.ok(tool.inputSchema.required.includes("intent"))
+		// `intent` is now optional — the FSM auto-resolves from the current
+		// git branch (`haiku/<slug>/*`) or from the sole active intent.
+		// Schema either omits `required` or doesn't list `intent` there.
+		const required = tool.inputSchema.required ?? []
+		assert.ok(
+			!required.includes("intent"),
+			"intent should not be required — auto-resolved from branch or sole active intent",
+		)
+		assert.ok(
+			tool.inputSchema.properties.intent,
+			"intent should still be declared as a property",
+		)
 	})
 
 	test("haiku_intent_create tool defined with title and description required", () => {
@@ -544,6 +555,74 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 		})
 		assert.strictEqual(res.isError, true)
 		assert.ok(res.content[0].text.includes("Invalid intent"))
+	})
+
+	// ── auto-resolve: intent argument is optional ──────────────────────────
+
+	await test("haiku_run_next with no intent and zero active intents errors cleanly", async () => {
+		const { projDir } = createProject("no-active-intents", {
+			status: "completed",
+		})
+		process.chdir(projDir)
+		const res = await handleOrchestratorTool("haiku_run_next", {})
+		assert.strictEqual(res.isError, true)
+		assert.ok(
+			res.content[0].text.includes("No active intents"),
+			`unexpected error text: ${res.content[0].text}`,
+		)
+	})
+
+	await test("haiku_run_next with no intent and sole active intent auto-resolves", async () => {
+		const { projDir, slug } = createProject("single-active")
+		process.chdir(projDir)
+		// Fake git returns "" (not a haiku branch) so we exercise the
+		// "sole active intent" fallback, not the branch-match path.
+		const res = await handleOrchestratorTool("haiku_run_next", {})
+		// Success path: whatever action the FSM picks, it's about `slug`.
+		// We only care that auto-resolve picked the right intent — the
+		// stringified response must include the slug.
+		const body = res.content[0].text
+		assert.ok(
+			body.includes(slug),
+			`expected response to reference auto-resolved slug '${slug}', got: ${body}`,
+		)
+	})
+
+	await test("haiku_run_next with no intent and multiple active intents errors with slug list", async () => {
+		const { projDir } = createProject("multi-project", {
+			slug: "multi-1-slug",
+		})
+		// Drop a second intent.md alongside the first so the project has
+		// two active intents and auto-resolve can't pick a winner.
+		const secondIntent = join(
+			projDir,
+			".haiku/intents/multi-2-slug/intent.md",
+		)
+		mkdirSync(join(projDir, ".haiku/intents/multi-2-slug/stages"), {
+			recursive: true,
+		})
+		writeFileSync(
+			secondIntent,
+			`---
+title: Second Intent
+studio: test-studio
+mode: continuous
+active_stage: ""
+status: active
+started_at: 2026-04-04T18:00:00Z
+completed_at: null
+---
+
+Second intent body.
+`,
+		)
+		process.chdir(projDir)
+		const res = await handleOrchestratorTool("haiku_run_next", {})
+		assert.strictEqual(res.isError, true)
+		const body = res.content[0].text
+		assert.ok(body.includes("Multiple active intents"))
+		assert.ok(body.includes("multi-1-slug"))
+		assert.ok(body.includes("multi-2-slug"))
 	})
 
 	// ── runNext: intent review gate ──────────────────────────────────────────

@@ -55,7 +55,7 @@ export function RemoteBrowseView({ pathSegments, branch: branchParam }: Props) {
 	const isGitHub = host === "github.com"
 
 	useEffect(() => {
-		if (!host || !project) {
+		if (!(host && project)) {
 			setError(
 				"Invalid repository path. Expected: /browse/github.com/org/repo/",
 			)

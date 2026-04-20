@@ -2,6 +2,7 @@
 name: product
 description: Define behavioral specifications and acceptance criteria
 hats: [product, specification, validator]
+fix_hats: [product, feedback-assessor]
 review: [external, ask]
 elaboration: collaborative
 inputs:

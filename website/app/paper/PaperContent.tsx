@@ -251,7 +251,7 @@ function buildDiffMarkdown(
 
 		const hasMermaidPlaceholder = part.value.includes("data-mermaid-index=")
 
-		if (!part.added && !part.removed) {
+		if (!(part.added || part.removed)) {
 			result += part.value
 			i++
 		} else if (part.removed && lineDiff[i + 1]?.added) {

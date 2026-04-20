@@ -214,7 +214,7 @@ function MermaidSvg({ chart }: { chart: string }) {
 
 	// Post-process SVG: darken fills in dark mode and add edge label backgrounds
 	useEffect(() => {
-		if (!containerRef.current || !svg) return
+		if (!(containerRef.current && svg)) return
 
 		const svgElement = containerRef.current.querySelector("svg")
 		if (!svgElement) return
@@ -294,7 +294,7 @@ function MermaidSvg({ chart }: { chart: string }) {
 			const edgeLabels = svgElement.querySelectorAll(".edgeLabel")
 			for (const labelGroup of edgeLabels) {
 				const textElement = labelGroup.querySelector("text")
-				if (!textElement || !(textElement instanceof SVGTextElement)) return
+				if (!(textElement && textElement instanceof SVGTextElement)) return
 
 				const labelText = textElement.textContent?.trim()
 				let bgColor = ""

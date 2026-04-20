@@ -35,7 +35,8 @@ window
 	.matchMedia("(prefers-color-scheme: dark)")
 	.addEventListener("change", applyTheme)
 
-const root = document.getElementById("root")!
+const root = document.getElementById("root")
+if (!root) throw new Error("Missing #root element — check index.html")
 createRoot(root).render(
 	<StrictMode>
 		<App />

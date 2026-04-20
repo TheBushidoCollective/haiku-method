@@ -38,7 +38,7 @@ interface Props {
 export function ReviewRouter({
 	session,
 	baseUrl,
-	onSubmitDecision,
+	onSubmitDecision: _onSubmitDecision,
 	onSubmitAnswers,
 	onSubmitDirection,
 }: Props) {

@@ -2,6 +2,7 @@
 name: screening
 description: Resume review and initial candidate qualification
 hats: [screener, assessor]
+fix_hats: [screener, feedback-assessor]
 review: auto
 elaboration: autonomous
 inputs:

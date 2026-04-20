@@ -257,7 +257,7 @@ async function withE2E(
 	response: Response,
 	sessionId: string | null,
 ): Promise<Response> {
-	if (!sessionId || !isE2EActive(sessionId) || response.status >= 400)
+	if (!(sessionId && isE2EActive(sessionId)) || response.status >= 400)
 		return response
 	// Null-body responses (HEAD endpoints, 204/205/304) have no payload to
 	// encrypt, and constructing `new Response(body, { status: 204 })` throws
@@ -921,7 +921,7 @@ function validateStage(slug: string, stage: string): boolean {
 }
 
 function handleFeedbackGet(intent: string, stage: string, url: URL): Response {
-	if (!isValidSlug(intent) || !isValidSlug(stage)) {
+	if (!(isValidSlug(intent) && isValidSlug(stage))) {
 		return Response.json(
 			{
 				error:
@@ -1002,7 +1002,7 @@ async function handleFeedbackPost(
 	stage: string,
 	req: Request,
 ): Promise<Response> {
-	if (!isValidSlug(intent) || !isValidSlug(stage)) {
+	if (!(isValidSlug(intent) && isValidSlug(stage))) {
 		return Response.json(
 			{
 				error:
@@ -1088,7 +1088,7 @@ async function handleFeedbackPut(
 	feedbackId: string,
 	req: Request,
 ): Promise<Response> {
-	if (!isValidSlug(intent) || !isValidSlug(stage) || !isValidSlug(feedbackId)) {
+	if (!(isValidSlug(intent) && isValidSlug(stage) && isValidSlug(feedbackId))) {
 		return Response.json(
 			{
 				error:
@@ -1176,7 +1176,7 @@ async function handleFeedbackDelete(
 	stage: string,
 	feedbackId: string,
 ): Promise<Response> {
-	if (!isValidSlug(intent) || !isValidSlug(stage) || !isValidSlug(feedbackId)) {
+	if (!(isValidSlug(intent) && isValidSlug(stage) && isValidSlug(feedbackId))) {
 		return Response.json(
 			{
 				error:
@@ -1214,11 +1214,13 @@ async function handleFeedbackDelete(
 				{ status: 404 },
 			)
 		}
-		if (result.error.includes("cannot delete pending")) {
+		// Lifecycle conflict: open item ("pending" or "fixing") can't be
+		// deleted mid-flight. Both statuses surface as 409 (Conflict) so
+		// UI clients can distinguish a lifecycle block from a bad request.
+		if (result.error.includes("cannot delete")) {
 			return Response.json(
 				{
-					error:
-						"Cannot delete pending feedback. Address, close, or reject it first.",
+					error: result.error.replace(/^Error:\s*/, ""),
 				},
 				{ status: 409 },
 			)

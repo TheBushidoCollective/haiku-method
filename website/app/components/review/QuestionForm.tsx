@@ -123,6 +123,7 @@ export function QuestionForm({ session, onSubmit }: Props) {
 			<form onSubmit={handleSubmit} className="flex flex-col gap-8">
 				{questions.map((q, qIdx) => (
 					<div
+						// biome-ignore lint/suspicious/noArrayIndexKey: fixed-order form questions; no unique ID available
 						key={qIdx}
 						className="rounded-xl border border-stone-700 bg-stone-800 p-6"
 					>
@@ -217,14 +218,14 @@ export function QuestionForm({ session, onSubmit }: Props) {
 				<div>
 					<label className="mb-2 block text-xs text-stone-500">
 						Additional feedback (optional)
+						<textarea
+							className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-200 placeholder:text-stone-600 focus:border-amber-500 focus:outline-none"
+							placeholder="Any additional context..."
+							value={feedback}
+							onChange={(e) => setFeedback(e.target.value)}
+							rows={3}
+						/>
 					</label>
-					<textarea
-						className="w-full rounded-lg border border-stone-700 bg-stone-800 px-3 py-2 text-sm text-stone-200 placeholder:text-stone-600 focus:border-amber-500 focus:outline-none"
-						placeholder="Any additional context..."
-						value={feedback}
-						onChange={(e) => setFeedback(e.target.value)}
-						rows={3}
-					/>
 				</div>
 
 				<button

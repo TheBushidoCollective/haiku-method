@@ -199,6 +199,7 @@ export default function BrowsePage() {
 			</p>
 
 			{/* Local directory */}
+			{/* biome-ignore lint/a11y/useSemanticElements: real <button> can't carry drag-and-drop handlers cleanly; this drop zone mixes click + drag, which only a div pattern supports */}
 			<div
 				className={`mb-8 cursor-pointer rounded-xl border-2 border-dashed p-12 text-center transition ${
 					dragging
@@ -206,6 +207,14 @@ export default function BrowsePage() {
 						: "border-stone-300 hover:border-teal-300 dark:border-stone-700 dark:hover:border-teal-700"
 				}`}
 				onClick={handleDirectoryPicker}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault()
+						handleDirectoryPicker()
+					}
+				}}
+				role="button"
+				tabIndex={0}
 				onDragOver={(e) => {
 					e.preventDefault()
 					setDragging(true)

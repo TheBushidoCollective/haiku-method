@@ -2,6 +2,7 @@
 name: budget
 description: Allocate resources and set financial targets
 hats: [budget-owner, allocator]
+fix_hats: [budget-owner, feedback-assessor]
 review: external
 elaboration: collaborative
 inputs:

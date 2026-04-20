@@ -260,7 +260,7 @@ export function addTempWorktree(
 
 /** Remove a temporary worktree. Non-fatal — never throws. */
 export function removeTempWorktree(path: string): void {
-	if (!path || !existsSync(path)) return
+	if (!(path && existsSync(path))) return
 	tryRun(["git", "worktree", "remove", "--force", path])
 }
 

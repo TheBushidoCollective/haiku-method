@@ -50,8 +50,8 @@ export function UnitReview({ session, baseUrl }: Props) {
 					<h2 className="mb-4 text-sm font-semibold uppercase tracking-widest text-stone-500">
 						Specification
 					</h2>
-					{sections.map((section, i) => (
-						<div key={i} className="mb-6">
+					{sections.map((section) => (
+						<div key={section.heading} className="mb-6">
 							<h3 className="mb-2 text-base font-semibold text-stone-200">
 								{section.heading}
 							</h3>
@@ -72,9 +72,9 @@ export function UnitReview({ session, baseUrl }: Props) {
 						Completion Criteria
 					</h2>
 					<div className="flex flex-col gap-2">
-						{criteria.map((c, i) => (
+						{criteria.map((c) => (
 							<div
-								key={i}
+								key={c.text}
 								className="flex items-start gap-3 rounded-lg bg-stone-800 px-4 py-3"
 							>
 								<div
@@ -109,8 +109,9 @@ export function UnitReview({ session, baseUrl }: Props) {
 									const url = m.url as string | undefined
 									const imgSrc = url ? `${baseUrl}${url}` : undefined
 									return imgSrc ? (
+										// biome-ignore lint/performance/noImgElement: review-server content from dynamic baseUrl
 										<img
-											key={i}
+											key={url ?? `mockup-${i}`}
 											src={imgSrc}
 											alt={(m.name as string) ?? `Mockup ${i + 1}`}
 											className="rounded-lg border border-stone-700 cursor-pointer hover:opacity-80 transition-opacity"

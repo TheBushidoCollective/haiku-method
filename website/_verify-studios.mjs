@@ -188,7 +188,7 @@ const auxSoftware = await auxSnapshot()
 await setStudio("legal")
 const auxLegal = await auxSnapshot()
 
-if (!auxSoftware || !auxLegal) {
+if (!(auxSoftware && auxLegal)) {
 	failures.push("aux cards: empty snapshot on at least one studio")
 } else if (auxSoftware === auxLegal) {
 	failures.push(

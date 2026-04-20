@@ -10,7 +10,7 @@ export function useFeedback(intent: string | null, stage: string | null) {
 
 	const fetchFeedback = useCallback(
 		async (statusFilter?: string) => {
-			if (!intent || !stage) return
+			if (!(intent && stage)) return
 			setLoading(true)
 			setError(null)
 			try {
@@ -42,7 +42,7 @@ export function useFeedback(intent: string | null, stage: string | null) {
 
 	const createFeedback = useCallback(
 		async (title: string, body: string, origin = "user-visual") => {
-			if (!intent || !stage) return null
+			if (!(intent && stage)) return null
 			const res = await fetch(
 				`/api/feedback/${encodeURIComponent(intent)}/${encodeURIComponent(stage)}`,
 				{
@@ -67,7 +67,7 @@ export function useFeedback(intent: string | null, stage: string | null) {
 			feedbackId: string,
 			fields: { status?: string; addressed_by?: string },
 		) => {
-			if (!intent || !stage) return null
+			if (!(intent && stage)) return null
 			const res = await fetch(
 				`/api/feedback/${encodeURIComponent(intent)}/${encodeURIComponent(stage)}/${encodeURIComponent(feedbackId)}`,
 				{
@@ -89,7 +89,7 @@ export function useFeedback(intent: string | null, stage: string | null) {
 
 	const deleteFeedback = useCallback(
 		async (feedbackId: string) => {
-			if (!intent || !stage) return null
+			if (!(intent && stage)) return null
 			const res = await fetch(
 				`/api/feedback/${encodeURIComponent(intent)}/${encodeURIComponent(stage)}/${encodeURIComponent(feedbackId)}`,
 				{

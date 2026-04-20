@@ -69,31 +69,48 @@ async function handleGitHub(
 ) {
 	const { code } = req.body || {}
 	if (!code) {
-		res.status(400).json({ error: "missing_code", error_description: "Authorization code is required" })
+		res.status(400).json({
+			error: "missing_code",
+			error_description: "Authorization code is required",
+		})
 		return
 	}
 
 	try {
-		const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
-			method: "POST",
-			headers: { "Content-Type": "application/json", Accept: "application/json" },
-			body: JSON.stringify({
-				client_id: process.env.HAIKU_GITHUB_OAUTH_CLIENT_ID,
-				client_secret: process.env.HAIKU_GITHUB_OAUTH_CLIENT_SECRET,
-				code,
-			}),
-		})
+		const tokenRes = await fetch(
+			"https://github.com/login/oauth/access_token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Accept: "application/json",
+				},
+				body: JSON.stringify({
+					client_id: process.env.HAIKU_GITHUB_OAUTH_CLIENT_ID,
+					client_secret: process.env.HAIKU_GITHUB_OAUTH_CLIENT_SECRET,
+					code,
+				}),
+			},
+		)
 
-		const data = (await tokenRes.json()) as { error?: string; error_description?: string; access_token?: string }
+		const data = (await tokenRes.json()) as {
+			error?: string
+			error_description?: string
+			access_token?: string
+		}
 
 		if (data.error) {
-			res.status(400).json({ error: data.error, error_description: data.error_description })
+			res
+				.status(400)
+				.json({ error: data.error, error_description: data.error_description })
 			return
 		}
 
 		res.json({ access_token: data.access_token })
 	} catch (e) {
-		res.status(500).json({ error: "server_error", error_description: (e as Error).message })
+		res
+			.status(500)
+			.json({ error: "server_error", error_description: (e as Error).message })
 	}
 }
 
@@ -103,7 +120,10 @@ async function handleGitLab(
 ) {
 	const { code, host } = req.body || {}
 	if (!code) {
-		res.status(400).json({ error: "missing_code", error_description: "Authorization code is required" })
+		res.status(400).json({
+			error: "missing_code",
+			error_description: "Authorization code is required",
+		})
 		return
 	}
 
@@ -114,7 +134,10 @@ async function handleGitLab(
 	try {
 		const tokenRes = await fetch(`https://${gitlabHost}/oauth/token`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json", Accept: "application/json" },
+			headers: {
+				"Content-Type": "application/json",
+				Accept: "application/json",
+			},
 			body: JSON.stringify({
 				client_id: process.env.HAIKU_GITLAB_OAUTH_CLIENT_ID,
 				client_secret: process.env.HAIKU_GITLAB_OAUTH_CLIENT_SECRET,
@@ -124,15 +147,23 @@ async function handleGitLab(
 			}),
 		})
 
-		const data = (await tokenRes.json()) as { error?: string; error_description?: string; access_token?: string }
+		const data = (await tokenRes.json()) as {
+			error?: string
+			error_description?: string
+			access_token?: string
+		}
 
 		if (data.error) {
-			res.status(400).json({ error: data.error, error_description: data.error_description })
+			res
+				.status(400)
+				.json({ error: data.error, error_description: data.error_description })
 			return
 		}
 
 		res.json({ access_token: data.access_token })
 	} catch (e) {
-		res.status(500).json({ error: "server_error", error_description: (e as Error).message })
+		res
+			.status(500)
+			.json({ error: "server_error", error_description: (e as Error).message })
 	}
 }

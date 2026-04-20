@@ -22,7 +22,7 @@ export function StageProgressStrip({
 			{stages.map((stage, i) => {
 				const isCurrent = stage.name === currentStage
 				const isCompleted = stage.status === "completed"
-				const isFuture = !isCurrent && !isCompleted
+				const isFuture = !(isCurrent || isCompleted)
 				const hasVisits = (stage.visits ?? 0) > 0
 				const isClickable = isCompleted || (isFuture && hasVisits)
 
@@ -42,7 +42,7 @@ export function StageProgressStrip({
 						{/* Stage dot/diamond */}
 						<button
 							type="button"
-							disabled={!isClickable && !isCurrent}
+							disabled={!(isClickable || isCurrent)}
 							onClick={() => isClickable && onStageClick?.(stage.name)}
 							title={`${stage.name} (${stage.status})`}
 							className={`relative flex items-center justify-center shrink-0 transition-all ${

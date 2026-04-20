@@ -2,6 +2,7 @@
 name: reporting
 description: Formal findings report with severity ratings, reproduction steps, remediation guidance, and executive summary
 hats: [report-writer, remediation-advisor]
+fix_hats: [report-writer, feedback-assessor]
 review: external
 elaboration: autonomous
 inputs:

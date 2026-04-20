@@ -62,7 +62,7 @@ async function e2eFetch(
 	const headers = new Headers(init?.headers)
 	headers.set("bypass-tunnel-reminder", "1")
 	const res = await fetch(url, { ...init, headers })
-	if (!e2eKey || !res.headers.get("X-E2E-Encrypted")) return res
+	if (!(e2eKey && res.headers.get("X-E2E-Encrypted"))) return res
 
 	const originalContentType =
 		res.headers.get("X-Original-Content-Type") ?? "application/octet-stream"

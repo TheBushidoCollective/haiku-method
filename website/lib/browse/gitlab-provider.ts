@@ -352,7 +352,7 @@ export class GitLabProvider implements BrowseProvider {
 				const parts = branchName.split("/")
 				const slug = parts.slice(1, -1).join("/")
 				const stageName = parts[parts.length - 1]
-				if (!slug || !stageName) return
+				if (!(slug && stageName)) return
 
 				const { prUrl, prStatus, prNumber } =
 					await this.fetchMrForBranch(branchName)
@@ -895,11 +895,15 @@ export class GitLabProvider implements BrowseProvider {
 					stageBranchResult,
 					activeStage,
 					stageNames,
-					stageBranchRef?.branch,
+					stageBranchRef?.branch ?? "",
 				)
 			}
 
-			// Level 2: Intent branch
+			// Level 2: Intent branch. We only reach this branch when
+			// intentData was set, which in turn required intentBranch to
+			// have resolved above. Fall back to empty string if the
+			// probe failed so the downstream reader sees a deterministic
+			// empty ref rather than an unchecked undefined.
 			if (!parsed && intentData) {
 				parsed = this.parseStageFromBlobs(
 					slug,
@@ -907,7 +911,7 @@ export class GitLabProvider implements BrowseProvider {
 					intentData,
 					activeStage,
 					stageNames,
-					intentBranch!,
+					intentBranch ?? "",
 				)
 			}
 

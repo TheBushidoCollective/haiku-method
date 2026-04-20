@@ -2,6 +2,7 @@
 name: health-check
 description: Monitor account health, identify risks, and create action plans
 hats: [health-monitor, risk-analyst]
+fix_hats: [health-monitor, feedback-assessor]
 review: ask
 elaboration: autonomous
 inputs:

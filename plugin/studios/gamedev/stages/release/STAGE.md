@@ -2,6 +2,7 @@
 name: release
 description: Storefront submission, platform certification, and patch pipeline
 hats: [release-engineer, platform-cert-specialist]
+fix_hats: [release-engineer, feedback-assessor]
 review: await
 elaboration: autonomous
 inputs:

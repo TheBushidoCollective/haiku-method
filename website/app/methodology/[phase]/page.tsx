@@ -127,6 +127,7 @@ export default async function PhasePage({ params }: PhasePageProps) {
 				<div className="mx-auto max-w-3xl">
 					<div
 						className="prose prose-stone dark:prose-invert prose-headings:font-semibold prose-h2:text-2xl prose-h2:mt-10 prose-h2:mb-4 prose-h3:text-lg prose-h3:mt-6 prose-p:leading-relaxed"
+						// biome-ignore lint/security/noDangerouslySetInnerHtml: server-rendered markdown from the methodology content directory (author-controlled, not user input)
 						dangerouslySetInnerHTML={{ __html: contentHtml }}
 					/>
 				</div>

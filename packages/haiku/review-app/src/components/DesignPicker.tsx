@@ -133,13 +133,15 @@ export function DesignPicker({ session, sessionId, wsRef }: Props) {
 					{archetypes.map((arch) => {
 						const isSelected = arch.name === selectedArchetype
 						return (
-							<div
+							// biome-ignore lint/a11y/useSemanticElements: custom card-style radio option — a real <input type="radio"> can't carry the rich preview/title/description card content inline, and the role="radio" + aria-checked + tabIndex pattern is ARIA-equivalent
+							<button
 								key={arch.name}
+								type="button"
 								role="radio"
 								aria-checked={isSelected}
 								tabIndex={isSelected ? 0 : -1}
 								onClick={() => selectArchetype(arch.name)}
-								className={`group relative rounded-xl border-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-stone-900 ${
+								className={`group relative rounded-xl border-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-stone-900 text-left ${
 									isSelected
 										? "border-teal-600 dark:border-teal-400 bg-teal-50 dark:bg-teal-900/20"
 										: "border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500"
@@ -182,7 +184,7 @@ export function DesignPicker({ session, sessionId, wsRef }: Props) {
 										View Full Size
 									</button>
 								</div>
-							</div>
+							</button>
 						)
 					})}
 				</div>
@@ -265,7 +267,9 @@ export function DesignPicker({ session, sessionId, wsRef }: Props) {
 				</div>
 			)}
 
-			{/* Preview Modal */}
+			{/* Preview Modal — backdrop is role="dialog" with Escape handler.
+			    The click-to-close + Escape is a standard modal affordance;
+			    the dedicated close button inside provides the keyboard path. */}
 			{previewModal && (
 				<div
 					className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
@@ -277,6 +281,8 @@ export function DesignPicker({ session, sessionId, wsRef }: Props) {
 					aria-modal="true"
 					aria-label={`Full size preview: ${previewModal.name}`}
 				>
+					{/* biome-ignore lint/a11y/noStaticElementInteractions: inner modal container; stopPropagation suppresses backdrop close-on-click when interacting with modal content */}
+					{/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation is click-capture suppression, not a user affordance */}
 					<div
 						className="relative bg-white dark:bg-stone-900 rounded-xl shadow-2xl"
 						style={{ width: "90vw", height: "90vh" }}

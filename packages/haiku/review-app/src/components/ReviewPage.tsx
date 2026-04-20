@@ -708,7 +708,15 @@ function IntentReview({
 								<div
 									className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
 									onClick={() => setDagMaximized(false)}
+									onKeyDown={(e) => {
+										if (e.key === "Escape") setDagMaximized(false)
+									}}
+									role="dialog"
+									aria-modal="true"
+									aria-label="Dependency graph preview"
 								>
+									{/* biome-ignore lint/a11y/noStaticElementInteractions: inner container stops propagation to prevent backdrop close-on-click when interacting with content */}
+									{/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation is not an interactive action, just click-capture suppression */}
 									<div
 										className="relative bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-700 shadow-xl overflow-auto"
 										style={{ width: "90vw", height: "90vh" }}
@@ -762,7 +770,7 @@ function IntentReview({
 									</h3>
 									{knowledgeFiles.map((kf, i) => (
 										<a
-											key={`kf-${i}`}
+											key={`kf-${kf.name}`}
 											href={`#knowledge-${i}`}
 											className="block py-1 px-2 rounded text-stone-600 dark:text-stone-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors truncate"
 										>
@@ -771,7 +779,7 @@ function IntentReview({
 									))}
 									{stageArtifacts.map((sa, i) => (
 										<a
-											key={`sa-${i}`}
+											key={`sa-${sa.stage}-${sa.name}`}
 											href={`#artifact-${i}`}
 											className="block py-1 px-2 rounded text-stone-600 dark:text-stone-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors truncate"
 										>
@@ -785,7 +793,7 @@ function IntentReview({
 						{/* Content area */}
 						<div className="flex-1 min-w-0">
 							{knowledgeFiles.map((kf, i) => (
-								<Card key={`kf-${i}`} id={`knowledge-${i}`}>
+								<Card key={`kf-${kf.name}`} id={`knowledge-${i}`}>
 									<SectionHeading>{kf.name}</SectionHeading>
 									<InlineComments
 										htmlContent={markdownToSimpleHtml(kf.content)}
@@ -794,7 +802,7 @@ function IntentReview({
 								</Card>
 							))}
 							{stageArtifacts.map((sa, i) => (
-								<Card key={`sa-${i}`} id={`artifact-${i}`}>
+								<Card key={`sa-${sa.stage}-${sa.name}`} id={`artifact-${i}`}>
 									<SectionHeading>
 										{sa.stage}: {sa.name}
 									</SectionHeading>
@@ -837,7 +845,7 @@ function IntentReview({
 						{domainSection.content}
 					</MarkdownViewer>
 					{domainSection.subsections.map((sub, i) => (
-						<div key={i} className="mt-6">
+						<div key={sub.heading} className="mt-6">
 							<SectionHeading level={3}>{sub.heading}</SectionHeading>
 							<MarkdownViewer id={`domain-sub-${i}`}>
 								{sub.content}
@@ -1115,7 +1123,7 @@ function UnitReview({
 							<MarkdownViewer id="unit-notes">{notes}</MarkdownViewer>
 						</Card>
 					)}
-					{!risks && !boundaries && !notes && (
+					{!(risks || boundaries || notes) && (
 						<Card>
 							<p className="text-stone-500 dark:text-stone-400 italic">
 								No risks or boundaries documented for this unit.
@@ -1174,7 +1182,7 @@ function OutputArtifactsTab({
 							</h3>
 							{artifacts.map((a, i) => (
 								<a
-									key={`oa-${i}`}
+									key={`oa-${a.stage}-${a.name}`}
 									href={`#output-${i}`}
 									className="block py-1 px-2 rounded text-stone-600 dark:text-stone-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors truncate"
 								>
@@ -1261,7 +1269,7 @@ function OutputArtifactsTab({
 														setExpandedImage(
 															expandedImage === a.relativePath
 																? null
-																: a.relativePath!,
+																: (a.relativePath ?? null),
 														)
 													}
 													className="block cursor-pointer"
@@ -1314,7 +1322,7 @@ function OutputArtifactsTab({
 
 function UnitsTable({
 	units,
-	unitMockups,
+	unitMockups: _unitMockups,
 	onInlineCommentsChange,
 	previousUnitContents,
 }: {
@@ -1531,8 +1539,8 @@ function UnitsTable({
 function MockupEmbeds({ mockups }: { mockups: MockupInfo[] }) {
 	return (
 		<>
-			{mockups.map((m, i) => (
-				<div key={i} className="mt-4">
+			{mockups.map((m) => (
+				<div key={m.url} className="mt-4">
 					<div className="flex items-center justify-between mb-2">
 						<h4 className="text-sm font-medium text-stone-600 dark:text-stone-400">
 							{m.label}

@@ -54,7 +54,7 @@ export function AnnotationCanvas({ imageUrl, onPinsChange }: Props) {
 	const sizeCanvas = useCallback(() => {
 		const img = imgRef.current
 		const canvas = canvasRef.current
-		if (!img || !canvas) return
+		if (!(img && canvas)) return
 		canvas.width = img.naturalWidth || img.offsetWidth
 		canvas.height = img.naturalHeight || img.offsetHeight
 		canvas.style.width = `${img.offsetWidth}px`
@@ -325,8 +325,9 @@ export function AnnotationCanvas({ imageUrl, onPinsChange }: Props) {
 					style={{ pointerEvents: "none" }}
 				>
 					{pins.map((pin, i) => (
-						<div
+						<button
 							key={pin.id}
+							type="button"
 							className={`annotation-pin ${activePin === i ? "selected" : ""}`}
 							data-pin-id={pin.id}
 							style={{
@@ -334,7 +335,6 @@ export function AnnotationCanvas({ imageUrl, onPinsChange }: Props) {
 								top: `${pin.y}%`,
 								pointerEvents: "auto",
 							}}
-							role="button"
 							aria-label={`Annotation ${i + 1}${pin.text ? `: ${pin.text}` : ""}`}
 							onClick={(e) => {
 								e.stopPropagation()
@@ -344,7 +344,7 @@ export function AnnotationCanvas({ imageUrl, onPinsChange }: Props) {
 							onMouseLeave={() => setActivePin(null)}
 						>
 							{i + 1}
-						</div>
+						</button>
 					))}
 				</div>
 
@@ -456,7 +456,7 @@ export function captureAnnotations(
 	canvasEl: HTMLCanvasElement | null,
 	pins: AnnotationPin[],
 ): AnnotationCaptureData | undefined {
-	if (!imgEl || !canvasEl) return undefined
+	if (!(imgEl && canvasEl)) return undefined
 
 	const captureCanvas = document.createElement("canvas")
 	captureCanvas.width = canvasEl.width

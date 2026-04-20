@@ -122,6 +122,72 @@ export function readReviewAgentPaths(
 }
 
 /**
+ * Studio-level review agents live at `plugin/studios/{studio}/review-agents/*.md`
+ * (NOT per-stage). They run once at intent completion, after the final
+ * stage gate passes but before `intent_complete`. Their scope is the whole
+ * intent, not a single stage. Project overrides plugin. Subagent reads
+ * each file. Returns name → absolute path.
+ */
+export function readStudioReviewAgentPaths(
+	studio: string,
+): Record<string, string> {
+	validateIdentifier(studio, "studio")
+	const agents: Record<string, string> = {}
+	for (const base of [...studioSearchPaths()].reverse()) {
+		const agentsDir = join(base, studio, "review-agents")
+		if (!existsSync(agentsDir)) continue
+		for (const f of readdirSync(agentsDir).filter((f) => f.endsWith(".md"))) {
+			agents[f.replace(/\.md$/, "")] = join(agentsDir, f)
+		}
+	}
+	return agents
+}
+
+/**
+ * Studio-level fix hats live at `plugin/studios/{studio}/fix-hats/*.md`
+ * (NOT per-stage). They are dispatched against intent-scope feedback
+ * produced by the studio-level review agents. They run at intent
+ * completion time to reconcile cross-stage artifacts against studio-wide
+ * standards — different mandate than stage-owned hats. Project overrides
+ * plugin. Returns name → HatDef (content + agent_type + model).
+ */
+export function readStudioFixHatDefs(studio: string): Record<string, HatDef> {
+	validateIdentifier(studio, "studio")
+	const hats: Record<string, HatDef> = {}
+	for (const base of [...studioSearchPaths()].reverse()) {
+		const hatsDir = join(base, studio, "fix-hats")
+		if (!existsSync(hatsDir)) continue
+		for (const f of readdirSync(hatsDir).filter((f) => f.endsWith(".md"))) {
+			const raw = readFileSync(join(hatsDir, f), "utf8")
+			const { data, body } = parseFrontmatter(raw)
+			hats[f.replace(/\.md$/, "")] = {
+				content: body,
+				agent_type: (data.agent_type as string) || undefined,
+				model: (data.model as string) || undefined,
+				raw,
+			}
+		}
+	}
+	return hats
+}
+
+/** Return studio-level fix hat NAME → FILE PATH mapping. Parent spawns a
+ *  subagent with the mandate file; we pass the path, not the body, to keep
+ *  the parent's context small. */
+export function readStudioFixHatPaths(studio: string): Record<string, string> {
+	validateIdentifier(studio, "studio")
+	const hats: Record<string, string> = {}
+	for (const base of [...studioSearchPaths()].reverse()) {
+		const hatsDir = join(base, studio, "fix-hats")
+		if (!existsSync(hatsDir)) continue
+		for (const f of readdirSync(hatsDir).filter((f) => f.endsWith(".md"))) {
+			hats[f.replace(/\.md$/, "")] = join(hatsDir, f)
+		}
+	}
+	return hats
+}
+
+/**
  * Filter review agents by their `applies_to:` frontmatter against the
  * artifacts the stage actually produces. Agents with no `applies_to:`
  * declaration always run (backward compat). Agents with a list of globs

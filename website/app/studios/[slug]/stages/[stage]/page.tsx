@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 	const { slug, stage: stageName } = await params
 	const studio = getStudioBySlug(slug)
 	const stage = studio?.stageDefinitions.find((s) => s.name === stageName)
-	if (!studio || !stage) return { title: "Not Found" }
+	if (!(studio && stage)) return { title: "Not Found" }
 	return {
 		title: `${titleCase(stage.name)} - ${titleCase(studio.name)} Studio - H\u00b7AI\u00b7K\u00b7U`,
 		description: stage.description,

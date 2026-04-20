@@ -2,6 +2,7 @@
 name: concept
 description: Pillars, core loop, fantasy, target audience, and scope
 hats: [game-designer, creative-director, elaborator]
+fix_hats: [game-designer, feedback-assessor]
 review: ask
 elaboration: collaborative
 inputs: []

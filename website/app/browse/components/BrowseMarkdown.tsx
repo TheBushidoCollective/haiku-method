@@ -79,6 +79,7 @@ export function BrowseMarkdown({ children, assets, host, basePath }: Props) {
 						srcStr.startsWith("data:")
 					) {
 						return (
+							// biome-ignore lint/performance/noImgElement: user-supplied markdown image URL; next/image requires a configured domain list which we can't enforce for arbitrary external sources
 							<img
 								src={srcStr}
 								alt={alt || ""}

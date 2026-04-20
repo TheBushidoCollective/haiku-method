@@ -124,6 +124,8 @@ export function DirectionPicker({ session, onSubmit }: Props) {
 							}`}
 						>
 							{/* Thumbnail preview */}
+							{/* biome-ignore lint/a11y/noStaticElementInteractions: thumbnail click opens modal preview; outer button handles selection — nested button would be invalid HTML */}
+							{/* biome-ignore lint/a11y/useKeyWithClickEvents: outer button carries the keyboard affordance for selection; the modal-open is a pointer-driven secondary interaction */}
 							<div
 								className="mb-3 h-32 overflow-hidden rounded-lg border border-stone-700 bg-stone-900"
 								onClick={(e) => {
@@ -215,7 +217,15 @@ export function DirectionPicker({ session, onSubmit }: Props) {
 				<div
 					className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
 					onClick={() => setPreviewModal(null)}
+					onKeyDown={(e) => {
+						if (e.key === "Escape") setPreviewModal(null)
+					}}
+					role="dialog"
+					aria-modal="true"
+					aria-label={`Preview: ${previewModal.name}`}
 				>
+					{/* biome-ignore lint/a11y/noStaticElementInteractions: inner container stops backdrop-close propagation */}
+					{/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation is click-capture suppression */}
 					<div
 						className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-xl border border-stone-700 bg-stone-900"
 						onClick={(e) => e.stopPropagation()}

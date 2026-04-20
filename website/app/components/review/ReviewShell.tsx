@@ -83,10 +83,12 @@ export function ReviewShell() {
 				return
 			}
 			if (
-				!payload.tun ||
-				!payload.sid ||
-				!payload.typ ||
-				!payload.tun.startsWith("https://")
+				!(
+					payload.tun &&
+					payload.sid &&
+					payload.typ &&
+					payload.tun.startsWith("https://")
+				)
 			) {
 				setState({
 					status: "error",

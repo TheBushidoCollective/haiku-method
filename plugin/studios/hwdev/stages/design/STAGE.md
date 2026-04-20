@@ -2,6 +2,7 @@
 name: design
 description: Schematic, PCB layout, mechanical, and BOM
 hats: [electrical-engineer, mechanical-engineer, pcb-designer, design-reviewer]
+fix_hats: [electrical-engineer, feedback-assessor]
 review: [external, ask]
 elaboration: collaborative
 inputs:

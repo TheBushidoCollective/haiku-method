@@ -2,6 +2,7 @@
 name: resolve
 description: Implement permanent fix with proper testing and review
 hats: [engineer, reviewer]
+fix_hats: [engineer, feedback-assessor]
 review: ask
 elaboration: autonomous
 inputs:

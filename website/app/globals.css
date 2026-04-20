@@ -348,6 +348,7 @@ html.dark {
 		word-wrap: break-word;
 	}
 
+	/* biome-ignore lint/style/noDescendingSpecificity: the higher-specificity `.prose code:not(pre code)` above is intentionally declared first because it's the common screen-reading case; this print-override is scoped by media query */
 	.prose-print code {
 		background: #f5f5f5;
 		color: black;

@@ -368,7 +368,8 @@ export function IntentDetailView({
 						(() => {
 							const expandedStageData = intent.stages.find(
 								(s) => s.name === expandedStage,
-							)!
+							)
+							if (!expandedStageData) return null
 							return (
 								<section
 									className="mb-8"
@@ -547,12 +548,12 @@ function ProviderLinksSection({
 				References
 			</h2>
 			<div className="flex flex-wrap gap-3">
-				{hasPr && (
+				{hasPr && intent.prUrl && (
 					<a
-						href={intent.prUrl!}
+						href={intent.prUrl}
 						target="_blank"
 						rel="noopener noreferrer"
-						className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:opacity-80 transition-opacity ${prStatusColors[intent.prStatus!] || prStatusColors.open}`}
+						className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:opacity-80 transition-opacity ${(intent.prStatus && prStatusColors[intent.prStatus]) || prStatusColors.open}`}
 					>
 						<svg
 							className="h-4 w-4"
@@ -560,6 +561,7 @@ function ProviderLinksSection({
 							viewBox="0 0 16 16"
 							stroke="currentColor"
 							strokeWidth={2}
+							aria-hidden="true"
 						>
 							<path d="M5 5.5v5m6-5v5M5 3a2 2 0 100-4 2 2 0 000 4zm6 0a2 2 0 100-4 2 2 0 000 4zM5 14.5a2 2 0 100-4 2 2 0 000 4z" />
 						</svg>
@@ -581,6 +583,7 @@ function ProviderLinksSection({
 							viewBox="0 0 16 16"
 							stroke="currentColor"
 							strokeWidth={2}
+							aria-hidden="true"
 						>
 							<path d="M6 3v10M6 3L3 6m3-3l3 3m4 7V3" />
 						</svg>
@@ -665,6 +668,7 @@ function KnowledgeFileCard({
 					fill="none"
 					viewBox="0 0 24 24"
 					stroke="currentColor"
+					aria-hidden="true"
 				>
 					<path
 						strokeLinecap="round"
@@ -745,7 +749,15 @@ function ArtifactFullscreenModal({
 			<div
 				className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
 				onClick={onClose}
+				onKeyDown={(e) => {
+					if (e.key === "Escape") onClose()
+				}}
+				role="dialog"
+				aria-modal="true"
+				aria-label={`Artifact preview: ${artifact.name}`}
 			>
+				{/* biome-ignore lint/a11y/noStaticElementInteractions: inner modal container stops propagation to prevent backdrop close */}
+				{/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation is click-capture suppression, not a user affordance */}
 				<div
 					className="relative flex max-h-[95vh] max-w-[95vw] flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-stone-900"
 					onClick={(e) => e.stopPropagation()}
@@ -786,6 +798,7 @@ function ArtifactFullscreenModal({
 								fullSize
 							/>
 						) : artifact.rawUrl ? (
+							// biome-ignore lint/performance/noImgElement: artifact.rawUrl is provider-specific and may require credentials or headers; next/image's remote-pattern allowlist can't cover arbitrary user providers
 							<img
 								src={artifact.rawUrl}
 								alt={artifact.name}
@@ -803,7 +816,15 @@ function ArtifactFullscreenModal({
 			<div
 				className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
 				onClick={onClose}
+				onKeyDown={(e) => {
+					if (e.key === "Escape") onClose()
+				}}
+				role="dialog"
+				aria-modal="true"
+				aria-label={`Artifact preview: ${artifact.name}`}
 			>
+				{/* biome-ignore lint/a11y/noStaticElementInteractions: inner container stops backdrop-close propagation */}
+				{/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation is click-capture suppression */}
 				<div
 					className="relative flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-stone-900"
 					onClick={(e) => e.stopPropagation()}
@@ -901,6 +922,7 @@ function ArtifactThumbnail({
 							className="h-full w-full object-cover"
 						/>
 					) : artifact.rawUrl ? (
+						// biome-ignore lint/performance/noImgElement: artifact.rawUrl from external provider; see comment on the full-size viewer above
 						<img
 							src={artifact.rawUrl}
 							alt={artifact.name}
@@ -913,6 +935,7 @@ function ArtifactThumbnail({
 								fill="none"
 								viewBox="0 0 24 24"
 								stroke="currentColor"
+								aria-hidden="true"
 							>
 								<path
 									strokeLinecap="round"
@@ -964,6 +987,7 @@ function MarkdownArtifactCard({
 							fill="none"
 							viewBox="0 0 24 24"
 							stroke="currentColor"
+							aria-hidden="true"
 						>
 							<path
 								strokeLinecap="round"
@@ -1067,7 +1091,7 @@ function StageDetail({
 			(a) => a.type !== "html" && a.type !== "image" && a.type !== "markdown",
 		) ?? []
 
-	if (!hasUnits && !hasArtifacts) {
+	if (!(hasUnits || hasArtifacts)) {
 		return (
 			<div className="rounded-xl border border-stone-200 px-6 py-8 text-center dark:border-stone-700">
 				<p className="text-stone-500">No units in this stage yet.</p>
@@ -1106,11 +1130,12 @@ function StageDetail({
 							viewBox="0 0 16 16"
 							stroke="currentColor"
 							strokeWidth={2}
+							aria-hidden="true"
 						>
 							<path d="M5 5.5v5m6-5v5M5 3a2 2 0 100-4 2 2 0 000 4zm6 0a2 2 0 100-4 2 2 0 000 4zM5 14.5a2 2 0 100-4 2 2 0 000 4z" />
 						</svg>
 						{prLabel} {stage.prNumber ? `${prPrefix}${stage.prNumber}` : ""}{" "}
-						{prStatusLabel[stage.prStatus!] ?? stage.prStatus}
+						{prStatusLabel[stage.prStatus] ?? stage.prStatus}
 					</a>
 				)}
 				{stage.branch && branchUrl && (
@@ -1126,6 +1151,7 @@ function StageDetail({
 							viewBox="0 0 16 16"
 							stroke="currentColor"
 							strokeWidth={2}
+							aria-hidden="true"
 						>
 							<path d="M6 3v10M6 3L3 6m3-3l3 3m4 7V3" />
 						</svg>

@@ -60,6 +60,7 @@ function renderTreeNodes(
 		const isHighlighted = fullPath === highlightedFile
 		const hasArtifact = !isDir && artifacts && fullPath in artifacts
 		items.push(
+			// biome-ignore lint/a11y/noStaticElementInteractions: row is interactive only when hasArtifact; role="button"+tabIndex+onKeyDown are conditionally wired below (no-op otherwise)
 			<div
 				key={fullPath}
 				data-path={fullPath}
@@ -340,11 +341,6 @@ export function DemoClient({
 		return () => document.removeEventListener("keydown", handleKeyDown)
 	}, [handleKeyDown])
 
-	// Handle completion overlay trigger from __SHOW_COMPLETION__ system message
-	const _isComplete =
-		state.messages.some((m) => m.text === "__SHOW_COMPLETION__") ||
-		state.completed
-
 	// Filter out the __SHOW_COMPLETION__ sentinel from displayed messages
 	const displayMessages = state.messages.filter(
 		(m) => m.text !== "__SHOW_COMPLETION__",
@@ -375,7 +371,7 @@ export function DemoClient({
 		? "complete"
 		: state.activeStage || "ready"
 	const stageBadgeIsComplete = state.allStagesComplete
-	const stageBadgeIsIdle = !state.activeStage && !state.allStagesComplete
+	const stageBadgeIsIdle = !(state.activeStage || state.allStagesComplete)
 
 	return (
 		<div className="fixed inset-0 z-50 flex flex-col bg-stone-950 font-sans text-stone-200">
@@ -549,6 +545,7 @@ export function DemoClient({
 						className="flex-1 overflow-y-auto scroll-smooth p-4 font-mono text-[13px] leading-[1.7] max-[600px]:p-3 max-[600px]:text-xs max-[600px]:leading-[1.6] [&::-webkit-scrollbar-thumb]:rounded-sm [&::-webkit-scrollbar-thumb]:bg-stone-700 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-1.5"
 					>
 						{displayMessages.map((msg, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: append-only terminal transcript — order is stable for the demo's lifetime
 							<div key={i} className="mb-3 demo-animate-in">
 								<div
 									className={`text-[11px] font-semibold uppercase tracking-widest ${
@@ -567,6 +564,7 @@ export function DemoClient({
 											? "italic text-amber-400"
 											: "text-stone-200"
 									}`}
+									// biome-ignore lint/security/noDangerouslySetInnerHtml: escapeHtml runs on msg.text before injection — this is a safe HTML-entity re-render (lets us preserve line breaks via styled whitespace-pre-wrap without losing escape safety)
 									dangerouslySetInnerHTML={{ __html: escapeHtml(msg.text) }}
 								/>
 							</div>
@@ -595,6 +593,7 @@ export function DemoClient({
 									stroke="currentColor"
 									strokeWidth="2"
 									className="h-3.5 w-3.5"
+									aria-hidden="true"
 								>
 									<polygon points="13 19 22 12 13 5" />
 									<polygon points="2 19 11 12 2 5" />
@@ -733,7 +732,7 @@ export function DemoClient({
 										const isChecked = state.review.checkedIndexes.includes(i)
 										return (
 											<li
-												key={i}
+												key={criterion}
 												className="flex items-center gap-2 font-mono text-xs text-stone-400"
 											>
 												<span
@@ -781,6 +780,7 @@ export function DemoClient({
 			{viewingFile && artifacts && viewingFile in artifacts && (
 				<div className="fixed inset-0 z-[95] flex">
 					{/* Backdrop */}
+					{/* biome-ignore lint/a11y/useSemanticElements: a real <button> inside a fixed-inset flex backdrop collides with Tailwind's flex-1 layout; role="button" with Escape+click handlers gives equivalent semantics for a dismissal-only affordance */}
 					<div
 						className="flex-1 bg-stone-950/70"
 						onClick={closeFile}

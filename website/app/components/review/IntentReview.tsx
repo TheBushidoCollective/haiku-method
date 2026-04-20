@@ -30,8 +30,8 @@ export function IntentReview({ session, baseUrl }: Props) {
 					<h2 className="mb-4 text-sm font-semibold uppercase tracking-widest text-stone-500">
 						Overview
 					</h2>
-					{intent.sections?.map((section, i) => (
-						<div key={i} className="mb-6">
+					{intent.sections?.map((section) => (
+						<div key={section.heading} className="mb-6">
 							<h3 className="mb-2 text-base font-semibold text-stone-200">
 								{section.heading}
 							</h3>
@@ -54,7 +54,7 @@ export function IntentReview({ session, baseUrl }: Props) {
 					<div className="flex flex-col gap-2">
 						{units.map((unit, i) => (
 							<div
-								key={i}
+								key={(unit.slug as string) ?? `unit-${i}`}
 								className="flex items-center justify-between rounded-lg bg-stone-800 px-4 py-3"
 							>
 								<span className="text-sm text-stone-200">
@@ -92,9 +92,9 @@ export function IntentReview({ session, baseUrl }: Props) {
 						Completion Criteria
 					</h2>
 					<div className="flex flex-col gap-2">
-						{criteria.map((c, i) => (
+						{criteria.map((c) => (
 							<div
-								key={i}
+								key={c.text}
 								className="flex items-start gap-3 rounded-lg bg-stone-800 px-4 py-3"
 							>
 								<div
@@ -121,8 +121,8 @@ export function IntentReview({ session, baseUrl }: Props) {
 					<h2 className="mb-4 text-sm font-semibold uppercase tracking-widest text-stone-500">
 						Knowledge
 					</h2>
-					{knowledgeFiles.map((kf, i) => (
-						<div key={i} className="mb-4 rounded-lg bg-stone-800 p-4">
+					{knowledgeFiles.map((kf) => (
+						<div key={kf.name} className="mb-4 rounded-lg bg-stone-800 p-4">
 							<h3 className="mb-2 text-sm font-medium text-stone-300">
 								{kf.name}
 							</h3>
@@ -149,12 +149,15 @@ export function IntentReview({ session, baseUrl }: Props) {
 							const imgSrc = relativePath
 								? `${baseUrl}${relativePath}`
 								: undefined
+							const artifactKey =
+								(artifact.name as string) ?? relativePath ?? `artifact-${i}`
 							return (
-								<div key={i} className="rounded-lg bg-stone-800 p-4">
+								<div key={artifactKey} className="rounded-lg bg-stone-800 p-4">
 									<div className="text-sm font-medium text-stone-300">
 										{(artifact.name as string) ?? `Artifact ${i + 1}`}
 									</div>
 									{artifact.type === "image" && imgSrc && (
+										// biome-ignore lint/performance/noImgElement: review-server content — baseUrl + relative path, not a static import; next/image's domain allowlist isn't compatible with dynamic review-server origins
 										<img
 											src={imgSrc}
 											alt={(artifact.name as string) ?? "artifact"}

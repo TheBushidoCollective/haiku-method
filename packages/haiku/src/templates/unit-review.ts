@@ -170,7 +170,7 @@ export function renderUnitReview(
 		}
 
     ${
-			!risks && !boundaries && !notes
+			!(risks || boundaries || notes)
 				? card(`
       <p class="text-gray-500 dark:text-gray-400 italic">No risks or boundaries documented for this unit.</p>
     `)

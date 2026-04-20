@@ -827,6 +827,7 @@ export function PortfolioView({
 														viewBox="0 0 16 16"
 														stroke="currentColor"
 														strokeWidth={2}
+														aria-hidden="true"
 													>
 														<path d="M5 5.5v5m6-5v5M5 3a2 2 0 100-4 2 2 0 000 4zm6 0a2 2 0 100-4 2 2 0 000 4zM5 14.5a2 2 0 100-4 2 2 0 000 4z" />
 													</svg>
@@ -945,6 +946,7 @@ function PortfolioKnowledge({
 					fill="none"
 					viewBox="0 0 24 24"
 					stroke="currentColor"
+					aria-hidden="true"
 				>
 					<path
 						strokeLinecap="round"
@@ -1010,6 +1012,7 @@ function PortfolioKnowledgeFile({
 					fill="none"
 					viewBox="0 0 24 24"
 					stroke="currentColor"
+					aria-hidden="true"
 				>
 					<path
 						strokeLinecap="round"

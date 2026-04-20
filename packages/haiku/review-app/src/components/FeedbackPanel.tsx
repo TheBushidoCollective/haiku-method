@@ -137,12 +137,19 @@ export function FeedbackPanel({ items, loading, onUpdate, onDelete }: Props) {
 					filtered.map((item) => {
 						const isExpanded = expandedId === item.feedback_id
 						return (
+							// biome-ignore lint/a11y/noStaticElementInteractions: feedback card is a disclosure toggle; semantic button would break nested interactive content (action buttons, links) inside the card
 							<div
 								key={item.feedback_id}
 								className={`p-2.5 rounded-lg border ${statusBorderLeft[item.status] || ""} ${statusBackground[item.status] || ""} hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group`}
 								onClick={() =>
 									setExpandedId(isExpanded ? null : item.feedback_id)
 								}
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										e.preventDefault()
+										setExpandedId(isExpanded ? null : item.feedback_id)
+									}
+								}}
 							>
 								<div className="flex items-center gap-2 mb-1 flex-wrap">
 									{/* Status badge */}

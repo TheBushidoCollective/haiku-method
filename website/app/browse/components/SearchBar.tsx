@@ -65,7 +65,7 @@ export function SearchBar({
 
 	const performSearch = useCallback(
 		(q: string) => {
-			if (!index || !q.trim()) {
+			if (!(index && q.trim())) {
 				setResults([])
 				return
 			}
@@ -327,12 +327,14 @@ export function SearchBar({
 														).map((part, i) =>
 															part.highlighted ? (
 																<mark
+																	// biome-ignore lint/suspicious/noArrayIndexKey: static match-result list
 																	key={i}
 																	className="bg-teal-100 text-teal-900 dark:bg-teal-900/50 dark:text-teal-300"
 																>
 																	{part.text}
 																</mark>
 															) : (
+																// biome-ignore lint/suspicious/noArrayIndexKey: static match-result list
 																<span key={i}>{part.text}</span>
 															),
 														)}
@@ -358,12 +360,14 @@ export function SearchBar({
 																(part, i) =>
 																	part.highlighted ? (
 																		<mark
+																			// biome-ignore lint/suspicious/noArrayIndexKey: static match-result list
 																			key={i}
 																			className="bg-teal-100/50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400"
 																		>
 																			{part.text}
 																		</mark>
 																	) : (
+																		// biome-ignore lint/suspicious/noArrayIndexKey: static match-result list
 																		<span key={i}>{part.text}</span>
 																	),
 															)}

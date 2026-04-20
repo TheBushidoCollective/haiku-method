@@ -2,6 +2,7 @@
 name: deployment
 description: Deploy pipelines to production with monitoring and alerting
 hats: [pipeline-engineer, sre]
+fix_hats: [pipeline-engineer, feedback-assessor]
 review: external
 elaboration: autonomous
 inputs:

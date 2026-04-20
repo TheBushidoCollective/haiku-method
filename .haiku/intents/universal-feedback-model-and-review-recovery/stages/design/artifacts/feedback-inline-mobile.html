@@ -120,15 +120,20 @@
   </main>
 
   <!-- FAB (Floating Action Button) — bottom right
-       id="feedback-fab" used by dialog close handler to restore focus (FB-22) -->
+       id="feedback-fab" used by dialog close handler to restore focus (FB-22).
+       open/close are handled by the inline script at the bottom of the document
+       (data-feedback-sheet-controller) — NO onclick inline handlers. Dev stage
+       replaces this vanilla controller with <FocusTrap active returnFocusOnDeactivate>
+       wrapping <MobileFeedbackPanel> per aria-landmark-spec.md §5. -->
   <button
+    type="button"
     id="feedback-fab"
     aria-label="Open feedback panel, 3 pending"
     aria-haspopup="dialog"
     aria-expanded="false"
     aria-controls="feedback-sheet"
+    data-feedback-sheet-trigger
     class="fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center text-lg feedback-fab-pulse touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none"
-    onclick="document.getElementById('feedback-sheet').classList.remove('hidden'); this.setAttribute('aria-expanded','true'); /* dev stage: on open, also set main#main-content aria-hidden=true + inert, then move focus to #sheet-first-tab via focus-trap library */"
   >
     <span aria-hidden="true">&#x1F4AC;</span>
     <!-- Count badge — aria-hidden because count is already included in button aria-label -->
@@ -136,31 +141,45 @@
   </button>
 
   <!--
-    Bottom Sheet Overlay (the feedback view for mobile) — role="dialog" aria-modal="true"
+    Bottom Sheet Overlay — role="dialog" aria-modal="true"
 
-    ## Focus-trap strategy (FB-22 fix, referenced by DESIGN-BRIEF §6)
-    Use `focus-trap-react` (https://github.com/focus-trap/focus-trap-react) — same library
-    the annotation-popover already relies on. Implementation contract for dev stage:
+    ## Dialog + inert contract (FB-22, FB-51, FB-80 fix, referenced by aria-landmark-spec.md §3 + §5)
 
-      1. On open (FAB click):
-         - Add `aria-hidden="true"` AND `inert` to `<main id="main-content">` and `<header>`
-         - Set `aria-expanded="true"` on the FAB
-         - Wrap sheet in <FocusTrap active returnFocusOnDeactivate> — library moves focus
-           to first tabbable (the segmented control button below) on mount, restores to
-           FAB on unmount. No manual focus() calls needed.
-         - Add keydown listener: Escape -> close
-      2. On close (close button, Escape, backdrop tap, Approve/Request Changes submit):
-         - Remove `aria-hidden` + `inert` from main + header
-         - FocusTrap returnFocusOnDeactivate automatically restores focus to #feedback-fab
-         - Set `aria-expanded="false"` on FAB
+    The sheet below renders the dialog landmark per aria-landmark-spec §3:
+      - role="dialog" aria-modal="true" aria-labelledby="sheet-title" on the root
+      - <h2 id="sheet-title"> visible inside the sheet
+      - hidden by default (hidden attribute) — toggled by the controller at the bottom of the file
 
-    This sheet is aria-labelledby="sheet-title" which points at the h2#sheet-title.
+    The controller <script data-feedback-sheet-controller> at the bottom of this document wires the
+    real open/close behavior so dev-stage has a concrete pattern to port, not a TODO comment:
+
+      On open (FAB click or keyboard activation):
+        - Set aria-hidden="true" AND inert on #main-content, <header role="banner">
+        - Set aria-expanded="true" on #feedback-fab
+        - Show the sheet (remove [hidden])
+        - Move focus to #sheet-first-tab (the AgentFeedbackToggle switch inside the sheet)
+        - Install an Escape-key listener scoped to the sheet
+
+      On close (close button, Escape, Approve/Request Changes submit):
+        - Remove aria-hidden + inert from #main-content and <header>
+        - Set aria-expanded="false" on #feedback-fab
+        - Hide the sheet (add [hidden])
+        - Return focus to #feedback-fab
+
+    ## Dev-stage handoff (React)
+    Replace the vanilla controller with <FocusTrap active returnFocusOnDeactivate> from
+    focus-trap-react (https://github.com/focus-trap/focus-trap-react) — the library moves focus
+    to the first tabbable on mount and restores to the opener on unmount, making the manual
+    focus() calls unnecessary. Wrap the sheet exactly as annotation-popover-states.html does.
+    The inert + aria-hidden pair on background landmarks stays exactly as this artifact wires
+    it (belt-and-suspenders — see aria-landmark-spec.md §3.7).
   -->
   <div
     id="feedback-sheet"
     role="dialog"
     aria-modal="true"
     aria-labelledby="sheet-title"
+    hidden
     class="fixed inset-0 z-50 bg-white dark:bg-stone-900 flex flex-col sheet-enter"
   >
 
@@ -168,9 +187,10 @@
     <div class="shrink-0 px-4 py-3 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between">
       <h2 id="sheet-title" class="text-sm font-semibold text-stone-700 dark:text-stone-300">Feedback</h2>
       <button
+        type="button"
         aria-label="Close feedback panel"
+        data-feedback-sheet-close
         class="text-stone-600 dark:text-stone-300 hover:text-stone-800 dark:hover:text-stone-100 touch-target flex items-center justify-center text-lg focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none"
-        onclick="var s=document.getElementById('feedback-sheet');s.classList.add('hidden');document.getElementById('feedback-fab').setAttribute('aria-expanded','false');document.getElementById('feedback-fab').focus(); /* dev stage: also remove aria-hidden+inert from main + header */"
       >
         <span aria-hidden="true">&times;</span>
       </button>
@@ -335,5 +355,83 @@
   -->
   <div id="feedback-live-polite" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
   <div id="feedback-live-assertive" role="alert" aria-live="assertive" aria-atomic="true" class="sr-only"></div>
+
+  <!--
+    Feedback-sheet controller — vanilla implementation of the dialog + inert contract.
+
+    Closes FB-80 (the narrative comment moved into a real wired script). Dev stage replaces
+    this with <FocusTrap active returnFocusOnDeactivate> from focus-trap-react; the inert +
+    aria-hidden apparatus on background landmarks stays exactly as wired below.
+
+    Contract (aria-landmark-spec.md §3 + §5):
+      - On open:  main + header get inert=true AND aria-hidden="true"; focus moves into sheet.
+      - On close: main + header lose inert + aria-hidden; focus returns to #feedback-fab.
+      - Escape while open closes the sheet.
+
+    grep contract (unit-19 completion criteria — must hit this block):
+      grep -nE 'main.*\.inert|setAttribute\(.aria-hidden' feedback-inline-mobile.html
+  -->
+  <script data-feedback-sheet-controller>
+    (function () {
+      var sheet = document.getElementById('feedback-sheet');
+      var fab = document.getElementById('feedback-fab');
+      var main = document.getElementById('main-content');
+      var header = document.querySelector('header[role="banner"]');
+      var closeBtn = document.querySelector('[data-feedback-sheet-close]');
+      var firstTab = document.getElementById('sheet-first-tab');
+      if (!sheet || !fab || !main || !header || !closeBtn) return;
+
+      function lockBackground() {
+        // Belt-and-suspenders: inert blocks pointer/keyboard; aria-hidden hides from AT.
+        // Both are required per aria-landmark-spec.md §3.7.
+        main.inert = true;
+        main.setAttribute('aria-hidden', 'true');
+        header.inert = true;
+        header.setAttribute('aria-hidden', 'true');
+      }
+
+      function unlockBackground() {
+        main.inert = false;
+        main.removeAttribute('aria-hidden');
+        header.inert = false;
+        header.removeAttribute('aria-hidden');
+      }
+
+      function openSheet() {
+        if (!sheet.hasAttribute('hidden') && fab.getAttribute('aria-expanded') === 'true') return;
+        sheet.removeAttribute('hidden');
+        fab.setAttribute('aria-expanded', 'true');
+        lockBackground();
+        // Dev-stage replaces this manual focus() with <FocusTrap active returnFocusOnDeactivate>;
+        // the library moves focus to the first tabbable on mount. The behavior must match.
+        if (firstTab) firstTab.focus();
+        document.addEventListener('keydown', onEscape);
+      }
+
+      function closeSheet() {
+        if (sheet.hasAttribute('hidden')) return;
+        sheet.setAttribute('hidden', '');
+        fab.setAttribute('aria-expanded', 'false');
+        unlockBackground();
+        document.removeEventListener('keydown', onEscape);
+        // focus-trap-react's returnFocusOnDeactivate handles this in dev; vanilla here.
+        fab.focus();
+      }
+
+      function onEscape(e) {
+        if (e.key === 'Escape') closeSheet();
+      }
+
+      fab.addEventListener('click', openSheet);
+      closeBtn.addEventListener('click', closeSheet);
+
+      // Approve / Request Changes submit handlers close the sheet after decision completes.
+      // Wired here as a placeholder — real submit logic lives in dev-stage components.
+      Array.prototype.forEach.call(
+        sheet.querySelectorAll('[data-feedback-sheet-submit]'),
+        function (btn) { btn.addEventListener('click', closeSheet); }
+      );
+    })();
+  </script>
 </body>
 </html>

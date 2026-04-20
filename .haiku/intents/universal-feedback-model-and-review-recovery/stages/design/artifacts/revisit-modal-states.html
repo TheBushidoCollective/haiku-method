@@ -41,10 +41,10 @@
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500">Design States · unit-06</p>
         <h1 class="text-xl font-semibold text-stone-900 dark:text-stone-100">Revisit confirmation modal — interactive states</h1>
         <p class="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-2xl">
-          Every interactive element in every state. Default → hover → focus → active → disabled → error → loading → empty. Companion to <code class="font-mono">revisit-modal-spec.html</code>.
+          Every interactive element in every state. Default → hover → focus → active → disabled → error → loading → empty. Companion to <code class="font-mono">revisit-modal-spec.html</code>. Every modal shell renders the dialog contract from <code class="font-mono">aria-landmark-spec.md §3</code> — <code class="font-mono">role="dialog" aria-modal="true" aria-labelledby</code> on the container plus the inert + <code class="font-mono">aria-hidden</code> apparatus on background landmarks while open (see <a href="#modal-lifecycle" class="text-teal-600 dark:text-teal-400 underline">§ Modal lifecycle</a>).
         </p>
       </div>
-      <button id="theme-toggle" class="px-3 py-1.5 text-xs rounded-md border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800">Toggle theme</button>
+      <button type="button" id="theme-toggle" aria-label="Toggle theme" class="px-3 py-1.5 text-xs rounded-md border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800">Toggle theme</button>
     </div>
     <nav class="max-w-6xl mx-auto px-6 pb-3 flex flex-wrap gap-1 text-[11px] font-medium">
       <a href="#buttons" class="px-2 py-1 rounded hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300">Buttons</a>
@@ -310,7 +310,8 @@
             <li>Backdrop fades in: <code class="font-mono">opacity 0 → 1</code> over 150ms.</li>
             <li>Dialog scales in: <code class="font-mono">scale-95 → scale-100</code>, <code class="font-mono">opacity 0 → 1</code>, 120ms.</li>
             <li>Body scroll locked.</li>
-            <li>Focus lands on <code class="font-mono">Cancel</code>.</li>
+            <li><code class="font-mono">&lt;main id="main-content"&gt;</code>, <code class="font-mono">&lt;header role="banner"&gt;</code>, and <code class="font-mono">&lt;nav aria-label="Stage progress"&gt;</code> receive <code class="font-mono">inert</code> and <code class="font-mono">aria-hidden="true"</code> (belt + suspenders per <code class="font-mono">aria-landmark-spec.md §3.7</code>).</li>
+            <li><code class="font-mono">&lt;FocusTrap active returnFocusOnDeactivate&gt;</code> wraps the dialog; library moves focus to <code class="font-mono">Cancel</code> on mount.</li>
             <li>Reduced-motion users skip the transform; fade only.</li>
           </ul>
         </div>
@@ -318,6 +319,7 @@
           <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500 mb-2">② Confirm clicked</p>
           <ul class="text-xs text-stone-700 dark:text-stone-300 space-y-1">
             <li>Confirm enters loading state (spinner + <code class="font-mono">aria-busy=true</code>).</li>
+            <li>Dialog root also flips <code class="font-mono">aria-busy="true"</code> so AT announces the dialog as busy.</li>
             <li>Cancel disables during in-flight call.</li>
             <li>Backdrop click + ESC are ignored while loading.</li>
             <li>On success: modal closes, <code class="font-mono">showToast('haiku_revisit invoked', …, 'revisit')</code> fires.</li>
@@ -330,10 +332,96 @@
             <li>Backdrop fades out 120ms.</li>
             <li>Dialog scales out: <code class="font-mono">scale-100 → scale-95</code>, 100ms.</li>
             <li>Body scroll restored.</li>
-            <li>Focus returns to the element that triggered the modal.</li>
+            <li><code class="font-mono">inert</code> and <code class="font-mono">aria-hidden</code> removed from <code class="font-mono">&lt;main&gt;</code>, <code class="font-mono">&lt;header&gt;</code>, <code class="font-mono">&lt;nav&gt;</code> in the same frame the dialog unmounts.</li>
+            <li><code class="font-mono">FocusTrap</code>'s <code class="font-mono">returnFocusOnDeactivate</code> restores focus to the element that opened the modal — no manual <code class="font-mono">.focus()</code> calls.</li>
           </ul>
         </div>
       </div>
+
+      <!-- Inert contract cheat-sheet — the state matrix every render MUST satisfy. -->
+      <div class="rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 overflow-hidden">
+        <div class="px-4 py-2 bg-stone-50 dark:bg-stone-800/60 border-b border-stone-200 dark:border-stone-700">
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Inert + aria-hidden contract — state matrix</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-xs">
+            <thead class="bg-stone-50 dark:bg-stone-800/40">
+              <tr class="text-left">
+                <th class="px-3 py-2 font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Phase</th>
+                <th class="px-3 py-2 font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Dialog in DOM</th>
+                <th class="px-3 py-2 font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">&lt;main&gt; inert</th>
+                <th class="px-3 py-2 font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">&lt;main&gt; aria-hidden</th>
+                <th class="px-3 py-2 font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">&lt;header&gt; inert</th>
+                <th class="px-3 py-2 font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">FocusTrap</th>
+                <th class="px-3 py-2 font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">Focus location</th>
+              </tr>
+            </thead>
+            <tbody class="text-stone-700 dark:text-stone-300">
+              <tr class="border-t border-stone-100 dark:border-stone-800">
+                <td class="px-3 py-2 font-semibold">Idle (closed)</td>
+                <td class="px-3 py-2">absent</td>
+                <td class="px-3 py-2">—</td>
+                <td class="px-3 py-2">—</td>
+                <td class="px-3 py-2">—</td>
+                <td class="px-3 py-2">inactive</td>
+                <td class="px-3 py-2">trigger (Revisit button)</td>
+              </tr>
+              <tr class="border-t border-stone-100 dark:border-stone-800">
+                <td class="px-3 py-2 font-semibold">Opening</td>
+                <td class="px-3 py-2">mounting</td>
+                <td class="px-3 py-2"><code class="font-mono">true</code></td>
+                <td class="px-3 py-2"><code class="font-mono">"true"</code></td>
+                <td class="px-3 py-2"><code class="font-mono">true</code></td>
+                <td class="px-3 py-2">activating</td>
+                <td class="px-3 py-2">shifting → first tabbable</td>
+              </tr>
+              <tr class="border-t border-stone-100 dark:border-stone-800">
+                <td class="px-3 py-2 font-semibold">Open + interactive</td>
+                <td class="px-3 py-2">present</td>
+                <td class="px-3 py-2"><code class="font-mono">true</code></td>
+                <td class="px-3 py-2"><code class="font-mono">"true"</code></td>
+                <td class="px-3 py-2"><code class="font-mono">true</code></td>
+                <td class="px-3 py-2">active</td>
+                <td class="px-3 py-2">inside dialog (trapped)</td>
+              </tr>
+              <tr class="border-t border-stone-100 dark:border-stone-800">
+                <td class="px-3 py-2 font-semibold">Loading (in-flight)</td>
+                <td class="px-3 py-2">present, <code class="font-mono">aria-busy="true"</code></td>
+                <td class="px-3 py-2"><code class="font-mono">true</code></td>
+                <td class="px-3 py-2"><code class="font-mono">"true"</code></td>
+                <td class="px-3 py-2"><code class="font-mono">true</code></td>
+                <td class="px-3 py-2">active (trapped, Escape suppressed)</td>
+                <td class="px-3 py-2">stays on Confirm (aria-busy)</td>
+              </tr>
+              <tr class="border-t border-stone-100 dark:border-stone-800">
+                <td class="px-3 py-2 font-semibold">Closing</td>
+                <td class="px-3 py-2">unmounting</td>
+                <td class="px-3 py-2"><code class="font-mono">true</code> → removed</td>
+                <td class="px-3 py-2"><code class="font-mono">"true"</code> → removed</td>
+                <td class="px-3 py-2"><code class="font-mono">true</code> → removed</td>
+                <td class="px-3 py-2">deactivating</td>
+                <td class="px-3 py-2">trapped until unmount</td>
+              </tr>
+              <tr class="border-t border-stone-100 dark:border-stone-800">
+                <td class="px-3 py-2 font-semibold">Closed (post-close)</td>
+                <td class="px-3 py-2">absent</td>
+                <td class="px-3 py-2">—</td>
+                <td class="px-3 py-2">—</td>
+                <td class="px-3 py-2">—</td>
+                <td class="px-3 py-2">inactive</td>
+                <td class="px-3 py-2">back on opener (<code class="font-mono">returnFocusOnDeactivate</code>)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <ul class="text-xs text-stone-600 dark:text-stone-300 list-disc pl-5 space-y-1">
+        <li>Both <code class="font-mono">inert</code> AND <code class="font-mono">aria-hidden="true"</code> are required — belt-and-suspenders. Safari/VoiceOver respects <code class="font-mono">aria-modal="true"</code>; NVDA + JAWS do not consistently. <code class="font-mono">inert</code> also blocks pointer/keyboard fall-through.</li>
+        <li>The backdrop is a sibling of the dialog, not an ancestor — it carries <code class="font-mono">aria-hidden="true"</code> but not <code class="font-mono">inert</code> (it needs to receive backdrop-click to cancel).</li>
+        <li>Never call <code class="font-mono">.focus()</code> on the opener manually. <code class="font-mono">focus-trap-react</code>'s <code class="font-mono">returnFocusOnDeactivate</code> does it — manual calls can land on the wrong element if the DOM shifted.</li>
+        <li>The same contract applies to <strong>every</strong> variant in this artifact — error, loading, empty, long-content. This is why every modal shell carries <code class="font-mono">role="dialog" aria-modal="true" aria-labelledby</code> in the markup.</li>
+      </ul>
     </section>
 
     <!-- ============================================================ -->
@@ -346,13 +434,14 @@
       </p>
 
       <div class="rounded-xl bg-stone-900/80 dark:bg-black/60 p-8 flex items-start justify-center">
-        <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 overflow-hidden">
+        <!-- Modal shell is rendered with full dialog semantics per aria-landmark-spec §3 and §5. -->
+        <div role="dialog" aria-modal="true" aria-labelledby="revisit-states-error-title" aria-describedby="revisit-states-error-desc" class="w-full max-w-md bg-white dark:bg-stone-900 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 overflow-hidden">
           <div class="px-5 py-4 border-b border-stone-200 dark:border-stone-700 flex items-center gap-2">
-            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-bold">↩</span>
-            <h3 class="text-base font-bold text-stone-900 dark:text-stone-100">Confirm revisit</h3>
+            <span aria-hidden="true" class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-bold">↩</span>
+            <h3 id="revisit-states-error-title" class="text-base font-bold text-stone-900 dark:text-stone-100">Confirm revisit</h3>
           </div>
           <div class="px-5 py-4 space-y-3">
-            <p class="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">This will invoke <code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono text-[11px]">haiku_revisit</code>, rewriting state and pushing to the main intent branch.</p>
+            <p id="revisit-states-error-desc" class="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">This will invoke <code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono text-[11px]">haiku_revisit</code>, rewriting state and pushing to the main intent branch.</p>
             <section>
               <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500 mb-1">Target stage</p>
               <div class="px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 flex items-center gap-2">
@@ -367,8 +456,8 @@
             </div>
           </div>
           <div class="px-5 py-3 border-t border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900/60 flex items-center justify-end gap-2">
-            <button class="px-3 py-1.5 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800">Cancel</button>
-            <button class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 hover:bg-amber-700 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">Retry</button>
+            <button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800">Cancel</button>
+            <button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 hover:bg-amber-700 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">Retry</button>
           </div>
         </div>
       </div>
@@ -378,6 +467,7 @@
         <li><code class="font-mono">role="alert"</code> so screen readers announce it without needing focus.</li>
         <li>Confirm label switches to "Retry" when an error is present, then returns to the default Confirm copy once the user edits the state or reopens.</li>
         <li>Cancel remains functional — user can back out without retrying.</li>
+        <li>Modal container carries <code class="font-mono">role="dialog" aria-modal="true" aria-labelledby aria-describedby</code> per <code class="font-mono">aria-landmark-spec.md §3</code>; the ↩ glyph is <code class="font-mono">aria-hidden="true"</code> so the accessible name is the heading text alone.</li>
       </ul>
     </section>
 
@@ -436,13 +526,15 @@
       <h2 class="text-base font-semibold text-stone-900 dark:text-stone-100">Loading state — in-flight revisit</h2>
 
       <div class="rounded-xl bg-stone-900/80 dark:bg-black/60 p-8 flex items-start justify-center">
-        <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 overflow-hidden">
+        <!-- Modal shell with dialog semantics; aria-busy signals the in-flight state to AT without
+             breaking the dialog role. Escape + backdrop are suppressed while aria-busy=true. -->
+        <div role="dialog" aria-modal="true" aria-labelledby="revisit-states-loading-title" aria-describedby="revisit-states-loading-desc" aria-busy="true" class="w-full max-w-md bg-white dark:bg-stone-900 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 overflow-hidden">
           <div class="px-5 py-4 border-b border-stone-200 dark:border-stone-700 flex items-center gap-2">
-            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-bold">↩</span>
-            <h3 class="text-base font-bold text-stone-900 dark:text-stone-100">Confirm revisit</h3>
+            <span aria-hidden="true" class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-bold">↩</span>
+            <h3 id="revisit-states-loading-title" class="text-base font-bold text-stone-900 dark:text-stone-100">Confirm revisit</h3>
           </div>
           <div class="px-5 py-4 space-y-3 opacity-75 pointer-events-none select-none">
-            <p class="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">This will invoke <code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono text-[11px]">haiku_revisit</code>, rewriting state and pushing to the main intent branch.</p>
+            <p id="revisit-states-loading-desc" class="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">This will invoke <code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono text-[11px]">haiku_revisit</code>, rewriting state and pushing to the main intent branch.</p>
             <section>
               <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500 mb-1">Target stage</p>
               <div class="px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 flex items-center gap-2">
@@ -453,13 +545,13 @@
           </div>
           <div class="px-5 py-3 border-t border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900/60 flex items-center justify-between gap-2">
             <p class="text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1.5">
-              <svg class="w-3.5 h-3.5 spin text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="9" class="opacity-30"/><path stroke-linecap="round" d="M21 12a9 9 0 0 1-9 9"/></svg>
+              <svg aria-hidden="true" class="w-3.5 h-3.5 spin text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="9" class="opacity-30"/><path stroke-linecap="round" d="M21 12a9 9 0 0 1-9 9"/></svg>
               Rewriting state · pushing branch…
             </p>
             <div class="flex items-center gap-2">
-              <button disabled class="px-3 py-1.5 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 opacity-50 cursor-not-allowed">Cancel</button>
-              <button aria-busy="true" disabled class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 text-white flex items-center gap-1.5 cursor-progress">
-                <svg class="w-3.5 h-3.5 spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="9" class="opacity-30"/><path stroke-linecap="round" d="M21 12a9 9 0 0 1-9 9"/></svg>
+              <button type="button" disabled class="px-3 py-1.5 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 opacity-50 cursor-not-allowed">Cancel</button>
+              <button type="button" aria-busy="true" disabled class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 text-white flex items-center gap-1.5 cursor-progress">
+                <svg aria-hidden="true" class="w-3.5 h-3.5 spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="9" class="opacity-30"/><path stroke-linecap="round" d="M21 12a9 9 0 0 1-9 9"/></svg>
                 Revisiting…
               </button>
             </div>
@@ -485,14 +577,14 @@
       </p>
 
       <div class="rounded-xl bg-stone-900/80 dark:bg-black/60 p-8 flex items-start justify-center">
-        <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 overflow-hidden">
+        <div role="dialog" aria-modal="true" aria-labelledby="revisit-states-empty-title" aria-describedby="revisit-states-empty-desc" class="w-full max-w-md bg-white dark:bg-stone-900 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 overflow-hidden">
           <div class="px-5 py-4 border-b border-stone-200 dark:border-stone-700 flex items-center gap-2">
-            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-bold">↩</span>
-            <h3 class="text-base font-bold text-stone-900 dark:text-stone-100">Confirm revisit</h3>
+            <span aria-hidden="true" class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-bold">↩</span>
+            <h3 id="revisit-states-empty-title" class="text-base font-bold text-stone-900 dark:text-stone-100">Confirm revisit</h3>
             <span class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400">no active gate</span>
           </div>
           <div class="px-5 py-4 space-y-3">
-            <p class="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">This will invoke <code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono text-[11px]">haiku_revisit</code>, rewriting state and pushing to the main intent branch.</p>
+            <p id="revisit-states-empty-desc" class="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">This will invoke <code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono text-[11px]">haiku_revisit</code>, rewriting state and pushing to the main intent branch.</p>
             <div class="px-3 py-2 rounded-md bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 text-[11px] text-stone-600 dark:text-stone-300 leading-snug">
               Nothing is structurally open. The <strong>earliest unaddressed</strong> stage still determines the target — even though you opened the app manually.
             </div>
@@ -516,8 +608,8 @@
             <!-- no "open feedback in scope" section — suppressed when empty -->
           </div>
           <div class="px-5 py-3 border-t border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900/60 flex items-center justify-end gap-2">
-            <button class="px-3 py-1.5 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800">Cancel</button>
-            <button class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 hover:bg-amber-700 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">Confirm &amp; Revisit to Design · resets 4 downstream stages</button>
+            <button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800">Cancel</button>
+            <button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 hover:bg-amber-700 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">Confirm &amp; Revisit to Design · resets 4 downstream stages</button>
           </div>
         </div>
       </div>
@@ -533,13 +625,13 @@
       </p>
 
       <div class="rounded-xl bg-stone-900/80 dark:bg-black/60 p-8 flex items-start justify-center">
-        <div class="w-full max-w-md bg-white dark:bg-stone-900 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 overflow-hidden flex flex-col" style="height: 560px;">
+        <div role="dialog" aria-modal="true" aria-labelledby="revisit-states-long-title" aria-describedby="revisit-states-long-desc" class="w-full max-w-md bg-white dark:bg-stone-900 rounded-xl shadow-2xl border border-stone-200 dark:border-stone-700 overflow-hidden flex flex-col" style="height: 560px;">
           <div class="px-5 py-4 border-b border-stone-200 dark:border-stone-700 flex items-center gap-2 shrink-0">
-            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-bold">↩</span>
-            <h3 class="text-base font-bold text-stone-900 dark:text-stone-100">Confirm revisit</h3>
+            <span aria-hidden="true" class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-bold">↩</span>
+            <h3 id="revisit-states-long-title" class="text-base font-bold text-stone-900 dark:text-stone-100">Confirm revisit</h3>
           </div>
           <div class="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-            <p class="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">This will invoke <code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono text-[11px]">haiku_revisit</code>, rewriting state and pushing to the main intent branch.</p>
+            <p id="revisit-states-long-desc" class="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">This will invoke <code class="px-1 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono text-[11px]">haiku_revisit</code>, rewriting state and pushing to the main intent branch.</p>
             <section>
               <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500 mb-1">Target stage</p>
               <div class="px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 flex items-center gap-2">
@@ -578,8 +670,8 @@
             </section>
           </div>
           <div class="px-5 py-3 border-t border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900/60 flex items-center justify-end gap-2 shrink-0">
-            <button class="px-3 py-1.5 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800">Cancel</button>
-            <button class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 hover:bg-amber-700 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">Confirm &amp; Revisit to Inception · resets 5 downstream stages</button>
+            <button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-md border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800">Cancel</button>
+            <button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 hover:bg-amber-700 text-white focus:ring-2 focus:ring-amber-500 focus:outline-none">Confirm &amp; Revisit to Inception · resets 5 downstream stages</button>
           </div>
         </div>
       </div>

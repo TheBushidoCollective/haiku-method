@@ -2,7 +2,7 @@
 title: >-
   text-[11px] without font-semibold/bold across 5 artifacts — violates §3
   type-scale floor (WCAG 1.4.4)
-status: closed
+status: pending
 origin: adversarial-review
 author: accessibility
 author_type: agent

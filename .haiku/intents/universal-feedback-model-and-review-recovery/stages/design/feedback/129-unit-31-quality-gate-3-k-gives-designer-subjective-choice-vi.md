@@ -2,7 +2,7 @@
 title: >-
   unit-31 quality gate 3 (k) gives designer subjective choice — violates
   falsifiability standard
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:34:14Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-31-contrast-and-type-scale-fixes.md
-closed_by: null
+closed_by: unit-31-contrast-and-type-scale-fixes
 bolt: 0
 upstream_stage: null
 ---

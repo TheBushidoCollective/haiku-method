@@ -63,16 +63,31 @@ Any combination in this table MUST NOT appear in `stages/design/artifacts/*.html
 
 ### 1.2 Status Badge Colors (Shared StatusBadge)
 
-From `packages/shared/src/components/StatusBadge.tsx`:
+From `packages/shared/src/components/StatusBadge.tsx` — canonical light/dark token mapping. **The default-case semantic name is `idle`, not `pending`** (see §1.2a). The shared component's literal `default:` branch in the switch still accepts the string `"pending"` today for back-compat with existing callers, but any new caller MUST pass `"idle"` and the component's default case MUST be renamed to `idle` at implementation time. This rename is intentional — it removes the cross-component color-semantics collision with `FeedbackStatusBadge pending` (amber / attention) documented in §1.2a.
 
 | Status | Light | Dark |
 |---|---|---|
 | `completed` / `complete` | `bg-green-100 text-green-700` | `dark:bg-green-900/30 dark:text-green-400` |
 | `in_progress` / `active` | `bg-teal-100 text-teal-700` | `dark:bg-teal-900/30 dark:text-teal-400` |
-| `pending` (default fallback) | `bg-stone-100 text-stone-500` | `dark:bg-stone-800 dark:text-stone-400` |
+| `idle` (default fallback — see §1.2a; legacy callers may still pass `"pending"` until the rename lands) | `bg-stone-100 text-stone-600` | `dark:bg-stone-800 dark:text-stone-300` |
 | `blocked` | `bg-red-100 text-red-700` | `dark:bg-red-900/30 dark:text-red-400` |
 | `unit` | `bg-indigo-100 text-indigo-700` | `dark:bg-indigo-900/30 dark:text-indigo-400` |
 | `intent` | `bg-purple-100 text-purple-700` | `dark:bg-purple-900/30 dark:text-purple-400` |
+
+> **Why `idle` instead of `pending`?** `FeedbackStatusBadge pending` means "amber / attention needed / action required" (see §2.1). A shared-badge `pending` that meant "stone / neutral / not started yet" created a trap where the literal label "pending" rendered in two visually opposite colors on the same page depending on which component emitted it. The shared component's neutral fallback is therefore named `idle` and the `FeedbackStatusBadge` owns the word `pending` outright.
+
+> **Contrast update (FB-15):** the shared idle fallback previously rendered as `text-stone-500` on `bg-stone-100`, which measures **4.40:1** and is flagged in §1.1a as an AA body-text **FAIL**. Lifting to `text-stone-600` on `bg-stone-100` yields **6.99:1** (AAA). The dark-mode pair is lifted from `dark:text-stone-400` (≈ 4.4:1 against `dark:bg-stone-800`) to `dark:text-stone-300` (≈ 10.8:1) so both modes clear AA with margin.
+
+### 1.2a Cross-Component Color-Semantics Policy (FB-15)
+
+| Rule | Rationale |
+|---|---|
+| **Never render a shared `StatusBadge` inside a feedback context.** Feedback lists, feedback cards, feedback sidebar groupings, review-page feedback tabs — MUST use `FeedbackStatusBadge` exclusively. | Shared `StatusBadge idle` (stone) and `FeedbackStatusBadge rejected` (stone) now use near-identical token pairs. An implementer who forgets the `feedbackStatusColors` map and falls back to shared `StatusBadge` would render rejected feedback with idle-unit tokens — two different states, one shape. The policy removes the fallback path entirely. |
+| **Never render a `FeedbackStatusBadge` outside a feedback context** (unit lists, stage progress strips, intent dashboards, kanban columns, etc.). | Symmetric containment — `FeedbackStatusBadge pending` is amber (attention); a unit sidebar using it would show "pending" in amber next to a sibling list of units using shared `StatusBadge idle` (stone). Same literal word, two colors, one page. |
+| **The string `"pending"` is reserved for `FeedbackStatusBadge`.** New shared-badge callers MUST pass `"idle"` and treat the shared component's legacy acceptance of `"pending"` as a back-compat alias slated for removal. | Prevents the rename from silently drifting back in as new callers grep the existing codebase for `"pending"` and copy the wrong pattern. |
+| **CI lint (implementation-stage follow-up):** grep any source file under a `feedback/` or `review/` directory for `StatusBadge` imports (capital-S, no `Feedback` prefix) — fail the build on any hit. Symmetric rule for `FeedbackStatusBadge` imports outside feedback directories. | Hard-enforces the policy so the rule doesn't drift back during implementation churn. Implementation stage owns wiring this lint — design stage owns the policy. |
+
+This policy is canonical. If any downstream spec (DESIGN-BRIEF, artifact HTML, state-coverage grid, aria-landmark spec, or implementation stage docs) contradicts it, this section wins and the other must be updated.
 
 From `packages/haiku/src/templates/styles.ts` (server-rendered):
 
@@ -240,7 +255,7 @@ Feedback items progress through a lifecycle: `pending` -> `addressed` / `rejecte
 | `feedback-status-pending` | `bg-amber-100 text-amber-800 border-amber-300` | `dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700` | Amber = attention needed. Matches the existing comment-count badge palette. |
 | `feedback-status-addressed` | `bg-blue-100 text-blue-800 border-blue-300` | `dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700` | Blue = work done, awaiting verification. Distinct from teal (which is "active/primary"). |
 | `feedback-status-closed` | `bg-green-100 text-green-800 border-green-300` | `dark:bg-green-900/30 dark:text-green-300 dark:border-green-700` | Green = resolved. Consistent with existing `completed` status color. |
-| `feedback-status-rejected` | `bg-stone-100 text-stone-500 border-stone-300` | `dark:bg-stone-800 dark:text-stone-400 dark:border-stone-600` | Stone/gray = dismissed/not actionable. Muted, de-emphasized. |
+| `feedback-status-rejected` | `bg-stone-100 text-stone-600 border-stone-300` | `dark:bg-stone-800 dark:text-stone-300 dark:border-stone-600` | Stone/gray = dismissed/not actionable. Muted, de-emphasized. **Foreground lifted from `text-stone-500` (4.40:1 — AA FAIL per §1.1a) to `text-stone-600` (6.99:1 — AAA) per FB-15.** Dark lifted from `dark:text-stone-400` to `dark:text-stone-300` for symmetric AA margin. |
 
 **Measured contrast (WCAG 2.1 AA, ≥ 4.5:1 for text):**
 
@@ -249,11 +264,13 @@ Feedback items progress through a lifecycle: `pending` -> `addressed` / `rejecte
 | `amber-800` on `amber-100` | 5.9:1 | AA |
 | `blue-800` on `blue-100` | 7.2:1 | AA |
 | `green-800` on `green-100` | 5.8:1 | AA |
-| `stone-500` on `stone-100` | 4.6:1 | AA |
+| `stone-600` on `stone-100` | 6.99:1 | AAA |
 | `amber-300` on `amber-900/30` | 5.1:1 | AA |
 | `blue-300` on `blue-900/30` | 5.5:1 | AA |
 | `green-300` on `green-900/30` | 4.9:1 | AA |
-| `stone-400` on `stone-800` | 4.9:1 | AA |
+| `stone-300` on `stone-800` | ≈ 10.8:1 | AAA |
+
+> **FB-15 contradiction fix:** this table previously listed `stone-500 on stone-100 = 4.6:1` as AA-pass, while §1.1a line 56 listed the same pair as **4.40:1 AA FAIL**. The 4.6:1 figure was measured against `bg-white`, not the actual `bg-stone-100` card surface; the real ratio on `bg-stone-100` is 4.40:1 (WebAIM confirms 4.43:1), which fails AA for normal body text. The `feedback-status-rejected` foreground is therefore lifted to `text-stone-600` (6.99:1 unambiguous AAA) and DESIGN-BRIEF §2 + §6 are updated to match. The rejected badge remains visually de-emphasized via its muted `bg-stone-100` field, but no longer at the cost of AA compliance.
 
 #### Implementation: Badge Variant
 
@@ -262,7 +279,7 @@ const feedbackStatusColors: Record<string, string> = {
   pending:   "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   addressed: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   closed:    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  rejected:  "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400",
+  rejected:  "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
 };
 ```
 

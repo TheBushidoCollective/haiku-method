@@ -171,7 +171,7 @@ interface FeedbackStatusBadgeProps {
 | `pending` | `bg-amber-100 text-amber-800` | `bg-amber-900/30 text-amber-300` | Amber = needs attention, consistent with existing warning color |
 | `addressed` | `bg-blue-100 text-blue-800` | `bg-blue-900/30 text-blue-300` | Blue = in-progress/claimed, distinct from final states |
 | `closed` | `bg-green-100 text-green-800` | `bg-green-900/30 text-green-300` | Green = resolved, consistent with `completed` status |
-| `rejected` | `bg-stone-100 text-stone-500` | `bg-stone-800 text-stone-400` | Gray = dismissed, deliberately low-contrast |
+| `rejected` | `bg-stone-100 text-stone-600` | `bg-stone-800 text-stone-300` | Gray = dismissed, de-emphasized. Foreground pinned at `text-stone-600` (6.99:1 AAA) per FB-15 — `text-stone-500` on `bg-stone-100` only measures 4.40:1 against the actual card surface (fails AA body-text per DESIGN-TOKENS §1.1a). |
 
 **Implementation:**
 ```tsx
@@ -179,18 +179,20 @@ const feedbackColors: Record<string, string> = {
   pending:   "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   addressed: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   closed:    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  rejected:  "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400",
+  rejected:  "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
 };
 ```
 
-Uses the same `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold` base classes as the shared `StatusBadge`.
+Uses the same `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold` base classes as the shared `StatusBadge`. **MUST NOT be substituted by, or substituted for, the shared `StatusBadge`** — see DESIGN-TOKENS §1.2a Cross-Component Color-Semantics Policy. Feedback contexts render `FeedbackStatusBadge` only; non-feedback contexts render shared `StatusBadge` only. The string `"pending"` means *amber / attention needed* in feedback scope; the shared badge's neutral fallback is semantically `idle`, not `pending`.
 
 **Accessibility:** The badge includes a visible text label ("pending", "addressed", etc.) so it does not rely on color alone. The `aria-label` includes the status value. All color combinations meet WCAG 2.1 AA contrast ratios:
 - amber-800 on amber-100: 5.9:1 (passes AA)
 - blue-800 on blue-100: 7.2:1 (passes AA)
 - green-800 on green-100: 5.8:1 (passes AA)
-- stone-500 on stone-100: 4.6:1 (passes AA)
-- Dark mode equivalents (amber-300 / blue-300 / green-300 on `*-900/30`) all pass AA at minimum (≥ 4.9:1).
+- stone-600 on stone-100: 6.99:1 (passes AAA)
+- Dark mode equivalents (amber-300 / blue-300 / green-300 on `*-900/30`) all pass AA at minimum (≥ 4.9:1); rejected dark uses `stone-300 on stone-800` ≈ 10.8:1 (AAA).
+
+**State coverage (FB-25 / FB-56):** `FeedbackStatusBadge` is a pure label, not a focusable control. Default + error cells are ✓; hover / focus / active / disabled are `N/A` (the badge inherits the owning card's focus and hover, never receives its own). Canonical rendered matrix: `state-coverage-grid.md §7.1`.
 
 ---
 
@@ -223,6 +225,8 @@ Every artifact and every React/SSR render **MUST** use the code points above. Cr
 **ARIA policy for emoji:** When paired with a visible text label, the emoji span uses `aria-hidden="true"`. When rendered alone (no visible label), it uses `role="img" aria-label="{Label}"`.
 
 Rendered as: `<span className="text-xs text-stone-500 dark:text-stone-400" aria-hidden="true">{icon}</span> {label}` when the label is visible.`
+
+**State coverage (FB-25 / FB-56):** `FeedbackOriginIcon` is a pure label + emoji, not a focusable control. Default cell is ✓ (six origin variants per the mapping above); hover / focus / active / disabled / error are all `N/A` — the icon inherits the owning card's hover and focus, and there is no "disabled origin" (the owning item may be disabled; the icon stays full-contrast to preserve the origin signal). The `?`-legend popover button (line ↑) is itself a button and carries the shared footer-button six-state coverage from DESIGN-TOKENS §1.7 — see `aria-landmark-spec.md §6` for keyboard activation. Canonical rendered matrix: `state-coverage-grid.md §7.2`.
 
 ---
 
@@ -266,14 +270,21 @@ The item expands in-place to show:
 - If `status === "addressed"`: a **"Verify & Close"** primary button plus a **"Reopen"** secondary button.
 - If `status === "closed"` or `status === "rejected"`: a single **"Reopen"** button (one word, no hyphen).
 
-**Interaction states:**
-- **Default**: compact, clickable.
-- **Hover**: border highlight (teal).
-- **Expanded**: body visible, action buttons visible.
+**Interaction states (six-state grid — FB-25 / FB-56; see `artifacts/state-coverage-grid.md §2` for the canonical rendered matrix):**
+
+- **Default**: compact, clickable. Container uses the base Tailwind classes from the Compact-state block above (`p-2.5 rounded-lg bg-stone-50 dark:bg-stone-800/50 border border-transparent`).
+- **Hover**: border highlight (teal) — `hover:border-teal-400 dark:hover:border-teal-500 transition-colors`.
+- **Focus**: canonical teal focus ring per `artifacts/focus-ring-spec.html §1` — `focus-visible:outline-2 focus-visible:outline-teal-500 dark:focus-visible:outline-teal-400 focus-visible:outline-offset-1` (the compact §1a variant for dense card stacks). The card also adds `aria-expanded={isExpanded}` so AT announces the collapsed/expanded state on focus. Focus must be preserved across status changes (the item stays focused after an optimistic update or a revert).
+- **Active** (mid-click / pressed): brief 100ms depression — `active:brightness-95 dark:active:brightness-105`. No layout shift (no `transform: scale()` because reduced-motion users still need a tactile affordance; brightness is motion-safe).
+- **Expanded**: body visible, action buttons visible (as specified in the Expanded-state block above). The focus ring persists on the card while the body is open; individual action buttons carry their own focus rings.
+- **Disabled** (`isReadOnly === true` OR an in-flight status change has the card in a busy state): the card root carries `aria-disabled="true"` + `aria-busy="true"` (for the busy variant) + `cursor-not-allowed`. Visual: opacity-0.6 on the card **content only** (title + metadata + body); the left-border status signal stays at full opacity so status is still readable. **Do NOT apply `opacity-*` on the card root** — opacity-layering on the whole card collapses text contrast (see DESIGN-TOKENS §1.7 / the Banned Text-on-Surface table in §2 of this brief). Action buttons inside a disabled card use their own disabled tokens from DESIGN-TOKENS §1.7.
+- **Error** (per-item error — status-change API call failed after optimistic update): the card shows a 150ms revert animation, then displays a one-line inline error row above the footer: `text-xs text-red-600 dark:text-red-400` with copy `"Couldn't save — reverted to {previous status}."` plus a "Retry" link. Simultaneously, `#feedback-live-assertive` (see §6) announces `"Feedback {ID} update failed — reverted to {previous status}."` via `aria-live-sequencing-spec.md §3`. This is **distinct** from the sidebar-level red toast described in §3 (the toast is batch/submit-scope; this row is item-scope). If the status-change call returns a permanent failure (e.g. 404), the inline error persists until dismissed; transient failures auto-clear after the successful retry.
 - **Status: pending**: amber left border + amber badge + `⏱` clock glyph in a 16px amber-500 solid circle before the origin badge.
 - **Status: addressed**: blue left border + blue badge + `↗` arrow glyph + "Addressed by ..." meta line (3-signal).
 - **Status: closed**: green left border + `bg-green-50/60` muted background + green badge + `✓` checkmark glyph in a 16px green-600 solid circle + **"Closed ·" text prefix** on the title. **Do NOT apply `opacity-70`** — the opacity composite collapses metadata-text contrast below AA.
-- **Status: rejected**: stone-400 left border + `bg-stone-100` muted background + stone badge + `×` cross glyph in a 16px stone-500 solid circle + **"Rejected ·" text prefix** + `line-through decoration-stone-500` on the title span at full opacity. **Do NOT apply `opacity-50`** — the strikethrough itself becomes invisible under 50% opacity.
+- **Status: rejected**: stone-400 left border + `bg-stone-100` muted background + stone badge + `×` cross glyph in a 16px stone-500 solid circle (glyph background — white glyph on `bg-stone-500` is 4.86:1 non-text UI per §6 and stays stone-500) + **"Rejected ·" text prefix** + `line-through decoration-stone-600` on the title span (text color `text-stone-600`, 6.99:1 AAA per FB-15) at full opacity. **Do NOT apply `opacity-50`** — the strikethrough itself becomes invisible under 50% opacity. The *text* foreground (`text-stone-600`) is lifted from the earlier `text-stone-500` spec; only the glyph's solid `bg-stone-500` circle retains stone-500 because it's a non-text UI element governed by the 3:1 non-text rule rather than the 4.5:1 body-text rule.
+
+The six interactive states above (default / hover / focus / active / disabled / error) compose orthogonally with the four status variants: every status variant MUST render all six interactive states cleanly (e.g. a `rejected` card still has a visible focus ring, still shows an inline error row on a failed reopen, and still darkens on active). See `state-coverage-grid.md §2` for the full rendered matrix and `feedback-card-states.html` for the visual proof.
 
 **Status-signaling rule (WCAG 1.4.1 "Use of Color"):** every feedback card MUST convey status via at least TWO signals — the colored left border + a non-color second signal (shape glyph OR text prefix). The status badge text label is a third signal but alone is not sufficient at list-scan scale (the badge is 11px and sits at the card's top-right, where scanning users rarely land). See `state-signaling-inventory.html` for the full rendered matrix across compact + expanded + light + dark.
 
@@ -315,6 +326,8 @@ Group header: `text-xs font-semibold uppercase tracking-wider text-stone-600 dar
 3. `rejected` and `closed` items last
 4. Within same status: newest first (by `created_at` descending)
 
+**State coverage (FB-25 / FB-56):** `FeedbackList` is a scrollable `role="list"` container — not itself focusable; its children (`FeedbackItem`s) carry interaction states. Cells: default ✓, hover / focus / active / disabled = `N/A` (states live on the items, not the container), error ✓ (when the load API returns an error the list renders an error row with a "Retry" button — same pattern as `feedback-inline-desktop.html §error-state`), empty ✓ (the "No feedback yet" copy above), loading ✓ (skeleton rows + `aria-busy="true"` on the list container). Canonical rendered matrix: `state-coverage-grid.md §7.5`.
+
 ---
 
 #### `FeedbackSummaryBar`
@@ -331,6 +344,8 @@ A compact summary strip at the top of the feedback list showing aggregate counts
 - Each count: `text-xs font-medium` with the corresponding status color.
 - Counts that are zero are omitted.
 - Clickable counts filter the list to that status (toggle behavior -- click again to clear filter).
+
+**State coverage (FB-25 / FB-56):** Each count inside the bar is a `<button role="button" aria-pressed>` — the focusable surface. Cells per count button: default ✓, hover ✓ (subtle underline `hover:underline`), focus ✓ (canonical teal focus ring from `focus-ring-spec.html §1`), active ✓ (`aria-pressed="true"` when the filter is engaged — matches filter-pill behavior in §3), disabled = `N/A` (a count of 0 is omitted, not disabled), error = `N/A` (counts are derived; on a fetch error the bar falls back to hidden, same as empty). Canonical rendered matrix: `state-coverage-grid.md §7.6`.
 
 ---
 
@@ -385,6 +400,15 @@ interface AgentFeedbackToggleProps {
 - `aria-label="Show agent feedback inline"` (the visible "Comments" label sits outside the switch, so the switch needs its own label).
 - When the toggle flips, a `role="status" aria-live="polite"` region announces `"Agent feedback shown (N items)"` or `"Agent feedback hidden"`.
 - Keyboard: `Space` or `Enter` toggles; focus ring uses the shared focus-ring spec (`ring-2 ring-teal-500 ring-offset-2 ring-offset-white dark:ring-offset-stone-900`).
+
+**State coverage (FB-25 / FB-56):** Full six-state render lives in `agent-feedback-toggle-spec.html` and is mirrored in `state-coverage-grid.md §7.7`.
+
+- **Default (OFF)**: thumb left, track `bg-stone-300 dark:bg-stone-600`.
+- **Hover**: track darkens one step (`hover:bg-stone-400 dark:hover:bg-stone-500`); muted count chip (when present) keeps its full-contrast palette.
+- **Focus**: canonical teal focus ring per `focus-ring-spec.html §1` (`ring-2 ring-teal-500 ring-offset-2 ring-offset-white dark:ring-offset-stone-900`).
+- **Active (ON)**: thumb right, track `bg-teal-600 dark:bg-teal-500`; combined active-mid-click is a brief brightness depression (`active:brightness-95`) — no scale transform (reduced-motion safe).
+- **Disabled** (parent sets `disabled={true}`, e.g. while a filter fetch is in flight): `aria-disabled="true"` + `cursor-not-allowed`; track stays at the banned-pair-safe `bg-stone-200 dark:bg-stone-800` pair, thumb stays at its current position. **Do NOT** use `opacity-50` on the switch root — it collapses the thumb/track contrast ratio below the 3:1 UI-contrast floor (DESIGN-TOKENS §1.7). Instead, swap tokens for the disabled palette.
+- **Error**: the toggle has no native error surface — toggle API failures (e.g. a persistence error while saving `showAgent`) surface via `#feedback-live-assertive` per `aria-live-sequencing-spec.md §3`, and the toggle flips back to the previous state (optimistic-revert). The muted count chip briefly flashes red-600 text for 600ms then returns to its stone palette.
 
 **Rationale:** agent-origin feedback is usually secondary during active review; surfacing it by default would overwhelm the list with assessor / consistency-agent output. The toggle is an opt-in overlay, and the muted count keeps the reviewer aware that agent items exist without making them visible.
 
@@ -687,6 +711,10 @@ The UI shows only the actions valid for the item's current status. Invalid actio
 - `FeedbackSheet`: `fixed inset-0 z-50 bg-white dark:bg-stone-900` with a close button at top-right. Contains the same sidebar content (AgentFeedbackToggle, unified Comments list, status filter pills, general input, decision buttons). Responsive behavior is baked into the single `FeedbackSheet` component — no `Mobile` prefix is needed since the sheet only renders on mobile breakpoints anyway.
 - Both components are canonicalized in `component-inventory.md` and §9.
 
+**State coverage (FB-25 / FB-56) — `FeedbackFloatingButton`:** full eight-state render is in `feedback-inline-mobile.html` and mirrored in `state-coverage-grid.md §3` (cross-referenced from §7.9). Cells: default ✓, hover ✓ (`hover:bg-teal-700`), focus ✓ (canonical teal-500 2px ring, 2px offset — `focus-ring-spec.html §1`), active ✓ (`active:bg-teal-800 active:scale-[0.97]`; reduced-motion strips the scale transform), disabled ✓ (opacity-50 + grayscale-40 + `cursor-not-allowed`; used only when the user is on a non-review page — FB-64 48×48 hit area preserved so the button is still AT-reachable), error = `N/A` (FAB errors route through the underlying API's toast, not the button itself), empty ✓ (hidden when no pending items — the `.fab-hidden` CSS class handles this), pulse ✓ (`.feedback-floating-button-pulse` runs 2s × 3 iterations on new agent feedback; reduced-motion swaps to a static count-badge bump per §7).
+
+**State coverage (FB-25 / FB-56) — `FeedbackSheet`:** full sheet + interior-control matrix lives in `state-coverage-grid.md §3` (cross-referenced from §7.8) and rendered in `feedback-inline-mobile.html`. The sheet container itself has default ✓ + sheet-enter animation ✓ (reduced-motion → appears in-place, no slide-up); hover / focus / active / disabled are `N/A` at the container level (the sheet is a dialog wrapper; all interactive states live on its interior controls — close ✕, `AgentFeedbackToggle`, filter pills, textarea, footer buttons). Interior controls carry individual six-state coverage per §3 of the grid. Error ✓ (API error inside the sheet surfaces via the same `#feedback-live-assertive` path as desktop, plus an inline red-tinted error row at the list level).
+
 **Note:** The current sidebar is already `hidden md:flex`, so mobile users currently have NO access to review actions. The `FeedbackFloatingButton` + `FeedbackSheet` pattern is a new addition that unblocks mobile review entirely.
 
 ### Touch-target rule (hard floor, FB-64)
@@ -752,8 +780,10 @@ All feedback status badge colors meet WCAG 2.1 AA (4.5:1 minimum for text):
 | Addressed (dark) | `blue-300` (#93c5fd) | `blue-900/30` | 5.5:1 | AA |
 | Closed (light) | `green-800` (#166534) | `green-100` (#dcfce7) | 5.8:1 | AA |
 | Closed (dark) | `green-300` (#86efac) | `green-900/30` | 4.9:1 | AA |
-| Rejected (light) | `stone-500` (#78716c) | `stone-100` (#f5f5f4) | 4.6:1 | AA |
-| Rejected (dark) | `stone-400` (#a8a29e) | `stone-800` (#292524) | 4.9:1 | AA |
+| Rejected (light) | `stone-600` (#57534e) | `stone-100` (#f5f5f4) | 6.99:1 | AAA |
+| Rejected (dark) | `stone-300` (#d6d3d1) | `stone-800` (#292524) | 10.8:1 | AAA |
+
+> **FB-15 correction:** the Rejected rows previously listed `stone-500 on stone-100 = 4.6:1 AA` and `stone-400 on stone-800 = 4.9:1 AA`. The 4.6:1 light-mode figure was measured against `bg-white`, not the actual `bg-stone-100` card surface — on the real surface the ratio is **4.40:1**, which DESIGN-TOKENS §1.1a correctly flags as an AA body-text **FAIL**. The foreground is lifted to `text-stone-600` (6.99:1 AAA) in light mode and `dark:text-stone-300` (≈ 10.8:1 AAA) in dark mode so both modes clear AA with an unambiguous margin. DESIGN-TOKENS §2.1, the `feedbackColors` map in §2 above, and all rendered artifacts (feedback-inline-*, feedback-card-states, review-ui-mockup's rejected row) are updated to match.
 
 ### Metadata, Title, and Disabled-Control Contrast (unit-11)
 
@@ -763,7 +793,7 @@ Additional pairs audited and locked:
 |---|---|---|---|---|
 | Card metadata (FB-id, Visit, origin) | `text-stone-600` on white | 7.14:1 | `dark:text-stone-300` on `dark:bg-stone-900` | 12.6:1 |
 | Card title (pending / addressed / closed) | `text-stone-700` on card bg | ≥ 9:1 | `dark:text-stone-200` on card bg | ≥ 10:1 |
-| Card title (rejected, struck-through) | `text-stone-500 line-through decoration-stone-500` on `bg-stone-100` | 4.61:1 (full opacity) | `text-stone-400 line-through decoration-stone-400` on `bg-stone-800/50` | 5.0:1 |
+| Card title (rejected, struck-through) | `text-stone-600 line-through decoration-stone-600` on `bg-stone-100` | 6.99:1 (full opacity) | `text-stone-300 line-through decoration-stone-300` on `bg-stone-800/50` | 11.8:1 |
 | Disabled button — secondary | `bg-stone-100 text-stone-600 border-stone-400` | 6.85:1 text / 3.4:1 border | `dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500` | 10.2:1 text / 3.2:1 border |
 | Disabled button — primary green | `bg-green-300 text-green-800` | 5.1:1 | `dark:bg-green-900/40 dark:text-green-200` | 7.8:1 |
 | Status glyph circle — closed | white on `bg-green-600` | 4.5:1 | white on `bg-green-500` | 3.9:1 |
@@ -838,7 +868,7 @@ Prefer Tailwind utilities on the component itself for status-aware borders, back
 | `closed` | `border-l-[3px] border-l-green-500 dark:border-l-green-400 bg-green-50/60 dark:bg-green-950/25` |
 | `rejected` | `border-l-[3px] border-l-stone-400 dark:border-l-stone-500 bg-stone-100 dark:bg-stone-800/50` |
 
-The rejected-title strikethrough is rendered via utilities on the title span (`line-through decoration-stone-500`) at full opacity. Do **not** apply `opacity-70`, `opacity-50`, or any `opacity-60` to the card root, title, or metadata — these are banned repo-wide per §2 and DESIGN-TOKENS §1.7.
+The rejected-title strikethrough is rendered via utilities on the title span (`line-through decoration-stone-600` in light mode, `dark:decoration-stone-300` in dark mode — matching `text-stone-600` / `dark:text-stone-300` per FB-15) at full opacity. Do **not** apply `opacity-70`, `opacity-50`, or any `opacity-60` to the card root, title, or metadata — these are banned repo-wide per §2 and DESIGN-TOKENS §1.7.
 
 The only new styles that need to live in `packages/haiku/review-app/src/index.css` are (a) the FeedbackFloatingButton pulse animation (keyframes cannot be expressed inline as Tailwind) and (b) reduced-motion fallbacks:
 

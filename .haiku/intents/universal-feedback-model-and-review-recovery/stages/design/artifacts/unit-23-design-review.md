@@ -1,11 +1,11 @@
 ---
-title: Design review — unit-23 focus-visible + activable element semantics (bolt 1 + bolt 2 + bolt 3 + bolt 4)
+title: Design review — unit-23 focus-visible + activable element semantics (bolt 1 + bolt 2 + bolt 3 + bolt 4 + bolt 5)
 unit: unit-23-focus-visible-and-activable-element-semantics
 reviewer: design-reviewer
-bolt: 4
+bolt: 5
 status: approved
 created_at: '2026-04-20T03:10:00Z'
-updated_at: '2026-04-20T10:30:00Z'
+updated_at: '2026-04-20T12:00:00Z'
 artifacts_reviewed:
   - stages/design/artifacts/assessor-summary-card.html
   - stages/design/artifacts/stage-progress-strip.html
@@ -315,4 +315,41 @@ Re-verification grep set, rerun against current HEAD:
 designer commits). All 7 designer/reviewer criteria remain honest; no
 token-drift regression. Advance to feedback-assessor; criterion 8 is
 their deliverable.
+
+---
+
+## Bolt 5 addendum — design-reviewer re-verification after designer bolt-5 no-op
+
+Scope of bolt 5: another designer → design-reviewer pair triggered by the
+FSM without any new designer commits landing. `git diff 10e18b6b HEAD`
+(bolt-4 reviewer SHA → current HEAD) is empty; the artifact tree is
+byte-identical to bolts 2, 3, and 4. This is a re-verification sweep
+rather than a substantive review pass.
+
+Re-verification grep set, rerun against current HEAD:
+
+| # | Criterion | Grep | Result |
+|---|---|---|---|
+| 1 | assessor-summary-card.html ≥ 4 buttons with `focus-visible:ring-2` | `grep -c '<button[^>]*focus-visible:ring-2' assessor-summary-card.html` | **4** — pass |
+| 2 | stage-progress-strip.html 0 `role="link"` | `grep -c 'role="link"' stage-progress-strip.html` | **0** — pass |
+| 3 | Every stage-node is `<a href>` or `<button type="button">` | `grep -c '<a[^>]*href="#stage-' stage-progress-strip.html` | **10** — pass |
+| 4 | Canonical focus-visible ring on every converted node | line walk of L91/105/119/138/152/191/201/216/230/243 against `focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900` | all 10 carry the full ring class list — pass |
+| 5 | `aria-current="step"` on active; `tabindex="-1"` + `aria-disabled="true"` on future | counts: `aria-current="step"` = 2, `aria-disabled="true"` = 7, `tabindex="-1"` = 11 | unchanged from bolts 2/3/4 — pass |
+| 6 | focus-ring-spec.html §1b footgun rule | re-read L111-L117 (§1b), L175 (§3), L188 (§4) | present and intact — pass |
+| 7 | Stage-wide `<div role="link">` in applied HTML = 0 | `grep -rEn --include="*.html" '<div[^>]*role="link"' stages/design/artifacts/` | **0** HTML matches — pass |
+| — | No `ring-offset-gray-900` drift in applied HTML | `grep -rE 'ring-offset-gray-900' stages/design/artifacts/*.html` | **0** HTML matches — pass |
+
+### Bolt-5 Verdict
+
+**Approved.** Artifact state is byte-identical to bolts 2, 3, and 4 (no
+new designer commits between any of these reviewer bolts). All 7
+designer/reviewer criteria remain honest; no token-drift regression; the
+focus-ring-spec §1b / §3 / §4 footgun rule is still in place. Criterion 8
+(feedback-assessor verification of FB-76 + FB-82) remains appropriately
+unchecked as their deliverable.
+
+Advance to feedback-assessor. If the FSM keeps cycling designer →
+design-reviewer without advancing to feedback-assessor, that is a
+scheduler/hat-sequence issue, not an artifact-quality issue — the unit's
+design-review pass has been stable and approved since bolt 2.
 

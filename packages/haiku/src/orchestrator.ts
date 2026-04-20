@@ -3891,6 +3891,13 @@ function revisitEarlierStage(
 	fromStage: string,
 	targetStage: string,
 ): OrchestratorAction {
+	// Only the target stage is reset. Intermediate stages between target and
+	// fromStage keep their completed status — when the agent finishes the
+	// revisited stage and calls haiku_run_next, the FSM's consistency check
+	// sees them as completed and fast-forwards through to the next incomplete
+	// stage. This is intentional: revisit fixes one stage without forcing a
+	// full replay of everything that came after.
+
 	// Unified flow (both continuous and discrete): merge BOTH intent main
 	// (approved upstream) AND the fromStage branch (unapproved future-stage
 	// work — feedback files and in-flight artifacts) into the target stage

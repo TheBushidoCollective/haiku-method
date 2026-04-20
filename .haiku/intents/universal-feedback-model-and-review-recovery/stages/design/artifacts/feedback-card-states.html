@@ -76,10 +76,17 @@
   <!-- Section 2: Light mode -->
   <section aria-labelledby="sec-light">
     <h2 id="sec-light" class="text-base font-semibold mb-3">2. Card Mockups — Light Mode</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-stone-50 p-4 rounded-lg">
+    <!--
+      Native <ul class="list-none"> + <li> per unit-31 / FB-148 — this gallery
+      is the canonical spec surface for the FeedbackItem component, so its
+      list semantics must match the real render surface in
+      feedback-inline-desktop.html and feedback-inline-mobile.html. See
+      aria-landmark-spec.md §2.
+    -->
+    <ul class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-stone-50 p-4 rounded-lg list-none">
 
       <!-- PENDING — default -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">pending · default</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-400 bg-amber-50/50 border-stone-200 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -95,10 +102,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-300 text-stone-700 bg-white">Dismiss</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- PENDING — hover -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">pending · hover (card + button)</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-400 bg-amber-50/50 border-teal-400 cursor-pointer shadow-sm">
           <div class="flex items-center gap-2 mb-1">
@@ -114,10 +121,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-400 text-stone-900 bg-stone-100">Dismiss</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- ADDRESSED — default -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">addressed · default</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-400 bg-blue-50/50 border-stone-200 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -133,10 +140,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white">Verify &amp; Close</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- ADDRESSED — focus on Verify -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">addressed · focus on "Verify &amp; Close"</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-400 bg-blue-50/50 border-stone-200 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -152,10 +159,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded bg-green-600 text-white ring-2 ring-teal-500 ring-offset-2">Verify &amp; Close</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- REJECTED — default -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-600 mb-1">rejected · default (full-opacity strikethrough + X glyph + "Rejected" prefix)</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-400 bg-stone-100 border-stone-200 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -171,10 +178,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-300 text-stone-700 bg-white">Reopen</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- CLOSED — default -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-600 mb-1">closed · default (green border + checkmark glyph + "Closed" prefix — no opacity)</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-green-500 bg-green-50/60 border-stone-200 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -190,10 +197,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-300 text-stone-700 bg-white">Reopen</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- DISABLED state example -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">disabled · in-flight (optimistic)</p>
         <article aria-busy="true" class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-400 bg-blue-50/50 border-stone-200">
           <div class="flex items-center gap-2 mb-1">
@@ -211,10 +218,10 @@
             <button disabled aria-disabled="true" class="text-[11px] font-semibold px-2 py-1 rounded bg-green-300 text-green-800 dark:bg-green-900/40 dark:text-green-200 cursor-not-allowed">Verify &amp; Close</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- ACTIVE (pressed) -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">pending · active (button pressed)</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-400 bg-amber-50/50 border-stone-200 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -230,18 +237,23 @@
             <button style="transform: translateY(1px); filter: brightness(0.95);" class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-500 text-stone-900 bg-stone-200">Dismiss</button>
           </div>
         </article>
-      </div>
+      </li>
 
-    </div>
+    </ul>
   </section>
 
   <!-- Section 3: Dark mode -->
   <section aria-labelledby="sec-dark" class="dark">
     <h2 id="sec-dark" class="text-base font-semibold mb-3 text-stone-900">3. Card Mockups — Dark Mode</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-stone-950 p-4 rounded-lg">
+    <!--
+      Native <ul class="list-none"> + <li> per unit-31 / FB-148. Parity with
+      the Light mode gallery above and with feedback-inline-desktop.html /
+      feedback-inline-mobile.html.
+    -->
+    <ul class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-stone-950 p-4 rounded-lg list-none">
 
       <!-- PENDING — default -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">pending · default</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-500 bg-amber-950/20 border-stone-700 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -257,10 +269,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-600 text-stone-300 bg-stone-800">Dismiss</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- PENDING — hover -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">pending · hover</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-500 bg-amber-950/20 border-teal-500 cursor-pointer shadow-sm">
           <div class="flex items-center gap-2 mb-1">
@@ -276,10 +288,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-500 text-stone-100 bg-stone-700">Dismiss</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- ADDRESSED — default -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">addressed · default</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-500 bg-blue-950/20 border-stone-700 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -295,10 +307,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded bg-green-600 hover:bg-green-700 text-white">Verify &amp; Close</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- ADDRESSED — focus -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">addressed · focus on "Verify &amp; Close"</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-500 bg-blue-950/20 border-stone-700 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -314,10 +326,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded bg-green-600 text-white ring-2 ring-teal-400 ring-offset-2 ring-offset-stone-900">Verify &amp; Close</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- REJECTED — default (dark mode) -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-300 mb-1">rejected · default (full-opacity strikethrough + X glyph + "Rejected" prefix)</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-500 bg-stone-800/50 border-stone-700 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -333,10 +345,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-600 text-stone-200 bg-stone-800">Reopen</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- CLOSED — default (dark) -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-300 mb-1">closed · default (green border + checkmark glyph + "Closed" prefix — no opacity)</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-green-400 bg-green-950/25 border-stone-700 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -352,10 +364,10 @@
             <button class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-600 text-stone-200 bg-stone-800">Reopen</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- DISABLED -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">disabled · in-flight</p>
         <article aria-busy="true" class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-500 bg-blue-950/20 border-stone-700">
           <div class="flex items-center gap-2 mb-1">
@@ -373,10 +385,10 @@
             <button disabled aria-disabled="true" class="text-[11px] font-semibold px-2 py-1 rounded bg-green-300 text-green-800 dark:bg-green-900/40 dark:text-green-200 cursor-not-allowed">Verify &amp; Close</button>
           </div>
         </article>
-      </div>
+      </li>
 
       <!-- ACTIVE -->
-      <div>
+      <li class="list-none">
         <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-1">pending · active (button pressed)</p>
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-500 bg-amber-950/20 border-stone-700 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
@@ -392,9 +404,9 @@
             <button style="transform: translateY(1px); filter: brightness(0.9);" class="text-[11px] font-semibold px-2 py-1 rounded border border-stone-500 text-stone-100 bg-stone-600">Dismiss</button>
           </div>
         </article>
-      </div>
+      </li>
 
-    </div>
+    </ul>
   </section>
 
   <!-- Section 4: Origin badge inventory -->

@@ -2,7 +2,7 @@
 title: >-
   Focus-ring canonical drift: `focus:ring-*` (not `focus-visible:`) still on
   inputs, tabs, pins across ~10 artifacts
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:27:20Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: null
+closed_by: unit-29-focus-visible-canonicalization-and-spec-clarity
 ---
 
 DESIGN-BRIEF §2 declares the canonical Input/Textarea focus ring (line 37):

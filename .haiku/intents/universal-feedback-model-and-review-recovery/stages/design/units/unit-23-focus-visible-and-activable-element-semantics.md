@@ -64,10 +64,10 @@ quality_gates:
     consistently (convert to `<a>` or `<button>`) within this unit's scope. The
     final audit count is reported in the design-reviewer's verification note.
 status: active
-bolt: 2
-hat: feedback-assessor
+bolt: 3
+hat: designer
 started_at: '2026-04-20T05:08:26Z'
-hat_started_at: '2026-04-20T09:00:48Z'
+hat_started_at: '2026-04-20T09:02:39Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:26Z'
@@ -102,6 +102,28 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T09:00:48Z'
+    completed_at: '2026-04-20T09:02:39Z'
+    result: reject
+    reason: >-
+      FB-76 and FB-82 are both demonstrably closed — verified:
+      assessor-summary-card.html L83/L123/L236/L259 carry the canonical
+      `focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500
+      focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900`
+      class list on all 4 interactive buttons; stage-progress-strip.html has 0
+      `<div role="link">` and 10 native `<a href="#stage-...">` anchors with
+      canonical focus-visible ring + proper tabindex/aria-current/aria-disabled;
+      focus-ring-spec.html §1b (L111–L117) codifies the native-element mandate,
+      §3 L175 lists `<div role="link">` as forbidden, §4 L188 adds the
+      enforcement grep. However advance_hat refused with `criteria_not_met: 8
+      unchecked completion criteria`. The checkboxes were ticked in the unit
+      worktree's copy of the unit spec but the parent-visible unit file still
+      shows all 8 `- [ ]` — the harness reads the parent path. Bolting back so
+      the designer/reviewer hats tick the completion criteria on the unit spec
+      in a way that reaches the parent worktree (e.g., check boxes + commit with
+      merge-forward, or verify the unit-advance path captures the tick).
+      FB-closure artifacts themselves are correct and should not be redone.
+  - hat: designer
+    started_at: '2026-04-20T09:02:39Z'
     completed_at: null
     result: null
 ---

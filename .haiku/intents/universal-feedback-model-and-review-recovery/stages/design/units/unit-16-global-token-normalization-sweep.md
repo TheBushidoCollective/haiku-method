@@ -24,6 +24,33 @@ outputs:
   - stages/design/artifacts/
   - stages/design/DESIGN-BRIEF.md
   - knowledge/DESIGN-TOKENS.md
+  - stages/design/artifacts/agent-feedback-toggle-spec.html
+  - stages/design/artifacts/annotation-gesture-spec.html
+  - stages/design/artifacts/annotation-popover-states.html
+  - stages/design/artifacts/aria-landmark-spec.md
+  - stages/design/artifacts/aria-live-sequencing-spec.md
+  - stages/design/artifacts/assessor-summary-card.html
+  - stages/design/artifacts/comment-to-feedback-flow.html
+  - stages/design/artifacts/comments-list-with-agent-toggle.html
+  - stages/design/artifacts/contrast-and-type-audit.md
+  - stages/design/artifacts/feedback-card-states.html
+  - stages/design/artifacts/feedback-inline-desktop.html
+  - stages/design/artifacts/feedback-inline-mobile.html
+  - stages/design/artifacts/feedback-lifecycle-transitions.html
+  - stages/design/artifacts/focus-ring-spec.html
+  - stages/design/artifacts/footer-button-copy-spec.md
+  - stages/design/artifacts/keyboard-shortcut-map.html
+  - stages/design/artifacts/review-context-header.html
+  - stages/design/artifacts/review-flow-with-feedback-assessor.html
+  - stages/design/artifacts/review-package-structure.html
+  - stages/design/artifacts/review-ui-mockup.html
+  - stages/design/artifacts/revisit-modal-states.html
+  - stages/design/artifacts/revisit-unit-list.html
+  - stages/design/artifacts/rollback-reason-banner.html
+  - stages/design/artifacts/skip-link-spec.html
+  - stages/design/artifacts/stage-progress-strip.html
+  - stages/design/artifacts/state-coverage-grid.md
+  - stages/design/artifacts/state-signaling-inventory.html
 quality_gates:
   - >-
     `grep -rn 'gray-' stages/design/artifacts/ | wc -l` returns 0. Every
@@ -91,12 +118,16 @@ quality_gates:
     match the post-sweep state.
 status: active
 bolt: 1
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T01:54:01Z'
-hat_started_at: '2026-04-20T01:54:01Z'
+hat_started_at: '2026-04-20T02:09:53Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:01Z'
+    completed_at: '2026-04-20T02:09:53Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T02:09:53Z'
     completed_at: null
     result: null
 ---

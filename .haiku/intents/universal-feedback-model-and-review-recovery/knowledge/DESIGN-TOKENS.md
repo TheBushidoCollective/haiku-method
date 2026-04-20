@@ -319,12 +319,16 @@ const feedbackStatusDots: Record<string, string> = {
 
 Each feedback item carries an `origin` indicating where it came from. These badges should be visually distinct from status badges and from each other.
 
-| Semantic Name | Tailwind Classes (Light) | Tailwind Classes (Dark) | Icon Suggestion |
+| Semantic Name | Tailwind Classes (Light) | Tailwind Classes (Dark) | Canonical Icon (unit-16) |
 |---|---|---|---|
-| `origin-adversarial-review` | `bg-rose-100 text-rose-700 border-rose-200` | `dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800` | Shield / target |
-| `origin-external-pr` | `bg-violet-100 text-violet-700 border-violet-200` | `dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800` | Git branch / PR icon |
-| `origin-user-visual` | `bg-sky-100 text-sky-700 border-sky-200` | `dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800` | Eye / annotation pin |
-| `origin-agent` | `bg-teal-100 text-teal-700 border-teal-200` | `dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800` | Sparkle / robot |
+| `origin-adversarial-review` | `bg-rose-100 text-rose-700 border-rose-200` | `dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800` | 🔍 `U+1F50D` (magnifying glass) |
+| `origin-external-pr` | `bg-violet-100 text-violet-700 border-violet-200` | `dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800` | 🔗 `U+1F517` (link) |
+| `origin-external-mr` | `bg-violet-100 text-violet-700 border-violet-200` | `dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800` | 🔗 `U+1F517` (link) |
+| `origin-user-visual` | `bg-sky-100 text-sky-700 border-sky-200` | `dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800` | ✎ `U+270E` (pencil) |
+| `origin-user-chat` | `bg-blue-100 text-blue-700 border-blue-200` | `dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800` | 💬 `U+1F4AC` (speech bubble) |
+| `origin-agent` | `bg-teal-100 text-teal-700 border-teal-200` | `dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800` | 🤖 `U+1F916` (robot) |
+
+> **unit-16 note.** DESIGN-BRIEF §2 and `aria-landmark-spec.md §6` are the single source of truth for origin codepoints. The old draft icons (🛡 `U+1F6E1`, 🔀 `U+1F500`, ✨ `U+2728`, 👁 `U+1F441`) are forbidden by the unit-16 emoji gate and by `aria-landmark-spec.md §9`.
 
 #### Implementation
 
@@ -332,23 +336,29 @@ Each feedback item carries an `origin` indicating where it came from. These badg
 const originColors: Record<string, string> = {
   "adversarial-review": "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
   "external-pr":        "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
+  "external-mr":        "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
   "user-visual":        "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
+  "user-chat":          "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
   "agent":              "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
 };
 
+// Canonical unit-16 codepoints — MUST match DESIGN-BRIEF §2 and aria-landmark-spec.md §6.
 const originIcons: Record<string, string> = {
-  "adversarial-review": "\uD83D\uDEE1\uFE0F",  // shield
-  "external-pr":        "\uD83D\uDD00",          // shuffle (merge)
-  "user-visual":        "\uD83D\uDC41\uFE0F",   // eye
-  "agent":              "\u2728",                 // sparkle
+  "adversarial-review": "\uD83D\uDD0D",  // U+1F50D magnifying glass
+  "external-pr":        "\uD83D\uDD17",  // U+1F517 link
+  "external-mr":        "\uD83D\uDD17",  // U+1F517 link
+  "user-visual":        "\u270E",         // U+270E pencil
+  "user-chat":          "\uD83D\uDCAC",  // U+1F4AC speech bubble
+  "agent":              "\uD83E\uDD16",  // U+1F916 robot
 };
 ```
 
 #### Design rationale
 
 - Rose for adversarial review: conveys critical/adversarial nature without being red (which is reserved for errors/blocked).
-- Violet for external PR: distinct from indigo (used for `unit` badges) and purple (used for `intent` badges). Violet sits between them and reads as "external/VCS".
-- Sky for user-visual: bright, attention-catching -- visual feedback is the most human-interactive origin. Distinct from blue (used for `in_progress` in SSR templates).
+- Violet for external PR/MR: distinct from indigo (used for `unit` badges) and purple (used for `intent` badges). Violet sits between them and reads as "external/VCS". PR and MR share the palette because they represent the same class of signal arriving from different providers (GitHub vs GitLab).
+- Sky for user-visual: bright, attention-catching -- visual feedback is the most human-interactive origin. Distinct from blue (used for user-chat and for `in_progress` in SSR templates).
+- Blue for user-chat: calm, conversational. Paired with the speech-bubble glyph; distinct from sky's more kinetic tone.
 - Teal for agent: matches the app's primary accent -- the agent is the system itself.
 
 ### 2.3 Feedback Item Card Tokens
@@ -396,9 +406,11 @@ This maintains consistency with the existing sidebar comment card hover pattern.
 
 The visit counter appears on feedback items that have been re-encountered across multiple review cycles. It uses a numeric counter in a small pill.
 
+> **unit-16 note.** Visit-counter text uses `text-xs` (12px), not `text-[10px]`, to stay above the §1.1a typography floor (`text-[9px]`/`text-[10px]` banned on user-facing information). The `font-bold` weight plus the colored pill background preserve legibility at the compact 12px size.
+
 ```tsx
 // Container
-"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none"
+"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-bold leading-none"
 
 // Default (single visit -- hidden or not rendered)
 // Shown at visit >= 2
@@ -453,8 +465,9 @@ When the panel has grouped sections (e.g., by status), use:
 
 ```
 // Section header inside panel
-text-[10px] font-bold uppercase tracking-widest
-text-stone-400 dark:text-stone-500
+// unit-16: text-xs (12px) replaces the earlier text-[10px] per §1.1a typography floor.
+text-xs font-bold uppercase tracking-widest
+text-stone-500 dark:text-stone-400
 px-3 py-2 bg-stone-50 dark:bg-stone-800/50
 sticky top-0 z-10
 ```
@@ -634,7 +647,7 @@ The feedback panel sits within the sidebar at the same level as existing content
 ### Visit Counter
 
 ```tsx
-<span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none ${visitCounterClasses(visits)}`}>
+<span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-bold leading-none ${visitCounterClasses(visits)}`}>
   {visits}x
 </span>
 ```

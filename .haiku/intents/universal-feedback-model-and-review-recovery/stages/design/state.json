@@ -1,7 +1,7 @@
 {
   "stage": "design",
   "status": "active",
-  "phase": "gate",
+  "phase": "elaborate",
   "started_at": "2026-04-17T03:10:00Z",
   "completed_at": null,
   "gate_entered_at": null,
@@ -16,7 +16,7 @@
       "show_origin_badge": 1
     }
   },
-  "visits": 5,
+  "visits": 6,
   "iterations": [
     {
       "index": 1,
@@ -54,15 +54,25 @@
     {
       "index": 5,
       "started_at": "2026-04-20T09:32:30Z",
+      "completed_at": "2026-04-20T17:54:34Z",
+      "trigger": "feedback",
+      "result": "feedback-revisit",
+      "reason": "24 pending feedback item(s)",
+      "feedback_signature": "sig:7ba4b802"
+    },
+    {
+      "index": 6,
+      "started_at": "2026-04-20T17:54:34Z",
       "completed_at": null,
       "trigger": "feedback",
       "result": null,
-      "reason": "24 pending feedback item(s)",
-      "feedback_signature": "sig:7ba4b802"
+      "reason": "20 pending feedback item(s)",
+      "feedback_signature": "sig:4c78913a"
     }
   ],
-  "pre_review_dispatched": true,
-  "pre_review_dispatched_at": "2026-04-20T15:27:59Z",
-  "pre_review_reviewers_acknowledged": true,
-  "pre_review_reviewers_acknowledged_at": "2026-04-20T16:18:35Z"
+  "pre_review_dispatched": false,
+  "pre_review_dispatched_at": null,
+  "pre_review_reviewers_acknowledged": false,
+  "pre_review_reviewers_acknowledged_at": null,
+  "pre_review_skipped_no_agents": false
 }

@@ -2,7 +2,7 @@
 title: >-
   Authoritative spec .md files referenced across brief and tokens do not exist
   in artifacts
-status: fixing
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T20:19:57Z'
 iteration: 0
 visit: 0
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-09:bolt-1'
 bolt: 1
 upstream_stage: null
 ---

@@ -232,7 +232,7 @@
         <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5">FB-05 &middot; Visit 2 &middot; jwaldrip</p>
       </div>
 
-      <!-- Pending item 3 (agent — shows Reject button). In-flight example: role="status" announces "FB-06 marking as closed..." (FB-26 aria-live sequencing spec). Emoji 🤖 matches DESIGN-BRIEF §2 for agent origin -->
+      <!-- Pending item 3 (agent — shows Dismiss button). Canonical verb per DESIGN-BRIEF §2 footer-button matrix: pending → rejected uses "Dismiss" regardless of author_type. In-flight example: role="status" announces "FB-06 marking as rejected..." (FB-26 aria-live sequencing spec). Emoji 🤖 matches DESIGN-BRIEF §2 for agent origin -->
       <div role="listitem" tabindex="0" aria-busy="true" class="border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-blue-400 dark:border-blue-500 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
         <div class="flex items-center gap-2 mb-1">
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800">
@@ -247,8 +247,8 @@
         </div>
         <p class="text-xs text-stone-600 dark:text-stone-300 mt-2">FB-06 &middot; Visit 2 &middot; agent</p>
         <div class="flex gap-2 mt-2">
-          <button class="text-xs font-medium px-3 py-1.5 rounded-md bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">Reject</button>
-          <button class="text-xs font-medium px-3 py-1.5 rounded-md bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">Close</button>
+          <!-- pending agent item: single Dismiss verb — same as pending user items (DESIGN-BRIEF §2 Status × Origin matrix; "Reject" and "Close" are banned verbs on pending) -->
+          <button class="text-xs font-medium px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 bg-white dark:border-gray-600 dark:text-gray-300 dark:bg-gray-900 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">Dismiss</button>
         </div>
       </div>
 
@@ -288,8 +288,9 @@
     </div><!-- /role=list -->
     </div><!-- /tabpanel -->
 
-    <!-- hidden: mine panel placeholder so aria-controls has a valid target -->
-    <div id="sheet-mine-panel" role="tabpanel" aria-labelledby="sheet-mine-tab" hidden></div>
+    <!-- (Retired: the old "mine" tabpanel referenced a retired identity split.
+         DESIGN-BRIEF §2 "Retired Components" is authoritative — the unified
+         Comments list + AgentFeedbackToggle replaces any identity-based tab.) -->
 
     <!-- Sheet footer: comment input + decision buttons -->
     <div class="shrink-0 border-t border-gray-200 dark:border-gray-700 p-3 space-y-3 bg-gray-50/50 dark:bg-gray-800/50">

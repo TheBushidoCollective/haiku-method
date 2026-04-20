@@ -629,12 +629,13 @@
                 <button class="text-[10px] font-medium px-2 py-1 rounded-md bg-gray-800 text-gray-400">Edit</button>
                 <button class="text-[10px] font-medium px-2 py-1 rounded-md bg-red-900/20 text-red-400">Delete</button>
                 <span class="flex-1"></span>
-                <button class="text-[10px] font-medium px-2 py-1 rounded-md bg-green-900/20 text-green-400">Close</button>
+                <!-- pending item: single Dismiss verb per DESIGN-BRIEF §2 footer-button matrix -->
+                <button class="text-[10px] font-medium px-2 py-1 rounded-md border border-gray-600 text-gray-300 bg-gray-900">Dismiss</button>
               </div>
             </div>
           </div>
           <div class="mt-3 p-2 bg-gray-800/50 rounded border border-gray-700">
-            <p class="text-[10px] text-gray-400"><span class="text-green-400 font-medium">Has:</span> Edit, Delete, Close buttons</p>
+            <p class="text-[10px] text-gray-400"><span class="text-green-400 font-medium">Has:</span> Edit, Delete, Dismiss buttons</p>
             <p class="text-[10px] text-gray-400"><span class="text-green-400 font-medium">Has:</span> Hover + focus interactions</p>
           </div>
         </div>
@@ -655,9 +656,9 @@
               <p class="text-xs font-medium text-gray-300">Missing null check in handleSubmit</p>
               <p class="text-[10px] text-gray-500 mt-0.5">FB-03 &middot; Visit 1 &middot; adversarial-review</p>
               <div class="flex gap-1 mt-2 border-t border-gray-700 pt-2">
-                <button class="text-[10px] font-medium px-2 py-1 rounded-md bg-gray-800 text-gray-400">Reject</button>
                 <span class="flex-1"></span>
-                <button class="text-[10px] font-medium px-2 py-1 rounded-md bg-green-900/20 text-green-400">Close</button>
+                <!-- pending agent item: single Dismiss verb regardless of origin (DESIGN-BRIEF §2 Status × Origin matrix) -->
+                <button class="text-[10px] font-medium px-2 py-1 rounded-md border border-gray-600 text-gray-300 bg-gray-900">Dismiss</button>
               </div>
             </div>
 
@@ -677,7 +678,7 @@
           </div>
           <div class="mt-3 p-2 bg-gray-800/50 rounded border border-gray-700">
             <p class="text-[10px] text-gray-400"><span class="text-red-400 font-medium">No:</span> Edit or Delete buttons</p>
-            <p class="text-[10px] text-gray-400"><span class="text-green-400 font-medium">Has:</span> Reject (agent items) and Close</p>
+            <p class="text-[10px] text-gray-400"><span class="text-green-400 font-medium">Has:</span> Dismiss (pending items, any origin)</p>
             <p class="text-[10px] text-gray-400"><span class="text-green-400 font-medium">Has:</span> Prominent origin badge</p>
           </div>
         </div>
@@ -952,8 +953,8 @@
                   <p class="text-[9px] text-gray-400 mt-1 leading-relaxed">The handleSubmit function calls getAnnotations() without checking if the result is undefined...</p>
                   <p class="text-[9px] text-gray-500 mt-1">FB-03 &middot; Visit 1</p>
                   <div class="flex gap-1 mt-2 pt-1.5 border-t border-gray-700">
-                    <button class="text-[9px] font-medium px-2 py-1 rounded bg-gray-800 text-gray-400">Reject</button>
-                    <button class="text-[9px] font-medium px-2 py-1 rounded bg-green-900/20 text-green-400">Close</button>
+                    <!-- pending item: single Dismiss verb per DESIGN-BRIEF §2 footer-button matrix -->
+                    <button class="text-[9px] font-medium px-2 py-1 rounded border border-gray-600 bg-gray-900 text-gray-300">Dismiss</button>
                   </div>
                 </div>
               </div>
@@ -1017,26 +1018,28 @@
           <p class="text-[10px] text-gray-500 mt-1">Initial state for all feedback</p>
         </div>
 
-        <!-- Arrows from pending -->
+        <!-- Arrows from pending (canonical per DESIGN-BRIEF §3: only Agent addresses → addressed, and Dismiss → rejected. No user-initiable pending → closed transition.) -->
         <div class="flex flex-col items-center gap-1 text-gray-500">
-          <div class="flex items-center gap-2">
-            <span class="text-[10px] text-gray-400">Close</span>
-            <span>&rarr;</span>
-          </div>
           <div class="flex items-center gap-2">
             <span class="text-[10px] text-gray-400">Agent addresses</span>
             <span>&rarr;</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-[10px] text-gray-400">Reject</span>
+            <span class="text-[10px] text-gray-400">Dismiss</span>
             <span>&rarr;</span>
           </div>
         </div>
 
         <!-- End states -->
         <div class="flex flex-col gap-3">
-          <!-- Closed -->
+          <!-- Addressed -->
           <div class="flex items-center gap-3">
+            <div class="inline-flex items-center px-4 py-2 rounded-lg border-2 border-blue-500 bg-blue-950/20">
+              <span class="inline-block w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
+              <span class="text-sm font-semibold text-blue-300">addressed</span>
+            </div>
+            <span class="text-gray-600">&rarr;</span>
+            <span class="text-[10px] text-gray-500">Verify &amp; Close</span>
             <div class="inline-flex items-center px-4 py-2 rounded-lg border-2 border-green-500 bg-green-950/20">
               <span class="inline-block w-3 h-3 rounded-full bg-green-500 mr-2"></span>
               <span class="text-sm font-semibold text-green-300">closed</span>
@@ -1045,21 +1048,21 @@
             <span class="text-[10px] text-gray-500">Reopen</span>
           </div>
 
-          <!-- Addressed -->
+          <!-- Rejected (via Dismiss, with Reopen back) -->
           <div class="flex items-center gap-3">
-            <div class="inline-flex items-center px-4 py-2 rounded-lg border-2 border-blue-500 bg-blue-950/20">
-              <span class="inline-block w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
-              <span class="text-sm font-semibold text-blue-300">addressed</span>
+            <div class="inline-flex items-center px-4 py-2 rounded-lg border-2 border-gray-500 bg-gray-800/30">
+              <span class="inline-block w-3 h-3 rounded-full bg-gray-400 mr-2"></span>
+              <span class="text-sm font-semibold text-gray-400">rejected</span>
             </div>
             <span class="text-gray-600">&larr;</span>
             <span class="text-[10px] text-gray-500">Reopen</span>
           </div>
 
-          <!-- Rejected -->
+          <!-- Addressed returns to pending via Reopen -->
           <div class="flex items-center gap-3">
-            <div class="inline-flex items-center px-4 py-2 rounded-lg border-2 border-gray-500 bg-gray-800/30">
-              <span class="inline-block w-3 h-3 rounded-full bg-gray-400 mr-2"></span>
-              <span class="text-sm font-semibold text-gray-400">rejected</span>
+            <div class="inline-flex items-center px-4 py-2 rounded-lg border-2 border-blue-500 bg-blue-950/20 opacity-70">
+              <span class="inline-block w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
+              <span class="text-sm font-semibold text-blue-300">addressed</span>
             </div>
             <span class="text-gray-600">&larr;</span>
             <span class="text-[10px] text-gray-500">Reopen</span>
@@ -1080,26 +1083,27 @@
             </tr>
           </thead>
           <tbody class="text-gray-300">
+            <!-- Canonical per DESIGN-BRIEF §2 footer-button matrix + §3 Feedback Status Transitions. Action column holds the canonical verb (Dismiss / Verify & Close / Reopen). Verbs do NOT split by author_type. -->
             <tr class="border-b border-gray-800">
               <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-900/30 text-amber-300">pending</span></td>
-              <td class="py-2 px-3">Close</td>
-              <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-900/30 text-green-300">closed</span></td>
-              <td class="py-2 px-3 text-gray-400">Human-authored OR explicit close</td>
-              <td class="py-2 px-3 font-mono text-[10px] text-teal-400">PATCH .../status {status: "closed"}</td>
-            </tr>
-            <tr class="border-b border-gray-800">
-              <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-900/30 text-amber-300">pending</span></td>
-              <td class="py-2 px-3">Reject</td>
+              <td class="py-2 px-3">Dismiss</td>
               <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-gray-800 text-gray-400">rejected</span></td>
-              <td class="py-2 px-3 text-gray-400">Agent-authored items only</td>
+              <td class="py-2 px-3 text-gray-400">Any pending item the user can see (any origin)</td>
               <td class="py-2 px-3 font-mono text-[10px] text-teal-400">PATCH .../status {status: "rejected"}</td>
             </tr>
             <tr class="border-b border-gray-800">
               <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-900/30 text-amber-300">pending</span></td>
-              <td class="py-2 px-3">Agent addresses</td>
+              <td class="py-2 px-3 text-gray-500 italic">(agent addresses)</td>
               <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-900/30 text-blue-300">addressed</span></td>
-              <td class="py-2 px-3 text-gray-400">Set by agent via CRUD API</td>
+              <td class="py-2 px-3 text-gray-400">Set by agent via CRUD API &mdash; no user-facing button</td>
               <td class="py-2 px-3 font-mono text-[10px] text-teal-400">PATCH .../status {status: "addressed"}</td>
+            </tr>
+            <tr class="border-b border-gray-800">
+              <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-900/30 text-blue-300">addressed</span></td>
+              <td class="py-2 px-3">Verify &amp; Close</td>
+              <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-900/30 text-green-300">closed</span></td>
+              <td class="py-2 px-3 text-gray-400">Any addressed item the user can see</td>
+              <td class="py-2 px-3 font-mono text-[10px] text-teal-400">PATCH .../status {status: "closed"}</td>
             </tr>
             <tr class="border-b border-gray-800">
               <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-900/30 text-blue-300">addressed</span></td>

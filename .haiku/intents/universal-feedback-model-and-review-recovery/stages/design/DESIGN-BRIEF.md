@@ -731,14 +731,14 @@ All feedback status badge colors meet WCAG 2.1 AA (4.5:1 minimum for text):
 
 | Badge | Foreground | Background | Ratio | Passes |
 |---|---|---|---|---|
-| Pending (light) | `amber-700` (#b45309) | `amber-100` (#fef3c7) | 4.9:1 | AA |
-| Pending (dark) | `amber-300` (#fcd34d) | `amber-900/30` | 5.2:1 | AA |
-| Addressed (light) | `blue-700` (#1d4ed8) | `blue-100` (#dbeafe) | 5.1:1 | AA |
-| Addressed (dark) | `blue-400` (#60a5fa) | `blue-900/30` | 5.6:1 | AA |
-| Closed (light) | `green-700` (#15803d) | `green-100` (#dcfce7) | 4.5:1 | AA |
-| Closed (dark) | `green-400` (#4ade80) | `green-900/30` | 5.3:1 | AA |
-| Rejected (light) | `stone-700` (#44403c) | `stone-200` (#e7e5e4) | 8.3:1 | AAA |
-| Rejected (dark) | `stone-200` (#e7e5e4) | `stone-700` (#44403c) | 8.3:1 | AAA |
+| Pending (light) | `amber-800` (#92400e) | `amber-100` (#fef3c7) | 5.9:1 | AA |
+| Pending (dark) | `amber-300` (#fcd34d) | `amber-900/30` | 5.1:1 | AA |
+| Addressed (light) | `blue-800` (#1e40af) | `blue-100` (#dbeafe) | 7.2:1 | AA |
+| Addressed (dark) | `blue-300` (#93c5fd) | `blue-900/30` | 5.5:1 | AA |
+| Closed (light) | `green-800` (#166534) | `green-100` (#dcfce7) | 5.8:1 | AA |
+| Closed (dark) | `green-300` (#86efac) | `green-900/30` | 4.9:1 | AA |
+| Rejected (light) | `stone-500` (#78716c) | `stone-100` (#f5f5f4) | 4.6:1 | AA |
+| Rejected (dark) | `stone-400` (#a8a29e) | `stone-800` (#292524) | 4.9:1 | AA |
 
 ### Metadata, Title, and Disabled-Control Contrast (unit-11)
 

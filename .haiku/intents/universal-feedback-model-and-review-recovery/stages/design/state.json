@@ -16,7 +16,7 @@
       "show_origin_badge": 1
     }
   },
-  "visits": 6,
+  "visits": 7,
   "iterations": [
     {
       "index": 1,
@@ -63,11 +63,20 @@
     {
       "index": 6,
       "started_at": "2026-04-20T17:54:34Z",
-      "completed_at": null,
+      "completed_at": "2026-04-20T18:59:54Z",
       "trigger": "feedback",
-      "result": null,
+      "result": "user-revisit",
       "reason": "20 pending feedback item(s)",
       "feedback_signature": "sig:4c78913a"
+    },
+    {
+      "index": 7,
+      "started_at": "2026-04-20T18:59:54Z",
+      "completed_at": null,
+      "trigger": "user-revisit",
+      "result": null,
+      "reason": "User revisit with 1 feedback item(s)",
+      "feedback_signature": "sig:dd3f676e"
     }
   ],
   "pre_review_dispatched": false,

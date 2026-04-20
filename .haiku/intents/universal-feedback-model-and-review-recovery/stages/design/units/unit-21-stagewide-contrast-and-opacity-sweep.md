@@ -22,6 +22,7 @@ outputs:
   - stages/design/artifacts/contrast-and-type-audit.md
   - stages/design/artifacts/revisit-modal-states.html
   - stages/design/artifacts/revisit-unit-list.html
+  - stages/design/artifacts/unit-21-design-review.md
 quality_gates:
   - >-
     `annotation-popover-states.html:394` no longer carries `opacity-50` on the
@@ -72,10 +73,10 @@ quality_gates:
     greps are updated to cover the widened scope as well (comment near the grep
     loop in each unit's post-sweep note).
 status: active
-bolt: 1
-hat: design-reviewer
+bolt: 2
+hat: designer
 started_at: '2026-04-20T05:08:18Z'
-hat_started_at: '2026-04-20T05:18:30Z'
+hat_started_at: '2026-04-20T08:55:27Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:18Z'
@@ -83,6 +84,11 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T05:18:30Z'
+    completed_at: '2026-04-20T08:55:27Z'
+    result: reject
+    reason: "Sweep is not stage-wide. B1: QG3 aria-disabled walker returns 4 violations repo-wide (review-ui-mockup.html:{136,153,856}, revisit-modal-states.html:461) vs audit's claimed 0. B2: dark:text-stone-500 (banned, 2.36:1 on bg-stone-950) still present across 9 artifacts — only 3 files were swept despite unit title committing to stage-wide. B3: opacity-60 on text-carrying card/button roots non-zero (review-ui-mockup stage-strip + JS dim literal; 9 revisit-unit-list locked cards; comment-to-feedback-flow collapsed card preview). B4: audit §4 Bolt-4 / §6.3 Bolt-5 prose describes remediations that were not performed. B5: revisit-unit-list \U0001F512 glyph dark:text-stone-600 on stone-900 ~3.25:1 fails AA. Narrow QGs (opacity-50/70, bg-stone-200+text-stone-500, type-scale) do pass. See stages/design/artifacts/unit-21-design-review.md for per-site line numbers and remediation plan."
+  - hat: designer
+    started_at: '2026-04-20T08:55:27Z'
     completed_at: null
     result: null
 ---

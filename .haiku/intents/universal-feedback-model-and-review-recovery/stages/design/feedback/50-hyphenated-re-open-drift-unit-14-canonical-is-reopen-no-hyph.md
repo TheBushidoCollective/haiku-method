@@ -2,7 +2,7 @@
 title: >-
   Hyphenated "Re-open" drift: unit-14 canonical is "Reopen" (no hyphen) — ~30
   occurrences remain
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:53:05Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 unit-14 completion criteria line 122 declares canonical copy: `closed/rejected → "Reopen" (one word, no hyphen)`. Line 125 requires a recursive search for the hyphenated spelling in `stages/design/` to return 0 matches in artifact files. Actual count: **~30 occurrences across 4 artifacts + the state-coverage grid itself**.

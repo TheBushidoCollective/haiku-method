@@ -1,6 +1,6 @@
 ---
 title: 'max-w-[1400px] magic number: 26 literals across 13 artifacts, never tokenized'
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -8,7 +8,7 @@ created_at: '2026-04-19T17:53:49Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 unit-10 gate line 159 requires: `max-w-[1400px]` either removed from all artifacts OR added to DESIGN-TOKENS.md as a named layout token referenced uniformly.

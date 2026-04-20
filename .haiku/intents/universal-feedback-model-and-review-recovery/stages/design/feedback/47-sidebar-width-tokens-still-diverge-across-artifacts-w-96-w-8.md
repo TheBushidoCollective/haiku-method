@@ -1,6 +1,6 @@
 ---
 title: 'Sidebar width tokens still diverge across artifacts — w-96, w-80, w-80 lg:w-96'
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -8,7 +8,7 @@ created_at: '2026-04-19T17:52:14Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 unit-10 gate line 158 requires "every sidebar container in every artifact uses the canonical responsive width pattern" — DESIGN-BRIEF §4 + DESIGN-TOKENS.md §1.3 line 83 set this to `w-80 lg:w-96`.

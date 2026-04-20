@@ -2,7 +2,7 @@
 title: >-
   Inactive tabs at tabindex=-1 receive text-gray-400 — unreachable by keyboard
   AND low contrast (compound a11y fail)
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:54:37Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 **WCAG 1.4.3 (AA)** + **2.1.1 Keyboard (A)** + **ARIA-1.2 tablist pattern.** The ARIA tablist roving-tabindex pattern is legitimate — inactive tabs are `tabindex="-1"` and reached via arrow keys. But two parts of the contract are broken here:

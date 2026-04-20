@@ -2,7 +2,7 @@
 title: >-
   Unit-11 gate FAIL: text-[10px] / text-[9px] metadata text rampant in
   load-bearing mockups (WCAG 1.4.4, 1.4.12)
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:51:32Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 **WCAG:** 1.4.4 Resize Text (A), 1.4.12 Text Spacing (AA) — 10px/9px is below the effective readability floor, and the unit-11 fix gate explicitly required `grep -rEn 'text-\[(9|10)px\]' stages/design/artifacts/` to return 0. Reality: 1154 matches across 21 files, most on user-facing information text (metadata "FB-NN · Visit N · origin", status labels, filter counts, section labels).

@@ -2,7 +2,7 @@
 title: >-
   Metadata contrast fails WCAG 1.4.3 AA: text-gray-400 / text-stone-400 on white
   used as default across all artifacts
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:51:52Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 **WCAG 1.4.3 Contrast (Minimum, AA):** body text must be ≥ 4.5:1 against its background. `text-gray-400` (#9ca3af) on white = 2.85:1 — FAIL. `text-stone-400` (#a8a29e) on white = 2.78:1 — FAIL. Unit-11's fix gate required raising metadata to `text-stone-500 dark:text-stone-400` minimum and documenting `stone-400`/`gray-400` as banned on white/stone-50.

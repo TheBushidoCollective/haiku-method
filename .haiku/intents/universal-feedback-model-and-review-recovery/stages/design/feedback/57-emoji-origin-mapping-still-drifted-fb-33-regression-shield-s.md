@@ -2,7 +2,7 @@
 title: >-
   Emoji origin mapping still drifted (FB-33 regression): shield/shuffle/sparkles
   still in use across mockups
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:54:15Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 **WCAG 1.1.1 Non-text Content (A):** decorative emoji used as the origin indicator must map consistently and have a textual alternative. When the emoji and its label drift between artifacts, screen-reader users get one origin, sighted users get another, and dev ships whichever file they copy first.

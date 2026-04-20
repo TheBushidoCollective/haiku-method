@@ -1,6 +1,6 @@
 ---
 title: 'focus:ring-1 still present on 4 artifacts — unit-13 gate unfulfilled'
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -8,7 +8,7 @@ created_at: '2026-04-19T17:52:31Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 unit-13 completion criteria line 213 (marked `[x]`) says: `grep -rEn 'focus:ring-1' stages/design/artifacts/` returns 0 matches on interactive elements. It does not — **7 occurrences across 4 files**.

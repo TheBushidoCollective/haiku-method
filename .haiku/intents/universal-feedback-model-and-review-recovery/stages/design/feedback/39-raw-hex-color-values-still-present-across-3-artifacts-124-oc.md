@@ -1,6 +1,6 @@
 ---
 title: Raw hex color values still present across 3+ artifacts (124 occurrences)
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -8,7 +8,7 @@ created_at: '2026-04-19T17:50:41Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 unit-10 completion criteria line 153 claims `grep -rEn '#[0-9a-fA-F]{3,8}\b' stages/design/artifacts/` returns 0 matches for color values. It does not. Running the gate returns **124 raw hex occurrences** across at least 3 files.

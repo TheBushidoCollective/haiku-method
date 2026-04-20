@@ -2,7 +2,7 @@
 title: >-
   text-[9px] and text-[10px] sub-minimum font sizes still widespread — unit-11
   gate unfulfilled
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:54:45Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 unit-11 completion criteria line 42 (marked `[x]`) requires: `grep -rEn 'text-\[(9|10)px\]' stages/design/artifacts/` returns 0 matches, with `text-xs` (12px) as the hard minimum and `text-[11px]` only permitted when paired with `font-semibold` and documented.

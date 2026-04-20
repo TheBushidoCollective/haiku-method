@@ -2,7 +2,7 @@
 title: >-
   focus:ring-1 still pervasive on inputs/textareas + no focus-visible:ring-2 on
   desktop mockup (FB-37 regression)
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:53:50Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 **WCAG 2.4.7 Focus Visible (AA) / 2.4.11 Focus Not Obscured (AA, WCAG 2.2):** focus indicator must be clearly visible. A 1px ring is below the canonical spec unit-13 adopted (2px teal-500) and below the 3:1 non-text contrast floor in many cases. Unit-13 gate required `grep -rEn 'focus:ring-1' stages/design/artifacts/` to return 0 for interactive elements, and every `<input>`, `<textarea>`, `<button>`, `[tabindex="0"]`, `<a>` to carry `focus-visible:ring-2 focus-visible:ring-teal-500`.

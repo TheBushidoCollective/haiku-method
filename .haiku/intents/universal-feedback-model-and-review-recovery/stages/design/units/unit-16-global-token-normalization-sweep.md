@@ -116,7 +116,7 @@ quality_gates:
     matching the gates above (all zero for banned patterns).
     state-signaling-inventory.html screenshots re-rendered (or HTML updated) to
     match the post-sweep state.
-status: active
+status: completed
 bolt: 2
 hat: feedback-assessor
 started_at: '2026-04-20T01:54:01Z'
@@ -145,8 +145,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T02:36:40Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T02:43:56Z'
+    result: advance
+completed_at: '2026-04-20T02:43:56Z'
 ---
 # Global token normalization sweep
 
@@ -213,12 +214,12 @@ item specified (most include the command in their body).
 
 ## Completion criteria
 
-- [ ] All 12 quality_gates pass
-- [ ] contrast-and-type-audit.md §3 post-sweep table reflects reality
-- [ ] DESIGN-BRIEF §1, §2, §7 updated for canonical tokens/patterns
-- [ ] DESIGN-TOKENS.md updated: breakpoint table (1280 canonical),
+- [x] All 12 quality_gates pass
+- [x] contrast-and-type-audit.md §3 post-sweep table reflects reality
+- [x] DESIGN-BRIEF §1, §2, §7 updated for canonical tokens/patterns
+- [x] DESIGN-TOKENS.md updated: breakpoint table (1280 canonical),
       max-w-page token, focus-visible canonical pattern
-- [ ] aria-landmark-spec.md §4.3 documents roving-tabindex arrow-key
+- [x] aria-landmark-spec.md §4.3 documents roving-tabindex arrow-key
       handler with sample JS
-- [ ] Every FB item listed in `closes:` verified as closed by the
+- [x] Every FB item listed in `closes:` verified as closed by the
       feedback-assessor against its original gate command

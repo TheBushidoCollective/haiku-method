@@ -1,6 +1,6 @@
 ---
 title: 'gray-* palette sweep incomplete: 1,669 occurrences remain across 14 artifacts'
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -8,7 +8,7 @@ created_at: '2026-04-19T17:50:19Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-16-global-token-normalization-sweep
 ---
 
 unit-10 completion criteria line 152 claims `grep -rn 'gray-' stages/design/artifacts/` returns 0 matches. It does not. Running the exact gate command returns **1,669 matches across 14 HTML files**.

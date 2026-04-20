@@ -21,6 +21,7 @@ outputs:
   - stages/design/artifacts/review-package-structure.html
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
   - stages/design/artifacts/rollback-reason-banner.html
+  - stages/design/artifacts/unit-25-design-review.md
 quality_gates:
   - >-
     Every artifact under `stages/design/artifacts/` that declares animations or
@@ -62,9 +63,9 @@ quality_gates:
     rule.
 status: active
 bolt: 1
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T05:08:30Z'
-hat_started_at: '2026-04-20T05:15:08Z'
+hat_started_at: '2026-04-20T05:18:59Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:30Z'
@@ -72,6 +73,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T05:15:08Z'
+    completed_at: '2026-04-20T05:18:59Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T05:18:59Z'
     completed_at: null
     result: null
 ---

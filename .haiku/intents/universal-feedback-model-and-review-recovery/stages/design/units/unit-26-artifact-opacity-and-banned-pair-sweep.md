@@ -3,8 +3,8 @@ title: >-
   Artifact opacity-50/60 and banned-token-pair stage-wide rewrite — markup
   actually matches what contrast-and-type-audit claims for revisit-unit-list,
   revisit-modal-states, review-ui-mockup, agent-feedback-toggle-spec, and
-  annotation-popover-states; disabled + aria-disabled contract enforced; stage-btn
-  gets a focus-visible ring
+  annotation-popover-states; disabled + aria-disabled contract enforced;
+  stage-btn gets a focus-visible ring
 type: design
 closes:
   - FB-134
@@ -28,23 +28,60 @@ outputs:
   - stages/design/artifacts/unit-26-design-review.md
 quality_gates:
   - name: stagewide-no-opacity-50-60-on-text
-    command: "! grep -rEn 'opacity-(50|60)' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/*.html | grep -vE 'backdrop-blur|black/(50|60)|modal-overlay|demo-only'"
+    command: >-
+      ! grep -rEn 'opacity-(50|60)'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/*.html
+      | grep -vE 'backdrop-blur|black/(50|60)|modal-overlay|demo-only'
   - name: revisit-unit-list-no-opacity-60
-    command: "! grep -En 'opacity-60' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/revisit-unit-list.html"
+    command: >-
+      ! grep -En 'opacity-60'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/revisit-unit-list.html
   - name: revisit-modal-states-no-opacity-50
-    command: "! grep -En 'opacity-50' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/revisit-modal-states.html | grep -vE 'backdrop-blur|black/50|modal-overlay'"
+    command: >-
+      ! grep -En 'opacity-50'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/revisit-modal-states.html
+      | grep -vE 'backdrop-blur|black/50|modal-overlay'
   - name: review-ui-mockup-no-opacity-60
-    command: "! grep -En 'opacity-60' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/review-ui-mockup.html"
+    command: >-
+      ! grep -En 'opacity-60'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/review-ui-mockup.html
   - name: review-ui-mockup-stage-btn-focus-visible
-    command: "! grep -E 'stage-btn[^>]*focus:outline-none' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/review-ui-mockup.html | grep -v focus-visible"
+    command: >-
+      ! grep -E 'stage-btn[^>]*focus:outline-none'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/review-ui-mockup.html
+      | grep -v focus-visible
   - name: agent-feedback-toggle-no-opacity-50
-    command: "! grep -En 'opacity-50' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/agent-feedback-toggle-spec.html | grep -vE 'backdrop-blur|black/50'"
+    command: >-
+      ! grep -En 'opacity-50'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/agent-feedback-toggle-spec.html
+      | grep -vE 'backdrop-blur|black/50'
   - name: annotation-popover-no-opacity-50
-    command: "! grep -En 'opacity-50' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/annotation-popover-states.html"
+    command: >-
+      ! grep -En 'opacity-50'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/annotation-popover-states.html
   - name: stagewide-no-banned-stone-pairs
-    command: "! grep -rEn 'bg-stone-(100|200)[^\"]*text-stone-500|text-stone-500[^\"]*bg-stone-(100|200)' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/*.html"
+    command: >-
+      ! grep -rEn
+      'bg-stone-(100|200)[^"]*text-stone-500|text-stone-500[^"]*bg-stone-(100|200)'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/*.html
   - name: disabled-paired-with-aria-disabled
-    command: "python3 -c \"import re, sys, glob; bad = []; [bad.append((f, line)) for f in glob.glob('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/*.html') for i, line in enumerate(open(f).read().splitlines(), 1) if re.search(r'<(button|input|select|textarea|fieldset|label|a)\\b[^>]*\\bdisabled\\b', line) and 'aria-disabled' not in line]; sys.exit(1 if bad else 0)\""
+    command: >-
+      python3 -c "import re, sys, glob; bad = []; [bad.append((f, line)) for f
+      in
+      glob.glob('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/*.html')
+      for i, line in enumerate(open(f).read().splitlines(), 1) if
+      re.search(r'<(button|input|select|textarea|fieldset|label|a)\b[^>]*\bdisabled\b',
+      line) and 'aria-disabled' not in line]; sys.exit(1 if bad else 0)"
+status: active
+bolt: 1
+hat: designer
+started_at: '2026-04-20T19:39:02Z'
+hat_started_at: '2026-04-20T19:39:02Z'
+iterations:
+  - hat: designer
+    started_at: '2026-04-20T19:39:02Z'
+    completed_at: null
+    result: null
 ---
 # Artifact opacity and banned-token-pair stage-wide rewrite
 

@@ -36,27 +36,28 @@ quality_gates:
     aria-hidden state-matrix table enumerates the DOM/attribute state for each
     phase (idle, opening, open, loading, closing, closed).
   - >-
-    `feedback-inline-mobile.html` — the dialog open/close behavior is wired as
-    a real `<script data-feedback-sheet-controller>` block at the bottom of the
+    `feedback-inline-mobile.html` — the dialog open/close behavior is wired as a
+    real `<script data-feedback-sheet-controller>` block at the bottom of the
     document, not a `/* dev stage: … */` comment. The script (a) sets
-    `main.inert = true` and `main.setAttribute('aria-hidden', 'true')` on
-    `<main id="main-content">` and `<header role="banner">` on open, (b)
-    reverses both on close, (c) flips the FAB's `aria-expanded`, (d) moves
-    focus into the sheet on open and restores it to the FAB on close, (e)
-    installs an Escape-key listener scoped to the sheet. Verification: `grep
-    -nE 'main.*\.inert|setAttribute\(.aria-hidden'
-    stages/design/artifacts/feedback-inline-mobile.html` hits both the open
-    and close paths (≥ 4 matches in the controller); FB-22/FB-51/FB-80 all
+    `main.inert = true` and `main.setAttribute('aria-hidden', 'true')` on `<main
+    id="main-content">` and `<header role="banner">` on open, (b) reverses both
+    on close, (c) flips the FAB's `aria-expanded`, (d) moves focus into the
+    sheet on open and restores it to the FAB on close, (e) installs an
+    Escape-key listener scoped to the sheet. Verification: `grep -nE
+    'main.*\.inert|setAttribute\(.aria-hidden'
+    stages/design/artifacts/feedback-inline-mobile.html` hits both the open and
+    close paths (≥ 4 matches in the controller); FB-22/FB-51/FB-80 all
     satisfied.
   - >-
     Neither artifact hand-rolls a focus trap; both cite `focus-trap-react`
-    (https://github.com/focus-trap/focus-trap-react) — the same library
-    already referenced by annotation-popover-states.html — as the dev-stage
-    implementation. A dev-stage handoff comment in
-    `feedback-inline-mobile.html` explains that the vanilla controller is
-    replaced by `<FocusTrap active returnFocusOnDeactivate>` wrapping
-    `<MobileFeedbackPanel>`; the inert + aria-hidden apparatus on background
-    landmarks stays as wired.
+    (https://github.com/focus-trap/focus-trap-react) — the same library already
+    referenced by annotation-popover-states.html — as the dev-stage
+    implementation. A dev-stage handoff comment in `feedback-inline-mobile.html`
+    explains that the vanilla controller is replaced by `<FocusTrap active
+    returnFocusOnDeactivate>` wrapping `<MobileFeedbackPanel>`; the inert +
+    aria-hidden apparatus on background landmarks stays as wired.
+status: completed
+completed_at: '2026-04-20T09:18:06Z'
 ---
 # Modal dialog semantics & inert contract
 

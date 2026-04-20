@@ -2,7 +2,7 @@
 title: >-
   DESIGN-TOKENS §2.5 filter-pill active style diverges from brief active style
   (teal-100 vs teal-600 white)
-status: fixing
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T20:19:23Z'
 iteration: 0
 visit: 0
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-06:bolt-1'
 bolt: 1
 upstream_stage: null
 ---

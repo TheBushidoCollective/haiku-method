@@ -26,6 +26,9 @@ outputs:
   - stages/design/artifacts/footer-button-copy-spec.md
   - stages/design/artifacts/review-ui-mockup.html
   - stages/design/artifacts/revisit-modal-states.html
+  - stages/design/artifacts/comment-to-feedback-flow.html
+  - stages/design/artifacts/revisit-unit-list.html
+  - stages/design/artifacts/state-signaling-inventory.html
 quality_gates:
   - >-
     `grep -rEn 'opacity-70|opacity-50' stages/design/artifacts/ | grep -v
@@ -73,9 +76,9 @@ quality_gates:
     closed/rejected/pending/addressed background tokens.
 status: active
 bolt: 3
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T01:54:04Z'
-hat_started_at: '2026-04-20T02:31:00Z'
+hat_started_at: '2026-04-20T02:38:02Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:04Z'
@@ -118,6 +121,10 @@ iterations:
       specific remediation.
   - hat: designer
     started_at: '2026-04-20T02:31:00Z'
+    completed_at: '2026-04-20T02:38:02Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T02:38:02Z'
     completed_at: null
     result: null
 ---

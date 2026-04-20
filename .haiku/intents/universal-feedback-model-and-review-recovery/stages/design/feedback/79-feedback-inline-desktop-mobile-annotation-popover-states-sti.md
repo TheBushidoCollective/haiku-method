@@ -2,7 +2,7 @@
 title: >-
   feedback-inline-desktop/mobile + annotation-popover-states still carry
   text-[10px] after unit-11 claimed zero
-status: pending
+status: rejected
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -38,3 +38,7 @@ grep -cE 'text-\[10px\]' stages/design/artifacts/annotation-popover-states.html 
 - Purely decorative count-badges → either `text-xs font-bold` in a compact chip or hidden from the visible tree with `aria-hidden="true"` and the count included in the containing button's `aria-label`.
 
 Re-run the §3 verification command AFTER the fix and update the §3 table with the live count (not the claimed count).
+
+---
+
+**Rejection reason:** Stale: `grep -c 'text-\[10px\]'` returns 0 on feedback-inline-desktop.html, feedback-inline-mobile.html, and annotation-popover-states.html post-unit-16 merge.

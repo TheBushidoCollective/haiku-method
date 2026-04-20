@@ -65,10 +65,10 @@ quality_gates:
     ≥ 1. unit-19's completion-criteria grep is updated to include these two
     checks so the pattern is enforced stage-wide, not only at this unit's close.
 status: active
-bolt: 3
-hat: feedback-assessor
+bolt: 4
+hat: designer
 started_at: '2026-04-20T05:08:23Z'
-hat_started_at: '2026-04-20T09:09:11Z'
+hat_started_at: '2026-04-20T09:11:49Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:23Z'
@@ -131,6 +131,27 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T09:09:11Z'
+    completed_at: '2026-04-20T09:11:49Z'
+    result: reject
+    reason: >-
+      FB-74 and FB-80 feedback bodies themselves ARE demonstrably closed by the
+      outputs (8 dialog-markup hits across all four shells in
+      revisit-modal-states.html; real <script data-feedback-sheet-controller>
+      block in feedback-inline-mobile.html with inert + aria-hidden wired on
+      open/close, Escape, focus move + return, aria-expanded flip). However, the
+      unit-spec completion criteria in the main-repo unit file are not met: (1)
+      criterion says ≥9 occurrences of dialog markup in
+      revisit-modal-states.html, actual count is 8 — one shell short of the
+      stricter gate; (2) feedback-inline-mobile.html sheet root is missing the
+      required `data-focus-trap` marker attribute — grep returns 0 hits; (3)
+      aria-landmark-spec.md §3.7 has the before/after code but lacks the
+      explicit NVDA/JAWS + virtual-cursor rationale the criterion demands (only
+      generic "some screen readers" phrasing). Also, the worktree's unit-spec
+      file has an older/looser checklist than the main-repo unit-spec file —
+      designer should reconcile to the stricter main-repo list and satisfy all 7
+      criteria.
+  - hat: designer
+    started_at: '2026-04-20T09:11:49Z'
     completed_at: null
     result: null
 ---

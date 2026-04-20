@@ -2,7 +2,7 @@
 title: >-
   feedback-card-states.html error-card uses banned text-[10px] for body copy,
   buttons, and labels — 14 occurrences
-status: pending
+status: rejected
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -31,3 +31,7 @@ grep -cE 'text-\[10px\]' stages/design/artifacts/feedback-card-states.html
 The audit's own verification command returns 14, not 0.
 
 **Fix:** Promote the error-card body copy and action buttons to `text-xs` (12px). For the uppercase labels, either move to `text-[11px] font-semibold` per the audit's own allowed exception, or to `text-xs`. Re-run the grep after the sweep and reconcile the §3 table with reality.
+
+---
+
+**Rejection reason:** Stale: `grep -c 'text-\[10px\]' feedback-card-states.html` returns 0 after unit-16 sweep merged. Reviewer scanned the pre-merge version.

@@ -71,12 +71,16 @@ quality_gates:
     future designers from repeating the static-tabindex-only pattern.
 status: active
 bolt: 1
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T05:08:28Z'
-hat_started_at: '2026-04-20T05:08:28Z'
+hat_started_at: '2026-04-20T05:15:02Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:28Z'
+    completed_at: '2026-04-20T05:15:02Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T05:15:02Z'
     completed_at: null
     result: null
 ---

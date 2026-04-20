@@ -64,12 +64,16 @@ quality_gates:
     final audit count is reported in the design-reviewer's verification note.
 status: active
 bolt: 1
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T05:08:26Z'
-hat_started_at: '2026-04-20T05:08:26Z'
+hat_started_at: '2026-04-20T05:14:44Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:26Z'
+    completed_at: '2026-04-20T05:14:44Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T05:14:44Z'
     completed_at: null
     result: null
 ---

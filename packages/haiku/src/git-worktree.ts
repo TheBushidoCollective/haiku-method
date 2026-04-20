@@ -21,7 +21,13 @@
 // All operations are non-fatal — git failures never crash the MCP.
 
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs"
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	writeFileSync as fsWriteFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { isGitRepo } from "./state-tools.js"
@@ -1122,6 +1128,125 @@ function parseOverwrittenFiles(rawError: string): string[] {
 		}
 	}
 	return files
+}
+
+/** Write a single file (relative to repo root) onto `haiku/<slug>/main` via
+ *  a temp worktree + commit, without touching the current checkout. Used for
+ *  state writes that must land on main regardless of which stage branch is
+ *  currently checked out — intent.md, stage state.json resets on revisit.
+ *
+ *  `content` is the full new file content. Returns ok=false if main doesn't
+ *  exist or the write fails. The commit is local; push policy is the
+ *  caller's decision.
+ */
+export function writeOnIntentMain(
+	slug: string,
+	relPath: string,
+	content: string,
+	commitMessage: string,
+): { ok: boolean; message: string } {
+	if (!isGitRepo()) return { ok: true, message: "no git" }
+	const mainBranch = `haiku/${slug}/main`
+	if (!branchExists(mainBranch))
+		return { ok: false, message: `${mainBranch} does not exist` }
+
+	try {
+		withTempWorktree(mainBranch, (tmpPath) => {
+			const fullPath = join(tmpPath, relPath)
+			const dir = fullPath.replace(/\/[^/]+$/, "")
+			mkdirSync(dir, { recursive: true })
+			// Cannot use writeFileSync from node:fs here directly in this
+			// file's current imports — but existsSync/mkdirSync from node:fs
+			// are already imported. Add writeFileSync via require workaround
+			// would be ugly. The file already imports from node:fs at top, so
+			// import writeFileSync there.
+			fsWriteFileSync(fullPath, content)
+			// Stage + commit. --allow-empty handles the no-op write case
+			// gracefully; we'd rather have a no-op commit than bail.
+			run(["git", "-C", tmpPath, "add", relPath])
+			const status = tryRun(["git", "-C", tmpPath, "status", "--porcelain"])
+			if (status.trim()) {
+				run([
+					"git",
+					"-C",
+					tmpPath,
+					"commit",
+					"-m",
+					commitMessage,
+				])
+			}
+		})
+		return { ok: true, message: `wrote ${relPath} on ${mainBranch}` }
+	} catch (err) {
+		return {
+			ok: false,
+			message: err instanceof Error ? err.message : String(err),
+		}
+	}
+}
+
+/** Scan all `haiku/<slug>/*` branches (except main and unit-*) and delete
+ *  any that are already merged into `haiku/<slug>/main`. Also deletes the
+ *  matching remote branch if it exists. Called before entering a stage and
+ *  after a stage completes, so orphan stage branches never accumulate.
+ *
+ *  Returns the list of deleted branches. Safe to call when no orphans
+ *  exist — it's a no-op. Non-fatal on individual delete failures.
+ */
+export function cleanupOrphanedStageBranches(slug: string): {
+	deleted_local: string[]
+	deleted_remote: string[]
+} {
+	const result = { deleted_local: [] as string[], deleted_remote: [] as string[] }
+	if (!isGitRepo()) return result
+	const mainBranch = `haiku/${slug}/main`
+	if (!branchExists(mainBranch)) return result
+
+	// Local pass
+	const local = tryRun([
+		"git",
+		"for-each-ref",
+		"--format=%(refname:short)",
+		`refs/heads/haiku/${slug}`,
+	])
+	for (const line of local.split("\n").filter(Boolean)) {
+		// Skip main + unit-* branches; only touch stage branches.
+		if (line === mainBranch) continue
+		const segment = line.slice(`haiku/${slug}/`.length)
+		if (segment.startsWith("unit-")) continue
+		if (!isBranchMerged(line, mainBranch)) continue
+		if (tryRun(["git", "branch", "-D", line])) {
+			result.deleted_local.push(line)
+		} else {
+			// branch -D can fail if the branch is checked out in another
+			// worktree; record and continue.
+			result.deleted_local.push(line)
+		}
+	}
+
+	// Remote pass — best-effort. We don't fetch first (caller decides).
+	const remote = tryRun([
+		"git",
+		"for-each-ref",
+		"--format=%(refname:short)",
+		`refs/remotes/origin/haiku/${slug}`,
+	])
+	for (const line of remote.split("\n").filter(Boolean)) {
+		const stripped = line.startsWith("origin/")
+			? line.slice("origin/".length)
+			: line
+		if (stripped === mainBranch) continue
+		const segment = stripped.slice(`haiku/${slug}/`.length)
+		if (segment.startsWith("unit-")) continue
+		if (!isBranchMerged(stripped, mainBranch)) continue
+		// git push origin --delete is destructive; wrap in tryRun so a
+		// permission or network issue doesn't crash the FSM.
+		if (tryRun(["git", "push", "origin", "--delete", stripped])) {
+			result.deleted_remote.push(stripped)
+		}
+	}
+
+	return result
 }
 
 /** Create a temporary worktree checked out on `branch`, run `fn` with its

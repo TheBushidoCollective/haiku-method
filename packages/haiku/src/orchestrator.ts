@@ -24,6 +24,7 @@ import { computeWaves, topologicalSort } from "./dag.js"
 import {
 	branchExists,
 	cleanupIntentWorktrees,
+	cleanupOrphanedStageBranches,
 	createIntentBranch,
 	createStageBranch,
 	createUnitWorktree,
@@ -37,6 +38,7 @@ import {
 	mergeStageBranchForward,
 	mergeStageBranchIntoMain,
 	prepareRevisitBranch,
+	writeOnIntentMain,
 } from "./git-worktree.js"
 import { getCapabilities } from "./harness.js"
 import { adaptInstructions } from "./harness-instructions.js"
@@ -1388,13 +1390,26 @@ function fsmStartStage(slug: string, stage: string): void {
 	// mechanism): every stage runs on its own branch `haiku/<slug>/<stage>`, and
 	// `haiku/<slug>/main` is the consolidation hub. Stage advance A → B:
 	//   1. Ensure main exists.
-	//   2. If prev stage branch A exists and isn't merged, merge A → main.
-	//   3. Reap A's branch (its commits now live on main).
-	//   4. Checkout B: if B's branch already exists (go-back), merge main forward
+	//   2. Guard 3 (pre-stage cleanup): delete any merged stage branches that
+	//      shouldn't still exist — e.g. a prior stage whose work is on main
+	//      but whose branch lingered because an earlier session crashed.
+	//   3. If prev stage branch A exists and isn't merged, merge A → main.
+	//   4. Reap A's branch (its commits now live on main). Delete on remote too.
+	//   5. Checkout B: if B's branch already exists (go-back), merge main forward
 	//      into it; otherwise create B from main.
+	//   6. Guard 1 (entry pos-0 reset): write pos-0 default state.json onto main
+	//      for the entered stage via temp worktree. After the stage-branch
+	//      checkout merges main forward, this reset is visible on the stage
+	//      branch too. The local state.json write below keeps the currently
+	//      checked-out branch in sync with main's pos-0 for this tick.
+	//   7. Guard 3 (post-stage cleanup): scan again for any orphans that slipped
+	//      through the merge-reap cycle.
 	// The intent's `mode` field controls other concerns (how the agent iterates,
 	// review cadence) but not the branching topology — both modes branch per-stage.
 	createIntentBranch(slug)
+
+	// Guard 3 (pre-stage): sweep orphan stage branches before touching anything.
+	cleanupOrphanedStageBranches(slug)
 
 	const prevStage = findPreviousStage(slug, stage)
 	const prevStageBranch = prevStage ? `haiku/${slug}/${prevStage}` : ""
@@ -1411,11 +1426,41 @@ function fsmStartStage(slug: string, stage: string): void {
 		}
 	}
 
-	// Reap the previous stage branch so we don't accumulate one dead branch
-	// per completed stage. Its commits now live on main.
+	// Reap the previous stage branch locally + push-delete remote so we don't
+	// accumulate one dead branch per completed stage.
 	if (prevStage && branchExists(prevStageBranch)) {
 		deleteStageBranch(slug, prevStage)
+		// Best-effort remote delete — don't crash if offline/no push perms.
+		try {
+			execFileSync("git", ["push", "origin", "--delete", prevStageBranch], {
+				stdio: "pipe",
+			})
+		} catch {
+			/* non-fatal */
+		}
 	}
+
+	// Guard 1 (entry pos-0 reset on main): write the stage's default state.json
+	// onto main before we switch branches. This is the authoritative reset;
+	// downstream readers can trust main's copy even if a stage branch's local
+	// snapshot is stale.
+	const posZeroState = {
+		stage,
+		status: "active",
+		phase: "elaborate",
+		started_at: timestamp(),
+		completed_at: null,
+		gate_entered_at: null,
+		gate_outcome: null,
+		visits: 0,
+	}
+	const stageStateRelPath = `.haiku/intents/${slug}/stages/${stage}/state.json`
+	writeOnIntentMain(
+		slug,
+		stageStateRelPath,
+		`${JSON.stringify(posZeroState, null, 2)}\n`,
+		`haiku: reset ${stage} state.json to pos 0 on stage entry (Guard 1)`,
+	)
 
 	if (!isOnStageBranch(slug, stage)) {
 		const stageBranch = `haiku/${slug}/${stage}`
@@ -1432,28 +1477,23 @@ function fsmStartStage(slug: string, stage: string): void {
 		}
 	}
 
-	// State mutations only after branch is ready
+	// Mirror the pos-0 reset onto the local (now stage-branch) state file.
+	// Guard 1 already wrote main; this keeps the checked-out copy coherent for
+	// the rest of this tick without waiting for a subsequent merge-forward.
 	const path = stageStatePath(slug, stage)
-	const data = readJson(path)
-	data.stage = stage
-	data.status = "active"
-	data.phase = "elaborate"
-	data.started_at = timestamp()
-	data.completed_at = null
-	data.gate_entered_at = null
-	data.gate_outcome = null
-	writeJson(path, data)
+	writeJson(path, posZeroState)
 
-	// Open the first iteration when the stage is genuinely starting for the
-	// first time. If the stage already has iterations (e.g. re-run after a
-	// restart), leave them alone.
-	if (getStageIterationCount(data) === 0) {
-		appendStageIteration(slug, stage, { trigger: "initial" })
-	}
+	// Open the first iteration every time the stage is entered — Guard 1 wipes
+	// the state so there's always exactly one fresh iteration on entry.
+	appendStageIteration(slug, stage, { trigger: "initial" })
 
 	if (existsSync(intentFile)) {
 		setFrontmatterField(intentFile, "active_stage", stage)
 	}
+
+	// Guard 3 (post-stage): sweep again after the stage-branch checkout in
+	// case the prior delete didn't clean up every merged remote.
+	cleanupOrphanedStageBranches(slug)
 
 	emitTelemetry("haiku.stage.started", { intent: slug, stage })
 	gitCommitState(`haiku: start stage ${stage}`)
@@ -3854,7 +3894,7 @@ function resetFixLoopBolts(slug: string, stage: string): void {
  */
 function markDownstreamStagesStale(
 	slug: string,
-	iDir: string,
+	_iDir: string,
 	targetStage: string,
 	intentFile: string,
 ): void {
@@ -3863,23 +3903,39 @@ function markDownstreamStagesStale(
 	const stages = resolveIntentStages(intent, studio)
 	const targetIdx = stages.indexOf(targetStage)
 	if (targetIdx < 0) return
-	const downstream = stages.slice(targetIdx + 1)
-	for (const stage of downstream) {
-		const path = stageStatePath(slug, stage)
-		if (!existsSync(path)) continue
-		const data = readJson(path)
-		// Only rewind if this stage had actually completed. A stage that's
-		// still in progress (status=active) or untouched (no status) stays
-		// as-is — marking it stale would overwrite live iteration state.
-		if (data.status === "completed") {
-			data.status = "active"
-			data.phase = "elaborate"
-			data.completed_at = null
-			data.gate_entered_at = null
-			data.gate_outcome = null
-			data.stale_reason = `revisit of upstream stage '${targetStage}'`
-			data.stale_marked_at = timestamp()
-			writeJson(path, data)
+	// Guard 2: write pos-0 defaults on main for the target AND every
+	// downstream stage via temp worktree. That way the reset is visible
+	// from every stage branch on its next merge-main-forward, and there's
+	// exactly one source of truth. We do NOT conditionally "only rewind
+	// completed stages" — the revisit is explicit human intent, and the
+	// defaults are always safe (fresh start). Local in-progress state on a
+	// downstream stage was built on the obsolete upstream anyway.
+	const toReset = [targetStage, ...stages.slice(targetIdx + 1)]
+	for (const stage of toReset) {
+		const posZero = {
+			stage,
+			status: "active",
+			phase: "elaborate",
+			started_at: null,
+			completed_at: null,
+			gate_entered_at: null,
+			gate_outcome: null,
+			visits: 0,
+			stale_reason: `revisit of upstream stage '${targetStage}'`,
+			stale_marked_at: timestamp(),
+		}
+		const relPath = `.haiku/intents/${slug}/stages/${stage}/state.json`
+		writeOnIntentMain(
+			slug,
+			relPath,
+			`${JSON.stringify(posZero, null, 2)}\n`,
+			`haiku: reset ${stage} state.json on revisit from '${targetStage}' (Guard 2)`,
+		)
+		// Also update the currently checked-out copy so the in-flight tick
+		// sees the reset without waiting for a merge forward.
+		const localPath = stageStatePath(slug, stage)
+		if (existsSync(localPath)) {
+			writeJson(localPath, posZero)
 		}
 	}
 }

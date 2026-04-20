@@ -633,12 +633,12 @@
                 <button class="text-xs font-medium px-2 py-1 rounded-md bg-stone-800 text-stone-500">Edit</button>
                 <button class="text-xs font-medium px-2 py-1 rounded-md bg-red-900/20 text-red-400">Delete</button>
                 <span class="flex-1"></span>
-                <button class="text-xs font-medium px-2 py-1 rounded-md bg-green-900/20 text-green-400">Close</button>
+                <button class="text-xs font-medium px-2 py-1 rounded-md bg-green-900/20 text-green-400">Verify &amp; Close</button>
               </div>
             </div>
           </div>
           <div class="mt-3 p-2 bg-stone-800/50 rounded border border-stone-700">
-            <p class="text-xs text-stone-500"><span class="text-green-400 font-medium">Has:</span> Edit, Delete, Close buttons</p>
+            <p class="text-xs text-stone-500"><span class="text-green-400 font-medium">Has:</span> Edit, Delete, Verify &amp; Close buttons</p>
             <p class="text-xs text-stone-500"><span class="text-green-400 font-medium">Has:</span> Hover + focus interactions</p>
           </div>
         </div>
@@ -659,9 +659,9 @@
               <p class="text-xs font-medium text-stone-300">Missing null check in handleSubmit</p>
               <p class="text-xs text-stone-500 mt-0.5">FB-03 &middot; Visit 1 &middot; adversarial-review</p>
               <div class="flex gap-1 mt-2 border-t border-stone-700 pt-2">
-                <button class="text-xs font-medium px-2 py-1 rounded-md bg-stone-800 text-stone-500">Reject</button>
+                <button class="text-xs font-medium px-2 py-1 rounded-md bg-stone-800 text-stone-500">Dismiss</button>
                 <span class="flex-1"></span>
-                <button class="text-xs font-medium px-2 py-1 rounded-md bg-green-900/20 text-green-400">Close</button>
+                <button class="text-xs font-medium px-2 py-1 rounded-md bg-green-900/20 text-green-400">Verify &amp; Close</button>
               </div>
             </div>
 
@@ -681,7 +681,7 @@
           </div>
           <div class="mt-3 p-2 bg-stone-800/50 rounded border border-stone-700">
             <p class="text-xs text-stone-500"><span class="text-red-400 font-medium">No:</span> Edit or Delete buttons</p>
-            <p class="text-xs text-stone-500"><span class="text-green-400 font-medium">Has:</span> Reject (agent items) and Close</p>
+            <p class="text-xs text-stone-500"><span class="text-green-400 font-medium">Has:</span> Dismiss (agent items) and Verify &amp; Close</p>
             <p class="text-xs text-stone-500"><span class="text-green-400 font-medium">Has:</span> Prominent origin badge</p>
           </div>
         </div>
@@ -860,8 +860,8 @@
                   <span>Show agent feedback</span>
                   <span class="text-xs bg-teal-900/40 text-teal-300 px-1 rounded-full">3</span>
                 </label>
-                <button id="mobile-agent-toggle" role="switch" aria-checked="true" aria-label="Show agent feedback" class="relative inline-flex h-4 w-7 shrink-0 items-center rounded-full bg-teal-500">
-                  <span class="inline-block h-3 w-3 translate-x-3.5 rounded-full bg-white"></span>
+                <button id="mobile-agent-toggle" role="switch" aria-checked="false" aria-label="Show agent feedback inline" class="relative inline-flex h-4 w-7 shrink-0 items-center rounded-full bg-stone-600">
+                  <span class="inline-block h-3 w-3 translate-x-0.5 rounded-full bg-white"></span>
                 </button>
               </div>
               <!-- Feedback list -->
@@ -956,8 +956,8 @@
                   <p class="text-xs text-stone-500 mt-1 leading-relaxed">The handleSubmit function calls getAnnotations() without checking if the result is undefined...</p>
                   <p class="text-xs text-stone-500 mt-1">FB-03 &middot; Visit 1</p>
                   <div class="flex gap-1 mt-2 pt-1.5 border-t border-stone-700">
-                    <button class="text-xs font-medium px-2 py-1 rounded bg-stone-800 text-stone-500">Reject</button>
-                    <button class="text-xs font-medium px-2 py-1 rounded bg-green-900/20 text-green-400">Close</button>
+                    <button class="text-xs font-medium px-2 py-1 rounded bg-stone-800 text-stone-500">Dismiss</button>
+                    <button class="text-xs font-medium px-2 py-1 rounded bg-green-900/20 text-green-400">Verify &amp; Close</button>
                   </div>
                 </div>
               </div>
@@ -1024,7 +1024,7 @@
         <!-- Arrows from pending -->
         <div class="flex flex-col items-center gap-1 text-stone-500">
           <div class="flex items-center gap-2">
-            <span class="text-xs text-stone-500">Close</span>
+            <span class="text-xs text-stone-500">Verify &amp; Close</span>
             <span>&rarr;</span>
           </div>
           <div class="flex items-center gap-2">
@@ -1032,7 +1032,7 @@
             <span>&rarr;</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-xs text-stone-500">Reject</span>
+            <span class="text-xs text-stone-500">Dismiss</span>
             <span>&rarr;</span>
           </div>
         </div>
@@ -1086,14 +1086,14 @@
           <tbody class="text-stone-300">
             <tr class="border-b border-stone-800">
               <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold bg-amber-900/30 text-amber-300">pending</span></td>
-              <td class="py-2 px-3">Close</td>
+              <td class="py-2 px-3">Verify &amp; Close</td>
               <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold bg-green-900/30 text-green-300">closed</span></td>
               <td class="py-2 px-3 text-stone-500">Human-authored OR explicit close</td>
               <td class="py-2 px-3 font-mono text-xs text-teal-400">PATCH .../status {status: "closed"}</td>
             </tr>
             <tr class="border-b border-stone-800">
               <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold bg-amber-900/30 text-amber-300">pending</span></td>
-              <td class="py-2 px-3">Reject</td>
+              <td class="py-2 px-3">Dismiss</td>
               <td class="py-2 px-3"><span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold bg-stone-800 text-stone-500">rejected</span></td>
               <td class="py-2 px-3 text-stone-500">Agent-authored items only</td>
               <td class="py-2 px-3 font-mono text-xs text-teal-400">PATCH .../status {status: "rejected"}</td>

@@ -8,7 +8,7 @@
 
 The optimistic UI pattern specified in unit-05 creates a three-phase lifecycle:
 
-1. User clicks "Verify & Close" (or "Reject", "Re-open", etc.)
+1. User clicks "Verify & Close" (or "Reject", "Reopen", etc.)
 2. UI updates immediately (badge flips, filter counts shift, the in-flight card gets `aria-busy="true"` + spinner + `<span class="sr-only">Processing…</span>`)
 3. API call resolves:
    - **Success** → UI persists the optimistic state; polite announcement confirms
@@ -58,8 +58,8 @@ The **polite** region is set to the in-flight text on click, and then **replaced
 |---|---|---|---|---|
 | Close | `addressed` → `closed` | `marking as closed` | `closed` | `close` |
 | Verify & Close | `pending` → `closed` | `verifying and closing` | `verified and closed` | `verify and close` |
-| Re-open | `closed` → `addressed` | `re-opening` | `re-opened` | `re-open` |
-| Re-open (rejected → addressed) | `rejected` → `addressed` | `re-opening` | `re-opened` | `re-open` |
+| Reopen | `closed` → `addressed` | `reopening` | `reopened` | `reopen` |
+| Reopen (rejected → addressed) | `rejected` → `addressed` | `reopening` | `reopened` | `reopen` |
 | Reject | `pending` → `rejected` | `rejecting` | `rejected` | `reject` |
 | Address (agent or human marks as addressed) | `pending` → `addressed` | `marking as addressed` | `addressed` | `mark as addressed` |
 
@@ -75,10 +75,10 @@ The **polite** region is set to the in-flight text on click, and then **replaced
 - Phase 1: `#feedback-live-polite` ← `"FB-03 marking as closed…"`
 - Phase 2b: `#feedback-live-assertive` ← `"FB-03 close failed; reverted to addressed."`
 
-**Re-open (success):**
+**Reopen (success):**
 
-- Phase 1: `#feedback-live-polite` ← `"FB-03 re-opening…"`
-- Phase 2a: `#feedback-live-polite` ← `"FB-03 re-opened."`
+- Phase 1: `#feedback-live-polite` ← `"FB-03 reopening…"`
+- Phase 2a: `#feedback-live-polite` ← `"FB-03 reopened."`
 
 **Reject (failure):**
 
@@ -155,6 +155,6 @@ Toast notifications (optional visual layer) **MUST NOT** also announce via a liv
 
 unit-05's completion criteria section is amended to reference this spec:
 
-> - [ ] aria-live sequencing implemented per `stages/design/artifacts/aria-live-sequencing-spec.md` — three-phase template (in-flight → success OR failure) wired for all six transitions (close, verify+close, re-open, re-open-from-rejected, reject, address); two separate live-region nodes (polite + assertive); in-flight cards have `aria-busy="true"` + sr-only "Processing, please wait." fallback.
+> - [ ] aria-live sequencing implemented per `stages/design/artifacts/aria-live-sequencing-spec.md` — three-phase template (in-flight → success OR failure) wired for all six transitions (close, verify+close, reopen, reopen-from-rejected, reject, address); two separate live-region nodes (polite + assertive); in-flight cards have `aria-busy="true"` + sr-only "Processing, please wait." fallback.
 
 This is a body-text amendment only — unit-05's FSM fields (status, hat, iterations, etc.) are **not** modified. The actual in-scope amendment copy is placed in unit-05 during the feedback-assessor / designer sweep of this unit.

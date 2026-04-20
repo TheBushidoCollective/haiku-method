@@ -34,7 +34,7 @@ These patterns are non-negotiable -- every new component must match them exactly
 - **Badge (status)**: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold` + color class
 - **Button primary**: `px-4 py-2.5 text-sm font-semibold rounded-lg bg-teal-600 hover:bg-teal-700 text-white transition-colors`
 - **Button secondary**: `px-4 py-2.5 text-sm font-semibold rounded-lg bg-stone-200 dark:bg-stone-700 hover:bg-stone-300 dark:hover:bg-stone-600 text-stone-700 dark:text-stone-200`
-- **Input/Textarea**: `text-xs p-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-teal-500`
+- **Input/Textarea**: `text-xs p-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900` (canonical focus-ring — matches `focus-ring-spec.html §1`; the earlier single-ring shorthand was retired as of unit-16)
 - **Sidebar layout**: `w-80 lg:w-96 shrink-0 sticky top-16 h-[calc(100vh-4rem)] flex-col`
 - **Tab active**: `border-b-2 border-teal-600 text-teal-600 dark:border-teal-400 dark:text-teal-400`
 - **Tab inactive**: `border-transparent text-stone-500 dark:text-stone-400`
@@ -588,16 +588,19 @@ The UI shows only the actions valid for the item's current status. Invalid actio
 
 ## 4. Responsive Behavior
 
-### Desktop (>= 1024px, `lg:`)
+> **Canonical breakpoint note (unit-16).** The desktop cutover is **1280px** (Tailwind `xl`). The sidebar uses the canonical pair `w-80 xl:w-96` — 320px below `xl`, 384px at `xl` and above. `lg:` (1024px) is an intermediate breakpoint used for layout transitions only; the width change sits at `xl:`.
 
-- Sidebar width: `w-96` (384px).
+### Desktop (>= 1280px, `xl:`)
+
+- Sidebar width: canonical pair `w-80 xl:w-96` — widens to 384px at the `xl` breakpoint.
 - Main content and sidebar side by side (`flex gap-6`).
 - Feedback list has generous padding and spacing.
 - FeedbackItem shows full metadata line.
+- Page wrapper uses `max-w-page` (backed by the `--max-page-width` CSS variable, default 1400px — see `knowledge/DESIGN-TOKENS.md §1.3`).
 
-### Tablet (768px -- 1023px, `md:`)
+### Tablet (768px -- 1279px, `md:` / `lg:`)
 
-- Sidebar width: `w-80` (320px).
+- Sidebar width: `w-80` (320px). At `lg:` (1024px) layout shifts into the sticky sidebar configuration, but the width bump to 384px does not happen until `xl:` (1280px).
 - Feedback list compresses: metadata line truncates, body preview limited to 2 lines (`line-clamp-2`).
 - FeedbackItem compact mode uses smaller padding (`p-2` instead of `p-2.5`).
 

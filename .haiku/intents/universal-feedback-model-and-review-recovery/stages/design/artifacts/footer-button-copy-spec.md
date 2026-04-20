@@ -50,7 +50,7 @@ The lifecycle-level **mechanism** (what the tool-layer guard actually does) can 
 
 | Verb | Visual role | Tailwind |
 |---|---|---|
-| **Dismiss** | Secondary (muted) | `border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900` |
+| **Dismiss** | Secondary (muted) | `border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 bg-white dark:bg-stone-900` |
 | **Verify & Close** | Primary (positive) | `bg-green-600 hover:bg-green-700 text-white` |
 | **Reopen** | Secondary (muted) | Same as Dismiss |
 

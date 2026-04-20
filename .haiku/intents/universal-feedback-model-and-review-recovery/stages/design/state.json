@@ -6,7 +6,7 @@
   "completed_at": null,
   "gate_entered_at": null,
   "gate_outcome": null,
-  "elaboration_turns": 26,
+  "elaboration_turns": 29,
   "design_direction_selected": true,
   "design_direction": {
     "archetype": "Inline Feedback Annotations",
@@ -79,8 +79,8 @@
       "feedback_signature": "sig:dd3f676e"
     }
   ],
-  "pre_review_dispatched": false,
-  "pre_review_dispatched_at": null,
+  "pre_review_dispatched": true,
+  "pre_review_dispatched_at": "2026-04-20T19:25:30Z",
   "pre_review_reviewers_acknowledged": false,
   "pre_review_reviewers_acknowledged_at": null,
   "pre_review_skipped_no_agents": false

@@ -106,9 +106,9 @@ quality_gates:
   - "Mobile theme-toggle button has `aria-label` describing the action (\"Switch to light theme\" / \"Switch to dark theme\" — dynamic based on current state). Applies to: feedback-inline-mobile.html, comment-to-feedback-flow.html, any other mobile artifact with an icon-only theme toggle. `grep -rEn '<button[^>]*>\\s*<svg|<button [^>]*\U0001F319|<button[^>]*☀' stages/design/artifacts/` — every match has `aria-label` on the button element."
 status: active
 bolt: 1
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T01:54:06Z'
-hat_started_at: '2026-04-20T02:07:08Z'
+hat_started_at: '2026-04-20T02:12:44Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:06Z'
@@ -116,6 +116,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T02:07:08Z'
+    completed_at: '2026-04-20T02:12:44Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T02:12:44Z'
     completed_at: null
     result: null
 ---

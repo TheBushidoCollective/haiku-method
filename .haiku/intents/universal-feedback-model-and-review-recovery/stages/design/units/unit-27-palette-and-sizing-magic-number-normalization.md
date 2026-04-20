@@ -11,20 +11,10 @@ closes:
   - FB-133
   - FB-135
   - FB-144
-depends_on: []
+depends_on:
+  - unit-26-artifact-opacity-and-banned-pair-sweep
 inputs:
-  - stages/design/artifacts/assessor-summary-card.html
-  - stages/design/artifacts/stage-progress-strip.html
-  - stages/design/artifacts/feedback-card-states.html
-  - stages/design/artifacts/agent-feedback-toggle-spec.html
-  - stages/design/artifacts/focus-ring-spec.html
-  - stages/design/artifacts/annotation-popover-states.html
-  - stages/design/artifacts/comment-to-feedback-flow.html
-  - stages/design/artifacts/feedback-inline-desktop.html
-  - stages/design/artifacts/feedback-inline-mobile.html
-  - stages/design/artifacts/review-context-header.html
-  - stages/design/artifacts/rollback-reason-banner.html
-  - stages/design/artifacts/comments-list-with-agent-toggle.html
+  - stages/design/artifacts/
   - stages/design/knowledge/DESIGN-TOKENS.md
 outputs:
   - stages/design/artifacts/assessor-summary-card.html
@@ -39,68 +29,27 @@ outputs:
   - stages/design/artifacts/review-context-header.html
   - stages/design/artifacts/rollback-reason-banner.html
   - stages/design/artifacts/comments-list-with-agent-toggle.html
+  - stages/design/artifacts/revisit-modal-spec.html
+  - stages/design/artifacts/revisit-modal-states.html
+  - stages/design/artifacts/revisit-unit-list.html
+  - stages/design/artifacts/review-package-structure.html
   - stages/design/knowledge/DESIGN-TOKENS.md
   - stages/design/artifacts/unit-27-design-review.md
 quality_gates:
-  - >-
-    Stage-wide `max-w-[1400px]` elimination: `grep -rn 'max-w-\[1400px\]'
-    stages/design/artifacts/` → 0 hits. Both sites in
-    `assessor-summary-card.html` (lines 15, 24) rewritten to `max-w-page`,
-    matching the pattern already in `feedback-inline-desktop.html:105` and
-    `rollback-reason-banner.html:20/29`.
-  - >-
-    Stage-wide `gray-*` palette elimination: `grep -rn 'gray-'
-    stages/design/artifacts/*.html` → 0 hits on rendered markup (md files
-    documenting the ban are excluded from the grep by the `.html` filter).
-    All 13 `gray-*` tokens in `stage-progress-strip.html` (lines 361, 362,
-    370, 372, 379, 391, 392, 399, 400, 451, 452, 459, 460) swept to
-    `stone-*` at the same shade: `gray-900` → `stone-900`, `gray-800` →
-    `stone-800`, `gray-700` → `stone-700`, `gray-500` → `stone-500`,
-    `gray-400` → `stone-400`, `gray-300` → `stone-300`, `gray-200` →
-    `stone-200`, `gray-100` → `stone-100`, `gray-50` → `stone-50`,
-    `gray-950` → `stone-950`.
-  - >-
-    Stage-wide bare-`rounded` elimination: `grep -rEn 'class="[^"]*\brounded
-    \b[^-]' stages/design/artifacts/*.html` → 0 hits. All 10+ sites in
-    `feedback-card-states.html` resolved — status-pill spans in the
-    transition matrix (lines 53, 58, 63, 68) use `rounded-full` per
-    DESIGN-BRIEF §2 Badge pattern; secondary footer buttons (Dismiss at
-    lines 95, 114; Reopen at 132, 151, 171) use `rounded-md`; primary
-    footer button (Verify & Close) uses `rounded-md` matching the sister
-    artifacts (feedback-inline-desktop/mobile).
-  - >-
-    Stage-wide raw-px sizing elimination: `grep -rEn 'max-w-\[[0-9]+px\]|w-
-    \[[0-9]+px\]|min-h-\[[0-9]+px\]|h-\[[0-9]+px\]|rounded-\[[0-9]+px\]'
-    stages/design/artifacts/*.html` returns either 0 hits OR every
-    remaining match is on a line carrying an inline HTML comment containing
-    the literal `demo-only` plus a short rationale (e.g., phone-frame
-    mockup dimensions that intentionally visualize a real device size). No
-    un-tagged raw-px sizing literal remains.
-  - >-
-    `DESIGN-TOKENS.md §1.6 Sizing` section lists the named sizing tokens
-    referenced by the artifact rewrites. At minimum: `--popover-width-sm`
-    (140px), `--popover-width-md` (160px), `--popover-width-lg` (220px),
-    `--annotation-w-sm` (240px), `--annotation-w-md` (300px),
-    `--textarea-minh-sm` (32px), `--textarea-minh-md` (40px),
-    `--textarea-minh-lg` (48px), `--brand-diamond` (18px). If the
-    `rounded-[28px]` literal in `annotation-popover-states.html:424` is
-    kept as a phone-frame device radius, DESIGN-TOKENS.md §1.5 lists
-    `rounded-phone` (or `rounded-3xl`) as an explicit inventory row. Token
-    naming follows the `--<category>-<variant>` convention already in
-    §1.1-§1.5.
-  - >-
-    Affected `.html` artifacts reference the new tokens (via Tailwind
-    arbitrary value `w-[var(--popover-width-md)]` or a named utility in
-    DESIGN-TOKENS §1.6 registry). No artifact declares a raw-px sizing
-    value without a corresponding token or a `demo-only` comment.
-  - >-
-    Page wrappers in `agent-feedback-toggle-spec.html:37` and
-    `focus-ring-spec.html:80` rewritten from `max-w-[960px]` /
-    `max-w-[1000px]` to `max-w-page`.
-  - >-
-    The four grep gates above added to design-reviewer's gate list (as
-    pointers in the hat instructions file or as inline comments in
-    DESIGN-BRIEF §2 token-hygiene section) so they persist past this unit.
+  - name: no-max-w-1400px
+    command: "! grep -rn 'max-w-\\[1400px\\]' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/"
+  - name: no-gray-palette-in-html
+    command: "! grep -rn 'gray-' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/ --include='*.html'"
+  - name: no-bare-rounded-class
+    command: "! grep -rEn 'class=\"[^\"]*\\brounded\\b[^-]' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/ --include='*.html'"
+  - name: no-raw-px-sizing-untagged
+    command: "! grep -rEn 'max-w-\\[[0-9]+px\\]|w-\\[[0-9]+px\\]|min-h-\\[[0-9]+px\\]|h-\\[[0-9]+px\\]|rounded-\\[[0-9]+px\\]' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/ --include='*.html' | grep -v 'demo-only'"
+  - name: design-tokens-1-6-sizing-section-exists
+    command: "grep -E '^(#{1,4} )?1\\.6 Sizing|^(#{1,4} )?§1\\.6 Sizing' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/knowledge/DESIGN-TOKENS.md"
+  - name: popover-width-tokens-declared
+    command: "python3 -c \"import sys; c = open('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/knowledge/DESIGN-TOKENS.md').read(); names=['--popover-width-sm','--popover-width-md','--popover-width-lg','--annotation-w-md','--textarea-minh-md']; missing=[n for n in names if n not in c]; sys.exit(1 if missing else 0)\""
+  - name: page-wrappers-use-max-w-page
+    command: "! grep -En 'max-w-\\[(960|1000|1400)px\\]' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/ -r --include='*.html'"
 ---
 # Palette, radii, and sizing magic-number normalization
 

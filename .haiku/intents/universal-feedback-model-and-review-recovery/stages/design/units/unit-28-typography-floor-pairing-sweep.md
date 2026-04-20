@@ -8,18 +8,11 @@ title: >-
 type: design
 closes:
   - FB-138
-depends_on: []
+depends_on:
+  - unit-27-palette-and-sizing-magic-number-normalization
 inputs:
-  - stages/design/artifacts/annotation-gesture-spec.html
-  - stages/design/artifacts/feedback-lifecycle-transitions.html
-  - stages/design/artifacts/focus-ring-spec.html
-  - stages/design/artifacts/keyboard-shortcut-map.html
-  - stages/design/artifacts/review-package-structure.html
-  - stages/design/artifacts/review-ui-mockup.html
-  - stages/design/artifacts/revisit-modal-states.html
-  - stages/design/artifacts/rollback-reason-banner.html
+  - stages/design/artifacts/
   - stages/design/DESIGN-BRIEF.md
-  - stages/design/artifacts/contrast-and-type-audit.md
 outputs:
   - stages/design/artifacts/annotation-gesture-spec.html
   - stages/design/artifacts/feedback-lifecycle-transitions.html
@@ -29,53 +22,17 @@ outputs:
   - stages/design/artifacts/review-ui-mockup.html
   - stages/design/artifacts/revisit-modal-states.html
   - stages/design/artifacts/rollback-reason-banner.html
+  - stages/design/artifacts/skip-link-spec.html
+  - stages/design/artifacts/contrast-and-type-audit.md
+  - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/unit-28-design-review.md
 quality_gates:
-  - >-
-    Stage-wide typography-floor gate: `grep -rEn 'text-\[11px\]'
-    stages/design/artifacts/*.html | grep -vE 'font-semibold|font-bold'` →
-    0 hits on rendered markup. Every `text-[11px]` class is paired with
-    `font-semibold` or `font-bold`; non-compliant sites either gain the
-    `font-semibold`/`font-bold` pairing OR are lifted to `text-xs`
-    (12px floor).
-  - >-
-    Per-artifact resolution plan verified:
-    - `annotation-gesture-spec.html:111` — code pill `text-[11px]
-      font-mono` → `text-[11px] font-mono font-semibold` (monospace family
-      + semibold weight pairing).
-    - `feedback-lifecycle-transitions.html:226` — italic prose `text-[11px]`
-      → `text-xs italic` (12px floor preserves readability).
-    - `focus-ring-spec.html:108` — bare `text-[11px]` prose → `text-xs`.
-    - `keyboard-shortcut-map.html:546, 635` — footer text bare `text-
-      [11px]` → `text-xs`.
-    - `review-package-structure.html:545, 666, 697, 725, 767, 802, 805,
-      839, 870` — 9 sites, bare or `font-mono`-only `text-[11px]` → either
-      `text-[11px] font-mono font-semibold` (for monospace code pills) or
-      `text-xs` (for prose).
-    - `review-ui-mockup.html:43, 146, 163, 802, 1019, 1055, 1087, 1094,
-      1102, 1285, 1332, 1496, 1532, 1568, 1696` — 15+ sites, each triaged
-      to either the semibold pairing (code) or `text-xs` lift (prose).
-    - `revisit-modal-states.html:49, 444, 506, 537, 547, 588, 634` —
-      modal-states footer / inline code, triaged the same way.
-    - `rollback-reason-banner.html:55, 60, 65, ...` — monospaced table
-      cells `text-[11px] font-mono` → `text-[11px] font-mono font-semibold`.
-  - >-
-    `DESIGN-BRIEF.md §2 "Typography Floor"` carries a reference row citing
-    the exact grep above as the canonical audit command, and marks the
-    rule as `MUST pair text-[11px] with font-semibold or font-bold —
-    alternatives: lift to text-xs; font-mono alone is NOT sufficient
-    (family ≠ weight); font-medium is one notch too light; italic is
-    orthogonal`.
-  - >-
-    `contrast-and-type-audit.md §3` prose updated: replace the "Remaining
-    `text-[11px]` instances are ALL paired with `font-semibold` or
-    `font-bold`" claim with the actual post-sweep count (which will be
-    "all remaining 0 violations" after this unit lands) and cite the grep
-    as the verification method, not prose inspection.
-  - >-
-    Typography-floor grep added to `design-reviewer.md` hat spec gate list
-    alongside existing `text-\[9px\]` / `text-\[10px\]` bans so it runs on
-    every future iteration.
+  - name: stagewide-text-11px-paired-with-semibold
+    command: "! grep -rEn 'text-\\[11px\\]' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/ --include='*.html' | grep -vE 'font-semibold|font-bold'"
+  - name: design-brief-typography-floor-rule-documented
+    command: "grep -E 'text-\\[11px\\].*font-semibold|Typography Floor' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/DESIGN-BRIEF.md"
+  - name: audit-cites-typography-grep
+    command: "grep -E 'text-\\[11px\\]' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/contrast-and-type-audit.md"
 ---
 # Typography floor stage-wide sweep
 

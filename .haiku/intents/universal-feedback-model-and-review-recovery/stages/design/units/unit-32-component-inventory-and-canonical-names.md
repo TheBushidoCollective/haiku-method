@@ -9,14 +9,10 @@ type: design
 closes:
   - FB-142
   - FB-147
-depends_on: []
+depends_on:
+  - unit-31-feedback-list-semantics-parity
 inputs:
-  - stages/design/DESIGN-BRIEF.md
-  - stages/design/artifacts/state-coverage-grid.md
-  - stages/design/artifacts/component-inventory.md
-  - stages/design/artifacts/rollback-reason-banner.html
-  - stages/design/artifacts/revisit-modal-states.html
-  - stages/design/artifacts/aria-landmark-spec.md
+  - stages/design/
 outputs:
   - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/state-coverage-grid.md
@@ -24,62 +20,18 @@ outputs:
   - stages/design/artifacts/aria-landmark-spec.md
   - stages/design/artifacts/unit-32-design-review.md
 quality_gates:
-  - >-
-    `DESIGN-BRIEF §2 "New Components"` — 3 new rows added after
-    `RevisitModal`:
-    - `RollbackBanner`: full-width top-of-content banner per
-      rollback-reason-banner.html §A; props drive copy template
-      (`still-pending`, `assessor-error`, etc.); ties into FSM rollback
-      event.
-    - `BlockedGatePanel`: replaces user-gate action bar when gate is not
-      reachable; contextual (hides when feedback is not pending).
-    - `RollbackToast`: ephemeral toast with Retry + Open-repair + ✕
-      dismiss buttons; lives inside RevisitModal error flow per
-      revisit-modal-states.html + state-coverage-grid §4.
-    Total §2 row count lifts from 12 → 15.
-  - >-
-    `state-coverage-grid.md §0 "DESIGN-BRIEF §2 component checklist"` —
-    extended to 15 rows, each pointing to its §row where the 6-state grid
-    lives. The §4 rollback-toast rows already exist; new §rows added for
-    RollbackBanner + BlockedGatePanel state coverage.
-  - >-
-    `component-inventory.md "New Components"` — 3 new rows mirroring the
-    DESIGN-BRIEF §2 additions (thin pointers, same pattern as the
-    existing 12).
-  - >-
-    Canonical name resolution: `FeedbackSheet` is the single name.
-    Verification: `grep -rEn 'MobileFeedbackPanel'
-    stages/design/artifacts/ stages/design/DESIGN-BRIEF.md` → 0 hits. Every
-    reference rewritten to `FeedbackSheet`:
-    - DESIGN-BRIEF §2 L119: drop `(aka MobileFeedbackPanel)` → just
-      `FeedbackSheet`.
-    - DESIGN-BRIEF §2 L597 "Retired Components" row: rewrite rationale —
-      "The sheet only ever renders on mobile breakpoints, so the `Mobile`
-      prefix was redundant. Canonical name: `FeedbackSheet`. Responsive
-      behavior is baked in." No mention of MobileFeedbackPanel.
-    - DESIGN-BRIEF §2 L810 aria-landmark prose: `The MobileFeedbackPanel
-      (rendered by FeedbackSheet...)` → `The FeedbackSheet (opened by
-      FeedbackFloatingButton...)`.
-    - `state-coverage-grid.md §0 L22`: `FeedbackSheet (aka
-      MobileFeedbackPanel) | ...` → `FeedbackSheet | §3 FAB + bottom
-      sheet + §7.8`.
-    - `aria-landmark-spec.md §5` — any MobileFeedbackPanel dialog
-      lifecycle references rewritten to FeedbackSheet.
-  - >-
-    Unit-19 and unit-20 prose (completed, read-only) reference
-    MobileFeedbackPanel. Per FB-147's upstream-finding scope, this unit
-    does NOT modify those completed units — instead, it adds a
-    design-reviewer pointer noting the downstream upstream-finding:
-    "Unit-19/20 prose cites `MobileFeedbackPanel` which no longer
-    exists; dev stage should treat the file-inventory canonical name
-    (`FeedbackSheet`) as authoritative." This pointer goes in
-    DESIGN-BRIEF §2 L597 row or a new note block near the retired-
-    components list.
-  - >-
-    Cross-reference gate: every component listed in DESIGN-BRIEF §2
-    appears in state-coverage-grid.md §0 checklist, AND every component
-    with a grid row (§3-§7) appears in DESIGN-BRIEF §2. Verified by
-    walking both lists — row counts must match.
+  - name: design-brief-has-rollback-banner
+    command: "grep -E 'RollbackBanner' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/DESIGN-BRIEF.md"
+  - name: design-brief-has-blocked-gate-panel
+    command: "grep -E 'BlockedGatePanel' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/DESIGN-BRIEF.md"
+  - name: design-brief-has-rollback-toast
+    command: "grep -E 'RollbackToast' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/DESIGN-BRIEF.md"
+  - name: state-coverage-checklist-has-rollback-trio
+    command: "python3 -c \"import sys; c = open('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/state-coverage-grid.md').read(); names = ['RollbackBanner', 'BlockedGatePanel', 'RollbackToast']; missing = [n for n in names if n not in c]; sys.exit(1 if missing else 0)\""
+  - name: component-inventory-has-rollback-trio
+    command: "python3 -c \"import sys; c = open('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/component-inventory.md').read(); names = ['RollbackBanner', 'BlockedGatePanel', 'RollbackToast']; missing = [n for n in names if n not in c]; sys.exit(1 if missing else 0)\""
+  - name: no-mobile-feedback-panel-in-stage
+    command: "! grep -rEn 'MobileFeedbackPanel' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/ .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/DESIGN-BRIEF.md .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/knowledge/"
 ---
 # Component-inventory and canonical-name consistency
 

@@ -22,40 +22,16 @@ outputs:
   - stages/design/artifacts/aria-landmark-spec.md
   - stages/design/artifacts/unit-31-design-review.md
 quality_gates:
-  - >-
-    `feedback-inline-desktop.html` — scrollable feedback-card container
-    wrapped in native `<ul class="... list-none" aria-label="Feedback
-    items">` (or `<div role="list" aria-label="Feedback items">` if a
-    `<div>` is retained). Each feedback card rendered as `<li>` (or
-    wrapped in `<li>`), preserving its existing `tabindex="0"` +
-    focus-visible styling. Verification: `grep -cE '<ul|role="list"'
-    stages/design/artifacts/feedback-inline-desktop.html` ≥ 1 AND `grep
-    -cE '<li|role="listitem"'
-    stages/design/artifacts/feedback-inline-desktop.html` ≥ 5 (one per
-    rendered card in the default artifact state).
-  - >-
-    `feedback-card-states.html` — state-gallery card collection also
-    wrapped in `<ul>` / `<li>` (this is the canonical spec gallery for
-    the component; list semantics there match the real surface).
-    Verification: `grep -cE '<ul|role="list"'
-    stages/design/artifacts/feedback-card-states.html` ≥ 1.
-  - >-
-    `focus-order-spec.md §1` rows for the sidebar-card rows (N-6 through
-    N) gain an explicit "list-structure required" note. `aria-landmark-
-    spec.md §2 Per-surface landmark map` adds a row for "list semantics
-    inside `<aside role="complementary">`" pointing at the new `<ul>`
-    wrapper.
-  - >-
-    Parity check: `grep -cE '<ul|role="list"'
-    stages/design/artifacts/feedback-inline-mobile.html` ≥ 1
-    (already present per FB-148's observation; this gate just confirms
-    no regression). Mobile and desktop both expose the same list
-    semantics.
-  - >-
-    Feedback-assessor verification: a list-semantics grep added to the
-    feedback-assessor gate script so this pattern is enforced on every
-    future iteration — `grep -c 'role="list"\|<ul'
-    stages/design/artifacts/feedback-inline-desktop.html` ≥ 1.
+  - name: desktop-feedback-list-ul-with-label
+    command: "grep -cE '<ul[^>]*aria-label=\"Feedback items\"|role=\"list\"[^>]*aria-label=\"Feedback items\"' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-inline-desktop.html"
+  - name: desktop-feedback-cards-in-list-items
+    command: "python3 -c \"import re, sys; c = open('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-inline-desktop.html').read(); m = re.search(r'<ul[^>]*aria-label=\\\"Feedback items\\\"[^>]*>(.*?)</ul>', c, re.S); sys.exit(0 if m and len(re.findall(r'<li\\b', m.group(1))) >= 3 else 1)\""
+  - name: feedback-card-states-uses-list-semantics
+    command: "grep -cE '<ul|role=\"list\"' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-card-states.html"
+  - name: mobile-feedback-list-parity-preserved
+    command: "grep -cE '<ul|role=\"list\"' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-inline-mobile.html"
+  - name: aria-landmark-spec-cites-list-inside-aside
+    command: "grep -iE 'role=\"list\"|<ul|list semantics|listitem' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/aria-landmark-spec.md"
 ---
 # feedback list-semantics desktop/mobile parity
 

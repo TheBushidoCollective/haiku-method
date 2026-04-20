@@ -7,7 +7,12 @@ title: >-
 type: design
 closes:
   - FB-149
-depends_on: []
+depends_on:
+  - unit-26-artifact-opacity-and-banned-pair-sweep
+  - unit-27-palette-and-sizing-magic-number-normalization
+  - unit-28-typography-floor-pairing-sweep
+  - unit-30-feedback-inline-mobile-reduced-motion-guard
+  - unit-32-component-inventory-and-canonical-names
 inputs:
   - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/state-coverage-grid.md
@@ -18,44 +23,26 @@ outputs:
   - stages/design/artifacts/state-coverage-grid.md
   - stages/design/artifacts/unit-33-design-review.md
 quality_gates:
-  - >-
-    New file `stages/design/artifacts/feedback-summary-bar.html` exists
-    and renders the `FeedbackSummaryBar` component across the 6 canonical
-    states per DESIGN-BRIEF §2 state-coverage requirement: default / hover
-    / focus / active / disabled / error. Layout is a 3-row × 6-col (or
-    equivalent) matrix:
-    - Row 1: populated states — pending / addressed / closed counts
-      rendered with the status-badge tokens from feedback-card-states.html.
-    - Row 2: interactive states — hover (cursor over summary chip) / focus
-      (keyboard focus-visible ring) / active (mousedown).
-    - Row 3: degraded states — disabled (no feedback data) / error (API
-      fail → bar hidden per §7.6 rationale with a fallback message).
-    File size kept small (~3 KB target).
-  - >-
-    File follows the artifact conventions of sibling state-coverage
-    artifacts (`feedback-card-states.html`, `agent-feedback-toggle-spec.
-    html`): page-wrapper uses `max-w-page`; palette uses `stone-*` (not
-    `gray-*`); radii from DESIGN-TOKENS §1.5; typography floor observed
-    (`text-[11px]` pairs with `font-semibold`, else `text-xs`); `prefers-
-    reduced-motion` guard block present if any transitions declared;
-    focus-visible ring on interactive states. All stage quality gates
-    pass when scanned.
-  - >-
-    `state-coverage-grid.md §0 "DESIGN-BRIEF §2 component checklist"` —
-    row for `FeedbackSummaryBar` updated to point at
-    `feedback-summary-bar.html` as the rendered artifact (previously
-    pointed only at `review-package-structure.html`, which enumerates the
-    component but doesn't visualize it). Row count remains consistent
-    with unit-32's 15-row count.
-  - >-
-    `state-coverage-grid.md §7.6` (FeedbackSummaryBar row) updated with
-    an artifact pointer so the state-grid row cross-references the
-    visual.
-  - >-
-    Cross-reference gate: `ls stages/design/artifacts/feedback-summary-
-    bar.html` returns the file; `grep -c 'FeedbackSummaryBar'
-    stages/design/artifacts/feedback-summary-bar.html` ≥ 1 (component
-    name referenced in the file).
+  - name: feedback-summary-bar-file-exists
+    command: "test -f .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-summary-bar.html"
+  - name: feedback-summary-bar-references-component
+    command: "grep -c 'FeedbackSummaryBar' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-summary-bar.html"
+  - name: feedback-summary-bar-uses-max-w-page
+    command: "grep -E 'max-w-page' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-summary-bar.html"
+  - name: feedback-summary-bar-no-gray-palette
+    command: "! grep -E 'gray-[0-9]+' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-summary-bar.html"
+  - name: feedback-summary-bar-no-banned-opacity
+    command: "! grep -E 'opacity-(50|60)' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-summary-bar.html | grep -vE 'backdrop-blur|demo-only'"
+  - name: feedback-summary-bar-no-bare-rounded
+    command: "! grep -E 'class=\"[^\"]*\\brounded\\b[^-]' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-summary-bar.html"
+  - name: feedback-summary-bar-typography-floor
+    command: "! grep -E 'text-\\[11px\\]' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-summary-bar.html | grep -vE 'font-semibold|font-bold'"
+  - name: feedback-summary-bar-has-reduced-motion-guard
+    command: "bash -c 'f=.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-summary-bar.html; anim=$(grep -cE \"@keyframes|animation:|animate-\" \"$f\"); if [ \"$anim\" -gt 0 ]; then grep -cE \"prefers-reduced-motion\" \"$f\"; else exit 0; fi'"
+  - name: feedback-summary-bar-has-6-state-labels
+    command: "python3 -c \"import sys; c = open('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-summary-bar.html').read().lower(); states = ['default', 'hover', 'focus', 'active', 'disabled', 'error']; missing = [s for s in states if s not in c]; sys.exit(1 if missing else 0)\""
+  - name: state-coverage-grid-cites-summary-bar-artifact
+    command: "grep -E 'feedback-summary-bar\\.html' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/state-coverage-grid.md"
 ---
 # FeedbackSummaryBar state-coverage artifact
 

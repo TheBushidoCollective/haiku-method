@@ -16,11 +16,7 @@ closes:
   - FB-150
 depends_on: []
 inputs:
-  - stages/design/artifacts/revisit-unit-list.html
-  - stages/design/artifacts/revisit-modal-states.html
-  - stages/design/artifacts/review-ui-mockup.html
-  - stages/design/artifacts/agent-feedback-toggle-spec.html
-  - stages/design/artifacts/annotation-popover-states.html
+  - stages/design/artifacts/
   - stages/design/artifacts/contrast-and-type-audit.md
 outputs:
   - stages/design/artifacts/revisit-unit-list.html
@@ -28,95 +24,27 @@ outputs:
   - stages/design/artifacts/review-ui-mockup.html
   - stages/design/artifacts/agent-feedback-toggle-spec.html
   - stages/design/artifacts/annotation-popover-states.html
+  - stages/design/artifacts/comment-to-feedback-flow.html
   - stages/design/artifacts/unit-26-design-review.md
 quality_gates:
-  - >-
-    `grep -rEn 'opacity-50|opacity-60' stages/design/artifacts/*.html | grep
-    -vE 'backdrop-blur|black/50|black/60|modal-overlay|demo-only'` returns 0
-    hits on text-carrying card/button/label surfaces. Decorative-overlay
-    opacity (backdrops, loading shrouds) and explicitly-tagged demo-only
-    references are exempt; every other match must be resolved via canonical
-    muted-surface token pairs from contrast-and-type-audit.md §4 Bolt-3/4.
-  - >-
-    `revisit-unit-list.html` — 9 locked-card roots (lines 247, 259, 271, 283,
-    295, 307, 319, 345, 393) no longer carry `opacity-60 transition-opacity`;
-    instead use `bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-
-    dashed border-stone-300 dark:border-stone-700 shadow-sm p-4`. Card titles
-    lifted from `text-stone-700 dark:text-stone-400` to `text-stone-600
-    dark:text-stone-300`. Read-only pill text lifted from `text-stone-500` to
-    `text-stone-700 dark:text-stone-300`. Stylesheet `.locked-card:hover {
-    opacity: 0.8 }` / `:focus-visible { opacity: 0.95 }` rules removed.
-    Verification: `grep -cEn 'opacity-60'
-    stages/design/artifacts/revisit-unit-list.html` → 0.
-  - >-
-    `revisit-modal-states.html` — 3 disabled buttons at lines 100, 155, 552
-    rewritten from `bg-amber-600 text-white opacity-50 cursor-not-allowed` /
-    `border border-stone-300 text-stone-700 opacity-50 cursor-not-allowed` to
-    the canonical amber-disabled (`bg-amber-300 text-amber-900
-    dark:bg-amber-900/40 dark:text-amber-200 cursor-not-allowed`) and
-    secondary-disabled (`bg-stone-100 text-stone-600 border border-stone-400
-    dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500
-    cursor-not-allowed`) token pairs. Every native `disabled` on lines 100,
-    155, 540-area, 552 paired with `aria-disabled="true"`. Reference prose
-    on line 101 / 156 rewritten to cite canonical token pairs, not
-    `disabled:opacity-50`. Verification: `grep -En 'opacity-50'
-    stages/design/artifacts/revisit-modal-states.html | grep -v
-    'backdrop-blur\|black/50'` → 0 hits.
-  - >-
-    `review-ui-mockup.html` — 3 `opacity-60` sites resolved: stage-button
-    markup on lines 136, 153 drops `opacity-60 cursor-not-allowed` and pairs
-    native `disabled` with `aria-disabled="true"`; label `<span>` lifted
-    from `text-stone-500` to `text-stone-600 dark:text-stone-300`. Line 790
-    render JS rewritten to emit status-aware muted backgrounds (`bg-green-
-    50/60 dark:bg-green-950/25` for closed; `bg-stone-100 dark:bg-stone-
-    800/50` for rejected) on the card wrapper rather than α-compositing the
-    whole subtree. Every `.stage-btn` button gains a canonical focus-visible
-    ring (`focus-visible:ring-2 focus-visible:ring-teal-500
-    focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900`)
-    replacing the bare `focus:outline-none`. Line 856 dynamic button
-    rewritten from `bg-stone-100 dark:bg-stone-800 text-stone-500
-    dark:text-stone-500` to `bg-stone-100 dark:bg-stone-800 text-stone-600
-    dark:text-stone-300 border border-stone-400 dark:border-stone-500
-    cursor-not-allowed focus-visible:ring-2 focus-visible:ring-teal-500
-    focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900
-    outline-none` and pairs `disabled` with `aria-disabled="true"`. Lines
-    844-852 dynamic branches switch from `focus:ring-2` to `focus-visible:`.
-    Verification: `grep -En 'opacity-60'
-    stages/design/artifacts/review-ui-mockup.html` → 0 hits; `grep -E
-    'stage-btn[^"]*focus:outline-none'
-    stages/design/artifacts/review-ui-mockup.html | grep -v focus-visible`
-    → 0 hits; banned-pair grep `grep -En
-    'bg-stone-100[^"]*text-stone-500|text-stone-500[^"]*bg-stone-100'
-    stages/design/artifacts/review-ui-mockup.html` → 0 hits.
-  - >-
-    `agent-feedback-toggle-spec.html` — line 181 wrapper `<label>` drops
-    `opacity-50`; disabled affordance communicated via `bg-stone-200
-    dark:bg-stone-700` on the switch track, `border-stone-400
-    dark:border-stone-500` for 3:1 non-text contrast, and full-opacity
-    `text-stone-700 dark:text-stone-300` on the label text. Line 195
-    reference caption rewritten to cite the canonical disabled token pair
-    and color lifted from `text-stone-500 dark:text-stone-500` to
-    `text-stone-600 dark:text-stone-300`. Verification: `grep -En
-    'opacity-50' stages/design/artifacts/agent-feedback-toggle-spec.html |
-    grep -v 'backdrop-blur\|black/50'` → 0 hits.
-  - >-
-    `annotation-popover-states.html` — line 394 State 4b "Create" button
-    rewritten from `bg-teal-600 text-white opacity-50 cursor-not-allowed`
-    to `<button type="button" disabled aria-disabled="true" class="px-2.5
-    py-1 text-xs font-semibold rounded-md bg-stone-100 text-stone-600
-    border border-stone-400 dark:bg-stone-800 dark:text-stone-300
-    dark:border-stone-500 cursor-not-allowed">Create</button>`.
-    Verification: `grep -En 'opacity-50'
-    stages/design/artifacts/annotation-popover-states.html` → 0 hits.
-  - >-
-    Python3 aria-disabled walker (the script from contrast-and-type-audit.md
-    §4 Bolt-4) returns 0 violations across the 5 affected files — every
-    native `disabled` attribute is paired with `aria-disabled="true"`.
-  - >-
-    Stage-wide banned-pair grep `grep -rEn 'bg-stone-200[^"]*text-stone-
-    500|text-stone-500[^"]*bg-stone-200' stages/design/artifacts/*.html` →
-    0 hits on rendered markup (prose-documenting-the-ban lines in .md files
-    and comment blocks are exempt; the grep is scoped to `.html`).
+  - name: stagewide-no-opacity-50-60-on-text
+    command: "! grep -rEn 'opacity-(50|60)' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/*.html | grep -vE 'backdrop-blur|black/(50|60)|modal-overlay|demo-only'"
+  - name: revisit-unit-list-no-opacity-60
+    command: "! grep -En 'opacity-60' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/revisit-unit-list.html"
+  - name: revisit-modal-states-no-opacity-50
+    command: "! grep -En 'opacity-50' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/revisit-modal-states.html | grep -vE 'backdrop-blur|black/50|modal-overlay'"
+  - name: review-ui-mockup-no-opacity-60
+    command: "! grep -En 'opacity-60' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/review-ui-mockup.html"
+  - name: review-ui-mockup-stage-btn-focus-visible
+    command: "! grep -E 'stage-btn[^>]*focus:outline-none' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/review-ui-mockup.html | grep -v focus-visible"
+  - name: agent-feedback-toggle-no-opacity-50
+    command: "! grep -En 'opacity-50' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/agent-feedback-toggle-spec.html | grep -vE 'backdrop-blur|black/50'"
+  - name: annotation-popover-no-opacity-50
+    command: "! grep -En 'opacity-50' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/annotation-popover-states.html"
+  - name: stagewide-no-banned-stone-pairs
+    command: "! grep -rEn 'bg-stone-(100|200)[^\"]*text-stone-500|text-stone-500[^\"]*bg-stone-(100|200)' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/*.html"
+  - name: disabled-paired-with-aria-disabled
+    command: "python3 -c \"import re, sys, glob; bad = []; [bad.append((f, line)) for f in glob.glob('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/*.html') for i, line in enumerate(open(f).read().splitlines(), 1) if re.search(r'<(button|input|select|textarea|fieldset|label|a)\\b[^>]*\\bdisabled\\b', line) and 'aria-disabled' not in line]; sys.exit(1 if bad else 0)\""
 ---
 # Artifact opacity and banned-token-pair stage-wide rewrite
 

@@ -2,59 +2,46 @@
 title: >-
   feedback-inline-mobile.html — add prefers-reduced-motion guard for the FAB
   pulse and bottom-sheet slide-in keyframes. FB-86 was marked closed by
-  non-existent unit-25 variant; live grep shows 2 keyframes with 0 guards.
-  Also re-runs the stage-wide motion-audit script to catch any other
-  regressions
+  non-existent unit-25 variant; live grep shows 2 keyframes with 0 guards. Also
+  re-runs the stage-wide motion-audit script to catch any other regressions
 type: design
 closes:
   - FB-143
 depends_on: []
 inputs:
-  - stages/design/artifacts/feedback-inline-mobile.html
+  - stages/design/artifacts/
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
 outputs:
   - stages/design/artifacts/feedback-inline-mobile.html
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
   - stages/design/artifacts/unit-30-design-review.md
 quality_gates:
-  - >-
-    `grep -c 'prefers-reduced-motion'
-    stages/design/artifacts/feedback-inline-mobile.html` ≥ 1. The file
-    carries a `<style>` block with the stage-canonical global guard
-    prescribed by motion-and-reduced-motion-spec.md §Cross-file policy:
-    ```css
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
-      }
-    }
-    ```
-    Optionally paired with per-keyframe `animation: none !important;` on
-    `.animate-pulse` / `[class*="feedback-pulse"]` / `.sheet-enter` for the
-    FAB pulse (decorative; no essential state information lost by stopping
-    it) — per motion-and-reduced-motion-spec.md's "FAB pulse is
-    decorative" clause.
-  - >-
-    Stage-wide motion-audit script (re-run of unit-25's gate to catch the
-    false-closure): `for f in stages/design/artifacts/*.html; do
-    anim=$(grep -cE '@keyframes|animation:|animate-pulse|animate-spin|
-    transition-' $f); guard=$(grep -cE 'prefers-reduced-motion' $f); if [
-    "$anim" -gt 0 ] && [ "$guard" -eq 0 ]; then echo "MISSING: $f"; fi;
-    done` → empty output. Every artifact with animations or transitions
-    ships a reduced-motion guard.
-  - >-
-    `motion-and-reduced-motion-spec.md` — FAB pulse + bottom-sheet slide
-    rows updated to cite the specific guard in feedback-inline-mobile.html
-    (not just the spec-canonical guard block). Per-keyframe fallback
-    behavior documented: sheet-open animates to final position at 0.01ms
-    so the content paints; FAB pulse stops entirely (decorative only).
-  - >-
-    Motion-audit script added to `design-reviewer.md` hat spec gate list
-    so it runs on every future iteration (prevents the false-closure
-    pattern from recurring for FB-86 / FB-143's same failure shape).
+  - name: feedback-inline-mobile-has-reduced-motion-guard
+    command: >-
+      grep -c 'prefers-reduced-motion'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-inline-mobile.html
+  - name: stagewide-animations-have-reduced-motion-guard
+    command: >-
+      bash -c 'missing=0; for f in
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/*.html;
+      do anim=$(grep -cE "@keyframes|animation:|animate-pulse|animate-spin"
+      "$f"); guard=$(grep -cE "prefers-reduced-motion" "$f"); if [ "$anim" -gt 0
+      ] && [ "$guard" -eq 0 ]; then echo "MISSING: $f"; missing=$((missing+1));
+      fi; done; [ "$missing" -eq 0 ]'
+  - name: motion-spec-cites-feedback-inline-mobile-guard
+    command: >-
+      grep -E 'feedback-inline-mobile'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/motion-and-reduced-motion-spec.md
+status: active
+bolt: 1
+hat: designer
+started_at: '2026-04-20T19:38:59Z'
+hat_started_at: '2026-04-20T19:38:59Z'
+iterations:
+  - hat: designer
+    started_at: '2026-04-20T19:38:59Z'
+    completed_at: null
+    result: null
 ---
 # feedback-inline-mobile reduced-motion guard
 

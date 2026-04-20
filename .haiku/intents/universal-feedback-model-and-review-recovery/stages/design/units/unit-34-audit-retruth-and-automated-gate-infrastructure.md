@@ -21,112 +21,31 @@ depends_on:
   - unit-32-component-inventory-and-canonical-names
   - unit-33-feedback-summary-bar-artifact
 inputs:
-  - stages/design/artifacts/contrast-and-type-audit.md
-  - stages/design/hats/design-reviewer.md
-  - stages/design/hats/feedback-assessor.md
-  - stages/design/artifacts/motion-and-reduced-motion-spec.md
-  - stages/design/feedback/
-  - stages/design/units/
+  - stages/design/
 outputs:
   - stages/design/artifacts/contrast-and-type-audit.md
   - stages/design/hats/design-reviewer.md
   - stages/design/hats/feedback-assessor.md
-  - stages/design/artifacts/quality-gates.sh
-  - stages/design/artifacts/ledger-integrity-check.sh
+  - stages/design/scripts/quality-gates.sh
+  - stages/design/scripts/ledger-integrity-check.sh
   - stages/design/artifacts/unit-34-design-review.md
 quality_gates:
-  - >-
-    `contrast-and-type-audit.md §6.1, §6.2, §6.3` tables regenerated from
-    live grep output. Every PASS declaration replaced with the actual
-    live count (after unit-26 / unit-27 / unit-28 land, every count
-    should be 0; unit-34 runs LAST in the sequence to capture the true
-    post-fix state). The audit doc NO LONGER contains prose like
-    "Remaining instances are ALL paired with..." — it cites the
-    grep command and its output.
-  - >-
-    `stages/design/artifacts/quality-gates.sh` exists and contains the
-    canonical gate suite. Each gate is a named shell function that
-    returns 0 on pass and non-zero on fail, with the grep command
-    inlined so the source of truth is self-evident. Minimum gates:
-    - `qg1_opacity` — `grep -rEn 'opacity-50|opacity-60'
-      stages/design/artifacts/*.html | grep -vE 'backdrop-blur|black/50|
-      black/60|modal-overlay|demo-only'` → 0 hits.
-    - `qg2_banned_pairs` — `grep -rEn 'bg-stone-100[^"]*text-stone-500|
-      text-stone-500[^"]*bg-stone-100|bg-stone-200[^"]*text-stone-500|
-      text-stone-500[^"]*bg-stone-200' stages/design/artifacts/*.html`
-      → 0 hits.
-    - `qg3_aria_disabled` — Python3 `aria-disabled` walker from audit §4
-      Bolt-4, returns 0 violations.
-    - `qg4_palette` — `grep -rn 'gray-' stages/design/artifacts/*.html`
-      → 0 hits.
-    - `qg5_bare_rounded` — `grep -rEn 'class="[^"]*\brounded\b[^-]'
-      stages/design/artifacts/*.html` → 0 hits.
-    - `qg6_magic_px` — `grep -rEn 'max-w-\[[0-9]+px\]|w-\[[0-9]+px\]|
-      min-h-\[[0-9]+px\]|h-\[[0-9]+px\]|rounded-\[[0-9]+px\]'
-      stages/design/artifacts/*.html` → 0 hits (or all remaining tagged
-      `demo-only`).
-    - `qg7_typography_floor` — `grep -rEn 'text-\[11px\]'
-      stages/design/artifacts/*.html | grep -vE 'font-semibold|font-bold'`
-      → 0 hits.
-    - `qg8_reduced_motion` — stage-wide motion-audit script from
-      motion-and-reduced-motion-spec.md §Verification → empty output.
-    - `qg9_list_semantics` — `grep -cE '<ul|role="list"'
-      stages/design/artifacts/feedback-inline-desktop.html` ≥ 1.
-    - `qg10_stage_progress_buttons` — `grep -En '<div[^>]*role="link"'
-      stages/design/artifacts/stage-progress-strip.html` → 0 hits.
-    The script has a `run_all` dispatch that runs every function and
-    prints PASS / FAIL with exit code 0 iff all pass.
-  - >-
-    `stages/design/artifacts/ledger-integrity-check.sh` exists and
-    implements the FB-137 gate. Contents (conceptually):
-    ```
-    #!/usr/bin/env bash
-    set -eu
-    missing=0
-    for f in stages/design/feedback/*.md; do
-      ref=$(awk '/^closed_by:/ {print $2}' "$f")
-      [ -z "$ref" ] || [ "$ref" = "null" ] && continue
-      ref=${ref#\"}; ref=${ref%\"}
-      [ -f "stages/design/units/${ref}.md" ] || {
-        echo "GHOST-CLOSURE: $f → ${ref} missing"
-        missing=$((missing + 1))
-      }
-    done
-    [ "$missing" -eq 0 ]
-    ```
-    Script returns 0 only when every `closed_by:` points at an existing
-    unit file. Running it against the current tree returns 0 — every
-    feedback item whose `closed_by` previously cited unit-26..31 has
-    been reopened by the FB-152 repair, OR re-closed by one of unit-26..34
-    in this revisit.
-  - >-
-    `stages/design/hats/design-reviewer.md` updated so the review-agent
-    MUST run `quality-gates.sh run_all` AND `ledger-integrity-check.sh`
-    as the first step of its review and fail the review immediately if
-    either script returns non-zero. The hat spec explicitly calls out
-    that prose claims in `contrast-and-type-audit.md` are NOT a
-    substitute for the live script output.
-  - >-
-    `stages/design/hats/feedback-assessor.md` updated with the same
-    script-runner requirement. Feedback-assessor closure of any a11y /
-    consistency finding REQUIRES the relevant gate to return 0. The
-    hat spec explicitly cites the failure mode: "prior iterations
-    marked findings closed_by non-existent units and accepted audit
-    prose as proof; this iteration requires live grep + existing-unit
-    verification, no exceptions."
-  - >-
-    `FB-152` (ghost-unit ledger repair) closure: `ledger-integrity-check
-    .sh` returns 0, confirming the 45 falsely-closed findings were
-    properly reopened AND the orchestrator guard (referenced in FB-152
-    body) is live. Closure memo in the unit-34 design-review artifact
-    documents the state of the ledger at the time of closure: total
-    feedback count, closed count, pending count, reopened count.
-  - >-
-    Pattern prevention documented: `design-reviewer.md` gains a
-    "False-closure regression history" section naming iterations 5–7 of
-    this intent as the exemplar anti-pattern, and citing the two
-    scripts as the structural defense. Future adversarial cycles run
-    both scripts first, not prose-inspect.
+  - name: quality-gates-script-exists
+    command: "test -x .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/scripts/quality-gates.sh"
+  - name: ledger-integrity-script-exists
+    command: "test -x .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/scripts/ledger-integrity-check.sh"
+  - name: quality-gates-script-runs-clean
+    command: "bash .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/scripts/quality-gates.sh run_all"
+  - name: ledger-integrity-clean
+    command: "bash .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/scripts/ledger-integrity-check.sh"
+  - name: design-reviewer-hat-requires-gate-scripts
+    command: "grep -E 'quality-gates\\.sh|ledger-integrity-check\\.sh' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/hats/design-reviewer.md"
+  - name: feedback-assessor-hat-requires-gate-scripts
+    command: "grep -E 'quality-gates\\.sh|ledger-integrity-check\\.sh' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/hats/feedback-assessor.md"
+  - name: audit-tables-cite-grep-not-prose
+    command: "python3 -c \"import sys; c = open('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/contrast-and-type-audit.md').read(); required = ['grep', 'quality-gates.sh']; missing = [x for x in required if x not in c]; sys.exit(1 if missing else 0)\""
+  - name: false-closure-regression-history-documented
+    command: "grep -iE 'false[- ]closure|ghost[- ]unit|regression history' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/hats/design-reviewer.md"
 ---
 # Audit re-truth, automated quality-gate infrastructure, and ledger-integrity gate
 
@@ -165,11 +84,11 @@ and the gate-run outputs need to reflect the post-fix state.
 
 **Designer hat:**
 
-1. **Author `stages/design/artifacts/quality-gates.sh`** — the canonical
+1. **Author `stages/design/scripts/quality-gates.sh`** — the canonical
    gate script covering qg1 through qg10 enumerated in `quality_gates`.
    Each function is a small shell snippet; `run_all` dispatches them
    and prints PASS / FAIL per gate plus a final exit code.
-2. **Author `stages/design/artifacts/ledger-integrity-check.sh`** — the
+2. **Author `stages/design/scripts/ledger-integrity-check.sh`** — the
    FB-137 gate. Walks every feedback file, extracts `closed_by:`, and
    verifies the unit file exists. Non-existent references print
    `GHOST-CLOSURE:` and the script exits non-zero.

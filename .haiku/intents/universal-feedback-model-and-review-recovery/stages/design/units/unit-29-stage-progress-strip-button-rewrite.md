@@ -7,7 +7,8 @@ title: >-
 type: design
 closes:
   - FB-136
-depends_on: []
+depends_on:
+  - unit-27-palette-and-sizing-magic-number-normalization
 inputs:
   - stages/design/artifacts/stage-progress-strip.html
   - stages/design/artifacts/focus-order-spec.md
@@ -16,46 +17,18 @@ outputs:
   - stages/design/artifacts/focus-order-spec.md
   - stages/design/artifacts/unit-29-design-review.md
 quality_gates:
-  - >-
-    `grep -En '<div[^>]*role="link"'
-    stages/design/artifacts/stage-progress-strip.html` → 0 hits. Every
-    stage node in both pipelines uses `<button type="button">` (or
-    equivalently `<a href="#stage-{id}">` with preventDefault + pushState
-    if link semantics are chosen). No `role="link"` on a `<div>`.
-  - >-
-    `grep -cE '<button[^>]*aria-label="[^"]*stage'
-    stages/design/artifacts/stage-progress-strip.html` ≥ 10 — both
-    pipelines (primary + reference) render all 5 stages as `<button>`
-    elements with aria-label including the word "stage".
-  - >-
-    Upcoming-stage nodes (currently lines ~137, 151 in primary pipeline,
-    same pattern in reference pipeline) are keyboard-reachable:
-    `tabindex="0"` (not `tabindex="-1"`) paired with
-    `aria-disabled="true"` AND `aria-describedby` pointing at a hidden
-    span that explains the disabled state (e.g. "Operations stage —
-    will become available after Development stage review approves").
-    Verification: `grep -cE 'tabindex="0"[^>]*aria-disabled="true"'
-    stages/design/artifacts/stage-progress-strip.html` ≥ 4 (Operations +
-    Security, × 2 pipelines).
-  - >-
-    Focus-order-spec.md §1 rows 4-7 rewritten: element column says
-    "button" (or chosen anchor element), activation column says
-    "native Enter + Space (button) or click + Enter (anchor)". §9
-    Implementation contract extended with a row: "Stage-progress-strip
-    pins are `<button type="button">` — `<div role="link">` is a known
-    a11y footgun (no native Enter/Space activation; role implies
-    navigation that isn't happening)."
-  - >-
-    Verification: Python-based AT-simulation check OR manual keyboard
-    walk-through confirms every stage-node receives keyboard focus on
-    Tab, and activating with Enter or Space triggers the same handler
-    the click path triggers (tab-switch / scroll-into-view). Upcoming
-    stages focusable but communicate disabled state via aria-describedby
-    content read by AT.
-  - >-
-    No regression on existing focus-visible ring (the `.stage-node:
-    focus-visible` CSS at approx line 39 of stage-progress-strip.html
-    continues to render the teal ring).
+  - name: no-div-role-link-stage-nodes
+    command: "! grep -En '<div[^>]*role=\"link\"' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/stage-progress-strip.html"
+  - name: stage-nodes-are-buttons
+    command: "python3 -c \"import sys; c = open('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/stage-progress-strip.html').read(); import re; n = len(re.findall(r'<button[^>]*aria-label=\\\"[^\\\"]*stage', c, re.IGNORECASE)); sys.exit(0 if n >= 10 else 1)\""
+  - name: upcoming-stages-keyboard-reachable
+    command: "python3 -c \"import sys, re; c = open('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/stage-progress-strip.html').read(); n = len(re.findall(r'tabindex=\\\"0\\\"[^>]{0,200}aria-disabled=\\\"true\\\"|aria-disabled=\\\"true\\\"[^>]{0,200}tabindex=\\\"0\\\"', c)); sys.exit(0 if n >= 4 else 1)\""
+  - name: upcoming-stage-activation-guarded
+    command: "grep -E 'aria-disabled.*(true|getAttribute).*return|if\\s*\\(.*aria-disabled.*(true|===)' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/stage-progress-strip.html"
+  - name: stage-node-focus-visible-css-present
+    command: "grep -E '\\.stage-node:focus-visible|stage-node[^\"]*focus-visible' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/stage-progress-strip.html"
+  - name: focus-order-spec-describes-buttons
+    command: "grep -E '<button|button type|Enter.*Space' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/focus-order-spec.md"
 ---
 # stage-progress-strip div-role-link to button rewrite
 

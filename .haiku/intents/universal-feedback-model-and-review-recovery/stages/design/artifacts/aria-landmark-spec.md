@@ -72,8 +72,83 @@ Every surface with `role="dialog"`:
 4. First focusable element receives focus on open (use `focus-trap-react` or equivalent).
 5. `Escape` key closes the dialog.
 6. On close, focus returns to the element that opened the dialog (FAB for the mobile sheet; the "Revisit" button for the revisit modal; etc.).
-7. When a dialog is open, all other landmarks (`<header>`, `<nav>`, `<main>`, `<aside>`) receive `aria-hidden="true"` **and** the `inert` attribute so assistive tech does not traverse background content.
+7. When a dialog is open, all other landmarks (`<header>`, `<nav>`, `<main>`, `<aside>`) receive `aria-hidden="true"` **and** the `inert` attribute so assistive tech does not traverse background content. See **§3.7 (Inert + aria-hidden contract)** below for the exhaustive rules.
 8. Dialogs use the canonical focus-ring spec (see `focus-ring-spec.html §1`).
+
+### 3.7 Inert + aria-hidden contract (background-landmark neutralization)
+
+This subsection formalizes list-item 7 above. Every artifact that opens a dialog (modal, sheet, popover) **MUST** wire the belt-and-suspenders pair below; hand-rolled half-implementations are a blocker. Dev-stage React implementations inherit this contract verbatim — the DOM/attribute writes below are library-agnostic.
+
+**Why both `inert` and `aria-hidden="true"`:**
+
+- `inert` (HTML living standard, Safari 15.5+ / Chrome 102+ / Firefox 112+) removes the element and its subtree from the tab order, blocks pointer events, and flags descendants as unfocusable. AT behavior for `inert` alone is inconsistent — some screen readers still announce `inert` subtrees.
+- `aria-hidden="true"` tells every AT to skip the node during traversal but does NOT block focus or pointer events. A keyboard user could still Tab into the "hidden" region.
+- Together they form a complete neutralization: `inert` covers input + focus, `aria-hidden` covers AT announcement. Browsers without `inert` fall back to `aria-hidden`; ATs ignoring `inert` fall back to `aria-hidden`. There is no single-attribute path that works across the matrix.
+
+**Which nodes receive the pair (the background-landmark set):**
+
+Every top-level landmark that is a sibling of the dialog in the rendered DOM. For a page-level dialog (mobile sheet, revisit modal), this is:
+
+- `<header role="banner">`
+- `<nav aria-label="Stage progress">` (if rendered outside `<header>`)
+- `<main id="main-content" role="main">`
+- `<aside role="complementary" aria-label="Review sidebar">` (desktop artifacts only)
+
+The dialog itself and any live-region nodes (`#feedback-live-polite`, `#feedback-live-assertive`) **MUST NOT** receive `inert` or `aria-hidden` — the live regions must remain announceable while the dialog is open.
+
+**Open-lifecycle writes (exact DOM operations):**
+
+```js
+// On dialog open
+header.inert = true;
+header.setAttribute('aria-hidden', 'true');
+main.inert = true;
+main.setAttribute('aria-hidden', 'true');
+// Repeat for <nav> (if outside header) and <aside> (if present)
+```
+
+**Close-lifecycle writes (exact reversal — both attributes removed):**
+
+```js
+// On dialog close — reverse both
+header.inert = false;
+header.removeAttribute('aria-hidden');
+main.inert = false;
+main.removeAttribute('aria-hidden');
+```
+
+Use `element.inert = false` (property assignment) **not** `removeAttribute('inert')` — property assignment is the canonical API and works even when the attribute was never serialized.
+
+**State matrix (canonical — copy into every artifact that owns a dialog):**
+
+| Phase | Dialog DOM | `<header>` inert | `<header>` aria-hidden | `<main>` inert | `<main>` aria-hidden | Focus |
+|---|---|---|---|---|---|---|
+| Idle (closed) | absent / `[hidden]` | no | absent | no | absent | opener |
+| Opening (animation start) | present | **yes** | `"true"` | **yes** | `"true"` | moving to first tabbable |
+| Open (interactive) | present, focus-trapped | yes | `"true"` | yes | `"true"` | inside dialog |
+| Closing (animation) | present | still yes | still `"true"` | still yes | still `"true"` | still trapped until unmount |
+| Closed | absent / `[hidden]` | no | absent | no | absent | returned to opener |
+
+**Do NOT do any of the following:**
+
+- Apply `inert` to `<body>` — it neutralizes live regions and breaks AT announcements.
+- Apply `aria-hidden="true"` to the dialog itself — the dialog must remain in the AT tree.
+- Use `display: none` on background landmarks instead of the `inert` + `aria-hidden` pair — `display: none` loses scroll position and re-renders children on close (expensive + scroll jump).
+- Use a CSS-only "backdrop" as a substitute — CSS does not block keyboard tab order.
+- Hand-roll a focus trap inside the dialog while also writing `inert` to the dialog's parent — `inert` on the parent makes focus-trap's own DOM queries fail; the pair is strictly scoped to siblings.
+
+**Vanilla-to-React port (dev-stage handoff):**
+
+The inert + aria-hidden pair is implemented identically in vanilla JS (current wireframes) and React. The only thing that changes is the focus-trap layer:
+
+- Vanilla (wireframe): a `<script data-feedback-sheet-controller>` block sets `.inert` and `setAttribute('aria-hidden', 'true')` directly on the landmark nodes; manual `focus()` calls move focus to the first tabbable and return it on close.
+- React (dev-stage): the component wraps the dialog in `<FocusTrap active returnFocusOnDeactivate>` from `focus-trap-react`. The inert + aria-hidden writes to background landmarks still happen in a `useEffect` that fires on mount/unmount of the dialog — `FocusTrap` does not manage background-landmark neutralization, only focus.
+
+**Verification greps (feedback-assessor runs these):**
+
+- `grep -nE 'main\.inert|setAttribute\(.aria-hidden' stages/design/artifacts/feedback-inline-mobile.html` → ≥ 4 matches (open + close paths)
+- `grep -nE 'aria-landmark-spec\.md §3\.7' stages/design/artifacts/feedback-inline-mobile.html` → ≥ 1 match (head-of-document comment pointer so dev-stage inherits the contract)
+- `grep -nE 'aria-landmark-spec\.md §3\.7' stages/design/artifacts/revisit-modal-states.html` → ≥ 1 match (§Modal lifecycle citation)
 
 ### Focus-trap contract
 

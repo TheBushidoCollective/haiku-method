@@ -2,7 +2,7 @@
 title: >-
   Sidebar-width canonical pair violated: DESIGN-BRIEF §2 and
   assessor-summary-card say `lg:w-96`, not `xl:w-96`
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent

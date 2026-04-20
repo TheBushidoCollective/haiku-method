@@ -3,7 +3,15 @@ title: >-
   Canonical-token normalization sweep — sidebar width, magic max-width,
   gray→stone, Re-open, tab color, bare rounded, component-name unification
 type: design
-closes: []
+closes:
+  - FB-87
+  - FB-88
+  - FB-89
+  - FB-90
+  - FB-91
+  - FB-96
+  - FB-99
+  - FB-101
 depends_on:
   - unit-27-spec-alignment-and-design-brief-completeness
 inputs:

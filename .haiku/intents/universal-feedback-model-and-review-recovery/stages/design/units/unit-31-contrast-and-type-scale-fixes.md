@@ -3,7 +3,10 @@ title: >-
   Dark-mode contrast fixes + text-[11px] type-scale enforcement — lift specific
   stone-token combinations, add semibold or scale up every 11px user-facing copy
 type: design
-closes: []
+closes:
+  - FB-105
+  - FB-106
+  - FB-109
 depends_on:
   - unit-30-native-activation-and-live-region-landmarks
 inputs:

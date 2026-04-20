@@ -4,7 +4,10 @@ title: >-
   `focus-visible:ring-*`, add focus-visible rings to `.stage-btn`, clarify
   focus-ring-spec code samples
 type: design
-closes: []
+closes:
+  - FB-93
+  - FB-107
+  - FB-110
 depends_on:
   - unit-26-artifact-opacity-ban-enforcement
 inputs:

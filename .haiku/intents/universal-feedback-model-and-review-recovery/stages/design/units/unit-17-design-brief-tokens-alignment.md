@@ -62,9 +62,9 @@ quality_gates:
     duplicating component specs.
 status: active
 bolt: 3
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T01:54:22Z'
-hat_started_at: '2026-04-20T02:43:00Z'
+hat_started_at: '2026-04-20T02:47:50Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:22Z'
@@ -100,6 +100,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T02:43:00Z'
+    completed_at: '2026-04-20T02:47:50Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T02:47:50Z'
     completed_at: null
     result: null
 ---

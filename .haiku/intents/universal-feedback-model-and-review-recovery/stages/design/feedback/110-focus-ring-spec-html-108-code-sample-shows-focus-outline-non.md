@@ -2,7 +2,7 @@
 title: >-
   focus-ring-spec.html:108 code sample shows focus:outline-none without
   focus-visible context — misleads devs
-status: closed
+status: pending
 origin: adversarial-review
 author: accessibility
 author_type: agent

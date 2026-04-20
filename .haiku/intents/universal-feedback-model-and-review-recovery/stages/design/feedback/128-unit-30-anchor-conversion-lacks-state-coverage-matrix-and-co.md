@@ -2,7 +2,7 @@
 title: >-
   unit-30 anchor conversion lacks state-coverage matrix and collides with
   unit-28 on stage-progress-strip.html
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:33:55Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-30-native-activation-and-live-region-landmarks.md
-closed_by: null
+closed_by: unit-30-native-activation-and-live-region-landmarks
 bolt: 0
 upstream_stage: null
 ---

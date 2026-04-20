@@ -825,24 +825,20 @@ The sidebar focus order follows the DOM order, which matches the visual top-to-b
 
 ## 7. CSS Additions
 
-New styles to add to `packages/haiku/review-app/src/index.css`:
+Prefer Tailwind utilities on the component itself for status-aware borders, backgrounds, glyphs, and the rejected strikethrough (see DESIGN-TOKENS §2.3 and §2, and `FeedbackItem` rules in §2 above). The following class bindings are canonical and MUST be applied via component props rather than descendant selectors:
+
+| Status | Utilities on card root (light / dark) |
+|---|---|
+| `pending` | `border-l-[3px] border-l-amber-400 dark:border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20` |
+| `addressed` | `border-l-[3px] border-l-blue-400 dark:border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20` |
+| `closed` | `border-l-[3px] border-l-green-500 dark:border-l-green-400 bg-green-50/60 dark:bg-green-950/25` |
+| `rejected` | `border-l-[3px] border-l-stone-400 dark:border-l-stone-500 bg-stone-100 dark:bg-stone-800/50` |
+
+The rejected-title strikethrough is rendered via utilities on the title span (`line-through decoration-stone-500`) at full opacity. Do **not** apply `opacity-70`, `opacity-50`, or any `opacity-60` to the card root, title, or metadata — these are banned repo-wide per §2 and DESIGN-TOKENS §1.7.
+
+The only new styles that need to live in `packages/haiku/review-app/src/index.css` are (a) the FeedbackFloatingButton pulse animation (keyframes cannot be expressed inline as Tailwind) and (b) reduced-motion fallbacks:
 
 ```css
-/* Feedback item status indicators -- left border */
-.feedback-item-addressed {
-  border-left: 2px solid #60a5fa; /* blue-400 */
-}
-.feedback-item-closed {
-  border-left: 2px solid #4ade80; /* green-400 */
-  opacity: 0.7;
-}
-.feedback-item-rejected {
-  opacity: 0.5;
-}
-.feedback-item-rejected .feedback-title {
-  text-decoration: line-through;
-}
-
 /* FeedbackFloatingButton pulse animation for new items (mobile only) */
 @keyframes feedback-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.4); }
@@ -856,7 +852,7 @@ New styles to add to `packages/haiku/review-app/src/index.css`:
 }
 ```
 
-Most styling uses Tailwind utility classes directly on components. The CSS additions are only for states that require descendant selectors or animations that are cumbersome in inline Tailwind.
+If a descendant-selector fallback is ever required (e.g. for environments where Tailwind class bindings are unreachable), it MUST express the same contract as the utility row above — 3px left borders, named token colors, muted backgrounds, glyph + text prefix for closed/rejected, full-opacity strikethrough — and MUST NOT use `opacity-70`, `opacity-60`, or `opacity-50`.
 
 ---
 

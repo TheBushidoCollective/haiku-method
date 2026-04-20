@@ -47,22 +47,5 @@
 			"cssModules": true,
 			"tailwindDirectives": true
 		}
-	},
-	"overrides": [
-		{
-			"includes": ["packages/haiku/src/templates/input.css"],
-			"linter": {
-				"rules": {
-					"suspicious": {
-						"noUnknownAtRules": {
-							"level": "error",
-							"options": {
-								"ignore": ["tailwind"]
-							}
-						}
-					}
-				}
-			}
-		}
-	]
+	}
 }

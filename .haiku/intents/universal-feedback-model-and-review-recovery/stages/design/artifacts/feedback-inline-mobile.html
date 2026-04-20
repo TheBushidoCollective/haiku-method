@@ -1,4 +1,40 @@
 <!DOCTYPE html>
+<!--
+  ============================================================================
+  a11y contract — dev-stage inherits the contract from aria-landmark-spec.md §3.7
+  ============================================================================
+
+  This wireframe encodes the canonical "dialog open/close" contract for the
+  MobileFeedbackPanel. Before porting to React, read:
+
+    - aria-landmark-spec.md §3   — every modal carries role=dialog, aria-modal,
+                                    aria-labelledby pointing at a visible heading.
+    - aria-landmark-spec.md §3.7 — inert + aria-hidden="true" are both applied
+                                    to every background landmark (<header>, <nav>,
+                                    <main>, <aside>) on open and BOTH removed on
+                                    close. Property assignment (element.inert =
+                                    true/false) for inert, setAttribute /
+                                    removeAttribute for aria-hidden. The live-
+                                    region nodes and the dialog itself MUST NOT
+                                    receive either attribute.
+    - aria-landmark-spec.md §5   — full MobileFeedbackPanel lifecycle (state
+                                    matrix, FAB aria-haspopup/aria-expanded/
+                                    aria-controls wiring, focus return).
+
+  The vanilla <script data-feedback-sheet-controller> block at the bottom of
+  this document implements §3.7 end-to-end — main.inert = true + aria-hidden
+  on open, reversed on close, plus Escape handling and focus return to the
+  FAB. Dev-stage replaces the vanilla controller with <FocusTrap active
+  returnFocusOnDeactivate> from focus-trap-react
+  (https://github.com/focus-trap/focus-trap-react); the inert + aria-hidden
+  apparatus on background landmarks stays exactly as wired here.
+
+  Grep contract (feedback-assessor gate — aria-landmark-spec.md §9):
+    - 'role="dialog" aria-modal="true" aria-labelledby=' → ≥ 1 match
+    - 'main\.inert|setAttribute\(.aria-hidden'            → ≥ 4 matches (controller open + close paths)
+    - 'aria-landmark-spec\.md §3\.7'                      → ≥ 1 match (this head-of-document pointer + controller inline citations)
+  ============================================================================
+-->
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />

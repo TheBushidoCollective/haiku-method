@@ -23,9 +23,9 @@ import { features, resolvePluginRoot } from "./config.js"
 import { computeWaves, topologicalSort } from "./dag.js"
 import {
 	branchExists,
+	cleanupIntentWorktrees,
 	consolidateStageBranches,
 	createIntentBranch,
-	cleanupIntentWorktrees,
 	createStageBranch,
 	createUnitWorktree,
 	deleteBranch,
@@ -46,7 +46,6 @@ import { type ModelTier, resolveModel } from "./model-selection.js"
 import { validateIdentifier } from "./prompts/helpers.js"
 import { reportError } from "./sentry.js"
 import { getSessionIntent, logSessionEvent } from "./session-metadata.js"
-import { writeSubagentPrompt } from "./subagent-prompt-file.js"
 import {
 	sanitizeForContext,
 	sealIntentState,
@@ -89,6 +88,7 @@ import {
 	resolveStudio,
 	studioSearchPaths,
 } from "./studio-reader.js"
+import { writeSubagentPrompt } from "./subagent-prompt-file.js"
 import { emitTelemetry } from "./telemetry.js"
 import type { DAGGraph } from "./types.js"
 
@@ -184,8 +184,8 @@ const FSM_CONTRACTS_REVIEW_BLOCK = [
 	"",
 	"- Review agents MUST NOT write, edit, or create any file. Their ONLY output channel is `haiku_feedback`. Any file write is a scope violation.",
 	"- Conditional review: each agent's `applies_to:` frontmatter (glob list) scopes it to matching output kinds. The FSM filters agents whose scope doesn't match; agents without `applies_to:` always run.",
-	"- Findings with concrete reproducible claims (file:line + gate command + proposed fix) accelerate resolution. Vague concerns (\"looks wrong\") are less actionable — prefer concrete.",
-	"- A stage's retry budget is TIGHT: agent-invoked rejection cycles are capped at 2 iterations (`MAX_STAGE_ITERATIONS=2`). Beyond that, the framework escalates to the human — repeated rejections indicate a spec problem the pre-execute review should have caught, and the correct response is to fix the plan, not keep building against a broken plan.",
+	'- Findings with concrete reproducible claims (file:line + gate command + proposed fix) accelerate resolution. Vague concerns ("looks wrong") are less actionable — prefer concrete.',
+	`- A stage's retry budget is TIGHT: agent-invoked rejection cycles are capped at ${MAX_STAGE_ITERATIONS} iterations (\`MAX_STAGE_ITERATIONS=${MAX_STAGE_ITERATIONS}\`). Beyond that, the framework escalates to the human — repeated rejections indicate a spec problem the pre-execute review should have caught, and the correct response is to fix the plan, not keep building against a broken plan.`,
 ].join("\n")
 
 /**
@@ -234,9 +234,7 @@ function maybeEscalate(
 ): OrchestratorAction | null {
 	if (!iter.exceeded && !iter.loopDetected) return null
 
-	const reason = iter.exceeded
-		? "iteration_limit"
-		: "loop_detected"
+	const reason = iter.exceeded ? "iteration_limit" : "loop_detected"
 	const message = iter.exceeded
 		? `Stage '${stage}' has exceeded ${MAX_STAGE_ITERATIONS} agent-invoked iterations (now at ${iter.count}). The autonomous loop has stopped — a human must decide whether to keep pushing, reject feedback items, split the work, or terminate the intent. Use \`haiku_revisit { intent: "${slug}" }\` (user-invoked, uncapped) to force another cycle, \`haiku_feedback_reject\` to dismiss specific items, or mark the stage complete manually.`
 		: `Stage '${stage}' is in a loop: iteration ${iter.count}'s feedback set is the same as the previous iteration's. The agent keeps regenerating identical findings, which usually means the spec is wrong or the criteria are unreachable. A human must intervene — adjust the feedback items, relax the criteria, or terminate the intent.`
@@ -707,7 +705,12 @@ function handleExternalChangesRequested(
 		outcome: "changes_requested",
 	})
 
-	const escalateResult = maybeEscalate(slug, currentStage, iterResult, "external-changes")
+	const escalateResult = maybeEscalate(
+		slug,
+		currentStage,
+		iterResult,
+		"external-changes",
+	)
 	if (escalateResult) return escalateResult
 
 	return {
@@ -1493,14 +1496,18 @@ function completeOrReviewIntent(
 ): OrchestratorAction {
 	const intentFile = join(intentDir(slug), "intent.md")
 	const intent = existsSync(intentFile) ? readFrontmatter(intentFile) : {}
-	const skipReview = intent.skip_intent_completion_review === true
-	if (skipReview) {
+	// Opt-IN: the final intent-completion review only fires when the intent
+	// explicitly sets `intent_completion_review: true`. Default behavior
+	// (flag absent or false) fires intent_complete directly, matching the
+	// pre-existing contract every external-review/test caller relies on.
+	const reviewOnCompletion = intent.intent_completion_review === true
+	if (!reviewOnCompletion) {
 		fsmIntentComplete(slug)
 		return {
 			action: "intent_complete",
 			intent: slug,
 			studio,
-			message: `${sourceMessage} (skip_intent_completion_review=true — completed without final review)`,
+			message: sourceMessage,
 		}
 	}
 	fsmEnterIntentCompletionReview(slug)
@@ -1514,7 +1521,7 @@ function completeOrReviewIntent(
 		stage: null,
 		gate_type: "ask",
 		gate_context: "intent_completion",
-		message: `${sourceMessage} All stages passed — opening final intent review. Approval completes the intent; changes_requested routes back to a stage you specify.`,
+		message: `${sourceMessage} All stages passed — opening final intent review (intent_completion_review=true). Approval completes the intent; changes_requested routes back to a stage you specify.`,
 	}
 }
 
@@ -2201,6 +2208,7 @@ export function runNext(slug: string): OrchestratorAction {
 				const agentPaths = filterReviewAgentsByScope(
 					readReviewAgentPaths(studio, currentStage),
 					join(iDir, "stages", currentStage, "artifacts"),
+					{ studio, stage: currentStage },
 				)
 				if (Object.keys(agentPaths).length === 0) {
 					stageState.pre_review_dispatched = true
@@ -2246,6 +2254,56 @@ export function runNext(slug: string): OrchestratorAction {
 					pending_items: pendingPreReviewFb.map(summarizeFeedback),
 					units_dir: `.haiku/intents/${slug}/stages/${currentStage}/units/`,
 					message: `${pendingPreReviewFb.length} pending feedback item(s) on unit specs. Resolve by EDITING the affected unit.md files (NOT by drafting new units — that's additive-elaboration, a different mode). After each edit, close the feedback via haiku_feedback_update status=closed closed_by=<unit-name>. When all spec feedback is closed/rejected, call haiku_run_next to advance elaborate → execute.`,
+				}
+			}
+
+			// TOCTOU mitigation for BUG 4 (fast-retry race): if reviewer
+			// dispatch was recent AND we see zero pending feedback, reviewer
+			// subagents may still be running. Refuse to advance until either
+			// a grace window elapses or the agent explicitly confirms
+			// reviewers completed by setting
+			// `pre_review_reviewers_acknowledged: true` in the stage state.
+			//
+			// Skipped when pre-review itself was skipped (no applicable
+			// agents) — there's no race to guard against if no reviewers
+			// were ever dispatched.
+			const skippedNoAgents = stageState.pre_review_skipped_no_agents === true
+			if (!skippedNoAgents) {
+				const dispatchedAtStr =
+					typeof stageState.pre_review_dispatched_at === "string"
+						? (stageState.pre_review_dispatched_at as string)
+						: ""
+				const dispatchedAtMs = dispatchedAtStr
+					? new Date(dispatchedAtStr).getTime()
+					: 0
+				const ackd = stageState.pre_review_reviewers_acknowledged === true
+				const elapsedMs = dispatchedAtMs
+					? Date.now() - dispatchedAtMs
+					: Number.POSITIVE_INFINITY
+				const GRACE_MS =
+					Number.parseInt(process.env.HAIKU_PRE_REVIEW_GRACE_MS ?? "", 10) ||
+					15000
+				if (!ackd && elapsedMs < GRACE_MS) {
+					return {
+						action: "pre_review_waiting",
+						intent: slug,
+						studio,
+						stage: currentStage,
+						dispatched_at: dispatchedAtStr,
+						grace_remaining_ms: Math.max(0, GRACE_MS - elapsedMs),
+						message: `Pre-execute review dispatched ${Math.floor(elapsedMs / 1000)}s ago — reviewer subagents may still be running. Wait for all subagents to return, then call haiku_run_next again. (Grace window: ${GRACE_MS}ms; override via HAIKU_PRE_REVIEW_GRACE_MS. To skip the grace window when you're confident reviewers have all returned, set stage state \`pre_review_reviewers_acknowledged: true\`.)`,
+					}
+				}
+				if (!ackd) {
+					// Grace elapsed and nobody bumped the ack — treat as
+					// implicit acknowledgment and record it, so subsequent
+					// calls advance cleanly and audit logs show the state.
+					stageState.pre_review_reviewers_acknowledged = true
+					stageState.pre_review_reviewers_acknowledged_at = timestamp()
+					writeJson(
+						join(iDir, "stages", currentStage, "state.json"),
+						stageState,
+					)
 				}
 			}
 		}
@@ -2563,6 +2621,9 @@ export function runNext(slug: string): OrchestratorAction {
 			// (potentially edited) unit specs before re-entering execute.
 			gateState.pre_review_dispatched = false
 			gateState.pre_review_dispatched_at = null
+			gateState.pre_review_skipped_no_agents = false
+			gateState.pre_review_reviewers_acknowledged = false
+			gateState.pre_review_reviewers_acknowledged_at = null
 			writeJson(statePath, gateState)
 			const iterResult = appendStageIteration(
 				slug,
@@ -3144,6 +3205,9 @@ function revisitCurrentStage(
 	// Reset pre-review state so the revisit re-audits the (edited) unit specs.
 	stageState.pre_review_dispatched = false
 	stageState.pre_review_dispatched_at = null
+	stageState.pre_review_skipped_no_agents = false
+	stageState.pre_review_reviewers_acknowledged = false
+	stageState.pre_review_reviewers_acknowledged_at = null
 	writeJson(path, stageState)
 
 	// If the intent was marked completed, revisit reactivates it
@@ -3579,7 +3643,7 @@ function enrichActionWithPreview(action: OrchestratorAction): void {
 const SUBAGENT_ERROR_RECOVERY = [
 	"## Error Recovery (if advance_hat / reject_hat returns an error)",
 	"",
-	"Tool responses containing `\"error\": \"...\"` mean the FSM refused the action. Read the `message` field — it describes the exact fix. Common errors and recovery:",
+	'Tool responses containing `"error": "..."` mean the FSM refused the action. Read the `message` field — it describes the exact fix. Common errors and recovery:',
 	"",
 	"- `unit_scope_violation` (from advance_hat) / `unit_scope_violation_on_reject` (from reject_hat) — your unit worktree contains commits that wrote files outside the stage's declared scope. **`git checkout HEAD -- <file>` is a NO-OP on committed files.** Use ONE of:",
 	"  - `git reset --hard $(git merge-base HEAD <stage-branch>)` — drops ALL unit commits (recommended early in a unit)",
@@ -3634,16 +3698,8 @@ function emitSubagentDispatchBlock(opts: {
 	heading?: string // e.g., "## Subagent Dispatch (MANDATORY — relay verbatim)" or "### Subagent: <name>"
 	toolAttr?: boolean // whether to include tool="Agent"
 }): string {
-	const {
-		unit,
-		hat,
-		bolt,
-		agentType,
-		model,
-		promptBody,
-		heading,
-		toolAttr,
-	} = opts
+	const { unit, hat, bolt, agentType, model, promptBody, heading, toolAttr } =
+		opts
 	const { path, parentInstruction } = writeSubagentPrompt({
 		unit,
 		hat,
@@ -3823,7 +3879,9 @@ function buildRunInstructions(
 								(f) =>
 									`- **${f.feedback_id}** — ${f.title}\n  - file: \`${f.file}\`\n  - origin: ${f.origin} · author: ${f.author}`,
 							)
-							.join("\n")}\n\nYou MUST open every file above and read it completely before drafting units. The title is only a handle; the body carries requirements, tests, and acceptance criteria.`,
+							.join(
+								"\n",
+							)}\n\nYou MUST open every file above and read it completely before drafting units. The title is only a handle; the body carries requirements, tests, and acceptance criteria.`,
 					)
 				}
 				sections.push(
@@ -3909,13 +3967,7 @@ function buildRunInstructions(
 			{
 				const seen = new Set<string>()
 				for (const base of [...studioSearchPaths()].reverse()) {
-					const discoveryDir = join(
-						base,
-						studio,
-						"stages",
-						stage,
-						"discovery",
-					)
+					const discoveryDir = join(base, studio, "stages", stage, "discovery")
 					if (!existsSync(discoveryDir)) continue
 					for (const f of readdirSync(discoveryDir).filter((f) =>
 						f.endsWith(".md"),
@@ -3967,15 +4019,14 @@ function buildRunInstructions(
 						"4. Write the populated document to the stage's discovery path (as defined in the template's `location:` frontmatter above). **This is your ONLY write path** — any file you write elsewhere is a scope violation.",
 						"5. Be thorough — this artifact informs all downstream work.",
 					)
-					fanOutText +=
-						emitSubagentDispatchBlock({
-							unit: "discovery",
-							hat: a.name,
-							bolt: 1,
-							agentType: "general-purpose",
-							promptBody: lines.join("\n"),
-							heading: `### Subagent: \`${a.name}\``,
-						}) + "\n\n"
+					fanOutText += `${emitSubagentDispatchBlock({
+						unit: "discovery",
+						hat: a.name,
+						bolt: 1,
+						agentType: "general-purpose",
+						promptBody: lines.join("\n"),
+						heading: `### Subagent: \`${a.name}\``,
+					})}\n\n`
 				}
 
 				fanOutText +=
@@ -4214,9 +4265,7 @@ function buildRunInstructions(
 						feedbackFiles.push({
 							id: found.id,
 							file: found.file.startsWith(".haiku/intents/")
-								? found.file.slice(
-										`.haiku/intents/${slug}/`.length,
-									)
+								? found.file.slice(`.haiku/intents/${slug}/`.length)
 								: found.file,
 						})
 				}
@@ -4349,7 +4398,7 @@ function buildRunInstructions(
 
 				// Parent-only instructions OUTSIDE the tag
 				sections.push(
-					"### Parent Instructions (do NOT include in subagent prompt)\n\nSpawn the subagent using the `type`, `model`, and `prompt_file` attributes from the `<subagent>` block above. The subagent's prompt is the file at `prompt_file` — pass `\"Read <prompt_file> and execute its instructions exactly.\"` as the spawn prompt.\n\n**When the subagent returns, its final message will be one of:**\n- `FSM Result: <path>` — read that JSON file and act on its `action` field. Valid actions: `continue_unit` (spawn next subagent for same unit), `start_units` (dispatch wave), `advance_phase`, `review`, `advance_stage`, `intent_complete`, `blocked`. For unit-level actions, call `haiku_run_next { intent: ... }` to get the FSM's canonical next step (the result file and run_next return the same data; run_next is the authoritative drive step).\n- Plaintext \"job ends here\" message — another subagent in the wave will produce the structured result; do not dispatch yet.\n- Anything else (subagent non-compliant) — fall back: call `haiku_run_next { intent: ... }`.\n\nDo NOT stop until run_next returns `gate_review`, `advance_stage → intent_complete`, `intent_complete`, or `error`.",
+					'### Parent Instructions (do NOT include in subagent prompt)\n\nSpawn the subagent using the `type`, `model`, and `prompt_file` attributes from the `<subagent>` block above. The subagent\'s prompt is the file at `prompt_file` — pass `"Read <prompt_file> and execute its instructions exactly."` as the spawn prompt.\n\n**When the subagent returns, its final message will be one of:**\n- `FSM Result: <path>` — read that JSON file and act on its `action` field. Valid actions: `continue_unit` (spawn next subagent for same unit), `start_units` (dispatch wave), `advance_phase`, `review`, `advance_stage`, `intent_complete`, `blocked`. For unit-level actions, call `haiku_run_next { intent: ... }` to get the FSM\'s canonical next step (the result file and run_next return the same data; run_next is the authoritative drive step).\n- Plaintext "job ends here" message — another subagent in the wave will produce the structured result; do not dispatch yet.\n- Anything else (subagent non-compliant) — fall back: call `haiku_run_next { intent: ... }`.\n\nDo NOT stop until run_next returns `gate_review`, `advance_stage → intent_complete`, `intent_complete`, or `error`.',
 				)
 			} else {
 				// ── Subagentless: direct execution in current context ──
@@ -4506,9 +4555,7 @@ function buildRunInstructions(
 					}
 
 					const wt = worktrees[unitName]
-					const unitIntentRoot = wt
-						? join(wt, ".haiku", "intents", slug)
-						: dir
+					const unitIntentRoot = wt ? join(wt, ".haiku", "intents", slug) : dir
 					const unitAbsPath = join(
 						unitIntentRoot,
 						"stages",
@@ -4728,9 +4775,7 @@ function buildRunInstructions(
 					unitName.endsWith(".md") ? unitName : `${unitName}.md`,
 				)
 
-				const unitIntentRoot = wt
-					? join(wt, ".haiku", "intents", slug)
-					: dir
+				const unitIntentRoot = wt ? join(wt, ".haiku", "intents", slug) : dir
 				const unitAbsPath = join(
 					unitIntentRoot,
 					"stages",
@@ -4947,6 +4992,7 @@ function buildRunInstructions(
 			agentPaths = filterReviewAgentsByScope(
 				agentPaths,
 				join(findHaikuRoot(), "intents", slug, "stages", stage, "artifacts"),
+				{ studio, stage },
 			)
 
 			sections.push(`## Adversarial Review: ${stage}`)
@@ -4985,14 +5031,14 @@ function buildRunInstructions(
 					)
 					const prompt = reviewLines.join("\n")
 					sections.push(
-						emitSubagentDispatchBlock({
+						`${emitSubagentDispatchBlock({
 							unit: `review-${stage}`,
 							hat: name,
 							bolt: 1,
 							agentType: "general-purpose",
 							promptBody: prompt,
 							heading: `#### Subagent: \`${name}\``,
-						}) + "\n",
+						})}\n`,
 					)
 				}
 			}
@@ -5151,6 +5197,7 @@ function buildRunInstructions(
 			agentPaths = filterReviewAgentsByScope(
 				agentPaths,
 				join(findHaikuRoot(), "intents", slug, "stages", stage, "artifacts"),
+				{ studio, stage },
 			)
 
 			sections.push(`## Pre-Execute Adversarial Review: ${stage}`)
@@ -5282,6 +5329,7 @@ function buildRunInstructions(
 			agentPaths = filterReviewAgentsByScope(
 				agentPaths,
 				join(findHaikuRoot(), "intents", slug, "stages", stage, "artifacts"),
+				{ studio, stage },
 			)
 
 			sections.push("## Review Elaboration Artifacts")
@@ -5314,14 +5362,14 @@ function buildRunInstructions(
 						"6. Return only a summary count of how many findings you logged.",
 					].join("\n")
 					sections.push(
-						emitSubagentDispatchBlock({
+						`${emitSubagentDispatchBlock({
 							unit: `review-elab-${stage}`,
 							hat: name,
 							bolt: 1,
 							agentType: "general-purpose",
 							promptBody: prompt,
 							heading: `#### Subagent: \`${name}\``,
-						}) + "\n",
+						})}\n`,
 					)
 				}
 			}

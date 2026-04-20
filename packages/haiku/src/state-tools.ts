@@ -36,11 +36,6 @@ import {
 } from "./git-worktree.js"
 import { getCapabilities } from "./harness.js"
 import { escalate } from "./model-selection.js"
-import {
-	resultPathFor,
-	setSessionId,
-	writeResultFile,
-} from "./subagent-prompt-file.js"
 import { logSessionEvent, writeHaikuMetadata } from "./session-metadata.js"
 import { sealIntentState } from "./state-integrity.js"
 import {
@@ -50,6 +45,11 @@ import {
 	readStageArtifactDefs,
 	resolveStudio,
 } from "./studio-reader.js"
+import {
+	resultPathFor,
+	setSessionId,
+	writeResultFile,
+} from "./subagent-prompt-file.js"
 import { emitTelemetry } from "./telemetry.js"
 import { MCP_VERSION, getPluginVersion } from "./version.js"
 
@@ -1769,11 +1769,19 @@ export function matchesGlob(candidate: string, pattern: string): boolean {
 	// the subsequent single-`*` expansion doesn't re-expand the `.*`.
 	if (p.includes("*")) {
 		const esc = p.replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+		// Sentinel-swap trick: replace `**` with \x00 first (so the next step
+		// doesn't eat them), replace `*` with the single-segment regex, then
+		// restore \x00 as the multi-segment regex. Both regex literals
+		// reference \x00 intentionally — biome's control-char rule is
+		// suppressed below because the sentinel is the point of this code.
+		const doubleStar = /\*\*/g
+		// biome-ignore lint/suspicious/noControlCharactersInRegex: \x00 sentinel restored after escaping single *
+		const sentinel = /\x00/g
 		const regex = new RegExp(
 			`^${esc
-				.replace(/\*\*/g, "\x00")
+				.replace(doubleStar, "\x00")
 				.replace(/\*/g, "[^/]*")
-				.replace(/\x00/g, ".*")}$`,
+				.replace(sentinel, ".*")}$`,
 		)
 		return regex.test(c)
 	}
@@ -1792,12 +1800,7 @@ function getUnitWorktreeChanges(
 ): string[] | null {
 	if (!isGitRepo()) return null
 	const unitBase = unit.replace(/\.md$/, "")
-	const worktreePath = join(
-		findHaikuRoot(),
-		"worktrees",
-		slug,
-		unitBase,
-	)
+	const worktreePath = join(findHaikuRoot(), "worktrees", slug, unitBase)
 	if (!existsSync(worktreePath)) return null
 	try {
 		const unitBranch = `haiku/${slug}/${unitBase}`
@@ -1890,10 +1893,10 @@ function computeStageScope(
 		// Discovery artifacts authored during this stage's elaborate phase
 		`stages/${stage}/discovery/**`,
 		// Intent-level sealing + integrity artifacts
-		`state/**`,
-		`.integrity.json`,
+		"state/**",
+		".integrity.json",
 		// Discovery knowledge (populated by early hats, read by later)
-		`knowledge/**`,
+		"knowledge/**",
 	]
 	const repoGlobs: string[] = []
 	let repoWildcard = false
@@ -2008,18 +2011,17 @@ function autoPopulateOutputs(
 	if (!existsSync(spec)) return
 	const raw = readFileSync(spec, "utf8")
 	const { data, content } = matter(raw)
-	const existing = new Set<string>(((data.outputs as string[]) || []).map((o) => o))
+	const existing = new Set<string>(
+		((data.outputs as string[]) || []).map((o) => o),
+	)
 	const unitBase = unit.replace(/\.md$/, "")
 	const bookkeeping = new Set<string>([
 		`stages/${stage}/units/${unitBase}.md`,
 		`stages/${stage}/state.json`,
 		`stages/${stage}/iteration.json`,
-		`.integrity.json`,
+		".integrity.json",
 	])
-	const bookkeepingPrefixes = [
-		`stages/${stage}/feedback/`,
-		`state/`,
-	]
+	const bookkeepingPrefixes = [`stages/${stage}/feedback/`, "state/"]
 	const gitMode = isGitRepo()
 	const intentPrefix = `.haiku/intents/${slug}/`
 	const toAdd: string[] = []
@@ -2185,9 +2187,7 @@ export function getStageIterationCount(
 }
 
 /** Read the iterations array with a migration fallback from `visits: N`. */
-function readIterations(
-	stageState: Record<string, unknown>,
-): StageIteration[] {
+function readIterations(stageState: Record<string, unknown>): StageIteration[] {
 	const arr = stageState.iterations as StageIteration[] | undefined
 	if (Array.isArray(arr)) return arr.slice()
 	const legacyVisits = (stageState.visits as number) || 0
@@ -3140,8 +3140,7 @@ export function updateFeedbackFile(
 	if (fields.status === undefined && fields.closed_by === undefined) {
 		return {
 			ok: false,
-			error:
-				"Error: at least one of 'status' or 'closed_by' must be provided",
+			error: "Error: at least one of 'status' or 'closed_by' must be provided",
 		}
 	}
 
@@ -3182,7 +3181,7 @@ export function updateFeedbackFile(
 	}
 	if (fields.closed_by !== undefined) {
 		if (fields.closed_by === null) {
-			delete newData.closed_by
+			newData.closed_by = undefined
 		} else {
 			newData.closed_by = fields.closed_by
 		}
@@ -3955,10 +3954,7 @@ export function handleStateTool(
 
 			// Re-enforce if findUnitFile resolved to a different stage (rare but
 			// possible for cross-stage go-backs); idempotent when already aligned.
-			const advBranchErr = enforceStageBranch(
-				args.intent as string,
-				advStage,
-			)
+			const advBranchErr = enforceStageBranch(args.intent as string, advStage)
 			if (advBranchErr) return advBranchErr
 
 			const unitRaw = readFileSync(advPath, "utf8")
@@ -4016,11 +4012,7 @@ export function handleStateTool(
 				}
 				const missing = unitOutputs.filter(
 					(o) =>
-						!unitOutputExists(
-							args.intent as string,
-							args.unit as string,
-							o,
-						),
+						!unitOutputExists(args.intent as string, args.unit as string, o),
 				)
 				if (missing.length > 0) {
 					const sf = args.state_file as string | undefined
@@ -4351,10 +4343,7 @@ export function handleStateTool(
 					})
 					writeResultFile(resultPath, payload)
 					return text(
-						`FSM Result written to: ${resultPath}\n\n` +
-							`YOUR FINAL MESSAGE TO THE PARENT MUST BE EXACTLY ONE LINE:\n\n` +
-							`FSM Result: ${resultPath}\n\n` +
-							`Do NOT add prose, summary, or description. The parent reads the file to drive the next FSM action (phase/stage/intent transition).`,
+						`FSM Result written to: ${resultPath}\n\nYOUR FINAL MESSAGE TO THE PARENT MUST BE EXACTLY ONE LINE:\n\nFSM Result: ${resultPath}\n\nDo NOT add prose, summary, or description. The parent reads the file to drive the next FSM action (phase/stage/intent transition).`,
 					)
 				}
 
@@ -4431,9 +4420,7 @@ export function handleStateTool(
 			// Clean scope — reset the reject-attempts counter.
 			{
 				const { data: advFm } = parseFrontmatter(readFileSync(advPath, "utf8"))
-				if (
-					(((advFm.scope_reject_attempts as number) ?? 0) as number) > 0
-				) {
+				if ((((advFm.scope_reject_attempts as number) ?? 0) as number) > 0) {
 					setFrontmatterField(advPath, "scope_reject_attempts", 0)
 				}
 			}
@@ -4484,10 +4471,7 @@ export function handleStateTool(
 				})
 				writeResultFile(resultPath, payload)
 				return text(
-					`FSM Result written to: ${resultPath}\n\n` +
-						`YOUR FINAL MESSAGE TO THE PARENT MUST BE EXACTLY ONE LINE:\n\n` +
-						`FSM Result: ${resultPath}\n\n` +
-						`Do NOT add prose, summary, or description. The parent reads the file to drive the next FSM action.`,
+					`FSM Result written to: ${resultPath}\n\nYOUR FINAL MESSAGE TO THE PARENT MUST BE EXACTLY ONE LINE:\n\nFSM Result: ${resultPath}\n\nDo NOT add prose, summary, or description. The parent reads the file to drive the next FSM action.`,
 				)
 			}
 
@@ -4618,9 +4602,7 @@ export function handleStateTool(
 				const { data: cleanFm } = parseFrontmatter(
 					readFileSync(failPath, "utf8"),
 				)
-				if (
-					(((cleanFm.scope_reject_attempts as number) ?? 0) as number) > 0
-				) {
+				if ((((cleanFm.scope_reject_attempts as number) ?? 0) as number) > 0) {
 					setFrontmatterField(failPath, "scope_reject_attempts", 0)
 				}
 			}
@@ -4711,10 +4693,7 @@ export function handleStateTool(
 					_push_warning: pushWarning(rejectGit) || undefined,
 				})
 				return text(
-					`FSM Result written to: ${resultPath}\n\n` +
-						`YOUR FINAL MESSAGE TO THE PARENT MUST BE EXACTLY ONE LINE:\n\n` +
-						`FSM Result: ${resultPath}\n\n` +
-						`Do NOT add prose or summary. Parent reads the file to drive the rebolt.`,
+					`FSM Result written to: ${resultPath}\n\nYOUR FINAL MESSAGE TO THE PARENT MUST BE EXACTLY ONE LINE:\n\nFSM Result: ${resultPath}\n\nDo NOT add prose or summary. Parent reads the file to drive the rebolt.`,
 				)
 			}
 		}

@@ -134,40 +134,125 @@ export function readReviewAgentPaths(
 export function filterReviewAgentsByScope(
 	agentPaths: Record<string, string>,
 	stageArtifactsDir: string,
+	/** Optional: studio + stage, used when artifacts don't exist yet (pre-execute
+	 *  review). Lets the filter consult declared output templates instead of
+	 *  falling back to "include everything." */
+	studioStage?: { studio: string; stage: string },
 ): Record<string, string> {
 	const filtered: Record<string, string> = {}
 	let stageFiles: string[] | null = null // lazily loaded
+	let outputExts: string[] | null = null // lazily loaded
 	for (const [name, mandatePath] of Object.entries(agentPaths)) {
 		if (!applies(mandatePath)) continue
 		filtered[name] = mandatePath
 	}
 	return filtered
 
-	function applies(mandatePath: string): boolean {
-		let appliesTo: string[] | undefined
+	function readAppliesTo(mandatePath: string): string[] | undefined {
 		try {
 			const raw = readFileSync(mandatePath, "utf8")
 			const { data } = parseFrontmatter(raw)
 			const v = data.applies_to
-			if (Array.isArray(v) && v.every((x) => typeof x === "string")) {
-				appliesTo = v as string[]
+			if (v !== undefined && v !== null) {
+				if (Array.isArray(v) && v.every((x) => typeof x === "string")) {
+					return v as string[]
+				}
+				// Malformed — warn so typos like `applyes_to:` surface rather
+				// than silently producing a fall-through "always include."
+				console.warn(
+					`[haiku] review-agent ${mandatePath}: \`applies_to:\` is present but not a string[]; treating as unscoped (always runs). Fix the frontmatter to scope the agent.`,
+				)
 			}
 		} catch {
-			return true // defensive: can't parse → include
+			/* defensive: can't parse → treat as unscoped */
 		}
-		if (!appliesTo || appliesTo.length === 0) return true
-		if (stageFiles === null) {
-			stageFiles = existsSync(stageArtifactsDir)
-				? readdirSync(stageArtifactsDir)
-				: []
-		}
-		if (stageFiles.length === 0) return true // pre-artifact phase; don't filter
-		for (const pattern of appliesTo) {
-			const ext = pattern.replace(/^\*/, "").toLowerCase()
-			if (stageFiles.some((f) => f.toLowerCase().endsWith(ext))) return true
-		}
-		return false
+		return undefined
 	}
+
+	function getStageFiles(): string[] {
+		if (stageFiles === null) {
+			stageFiles = walkDirExtensions(stageArtifactsDir)
+		}
+		return stageFiles
+	}
+
+	function getOutputExts(): string[] {
+		if (outputExts === null) {
+			outputExts = []
+			if (studioStage) {
+				for (const def of readStageArtifactDefs(
+					studioStage.studio,
+					studioStage.stage,
+				)) {
+					if (def.kind !== "output") continue
+					const loc = def.location || ""
+					// Extract extension from location template (e.g.
+					// ".../stages/design/artifacts/DESIGN-BRIEF.md" → ".md";
+					// ".../stages/design/artifacts/{foo}.html" → ".html"). Strip
+					// placeholder segments so templates with `{}` markers still
+					// resolve an extension.
+					const cleaned = loc.replace(/\{[^}]+\}/g, "").toLowerCase()
+					const m = cleaned.match(/\.[a-z0-9]+$/)
+					if (m) outputExts.push(m[0])
+				}
+			}
+		}
+		return outputExts
+	}
+
+	function applies(mandatePath: string): boolean {
+		const appliesTo = readAppliesTo(mandatePath)
+		if (!appliesTo || appliesTo.length === 0) return true
+		const files = getStageFiles()
+		// Prefer filesystem evidence when the stage has actually produced
+		// artifacts (post-execute review path).
+		if (files.length > 0) {
+			for (const pattern of appliesTo) {
+				const ext = pattern.replace(/^\*/, "").toLowerCase()
+				if (files.some((f) => f.toLowerCase().endsWith(ext))) return true
+			}
+			return false
+		}
+		// Pre-execute review: artifacts don't exist yet. Consult the stage's
+		// DECLARED output templates so the applies_to: filter isn't silently
+		// defeated (e.g. a web a11y agent must not run on a stage whose
+		// outputs are all .md specs).
+		const declaredExts = getOutputExts()
+		if (declaredExts.length > 0) {
+			for (const pattern of appliesTo) {
+				const ext = pattern.replace(/^\*/, "").toLowerCase()
+				if (declaredExts.some((e) => e === ext)) return true
+			}
+			return false
+		}
+		// No artifacts AND no declared outputs — can't decide; include by
+		// default. This path fires only for misconfigured stages without
+		// any `outputs/*.md` definitions.
+		return true
+	}
+}
+
+/** Recursively collect every file path under `dir`, returning the filenames
+ *  (not full paths). Used by the review-agent scope filter so artifacts in
+ *  subdirectories (`artifacts/wireframes/home.html`) still match extension
+ *  globs. Non-fatal on missing dir. */
+function walkDirExtensions(dir: string): string[] {
+	if (!existsSync(dir)) return []
+	const out: string[] = []
+	const stack: string[] = [dir]
+	while (stack.length > 0) {
+		const current = stack.pop() as string
+		try {
+			const entries = readdirSync(current, { withFileTypes: true })
+			for (const e of entries) {
+				const name = String(e.name)
+				const p = join(current, name)
+				if (e.isDirectory()) stack.push(p)
+				else out.push(name)
+			}
+		} catch {}
+	}
+	return out
 }
 
 /** Read discovery and output artifact definitions for a stage */

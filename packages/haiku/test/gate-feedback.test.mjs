@@ -2,6 +2,7 @@
 // Test suite for gate-phase feedback check and haiku_revisit reasons extension
 // Covers auto-revisit.feature and revisit-with-reasons.feature scenarios
 
+import assert from "node:assert"
 import {
 	chmodSync,
 	existsSync,
@@ -14,7 +15,6 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import assert from "node:assert"
 
 import {
 	handleOrchestratorTool,
@@ -175,7 +175,7 @@ function createFeedbackFile(intentDirPath, slug, stage, title, opts = {}) {
 		: []
 	const maxNum = existingFiles.reduce((max, f) => {
 		const match = f.match(/^(\d+)-/)
-		return match ? Math.max(max, parseInt(match[1], 10)) : max
+		return match ? Math.max(max, Number.parseInt(match[1], 10)) : max
 	}, 0)
 	const num = maxNum + 1
 	const nn = String(num).padStart(2, "0")
@@ -219,7 +219,9 @@ try {
 	// Gate-phase feedback check (auto-revisit.feature)
 	// =========================================================================
 
-	console.log("\n=== Gate-phase feedback check: pending feedback triggers rollback ===")
+	console.log(
+		"\n=== Gate-phase feedback check: pending feedback triggers rollback ===",
+	)
 
 	test("gate handler rolls to elaborate when pending feedback exists", () => {
 		const { projDir, intentDirPath, slug } = createProject("gate-fb-1", {
@@ -245,13 +247,20 @@ try {
 	})
 
 	test("gate handler proceeds normally when no pending feedback exists", () => {
-		const { projDir, intentDirPath, slug } = createProject("gate-fb-no-pending", {
-			active_stage: "plan",
-			stageConfig: { plan: { review: "auto" } },
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"gate-fb-no-pending",
+			{
+				active_stage: "plan",
+				stageConfig: { plan: { review: "auto" } },
+			},
+		)
 		createStageState(intentDirPath, "plan", { phase: "gate" })
-		createFeedbackFile(intentDirPath, slug, "plan", "Old finding", { status: "closed" })
-		createFeedbackFile(intentDirPath, slug, "plan", "Another finding", { status: "addressed" })
+		createFeedbackFile(intentDirPath, slug, "plan", "Old finding", {
+			status: "closed",
+		})
+		createFeedbackFile(intentDirPath, slug, "plan", "Another finding", {
+			status: "addressed",
+		})
 
 		process.chdir(projDir)
 		const result = runNext(slug)
@@ -269,9 +278,15 @@ try {
 			stageConfig: { plan: { review: "auto" } },
 		})
 		createStageState(intentDirPath, "plan", { phase: "gate" })
-		createFeedbackFile(intentDirPath, slug, "plan", "Finding A", { status: "addressed" })
-		createFeedbackFile(intentDirPath, slug, "plan", "Finding B", { status: "rejected" })
-		createFeedbackFile(intentDirPath, slug, "plan", "Finding C", { status: "closed" })
+		createFeedbackFile(intentDirPath, slug, "plan", "Finding A", {
+			status: "addressed",
+		})
+		createFeedbackFile(intentDirPath, slug, "plan", "Finding B", {
+			status: "rejected",
+		})
+		createFeedbackFile(intentDirPath, slug, "plan", "Finding C", {
+			status: "closed",
+		})
 
 		process.chdir(projDir)
 		const result = runNext(slug)
@@ -288,9 +303,15 @@ try {
 			stageConfig: { plan: { review: "auto" } },
 		})
 		createStageState(intentDirPath, "plan", { phase: "gate" })
-		createFeedbackFile(intentDirPath, slug, "plan", "Resolved", { status: "closed" })
-		createFeedbackFile(intentDirPath, slug, "plan", "Addressed", { status: "addressed" })
-		createFeedbackFile(intentDirPath, slug, "plan", "Still open", { status: "pending" })
+		createFeedbackFile(intentDirPath, slug, "plan", "Resolved", {
+			status: "closed",
+		})
+		createFeedbackFile(intentDirPath, slug, "plan", "Addressed", {
+			status: "addressed",
+		})
+		createFeedbackFile(intentDirPath, slug, "plan", "Still open", {
+			status: "pending",
+		})
 
 		process.chdir(projDir)
 		const result = runNext(slug)
@@ -409,10 +430,13 @@ try {
 	})
 
 	test("feedback items include summary info in pending_items", () => {
-		const { projDir, intentDirPath, slug } = createProject("gate-fb-summaries", {
-			active_stage: "plan",
-			stageConfig: { plan: { review: "auto" } },
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"gate-fb-summaries",
+			{
+				active_stage: "plan",
+				stageConfig: { plan: { review: "auto" } },
+			},
+		)
 		createStageState(intentDirPath, "plan", { phase: "gate" })
 		createFeedbackFile(intentDirPath, slug, "plan", "Security issue", {
 			origin: "adversarial-review",
@@ -443,9 +467,12 @@ try {
 	console.log("\n=== haiku_revisit: stopgap without reasons ===")
 
 	await test("revisit without reasons returns stopgap", async () => {
-		const { projDir, intentDirPath, slug } = createProject("revisit-no-reasons", {
-			active_stage: "plan",
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"revisit-no-reasons",
+			{
+				active_stage: "plan",
+			},
+		)
 		createStageState(intentDirPath, "plan", { phase: "execute" })
 		process.chdir(projDir)
 
@@ -463,9 +490,12 @@ try {
 	})
 
 	await test("revisit with intent and stage but no reasons returns stopgap", async () => {
-		const { projDir, intentDirPath, slug } = createProject("revisit-stage-no-reasons", {
-			active_stage: "plan",
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"revisit-stage-no-reasons",
+			{
+				active_stage: "plan",
+			},
+		)
 		createStageState(intentDirPath, "plan", { phase: "execute" })
 		process.chdir(projDir)
 
@@ -543,9 +573,12 @@ try {
 	console.log("\n=== haiku_revisit: reasons create feedback and roll back ===")
 
 	await test("single reason creates feedback and rolls back", async () => {
-		const { projDir, intentDirPath, slug } = createProject("revisit-single-reason", {
-			active_stage: "plan",
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"revisit-single-reason",
+			{
+				active_stage: "plan",
+			},
+		)
 		createStageState(intentDirPath, "plan", { phase: "execute" })
 		process.chdir(projDir)
 
@@ -559,7 +592,10 @@ try {
 			],
 		})
 
-		assert.ok(!result.isError, `Expected success, got: ${result.content[0].text}`)
+		assert.ok(
+			!result.isError,
+			`Expected success, got: ${result.content[0].text}`,
+		)
 		const parsed = JSON.parse(result.content[0].text)
 		assert.strictEqual(parsed.action, "revisit")
 		assert.strictEqual(parsed.to_phase, "elaborate")
@@ -590,9 +626,12 @@ try {
 	})
 
 	await test("multiple reasons create multiple feedback files", async () => {
-		const { projDir, intentDirPath, slug } = createProject("revisit-multi-reason", {
-			active_stage: "plan",
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"revisit-multi-reason",
+			{
+				active_stage: "plan",
+			},
+		)
 		createStageState(intentDirPath, "plan", { phase: "execute" })
 		process.chdir(projDir)
 
@@ -600,7 +639,10 @@ try {
 			intent: slug,
 			reasons: [
 				{ title: "Null check missing", body: "Parser line 42" },
-				{ title: "Race condition", body: "Worker pool starves under concurrency" },
+				{
+					title: "Race condition",
+					body: "Worker pool starves under concurrency",
+				},
 			],
 		})
 
@@ -618,13 +660,20 @@ try {
 	})
 
 	await test("reasons-created feedback has sequential numbering after existing files", async () => {
-		const { projDir, intentDirPath, slug } = createProject("revisit-sequential", {
-			active_stage: "plan",
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"revisit-sequential",
+			{
+				active_stage: "plan",
+			},
+		)
 		createStageState(intentDirPath, "plan", { phase: "execute" })
 		// Create pre-existing feedback
-		createFeedbackFile(intentDirPath, slug, "plan", "Prior finding A", { status: "addressed" })
-		createFeedbackFile(intentDirPath, slug, "plan", "Prior finding B", { status: "addressed" })
+		createFeedbackFile(intentDirPath, slug, "plan", "Prior finding A", {
+			status: "addressed",
+		})
+		createFeedbackFile(intentDirPath, slug, "plan", "Prior finding B", {
+			status: "addressed",
+		})
 
 		process.chdir(projDir)
 
@@ -639,15 +688,20 @@ try {
 	})
 
 	await test("revisit with reasons increments visits from existing value", async () => {
-		const { projDir, intentDirPath, slug } = createProject("revisit-visits-incr", {
-			active_stage: "plan",
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"revisit-visits-incr",
+			{
+				active_stage: "plan",
+			},
+		)
 		createStageState(intentDirPath, "plan", { phase: "execute", visits: 2 })
 		process.chdir(projDir)
 
 		const result = await handleOrchestratorTool("haiku_revisit", {
 			intent: slug,
-			reasons: [{ title: "Recurring issue", body: "Still broken after two revisits" }],
+			reasons: [
+				{ title: "Recurring issue", body: "Still broken after two revisits" },
+			],
 		})
 
 		assert.ok(!result.isError)
@@ -675,7 +729,10 @@ try {
 		})
 
 		assert.ok(!result.isError)
-		assert.ok(existsSync(feedbackDirPath), "feedback dir should have been created")
+		assert.ok(
+			existsSync(feedbackDirPath),
+			"feedback dir should have been created",
+		)
 		const files = readdirSync(feedbackDirPath).filter((f) => f.endsWith(".md"))
 		assert.strictEqual(files.length, 1)
 	})
@@ -685,7 +742,10 @@ try {
 	test("haiku_revisit tool has reasons parameter in schema", () => {
 		const tool = orchestratorToolDefs.find((t) => t.name === "haiku_revisit")
 		assert.ok(tool)
-		assert.ok(tool.inputSchema.properties.reasons, "reasons property should exist")
+		assert.ok(
+			tool.inputSchema.properties.reasons,
+			"reasons property should exist",
+		)
 		assert.strictEqual(tool.inputSchema.properties.reasons.type, "array")
 		assert.ok(tool.inputSchema.properties.reasons.items)
 		assert.ok(tool.inputSchema.properties.reasons.items.properties.title)
@@ -712,10 +772,13 @@ try {
 	console.log("\n=== Integration: revisit feedback blocks gate ===")
 
 	await test("reasons-created feedback blocks gate on next cycle", async () => {
-		const { projDir, intentDirPath, slug } = createProject("revisit-then-gate", {
-			active_stage: "plan",
-			stageConfig: { plan: { review: "auto" } },
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"revisit-then-gate",
+			{
+				active_stage: "plan",
+				stageConfig: { plan: { review: "auto" } },
+			},
+		)
 		createStageState(intentDirPath, "plan", { phase: "execute" })
 		process.chdir(projDir)
 
@@ -750,10 +813,13 @@ try {
 	})
 
 	await test("addressed revisit feedback does not block gate", async () => {
-		const { projDir, intentDirPath, slug } = createProject("revisit-addressed", {
-			active_stage: "plan",
-			stageConfig: { plan: { review: "auto" } },
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"revisit-addressed",
+			{
+				active_stage: "plan",
+				stageConfig: { plan: { review: "auto" } },
+			},
+		)
 		createStageState(intentDirPath, "plan", { phase: "execute" })
 		process.chdir(projDir)
 
@@ -824,7 +890,9 @@ try {
 		// and revisit flow to work downstream. Dropping any of these would
 		// break the review page or the per-item reject/close flow.
 		for (const item of result.pending_items) {
-			assert.ok(typeof item.feedback_id === "string" && item.feedback_id.length > 0)
+			assert.ok(
+				typeof item.feedback_id === "string" && item.feedback_id.length > 0,
+			)
 			assert.ok(typeof item.title === "string" && item.title.length > 0)
 			assert.ok(typeof item.status === "string")
 			assert.ok(typeof item.origin === "string")

@@ -24,6 +24,8 @@ outputs:
   - stages/design/artifacts/comment-to-feedback-flow.html
   - stages/design/artifacts/feedback-inline-desktop.html
   - stages/design/artifacts/feedback-inline-mobile.html
+  - stages/design/artifacts/feedback-card-states.html
+  - stages/design/artifacts/state-signaling-inventory.html
 quality_gates:
   - >-
     FeedbackStatusBadge text shade is consistent across DESIGN-BRIEF §2 and
@@ -60,9 +62,9 @@ quality_gates:
     duplicating component specs.
 status: active
 bolt: 3
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T01:54:22Z'
-hat_started_at: '2026-04-20T02:35:58Z'
+hat_started_at: '2026-04-20T02:43:00Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:22Z'
@@ -94,6 +96,10 @@ iterations:
     reason: "FB-40 still-pending: DESIGN-BRIEF §6 Contrast Ratios table (lines 734-740) still lists amber-700/blue-700/green-700 (with 4.9/5.1/4.5 ratios) and stone-700 on stone-200 8.3:1 for Rejected — contradicts §2 FeedbackStatusBadge table and DESIGN-TOKENS §2.1 which canonicalize amber-800/blue-800/green-800 and stone-500 on stone-100. FB-40 explicitly required §6 to be swept to -800 to reconcile. FB-45 still-pending: DESIGN-BRIEF §2, DESIGN-TOKENS §2.2, and aria-landmark-spec §6 agree on \U0001F50D/\U0001F517/✎/\U0001F4AC/\U0001F916, but state-signaling-inventory.html (cited by DESIGN-BRIEF §2 line 276 as the canonical rendered matrix) still renders the forbidden \U0001F6E1/\U0001F500/\U0001F441/✨ set across ~16 occurrences. FB-45 required grep -rE '\U0001F6E1|\U0001F500|✨' stages/design/ = 0. FB-41 and FB-43 are closed."
   - hat: designer
     started_at: '2026-04-20T02:35:58Z'
+    completed_at: '2026-04-20T02:43:00Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T02:43:00Z'
     completed_at: null
     result: null
 ---

@@ -4,7 +4,10 @@ import type { ParsedFlow } from "./parser"
 
 let elkInstance: InstanceType<typeof ELK> | null = null
 function getElk(): InstanceType<typeof ELK> {
-	return (elkInstance ??= new ELK())
+	if (elkInstance === null) {
+		elkInstance = new ELK()
+	}
+	return elkInstance
 }
 
 const NODE_MIN_WIDTH = 180

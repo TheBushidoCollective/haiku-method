@@ -157,7 +157,7 @@ export function QuestionPage({ session, sessionId, wsRef }: Props) {
 												</p>
 												<img
 													src={imageUrls[refIdx]}
-													alt={`Reference image ${pairIdx + 1}`}
+													alt={`Reference `}
 													className="w-full rounded-lg border border-stone-200 dark:border-stone-700"
 												/>
 											</div>
@@ -168,7 +168,7 @@ export function QuestionPage({ session, sessionId, wsRef }: Props) {
 													</p>
 													<img
 														src={imageUrls[builtIdx]}
-														alt={`Built output image ${pairIdx + 1}`}
+														alt={`Built output `}
 														className="w-full rounded-lg border border-stone-200 dark:border-stone-700"
 													/>
 												</div>
@@ -181,7 +181,7 @@ export function QuestionPage({ session, sessionId, wsRef }: Props) {
 								<div key={i} className="mb-4">
 									<img
 										src={url}
-										alt={`Image ${i + 1}`}
+										alt={`Item `}
 										className="w-full rounded-lg border border-stone-200 dark:border-stone-700"
 									/>
 								</div>

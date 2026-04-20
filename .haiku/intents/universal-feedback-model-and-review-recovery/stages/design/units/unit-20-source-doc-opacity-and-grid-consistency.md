@@ -63,7 +63,7 @@ quality_gates:
     inline "see state-coverage-grid.md §X" pointers on each component spec — so
     a design-reviewer walking §2 top-to-bottom can find the corresponding state
     grid for every component without searching.
-status: active
+status: completed
 bolt: 2
 hat: designer
 started_at: '2026-04-20T05:08:33Z'
@@ -101,6 +101,7 @@ iterations:
     started_at: '2026-04-20T08:51:46Z'
     completed_at: null
     result: null
+completed_at: '2026-04-20T09:21:29Z'
 ---
 # Source-doc consistency — §7 CSS strip + state-coverage completeness
 

@@ -2,7 +2,7 @@
 title: >-
   feedback-inline-desktop.html cards lack role=list/listitem — mobile has it —
   1.3.1 inconsistency
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T17:53:13Z'
 iteration: 5
 visit: 5
 source_ref: null
-closed_by: null
+closed_by: unit-31-feedback-list-semantics-parity
 bolt: 0
 upstream_stage: null
 ---

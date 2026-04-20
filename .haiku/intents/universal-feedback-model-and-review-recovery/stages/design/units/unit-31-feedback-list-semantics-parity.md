@@ -46,7 +46,7 @@ quality_gates:
     command: >-
       grep -iE 'role="list"|<ul|list semantics|listitem'
       .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/aria-landmark-spec.md
-status: active
+status: completed
 bolt: 1
 hat: feedback-assessor
 started_at: '2026-04-20T19:39:06Z'
@@ -62,8 +62,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T19:48:29Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T19:50:23Z'
+    result: advance
+completed_at: '2026-04-20T19:50:23Z'
 ---
 # feedback list-semantics desktop/mobile parity
 
@@ -135,10 +136,10 @@ require list inside).
 
 ## Completion criteria
 
-- [ ] feedback-inline-desktop.html cards wrapped in `<ul>` / `<li>`
-- [ ] feedback-card-states.html cards wrapped in `<ul>` / `<li>`
-- [ ] focus-order-spec.md §1 rows note list structure
-- [ ] aria-landmark-spec.md §2 adds list-inside-aside row
-- [ ] List-semantics grep added to feedback-assessor gate
-- [ ] No visual regression on desktop card layout
-- [ ] FB-148 closes on live-grep verification
+- [x] feedback-inline-desktop.html cards wrapped in `<ul>` / `<li>`
+- [x] feedback-card-states.html cards wrapped in `<ul>` / `<li>`
+- [x] focus-order-spec.md §1 rows note list structure
+- [x] aria-landmark-spec.md §2 adds list-inside-aside row
+- [x] List-semantics grep added to feedback-assessor gate
+- [x] No visual regression on desktop card layout
+- [x] FB-148 closes on live-grep verification

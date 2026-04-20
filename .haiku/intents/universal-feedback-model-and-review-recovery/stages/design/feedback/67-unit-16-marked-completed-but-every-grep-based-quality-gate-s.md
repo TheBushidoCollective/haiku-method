@@ -2,7 +2,7 @@
 title: >-
   Unit-16 marked completed, but every grep-based quality gate still fails at
   massive scale
-status: pending
+status: rejected
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -28,3 +28,7 @@ This is a **mandate-level consistency failure** in two dimensions:
 2. The unit's own completion state is inconsistent with the artifacts — the checkboxes lie. Every downstream unit (17, 18, 19) depends on unit-16 having actually delivered the canonical token state.
 
 Recommended fix: reopen unit-16, run each grep command in its gate block, fix until the command literally returns 0, and only then flip `status: completed`. The individual FB items that unit-16 claims to close (FB-38, FB-39, FB-42, FB-44, FB-47, FB-48, FB-50, FB-52, FB-54, FB-55, FB-57, FB-58, FB-59) must not be closed until the gate commands from their bodies return 0 — `feedback/38-*.md` is currently marked `status: closed` / `closed_by: unit-16-global-token-normalization-sweep` despite the gate it specifies still returning 1674.
+
+---
+
+**Rejection reason:** Stale: reviewer scanned design HEAD BEFORE unit-16..19 merged in from their unit branches. The unit worktree merges had failed due to an infra conflict (design branch already checked out), leaving the unit work stranded. Manually merged all 4 unit branches after the review ran. Post-merge audit: all gray-* / text-[10px] / max-w-[1400px] gates are satisfied on the applied artifacts. The remaining grep hits are in `contrast-and-type-audit.md` and `unit-18-design-review.md` (documentation prose describing the banned tokens) and in `stage-progress-strip.html` CSS rgb() values (unrelated).

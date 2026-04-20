@@ -2,7 +2,7 @@
 title: >-
   Footer buttons still use banned "Reject"/"Close" verbs across desktop + mobile
   wireframes
-status: fixing
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T20:19:14Z'
 iteration: 0
 visit: 0
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-05:bolt-1'
 bolt: 1
 upstream_stage: null
 ---

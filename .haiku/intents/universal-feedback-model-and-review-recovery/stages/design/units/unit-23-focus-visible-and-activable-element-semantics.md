@@ -64,10 +64,10 @@ quality_gates:
     consistently (convert to `<a>` or `<button>`) within this unit's scope. The
     final audit count is reported in the design-reviewer's verification note.
 status: active
-bolt: 4
-hat: feedback-assessor
+bolt: 5
+hat: designer
 started_at: '2026-04-20T05:08:26Z'
-hat_started_at: '2026-04-20T09:11:10Z'
+hat_started_at: '2026-04-20T09:12:40Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:26Z'
@@ -165,6 +165,28 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T09:11:10Z'
+    completed_at: '2026-04-20T09:12:40Z'
+    result: reject
+    reason: >-
+      FB-76 and FB-82 are demonstrably closed (verified against the artifacts:
+      assessor-summary-card.html L83/123/236/259 carry the canonical
+      `focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500
+      focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900`
+      class list on all 4 interactive buttons; stage-progress-strip.html has 0
+      `role="link"` occurrences and all 10 stage-nodes are native `<a
+      href="#stage-{slug}">` anchors with proper
+      tabindex/aria-current/aria-disabled + canonical focus-visible ring;
+      focus-ring-spec.html §1b/§3/§4 codifies the native-element mandate;
+      stage-wide HTML sweep returns 0 `<div role="link">` matches). However,
+      advance_hat refused with `criteria_not_met: 9 unchecked completion
+      criteria` — same bookkeeping wall that rejected bolt 1. Bolt-2/3/4
+      designer/reviewer re-verified the artifact state but did not tick the
+      criteria in the format the FSM recognizes (likely the frontmatter
+      `quality_gates` items, not the markdown checkbox list at L161–L172).
+      Bolting back so the designer can tick the actual FSM-tracked criteria; the
+      FB-closure work and artifact state are correct and must not be redone.
+  - hat: designer
+    started_at: '2026-04-20T09:12:40Z'
     completed_at: null
     result: null
 ---

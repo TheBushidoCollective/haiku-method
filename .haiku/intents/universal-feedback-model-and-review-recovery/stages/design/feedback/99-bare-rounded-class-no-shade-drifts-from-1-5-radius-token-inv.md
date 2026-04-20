@@ -2,7 +2,7 @@
 title: >-
   Bare `rounded` class (no shade) drifts from §1.5 radius token inventory —
   inconsistent card/button corner radii
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:28:30Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: null
+closed_by: unit-28-canonical-token-normalization-sweep
 ---
 
 DESIGN-TOKENS.md §1.5 "Border & Radius Tokens" enumerates every valid radius token: `rounded-xl` (cards, modal overlay), `rounded-full` (badges, pins, progress track), `rounded-lg` (buttons primary, inputs/textareas full, tooltips, image embeds), `rounded-md` (buttons secondary, inputs compact). **Bare `rounded` (no shade — Tailwind's default 0.25rem / equivalent to `rounded-sm`) is not in the inventory.**

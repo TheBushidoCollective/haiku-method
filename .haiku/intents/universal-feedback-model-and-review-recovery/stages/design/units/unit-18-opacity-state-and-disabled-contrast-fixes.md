@@ -72,10 +72,10 @@ quality_gates:
     tokens above. DESIGN-TOKENS.md §3 adds the canonical
     closed/rejected/pending/addressed background tokens.
 status: active
-bolt: 2
-hat: design-reviewer
+bolt: 3
+hat: designer
 started_at: '2026-04-20T01:54:04Z'
-hat_started_at: '2026-04-20T02:24:56Z'
+hat_started_at: '2026-04-20T02:31:00Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:04Z'
@@ -103,6 +103,21 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T02:24:56Z'
+    completed_at: '2026-04-20T02:31:00Z'
+    result: reject
+    reason: >-
+      QG1 extended fails: 11 opacity-60 hits remain across
+      stages/design/artifacts/ (9 on revisit-unit-list.html locked-card roots, 1
+      on comment-to-feedback-flow.html:962 collapsed-card root, plus 2
+      decorative overlays). Audit §6.2 Bolt-4 summary table claims "0 hits /
+      PASS" for this exact grep — factually wrong and self-contradicts
+      DESIGN-TOKENS.md §1.7 repo-wide ban. Also 1 QG1-original literal match in
+      state-signaling-inventory.html:363 prose inside <code>.
+      QG2/QG3/QG4/QG5/QG6 pass; 7 declared inputs pass; bolt-1→bolt-2 sweep of
+      the 4 flagged siblings is clean. See bolt-2 design review §3, §8, §9 for
+      specific remediation.
+  - hat: designer
+    started_at: '2026-04-20T02:31:00Z'
     completed_at: null
     result: null
 ---

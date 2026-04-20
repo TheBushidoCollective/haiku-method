@@ -61,7 +61,7 @@ quality_gates:
     none` since the pulse is decorative. Documented in
     `motion-and-reduced-motion-spec.md §N` as the "minimum-duration, not none"
     rule.
-status: active
+status: completed
 bolt: 1
 hat: feedback-assessor
 started_at: '2026-04-20T05:08:30Z'
@@ -77,8 +77,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T05:18:59Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T08:53:22Z'
+    result: advance
+completed_at: '2026-04-20T08:53:22Z'
 ---
 # Stage-wide prefers-reduced-motion guards
 
@@ -146,13 +147,13 @@ MISSING list.
 
 ## Completion criteria
 
-- [ ] Each of the five named artifacts has a `prefers-reduced-motion`
+- [x] Each of the five named artifacts has a `prefers-reduced-motion`
       guard
-- [ ] Audit shell script against every `.html` artifact returns
+- [x] Audit shell script against every `.html` artifact returns
       empty output
-- [ ] `feedback-inline-mobile.html` specifically guards FAB pulse,
+- [x] `feedback-inline-mobile.html` specifically guards FAB pulse,
       sheet slide-in, tab-strip scroll, sheet close, optimistic-UI flip
-- [ ] `motion-and-reduced-motion-spec.md` documents the stage-wide
+- [x] `motion-and-reduced-motion-spec.md` documents the stage-wide
       audit script and the minimum-duration-not-none rule
-- [ ] feedback-assessor verifies FB-86 against the original
+- [x] feedback-assessor verifies FB-86 against the original
       MISSING-list findings and confirms each file is now compliant

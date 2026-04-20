@@ -2,7 +2,7 @@
 title: >-
   Multiple artifacts use animation/transition without prefers-reduced-motion
   guard — vestibular WCAG 2.3.3
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T03:01:02Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-25-stagewide-reduced-motion-guards
 ---
 
 `motion-and-reduced-motion-spec.md` mandates every animation / transition be guarded by `@media (prefers-reduced-motion: reduce)`. Spot audit across the design artifacts shows five files that declare animations / transitions with no guard:

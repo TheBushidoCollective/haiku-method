@@ -320,7 +320,14 @@
             <div class="absolute inset-0 flex items-center justify-center text-gray-600">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
             </div>
-            <!-- Crosshair cursor indicator -->
+            <!-- Crosshair cursor indicator.
+                 demo-only: the `opacity-60` here simulates the visual
+                 fade of a hovering crosshair cursor ring over a mockup
+                 image — it is NOT a production class applied to any
+                 real UI component. Unit-18 bolt-3: explicitly retained
+                 with this disambiguating comment because the wholesale-
+                 opacity-on-card-root ban targets text-carrying surfaces,
+                 not decorative cursor overlays. -->
             <div class="absolute" style="left: 40%; top: 35%;">
               <div class="w-6 h-6 border-2 border-teal-400 rounded-full opacity-60"></div>
               <div class="absolute top-1/2 left-1/2 w-1 h-1 bg-teal-400 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
@@ -769,7 +776,16 @@
         <div class="space-y-3">
           <p class="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">API Error Toast</p>
           <div class="relative rounded-lg border border-gray-700 bg-gray-800/50 p-3" style="height: 200px;">
-            <!-- Simulated sidebar content -->
+            <!-- Simulated sidebar content.
+                 demo-only: `opacity-60` here is the visual mockup of the
+                 "sidebar dimmed behind an error toast" effect — the
+                 `<div>`s are empty placeholder bars (no text content),
+                 standing in for background UI that is dimmed while the
+                 toast is shown. This is NOT a production class applied
+                 to real card content. Unit-18 bolt-3: retained with
+                 this disambiguating comment; the wholesale-opacity ban
+                 targets text-carrying card roots, not demo placeholder
+                 rectangles. -->
             <div class="space-y-2 opacity-60">
               <div class="h-8 bg-gray-700/50 rounded"></div>
               <div class="h-8 bg-gray-700/50 rounded"></div>
@@ -957,10 +973,16 @@
                   </div>
                 </div>
               </div>
-              <!-- Collapsed card beneath -->
+              <!-- Collapsed card beneath.
+                   Unit-18 bolt-3: removed wholesale `opacity-60` from the
+                   card root (banned repo-wide, see DESIGN-TOKENS.md §1.7)
+                   and lifted the metadata text from `text-[9px]` to
+                   `text-xs` (unit-11 typography floor) and
+                   `text-gray-400` to `text-stone-300` (dark-mode
+                   metadata floor per contrast-and-type-audit.md §1). -->
               <div class="px-2 mt-1">
-                <div class="border-l-[3px] border-l-amber-400 p-2 rounded-lg bg-amber-950/20 border border-gray-700 opacity-60">
-                  <p class="text-[9px] text-gray-400 truncate">Header alignment off...</p>
+                <div class="border-l-[3px] border-l-amber-400 p-2 rounded-lg bg-amber-950/20 border border-gray-700">
+                  <p class="text-xs text-stone-300 truncate">Header alignment off...</p>
                 </div>
               </div>
             </div>

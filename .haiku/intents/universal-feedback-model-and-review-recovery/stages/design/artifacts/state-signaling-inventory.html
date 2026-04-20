@@ -360,7 +360,7 @@
       <li>Every card renders (1) a colored left border, (2) a shape glyph, and (3) a status badge with explicit text label.</li>
       <li>Compact (truncated) card state still shows all three signals — glyph sits before the title so it is visible even after <code>truncate</code> clips the title mid-word.</li>
       <li>Rejected state applies <code>line-through decoration-stone-500</code> only to the title span — the "Rejected ·" prefix stays upright (not struck-through) so it remains unambiguous when the title truncates mid-word.</li>
-      <li>Closed state does not use <code>opacity-70</code>; rejected state does not use <code>opacity-50</code>. Both convey "finality" through muted background (<code>bg-green-50/60</code> / <code>bg-stone-100</code>) plus the status badge label.</li>
+      <li>Closed and rejected cards never apply wholesale element opacity to the card root (banned by unit-11 / unit-18). Both convey "finality" through muted background tokens plus the status badge label with full-opacity text — see DESIGN-TOKENS.md &sect;1.7 for the ban and &sect;2.3 for the canonical muted-surface tokens.</li>
       <li>Light and dark modes both tested — contrast ratios for every text span ≥ 4.5:1 and for every border/glyph ≥ 3:1.</li>
       <li>All glyphs are <code>aria-hidden="true"</code> — screen readers announce the status via the badge's <code>aria-label="Status: …"</code> and the text prefix on the title.</li>
     </ul>

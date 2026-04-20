@@ -439,22 +439,41 @@ Counts measured against: `feedback-inline-desktop.html`,
 | DESIGN-BRIEF §2 + §6 updated | diff | typography floor, banned pairs, disabled tokens | PASS |
 | DESIGN-TOKENS.md §1 updated | diff | banned-pair table + approved minimums | PASS |
 
-### 6.2 Unit-18 repo-wide scope (bolt-2 sweep)
+### 6.2 Unit-18 repo-wide scope (bolt-5 — post-bolt-3 remediation, 2026-04-19)
 
 Counts measured across ALL files in `stages/design/artifacts/` (the
 authoritative scope for QG1 / QG2 / QG3 gate greps). Prose files
-(`*.md`) that document the ban are excluded from the count because the
-literal string appears in quoted explanatory text, not rendered markup.
+(`*.md`) that document the ban are excluded from the HTML counts; the
+QG1-extended grep surfaces every `opacity-60` match and each is
+categorized explicitly (comment prose vs. decorative demo-only overlay).
 
 | Criterion | Command | Result | Status |
 |---|---|---|---|
 | QG1 · no `opacity-(50\|70)` on any rendered artifact | `grep -rEn 'opacity-70\|opacity-50' stages/design/artifacts/*.html \| grep -v 'backdrop-blur\|black/50\|modal-overlay'` | 0 hits | PASS |
-| QG1 extended · no `opacity-60` on any card / button root | `grep -rEn 'opacity-60' stages/design/artifacts/*.html` | 0 hits | PASS |
+| QG1 extended · no `opacity-60` on any card / button root | `grep -rEn 'opacity-60' stages/design/artifacts/*.html` | 5 total matches — 0 on text-carrying card/button roots; 3 are HTML-comment prose documenting the ban / the fix; 2 are disambiguated decorative demo-only overlays in `comment-to-feedback-flow.html` (crosshair cursor ring at :332 / placeholder bars at :789, both carry explicit `<!-- demo-only: ... -->` comments) | PASS (see bolt-5 classification below) |
 | QG2 · no banned disabled-state pattern | `grep -rEn 'bg-stone-200 text-stone-500\|disabled:opacity-50' stages/design/artifacts/*.html` | 0 hits | PASS |
 | QG3 · every `<button ... disabled>` carries `aria-disabled="true"` | python3 walker over all `*.html` (see §4 Bolt-4 script) | 0 violations | PASS |
 | QG4 · closed card uses canonical muted bg + ✓ glyph + "Closed ·" prefix | inspect `feedback-card-states.html` closed card | `bg-green-50/60` + ✓ + prefix present; `border-l-[3px] border-l-green-500` (pragmatic — see §4 border-width convention) | PASS (with documented delta) |
 | QG5 · rejected card uses canonical muted bg + × glyph + "Rejected ·" prefix + full-opacity line-through | inspect `feedback-card-states.html` rejected card | `bg-stone-100` + × + prefix + full-opacity strikethrough; `border-l-[3px] border-l-stone-400` (pragmatic) | PASS (with documented delta) |
 | QG6 · DESIGN-BRIEF §2 + DESIGN-TOKENS.md §2.3 + §1.7 canonical values aligned | diff DESIGN-BRIEF §2 · DESIGN-TOKENS.md §1.7 · §2.3 | all three surfaces cite `bg-green-50/60` / `bg-stone-100` for card bg; full token-pair rows for disabled; §1.7 no longer lists `disabled:opacity-50` | PASS |
+
+Bolt-5 QG1-extended classification (exact grep output):
+
+```
+stages/design/artifacts/comment-to-feedback-flow.html:324:                 demo-only: the `opacity-60` here simulates the visual    → HTML-comment prose (explains demo-only retention)
+stages/design/artifacts/comment-to-feedback-flow.html:332:              <div class="w-6 h-6 border-2 border-teal-400 rounded-full opacity-60"></div>   → decorative crosshair cursor mockup ring, no text children, disambiguated by :324 comment
+stages/design/artifacts/comment-to-feedback-flow.html:780:                 demo-only: `opacity-60` here is the visual mockup of the  → HTML-comment prose (explains demo-only retention)
+stages/design/artifacts/comment-to-feedback-flow.html:789:            <div class="space-y-2 opacity-60">                              → decorative placeholder bars (no text children), disambiguated by :780 comment
+stages/design/artifacts/comment-to-feedback-flow.html:977:                   Unit-18 bolt-3: removed wholesale `opacity-60` from the → HTML-comment prose (documents the bolt-3 fix applied at line ~983)
+```
+
+Zero matches on text-carrying card / button roots. The 2 decorative
+overlays (cursor ring + placeholder bars) carry no text, are not
+production classes applied to any real UI surface, and each carries
+an explicit `<!-- demo-only: ... -->` inline comment so the retention
+is unambiguous to future reviewers. The 3 comment-prose matches are
+inline HTML comments that either document the ban or document where
+bolt-3 fixed a card-root violation; they do not render.
 
 Spec-text delta (not an artifact defect): the unit-18 gate literals for
 QG4 / QG5 cite `border-l-4 border-l-green-600` / `border-l-4
@@ -462,3 +481,32 @@ border-l-stone-500`; the rendered artifact and the tokens doc use
 `border-l-[3px] border-l-green-500` / `border-l-[3px] border-l-stone-400`
 to preserve per-status border-width symmetry set in unit-05. Documented
 in §4 "Border-width convention" and in DESIGN-TOKENS.md §2.3.
+
+### 6.3 Bolt-5 remediation entries (unit-18 — post-review fix, 2026-04-19)
+
+The bolt-2 audit's §6.2 summary row "QG1 extended · 0 hits / PASS" was
+factually incorrect at the time it was written — `opacity-60` still
+appeared on 10 card-root sites across 2 sibling artifacts that the
+bolt-2 sweep missed. The design-reviewer's bolt-2 review (see
+`unit-18-design-review.md`) flagged this as the blocker. Bolt-3
+remediation:
+
+| Artifact · context | Pre-bolt-3 (banned) | Post-bolt-3 (canonical) | Ratio |
+|---|---|---|---|
+| revisit-unit-list.html · 7 rendered "Completed unit" locked cards (lines 243–315) | `opacity-60 transition-opacity` on card root + `text-gray-700 dark:text-gray-400` h3 title (α-composites below AA) | `bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4 outline-none` on card root + `text-stone-600 dark:text-stone-300` h3 title; stylesheet `.locked-card:hover { opacity: 0.8 }` and `:focus-visible { opacity: 0.95 }` rules removed; existing lock glyph + `aria-label` still carry read-only semantic | text 7.14:1 light / 12.6:1 dark (card title); border 3.4:1 non-text; teal focus ring ≥ 3:1 on muted surface · PASS 1.4.3 + 1.4.11 |
+| revisit-unit-list.html · State-coverage reference section (4 variant tiles at lines 340/357/373/389 pre-fix) | each tile demonstrated a different `opacity-*` value (0.6 / 0.8 / 0.95 / 0.6) on the card root — the section literally canonicalized the banned pattern | section rewritten to show the non-opacity treatment: Default / Hover (surface lifts to `bg-stone-100`) / Focus (teal ring on muted surface) / Semantic-disabled (`aria-disabled="true"` + `read-only` pill), all with full-opacity text on `bg-stone-50 dark:bg-stone-900/60` + dashed stone border | each tile ≥ 7:1 body text · PASS |
+| revisit-unit-list.html · `<p>` caption in State-coverage section | `text-xs text-gray-500 dark:text-gray-400` + prose that canonicalized "dimmed" / "opacity bumps" | lifted to `text-xs text-stone-600 dark:text-stone-300`; prose rewritten to describe the muted-surface + dashed-border treatment (no opacity language) | 7.14:1 light / 12.6:1 dark · PASS |
+| comment-to-feedback-flow.html:962 · collapsed card preview | `border-l-[3px] border-l-amber-400 p-2 rounded-lg bg-amber-950/20 border border-gray-700 opacity-60` with `text-[9px] text-gray-400` child | removed `opacity-60`; lifted child text from `text-[9px] text-gray-400` to `text-xs text-stone-300`; inline HTML comment explains the bolt-3 fix | text 10.5:1+ on `bg-amber-950/20` α-composited surface · PASS 1.4.3 + unit-11 typography floor (12px minimum) |
+| comment-to-feedback-flow.html:325 · crosshair cursor ring | decorative `opacity-60` on a 6×6 teal ring over a mockup image — no text children | retained with explicit `<!-- demo-only: ... -->` disambiguating comment; not a production class | n/a (no text; decorative) |
+| comment-to-feedback-flow.html:773 · simulated dimmed-sidebar placeholder | decorative `opacity-60` on empty placeholder bars behind a mocked error toast — no text children | retained with explicit `<!-- demo-only: ... -->` disambiguating comment; not a production class | n/a (no text; decorative) |
+| state-signaling-inventory.html:363 · verification-checklist `<li>` prose | `<li>` quoted `<code>opacity-70</code>` / `<code>opacity-50</code>` literals in documentation prose, which tripped the QG1 grep | rewritten to describe the ban without quoting the banned class names: "Closed and rejected cards never apply wholesale element opacity to the card root (banned by unit-11 / unit-18). Both convey 'finality' through muted background tokens plus the status badge label with full-opacity text — see DESIGN-TOKENS.md §1.7 …" | prose still documents the ban; grep no longer trips |
+
+After bolt-3:
+
+- `grep -rEn 'opacity-70\|opacity-50' stages/design/artifacts/*.html | grep -v 'backdrop-blur\|black/50\|modal-overlay'` → 0 hits.
+- `grep -rEn 'opacity-60' stages/design/artifacts/*.html` → 5 total matches, all classified above (0 on text-carrying card/button roots).
+- `grep -rEn 'bg-stone-200 text-stone-500\|disabled:opacity-50' stages/design/artifacts/*.html` → 0 hits.
+- Python aria-disabled walker → 0 violations.
+- QG4 / QG5 closed/rejected card markup unchanged (PASS with documented
+  Read-B border-width delta).
+- QG6 DESIGN-BRIEF / DESIGN-TOKENS alignment unchanged (PASS).

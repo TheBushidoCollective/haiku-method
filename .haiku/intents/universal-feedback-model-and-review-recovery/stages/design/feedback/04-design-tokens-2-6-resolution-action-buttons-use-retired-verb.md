@@ -2,7 +2,7 @@
 title: >-
   DESIGN-TOKENS §2.6 resolution-action buttons use retired verbs, diverges from
   canonical footer-button matrix
-status: fixing
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T20:19:06Z'
 iteration: 0
 visit: 0
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-04:bolt-1'
 bolt: 1
 upstream_stage: null
 ---

@@ -2,7 +2,7 @@
 title: >-
   Focus-ring canonical drift: `focus:ring-*` (not `focus-visible:`) still on
   inputs, tabs, pins across ~10 artifacts
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent

@@ -2,7 +2,7 @@
 title: >-
   Unit-16 FB-38 regression: `gray-*` tokens still in stage-progress-strip.html
   (13 occurrences)
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent

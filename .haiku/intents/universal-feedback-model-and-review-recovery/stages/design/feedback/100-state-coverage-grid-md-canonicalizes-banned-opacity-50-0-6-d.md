@@ -2,7 +2,7 @@
 title: >-
   state-coverage-grid.md canonicalizes banned opacity-50/0.6 disabled state
   across 5 rows — spec contradicts ban
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:28:32Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: null
+closed_by: unit-27-spec-alignment-and-design-brief-completeness
 ---
 
 `state-coverage-grid.md` is supposed to be the canonical state-coverage reference for every interactive surface, but it canonicalizes the banned `opacity-50` / `opacity 0.6` disabled patterns across five rows. These spec contradictions directly cause the repeat violations that unit-18 has been chasing for five bolts.

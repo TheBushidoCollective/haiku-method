@@ -2,7 +2,7 @@
 title: >-
   focus-order-spec §2 mobile tablist uses tabindex=-1 but artifact doesn't
   support Arrow-key nav
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T03:00:00Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-24-live-region-wiring-and-tablist-roving-keyboard
 ---
 
 `focus-order-spec.md §2` row 4 declares: *"Tab strip (4 buttons, horizontal scroll) — tabindex: 0 on active / -1 on others. Arrow keys within."* — i.e. the standard ARIA tablist roving-tabindex pattern.

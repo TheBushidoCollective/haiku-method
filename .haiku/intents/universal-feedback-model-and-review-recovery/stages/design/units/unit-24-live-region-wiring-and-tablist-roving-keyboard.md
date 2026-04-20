@@ -70,7 +70,7 @@ quality_gates:
     tabs)". A spec-level note is added clarifying that `tabindex="-1"` WITHOUT
     an arrow-key handler is a violation, not a safe default — this prevents
     future designers from repeating the static-tabindex-only pattern.
-status: active
+status: completed
 bolt: 1
 hat: feedback-assessor
 started_at: '2026-04-20T05:08:28Z'
@@ -86,8 +86,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T05:18:08Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T08:52:16Z'
+    result: advance
+completed_at: '2026-04-20T08:52:16Z'
 ---
 # Live-region wiring + tablist roving-tabindex keyboard contract
 
@@ -155,16 +156,16 @@ Arrow-key handler count in both feedback-inline files.
 
 ## Completion criteria
 
-- [ ] `feedback-card-states.html` has the two canonical live-region
+- [x] `feedback-card-states.html` has the two canonical live-region
       elements at the bottom of `<body>`
-- [ ] Each card action button wires a demo-level three-phase
+- [x] Each card action button wires a demo-level three-phase
       announcement to the appropriate region
-- [ ] Head-of-document comment points at the two spec files
-- [ ] `feedback-inline-desktop.html` has a keyboard roving-tabindex
+- [x] Head-of-document comment points at the two spec files
+- [x] `feedback-inline-desktop.html` has a keyboard roving-tabindex
       script block for the tablist
-- [ ] `feedback-inline-mobile.html` has the same, matching the desktop
+- [x] `feedback-inline-mobile.html` has the same, matching the desktop
       contract
-- [ ] `focus-order-spec.md §10` carries the three new test items
-- [ ] `focus-order-spec.md` carries the `tabindex=-1 without arrow-key
+- [x] `focus-order-spec.md §10` carries the three new test items
+- [x] `focus-order-spec.md` carries the `tabindex=-1 without arrow-key
       handler = violation` note
-- [ ] feedback-assessor verifies FB-83 and FB-84 against their concrete claims
+- [x] feedback-assessor verifies FB-83 and FB-84 against their concrete claims

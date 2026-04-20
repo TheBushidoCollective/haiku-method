@@ -2,7 +2,7 @@
 title: >-
   aria-live sequencing spec exists but no live-region markup in
   feedback-card-states optimistic UI demo
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T02:59:39Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-24-live-region-wiring-and-tablist-roving-keyboard
 ---
 
 `aria-live-sequencing-spec.md` defines a three-phase announcement template (pending → success | failure) using the polite region for "FB-XX marking as closed…" and the assertive region for rollback errors. `aria-landmark-spec.md §1` defines the two live-region elements (`#feedback-live-polite` role=status + `#feedback-live-assertive` role=alert). These are correctly wired into `feedback-inline-desktop.html:514-515` and `feedback-inline-mobile.html`.

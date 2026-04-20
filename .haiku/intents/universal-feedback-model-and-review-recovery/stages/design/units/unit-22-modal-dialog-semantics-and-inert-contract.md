@@ -64,10 +64,10 @@ quality_gates:
     ≥ 1. unit-19's completion-criteria grep is updated to include these two
     checks so the pattern is enforced stage-wide, not only at this unit's close.
 status: active
-bolt: 2
-hat: feedback-assessor
+bolt: 3
+hat: designer
 started_at: '2026-04-20T05:08:23Z'
-hat_started_at: '2026-04-20T09:00:01Z'
+hat_started_at: '2026-04-20T09:02:07Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:23Z'
@@ -102,6 +102,26 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T09:00:01Z'
+    completed_at: '2026-04-20T09:02:07Z'
+    result: reject
+    reason: >-
+      Feedback content for FB-74 and FB-80 is demonstrably closed in the unit
+      worktree artifacts (revisit-modal-states.html: 8
+      dialog/aria-modal/aria-labelledby matches across all 4 modal shells +
+      state-matrix table; feedback-inline-mobile.html: 5 main.inert/aria-hidden
+      matches in a real <script data-feedback-sheet-controller> block;
+      aria-landmark-spec.md §3.7 authored). However, the FSM blocks advance_hat
+      with criteria_not_met (7 unchecked). Root cause: the outer intent-root
+      unit spec
+      (.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/units/unit-22-modal-dialog-semantics-and-inert-contract.md)
+      still has all 7 original completion-criteria boxes unchecked at L167–177 —
+      the prior-hat commits (designer + reviewer) updated checkboxes only on the
+      unit-worktree copy, never on the FSM-visible outer-root copy. Next bolt's
+      designer must tick the 7 outer-root checkboxes (or merge the worktree's
+      updated spec into the outer root) so the FSM can verify advancement. The
+      underlying FB-74 and FB-80 fixes are good — do not redo them.
+  - hat: designer
+    started_at: '2026-04-20T09:02:07Z'
     completed_at: null
     result: null
 ---

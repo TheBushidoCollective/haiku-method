@@ -2,7 +2,7 @@
 title: >-
   unit-31 contrast gates assert ratios (≥7:1, ≥10:1, 4.5:1) with no executable
   computation — prose-only WCAG check
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:30:03Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-31-contrast-and-type-scale-fixes.md
-closed_by: null
+closed_by: unit-31-contrast-and-type-scale-fixes
 bolt: 0
 upstream_stage: null
 ---

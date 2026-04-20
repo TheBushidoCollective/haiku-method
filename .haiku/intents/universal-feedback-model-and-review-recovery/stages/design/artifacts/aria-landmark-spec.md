@@ -230,7 +230,7 @@ Every page-level artifact **MUST** include a skip link as the first focusable el
           focus-visible:z-[100] focus-visible:px-3 focus-visible:py-2
           focus-visible:bg-teal-600 focus-visible:text-white focus-visible:rounded-md
           focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2
-          dark:focus-visible:ring-offset-gray-900">
+          dark:focus-visible:ring-offset-stone-900">
   Skip to main content
 </a>
 ```

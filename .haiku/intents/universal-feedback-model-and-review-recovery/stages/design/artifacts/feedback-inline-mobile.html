@@ -43,16 +43,16 @@
     }
   </style>
 </head>
-<body class="dark bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 min-h-screen" style="max-width: 375px; margin: 0 auto;">
+<body class="dark bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 min-h-screen" style="max-width: 375px; margin: 0 auto;">
 
   <!-- FB-30/FB-35: Skip links. First focusable elements; visually hidden until focused. Bypass header nav for keyboard users. -->
-  <a href="#main-content" class="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-[200] focus-visible:px-3 focus-visible:py-2 focus-visible:bg-teal-600 focus-visible:text-white focus-visible:rounded-md focus-visible:shadow-lg focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">Skip to main content</a>
-  <a href="#feedback-list" class="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-40 focus-visible:z-[200] focus-visible:px-3 focus-visible:py-2 focus-visible:bg-teal-600 focus-visible:text-white focus-visible:rounded-md focus-visible:shadow-lg focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">Skip to feedback list</a>
+  <a href="#main-content" class="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-[200] focus-visible:px-3 focus-visible:py-2 focus-visible:bg-teal-600 focus-visible:text-white focus-visible:rounded-md focus-visible:shadow-lg focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900">Skip to main content</a>
+  <a href="#feedback-list" class="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-40 focus-visible:z-[200] focus-visible:px-3 focus-visible:py-2 focus-visible:bg-teal-600 focus-visible:text-white focus-visible:rounded-md focus-visible:shadow-lg focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900">Skip to feedback list</a>
 
   <!-- Header -->
-  <header role="banner" class="sticky top-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
+  <header role="banner" class="sticky top-0 z-40 bg-white/80 dark:bg-stone-900/80 backdrop-blur-sm border-b border-stone-200 dark:border-stone-800">
     <div class="px-4 py-3 flex items-center justify-between">
-      <h1 class="text-base font-semibold truncate text-gray-900 dark:text-gray-100">Review: Feedback Model</h1>
+      <h1 class="text-base font-semibold truncate text-stone-900 dark:text-stone-100">Review: Feedback Model</h1>
       <!-- FB-66: icon-only theme toggle carries a dynamic aria-label reflecting the current state.
            Implementation contract: the label MUST reflect the ACTION the user would take, not the
            current theme. So if dark mode is active, aria-label="Switch to light theme"; if light
@@ -66,7 +66,7 @@
         aria-pressed="true"
         title="Switch to light theme"
         onclick="var h=document.documentElement;var nowDark=h.classList.toggle('dark');this.setAttribute('aria-pressed',String(nowDark));var nextLabel=nowDark?'Switch to light theme':'Switch to dark theme';this.setAttribute('aria-label',nextLabel);this.setAttribute('title',nextLabel);this.querySelector('[data-theme-glyph]').textContent=nowDark?'\u263E':'\u2600';"
-        class="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 touch-target flex items-center justify-center focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none"
+        class="text-xs px-2 py-1 rounded border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-400 touch-target flex items-center justify-center focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none"
       >
         <span aria-hidden="true" data-theme-glyph>&#x263E;</span>
       </button>
@@ -77,17 +77,17 @@
   <main id="main-content" role="main" class="px-4 py-4">
 
     <!-- Tabs (horizontal scroll on mobile) -->
-    <div class="sticky top-[49px] z-30 bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-700 mb-4 -mx-4 px-4 overflow-x-auto">
+    <div class="sticky top-[49px] z-30 bg-white dark:bg-stone-950 border-b border-stone-200 dark:border-stone-700 mb-4 -mx-4 px-4 overflow-x-auto">
       <div role="tablist" aria-label="Review sections" class="flex gap-1 -mb-px whitespace-nowrap">
         <button role="tab" aria-selected="true" tabindex="0" class="px-3 py-2 text-sm font-medium border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 touch-target focus:ring-2 focus:ring-teal-500">Overview</button>
-        <button role="tab" aria-selected="false" tabindex="-1" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 dark:text-gray-400 touch-target focus:ring-2 focus:ring-teal-500">Units</button>
-        <button role="tab" aria-selected="false" tabindex="-1" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 dark:text-gray-400 touch-target focus:ring-2 focus:ring-teal-500">Knowledge</button>
+        <button role="tab" aria-selected="false" tabindex="-1" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-stone-500 dark:text-stone-400 touch-target focus:ring-2 focus:ring-teal-500">Units</button>
+        <button role="tab" aria-selected="false" tabindex="-1" class="px-3 py-2 text-sm font-medium border-b-2 border-transparent text-stone-500 dark:text-stone-400 touch-target focus:ring-2 focus:ring-teal-500">Knowledge</button>
       </div>
     </div>
 
     <!-- Overview card (content only, no floating annotations on mobile) -->
-    <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4">
-      <h2 class="text-base font-semibold mb-2 text-gray-900 dark:text-gray-100">Overview</h2>
+    <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-4 mb-4">
+      <h2 class="text-base font-semibold mb-2 text-stone-900 dark:text-stone-100">Overview</h2>
       <div class="prose prose-sm prose-gray dark:prose-invert max-w-none">
         <h3 class="text-sm">Problem</h3>
         <p class="text-sm">The current review workflow treats feedback as ephemeral batch comments that vanish after submission. When a reviewer requests changes, the agent receives a single feedback string with no structured identity.</p>
@@ -97,19 +97,19 @@
     </div>
 
     <!-- Criteria card -->
-    <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4">
-      <h2 class="text-base font-semibold mb-2 text-gray-900 dark:text-gray-100">Success Criteria</h2>
-      <ul class="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+    <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 p-4 mb-4">
+      <h2 class="text-base font-semibold mb-2 text-stone-900 dark:text-stone-100">Success Criteria</h2>
+      <ul class="space-y-2 text-sm text-stone-700 dark:text-stone-300">
         <li class="flex items-start gap-2">
-          <span class="inline-block w-4 h-4 rounded border border-gray-300 dark:border-gray-600 mt-0.5 shrink-0"></span>
+          <span class="inline-block w-4 h-4 rounded border border-stone-300 dark:border-stone-600 mt-0.5 shrink-0"></span>
           Feedback items are individually trackable
         </li>
         <li class="flex items-start gap-2">
-          <span class="inline-block w-4 h-4 rounded border border-gray-300 dark:border-gray-600 mt-0.5 shrink-0"></span>
+          <span class="inline-block w-4 h-4 rounded border border-stone-300 dark:border-stone-600 mt-0.5 shrink-0"></span>
           Status lifecycle: pending &rarr; addressed &rarr; closed
         </li>
         <li class="flex items-start gap-2">
-          <span class="inline-block w-4 h-4 rounded border border-gray-300 dark:border-gray-600 mt-0.5 shrink-0"></span>
+          <span class="inline-block w-4 h-4 rounded border border-stone-300 dark:border-stone-600 mt-0.5 shrink-0"></span>
           Sidebar shows feedback across review cycles
         </li>
       </ul>
@@ -127,12 +127,12 @@
     aria-haspopup="dialog"
     aria-expanded="false"
     aria-controls="feedback-sheet"
-    class="fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center text-lg feedback-fab-pulse touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none"
+    class="fixed bottom-4 right-4 z-50 w-14 h-14 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center text-lg feedback-fab-pulse touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none"
     onclick="document.getElementById('feedback-sheet').classList.remove('hidden'); this.setAttribute('aria-expanded','true'); /* dev stage: on open, also set main#main-content aria-hidden=true + inert, then move focus to #sheet-first-tab via focus-trap library */"
   >
     <span aria-hidden="true">&#x1F4AC;</span>
     <!-- Count badge — aria-hidden because count is already included in button aria-label -->
-    <span aria-hidden="true" class="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[20px] h-[20px] rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-2 border-white dark:border-gray-900">3</span>
+    <span aria-hidden="true" class="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[20px] h-[20px] rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-2 border-white dark:border-stone-900">3</span>
   </button>
 
   <!--
@@ -161,15 +161,15 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="sheet-title"
-    class="fixed inset-0 z-50 bg-white dark:bg-gray-900 flex flex-col sheet-enter"
+    class="fixed inset-0 z-50 bg-white dark:bg-stone-900 flex flex-col sheet-enter"
   >
 
     <!-- Sheet header -->
-    <div class="shrink-0 px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-      <h2 id="sheet-title" class="text-sm font-semibold text-gray-700 dark:text-gray-300">Feedback</h2>
+    <div class="shrink-0 px-4 py-3 border-b border-stone-200 dark:border-stone-700 flex items-center justify-between">
+      <h2 id="sheet-title" class="text-sm font-semibold text-stone-700 dark:text-stone-300">Feedback</h2>
       <button
         aria-label="Close feedback panel"
-        class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 touch-target flex items-center justify-center text-lg focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none"
+        class="text-stone-600 dark:text-stone-300 hover:text-stone-800 dark:hover:text-stone-100 touch-target flex items-center justify-center text-lg focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none"
         onclick="var s=document.getElementById('feedback-sheet');s.classList.add('hidden');document.getElementById('feedback-fab').setAttribute('aria-expanded','false');document.getElementById('feedback-fab').focus(); /* dev stage: also remove aria-hidden+inert from main + header */"
       >
         <span aria-hidden="true">&times;</span>
@@ -177,38 +177,38 @@
     </div>
 
     <!-- Unified Comments header + AgentFeedbackToggle (replaces retired identity-based segmented control) -->
-    <div id="sheet-feedback-panel-header" class="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+    <div id="sheet-feedback-panel-header" class="shrink-0 flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-stone-700">
       <div class="flex items-center gap-2">
-        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Comments</h3>
-        <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">agent · 2</span>
+        <h3 class="text-sm font-semibold text-stone-900 dark:text-stone-100">Comments</h3>
+        <span class="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400 px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800">agent · 2</span>
       </div>
       <button
         id="sheet-first-tab"
         role="switch"
         aria-checked="false"
         aria-label="Show agent feedback inline"
-        class="relative inline-flex items-center touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none rounded-full"
+        class="relative inline-flex items-center touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none rounded-full"
       >
-        <span class="w-10 h-5 rounded-full bg-gray-300 dark:bg-gray-600 transition-colors"></span>
+        <span class="w-10 h-5 rounded-full bg-stone-300 dark:bg-stone-600 transition-colors"></span>
         <span class="absolute left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transform transition-transform"></span>
       </button>
     </div>
 
     <!-- Summary bar — filter chips; colored dots aria-hidden (label conveys status) -->
-    <div class="shrink-0 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 overflow-x-auto" role="group" aria-label="Filter feedback by status">
-      <button aria-pressed="true" aria-label="All, 5 items" class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-full bg-teal-100 text-teal-700 border border-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-700 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
+    <div class="shrink-0 px-3 py-2 bg-stone-50 dark:bg-stone-800/50 border-b border-stone-200 dark:border-stone-700 flex items-center gap-2 overflow-x-auto" role="group" aria-label="Filter feedback by status">
+      <button aria-pressed="true" aria-label="All, 5 items" class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-full bg-teal-100 text-teal-700 border border-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-700 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
         <span aria-hidden="true" class="inline-block w-2 h-2 rounded-full bg-stone-500 dark:bg-stone-300 mr-1"></span>All
         <span aria-hidden="true" class="ml-0.5 font-bold">5</span>
       </button>
-      <button aria-pressed="false" aria-label="Pending, 3 items" class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-full border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
+      <button aria-pressed="false" aria-label="Pending, 3 items" class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400 touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
         <span aria-hidden="true" class="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1"></span>Pending
         <span aria-hidden="true" class="ml-0.5 font-bold">3</span>
       </button>
-      <button aria-pressed="false" aria-label="Addressed, 1 item" class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-full border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
+      <button aria-pressed="false" aria-label="Addressed, 1 item" class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400 touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
         <span aria-hidden="true" class="inline-block w-2 h-2 rounded-full bg-blue-500 mr-1"></span>Addressed
         <span aria-hidden="true" class="ml-0.5 font-bold">1</span>
       </button>
-      <button aria-pressed="false" aria-label="Closed, 1 item" class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-full border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
+      <button aria-pressed="false" aria-label="Closed, 1 item" class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400 touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
         <span aria-hidden="true" class="inline-block w-2 h-2 rounded-full bg-green-500 mr-1"></span>Closed
         <span aria-hidden="true" class="ml-0.5 font-bold">1</span>
       </button>
@@ -220,11 +220,11 @@
       <!-- Group: Current Visit -->
       <div class="flex items-center gap-2 px-1 py-1">
         <span class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300">Current Visit</span>
-        <div class="flex-1 border-t border-gray-200 dark:border-gray-700"></div>
+        <div class="flex-1 border-t border-stone-200 dark:border-stone-700"></div>
       </div>
 
       <!-- Pending item 1 — emoji 🔍 magnifier matches DESIGN-BRIEF §2 for adversarial-review origin -->
-      <div role="listitem" tabindex="0" class="border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-gray-200 dark:border-gray-700 active:border-blue-400 dark:active:border-blue-500 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
+      <div role="listitem" tabindex="0" class="border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-stone-200 dark:border-stone-700 active:border-blue-400 dark:active:border-blue-500 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
         <div class="flex items-center gap-2 mb-1">
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800">
             <span aria-hidden="true">&#x1F50D;</span> Review Agent
@@ -232,12 +232,12 @@
           <span class="flex-1"></span>
           <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" aria-label="Status: pending">pending</span>
         </div>
-        <p class="text-xs font-medium text-gray-700 dark:text-gray-300">Missing null check in handleSubmit</p>
+        <p class="text-xs font-medium text-stone-700 dark:text-stone-300">Missing null check in handleSubmit</p>
         <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5">FB-03 &middot; Visit 2 &middot; adversarial-review</p>
       </div>
 
       <!-- Pending item 2 — emoji ✎ pencil matches DESIGN-BRIEF §2 for user-visual origin -->
-      <div role="listitem" tabindex="0" class="border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-gray-200 dark:border-gray-700 active:border-blue-400 dark:active:border-blue-500 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
+      <div role="listitem" tabindex="0" class="border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-stone-200 dark:border-stone-700 active:border-blue-400 dark:active:border-blue-500 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
         <div class="flex items-center gap-2 mb-1">
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800">
             <span aria-hidden="true">&#x270E;</span> Annotation
@@ -245,12 +245,12 @@
           <span class="flex-1"></span>
           <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" aria-label="Status: pending">pending</span>
         </div>
-        <p class="text-xs font-medium text-gray-700 dark:text-gray-300">Header alignment feels off</p>
+        <p class="text-xs font-medium text-stone-700 dark:text-stone-300">Header alignment feels off</p>
         <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5">FB-05 &middot; Visit 2 &middot; jwaldrip</p>
       </div>
 
       <!-- Pending item 3 (agent — shows Reject button). In-flight example: role="status" announces "FB-06 marking as closed..." (FB-26 aria-live sequencing spec). Emoji 🤖 matches DESIGN-BRIEF §2 for agent origin -->
-      <div role="listitem" tabindex="0" aria-busy="true" class="border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-blue-400 dark:border-blue-500 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
+      <div role="listitem" tabindex="0" aria-busy="true" class="border-l-[3px] border-l-amber-400 dark:border-l-amber-500 p-3 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-blue-400 dark:border-blue-500 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
         <div class="flex items-center gap-2 mb-1">
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800">
             <span aria-hidden="true">&#x1F916;</span> Agent
@@ -258,25 +258,25 @@
           <span class="flex-1"></span>
           <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" aria-label="Status: pending">pending</span>
         </div>
-        <p class="text-xs font-medium text-gray-700 dark:text-gray-300">Consider extracting validation into shared module</p>
+        <p class="text-xs font-medium text-stone-700 dark:text-stone-300">Consider extracting validation into shared module</p>
         <div class="prose prose-xs prose-gray dark:prose-invert max-w-none mt-2">
-          <p class="text-xs text-gray-600 dark:text-gray-400">The feedback validation logic in <code>ReviewSidebar</code> and the CRUD API handler both independently check field lengths and status transitions. This should be a shared utility to prevent drift.</p>
+          <p class="text-xs text-stone-600 dark:text-stone-400">The feedback validation logic in <code>ReviewSidebar</code> and the CRUD API handler both independently check field lengths and status transitions. This should be a shared utility to prevent drift.</p>
         </div>
         <p class="text-xs text-stone-600 dark:text-stone-300 mt-2">FB-06 &middot; Visit 2 &middot; agent</p>
         <div class="flex gap-2 mt-2">
-          <button class="text-xs font-medium px-3 py-1.5 rounded-md bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">Reject</button>
-          <button class="text-xs font-medium px-3 py-1.5 rounded-md bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">Close</button>
+          <button class="text-xs font-medium px-3 py-1.5 rounded-md bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">Reject</button>
+          <button class="text-xs font-medium px-3 py-1.5 rounded-md bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">Close</button>
         </div>
       </div>
 
       <!-- Group: Visit 1 -->
       <div class="flex items-center gap-2 px-1 py-1 mt-3">
         <span class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300">Visit 1</span>
-        <div class="flex-1 border-t border-gray-200 dark:border-gray-700"></div>
+        <div class="flex-1 border-t border-stone-200 dark:border-stone-700"></div>
       </div>
 
       <!-- Addressed — emoji 🔗 link matches DESIGN-BRIEF §2 for external-pr origin -->
-      <div role="listitem" tabindex="0" class="border-l-[3px] border-l-blue-400 dark:border-l-blue-500 p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-gray-200 dark:border-gray-700 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
+      <div role="listitem" tabindex="0" class="border-l-[3px] border-l-blue-400 dark:border-l-blue-500 p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-stone-200 dark:border-stone-700 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
         <div class="flex items-center gap-2 mb-1">
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800">
             <span aria-hidden="true">&#x1F517;</span> PR Comment
@@ -284,13 +284,13 @@
           <span class="flex-1"></span>
           <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" aria-label="Status: addressed">addressed</span>
         </div>
-        <p class="text-xs font-medium text-gray-700 dark:text-gray-300">Lifecycle transitions need validation guards</p>
+        <p class="text-xs font-medium text-stone-700 dark:text-stone-300">Lifecycle transitions need validation guards</p>
         <p class="text-xs text-blue-500 dark:text-blue-400 mt-1">Addressed by: unit-04-feedback-crud-api</p>
         <p class="text-xs text-stone-600 dark:text-stone-300 mt-0.5">FB-02 &middot; Visit 1 &middot; external-pr</p>
       </div>
 
       <!-- Closed — emoji ✎ pencil matches DESIGN-BRIEF §2 for user-visual origin -->
-      <div role="listitem" tabindex="0" class="border-l-[3px] border-l-green-500 dark:border-l-green-400 p-3 rounded-lg bg-green-50/60 dark:bg-green-950/25 border border-stone-200 dark:border-stone-700 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
+      <div role="listitem" tabindex="0" class="border-l-[3px] border-l-green-500 dark:border-l-green-400 p-3 rounded-lg bg-green-50/60 dark:bg-green-950/25 border border-stone-200 dark:border-stone-700 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">
         <div class="flex items-center gap-2 mb-1">
           <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-600 dark:bg-green-500 text-white text-xs font-bold leading-none">&check;</span>
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800">
@@ -309,17 +309,17 @@
     <div id="sheet-mine-panel" role="tabpanel" aria-labelledby="sheet-mine-tab" hidden></div>
 
     <!-- Sheet footer: comment input + decision buttons -->
-    <div class="shrink-0 border-t border-gray-200 dark:border-gray-700 p-3 space-y-3 bg-gray-50/50 dark:bg-gray-800/50">
+    <div class="shrink-0 border-t border-stone-200 dark:border-stone-700 p-3 space-y-3 bg-stone-50/50 dark:bg-stone-800/50">
       <div class="flex gap-2">
         <label for="sheet-general-comment" class="sr-only">Add a general comment</label>
         <!-- Canonical focus ring: 2px teal-500 with offset (focus-ring-spec.html §1) -->
-        <textarea id="sheet-general-comment" class="flex-1 text-xs p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 resize-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 focus:outline-none" rows="2" placeholder="Add a comment..."></textarea>
-        <button class="self-end px-3 py-1.5 text-xs font-medium bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">Add</button>
+        <textarea id="sheet-general-comment" class="flex-1 text-xs p-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 resize-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 focus:outline-none" rows="2" placeholder="Add a comment..."></textarea>
+        <button class="self-end px-3 py-1.5 text-xs font-medium bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">Add</button>
       </div>
       <div class="flex gap-2">
         <!-- Decision buttons use variant-matched focus rings per focus-ring-spec.html §2 (green-500 for Approve, amber-500 for Request Changes) -->
-        <button class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors touch-target focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none disabled:bg-green-300 disabled:text-green-800 dark:disabled:bg-green-900/40 dark:disabled:text-green-200 disabled:cursor-not-allowed">Approve</button>
-        <button class="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition-colors touch-target focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none disabled:bg-amber-200 disabled:text-amber-900 dark:disabled:bg-amber-900/40 dark:disabled:text-amber-200 disabled:cursor-not-allowed">Request Changes</button>
+        <button class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors touch-target focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none disabled:bg-green-300 disabled:text-green-800 dark:disabled:bg-green-900/40 dark:disabled:text-green-200 disabled:cursor-not-allowed">Approve</button>
+        <button class="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition-colors touch-target focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none disabled:bg-amber-200 disabled:text-amber-900 dark:disabled:bg-amber-900/40 dark:disabled:text-amber-200 disabled:cursor-not-allowed">Request Changes</button>
       </div>
     </div>
   </div><!-- /feedback-sheet dialog -->

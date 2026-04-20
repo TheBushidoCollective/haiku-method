@@ -2675,11 +2675,36 @@ function enforceStageBranch(
 ): { content: Array<{ type: "text"; text: string }>; isError: true } | null {
 	const guard = ensureOnStageBranch(intent, stage)
 	if (!guard.ok) {
+		// When the block is a dirty tree, return a structured commit_wip
+		// action instead of a hard error. The agent commits the listed
+		// files (which belong on the current branch) and retries — no
+		// human intervention needed.
+		if (guard.block === "dirty_tree") {
+			const files = guard.dirty_files || []
+			const filesBlock =
+				files.length > 0
+					? `\n\nFiles to commit:\n${files.map((f) => `  - ${f}`).join("\n")}`
+					: ""
+			const action = {
+				action: "commit_wip",
+				intent,
+				stage: stage ?? null,
+				context: "state-tool branch enforcement",
+				current_branch: guard.branch,
+				target_branch: guard.target_branch || "the target branch",
+				dirty_files: files,
+				message: `Uncommitted changes on branch '${guard.branch}' block the switch to '${guard.target_branch}'. These changes belong on '${guard.branch}' — commit them there, then retry the tool call. No human intervention needed.${filesBlock}\n\nSteps:\n  1. \`git add ${files.length > 0 ? files.join(" ") : "<files listed above>"}\`\n  2. \`git commit -m "haiku: wip on ${guard.branch}"\`\n  3. Retry the call.`,
+			}
+			return {
+				content: [{ type: "text", text: JSON.stringify(action, null, 2) }],
+				isError: true as const,
+			}
+		}
 		return {
 			content: [
 				{
 					type: "text",
-					text: `Error: stage-branch enforcement failed for intent '${intent}', stage '${stage ?? "(none)"}' — ${guard.message}. Resolve manually and retry.`,
+					text: `Error: stage-branch enforcement failed for intent '${intent}', stage '${stage ?? "(none)"}' — ${guard.message}`,
 				},
 			],
 			isError: true as const,

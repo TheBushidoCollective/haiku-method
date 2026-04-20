@@ -250,6 +250,70 @@ function summarizeFeedback(f: {
  * human. User-invoked revisits (`trigger: "user-revisit"`) never hit these
  * guards — explicit human intent always wins.
  */
+/**
+ * Build an MCP response for a failed stage-branch enforcement.
+ *
+ * When the guard failed because uncommitted changes block a checkout, we
+ * return a structured `commit_wip` action. That action tells the agent
+ * exactly what to commit (the specific files git refused to overwrite,
+ * which belong on the branch they currently sit on) and to retry — no
+ * human needs to step in to resolve the dirty tree.
+ *
+ * Other block types (merge_conflict, merge_in_progress) still ask the
+ * agent to resolve, but expose the structured block code so the agent
+ * handles the right case. Hard errors remain only for truly unresolvable
+ * states.
+ */
+function buildGuardResponse(
+	slug: string,
+	stage: string | undefined,
+	guard: {
+		ok: boolean
+		branch: string
+		message: string
+		block?: "dirty_tree" | "merge_conflict" | "merge_in_progress"
+		dirty_files?: string[]
+		target_branch?: string
+	},
+	contextLabel: string,
+): {
+	content: { type: "text"; text: string }[]
+	isError: true
+} {
+	const stageLabel = stage || "(none)"
+	const target = guard.target_branch || "the target branch"
+	const files = guard.dirty_files || []
+	if (guard.block === "dirty_tree") {
+		const filesBlock =
+			files.length > 0
+				? `\n\nFiles to commit:\n${files.map((f) => `  - ${f}`).join("\n")}`
+				: ""
+		const action = {
+			action: "commit_wip",
+			intent: slug,
+			stage: stage || null,
+			context: contextLabel,
+			current_branch: guard.branch,
+			target_branch: target,
+			dirty_files: files,
+			message: `Uncommitted changes on branch '${guard.branch}' block the switch to '${target}'. These changes belong on '${guard.branch}' — commit them there, then call \`haiku_run_next\` again. The FSM will retry the branch switch automatically.${filesBlock}\n\nNo human intervention needed — just:\n  1. \`git add ${files.length > 0 ? files.join(" ") : "<files listed above>"}\`\n  2. \`git commit -m "haiku: wip on ${guard.branch}"\`\n  3. Call \`haiku_run_next\` to retry.`,
+		}
+		return {
+			content: [{ type: "text" as const, text: JSON.stringify(action, null, 2) }],
+			isError: true,
+		}
+	}
+	return {
+		content: [
+			{
+				type: "text" as const,
+				text: `Error: stage-branch enforcement failed for intent '${slug}', stage '${stageLabel}' (${contextLabel}) — ${guard.message}`,
+			},
+		],
+		isError: true,
+	}
+}
+
 function maybeEscalate(
 	slug: string,
 	stage: string,
@@ -6853,15 +6917,12 @@ export async function handleOrchestratorTool(
 				const activeStage = (im.active_stage as string) || ""
 				const guard = ensureOnStageBranch(slug, activeStage || undefined)
 				if (!guard.ok) {
-					return {
-						content: [
-							{
-								type: "text" as const,
-								text: `Error: stage-branch enforcement failed for intent '${slug}', stage '${activeStage || "(none)"}' — ${guard.message}. Resolve manually and retry.`,
-							},
-						],
-						isError: true,
-					}
+					return buildGuardResponse(
+						slug,
+						activeStage,
+						guard,
+						"run_next entry",
+					)
 				}
 			}
 		}
@@ -7000,15 +7061,12 @@ export async function handleOrchestratorTool(
 				{
 					const postReviewGuard = ensureOnStageBranch(slug, stage)
 					if (!postReviewGuard.ok) {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: `Error: stage-branch enforcement failed after review wait for intent '${slug}', stage '${stage}' — ${postReviewGuard.message}. Resolve manually and retry.`,
-								},
-							],
-							isError: true,
-						}
+						return buildGuardResponse(
+							slug,
+							stage,
+							postReviewGuard,
+							"after review wait",
+						)
 					}
 				}
 
@@ -7308,15 +7366,12 @@ export async function handleOrchestratorTool(
 						{
 							const postElicitGuard = ensureOnStageBranch(slug, stage)
 							if (!postElicitGuard.ok) {
-								return {
-									content: [
-										{
-											type: "text" as const,
-											text: `Error: stage-branch enforcement failed after elicitation for intent '${slug}', stage '${stage}' — ${postElicitGuard.message}. Resolve manually and retry.`,
-										},
-									],
-									isError: true,
-								}
+								return buildGuardResponse(
+									slug,
+									stage,
+									postElicitGuard,
+									"after elicitation",
+								)
 							}
 						}
 
@@ -7486,15 +7541,12 @@ export async function handleOrchestratorTool(
 						(result.stage as string) || undefined,
 					)
 					if (!postRepairGuard.ok) {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: `Error: stage-branch enforcement failed after repair-agent run for intent '${slug}' — ${postRepairGuard.message}. Resolve manually and retry.`,
-								},
-							],
-							isError: true,
-						}
+						return buildGuardResponse(
+							slug,
+							(result.stage as string) || undefined,
+							postRepairGuard,
+							"after repair-agent run",
+						)
 					}
 				}
 
@@ -8175,15 +8227,12 @@ export async function handleOrchestratorTool(
 				(revisitIntentData.active_stage as string) || undefined,
 			)
 			if (!guard.ok) {
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `Error: stage-branch enforcement failed for revisit of intent '${revisitSlug}' — ${guard.message}. Resolve manually and retry.`,
-						},
-					],
-					isError: true as const,
-				}
+				return buildGuardResponse(
+					revisitSlug,
+					(revisitIntentData.active_stage as string) || undefined,
+					guard,
+					"revisit pre-branch",
+				)
 			}
 			return null
 		})()

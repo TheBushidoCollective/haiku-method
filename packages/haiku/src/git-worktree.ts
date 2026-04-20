@@ -722,7 +722,22 @@ export function ensureStageBranch(slug: string, stage: string): string {
 export function ensureOnStageBranch(
 	slug: string,
 	stage: string | undefined,
-): { ok: boolean; branch: string; message: string; switched: boolean } {
+): {
+	ok: boolean
+	branch: string
+	message: string
+	switched: boolean
+	/** When ok=false and the block is dirty-tree, this is set so callers can
+	 *  emit a `commit_wip` action rather than a hard error requiring a human.
+	 *  Values: "dirty_tree" — uncommitted changes blocked a branch switch;
+	 *  "merge_conflict" — the merge left conflicts to resolve;
+	 *  "merge_in_progress" — MERGE_HEAD/REBASE_HEAD etc present. */
+	block?: "dirty_tree" | "merge_conflict" | "merge_in_progress"
+	/** For block=dirty_tree: the paths git reported as "would be overwritten". */
+	dirty_files?: string[]
+	/** The branch we were trying to reach when blocked. */
+	target_branch?: string
+} {
 	if (!isGitRepo())
 		return { ok: true, branch: "", message: "no git", switched: false }
 
@@ -766,9 +781,14 @@ export function ensureOnStageBranch(
 					ok: false,
 					branch: current,
 					message: looksLikeDirtyTree
-						? `Uncommitted changes on branch '${current}' would be overwritten by falling back to repo mainline '${mainlineBranch}'. Stash (\`git stash\`) or commit them, then retry. Raw git error: ${raw}`
+						? `Uncommitted changes on branch '${current}' would be overwritten by falling back to repo mainline '${mainlineBranch}'. Commit them (they belong on '${current}') and retry.`
 						: `target branch '${targetBranch}' not yet created, and failed to fall back to mainline '${mainlineBranch}': ${raw}`,
 					switched: false,
+					block: looksLikeDirtyTree ? "dirty_tree" : undefined,
+					dirty_files: looksLikeDirtyTree
+						? parseOverwrittenFiles(raw)
+						: undefined,
+					target_branch: mainlineBranch,
 				}
 			}
 		}
@@ -805,6 +825,8 @@ export function ensureOnStageBranch(
 					branch: current,
 					message: `A git operation is in progress (${marker} present). Finish or abort it before stage-branch enforcement can realign the checkout.`,
 					switched: false,
+					block: "merge_in_progress",
+					target_branch: targetBranch,
 				}
 			}
 		}
@@ -840,6 +862,7 @@ export function ensureOnStageBranch(
 					switched: true,
 				}
 			} catch (err) {
+				const raw = err instanceof Error ? err.message : String(err)
 				// Detect conflicts via git status so the agent sees exactly
 				// which files to resolve. Do NOT abort — leaving the merge
 				// in progress lets the agent fix and commit, then retry.
@@ -857,14 +880,33 @@ export function ensureOnStageBranch(
 							l.startsWith("UD "),
 					)
 					.map((l) => l.slice(3).trim())
+				const looksLikeDirtyTree =
+					conflicts.length === 0 &&
+					(raw.includes("would be overwritten by") ||
+						raw.includes("Please commit your changes or stash them"))
 				return {
 					ok: false,
 					branch: getCurrentBranch() || current,
 					message:
 						conflicts.length > 0
 							? `Merge intent-main → stage '${stage}' left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on '${stageBranch}' (edit files, \`git add\`, \`git commit\`), then retry. A clean retry will detect main is already merged and skip this step.`
-							: `failed to merge main into stage: ${err instanceof Error ? err.message : String(err)}. Resolve manually on '${stageBranch}', then retry.`,
+							: looksLikeDirtyTree
+								? `Uncommitted changes would be overwritten by merging main → stage '${stage}'. Commit them (they belong on '${stageBranch}') and retry.`
+								: `failed to merge main into stage: ${raw}. Resolve manually on '${stageBranch}', then retry.`,
 					switched: false,
+					block:
+						conflicts.length > 0
+							? "merge_conflict"
+							: looksLikeDirtyTree
+								? "dirty_tree"
+								: undefined,
+					dirty_files:
+						conflicts.length > 0
+							? conflicts
+							: looksLikeDirtyTree
+								? parseOverwrittenFiles(raw)
+								: undefined,
+					target_branch: stageBranch,
 				}
 			}
 		}
@@ -891,11 +933,44 @@ export function ensureOnStageBranch(
 			ok: false,
 			branch: current,
 			message: looksLikeDirtyTree
-				? `Uncommitted changes on branch '${current}' would be overwritten by switching to '${targetBranch}'. Stash (\`git stash\`) or commit them, then retry. Raw git error: ${raw}`
+				? `Uncommitted changes on branch '${current}' would be overwritten by switching to '${targetBranch}'. Commit them (they belong on '${current}') and retry.`
 				: `failed to checkout ${targetBranch}: ${raw}`,
 			switched: false,
+			block: looksLikeDirtyTree ? "dirty_tree" : undefined,
+			dirty_files: looksLikeDirtyTree ? parseOverwrittenFiles(raw) : undefined,
+			target_branch: targetBranch,
 		}
 	}
+}
+
+/** Parse `git checkout`/`git merge` error output to extract the list of file
+ *  paths that would be overwritten by the operation. Used to surface a
+ *  precise `dirty_files` list to agents so they can commit exactly the
+ *  right paths rather than guessing or running `git add -A`. */
+function parseOverwrittenFiles(rawError: string): string[] {
+	const lines = rawError.split("\n")
+	const files: string[] = []
+	let capturing = false
+	for (const line of lines) {
+		if (
+			line.includes("would be overwritten by") ||
+			line.includes("Please commit your changes or stash them")
+		) {
+			capturing = true
+			continue
+		}
+		if (line.trim() === "Aborting" || line.trim().startsWith("error: ")) {
+			capturing = false
+			continue
+		}
+		if (capturing) {
+			const trimmed = line.replace(/^\t+/, "").trim()
+			if (trimmed && !trimmed.startsWith("error:") && !trimmed.startsWith("hint:")) {
+				files.push(trimmed)
+			}
+		}
+	}
+	return files
 }
 
 /** Create a temporary worktree checked out on `branch`, run `fn` with its

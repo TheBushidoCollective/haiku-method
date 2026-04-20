@@ -65,9 +65,9 @@ quality_gates:
     checks so the pattern is enforced stage-wide, not only at this unit's close.
 status: active
 bolt: 3
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T05:08:23Z'
-hat_started_at: '2026-04-20T09:02:07Z'
+hat_started_at: '2026-04-20T09:05:35Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:23Z'
@@ -122,6 +122,10 @@ iterations:
       underlying FB-74 and FB-80 fixes are good — do not redo them.
   - hat: designer
     started_at: '2026-04-20T09:02:07Z'
+    completed_at: '2026-04-20T09:05:35Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T09:05:35Z'
     completed_at: null
     result: null
 ---

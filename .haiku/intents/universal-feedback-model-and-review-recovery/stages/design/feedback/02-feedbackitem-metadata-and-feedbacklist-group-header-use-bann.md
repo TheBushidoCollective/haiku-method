@@ -2,7 +2,7 @@
 title: >-
   FeedbackItem metadata and FeedbackList group header use banned text-[10px] +
   banned stone-400/stone-500 pair
-status: fixing
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T20:18:06Z'
 iteration: 0
 visit: 0
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-02:bolt-1'
 bolt: 1
 upstream_stage: null
 ---

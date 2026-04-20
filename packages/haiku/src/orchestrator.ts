@@ -157,6 +157,17 @@ const FSM_CONTRACTS_ELABORATE_BLOCK = [
 	"- Commands should be idempotent and fast (< 5s each). Negate banned-pattern greps (`! grep …`) so exit 0 means the gate passes.",
 	"- Prose descriptions of what the gate *means* belong in the unit body under `## Completion criteria`, NOT in the frontmatter.",
 	"",
+	"#### Model selection (`model:` frontmatter on each unit)",
+	"",
+	"- Set `model:` on EVERY unit you create. The FSM reads this at hat-dispatch time and spawns the subagent with the matching tier.",
+	"- Valid values: `haiku` (cheap/fast), `sonnet` (standard), `opus` (deep reasoning). No other values are honored — unknown strings fall through to the next cascade level.",
+	"- **Calibrate per-unit to the work.** The entire point of per-unit model is that different units have different cognitive load; picking one tier for the whole intent wastes budget on the trivial units and starves the hard ones.",
+	"  - `haiku` — mechanical edits, rename sweeps, formatter passes, simple CRUD additions, boilerplate scaffolding, small docs updates. Decisions are obvious from context; no architectural judgment needed.",
+	"  - `sonnet` — most real work. Feature implementation, API design decisions within a known pattern, moderate refactors, UI flows, data transformations, test writing. Default when you're unsure.",
+	"  - `opus` — novel design, deep debugging of distributed/timing issues, cross-cutting architecture changes, complex algorithm design, research-heavy tasks. Reserve for units where a cheaper tier is likely to produce the wrong answer.",
+	"- The cascade (`unit > hat > stage > studio`) lets studio/stage defaults carry most units; unit-level overrides are for outliers on either end of the distribution.",
+	"- Omitting `model:` on a unit is valid — the cascade will fall through to hat/stage/studio defaults. Omit ONLY when the default tier is the right pick; do not omit as a sidestep.",
+	"",
 	"#### Bolts, hats, advance",
 	"",
 	"- A **bolt** is one full cycle through the stage's hat sequence for a unit. The FSM advances hats via `haiku_unit_advance_hat`; agents NEVER mutate `bolt`, `hat`, `status`, or `iterations` fields directly (the harness blocks those writes).",
@@ -199,11 +210,12 @@ const FSM_CONTRACTS_REVIEW_BLOCK = [
 const FSM_CONTRACTS_FIX_LOOP_BLOCK = [
 	"### FSM Contracts (REQUIRED — reminder during fix loop)",
 	"",
-	"- The fix loop runs the stage's `fix_hats:` sequence directly against an open feedback finding. The feedback file IS the scope — do NOT synthesize a new unit spec.",
+	"- The fix loop runs the stage's `fix_hats:` sequence against every eligible pending finding in parallel. Each finding's hat chain is serial (e.g. designer → feedback-assessor); chains run in parallel across findings. The feedback file IS the scope — do NOT synthesize a new unit spec.",
 	'- Every hat in the sequence reads the feedback body + the flagged artifact path and acts within its mandate. The sequence typically ends with a `feedback-assessor` hat that independently verifies the fix and, if satisfied, calls `haiku_feedback_update { status: "closed", closed_by: "fix-loop:<bolt-id>" }`.',
 	"- If the feedback-assessor is NOT satisfied, it leaves the feedback open (no `closed_by`, no status change). The FSM increments the bolt counter and may dispatch another loop, up to 3 bolts per finding. Exceeding 3 escalates to the human.",
-	"- A fix-loop hat is NOT a unit hat. Do NOT call `haiku_unit_advance_hat` or `haiku_unit_reject_hat` — those are for unit execution. The fix-loop is orchestrated by the parent; each fix hat completes its work and returns, and the parent calls `haiku_run_next` to advance.",
+	"- A fix-loop hat is NOT a unit hat. Do NOT call `haiku_unit_advance_hat` or `haiku_unit_reject_hat` — those are for unit execution. The fix-loop is orchestrated by the parent; each fix hat completes its work and returns, and the parent calls `haiku_run_next` after every wave completes to advance.",
 	'- If a fix hat discovers the finding is actually invalid or already addressed, call `haiku_feedback_reject { reason: "<concrete reason>" }` instead of editing artifacts. A stale finding should be rejected, not silently dropped.',
+	"- Parallel chains may edit the same artifact concurrently. Each final hat validates closure independently — a chain whose fix was clobbered by another chain will leave its finding open, and the next bolt will retry. Budget is spent, not lost.",
 ].join("\n")
 
 /**
@@ -1726,43 +1738,25 @@ function runIntentCompletionReview(
 			}
 		}
 
-		// Deterministic order: pick the lowest-numbered pending item. A
-		// previous bolt may have left status="fixing" on the same item —
-		// that's fine, we just increment the bolt and dispatch again.
-		const inProgress = inScopePending.find((i) => i.status === "fixing")
-		const target =
-			inProgress ?? [...inScopePending].sort((a, b) => a.num - b.num)[0]
+		// Partition: eligible (under bolt cap) vs escalated. Deterministic
+		// ordering so re-entries are stable. Batch-dispatch all eligible in
+		// parallel chains — conflict risk is accepted, each chain's final
+		// hat validates closure independently.
+		const sortedScope = [...inScopePending].sort((a, b) => a.num - b.num)
+		const eligibleScope = sortedScope.filter(
+			(i) => i.bolt < MAX_FIX_LOOP_BOLTS,
+		)
+		const escalatedScope = sortedScope.filter(
+			(i) => i.bolt >= MAX_FIX_LOOP_BOLTS,
+		)
 
-		// Escalation check BEFORE increment: stop pumping the counter on
-		// repeated escalate returns.
-		if (target.bolt >= MAX_FIX_LOOP_BOLTS) {
+		if (eligibleScope.length === 0 && escalatedScope.length > 0) {
+			const target = escalatedScope[0]
 			emitTelemetry("haiku.intent.fix_loop_escalate", {
 				intent: slug,
 				feedback_id: target.id,
 				bolt: String(target.bolt),
 			})
-			// Surface the full intent-scope pending queue so the human can
-			// see every finding blocked behind the escalated one.
-			const queue = [
-				{
-					feedback_id: target.id,
-					title: target.title,
-					status: target.status,
-					origin: target.origin,
-					author: target.author,
-					file: target.file,
-				},
-				...inScopePending
-					.filter((i) => i.id !== target.id)
-					.map((i) => ({
-						feedback_id: i.id,
-						title: i.title,
-						status: i.status,
-						origin: i.origin,
-						author: i.author,
-						file: i.file,
-					})),
-			]
 			return {
 				action: "escalate",
 				intent: slug,
@@ -1771,40 +1765,61 @@ function runIntentCompletionReview(
 				iteration: target.bolt,
 				max_iterations: MAX_FIX_LOOP_BOLTS,
 				message:
-					`Intent-scope feedback ${target.id} ("${target.title}") has exceeded the fix-loop cap of ${MAX_FIX_LOOP_BOLTS} bolts. Present the finding to the user; they can reject, edit, or close it manually. ${inScopePending.length - 1 > 0 ? `${inScopePending.length - 1} other finding(s) are queued behind this one.` : ""}`.trim(),
-				pending_items: queue,
+					`Intent-scope feedback ${target.id} ("${target.title}") has exceeded the fix-loop cap of ${MAX_FIX_LOOP_BOLTS} bolts. Present the finding to the user; they can reject, edit, or close it manually. ${escalatedScope.length - 1 > 0 ? `${escalatedScope.length - 1} other finding(s) are also blocked at the cap.` : ""}`.trim(),
+				pending_items: escalatedScope.map((i) => ({
+					feedback_id: i.id,
+					title: i.title,
+					status: i.status,
+					origin: i.origin,
+					author: i.author,
+					file: i.file,
+				})),
 			}
 		}
 
-		const bumped = incrementFeedbackBolt(slug, "", target.id)
-		if (!bumped) {
+		const dispatchedScope: {
+			feedback_id: string
+			feedback_file: string
+			feedback_title: string
+			bolt: number
+		}[] = []
+		for (const item of eligibleScope) {
+			const bumped = incrementFeedbackBolt(slug, "", item.id)
+			if (!bumped) continue
+			dispatchedScope.push({
+				feedback_id: item.id,
+				feedback_file: item.file,
+				feedback_title: item.title,
+				bolt: bumped.bolt,
+			})
+		}
+
+		if (dispatchedScope.length === 0) {
 			return {
 				action: "error",
 				intent: slug,
-				message: `Failed to increment fix-loop bolt on intent-scope ${target.id} — feedback file may have been deleted mid-tick.`,
+				message: `Failed to increment fix-loop bolts on any of ${eligibleScope.length} eligible intent-scope finding(s) — feedback files may have been deleted mid-tick.`,
 			}
 		}
 
 		gitCommitState(
-			`haiku: intent_completion_fix ${target.id} bolt ${bumped.bolt}`,
+			`haiku: intent_completion_fix dispatch ${dispatchedScope.length} finding(s)`,
 		)
 		emitTelemetry("haiku.intent.completion_fix_dispatch", {
 			intent: slug,
-			feedback_id: target.id,
-			bolt: String(bumped.bolt),
+			count: String(dispatchedScope.length),
+			escalated: String(escalatedScope.length),
 		})
 		return {
 			action: "intent_completion_fix",
 			intent: slug,
 			studio,
-			feedback_id: target.id,
-			feedback_file: target.file,
-			feedback_title: target.title,
 			fix_hats: fixHatNames,
-			bolt: bumped.bolt,
 			max_bolts: MAX_FIX_LOOP_BOLTS,
-			remaining_pending: inScopePending.length,
-			message: `Dispatching intent-completion fix loop for ${target.id} ("${target.title}") — bolt ${bumped.bolt}/${MAX_FIX_LOOP_BOLTS}. Studio fix-hats: ${fixHatNames.join(" → ")}.`,
+			items: dispatchedScope,
+			total_pending: inScopePending.length,
+			escalated_count: escalatedScope.length,
+			message: `Dispatching intent-completion fix loop for ${dispatchedScope.length} finding(s) in parallel. Per-finding studio fix-hats: ${fixHatNames.join(" → ")} (serial within chain). Chains run in parallel.${escalatedScope.length > 0 ? ` ${escalatedScope.length} additional finding(s) are at the bolt cap and will escalate after these complete.` : ""}`,
 		}
 	}
 
@@ -2960,13 +2975,17 @@ export function runNext(slug: string): OrchestratorAction {
 			}
 
 			// ── Route 2: fix_hats fix loop ────────────────────────────────
-			// When the stage declares fix_hats, dispatch the sequence
-			// directly against ONE pending finding per tick. Serial (not
-			// parallel) because findings may conflict — fixing one can
-			// invalidate another. The final fix hat validates closure and
-			// calls haiku_feedback_update status=closed. The FSM loops
-			// (one feedback per run_next) until every finding is closed or
-			// rejected, then re-enters gate.
+			// When the stage declares fix_hats, batch-dispatch the sequence
+			// against EVERY eligible (under bolt-cap) pending finding in one
+			// tick. Findings run in parallel chains; within a chain, hats run
+			// serially (e.g. designer → feedback-assessor). The final fix hat
+			// in each chain validates closure and calls haiku_feedback_update
+			// status=closed. If a chain fails to close, the assessor leaves
+			// status=fixing and the next run_next picks it up with an
+			// incremented bolt. Conflict risk: two chains editing the same
+			// artifact may overwrite each other — the assessor catches it,
+			// the finding stays open, and the next bolt retries. Budget is
+			// spent, not lost.
 			const fixHats = resolveStageFixHats(studio, currentStage)
 			if (fixHats.length > 0 && pendingItems.length > 0) {
 				// Ensure each fix-hat has a real mandate file. Fix-mode hats
@@ -2984,36 +3003,28 @@ export function runNext(slug: string): OrchestratorAction {
 					}
 				}
 
-				// Pick the next feedback to fix: prefer items already in
-				// "fixing" state (mid-loop resumption), else the lowest-numbered
-				// pending item. Deterministic so re-entries are stable.
-				const inProgress = pendingItems.find((i) => i.status === "fixing")
-				const target =
-					inProgress ?? [...pendingItems].sort((a, b) => a.num - b.num)[0]
+				// Partition: eligible (under bolt cap) vs escalated (at/over).
+				// Deterministic ordering so re-entries are stable.
+				const sorted = [...pendingItems].sort((a, b) => a.num - b.num)
+				const eligibleItems = sorted.filter(
+					(i) => i.bolt < MAX_FIX_LOOP_BOLTS,
+				)
+				const escalatedItems = sorted.filter(
+					(i) => i.bolt >= MAX_FIX_LOOP_BOLTS,
+				)
 
-				// Escalation check BEFORE increment: if this finding has
-				// already burned its bolt budget, stop incrementing and
-				// surface the escalation. Incrementing first would let a
-				// misbehaving agent keep calling haiku_run_next and pump the
-				// counter arbitrarily high across escalate hops.
-				if (target.bolt >= MAX_FIX_LOOP_BOLTS) {
+				// If every remaining finding has already burned its bolt
+				// budget, the whole queue is blocked — surface the first
+				// escalation to the human. Other escalated items ride along
+				// in the pending_items list so visibility isn't lost.
+				if (eligibleItems.length === 0 && escalatedItems.length > 0) {
+					const target = escalatedItems[0]
 					emitTelemetry("haiku.feedback.fix_loop_escalate", {
 						intent: slug,
 						stage: currentStage,
 						feedback_id: target.id,
 						bolt: String(target.bolt),
 					})
-					// Surface the WHOLE pending queue — the escalated finding
-					// is at the front, followed by any still-unaddressed
-					// items. Without this, the human sees only FB-N and
-					// has no visibility that FB-M, FB-M+1, ... are
-					// queued behind it waiting on this block.
-					const queue = [
-						summarizeFeedback(target),
-						...pendingItems
-							.filter((i) => i.id !== target.id)
-							.map(summarizeFeedback),
-					]
 					return {
 						action: "escalate",
 						intent: slug,
@@ -3022,43 +3033,63 @@ export function runNext(slug: string): OrchestratorAction {
 						iteration: target.bolt,
 						max_iterations: MAX_FIX_LOOP_BOLTS,
 						message:
-							`Feedback ${target.id} ("${target.title}") has exceeded the fix-loop cap of ${MAX_FIX_LOOP_BOLTS} bolts. The fix hats cannot resolve this finding autonomously — the finding itself, the spec it's flagging, or the hat mandates likely need human intervention. Present the finding to the user; they can revisit upstream, reject the finding, edit the spec, or mark it resolved manually. ${pendingItems.length - 1 > 0 ? `${pendingItems.length - 1} other finding(s) are queued behind this one.` : ""}`.trim(),
-						pending_items: queue,
+							`Feedback ${target.id} ("${target.title}") has exceeded the fix-loop cap of ${MAX_FIX_LOOP_BOLTS} bolts. The fix hats cannot resolve this finding autonomously — the finding itself, the spec it's flagging, or the hat mandates likely need human intervention. Present the finding to the user; they can revisit upstream, reject the finding, edit the spec, or mark it resolved manually. ${escalatedItems.length - 1 > 0 ? `${escalatedItems.length - 1} other finding(s) are also blocked at the cap.` : ""}`.trim(),
+						pending_items: escalatedItems.map(summarizeFeedback),
 					}
 				}
 
-				// Increment bolt counter and mark status "fixing".
-				const bumped = incrementFeedbackBolt(slug, currentStage, target.id)
-				if (!bumped) {
+				// Increment bolt for every eligible item and build dispatch
+				// batch. Items whose increment fails (file deleted mid-tick)
+				// are skipped, not fatal — the tick still dispatches the rest.
+				const dispatched: {
+					feedback_id: string
+					feedback_file: string
+					feedback_title: string
+					bolt: number
+				}[] = []
+				for (const item of eligibleItems) {
+					const bumped = incrementFeedbackBolt(
+						slug,
+						currentStage,
+						item.id,
+					)
+					if (!bumped) continue
+					dispatched.push({
+						feedback_id: item.id,
+						feedback_file: item.file,
+						feedback_title: item.title,
+						bolt: bumped.bolt,
+					})
+				}
+
+				if (dispatched.length === 0) {
 					return {
 						action: "error",
 						intent: slug,
-						message: `Failed to increment fix-loop bolt on ${target.id} — feedback file may have been deleted mid-tick.`,
+						message: `Failed to increment fix-loop bolts on any of ${eligibleItems.length} eligible finding(s) — feedback files may have been deleted mid-tick.`,
 					}
 				}
 
 				gitCommitState(
-					`haiku: review_fix dispatch ${target.id} bolt ${bumped.bolt} in ${currentStage}`,
+					`haiku: review_fix dispatch ${dispatched.length} finding(s) in ${currentStage}`,
 				)
 				emitTelemetry("haiku.gate.review_fix", {
 					intent: slug,
 					stage: currentStage,
-					feedback_id: target.id,
-					bolt: String(bumped.bolt),
+					count: String(dispatched.length),
+					escalated: String(escalatedItems.length),
 				})
 				return {
 					action: "review_fix",
 					intent: slug,
 					studio,
 					stage: currentStage,
-					feedback_id: target.id,
-					feedback_file: target.file,
-					feedback_title: target.title,
 					fix_hats: fixHats,
-					bolt: bumped.bolt,
 					max_bolts: MAX_FIX_LOOP_BOLTS,
-					remaining_pending: pendingItems.length,
-					message: `Dispatching fix loop for ${target.id} ("${target.title}") — bolt ${bumped.bolt}/${MAX_FIX_LOOP_BOLTS}. Hat sequence: ${fixHats.join(" → ")}. Each hat reads the feedback body at ${target.file} directly; no new unit is synthesized.`,
+					items: dispatched,
+					total_pending: pendingItems.length,
+					escalated_count: escalatedItems.length,
+					message: `Dispatching fix loop for ${dispatched.length} finding(s) in parallel — stage '${currentStage}'. Per-finding hat sequence: ${fixHats.join(" → ")} (serial within chain). Chains run in parallel across findings.${escalatedItems.length > 0 ? ` ${escalatedItems.length} additional finding(s) are at the bolt cap and will escalate after these complete.` : ""}`,
 				}
 			}
 
@@ -4976,7 +5007,7 @@ function buildRunInstructions(
 
 				// Parent-only instructions OUTSIDE the tag
 				sections.push(
-					'### Parent Instructions (do NOT include in subagent prompt)\n\nSpawn the subagent using the `type`, `model`, and `prompt_file` attributes from the `<subagent>` block above. The subagent\'s prompt is the file at `prompt_file` — pass `"Read <prompt_file> and execute its instructions exactly."` as the spawn prompt.\n\n**When the subagent returns, its final message will be one of:**\n- `FSM Result: <path>` — read that JSON file and act on its `action` field. Valid actions: `continue_unit` (spawn next subagent for same unit), `start_units` (dispatch wave), `advance_phase`, `review`, `advance_stage`, `intent_complete`, `blocked`. For unit-level actions, call `haiku_run_next { intent: ... }` to get the FSM\'s canonical next step (the result file and run_next return the same data; run_next is the authoritative drive step).\n- Plaintext "job ends here" message — another subagent in the wave will produce the structured result; do not dispatch yet.\n- Anything else (subagent non-compliant) — fall back: call `haiku_run_next { intent: ... }`.\n\nDo NOT stop until run_next returns `gate_review`, `advance_stage → intent_complete`, `intent_complete`, or `error`.',
+					'### Parent Instructions (do NOT include in subagent prompt)\n\nSpawn the subagent with the Task tool. Map the `<subagent>` block attributes to the tool parameters **exactly**:\n\n- `type="..."` → `subagent_type` argument\n- `model="..."` → `model` argument (OMIT the `model` arg when the attribute is absent — do NOT pass a default)\n- `prompt_file="..."` → the prompt body is the literal string `"Read <path> and execute its instructions exactly."` (substitute `<path>` with the attribute value)\n\nPassing the `model` attribute is non-negotiable when it\'s present — the FSM resolved the tier from the unit/hat/stage/studio cascade and the wrong tier undermines the whole selection logic.\n\n**When the subagent returns, its final message will be one of:**\n- `FSM Result: <path>` — read that JSON file and act on its `action` field. Valid actions: `continue_unit` (spawn next subagent for same unit), `start_units` (dispatch wave), `advance_phase`, `review`, `advance_stage`, `intent_complete`, `blocked`. For unit-level actions, call `haiku_run_next { intent: ... }` to get the FSM\'s canonical next step (the result file and run_next return the same data; run_next is the authoritative drive step).\n- Plaintext "job ends here" message — another subagent in the wave will produce the structured result; do not dispatch yet.\n- Anything else (subagent non-compliant) — fall back: call `haiku_run_next { intent: ... }`.\n\nDo NOT stop until run_next returns `gate_review`, `advance_stage → intent_complete`, `intent_complete`, or `error`.',
 				)
 			} else {
 				// ── Subagentless: direct execution in current context ──
@@ -5232,7 +5263,7 @@ function buildRunInstructions(
 
 				// Parent instructions
 				sections.push(
-					`### Parent Instructions (do NOT include in subagent prompts)\n\n**IMMEDIATELY** spawn ALL subagents above **in parallel, in a single response**. Each \`<subagent>\` block has \`type\`, \`model\`, and \`prompt_file\` attributes. Spawn each with prompt: \`"Read <prompt_file> and execute its instructions exactly."\` — no other text. The FSM owns the authoritative prompt at \`prompt_file\`; do not paraphrase.\n\n**Drive forward on every return — do NOT wait for the whole batch.** The moment ANY subagent returns, inspect its final message:\n- \`FSM Result: <path>\` → read that JSON file, then call \`haiku_run_next { intent: "${slug}" }\` (run_next is authoritative). The FSM will include every still-active unit plus the newly-ready work.\n- Plaintext "job ends here" → another subagent will emit the structured result; do NOT dispatch yet.\n- Anything else (non-compliant) → fall back: call \`haiku_run_next { intent: "${slug}" }\`.\n\nWaiting for the whole batch strands other units. Stop driving only when run_next returns \`gate_review\`, \`escalate\`, \`intent_complete\`, or \`error\`.`,
+					`### Parent Instructions (do NOT include in subagent prompts)\n\n**IMMEDIATELY** spawn ALL subagents above **in parallel, in a single response**. For each \`<subagent>\` block, map attributes to Task-tool parameters:\n\n- \`type="..."\` → \`subagent_type\`\n- \`model="..."\` → \`model\` (OMIT when absent; do NOT supply a default)\n- \`prompt_file="..."\` → prompt body is literally \`"Read <path> and execute its instructions exactly."\`\n\nDo NOT add text beyond that prompt body. The FSM owns the authoritative prompt at \`prompt_file\`; do not paraphrase. Per-unit \`model\` attributes reflect the cascade the FSM resolved (unit > hat > stage > studio) — dropping them wastes the selection.\n\n**Drive forward on every return — do NOT wait for the whole batch.** The moment ANY subagent returns, inspect its final message:\n- \`FSM Result: <path>\` → read that JSON file, then call \`haiku_run_next { intent: "${slug}" }\` (run_next is authoritative). The FSM will include every still-active unit plus the newly-ready work.\n- Plaintext "job ends here" → another subagent will emit the structured result; do NOT dispatch yet.\n- Anything else (non-compliant) → fall back: call \`haiku_run_next { intent: "${slug}" }\`.\n\nWaiting for the whole batch strands other units. Stop driving only when run_next returns \`gate_review\`, \`escalate\`, \`intent_complete\`, or \`error\`.`,
 				)
 			} else {
 				// ── Subagentless harness: sequential execution in current context ──
@@ -5509,7 +5540,7 @@ function buildRunInstructions(
 			}
 
 			sections.push(
-				`### Parent Instructions (do NOT include in subagent prompts)\n\n**IMMEDIATELY** spawn ALL subagents above **in parallel, in a single response**. Each \`<subagent>\` block has \`type\`, \`model\`, and \`prompt_file\` attributes. Spawn each with prompt: \`"Read <prompt_file> and execute its instructions exactly."\` — no other text. The FSM owns the authoritative prompt at \`prompt_file\`; do not paraphrase.\n\n**Drive forward on every return — do NOT wait for the whole batch.** The moment ANY subagent returns, inspect its final message:\n- \`FSM Result: <path>\` → read that JSON file, then call \`haiku_run_next { intent: "${slug}" }\` (run_next is authoritative).\n- Plaintext "job ends here" → another subagent will emit the structured result; do NOT dispatch yet.\n- Anything else → fall back: call \`haiku_run_next { intent: "${slug}" }\`.\n\nStop driving only when run_next returns \`gate_review\`, \`escalate\`, \`intent_complete\`, or \`error\`.`,
+				`### Parent Instructions (do NOT include in subagent prompts)\n\n**IMMEDIATELY** spawn ALL subagents above **in parallel, in a single response**. For each \`<subagent>\` block, map attributes to Task-tool parameters:\n\n- \`type="..."\` → \`subagent_type\`\n- \`model="..."\` → \`model\` (OMIT when absent; do NOT supply a default)\n- \`prompt_file="..."\` → prompt body is literally \`"Read <path> and execute its instructions exactly."\`\n\nThe FSM owns the authoritative prompt at \`prompt_file\`; do not paraphrase. Per-unit \`model\` attributes reflect the cascade the FSM resolved — dropping them defeats the selection.\n\n**Drive forward on every return — do NOT wait for the whole batch.** The moment ANY subagent returns, inspect its final message:\n- \`FSM Result: <path>\` → read that JSON file, then call \`haiku_run_next { intent: "${slug}" }\` (run_next is authoritative).\n- Plaintext "job ends here" → another subagent will emit the structured result; do NOT dispatch yet.\n- Anything else → fall back: call \`haiku_run_next { intent: "${slug}" }\`.\n\nStop driving only when run_next returns \`gate_review\`, \`escalate\`, \`intent_complete\`, or \`error\`.`,
 			)
 
 			// Suppress unused-var warning for hats (kept in payload for forward-compat)
@@ -5629,20 +5660,37 @@ function buildRunInstructions(
 
 		case "review_fix": {
 			const fixStage = action.stage as string
-			const fbId = action.feedback_id as string
-			const fbFile = action.feedback_file as string
-			const fbTitle = action.feedback_title as string
 			const fixHatsList = (action.fix_hats as string[]) || []
-			const fixBolt = (action.bolt as number) || 1
 			const fixMaxBolts = (action.max_bolts as number) || MAX_FIX_LOOP_BOLTS
-			const remaining = (action.remaining_pending as number) || 1
+			const items = (action.items as Array<{
+				feedback_id: string
+				feedback_file: string
+				feedback_title: string
+				bolt: number
+			}>) || []
+			const totalPending = (action.total_pending as number) || items.length
+			const escalatedCount = (action.escalated_count as number) || 0
 			const haikuRoot = findHaikuRoot()
-			const fbAbsPath = join(haikuRoot, fbFile)
 
 			sections.push(FSM_CONTRACTS_FIX_LOOP_BLOCK)
-			sections.push(
-				`## Fix Loop: ${fbId} (bolt ${fixBolt}/${fixMaxBolts})\n\nFeedback finding **${fbId}** — _${fbTitle}_ — will be addressed by dispatching the stage's \`fix_hats:\` sequence directly against the feedback body. The feedback file IS the scope; no new unit spec is synthesized. ${remaining > 1 ? `(${remaining - 1} other finding(s) remain after this one and will dispatch on the next \`haiku_run_next\`.)` : ""}`,
-			)
+			const headerLines = [
+				`## Fix Loop: ${items.length} finding(s) in parallel`,
+				"",
+				`Dispatching the stage's \`fix_hats:\` sequence against ${items.length} pending finding(s) in stage **${fixStage}**. Each finding's hat chain runs serially (${fixHatsList.join(" → ")}); chains run in parallel across findings.`,
+			]
+			if (escalatedCount > 0) {
+				headerLines.push(
+					"",
+					`> ⚠ ${escalatedCount} additional finding(s) are at the bolt cap and will escalate after this batch completes.`,
+				)
+			}
+			if (totalPending !== items.length + escalatedCount) {
+				headerLines.push(
+					"",
+					`> Total pending: ${totalPending}. Dispatching: ${items.length}. At cap: ${escalatedCount}.`,
+				)
+			}
+			sections.push(headerLines.join("\n"))
 
 			// Load each fix hat's mandate. Fix hats reuse the stage's
 			// `hats/{hat}.md` files — when a hat wants to behave differently
@@ -5658,99 +5706,136 @@ function buildRunInstructions(
 			)
 
 			sections.push(
-				'### Fix Hat Sequence (SERIAL — one at a time)\n\n**Dispatch hats SEQUENTIALLY — wait for each to complete before the next.** The final hat (typically `feedback-assessor`) validates closure and calls `haiku_feedback_update { status: "closed" }`. If the final hat leaves the feedback open, the FSM will loop again on the next `haiku_run_next` — up to the bolt cap.\n',
+				'### Parallel Fix-Chain Dispatch\n\nEach finding below has its own hat chain. **Within a chain, hats run serially.** **Across chains, findings run in parallel.** The final hat in each chain validates closure and calls `haiku_feedback_update { status: "closed" }`. If a chain leaves its feedback open, the FSM loops that finding again on the next `haiku_run_next` — up to the bolt cap.\n',
 			)
 
-			for (const hat of fixHatsList) {
-				const hatDef = allHats[hat]
-				if (!hatDef) {
-					sections.push(
-						`\n> **Warning:** hat \`${hat}\` declared in \`fix_hats\` has no mandate file in \`hats/${hat}.md\`. The subagent will run without a mandate — this is likely a studio bug.\n`,
-					)
-				}
-				const hatPath = hatDef
-					? join(
-							pluginRoot,
-							"studios",
-							studioDir,
-							"stages",
-							fixStage,
-							"hats",
-							`${hat}.md`,
-						)
-					: null
-
-				const isLast = hat === fixHatsList[fixHatsList.length - 1]
-				const promptLines: string[] = [
-					`You are the **${hat}** hat running in **fix-mode** against feedback **${fbId}** (bolt ${fixBolt} of ${fixMaxBolts}) in stage **${fixStage}** of intent **${slug}**.`,
-					"",
-					"## Required context (inlined below)",
-					"You are NOT wearing this hat to build a new unit. You are wearing it to resolve ONE specific feedback finding on artifacts that already exist.",
-					"",
-				]
-				if (stageBasePath) {
-					promptLines.push(
-						inlineFile(stageBasePath, `Stage scope: ${fixStage}`),
-					)
-				}
-				if (hatPath && existsSync(hatPath)) {
-					promptLines.push(inlineFile(hatPath, `Hat mandate: ${hat}`))
-				}
-				// Inline the feedback body so the subagent reads the finding
-				// directly from its prompt — no fan-out read required.
-				if (existsSync(fbAbsPath)) {
-					promptLines.push(
-						inlineFile(fbAbsPath, `Feedback: ${fbId} — ${fbTitle}`),
-					)
-				}
-				promptLines.push(
-					"",
-					"## Fix-mode scope (STRICT)",
-					`- You are addressing ONE finding: **${fbId}** — _${fbTitle}_.`,
-					`- Read the feedback body (above) carefully. It contains file:line references and the reviewer's concern.`,
-					`- The artifact(s) the feedback flags live in \`.haiku/intents/${slug}/stages/${fixStage}/\` — edit them in place.`,
-					"- Do NOT create a new unit spec. Do NOT modify unit FSM fields. Do NOT touch unrelated artifacts. Stay in scope.",
-					"- Do NOT call `haiku_unit_advance_hat` or `haiku_unit_reject_hat` — this is NOT unit execution.",
-					"",
-					"## Instructions",
-					"",
-				)
-				let step = 1
-				if (isGitRepo()) {
-					promptLines.push(
-						`${step++}. Work on the current branch. Commit the fix with a message like \`haiku: fix ${fbId} bolt ${fixBolt} (${hat})\` — do NOT push.`,
-					)
-				}
-				if (isLast) {
-					promptLines.push(
-						`${step++}. **Assess closure independently.** Read the edited artifact(s) and decide, through the lens of the finding, whether the fix resolves the finding as written.`,
-						`${step++}. If resolved: call \`haiku_feedback_update { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", status: "closed", closed_by: "fix-loop:${fbId}:bolt-${fixBolt}" }\`.`,
-						`${step++}. If NOT resolved: leave the feedback status as-is (the FSM will count this bolt and decide whether to dispatch another).`,
-						`${step++}. If the finding is actually invalid (e.g. the reviewer misread the artifact): call \`haiku_feedback_reject { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", reason: "<concrete reason>" }\` INSTEAD of closing it.`,
-						`${step++}. Return a one-line summary: \`fix-assessor: closed | open | rejected — <reason>\`.`,
-					)
-				} else {
-					promptLines.push(
-						`${step++}. Apply the fix within your hat's mandate. Save changes. Return a one-line summary of what you changed.`,
-					)
-				}
-
+			// Emit one grouped subagent block set per finding.
+			for (const {
+				feedback_id: fbId,
+				feedback_file: fbFile,
+				feedback_title: fbTitle,
+				bolt: fixBolt,
+			} of items) {
+				const fbAbsPath = join(haikuRoot, fbFile)
 				sections.push(
-					`${emitSubagentDispatchBlock({
-						unit: `fix-${fbId}`,
-						hat,
-						bolt: fixBolt,
-						agentType: hatDef?.agent_type ?? "general-purpose",
-						model: hatDef?.model,
-						promptBody: promptLines.join("\n"),
-						heading: `#### Subagent: \`${hat}\`${isLast ? " (final — validates closure)" : ""}`,
-					})}\n`,
+					`\n### Finding \`${fbId}\` — _${fbTitle}_ (bolt ${fixBolt}/${fixMaxBolts})\n`,
 				)
+
+				for (const hat of fixHatsList) {
+					const hatDef = allHats[hat]
+					if (!hatDef) {
+						sections.push(
+							`\n> **Warning:** hat \`${hat}\` declared in \`fix_hats\` has no mandate file in \`hats/${hat}.md\`. The subagent will run without a mandate — this is likely a studio bug.\n`,
+						)
+					}
+					const hatPath = hatDef
+						? join(
+								pluginRoot,
+								"studios",
+								studioDir,
+								"stages",
+								fixStage,
+								"hats",
+								`${hat}.md`,
+							)
+						: null
+
+					const isLast = hat === fixHatsList[fixHatsList.length - 1]
+					const promptLines: string[] = [
+						`You are the **${hat}** hat running in **fix-mode** against feedback **${fbId}** (bolt ${fixBolt} of ${fixMaxBolts}) in stage **${fixStage}** of intent **${slug}**.`,
+						"",
+						"## Parallel-batch warning",
+						`This fix loop is running in parallel with other findings. Multiple chains may edit the **same files** at overlapping times. When you edit, read the file immediately before writing so you don't clobber another chain's change. If your edit depends on state another chain may have already fixed, verify the current file content rather than trusting the feedback body's line numbers verbatim. The assessor will catch incomplete fixes and the FSM will retry on the next bolt.`,
+						"",
+						"## Required context (inlined below)",
+						"You are NOT wearing this hat to build a new unit. You are wearing it to resolve ONE specific feedback finding on artifacts that already exist.",
+						"",
+					]
+					if (stageBasePath) {
+						promptLines.push(
+							inlineFile(stageBasePath, `Stage scope: ${fixStage}`),
+						)
+					}
+					if (hatPath && existsSync(hatPath)) {
+						promptLines.push(inlineFile(hatPath, `Hat mandate: ${hat}`))
+					}
+					// Inline the feedback body so the subagent reads the finding
+					// directly from its prompt — no fan-out read required.
+					if (existsSync(fbAbsPath)) {
+						promptLines.push(
+							inlineFile(fbAbsPath, `Feedback: ${fbId} — ${fbTitle}`),
+						)
+					}
+					promptLines.push(
+						"",
+						"## Fix-mode scope (STRICT)",
+						`- You are addressing ONE finding: **${fbId}** — _${fbTitle}_.`,
+						`- Read the feedback body (above) carefully. It contains file:line references and the reviewer's concern.`,
+						`- The artifact(s) the feedback flags live in \`.haiku/intents/${slug}/stages/${fixStage}/\` — edit them in place.`,
+						"- Do NOT create a new unit spec. Do NOT modify unit FSM fields. Do NOT touch unrelated artifacts. Stay in scope.",
+						"- Do NOT call `haiku_unit_advance_hat` or `haiku_unit_reject_hat` — this is NOT unit execution.",
+						"",
+						"## Instructions",
+						"",
+					)
+					let step = 1
+					if (isGitRepo()) {
+						promptLines.push(
+							`${step++}. Work on the current branch. Commit the fix with a message like \`haiku: fix ${fbId} bolt ${fixBolt} (${hat})\` — do NOT push.`,
+						)
+					}
+					if (isLast) {
+						promptLines.push(
+							`${step++}. **Assess closure independently.** Read the edited artifact(s) and decide, through the lens of the finding, whether the fix resolves the finding as written.`,
+							`${step++}. If resolved: call \`haiku_feedback_update { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", status: "closed", closed_by: "fix-loop:${fbId}:bolt-${fixBolt}" }\`.`,
+							`${step++}. If NOT resolved: leave the feedback status as-is (the FSM will count this bolt and decide whether to dispatch another).`,
+							`${step++}. If the finding is actually invalid (e.g. the reviewer misread the artifact): call \`haiku_feedback_reject { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", reason: "<concrete reason>" }\` INSTEAD of closing it.`,
+							`${step++}. Return a one-line summary: \`fix-assessor: closed | open | rejected — <reason>\`.`,
+						)
+					} else {
+						promptLines.push(
+							`${step++}. Apply the fix within your hat's mandate. Save changes. Return a one-line summary of what you changed.`,
+						)
+					}
+
+					sections.push(
+						`${emitSubagentDispatchBlock({
+							unit: `fix-${fbId}`,
+							hat,
+							bolt: fixBolt,
+							agentType: hatDef?.agent_type ?? "general-purpose",
+							model: hatDef?.model,
+							promptBody: promptLines.join("\n"),
+							heading: `#### Subagent: \`${hat}\`${isLast ? " (final — validates closure)" : ""}`,
+						})}\n`,
+					)
+				}
 			}
 
-			sections.push(
-				`### Parent Instructions (do NOT include in subagent prompts)\n\nDispatch the subagents **serially, in the order listed above**. After the LAST subagent returns (regardless of whether it closed, rejected, or left the feedback open), call \`haiku_run_next { intent: "${slug}" }\` — the FSM decides what happens next (advance, loop, or escalate).`,
-			)
+			// Parent instructions: wave-based dispatch. Within a finding's
+			// chain, hats run serially; across findings, chains run in
+			// parallel. The simplest way for the parent agent to express
+			// that is to run waves — one wave per hat in the sequence,
+			// spawning all findings' subagents for that hat in a single
+			// message (multiple Agent tool_use blocks).
+			const waveLines: string[] = [
+				"### Parent Instructions (do NOT include in subagent prompts)",
+				"",
+				`**Dispatch by wave.** The hat sequence is \`${fixHatsList.join(" → ")}\`. For each hat in the sequence:`,
+				"",
+				`1. Spawn **one subagent per finding** for that hat, **all in parallel** (a single assistant message with multiple Agent tool_use blocks).`,
+				`2. Wait for every subagent in the wave to return before starting the next wave.`,
+				`3. Proceed to the next hat in the sequence.`,
+				"",
+				`After the FINAL wave (\`${fixHatsList[fixHatsList.length - 1]}\`) completes for all findings, call \`haiku_run_next { intent: "${slug}" }\` — the FSM decides what happens next (advance, loop the still-open findings, or escalate).`,
+			]
+			if (items.length > 1) {
+				waveLines.push(
+					"",
+					`**Conflict note:** ${items.length} chains will be editing artifacts concurrently. Any two chains may target the same file. Each chain's final hat validates closure independently — unresolved findings simply loop with an incremented bolt rather than silently drop. No serial fallback is needed.`,
+				)
+			}
+			sections.push(waveLines.join("\n"))
 			break
 		}
 
@@ -5813,97 +5898,143 @@ function buildRunInstructions(
 		}
 
 		case "intent_completion_fix": {
-			const fbId = action.feedback_id as string
-			const fbFile = action.feedback_file as string
-			const fbTitle = action.feedback_title as string
 			const fixHatsList = (action.fix_hats as string[]) || []
-			const fixBolt = (action.bolt as number) || 1
 			const fixMaxBolts = (action.max_bolts as number) || MAX_FIX_LOOP_BOLTS
-			const remaining = (action.remaining_pending as number) || 1
+			const items = (action.items as Array<{
+				feedback_id: string
+				feedback_file: string
+				feedback_title: string
+				bolt: number
+			}>) || []
+			const totalPending = (action.total_pending as number) || items.length
+			const escalatedCount = (action.escalated_count as number) || 0
 			const haikuRoot = findHaikuRoot()
-			const fbAbsPath = join(haikuRoot, fbFile)
-
 			const fixHatPaths = readStudioFixHatPaths(studio)
 
 			sections.push(FSM_CONTRACTS_FIX_LOOP_BLOCK)
-			sections.push(
-				`## Intent-Completion Fix Loop: ${fbId} (bolt ${fixBolt}/${fixMaxBolts})\n\nStudio-level finding **${fbId}** — _${fbTitle}_ — will be addressed by dispatching the studio's \`fix-hats/\` sequence directly against the feedback body. No new unit is synthesized. ${remaining > 1 ? `(${remaining - 1} other finding(s) remain after this one.)` : ""}`,
-			)
-
-			sections.push(
-				'### Fix Hat Sequence (SERIAL — one at a time)\n\n**Dispatch hats SEQUENTIALLY — wait for each to complete before the next.** The final hat validates closure and calls `haiku_feedback_update { status: "closed" }` (omit `stage`). If the final hat leaves the feedback open, the FSM loops again on the next `haiku_run_next` — up to the bolt cap.\n',
-			)
-
-			for (const hat of fixHatsList) {
-				const hatPath = fixHatPaths[hat]
-				if (!hatPath) {
-					sections.push(
-						`\n> **Warning:** studio fix-hat \`${hat}\` has no mandate file in \`plugin/studios/${studio}/fix-hats/${hat}.md\`. The subagent will run without a mandate — this is likely a studio bug.\n`,
-					)
-				}
-				const isLast = hat === fixHatsList[fixHatsList.length - 1]
-
-				const promptLines: string[] = [
-					`You are the **${hat}** studio fix-hat running against intent-scope feedback **${fbId}** (bolt ${fixBolt} of ${fixMaxBolts}) for intent **${slug}**.`,
+			const icHeader = [
+				`## Intent-Completion Fix Loop: ${items.length} finding(s) in parallel`,
+				"",
+				`Studio-level findings will be addressed by dispatching the studio's \`fix-hats/\` sequence against each finding. Per-finding sequence: ${fixHatsList.join(" → ")} (serial within chain). Chains run in parallel across findings.`,
+			]
+			if (escalatedCount > 0) {
+				icHeader.push(
 					"",
-					"## Required context (inlined below)",
-					"You are addressing ONE whole-intent finding. Your mandate is studio-wide, not stage-specific — you reconcile artifacts across the whole intent against studio standards.",
-					"",
-				]
-				if (hatPath && existsSync(hatPath)) {
-					promptLines.push(inlineFile(hatPath, `Fix-hat mandate: ${hat}`))
-				}
-				if (existsSync(fbAbsPath)) {
-					promptLines.push(
-						inlineFile(fbAbsPath, `Feedback: ${fbId} — ${fbTitle}`),
-					)
-				}
-				promptLines.push(
-					"",
-					"## Fix-mode scope (STRICT)",
-					`- You are addressing ONE finding: **${fbId}** — _${fbTitle}_.`,
-					`- The artifact(s) the feedback flags live under \`.haiku/intents/${slug}/stages/*/\` — edit them in place.`,
-					"- Do NOT create a new unit spec. Do NOT modify unit FSM fields. Do NOT touch unrelated artifacts.",
-					"- Do NOT call `haiku_unit_advance_hat` or `haiku_unit_reject_hat`.",
-					"",
-					"## Instructions",
-					"",
-				)
-				let step = 1
-				if (isGitRepo()) {
-					promptLines.push(
-						`${step++}. Work on the current branch. Commit with a message like \`haiku: intent-fix ${fbId} bolt ${fixBolt} (${hat})\` — do NOT push.`,
-					)
-				}
-				if (isLast) {
-					promptLines.push(
-						`${step++}. **Assess closure independently.** Decide whether the fix resolves the finding as written.`,
-						`${step++}. If resolved: call \`haiku_feedback_update { intent: "${slug}", feedback_id: "${fbId}", status: "closed", closed_by: "intent-fix:${fbId}:bolt-${fixBolt}" }\` — omit \`stage\`.`,
-						`${step++}. If NOT resolved: leave status unchanged.`,
-						`${step++}. If the finding is actually invalid: call \`haiku_feedback_reject { intent: "${slug}", feedback_id: "${fbId}", reason: "<concrete reason>" }\` — omit \`stage\`.`,
-						`${step++}. Return \`fix-assessor: closed | open | rejected — <reason>\`.`,
-					)
-				} else {
-					promptLines.push(
-						`${step++}. Apply the fix within your mandate. Save changes. Return a one-line summary.`,
-					)
-				}
-
-				sections.push(
-					`${emitSubagentDispatchBlock({
-						unit: `intent-fix-${fbId}`,
-						hat,
-						bolt: fixBolt,
-						agentType: "general-purpose",
-						promptBody: promptLines.join("\n"),
-						heading: `#### Subagent: \`${hat}\`${isLast ? " (final — validates closure)" : ""}`,
-					})}\n`,
+					`> ⚠ ${escalatedCount} additional finding(s) are at the bolt cap and will escalate after this batch completes.`,
 				)
 			}
+			if (totalPending !== items.length + escalatedCount) {
+				icHeader.push(
+					"",
+					`> Total pending: ${totalPending}. Dispatching: ${items.length}. At cap: ${escalatedCount}.`,
+				)
+			}
+			sections.push(icHeader.join("\n"))
 
 			sections.push(
-				`### Parent Instructions (do NOT include in subagent prompts)\n\nDispatch serially. After the LAST subagent returns, call \`haiku_run_next { intent: "${slug}" }\` — the FSM decides: advance to gate, loop again, or escalate.`,
+				'### Parallel Fix-Chain Dispatch\n\nEach finding below has its own hat chain. **Within a chain, hats run serially.** **Across chains, findings run in parallel.** The final hat in each chain validates closure and calls `haiku_feedback_update { status: "closed" }` (omit `stage`). If a chain leaves its feedback open, the FSM loops that finding again on the next `haiku_run_next` — up to the bolt cap.\n',
 			)
+
+			for (const {
+				feedback_id: fbId,
+				feedback_file: fbFile,
+				feedback_title: fbTitle,
+				bolt: fixBolt,
+			} of items) {
+				const fbAbsPath = join(haikuRoot, fbFile)
+				sections.push(
+					`\n### Finding \`${fbId}\` — _${fbTitle}_ (bolt ${fixBolt}/${fixMaxBolts})\n`,
+				)
+
+				for (const hat of fixHatsList) {
+					const hatPath = fixHatPaths[hat]
+					if (!hatPath) {
+						sections.push(
+							`\n> **Warning:** studio fix-hat \`${hat}\` has no mandate file in \`plugin/studios/${studio}/fix-hats/${hat}.md\`. The subagent will run without a mandate — this is likely a studio bug.\n`,
+						)
+					}
+					const isLast = hat === fixHatsList[fixHatsList.length - 1]
+
+					const promptLines: string[] = [
+						`You are the **${hat}** studio fix-hat running against intent-scope feedback **${fbId}** (bolt ${fixBolt} of ${fixMaxBolts}) for intent **${slug}**.`,
+						"",
+						"## Parallel-batch warning",
+						`This fix loop is running in parallel with other findings. Multiple chains may edit the **same files** at overlapping times. When you edit, read the file immediately before writing so you don't clobber another chain's change. The assessor will catch incomplete fixes and the FSM will retry on the next bolt.`,
+						"",
+						"## Required context (inlined below)",
+						"You are addressing ONE whole-intent finding. Your mandate is studio-wide, not stage-specific — you reconcile artifacts across the whole intent against studio standards.",
+						"",
+					]
+					if (hatPath && existsSync(hatPath)) {
+						promptLines.push(inlineFile(hatPath, `Fix-hat mandate: ${hat}`))
+					}
+					if (existsSync(fbAbsPath)) {
+						promptLines.push(
+							inlineFile(fbAbsPath, `Feedback: ${fbId} — ${fbTitle}`),
+						)
+					}
+					promptLines.push(
+						"",
+						"## Fix-mode scope (STRICT)",
+						`- You are addressing ONE finding: **${fbId}** — _${fbTitle}_.`,
+						`- The artifact(s) the feedback flags live under \`.haiku/intents/${slug}/stages/*/\` — edit them in place.`,
+						"- Do NOT create a new unit spec. Do NOT modify unit FSM fields. Do NOT touch unrelated artifacts.",
+						"- Do NOT call `haiku_unit_advance_hat` or `haiku_unit_reject_hat`.",
+						"",
+						"## Instructions",
+						"",
+					)
+					let step = 1
+					if (isGitRepo()) {
+						promptLines.push(
+							`${step++}. Work on the current branch. Commit with a message like \`haiku: intent-fix ${fbId} bolt ${fixBolt} (${hat})\` — do NOT push.`,
+						)
+					}
+					if (isLast) {
+						promptLines.push(
+							`${step++}. **Assess closure independently.** Decide whether the fix resolves the finding as written.`,
+							`${step++}. If resolved: call \`haiku_feedback_update { intent: "${slug}", feedback_id: "${fbId}", status: "closed", closed_by: "intent-fix:${fbId}:bolt-${fixBolt}" }\` — omit \`stage\`.`,
+							`${step++}. If NOT resolved: leave status unchanged.`,
+							`${step++}. If the finding is actually invalid: call \`haiku_feedback_reject { intent: "${slug}", feedback_id: "${fbId}", reason: "<concrete reason>" }\` — omit \`stage\`.`,
+							`${step++}. Return \`fix-assessor: closed | open | rejected — <reason>\`.`,
+						)
+					} else {
+						promptLines.push(
+							`${step++}. Apply the fix within your mandate. Save changes. Return a one-line summary.`,
+						)
+					}
+
+					sections.push(
+						`${emitSubagentDispatchBlock({
+							unit: `intent-fix-${fbId}`,
+							hat,
+							bolt: fixBolt,
+							agentType: "general-purpose",
+							promptBody: promptLines.join("\n"),
+							heading: `#### Subagent: \`${hat}\`${isLast ? " (final — validates closure)" : ""}`,
+						})}\n`,
+					)
+				}
+			}
+
+			const icWaveLines: string[] = [
+				"### Parent Instructions (do NOT include in subagent prompts)",
+				"",
+				`**Dispatch by wave.** The hat sequence is \`${fixHatsList.join(" → ")}\`. For each hat in the sequence:`,
+				"",
+				`1. Spawn **one subagent per finding** for that hat, **all in parallel** (a single assistant message with multiple Agent tool_use blocks).`,
+				`2. Wait for every subagent in the wave to return before starting the next wave.`,
+				`3. Proceed to the next hat in the sequence.`,
+				"",
+				`After the FINAL wave completes for all findings, call \`haiku_run_next { intent: "${slug}" }\` — the FSM decides: advance to gate, loop still-open findings, or escalate.`,
+			]
+			if (items.length > 1) {
+				icWaveLines.push(
+					"",
+					`**Conflict note:** ${items.length} chains will be editing artifacts concurrently. Unresolved findings loop with an incremented bolt rather than drop.`,
+				)
+			}
+			sections.push(icWaveLines.join("\n"))
 			break
 		}
 

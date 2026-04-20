@@ -1102,9 +1102,11 @@ try {
 			"review_fix",
 			`Expected review_fix, got: ${result.action}`,
 		)
-		assert.strictEqual(result.feedback_id, "FB-01")
+		assert.ok(Array.isArray(result.items), "expected items[] on review_fix")
+		assert.strictEqual(result.items.length, 1)
+		assert.strictEqual(result.items[0].feedback_id, "FB-01")
+		assert.strictEqual(result.items[0].bolt, 1)
 		assert.deepStrictEqual(result.fix_hats, ["worker", "feedback-assessor"])
-		assert.strictEqual(result.bolt, 1)
 		assert.strictEqual(result.max_bolts, 3)
 	})
 

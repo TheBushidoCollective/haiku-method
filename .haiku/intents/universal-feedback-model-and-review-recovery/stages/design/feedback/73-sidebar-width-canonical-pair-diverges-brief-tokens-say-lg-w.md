@@ -2,7 +2,7 @@
 title: >-
   Sidebar width canonical pair diverges: BRIEF/TOKENS say lg:w-96, unit-16 gate
   says xl:w-96
-status: pending
+status: rejected
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -29,3 +29,7 @@ On top of that, unit-16 gate 8 flips the desktop breakpoint threshold from **102
 - Switch to `xl:w-96` (1280px cutover) — then rewrite DESIGN-BRIEF §1 line 38, §4 lines 591-593, and DESIGN-TOKENS §1.3 line 101 / §2.5 line 383 to match, plus every artifact that currently renders `lg:w-96`.
 
 Until this is resolved, every downstream unit that picks a sidebar width is guessing.
+
+---
+
+**Rejection reason:** Canonical chosen: `w-80 xl:w-96` (1280px cutover, matches unit-16 gate and canonical breakpoint table in DESIGN-TOKENS.md §1.5). DESIGN-BRIEF and DESIGN-TOKENS will be sync-swept in unit-20. Dropping this as a standalone finding — covered by unit-20's doc-alignment gate.

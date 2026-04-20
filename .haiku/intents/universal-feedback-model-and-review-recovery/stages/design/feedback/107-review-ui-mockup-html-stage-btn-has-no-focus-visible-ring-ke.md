@@ -2,7 +2,7 @@
 title: >-
   review-ui-mockup.html .stage-btn has no focus-visible ring — keyboard focus
   invisible (WCAG 2.4.7)
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:30:51Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: null
+closed_by: unit-29-focus-visible-canonicalization-and-spec-clarity
 ---
 
 The six `.stage-btn` buttons in `review-ui-mockup.html` (lines 66, 83, 100, 118, 136, 153) use `focus:outline-none` and have NO replacement focus-visible ring. The companion `<style>` block at lines 1922-1957 defines:

@@ -1,11 +1,11 @@
 ---
-title: Design review — unit-23 focus-visible + activable element semantics (bolt 1 + bolt 2)
+title: Design review — unit-23 focus-visible + activable element semantics (bolt 1 + bolt 2 + bolt 3)
 unit: unit-23-focus-visible-and-activable-element-semantics
 reviewer: design-reviewer
-bolt: 2
+bolt: 3
 status: approved
 created_at: '2026-04-20T03:10:00Z'
-updated_at: '2026-04-20T09:15:00Z'
+updated_at: '2026-04-20T09:48:00Z'
 artifacts_reviewed:
   - stages/design/artifacts/assessor-summary-card.html
   - stages/design/artifacts/stage-progress-strip.html
@@ -247,3 +247,43 @@ unchecked for the feedback-assessor to close.
 
 Bolt-2 Verdict: **approved**. No artifact regressions, ticks are
 accurate. Advance to feedback-assessor.
+
+---
+
+## Bolt 3 addendum — design-reviewer re-verification after designer bolt-3 no-op
+
+Scope of bolt 3: the FSM re-ran the designer → design-reviewer pair after
+bolt-2's advance. No new designer commits landed (`git diff 0f5790f6 HEAD`
+empty; bolt-2 reviewer SHA is still HEAD). This bolt is a re-verification
+sweep to confirm the artifact state hasn't drifted and the ticks remain
+honest before the hat hands off to feedback-assessor.
+
+Re-verification grep set, rerun against current HEAD:
+
+| # | Criterion | Grep | Result |
+|---|---|---|---|
+| 1 | assessor-summary-card.html ≥ 4 buttons with `focus-visible:ring-2` | `grep -cE 'focus-visible:ring-2' assessor-summary-card.html` | **4** (L83/123/236/259) — pass |
+| 2 | stage-progress-strip.html 0 `role="link"` | `grep -c 'role="link"' stage-progress-strip.html` | **0** — pass |
+| 3 | Every stage-node is `<a href>` or `<button type="button">` | `grep -c '<a href="#stage-' stage-progress-strip.html` | **10** — pass |
+| 4 | Canonical focus-visible ring on every converted node | Line walk of L91/105/119/138/152/191/201/216/230/243 | all 10 carry `focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900` — pass |
+| 5 | `aria-current="step"` on active; `tabindex="-1"` + `aria-disabled="true"` on future | counts in bolt-2 row 5 | unchanged from bolt 2 — pass |
+| 6 | focus-ring-spec.html §1b footgun rule | re-read L111-L117 (§1b), L175 (§3), L188 (§4) | present and intact — pass |
+| 7 | Stage-wide `<div role="link">` in applied HTML = 0 | `grep -rE --include="*.html" '<div[^>]*role="link"' stages/design/artifacts/` | **0** — pass |
+
+### Out-of-scope observation (not blocking this unit)
+
+While running the stage-wide sweep I noticed `aria-landmark-spec.md:86`
+still describes stage nodes as having `role="link"`. That line is stale
+doc prose in a markdown spec that predates this unit; it is not applied
+HTML (the grep in criterion 7 correctly excludes it via `--include="*.html"`)
+and it lives outside this unit's declared inputs/outputs. Flagging it here
+so a future unit can sweep non-HTML specs, but it does NOT invalidate any
+of this unit's completion criteria or the FB-76 / FB-82 closures.
+
+### Bolt-3 Verdict
+
+**Approved.** Artifact state is identical to bolt 2's approved state (no
+new commits between reviewer bolts). All 7 designer/reviewer criteria
+remain honest. Advance to feedback-assessor; criterion 8 is their
+deliverable.
+

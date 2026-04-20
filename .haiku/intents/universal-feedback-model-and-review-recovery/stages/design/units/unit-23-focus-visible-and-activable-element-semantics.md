@@ -65,9 +65,9 @@ quality_gates:
     final audit count is reported in the design-reviewer's verification note.
 status: active
 bolt: 5
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T05:08:26Z'
-hat_started_at: '2026-04-20T09:12:40Z'
+hat_started_at: '2026-04-20T09:14:00Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:26Z'
@@ -187,6 +187,10 @@ iterations:
       FB-closure work and artifact state are correct and must not be redone.
   - hat: designer
     started_at: '2026-04-20T09:12:40Z'
+    completed_at: '2026-04-20T09:14:00Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T09:14:00Z'
     completed_at: null
     result: null
 ---

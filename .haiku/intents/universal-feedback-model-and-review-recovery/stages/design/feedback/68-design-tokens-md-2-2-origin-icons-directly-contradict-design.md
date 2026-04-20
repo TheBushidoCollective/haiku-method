@@ -2,7 +2,7 @@
 title: >-
   DESIGN-TOKENS.md §2.2 origin icons directly contradict DESIGN-BRIEF §2
   canonical mapping
-status: pending
+status: rejected
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -41,3 +41,7 @@ Plus the "Icon Suggestion" column of the same table says "Shield / target", "Git
 Downstream artifacts are split: some render the BRIEF set (e.g. `aria-landmark-spec.md §6`), others the TOKENS set (e.g. `state-signaling-inventory.html:84,95,113,125,173,184,211,222,238,250,293,304` still uses 🛡/🔀/✨; `feedback-card-states.html:495,521` still uses `&#x1F6E1;&#xFE0F;` = 🛡). Unit-16's quality gate explicitly banned 🛡/🔀/✨ / `&#x1F6E1` / `&#x1F500` / `&#x2728` and was marked satisfied. The gate fails on live file contents.
 
 **Recommended fix:** pick one source of truth (DESIGN-BRIEF is the explicit canonical per line 217), then rewrite `DESIGN-TOKENS.md §2.2` to reference the BRIEF codepoints verbatim, delete the "shield/shuffle/eye/sparkle" text including the "Icon Suggestion" column, and re-run the unit-16 gate until `grep -rnP '\\U0001F6E1|\\U0001F500|✨|&#x1F6E1|&#x1F500|&#x2728' stages/design/artifacts/ DESIGN-BRIEF.md` returns 0.
+
+---
+
+**Rejection reason:** Stale: reviewer scanned pre-merge. Post-unit-17 merge, DESIGN-TOKENS.md §2.2 uses the canonical 🔍/🔗/✎/💬/🤖 set with explicit codepoints, matching DESIGN-BRIEF §2 and aria-landmark-spec.md §6. Verified: no 🛡/🔀/✨/👁 drift on current HEAD.

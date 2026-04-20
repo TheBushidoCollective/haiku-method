@@ -51,9 +51,9 @@
             <button id="mode-user" onclick="setMode('user')" class="px-2 py-1 text-xs font-semibold">User-opened</button>
           </div>
         </div>
-        <button onclick="resetSeen()" class="px-2 py-1 text-xs rounded border border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800" title="Demo: clear seen state">Reset seen</button>
-        <button onclick="toggleKbdHelp()" class="px-2 py-1 text-xs rounded border border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800" title="Keyboard shortcuts (?)">?</button>
-        <button id="theme-toggle" onclick="toggleTheme()" class="px-2 py-1 text-xs rounded border border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800" title="Toggle theme">&#x263E;</button>
+        <button onclick="resetSeen()" class="px-2 py-1 text-xs rounded border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800" title="Demo: clear seen state">Reset seen</button>
+        <button onclick="toggleKbdHelp()" class="px-2 py-1 text-xs rounded border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800" title="Keyboard shortcuts (?)">?</button>
+        <button id="theme-toggle" onclick="toggleTheme()" class="px-2 py-1 text-xs rounded border border-stone-300 dark:border-stone-600 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800" title="Toggle theme">&#x263E;</button>
       </div>
     </div>
 
@@ -63,7 +63,7 @@
         <ol class="flex items-start gap-0">
           <!-- Inception — complete, no pending -->
           <li class="w-24">
-            <button type="button" data-stage="inception" class="stage-btn group w-full flex flex-col items-center focus:outline-none" aria-label="View Inception feedback">
+            <button type="button" data-stage="inception" class="stage-btn group w-full flex flex-col items-center" aria-label="View Inception feedback">
               <div class="flex items-center w-full h-10">
                 <div class="flex-1 h-0.5 bg-transparent"></div>
                 <div class="stage-icon relative w-10 h-10 flex items-center justify-center shrink-0">
@@ -80,7 +80,7 @@
 
           <!-- Design — complete, no pending -->
           <li class="w-24">
-            <button type="button" data-stage="design" class="stage-btn group w-full flex flex-col items-center focus:outline-none" aria-label="View Design feedback">
+            <button type="button" data-stage="design" class="stage-btn group w-full flex flex-col items-center" aria-label="View Design feedback">
               <div class="flex items-center w-full h-10">
                 <div class="flex-1 h-0.5 bg-green-400 dark:bg-green-700"></div>
                 <div class="stage-icon relative w-10 h-10 flex items-center justify-center shrink-0">
@@ -97,7 +97,7 @@
 
           <!-- Product — complete, 1 pending feedback (EARLIEST unaddressed) -->
           <li class="w-24">
-            <button type="button" data-stage="product" class="stage-btn group w-full flex flex-col items-center focus:outline-none" aria-label="View Product feedback (1 pending)">
+            <button type="button" data-stage="product" class="stage-btn group w-full flex flex-col items-center" aria-label="View Product feedback (1 pending)">
               <div class="flex items-center w-full h-10">
                 <div class="flex-1 h-0.5 bg-green-400 dark:bg-green-700"></div>
                 <div class="stage-icon relative w-10 h-10 flex items-center justify-center shrink-0">
@@ -115,7 +115,7 @@
 
           <!-- Development — current, 2 pending feedback -->
           <li class="w-24">
-            <button type="button" data-stage="development" class="stage-btn group w-full flex flex-col items-center focus:outline-none" aria-current="step" aria-label="View Development feedback (current, 2 pending)">
+            <button type="button" data-stage="development" class="stage-btn group w-full flex flex-col items-center" aria-current="step" aria-label="View Development feedback (current, 2 pending)">
               <div class="flex items-center w-full h-10">
                 <div class="flex-1 h-0.5 bg-gradient-to-r from-green-400 to-teal-400 dark:from-green-700 dark:to-teal-600"></div>
                 <div class="stage-icon relative w-10 h-10 flex items-center justify-center shrink-0">
@@ -133,7 +133,7 @@
 
           <!-- Operations — upcoming -->
           <li class="w-24">
-            <button type="button" data-stage="operations" data-disabled="true" class="stage-btn group w-full flex flex-col items-center focus:outline-none opacity-60 cursor-not-allowed" disabled aria-label="Operations — not yet started">
+            <button type="button" data-stage="operations" data-disabled="true" class="stage-btn group w-full flex flex-col items-center cursor-not-allowed" disabled aria-disabled="true" aria-label="Operations — not yet started">
               <div class="flex items-center w-full h-10">
                 <div class="flex-1 h-0.5 bg-stone-300 dark:bg-stone-700"></div>
                 <div class="stage-icon relative w-10 h-10 flex items-center justify-center shrink-0">
@@ -150,7 +150,7 @@
 
           <!-- Security — upcoming -->
           <li class="w-24">
-            <button type="button" data-stage="security" data-disabled="true" class="stage-btn group w-full flex flex-col items-center focus:outline-none opacity-60 cursor-not-allowed" disabled aria-label="Security — not yet started">
+            <button type="button" data-stage="security" data-disabled="true" class="stage-btn group w-full flex flex-col items-center cursor-not-allowed" disabled aria-disabled="true" aria-label="Security — not yet started">
               <div class="flex items-center w-full h-10">
                 <div class="flex-1 h-0.5 bg-stone-300 dark:bg-stone-700"></div>
                 <div class="stage-icon relative w-10 h-10 flex items-center justify-center shrink-0">
@@ -725,7 +725,7 @@
       badge.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ' + (
         isCurrent ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
         : s.status === 'complete' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-        : 'bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400'
+        : 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300'
       );
 
       // Gate badge
@@ -736,7 +736,7 @@
         gateBadge.style.display = 'inline-flex';
       } else if (s.status === 'complete') {
         gateBadge.textContent = 'gates closed';
-        gateBadge.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400';
+        gateBadge.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300';
         gateBadge.style.display = 'inline-flex';
       } else {
         gateBadge.style.display = 'none';
@@ -748,7 +748,7 @@
         sel.classList.remove('hidden');
         sel.classList.add('flex');
         const activeCls = 'bg-teal-600 text-white';
-        const inactiveCls = 'bg-transparent text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800';
+        const inactiveCls = 'bg-transparent text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800';
         document.getElementById('gate-postElab').className = 'px-2 py-0.5 text-xs font-semibold ' + (s.activeGate === 'postElab' ? activeCls : inactiveCls);
         document.getElementById('gate-finalReview').className = 'px-2 py-0.5 text-xs font-semibold ' + (s.activeGate === 'finalReview' ? activeCls : inactiveCls);
       } else {
@@ -760,7 +760,7 @@
       fbCount.textContent = pending;
       fbCount.className = 'ml-1 px-1.5 py-0.5 rounded-full text-xs ' + (pending > 0
         ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-        : 'bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400');
+        : 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300');
 
       // Feedback list
       const list = document.getElementById('sb-feedback-list');
@@ -780,20 +780,29 @@
         list.innerHTML = `
           <div class="flex gap-1.5 mb-2">
             <button class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Pending (${pending})</button>
-            <button class="px-2 py-0.5 rounded-full text-xs font-medium text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800">All (${s.feedback.length})</button>
+            <button class="px-2 py-0.5 rounded-full text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800">All (${s.feedback.length})</button>
           </div>
           ${visitKeys.map(v => `
             <p class="text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-2">Visit ${v}</p>
             ${byVisit[v].map((f, idx) => {
               const st = STATUS_STYLES[f.status];
               const origin = ORIGIN_STYLES[f.origin] || '';
-              const dim = (f.status === 'closed' || f.status === 'rejected') ? 'opacity-60' : '';
+              // unit-26 / unit-11 ban: no wholesale element opacity. Closed
+              // and rejected cards signal "finality" via status-aware muted
+              // background tokens (matches feedback-card-states.html and
+              // knowledge/DESIGN-TOKENS.md §2.3). Card text stays at full
+              // opacity so metadata and body copy remain AA-legible.
+              const surface = f.status === 'closed'
+                ? 'bg-green-50/60 dark:bg-green-950/25'
+                : (f.status === 'rejected'
+                    ? 'bg-stone-100 dark:bg-stone-800/50'
+                    : 'bg-white dark:bg-stone-900');
               const markerNum = s.feedback.indexOf(f) + 1;
               const targetLabel = f.target ? f.target.label : '';
               const targetIconMap = { file: '&#x1F4C4;', unit: '&#x1F4E6;', knowledge: '&#x1F9E0;', output: '&#x1F4E4;' };
               const targetIcon = f.target ? (targetIconMap[f.target.kind] || '&#x1F4CC;') : '';
               return `
-                <div data-fb-id="${f.id}" onclick="highlightFeedback('${f.id}')" class="fb-card rounded-lg border border-stone-200 dark:border-stone-700 border-l-[3px] ${st.border} bg-white dark:bg-stone-900 p-2.5 cursor-pointer hover:border-teal-400 dark:hover:border-teal-500 transition-colors overflow-hidden ${dim} ${f.id === focusedFbId ? 'fb-focused' : ''}">
+                <div data-fb-id="${f.id}" onclick="highlightFeedback('${f.id}')" class="fb-card rounded-lg border border-stone-200 dark:border-stone-700 border-l-[3px] ${st.border} ${surface} p-2.5 cursor-pointer hover:border-teal-400 dark:hover:border-teal-500 transition-colors overflow-hidden ${f.id === focusedFbId ? 'fb-focused' : ''}">
                   <div class="flex items-start gap-2 mb-1 min-w-0">
                     <span class="shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full bg-teal-500 text-white text-xs font-bold">${markerNum}</span>
                     <span class="flex-1 min-w-0 text-xs font-semibold text-stone-900 dark:text-stone-100 leading-tight break-words">${f.title}</span>
@@ -841,19 +850,20 @@
       if (requestMode) {
         const label = isCurrent ? 'Request Changes' : `Request Changes on ${s.label}`;
         actions.innerHTML = `
-          <button onclick="onRequestChanges()" class="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition-colors focus:ring-2 focus:ring-amber-500 focus:outline-none">${label}</button>`;
+          <button onclick="onRequestChanges()" class="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition-colors focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">${label}</button>`;
       } else if (isCurrent) {
         const gateActive = reviewMode === 'gate';
         const approveClasses = gateActive
-          ? 'bg-green-600 hover:bg-green-700 text-white focus:ring-green-500'
-          : 'bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-500 cursor-not-allowed focus:ring-stone-400';
+          ? 'bg-green-600 hover:bg-green-700 text-white focus-visible:ring-green-500'
+          : 'bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed focus-visible:ring-stone-500';
+        const approveDisabled = gateActive ? '' : 'disabled aria-disabled="true"';
         const approveLabel = gateActive ? 'Approve' : 'Approve (no-op outside gate)';
         actions.innerHTML = `
-          <button onclick="onApprove()" class="w-full px-3 py-2 text-xs font-semibold rounded-lg ${approveClasses} transition-colors focus:ring-2 focus:outline-none" title="${gateActive ? 'Advance FSM to next stage' : 'No gate active'}">${approveLabel}</button>`;
+          <button onclick="onApprove()" ${approveDisabled} class="w-full px-3 py-2 text-xs font-semibold rounded-lg ${approveClasses} transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none" title="${gateActive ? 'Advance FSM to next stage' : 'No gate active'}">${approveLabel}</button>`;
       } else {
         // Non-current stage, nothing pending, nothing typed — disabled Request Changes with hint
         actions.innerHTML = `
-          <button disabled class="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-500 cursor-not-allowed">Add feedback above to enable</button>`;
+          <button disabled aria-disabled="true" class="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 outline-none">Add feedback above to enable</button>`;
       }
 
       // Hint line reflects current action
@@ -1009,7 +1019,7 @@
         <div data-unit-card="${u.name}" class="unit-card bg-white dark:bg-stone-900 rounded-lg border-2 ${state === 'unseen' ? 'border-sky-300 dark:border-sky-800' : state === 'changed' ? 'border-amber-300 dark:border-amber-700' : 'border-stone-200 dark:border-stone-700'} overflow-hidden">
           <!-- Header row -->
           <button type="button" onclick="toggleUnit('${s.id}', '${u.name}')" class="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
-            <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 text-xs font-bold font-mono mt-0.5">${String(idx + 1).padStart(2, '0')}</span>
+            <span class="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs font-bold font-mono mt-0.5">${String(idx + 1).padStart(2, '0')}</span>
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-sm font-semibold text-stone-900 dark:text-stone-100 leading-tight break-words">${u.title || u.name}</span>
@@ -1668,7 +1678,7 @@
       const g = document.getElementById('mode-gate');
       const u = document.getElementById('mode-user');
       const active = 'bg-teal-600 text-white';
-      const inactive = 'bg-transparent text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800';
+      const inactive = 'bg-transparent text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800';
       g.className = 'px-2 py-1 text-xs font-semibold ' + (mode === 'gate' ? active : inactive);
       u.className = 'px-2 py-1 text-xs font-semibold ' + (mode === 'user' ? active : inactive);
       selectStage(selectedStageId);
@@ -1921,6 +1931,22 @@
 
   <style>
     .stage-btn { position: relative; }
+    /* Canonical focus-visible ring — 2px teal-500 with 2px offset. Mirrors
+       stage-progress-strip.html §canonical focus ring (FB-37 / focus-ring-spec.html §1).
+       Applied to every .stage-btn so keyboard users always see focus. The
+       existing `.stage-icon` sky outline is reserved for the SELECTED-stage
+       indicator, not for keyboard focus. */
+    .stage-btn:focus-visible {
+      outline: 2px solid rgb(20 184 166); /* teal-500 */
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+    html.dark .stage-btn:focus-visible {
+      outline-color: rgb(45 212 191); /* teal-400 (dark-mode variant — allowed by focus-ring-spec.html) */
+    }
+    /* Suppress the default (non focus-visible) outline since we own the ring. */
+    .stage-btn:focus:not(:focus-visible) { outline: none; }
+
     /* Selection indicator: a sky-blue ring around the icon wrapper — mirrors the hover state in a distinct color */
     .stage-btn .stage-icon {
       outline: 0 solid transparent;

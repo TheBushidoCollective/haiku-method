@@ -18,7 +18,14 @@
     .max-w-page { max-width: var(--max-page-width); }
     body { font-family: system-ui, -apple-system, sans-serif; }
 
-    /* Locked card overlay */
+    /* Locked card — muted-surface treatment (unit-26 / unit-11 / unit-18 ban
+       on wholesale element opacity). Cards render at full opacity with a
+       muted stone background and dashed border as the "read-only" signal;
+       hover lifts the surface rather than changing alpha; focus applies the
+       canonical teal ring on the muted surface.
+       Canonical tokens: bg-stone-50 dark:bg-stone-900/60 + dashed stone
+       border + text-stone-600 dark:text-stone-300 title. See
+       knowledge/DESIGN-TOKENS.md §1.7 and contrast-and-type-audit.md §6.3. */
     .locked-card {
       position: relative;
     }
@@ -30,21 +37,17 @@
       pointer-events: none;
     }
     /* Locked / completed cards are focusable for read-only inspection
-       (keyboard users can still land on them to read the SR summary). The
-       focus ring is teal even though the card is dimmed — the ring must be
-       brighter than the surrounding content so keyboard users see where
-       they are. FB-25: focus ring documented for locked/completed units. */
+       (keyboard users can land on them to read the SR summary). FB-25:
+       canonical focus ring documented for locked/completed units. */
     .locked-card:focus-visible {
       outline: 2px solid rgb(20 184 166);
       outline-offset: 3px;
-      opacity: 0.95; /* briefly restore visibility of content while focused */
     }
     .locked-card:hover {
-      opacity: 0.8; /* pointer hover restores some visibility too */
+      background-color: rgb(245 245 244); /* stone-100 — lift the surface, not alpha */
     }
-    /* Reduced-motion — no transitions on focus/hover opacity */
-    @media (prefers-reduced-motion: reduce) {
-      .locked-card { transition: none; }
+    .dark .locked-card:hover {
+      background-color: rgb(41 37 36); /* stone-800 */
     }
   </style>
 </head>
@@ -175,7 +178,7 @@
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">unit-08</span>
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400">pending</span>
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300">pending</span>
             </div>
             <span class="text-xs text-stone-500 dark:text-stone-500">NEW</span>
           </div>
@@ -205,7 +208,7 @@
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">unit-09</span>
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400">pending</span>
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300">pending</span>
             </div>
             <span class="text-xs text-stone-500 dark:text-stone-500">NEW</span>
           </div>
@@ -237,14 +240,14 @@
         <h2 class="text-base font-semibold text-stone-900 dark:text-stone-100">
           Completed Units <span class="text-sm font-normal text-stone-500 dark:text-stone-400">(7)</span>
         </h2>
-        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-stone-200 text-stone-500 dark:bg-stone-700 dark:text-stone-400">
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-stone-100 text-stone-700 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500">
           &#x1F512; read-only
         </span>
       </div>
 
       <div class="space-y-2">
         <!-- Completed unit 1 -->
-        <div tabindex="0" role="article" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm p-4 opacity-60 transition-opacity outline-none">
+        <div tabindex="0" role="article" aria-disabled="true" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4 outline-none">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">unit-01</span>
@@ -252,11 +255,11 @@
             </div>
             <span class="text-stone-500 dark:text-stone-600 text-xs">&#x1F512;</span>
           </div>
-          <h3 class="text-sm font-medium text-stone-700 dark:text-stone-400 mt-1">Feedback Data Model Design</h3>
+          <h3 class="text-sm font-medium text-stone-600 dark:text-stone-300 mt-1">Feedback Data Model Design</h3>
         </div>
 
         <!-- Completed unit 2 -->
-        <div tabindex="0" role="article" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm p-4 opacity-60 transition-opacity outline-none">
+        <div tabindex="0" role="article" aria-disabled="true" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4 outline-none">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">unit-02</span>
@@ -264,11 +267,11 @@
             </div>
             <span class="text-stone-500 dark:text-stone-600 text-xs">&#x1F512;</span>
           </div>
-          <h3 class="text-sm font-medium text-stone-700 dark:text-stone-400 mt-1">Review Sidebar Segmented Control</h3>
+          <h3 class="text-sm font-medium text-stone-600 dark:text-stone-300 mt-1">Review Sidebar Segmented Control</h3>
         </div>
 
         <!-- Completed unit 3 -->
-        <div tabindex="0" role="article" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm p-4 opacity-60 transition-opacity outline-none">
+        <div tabindex="0" role="article" aria-disabled="true" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4 outline-none">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">unit-03</span>
@@ -276,11 +279,11 @@
             </div>
             <span class="text-stone-500 dark:text-stone-600 text-xs">&#x1F512;</span>
           </div>
-          <h3 class="text-sm font-medium text-stone-700 dark:text-stone-400 mt-1">Feedback Status Badge Component</h3>
+          <h3 class="text-sm font-medium text-stone-600 dark:text-stone-300 mt-1">Feedback Status Badge Component</h3>
         </div>
 
         <!-- Completed unit 4 -->
-        <div tabindex="0" role="article" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm p-4 opacity-60 transition-opacity outline-none">
+        <div tabindex="0" role="article" aria-disabled="true" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4 outline-none">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">unit-04</span>
@@ -288,11 +291,11 @@
             </div>
             <span class="text-stone-500 dark:text-stone-600 text-xs">&#x1F512;</span>
           </div>
-          <h3 class="text-sm font-medium text-stone-700 dark:text-stone-400 mt-1">Feedback CRUD API Endpoints</h3>
+          <h3 class="text-sm font-medium text-stone-600 dark:text-stone-300 mt-1">Feedback CRUD API Endpoints</h3>
         </div>
 
         <!-- Completed unit 5 -->
-        <div tabindex="0" role="article" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm p-4 opacity-60 transition-opacity outline-none">
+        <div tabindex="0" role="article" aria-disabled="true" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4 outline-none">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">unit-05</span>
@@ -300,11 +303,11 @@
             </div>
             <span class="text-stone-500 dark:text-stone-600 text-xs">&#x1F512;</span>
           </div>
-          <h3 class="text-sm font-medium text-stone-700 dark:text-stone-400 mt-1">Feedback List with Grouping and Sorting</h3>
+          <h3 class="text-sm font-medium text-stone-600 dark:text-stone-300 mt-1">Feedback List with Grouping and Sorting</h3>
         </div>
 
         <!-- Completed unit 6 -->
-        <div tabindex="0" role="article" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm p-4 opacity-60 transition-opacity outline-none">
+        <div tabindex="0" role="article" aria-disabled="true" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4 outline-none">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">unit-06</span>
@@ -312,11 +315,11 @@
             </div>
             <span class="text-stone-500 dark:text-stone-600 text-xs">&#x1F512;</span>
           </div>
-          <h3 class="text-sm font-medium text-stone-700 dark:text-stone-400 mt-1">Mobile FAB and Bottom Sheet</h3>
+          <h3 class="text-sm font-medium text-stone-600 dark:text-stone-300 mt-1">Mobile FAB and Bottom Sheet</h3>
         </div>
 
         <!-- Completed unit 7 -->
-        <div tabindex="0" role="article" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm p-4 opacity-60 transition-opacity outline-none">
+        <div tabindex="0" role="article" aria-disabled="true" aria-label="Completed unit (read-only — locked for editing, focusable for inspection)" class="locked-card bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4 outline-none">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">unit-07</span>
@@ -324,83 +327,90 @@
             </div>
             <span class="text-stone-500 dark:text-stone-600 text-xs">&#x1F512;</span>
           </div>
-          <h3 class="text-sm font-medium text-stone-700 dark:text-stone-400 mt-1">Comment-to-Feedback Migration Layer</h3>
+          <h3 class="text-sm font-medium text-stone-600 dark:text-stone-300 mt-1">Comment-to-Feedback Migration Layer</h3>
         </div>
       </div>
     </section>
 
     <!-- ============================================================
-         State-coverage reference (FB-25) — focus ring on locked units
-         and the full matrix for the new-unit and locked-unit cards.
+         State-coverage reference (FB-25 / unit-26) — muted-surface
+         treatment for locked units. NO wholesale element opacity;
+         banned by unit-11 / unit-18 / unit-26. Canonical tokens:
+         bg-stone-50 dark:bg-stone-900/60 card surface with dashed
+         stone border + text-stone-600 dark:text-stone-300 title. Hover
+         lifts the surface (bg-stone-100). Focus applies teal ring on
+         the muted surface. Semantic-disabled is signaled by the
+         aria-disabled="true" attribute and a canonical "read-only"
+         pill, NOT by alpha.
     ============================================================ -->
     <section class="mb-6" aria-labelledby="state-ref-h">
       <h2 id="state-ref-h" class="text-base font-semibold text-stone-900 dark:text-stone-100 mb-3">State coverage — read-only locked units</h2>
-      <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">Locked / completed unit cards are dimmed by default but remain in the Tab order (<code class="font-mono">tabindex="0"</code>) so keyboard users can land on them for read-only inspection. Focus ring restores visibility while focused. Hover opacity bumps also help pointer users spot them.</p>
+      <p class="text-xs text-stone-600 dark:text-stone-300 mb-4">Locked / completed unit cards render at <strong>full opacity</strong> on a muted stone surface (<code class="font-mono">bg-stone-50 dark:bg-stone-900/60</code>) with a dashed stone border as the read-only signal. Cards remain in the Tab order (<code class="font-mono">tabindex="0"</code>) so keyboard users can land on them for inspection; focus applies the canonical teal 2px ring on the muted surface. Hover lifts the surface to <code class="font-mono">bg-stone-100</code> (no alpha change). See <code class="font-mono">knowledge/DESIGN-TOKENS.md §1.7</code> and <code class="font-mono">contrast-and-type-audit.md §6.3</code>.</p>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Default (dimmed) -->
+        <!-- Default (muted surface, full-opacity text) -->
         <div>
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500 mb-2">Default (locked, opacity 60%)</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-2">Default — muted surface</p>
           <div tabindex="0" role="article" aria-label="Locked unit default"
-               class="locked-card bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm p-4 opacity-60 transition-opacity">
+               class="locked-card bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4 outline-none">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">unit-01</span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">completed</span>
               </div>
-              <span class="text-stone-500 dark:text-stone-600 text-xs">&#x1F512;</span>
+              <span class="text-stone-600 dark:text-stone-300 text-xs">&#x1F512;</span>
             </div>
-            <h3 class="text-sm font-medium text-stone-700 dark:text-stone-400 mt-1">Feedback Data Model Design</h3>
+            <h3 class="text-sm font-medium text-stone-600 dark:text-stone-300 mt-1">Feedback Data Model Design</h3>
           </div>
         </div>
 
-        <!-- Hover (simulated 80% opacity) -->
+        <!-- Hover (surface lifts to stone-100, text stays full opacity) -->
         <div>
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500 mb-2">Hover (opacity 80%)</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-2">Hover — surface lifts</p>
           <div role="article" aria-label="Locked unit hover"
-               class="locked-card bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm p-4" style="opacity: 0.8;">
+               class="bg-stone-100 dark:bg-stone-800 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">unit-01</span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">completed</span>
               </div>
-              <span class="text-stone-500 dark:text-stone-600 text-xs">&#x1F512;</span>
+              <span class="text-stone-600 dark:text-stone-300 text-xs">&#x1F512;</span>
             </div>
-            <h3 class="text-sm font-medium text-stone-700 dark:text-stone-400 mt-1">Feedback Data Model Design</h3>
+            <h3 class="text-sm font-medium text-stone-600 dark:text-stone-300 mt-1">Feedback Data Model Design</h3>
           </div>
         </div>
 
-        <!-- Focus (simulated teal ring) -->
+        <!-- Focus (teal 2px ring on muted surface, full-opacity text) -->
         <div>
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500 mb-2">Focus (teal 2px ring, opacity 95%)</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-2">Focus — teal 2px ring on muted surface</p>
           <div role="article" aria-label="Locked unit focus"
-               class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm p-4" style="opacity: 0.95; outline: 2px solid rgb(20 184 166); outline-offset: 3px;">
+               class="bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4" style="outline: 2px solid rgb(20 184 166); outline-offset: 3px;">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">unit-01</span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">completed</span>
               </div>
-              <span class="text-stone-500 dark:text-stone-600 text-xs">&#x1F512;</span>
+              <span class="text-stone-600 dark:text-stone-300 text-xs">&#x1F512;</span>
             </div>
-            <h3 class="text-sm font-medium text-stone-700 dark:text-stone-400 mt-1">Feedback Data Model Design</h3>
+            <h3 class="text-sm font-medium text-stone-600 dark:text-stone-300 mt-1">Feedback Data Model Design</h3>
           </div>
         </div>
 
-        <!-- Disabled semantics spelled out -->
+        <!-- Semantic disabled (aria-disabled + read-only pill, no alpha) -->
         <div>
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500 mb-2">Semantic disabled (aria-disabled="true")</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-600 dark:text-stone-300 mb-2">Semantic disabled (<code class="font-mono">aria-disabled="true"</code>)</p>
           <div role="article" aria-disabled="true" aria-label="Locked unit — cannot be edited"
-               class="locked-card bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm p-4 opacity-60">
+               class="locked-card bg-stone-50 dark:bg-stone-900/60 rounded-lg border border-dashed border-stone-300 dark:border-stone-700 shadow-sm p-4">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">unit-01</span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">completed</span>
-                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-stone-200 text-stone-500 dark:bg-stone-700 dark:text-stone-400">read-only</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-stone-100 text-stone-700 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500">read-only</span>
               </div>
-              <span class="text-stone-500 dark:text-stone-600 text-xs">&#x1F512;</span>
+              <span class="text-stone-600 dark:text-stone-300 text-xs">&#x1F512;</span>
             </div>
-            <h3 class="text-sm font-medium text-stone-700 dark:text-stone-400 mt-1">Feedback Data Model Design</h3>
-            <p class="text-xs text-stone-500 dark:text-stone-500 mt-1 italic">Focus still works (tabindex=0, read-only inspection); content is uneditable.</p>
+            <h3 class="text-sm font-medium text-stone-600 dark:text-stone-300 mt-1">Feedback Data Model Design</h3>
+            <p class="text-xs text-stone-600 dark:text-stone-300 mt-1 italic">Focus still works (tabindex=0, read-only inspection); content is uneditable. Semantic conveyed by <code class="font-mono">aria-disabled="true"</code> + read-only pill — not by alpha.</p>
           </div>
         </div>
       </div>

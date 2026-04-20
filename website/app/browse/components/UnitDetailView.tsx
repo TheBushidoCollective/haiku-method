@@ -58,6 +58,7 @@ export function UnitDetailView({
 		<div className="mx-auto max-w-4xl px-4 py-8 lg:py-12">
 			{/* Breadcrumb */}
 			<button
+				type="button"
 				onClick={onBack}
 				className="mb-4 text-sm text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white"
 			>
@@ -447,6 +448,7 @@ function AssetRefItem({
 	return (
 		<>
 			<button
+				type="button"
 				onClick={() => setShowLightbox(true)}
 				className="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-stone-200 p-3 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
 			>
@@ -509,6 +511,7 @@ function TextRefItem({
 	return (
 		<>
 			<button
+				type="button"
 				onClick={handleOpen}
 				className="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-stone-200 p-3 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
 			>
@@ -586,6 +589,7 @@ function DocModal({
 						<p className="font-mono text-xs text-stone-400">{filePath}</p>
 					</div>
 					<button
+						type="button"
 						onClick={onClose}
 						className="rounded p-1 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
 					>

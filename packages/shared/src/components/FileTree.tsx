@@ -61,6 +61,7 @@ function FileTreeNode({
 	return (
 		<div>
 			<button
+				type="button"
 				onClick={handleClick}
 				className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-stone-50 dark:hover:bg-stone-800 transition-colors"
 				style={{ paddingLeft: `${depth * 16 + 12}px` }}

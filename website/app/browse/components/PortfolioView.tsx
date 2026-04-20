@@ -628,6 +628,7 @@ export function PortfolioView({
 				<div className="flex items-center justify-between">
 					<div>
 						<button
+							type="button"
 							onClick={onBack}
 							className="mb-2 text-sm text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white"
 						>
@@ -692,12 +693,14 @@ export function PortfolioView({
 			{!loading && visibleIntents.length > 0 && (
 				<div className="mb-4 flex gap-1 rounded-lg border border-stone-200 p-1 dark:border-stone-700 w-fit">
 					<button
+						type="button"
 						onClick={() => handleViewModeChange("list")}
 						className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${viewMode === "list" ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900" : "text-stone-500 hover:text-stone-700"}`}
 					>
 						List
 					</button>
 					<button
+						type="button"
 						onClick={() => handleViewModeChange("board")}
 						className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${viewMode === "board" ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900" : "text-stone-500 hover:text-stone-700"}`}
 					>
@@ -933,6 +936,7 @@ function PortfolioKnowledge({
 	return (
 		<section className="mb-6">
 			<button
+				type="button"
 				onClick={() => setExpanded(!expanded)}
 				className="flex w-full items-center gap-2 rounded-lg border border-stone-200 px-4 py-3 text-left transition hover:border-teal-300 dark:border-stone-700 dark:hover:border-teal-700"
 			>
@@ -994,6 +998,7 @@ function PortfolioKnowledgeFile({
 	return (
 		<div className="rounded-lg border border-stone-200 dark:border-stone-700">
 			<button
+				type="button"
 				onClick={handleExpand}
 				className="flex w-full items-center justify-between px-4 py-3 text-left text-sm hover:bg-stone-50 dark:hover:bg-stone-800"
 			>

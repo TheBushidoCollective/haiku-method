@@ -60,6 +60,7 @@ export default function GlobalError({
 						style={{ display: "flex", gap: "1rem", justifyContent: "center" }}
 					>
 						<button
+							type="button"
 							onClick={reset}
 							style={{
 								backgroundColor: "#0d9488",
@@ -91,6 +92,7 @@ export default function GlobalError({
 					</div>
 					<div style={{ marginTop: "2rem" }}>
 						<button
+							type="button"
 							onClick={() => setShowDetails(!showDetails)}
 							style={{
 								background: "none",

@@ -114,6 +114,7 @@ export function DirectionPicker({ session, onSubmit }: Props) {
 					const isSelected = selectedArchetype === arch.name
 					return (
 						<button
+							type="button"
 							key={arch.name}
 							onClick={() => selectArchetype(arch.name)}
 							className={`rounded-xl border-2 p-4 text-left transition-colors ${
@@ -201,6 +202,7 @@ export function DirectionPicker({ session, onSubmit }: Props) {
 			)}
 
 			<button
+				type="button"
 				onClick={handleSubmit}
 				disabled={submitting || !selectedArchetype}
 				className="w-full rounded-lg bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-50"
@@ -223,6 +225,7 @@ export function DirectionPicker({ session, onSubmit }: Props) {
 								{previewModal.name}
 							</span>
 							<button
+								type="button"
 								onClick={() => setPreviewModal(null)}
 								className="text-stone-500 hover:text-stone-300"
 							>

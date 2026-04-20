@@ -217,6 +217,7 @@ export function IntentDetailView({
 		>
 			{/* Header */}
 			<button
+				type="button"
 				onClick={onBack}
 				className="mb-4 text-sm text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white"
 			>
@@ -268,12 +269,14 @@ export function IntentDetailView({
 			{/* View toggle */}
 			<div className="mb-4 flex gap-1 rounded-lg border border-stone-200 p-1 dark:border-stone-700 w-fit">
 				<button
+					type="button"
 					onClick={() => handleViewModeChange("pipeline")}
 					className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${viewMode === "pipeline" ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900" : "text-stone-500 hover:text-stone-700"}`}
 				>
 					Pipeline
 				</button>
 				<button
+					type="button"
 					onClick={() => handleViewModeChange("board")}
 					className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${viewMode === "board" ? "bg-stone-900 text-white dark:bg-white dark:text-stone-900" : "text-stone-500 hover:text-stone-700"}`}
 				>
@@ -307,6 +310,7 @@ export function IntentDetailView({
 								return (
 									<div key={stage.name} className="flex items-center">
 										<button
+											type="button"
 											onClick={() => {
 												const newStage =
 													expandedStage === stage.name ? null : stage.name
@@ -649,6 +653,7 @@ function KnowledgeFileCard({
 	return (
 		<div className="rounded-lg border border-stone-200 dark:border-stone-700">
 			<button
+				type="button"
 				onClick={() => setExpanded(!expanded)}
 				className="flex w-full items-center justify-between px-4 py-3 text-left text-sm hover:bg-stone-50 dark:hover:bg-stone-800"
 			>
@@ -718,6 +723,7 @@ function ArtifactFullscreenModal({
 						{artifact.name}
 					</span>
 					<button
+						type="button"
 						onClick={onClose}
 						className="rounded-lg px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
 					>
@@ -749,6 +755,7 @@ function ArtifactFullscreenModal({
 							{artifact.name}
 						</span>
 						<button
+							type="button"
 							onClick={onClose}
 							className="ml-4 rounded-lg p-1.5 text-stone-400 transition hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-300"
 							aria-label="Close"
@@ -806,6 +813,7 @@ function ArtifactFullscreenModal({
 							{artifact.name}
 						</span>
 						<button
+							type="button"
 							onClick={onClose}
 							className="ml-4 rounded-lg p-1.5 text-stone-400 transition hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-300"
 							aria-label="Close"
@@ -854,6 +862,7 @@ function ArtifactThumbnail({
 	if (artifact.type === "html" && artifact.content) {
 		return (
 			<button
+				type="button"
 				onClick={onClick}
 				className="group flex flex-col overflow-hidden rounded-lg border border-stone-200 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
 			>
@@ -879,6 +888,7 @@ function ArtifactThumbnail({
 	if (artifact.type === "image") {
 		return (
 			<button
+				type="button"
 				onClick={onClick}
 				className="group flex flex-col overflow-hidden rounded-lg border border-stone-200 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
 			>
@@ -945,6 +955,7 @@ function MarkdownArtifactCard({
 			<div className="rounded-lg border border-stone-200 dark:border-stone-700">
 				<div className="flex w-full items-center justify-between px-4 py-3 text-left text-sm">
 					<button
+						type="button"
 						onClick={() => setExpanded(!expanded)}
 						className="flex flex-1 items-center gap-2 hover:text-stone-900 dark:hover:text-stone-100"
 					>
@@ -966,6 +977,7 @@ function MarkdownArtifactCard({
 						</span>
 					</button>
 					<button
+						type="button"
 						onClick={() => setFullscreen(true)}
 						className="ml-2 rounded px-2 py-1 text-xs text-stone-500 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-300"
 					>
@@ -1145,6 +1157,7 @@ function StageDetail({
 						const totalCriteria = unit.criteria.length
 						return (
 							<button
+								type="button"
 								key={unit.name}
 								onClick={() => onSelectUnit(unit)}
 								className="w-full rounded-lg border border-stone-200 px-5 py-3 text-left transition hover:border-teal-300 dark:border-stone-700 dark:hover:border-teal-700"
@@ -1259,6 +1272,7 @@ function AssetsSection({
 						<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
 							{dirAssets.map((asset) => (
 								<button
+									type="button"
 									key={asset.path}
 									onClick={() => onSelect(asset)}
 									className="group overflow-hidden rounded-lg border border-stone-200 transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"

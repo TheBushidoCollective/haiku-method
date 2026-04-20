@@ -199,6 +199,7 @@ export function RemoteBrowseView({ pathSegments, branch: branchParam }: Props) {
 				{isOAuthAvailable(host) && (
 					<div className="mb-6 rounded-xl border border-stone-200 p-6 dark:border-stone-700">
 						<button
+							type="button"
 							onClick={handleOAuth}
 							className="flex w-full items-center justify-center gap-3 rounded-lg bg-stone-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-stone-800 dark:bg-white dark:text-stone-900 dark:hover:bg-stone-100"
 						>

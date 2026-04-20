@@ -385,6 +385,7 @@ export function ReviewSidebar({
 				<div className="flex gap-2">
 					{gateType.includes("ask") && (
 						<button
+							type="button"
 							onClick={handleApproveClick}
 							disabled={submitting}
 							className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -398,6 +399,7 @@ export function ReviewSidebar({
 					)}
 					{gateType.includes("external") && (
 						<button
+							type="button"
 							onClick={() => setShowExternalConfirm(true)}
 							disabled={submitting}
 							className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -410,6 +412,7 @@ export function ReviewSidebar({
 						</button>
 					)}
 					<button
+						type="button"
 						onClick={handleRequestChanges}
 						disabled={submitting}
 						className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -439,12 +442,14 @@ export function ReviewSidebar({
 							</p>
 							<div className="flex gap-3">
 								<button
+									type="button"
 									onClick={() => setShowExternalConfirm(false)}
 									className="flex-1 px-4 py-2 bg-stone-200 dark:bg-stone-700 hover:bg-stone-300 dark:hover:bg-stone-600 text-stone-700 dark:text-stone-200 text-sm font-medium rounded-lg transition-colors"
 								>
 									Cancel
 								</button>
 								<button
+									type="button"
 									onClick={doExternalReview}
 									className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors"
 								>
@@ -468,12 +473,14 @@ export function ReviewSidebar({
 							</p>
 							<div className="flex gap-3">
 								<button
+									type="button"
 									onClick={() => setShowApproveConfirm(false)}
 									className="flex-1 px-4 py-2 bg-stone-200 dark:bg-stone-700 hover:bg-stone-300 dark:hover:bg-stone-600 text-stone-700 dark:text-stone-200 text-sm font-medium rounded-lg transition-colors"
 								>
 									Cancel
 								</button>
 								<button
+									type="button"
 									onClick={doApprove}
 									className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg transition-colors"
 								>

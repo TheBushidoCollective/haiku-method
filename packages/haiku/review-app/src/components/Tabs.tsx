@@ -67,6 +67,7 @@ export function Tabs({ groupId, tabs }: Props) {
 					const disabled = tab.disabled ?? false
 					return (
 						<button
+							type="button"
 							key={tab.id}
 							ref={setRef(tab.id)}
 							role="tab"

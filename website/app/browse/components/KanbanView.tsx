@@ -136,6 +136,7 @@ export function PortfolioKanban({
 											>
 												{items.map((intent) => (
 													<button
+														type="button"
 														key={
 															intent.branch
 																? `${intent.branch}/${intent.slug}`
@@ -259,6 +260,7 @@ export function IntentKanban({ intent, onSelectUnit }: IntentKanbanProps) {
 								const total = unit.criteria.length
 								return (
 									<button
+										type="button"
 										key={`${unit.stageName}-${unit.name}`}
 										onClick={() =>
 											onSelectUnit?.({ name: unit.name, stage: unit.stageName })

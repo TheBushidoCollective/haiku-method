@@ -66,6 +66,7 @@ export function AssetLightbox({ asset, host, onClose }: Props) {
 							Download
 						</a>
 						<button
+							type="button"
 							onClick={onClose}
 							className="rounded-lg p-1.5 text-stone-400 transition hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-300"
 							aria-label="Close"

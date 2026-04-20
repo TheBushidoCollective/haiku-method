@@ -1,34 +1,14 @@
 // guard-fsm-fields — PreToolUse hook for Write/Edit
 //
-// Blocks direct file edits that modify FSM-controlled fields in haiku state files.
-// The agent must use MCP tools (haiku_run_next, haiku_unit_start, etc.) to mutate
-// lifecycle state. Direct file writes bypass the FSM and break the state machine.
+// Blocks direct file edits that attempt to set status to "completed" on
+// haiku state files (intent.md, stage state.json, unit.md). Completion is
+// the ONE field transition that MUST go through the FSM — the FSM owns
+// merge-back, scope validation, feedback closure, and integrity sealing
+// on completion. Every other field (including status transitions to
+// pending/active/blocked) is allowed; agents may freely edit those for
+// legitimate state repair.
 
 import { resolve } from "node:path"
-
-// FSM-controlled fields by file type
-const INTENT_PROTECTED = [
-	"status",
-	"active_stage",
-	"completed_at",
-	"started_at",
-]
-const STAGE_PROTECTED = [
-	"status",
-	"phase",
-	"started_at",
-	"completed_at",
-	"gate_entered_at",
-	"gate_outcome",
-]
-const UNIT_PROTECTED = [
-	"status",
-	"started_at",
-	"completed_at",
-	"bolt",
-	"hat",
-	"hat_started_at",
-]
 
 function out(s: string): void {
 	process.stderr.write(s)
@@ -46,52 +26,35 @@ export async function guardFsmFields(
 
 	const absPath = resolve(process.cwd(), filePath)
 
-	// Check if this is a haiku state file
-	const isIntentFile = absPath.match(/\.haiku\/intents\/[^/]+\/intent\.md$/)
-	const isStageState = absPath.match(
-		/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/state\.json$/,
+	// Only guard haiku state files.
+	const isIntentFile = /\.haiku\/intents\/[^/]+\/intent\.md$/.test(absPath)
+	const isStageState = /\.haiku\/intents\/[^/]+\/stages\/[^/]+\/state\.json$/.test(
+		absPath,
 	)
-	const isUnitFile = absPath.match(
-		/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/units\/[^/]+\.md$/,
+	const isUnitFile = /\.haiku\/intents\/[^/]+\/stages\/[^/]+\/units\/[^/]+\.md$/.test(
+		absPath,
 	)
-
 	if (!isIntentFile && !isStageState && !isUnitFile) return
 
-	// Determine what's being written (content for Write, new_string for Edit)
 	const content =
 		(toolInput.content as string) || (toolInput.new_string as string) || ""
 	if (!content) return
 
-	let protectedFields: string[]
-	let fileType: string
+	// Detect status=completed writes in either YAML frontmatter or JSON body.
+	// YAML: `status: completed` (optionally quoted)
+	// JSON: `"status": "completed"`
+	const yamlCompleted = /^\s*status:\s*["']?completed\b["']?/m.test(content)
+	const jsonCompleted = /"status"\s*:\s*"completed"/.test(content)
 
-	if (isIntentFile) {
-		protectedFields = INTENT_PROTECTED
-		fileType = "intent"
-	} else if (isStageState) {
-		protectedFields = STAGE_PROTECTED
-		fileType = "stage state"
-	} else {
-		protectedFields = UNIT_PROTECTED
-		fileType = "unit"
-	}
-
-	// Check if the content modifies protected fields
-	const violations: string[] = []
-	for (const field of protectedFields) {
-		// Check YAML frontmatter pattern: "field: value" or JSON: "field":
-		const yamlPattern = new RegExp(`^${field}:`, "m")
-		const jsonPattern = new RegExp(`"${field}"\\s*:`)
-		if (yamlPattern.test(content) || jsonPattern.test(content)) {
-			violations.push(field)
-		}
-	}
-
-	if (violations.length > 0) {
-		// Block the edit
+	if (yamlCompleted || jsonCompleted) {
+		const kind = isIntentFile ? "intent" : isStageState ? "stage" : "unit"
 		out(
-			`BLOCKED: Cannot directly modify FSM-controlled fields in ${fileType} files: ${violations.join(", ")}. Use the haiku MCP tools instead (haiku_run_next, haiku_unit_start, haiku_unit_advance_hat, etc.). Direct file edits bypass the state machine and corrupt lifecycle state.`,
+			`BLOCKED: Cannot directly set status to "completed" on ${kind} files. ` +
+				`Completion is FSM-controlled — use the MCP tools (haiku_run_next, ` +
+				`haiku_unit_advance_hat) so scope validation, feedback closure, ` +
+				`worktree merge-back, and integrity sealing run. Setting status to ` +
+				`other values (pending, active, blocked) via direct edit is fine.`,
 		)
-		process.exit(2) // Exit code 2 signals "blocked" to Claude Code
+		process.exit(2)
 	}
 }

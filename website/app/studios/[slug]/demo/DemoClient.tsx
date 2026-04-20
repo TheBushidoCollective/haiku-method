@@ -405,6 +405,7 @@ export function DemoClient({
 
 					{/* Play/Pause button */}
 					<button
+						type="button"
 						onClick={togglePlayPause}
 						title="Play / Pause (Space)"
 						className={`cursor-pointer rounded-md border px-3.5 py-1.5 font-sans text-[13px] transition-all max-[600px]:px-2 max-[600px]:py-1 max-[600px]:text-[11px] ${
@@ -418,6 +419,7 @@ export function DemoClient({
 
 					{/* Step backward/forward */}
 					<button
+						type="button"
 						onClick={stepBackward}
 						title="Step Back"
 						disabled={state.stepIndex === 0}
@@ -426,6 +428,7 @@ export function DemoClient({
 						&#9664;
 					</button>
 					<button
+						type="button"
 						onClick={stepForward}
 						title="Step Forward"
 						disabled={state.stepIndex >= totalSteps}
@@ -438,6 +441,7 @@ export function DemoClient({
 					<div className="flex gap-1 max-[900px]:hidden">
 						{[1, 2, 4].map((s) => (
 							<button
+								type="button"
 								key={s}
 								onClick={() => setSpeed(s)}
 								className={`cursor-pointer rounded border px-2.5 py-1 font-sans text-xs transition-all ${
@@ -453,6 +457,7 @@ export function DemoClient({
 
 					{/* Restart button */}
 					<button
+						type="button"
 						onClick={reset}
 						title="Restart (R)"
 						className="cursor-pointer rounded-md border border-stone-700 bg-stone-900 px-3.5 py-1.5 font-sans text-[13px] text-stone-200 transition-all hover:border-teal-400 hover:text-teal-400 max-[600px]:px-2 max-[600px]:py-1 max-[600px]:text-[11px]"
@@ -495,6 +500,7 @@ export function DemoClient({
 			<div className="hidden shrink-0 border-b border-stone-800 bg-stone-950 max-[600px]:flex">
 				{(["terminal", "artifacts", "board"] as const).map((tab) => (
 					<button
+						type="button"
 						key={tab}
 						onClick={() => setMobileTab(tab)}
 						className={`flex-1 cursor-pointer border-b-2 bg-transparent py-2 font-sans text-xs font-semibold transition-all ${

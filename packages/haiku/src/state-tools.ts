@@ -17,7 +17,8 @@ import { join, resolve } from "node:path"
 import matter from "gray-matter"
 import { getPendingVersion, hasPendingUpdate } from "./auto-update.js"
 import { features, resolvePluginRoot } from "./config.js"
-import { UNIT_FIELDS } from "./fsm-fields.js"
+// fsm-fields module retained for state-integrity sealing; no direct imports
+// needed here since the completion-only guard is narrow to status/completed.
 import {
 	addTempWorktree,
 	commitAndPushFromWorktree,
@@ -3798,21 +3799,22 @@ export function handleStateTool(
 			)
 		}
 		case "haiku_unit_set": {
-			// Guard FSM-controlled fields for hookless harnesses.
-			// When hooks are available (Claude Code, Kiro), the guard-fsm-fields
-			// PreToolUse hook blocks direct file writes. For hookless harnesses,
-			// validate here inside the MCP tool itself.
-			//
-			// Shared with state-integrity.ts via fsm-fields.ts so the write
-			// guard and the tamper detector cannot drift out of alignment.
-			const fsmProtectedFields = new Set<string>(UNIT_FIELDS)
+			// Guard: only `status = "completed"` is FSM-protected. Agents may
+			// freely change status to pending/active/blocked and set any other
+			// field for legitimate repair — the FSM owns the completion moment
+			// exclusively (via advance_hat's auto-complete on the last hat).
+			// Direct "completed" writes bypass merge-back, scope validation,
+			// and the feedback-assessor, so they're the only value blocked.
 			const field = args.field as string
-			if (!getCapabilities().hooks && fsmProtectedFields.has(field)) {
+			const value = args.value
+			if (field === "status" && value === "completed") {
 				return text(
 					JSON.stringify({
-						error: "fsm_field_protected",
+						error: "fsm_completion_protected",
 						field,
-						message: `Cannot set '${field}' directly — it is controlled by the FSM. Use haiku_run_next, haiku_unit_start, haiku_unit_advance_hat, or haiku_unit_reject_hat instead.`,
+						value,
+						message:
+							"Cannot set status to \"completed\" directly — unit completion is FSM-controlled. Call `haiku_unit_advance_hat` to let the FSM auto-complete the unit's last hat, which runs scope validation, feedback-assessor closure, and worktree merge-back. Setting status to other values (pending, active, blocked) is fine.",
 					}),
 				)
 			}

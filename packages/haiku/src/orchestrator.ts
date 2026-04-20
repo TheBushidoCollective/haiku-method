@@ -293,8 +293,21 @@ function buildElaboratorInstruction(opts: {
 		"- Read every `pending_feedback[].file` COMPLETELY. The title is only a handle; the body carries requirements, tests, and acceptance criteria.",
 		"- Draft one or more new units whose `closes:` frontmatter references the feedback items they resolve.",
 		"- Every pending feedback item MUST be referenced by at least one new unit's `closes:` (orphans block advancement).",
-		"- Ask the user clarifying questions (`AskUserQuestion` with options[]) when trade-offs are unclear; iterate across turns.",
-		"- When the user approves the drafted units, call `haiku_run_next` to advance.",
+		"- When drafting is complete, call `haiku_run_next` to advance. The FSM opens a review gate where the user inspects and approves the drafted units via the review UI — that is the ONLY approval path.",
+		"",
+		"## Turn discipline",
+		"",
+		"Elaboration is COLLABORATIVE and DETAILED. Take as many turns as you need to draft a thorough, well-scoped unit set — but every turn must earn its place.",
+		"",
+		"- **Each turn MUST ask a meaningful question.** A meaningful question is one whose answer changes what you draft — trade-offs, scope boundaries, acceptance criteria, architectural choices with two-plus viable options, priorities between conflicting requirements, or requirement ambiguities that can't be resolved from the intent body alone. Use `AskUserQuestion` with a pre-populated `options[]` array.",
+		"- **NEVER ask about things covered elsewhere in the flow.** The following are handled by other parts of the system — asking about them here duplicates work:",
+		"  - Unit-set approval (\"how do these units look\", \"does this scope work\", \"are these acceptable\", \"should I proceed\", \"do you approve\") — handled by the review gate UI after drafting completes",
+		"  - Per-unit feedback (reject / request-changes on specific units) — handled by the review gate's annotation + changes-requested path",
+		"  - Feedback closure verification (\"did my unit address FB-N\") — handled by the feedback-assessor hat during execution",
+		"  - Gate decisions (\"should we advance the stage\") — handled by the gate itself",
+		"  - Quality-gate results (\"did tests pass\") — handled by advance_hat",
+		"- **Use `AskUserQuestion` with `questions[]` when several decisions are related** so the user answers them in one UI exchange. Independent questions can still be separate turns — collaboration is the point.",
+		"- **When information is genuinely absent from the intent and there are no viable defaults, ask.** When you have reasonable inference based on intent goals + stage scope + prior units, draft it and let the review gate surface disagreements.",
 	].join("\n")
 
 	return situation ? `${lead}\n\n${situation}${body}` : `${lead}${body}`

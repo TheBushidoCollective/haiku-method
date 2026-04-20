@@ -2,7 +2,7 @@
 title: >-
   DESIGN-BRIEF §2 sidebar-layout pattern still says `w-80 lg:w-96`, unit-16
   canonical is `w-80 xl:w-96`
-status: closed
+status: pending
 origin: adversarial-review
 author: consistency
 author_type: agent

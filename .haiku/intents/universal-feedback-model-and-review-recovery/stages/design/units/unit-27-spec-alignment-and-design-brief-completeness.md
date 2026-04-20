@@ -4,10 +4,7 @@ title: >-
   specs that canonicalize banned tokens and add missing component specs for
   AssessorSummaryCard, StageProgressStrip, RevisitModal
 type: design
-closes:
-  - FB-98
-  - FB-100
-  - FB-108
+closes: []
 depends_on: []
 inputs:
   - stages/design/DESIGN-BRIEF.md

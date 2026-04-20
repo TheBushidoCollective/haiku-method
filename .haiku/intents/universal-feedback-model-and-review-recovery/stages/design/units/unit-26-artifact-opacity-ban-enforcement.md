@@ -3,12 +3,7 @@ title: >-
   Artifact HTML opacity-ban enforcement — apply the audit's claimed remediation
   to every HTML that still ships opacity-50/60 on cards, buttons, and labels
 type: design
-closes:
-  - FB-92
-  - FB-94
-  - FB-95
-  - FB-97
-  - FB-102
+closes: []
 depends_on:
   - unit-28-canonical-token-normalization-sweep
 inputs:

@@ -4,9 +4,7 @@ title: >-
   `<div role="link">` stage strip to native elements, wire canonical live-region
   pair on every page-level artifact
 type: design
-closes:
-  - FB-103
-  - FB-104
+closes: []
 depends_on:
   - unit-29-focus-visible-canonicalization-and-spec-clarity
 inputs:

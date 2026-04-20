@@ -90,9 +90,9 @@ quality_gates:
     loop in each unit's post-sweep note).
 status: active
 bolt: 2
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T05:08:18Z'
-hat_started_at: '2026-04-20T09:05:04Z'
+hat_started_at: '2026-04-20T09:12:05Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:18Z'
@@ -109,6 +109,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T09:05:04Z'
+    completed_at: '2026-04-20T09:12:05Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T09:12:05Z'
     completed_at: null
     result: null
 ---

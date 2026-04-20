@@ -2,7 +2,7 @@
 title: >-
   revisit-modal-states.html:567 still ships text-[9px] in pending-feedback list
   — hard-banned per unit-11 §3
-status: pending
+status: rejected
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -37,3 +37,7 @@ grep -cE 'text-\[9px\]|text-\[10px\]' stages/design/artifacts/revisit-modal-stat
 → must be 0
 ```
 Currently returns ≥ 1.
+
+---
+
+**Rejection reason:** Stale: `grep -c 'text-\[9px\]' revisit-modal-states.html` returns 0 post-unit-16-merge.

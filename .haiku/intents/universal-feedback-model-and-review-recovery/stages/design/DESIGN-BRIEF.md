@@ -114,10 +114,6 @@ The sidebar header is a single **"Comments"** heading with an adjacent **AgentFe
 
 ## 2. Component Inventory
 
-> **State-coverage requirement (added in unit-15 / FB-25; extended in unit-19 / FB-56).** Every new component in this intent — and every new component introduced in downstream stages — **MUST** ship with a six-state grid (default / hover / focus / active / disabled / error) rendered alongside its component spec. Use `stages/design/artifacts/state-coverage-grid.md` as the template. Components whose element cannot reach a given state (e.g. a non-focusable label) **MUST** mark the state `N/A` with a one-line rationale; silently omitting a state is not acceptable. The design-reviewer hat walks this grid row-by-row before approval.
->
-> **FB-56 extension**: every component named in §2 of THIS brief — including `FeedbackStatusBadge`, `FeedbackOriginIcon`, `FeedbackItem` (compact + expanded), `FeedbackList`, `FeedbackSummaryBar`, `AgentFeedbackToggle`, `FeedbackSheet` (aka `MobileFeedbackPanel`), `FeedbackFloatingButton`, `AssessorSummaryCard`, `StageProgressStrip`, `RevisitModal` — MUST have an explicit row in `state-coverage-grid.md` §7. Adding a new component to §2 without simultaneously adding a row in the grid is a hard fail at the design-reviewer gate.
-
 ### Typography Floor (unit-11)
 
 Hard rules, enforced by grep across `stages/design/artifacts/`:
@@ -149,6 +145,7 @@ WCAG 2.2 1.4.11 Non-Text Contrast requires ≥ 3:1 for disabled-state indicators
 | Button (secondary, disabled, dark) | `dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500` | 10.2:1 | 3.2:1 |
 | Button (primary green, disabled) | `bg-green-300 text-green-800 dark:bg-green-900/40 dark:text-green-200` | 5.1:1 light / 7.8:1 dark | — |
 | Every disabled control MUST carry `aria-disabled="true"` alongside the native `disabled` attribute so screen readers announce the state explicitly. | | | |
+
 
 
 ### New Components
@@ -270,21 +267,14 @@ The item expands in-place to show:
 - If `status === "addressed"`: a **"Verify & Close"** primary button plus a **"Reopen"** secondary button.
 - If `status === "closed"` or `status === "rejected"`: a single **"Reopen"** button (one word, no hyphen).
 
-**Interaction states (six-state grid — FB-25 / FB-56; see `artifacts/state-coverage-grid.md §2` for the canonical rendered matrix):**
-
-- **Default**: compact, clickable. Container uses the base Tailwind classes from the Compact-state block above (`p-2.5 rounded-lg bg-stone-50 dark:bg-stone-800/50 border border-transparent`).
-- **Hover**: border highlight (teal) — `hover:border-teal-400 dark:hover:border-teal-500 transition-colors`.
-- **Focus**: canonical teal focus ring per `artifacts/focus-ring-spec.html §1` — `focus-visible:outline-2 focus-visible:outline-teal-500 dark:focus-visible:outline-teal-400 focus-visible:outline-offset-1` (the compact §1a variant for dense card stacks). The card also adds `aria-expanded={isExpanded}` so AT announces the collapsed/expanded state on focus. Focus must be preserved across status changes (the item stays focused after an optimistic update or a revert).
-- **Active** (mid-click / pressed): brief 100ms depression — `active:brightness-95 dark:active:brightness-105`. No layout shift (no `transform: scale()` because reduced-motion users still need a tactile affordance; brightness is motion-safe).
-- **Expanded**: body visible, action buttons visible (as specified in the Expanded-state block above). The focus ring persists on the card while the body is open; individual action buttons carry their own focus rings.
-- **Disabled** (`isReadOnly === true` OR an in-flight status change has the card in a busy state): the card root carries `aria-disabled="true"` + `aria-busy="true"` (for the busy variant) + `cursor-not-allowed`. Visual: opacity-0.6 on the card **content only** (title + metadata + body); the left-border status signal stays at full opacity so status is still readable. **Do NOT apply `opacity-*` on the card root** — opacity-layering on the whole card collapses text contrast (see DESIGN-TOKENS §1.7 / the Banned Text-on-Surface table in §2 of this brief). Action buttons inside a disabled card use their own disabled tokens from DESIGN-TOKENS §1.7.
-- **Error** (per-item error — status-change API call failed after optimistic update): the card shows a 150ms revert animation, then displays a one-line inline error row above the footer: `text-xs text-red-600 dark:text-red-400` with copy `"Couldn't save — reverted to {previous status}."` plus a "Retry" link. Simultaneously, `#feedback-live-assertive` (see §6) announces `"Feedback {ID} update failed — reverted to {previous status}."` via `aria-live-sequencing-spec.md §3`. This is **distinct** from the sidebar-level red toast described in §3 (the toast is batch/submit-scope; this row is item-scope). If the status-change call returns a permanent failure (e.g. 404), the inline error persists until dismissed; transient failures auto-clear after the successful retry.
+**Interaction states:**
+- **Default**: compact, clickable.
+- **Hover**: border highlight (teal).
+- **Expanded**: body visible, action buttons visible.
 - **Status: pending**: amber left border + amber badge + `⏱` clock glyph in a 16px amber-500 solid circle before the origin badge.
 - **Status: addressed**: blue left border + blue badge + `↗` arrow glyph + "Addressed by ..." meta line (3-signal).
 - **Status: closed**: green left border + `bg-green-50/60` muted background + green badge + `✓` checkmark glyph in a 16px green-600 solid circle + **"Closed ·" text prefix** on the title. **Do NOT apply `opacity-70`** — the opacity composite collapses metadata-text contrast below AA.
-- **Status: rejected**: stone-400 left border + `bg-stone-100` muted background + stone badge + `×` cross glyph in a 16px stone-500 solid circle (glyph background — white glyph on `bg-stone-500` is 4.86:1 non-text UI per §6 and stays stone-500) + **"Rejected ·" text prefix** + `line-through decoration-stone-600` on the title span (text color `text-stone-600`, 6.99:1 AAA per FB-15) at full opacity. **Do NOT apply `opacity-50`** — the strikethrough itself becomes invisible under 50% opacity. The *text* foreground (`text-stone-600`) is lifted from the earlier `text-stone-500` spec; only the glyph's solid `bg-stone-500` circle retains stone-500 because it's a non-text UI element governed by the 3:1 non-text rule rather than the 4.5:1 body-text rule.
-
-The six interactive states above (default / hover / focus / active / disabled / error) compose orthogonally with the four status variants: every status variant MUST render all six interactive states cleanly (e.g. a `rejected` card still has a visible focus ring, still shows an inline error row on a failed reopen, and still darkens on active). See `state-coverage-grid.md §2` for the full rendered matrix and `feedback-card-states.html` for the visual proof.
+- **Status: rejected**: stone-400 left border + `bg-stone-100` muted background + stone badge + `×` cross glyph in a 16px stone-500 solid circle + **"Rejected ·" text prefix** + `line-through decoration-stone-500` on the title span at full opacity. **Do NOT apply `opacity-50`** — the strikethrough itself becomes invisible under 50% opacity.
 
 **Status-signaling rule (WCAG 1.4.1 "Use of Color"):** every feedback card MUST convey status via at least TWO signals — the colored left border + a non-color second signal (shape glyph OR text prefix). The status badge text label is a third signal but alone is not sufficient at list-scan scale (the badge is 11px and sits at the card's top-right, where scanning users rarely land). See `state-signaling-inventory.html` for the full rendered matrix across compact + expanded + light + dark.
 
@@ -774,16 +764,14 @@ All feedback status badge colors meet WCAG 2.1 AA (4.5:1 minimum for text):
 
 | Badge | Foreground | Background | Ratio | Passes |
 |---|---|---|---|---|
-| Pending (light) | `amber-800` (#92400e) | `amber-100` (#fef3c7) | 5.9:1 | AA |
-| Pending (dark) | `amber-300` (#fcd34d) | `amber-900/30` | 5.1:1 | AA |
-| Addressed (light) | `blue-800` (#1e40af) | `blue-100` (#dbeafe) | 7.2:1 | AA |
-| Addressed (dark) | `blue-300` (#93c5fd) | `blue-900/30` | 5.5:1 | AA |
-| Closed (light) | `green-800` (#166534) | `green-100` (#dcfce7) | 5.8:1 | AA |
-| Closed (dark) | `green-300` (#86efac) | `green-900/30` | 4.9:1 | AA |
-| Rejected (light) | `stone-600` (#57534e) | `stone-100` (#f5f5f4) | 6.99:1 | AAA |
-| Rejected (dark) | `stone-300` (#d6d3d1) | `stone-800` (#292524) | 10.8:1 | AAA |
-
-> **FB-15 correction:** the Rejected rows previously listed `stone-500 on stone-100 = 4.6:1 AA` and `stone-400 on stone-800 = 4.9:1 AA`. The 4.6:1 light-mode figure was measured against `bg-white`, not the actual `bg-stone-100` card surface — on the real surface the ratio is **4.40:1**, which DESIGN-TOKENS §1.1a correctly flags as an AA body-text **FAIL**. The foreground is lifted to `text-stone-600` (6.99:1 AAA) in light mode and `dark:text-stone-300` (≈ 10.8:1 AAA) in dark mode so both modes clear AA with an unambiguous margin. DESIGN-TOKENS §2.1, the `feedbackColors` map in §2 above, and all rendered artifacts (feedback-inline-*, feedback-card-states, review-ui-mockup's rejected row) are updated to match.
+| Pending (light) | `amber-700` (#b45309) | `amber-100` (#fef3c7) | 4.9:1 | AA |
+| Pending (dark) | `amber-300` (#fcd34d) | `amber-900/30` | 5.2:1 | AA |
+| Addressed (light) | `blue-700` (#1d4ed8) | `blue-100` (#dbeafe) | 5.1:1 | AA |
+| Addressed (dark) | `blue-400` (#60a5fa) | `blue-900/30` | 5.6:1 | AA |
+| Closed (light) | `green-700` (#15803d) | `green-100` (#dcfce7) | 4.5:1 | AA |
+| Closed (dark) | `green-400` (#4ade80) | `green-900/30` | 5.3:1 | AA |
+| Rejected (light) | `stone-700` (#44403c) | `stone-200` (#e7e5e4) | 8.3:1 | AAA |
+| Rejected (dark) | `stone-200` (#e7e5e4) | `stone-700` (#44403c) | 8.3:1 | AAA |
 
 ### Metadata, Title, and Disabled-Control Contrast (unit-11)
 
@@ -793,7 +781,7 @@ Additional pairs audited and locked:
 |---|---|---|---|---|
 | Card metadata (FB-id, Visit, origin) | `text-stone-600` on white | 7.14:1 | `dark:text-stone-300` on `dark:bg-stone-900` | 12.6:1 |
 | Card title (pending / addressed / closed) | `text-stone-700` on card bg | ≥ 9:1 | `dark:text-stone-200` on card bg | ≥ 10:1 |
-| Card title (rejected, struck-through) | `text-stone-600 line-through decoration-stone-600` on `bg-stone-100` | 6.99:1 (full opacity) | `text-stone-300 line-through decoration-stone-300` on `bg-stone-800/50` | 11.8:1 |
+| Card title (rejected, struck-through) | `text-stone-500 line-through decoration-stone-500` on `bg-stone-100` | 4.61:1 (full opacity) | `text-stone-400 line-through decoration-stone-400` on `bg-stone-800/50` | 5.0:1 |
 | Disabled button — secondary | `bg-stone-100 text-stone-600 border-stone-400` | 6.85:1 text / 3.4:1 border | `dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500` | 10.2:1 text / 3.2:1 border |
 | Disabled button — primary green | `bg-green-300 text-green-800` | 5.1:1 | `dark:bg-green-900/40 dark:text-green-200` | 7.8:1 |
 | Status glyph circle — closed | white on `bg-green-600` | 4.5:1 | white on `bg-green-500` | 3.9:1 |

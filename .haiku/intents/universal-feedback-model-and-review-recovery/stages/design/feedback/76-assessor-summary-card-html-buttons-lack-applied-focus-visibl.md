@@ -2,7 +2,7 @@
 title: >-
   assessor-summary-card.html buttons lack applied focus-visible ring despite
   prose claim at line 275
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T02:57:11Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-23-focus-visible-and-activable-element-semantics
 ---
 
 `assessor-summary-card.html:275` declares in prose: *"focus ring — `focus:ring-2 focus:ring-teal-500` on any interactive element (view details button, per-item rows)."* But the actual buttons in the artifact ship with **zero** `focus-visible:ring-*` or `focus:ring-*` classes. Verification:

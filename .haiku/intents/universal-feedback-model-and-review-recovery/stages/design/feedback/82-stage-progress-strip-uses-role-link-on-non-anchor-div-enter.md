@@ -2,7 +2,7 @@
 title: >-
   stage-progress-strip uses role="link" on non-anchor div — Enter/Space
   activation not guaranteed
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T02:59:18Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-23-focus-visible-and-activable-element-semantics
 ---
 
 `stage-progress-strip.html` wraps each stage node in `<div … role="link" tabindex="0" aria-label="…">` (e.g. L87, L101, L115, L133, L147, L186, L196, L211, etc.). This is a known a11y footgun:

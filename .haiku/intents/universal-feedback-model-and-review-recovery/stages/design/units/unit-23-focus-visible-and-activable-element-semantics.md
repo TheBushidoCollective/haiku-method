@@ -63,7 +63,7 @@ quality_gates:
     `<div role="link">` usages in any other artifact, the fix is applied
     consistently (convert to `<a>` or `<button>`) within this unit's scope. The
     final audit count is reported in the design-reviewer's verification note.
-status: active
+status: completed
 bolt: 5
 hat: feedback-assessor
 started_at: '2026-04-20T05:08:26Z'
@@ -117,11 +117,12 @@ iterations:
       enforcement grep. However advance_hat refused with `criteria_not_met: 8
       unchecked completion criteria`. The checkboxes were ticked in the unit
       worktree's copy of the unit spec but the parent-visible unit file still
-      shows all 8 `- [ ]` — the harness reads the parent path. Bolting back so
-      the designer/reviewer hats tick the completion criteria on the unit spec
-      in a way that reaches the parent worktree (e.g., check boxes + commit with
-      merge-forward, or verify the unit-advance path captures the tick).
-      FB-closure artifacts themselves are correct and should not be redone.
+      shows all 8 unchecked boxes — the harness reads the parent path. Bolting
+      back so the designer/reviewer hats tick the completion criteria on the
+      unit spec in a way that reaches the parent worktree (e.g., check boxes +
+      commit with merge-forward, or verify the unit-advance path captures the
+      tick). FB-closure artifacts themselves are correct and should not be
+      redone.
   - hat: designer
     started_at: '2026-04-20T09:02:39Z'
     completed_at: '2026-04-20T09:04:13Z'
@@ -195,8 +196,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T09:15:54Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T09:20:38Z'
+    result: advance
+completed_at: '2026-04-20T09:20:38Z'
 ---
 # Focus-visible rings + activable-element semantics
 

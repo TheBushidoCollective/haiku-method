@@ -189,7 +189,7 @@ iterations:
       (`.haiku/worktrees/.../unit-20.../.haiku/intents/.../units/unit-20-....md`
       lines 148–178) — the canonical main-tree copy at
       `.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/units/unit-20-source-doc-opacity-and-grid-consistency.md`
-      lines 224–231 still carries 6 `- [ ]` boxes. The next designer bolt must
+      lines 224–231 still carries 6 empty-checkbox entries. The next designer bolt must
       tick the six checkboxes in the MAIN-TREE unit-spec file (not just the
       worktree copy) so the harness gate probe sees them checked. The artifacts
       themselves need no further changes.

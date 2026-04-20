@@ -68,6 +68,86 @@
     @media (prefers-reduced-motion: reduce) {
       .stage-tooltip { transition: none; }
     }
+
+    /* ============================================================
+       FB-07 — 44×44 touch-target hit-zone extension
+       ------------------------------------------------------------
+       DESIGN-BRIEF §4 "Touch-target rule (hard floor, FB-64)" and
+       WCAG 2.5.5 (AAA) / 2.5.8 (AA, WCAG 2.2): every stage-progress
+       node is a discrete activatable navigation target and MUST
+       have a ≥ 44×44 CSS-px effective hit area on viewports ≤ 768px.
+       The inline-text exception does NOT apply — stage-progress
+       nodes are explicitly called out as excluded.
+
+       Technique (matches DESIGN-BRIEF §4 remediation option): a
+       transparent `::before` pseudo-element centered on the visible
+       glyph (circle / diamond) extends the hit zone to 44×44 without
+       changing the rendered visual. The glyph keeps its 20×20 /
+       22×22 footprint; only the clickable/tappable surface grows.
+
+       The parent `.stage-node` is `position: relative` (already set
+       in the markup). The ::before fills a 44×44 box centered on
+       the node, and inner visual children are lifted via
+       `position: relative; z-index: 1;` so they paint above the
+       hit-zone layer while ::before still catches pointer/touch
+       events inside the 44×44 region.
+
+       `min-width: 44px` on the container also guarantees each node
+       has ≥ 44px of horizontal real estate in the nav flex row —
+       this prevents adjacent ::before hit zones from overlapping
+       and creating ambiguous target assignment. */
+    .stage-node {
+      min-width: 44px;
+      min-height: 44px;
+      justify-content: center;
+    }
+    .stage-node::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 44px;
+      height: 44px;
+      background: transparent;
+      z-index: 0;
+      pointer-events: auto;
+    }
+    .stage-node > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* The Mobile variant and All-Completed variant use plain
+       `.flex.flex-col.items-center` columns (no .stage-node class)
+       for each stage node. They still represent interactive
+       stage-progress targets (or at minimum tap-to-inspect targets
+       on touch devices), so apply the same 44×44 floor. Scoping to
+       `nav[aria-label^="Stage progress"]` keeps the rule local and
+       prevents it bleeding into unrelated flex columns elsewhere
+       in the gallery. */
+    nav[aria-label^="Stage progress"] > .flex.flex-col.items-center {
+      min-width: 44px;
+      min-height: 44px;
+      justify-content: center;
+      position: relative;
+    }
+    nav[aria-label^="Stage progress"] > .flex.flex-col.items-center::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 44px;
+      height: 44px;
+      background: transparent;
+      z-index: 0;
+      pointer-events: auto;
+    }
+    nav[aria-label^="Stage progress"] > .flex.flex-col.items-center > * {
+      position: relative;
+      z-index: 1;
+    }
   </style>
 </head>
 <body class="dark bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100">
@@ -518,6 +598,59 @@ nav.addEventListener('keydown', handleArrowNav);
         </table>
       </div>
       <p class="text-xs text-stone-600 dark:text-stone-300 mt-3 italic">Future never-visited stages are <code class="font-mono">tabindex="-1"</code> so they are skipped by the Tab key — but the arrow-key roving handler above (FB-65) moves focus to them, which reveals the same tooltip content that hover shows and satisfies WCAG 2.1.1 Keyboard + 1.4.13 Content on Hover. They remain in the a11y tree (<code class="font-mono">role="link"</code> + <code class="font-mono">aria-disabled="true"</code>) so assistive tech announces their existence; Enter / Space is a no-op because there is nothing to activate yet.</p>
+    </section>
+
+    <!-- ============================================================
+         Touch-target hit-zone — 44×44 floor (FB-07)
+    ============================================================ -->
+    <section>
+      <h2 class="text-lg font-semibold text-stone-900 dark:text-stone-100 mb-2">Touch-target hit-zone (FB-07)</h2>
+      <p class="text-xs text-stone-500 dark:text-stone-400 mb-4">
+        Every stage node has a ≥ 44×44 CSS-px effective hit area per DESIGN-BRIEF §4 "Touch-target rule (hard floor, FB-64)" and WCAG 2.5.5 (AAA) / 2.5.8 (AA, WCAG 2.2). Stage-progress nodes are discrete activatable navigation targets and are explicitly excluded from the WCAG inline-text exception.
+      </p>
+
+      <div class="bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-700 shadow-sm overflow-hidden">
+        <table class="w-full text-xs">
+          <thead class="bg-stone-50 dark:bg-stone-800 text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400">
+            <tr>
+              <th class="text-left px-3 py-2 w-48">Stage variant</th>
+              <th class="text-left px-3 py-2">Visible glyph</th>
+              <th class="text-left px-3 py-2">Hit-zone extension</th>
+              <th class="text-left px-3 py-2">Effective hit area</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone-100 dark:divide-stone-800 text-stone-700 dark:text-stone-300">
+            <tr>
+              <td class="px-3 py-2 font-semibold">Desktop / Revisit — circle (completed, previously visited, upcoming)</td>
+              <td class="px-3 py-2"><code class="font-mono">w-5 h-5</code> (20×20)</td>
+              <td class="px-3 py-2"><code class="font-mono">.stage-node::before</code> — 44×44 transparent box centered on glyph</td>
+              <td class="px-3 py-2">44×44 (✅ WCAG 2.5.5/2.5.8)</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2 font-semibold">Desktop / Revisit — current diamond</td>
+              <td class="px-3 py-2"><code class="font-mono">w-[22px] h-[22px]</code> (22×22)</td>
+              <td class="px-3 py-2"><code class="font-mono">.stage-node::before</code> — 44×44 transparent box centered on diamond</td>
+              <td class="px-3 py-2">44×44 (✅ WCAG 2.5.5/2.5.8)</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2 font-semibold">Mobile — every stage column</td>
+              <td class="px-3 py-2"><code class="font-mono">w-5 h-5</code> (20×20) plus label</td>
+              <td class="px-3 py-2"><code class="font-mono">nav[aria-label^="Stage progress"] &gt; .flex.flex-col.items-center::before</code></td>
+              <td class="px-3 py-2">44×44 (✅ WCAG 2.5.5/2.5.8 on ≤ 768px)</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2 font-semibold">All-completed variant — every stage column</td>
+              <td class="px-3 py-2"><code class="font-mono">w-5 h-5</code> (20×20)</td>
+              <td class="px-3 py-2">Same nav-scoped rule as Mobile</td>
+              <td class="px-3 py-2">44×44 (✅ WCAG 2.5.5/2.5.8)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="text-xs text-stone-600 dark:text-stone-300 mt-3">
+        The 44×44 zone is a transparent <code class="font-mono">::before</code> pseudo-element — it does not alter the visible geometry of the circle or diamond. Inner children are lifted to <code class="font-mono">position: relative; z-index: 1;</code> so they paint above the hit-zone layer. <code class="font-mono">min-width: 44px</code> on each stage column also guarantees flex layout reserves ≥ 44px of horizontal real estate per node, so adjacent ::before hit zones never overlap and create ambiguous target assignment. See <code class="font-mono">touch-target-audit.md §2-3</code> for the canonical per-control audit + fix matrix.
+      </p>
     </section>
 
   </main>

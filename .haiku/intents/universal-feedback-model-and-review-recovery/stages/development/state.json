@@ -1,12 +1,20 @@
 {
   "stage": "development",
-  "status": "active",
-  "phase": "elaborate",
+  "status": "completed",
+  "phase": "gate",
   "started_at": "2026-04-16T14:56:03Z",
-  "completed_at": null,
-  "gate_entered_at": null,
-  "gate_outcome": null,
+  "completed_at": "2026-04-20T21:48:12Z",
+  "gate_entered_at": "2026-04-20T21:48:01Z",
+  "gate_outcome": "advanced",
   "elaboration_turns": 5,
-  "stale_reason": "revisit of upstream stage 'design' (manual retroactive fix)",
-  "stale_marked_at": "2026-04-20T21:55:00Z"
+  "iterations": [
+    {
+      "index": 1,
+      "started_at": "2026-04-20T21:48:12Z",
+      "completed_at": "2026-04-20T21:48:12Z",
+      "trigger": "initial",
+      "result": "advanced"
+    }
+  ],
+  "visits": 1
 }

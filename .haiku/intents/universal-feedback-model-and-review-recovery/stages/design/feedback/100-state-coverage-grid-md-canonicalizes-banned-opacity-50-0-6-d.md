@@ -2,7 +2,7 @@
 title: >-
   state-coverage-grid.md canonicalizes banned opacity-50/0.6 disabled state
   across 5 rows — spec contradicts ban
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent

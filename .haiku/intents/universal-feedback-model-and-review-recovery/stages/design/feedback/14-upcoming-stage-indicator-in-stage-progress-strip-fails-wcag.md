@@ -2,7 +2,7 @@
 title: >-
   Upcoming-stage indicator in stage-progress-strip fails WCAG 1.4.11 Non-Text
   Contrast in dark mode
-status: fixing
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T20:20:47Z'
 iteration: 0
 visit: 0
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-14:bolt-1'
 bolt: 1
 upstream_stage: null
 ---

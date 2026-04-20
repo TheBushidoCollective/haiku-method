@@ -8,6 +8,22 @@
   <script>tailwind.config = { darkMode: 'class' }</script>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; }
+
+    /* Reduced-motion guard (FB-86, unit-25) — stage-wide policy from
+       motion-and-reduced-motion-spec.md §10.audit. Minimum-duration-not-none
+       rule: transitions that convey state still paint at 0.01ms; decorative
+       `animate-pulse` / `animate-spin` keyframed animations are effectively
+       suppressed via animation-iteration-count: 1 + 0.01ms duration. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+
         <!-- Agent-feedback toggle (canonical role="switch" pattern per agent-feedback-toggle-spec.html §1) -->
         <div class="shrink-0 px-4 py-2.5 border-b border-stone-200 bg-stone-50/60">
           <label class="af-touch flex items-center gap-2 cursor-pointer group">

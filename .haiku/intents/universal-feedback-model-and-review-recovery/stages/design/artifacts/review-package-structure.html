@@ -86,6 +86,19 @@
 
     /* Toggle for light/dark preview */
     .theme-toggle { cursor: pointer; user-select: none; }
+
+    /* Reduced-motion guard (FB-86, unit-25) — stage-wide policy from
+       motion-and-reduced-motion-spec.md §10.audit. Minimum-duration-not-none
+       rule: class-toggle transitions that convey state (theme flip,
+       hover row-tint) still paint their final frame at 0.01ms. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
 <body class="dark bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100">

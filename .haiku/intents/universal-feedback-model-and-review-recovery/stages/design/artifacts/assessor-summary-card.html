@@ -6,7 +6,22 @@
   <title>Feedback-assessor summary card — design spec</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' }</script>
-  <style>body { font-family: system-ui, -apple-system, sans-serif; }</style>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+
+    /* Reduced-motion guard (FB-86, unit-25) — stage-wide policy from
+       motion-and-reduced-motion-spec.md §10.audit. Minimum-duration-not-none
+       rule: class-toggle transitions that convey state (aria-expanded,
+       aria-checked, hidden) still paint at 0.01ms so final positions render. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
 </head>
 <body class="bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 min-h-screen">
 

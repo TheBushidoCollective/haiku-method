@@ -41,6 +41,46 @@
       min-height: 44px;
       min-width: 44px;
     }
+
+    /* Reduced-motion guard (FB-86, unit-25) — stage-wide policy from
+       motion-and-reduced-motion-spec.md §10.audit. This file specifically
+       guards five motion surfaces enumerated in unit-25's quality gate:
+
+         1. FAB pulse — `.feedback-fab-pulse` uses `animation: none` because
+            the pulse is purely decorative ("new-item" cue; the amber badge
+            count already communicates "unread > 0").
+         2. Bottom-sheet slide-in — `.sheet-enter` (`@keyframes sheet-up`)
+            drops to a static end-state; focus move + `aria-live` announce
+            the sheet appearance instead.
+         3. Tab-strip horizontal scroll — any `scroll-behavior: smooth`
+            (set by Tailwind JIT or inline) is forced to `auto`.
+         4. Sheet close transition — the `hidden` class toggle still paints
+            in one frame at 0.01ms; the visual hide is preserved.
+         5. Optimistic-UI flip — feedback-card border-color and
+            background-color transitions paint at 0.01ms so the final
+            state cue remains.
+
+       Rule is "minimum-duration, not none" for state-conveying transitions
+       so aria-expanded / aria-checked / hidden-class toggles still paint
+       their final frame; decorative animations get `animation: none`. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+      /* FAB pulse is decorative — suppress entirely, not just minimize. */
+      .feedback-fab-pulse {
+        animation: none !important;
+      }
+      /* Bottom-sheet slide-in is a location change communicated by focus
+         move + aria-live; drop the motion so vestibular-disorder users
+         see the sheet appear in-place. */
+      .sheet-enter {
+        animation: none !important;
+      }
+    }
   </style>
 </head>
 <body class="dark bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 min-h-screen" style="max-width: 375px; margin: 0 auto;">

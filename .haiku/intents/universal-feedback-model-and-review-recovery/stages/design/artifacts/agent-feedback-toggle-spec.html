@@ -28,6 +28,21 @@
       min-height: 44px;
       min-width: 44px;
     }
+
+    /* Reduced-motion guard (FB-86, unit-25) — stage-wide policy from
+       motion-and-reduced-motion-spec.md §10.audit. Minimum-duration-not-none
+       rule: state-conveying transitions (aria-checked on the switch thumb,
+       aria-expanded, hidden-class toggles) still paint at 0.01ms so final
+       positions render; decorative animations are suppressed entirely by
+       author-level per-component `animation: none` where applicable. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
 <body class="dark bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 min-h-screen">

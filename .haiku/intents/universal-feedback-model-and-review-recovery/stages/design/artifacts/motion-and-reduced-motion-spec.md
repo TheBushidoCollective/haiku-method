@@ -55,9 +55,88 @@ done
 echo "All animations have reduced-motion fallbacks."
 ```
 
+## §10.audit — Stage-wide reduced-motion audit (canonical, FB-86, unit-25)
+
+The Verification script above only catches `@keyframes` declarations. FB-86
+found five artifacts that declared **transitions** (`transition-colors`,
+`transition-transform`) and **Tailwind animation utilities**
+(`animate-pulse`, `animate-spin`) with no `prefers-reduced-motion` guard —
+the narrower script missed them. The audit below is the canonical one,
+run stage-wide (every `.html` artifact, not just the FAB or per-unit inputs).
+
+```sh
+# Canonical stage-wide reduced-motion audit (unit-25, FB-86).
+# Runs against every artifact — scope-widening mirrors the approach unit-21
+# took for the contrast audit (audit the whole stage, not just the unit inputs).
+# Expected output: empty. Any MISSING line is a failure.
+for f in stages/design/artifacts/*.html; do
+  anim=$(grep -cE '@keyframes|animation:|animate-pulse|animate-spin|transition-' "$f")
+  guard=$(grep -cE 'prefers-reduced-motion' "$f")
+  if [ "$anim" -gt 0 ] && [ "$guard" -eq 0 ]; then
+    echo "MISSING: $f"
+  fi
+done
+# empty output = pass
+```
+
+**Scope note.** This audit is run stage-wide, not per-artifact-input.
+A unit that only declares five artifacts as `inputs:` in its frontmatter
+still runs the audit across every artifact — because the reduced-motion
+policy covers the whole stage, and a regression in an artifact the unit
+did not name would still ship. FB-86 itself was the failure mode of the
+narrower audit.
+
+## §10.rule — Minimum-duration, not none
+
+Reduced-motion guards MUST NOT eliminate essential transitions that
+convey state. The canonical guard form is:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+```
+
+The guard collapses durations to `0.01ms`, **not** `none` / `0` / `initial`,
+so final positions still paint. This matters because several state cues in
+the review app are communicated via CSS transitions:
+
+- The FAB's `aria-expanded=true/false` toggle flips the chevron rotation
+  (`transform: rotate(0) → rotate(180deg)`) via `transition-transform`.
+  At `0.01ms` the rotation still lands on the final frame — under
+  `none`, the browser would skip the transition but the transform
+  would still apply, so this is belt-and-braces for authors who use
+  `transition: all` on the element.
+- The toggle thumb's `aria-checked=true/false` slides via
+  `transition-transform translate-x-0 → translate-x-4`. At `0.01ms`
+  the thumb still reaches the on-position.
+- The sheet `hidden` class toggle (display / visibility) still paints
+  in one frame; the visual hide is preserved.
+- Optimistic-UI state changes (border-color, background-color) still
+  show the final cue.
+
+**Decorative animations** — the FAB pulse (`feedback-pulse`), the bottom-
+sheet slide-in (`sheet-up`), toast slide-ins — SHOULD additionally carry
+a per-component `animation: none` override inside the same `@media` block
+(as `feedback-inline-mobile.html` does for `.feedback-fab-pulse` and
+`.sheet-enter`). These carry no information the user needs; the amber
+badge count, focus move, and `aria-live` announcement cover the signal.
+
+**Rule summary.** Use `animation-duration: 0.01ms` / `transition-duration:
+0.01ms` as the global default. Add per-component `animation: none` only
+for animations whose *only* job is decoration — pulses, spinners, slide-
+ins already paired with focus moves or `aria-live`. Never use `none` on
+transitions that paint a state cue.
+
 ## Testing
 
 1. macOS: `System Settings → Accessibility → Display → Reduce motion`.
 2. iOS: `Settings → Accessibility → Motion → Reduce Motion`.
 3. DevTools: Chrome/Edge `Rendering → Emulate CSS media feature prefers-reduced-motion: reduce`.
 4. Per artifact, open in reduced-motion mode, trigger every state change listed in `state-coverage-grid.md`, verify no animation plays and the static cue (color / border / badge / label) remains legible.
+5. Stage-wide: run the §10.audit script after any artifact edit; empty output = pass.

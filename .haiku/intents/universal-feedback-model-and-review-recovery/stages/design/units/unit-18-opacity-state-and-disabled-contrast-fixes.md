@@ -1,5 +1,5 @@
 ---
-title: 'Remove opacity on state + fix disabled button contrast across all artifacts'
+title: Remove opacity on state + fix disabled button contrast across all artifacts
 type: design
 closes:
   - FB-46
@@ -23,53 +23,59 @@ outputs:
 quality_gates:
   - >-
     `grep -rEn 'opacity-70|opacity-50' stages/design/artifacts/ | grep -v
-    'backdrop-blur\|black/50\|modal-overlay'` returns 0 matches on card
-    roots. Closed/rejected card visual differentiation comes from:
-    (a) background tint (`bg-green-50/60` closed, `bg-stone-100` rejected
-    for light; `dark:bg-green-900/20` / `dark:bg-stone-800/50` for dark),
-    (b) left-border color, (c) status-glyph icon, and (d) text prefix —
-    NEVER α-composite opacity on the card root.
+    'backdrop-blur\|black/50\|modal-overlay'` returns 0 matches on card roots.
+    Closed/rejected card visual differentiation comes from: (a) background tint
+    (`bg-green-50/60` closed, `bg-stone-100` rejected for light;
+    `dark:bg-green-900/20` / `dark:bg-stone-800/50` for dark), (b) left-border
+    color, (c) status-glyph icon, and (d) text prefix — NEVER α-composite
+    opacity on the card root.
   - >-
-    Disabled buttons use a documented token pair with ≥ 4.5:1 text
-    contrast and ≥ 3:1 non-text (border) contrast per WCAG 2.2 1.4.11.
-    Canonical pairs (from unit-11 and DESIGN-BRIEF §2):
-    Secondary disabled light: `bg-stone-100 text-stone-600 border
-    border-stone-400 cursor-not-allowed` (6.85:1 text, 3.4:1 border).
-    Secondary disabled dark: `dark:bg-stone-800 dark:text-stone-300
-    dark:border-stone-500` (10.2:1, 3.2:1).
-    Primary green disabled: `bg-green-300 text-green-800
-    dark:bg-green-900/40 dark:text-green-200` (5.1:1 light, 7.8:1 dark).
-    `grep -rEn 'bg-stone-200 text-stone-500|disabled:opacity-50'
-    stages/design/artifacts/` returns 0. Non-canonical disabled pairs
-    flagged per-line in contrast-and-type-audit.md §4.
+    Disabled buttons use a documented token pair with ≥ 4.5:1 text contrast and
+    ≥ 3:1 non-text (border) contrast per WCAG 2.2 1.4.11. Canonical pairs (from
+    unit-11 and DESIGN-BRIEF §2): Secondary disabled light: `bg-stone-100
+    text-stone-600 border border-stone-400 cursor-not-allowed` (6.85:1 text,
+    3.4:1 border). Secondary disabled dark: `dark:bg-stone-800
+    dark:text-stone-300 dark:border-stone-500` (10.2:1, 3.2:1). Primary green
+    disabled: `bg-green-300 text-green-800 dark:bg-green-900/40
+    dark:text-green-200` (5.1:1 light, 7.8:1 dark). `grep -rEn 'bg-stone-200
+    text-stone-500|disabled:opacity-50' stages/design/artifacts/` returns 0.
+    Non-canonical disabled pairs flagged per-line in contrast-and-type-audit.md
+    §4.
   - >-
     Every `<button disabled>` or `<input disabled>` carries
-    `aria-disabled="true"`. `grep -rEn 'disabled[ >]'
-    stages/design/artifacts/ | wc -l` — `grep -rEn 'aria-disabled="true"'
-    stages/design/artifacts/ | wc -l` ≥ the button count on each file.
-    contrast-and-type-audit.md §5 lists each disabled control with
-    aria-disabled coverage status.
+    `aria-disabled="true"`. `grep -rEn 'disabled[ >]' stages/design/artifacts/ |
+    wc -l` — `grep -rEn 'aria-disabled="true"' stages/design/artifacts/ | wc -l`
+    ≥ the button count on each file. contrast-and-type-audit.md §5 lists each
+    disabled control with aria-disabled coverage status.
   - >-
     Closed feedback card state (light): `bg-green-50/60 border-l-4
-    border-l-green-600` + green checkmark glyph in the status-signal
-    circle + "Closed · " text prefix in metadata line. Strikethrough
-    optional on title (NOT on metadata, which must remain readable).
-    Rendered in feedback-card-states.html and state-signaling-inventory.html.
+    border-l-green-600` + green checkmark glyph in the status-signal circle +
+    "Closed · " text prefix in metadata line. Strikethrough optional on title
+    (NOT on metadata, which must remain readable). Rendered in
+    feedback-card-states.html and state-signaling-inventory.html.
   - >-
     Rejected feedback card state (light): `bg-stone-100 border-l-4
-    border-l-stone-500` + red-x glyph in the status-signal circle +
-    "Rejected · " text prefix in metadata line. Title rendered with
-    `text-stone-500 line-through decoration-stone-500` at FULL opacity
-    (not composited with opacity-50). Visible at compact width without
-    clipping mid-word.
+    border-l-stone-500` + red-x glyph in the status-signal circle + "Rejected ·
+    " text prefix in metadata line. Title rendered with `text-stone-500
+    line-through decoration-stone-500` at FULL opacity (not composited with
+    opacity-50). Visible at compact width without clipping mid-word.
   - >-
-    DESIGN-BRIEF §2 "Banned Text-on-Surface Pairs" table (from unit-11)
-    extended with an "opacity on state" row explicitly forbidding
-    `opacity-70` on closed card roots and `opacity-50` on rejected card
-    roots, with the replacement tokens above. DESIGN-TOKENS.md §3 adds
-    the canonical closed/rejected/pending/addressed background tokens.
+    DESIGN-BRIEF §2 "Banned Text-on-Surface Pairs" table (from unit-11) extended
+    with an "opacity on state" row explicitly forbidding `opacity-70` on closed
+    card roots and `opacity-50` on rejected card roots, with the replacement
+    tokens above. DESIGN-TOKENS.md §3 adds the canonical
+    closed/rejected/pending/addressed background tokens.
+status: active
+bolt: 1
+hat: designer
+started_at: '2026-04-20T01:54:04Z'
+hat_started_at: '2026-04-20T01:54:04Z'
+iterations:
+  - hat: designer
+    started_at: '2026-04-20T01:54:04Z'
+    completed_at: null
+    result: null
 ---
-
 # Opacity-on-state removal + disabled button contrast
 
 ## Scope

@@ -76,9 +76,9 @@ quality_gates:
     closed/rejected/pending/addressed background tokens.
 status: active
 bolt: 3
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T01:54:04Z'
-hat_started_at: '2026-04-20T02:38:02Z'
+hat_started_at: '2026-04-20T02:41:58Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:04Z'
@@ -125,6 +125,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T02:38:02Z'
+    completed_at: '2026-04-20T02:41:58Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T02:41:58Z'
     completed_at: null
     result: null
 ---

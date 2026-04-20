@@ -2,7 +2,7 @@
 title: >-
   DESIGN-BRIEF §2 missing specs for AssessorSummaryCard, StageProgressStrip,
   RevisitModal; §9 missing their files
-status: closed
+status: pending
 origin: adversarial-review
 author: consistency
 author_type: agent

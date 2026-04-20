@@ -23,39 +23,37 @@ outputs:
   - stages/design/artifacts/unit-31-design-review.md
 quality_gates:
   - >-
-    `feedback-inline-desktop.html` — scrollable feedback-card container
-    wrapped in native `<ul class="... list-none" aria-label="Feedback
-    items">` (or `<div role="list" aria-label="Feedback items">` if a
-    `<div>` is retained). Each feedback card rendered as `<li>` (or
-    wrapped in `<li>`), preserving its existing `tabindex="0"` +
-    focus-visible styling. Verification: `grep -cE '<ul|role="list"'
-    stages/design/artifacts/feedback-inline-desktop.html` ≥ 1 AND `grep
-    -cE '<li|role="listitem"'
-    stages/design/artifacts/feedback-inline-desktop.html` ≥ 5 (one per
-    rendered card in the default artifact state).
+    `feedback-inline-desktop.html` — scrollable feedback-card container wrapped
+    in native `<ul class="... list-none" aria-label="Feedback items">` (or `<div
+    role="list" aria-label="Feedback items">` if a `<div>` is retained). Each
+    feedback card rendered as `<li>` (or wrapped in `<li>`), preserving its
+    existing `tabindex="0"` + focus-visible styling. Verification: `grep -cE
+    '<ul|role="list"' stages/design/artifacts/feedback-inline-desktop.html` ≥ 1
+    AND `grep -cE '<li|role="listitem"'
+    stages/design/artifacts/feedback-inline-desktop.html` ≥ 5 (one per rendered
+    card in the default artifact state).
   - >-
-    `feedback-card-states.html` — state-gallery card collection also
-    wrapped in `<ul>` / `<li>` (this is the canonical spec gallery for
-    the component; list semantics there match the real surface).
-    Verification: `grep -cE '<ul|role="list"'
-    stages/design/artifacts/feedback-card-states.html` ≥ 1.
+    `feedback-card-states.html` — state-gallery card collection also wrapped in
+    `<ul>` / `<li>` (this is the canonical spec gallery for the component; list
+    semantics there match the real surface). Verification: `grep -cE
+    '<ul|role="list"' stages/design/artifacts/feedback-card-states.html` ≥ 1.
   - >-
-    `focus-order-spec.md §1` rows for the sidebar-card rows (N-6 through
-    N) gain an explicit "list-structure required" note. `aria-landmark-
-    spec.md §2 Per-surface landmark map` adds a row for "list semantics
-    inside `<aside role="complementary">`" pointing at the new `<ul>`
-    wrapper.
+    `focus-order-spec.md §1` rows for the sidebar-card rows (N-6 through N) gain
+    an explicit "list-structure required" note. `aria-landmark- spec.md §2
+    Per-surface landmark map` adds a row for "list semantics inside `<aside
+    role="complementary">`" pointing at the new `<ul>` wrapper.
   - >-
     Parity check: `grep -cE '<ul|role="list"'
-    stages/design/artifacts/feedback-inline-mobile.html` ≥ 1
-    (already present per FB-148's observation; this gate just confirms
-    no regression). Mobile and desktop both expose the same list
-    semantics.
+    stages/design/artifacts/feedback-inline-mobile.html` ≥ 1 (already present
+    per FB-148's observation; this gate just confirms no regression). Mobile and
+    desktop both expose the same list semantics.
   - >-
     Feedback-assessor verification: a list-semantics grep added to the
-    feedback-assessor gate script so this pattern is enforced on every
-    future iteration — `grep -c 'role="list"\|<ul'
+    feedback-assessor gate script so this pattern is enforced on every future
+    iteration — `grep -c 'role="list"\|<ul'
     stages/design/artifacts/feedback-inline-desktop.html` ≥ 1.
+status: completed
+completed_at: '2026-04-20T19:50:23Z'
 ---
 # feedback list-semantics desktop/mobile parity
 
@@ -127,10 +125,10 @@ require list inside).
 
 ## Completion criteria
 
-- [ ] feedback-inline-desktop.html cards wrapped in `<ul>` / `<li>`
-- [ ] feedback-card-states.html cards wrapped in `<ul>` / `<li>`
-- [ ] focus-order-spec.md §1 rows note list structure
-- [ ] aria-landmark-spec.md §2 adds list-inside-aside row
-- [ ] List-semantics grep added to feedback-assessor gate
-- [ ] No visual regression on desktop card layout
-- [ ] FB-148 closes on live-grep verification
+- [x] feedback-inline-desktop.html cards wrapped in `<ul>` / `<li>`
+- [x] feedback-card-states.html cards wrapped in `<ul>` / `<li>`
+- [x] focus-order-spec.md §1 rows note list structure
+- [x] aria-landmark-spec.md §2 adds list-inside-aside row
+- [x] List-semantics grep added to feedback-assessor gate
+- [x] No visual regression on desktop card layout
+- [x] FB-148 closes on live-grep verification

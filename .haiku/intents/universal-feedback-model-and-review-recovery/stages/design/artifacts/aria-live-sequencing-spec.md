@@ -40,6 +40,38 @@ Screen readers queue polite announcements and interrupt with assertive ones. If 
 - The failure message interrupts to correct the record
 - The two phases are semantically distinct (status vs. alert), which helps AT that differentiates (e.g. VoiceOver's "notification" chime on alerts)
 
+### 2.2 Coalescing & debouncing for streaming summaries (added for FB-62)
+
+When multiple updates would otherwise fire in rapid succession (e.g. the `AssessorSummaryCard` refreshing its counts as the assessor streams per-item verdicts), the live region **MUST** coalesce them:
+
+1. First update: write immediately.
+2. Subsequent updates within a 400 ms window: replace the pending `textContent`, do NOT flush yet.
+3. After 400 ms of silence: flush the latest coalesced message once.
+
+This avoids the "stuttered assessor" failure mode where a screen reader is fed "1 addressed, 2 addressed, 3 addressed, 4 addressed" back-to-back and drops messages on the floor. With debounce-coalescing the user hears one complete "4 addressed, gate unlocked" announcement.
+
+Pseudocode (lives in the same hook that owns the card's `textContent`):
+
+```ts
+let timer: ReturnType<typeof setTimeout> | null = null;
+let pending: string | null = null;
+
+function announceCoalesced(regionId: string, message: string) {
+  pending = message;
+  if (timer) return;
+  timer = setTimeout(() => {
+    const el = document.getElementById(regionId);
+    if (el && pending !== null) {
+      el.textContent = "";
+      requestAnimationFrame(() => { el!.textContent = pending!; pending = null; });
+    }
+    timer = null;
+  }, 400);
+}
+```
+
+Apply this pattern **specifically** to the `AssessorSummaryCard` live region and any other streaming-summary surface. Per-card feedback-item transitions (§3) do NOT coalesce — each is a discrete user action and should announce individually.
+
 ## 3. Three-phase announcement template
 
 For every transition `T` that takes feedback item `FB-XX` from state `S1` → `S2`:
@@ -84,6 +116,22 @@ The **polite** region is set to the in-flight text on click, and then **replaced
 
 - Phase 1: `#feedback-live-polite` ← `"FB-06 rejecting…"`
 - Phase 2b: `#feedback-live-assertive` ← `"FB-06 reject failed; reverted to pending."`
+
+### 3.1 AssessorSummaryCard live-region sequence (FB-62)
+
+The `AssessorSummaryCard` IS itself a live region (its card root carries `role="status" aria-live="polite" aria-atomic="true"` — see `assessor-summary-card.html` and DESIGN-BRIEF §2). It does NOT share `#feedback-live-polite`; announcements coalesce via §2.2 so the summary reads once when the assessor run resolves.
+
+| Phase | Trigger | What the card does | Expected announcement (after coalesce) |
+|---|---|---|---|
+| 1 — assessor starting | FSM enters the assessor phase | Card mounts with "running" pill, spinner on status dot; `aria-atomic="true"` + empty content → no announcement | (silence) |
+| 2 — streaming verdicts | Assessor subagent streams per-item outcomes | Counts tick up; coalesced via §2.2 | (silence during 400 ms window) |
+| 3a — pass clean | Assessor finishes, all items addressed | Card flips to "clean" pill; final counts set; textContent effectively "feedback assessor clean. 7 total. 0 pending. 4 updated. user gate unlocked." | Announced once as a single polite string |
+| 3b — pending (user gate blocked) | Assessor finishes, N items still pending | Card flips to "pending" pill with count | `"feedback assessor pending. 3 items pending. user gate blocked."` |
+| 3c — error (fail-closed) | Assessor timed out or write-failed | Card flips to "error" pill | `"feedback assessor error. assessor_timeout. user gate blocked — rolling back to elaborate."` |
+
+Because the card root itself is the live region with `aria-atomic="true"`, the *entire* card contents are the announcement — there is no need for a separate template string. The coalescing in §2.2 guarantees a single, complete announcement fires per assessor run.
+
+**Implementation note (dev stage):** the card body MUST avoid deeply-nested live-region ancestors. Only the outermost `rounded-lg` card `<div>` carries `role="status"`. Inner `<ul>` / `<div>` elements have no `role`, no `aria-live`, no `aria-atomic`.
 
 ## 4. In-flight card markup
 

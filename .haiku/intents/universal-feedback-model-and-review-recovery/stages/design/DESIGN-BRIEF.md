@@ -114,7 +114,9 @@ The sidebar header is a single **"Comments"** heading with an adjacent **AgentFe
 
 ## 2. Component Inventory
 
-> **State-coverage requirement (added in unit-15 / FB-25).** Every new component in this intent — and every new component introduced in downstream stages — **MUST** ship with a six-state grid (default / hover / focus / active / disabled / error) rendered alongside its component spec. Use `stages/design/artifacts/state-coverage-grid.md` as the template. Components whose element cannot reach a given state (e.g. a non-focusable label) **MUST** mark the state `N/A` with a one-line rationale; silently omitting a state is not acceptable. The design-reviewer hat walks this grid row-by-row before approval.
+> **State-coverage requirement (added in unit-15 / FB-25; extended in unit-19 / FB-56).** Every new component in this intent — and every new component introduced in downstream stages — **MUST** ship with a six-state grid (default / hover / focus / active / disabled / error) rendered alongside its component spec. Use `stages/design/artifacts/state-coverage-grid.md` as the template. Components whose element cannot reach a given state (e.g. a non-focusable label) **MUST** mark the state `N/A` with a one-line rationale; silently omitting a state is not acceptable. The design-reviewer hat walks this grid row-by-row before approval.
+>
+> **FB-56 extension**: every component named in §2 of THIS brief — including `FeedbackStatusBadge`, `FeedbackOriginIcon`, `FeedbackItem` (compact + expanded), `FeedbackList`, `FeedbackSummaryBar`, `AgentFeedbackToggle`, `FeedbackSheet` (aka `MobileFeedbackPanel`), `FeedbackFloatingButton`, `AssessorSummaryCard`, `StageProgressStrip`, `RevisitModal` — MUST have an explicit row in `state-coverage-grid.md` §7. Adding a new component to §2 without simultaneously adding a row in the grid is a hard fail at the design-reviewer gate.
 
 ### Typography Floor (unit-11)
 
@@ -611,6 +613,12 @@ The UI shows only the actions valid for the item's current status. Invalid actio
 
 **Note:** The current sidebar is already `hidden md:flex`, so mobile users currently have NO access to review actions. The `FeedbackFloatingButton` + `FeedbackSheet` pattern is a new addition that unblocks mobile review entirely.
 
+### Touch-target rule (hard floor, FB-64)
+
+On viewports ≤ 768 px, every button, link, icon, and input **MUST** have a ≥ 44×44 CSS-px effective hit area. The WCAG 2.5.8 inline-text exception applies **ONLY** to text links inside flowing prose (e.g. a citation link inside body copy). It does NOT apply to standalone toolbar controls, toast close × buttons, popover ✕ buttons, feedback-card footer buttons, navigation / stage-progress nodes, or any discrete action target.
+
+Placeholders like `desktop-ok, mobile-bump-required` in `touch-target-audit.md` are forbidden — every control must resolve to a concrete, measured 44×44 hit area on mobile (either via native size, `.touch-target` utility, or a transparent `::before` pseudo-element that extends the hit zone). See `touch-target-audit.md §2-3` for the canonical per-control audit and fix matrix.
+
 ---
 
 ## 5. Comment-to-Feedback Migration
@@ -726,7 +734,8 @@ The sidebar focus order follows the DOM order, which matches the visual top-to-b
 - Skip link (`<a href="#main-content">Skip to main content</a>`) is the first focusable element on every page — bypasses header/nav for keyboard users (see `artifacts/aria-landmark-spec.md §7`).
 - Every page declares the full landmark set: `<header role="banner">`, `<nav aria-label="Stage progress">`, `<main id="main-content" role="main">`, `<aside role="complementary" aria-label="Review sidebar">` (desktop). See `artifacts/aria-landmark-spec.md §1-2`.
 - Every modal declares `role="dialog" aria-modal="true" aria-labelledby="{titleId}"` with a focus-trap; see §3.
-- The assessor-summary-card root is `role="status" aria-live="polite"` so AT announces "assessor run complete" when the gate unlocks.
+- The `AssessorSummaryCard` root (the outer `rounded-lg` card `<div>`, not a nested prose region) MUST carry `role="status" aria-live="polite" aria-atomic="true"` so AT announces the complete rolled-up summary (`"feedback assessor clean. 7 total. 0 pending. 4 updated. user gate unlocked."`) when the gate unlocks. Coalescing rules in `aria-live-sequencing-spec.md §2.2` prevent per-item stutter during streaming assessor runs. See `aria-live-sequencing-spec.md §3.1` for the card's full live-region sequence. (FB-62)
+- The `MobileFeedbackPanel` (rendered by `FeedbackSheet`, opened by `FeedbackFloatingButton`) is a dialog per the §3 contract in `aria-landmark-spec.md` and its open / close lifecycle is documented in `aria-landmark-spec.md §5`. FAB: `aria-haspopup="dialog"` + `aria-expanded` + `aria-controls="feedback-sheet"`. Sheet: `role="dialog" aria-modal="true" aria-labelledby="sheet-title"`. Focus-trap: `focus-trap-react` library; no hand-rolled traps. On open: `aria-hidden="true"` + `inert` on `<main>` and `<header>`. On close: `FocusTrap`'s `returnFocusOnDeactivate` restores focus to the FAB; do NOT call `FAB.focus()` manually. `Escape` closes. (FB-51)
 
 ### Mobile Sheet Overlay
 

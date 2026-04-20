@@ -44,7 +44,7 @@
       <div class="rounded-xl border border-gray-800 bg-gray-950 p-4">
         <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">dark</div>
         <!-- sidebar footer surface -->
-        <div role="status" aria-live="polite" aria-label="Feedback assessor summary" class="rounded-lg border border-gray-800 bg-gray-900 p-3 space-y-3">
+        <div role="status" aria-live="polite" aria-atomic="true" aria-label="Feedback assessor summary" class="rounded-lg border border-gray-800 bg-gray-900 p-3 space-y-3">
           <!-- Roll-up header -->
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
@@ -88,7 +88,7 @@
       <!-- Light -->
       <div class="rounded-xl border border-gray-200 bg-white p-4">
         <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">light</div>
-        <div role="status" aria-live="polite" aria-label="Feedback assessor summary" class="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
+        <div role="status" aria-live="polite" aria-atomic="true" aria-label="Feedback assessor summary" class="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-green-500"></span>
@@ -134,7 +134,7 @@
       <!-- Dark -->
       <div class="rounded-xl border border-gray-800 bg-gray-950 p-4">
         <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">dark</div>
-        <div role="status" aria-live="polite" aria-label="Feedback assessor summary" class="rounded-lg border border-amber-700 bg-amber-900/10 p-3 space-y-3">
+        <div role="status" aria-live="polite" aria-atomic="true" aria-label="Feedback assessor summary" class="rounded-lg border border-amber-700 bg-amber-900/10 p-3 space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-amber-500"></span>
@@ -173,7 +173,7 @@
       <!-- Light -->
       <div class="rounded-xl border border-gray-200 bg-white p-4">
         <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">light</div>
-        <div role="status" aria-live="polite" aria-label="Feedback assessor summary" class="rounded-lg border border-amber-300 bg-amber-50/60 p-3 space-y-3">
+        <div role="status" aria-live="polite" aria-atomic="true" aria-label="Feedback assessor summary" class="rounded-lg border border-amber-300 bg-amber-50/60 p-3 space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-amber-500"></span>
@@ -218,7 +218,7 @@
       <!-- Dark -->
       <div class="rounded-xl border border-gray-800 bg-gray-950 p-4">
         <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">dark</div>
-        <div role="status" aria-live="polite" aria-label="Feedback assessor summary" class="rounded-lg border border-rose-800 bg-rose-900/10 p-3 space-y-3">
+        <div role="status" aria-live="polite" aria-atomic="true" aria-label="Feedback assessor summary" class="rounded-lg border border-rose-800 bg-rose-900/10 p-3 space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-rose-500"></span>
@@ -241,7 +241,7 @@
       <!-- Light -->
       <div class="rounded-xl border border-gray-200 bg-white p-4">
         <div class="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">light</div>
-        <div role="status" aria-live="polite" aria-label="Feedback assessor summary" class="rounded-lg border border-rose-300 bg-rose-50/60 p-3 space-y-3">
+        <div role="status" aria-live="polite" aria-atomic="true" aria-label="Feedback assessor summary" class="rounded-lg border border-rose-300 bg-rose-50/60 p-3 space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-rose-500"></span>
@@ -282,7 +282,7 @@
       <div class="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
         <h3 class="text-sm font-semibold mb-2">Accessibility</h3>
         <ul class="text-gray-600 dark:text-gray-400 space-y-1 list-disc ml-5">
-          <li>Card is a live region — <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">role="status" aria-live="polite"</code> — so screen readers pick up "pass clean" / "3 pending" when the assessor finishes.</li>
+          <li>Card ROOT is the live region (FB-62) — <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">role="status" aria-live="polite" aria-atomic="true"</code> applied on the outer card container (not a nested prose region) — so screen readers pick up "pass clean" / "3 pending" when the assessor finishes. <code>aria-atomic="true"</code> ensures the whole rolled-up summary is re-announced when any number flips (per aria-live-sequencing-spec.md §2.2 debounce-coalescing).</li>
           <li>Status dot has <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">aria-hidden="true"</code>; color is never the only signal — the adjacent pill text reads <code>clean</code> / <code>pending</code> / <code>error</code>.</li>
           <li>Contrast: amber-800 on amber-50 = 7.4:1, rose-800 on rose-50 = 7.1:1, green-700 on white = 5.4:1. All AA-compliant for body text.</li>
           <li>Touch targets on interactive buttons (view details, view log) meet 44×44 via <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">px-2 py-1</code> + 8px hit-area extension (cursor target = entire row).</li>

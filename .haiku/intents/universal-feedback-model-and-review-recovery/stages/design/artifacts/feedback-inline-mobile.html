@@ -53,8 +53,22 @@
   <header role="banner" class="sticky top-0 z-40 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
     <div class="px-4 py-3 flex items-center justify-between">
       <h1 class="text-base font-semibold truncate text-gray-900 dark:text-gray-100">Review: Feedback Model</h1>
-      <button aria-label="Toggle color theme" class="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 touch-target flex items-center justify-center focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
-        <span aria-hidden="true">&#x263E;</span>
+      <!-- FB-66: icon-only theme toggle carries a dynamic aria-label reflecting the current state.
+           Implementation contract: the label MUST reflect the ACTION the user would take, not the
+           current theme. So if dark mode is active, aria-label="Switch to light theme"; if light
+           mode is active, aria-label="Switch to dark theme". The label updates in the same click
+           handler that flips the `.dark` class on <html>. aria-pressed is also exposed so AT can
+           surface the binary state independently of the label. -->
+      <button
+        id="theme-toggle"
+        type="button"
+        aria-label="Switch to light theme"
+        aria-pressed="true"
+        title="Switch to light theme"
+        onclick="var h=document.documentElement;var nowDark=h.classList.toggle('dark');this.setAttribute('aria-pressed',String(nowDark));var nextLabel=nowDark?'Switch to light theme':'Switch to dark theme';this.setAttribute('aria-label',nextLabel);this.setAttribute('title',nextLabel);this.querySelector('[data-theme-glyph]').textContent=nowDark?'\u263E':'\u2600';"
+        class="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 touch-target flex items-center justify-center focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none"
+      >
+        <span aria-hidden="true" data-theme-glyph>&#x263E;</span>
       </button>
     </div>
   </header>
@@ -182,7 +196,10 @@
 
     <!-- Summary bar — filter chips; colored dots aria-hidden (label conveys status) -->
     <div class="shrink-0 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 overflow-x-auto" role="group" aria-label="Filter feedback by status">
-      <button aria-pressed="true" class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-full bg-teal-100 text-teal-700 border border-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-700 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">All</button>
+      <button aria-pressed="true" aria-label="All, 5 items" class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-full bg-teal-100 text-teal-700 border border-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-700 transition-colors touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
+        <span aria-hidden="true" class="inline-block w-2 h-2 rounded-full bg-stone-500 dark:bg-stone-300 mr-1"></span>All
+        <span aria-hidden="true" class="ml-0.5 font-bold">5</span>
+      </button>
       <button aria-pressed="false" aria-label="Pending, 3 items" class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-full border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 touch-target focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 outline-none">
         <span aria-hidden="true" class="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1"></span>Pending
         <span aria-hidden="true" class="ml-0.5 font-bold">3</span>

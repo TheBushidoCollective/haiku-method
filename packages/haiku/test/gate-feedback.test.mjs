@@ -8,8 +8,8 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
-	readFileSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs"
@@ -21,13 +21,7 @@ import {
 	orchestratorToolDefs,
 	runNext,
 } from "../src/orchestrator.ts"
-import {
-	countPendingFeedback,
-	readFeedbackFiles,
-	readJson,
-	writeFeedbackFile,
-	writeJson,
-} from "../src/state-tools.ts"
+import { readJson, writeJson } from "../src/state-tools.ts"
 
 // ── Setup ──────────────────────────────────────────────────────────────────
 
@@ -143,7 +137,7 @@ function createStageState(intentDirPath, stage, state) {
 	})
 }
 
-function createUnit(intentDirPath, stage, unitName, opts = {}) {
+function _createUnit(intentDirPath, stage, unitName, opts = {}) {
 	const unitsDir = join(intentDirPath, "stages", stage, "units")
 	mkdirSync(unitsDir, { recursive: true })
 	const inputs = opts.inputs || ["intent.md"]
@@ -166,7 +160,7 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 	)
 }
 
-function createFeedbackFile(intentDirPath, slug, stage, title, opts = {}) {
+function createFeedbackFile(intentDirPath, _slug, stage, title, opts = {}) {
 	const feedbackDirPath = join(intentDirPath, "stages", stage, "feedback")
 	mkdirSync(feedbackDirPath, { recursive: true })
 

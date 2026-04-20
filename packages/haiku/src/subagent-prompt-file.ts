@@ -118,10 +118,7 @@ export function writeSubagentPrompt(opts: {
 	atomicWrite(path, content)
 	maybePeriodicOwnSessionCleanup(dir)
 
-	const parentInstruction =
-		`Read the file at \`${path}\` and execute its instructions exactly. ` +
-		`The file is the complete, canonical subagent prompt authored by the FSM — ` +
-		`do not paraphrase or skip any of it.`
+	const parentInstruction = `Read the file at \`${path}\` and execute its instructions exactly. The file is the complete, canonical subagent prompt authored by the FSM — do not paraphrase or skip any of it.`
 
 	return { path, parentInstruction }
 }

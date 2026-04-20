@@ -1,10 +1,10 @@
 // prompts/helpers.ts — Shared utilities for prompt handlers
 
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { GetPromptResult } from "@modelcontextprotocol/sdk/types.js"
 import { resolvePluginRoot } from "../config.js"
-import { findHaikuRoot, intentDir, parseFrontmatter } from "../state-tools.js"
+import { findHaikuRoot, parseFrontmatter } from "../state-tools.js"
 
 // ── Message builders ─────────────────────────────────────────────────────────
 

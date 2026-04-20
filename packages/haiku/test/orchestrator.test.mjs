@@ -4,13 +4,13 @@
 
 import assert from "node:assert"
 import {
+	chmodSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs"
-import { chmodSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -390,55 +390,47 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 
 	console.log("\n=== handleOrchestratorTool: archive / unarchive ===")
 
-	await test(
-		"haiku_intent_archive sets archived:true and preserves other fields",
-		async () => {
-			const { projDir, slug, intentDirPath } = createProject(
-				"archive-tool-happy",
+	await test("haiku_intent_archive sets archived:true and preserves other fields", async () => {
+		const { projDir, slug, intentDirPath } = createProject("archive-tool-happy")
+		process.chdir(projDir)
+		const intentFile = join(intentDirPath, "intent.md")
+		const beforeRaw = readFileSync(intentFile, "utf8")
+		const before = parseFrontmatter(beforeRaw)
+
+		const res = await handleOrchestratorTool("haiku_intent_archive", {
+			intent: slug,
+		})
+		assert.ok(!res.isError)
+		const payload = JSON.parse(res.content[0].text)
+		assert.strictEqual(payload.action, "intent_archived")
+		assert.strictEqual(payload.slug, slug)
+
+		const after = parseFrontmatter(readFileSync(intentFile, "utf8"))
+		assert.strictEqual(after.data.archived, true)
+		// All other fields preserved
+		for (const key of Object.keys(before.data)) {
+			if (key === "archived") continue
+			assert.deepStrictEqual(
+				after.data[key],
+				before.data[key],
+				`frontmatter field "${key}" changed unexpectedly`,
 			)
-			process.chdir(projDir)
-			const intentFile = join(intentDirPath, "intent.md")
-			const beforeRaw = readFileSync(intentFile, "utf8")
-			const before = parseFrontmatter(beforeRaw)
+		}
+	})
 
-			const res = await handleOrchestratorTool("haiku_intent_archive", {
-				intent: slug,
-			})
-			assert.ok(!res.isError)
-			const payload = JSON.parse(res.content[0].text)
-			assert.strictEqual(payload.action, "intent_archived")
-			assert.strictEqual(payload.slug, slug)
-
-			const after = parseFrontmatter(readFileSync(intentFile, "utf8"))
-			assert.strictEqual(after.data.archived, true)
-			// All other fields preserved
-			for (const key of Object.keys(before.data)) {
-				if (key === "archived") continue
-				assert.deepStrictEqual(
-					after.data[key],
-					before.data[key],
-					`frontmatter field "${key}" changed unexpectedly`,
-				)
-			}
-		},
-	)
-
-	await test(
-		"haiku_intent_archive is idempotent (noop on already-archived)",
-		async () => {
-			const { projDir, slug } = createProject("archive-tool-idempotent", {
-				archived: true,
-			})
-			process.chdir(projDir)
-			const res = await handleOrchestratorTool("haiku_intent_archive", {
-				intent: slug,
-			})
-			assert.ok(!res.isError, "idempotent call must not return isError")
-			const payload = JSON.parse(res.content[0].text)
-			assert.strictEqual(payload.action, "noop")
-			assert.ok(payload.message.includes("already archived"))
-		},
-	)
+	await test("haiku_intent_archive is idempotent (noop on already-archived)", async () => {
+		const { projDir, slug } = createProject("archive-tool-idempotent", {
+			archived: true,
+		})
+		process.chdir(projDir)
+		const res = await handleOrchestratorTool("haiku_intent_archive", {
+			intent: slug,
+		})
+		assert.ok(!res.isError, "idempotent call must not return isError")
+		const payload = JSON.parse(res.content[0].text)
+		assert.strictEqual(payload.action, "noop")
+		assert.ok(payload.message.includes("already archived"))
+	})
 
 	await test("haiku_intent_archive errors on missing intent", async () => {
 		const { projDir } = createProject("archive-tool-missing")
@@ -450,54 +442,48 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 		assert.ok(res.content[0].text.includes("not found"))
 	})
 
-	await test(
-		"haiku_intent_unarchive removes archived flag (clean restore)",
-		async () => {
-			const { projDir, slug, intentDirPath } = createProject(
-				"unarchive-tool-happy",
-				{
-					archived: true,
-				},
-			)
-			process.chdir(projDir)
-			const intentFile = join(intentDirPath, "intent.md")
+	await test("haiku_intent_unarchive removes archived flag (clean restore)", async () => {
+		const { projDir, slug, intentDirPath } = createProject(
+			"unarchive-tool-happy",
+			{
+				archived: true,
+			},
+		)
+		process.chdir(projDir)
+		const intentFile = join(intentDirPath, "intent.md")
 
-			const res = await handleOrchestratorTool("haiku_intent_unarchive", {
-				intent: slug,
-			})
-			assert.ok(!res.isError)
-			const payload = JSON.parse(res.content[0].text)
-			assert.strictEqual(payload.action, "intent_unarchived")
+		const res = await handleOrchestratorTool("haiku_intent_unarchive", {
+			intent: slug,
+		})
+		assert.ok(!res.isError)
+		const payload = JSON.parse(res.content[0].text)
+		assert.strictEqual(payload.action, "intent_unarchived")
 
-			// Unarchive should DELETE the archived key, not leave `archived: false` behind.
-			// A pristine restored intent shouldn't carry a trace of prior archival.
-			const after = parseFrontmatter(readFileSync(intentFile, "utf8"))
-			assert.strictEqual(
-				after.data.archived,
-				undefined,
-				"archived key must be removed entirely, not set to false",
-			)
-			assert.ok(
-				!("archived" in after.data),
-				"archived key must not exist in frontmatter after unarchive",
-			)
-		},
-	)
+		// Unarchive should DELETE the archived key, not leave `archived: false` behind.
+		// A pristine restored intent shouldn't carry a trace of prior archival.
+		const after = parseFrontmatter(readFileSync(intentFile, "utf8"))
+		assert.strictEqual(
+			after.data.archived,
+			undefined,
+			"archived key must be removed entirely, not set to false",
+		)
+		assert.ok(
+			!("archived" in after.data),
+			"archived key must not exist in frontmatter after unarchive",
+		)
+	})
 
-	await test(
-		"haiku_intent_unarchive is idempotent (noop on not-archived)",
-		async () => {
-			const { projDir, slug } = createProject("unarchive-tool-idempotent")
-			process.chdir(projDir)
-			const res = await handleOrchestratorTool("haiku_intent_unarchive", {
-				intent: slug,
-			})
-			assert.ok(!res.isError)
-			const payload = JSON.parse(res.content[0].text)
-			assert.strictEqual(payload.action, "noop")
-			assert.ok(payload.message.includes("not archived"))
-		},
-	)
+	await test("haiku_intent_unarchive is idempotent (noop on not-archived)", async () => {
+		const { projDir, slug } = createProject("unarchive-tool-idempotent")
+		process.chdir(projDir)
+		const res = await handleOrchestratorTool("haiku_intent_unarchive", {
+			intent: slug,
+		})
+		assert.ok(!res.isError)
+		const payload = JSON.parse(res.content[0].text)
+		assert.strictEqual(payload.action, "noop")
+		assert.ok(payload.message.includes("not archived"))
+	})
 
 	await test("haiku_intent_unarchive errors on missing intent", async () => {
 		const { projDir } = createProject("unarchive-tool-missing")
@@ -537,21 +523,18 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 		assert.ok(res.content[0].text.includes("Invalid intent"))
 	})
 
-	await test(
-		"haiku_intent_unarchive rejects slug with path traversal",
-		async () => {
-			const { projDir } = createProject("unarchive-traversal")
-			process.chdir(projDir)
-			const res = await handleOrchestratorTool("haiku_intent_unarchive", {
-				intent: "../../../etc/passwd",
-			})
-			assert.strictEqual(res.isError, true)
-			assert.ok(
-				res.content[0].text.includes("path separators") ||
-					res.content[0].text.includes("traversal"),
-			)
-		},
-	)
+	await test("haiku_intent_unarchive rejects slug with path traversal", async () => {
+		const { projDir } = createProject("unarchive-traversal")
+		process.chdir(projDir)
+		const res = await handleOrchestratorTool("haiku_intent_unarchive", {
+			intent: "../../../etc/passwd",
+		})
+		assert.strictEqual(res.isError, true)
+		assert.ok(
+			res.content[0].text.includes("path separators") ||
+				res.content[0].text.includes("traversal"),
+		)
+	})
 
 	await test("haiku_run_next rejects slug with backslash", async () => {
 		const { projDir } = createProject("runnext-backslash")

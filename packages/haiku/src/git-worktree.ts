@@ -822,7 +822,7 @@ export function ensureOnStageBranch(
 			"--count",
 			`${stageBranch}..${intentMain}`,
 		])
-		if (aheadCount && parseInt(aheadCount, 10) > 0) {
+		if (aheadCount && Number.parseInt(aheadCount, 10) > 0) {
 			try {
 				run(["git", "checkout", stageBranch])
 				run([
@@ -1237,7 +1237,7 @@ export function prepareRevisitBranch(
 			"--count",
 			`${targetBranch}..${mainBranch}`,
 		])
-		if (mainAhead && parseInt(mainAhead, 10) > 0) {
+		if (mainAhead && Number.parseInt(mainAhead, 10) > 0) {
 			try {
 				run([
 					"git",
@@ -1272,7 +1272,7 @@ export function prepareRevisitBranch(
 				"--count",
 				`${targetBranch}..${fromBranch}`,
 			])
-			if (fromAhead && parseInt(fromAhead, 10) > 0) {
+			if (fromAhead && Number.parseInt(fromAhead, 10) > 0) {
 				try {
 					run([
 						"git",

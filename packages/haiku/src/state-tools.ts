@@ -7,8 +7,8 @@ import { execFileSync, execSync, spawnSync } from "node:child_process"
 import {
 	existsSync,
 	mkdirSync,
-	readFileSync,
 	readdirSync,
+	readFileSync,
 	statSync,
 	unlinkSync,
 	writeFileSync,
@@ -51,7 +51,7 @@ import {
 	writeResultFile,
 } from "./subagent-prompt-file.js"
 import { emitTelemetry } from "./telemetry.js"
-import { MCP_VERSION, getPluginVersion } from "./version.js"
+import { getPluginVersion, MCP_VERSION } from "./version.js"
 
 // ── Intent title derivation ────────────────────────────────────────────────
 
@@ -5353,7 +5353,7 @@ export function handleStateTool(
 				case "plant": {
 					let out = "## Plant a Seed\n\n"
 					out += "Create a new file in `.haiku/seeds/` with this template:\n\n"
-					out += `\`\`\`markdown\n---\nstatus: planted\ntrigger: \"<condition that should cause this to surface>\"\ncreated_at: ${timestamp()}\n---\n\n`
+					out += `\`\`\`markdown\n---\nstatus: planted\ntrigger: "<condition that should cause this to surface>"\ncreated_at: ${timestamp()}\n---\n\n`
 					out += "Description of the idea or future work.\n```\n"
 					out +=
 						"\nFilename should be a slug of the seed idea (e.g. `add-caching-layer.md`).\n"

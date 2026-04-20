@@ -7,8 +7,8 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
-	readFileSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs"
@@ -19,33 +19,28 @@ import {
 function expandPromptFiles(responseText) {
 	const re = /<subagent[^>]*\bprompt_file="([^"]+)"/g
 	let out = responseText
-	let match
-	while ((match = re.exec(responseText)) !== null) {
+	for (const match of responseText.matchAll(re)) {
 		const path = match[1]
 		if (existsSync(path)) {
-			out += "\n\n" + readFileSync(path, "utf8")
+			out += `\n\n${readFileSync(path, "utf8")}`
 		}
 	}
 	return out
 }
+
+import assert from "node:assert"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import assert from "node:assert"
 
 import {
 	handleOrchestratorTool,
 	runNext,
 	setOpenReviewHandler,
-	setElicitInputHandler,
 } from "../src/orchestrator.ts"
 import {
-	countPendingFeedback,
 	readFeedbackFiles,
-	readJson,
 	updateFeedbackFile,
-	writeFeedbackFile,
 	writeJson,
-	parseFrontmatter,
 } from "../src/state-tools.ts"
 
 // ── Setup ──────────────────────────────────────────────────────────────────
@@ -147,7 +142,9 @@ ${stage} stage instructions.
 		if (stageOpts.reviewAgents) {
 			const agentsDir = join(stageDir, "review-agents")
 			mkdirSync(agentsDir, { recursive: true })
-			for (const [agentName, content] of Object.entries(stageOpts.reviewAgents)) {
+			for (const [agentName, content] of Object.entries(
+				stageOpts.reviewAgents,
+			)) {
 				writeFileSync(
 					join(agentsDir, `${agentName}.md`),
 					`---
@@ -205,7 +202,7 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 	)
 }
 
-function createFeedbackFile(intentDirPath, slug, stage, title, opts = {}) {
+function createFeedbackFile(intentDirPath, _slug, stage, title, opts = {}) {
 	const feedbackDirPath = join(intentDirPath, "stages", stage, "feedback")
 	mkdirSync(feedbackDirPath, { recursive: true })
 
@@ -214,7 +211,7 @@ function createFeedbackFile(intentDirPath, slug, stage, title, opts = {}) {
 		: []
 	const maxNum = existingFiles.reduce((max, f) => {
 		const match = f.match(/^(\d+)-/)
-		return match ? Math.max(max, parseInt(match[1], 10)) : max
+		return match ? Math.max(max, Number.parseInt(match[1], 10)) : max
 	}, 0)
 	const num = maxNum + 1
 	const nn = String(num).padStart(2, "0")
@@ -258,7 +255,9 @@ try {
 	// Group 6: Review-UI changes_requested → feedback writes
 	// =========================================================================
 
-	console.log("\n=== Group 6: Review-UI changes_requested → feedback file writes ===")
+	console.log(
+		"\n=== Group 6: Review-UI changes_requested → feedback file writes ===",
+	)
 
 	await test("changes_requested with annotations writes individual feedback files", async () => {
 		const { projDir, intentDirPath, slug } = createProject("g6-annotations", {
@@ -281,41 +280,71 @@ try {
 					{ x: 50, y: 80, text: "Missing error handling here" },
 				],
 				comments: [
-					{ selectedText: "some text", comment: "Needs better validation", paragraph: 3 },
+					{
+						selectedText: "some text",
+						comment: "Needs better validation",
+						paragraph: 3,
+					},
 				],
 			},
 		}))
 
-		const result = await handleOrchestratorTool("haiku_run_next", { intent: slug })
+		const result = await handleOrchestratorTool("haiku_run_next", {
+			intent: slug,
+		})
 		const responseText = result.content[0].text
 		const jsonMatch = responseText.match(/\{[\s\S]*?\}\n\n---/)
 		const parsed = JSON.parse(jsonMatch[0].replace(/\n\n---$/, ""))
 
 		assert.strictEqual(parsed.action, "changes_requested")
-		assert.ok(Array.isArray(parsed.feedback_ids), "Should have feedback_ids array")
-		assert.strictEqual(parsed.feedback_ids.length, 4, "Should create 4 feedback files (2 pins + 1 comment + 1 free-text)")
+		assert.ok(
+			Array.isArray(parsed.feedback_ids),
+			"Should have feedback_ids array",
+		)
+		assert.strictEqual(
+			parsed.feedback_ids.length,
+			4,
+			"Should create 4 feedback files (2 pins + 1 comment + 1 free-text)",
+		)
 
 		// Verify files on disk
 		const feedbackDir = join(intentDirPath, "stages", "plan", "feedback")
-		const files = readdirSync(feedbackDir).filter(f => f.endsWith(".md"))
-		assert.strictEqual(files.length, 4, `Expected 4 feedback files, got ${files.length}`)
+		const files = readdirSync(feedbackDir).filter((f) => f.endsWith(".md"))
+		assert.strictEqual(
+			files.length,
+			4,
+			`Expected 4 feedback files, got ${files.length}`,
+		)
 
 		// Verify origins
 		const items = readFeedbackFiles(slug, "plan")
-		const visualItems = items.filter(i => i.origin === "user-visual")
-		const chatItems = items.filter(i => i.origin === "user-chat")
-		assert.strictEqual(visualItems.length, 3, "Should have 3 user-visual items (2 pins + 1 comment)")
+		const visualItems = items.filter((i) => i.origin === "user-visual")
+		const chatItems = items.filter((i) => i.origin === "user-chat")
+		assert.strictEqual(
+			visualItems.length,
+			3,
+			"Should have 3 user-visual items (2 pins + 1 comment)",
+		)
 		assert.strictEqual(chatItems.length, 1, "Should have 1 user-chat item")
 		assert.strictEqual(chatItems[0].body.trim(), "Overall the specs need work")
 
 		// Verify pin source_ref format
-		const pinItems = items.filter(i => i.source_ref?.startsWith("pin:"))
+		const pinItems = items.filter((i) => i.source_ref?.startsWith("pin:"))
 		assert.strictEqual(pinItems.length, 2, "Should have 2 pin items")
-		assert.ok(pinItems[0].source_ref.includes(","), "Pin source_ref should have x,y format")
+		assert.ok(
+			pinItems[0].source_ref.includes(","),
+			"Pin source_ref should have x,y format",
+		)
 
 		// Verify comment source_ref format
-		const commentItems = items.filter(i => i.source_ref?.startsWith("paragraph:"))
-		assert.strictEqual(commentItems.length, 1, "Should have 1 paragraph comment")
+		const commentItems = items.filter((i) =>
+			i.source_ref?.startsWith("paragraph:"),
+		)
+		assert.strictEqual(
+			commentItems.length,
+			1,
+			"Should have 1 paragraph comment",
+		)
 
 		// Reset handler
 		setOpenReviewHandler(null)
@@ -337,7 +366,9 @@ try {
 			annotations: {},
 		}))
 
-		const result = await handleOrchestratorTool("haiku_run_next", { intent: slug })
+		const result = await handleOrchestratorTool("haiku_run_next", {
+			intent: slug,
+		})
 		const responseText = result.content[0].text
 		const jsonMatch = responseText.match(/\{[\s\S]*?\}\n\n---/)
 		const parsed = JSON.parse(jsonMatch[0].replace(/\n\n---$/, ""))
@@ -366,14 +397,19 @@ try {
 			annotations: undefined,
 		}))
 
-		const result = await handleOrchestratorTool("haiku_run_next", { intent: slug })
+		const result = await handleOrchestratorTool("haiku_run_next", {
+			intent: slug,
+		})
 		const responseText = result.content[0].text
 		const jsonMatch = responseText.match(/\{[\s\S]*?\}\n\n---/)
 		const parsed = JSON.parse(jsonMatch[0].replace(/\n\n---$/, ""))
 
 		assert.strictEqual(parsed.feedback_ids.length, 0)
 		const feedbackDir = join(intentDirPath, "stages", "plan", "feedback")
-		assert.ok(!existsSync(feedbackDir) || readdirSync(feedbackDir).filter(f => f.endsWith(".md")).length === 0)
+		assert.ok(
+			!existsSync(feedbackDir) ||
+				readdirSync(feedbackDir).filter((f) => f.endsWith(".md")).length === 0,
+		)
 
 		setOpenReviewHandler(null)
 	})
@@ -397,13 +433,19 @@ try {
 			},
 		}))
 
-		const result = await handleOrchestratorTool("haiku_run_next", { intent: slug })
+		const result = await handleOrchestratorTool("haiku_run_next", {
+			intent: slug,
+		})
 		const responseText = result.content[0].text
 		const jsonMatch = responseText.match(/\{[\s\S]*?\}\n\n---/)
 		const parsed = JSON.parse(jsonMatch[0].replace(/\n\n---$/, ""))
 
 		assert.strictEqual(parsed.action, "changes_requested")
-		assert.strictEqual(parsed.feedback_ids.length, 2, "Should have 2 items (1 pin + 1 free-text)")
+		assert.strictEqual(
+			parsed.feedback_ids.length,
+			2,
+			"Should have 2 items (1 pin + 1 free-text)",
+		)
 
 		setOpenReviewHandler(null)
 	})
@@ -412,7 +454,9 @@ try {
 	// Group 7: Review subagent prompt update
 	// =========================================================================
 
-	console.log("\n=== Group 7: Review subagent prompt — haiku_feedback instructions ===")
+	console.log(
+		"\n=== Group 7: Review subagent prompt — haiku_feedback instructions ===",
+	)
 
 	test("review action instructions contain haiku_feedback call instructions", () => {
 		const { projDir, intentDirPath, slug } = createProject("g7-prompt", {
@@ -460,7 +504,9 @@ try {
 
 		process.chdir(projDir)
 
-		const result = await handleOrchestratorTool("haiku_run_next", { intent: slug })
+		const result = await handleOrchestratorTool("haiku_run_next", {
+			intent: slug,
+		})
 		const responseText = expandPromptFiles(result.content[0].text)
 
 		// Verify the subagent prompt contains haiku_feedback instructions
@@ -489,7 +535,9 @@ try {
 
 		// Verify parent instructions are simplified
 		assert.ok(
-			responseText.includes("They persist findings directly via haiku_feedback"),
+			responseText.includes(
+				"They persist findings directly via haiku_feedback",
+			),
 			"Parent instructions should mention direct feedback persistence",
 		)
 	})
@@ -498,16 +546,18 @@ try {
 	// Group 8: Additive elaborate mode
 	// =========================================================================
 
-
 	test("closes: field on unit triggers feedback update when frontmatter is parsed", () => {
 		// This tests the mechanism: when a unit's frontmatter has closes: [FB-NN],
 		// updateFeedbackFile transitions feedback to addressed.
 		// The actual integration (called during unit completion) is in state-tools.ts.
-		const { projDir, intentDirPath, slug } = createProject("g8-closes-mechanism", {
-			active_stage: "build",
-			stages: ["build"],
-			stageConfig: { build: { review: "auto", elaboration: "autonomous" } },
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"g8-closes-mechanism",
+			{
+				active_stage: "build",
+				stages: ["build"],
+				stageConfig: { build: { review: "auto", elaboration: "autonomous" } },
+			},
+		)
 		createStageState(intentDirPath, "build", { phase: "execute", visits: 1 })
 		createFeedbackFile(intentDirPath, slug, "build", "Missing null guard", {
 			origin: "adversarial-review",
@@ -525,17 +575,26 @@ try {
 		// Simulate what happens during unit completion: read closes and update feedback
 		const closes = ["FB-01", "FB-02"]
 		for (const fbId of closes) {
-			const result = updateFeedbackFile(slug, "build", fbId, {
-				status: "addressed",
-				closed_by: "unit-02-fix-guard",
-			}, "agent")
-			assert.ok(result.ok, `Should succeed updating ${fbId}: ${JSON.stringify(result)}`)
+			const result = updateFeedbackFile(
+				slug,
+				"build",
+				fbId,
+				{
+					status: "addressed",
+					closed_by: "unit-02-fix-guard",
+				},
+				"agent",
+			)
+			assert.ok(
+				result.ok,
+				`Should succeed updating ${fbId}: ${JSON.stringify(result)}`,
+			)
 		}
 
 		// Verify the feedback files were updated
 		const items = readFeedbackFiles(slug, "build")
-		const fb01 = items.find(i => i.id === "FB-01")
-		const fb02 = items.find(i => i.id === "FB-02")
+		const fb01 = items.find((i) => i.id === "FB-01")
+		const fb02 = items.find((i) => i.id === "FB-02")
 		assert.ok(fb01, "Should find FB-01")
 		assert.ok(fb02, "Should find FB-02")
 		assert.strictEqual(fb01.status, "addressed")

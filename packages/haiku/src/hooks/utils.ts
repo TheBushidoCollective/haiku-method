@@ -4,12 +4,12 @@ import { execSync } from "node:child_process"
 import {
 	existsSync,
 	mkdirSync,
-	readFileSync,
 	readdirSync,
+	readFileSync,
 	statSync,
 	writeFileSync,
 } from "node:fs"
-import { basename, dirname, join } from "node:path"
+import { dirname, join } from "node:path"
 
 /**
  * Read a frontmatter field from a markdown file.

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { readFile, readdir } from "node:fs/promises"
+import { readFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
@@ -17,7 +17,8 @@ import {
 	startUpdateChecker,
 	stopUpdateChecker,
 } from "./auto-update.js"
-import { getActualPort, startHttpServer } from "./http.js"
+import { ensureOnStageBranch } from "./git-worktree.js"
+import { startHttpServer } from "./http.js"
 import {
 	buildDAG,
 	parseAllUnits,
@@ -35,6 +36,11 @@ import {
 	reportError,
 	reportFeedback,
 } from "./sentry.js"
+import type {
+	DesignArchetypeData,
+	DesignParameterData,
+	QuestionDef,
+} from "./sessions.js"
 import {
 	clearHeartbeat,
 	createDesignDirectionSession,
@@ -45,12 +51,6 @@ import {
 	hasPresenceLost,
 	waitForSession,
 } from "./sessions.js"
-import type {
-	DesignArchetypeData,
-	DesignParameterData,
-	QuestionDef,
-} from "./sessions.js"
-import { ensureOnStageBranch } from "./git-worktree.js"
 import {
 	findHaikuRoot,
 	parseFrontmatter,
@@ -59,7 +59,7 @@ import {
 	writeJson,
 } from "./state-tools.js"
 import { renderDesignDirectionPage } from "./templates/design-direction.js"
-import { type MockupInfo, renderReviewPage } from "./templates/index.js"
+import { renderReviewPage } from "./templates/index.js"
 import { renderQuestionPage } from "./templates/question-form.js"
 import {
 	buildReviewUrl,

@@ -11,16 +11,11 @@
 // `persistent_scope_violation`. The first 4 attempts return
 // unit_scope_violation_on_reject with incrementing scope_reject_attempts.
 
+import assert from "node:assert"
 import { execSync } from "node:child_process"
-import {
-	mkdirSync,
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import assert from "node:assert"
 
 import { handleStateTool } from "../src/state-tools.ts"
 
@@ -52,10 +47,13 @@ function makeGitProject(name) {
 	const projDir = join(tmp, name)
 	mkdirSync(projDir, { recursive: true })
 	execSync("git init -q", { cwd: projDir })
-	execSync("git config user.email test@test.local && git config user.name test", {
-		cwd: projDir,
-		shell: "/bin/bash",
-	})
+	execSync(
+		"git config user.email test@test.local && git config user.name test",
+		{
+			cwd: projDir,
+			shell: "/bin/bash",
+		},
+	)
 	writeFileSync(join(projDir, ".gitignore"), "node_modules\n")
 	execSync("git add -A && git commit -q -m init", {
 		cwd: projDir,
@@ -87,12 +85,18 @@ function makeIntent(projDir, slug, stage) {
 	)
 	writeFileSync(
 		join(intentDir, "stages", stage, "units", "unit-01-test.md"),
-		`---\nstatus: active\nbolt: 1\nhat: design-reviewer\nhat_started_at: 2026-04-04T18:00:00Z\n---\n\nBody\n`,
+		"---\nstatus: active\nbolt: 1\nhat: design-reviewer\nhat_started_at: 2026-04-04T18:00:00Z\n---\n\nBody\n",
 	)
 
 	// Create stage branch + unit branch + unit worktree.
-	execSync(`git checkout -q -b haiku/${slug}/${stage}`, { cwd: projDir, shell: "/bin/bash" })
-	execSync("git add -A && git commit -q -m init", { cwd: projDir, shell: "/bin/bash" })
+	execSync(`git checkout -q -b haiku/${slug}/${stage}`, {
+		cwd: projDir,
+		shell: "/bin/bash",
+	})
+	execSync("git add -A && git commit -q -m init", {
+		cwd: projDir,
+		shell: "/bin/bash",
+	})
 
 	const wtBase = join(projDir, ".haiku", "worktrees", slug, "unit-01-test")
 	execSync(`git worktree add -q -b haiku/${slug}/unit-01-test "${wtBase}"`, {
@@ -104,50 +108,53 @@ function makeIntent(projDir, slug, stage) {
 }
 
 try {
+	// Note: scope validation relies on isGitRepo() and the unit-worktree
+	// layout. The setup mirrors production — creates a real git repo with
+	// a unit worktree forked from a stage branch. Tests exercise only the
+	// advance_hat / reject_hat MCP handlers, not the full orchestrator.
 
-// Note: scope validation relies on isGitRepo() and the unit-worktree
-// layout. The setup mirrors production — creates a real git repo with
-// a unit worktree forked from a stage branch. Tests exercise only the
-// advance_hat / reject_hat MCP handlers, not the full orchestrator.
+	console.log("\n=== MAX_BOLTS_FAIL escape from persistent scope violation ===")
 
-console.log("\n=== MAX_BOLTS_FAIL escape from persistent scope violation ===")
+	test("repeated scope-violation rejects trip max_bolts_exceeded", () => {
+		const projDir = makeGitProject("max-bolts")
+		const { wtBase } = makeIntent(projDir, "test-max", "design")
+		process.chdir(projDir)
 
-test("repeated scope-violation rejects trip max_bolts_exceeded", () => {
-	const projDir = makeGitProject("max-bolts")
-	const { wtBase } = makeIntent(projDir, "test-max", "design")
-	process.chdir(projDir)
+		// Plant the same kind of out-of-scope commit
+		mkdirSync(join(wtBase, "production", "src"), { recursive: true })
+		writeFileSync(join(wtBase, "production", "src", "bad.ts"), "const y = 2;\n")
+		execSync("git add -A && git commit -q -m 'out-of-scope'", {
+			cwd: wtBase,
+			shell: "/bin/bash",
+		})
 
-	// Plant the same kind of out-of-scope commit
-	mkdirSync(join(wtBase, "production", "src"), { recursive: true })
-	writeFileSync(join(wtBase, "production", "src", "bad.ts"), "const y = 2;\n")
-	execSync("git add -A && git commit -q -m 'out-of-scope'", {
-		cwd: wtBase,
-		shell: "/bin/bash",
+		// Call reject_hat 5 times. The first 4 should return
+		// unit_scope_violation_on_reject with incrementing scope_reject_attempts.
+		// The 5th should return max_bolts_exceeded.
+		let lastParsed
+		for (let i = 1; i <= 5; i++) {
+			const r = handleStateTool("haiku_unit_reject_hat", {
+				intent: "test-max",
+				unit: "unit-01-test",
+			})
+			lastParsed = JSON.parse(getTextResult(r))
+		}
+
+		assert.strictEqual(lastParsed.error, "max_bolts_exceeded")
+		assert.strictEqual(lastParsed.reason, "persistent_scope_violation")
+		assert.ok(
+			lastParsed.attempts >= 5,
+			`expected attempts >=5, got ${lastParsed.attempts}`,
+		)
 	})
 
-	// Call reject_hat 5 times. The first 4 should return
-	// unit_scope_violation_on_reject with incrementing scope_reject_attempts.
-	// The 5th should return max_bolts_exceeded.
-	let lastParsed
-	for (let i = 1; i <= 5; i++) {
-		const r = handleStateTool("haiku_unit_reject_hat", {
-			intent: "test-max",
-			unit: "unit-01-test",
-		})
-		lastParsed = JSON.parse(getTextResult(r))
-	}
+	// ── Summary ────────────────────────────────────────────────────────────────
 
-	assert.strictEqual(lastParsed.error, "max_bolts_exceeded")
-	assert.strictEqual(lastParsed.reason, "persistent_scope_violation")
-	assert.ok(lastParsed.attempts >= 5, `expected attempts >=5, got ${lastParsed.attempts}`)
-})
-
-// ── Summary ────────────────────────────────────────────────────────────────
-
-console.log(`\n${passed} passed, ${failed} failed\n`)
-
+	console.log(`\n${passed} passed, ${failed} failed\n`)
 } finally {
 	process.chdir(origCwd)
-	try { rmSync(tmp, { recursive: true, force: true }) } catch {}
+	try {
+		rmSync(tmp, { recursive: true, force: true })
+	} catch {}
 	process.exit(failed > 0 ? 1 : 0)
 }

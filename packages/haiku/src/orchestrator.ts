@@ -12,8 +12,8 @@ import { execFileSync, execSync } from "node:child_process"
 import {
 	existsSync,
 	mkdirSync,
-	readFileSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs"
@@ -40,8 +40,8 @@ import {
 	mergeStageBranchIntoMain,
 	prepareRevisitBranch,
 } from "./git-worktree.js"
-import { adaptInstructions } from "./harness-instructions.js"
 import { getCapabilities } from "./harness.js"
+import { adaptInstructions } from "./harness-instructions.js"
 import { type ModelTier, resolveModel } from "./model-selection.js"
 import { validateIdentifier } from "./prompts/helpers.js"
 import { reportError } from "./sentry.js"
@@ -52,7 +52,6 @@ import {
 	verifyIntentState,
 } from "./state-integrity.js"
 import {
-	MAX_STAGE_ITERATIONS,
 	appendStageIteration,
 	closeCurrentStageIteration,
 	countPendingFeedback,
@@ -62,6 +61,7 @@ import {
 	intentDir,
 	intentTitleNeedsRepair,
 	isGitRepo,
+	MAX_STAGE_ITERATIONS,
 	parseFrontmatter,
 	readFeedbackFiles,
 	readJson,
@@ -4148,7 +4148,7 @@ function buildRunInstructions(
 
 			// Need unit inputs + model hint from its frontmatter
 			let unitInputs: string[] = []
-			let unitModel: string | undefined = undefined
+			let unitModel: string | undefined
 			if (existsSync(unitFile)) {
 				const { data } = parseFrontmatter(readFileSync(unitFile, "utf8"))
 				unitInputs = (data.inputs as string[]) || (data.refs as string[]) || []
@@ -4654,7 +4654,7 @@ function buildRunInstructions(
 
 				// Parent instructions
 				sections.push(
-					`### Parent Instructions (do NOT include in subagent prompts)\n\n**IMMEDIATELY** spawn ALL subagents above **in parallel, in a single response**. Each \`<subagent>\` block has \`type\`, \`model\`, and \`prompt_file\` attributes. Spawn each with prompt: \`"Read <prompt_file> and execute its instructions exactly."\` — no other text. The FSM owns the authoritative prompt at \`prompt_file\`; do not paraphrase.\n\n**Drive forward on every return — do NOT wait for the whole batch.** The moment ANY subagent returns, inspect its final message:\n- \`FSM Result: <path>\` → read that JSON file, then call \`haiku_run_next { intent: "${slug}" }\` (run_next is authoritative). The FSM will include every still-active unit plus the newly-ready work.\n- Plaintext \"job ends here\" → another subagent will emit the structured result; do NOT dispatch yet.\n- Anything else (non-compliant) → fall back: call \`haiku_run_next { intent: "${slug}" }\`.\n\nWaiting for the whole batch strands other units. Stop driving only when run_next returns \`gate_review\`, \`escalate\`, \`intent_complete\`, or \`error\`.`,
+					`### Parent Instructions (do NOT include in subagent prompts)\n\n**IMMEDIATELY** spawn ALL subagents above **in parallel, in a single response**. Each \`<subagent>\` block has \`type\`, \`model\`, and \`prompt_file\` attributes. Spawn each with prompt: \`"Read <prompt_file> and execute its instructions exactly."\` — no other text. The FSM owns the authoritative prompt at \`prompt_file\`; do not paraphrase.\n\n**Drive forward on every return — do NOT wait for the whole batch.** The moment ANY subagent returns, inspect its final message:\n- \`FSM Result: <path>\` → read that JSON file, then call \`haiku_run_next { intent: "${slug}" }\` (run_next is authoritative). The FSM will include every still-active unit plus the newly-ready work.\n- Plaintext "job ends here" → another subagent will emit the structured result; do NOT dispatch yet.\n- Anything else (non-compliant) → fall back: call \`haiku_run_next { intent: "${slug}" }\`.\n\nWaiting for the whole batch strands other units. Stop driving only when run_next returns \`gate_review\`, \`escalate\`, \`intent_complete\`, or \`error\`.`,
 				)
 			} else {
 				// ── Subagentless harness: sequential execution in current context ──
@@ -4931,7 +4931,7 @@ function buildRunInstructions(
 			}
 
 			sections.push(
-				`### Parent Instructions (do NOT include in subagent prompts)\n\n**IMMEDIATELY** spawn ALL subagents above **in parallel, in a single response**. Each \`<subagent>\` block has \`type\`, \`model\`, and \`prompt_file\` attributes. Spawn each with prompt: \`"Read <prompt_file> and execute its instructions exactly."\` — no other text. The FSM owns the authoritative prompt at \`prompt_file\`; do not paraphrase.\n\n**Drive forward on every return — do NOT wait for the whole batch.** The moment ANY subagent returns, inspect its final message:\n- \`FSM Result: <path>\` → read that JSON file, then call \`haiku_run_next { intent: "${slug}" }\` (run_next is authoritative).\n- Plaintext \"job ends here\" → another subagent will emit the structured result; do NOT dispatch yet.\n- Anything else → fall back: call \`haiku_run_next { intent: "${slug}" }\`.\n\nStop driving only when run_next returns \`gate_review\`, \`escalate\`, \`intent_complete\`, or \`error\`.`,
+				`### Parent Instructions (do NOT include in subagent prompts)\n\n**IMMEDIATELY** spawn ALL subagents above **in parallel, in a single response**. Each \`<subagent>\` block has \`type\`, \`model\`, and \`prompt_file\` attributes. Spawn each with prompt: \`"Read <prompt_file> and execute its instructions exactly."\` — no other text. The FSM owns the authoritative prompt at \`prompt_file\`; do not paraphrase.\n\n**Drive forward on every return — do NOT wait for the whole batch.** The moment ANY subagent returns, inspect its final message:\n- \`FSM Result: <path>\` → read that JSON file, then call \`haiku_run_next { intent: "${slug}" }\` (run_next is authoritative).\n- Plaintext "job ends here" → another subagent will emit the structured result; do NOT dispatch yet.\n- Anything else → fall back: call \`haiku_run_next { intent: "${slug}" }\`.\n\nStop driving only when run_next returns \`gate_review\`, \`escalate\`, \`intent_complete\`, or \`error\`.`,
 			)
 
 			// Suppress unused-var warning for hats (kept in payload for forward-compat)
@@ -5862,7 +5862,7 @@ export async function handleOrchestratorTool(
 
 		// External review: include instructions about recording the URL
 		if (result.action === "external_review_requested") {
-			result.message = `${(result.message as string) || ""}\n\nIMPORTANT: Ask the user WHERE they submitted the work for review (PR URL, MR link, email, Slack channel, etc.). Record the URL by calling haiku_run_next { intent: \"${slug}\", external_review_url: \"<url>\" } so the FSM can track approval status.`
+			result.message = `${(result.message as string) || ""}\n\nIMPORTANT: Ask the user WHERE they submitted the work for review (PR URL, MR link, email, Slack channel, etc.). Record the URL by calling haiku_run_next { intent: "${slug}", external_review_url: "<url>" } so the FSM can track approval status.`
 		}
 
 		// Gate review: open review UI, block until user decides, process decision

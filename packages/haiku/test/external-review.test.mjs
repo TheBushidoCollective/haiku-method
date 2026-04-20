@@ -9,23 +9,16 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
-	readFileSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import {
-	checkExternalState,
-	runNext,
-} from "../src/orchestrator.ts"
-import {
-	parseFrontmatter,
-	readJson,
-	writeJson,
-} from "../src/state-tools.ts"
+import { checkExternalState, runNext } from "../src/orchestrator.ts"
+import { parseFrontmatter, readJson, writeJson } from "../src/state-tools.ts"
 
 // ── Setup ──────────────────────────────────────────────────────────────────
 
@@ -164,9 +157,7 @@ try {
 		stubCli("gh", 'echo \'["OPEN", "APPROVED"]\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const result = checkExternalState(
-			"https://github.com/org/repo/pull/42",
-		)
+		const result = checkExternalState("https://github.com/org/repo/pull/42")
 		assert.strictEqual(result.status, "approved")
 		assert.strictEqual(result.provider, "github")
 		assert.strictEqual(result.url, "https://github.com/org/repo/pull/42")
@@ -176,9 +167,7 @@ try {
 		stubCli("gh", 'echo \'["MERGED", ""]\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const result = checkExternalState(
-			"https://github.com/org/repo/pull/42",
-		)
+		const result = checkExternalState("https://github.com/org/repo/pull/42")
 		assert.strictEqual(result.status, "approved")
 		assert.strictEqual(result.provider, "github")
 	})
@@ -187,9 +176,7 @@ try {
 		stubCli("gh", 'echo \'["OPEN", "CHANGES_REQUESTED"]\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const result = checkExternalState(
-			"https://github.com/org/repo/pull/42",
-		)
+		const result = checkExternalState("https://github.com/org/repo/pull/42")
 		assert.strictEqual(result.status, "changes_requested")
 		assert.strictEqual(result.provider, "github")
 	})
@@ -198,9 +185,7 @@ try {
 		stubCli("gh", 'echo \'["OPEN", "REVIEW_REQUIRED"]\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const result = checkExternalState(
-			"https://github.com/org/repo/pull/42",
-		)
+		const result = checkExternalState("https://github.com/org/repo/pull/42")
 		assert.strictEqual(result.status, "pending")
 		assert.strictEqual(result.provider, "github")
 	})
@@ -209,9 +194,7 @@ try {
 		stubCli("gh", 'echo \'["OPEN", ""]\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const result = checkExternalState(
-			"https://github.com/org/repo/pull/42",
-		)
+		const result = checkExternalState("https://github.com/org/repo/pull/42")
 		assert.strictEqual(result.status, "pending")
 	})
 
@@ -220,10 +203,7 @@ try {
 	console.log("\n=== checkExternalState: GitLab MR ===")
 
 	test("GitLab MR approved returns status approved", () => {
-		stubCli(
-			"glab",
-			'echo \'{"state": "opened", "approved": true}\'',
-		)
+		stubCli("glab", 'echo \'{"state": "opened", "approved": true}\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
 		const result = checkExternalState(
@@ -234,10 +214,7 @@ try {
 	})
 
 	test("GitLab MR merged returns status approved", () => {
-		stubCli(
-			"glab",
-			'echo \'{"state": "merged", "approved": false}\'',
-		)
+		stubCli("glab", 'echo \'{"state": "merged", "approved": false}\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
 		const result = checkExternalState(
@@ -248,10 +225,7 @@ try {
 	})
 
 	test("GitLab MR non-approved open returns status changes_requested", () => {
-		stubCli(
-			"glab",
-			'echo \'{"state": "opened", "approved": false}\'',
-		)
+		stubCli("glab", 'echo \'{"state": "opened", "approved": false}\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
 		const result = checkExternalState(
@@ -262,10 +236,7 @@ try {
 	})
 
 	test("GitLab MR closed returns status pending", () => {
-		stubCli(
-			"glab",
-			'echo \'{"state": "closed", "approved": false}\'',
-		)
+		stubCli("glab", 'echo \'{"state": "closed", "approved": false}\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
 		const result = checkExternalState(
@@ -283,9 +254,7 @@ try {
 		// Ensure fake-bin is first so the missing stub takes effect
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const result = checkExternalState(
-			"https://github.com/org/repo/pull/42",
-		)
+		const result = checkExternalState("https://github.com/org/repo/pull/42")
 		assert.strictEqual(result.status, "unknown")
 	})
 
@@ -311,9 +280,7 @@ try {
 		stubCli("gh", "echo 'not json at all'")
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const result = checkExternalState(
-			"https://github.com/org/repo/pull/42",
-		)
+		const result = checkExternalState("https://github.com/org/repo/pull/42")
 		assert.strictEqual(result.status, "unknown")
 	})
 
@@ -321,9 +288,7 @@ try {
 		stubCli("gh", "exit 1")
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const result = checkExternalState(
-			"https://github.com/org/repo/pull/42",
-		)
+		const result = checkExternalState("https://github.com/org/repo/pull/42")
 		assert.strictEqual(result.status, "unknown")
 	})
 
@@ -378,19 +343,9 @@ try {
 		)
 
 		// Verify feedback file was created
-		const fbDir = join(
-			intentDirPath,
-			"stages",
-			"build",
-			"feedback",
-		)
-		assert.ok(
-			existsSync(fbDir),
-			"feedback directory should exist",
-		)
-		const fbFiles = readdirSync(fbDir).filter((f) =>
-			f.endsWith(".md"),
-		)
+		const fbDir = join(intentDirPath, "stages", "build", "feedback")
+		assert.ok(existsSync(fbDir), "feedback directory should exist")
+		const fbFiles = readdirSync(fbDir).filter((f) => f.endsWith(".md"))
 		assert.strictEqual(fbFiles.length, 1, "should have 1 feedback file")
 
 		// Verify feedback file content
@@ -400,18 +355,10 @@ try {
 		assert.strictEqual(fbData.origin, "external-pr")
 		assert.strictEqual(fbData.author, "user")
 		assert.strictEqual(fbData.author_type, "human")
-		assert.strictEqual(
-			fbData.source_ref,
-			"https://github.com/org/repo/pull/42",
-		)
+		assert.strictEqual(fbData.source_ref, "https://github.com/org/repo/pull/42")
 
 		// Verify state was rolled back
-		const stateFile = join(
-			intentDirPath,
-			"stages",
-			"build",
-			"state.json",
-		)
+		const stateFile = join(intentDirPath, "stages", "build", "state.json")
 		const stateData = readJson(stateFile)
 		assert.strictEqual(stateData.phase, "elaborate")
 		assert.strictEqual(stateData.status, "active")
@@ -424,13 +371,10 @@ try {
 		stubCli("gh", 'echo \'["OPEN", "APPROVED"]\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const { projDir, intentDirPath, slug } = createProject(
-			"ext-approved",
-			{
-				active_stage: "build",
-				stages: ["plan", "build"],
-			},
-		)
+		const { projDir, intentDirPath, slug } = createProject("ext-approved", {
+			active_stage: "build",
+			stages: ["plan", "build"],
+		})
 
 		// Plan completed
 		createStageState(intentDirPath, "plan", {
@@ -454,12 +398,7 @@ try {
 		assert.strictEqual(result.action, "intent_complete")
 
 		// No feedback directory
-		const fbDir = join(
-			intentDirPath,
-			"stages",
-			"build",
-			"feedback",
-		)
+		const fbDir = join(intentDirPath, "stages", "build", "feedback")
 		assert.ok(
 			!existsSync(fbDir) ||
 				readdirSync(fbDir).filter((f) => f.endsWith(".md")).length === 0,
@@ -472,13 +411,10 @@ try {
 		stubCli("gh", 'echo \'["OPEN", "REVIEW_REQUIRED"]\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const { projDir, intentDirPath, slug } = createProject(
-			"ext-pending",
-			{
-				active_stage: "build",
-				stageConfig: { build: { review: "external" } },
-			},
-		)
+		const { projDir, intentDirPath, slug } = createProject("ext-pending", {
+			active_stage: "build",
+			stageConfig: { build: { review: "external" } },
+		})
 
 		// Prior stage must be completed to avoid consistency reset
 		createStageState(intentDirPath, "plan", {
@@ -500,12 +436,7 @@ try {
 		assert.strictEqual(result.action, "awaiting_external_review")
 
 		// No feedback
-		const fbDir = join(
-			intentDirPath,
-			"stages",
-			"build",
-			"feedback",
-		)
+		const fbDir = join(intentDirPath, "stages", "build", "feedback")
 		assert.ok(
 			!existsSync(fbDir) ||
 				readdirSync(fbDir).filter((f) => f.endsWith(".md")).length === 0,
@@ -518,13 +449,10 @@ try {
 		stubCli("gh", "exit 1")
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const { projDir, intentDirPath, slug } = createProject(
-			"ext-unknown",
-			{
-				active_stage: "build",
-				stageConfig: { build: { review: "external" } },
-			},
-		)
+		const { projDir, intentDirPath, slug } = createProject("ext-unknown", {
+			active_stage: "build",
+			stageConfig: { build: { review: "external" } },
+		})
 
 		// Prior stage must be completed to avoid consistency reset
 		createStageState(intentDirPath, "plan", {
@@ -547,13 +475,10 @@ try {
 	})
 
 	test("no external URL falls through to gate review UI", () => {
-		const { projDir, intentDirPath, slug } = createProject(
-			"ext-no-url",
-			{
-				active_stage: "build",
-				stageConfig: { build: { review: "external" } },
-			},
-		)
+		const { projDir, intentDirPath, slug } = createProject("ext-no-url", {
+			active_stage: "build",
+			stageConfig: { build: { review: "external" } },
+		})
 
 		// Prior stage must be completed to avoid consistency reset
 		createStageState(intentDirPath, "plan", {
@@ -577,10 +502,7 @@ try {
 	})
 
 	test("GitLab MR changes_requested creates feedback with external-mr origin", () => {
-		stubCli(
-			"glab",
-			'echo \'{"state": "opened", "approved": false}\'',
-		)
+		stubCli("glab", 'echo \'{"state": "opened", "approved": false}\'')
 		// Restore git stub
 		stubCli("git", "exit 0")
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
@@ -604,8 +526,7 @@ try {
 			phase: "gate",
 			status: "completed",
 			gate_outcome: "blocked",
-			external_review_url:
-				"https://gitlab.com/org/repo/-/merge_requests/7",
+			external_review_url: "https://gitlab.com/org/repo/-/merge_requests/7",
 			visits: 0,
 		})
 
@@ -616,15 +537,8 @@ try {
 		assert.strictEqual(result.provider, "gitlab")
 
 		// Verify feedback file has external-mr origin
-		const fbDir = join(
-			intentDirPath,
-			"stages",
-			"build",
-			"feedback",
-		)
-		const fbFiles = readdirSync(fbDir).filter((f) =>
-			f.endsWith(".md"),
-		)
+		const fbDir = join(intentDirPath, "stages", "build", "feedback")
+		const fbFiles = readdirSync(fbDir).filter((f) => f.endsWith(".md"))
 		assert.strictEqual(fbFiles.length, 1)
 		const { data } = parseFrontmatter(
 			readFileSync(join(fbDir, fbFiles[0]), "utf8"),
@@ -638,13 +552,10 @@ try {
 		stubCli("git", "exit 0")
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const { projDir, intentDirPath, slug } = createProject(
-			"ext-multi-round",
-			{
-				active_stage: "build",
-				stageConfig: { build: { review: "external" } },
-			},
-		)
+		const { projDir, intentDirPath, slug } = createProject("ext-multi-round", {
+			active_stage: "build",
+			stageConfig: { build: { review: "external" } },
+		})
 
 		// Prior stage must be completed to avoid consistency reset
 		createStageState(intentDirPath, "plan", {
@@ -679,12 +590,7 @@ try {
 			writeFileSync(filePath, content)
 		}
 
-		const stateFile = join(
-			intentDirPath,
-			"stages",
-			"build",
-			"state.json",
-		)
+		const stateFile = join(intentDirPath, "stages", "build", "state.json")
 		const stateData = readJson(stateFile)
 		stateData.status = "completed"
 		stateData.phase = "gate"
@@ -696,12 +602,7 @@ try {
 		assert.strictEqual(result2.visits, 2)
 
 		// Verify two feedback files exist
-		const fbDir = join(
-			intentDirPath,
-			"stages",
-			"build",
-			"feedback",
-		)
+		const fbDir = join(intentDirPath, "stages", "build", "feedback")
 		const fbFiles = readdirSync(fbDir)
 			.filter((f) => f.endsWith(".md"))
 			.sort()
@@ -719,13 +620,10 @@ try {
 		stubCli("gh", 'echo \'["OPEN", ""]\'')
 		process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
-		const { projDir, intentDirPath, slug } = createProject(
-			"ext-commented",
-			{
-				active_stage: "build",
-				stageConfig: { build: { review: "external" } },
-			},
-		)
+		const { projDir, intentDirPath, slug } = createProject("ext-commented", {
+			active_stage: "build",
+			stageConfig: { build: { review: "external" } },
+		})
 
 		// Prior stage must be completed to avoid consistency reset
 		createStageState(intentDirPath, "plan", {
@@ -746,12 +644,7 @@ try {
 
 		assert.strictEqual(result.action, "awaiting_external_review")
 
-		const fbDir = join(
-			intentDirPath,
-			"stages",
-			"build",
-			"feedback",
-		)
+		const fbDir = join(intentDirPath, "stages", "build", "feedback")
 		assert.ok(
 			!existsSync(fbDir) ||
 				readdirSync(fbDir).filter((f) => f.endsWith(".md")).length === 0,

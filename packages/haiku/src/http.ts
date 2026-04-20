@@ -1,15 +1,21 @@
 import { createHash } from "node:crypto"
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { readFile, realpath } from "node:fs/promises"
 import {
+	createServer,
 	type Server as HttpServer,
 	type IncomingMessage,
-	createServer,
 } from "node:http"
 import { dirname, extname, join, resolve } from "node:path"
 import type { Duplex } from "node:stream"
 import { z } from "zod"
+import { ensureOnStageBranch } from "./git-worktree.js"
 import { REVIEW_APP_HTML } from "./review-app-html.js"
+import type {
+	QuestionAnnotations,
+	QuestionAnswer,
+	ReviewAnnotations,
+} from "./sessions.js"
 import {
 	getSession,
 	recordHeartbeat,
@@ -17,17 +23,11 @@ import {
 	updateQuestionSession,
 	updateSession,
 } from "./sessions.js"
-import type {
-	QuestionAnnotations,
-	QuestionAnswer,
-	ReviewAnnotations,
-} from "./sessions.js"
-import { ensureOnStageBranch } from "./git-worktree.js"
 import {
+	deleteFeedbackFile,
 	FEEDBACK_ORIGINS,
 	FEEDBACK_STATUSES,
 	type FeedbackItem,
-	deleteFeedbackFile,
 	findHaikuRoot,
 	gitCommitState,
 	intentDir,
@@ -362,7 +362,7 @@ async function handleMockupGet(
 		// Symlink-safe check: ensure resolved real path stays within base dir
 		const realResolved = await realpath(resolved).catch(() => null)
 		const realBase = await realpath(mockupsDir).catch(() => resolve(mockupsDir))
-		if (!realResolved || !realResolved.startsWith(`${realBase}/`)) {
+		if (!realResolved?.startsWith(`${realBase}/`)) {
 			return new Response("Forbidden", { status: 403 })
 		}
 		const data = await readFile(resolved)
@@ -398,7 +398,7 @@ async function handleWireframeGet(
 		const realBase = await realpath(session.intent_dir).catch(() =>
 			resolve(session.intent_dir),
 		)
-		if (!realResolved || !realResolved.startsWith(`${realBase}/`)) {
+		if (!realResolved?.startsWith(`${realBase}/`)) {
 			return new Response("Forbidden", { status: 403 })
 		}
 		const data = await readFile(resolved)
@@ -434,7 +434,7 @@ async function handleStageArtifactGet(
 		const realBase = await realpath(session.intent_dir).catch(() =>
 			resolve(session.intent_dir),
 		)
-		if (!realResolved || !realResolved.startsWith(`${realBase}/`)) {
+		if (!realResolved?.startsWith(`${realBase}/`)) {
 			return new Response("Forbidden", { status: 403 })
 		}
 		const data = await readFile(resolved)
@@ -1078,12 +1078,9 @@ const FeedbackUpdateSchema = z
 			.optional(),
 		closed_by: z.string().optional(),
 	})
-	.refine(
-		(data) => data.status !== undefined || data.closed_by !== undefined,
-		{
-			message: "At least one of 'status' or 'closed_by' must be provided",
-		},
-	)
+	.refine((data) => data.status !== undefined || data.closed_by !== undefined, {
+		message: "At least one of 'status' or 'closed_by' must be provided",
+	})
 
 async function handleFeedbackPut(
 	intent: string,
@@ -1299,8 +1296,7 @@ function handleReviewCurrent(): Response {
 			const iters = Array.isArray(stageState.iterations)
 				? (stageState.iterations as unknown[])
 				: undefined
-			const iteration =
-				iters?.length ?? ((stageState.visits as number) || 0)
+			const iteration = iters?.length ?? ((stageState.visits as number) || 0)
 			stages.push({
 				name: stageName,
 				status: (stageState.status as string) || "pending",

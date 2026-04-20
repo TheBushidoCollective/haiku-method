@@ -3,8 +3,8 @@
 import {
 	existsSync,
 	lstatSync,
-	readFileSync,
 	readdirSync,
+	readFileSync,
 	statSync,
 } from "node:fs"
 import { join } from "node:path"
@@ -15,6 +15,7 @@ import {
 
 // Re-export so consumers don't need to reach into prompts/helpers
 export const studioSearchPaths = _studioSearchPaths
+
 import { resolvePluginRoot } from "./config.js"
 import { parseFrontmatter } from "./state-tools.js"
 

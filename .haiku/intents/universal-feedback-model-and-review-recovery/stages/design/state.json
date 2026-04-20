@@ -1,11 +1,11 @@
 {
   "stage": "design",
-  "status": "active",
+  "status": "completed",
   "phase": "gate",
   "started_at": "2026-04-17T03:10:00Z",
-  "completed_at": null,
-  "gate_entered_at": null,
-  "gate_outcome": null,
+  "completed_at": "2026-04-20T20:56:30Z",
+  "gate_entered_at": "2026-04-20T20:56:21Z",
+  "gate_outcome": "advanced",
   "elaboration_turns": 29,
   "design_direction_selected": true,
   "design_direction": {
@@ -17,7 +17,15 @@
     }
   },
   "visits": 1,
-  "iterations": [],
+  "iterations": [
+    {
+      "index": 1,
+      "started_at": "2026-04-20T20:56:30Z",
+      "completed_at": "2026-04-20T20:56:30Z",
+      "trigger": "initial",
+      "result": "advanced"
+    }
+  ],
   "pre_review_dispatched": true,
   "pre_review_dispatched_at": "2026-04-20T19:25:30Z",
   "pre_review_reviewers_acknowledged": true,

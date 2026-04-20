@@ -2,7 +2,7 @@
 title: >-
   agent-feedback-toggle-spec.html uses text-[10px] + text-gray-400 on white —
   2.84:1 body-text fail
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T02:57:33Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-21-stagewide-contrast-and-opacity-sweep
 ---
 
 The agent-feedback-toggle spec artifact uses the banned `text-[10px]` type size combined with `text-gray-400` foreground on white in light mode — a stacked failure of unit-11 §1 (contrast) and §3 (type scale).

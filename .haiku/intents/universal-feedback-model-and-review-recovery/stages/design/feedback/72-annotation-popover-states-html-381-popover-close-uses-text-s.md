@@ -2,7 +2,7 @@
 title: >-
   annotation-popover-states.html:381 popover-close ✕ uses text-stone-400 on
   white — 2.52:1, fails 1.4.11 non-text contrast
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T02:56:28Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-21-stagewide-contrast-and-opacity-sweep
 ---
 
 The popover close button uses `text-stone-400` (`#a8a29e`) on the white popover surface — an icon-only glyph at 2.52:1 against the background. WCAG 1.4.11 Non-text Contrast requires ≥ 3:1 for UI components; the ✕ glyph IS the only affordance conveying "close this popover" until hover.

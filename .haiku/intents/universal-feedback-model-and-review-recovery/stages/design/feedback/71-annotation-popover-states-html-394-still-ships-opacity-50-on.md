@@ -2,7 +2,7 @@
 title: >-
   annotation-popover-states.html:394 still ships opacity-50 on disabled "Create"
   button — composite text contrast ~2.6:1
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T02:56:13Z'
 iteration: 3
 visit: 3
 source_ref: null
-closed_by: null
+closed_by: unit-21-stagewide-contrast-and-opacity-sweep
 ---
 
 Unit-11 `contrast-and-type-audit.md §2` declares "No `opacity-50` / `opacity-70` anywhere" as PASS in the summary table and lists `annotation-popover-states.html opacity-50/70: 0` in the bolt-2 verification. The file still contains one `opacity-50` on the exact pattern that was flagged in FB-13 / FB-19: a disabled button carrying `text-white opacity-50` (composite contrast < 3:1 for UI and < 4.5:1 for text).

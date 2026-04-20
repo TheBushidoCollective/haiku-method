@@ -88,7 +88,7 @@ quality_gates:
     artifacts introduced after unit-11 ran. The unit-17 / unit-18 verification
     greps are updated to cover the widened scope as well (comment near the grep
     loop in each unit's post-sweep note).
-status: active
+status: completed
 bolt: 2
 hat: feedback-assessor
 started_at: '2026-04-20T05:08:18Z'
@@ -113,8 +113,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T09:12:05Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T09:15:31Z'
+    result: advance
+completed_at: '2026-04-20T09:15:31Z'
 ---
 # Stage-wide contrast/opacity sweep — widen audit beyond the 7 inputs
 
@@ -181,11 +182,11 @@ cited.
 
 ## Completion criteria
 
-- [ ] `annotation-popover-states.html` has 0 `opacity-50` occurrences
-- [ ] Create button uses the §4 disabled pair + `disabled` + `aria-disabled`
-- [ ] popover-close ✕ uses `text-stone-600` + dark-mode variant + 44×44
-- [ ] `agent-feedback-toggle-spec.html` has 0 `text-[10px]` / banned-gray
-- [ ] `keyboard-shortcut-map.html` has 0 `text-[10px]` / banned-stone
-- [ ] `contrast-and-type-audit.md §2` documents the widened scope explicitly
-- [ ] Audit table reflects post-fix actual counts across all artifact files
-- [ ] feedback-assessor verifies FB-71, FB-72, FB-77 at the cited lines
+- [x] `annotation-popover-states.html` has 0 `opacity-50` occurrences
+- [x] Create button uses the §4 disabled pair + `disabled` + `aria-disabled`
+- [x] popover-close ✕ uses `text-stone-600` + dark-mode variant + 44×44
+- [x] `agent-feedback-toggle-spec.html` has 0 `text-[10px]` / banned-gray
+- [x] `keyboard-shortcut-map.html` has 0 `text-[10px]` / banned-stone
+- [x] `contrast-and-type-audit.md §2` documents the widened scope explicitly
+- [x] Audit table reflects post-fix actual counts across all artifact files
+- [x] feedback-assessor verifies FB-71, FB-72, FB-77 at the cited lines

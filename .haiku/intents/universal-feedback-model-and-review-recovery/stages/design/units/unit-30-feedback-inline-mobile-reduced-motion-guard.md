@@ -2,9 +2,8 @@
 title: >-
   feedback-inline-mobile.html — add prefers-reduced-motion guard for the FAB
   pulse and bottom-sheet slide-in keyframes. FB-86 was marked closed by
-  non-existent unit-25 variant; live grep shows 2 keyframes with 0 guards.
-  Also re-runs the stage-wide motion-audit script to catch any other
-  regressions
+  non-existent unit-25 variant; live grep shows 2 keyframes with 0 guards. Also
+  re-runs the stage-wide motion-audit script to catch any other regressions
 type: design
 closes:
   - FB-143
@@ -23,42 +22,39 @@ outputs:
 quality_gates:
   - >-
     `grep -c 'prefers-reduced-motion'
-    stages/design/artifacts/feedback-inline-mobile.html` ≥ 1. The file
-    carries a `<style>` block with the stage-canonical global guard
-    prescribed by motion-and-reduced-motion-spec.md §Cross-file policy:
-    ```css
-    @media (prefers-reduced-motion: reduce) {
+    stages/design/artifacts/feedback-inline-mobile.html` ≥ 1. The file carries a
+    `<style>` block with the stage-canonical global guard prescribed by
+    motion-and-reduced-motion-spec.md §Cross-file policy: ```css @media
+    (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
       }
-    }
-    ```
-    Optionally paired with per-keyframe `animation: none !important;` on
-    `.animate-pulse` / `[class*="feedback-pulse"]` / `.sheet-enter` for the
-    FAB pulse (decorative; no essential state information lost by stopping
-    it) — per motion-and-reduced-motion-spec.md's "FAB pulse is
-    decorative" clause.
+    } ``` Optionally paired with per-keyframe `animation: none !important;` on
+    `.animate-pulse` / `[class*="feedback-pulse"]` / `.sheet-enter` for the FAB
+    pulse (decorative; no essential state information lost by stopping it) — per
+    motion-and-reduced-motion-spec.md's "FAB pulse is decorative" clause.
   - >-
     Stage-wide motion-audit script (re-run of unit-25's gate to catch the
-    false-closure): `for f in stages/design/artifacts/*.html; do
-    anim=$(grep -cE '@keyframes|animation:|animate-pulse|animate-spin|
-    transition-' $f); guard=$(grep -cE 'prefers-reduced-motion' $f); if [
-    "$anim" -gt 0 ] && [ "$guard" -eq 0 ]; then echo "MISSING: $f"; fi;
-    done` → empty output. Every artifact with animations or transitions
-    ships a reduced-motion guard.
+    false-closure): `for f in stages/design/artifacts/*.html; do anim=$(grep -cE
+    '@keyframes|animation:|animate-pulse|animate-spin| transition-' $f);
+    guard=$(grep -cE 'prefers-reduced-motion' $f); if [ "$anim" -gt 0 ] && [
+    "$guard" -eq 0 ]; then echo "MISSING: $f"; fi; done` → empty output. Every
+    artifact with animations or transitions ships a reduced-motion guard.
   - >-
-    `motion-and-reduced-motion-spec.md` — FAB pulse + bottom-sheet slide
-    rows updated to cite the specific guard in feedback-inline-mobile.html
-    (not just the spec-canonical guard block). Per-keyframe fallback
-    behavior documented: sheet-open animates to final position at 0.01ms
-    so the content paints; FAB pulse stops entirely (decorative only).
+    `motion-and-reduced-motion-spec.md` — FAB pulse + bottom-sheet slide rows
+    updated to cite the specific guard in feedback-inline-mobile.html (not just
+    the spec-canonical guard block). Per-keyframe fallback behavior documented:
+    sheet-open animates to final position at 0.01ms so the content paints; FAB
+    pulse stops entirely (decorative only).
   - >-
-    Motion-audit script added to `design-reviewer.md` hat spec gate list
-    so it runs on every future iteration (prevents the false-closure
-    pattern from recurring for FB-86 / FB-143's same failure shape).
+    Motion-audit script added to `design-reviewer.md` hat spec gate list so it
+    runs on every future iteration (prevents the false-closure pattern from
+    recurring for FB-86 / FB-143's same failure shape).
+status: completed
+completed_at: '2026-04-20T19:50:45Z'
 ---
 # feedback-inline-mobile reduced-motion guard
 

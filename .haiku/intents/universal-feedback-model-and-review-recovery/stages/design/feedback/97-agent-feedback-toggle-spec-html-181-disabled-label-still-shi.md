@@ -2,7 +2,7 @@
 title: >-
   agent-feedback-toggle-spec.html:181 disabled label still ships opacity-50;
   audit §329 claims removed
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent

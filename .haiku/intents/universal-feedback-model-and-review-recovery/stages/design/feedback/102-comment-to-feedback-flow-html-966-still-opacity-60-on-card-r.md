@@ -2,7 +2,7 @@
 title: >-
   comment-to-feedback-flow.html:966 still opacity-60 on card root with
   text-stone-500 child — 1.4.3 FAIL
-status: closed
+status: pending
 origin: adversarial-review
 author: accessibility
 author_type: agent

@@ -2,7 +2,7 @@
 title: >-
   revisit-modal-states.html + comment-to-feedback-flow.html missing canonical
   live-region landmark pair
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent

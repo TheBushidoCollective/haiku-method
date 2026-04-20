@@ -2,7 +2,7 @@
 title: >-
   Sibling conflicts on revisit-unit-list.html (unit-26 + unit-30) and
   revisit-modal-states.html (unit-27 + unit-30)
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:31:32Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-30-native-activation-and-live-region-landmarks.md
-closed_by: null
+closed_by: unit-30-native-activation-and-live-region-landmarks
 bolt: 0
 upstream_stage: null
 ---

@@ -1,10 +1,12 @@
 {
-	"stage": "security",
-	"status": "completed",
-	"phase": "gate",
-	"started_at": "2026-04-16T16:52:45Z",
-	"completed_at": "2026-04-16T17:20:51Z",
-	"gate_entered_at": "2026-04-16T17:03:58Z",
-	"gate_outcome": "advanced",
-	"elaboration_turns": 1
+  "stage": "security",
+  "status": "active",
+  "phase": "elaborate",
+  "started_at": "2026-04-16T16:52:45Z",
+  "completed_at": null,
+  "gate_entered_at": null,
+  "gate_outcome": null,
+  "elaboration_turns": 1,
+  "stale_reason": "revisit of upstream stage 'design' (manual retroactive fix)",
+  "stale_marked_at": "2026-04-20T21:55:00Z"
 }

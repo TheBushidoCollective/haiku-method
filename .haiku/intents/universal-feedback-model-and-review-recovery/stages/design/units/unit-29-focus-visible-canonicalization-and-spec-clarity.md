@@ -8,8 +8,6 @@ closes:
   - FB-93
   - FB-107
   - FB-110
-  - FB-113
-  - FB-130
 depends_on:
   - unit-26-artifact-opacity-ban-enforcement
 inputs:

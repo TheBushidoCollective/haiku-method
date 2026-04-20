@@ -2,7 +2,7 @@
 title: >-
   Sidebar-width canonical pair violated: DESIGN-BRIEF §2 and
   assessor-summary-card say `lg:w-96`, not `xl:w-96`
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:26:04Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: null
+closed_by: unit-28-canonical-token-normalization-sweep
 ---
 
 Unit-16 gate 5 (FB-47) declared the canonical sidebar pair as `w-80 xl:w-96` (desktop cutover at 1280 / Tailwind `xl`). Multiple sources still publish the older `lg:w-96` cutover, which directly contradicts the canonical:

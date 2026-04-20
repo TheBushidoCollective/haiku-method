@@ -7,13 +7,6 @@ closes:
   - FB-105
   - FB-106
   - FB-109
-  - FB-111
-  - FB-112
-  - FB-118
-  - FB-119
-  - FB-120
-  - FB-123
-  - FB-129
 depends_on:
   - unit-30-native-activation-and-live-region-landmarks
 inputs:

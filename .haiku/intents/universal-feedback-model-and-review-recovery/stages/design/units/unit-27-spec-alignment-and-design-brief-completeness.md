@@ -8,8 +8,6 @@ closes:
   - FB-98
   - FB-100
   - FB-108
-  - FB-125
-  - FB-127
 depends_on: []
 inputs:
   - stages/design/DESIGN-BRIEF.md

@@ -9,7 +9,6 @@ closes:
   - FB-95
   - FB-97
   - FB-102
-  - FB-126
 depends_on:
   - unit-28-canonical-token-normalization-sweep
 inputs:

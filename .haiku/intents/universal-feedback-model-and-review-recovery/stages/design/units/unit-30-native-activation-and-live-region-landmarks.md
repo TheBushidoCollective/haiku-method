@@ -7,12 +7,6 @@ type: design
 closes:
   - FB-103
   - FB-104
-  - FB-115
-  - FB-116
-  - FB-121
-  - FB-122
-  - FB-128
-  - FB-131
 depends_on:
   - unit-29-focus-visible-canonicalization-and-spec-clarity
 inputs:

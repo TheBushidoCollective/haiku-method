@@ -12,9 +12,6 @@ closes:
   - FB-96
   - FB-99
   - FB-101
-  - FB-114
-  - FB-117
-  - FB-124
 depends_on:
   - unit-27-spec-alignment-and-design-brief-completeness
 inputs:

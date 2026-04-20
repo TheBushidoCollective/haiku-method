@@ -2,7 +2,7 @@
 title: >-
   Sibling conflict — three units (unit-26, unit-28, unit-31) all output
   contrast-and-type-audit.md
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:31:05Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-26-artifact-opacity-ban-enforcement.md
-closed_by: null
+closed_by: unit-31-contrast-and-type-scale-fixes
 bolt: 0
 upstream_stage: null
 ---

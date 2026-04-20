@@ -2,7 +2,7 @@
 title: >-
   annotation-popover-states.html:394 State 4b Create still ships bg-teal-600
   text-white opacity-50 — banned
-status: closed
+status: pending
 origin: adversarial-review
 author: accessibility
 author_type: agent

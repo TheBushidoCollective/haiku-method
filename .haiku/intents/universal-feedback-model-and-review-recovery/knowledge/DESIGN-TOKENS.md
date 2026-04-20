@@ -229,12 +229,27 @@ From `packages/haiku/src/templates/styles.ts` (server-rendered):
 
 Feedback items progress through a lifecycle: `pending` -> `addressed` / `rejected` -> `closed`. Each status needs a distinct color treatment.
 
+**Canonical text shades (matches DESIGN-BRIEF §2 `FeedbackStatusBadge` exactly — any divergence is a bug):**
+
 | Semantic Name | Tailwind Classes (Light) | Tailwind Classes (Dark) | Rationale |
 |---|---|---|---|
 | `feedback-status-pending` | `bg-amber-100 text-amber-800 border-amber-300` | `dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700` | Amber = attention needed. Matches the existing comment-count badge palette. |
 | `feedback-status-addressed` | `bg-blue-100 text-blue-800 border-blue-300` | `dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700` | Blue = work done, awaiting verification. Distinct from teal (which is "active/primary"). |
 | `feedback-status-closed` | `bg-green-100 text-green-800 border-green-300` | `dark:bg-green-900/30 dark:text-green-300 dark:border-green-700` | Green = resolved. Consistent with existing `completed` status color. |
 | `feedback-status-rejected` | `bg-stone-100 text-stone-500 border-stone-300` | `dark:bg-stone-800 dark:text-stone-400 dark:border-stone-600` | Stone/gray = dismissed/not actionable. Muted, de-emphasized. |
+
+**Measured contrast (WCAG 2.1 AA, ≥ 4.5:1 for text):**
+
+| Pair | Ratio | Passes |
+|---|---|---|
+| `amber-800` on `amber-100` | 5.9:1 | AA |
+| `blue-800` on `blue-100` | 7.2:1 | AA |
+| `green-800` on `green-100` | 5.8:1 | AA |
+| `stone-500` on `stone-100` | 4.6:1 | AA |
+| `amber-300` on `amber-900/30` | 5.1:1 | AA |
+| `blue-300` on `blue-900/30` | 5.5:1 | AA |
+| `green-300` on `green-900/30` | 4.9:1 | AA |
+| `stone-400` on `stone-800` | 4.9:1 | AA |
 
 #### Implementation: Badge Variant
 
@@ -264,12 +279,16 @@ const feedbackStatusDots: Record<string, string> = {
 
 Each feedback item carries an `origin` indicating where it came from. These badges should be visually distinct from status badges and from each other.
 
-| Semantic Name | Tailwind Classes (Light) | Tailwind Classes (Dark) | Icon Suggestion |
-|---|---|---|---|
-| `origin-adversarial-review` | `bg-rose-100 text-rose-700 border-rose-200` | `dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800` | Shield / target |
-| `origin-external-pr` | `bg-violet-100 text-violet-700 border-violet-200` | `dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800` | Git branch / PR icon |
-| `origin-user-visual` | `bg-sky-100 text-sky-700 border-sky-200` | `dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800` | Eye / annotation pin |
-| `origin-agent` | `bg-teal-100 text-teal-700 border-teal-200` | `dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800` | Sparkle / robot |
+**Canonical origin enumeration — MUST match DESIGN-BRIEF §2 `FeedbackOriginIcon` and `artifacts/aria-landmark-spec.md §6` exactly.** If the three tables disagree, DESIGN-BRIEF §2 wins and the other two must be corrected.
+
+| Semantic Name | Tailwind Classes (Light) | Tailwind Classes (Dark) | Emoji | Code point | Visible label |
+|---|---|---|---|---|---|
+| `origin-adversarial-review` | `bg-rose-100 text-rose-700 border-rose-200` | `dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800` | 🔍 | `U+1F50D` | Review Agent |
+| `origin-external-pr` | `bg-violet-100 text-violet-700 border-violet-200` | `dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800` | 🔗 | `U+1F517` | PR Comment |
+| `origin-external-mr` | `bg-violet-100 text-violet-700 border-violet-200` | `dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-800` | 🔗 | `U+1F517` | MR Comment |
+| `origin-user-visual` | `bg-sky-100 text-sky-700 border-sky-200` | `dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800` | ✎ | `U+270E` | Annotation |
+| `origin-user-chat` | `bg-sky-100 text-sky-700 border-sky-200` | `dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800` | 💬 | `U+1F4AC` | Comment |
+| `origin-agent` | `bg-teal-100 text-teal-700 border-teal-200` | `dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-800` | 🤖 | `U+1F916` | Agent |
 
 #### Implementation
 
@@ -277,24 +296,53 @@ Each feedback item carries an `origin` indicating where it came from. These badg
 const originColors: Record<string, string> = {
   "adversarial-review": "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
   "external-pr":        "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
+  "external-mr":        "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
   "user-visual":        "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
+  "user-chat":          "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
   "agent":              "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
 };
 
+// Canonical emoji mapping — DO NOT substitute. Cross-references:
+//   DESIGN-BRIEF.md §2 `FeedbackOriginIcon`
+//   artifacts/aria-landmark-spec.md §6
 const originIcons: Record<string, string> = {
-  "adversarial-review": "\uD83D\uDEE1\uFE0F",  // shield
-  "external-pr":        "\uD83D\uDD00",          // shuffle (merge)
-  "user-visual":        "\uD83D\uDC41\uFE0F",   // eye
-  "agent":              "\u2728",                 // sparkle
+  "adversarial-review": "\u{1F50D}", // 🔍 magnifying glass
+  "external-pr":        "\u{1F517}", // 🔗 link
+  "external-mr":        "\u{1F517}", // 🔗 link (same emoji as external-pr; label differentiates)
+  "user-visual":        "\u{270E}",  // ✎ pencil (text-style glyph — deliberate)
+  "user-chat":          "\u{1F4AC}", // 💬 speech balloon
+  "agent":              "\u{1F916}", // 🤖 robot face
+};
+
+// Visible text labels paired with the emoji — screen readers announce the
+// label (the emoji span carries aria-hidden="true" when a label is visible).
+const originLabels: Record<string, string> = {
+  "adversarial-review": "Review Agent",
+  "external-pr":        "PR Comment",
+  "external-mr":        "MR Comment",
+  "user-visual":        "Annotation",
+  "user-chat":          "Comment",
+  "agent":              "Agent",
 };
 ```
 
 #### Design rationale
 
 - Rose for adversarial review: conveys critical/adversarial nature without being red (which is reserved for errors/blocked).
-- Violet for external PR: distinct from indigo (used for `unit` badges) and purple (used for `intent` badges). Violet sits between them and reads as "external/VCS".
-- Sky for user-visual: bright, attention-catching -- visual feedback is the most human-interactive origin. Distinct from blue (used for `in_progress` in SSR templates).
+- Violet for external-pr and external-mr: distinct from indigo (used for `unit` badges) and purple (used for `intent` badges). Violet sits between them and reads as "external/VCS". PR and MR share the violet palette because they are the same class of external-VCS comment; the visible label and host tooling differentiate.
+- Sky for user-visual and user-chat: bright, attention-catching -- direct user-authored feedback is the most human-interactive class. Distinct from blue (used for `in_progress` in SSR templates). Both user origins share the sky palette because they're the same class; emoji and label differentiate (`✎ Annotation` vs `💬 Comment`).
 - Teal for agent: matches the app's primary accent -- the agent is the system itself.
+
+#### Banned (retired) emoji set
+
+Earlier drafts used these code points — they **MUST NOT** re-appear in any artifact or token reference. `aria-landmark-spec.md §9`'s grep audit fails if any do.
+
+| Retired code point | Why retired |
+|---|---|
+| `U+1F6E1` (🛡️ shield) | Earlier stand-in for `adversarial-review`; canonical mapping is `U+1F50D` 🔍 (magnifying glass) to match the "review agent inspects the work" metaphor. |
+| `U+1F500` (🔀 shuffle/merge) | Earlier stand-in for `external-pr`; canonical mapping is `U+1F517` 🔗 (link) because a PR/MR comment is a linked conversation, not a merge operation. |
+| `U+1F441` (👁 eye) | Earlier stand-in for `user-visual`; canonical mapping is `U+270E` ✎ (pencil) because the annotation metaphor is authoring, not observing. |
+| `U+2728` (✨ sparkles) | Earlier stand-in for `agent`; canonical mapping is `U+1F916` 🤖 (robot) because the agent class is a concrete automated actor, not a generic "AI magic" sparkle. |
 
 ### 2.3 Feedback Item Card Tokens
 

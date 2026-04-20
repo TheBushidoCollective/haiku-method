@@ -1,11 +1,13 @@
-# Footer Button Copy Spec — Canonical Vocabulary
+# Footer Button Copy Spec — Canonical Vocabulary (alias)
 
-**Unit:** `unit-14-component-naming-and-copy`
-**Closes:** FB-34 (footer button copy drift — "Close" vs "Verify & Close" vs "Dismiss" vs "Reject")
+**Unit:** `unit-14-component-naming-and-copy` (original); `unit-17-design-brief-tokens-alignment` (canonicalized into DESIGN-BRIEF §2)
+**Closes:** FB-34 (footer button copy drift — "Close" vs "Verify & Close" vs "Dismiss" vs "Reject"), FB-43 (canonical matrix relocated into DESIGN-BRIEF §2)
+
+> **Alias notice.** As of unit-17, the authoritative single source of truth for every footer-button label is **DESIGN-BRIEF.md §2 → "Footer Button Copy — Canonical Status × Origin Matrix"**. This file is retained as a discoverable reference for reviewers searching for footer-button vocabulary, but every canonical table below is a restatement of DESIGN-BRIEF §2. **If this file disagrees with DESIGN-BRIEF §2, DESIGN-BRIEF §2 wins** and this file is wrong.
 
 This file is the **single source of truth** for every footer-button label in the feedback UI. Every wireframe, component spec, unit body, and live implementation MUST match this vocabulary exactly.
 
-If this file disagrees with any other document, **this file wins** and the other document is wrong.
+If this file disagrees with any other document (other than DESIGN-BRIEF §2), **this file wins** and the other document is wrong.
 
 ---
 

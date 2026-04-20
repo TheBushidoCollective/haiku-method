@@ -418,7 +418,37 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Call tools — wrapped to trigger hot-swap after response when an update is staged
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-	const result = await handleToolCall(request)
+	let result: Awaited<ReturnType<typeof handleToolCall>>
+	try {
+		result = await handleToolCall(request)
+	} catch (err) {
+		// The MCP SDK's request dispatch catches thrown errors and returns
+		// them as JSON-RPC InternalError responses, which means they never
+		// reach main().catch — and therefore never hit Sentry. Report here
+		// so handled-but-thrown tool crashes still get captured alongside
+		// the session context the PreToolUse hook injects on every call.
+		const toolName = request.params?.name ?? "<unknown>"
+		const args = (request.params?.arguments ?? {}) as Record<string, unknown>
+		const sessionCtx = args._session_context as
+			| Record<string, string>
+			| undefined
+		reportError(
+			err,
+			{
+				context: "mcp-tool-handler",
+				tool_name: toolName,
+				// Intentionally omit args — they may carry sensitive payloads
+				// (source_ref URLs, feedback bodies). The stack + tool name is
+				// enough to locate the crash.
+			},
+			sessionCtx,
+		)
+		console.error(
+			`[haiku] Tool handler '${toolName}' threw:`,
+			err instanceof Error ? err.stack || err.message : String(err),
+		)
+		throw err
+	}
 
 	// After the response is written, check if we should yield to a new binary.
 	// setImmediate ensures the MCP SDK flushes the response first.

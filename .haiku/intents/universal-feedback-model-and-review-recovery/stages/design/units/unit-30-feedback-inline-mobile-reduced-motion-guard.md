@@ -39,9 +39,9 @@ quality_gates:
       .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/motion-and-reduced-motion-spec.md
 status: active
 bolt: 1
-hat: design-reviewer
+hat: feedback-assessor
 started_at: '2026-04-20T19:38:59Z'
-hat_started_at: '2026-04-20T19:45:22Z'
+hat_started_at: '2026-04-20T19:48:24Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T19:38:59Z'
@@ -49,6 +49,10 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T19:45:22Z'
+    completed_at: '2026-04-20T19:48:24Z'
+    result: advance
+  - hat: feedback-assessor
+    started_at: '2026-04-20T19:48:24Z'
     completed_at: null
     result: null
 ---

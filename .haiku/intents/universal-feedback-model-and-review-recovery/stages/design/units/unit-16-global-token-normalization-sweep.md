@@ -118,9 +118,9 @@ quality_gates:
     match the post-sweep state.
 status: active
 bolt: 2
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T01:54:01Z'
-hat_started_at: '2026-04-20T02:21:07Z'
+hat_started_at: '2026-04-20T02:32:16Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:01Z'
@@ -137,6 +137,10 @@ iterations:
     reason: "FB-57 still-pending: 2 drifted shield emoji (&#x1F6E1;&#xFE0F; \U0001F6E1) remain on Review Agent origin badges in feedback-card-states.html:499,521 — aria-landmark-spec.md §6 forbids \U0001F6E1 and canonicalizes \U0001F50D (&#x1F50D;) for Review Agent. FB-58 still-pending: feedback-inline-mobile.html:67 and feedback-inline-desktop.html:112 tablists still lack aria-orientation=\"horizontal\" — the specific aria-orientation fix FB-58 required is not applied. FB-59 still-pending: 7 undocumented text-[8px] occurrences remain on user-facing content (revisit-unit-list.html:101,109 visit-counter \"2x\" badges; review-context-header.html:76,140,202,336 diamond markers) — text-[8px] is not whitelisted in DESIGN-TOKENS.md §2 and the canonical visit-counter uses text-[10px], not text-[8px]."
   - hat: designer
     started_at: '2026-04-20T02:21:07Z'
+    completed_at: '2026-04-20T02:32:16Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T02:32:16Z'
     completed_at: null
     result: null
 ---

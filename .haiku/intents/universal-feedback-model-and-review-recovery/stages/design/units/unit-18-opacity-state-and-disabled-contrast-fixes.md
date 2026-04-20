@@ -22,6 +22,10 @@ outputs:
   - stages/design/artifacts/contrast-and-type-audit.md
   - stages/design/artifacts/annotation-popover-states.html
   - stages/design/artifacts/unit-18-design-review.md
+  - stages/design/artifacts/agent-feedback-toggle-spec.html
+  - stages/design/artifacts/footer-button-copy-spec.md
+  - stages/design/artifacts/review-ui-mockup.html
+  - stages/design/artifacts/revisit-modal-states.html
 quality_gates:
   - >-
     `grep -rEn 'opacity-70|opacity-50' stages/design/artifacts/ | grep -v
@@ -69,9 +73,9 @@ quality_gates:
     closed/rejected/pending/addressed background tokens.
 status: active
 bolt: 2
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T01:54:04Z'
-hat_started_at: '2026-04-20T02:16:54Z'
+hat_started_at: '2026-04-20T02:24:56Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:04Z'
@@ -95,6 +99,10 @@ iterations:
       and §9 for sign-off criteria.
   - hat: designer
     started_at: '2026-04-20T02:16:54Z'
+    completed_at: '2026-04-20T02:24:56Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T02:24:56Z'
     completed_at: null
     result: null
 ---

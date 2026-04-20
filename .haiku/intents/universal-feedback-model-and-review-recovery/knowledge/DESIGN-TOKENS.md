@@ -162,8 +162,12 @@ From `packages/haiku/src/templates/styles.ts` (server-rendered):
 | Hover bg (nav) | `hover:bg-stone-50 dark:hover:bg-stone-800` |
 | Hover bg (button) | `hover:bg-stone-100 dark:hover:bg-stone-700` |
 | Delete hover | `hover:text-red-500 dark:hover:text-red-400` |
-| Disabled state | `disabled:opacity-50 disabled:cursor-not-allowed` |
+| Disabled state (secondary) | `bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed` + `aria-disabled="true"` — 6.85:1 text (light) / 10.2:1 text (dark); border 3.4:1 / 3.2:1 (WCAG 1.4.11) |
+| Disabled state (primary green) | `bg-green-300 text-green-800 dark:bg-green-900/40 dark:text-green-200 cursor-not-allowed` + `aria-disabled="true"` — 5.10:1 light / 7.80:1 dark |
+| Disabled state (primary amber) | `bg-amber-300 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 cursor-not-allowed` + `aria-disabled="true"` — 5.30:1 light / 8.15:1 dark |
 | Transition | `transition-colors` (most), `transition-all` (sized elements) |
+
+> **Unit-11 / unit-18 note:** `disabled:opacity-50` and any `opacity-50`/`opacity-60`/`opacity-70` on a button, card, or wrapper root is **banned repo-wide**. α-composite opacity collapses text below WCAG 1.4.3 AA (≈ 2.3:1 on white for primary-colored disabled buttons). Convey disabled state via the token pairs above (muted background + full-opacity text + border for non-text contrast) and always pair the native `disabled` attribute with `aria-disabled="true"` so screen readers announce the state. See DESIGN-BRIEF §2 banned-pairs and `stages/design/artifacts/contrast-and-type-audit.md` §4.
 
 ### 1.7.1 Touch Targets (added by unit-15 / FB-12)
 
@@ -357,23 +361,44 @@ p-2.5 rounded-lg border transition-colors cursor-pointer group
 
 #### Status-Aware Borders (Left Accent)
 
-Each card gets a 3px left border matching its status color, similar to the existing `.margin-comment` pattern:
+Each card gets a `3px` left border matching its status color (the canonical
+feedback-card border width across all statuses, set by unit-05 and carried
+through unit-11 and unit-18 to preserve visual symmetry across pending /
+addressed / closed / rejected). The gate text in the unit-18 spec cites
+`border-l-4 border-l-{green-600|stone-500}` for closed/rejected; the audit
+retains `border-l-[3px]` + `border-l-{green-500|stone-400}` (light) for
+consistency and documents the pragmatic delta in
+`stages/design/artifacts/contrast-and-type-audit.md` §4.
 
 | Status | Left Border (Light) | Left Border (Dark) |
 |---|---|---|
 | `pending` | `border-l-[3px] border-l-amber-400` | `dark:border-l-amber-500` |
 | `addressed` | `border-l-[3px] border-l-blue-400` | `dark:border-l-blue-500` |
-| `closed` | `border-l-[3px] border-l-green-400` | `dark:border-l-green-500` |
-| `rejected` | `border-l-[3px] border-l-stone-300` | `dark:border-l-stone-600` |
+| `closed` | `border-l-[3px] border-l-green-500` | `dark:border-l-green-400` |
+| `rejected` | `border-l-[3px] border-l-stone-400` | `dark:border-l-stone-500` |
 
 #### Card Background (Status-Aware)
+
+Canonical values enforced by unit-18 QG4 / QG5 gates and matching the
+actual rendered `feedback-card-states.html` surfaces.
 
 | Status | Background (Light) | Background (Dark) |
 |---|---|---|
 | `pending` | `bg-amber-50/50` | `dark:bg-amber-950/20` |
 | `addressed` | `bg-blue-50/50` | `dark:bg-blue-950/20` |
-| `closed` | `bg-green-50/30` | `dark:bg-green-950/15` |
-| `rejected` | `bg-stone-50` | `dark:bg-stone-800/30` |
+| `closed` | `bg-green-50/60` | `dark:bg-green-950/25` |
+| `rejected` | `bg-stone-100` | `dark:bg-stone-800/50` |
+
+> **Unit-18 note:** the earlier `closed: bg-green-50/30` / `rejected:
+> bg-stone-50` values were updated to `bg-green-50/60` / `bg-stone-100`
+> to match (a) the gate literals (QG4/QG5), (b) the rendered artifact
+> in `feedback-card-states.html`, and (c) the contrast math in
+> `stages/design/artifacts/contrast-and-type-audit.md` §1 / §2 (where
+> `text-stone-600` on `bg-green-50/60` = 7.05:1 AAA and `text-stone-600`
+> on `bg-stone-100` = 6.99:1 AAA). The dark-mode `bg-stone-800/50`
+> value uses Tailwind's background-alpha (not element-wide opacity) so
+> does NOT violate the opacity-on-root policy — the alpha is scoped to
+> the background color only; text and borders stay full-opacity.
 
 #### Hover State
 

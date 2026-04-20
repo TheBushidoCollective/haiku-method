@@ -62,7 +62,15 @@ Both secondary verbs share the same style. Their meaning is inferred from the su
 
 ## Disabled / Focus / Active States
 
-Every button above inherits the standard focus ring (`ring-2 ring-teal-500 ring-offset-2 ring-offset-white dark:ring-offset-stone-900`) and the standard disabled style (`opacity-50 cursor-not-allowed`). No verb-specific deviations.
+Every button above inherits the standard focus ring (`ring-2 ring-teal-500 ring-offset-2 ring-offset-white dark:ring-offset-stone-900`).
+
+The standard disabled style comes from the canonical disabled-control token pairs in DESIGN-BRIEF §2 and `contrast-and-type-audit.md` §4 (NOT `opacity-50`, which is banned repo-wide by unit-11 / unit-18 because α-composited text collapses below WCAG 1.4.3 AA):
+
+- **Primary green disabled** (Verify & Close, primary affirmative): `bg-green-300 text-green-800 dark:bg-green-900/40 dark:text-green-200 cursor-not-allowed` — 5.10:1 light / 7.80:1 dark. Every instance also carries `aria-disabled="true"` alongside the native `disabled` attribute.
+- **Primary amber disabled** (Confirm & Revisit, destructive affirmative): `bg-amber-300 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200 cursor-not-allowed` + `aria-disabled="true"` — 5.30:1 light / 8.15:1 dark.
+- **Secondary disabled** (Dismiss, Reopen, Cancel): `bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed` + `aria-disabled="true"` — 6.85:1 text (light) / 10.2:1 text (dark); 3.4:1 / 3.2:1 border per WCAG 2.2 1.4.11 Non-Text Contrast.
+
+No verb-specific deviations — the primary/secondary split above is the only axis of variation.
 
 ---
 

@@ -2,7 +2,7 @@
 title: >-
   annotation-popover-states.html:381 popover close × uses text-stone-500 on
   dark:bg-stone-800 — 3.17:1 FAIL in dark
-status: closed
+status: pending
 origin: adversarial-review
 author: accessibility
 author_type: agent

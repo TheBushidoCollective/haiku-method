@@ -162,33 +162,33 @@ interface FeedbackStatusBadgeProps {
 }
 ```
 
-**Color mapping:**
+**Color mapping (canonical — DESIGN-TOKENS.md §2.1 mirrors this table exactly):**
 
 | Status | Light | Dark | Rationale |
 |---|---|---|---|
-| `pending` | `bg-amber-100 text-amber-700` | `bg-amber-900/30 text-amber-300` | Amber = needs attention, consistent with existing warning color |
-| `addressed` | `bg-blue-100 text-blue-700` | `bg-blue-900/30 text-blue-400` | Blue = in-progress/claimed, distinct from final states |
-| `closed` | `bg-green-100 text-green-700` | `bg-green-900/30 text-green-400` | Green = resolved, consistent with `completed` status |
+| `pending` | `bg-amber-100 text-amber-800` | `bg-amber-900/30 text-amber-300` | Amber = needs attention, consistent with existing warning color |
+| `addressed` | `bg-blue-100 text-blue-800` | `bg-blue-900/30 text-blue-300` | Blue = in-progress/claimed, distinct from final states |
+| `closed` | `bg-green-100 text-green-800` | `bg-green-900/30 text-green-300` | Green = resolved, consistent with `completed` status |
 | `rejected` | `bg-stone-100 text-stone-500` | `bg-stone-800 text-stone-400` | Gray = dismissed, deliberately low-contrast |
 
 **Implementation:**
 ```tsx
 const feedbackColors: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
-  addressed: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  closed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  rejected: "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400",
+  pending:   "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  addressed: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  closed:    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  rejected:  "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400",
 };
 ```
 
 Uses the same `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold` base classes as the shared `StatusBadge`.
 
 **Accessibility:** The badge includes a visible text label ("pending", "addressed", etc.) so it does not rely on color alone. The `aria-label` includes the status value. All color combinations meet WCAG 2.1 AA contrast ratios:
-- amber-700 on amber-100: 4.9:1 (passes AA)
-- blue-700 on blue-100: 4.8:1 (passes AA)
-- green-700 on green-100: 4.5:1 (passes AA)
+- amber-800 on amber-100: 5.9:1 (passes AA)
+- blue-800 on blue-100: 7.2:1 (passes AA)
+- green-800 on green-100: 5.8:1 (passes AA)
 - stone-500 on stone-100: 4.6:1 (passes AA)
-- Dark mode equivalents also pass AA at minimum.
+- Dark mode equivalents (amber-300 / blue-300 / green-300 on `*-900/30`) all pass AA at minimum (≥ 4.9:1).
 
 ---
 
@@ -334,7 +334,7 @@ A compact summary strip at the top of the feedback list showing aggregate counts
 
 #### `AgentFeedbackToggle`
 
-A single switch (default **OFF**) that reveals agent-origin feedback (`adversarial-review`, `agent`) inline within the unified **Comments** list. Replaces the earlier `SidebarSegmentedControl` design — H·AI·K·U has no user identity, so an identity-based split is undefined. See unit-05 rationale and `comments-list-with-agent-toggle.html`.
+A single switch (default **OFF**) that reveals agent-origin feedback (`adversarial-review`, `agent`) inline within the unified **Comments** list. H·AI·K·U has no user identity, so an identity-based split (an earlier identity-segmented control) is undefined — see the Retired Components subsection at the end of §2 and `comments-list-with-agent-toggle.html`.
 
 ```
 +---------------------------------------------+
@@ -531,6 +531,75 @@ export interface FeedbackItemData {
 
 ---
 
+### Footer Button Copy — Canonical Status × Origin Matrix
+
+DESIGN-BRIEF §2 is the single source of truth for every footer-button label in the feedback UI. `artifacts/footer-button-copy-spec.md` is an alias pointing at this table — if the two disagree, **this table wins**.
+
+**Canonical verbs (one verb per transition destination):**
+
+| Status → Transition | Button Label | Hyphenation | Notes |
+|---|---|---|---|
+| `pending → rejected` | **Dismiss** | — | Single verb regardless of `author_type`. |
+| `addressed → closed` | **Verify & Close** | ampersand with surrounding spaces | Primary action on addressed items. |
+| `addressed → pending` | **Reopen** | one word, no hyphen | Secondary action on addressed items. |
+| `closed → pending` | **Reopen** | one word | Same verb as addressed → pending. |
+| `rejected → pending` | **Reopen** | one word | Same verb as addressed → pending. |
+
+**Status × Origin (button copy does NOT split by `author_type`):**
+
+| Current status | `author_type = human` | `author_type = agent` |
+|---|---|---|
+| `pending` | **Dismiss** | **Dismiss** |
+| `addressed` | **Verify & Close** + **Reopen** | **Verify & Close** + **Reopen** |
+| `closed` | **Reopen** | **Reopen** |
+| `rejected` | **Reopen** | **Reopen** |
+
+**Button style per verb:**
+
+| Verb | Visual role | Tailwind |
+|---|---|---|
+| **Dismiss** | Secondary (muted) | `border border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-300 bg-white dark:bg-stone-900` |
+| **Verify & Close** | Primary (positive) | `bg-green-600 hover:bg-green-700 text-white` |
+| **Reopen** | Secondary (muted) | Same as Dismiss |
+
+Every button above inherits the standard focus ring (`ring-2 ring-teal-500 ring-offset-2 ring-offset-white dark:ring-offset-stone-900`) and the standard disabled style (`opacity-50 cursor-not-allowed`). No verb-specific deviations.
+
+**Screen-reader announcements (canonical phrasing, polite live region):**
+
+| Button clicked | Announcement |
+|---|---|
+| **Dismiss** | `"Feedback <ID> marked as rejected"` |
+| **Verify & Close** | `"Feedback <ID> marked as closed"` |
+| **Reopen** | `"Feedback <ID> reopened"` |
+
+**Banned variants (must not appear anywhere in the stage outputs):**
+
+- `"Close"` (as a standalone verb on a pending item — ambiguous with `"Verify & Close"`)
+- `"Reject"` (replaced by `"Dismiss"`)
+- Any hyphenated spelling of the reopen verb — canonical form is one word.
+- Any space-separated spelling of the reopen verb.
+- `"Dismiss & Close"` or any other compound — use only the verbs in the table above.
+
+**Rationale for no author-type split:** H·AI·K·U has no user identity. An agent-authored item the reviewer wants to discard and a human-authored item the reviewer wants to discard are the same action from the reviewer's perspective. The status badge's origin glyph already tells the reviewer who authored it — duplicating that into the verb is redundant.
+
+---
+
+### Retired Components (authoritative — do not resurrect)
+
+This subsection is the authoritative list of components that appeared in earlier drafts of the review-app delta and have been retired. They **MUST NOT** be re-introduced. Each row states the retired name, the live replacement, and a one-line rationale so future readers don't resurrect them.
+
+| Retired name | Replaced by | Rationale |
+|---|---|---|
+| `SidebarSegmentedControl` (and its `"Mine"` / `"All"` segment labels) | `AgentFeedbackToggle` + unified Comments list | H·AI·K·U has no concept of user identity (no login, no per-user state); a two-segment "mine" vs "not mine" split is undefined in this system. See unit-05 rationale and `comments-list-with-agent-toggle.html`. |
+| `FeedbackFAB` | `FeedbackFloatingButton` | `FAB` is an abbreviation; existing review-app uses full words (`AnnotationCanvas`, `InlineComments`). Full-word naming is non-negotiable across the review-app. |
+| `MobileFeedbackSheet` (standalone sheet wrapper) | `FeedbackSheet` (superseded by the unified `MobileFeedbackPanel` inside the bottom sheet) | The sheet only ever renders on mobile breakpoints, so the `Mobile` prefix was redundant; responsive behavior is baked into a single component. Matches the review-app convention (e.g. `ReviewSidebar`, not `DesktopReviewSidebar`). |
+
+**Important scoping note.** The retirement of `FeedbackFAB` applies only to the desktop floating-action-button variant. The mobile floating action button still exists and is shipped as `FeedbackFloatingButton` (§4 Responsive Behavior). The CSS animation class `.feedback-floating-button-pulse` (§7) is a live style hook, not a retired component name.
+
+`artifacts/component-inventory.md` cross-links back to this subsection rather than duplicating component specs. `§9. File Inventory (New + Modified)` includes a short pointer here instead of restating the retired rows.
+
+---
+
 ## 3. Interaction States
 
 ### Sidebar -- Unified Comments List
@@ -608,7 +677,7 @@ The UI shows only the actions valid for the item's current status. Invalid actio
 
 - Sidebar is hidden entirely (`hidden md:flex` -- existing behavior on `ReviewSidebar`).
 - **Mobile feedback access:** The sidebar content becomes accessible via a `FeedbackFloatingButton` in the bottom-right corner that opens a full-screen `FeedbackSheet` overlay.
-- `FeedbackFloatingButton`: `fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center text-lg` -- shows the comment count badge when > 0. (Full-word name replaces the earlier `FeedbackFAB` abbreviation; matches the review-app PascalCase full-word convention, e.g. `AnnotationCanvas`, not `AnnotCanv`.)
+- `FeedbackFloatingButton`: `fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full bg-teal-600 text-white shadow-lg flex items-center justify-center text-lg` -- shows the comment count badge when > 0. Full-word name matches the review-app PascalCase full-word convention (e.g. `AnnotationCanvas`, not `AnnotCanv`). The `.feedback-floating-button-pulse` animation class (see §7) briefly pulses the button when new agent feedback arrives; the CSS class name is stable.
 - `FeedbackSheet`: `fixed inset-0 z-50 bg-white dark:bg-stone-900` with a close button at top-right. Contains the same sidebar content (AgentFeedbackToggle, unified Comments list, status filter pills, general input, decision buttons). Responsive behavior is baked into the single `FeedbackSheet` component — no `Mobile` prefix is needed since the sheet only renders on mobile breakpoints anyway.
 - Both components are canonicalized in `component-inventory.md` and §9.
 
@@ -665,14 +734,14 @@ All feedback status badge colors meet WCAG 2.1 AA (4.5:1 minimum for text):
 
 | Badge | Foreground | Background | Ratio | Passes |
 |---|---|---|---|---|
-| Pending (light) | `amber-700` (#b45309) | `amber-100` (#fef3c7) | 4.9:1 | AA |
-| Pending (dark) | `amber-300` (#fcd34d) | `amber-900/30` | 5.2:1 | AA |
-| Addressed (light) | `blue-700` (#1d4ed8) | `blue-100` (#dbeafe) | 5.1:1 | AA |
-| Addressed (dark) | `blue-400` (#60a5fa) | `blue-900/30` | 5.6:1 | AA |
-| Closed (light) | `green-700` (#15803d) | `green-100` (#dcfce7) | 4.5:1 | AA |
-| Closed (dark) | `green-400` (#4ade80) | `green-900/30` | 5.3:1 | AA |
-| Rejected (light) | `stone-700` (#44403c) | `stone-200` (#e7e5e4) | 8.3:1 | AAA |
-| Rejected (dark) | `stone-200` (#e7e5e4) | `stone-700` (#44403c) | 8.3:1 | AAA |
+| Pending (light) | `amber-800` (#92400e) | `amber-100` (#fef3c7) | 5.9:1 | AA |
+| Pending (dark) | `amber-300` (#fcd34d) | `amber-900/30` | 5.1:1 | AA |
+| Addressed (light) | `blue-800` (#1e40af) | `blue-100` (#dbeafe) | 7.2:1 | AA |
+| Addressed (dark) | `blue-300` (#93c5fd) | `blue-900/30` | 5.5:1 | AA |
+| Closed (light) | `green-800` (#166534) | `green-100` (#dcfce7) | 5.8:1 | AA |
+| Closed (dark) | `green-300` (#86efac) | `green-900/30` | 4.9:1 | AA |
+| Rejected (light) | `stone-500` (#78716c) | `stone-100` (#f5f5f4) | 4.6:1 | AA |
+| Rejected (dark) | `stone-400` (#a8a29e) | `stone-800` (#292524) | 4.9:1 | AA |
 
 ### Metadata, Title, and Disabled-Control Contrast (unit-11)
 
@@ -835,7 +904,7 @@ Canonical component names — PascalCase, full words (no abbreviations), followi
 | `review-app/src/components/FeedbackItem.tsx` | **New** | Single feedback item (compact + expanded) |
 | `review-app/src/components/FeedbackList.tsx` | **New** | Unified Comments list — user-origin items always, agent-origin items when `showAgent` is true, grouped by visit, filtered by status pill |
 | `review-app/src/components/FeedbackSummaryBar.tsx` | **New** | Aggregate status count strip |
-| `review-app/src/components/AgentFeedbackToggle.tsx` | **New** | `role="switch"` toggle that reveals agent-origin items inline in the unified Comments list (replaces `SidebarSegmentedControl`) |
+| `review-app/src/components/AgentFeedbackToggle.tsx` | **New** | `role="switch"` toggle that reveals agent-origin items inline in the unified Comments list (see Retired Components at end of §2) |
 | `review-app/src/components/FeedbackSheet.tsx` | **New** | Full-screen sheet overlay (mobile-only render; responsive behavior baked in — no `Mobile` prefix needed) |
 | `review-app/src/components/FeedbackFloatingButton.tsx` | **New** | Floating action button that opens `FeedbackSheet` on mobile (full word replaces earlier `FAB` abbreviation) |
 | `review-app/src/components/ReviewSidebar.tsx` | **Modify** | Render unified Comments list + AgentFeedbackToggle + status filter pills, handle feedback fetching, per-item submission |
@@ -844,13 +913,7 @@ Canonical component names — PascalCase, full words (no abbreviations), followi
 | `review-app/src/types.ts` | **Modify** | Add `FeedbackItemData` type |
 | `review-app/src/index.css` | **Modify** | Add feedback status styles and `FeedbackFloatingButton` pulse animation (with `prefers-reduced-motion` guard) |
 
-**Dropped from inventory** (component retired — see `component-inventory.md`):
-
-| Former name | Replaced by | Reason |
-|---|---|---|
-| `SidebarSegmentedControl` | `AgentFeedbackToggle` + unified Comments list | H·AI·K·U has no user identity; an identity-based split is undefined. Unit-05 rationale. |
-| `MobileFeedbackSheet` | `FeedbackSheet` | `Mobile` prefix redundant — the sheet only ever renders on mobile breakpoints. Matches review-app convention (e.g. `ReviewSidebar`, not `DesktopReviewSidebar`). |
-| `FeedbackFAB` | `FeedbackFloatingButton` | `FAB` is an abbreviation; existing review-app uses full words (`AnnotationCanvas`, `InlineComments`). |
+**Dropped from inventory:** see the "Retired Components" subsection at the end of §2 — that subsection is the authoritative list of retired component names, their replacements, and the one-line rationale per row. §9 deliberately does not duplicate those rows.
 
 ---
 

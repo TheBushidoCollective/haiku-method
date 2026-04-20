@@ -2,7 +2,7 @@
 title: >-
   Component-name drift: `FeedbackSheet` vs `MobileFeedbackPanel` both live;
   `Mobile` prefix supposedly retired
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent

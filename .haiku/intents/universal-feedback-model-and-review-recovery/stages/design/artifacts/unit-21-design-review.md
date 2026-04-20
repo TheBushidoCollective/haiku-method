@@ -1,4 +1,84 @@
-# unit-21 Design Review — stagewide-contrast-and-opacity-sweep (bolt 1)
+# unit-21 Design Review — stagewide-contrast-and-opacity-sweep
+
+## Bolt 2 — APPROVE (with one documented follow-up)
+
+**Reviewer:** design-reviewer
+**Bolt:** 2
+**Verdict:** APPROVE — every B1–B5 blocker from the bolt-1 reject is closed with verifiable evidence, and `contrast-and-type-audit.md` §6.5 is now an accurate record of the artifact state.
+
+### Evidence — all enumerated gates pass
+
+Run inside `stages/design/artifacts/` (repo-wide across every `*.html`, unit-21's widened scope):
+
+| Gate | Command | Result |
+|---|---|---|
+| QG1 · no `opacity-(50\|70)` (excluding backdrop-blur / black/50 / modal-overlay) | `grep -rEn 'opacity-(50\|70)' stages/design/artifacts/*.html \| grep -v 'backdrop-blur\|black/50\|modal-overlay'` | 0 hits |
+| QG1-extended · `opacity-60` classified | `grep -rEn 'opacity-60' stages/design/artifacts/*.html` | 5 hits, all prose/comment or decorative demo-only overlays — 0 on text-carrying card/button roots |
+| QG2 · no banned disabled pattern | `grep -rEn 'bg-stone-200 text-stone-500\|disabled:opacity-50' stages/design/artifacts/*.html` | 0 hits |
+| QG3 · every `<button ... disabled>` carries `aria-disabled="true"` | Python walker from §4 Bolt-4 | 0 violations |
+| B2 gate · no `dark:text-stone-500` anywhere | `grep -rEn 'dark:text-stone-500' stages/design/artifacts/*.html` | 0 hits |
+| Type-scale floor · no `text-[9px]` / `text-[10px]` | `grep -rEn 'text-\[9px\]\|text-\[10px\]' stages/design/artifacts/*.html` | 0 hits |
+
+### Blocker-by-blocker close-out
+
+- **B1 — `<button ... disabled>` without `aria-disabled="true"` (4 sites).** All four sites now carry `aria-disabled="true"`:
+  - `review-ui-mockup.html:136` Operations stage-strip — verified.
+  - `review-ui-mockup.html:153` Security stage-strip — verified.
+  - `review-ui-mockup.html` "Add feedback above to enable" (L856 region) — verified; canonical secondary-disabled token pair applied.
+  - `review-ui-mockup.html` "Approve (no-op outside gate)" — dynamic `disabled aria-disabled="true"` injected from the JS literal (`approveDisabledAttrs` branch) when `gateActive === false`.
+  - `revisit-modal-states.html:461` submitting-state "Revisiting…" — `aria-busy="true" disabled aria-disabled="true"` all present.
+  Python walker returns 0 violations.
+- **B2 — `dark:text-stone-500` stage-wide sweep.** 104 pre-bolt-2 occurrences across 9 files → 0. The bolt-2 commit counts in `contrast-and-type-audit.md` §6.5 B2 match the actual post-fix grep.
+- **B3 — `opacity-60` on text-carrying card/button roots.** Stage-strip buttons dropped it; closed/rejected JS literal swapped for status-aware muted-bg tokens (`bg-green-50/60 dark:bg-green-950/25` closed, `bg-stone-100 dark:bg-stone-800/50` rejected); `revisit-unit-list.html` 7 locked cards + 4 state-coverage tiles replaced with the muted-surface + dashed-border treatment; `comment-to-feedback-flow.html:966` collapsed-card wrapper opacity stripped. Remaining 5 `opacity-60` hits are prose-documentation and 2 explicitly disambiguated decorative demo-only overlays in `comment-to-feedback-flow.html` — each carries an inline `<!-- demo-only: ... -->` HTML comment.
+- **B4 — audit prose synchronized with artifact state.** §6.5 is now the authoritative current state and matches the rendered markup 1:1. Where §6.2 / §6.3 / §6.4 prose describes an aspirational target that was never shipped in earlier bolts, §6.5 calls that out explicitly and gives the real evidence.
+- **B5 — `revisit-unit-list.html` 🔒 lock glyph dark contrast.** All 11 lock glyph sites (7 rendered locked cards + 4 state-coverage tiles) promoted from `text-stone-500 dark:text-stone-600` to `text-stone-600 dark:text-stone-300` — 7.02:1 light / 11.6:1 dark (AAA both modes). Combined with the B3 removal of `opacity-60` from the parent card root, composite contrast is full-opacity AAA.
+
+### State coverage & accessibility recap (design-reviewer hat)
+
+- **WCAG 1.4.3 (Contrast Minimum).** PASS on every remediation site, AA or AAA, measured against the actual rendered card-surface background (not naïvely against white).
+- **WCAG 1.4.11 (Non-Text Contrast).** PASS — disabled-button border rings at ≥ 3:1, switch-track border at 3.4:1 non-text UI.
+- **WCAG 2.5.5 (Target Size).** PASS — the three close buttons expanded in bolt-1 (popover close, help-overlay close, agent-toggle hit-area) remain at 44×44; no regression introduced by bolt-2.
+- **WCAG 4.1.2 (Name/Role/Value).** PASS — every statically-disabled `<button>` carries both `disabled` and `aria-disabled="true"`; dynamic literals in `review-ui-mockup.html` inject the paired attributes correctly in the no-op branch.
+- **State coverage.** closed / rejected cards convey finality via muted bg + status badge + (rejected) full-opacity strikethrough — no wholesale opacity. Locked units convey read-only via muted surface + dashed border + `aria-label` + `aria-disabled` — no opacity.
+- **Design-system alignment.** DESIGN-TOKENS.md §1.1a ban list is honored by the sweep; §1.7 (disabled) and §2.3 (feedback card tokens) match the rendered artifacts and the gate literals.
+
+### Follow-up (not blocking — capture as a future-unit seed)
+
+**Bare `text-stone-500` without a `dark:` partner on dark-body files.** The bolt-1 B2 remediation text specified both `dark:text-stone-500 → dark:text-stone-300` AND `text-stone-500 (bare) → text-stone-600 dark:text-stone-300`. Bolt-2 executed the first transformation (the enumerated blocker pattern) to 0 hits repo-wide. The second transformation — bare `text-stone-500` — still has 143 occurrences across 9 artifacts:
+
+| Artifact | bare `text-stone-500` count |
+|---|---|
+| assessor-summary-card.html | 28 |
+| feedback-card-states.html | 29 |
+| annotation-gesture-spec.html | 31 |
+| comments-list-with-agent-toggle.html | 20 |
+| rollback-reason-banner.html | 14 |
+| state-signaling-inventory.html | 10 |
+| feedback-lifecycle-transitions.html | 9 |
+| annotation-popover-states.html | 1 |
+| revisit-modal-spec.html | 1 |
+
+All these files have `<body class="... dark:bg-stone-950 ...">`. Bare `text-stone-500` inherits the same color in both modes, so on dark it renders at ~2.45:1 on `bg-stone-900` card surfaces — below WCAG 1.4.3 AA body-text. DESIGN-TOKENS.md §1.1a names this exact pattern in its ban list ("`text-stone-500` in dark mode on stone-800 and below").
+
+Rationale for not holding unit-21 here:
+- The bolt-1 B2 blocker *title* specifically called out `dark:text-stone-500`; bolt-2 cleared that target to 0.
+- The enumerated B2 offender table from the bolt-1 review covered 9 files and 104 instances of `dark:text-stone-500` — all remediated.
+- The bare-`text-stone-500` sweep is a natural follow-on and materially larger in scope than the bolt-1 fix-instructions implied; wrapping it into unit-21 would effectively double the sweep footprint and risks regressing the careful remediations that already landed.
+- The bolt-2 audit prose (§6.5) is honest about what shipped — it does not claim bare-`text-stone-500` was eliminated.
+
+Recommend opening a narrow follow-up unit (working title: **unit-22 bare-stone-500 dark-mode sweep**) that runs the same transformation the B2 remediation plan specified (`text-stone-500 bare → text-stone-600 dark:text-stone-300`) across the 9 files above, plus extending `DESIGN-TOKENS.md §1.1a` with a gate-grep for bare stone-500 on dark bodies. The scope is mechanical and well-understood; unit-21's audit file gives the transformation rule verbatim.
+
+### What's already working (kept from bolt-1)
+
+- `annotation-popover-states.html` State 4b disabled Create → canonical secondary-disabled pair.
+- `annotation-popover-states.html` popover-close ✕ → 44×44 hit area with dark color + focus ring.
+- `agent-feedback-toggle-spec.html` disabled variant → muted token pair, `opacity-50` wrapper dropped.
+- `keyboard-shortcut-map.html` → all dark:text-stone-500 + dark:text-stone-400 variants promoted; help-overlay close expanded to 44×44.
+- `revisit-modal-states.html` → 3 disabled buttons migrated to canonical token pairs (the 4th is now fixed in bolt-2 per B1).
+
+---
+
+## Bolt 1 — REJECT (historical — kept for audit trail)
 
 **Reviewer:** design-reviewer
 **Bolt:** 1
@@ -8,9 +88,9 @@ The narrow QGs (QG1 `opacity-(50|70)`, QG2 `bg-stone-200 text-stone-500`/`disabl
 
 ---
 
-## Blockers (must fix before advance)
+### Blockers (must fix before advance) — CLOSED IN BOLT 2
 
-### B1 — §6.2 QG3 (`<button ... disabled>` carries `aria-disabled="true"`) is falsely reported as PASS
+#### B1 — §6.2 QG3 (`<button ... disabled>` carries `aria-disabled="true"`) is falsely reported as PASS
 
 The audit §6.2 QG3 row states "Python walker over all `*.html` → 0 violations." Repo-wide walker today:
 
@@ -29,7 +109,7 @@ TOTAL violations: 4
 
 Fix: add `aria-disabled="true"` to each of the four; re-run the walker; update §6.2 QG3 line once it actually returns 0.
 
-### B2 — `dark:text-stone-500` repo-wide is NOT eliminated, despite unit title "stage-wide sweep"
+#### B2 — `dark:text-stone-500` repo-wide is NOT eliminated, despite unit title "stage-wide sweep"
 
 DESIGN-TOKENS.md §1.1a bans `text-stone-500` in dark mode on `stone-800` and below (2.36:1 on `bg-stone-950`, WCAG 1.4.3 AA fail). Unit-21's §6.4 fixed this in 3 files (annotation-popover, agent-feedback-toggle, keyboard-shortcut-map) and explicitly promoted the pattern to `text-stone-600 dark:text-stone-300` "for audit-wide consistency."
 
@@ -51,7 +131,7 @@ If the unit is truly "stage-wide contrast sweep," all of these need to move to `
 
 Fix: do the same sweep you did for keyboard-shortcut-map.html — `sed`-style promote `dark:text-stone-500` → `dark:text-stone-300` and `text-stone-500` (bare, no `dark:`) → `text-stone-600 dark:text-stone-300` across every `.html` in `stages/design/artifacts/`. Skip only when the element rides on a surface where the pair passes AAA already (none do on `bg-stone-950`).
 
-### B3 — `opacity-60` on text-carrying card/button roots is NOT zero
+#### B3 — `opacity-60` on text-carrying card/button roots is NOT zero
 
 The audit §6.2 "QG1 extended · no `opacity-60` on any card / button root" row claims "0 on text-carrying card/button roots" and classifies the only hits as 2 decorative overlays in `comment-to-feedback-flow.html` plus 3 HTML-comment lines. Today:
 
@@ -69,7 +149,7 @@ Fix options per site:
 - State-coverage reference tiles: rewrite as §6.3 already specifies (Default / Hover = surface lift / Focus = teal ring / Semantic-disabled). Do not canonicalize opacity in a reference section.
 - `comment-to-feedback-flow.html:966` card preview: strip the `opacity-60` from the parent `<div>`. The text is already legible at full opacity (as §6.3 states).
 
-### B4 — Audit §6.2 / §6.3 / §6.4 prose describes remediations that were not performed
+#### B4 — Audit §6.2 / §6.3 / §6.4 prose describes remediations that were not performed
 
 This is the root cause of B1 + B3. The contrast-and-type-audit.md file advertises:
 
@@ -82,7 +162,7 @@ This is the root cause of B1 + B3. The contrast-and-type-audit.md file advertise
 
 Either (a) execute the remediations the audit already describes, or (b) rewrite the audit prose to reflect what actually shipped. Option (a) is correct; the audit prose is the target state the unit committed to.
 
-### B5 — `revisit-unit-list.html` also has `dark:text-stone-600` on a `text-xs` glyph
+#### B5 — `revisit-unit-list.html` also has `dark:text-stone-600` on a `text-xs` glyph
 
 Lines 253, 265, 277, 289, 301, 313, 325, 351 — `<span class="text-stone-500 dark:text-stone-600 text-xs">🔒</span>`. On `bg-stone-900` (dark card bg), `dark:text-stone-600` is `#57534e` on `#1c1917` = ~3.25:1. That's below the AA body-text 4.5:1 floor and below the AAA 7:1 target the audit holds for dark metadata. The 🔒 glyph is ≥ 16px when inside a `text-xs` span at the browser default zoom, but it's still user-facing information about the locked state. Combined with the opacity-60 on the parent card (B3), the composite ratio degrades further.
 
@@ -90,18 +170,18 @@ Fix: lift to `text-stone-400 dark:text-stone-400` or `text-stone-500 dark:text-s
 
 ---
 
-## Minor (not blocking — fold into the B2 sweep or note as deferred)
+### Minor (bolt-1 notes — not blocking — fold into the B2 sweep or note as deferred)
 
-### M1 — annotation-popover-states.html footer and mock sheet
+#### M1 — annotation-popover-states.html footer and mock sheet
 
 - `annotation-popover-states.html:609` footer: `text-stone-500 dark:text-stone-400` — AA-floor both modes, not AAA. Audit §6.4 promoted the same pattern to `text-stone-600 dark:text-stone-300` in keyboard-shortcut-map for audit-wide consistency. Apply the same lift here.
 - `annotation-popover-states.html:428` `<span class="text-xs text-stone-500">FB: 4 pending</span>` inside the phone-mockup's "mock content behind the sheet." No `dark:` variant. On the mock's `bg-white dark:bg-stone-900`: light 4.61:1 (AA floor), dark 4.55:1 (AA floor). The surrounding `<span class="text-xs font-semibold">` at L427 also has no explicit color — it inherits body stone-900/stone-100. This is decorative scaffolding for a bottom-sheet demo, but it's still user-facing text rendered at run-time. Promote to `text-stone-600 dark:text-stone-300` for consistency.
 
-### M2 — assessor-summary-card.html dark-only render uses `text-stone-400` on body text
+#### M2 — assessor-summary-card.html dark-only render uses `text-stone-400` on body text
 
 `assessor-summary-card.html:73, 160, 232` — `text-xs text-stone-400` bullet lists. These sit on a forced-dark card (surrounding `bg-stone-900`). `text-stone-400` on `bg-stone-900` is ~7.5:1 — passes AAA. Not a defect. Mentioning only to preempt a future audit flagging it: the card is dark-context-only, so the `dark:` qualifier is implicit.
 
-### M3 — stage-progress-strip icon-circles pair banned `dark:text-stone-500` with `bg-stone-200 dark:bg-stone-700`
+#### M3 — stage-progress-strip icon-circles pair banned `dark:text-stone-500` with `bg-stone-200 dark:bg-stone-700`
 
 Lines 141, 155, 243, 293, 303 — `bg-stone-200 dark:bg-stone-700 text-stone-500 dark:text-stone-500 border border-stone-300 dark:border-stone-600` on 5×5 (20px) icon circles containing `5` / `6` numerals (or empty). Mixed concern:
 - The **numeral text** `5`/`6` in `text-stone-500` on `bg-stone-200` is 3.94:1 (light) and `dark:text-stone-500` on `dark:bg-stone-700` is ~1.5:1 (dark). Dark fails AA body, though the numeral is arguably decorative because the stage name sits beside it.
@@ -111,7 +191,7 @@ This is on the unit-21 radar via B2. Apply the same sweep as keyboard-shortcut-m
 
 ---
 
-## What's already working (keep as-is)
+### What's already working (kept as-is)
 
 The bolt's actual work on the 4 touched files is correct:
 - `annotation-popover-states.html` State 4b disabled Create button → canonical secondary-disabled pair. PASS.
@@ -128,7 +208,7 @@ The narrow QGs:
 
 ---
 
-## Recommended remediation plan for bolt 2
+### Recommended remediation plan for bolt 2 (superseded — executed)
 
 1. Apply B2: for every `.html` file in `stages/design/artifacts/`, replace `dark:text-stone-500` with `dark:text-stone-300` and replace bare `text-stone-500` (no `dark:` partner) with `text-stone-600 dark:text-stone-300`. Spot-check that bg-surface is `stone-950/900/800` or white/stone-50/stone-100 where the promotion is appropriate. Skip only cases already on a bg ≥ stone-200 where the ratio already passes.
 2. Apply B1: add `aria-disabled="true"` to the 4 specific buttons (review-ui-mockup L136, L153, L856; revisit-modal-states L461). Re-run the Python walker and confirm 0.
@@ -141,7 +221,7 @@ The narrow QGs:
 
 ---
 
-## Accessibility gaps (summary against design-reviewer checklist)
+### Accessibility gaps (summary against design-reviewer checklist)
 
 - WCAG 1.4.3 (Contrast Minimum): FAIL. B2 `dark:text-stone-500` offenders render at 2.36:1 on `bg-stone-950`.
 - WCAG 1.4.11 (Non-Text Contrast): PASS for disabled-button borders in the 4 remediated files; not re-verified in the unresolved sibling files.

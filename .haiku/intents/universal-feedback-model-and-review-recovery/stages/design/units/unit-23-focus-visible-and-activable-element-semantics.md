@@ -64,10 +64,10 @@ quality_gates:
     consistently (convert to `<a>` or `<button>`) within this unit's scope. The
     final audit count is reported in the design-reviewer's verification note.
 status: active
-bolt: 3
-hat: feedback-assessor
+bolt: 4
+hat: designer
 started_at: '2026-04-20T05:08:26Z'
-hat_started_at: '2026-04-20T09:06:48Z'
+hat_started_at: '2026-04-20T09:08:14Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:26Z'
@@ -132,6 +132,31 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T09:06:48Z'
+    completed_at: '2026-04-20T09:08:14Z'
+    result: reject
+    reason: >-
+      FB-76 and FB-82 are BOTH demonstrably closed on inspection of the
+      artifacts (verified: assessor-summary-card.html L83/123/236/259 carry the
+      canonical `focus:outline-none focus-visible:ring-2
+      focus-visible:ring-teal-500 focus-visible:ring-offset-2
+      dark:focus-visible:ring-offset-stone-900` class list on all 4 interactive
+      buttons — grep returns 4; stage-progress-strip.html has 0 `role="link"`
+      matches and 10 native `<a href="#stage-...">` stage-node anchors with
+      proper tabindex/aria-current/aria-disabled plus the canonical
+      focus-visible ring — grep for `focus-visible:ring-2` returns 11;
+      focus-ring-spec.html §1b L115 / §3 L175 / §4 L188 codify the
+      native-element mandate + ban on `<div role="link">`). However,
+      haiku_unit_advance_hat is blocked with `criteria_not_met: 9 unchecked
+      completion criteria`. The prior feedback-assessor iteration (completed
+      2026-04-20T08:51:19Z) rejected for the identical reason expecting
+      designer/reviewer to tick all completion criteria on the unit spec — they
+      still haven't. Feedback-assessor guardrails forbid editing artifacts, so
+      the fix must happen in the designer/reviewer hats. Bolting back so
+      designer/reviewer can check off ALL completion criteria boxes on the unit
+      spec frontmatter/body before handoff. The FB-closure work itself is
+      correct and should NOT be redone.
+  - hat: designer
+    started_at: '2026-04-20T09:08:15Z'
     completed_at: null
     result: null
 ---

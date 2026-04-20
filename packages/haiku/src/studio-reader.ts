@@ -120,6 +120,56 @@ export function readReviewAgentPaths(
 	return agents
 }
 
+/**
+ * Filter review agents by their `applies_to:` frontmatter against the
+ * artifacts the stage actually produces. Agents with no `applies_to:`
+ * declaration always run (backward compat). Agents with a list of globs
+ * run only when at least one artifact in the stage directory matches at
+ * least one glob — e.g. `applies_to: ['*.html', '*.tsx']` skips the web
+ * a11y agent on a backend-only stage.
+ *
+ * Globs support simple `*.ext` patterns; full glob semantics are not
+ * required because this is a coarse "does this stage have any HTML?" check.
+ */
+export function filterReviewAgentsByScope(
+	agentPaths: Record<string, string>,
+	stageArtifactsDir: string,
+): Record<string, string> {
+	const filtered: Record<string, string> = {}
+	let stageFiles: string[] | null = null // lazily loaded
+	for (const [name, mandatePath] of Object.entries(agentPaths)) {
+		if (!applies(mandatePath)) continue
+		filtered[name] = mandatePath
+	}
+	return filtered
+
+	function applies(mandatePath: string): boolean {
+		let appliesTo: string[] | undefined
+		try {
+			const raw = readFileSync(mandatePath, "utf8")
+			const { data } = parseFrontmatter(raw)
+			const v = data.applies_to
+			if (Array.isArray(v) && v.every((x) => typeof x === "string")) {
+				appliesTo = v as string[]
+			}
+		} catch {
+			return true // defensive: can't parse → include
+		}
+		if (!appliesTo || appliesTo.length === 0) return true
+		if (stageFiles === null) {
+			stageFiles = existsSync(stageArtifactsDir)
+				? readdirSync(stageArtifactsDir)
+				: []
+		}
+		if (stageFiles.length === 0) return true // pre-artifact phase; don't filter
+		for (const pattern of appliesTo) {
+			const ext = pattern.replace(/^\*/, "").toLowerCase()
+			if (stageFiles.some((f) => f.toLowerCase().endsWith(ext))) return true
+		}
+		return false
+	}
+}
+
 /** Read discovery and output artifact definitions for a stage */
 export interface ArtifactDef {
 	name: string

@@ -77,6 +77,7 @@ import {
 	writeJson,
 } from "./state-tools.js"
 import {
+	filterReviewAgentsByScope,
 	listStudios,
 	readHatDefs,
 	readPhaseOverride,
@@ -3616,6 +3617,36 @@ function buildRunInstructions(
 				)
 			}
 
+			// Universal executable-gate + full-stage-scope guidance — applies
+			// to every stage in every studio. Injected here (not per-STAGE.md)
+			// so the rule is uniform without sweeping 105 ELABORATION.md files.
+			sections.push(
+				[
+					"### Quality-Gate Format (REQUIRED)",
+					"",
+					"Each unit's `quality_gates:` frontmatter MUST be a list of **executable gate objects**, not prose strings. The FSM runs each gate's `command` at `haiku_unit_advance_hat` time; non-zero exit blocks the advance. Prose-only gates are silently skipped and give no enforcement.",
+					"",
+					"Canonical shape:",
+					"",
+					"```yaml",
+					"quality_gates:",
+					"  - name: no-banned-gray-tokens",
+					"    command: \"! grep -rnE 'bg-gray-|text-gray-|border-gray-' .haiku/intents/{slug}/stages/{stage}/artifacts/\"",
+					"    dir: .            # optional; default is repo root",
+					"  - name: all-spec-files-present",
+					"    command: \"test -f .haiku/intents/{slug}/stages/{stage}/artifacts/aria-landmark-spec.md\"",
+					"```",
+					"",
+					"**Scope rule (#1 — full-stage, not unit-inputs).** Gate commands MUST grep / audit the **entire stage artifact directory** (e.g. `stages/{stage}/artifacts/`), not just the files this unit declares in its `inputs:`. A unit's `inputs:` scopes what the unit reads — it does NOT scope what the gate enforces. Enforcement scope must match rule scope, or regressions creep back in on the files no unit audited.",
+					"",
+					"**Commands should be idempotent and fast (< 5s each).** Each gate runs synchronously on every advance_hat call. If a check is expensive, split it into a named gate with a tighter grep scope, or defer it to the adversarial-review phase.",
+					"",
+					"**Use negation for banned-pattern gates.** `! grep …` exits 0 on no matches, which is what the FSM needs for a passing gate.",
+					"",
+					"Prose descriptions of the intent of the gate are still welcome — put them in the unit body under `## Completion criteria`, not in the frontmatter.",
+				].join("\n"),
+			)
+
 			// Resolve upstream stage inputs — load actual content from prior stages
 			if (stageDef?.data?.inputs && Array.isArray(stageDef.data.inputs)) {
 				const inputs = stageDef.data.inputs as Array<{
@@ -4670,7 +4701,7 @@ function buildRunInstructions(
 		case "review": {
 			const stage = action.stage as string
 			// Collect agent name → mandate FILE PATH (path-only — subagent reads).
-			const agentPaths: Record<string, string> = readReviewAgentPaths(
+			let agentPaths: Record<string, string> = readReviewAgentPaths(
 				studio,
 				stage,
 			)
@@ -4697,6 +4728,14 @@ function buildRunInstructions(
 					}
 				}
 			}
+
+			// Conditional review: skip agents whose `applies_to:` declaration
+			// doesn't match any artifact this stage produces. E.g. the web
+			// accessibility agent doesn't run on a backend-only dev stage.
+			agentPaths = filterReviewAgentsByScope(
+				agentPaths,
+				join(findHaikuRoot(), "intents", slug, "stages", stage, "artifacts"),
+			)
 
 			sections.push(`## Adversarial Review: ${stage}`)
 
@@ -4892,7 +4931,7 @@ function buildRunInstructions(
 		case "review_elaboration": {
 			const stage = action.stage as string
 			// Path-only review agent prompts
-			const agentPaths: Record<string, string> = readReviewAgentPaths(
+			let agentPaths: Record<string, string> = readReviewAgentPaths(
 				studio,
 				stage,
 			)
@@ -4918,6 +4957,14 @@ function buildRunInstructions(
 					}
 				}
 			}
+
+			// Conditional review: skip agents whose `applies_to:` doesn't match
+			// any artifact this stage produces. Same filter as the post-execute
+			// review path.
+			agentPaths = filterReviewAgentsByScope(
+				agentPaths,
+				join(findHaikuRoot(), "intents", slug, "stages", stage, "artifacts"),
+			)
 
 			sections.push("## Review Elaboration Artifacts")
 			sections.push(

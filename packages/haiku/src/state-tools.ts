@@ -2137,8 +2137,14 @@ export interface StageIteration {
 
 /** Maximum number of agent-invoked iterations allowed before the FSM
  *  escalates to the human. User-invoked revisits (`trigger: "user-revisit"`)
- *  are NOT capped — explicit user intent always wins. */
-export const MAX_STAGE_ITERATIONS = 5
+ *  are NOT capped — explicit user intent always wins.
+ *
+ *  Dropped from 5 → 2 (2026-04-19): the goal is 0 rejections via upfront
+ *  spec rigor (pre-execution adversarial review + full-stage gate scope +
+ *  executable gates). Two agent-invoked retries is enough to catch the
+ *  rare emergent issue; more than that indicates a spec problem the human
+ *  must resolve. */
+export const MAX_STAGE_ITERATIONS = 2
 
 /** Build a loop-detection signature from a list of feedback titles.
  *  Stable hash of the sorted, normalized title set. */

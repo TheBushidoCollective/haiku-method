@@ -23,15 +23,39 @@ outputs:
   - stages/design/artifacts/unit-31-design-review.md
 quality_gates:
   - name: desktop-feedback-list-ul-with-label
-    command: "grep -cE '<ul[^>]*aria-label=\"Feedback items\"|role=\"list\"[^>]*aria-label=\"Feedback items\"' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-inline-desktop.html"
+    command: >-
+      grep -cE '<ul[^>]*aria-label="Feedback
+      items"|role="list"[^>]*aria-label="Feedback items"'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-inline-desktop.html
   - name: desktop-feedback-cards-in-list-items
-    command: "python3 -c \"import re, sys; c = open('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-inline-desktop.html').read(); m = re.search(r'<ul[^>]*aria-label=\\\"Feedback items\\\"[^>]*>(.*?)</ul>', c, re.S); sys.exit(0 if m and len(re.findall(r'<li\\b', m.group(1))) >= 3 else 1)\""
+    command: >-
+      python3 -c "import re, sys; c =
+      open('.haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-inline-desktop.html').read();
+      m = re.search(r'<ul[^>]*aria-label=\"Feedback items\"[^>]*>(.*?)</ul>', c,
+      re.S); sys.exit(0 if m and len(re.findall(r'<li\b', m.group(1))) >= 3 else
+      1)"
   - name: feedback-card-states-uses-list-semantics
-    command: "grep -cE '<ul|role=\"list\"' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-card-states.html"
+    command: >-
+      grep -cE '<ul|role="list"'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-card-states.html
   - name: mobile-feedback-list-parity-preserved
-    command: "grep -cE '<ul|role=\"list\"' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-inline-mobile.html"
+    command: >-
+      grep -cE '<ul|role="list"'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/feedback-inline-mobile.html
   - name: aria-landmark-spec-cites-list-inside-aside
-    command: "grep -iE 'role=\"list\"|<ul|list semantics|listitem' .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/aria-landmark-spec.md"
+    command: >-
+      grep -iE 'role="list"|<ul|list semantics|listitem'
+      .haiku/intents/universal-feedback-model-and-review-recovery/stages/design/artifacts/aria-landmark-spec.md
+status: active
+bolt: 1
+hat: designer
+started_at: '2026-04-20T19:39:06Z'
+hat_started_at: '2026-04-20T19:39:06Z'
+iterations:
+  - hat: designer
+    started_at: '2026-04-20T19:39:06Z'
+    completed_at: null
+    result: null
 ---
 # feedback list-semantics desktop/mobile parity
 

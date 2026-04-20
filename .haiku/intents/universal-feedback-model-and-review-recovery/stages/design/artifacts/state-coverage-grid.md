@@ -51,7 +51,7 @@ Artifacts: `feedback-inline-desktop.html`, `feedback-inline-mobile.html`, `feedb
 |---|---|---|---|---|---|---|---|
 | Feedback card (compact) | ✓ | ✓ (teal border bump) | ✓ (focus-visible 2px teal) | ✓ (depress + brightness) | ✓ (opacity 0.6 when read-only/locked) | ✓ (§5b red-tinted card — `feedback-card-states.html`) | ✓ (list-level empty copy — `feedback-inline-*` §empty-state) |
 | Feedback card (expanded) | ✓ | — [1] | ✓ | — | ✓ (busy state, `aria-busy="true"`) | ✓ (inline error row above footer) | — |
-| Pending footer buttons (Reject / Close) | ✓ | ✓ | ✓ | ✓ | ✓ (`disabled` while saving) | ✓ (toast + red ring) | — |
+| Pending footer buttons (Dismiss / Verify & Close) | ✓ | ✓ | ✓ | ✓ | ✓ (`disabled` while saving) | ✓ (toast + red ring) | — |
 | Addressed footer buttons (Verify & Close / Reopen) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
 | Closed / Rejected footer buttons (Reopen) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
 | Status badge (pending / addressed / closed / rejected) | ✓ | — [2] | — [2] | — [2] | — [2] | ✓ (contrast-preserved inside red-tinted card) | — |
@@ -71,7 +71,7 @@ Artifact: `feedback-inline-mobile.html`.
 | Sheet close ✕ | ✓ | ✓ | ✓ | ✓ | — | — | — | — |
 | Sheet sheet-enter anim | ✓ | — | — | — | — | — | — | reduced-motion → appears in-place |
 | `AgentFeedbackToggle` (role=switch — FB-53) | ✓ | ✓ (track darkens) | ✓ (teal outline) | ✓ | ✓ (`aria-disabled="true"`, cursor-not-allowed, opacity-50) | — [2] | — | — |
-| Filter pills (All / Pending / Addressed / Closed) | ✓ | ✓ | ✓ | ✓ (`aria-pressed="true"`) | — | — | — | — |
+| Filter pills (All / Pending / Addressed / Closed) | ✓ | ✓ | ✓ | ✓ (`aria-pressed="true"` → `bg-teal-600 text-white` primary fill per DESIGN-BRIEF §3 line 628 / DESIGN-TOKENS §2.5) [4] | — | — | — | — |
 | Group header (Current Visit / Visit 1 / …) | ✓ | — [3] | — [3] | — | — | — | ✓ ("No visits yet" inline) | — |
 | Sheet footer textarea | ✓ | — | ✓ (teal ring) | — | ✓ (during submit) | ✓ (red border on validation fail) | ✓ (placeholder) | — |
 | Add button | ✓ | ✓ | ✓ | ✓ | ✓ (until textarea has content) | ✓ | ✓ | — |
@@ -81,6 +81,7 @@ Artifact: `feedback-inline-mobile.html`.
 [1] FAB disabled state used when the user is on a non-review page; normal flow keeps it enabled.
 [2] `AgentFeedbackToggle` has no native error state — errors on the toggle action are announced via `#feedback-live-assertive` per `aria-live-sequencing-spec.md §3`.
 [3] Group headers are labels, not focusable controls.
+[4] FB-06: The active filter pill uses the PRIMARY active treatment (`bg-teal-600 text-white` / `dark:bg-teal-500 dark:text-white`), not the muted teal-100 status-badge treatment. Before FB-06, DESIGN-TOKENS §2.5 specified `bg-teal-100 text-teal-700` for active filter pills, which conflicted with DESIGN-BRIEF §3 line 628 — fixed by lifting tokens to primary. Decorative status dots inside the pill (`bg-stone-500`, `bg-amber-500`, etc.) are `aria-hidden` and have no WCAG contrast requirement.
 
 ---
 

@@ -416,7 +416,8 @@ The visit counter appears on feedback items that have been re-encountered across
 
 ```tsx
 // Container
-"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none"
+// FB-02 fix: lifted from banned text-[10px] → text-[11px] font-bold (DESIGN-BRIEF §2 typography-floor exception for semibold/bold).
+"inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none"
 
 // Default (single visit -- hidden or not rendered)
 // Shown at visit >= 2
@@ -471,8 +472,10 @@ When the panel has grouped sections (e.g., by status), use:
 
 ```
 // Section header inside panel
-text-[10px] font-bold uppercase tracking-widest
-text-stone-400 dark:text-stone-500
+// FB-02 fix: lifted from banned text-[10px] + banned text-stone-400 dark:text-stone-500 pair.
+// Now text-[11px] font-bold (typography-floor exception) + AA-passing foreground.
+text-[11px] font-bold uppercase tracking-widest
+text-stone-700 dark:text-stone-200
 px-3 py-2 bg-stone-50 dark:bg-stone-800/50
 sticky top-0 z-10
 ```
@@ -652,7 +655,7 @@ The feedback panel sits within the sidebar at the same level as existing content
 ### Visit Counter
 
 ```tsx
-<span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none ${visitCounterClasses(visits)}`}>
+<span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none ${visitCounterClasses(visits)}`}>{/* FB-02 fix: text-[10px] → text-[11px] font-bold */}
   {visits}x
 </span>
 ```

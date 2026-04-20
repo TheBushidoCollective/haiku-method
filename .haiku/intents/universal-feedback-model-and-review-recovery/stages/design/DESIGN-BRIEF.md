@@ -254,7 +254,7 @@ interface FeedbackItemProps {
 - Container: `p-2.5 rounded-lg bg-stone-50 dark:bg-stone-800/50 border border-transparent hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer` (matches existing `SidebarComment` styling).
 - First row: origin icon + label left-aligned, status badge right-aligned.
 - Second row: feedback title, `text-xs font-medium text-stone-700 dark:text-stone-300`, single line with `truncate`.
-- Third row: `text-[10px] text-stone-400 dark:text-stone-500` metadata line: feedback ID, visit number, origin.
+- Third row: `text-xs text-stone-600 dark:text-stone-300` metadata line: feedback ID, visit number, origin. (FB-02 fix: lifted from banned `text-[10px] text-stone-400 dark:text-stone-500` pair — now meets §2 typography floor AND Banned Text-on-Surface table.)
 
 **Expanded state (clicked):**
 
@@ -305,7 +305,7 @@ interface FeedbackListProps {
 [FeedbackItem] (closed)
 ```
 
-Group header: `text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500` with a horizontal rule using `border-t border-stone-200 dark:border-stone-700`.
+Group header: `text-xs font-semibold uppercase tracking-wider text-stone-600 dark:text-stone-300` with a horizontal rule using `border-t border-stone-200 dark:border-stone-700`. (FB-02 fix: lifted from banned `text-[10px]` + banned `text-stone-400 dark:text-stone-500` pair — now meets §2 typography floor AND Banned Text-on-Surface table.)
 
 **Empty state:** When no feedback items exist: `"No feedback yet. Select text or drop pins to add annotations."` in `text-xs text-stone-400 dark:text-stone-500 italic p-2 text-center` (matches existing empty state).
 
@@ -360,7 +360,7 @@ interface AgentFeedbackToggleProps {
 
 - Container: `flex items-center gap-2 px-4 py-3 border-b border-stone-200 dark:border-stone-700`
 - Label ("Comments"): `text-sm font-semibold text-stone-900 dark:text-stone-100`
-- Muted count chip (when toggle is OFF and `agentCount > 0`): `text-[10px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400 px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800` — e.g. `agent · 2`
+- Muted count chip (when toggle is OFF and `agentCount > 0`): `text-[11px] font-semibold uppercase tracking-wide text-stone-700 dark:text-stone-200 px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800` — e.g. `agent · 2`. (FB-02 fix: lifted from banned `text-[10px]` to `text-[11px]` + `font-semibold` — §2 typography-floor exception. Foreground lifted from `text-stone-500`/`text-stone-400` to `text-stone-700`/`dark:text-stone-200` so the chip meets AA on `bg-stone-100`/`dark:bg-stone-800` — see DESIGN-TOKENS §1.1a.)
 - Switch track (OFF): `w-8 h-4 rounded-full bg-stone-300 dark:bg-stone-600 transition-colors`
 - Switch track (ON): `w-8 h-4 rounded-full bg-teal-600 dark:bg-teal-500 transition-colors`
 - Switch thumb: `w-3.5 h-3.5 rounded-full bg-white shadow-sm transform transition-transform` — translates right when ON

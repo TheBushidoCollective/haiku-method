@@ -1,7 +1,7 @@
 {
   "stage": "design",
   "status": "active",
-  "phase": "gate",
+  "phase": "elaborate",
   "started_at": "2026-04-17T03:10:00Z",
   "completed_at": null,
   "gate_entered_at": null,
@@ -16,7 +16,7 @@
       "show_origin_badge": 1
     }
   },
-  "visits": 3,
+  "visits": 4,
   "iterations": [
     {
       "index": 1,
@@ -36,11 +36,20 @@
     {
       "index": 3,
       "started_at": "2026-04-19T17:57:29Z",
+      "completed_at": "2026-04-20T03:04:38Z",
+      "trigger": "feedback",
+      "result": "feedback-revisit",
+      "reason": "29 pending feedback item(s)",
+      "feedback_signature": "sig:b7142fcd"
+    },
+    {
+      "index": 4,
+      "started_at": "2026-04-20T03:04:38Z",
       "completed_at": null,
       "trigger": "feedback",
       "result": null,
-      "reason": "29 pending feedback item(s)",
-      "feedback_signature": "sig:b7142fcd"
+      "reason": "20 pending feedback item(s)",
+      "feedback_signature": "sig:38629a3e"
     }
   ]
 }

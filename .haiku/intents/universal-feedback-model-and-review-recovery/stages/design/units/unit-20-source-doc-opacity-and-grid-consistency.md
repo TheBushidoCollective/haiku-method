@@ -64,10 +64,10 @@ quality_gates:
     a design-reviewer walking §2 top-to-bottom can find the corresponding state
     grid for every component without searching.
 status: active
-bolt: 1
-hat: feedback-assessor
+bolt: 2
+hat: designer
 started_at: '2026-04-20T05:08:33Z'
-hat_started_at: '2026-04-20T05:18:24Z'
+hat_started_at: '2026-04-20T08:51:46Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:33Z'
@@ -79,6 +79,26 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T05:18:24Z'
+    completed_at: '2026-04-20T08:51:46Z'
+    result: reject
+    reason: >-
+      FB-70 and FB-75 are both factually closed in the artifacts — DESIGN-BRIEF
+      §7 (lines 887-917) no longer ships opacity 0.7/0.5 or raw hex (uses
+      var(--color-green-400), var(--color-blue-400), var(--color-stone-500),
+      var(--color-teal-600) tokens); state-coverage-grid.md §7.1–§7.12 has
+      per-component sections for every DESIGN-BRIEF §2 component
+      (FeedbackStatusBadge 4-status × 2-theme matrix, FeedbackOriginIcon
+      six-origin variants,
+      FeedbackList/FeedbackSheet/FeedbackSummaryBar/AgentFeedbackToggle full
+      six-state coverage with inline N/A rationales). However, advance_hat
+      blocks with 6 unchecked completion-criteria checkboxes in the unit
+      frontmatter (lines 128-135 of
+      unit-20-source-doc-opacity-and-grid-consistency.md). The
+      designer/design-reviewer hats completed the work but left every
+      "Completion criteria" checkbox unticked. Prior hat must tick all 6
+      checkboxes so the hard gate passes on the next feedback-assessor pass.
+  - hat: designer
+    started_at: '2026-04-20T08:51:46Z'
     completed_at: null
     result: null
 ---

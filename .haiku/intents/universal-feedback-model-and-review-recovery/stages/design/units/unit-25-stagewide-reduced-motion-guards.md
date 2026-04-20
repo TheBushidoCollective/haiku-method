@@ -22,16 +22,16 @@ outputs:
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
 quality_gates:
   - >-
-    Every artifact under `stages/design/artifacts/` that declares animations
-    or transitions ships a `prefers-reduced-motion` guard — either as a
-    global `@media` block disabling `animation-duration`,
-    `animation-iteration-count`, `transition-duration`, and `scroll-behavior`,
-    OR as per-component guards that set `animation: none` on each named
-    keyframe. The five artifacts named in FB-86 (`agent-feedback-toggle-spec.html`,
-    `assessor-summary-card.html`, `comments-list-with-agent-toggle.html`,
-    `feedback-inline-mobile.html`, `review-package-structure.html`) each
-    carry a guard, and the following shell script returns no MISSING lines:
-    `for f in stages/design/artifacts/*.html; do anim=$(grep -cE
+    Every artifact under `stages/design/artifacts/` that declares animations or
+    transitions ships a `prefers-reduced-motion` guard — either as a global
+    `@media` block disabling `animation-duration`, `animation-iteration-count`,
+    `transition-duration`, and `scroll-behavior`, OR as per-component guards
+    that set `animation: none` on each named keyframe. The five artifacts named
+    in FB-86 (`agent-feedback-toggle-spec.html`, `assessor-summary-card.html`,
+    `comments-list-with-agent-toggle.html`, `feedback-inline-mobile.html`,
+    `review-package-structure.html`) each carry a guard, and the following shell
+    script returns no MISSING lines: `for f in stages/design/artifacts/*.html;
+    do anim=$(grep -cE
     '@keyframes|animation:|animate-pulse|animate-spin|transition-' $f);
     guard=$(grep -cE 'prefers-reduced-motion' $f); if [ "$anim" -gt 0 ] && [
     "$guard" -eq 0 ]; then echo "MISSING: $f"; fi; done` → empty output.
@@ -39,27 +39,36 @@ quality_gates:
     `feedback-inline-mobile.html` specifically guards the FAB pulse, the
     bottom-sheet slide-in, the tab-strip horizontal scroll, the sheet close
     transition, and the optimistic-UI flip. FB-20's earlier claim that a
-    FAB-pulse guard landed is verified — if absent, it is added in this
-    unit. `grep -cE 'prefers-reduced-motion'
+    FAB-pulse guard landed is verified — if absent, it is added in this unit.
+    `grep -cE 'prefers-reduced-motion'
     stages/design/artifacts/feedback-inline-mobile.html` returns ≥ 1.
   - >-
     `motion-and-reduced-motion-spec.md` carries a verification-step section
-    (call it §N.verify or §10.audit) with the exact shell script above as
-    the canonical audit, stated as "every artifact, not just the FAB". The
-    script's expected output is specified as "empty output = pass". A
-    comment near the script notes that the audit is run stage-wide, not
-    per-artifact-input — mirroring the scope-widening approach unit-21 took
-    for the contrast audit.
+    (call it §N.verify or §10.audit) with the exact shell script above as the
+    canonical audit, stated as "every artifact, not just the FAB". The script's
+    expected output is specified as "empty output = pass". A comment near the
+    script notes that the audit is run stage-wide, not per-artifact-input —
+    mirroring the scope-widening approach unit-21 took for the contrast audit.
   - >-
-    Reduced-motion guards MUST NOT eliminate essential transitions that
-    convey state — e.g. the FAB's `aria-expanded=true/false` change is
-    visual state, not motion; the sheet's `hidden` class toggle is visual
-    state; the toggle thumb's `aria-checked=true/false` is visual state.
-    The guard reduces `animation-duration` and `transition-duration` to
-    `0.01ms`, not `none`, so final positions still paint. `animate-pulse`
-    on the FAB may use `animation: none` since the pulse is decorative.
-    Documented in `motion-and-reduced-motion-spec.md §N` as the
-    "minimum-duration, not none" rule.
+    Reduced-motion guards MUST NOT eliminate essential transitions that convey
+    state — e.g. the FAB's `aria-expanded=true/false` change is visual state,
+    not motion; the sheet's `hidden` class toggle is visual state; the toggle
+    thumb's `aria-checked=true/false` is visual state. The guard reduces
+    `animation-duration` and `transition-duration` to `0.01ms`, not `none`, so
+    final positions still paint. `animate-pulse` on the FAB may use `animation:
+    none` since the pulse is decorative. Documented in
+    `motion-and-reduced-motion-spec.md §N` as the "minimum-duration, not none"
+    rule.
+status: active
+bolt: 1
+hat: designer
+started_at: '2026-04-20T05:08:30Z'
+hat_started_at: '2026-04-20T05:08:30Z'
+iterations:
+  - hat: designer
+    started_at: '2026-04-20T05:08:30Z'
+    completed_at: null
+    result: null
 ---
 # Stage-wide prefers-reduced-motion guards
 

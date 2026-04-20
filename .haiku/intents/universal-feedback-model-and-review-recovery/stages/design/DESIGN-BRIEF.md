@@ -35,7 +35,7 @@ These patterns are non-negotiable -- every new component must match them exactly
 - **Button primary**: `px-4 py-2.5 text-sm font-semibold rounded-lg bg-teal-600 hover:bg-teal-700 text-white transition-colors`
 - **Button secondary**: `px-4 py-2.5 text-sm font-semibold rounded-lg bg-stone-200 dark:bg-stone-700 hover:bg-stone-300 dark:hover:bg-stone-600 text-stone-700 dark:text-stone-200`
 - **Input/Textarea**: `text-xs p-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900` (canonical focus-ring — matches `focus-ring-spec.html §1`; the earlier single-ring shorthand was retired as of unit-16)
-- **Sidebar layout**: `w-80 lg:w-96 shrink-0 sticky top-16 h-[calc(100vh-4rem)] flex-col`
+- **Sidebar layout**: `w-80 xl:w-96 shrink-0 sticky top-16 h-[calc(100vh-4rem)] flex-col` (canonical breakpoint — see §4)
 - **Tab active**: `border-b-2 border-teal-600 text-teal-600 dark:border-teal-400 dark:text-teal-400`
 - **Tab inactive**: `border-transparent text-stone-500 dark:text-stone-400`
 - **Hover highlight on list items**: `hover:border-teal-400 dark:hover:border-teal-500 transition-colors`
@@ -71,7 +71,7 @@ The sidebar splits into two vertical regions: a **feedback panel** (top, scrolla
 +------------------------------------------------------+
 |  Header (sticky top-0)                               |
 +------------------------------------------------------+
-|  Main Content (flex-1)       |  Sidebar (w-80/w-96)   |
+|  Main Content (flex-1)       |  Sidebar (w-80 → xl:w-96) |
 |  - Tabs (sticky top-[53px]) |  +--------------------+ |
 |  - Tab panels               |  | Comments  [·Agent] | |
 |  - Cards with InlineComments|  +--------------------+ |

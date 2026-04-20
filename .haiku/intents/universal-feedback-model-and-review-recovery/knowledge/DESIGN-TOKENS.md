@@ -98,7 +98,7 @@ From `packages/haiku/src/templates/styles.ts` (server-rendered):
 | Button padding (primary) | `px-4 py-2.5` (sidebar), `px-6 py-3` (full-width) |
 | Button padding (small) | `px-3 py-1.5` |
 | Button padding (tiny) | `px-3 py-1` or `px-2 py-0.5` |
-| Sidebar width | `w-80 lg:w-96` |
+| Sidebar width | `w-80 xl:w-96` (canonical — see DESIGN-BRIEF §4) |
 | Comment card padding | `p-2.5` |
 | Input padding | `p-2` (small), `p-3` (standard) |
 | Inline gap | `gap-2` (tight), `gap-3` (standard) |
@@ -454,7 +454,7 @@ The feedback panel replaces or augments the existing review sidebar. It follows 
 
 ```
 // Matches existing ReviewSidebar structure
-w-80 lg:w-96 shrink-0 sticky top-16 h-[calc(100vh-4rem)]
+w-80 xl:w-96 shrink-0 sticky top-16 h-[calc(100vh-4rem)]
 flex flex-col bg-white dark:bg-stone-900
 border-l border-stone-200 dark:border-stone-700
 ```

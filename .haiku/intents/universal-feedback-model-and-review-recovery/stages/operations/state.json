@@ -1,10 +1,20 @@
 {
-	"stage": "operations",
-	"status": "completed",
-	"phase": "gate",
-	"started_at": "2026-04-16T16:36:43Z",
-	"completed_at": "2026-04-16T16:52:25Z",
-	"gate_entered_at": null,
-	"gate_outcome": "advanced",
-	"elaboration_turns": 1
+  "stage": "operations",
+  "status": "completed",
+  "phase": "gate",
+  "started_at": "2026-04-16T16:36:43Z",
+  "completed_at": "2026-04-20T21:48:22Z",
+  "gate_entered_at": null,
+  "gate_outcome": "advanced",
+  "elaboration_turns": 1,
+  "iterations": [
+    {
+      "index": 1,
+      "started_at": "2026-04-20T21:48:22Z",
+      "completed_at": "2026-04-20T21:48:22Z",
+      "trigger": "initial",
+      "result": "advanced"
+    }
+  ],
+  "visits": 1
 }

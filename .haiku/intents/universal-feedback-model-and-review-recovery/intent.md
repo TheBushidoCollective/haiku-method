@@ -11,7 +11,7 @@ stages:
   - development
   - operations
   - security
-active_stage: product
+active_stage: operations
 intent_reviewed: true
 ---
 

@@ -24,7 +24,6 @@ import { computeWaves, topologicalSort } from "./dag.js"
 import {
 	branchExists,
 	cleanupIntentWorktrees,
-	consolidateStageBranches,
 	createIntentBranch,
 	createStageBranch,
 	createUnitWorktree,
@@ -34,7 +33,6 @@ import {
 	finalizeIntentBranches,
 	getMainlineBranch,
 	isBranchMerged,
-	isOnIntentBranch,
 	isOnStageBranch,
 	mergeStageBranchForward,
 	mergeStageBranchIntoMain,
@@ -657,37 +655,6 @@ function resolveStageReview(studio: string, stage: string): string {
 		}
 	}
 	return "auto"
-}
-
-/** Does the stage's `review:` field contain the given kind (e.g. "external")?
- *  Handles both scalar and array forms. Used to detect external-review stages
- *  that need branch isolation regardless of intent mode.
- *
- *  Resolves the studio identifier through `resolveStudio` first so callers can
- *  pass the canonical name, slug, or alias — not just the directory name. If
- *  resolveStudio returns null, falls back to using the identifier directly (for
- *  robustness when called during bootstrap before the studio cache is warm). */
-function stageReviewIncludes(
-	studio: string,
-	stage: string,
-	kind: string,
-): boolean {
-	const info = resolveStudio(studio)
-	const dir = info ? info.dir : studio
-	const pluginRoot = resolvePluginRoot()
-	for (const base of [
-		join(process.cwd(), ".haiku", "studios"),
-		join(pluginRoot, "studios"),
-	]) {
-		const stageFile = join(base, dir, "stages", stage, "STAGE.md")
-		if (existsSync(stageFile)) {
-			const fm = readFrontmatter(stageFile)
-			const review = fm.review
-			if (Array.isArray(review)) return (review as unknown[]).includes(kind)
-			return review === kind
-		}
-	}
-	return false
 }
 
 function resolveStageMetadata(
@@ -1403,31 +1370,7 @@ export interface OrchestratorAction {
  * each external-gated stage opens a distinct PR from its own
  * `haiku/{slug}/{stage}` branch back to the intent main branch.
  */
-function resolveEffectiveBranchMode(
-	slug: string,
-	stage: string,
-): "discrete" | "continuous" {
-	const intentFile = join(intentDir(slug), "intent.md")
-	const intent = readFrontmatter(intentFile)
-	const mode = (intent.mode as string) || "continuous"
-	const studio = (intent.studio as string) || ""
-
-	// External-review stages always use a stage branch so their PR is isolated.
-	if (studio && stageReviewIncludes(studio, stage, "external"))
-		return "discrete"
-
-	if (mode === "continuous") return "continuous"
-	if (mode === "discrete") return "discrete"
-	// hybrid: check continuous_from threshold
-	const continuousFrom = (intent.continuous_from as string) || ""
-	if (!continuousFrom) return "discrete"
-	const studioStages = resolveIntentStages(intent, studio)
-	const thresholdIdx = studioStages.indexOf(continuousFrom)
-	const stageIdx = studioStages.indexOf(stage)
-	return stageIdx >= thresholdIdx ? "continuous" : "discrete"
-}
-
-/** Find the previous completed stage for branch chaining in discrete mode */
+/** Find the previous completed stage for branch chaining */
 function findPreviousStage(slug: string, stage: string): string | undefined {
 	const intentFile = join(intentDir(slug), "intent.md")
 	const intent = readFrontmatter(intentFile)
@@ -1441,88 +1384,51 @@ function fsmStartStage(slug: string, stage: string): void {
 	const intentFile = join(intentDir(slug), "intent.md")
 
 	// Branch isolation first — if this fails (merge conflict), no state is mutated.
-	// Branch mode resolution is fully encapsulated in resolveEffectiveBranchMode,
-	// which reads intent mode + external-review flag internally.
-	const intent = readFrontmatter(intentFile)
-	const branchMode = resolveEffectiveBranchMode(slug, stage)
-	if (branchMode === "discrete") {
-		// Discrete mode: haiku/<slug>/main is the hub branch.
-		// Stage branches branch from main, and merge back into main when approved.
-		// This ensures browse/repair can always find the intent on main.
+	// Unified topology (continuous and discrete intents share the same branching
+	// mechanism): every stage runs on its own branch `haiku/<slug>/<stage>`, and
+	// `haiku/<slug>/main` is the consolidation hub. Stage advance A → B:
+	//   1. Ensure main exists.
+	//   2. If prev stage branch A exists and isn't merged, merge A → main.
+	//   3. Reap A's branch (its commits now live on main).
+	//   4. Checkout B: if B's branch already exists (go-back), merge main forward
+	//      into it; otherwise create B from main.
+	// The intent's `mode` field controls other concerns (how the agent iterates,
+	// review cadence) but not the branching topology — both modes branch per-stage.
+	createIntentBranch(slug)
 
-		// 1. Ensure the hub branch exists
-		createIntentBranch(slug)
+	const prevStage = findPreviousStage(slug, stage)
+	const prevStageBranch = prevStage ? `haiku/${slug}/${prevStage}` : ""
+	if (
+		prevStage &&
+		branchExists(prevStageBranch) &&
+		!isBranchMerged(prevStageBranch, `haiku/${slug}/main`)
+	) {
+		const mergeResult = mergeStageBranchIntoMain(slug, prevStage)
+		if (!mergeResult.success) {
+			throw new Error(
+				`Merge of completed stage '${prevStage}' into main failed: ${mergeResult.message}. Resolve conflicts on 'haiku/${slug}/main' manually, then retry.`,
+			)
+		}
+	}
 
-		// 2. If there's a completed previous stage not yet merged, merge it into main first
-		const prevStage = findPreviousStage(slug, stage)
-		const prevStageBranch = prevStage ? `haiku/${slug}/${prevStage}` : ""
-		if (
-			prevStage &&
-			branchExists(prevStageBranch) &&
-			!isBranchMerged(prevStageBranch, `haiku/${slug}/main`)
-		) {
-			const mergeResult = mergeStageBranchIntoMain(slug, prevStage)
+	// Reap the previous stage branch so we don't accumulate one dead branch
+	// per completed stage. Its commits now live on main.
+	if (prevStage && branchExists(prevStageBranch)) {
+		deleteStageBranch(slug, prevStage)
+	}
+
+	if (!isOnStageBranch(slug, stage)) {
+		const stageBranch = `haiku/${slug}/${stage}`
+		if (branchExists(stageBranch) && prevStage) {
+			// Stage branch already exists (go-back scenario) — merge main forward
+			const mergeResult = mergeStageBranchForward(slug, "main", stage)
 			if (!mergeResult.success) {
 				throw new Error(
-					`Merge of completed stage '${prevStage}' into main failed: ${mergeResult.message}. Resolve conflicts on 'haiku/${slug}/main' manually, then retry.`,
+					`Merge forward from main to '${stage}' failed: ${mergeResult.message}. Resolve conflicts on branch '${stageBranch}' manually, then retry.`,
 				)
 			}
-		}
-
-		// Now that the previous stage is merged into main, reap the stage branch
-		// so we don't accumulate one dead branch per completed stage.
-		if (prevStage && branchExists(prevStageBranch)) {
-			deleteStageBranch(slug, prevStage)
-		}
-
-		// 3. Create (or switch to) the stage branch from main
-		if (!isOnStageBranch(slug, stage)) {
-			const stageBranch = `haiku/${slug}/${stage}`
-			if (branchExists(stageBranch) && prevStage) {
-				// Stage branch already exists (go-back scenario) — merge main forward
-				const mergeResult = mergeStageBranchForward(slug, "main", stage)
-				if (!mergeResult.success) {
-					throw new Error(
-						`Merge forward from main to '${stage}' failed: ${mergeResult.message}. Resolve conflicts on branch '${stageBranch}' manually, then retry.`,
-					)
-				}
-			} else {
-				createStageBranch(slug, stage)
-			}
-		}
-	} else {
-		// Continuous branch mode for this stage — make sure we're on intent main.
-		if (!isOnIntentBranch(slug)) {
-			// We may be coming off a stage branch for one of three reasons:
-			//   1. Intent mode is "hybrid" (continuous_from threshold reached)
-			//   2. A previous stage had an external review → was isolated to a stage branch
-			//      even though the intent is in continuous mode
-			//   3. Previous stage was discrete and we're transitioning back
-			//
-			// In all cases, any previous stage branches must be consolidated (merged
-			// forward) into intent main so their commits are present locally. This
-			// mirrors how a server-side PR merge would land the work, without
-			// requiring a pull from the remote.
-			const studio = (intent.studio as string) || ""
-			const studioStages = resolveIntentStages(intent, studio)
-			const stageIdx = studioStages.indexOf(stage)
-			const previousBranchedStages = studioStages
-				.slice(0, stageIdx)
-				.filter((s) => branchExists(`haiku/${slug}/${s}`))
-
-			if (previousBranchedStages.length > 0) {
-				const consolResult = consolidateStageBranches(
-					slug,
-					previousBranchedStages,
-				)
-				if (!consolResult.success) {
-					throw new Error(
-						`Consolidation of stage branches into main failed: ${consolResult.message}. Resolve conflicts on 'haiku/${slug}/main' manually, then retry.`,
-					)
-				}
-			} else {
-				createIntentBranch(slug)
-			}
+		} else {
+			createStageBranch(slug, stage)
 		}
 	}
 
@@ -3841,25 +3747,22 @@ function revisitCurrentStage(
 	// phase, revisit reactivates it (and reseals the integrity checksum).
 	uncompleteIntent(slug, intentFile)
 
-	// In discrete mode, merge main into the current stage branch (non-destructive)
-	// and clean up unit worktrees so the re-queued units start fresh. We keep the
-	// stage branch history so feedback files and partial artifacts from prior
-	// attempts are preserved — the unit state reset below re-queues the work
-	// without losing context.
-	const branchMode = resolveEffectiveBranchMode(slug, currentActiveStage)
-	if (branchMode === "discrete") {
-		gitCommitState(`haiku: revisit elaborate ${currentActiveStage} (pre-merge)`)
-		cleanupIntentWorktrees(slug)
-		const prepared = prepareRevisitBranch(
-			slug,
-			currentActiveStage,
-			currentActiveStage,
-		)
-		if (!prepared.success) {
-			return {
-				action: "error",
-				message: `Failed to prepare stage branch '${currentActiveStage}' for revisit: ${prepared.message}. Resolve conflicts on the stage branch manually, then retry.`,
-			}
+	// Unified flow (both continuous and discrete): merge main forward into the
+	// current stage branch (non-destructive) and clean up unit worktrees so the
+	// re-queued units start fresh. We keep the stage branch history so feedback
+	// files and partial artifacts from prior attempts are preserved — the unit
+	// state reset below re-queues the work without losing context.
+	gitCommitState(`haiku: revisit elaborate ${currentActiveStage} (pre-merge)`)
+	cleanupIntentWorktrees(slug)
+	const prepared = prepareRevisitBranch(
+		slug,
+		currentActiveStage,
+		currentActiveStage,
+	)
+	if (!prepared.success) {
+		return {
+			action: "error",
+			message: `Failed to prepare stage branch '${currentActiveStage}' for revisit: ${prepared.message}. Resolve conflicts on the stage branch manually, then retry.`,
 		}
 	}
 
@@ -3947,25 +3850,22 @@ function revisitEarlierStage(
 	// stage. This is intentional: revisit fixes one stage without forcing a
 	// full replay of everything that came after.
 
-	// In discrete mode, merge BOTH intent main (approved upstream) AND the
-	// fromStage branch (unapproved future-stage work — feedback files and
-	// in-flight artifacts) into the target stage branch. This ensures feedback
-	// and artifacts raised on fromStage survive the revisit even when they
-	// haven't been merged into intent main yet. Non-destructive: the target
-	// stage branch's own history is preserved; the unit state reset below
-	// re-queues the work without losing context.
-	const branchMode = resolveEffectiveBranchMode(slug, targetStage)
-	if (branchMode === "discrete") {
-		gitCommitState(`haiku: revisit from ${fromStage}`)
-		// Clean up unit worktrees tied to the target stage first so the
-		// re-queued units start fresh.
-		cleanupIntentWorktrees(slug)
-		const prepared = prepareRevisitBranch(slug, fromStage, targetStage)
-		if (!prepared.success) {
-			return {
-				action: "error",
-				message: `Failed to prepare stage branch '${targetStage}' for revisit from '${fromStage}': ${prepared.message}. Resolve conflicts on the target branch manually, then retry.`,
-			}
+	// Unified flow (both continuous and discrete): merge BOTH intent main
+	// (approved upstream) AND the fromStage branch (unapproved future-stage
+	// work — feedback files and in-flight artifacts) into the target stage
+	// branch. This ensures feedback and artifacts raised on fromStage survive
+	// the revisit even when they haven't been merged into intent main yet.
+	// Non-destructive: the target stage branch's own history is preserved; the
+	// unit state reset below re-queues the work without losing context.
+	gitCommitState(`haiku: revisit from ${fromStage}`)
+	// Clean up unit worktrees tied to the target stage first so the
+	// re-queued units start fresh.
+	cleanupIntentWorktrees(slug)
+	const prepared = prepareRevisitBranch(slug, fromStage, targetStage)
+	if (!prepared.success) {
+		return {
+			action: "error",
+			message: `Failed to prepare stage branch '${targetStage}' for revisit from '${fromStage}': ${prepared.message}. Resolve conflicts on the target branch manually, then retry.`,
 		}
 	}
 

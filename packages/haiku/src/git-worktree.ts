@@ -1420,8 +1420,12 @@ export function prepareRevisitBranch(
 	const fromBranch = fromStage ? `haiku/${slug}/${fromStage}` : ""
 	const mainBranch = `haiku/${slug}/main`
 
+	// If main doesn't exist yet there's nothing to merge. Caller (e.g. a
+	// revisit invoked before the intent has been branched, or a test harness
+	// running without real git state) should treat this as a no-op rather
+	// than a hard failure.
 	if (!branchExists(mainBranch))
-		return { success: false, message: `${mainBranch} does not exist` }
+		return { success: true, message: `${mainBranch} does not exist — nothing to merge` }
 
 	// List conflicted files by reading git's unmerged index entries (code U*/AA/DD).
 	function listConflicts(): string[] {

@@ -2,7 +2,7 @@
 title: >-
   unit-26 state-coverage reference-tile rewrite lacks state-coverage grep recipe
   — unfalsifiable completion criterion
-status: closed
+status: open
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:32:54Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-26-artifact-opacity-ban-enforcement.md
-closed_by: unit-26-artifact-opacity-ban-enforcement
+closed_by: null
 bolt: 0
 upstream_stage: null
 ---

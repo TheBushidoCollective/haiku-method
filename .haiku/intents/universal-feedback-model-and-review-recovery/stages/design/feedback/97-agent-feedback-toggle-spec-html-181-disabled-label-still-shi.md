@@ -2,7 +2,7 @@
 title: >-
   agent-feedback-toggle-spec.html:181 disabled label still ships opacity-50;
   audit §329 claims removed
-status: closed
+status: open
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:28:03Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-26-artifact-opacity-ban-enforcement
+closed_by: null
 ---
 
 `agent-feedback-toggle-spec.html` disabled-state example still wraps the switch in `label ... cursor-not-allowed opacity-50`, directly contradicting `contrast-and-type-audit.md §4 Bolt-4` row 4 which claims the wrapper's `opacity-50` was removed.

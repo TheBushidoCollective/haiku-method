@@ -2,7 +2,7 @@
 title: >-
   unit-29 .stage-btn focus-visible rule adds teal-500 but rest of stage uses
   teal-600 for focus rings
-status: closed
+status: open
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:34:33Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-29-focus-visible-canonicalization-and-spec-clarity.md
-closed_by: unit-29-focus-visible-canonicalization-and-spec-clarity
+closed_by: null
 bolt: 0
 upstream_stage: null
 ---

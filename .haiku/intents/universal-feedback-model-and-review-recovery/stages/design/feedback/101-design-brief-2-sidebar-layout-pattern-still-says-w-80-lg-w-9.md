@@ -2,7 +2,7 @@
 title: >-
   DESIGN-BRIEF §2 sidebar-layout pattern still says `w-80 lg:w-96`, unit-16
   canonical is `w-80 xl:w-96`
-status: closed
+status: open
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:28:44Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-28-canonical-token-normalization-sweep
+closed_by: null
 ---
 
 Separate-but-related finding to the `lg:w-96` vs `xl:w-96` cutover. Specifically scoped to the internal inconsistency WITHIN DESIGN-BRIEF.

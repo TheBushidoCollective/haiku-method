@@ -2,7 +2,7 @@
 title: >-
   Component-name drift: `FeedbackSheet` vs `MobileFeedbackPanel` both live;
   `Mobile` prefix supposedly retired
-status: closed
+status: open
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:27:48Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-28-canonical-token-normalization-sweep
+closed_by: null
 ---
 
 DESIGN-BRIEF §2 "Retired Components" table explicitly retires the `Mobile` prefix:

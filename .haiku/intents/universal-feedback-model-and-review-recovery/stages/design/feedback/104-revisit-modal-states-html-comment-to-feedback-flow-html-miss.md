@@ -2,7 +2,7 @@
 title: >-
   revisit-modal-states.html + comment-to-feedback-flow.html missing canonical
   live-region landmark pair
-status: closed
+status: open
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:29:39Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-30-native-activation-and-live-region-landmarks
+closed_by: null
 ---
 
 Per `aria-landmark-spec.md §1` (the canonical landmark map) and `aria-live-sequencing-spec.md §2` (two live regions, separate nodes), every page-level artifact MUST carry BOTH of these at the body level:

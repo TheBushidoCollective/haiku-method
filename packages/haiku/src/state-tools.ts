@@ -139,7 +139,8 @@ export function applyAutoFixes(
 		// Legacy `created` field → `created_at`
 		if (issue.field === "created" && data.created && !data.created_at) {
 			data.created_at = data.created
-			// biome-ignore lint/performance/noDelete: gray-matter YAML serializer crashes on undefined values (#194)
+			// gray-matter YAML serializer crashes on undefined values (#194),
+			// so we must `delete` rather than assign `undefined`.
 			delete data.created
 			applied.push({
 				intent: slug,
@@ -266,7 +267,7 @@ export function applyAutoFixes(
 			const unitsDir = join(stagesDir, stageEntry.name, "units")
 			if (!existsSync(unitsDir)) continue
 			for (const unitEntry of readdirSync(unitsDir, { withFileTypes: true })) {
-				if (!unitEntry.isFile() || !unitEntry.name.endsWith(".md")) continue
+				if (!(unitEntry.isFile() && unitEntry.name.endsWith(".md"))) continue
 				const unitPath = join(unitsDir, unitEntry.name)
 				const unitRaw = readFileSync(unitPath, "utf8")
 				const unitParsed = matter(unitRaw)
@@ -293,8 +294,7 @@ export function applyAutoFixes(
 	for (const issue of remaining) {
 		const m = issue.field.match(unitInputsRe)
 		if (
-			!m ||
-			!issue.message.includes("Unit has no `inputs:`") ||
+			!(m && issue.message.includes("Unit has no `inputs:`")) ||
 			typeof issue.fix !== "string"
 		) {
 			inputsRemaining.push(issue)
@@ -632,7 +632,7 @@ function scanOneIntent(
 	}
 
 	// i. Missing created_at
-	if (!repairData.created && !repairData.created_at) {
+	if (!(repairData.created || repairData.created_at)) {
 		issues.push({
 			intent: slug,
 			field: "created_at",
@@ -801,7 +801,7 @@ function scanOneIntent(
 			}
 
 			for (const f of readdirSync(repairUnitsDir, { withFileTypes: true })) {
-				if (!f.isFile() || !f.name.endsWith(".md")) continue
+				if (!(f.isFile() && f.name.endsWith(".md"))) continue
 				if (!REPAIR_UNIT_PATTERN.test(f.name)) {
 					issues.push({
 						intent: slug,
@@ -2446,6 +2446,33 @@ export function listVisibleIntentSlugs(
 	return listVisibleIntents(intentsDir, opts).map((i) => i.slug)
 }
 
+/**
+ * Parse an intent slug (and optionally a stage) out of the current git
+ * branch. Supports the two H·AI·K·U branch shapes:
+ *
+ *   haiku/<slug>/main
+ *   haiku/<slug>/<stage>
+ *
+ * Returns null if the current checkout isn't on a haiku branch or the
+ * environment isn't git-backed. Used by pickup/revisit/run_next to
+ * auto-resolve the intent when the user's checkout already tells us
+ * which intent they want to work on — keeps skills thin and the
+ * logic centrally owned.
+ */
+export function intentFromCurrentBranch(): {
+	slug: string
+	stage: string | null
+} | null {
+	if (!isGitRepo()) return null
+	const branch = getCurrentBranch()
+	if (!branch) return null
+	const match = branch.match(/^haiku\/([^/]+)\/([^/]+)$/)
+	if (!match) return null
+	const slug = match[1]
+	const stagePart = match[2]
+	return { slug, stage: stagePart === "main" ? null : stagePart }
+}
+
 export function setFrontmatterField(
 	filePath: string,
 	field: string,
@@ -2854,6 +2881,7 @@ export function syncSessionMetadata(
 /** Valid origin values for feedback items. */
 export const FEEDBACK_ORIGINS = [
 	"adversarial-review",
+	"studio-review",
 	"external-pr",
 	"external-mr",
 	"user-visual",
@@ -2878,10 +2906,21 @@ export type FeedbackOrigin = (typeof FEEDBACK_ORIGINS)[number]
  */
 export const FEEDBACK_STATUSES = [
 	"pending",
+	"fixing",
 	"addressed",
 	"closed",
 	"rejected",
 ] as const
+
+/**
+ * Maximum number of fix-loop bolts we will run against a single feedback
+ * item before escalating to the human. Each bolt is one full dispatch of the
+ * stage's `fix_hats` sequence with the feedback file as scope. Three attempts
+ * is the same budget we give pre-execute spec revisits — if the fix hats
+ * can't resolve the finding in 3 passes, the spec or the finding itself is
+ * likely the problem.
+ */
+export const MAX_FIX_LOOP_BOLTS = 3
 
 export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number]
 
@@ -2913,9 +2952,13 @@ export function slugifyTitle(title: string, maxLen = 60): string {
 		.replace(/-+$/, "")
 }
 
-/** Path to the feedback directory for an intent stage. */
+/** Path to the feedback directory for an intent. When `stage` is falsy,
+ *  returns the intent-scope feedback dir used by the pre-intent-completion
+ *  review layer. Otherwise returns the per-stage dir used by every stage's
+ *  post-execute adversarial review. */
 export function feedbackDir(slug: string, stage: string): string {
-	return join(stageDir(slug, stage), "feedback")
+	if (stage) return join(stageDir(slug, stage), "feedback")
+	return join(intentDir(slug), "feedback")
 }
 
 /** Resolve the next sequential NN prefix in a feedback directory. */
@@ -2957,6 +3000,17 @@ export interface FeedbackItem {
 	// feedback-assessor hat validated as resolving this finding. `null`
 	// means open (pending) and blocks the stage gate.
 	closed_by: string | null
+	// Number of fix-loop bolts (dispatches of the stage's `fix_hats`
+	// sequence against this specific finding). Capped at MAX_FIX_LOOP_BOLTS;
+	// exceeding triggers an `escalate` action for human intervention.
+	bolt: number
+	// When a review agent in stage X flags an issue that is actually caused
+	// by stage Y, we record the upstream stage here. Cross-stage findings
+	// are NOT auto-routed — they are surfaced to the human via
+	// `upstream_finding_surfaced` so the user can decide whether to
+	// revisit upstream, reject the finding, or accept-as-is.
+	// `null` means same-stage (in-scope for the stage's fix loop).
+	upstream_stage: string | null
 }
 
 /**
@@ -2973,6 +3027,10 @@ export function writeFeedbackFile(
 		origin?: string
 		author?: string
 		source_ref?: string | null
+		/** When a reviewer in stage X flags a root cause in stage Y, pass Y
+		 *  here so the FSM surfaces it as cross-stage rather than attempting
+		 *  to fix it in stage X's fix loop. */
+		upstream_stage?: string | null
 	},
 ): { feedback_id: string; file: string; num: number } {
 	const dir = feedbackDir(slug, stage)
@@ -2988,10 +3046,15 @@ export function writeFeedbackFile(
 	const authorType = deriveAuthorType(origin)
 	const author = opts.author || deriveDefaultAuthor(origin)
 
-	// Read current iteration count from stage state
-	const stateFile = stageStatePath(slug, stage)
-	const stageState = readJson(stateFile)
-	const iteration = getStageIterationCount(stageState)
+	// Read current iteration count from stage state (intent-scope
+	// feedback has no stage state — use 0 as a neutral sentinel so the
+	// numbering stays deterministic).
+	let iteration = 0
+	if (stage) {
+		const stateFile = stageStatePath(slug, stage)
+		const stageState = readJson(stateFile)
+		iteration = getStageIterationCount(stageState)
+	}
 
 	const frontmatter: Record<string, unknown> = {
 		title: opts.title,
@@ -3004,12 +3067,18 @@ export function writeFeedbackFile(
 		visit: iteration, // legacy alias
 		source_ref: opts.source_ref ?? null,
 		closed_by: null,
+		bolt: 0,
+		// `||` (not `??`) so an empty-string upstream_stage from a sloppy
+		// caller still normalizes to null — "" is not nullish.
+		upstream_stage: opts.upstream_stage || null,
 	}
 
 	const content = matter.stringify(`\n${opts.body}\n`, frontmatter)
 	writeFileSync(filePath, content)
 
-	const relPath = `.haiku/intents/${slug}/stages/${stage}/feedback/${filename}`
+	const relPath = stage
+		? `.haiku/intents/${slug}/stages/${stage}/feedback/${filename}`
+		: `.haiku/intents/${slug}/feedback/${filename}`
 	return { feedback_id: `FB-${nn}`, file: relPath, num }
 }
 
@@ -3038,7 +3107,9 @@ export function readFeedbackFiles(slug: string, stage: string): FeedbackItem[] {
 			id: `FB-${zeroPad(num)}`,
 			num,
 			slug: fileSlug,
-			file: `.haiku/intents/${slug}/stages/${stage}/feedback/${f}`,
+			file: stage
+				? `.haiku/intents/${slug}/stages/${stage}/feedback/${f}`
+				: `.haiku/intents/${slug}/feedback/${f}`,
 			title: (data.title as string) || "",
 			body,
 			status: (data.status as string) || "pending",
@@ -3049,6 +3120,12 @@ export function readFeedbackFiles(slug: string, stage: string): FeedbackItem[] {
 			visit: (data.visit as number) || 0,
 			source_ref: (data.source_ref as string) || null,
 			closed_by: (data.closed_by as string) || null,
+			bolt: typeof data.bolt === "number" ? (data.bolt as number) : 0,
+			upstream_stage:
+				typeof data.upstream_stage === "string" &&
+				(data.upstream_stage as string).length > 0
+					? (data.upstream_stage as string)
+					: null,
 		})
 	}
 
@@ -3133,7 +3210,9 @@ export function updateFeedbackFile(
 	if (!found) {
 		return {
 			ok: false,
-			error: `Error: feedback '${feedbackId}' not found in stage '${stage}'`,
+			error: stage
+				? `Error: feedback '${feedbackId}' not found in stage '${stage}'`
+				: `Error: feedback '${feedbackId}' not found (intent-scope)`,
 		}
 	}
 
@@ -3172,6 +3251,28 @@ export function updateFeedbackFile(
 		}
 	}
 
+	// Guard: if closed_by uses the unit-NN-slug convention (pre-execute spec
+	// revisit), verify the unit spec actually exists on disk. Prevents the
+	// ghost-unit ledger drift: agents marking findings closed via a unit
+	// that was never produced (or was deleted by a later revisit), leaving
+	// the review gate believing work landed when the artifacts were never
+	// touched. Fix-loop markers ("fix-loop:...", "intent-fix:...") are
+	// free-form and skip this check.
+	if (
+		typeof fields.closed_by === "string" &&
+		/^unit-\d+[-_]/i.test(fields.closed_by) &&
+		stage
+	) {
+		const unitBase = fields.closed_by.replace(/\.md$/, "")
+		const unitFile = join(stageDir(slug, stage), "units", `${unitBase}.md`)
+		if (!existsSync(unitFile)) {
+			return {
+				ok: false,
+				error: `Error: closed_by='${fields.closed_by}' references a unit that does not exist at stages/${stage}/units/${unitBase}.md. Agents cannot mark findings closed via a ghost unit. Either create the unit spec first (additive elaboration), or close via a fix-loop marker (e.g. 'fix-loop:${feedbackId}:bolt-N').`,
+			}
+		}
+	}
+
 	// Apply updates
 	const updated: string[] = []
 	const newData = { ...found.data }
@@ -3194,6 +3295,28 @@ export function updateFeedbackFile(
 }
 
 /**
+ * Increment the fix-loop bolt counter on a feedback item and set status to
+ * "fixing". Called by the FSM before dispatching a fix-hat sequence against
+ * the finding. Returns the new bolt number, or null if the file is missing.
+ * Does NOT validate the ceiling — callers must check MAX_FIX_LOOP_BOLTS
+ * themselves so they can choose to escalate vs. continue.
+ */
+export function incrementFeedbackBolt(
+	slug: string,
+	stage: string,
+	feedbackId: string,
+): { bolt: number } | null {
+	const found = findFeedbackFile(slug, stage, feedbackId)
+	if (!found) return null
+	const currentBolt =
+		typeof found.data.bolt === "number" ? (found.data.bolt as number) : 0
+	const newBolt = currentBolt + 1
+	const newData = { ...found.data, bolt: newBolt, status: "fixing" }
+	writeFileSync(found.path, matter.stringify(`\n${found.body}\n`, newData))
+	return { bolt: newBolt }
+}
+
+/**
  * Delete a feedback file with guards:
  * - Cannot delete pending items (must be addressed/closed/rejected first)
  * - Agent callers cannot delete human-authored items
@@ -3208,16 +3331,28 @@ export function deleteFeedbackFile(
 	if (!found) {
 		return {
 			ok: false,
-			error: `Error: feedback '${feedbackId}' not found in stage '${stage}'`,
+			error: stage
+				? `Error: feedback '${feedbackId}' not found in stage '${stage}'`
+				: `Error: feedback '${feedbackId}' not found (intent-scope)`,
 		}
 	}
 
-	// Guard: cannot delete pending items
-	if (found.data.status === "pending") {
+	// Guard: cannot delete open items — "pending" or "fixing". Deleting
+	// a mid-fix-loop finding under the fix-hat's feet erases the in-flight
+	// work's paper trail and leaves the FSM picking a different target
+	// (or opening the gate) on the next tick. Close or reject first.
+	//
+	// Note: items with `closed_by` set but status still "pending" are
+	// treated as resolved for gate counting (countPendingFeedback honors
+	// closed_by) but still blocked from delete — the caller must either
+	// explicitly flip status to "closed" via haiku_feedback_update or
+	// call haiku_feedback_reject. This keeps the delete path a hard
+	// two-step so housekeeping can't accidentally erase an item whose
+	// lifecycle state the reviewer only half-updated.
+	if (found.data.status === "pending" || found.data.status === "fixing") {
 		return {
 			ok: false,
-			error:
-				"Error: cannot delete pending feedback. Address, close, or reject it first.",
+			error: `Error: cannot delete ${found.data.status} feedback. Address, close, or reject it first.`,
 		}
 	}
 
@@ -3514,12 +3649,16 @@ export const stateToolDefs = [
 	{
 		name: "haiku_feedback",
 		description:
-			"Create a feedback item for an intent stage. Writes a markdown file with frontmatter tracking status, origin, and author.",
+			"Create a feedback item for an intent. Writes a markdown file with frontmatter tracking status, origin, and author. Omit `stage` to log an intent-scope finding (used by the studio-level pre-intent-completion review layer).",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
 				intent: { type: "string", description: "Intent slug" },
-				stage: { type: "string", description: "Stage name" },
+				stage: {
+					type: "string",
+					description:
+						"Stage name. Omit (or pass empty) to log an intent-scope finding from the studio-level review layer.",
+				},
 				title: {
 					type: "string",
 					description: "Short title for the feedback item (max 120 chars)",
@@ -3531,7 +3670,7 @@ export const stateToolDefs = [
 				origin: {
 					type: "string",
 					description:
-						"Source: adversarial-review | external-pr | external-mr | user-visual | user-chat | agent (default: agent)",
+						"Source: adversarial-review | studio-review | external-pr | external-mr | user-visual | user-chat | agent (default: agent)",
 				},
 				source_ref: {
 					type: "string",
@@ -3542,62 +3681,77 @@ export const stateToolDefs = [
 					type: "string",
 					description: "Who created it (default: agent)",
 				},
+				upstream_stage: {
+					type: "string",
+					description:
+						"When the finding's root cause lives in a DIFFERENT stage than the one being reviewed, name it here. The FSM surfaces cross-stage findings to the human rather than routing them through the current stage's fix loop — the wrong hats cannot fix a different stage's artifacts.",
+				},
 			},
-			required: ["intent", "stage", "title", "body"],
+			required: ["intent", "title", "body"],
 		},
 	},
 	{
 		name: "haiku_feedback_update",
 		description:
-			"Update mutable fields on an existing feedback item. Agents cannot close human-authored feedback.",
+			"Update mutable fields on an existing feedback item. Agents cannot close human-authored feedback. Omit `stage` for intent-scope feedback.",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
 				intent: { type: "string", description: "Intent slug" },
-				stage: { type: "string", description: "Stage name" },
+				stage: {
+					type: "string",
+					description: "Stage name. Omit for intent-scope feedback.",
+				},
 				feedback_id: {
 					type: "string",
 					description: "FB-NN identifier or numeric prefix",
 				},
 				status: {
 					type: "string",
-					description: "New status: pending | closed | rejected",
+					description:
+						"New status: pending | fixing | addressed | closed | rejected",
 				},
 				closed_by: {
 					type: "string",
 					description:
-						"Unit slug whose work the feedback-assessor validated as closing this feedback item (set only by the feedback-assessor hat or via the human review UI).",
+						"Identifier of who/what closed the feedback. For stage feedback: the unit slug whose work the feedback-assessor validated. For fix-loop closures: `fix-loop:<FB-ID>:bolt-<N>`. For intent-scope closures: `intent-fix:<FB-ID>:bolt-<N>`.",
 				},
 			},
-			required: ["intent", "stage", "feedback_id"],
+			required: ["intent", "feedback_id"],
 		},
 	},
 	{
 		name: "haiku_feedback_delete",
 		description:
-			"Delete a feedback file. Cannot delete pending items. Agents cannot delete human-authored items.",
+			"Delete a feedback file. Cannot delete pending items. Agents cannot delete human-authored items. Omit `stage` for intent-scope feedback.",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
 				intent: { type: "string", description: "Intent slug" },
-				stage: { type: "string", description: "Stage name" },
+				stage: {
+					type: "string",
+					description: "Stage name. Omit for intent-scope feedback.",
+				},
 				feedback_id: {
 					type: "string",
 					description: "FB-NN identifier or numeric prefix",
 				},
 			},
-			required: ["intent", "stage", "feedback_id"],
+			required: ["intent", "feedback_id"],
 		},
 	},
 	{
 		name: "haiku_feedback_reject",
 		description:
-			"Reject an agent-authored feedback item with a reason. Sets status to rejected and appends rejection reason to body.",
+			"Reject an agent-authored feedback item with a reason. Sets status to rejected and appends rejection reason to body. Omit `stage` for intent-scope feedback.",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
 				intent: { type: "string", description: "Intent slug" },
-				stage: { type: "string", description: "Stage name" },
+				stage: {
+					type: "string",
+					description: "Stage name. Omit for intent-scope feedback.",
+				},
 				feedback_id: {
 					type: "string",
 					description: "FB-NN identifier or numeric prefix",
@@ -3607,7 +3761,7 @@ export const stateToolDefs = [
 					description: "Explanation for why this feedback is being rejected",
 				},
 			},
-			required: ["intent", "stage", "feedback_id", "reason"],
+			required: ["intent", "feedback_id", "reason"],
 		},
 	},
 	{
@@ -3757,6 +3911,10 @@ export function handleStateTool(
 			// for the archived-flag filter. Reuse the parsed `data` object for
 			// the response body — do NOT call parseFrontmatter again.
 			const entries = listVisibleIntents(intentsDir, { includeArchived })
+			// Resolve the current-checkout intent once — the pickup/revisit
+			// skills use this to skip the "which intent?" prompt when the
+			// user's git branch already names the intent.
+			const branchMatch = intentFromCurrentBranch()
 			const intents = entries.map(({ slug, data }) => {
 				const base: Record<string, unknown> = {
 					slug,
@@ -3766,6 +3924,10 @@ export function handleStateTool(
 				}
 				if (includeArchived) {
 					base.archived = data.archived === true
+				}
+				if (branchMatch && branchMatch.slug === slug) {
+					base.current_branch = true
+					if (branchMatch.stage) base.current_branch_stage = branchMatch.stage
 				}
 				return base
 			})
@@ -3814,7 +3976,7 @@ export function handleStateTool(
 						field,
 						value,
 						message:
-							"Cannot set status to \"completed\" directly — unit completion is FSM-controlled. Call `haiku_unit_advance_hat` to let the FSM auto-complete the unit's last hat, which runs scope validation, feedback-assessor closure, and worktree merge-back. Setting status to other values (pending, active, blocked) is fine.",
+							'Cannot set status to "completed" directly — unit completion is FSM-controlled. Call `haiku_unit_advance_hat` to let the FSM auto-complete the unit\'s last hat, which runs scope validation, feedback-assessor closure, and worktree merge-back. Setting status to other values (pending, active, blocked) is fine.',
 					}),
 				)
 			}
@@ -4830,7 +4992,7 @@ export function handleStateTool(
 			} catch {
 				/* */
 			}
-			if (!settingsPath || !existsSync(settingsPath)) return text("")
+			if (!(settingsPath && existsSync(settingsPath))) return text("")
 			const raw = readFileSync(settingsPath, "utf8")
 			const settings = parseYaml(raw)
 			const val = getNestedField(settings, field)
@@ -5525,22 +5687,20 @@ export function handleStateTool(
 		// ── Feedback ──
 		case "haiku_feedback": {
 			const intent = args.intent as string
-			const stage = args.stage as string
+			// `stage` is now optional — omit to log an intent-scope finding
+			// (used by the studio-level pre-intent-completion review layer).
+			const stage = (args.stage as string) || ""
 			const title = args.title as string
 			const body = args.body as string
 			const origin = (args.origin as string) || undefined
 			const sourceRef = (args.source_ref as string) || undefined
 			const author = (args.author as string) || undefined
+			const upstreamStage = (args.upstream_stage as string) || undefined
 
 			// Validation
 			if (!intent)
 				return {
 					content: [{ type: "text", text: "Error: intent is required" }],
-					isError: true,
-				}
-			if (!stage)
-				return {
-					content: [{ type: "text", text: "Error: stage is required" }],
 					isError: true,
 				}
 			if (!title)
@@ -5587,33 +5747,71 @@ export function handleStateTool(
 				}
 			}
 
-			// Enforce branch BEFORE any stage-dir check/create — otherwise a
-			// mkdirSync on intent main leaks an empty stage dir onto the wrong
-			// branch, and the subsequent write lands on whatever branch git
-			// was on at call time.
-			const feedbackBranchErr = enforceStageBranch(intent, stage)
+			// Branch enforcement — stage feedback lands on the stage branch;
+			// intent-scope feedback (stage omitted) lands on intent-main.
+			// `ensureOnStageBranch(slug, "")` already falls back to intent
+			// main when the stage arg is falsy, so the same helper covers
+			// both cases.
+			const feedbackBranchErr = enforceStageBranch(intent, stage || undefined)
 			if (feedbackBranchErr) return feedbackBranchErr
 
-			// Validate stage exists
-			const stgDir = stageDir(intent, stage)
-			if (!existsSync(stgDir)) {
-				// Auto-create stage dir if the intent has it declared but dir doesn't exist yet
+			if (stage) {
+				const stgDir = stageDir(intent, stage)
+				if (!existsSync(stgDir)) {
+					const { data: intentData } = parseFrontmatter(
+						readFileSync(intentFile, "utf8"),
+					)
+					const stages = (intentData.stages as string[]) || []
+					if (!stages.includes(stage)) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `Error: stage '${stage}' not found under intent '${intent}'`,
+								},
+							],
+							isError: true,
+						}
+					}
+					mkdirSync(stgDir, { recursive: true })
+				}
+			}
+
+			// If upstream_stage is provided, validate it names a real stage
+			// under this intent — otherwise a typo silently routes findings
+			// into a ghost stage the FSM never visits. Also reject self-
+			// reference — pointing upstream at the current stage is
+			// meaningless and would leave the FSM classifying the finding
+			// inconsistently between the stage gate (treats self-ref as
+			// in-scope) and the intent-completion layer (treats it as
+			// cross-stage).
+			if (upstreamStage) {
 				const { data: intentData } = parseFrontmatter(
 					readFileSync(intentFile, "utf8"),
 				)
 				const stages = (intentData.stages as string[]) || []
-				if (!stages.includes(stage)) {
+				if (!stages.includes(upstreamStage)) {
 					return {
 						content: [
 							{
 								type: "text",
-								text: `Error: stage '${stage}' not found under intent '${intent}'`,
+								text: `Error: upstream_stage '${upstreamStage}' is not a stage of intent '${intent}'. Valid stages: ${stages.join(", ")}`,
 							},
 						],
 						isError: true,
 					}
 				}
-				mkdirSync(stgDir, { recursive: true })
+				if (stage && upstreamStage === stage) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Error: upstream_stage '${upstreamStage}' equals the current stage. Omit upstream_stage for in-scope findings; set it only when the root cause lives in a DIFFERENT stage.`,
+							},
+						],
+						isError: true,
+					}
+				}
 			}
 
 			const result = writeFeedbackFile(intent, stage, {
@@ -5622,10 +5820,17 @@ export function handleStateTool(
 				origin,
 				author,
 				source_ref: sourceRef ?? null,
+				// Coalesce empty string to null — "" is not nullish, so `?? null`
+				// would persist the empty string on disk and leak a "present
+				// but empty" upstream_stage that readFeedbackFiles only
+				// normalizes on read. Using `||` avoids the data-hygiene drift.
+				upstream_stage: upstreamStage || null,
 			})
 
 			const gitResult = gitCommitState(
-				`feedback: create ${result.feedback_id} in ${stage}`,
+				stage
+					? `feedback: create ${result.feedback_id} in ${stage}`
+					: `feedback: create ${result.feedback_id} (intent-scope)`,
 			)
 			const response: Record<string, unknown> = {
 				feedback_id: result.feedback_id,
@@ -5640,17 +5845,14 @@ export function handleStateTool(
 
 		case "haiku_feedback_update": {
 			const intent = args.intent as string
-			const stage = args.stage as string
+			// `stage` is optional for intent-scope feedback (stage omitted on
+			// create → stage omitted on update/delete/reject).
+			const stage = (args.stage as string) || ""
 			const feedbackId = args.feedback_id as string
 
 			if (!intent)
 				return {
 					content: [{ type: "text", text: "Error: intent is required" }],
-					isError: true,
-				}
-			if (!stage)
-				return {
-					content: [{ type: "text", text: "Error: stage is required" }],
 					isError: true,
 				}
 			if (!feedbackId)
@@ -5664,7 +5866,11 @@ export function handleStateTool(
 			if (args.closed_by !== undefined)
 				updateFields.closed_by = args.closed_by as string
 
-			const feedbackUpdateBranchErr = enforceStageBranch(intent, stage)
+			// Intent-scope ("") enforces intent-main; stage-scoped enforces the stage branch.
+			const feedbackUpdateBranchErr = enforceStageBranch(
+				intent,
+				stage || undefined,
+			)
 			if (feedbackUpdateBranchErr) return feedbackUpdateBranchErr
 
 			const updateResult = updateFeedbackFile(
@@ -5683,14 +5889,18 @@ export function handleStateTool(
 			}
 
 			const updateGitResult = gitCommitState(
-				`feedback: update ${feedbackId} in ${stage}`,
+				stage
+					? `feedback: update ${feedbackId} in ${stage}`
+					: `feedback: update ${feedbackId} (intent-scope)`,
 			)
 
 			const found = findFeedbackFile(intent, stage, feedbackId)
 			const updateResponse: Record<string, unknown> = {
 				feedback_id: feedbackId,
 				file: found
-					? `.haiku/intents/${intent}/stages/${stage}/feedback/${found.filename}`
+					? stage
+						? `.haiku/intents/${intent}/stages/${stage}/feedback/${found.filename}`
+						: `.haiku/intents/${intent}/feedback/${found.filename}`
 					: undefined,
 				updated_fields: updateResult.updated_fields,
 				message: `Feedback ${feedbackId} updated.`,
@@ -5706,17 +5916,12 @@ export function handleStateTool(
 
 		case "haiku_feedback_delete": {
 			const intent = args.intent as string
-			const stage = args.stage as string
+			const stage = (args.stage as string) || ""
 			const feedbackId = args.feedback_id as string
 
 			if (!intent)
 				return {
 					content: [{ type: "text", text: "Error: intent is required" }],
-					isError: true,
-				}
-			if (!stage)
-				return {
-					content: [{ type: "text", text: "Error: stage is required" }],
 					isError: true,
 				}
 			if (!feedbackId)
@@ -5725,7 +5930,10 @@ export function handleStateTool(
 					isError: true,
 				}
 
-			const feedbackDeleteBranchErr = enforceStageBranch(intent, stage)
+			const feedbackDeleteBranchErr = enforceStageBranch(
+				intent,
+				stage || undefined,
+			)
 			if (feedbackDeleteBranchErr) return feedbackDeleteBranchErr
 
 			const deleteResult = deleteFeedbackFile(
@@ -5743,13 +5951,17 @@ export function handleStateTool(
 			}
 
 			const deleteGitResult = gitCommitState(
-				`feedback: delete ${feedbackId} from ${stage}`,
+				stage
+					? `feedback: delete ${feedbackId} from ${stage}`
+					: `feedback: delete ${feedbackId} (intent-scope)`,
 			)
 
 			const deleteResponse: Record<string, unknown> = {
 				feedback_id: feedbackId,
 				deleted: true,
-				message: `Feedback ${feedbackId} deleted from stage '${stage}'.`,
+				message: stage
+					? `Feedback ${feedbackId} deleted from stage '${stage}'.`
+					: `Feedback ${feedbackId} deleted (intent-scope).`,
 			}
 			return text(
 				JSON.stringify(
@@ -5762,18 +5974,13 @@ export function handleStateTool(
 
 		case "haiku_feedback_reject": {
 			const intent = args.intent as string
-			const stage = args.stage as string
+			const stage = (args.stage as string) || ""
 			const feedbackId = args.feedback_id as string
 			const reason = args.reason as string
 
 			if (!intent)
 				return {
 					content: [{ type: "text", text: "Error: intent is required" }],
-					isError: true,
-				}
-			if (!stage)
-				return {
-					content: [{ type: "text", text: "Error: stage is required" }],
 					isError: true,
 				}
 			if (!feedbackId)
@@ -5794,8 +6001,12 @@ export function handleStateTool(
 
 			// Enforce branch BEFORE reading the feedback file — if main has
 			// drifted ahead, the file may only exist on the stage branch.
-			// Reading first would spuriously report "not found".
-			const feedbackRejectBranchErr = enforceStageBranch(intent, stage)
+			// Reading first would spuriously report "not found". Intent-
+			// scope ("") resolves to intent-main via ensureOnStageBranch.
+			const feedbackRejectBranchErr = enforceStageBranch(
+				intent,
+				stage || undefined,
+			)
 			if (feedbackRejectBranchErr) return feedbackRejectBranchErr
 
 			// Find the feedback file
@@ -5805,7 +6016,9 @@ export function handleStateTool(
 					content: [
 						{
 							type: "text",
-							text: `Error: feedback '${feedbackId}' not found in stage '${stage}'`,
+							text: stage
+								? `Error: feedback '${feedbackId}' not found in stage '${stage}'`
+								: `Error: feedback '${feedbackId}' not found (intent-scope)`,
 						},
 					],
 					isError: true,
@@ -5849,7 +6062,9 @@ export function handleStateTool(
 			)
 
 			const rejectGitResult = gitCommitState(
-				`feedback: reject ${feedbackId} in ${stage}`,
+				stage
+					? `feedback: reject ${feedbackId} in ${stage}`
+					: `feedback: reject ${feedbackId} (intent-scope)`,
 			)
 
 			const rejectResponse: Record<string, unknown> = {
@@ -5949,12 +6164,39 @@ export function handleStateTool(
 						visit: item.visit,
 						source_ref: item.source_ref,
 						closed_by: item.closed_by,
+						bolt: item.bolt,
+						upstream_stage: item.upstream_stage,
 					}
 					// Include stage field when listing across stages
 					if (!stageFilt) {
 						entry.stage = stg
 					}
 					allItems.push(entry)
+				}
+			}
+
+			// Include intent-scope feedback when no stage filter was
+			// provided (studio-level review findings live there).
+			if (!stageFilt) {
+				const intentItems = readFeedbackFiles(intent, "")
+				for (const item of intentItems) {
+					if (statusFilt && item.status !== statusFilt) continue
+					allItems.push({
+						feedback_id: item.id,
+						file: item.file,
+						title: item.title,
+						status: item.status,
+						origin: item.origin,
+						author: item.author,
+						author_type: item.author_type,
+						created_at: item.created_at,
+						visit: item.visit,
+						source_ref: item.source_ref,
+						closed_by: item.closed_by,
+						bolt: item.bolt,
+						upstream_stage: item.upstream_stage,
+						stage: null,
+					})
 				}
 			}
 

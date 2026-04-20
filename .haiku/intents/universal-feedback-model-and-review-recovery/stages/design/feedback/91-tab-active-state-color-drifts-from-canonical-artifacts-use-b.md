@@ -2,7 +2,7 @@
 title: >-
   Tab active-state color drifts from canonical: artifacts use blue-600,
   DESIGN-BRIEF §2 says teal-600
-status: closed
+status: open
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:26:51Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-28-canonical-token-normalization-sweep
+closed_by: null
 ---
 
 DESIGN-BRIEF §2 "Design Language Reference > Component Patterns" declares the canonical tab-active pattern:

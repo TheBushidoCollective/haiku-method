@@ -2,7 +2,7 @@
 title: >-
   revisit-unit-list.html still ships opacity-60 on 9 locked cards +
   bg-stone-200/text-stone-500 pill — 1.4.3 FAIL
-status: closed
+status: open
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:26:56Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-26-artifact-opacity-ban-enforcement
+closed_by: null
 ---
 
 `revisit-unit-list.html` still renders the banned opacity-as-state pattern on nine `.locked-card` surfaces, directly contradicting the unit-11 / unit-18 repo-wide ban that `contrast-and-type-audit.md §6.3` claims was remediated.

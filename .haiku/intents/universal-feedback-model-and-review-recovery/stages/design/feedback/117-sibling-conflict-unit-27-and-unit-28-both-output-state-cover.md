@@ -2,7 +2,7 @@
 title: >-
   Sibling conflict — unit-27 and unit-28 both output state-coverage-grid.md and
   DESIGN-BRIEF.md with no declared ordering
-status: closed
+status: open
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:30:48Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-27-spec-alignment-and-design-brief-completeness.md
-closed_by: unit-28-canonical-token-normalization-sweep
+closed_by: null
 bolt: 0
 upstream_stage: null
 ---

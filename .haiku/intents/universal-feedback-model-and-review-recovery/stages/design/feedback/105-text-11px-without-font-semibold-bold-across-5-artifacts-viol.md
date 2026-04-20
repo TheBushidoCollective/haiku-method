@@ -2,7 +2,7 @@
 title: >-
   text-[11px] without font-semibold/bold across 5 artifacts — violates §3
   type-scale floor (WCAG 1.4.4)
-status: closed
+status: open
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:30:09Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-31-contrast-and-type-scale-fixes
+closed_by: null
 ---
 
 `contrast-and-type-audit.md §3 Type Scale` states:

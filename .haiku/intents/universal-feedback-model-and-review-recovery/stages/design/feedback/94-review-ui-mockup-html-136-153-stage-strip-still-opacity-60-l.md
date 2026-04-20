@@ -2,7 +2,7 @@
 title: >-
   review-ui-mockup.html:136/153 stage-strip still opacity-60, line 790 still
   opacity-60 on fb-card — 1.4.3 FAIL
-status: closed
+status: open
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:27:22Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-26-artifact-opacity-ban-enforcement
+closed_by: null
 ---
 
 `review-ui-mockup.html` still ships three `opacity-60` violations that `contrast-and-type-audit.md §6.2 / §4 Bolt-4` claims were remediated.

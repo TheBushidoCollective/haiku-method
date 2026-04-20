@@ -2,7 +2,7 @@
 title: >-
   Unit-16 FB-54 regression: `max-w-[1400px]` magic number still live in
   assessor-summary-card.html
-status: closed
+status: open
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:26:11Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-28-canonical-token-normalization-sweep
+closed_by: null
 ---
 
 Unit-16 gate 9 (FB-54) requires `max-w-[1400px]` to be replaced with the tokenized `max-w-page` utility (backed by the `--max-page-width` CSS variable defined in DESIGN-TOKENS.md §1.3). The gate command: `grep -rn 'max-w-\[1400px\]' stages/design/artifacts/` MUST return 0.

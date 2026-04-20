@@ -2,7 +2,7 @@
 title: >-
   unit-30 missing grep for announce() helper wiring — FB-104 completion-signal
   path unenforced
-status: closed
+status: open
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:30:43Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-30-native-activation-and-live-region-landmarks.md
-closed_by: unit-30-native-activation-and-live-region-landmarks
+closed_by: null
 bolt: 0
 upstream_stage: null
 ---

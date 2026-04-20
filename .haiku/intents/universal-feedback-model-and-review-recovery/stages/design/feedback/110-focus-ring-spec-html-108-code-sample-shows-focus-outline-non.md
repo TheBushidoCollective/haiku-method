@@ -2,7 +2,7 @@
 title: >-
   focus-ring-spec.html:108 code sample shows focus:outline-none without
   focus-visible context — misleads devs
-status: closed
+status: open
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:31:50Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-29-focus-visible-canonicalization-and-spec-clarity
+closed_by: null
 ---
 
 `focus-ring-spec.html:108` displays the canonical focus-ring pattern as a code sample, and the sample ends with `focus:outline-none`:

@@ -414,7 +414,13 @@ try {
 		setOpenReviewHandler(null)
 	})
 
-	await test("changes_requested on intent_review context writes feedback files", async () => {
+	await test("changes_requested on intent_review pre-execute context surfaces inline feedback without persisting files", async () => {
+		// Pre-execute contexts (intent_review + elaborate_to_execute with no
+		// completed units) deliberately do NOT persist feedback files — the
+		// reviewer's comments go inline in the returned action and the
+		// agent edits the unit specs or intent.md directly. Persisting
+		// pre-execute findings would accumulate artifacts the fix-loop
+		// model can't address (no artifact exists yet).
 		const { projDir, intentDirPath, slug } = createProject("g6-intent-review", {
 			active_stage: "plan",
 			intent_reviewed: false,
@@ -441,10 +447,12 @@ try {
 		const parsed = JSON.parse(jsonMatch[0].replace(/\n\n---$/, ""))
 
 		assert.strictEqual(parsed.action, "changes_requested")
-		assert.strictEqual(
-			parsed.feedback_ids.length,
-			2,
-			"Should have 2 items (1 pin + 1 free-text)",
+		// Pre-execute: no persistent files — feedback lives inline in the action.
+		assert.strictEqual(parsed.feedback_ids.length, 0)
+		assert.strictEqual(parsed.feedback, "Intent needs more scope")
+		assert.ok(
+			parsed.annotations?.pins?.length === 1,
+			"Inline annotations should still be surfaced",
 		)
 
 		setOpenReviewHandler(null)
@@ -568,6 +576,12 @@ try {
 			origin: "adversarial-review",
 			author_type: "agent",
 			author: "perf-agent",
+		})
+
+		// Stage the referenced unit spec on disk before closing — the
+		// ghost-unit guard in updateFeedbackFile requires it to exist.
+		createUnit(intentDirPath, "build", "unit-02-fix-guard", {
+			status: "completed",
 		})
 
 		process.chdir(projDir)

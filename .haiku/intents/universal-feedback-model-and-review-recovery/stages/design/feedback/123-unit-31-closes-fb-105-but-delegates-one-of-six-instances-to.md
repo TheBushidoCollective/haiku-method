@@ -2,7 +2,7 @@
 title: >-
   unit-31 closes FB-105 but delegates one of six instances to unit-29 with no
   depends_on wiring
-status: closed
+status: open
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:31:53Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-31-contrast-and-type-scale-fixes.md
-closed_by: unit-31-contrast-and-type-scale-fixes
+closed_by: null
 bolt: 0
 upstream_stage: null
 ---

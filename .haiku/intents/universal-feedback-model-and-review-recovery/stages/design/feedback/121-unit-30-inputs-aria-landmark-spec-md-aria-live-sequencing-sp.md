@@ -2,7 +2,7 @@
 title: >-
   unit-30 inputs aria-landmark-spec.md + aria-live-sequencing-spec.md but does
   not declare them as outputs
-status: closed
+status: open
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:31:30Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-30-native-activation-and-live-region-landmarks.md
-closed_by: unit-30-native-activation-and-live-region-landmarks
+closed_by: null
 bolt: 0
 upstream_stage: null
 ---

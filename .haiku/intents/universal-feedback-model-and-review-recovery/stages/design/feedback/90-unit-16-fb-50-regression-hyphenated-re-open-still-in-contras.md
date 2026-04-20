@@ -2,7 +2,7 @@
 title: >-
   Unit-16 FB-50 regression: hyphenated "Re-open" still in
   contrast-and-type-audit.md
-status: closed
+status: open
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:26:35Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-28-canonical-token-normalization-sweep
+closed_by: null
 ---
 
 Unit-16 gate 7 (FB-50) requires the hyphenated `Re-open` to be replaced with the canonical one-word `Reopen` (per DESIGN-BRIEF §2 Footer Button Copy Matrix and unit-14 canonical copy). Gate command: `grep -rn 'Re-open' stages/design/artifacts/ stages/design/DESIGN-BRIEF.md knowledge/DESIGN-TOKENS.md` MUST return 0.

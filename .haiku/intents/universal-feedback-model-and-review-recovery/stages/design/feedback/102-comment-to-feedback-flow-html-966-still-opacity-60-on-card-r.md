@@ -2,7 +2,7 @@
 title: >-
   comment-to-feedback-flow.html:966 still opacity-60 on card root with
   text-stone-500 child — 1.4.3 FAIL
-status: closed
+status: open
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:28:52Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-26-artifact-opacity-ban-enforcement
+closed_by: null
 ---
 
 `comment-to-feedback-flow.html:966` still ships a "collapsed card preview" with `opacity-60` on the root AND `text-stone-500` text inside, which the `contrast-and-type-audit.md §6.3` bolt-3 table (line 499) claims was remediated.

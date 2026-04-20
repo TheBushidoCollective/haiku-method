@@ -2,7 +2,7 @@
 title: >-
   unit-30 quality gate 3 script cross-ref comment requirement lacks grep recipe
   — unfalsifiable
-status: closed
+status: open
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T15:35:07Z'
 iteration: 5
 visit: 5
 source_ref: stages/design/units/unit-30-native-activation-and-live-region-landmarks.md
-closed_by: unit-30-native-activation-and-live-region-landmarks
+closed_by: null
 bolt: 0
 upstream_stage: null
 ---

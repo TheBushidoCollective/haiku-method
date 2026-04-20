@@ -312,6 +312,13 @@ async function run() {
 	})
 
 	await test("updates closed_by field", async () => {
+		// Stub the unit file so the ghost-unit guard in updateFeedbackFile
+		// sees the spec on disk. In a real lifecycle the unit spec lands
+		// during additive elaboration before a finding is closed against it.
+		writeFileSync(
+			join(intentDirPath, "stages", stageName, "units", "unit-99-fix.md"),
+			"---\ntitle: stub\n---\n\nstub unit for closed_by test.\n",
+		)
 		const res = await fetch(
 			`${baseUrl}/api/feedback/${intentSlug}/${stageName}/FB-01`,
 			{

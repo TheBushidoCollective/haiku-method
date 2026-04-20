@@ -107,6 +107,17 @@ function getTextResult(result) {
 	return result.content[0].text
 }
 
+// Write a stub unit spec so feedback closed_by=unit-NN-slug passes the
+// ghost-unit guard in updateFeedbackFile. Real lifecycle lands a proper
+// unit spec during additive elaboration; tests stub it to keep scope
+// local.
+function writeUnitStub(unitSlug, stage = stageName) {
+	writeFileSync(
+		join(intentDirPath, "stages", stage, "units", `${unitSlug}.md`),
+		"---\ntitle: stub\n---\n\nstub unit for feedback closed_by tests.\n",
+	)
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 try {
@@ -352,6 +363,7 @@ try {
 	})
 
 	test("updates closed_by field", () => {
+		writeUnitStub("unit-05-fix-null")
 		const result = updateFeedbackFile(intentSlug, stageName, "FB-02", {
 			closed_by: "unit-05-fix-null",
 		})
@@ -364,7 +376,32 @@ try {
 		assert.strictEqual(found.data.closed_by, "unit-05-fix-null")
 	})
 
+	test("rejects closed_by that references a ghost unit", () => {
+		// The unit-99-ghost.md file is never created on disk. The guard
+		// must refuse the close — otherwise prior revisits could leave
+		// findings marked closed_by=unit-NN when the unit spec was never
+		// produced or was deleted by a subsequent revisit cycle.
+		const result = updateFeedbackFile(intentSlug, stageName, "FB-02", {
+			closed_by: "unit-99-ghost",
+		})
+		assert.ok(!result.ok)
+		if (!result.ok) {
+			assert.ok(result.error.includes("does not exist"))
+			assert.ok(result.error.includes("unit-99-ghost"))
+		}
+	})
+
+	test("accepts fix-loop marker as closed_by without unit file check", () => {
+		// Fix-loop bolt markers don't match the unit-NN-slug pattern,
+		// so the ghost-unit guard leaves them alone.
+		const result = updateFeedbackFile(intentSlug, stageName, "FB-02", {
+			closed_by: "fix-loop:FB-02:bolt-1",
+		})
+		assert.ok(result.ok)
+	})
+
 	test("updates multiple fields at once", () => {
+		writeUnitStub("unit-06-defaults")
 		const result = updateFeedbackFile(intentSlug, stageName, "FB-03", {
 			status: "addressed",
 			closed_by: "unit-06-defaults",
@@ -534,15 +571,24 @@ try {
 		assert.ok(getTextResult(result).includes("intent is required"))
 	})
 
-	test("MCP tool rejects missing stage", () => {
+	test("MCP tool accepts missing stage (intent-scope feedback)", () => {
+		// `stage` is now optional — omitting it logs an intent-scope finding
+		// used by the studio-level pre-intent-completion review layer.
 		const result = handleStateTool("haiku_feedback", {
 			intent: intentSlug,
 			stage: "",
-			title: "Test",
-			body: "Test",
+			title: "Intent-scope finding",
+			body: "Cross-stage concern logged by studio-level review",
 		})
-		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("stage is required"))
+		assert.ok(!result.isError, getTextResult(result))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.ok(parsed.feedback_id.startsWith("FB-"))
+		// Intent-scope file lives outside any stage directory
+		assert.ok(
+			parsed.file.includes(`/intents/${intentSlug}/feedback/`),
+			`expected intent-scope path, got: ${parsed.file}`,
+		)
+		assert.ok(!parsed.file.includes("/stages/"))
 	})
 
 	test("MCP tool rejects missing title", () => {
@@ -659,6 +705,7 @@ try {
 	})
 
 	test("updates closed_by via MCP tool", () => {
+		writeUnitStub("unit-99-mcp-fix")
 		const result = handleStateTool("haiku_feedback_update", {
 			intent: intentSlug,
 			stage: stageName,

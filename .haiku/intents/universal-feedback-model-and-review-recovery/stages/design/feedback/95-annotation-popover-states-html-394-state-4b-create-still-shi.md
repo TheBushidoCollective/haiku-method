@@ -2,7 +2,7 @@
 title: >-
   annotation-popover-states.html:394 State 4b Create still ships bg-teal-600
   text-white opacity-50 — banned
-status: closed
+status: open
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:27:40Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: unit-26-artifact-opacity-ban-enforcement
+closed_by: null
 ---
 
 `annotation-popover-states.html` State 4b "Create" button still carries the exact banned pattern `contrast-and-type-audit.md §4 Bolt-3` claims was replaced, plus the explanatory `<li>` text that canonicalizes the banned approach.

@@ -2,7 +2,7 @@
 title: >-
   Unit-16 FB-54 regression: `max-w-[1400px]` magic number still live in
   assessor-summary-card.html
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent

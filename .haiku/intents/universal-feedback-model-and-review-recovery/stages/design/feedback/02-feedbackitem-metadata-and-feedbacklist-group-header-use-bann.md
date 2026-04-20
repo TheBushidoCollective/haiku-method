@@ -2,7 +2,7 @@
 title: >-
   FeedbackItem metadata and FeedbackList group header use banned text-[10px] +
   banned stone-400/stone-500 pair
-status: pending
+status: fixing
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -11,7 +11,7 @@ iteration: 0
 visit: 0
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 upstream_stage: null
 ---
 

@@ -2,7 +2,7 @@
 title: >-
   annotation-popover-states.html:381 popover close × uses text-stone-500 on
   dark:bg-stone-800 — 3.17:1 FAIL in dark
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-20T09:31:33Z'
 iteration: 4
 visit: 4
 source_ref: null
-closed_by: null
+closed_by: unit-31-contrast-and-type-scale-fixes
 ---
 
 `annotation-popover-states.html:381` popover close button uses `text-stone-500` as the default glyph color, which fails WCAG 1.4.11 (non-text UI ≥ 3:1) and 1.4.3 (text ≥ 4.5:1) when the popover is rendered in dark mode over a `dark:bg-stone-800` / `dark:bg-stone-900` surface.

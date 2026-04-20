@@ -139,9 +139,9 @@ motion-spec.md §Cross-file policy) is the landing pattern.
 
 ## Completion criteria
 
-- [ ] feedback-inline-mobile.html has prefers-reduced-motion guard block
-- [ ] Stage-wide motion-audit script returns empty output
-- [ ] FAB pulse stops under reduced-motion; sheet still opens
-- [ ] motion-and-reduced-motion-spec.md cites the specific guard
-- [ ] Motion-audit script added to design-reviewer gate list
-- [ ] FB-143 closes on live-grep verification
+- [x] feedback-inline-mobile.html has prefers-reduced-motion guard block
+- [x] Stage-wide motion-audit script returns empty output
+- [x] FAB pulse stops under reduced-motion; sheet still opens
+- [x] motion-and-reduced-motion-spec.md cites the specific guard
+- [x] Motion-audit script added to design-reviewer gate list
+- [x] FB-143 closes on live-grep verification

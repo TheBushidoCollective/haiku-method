@@ -107,6 +107,87 @@ function resolveStudioFilePath(subpath: string): string | null {
 	return null
 }
 
+// ── FSM Contracts (global rules, ONE source of truth) ────────────────────────
+//
+// These blocks are injected into the orchestrator's tool_use_result for the
+// corresponding phase actions. They define GLOBAL framework rules — not
+// per-studio or per-stage content. Per-studio files (STAGE.md, hats/*.md,
+// review-agents/*.md, phases/*.md) carry domain-specific guidance ONLY; they
+// MUST NOT restate FSM mechanics (they would drift and conflict).
+//
+// If a rule changes here, it changes for every studio at once.
+
+const FSM_CONTRACTS_ELABORATE_BLOCK = [
+	"### FSM Contracts (REQUIRED — global framework rules)",
+	"",
+	"These rules apply to **every studio and every stage**. They are enforced by the framework, not by prose. Re-stating them in per-studio files is forbidden (they would drift).",
+	"",
+	"#### Unit file naming",
+	"",
+	"- `stages/{stage}/units/unit-NN-slug.md` — zero-padded NN (`01`, `02`, … `10`, `11`); kebab-case slug; `.md` extension.",
+	"- NN is monotonically increasing across the stage's lifetime, including revisits. Never reuse a number.",
+	"- The FSM validates naming at `haiku_run_next` — non-compliant files block the advance.",
+	"",
+	"#### Unit DAG (`depends_on:`)",
+	"",
+	"- Each unit's `depends_on:` frontmatter lists the names of units in the **same stage** that must complete before this unit starts. Omit the field (or empty list) for units with no dependencies.",
+	"- The DAG MUST be acyclic. The FSM computes topological waves; a cycle blocks the advance.",
+	"- Cross-stage dependencies go in the stage's `inputs:` (STAGE.md) and resolve to concrete output files from prior stages.",
+	"",
+	"#### Quality gates",
+	"",
+	"- `quality_gates:` frontmatter MUST be a list of **executable gate objects** — `{ name, command, dir? }` — not prose strings. The FSM runs each `command` at `haiku_unit_advance_hat` time; non-zero exit blocks the advance. Prose-only gates are silently skipped and give no enforcement.",
+	"- Canonical shape:",
+	"",
+	"  ```yaml",
+	"  quality_gates:",
+	"    - name: no-banned-tokens",
+	"      command: \"! grep -rnE 'bg-gray-|text-gray-' .haiku/intents/{slug}/stages/{stage}/artifacts/\"",
+	"      dir: .            # optional; default repo root",
+	"  ```",
+	"",
+	"- **Scope rule**: gate commands MUST audit the **full stage artifact directory** (e.g. `stages/{stage}/artifacts/`), not only the unit's declared `inputs:`. Enforcement scope must match rule scope — narrower enforcement lets regressions accumulate on files no unit audited.",
+	"- Commands should be idempotent and fast (< 5s each). Negate banned-pattern greps (`! grep …`) so exit 0 means the gate passes.",
+	"- Prose descriptions of what the gate *means* belong in the unit body under `## Completion criteria`, NOT in the frontmatter.",
+	"",
+	"#### Bolts, hats, advance",
+	"",
+	"- A **bolt** is one full cycle through the stage's hat sequence for a unit. The FSM advances hats via `haiku_unit_advance_hat`; agents NEVER mutate `bolt`, `hat`, `status`, or `iterations` fields directly (the harness blocks those writes).",
+	"- The agent's responsibility per hat: produce the hat's outputs, then call `haiku_unit_advance_hat`. On reject: call `haiku_unit_reject_hat` with a reason.",
+	"- Maximum bolts per unit: 5. Exceeding escalates to the human.",
+	"",
+	"#### Revisit cycles — `closes:` frontmatter",
+	"",
+	"- On an iteration > 1 (feedback-revisit or post-execute rollback), new units MUST declare `closes: [FB-NN, FB-MM, …]` listing every feedback id they address.",
+	"- Every pending feedback id MUST be referenced by at least one new unit's `closes:` — orphans block advancement.",
+	"- Resolution paths: (a) draft new units that close findings (additive-elaboration), OR (b) fix existing unit specs and close the findings via `haiku_feedback_update status=closed` (pre-execute spec revisit), OR (c) reject stale/invalid findings via `haiku_feedback_reject` with a concrete reason.",
+	"",
+	"#### MCP tool contracts — what the agent calls vs. what the FSM owns",
+	"",
+	"- `haiku_run_next { intent }` is the sole FSM driver. Agents call it to advance the lifecycle; they never write `state.json`, `intent.md` frontmatter, or unit FSM fields directly.",
+	"- `haiku_unit_advance_hat` / `haiku_unit_reject_hat` are called by subagents inside each hat; they return the result path the parent reads to drive the next action.",
+	"- `haiku_feedback` / `haiku_feedback_update` / `haiku_feedback_reject` / `haiku_feedback_delete` are the sole channels for logging and resolving review findings.",
+	"- Branch topology, merge semantics, worktree creation, and stage-branch enforcement are owned by the FSM — the agent does not `git checkout`, `git merge`, or create branches manually during stage work.",
+].join("\n")
+
+const FSM_CONTRACTS_EXECUTE_BLOCK = [
+	"### FSM Contracts (REQUIRED — reminder during execute)",
+	"",
+	"- The agent operates inside ONE hat at a time. Each hat runs in a fresh subagent with the hat's mandate loaded from `hats/{hat}.md`. Hat context does not leak across hats — that isolation is the framework's defense against self-reinforcing errors.",
+	"- After the hat's work is done, the subagent calls `haiku_unit_advance_hat` (success) or `haiku_unit_reject_hat { reason }` (failure). The FSM writes the result; the subagent does not.",
+	"- Quality gates run automatically at `haiku_unit_advance_hat`. A failing gate blocks the advance with a concrete error — fix the failure, don't retry the tool call.",
+	"- Cross-unit writes within a stage are forbidden without explicit `inputs:` / `outputs:` declarations on the unit.",
+].join("\n")
+
+const FSM_CONTRACTS_REVIEW_BLOCK = [
+	"### FSM Contracts (REQUIRED — reminder during review)",
+	"",
+	"- Review agents MUST NOT write, edit, or create any file. Their ONLY output channel is `haiku_feedback`. Any file write is a scope violation.",
+	"- Conditional review: each agent's `applies_to:` frontmatter (glob list) scopes it to matching output kinds. The FSM filters agents whose scope doesn't match; agents without `applies_to:` always run.",
+	"- Findings with concrete reproducible claims (file:line + gate command + proposed fix) accelerate resolution. Vague concerns (\"looks wrong\") are less actionable — prefer concrete.",
+	"- A stage's retry budget is TIGHT: agent-invoked rejection cycles are capped at 2 iterations (`MAX_STAGE_ITERATIONS=2`). Beyond that, the framework escalates to the human — repeated rejections indicate a spec problem the pre-execute review should have caught, and the correct response is to fix the plan, not keep building against a broken plan.",
+].join("\n")
+
 /**
  * Compact feedback summary for orchestrator action responses.
  * Returns id/title/origin/author/status + file path — NO body.
@@ -1374,6 +1455,69 @@ function fsmGateAsk(slug: string, stage: string): void {
 	sealIntentState(slug)
 }
 
+/**
+ * Enter the intent-completion-review phase. Stage work is done; the intent
+ * awaits a terminal review before completion. This is the bookend that
+ * prevents a stage-level auto-gate from silently completing the whole
+ * intent. Users can opt out by setting `skip_intent_completion_review:
+ * true` on intent frontmatter.
+ *
+ * Note: distinct from the existing `intent_review` gate_context which
+ * fires at the FIRST stage's elaborate→execute gate to review initial
+ * specs. This one fires at the END, after the final stage's gate passes.
+ */
+function fsmEnterIntentCompletionReview(slug: string): void {
+	const intentFile = join(intentDir(slug), "intent.md")
+	if (!existsSync(intentFile)) return
+	setFrontmatterField(intentFile, "phase", "awaiting_completion_review")
+	setFrontmatterField(intentFile, "completion_review_entered_at", timestamp())
+	emitTelemetry("haiku.intent.completion_review_entered", { intent: slug })
+	sealIntentState(slug)
+}
+
+/**
+ * Shared completion path used by every gate-pass site that used to call
+ * `fsmIntentComplete` + return `intent_complete` directly. Returns the
+ * correct action for the current opt-in/opt-out state:
+ *   - skip_intent_completion_review = true → fire intent_complete as before
+ *   - otherwise → enter completion-review phase, open a gate_review
+ *
+ * This decouples stage-gate approval from intent completion. Stages
+ * approving (auto or otherwise) must NEVER by themselves mark an intent
+ * completed — the terminal review is a separate, explicit step.
+ */
+function completeOrReviewIntent(
+	slug: string,
+	studio: string,
+	sourceMessage: string,
+): OrchestratorAction {
+	const intentFile = join(intentDir(slug), "intent.md")
+	const intent = existsSync(intentFile) ? readFrontmatter(intentFile) : {}
+	const skipReview = intent.skip_intent_completion_review === true
+	if (skipReview) {
+		fsmIntentComplete(slug)
+		return {
+			action: "intent_complete",
+			intent: slug,
+			studio,
+			message: `${sourceMessage} (skip_intent_completion_review=true — completed without final review)`,
+		}
+	}
+	fsmEnterIntentCompletionReview(slug)
+	// Reuse the gate_review action so the existing review UI / elicitation
+	// path handles the approval. Distinguished by gate_context so the
+	// approval handler knows to fire intent_complete rather than advance_stage.
+	return {
+		action: "gate_review",
+		intent: slug,
+		studio,
+		stage: null,
+		gate_type: "ask",
+		gate_context: "intent_completion",
+		message: `${sourceMessage} All stages passed — opening final intent review. Approval completes the intent; changes_requested routes back to a stage you specify.`,
+	}
+}
+
 function fsmIntentComplete(slug: string): void {
 	const intentFile = join(intentDir(slug), "intent.md")
 	if (existsSync(intentFile)) {
@@ -1447,6 +1591,22 @@ export function runNext(slug: string): OrchestratorAction {
 
 	const status = (intent.status as string) || "active"
 	const activeStage = (intent.active_stage as string) || ""
+	const intentPhase = (intent.phase as string) || "active"
+
+	// Intent is in the final-completion-review phase — re-open the review
+	// gate on every run_next call until the user approves or requests
+	// changes. This is the terminal bookend before fsmIntentComplete fires.
+	if (intentPhase === "awaiting_completion_review" && status !== "completed") {
+		return {
+			action: "gate_review",
+			intent: slug,
+			studio,
+			stage: null,
+			gate_type: "ask",
+			gate_context: "intent_completion",
+			message: `Intent '${slug}' has all stages approved and is awaiting final review. Opening review gate.`,
+		}
+	}
 
 	if (status === "completed") {
 		return {
@@ -1665,13 +1825,11 @@ export function runNext(slug: string): OrchestratorAction {
 			.slice(idx + 1)
 			.find((s) => !skipStages.includes(s))
 		if (!next) {
-			fsmIntentComplete(slug)
-			return {
-				action: "intent_complete",
-				intent: slug,
+			return completeOrReviewIntent(
+				slug,
 				studio,
-				message: `All stages complete for intent '${slug}'`,
-			}
+				`All remaining stages in intent '${slug}' are skipped.`,
+			)
 		}
 		currentStage = next
 	}
@@ -2540,13 +2698,11 @@ export function runNext(slug: string): OrchestratorAction {
 				}
 			}
 			fsmCompleteStage(slug, currentStage, "advanced")
-			fsmIntentComplete(slug)
-			return {
-				action: "intent_complete",
-				intent: slug,
+			return completeOrReviewIntent(
+				slug,
 				studio,
-				message: `Auto-gate passed — all stages complete for intent '${slug}'`,
-			}
+				`Auto-gate passed — all stages complete for intent '${slug}'.`,
+			)
 		}
 
 		// Non-auto gates: open review UI
@@ -2645,13 +2801,11 @@ export function runNext(slug: string): OrchestratorAction {
 		const nextStage =
 			stageIdx < studioStages.length - 1 ? studioStages[stageIdx + 1] : null
 		if (!nextStage) {
-			fsmIntentComplete(slug)
-			return {
-				action: "intent_complete",
-				intent: slug,
+			return completeOrReviewIntent(
+				slug,
 				studio,
-				message: `All stages complete for intent '${slug}'`,
-			}
+				`All stages approved for intent '${slug}'.`,
+			)
 		}
 		const hats = resolveStageHats(studio, nextStage)
 
@@ -2749,12 +2903,11 @@ function runNextComposite(
 		(e) => compositeState[e.studio] === "complete",
 	)
 	if (allComplete) {
-		fsmIntentComplete(slug)
-		return {
-			action: "intent_complete",
-			intent: slug,
-			message: `All composite studios complete for '${slug}'`,
-		}
+		return completeOrReviewIntent(
+			slug,
+			"composite",
+			`All composite studios complete for '${slug}'.`,
+		)
 	}
 
 	return {
@@ -3698,35 +3851,10 @@ function buildRunInstructions(
 				)
 			}
 
-			// Universal executable-gate + full-stage-scope guidance — applies
-			// to every stage in every studio. Injected here (not per-STAGE.md)
-			// so the rule is uniform without sweeping 105 ELABORATION.md files.
-			sections.push(
-				[
-					"### Quality-Gate Format (REQUIRED)",
-					"",
-					"Each unit's `quality_gates:` frontmatter MUST be a list of **executable gate objects**, not prose strings. The FSM runs each gate's `command` at `haiku_unit_advance_hat` time; non-zero exit blocks the advance. Prose-only gates are silently skipped and give no enforcement.",
-					"",
-					"Canonical shape:",
-					"",
-					"```yaml",
-					"quality_gates:",
-					"  - name: no-banned-gray-tokens",
-					"    command: \"! grep -rnE 'bg-gray-|text-gray-|border-gray-' .haiku/intents/{slug}/stages/{stage}/artifacts/\"",
-					"    dir: .            # optional; default is repo root",
-					"  - name: all-spec-files-present",
-					"    command: \"test -f .haiku/intents/{slug}/stages/{stage}/artifacts/aria-landmark-spec.md\"",
-					"```",
-					"",
-					"**Scope rule (#1 — full-stage, not unit-inputs).** Gate commands MUST grep / audit the **entire stage artifact directory** (e.g. `stages/{stage}/artifacts/`), not just the files this unit declares in its `inputs:`. A unit's `inputs:` scopes what the unit reads — it does NOT scope what the gate enforces. Enforcement scope must match rule scope, or regressions creep back in on the files no unit audited.",
-					"",
-					"**Commands should be idempotent and fast (< 5s each).** Each gate runs synchronously on every advance_hat call. If a check is expensive, split it into a named gate with a tighter grep scope, or defer it to the adversarial-review phase.",
-					"",
-					"**Use negation for banned-pattern gates.** `! grep …` exits 0 on no matches, which is what the FSM needs for a passing gate.",
-					"",
-					"Prose descriptions of the intent of the gate are still welcome — put them in the unit body under `## Completion criteria`, not in the frontmatter.",
-				].join("\n"),
-			)
+			// Universal FSM Contracts — global rules the framework enforces,
+			// injected here (not per-STAGE.md / per-studio artifact) so the
+			// rules have ONE source of truth and can't drift per studio.
+			sections.push(FSM_CONTRACTS_ELABORATE_BLOCK)
 
 			// Resolve upstream stage inputs — load actual content from prior stages
 			if (stageDef?.data?.inputs && Array.isArray(stageDef.data.inputs)) {
@@ -4259,6 +4387,8 @@ function buildRunInstructions(
 			const hats = (action.hats as string[]) || []
 			const firstHat = (action.first_hat as string) || hats[0] || ""
 
+			sections.push(FSM_CONTRACTS_EXECUTE_BLOCK)
+
 			// Resolve file paths (NOT content) — subagents read these themselves.
 			// Keeps main-agent AND per-subagent context small — no double inlining.
 			const stagePath = resolveStudioFilePath(
@@ -4781,6 +4911,7 @@ function buildRunInstructions(
 
 		case "review": {
 			const stage = action.stage as string
+			sections.push(FSM_CONTRACTS_REVIEW_BLOCK)
 			// Collect agent name → mandate FILE PATH (path-only — subagent reads).
 			let agentPaths: Record<string, string> = readReviewAgentPaths(
 				studio,
@@ -5736,6 +5867,23 @@ export async function handleOrchestratorTool(
 						feedback: reviewResult.feedback,
 					})
 				if (reviewResult.decision === "approved") {
+					// Final intent-completion review — the terminal bookend.
+					// Approval fires fsmIntentComplete and returns intent_complete.
+					if (gateContext === "intent_completion") {
+						const intentStudio =
+							(readFrontmatter(join(intentDir(slug), "intent.md"))
+								.studio as string) || ""
+						fsmIntentComplete(slug)
+						syncSessionMetadata(slug, args.state_file as string | undefined)
+						const gateResult = {
+							action: "intent_complete",
+							intent: slug,
+							studio: intentStudio,
+							message:
+								"Final review approved — intent complete. Report the completion summary to the user.",
+						}
+						return text(withInstructions(gateResult))
+					}
 					if (gateContext === "intent_review") {
 						// Intent approved — mark as reviewed AND advance phase to execute
 						const intentFilePath = join(
@@ -5785,14 +5933,17 @@ export async function handleOrchestratorTool(
 						return text(withInstructions(gateResult))
 					}
 					fsmCompleteStage(slug, stage, "advanced")
-					fsmIntentComplete(slug)
 					syncSessionMetadata(slug, args.state_file as string | undefined)
-					const gateResult = {
-						action: "intent_complete",
-						intent: slug,
-						message:
-							"Approved — intent complete. IMPORTANT: Report completion summary. Do NOT ask what to do next — the intent is done.",
-					}
+					// Stage approved ≠ intent complete. Enter the intent-review
+					// bookend unless the intent explicitly opted out.
+					const approvedStudio =
+						(readFrontmatter(join(intentDir(slug), "intent.md"))
+							.studio as string) || ""
+					const gateResult = completeOrReviewIntent(
+						slug,
+						approvedStudio,
+						`Stage '${stage}' approved — final stage complete.`,
+					)
 					return text(withInstructions(gateResult))
 				}
 				if (reviewResult.decision === "external_review") {
@@ -5827,6 +5978,29 @@ export async function handleOrchestratorTool(
 						annotations: reviewResult.annotations,
 						feedback_ids: feedbackIds,
 						message: `Changes requested on intent: ${reviewResult.feedback || "(see annotations)"}.${feedbackSummary} Revise the intent description, then call haiku_run_next { intent: "${slug}" } again.`,
+					}
+					return text(withInstructions(gateResult))
+				}
+				if (gateContext === "intent_completion") {
+					// Final-review rejection — drop out of the completion-review
+					// phase and route the agent back. Feedback files were written
+					// against the last stage, so the agent can call haiku_revisit
+					// to re-open that stage's elaborate phase and address them.
+					const intentFilePath = join(intentDir(slug), "intent.md")
+					setFrontmatterField(intentFilePath, "phase", "active")
+					gitCommitState(
+						`haiku: intent ${slug} completion-review rejected, reopening for revisit`,
+					)
+					syncSessionMetadata(slug, args.state_file as string | undefined)
+					const gateResult = {
+						action: "changes_requested",
+						intent: slug,
+						stage: null,
+						gate_context: "intent_completion",
+						feedback: reviewResult.feedback,
+						annotations: reviewResult.annotations,
+						feedback_ids: feedbackIds,
+						message: `Changes requested on intent completion: ${reviewResult.feedback || "(see annotations)"}.${feedbackSummary} The intent is no longer in final review. Call \`haiku_revisit { intent: "${slug}" }\` to revisit a stage (or a specific one via \`stage\`), then address the feedback and call \`haiku_run_next\` to drive back to final review.`,
 					}
 					return text(withInstructions(gateResult))
 				}
@@ -6013,14 +6187,18 @@ export async function handleOrchestratorTool(
 									}
 									return text(withInstructions(elicitApproveResult))
 								}
+								// Final stage approved via elicitation — enter intent-
+								// completion bookend instead of completing silently.
 								fsmCompleteStage(slug, stage, "advanced")
-								fsmIntentComplete(slug)
 								syncSessionMetadata(slug, args.state_file as string | undefined)
-								const elicitApproveResult = {
-									action: "intent_complete",
-									intent: slug,
-									message: "Approved via elicitation — intent complete",
-								}
+								const elicitStudio =
+									(readFrontmatter(join(intentDir(slug), "intent.md"))
+										.studio as string) || ""
+								const elicitApproveResult = completeOrReviewIntent(
+									slug,
+									elicitStudio,
+									"Final stage approved via elicitation.",
+								)
 								return text(withInstructions(elicitApproveResult))
 							}
 							// request_changes

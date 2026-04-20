@@ -524,12 +524,49 @@ export function mergeStageBranchForward(
 	if (!isGitRepo()) return { success: true, message: "no git" }
 	const fromBranch = `haiku/${slug}/${fromStage}`
 	const toBranch = `haiku/${slug}/${toStage}`
+	const current = getCurrentBranch()
 
 	try {
 		run(["git", "rev-parse", "--verify", fromBranch])
 		run(["git", "rev-parse", "--verify", toBranch])
+	} catch (err) {
+		return {
+			success: false,
+			message: err instanceof Error ? err.message : String(err),
+		}
+	}
 
+	// Checkout may fail with dirty tree — auto-commit on current branch and retry.
+	try {
 		run(["git", "checkout", toBranch])
+	} catch (checkoutErr) {
+		const raw =
+			checkoutErr instanceof Error ? checkoutErr.message : String(checkoutErr)
+		const looksLikeDirtyTree =
+			raw.includes("would be overwritten by checkout") ||
+			raw.includes("Please commit your changes or stash them")
+		if (looksLikeDirtyTree && current) {
+			const committed = autoCommitDirtyTree(current)
+			if (!committed.ok) {
+				return {
+					success: false,
+					message: `dirty tree blocks checkout of ${toBranch} from ${current} and auto-commit failed: ${committed.message}`,
+				}
+			}
+			try {
+				run(["git", "checkout", toBranch])
+			} catch (retryErr) {
+				return {
+					success: false,
+					message: `auto-committed WIP on ${current} but checkout of ${toBranch} still failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`,
+				}
+			}
+		} else {
+			return { success: false, message: raw }
+		}
+	}
+
+	try {
 		run([
 			"git",
 			"merge",
@@ -538,7 +575,6 @@ export function mergeStageBranchForward(
 			"-m",
 			`haiku: merge forward ${fromStage} → ${toStage}`,
 		])
-
 		return { success: true, message: `merged ${fromBranch} → ${toBranch}` }
 	} catch (err) {
 		// Abort any in-progress merge to leave the repo clean
@@ -771,23 +807,36 @@ export function ensureOnStageBranch(
 				}
 			} catch (err) {
 				const raw = err instanceof Error ? err.message : String(err)
-				// Apply the same dirty-tree message-rewriting the plain-checkout
-				// path does — the raw git error is cryptic and the action
-				// ("stash or commit") is not obvious.
 				const looksLikeDirtyTree =
 					raw.includes("would be overwritten by checkout") ||
 					raw.includes("Please commit your changes or stash them")
+				if (looksLikeDirtyTree) {
+					const committed = autoCommitDirtyTree(current)
+					if (committed.ok) {
+						try {
+							run(["git", "checkout", mainlineBranch])
+							return {
+								ok: true,
+								branch: mainlineBranch,
+								message: `target branch '${targetBranch}' not yet created — auto-committed WIP on '${current}' (${committed.committed_files.length} file(s)) and fell back to repo mainline '${mainlineBranch}'`,
+								switched: true,
+							}
+						} catch (retryErr) {
+							return {
+								ok: false,
+								branch: current,
+								message: `auto-committed WIP on '${current}' but retry fallback to '${mainlineBranch}' still failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`,
+								switched: false,
+								target_branch: mainlineBranch,
+							}
+						}
+					}
+				}
 				return {
 					ok: false,
 					branch: current,
-					message: looksLikeDirtyTree
-						? `Uncommitted changes on branch '${current}' would be overwritten by falling back to repo mainline '${mainlineBranch}'. Commit them (they belong on '${current}') and retry.`
-						: `target branch '${targetBranch}' not yet created, and failed to fall back to mainline '${mainlineBranch}': ${raw}`,
+					message: `target branch '${targetBranch}' not yet created, and failed to fall back to mainline '${mainlineBranch}': ${raw}`,
 					switched: false,
-					block: looksLikeDirtyTree ? "dirty_tree" : undefined,
-					dirty_files: looksLikeDirtyTree
-						? parseOverwrittenFiles(raw)
-						: undefined,
 					target_branch: mainlineBranch,
 				}
 			}
@@ -834,9 +883,10 @@ export function ensureOnStageBranch(
 
 	// Recovery case: switching to stage branch but intent main has drifted ahead.
 	// Merge main → stage FIRST so any work mis-written to main (feedback files,
-	// state.json mutations) travels with the stage branch. On conflict, leave
-	// the repo in the merging state so the agent can resolve and commit, then
-	// retry — the next call detects main is already merged and skips.
+	// state.json mutations) travels with the stage branch. On merge conflict
+	// we leave the repo in the merging state so the agent can resolve and
+	// commit. On dirty-tree during the initial checkout, auto-commit the WIP
+	// on the current branch (where it belongs) and retry.
 	if (targetBranch === stageBranch && branchExists(intentMain)) {
 		const aheadCount = tryRun([
 			"git",
@@ -845,8 +895,56 @@ export function ensureOnStageBranch(
 			`${stageBranch}..${intentMain}`,
 		])
 		if (aheadCount && Number.parseInt(aheadCount, 10) > 0) {
+			// Stage 1: checkout stage branch. Dirty tree on this step is
+			// auto-recoverable.
 			try {
 				run(["git", "checkout", stageBranch])
+			} catch (checkoutErr) {
+				const raw =
+					checkoutErr instanceof Error
+						? checkoutErr.message
+						: String(checkoutErr)
+				const looksLikeDirtyTree =
+					raw.includes("would be overwritten by checkout") ||
+					raw.includes("Please commit your changes or stash them")
+				if (looksLikeDirtyTree) {
+					const committed = autoCommitDirtyTree(current)
+					if (committed.ok) {
+						try {
+							run(["git", "checkout", stageBranch])
+						} catch (retryErr) {
+							return {
+								ok: false,
+								branch: getCurrentBranch() || current,
+								message: `auto-committed WIP on '${current}' but retry checkout of '${stageBranch}' failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`,
+								switched: false,
+								target_branch: stageBranch,
+							}
+						}
+					} else {
+						return {
+							ok: false,
+							branch: current,
+							message: `Uncommitted changes on '${current}' block switch to '${stageBranch}' and auto-commit failed: ${committed.message}`,
+							switched: false,
+							block: "dirty_tree",
+							dirty_files: parseOverwrittenFiles(raw),
+							target_branch: stageBranch,
+						}
+					}
+				} else {
+					return {
+						ok: false,
+						branch: getCurrentBranch() || current,
+						message: `failed to checkout '${stageBranch}' before merging main: ${raw}`,
+						switched: false,
+						target_branch: stageBranch,
+					}
+				}
+			}
+			// Stage 2: merge main into the (now checked-out) stage branch.
+			// A failure here is a real conflict — leave it for human resolution.
+			try {
 				run([
 					"git",
 					"merge",
@@ -863,9 +961,6 @@ export function ensureOnStageBranch(
 				}
 			} catch (err) {
 				const raw = err instanceof Error ? err.message : String(err)
-				// Detect conflicts via git status so the agent sees exactly
-				// which files to resolve. Do NOT abort — leaving the merge
-				// in progress lets the agent fix and commit, then retry.
 				const status = tryRun(["git", "status", "--porcelain"])
 				const conflicts = (status || "")
 					.split("\n")
@@ -880,32 +975,16 @@ export function ensureOnStageBranch(
 							l.startsWith("UD "),
 					)
 					.map((l) => l.slice(3).trim())
-				const looksLikeDirtyTree =
-					conflicts.length === 0 &&
-					(raw.includes("would be overwritten by") ||
-						raw.includes("Please commit your changes or stash them"))
 				return {
 					ok: false,
-					branch: getCurrentBranch() || current,
+					branch: stageBranch,
 					message:
 						conflicts.length > 0
-							? `Merge intent-main → stage '${stage}' left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on '${stageBranch}' (edit files, \`git add\`, \`git commit\`), then retry. A clean retry will detect main is already merged and skip this step.`
-							: looksLikeDirtyTree
-								? `Uncommitted changes would be overwritten by merging main → stage '${stage}'. Commit them (they belong on '${stageBranch}') and retry.`
-								: `failed to merge main into stage: ${raw}. Resolve manually on '${stageBranch}', then retry.`,
+							? `Merge intent-main → stage '${stage}' left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on '${stageBranch}' (edit files, \`git add\`, \`git commit\`), then retry.`
+							: `failed to merge main into stage: ${raw}. Resolve manually on '${stageBranch}', then retry.`,
 					switched: false,
-					block:
-						conflicts.length > 0
-							? "merge_conflict"
-							: looksLikeDirtyTree
-								? "dirty_tree"
-								: undefined,
-					dirty_files:
-						conflicts.length > 0
-							? conflicts
-							: looksLikeDirtyTree
-								? parseOverwrittenFiles(raw)
-								: undefined,
+					block: conflicts.length > 0 ? "merge_conflict" : undefined,
+					dirty_files: conflicts.length > 0 ? conflicts : undefined,
 					target_branch: stageBranch,
 				}
 			}
@@ -923,22 +1002,94 @@ export function ensureOnStageBranch(
 		}
 	} catch (err) {
 		const raw = err instanceof Error ? err.message : String(err)
-		// Give a clearer hint when the user has uncommitted modifications
-		// that would be clobbered by the checkout — the raw git message is
-		// long and the action ("stash or commit") isn't obvious to an agent.
 		const looksLikeDirtyTree =
 			raw.includes("would be overwritten by checkout") ||
 			raw.includes("Please commit your changes or stash them")
+		if (looksLikeDirtyTree) {
+			// Auto-commit the dirty tree on the CURRENT branch (where the
+			// edits happened), then retry the checkout. These changes belong
+			// on `current` by definition — git refused to overwrite them
+			// because they differ from what `targetBranch` has. Committing
+			// them on `current` is the correct resolution and requires no
+			// human involvement.
+			const committed = autoCommitDirtyTree(current)
+			if (committed.ok) {
+				try {
+					run(["git", "checkout", targetBranch])
+					return {
+						ok: true,
+						branch: targetBranch,
+						message: `auto-committed WIP on '${current}' (${committed.committed_files.length} file(s)), then checked out ${targetBranch}`,
+						switched: true,
+					}
+				} catch (retryErr) {
+					const retryRaw =
+						retryErr instanceof Error ? retryErr.message : String(retryErr)
+					return {
+						ok: false,
+						branch: current,
+						message: `auto-committed WIP on '${current}' but retry checkout still failed: ${retryRaw}`,
+						switched: false,
+						target_branch: targetBranch,
+					}
+				}
+			}
+			return {
+				ok: false,
+				branch: current,
+				message: `Uncommitted changes on '${current}' block switch to '${targetBranch}' and auto-commit failed: ${committed.message}`,
+				switched: false,
+				block: "dirty_tree",
+				dirty_files: parseOverwrittenFiles(raw),
+				target_branch: targetBranch,
+			}
+		}
 		return {
 			ok: false,
 			branch: current,
-			message: looksLikeDirtyTree
-				? `Uncommitted changes on branch '${current}' would be overwritten by switching to '${targetBranch}'. Commit them (they belong on '${current}') and retry.`
-				: `failed to checkout ${targetBranch}: ${raw}`,
+			message: `failed to checkout ${targetBranch}: ${raw}`,
 			switched: false,
-			block: looksLikeDirtyTree ? "dirty_tree" : undefined,
-			dirty_files: looksLikeDirtyTree ? parseOverwrittenFiles(raw) : undefined,
 			target_branch: targetBranch,
+		}
+	}
+}
+
+/** Auto-commit the working tree and index on the current branch with a
+ *  generic WIP message. Used by stage-branch enforcement to resolve
+ *  dirty-tree blocks without agent/human involvement: the changes belong
+ *  on the current branch by definition, so committing them there is the
+ *  correct outcome. Returns ok=false only if git itself refuses (e.g.
+ *  nothing staged after `git add -A`, which would mean the dirty-tree
+ *  detection was a false positive). */
+function autoCommitDirtyTree(
+	branch: string,
+): { ok: true; committed_files: string[] } | { ok: false; message: string } {
+	try {
+		// Stage everything tracked and untracked. Submodule pointer drift
+		// (the "m" status entries) is included — those point at committed
+		// submodule refs and are safe to commit here; reverting them would
+		// throw away legitimate submodule updates.
+		run(["git", "add", "-A"])
+		// List what we're about to commit so the return value is accurate.
+		const staged = tryRun(["git", "diff", "--cached", "--name-only"])
+		const files = staged.split("\n").filter(Boolean)
+		if (files.length === 0) {
+			return {
+				ok: false,
+				message: "nothing to commit after git add -A (dirty-tree signal may have been spurious)",
+			}
+		}
+		run([
+			"git",
+			"commit",
+			"-m",
+			`haiku: auto-commit wip on ${branch} (FSM branch enforcement)`,
+		])
+		return { ok: true, committed_files: files }
+	} catch (err) {
+		return {
+			ok: false,
+			message: err instanceof Error ? err.message : String(err),
 		}
 	}
 }

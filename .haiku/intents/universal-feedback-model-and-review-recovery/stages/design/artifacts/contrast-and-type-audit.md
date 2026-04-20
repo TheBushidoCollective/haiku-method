@@ -173,6 +173,15 @@ fixed in-place (token pairs for the buttons, updated reference text for the
 table, rule removed from the stylesheet). The final grep above now returns 0
 for every input file.
 
+**Bolt-3 correction (unit-18, 2026-04-19):** The bolt-2 sweep missed one site
+— `annotation-popover-states.html` State 4b's Create button (line ~394)
+still carried `bg-teal-600 text-white opacity-50 cursor-not-allowed` on a
+live rendered button (not a table-reference or stylesheet rule, which
+explains why the bolt-2 investigation pattern overlooked it). The button
+was replaced with the canonical secondary-disabled token pair and the
+associated explanatory bullet was rewritten — see §4 Bolt-3 additions.
+Post-fix, the grep above returns 0 for every input file.
+
 ---
 
 ## 3. Type Scale (FB-15 remediation)
@@ -237,6 +246,7 @@ Pre-unit disabled buttons had two problems:
 | feedback-card-states.html · "Verify & Close" (dark) | `bg-green-700/50 text-white/60` | ~2.2:1 | `dark:bg-green-900/40 dark:text-green-200` | 7.8:1 | PASS |
 | feedback-card-states.html · "Re-open" (disabled, light) | `border-stone-300 text-stone-400 bg-stone-50` | 2.8:1 | `border-stone-400 text-stone-600 bg-stone-100` | 6.85:1 text, 3.4:1 border | PASS |
 | feedback-card-states.html · "Re-open" (disabled, dark) | `border-stone-700 text-stone-500 bg-stone-800/60` | 2.9:1 | `border-stone-500 text-stone-300 bg-stone-800` | 10.2:1 text, 3.2:1 border | PASS |
+| annotation-popover-states.html · State 4b "Create" (disabled) | `bg-teal-600 text-white opacity-50` | ≈ 2.3:1 (α-composited on white) | `bg-stone-100 text-stone-600 border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500` | 6.85:1 light / 10.2:1 dark; border 3.4:1 / 3.2:1 | PASS |
 
 ### Bolt-2 additions
 
@@ -253,13 +263,38 @@ Pre-unit disabled buttons had two problems:
   its `<style>` block. Removed. Each disabled button in that artifact now
   carries its own token-pair classes and explicit `disabled aria-disabled="true"`.
 
+### Bolt-3 additions (unit-18 — opacity-state & disabled-contrast sweep)
+
+- `annotation-popover-states.html` State 4b ("Disabled — empty body — Create
+  is inert") still used `bg-teal-600 text-white opacity-50` on the Create
+  button. That pattern α-composites the primary color with the page
+  background and collapses the text contrast below AA (≈ 2.3:1 on white).
+  The three OTHER disabled Create buttons in the same file (compact, full,
+  and bottom-sheet variants) already used the canonical secondary-disabled
+  token pair; State 4b was a holdout. Replaced with:
+  `bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border
+  border-stone-400 dark:border-stone-500 cursor-not-allowed` (text 6.85:1
+  light / 10.2:1 dark; border 3.4:1 light / 3.2:1 dark; PASS WCAG 2.2
+  1.4.11 Non-Text + 1.4.3 Text).
+- Same button's font size was lifted from `text-[10px]` (which violates
+  §3's type-scale floor when not paired with `font-semibold`/`font-bold`
+  context) to `text-xs` (12px), matching the three other disabled Create
+  buttons in the file.
+- State 4b's explanatory copy was rewritten. The previous bullet claimed
+  "Button keeps the teal color at `opacity: 0.5` so the brand / primary-
+  action meaning is preserved." That claim was the source of the
+  violation. Replaced with a bullet that states the canonical disabled
+  token pair and explains that primary-action meaning is carried by
+  position (right-most button) and `aria-describedby` hint, not by color
+  on a disabled control.
+
 Every native `<button ... disabled>` across the 7 inputs that is disabled at
 render time carries `aria-disabled="true"`:
 
 | Artifact | native `disabled` buttons | carry `aria-disabled="true"` |
 |---|---|---|
 | feedback-card-states.html | 4 | 4 |
-| annotation-popover-states.html | 3 | 3 |
+| annotation-popover-states.html | 4 | 4 |
 | feedback-inline-desktop.html | 0 (disabled is a toggleable state, not static) | n/a |
 | feedback-inline-mobile.html | 0 (same) | n/a |
 | comments-list-with-agent-toggle.html | 0 | n/a |

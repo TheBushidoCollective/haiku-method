@@ -64,10 +64,10 @@ quality_gates:
     consistently (convert to `<a>` or `<button>`) within this unit's scope. The
     final audit count is reported in the design-reviewer's verification note.
 status: active
-bolt: 1
-hat: feedback-assessor
+bolt: 2
+hat: designer
 started_at: '2026-04-20T05:08:26Z'
-hat_started_at: '2026-04-20T05:18:56Z'
+hat_started_at: '2026-04-20T08:51:19Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:26Z'
@@ -79,6 +79,21 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T05:18:56Z'
+    completed_at: '2026-04-20T08:51:19Z'
+    result: reject
+    reason: >-
+      FB-76 and FB-82 are both demonstrably closed (verified:
+      assessor-summary-card.html lines 83/123/236/259 carry the canonical
+      focus-visible ring on all 4 interactive buttons; stage-progress-strip.html
+      has 0 `<div role="link">` and 10 native `<a href="#stage-...">` anchors
+      with proper tabindex/aria-current/aria-disabled and the canonical
+      focus-visible ring). However, advance_hat refused with `criteria_not_met:
+      8 unchecked completion criteria` — the designer/reviewer hats did not tick
+      off the unit's completion criteria on the unit spec before handoff.
+      Bolting back so the prior hats can check off the criteria they completed;
+      the FB-closure work itself is correct and should not be redone.
+  - hat: designer
+    started_at: '2026-04-20T08:51:19Z'
     completed_at: null
     result: null
 ---

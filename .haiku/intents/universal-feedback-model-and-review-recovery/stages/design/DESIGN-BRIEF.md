@@ -564,7 +564,11 @@ DESIGN-BRIEF §2 is the single source of truth for every footer-button label in 
 | **Verify & Close** | Primary (positive) | `bg-green-600 hover:bg-green-700 text-white` |
 | **Reopen** | Secondary (muted) | Same as Dismiss |
 
-Every button above inherits the standard focus ring (`ring-2 ring-teal-500 ring-offset-2 ring-offset-white dark:ring-offset-stone-900`) and the standard disabled style (`opacity-50 cursor-not-allowed`). No verb-specific deviations.
+Every button above inherits the standard focus ring (`ring-2 ring-teal-500 ring-offset-2 ring-offset-white dark:ring-offset-stone-900`) and the standard disabled tokens from `DESIGN-TOKENS §1.7`:
+- **Dismiss / Reopen (secondary)**: `bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed` + `aria-disabled="true"`.
+- **Verify & Close (primary green)**: `bg-green-300 text-green-800 dark:bg-green-900/40 dark:text-green-200 cursor-not-allowed` + `aria-disabled="true"`.
+
+`opacity-*` on a button root is banned repo-wide (see DESIGN-TOKENS §1.7 / unit-11 / unit-18). No verb-specific deviations.
 
 **Screen-reader announcements (canonical phrasing, polite live region):**
 

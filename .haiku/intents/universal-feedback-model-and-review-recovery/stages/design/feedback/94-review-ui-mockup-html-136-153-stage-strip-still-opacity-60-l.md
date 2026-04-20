@@ -2,7 +2,7 @@
 title: >-
   review-ui-mockup.html:136/153 stage-strip still opacity-60, line 790 still
   opacity-60 on fb-card — 1.4.3 FAIL
-status: pending
+status: closed
 origin: adversarial-review
 author: accessibility
 author_type: agent

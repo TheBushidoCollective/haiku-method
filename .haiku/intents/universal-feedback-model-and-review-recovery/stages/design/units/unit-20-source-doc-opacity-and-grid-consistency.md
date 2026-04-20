@@ -65,9 +65,9 @@ quality_gates:
     grid for every component without searching.
 status: active
 bolt: 4
-hat: designer
+hat: design-reviewer
 started_at: '2026-04-20T05:08:33Z'
-hat_started_at: '2026-04-20T09:04:35Z'
+hat_started_at: '2026-04-20T09:05:25Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T05:08:33Z'
@@ -167,6 +167,10 @@ iterations:
       are sound and do not need re-work.
   - hat: designer
     started_at: '2026-04-20T09:04:35Z'
+    completed_at: '2026-04-20T09:05:25Z'
+    result: advance
+  - hat: design-reviewer
+    started_at: '2026-04-20T09:05:25Z'
     completed_at: null
     result: null
 ---

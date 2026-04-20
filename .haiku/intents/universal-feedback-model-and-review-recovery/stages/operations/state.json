@@ -2,11 +2,9 @@
   "stage": "operations",
   "status": "active",
   "phase": "elaborate",
-  "started_at": "2026-04-16T16:36:43Z",
+  "started_at": null,
   "completed_at": null,
   "gate_entered_at": null,
   "gate_outcome": null,
-  "elaboration_turns": 1,
-  "stale_reason": "revisit of upstream stage 'design' (manual retroactive fix)",
-  "stale_marked_at": "2026-04-20T21:55:00Z"
+  "visits": 0
 }

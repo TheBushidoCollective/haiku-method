@@ -62,7 +62,7 @@
     <!-- ===== Header ===== -->
     <header class="flex items-start justify-between border-b border-stone-200 dark:border-stone-700 pb-4">
       <div>
-        <p class="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">universal-feedback-model-and-review-recovery · stage: design · unit-07</p>
+        <p class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500">universal-feedback-model-and-review-recovery · stage: design · unit-07</p>
         <h1 class="text-2xl font-semibold text-stone-900 dark:text-stone-100 mt-1">Keyboard Shortcut Map &amp; Help Overlay</h1>
         <p class="text-sm text-stone-500 dark:text-stone-400 mt-2 max-w-3xl">
           Canonical keyboard contract for the review UI. Closes <strong>FB-04</strong>. Reference behavior:
@@ -122,7 +122,7 @@
               <td class="px-3 py-2"><span class="text-red-600 dark:text-red-400">suppressed</span></td>
             </tr>
             <tr>
-              <td class="px-3 py-2 whitespace-nowrap"><kbd class="k" aria-keyshortcuts="g o">g</kbd> <span class="text-stone-400">then</span> <kbd class="k" aria-keyshortcuts="g o">o</kbd></td>
+              <td class="px-3 py-2 whitespace-nowrap"><kbd class="k" aria-keyshortcuts="g o">g</kbd> <span class="text-stone-500">then</span> <kbd class="k" aria-keyshortcuts="g o">o</kbd></td>
               <td class="px-3 py-2 text-stone-700 dark:text-stone-200">Jump to <strong>O</strong>verview tab</td>
               <td class="px-3 py-2 text-stone-500 dark:text-stone-400">global (2-key sequence)</td>
               <td class="px-3 py-2 text-stone-500 dark:text-stone-400">
@@ -502,13 +502,13 @@
                   <h3 id="kbd-help-title" class="text-base font-semibold text-stone-900 dark:text-stone-100">Keyboard shortcuts</h3>
                   <p class="text-xs text-stone-500 dark:text-stone-400 mt-0.5">Press <kbd class="k">?</kbd> or <kbd class="k">Esc</kbd> to close.</p>
                 </div>
-                <button class="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-xl leading-none" aria-label="Close help">×</button>
+                <button class="text-stone-500 hover:text-stone-600 dark:hover:text-stone-200 text-xl leading-none" aria-label="Close help">×</button>
               </header>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-xs">
                 <!-- Navigation group -->
                 <div class="space-y-2">
-                  <h4 class="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mt-1">Navigation</h4>
+                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-1">Navigation</h4>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Next feedback</span><kbd class="k">j</kbd></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Previous feedback</span><kbd class="k">k</kbd></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Previous stage</span><kbd class="k">[</kbd></div>
@@ -518,7 +518,7 @@
 
                 <!-- Tabs group -->
                 <div class="space-y-2">
-                  <h4 class="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mt-1">Jump to tab</h4>
+                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-1">Jump to tab</h4>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Overview</span><span class="flex gap-1"><kbd class="k">g</kbd><kbd class="k">o</kbd></span></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Units</span><span class="flex gap-1"><kbd class="k">g</kbd><kbd class="k">u</kbd></span></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Knowledge</span><span class="flex gap-1"><kbd class="k">g</kbd><kbd class="k">k</kbd></span></div>
@@ -527,17 +527,17 @@
 
                 <!-- Actions group -->
                 <div class="space-y-2 mt-3">
-                  <h4 class="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mt-1">Actions</h4>
+                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-1">Actions</h4>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Cross-flash target / open pin</span><kbd class="k">Enter</kbd></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Approve</span><kbd class="k">a</kbd></div>
-                  <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Create annotation <span class="text-stone-400">(on focused artifact / line)</span></span><kbd class="k">c</kbd></div>
-                  <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Reopen / Request changes <span class="text-stone-400">(context)</span></span><kbd class="k">r</kbd></div>
+                  <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Create annotation <span class="text-stone-500">(on focused artifact / line)</span></span><kbd class="k">c</kbd></div>
+                  <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Reopen / Request changes <span class="text-stone-500">(context)</span></span><kbd class="k">r</kbd></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Focus feedback textarea</span><kbd class="k">/</kbd></div>
                 </div>
 
                 <!-- Dismiss group -->
                 <div class="space-y-2 mt-3">
-                  <h4 class="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mt-1">Dismiss</h4>
+                  <h4 class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mt-1">Dismiss</h4>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Close layer / blur input</span><kbd class="k">Esc</kbd></div>
                   <div class="flex items-center justify-between gap-3"><span class="text-stone-700 dark:text-stone-200">Toggle this help</span><kbd class="k">?</kbd></div>
                 </div>
@@ -550,7 +550,7 @@
                   <input type="checkbox" class="h-3.5 w-3.5 rounded border-stone-300 dark:border-stone-600 text-teal-600 focus:ring-teal-500" aria-describedby="req-mod-help" />
                   <span class="text-stone-600 dark:text-stone-300">Require <kbd class="k">Alt</kbd> for single-key shortcuts</span>
                 </label>
-                <p id="req-mod-help" class="text-[10px] text-stone-400 dark:text-stone-500 pl-5">Recommended for screen-reader users. Remaps <kbd class="k">j</kbd> → <kbd class="k">Alt</kbd>+<kbd class="k">j</kbd>, etc. See §3b for the conflict analysis.</p>
+                <p id="req-mod-help" class="text-xs text-stone-500 dark:text-stone-500 pl-5">Recommended for screen-reader users. Remaps <kbd class="k">j</kbd> → <kbd class="k">Alt</kbd>+<kbd class="k">j</kbd>, etc. See §3b for the conflict analysis.</p>
               </footer>
             </div>
           </div>
@@ -560,13 +560,13 @@
       <!-- Light / dark variants callout -->
       <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-4">
-          <p class="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-2">Light variant</p>
+          <p class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mb-2">Light variant</p>
           <p class="text-xs text-stone-600 dark:text-stone-300">
             Backdrop <code>bg-black/50 backdrop-blur-sm</code>; card <code>bg-white</code>, border <code>border-stone-200</code>, shadow <code>shadow-2xl</code>; <code>&lt;kbd&gt;</code> chips use <code>stone-100/stone-300/stone-900</code>.
           </p>
         </div>
         <div class="rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-4">
-          <p class="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-2">Dark variant</p>
+          <p class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500 mb-2">Dark variant</p>
           <p class="text-xs text-stone-600 dark:text-stone-300">
             Same backdrop; card <code>dark:bg-stone-900</code>, border <code>dark:border-stone-700</code>; <code>&lt;kbd&gt;</code> chips use <code>stone-800/stone-600/stone-200</code>. Both variants meet WCAG AA (contrast ≥ 4.5:1 between chip text and background).
           </p>
@@ -632,7 +632,7 @@
       </ul>
     </section>
 
-    <footer class="text-[11px] text-stone-400 dark:text-stone-500 pt-6 border-t border-stone-200 dark:border-stone-700">
+    <footer class="text-[11px] text-stone-500 dark:text-stone-500 pt-6 border-t border-stone-200 dark:border-stone-700">
       Closes <strong>FB-04</strong> · Companion: <code>focus-ring-spec.html</code> · Reference: <code>review-ui-mockup.html</code> lines 1826–1950.
     </footer>
   </div>

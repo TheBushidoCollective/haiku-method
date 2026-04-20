@@ -29,8 +29,8 @@ Artifacts: `feedback-inline-desktop.html`, `feedback-inline-mobile.html`, `feedb
 | Feedback card (compact) | ✓ | ✓ (teal border bump) | ✓ (focus-visible 2px teal) | ✓ (depress + brightness) | ✓ (opacity 0.6 when read-only/locked) | ✓ (§5b red-tinted card — `feedback-card-states.html`) | ✓ (list-level empty copy — `feedback-inline-*` §empty-state) |
 | Feedback card (expanded) | ✓ | — [1] | ✓ | — | ✓ (busy state, `aria-busy="true"`) | ✓ (inline error row above footer) | — |
 | Pending footer buttons (Reject / Close) | ✓ | ✓ | ✓ | ✓ | ✓ (`disabled` while saving) | ✓ (toast + red ring) | — |
-| Addressed footer buttons (Verify & Close / Re-open) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
-| Closed / Rejected footer buttons (Re-open) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| Addressed footer buttons (Verify & Close / Reopen) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| Closed / Rejected footer buttons (Reopen) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
 | Status badge (pending / addressed / closed / rejected) | ✓ | — [2] | — [2] | — [2] | — [2] | ✓ (contrast-preserved inside red-tinted card) | — |
 
 [1] Expanded card is the hover + click terminal state; no nested hover.

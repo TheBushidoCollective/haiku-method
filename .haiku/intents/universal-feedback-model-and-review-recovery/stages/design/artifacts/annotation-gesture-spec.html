@@ -63,11 +63,11 @@
     /* Section card — consistent with DESIGN-BRIEF */
     .card {
       background: white;
-      border: 1px solid #e7e5e4;
+      border: 1px solid #e7e5e4; <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
       border-radius: 12px;
       box-shadow: 0 1px 2px 0 rgba(0,0,0,0.04);
     }
-    .dark .card { background: #1c1917; border-color: #44403c; }
+    .dark .card { background: #1c1917; border-color: #44403c; } <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
   </style>
 </head>
 <body class="bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-sans">
@@ -80,7 +80,7 @@
 <header class="sticky top-0 z-40 bg-white/90 dark:bg-stone-900/90 backdrop-blur border-b border-stone-200 dark:border-stone-800">
   <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
     <div>
-      <p class="text-[10px] font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">Design Stage · unit-04</p>
+      <p class="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400">Design Stage · unit-04</p>
       <h1 class="text-base font-semibold">Annotation gesture spec</h1>
     </div>
     <div class="flex items-center gap-2">
@@ -121,7 +121,7 @@
     <div class="overflow-x-auto">
       <table class="w-full text-sm border-collapse">
         <thead>
-          <tr class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-700">
+          <tr class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-700">
             <th class="text-left py-2 pr-4">Artifact kind</th>
             <th class="text-left py-2 pr-4">MIME / detector</th>
             <th class="text-left py-2 pr-4">Cursor affordance</th>
@@ -148,7 +148,7 @@
             <td class="py-3 pr-4 font-medium">Markdown / text</td>
             <td class="py-3 pr-4 font-mono text-xs text-stone-500">text/markdown · text/plain</td>
             <td class="py-3 pr-4"><code class="text-xs">cursor-pointer</code> on hover row</td>
-            <td class="py-3 pr-4">Click a line (or focus + <kbd class="text-[10px] font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">C</kbd>)</td>
+            <td class="py-3 pr-4">Click a line (or focus + <kbd class="text-xs font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">C</kbd>)</td>
             <td class="py-3 font-mono text-xs text-stone-600 dark:text-stone-400">{ line } (1-indexed)</td>
           </tr>
           <tr>
@@ -193,22 +193,22 @@
          onmouseleave="ghostHide('ghost-img')">
       <!-- Stand-in artifact: architecture diagram rendered as inline SVG so we don't need external assets -->
       <svg viewBox="0 0 600 300" class="block max-w-full max-h-96 rounded-lg border border-stone-200 dark:border-stone-700 bg-white pointer-events-none">
-        <rect width="600" height="300" fill="#ffffff" />
+        <rect width="600" height="300" fill="#ffffff" /> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
         <g font-family="system-ui" font-size="12">
-          <rect x="40" y="40" width="140" height="60" rx="8" fill="#ccfbf1" stroke="#14b8a6" stroke-width="1.5"/>
-          <text x="110" y="74" text-anchor="middle" fill="#0f766e" font-weight="700">Review UI</text>
-          <rect x="230" y="40" width="140" height="60" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
-          <text x="300" y="74" text-anchor="middle" fill="#92400e" font-weight="700">haiku_feedback</text>
-          <rect x="420" y="40" width="140" height="60" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
-          <text x="490" y="74" text-anchor="middle" fill="#1e3a8a" font-weight="700">feedback/*.md</text>
-          <line x1="180" y1="70" x2="230" y2="70" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
-          <line x1="370" y1="70" x2="420" y2="70" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
-          <rect x="230" y="180" width="140" height="60" rx="8" fill="#e9d5ff" stroke="#a855f7" stroke-width="1.5"/>
-          <text x="300" y="214" text-anchor="middle" fill="#581c87" font-weight="700">orchestrator</text>
-          <line x1="300" y1="100" x2="300" y2="180" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <rect x="40" y="40" width="140" height="60" rx="8" fill="#ccfbf1" stroke="#14b8a6" stroke-width="1.5"/> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
+          <text x="110" y="74" text-anchor="middle" fill="#0f766e" font-weight="700">Review UI</text> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
+          <rect x="230" y="40" width="140" height="60" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
+          <text x="300" y="74" text-anchor="middle" fill="#92400e" font-weight="700">haiku_feedback</text> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
+          <rect x="420" y="40" width="140" height="60" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
+          <text x="490" y="74" text-anchor="middle" fill="#1e3a8a" font-weight="700">feedback/*.md</text> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
+          <line x1="180" y1="70" x2="230" y2="70" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
+          <line x1="370" y1="70" x2="420" y2="70" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
+          <rect x="230" y="180" width="140" height="60" rx="8" fill="#e9d5ff" stroke="#a855f7" stroke-width="1.5"/> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
+          <text x="300" y="214" text-anchor="middle" fill="#581c87" font-weight="700">orchestrator</text> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
+          <line x1="300" y1="100" x2="300" y2="180" stroke="#78716c" stroke-width="1.5" marker-end="url(#arrow)"/> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
           <defs>
             <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-              <path d="M0,0 L8,4 L0,8 Z" fill="#78716c"/>
+              <path d="M0,0 L8,4 L0,8 Z" fill="#78716c"/> <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
             </marker>
           </defs>
         </g>
@@ -233,11 +233,11 @@
 
     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-2">Touch behavior</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-2">Touch behavior</p>
         <p class="text-stone-700 dark:text-stone-300">Long-press (≥400ms) replaces click-to-place on touch devices — avoids the scroll-collision. Tapping an existing pin opens that feedback.</p>
       </div>
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-2">Rejection bounds</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-2">Rejection bounds</p>
         <p class="text-stone-700 dark:text-stone-300">If <code>x</code> or <code>y</code> falls outside [0,1] (edge click miss), the gesture is silently discarded — no popover, no error toast.</p>
       </div>
     </div>
@@ -273,44 +273,44 @@
       Each line is a row in a 2-column grid (gutter + content). Hover
       highlights the entire row in teal; click anywhere on the row opens
       the popover anchored near the click. Keyboard path: arrow-keys
-      focus a line, <kbd class="text-[10px] font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">C</kbd> (create) opens popover at that line. <span class="italic">Note: <kbd class="text-[10px] font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">A</kbd> is reserved for Approve (unit-07) — see keyboard-shortcut-map.html §1.</span>
+      focus a line, <kbd class="text-xs font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">C</kbd> (create) opens popover at that line. <span class="italic">Note: <kbd class="text-xs font-mono px-1 bg-stone-100 dark:bg-stone-800 rounded">A</kbd> is reserved for Approve (unit-07) — see keyboard-shortcut-map.html §1.</span>
     </p>
 
     <div class="text-[12px] font-mono text-stone-700 dark:text-stone-300 leading-relaxed bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md overflow-hidden"
          role="list" aria-label="Artifact lines">
       <div class="grid grid-cols-[2.5rem_1fr] line-row cursor-pointer" onclick="demoClickLine(event, 1)" tabindex="0">
-        <span class="text-stone-400 text-right pr-2 select-none bg-stone-50 dark:bg-stone-900">1</span>
+        <span class="text-stone-500 text-right pr-2 select-none bg-stone-50 dark:bg-stone-900">1</span>
         <span class="px-3 py-0.5">## Feedback model</span>
       </div>
       <div class="grid grid-cols-[2.5rem_1fr] line-row cursor-pointer" onclick="demoClickLine(event, 2)" tabindex="0">
-        <span class="text-stone-400 text-right pr-2 select-none bg-stone-50 dark:bg-stone-900">2</span>
+        <span class="text-stone-500 text-right pr-2 select-none bg-stone-50 dark:bg-stone-900">2</span>
         <span class="px-3 py-0.5"> </span>
       </div>
       <!-- Line 3 has an existing annotation -->
       <div class="grid grid-cols-[2.5rem_1fr] cursor-pointer bg-amber-50 dark:bg-amber-900/20 border-l-[3px] border-l-amber-500" onclick="demoClickLine(event, 3)" tabindex="0" aria-label="Line 3 with 1 annotation">
         <span class="text-amber-600 dark:text-amber-400 text-right pr-2 select-none font-bold bg-amber-100/60 dark:bg-amber-950/40">3</span>
         <span class="px-3 py-0.5">
-          <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold align-middle mr-1">7</span>
+          <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-xs font-bold align-middle mr-1">7</span>
           Every finding persists as a feedback file.
         </span>
       </div>
       <div class="grid grid-cols-[2.5rem_1fr] line-row cursor-pointer" onclick="demoClickLine(event, 4)" tabindex="0">
-        <span class="text-stone-400 text-right pr-2 select-none bg-stone-50 dark:bg-stone-900">4</span>
+        <span class="text-stone-500 text-right pr-2 select-none bg-stone-50 dark:bg-stone-900">4</span>
         <span class="px-3 py-0.5">Pending feedback count gates the FSM from review → gate.</span>
       </div>
       <div class="grid grid-cols-[2.5rem_1fr] line-row cursor-pointer" onclick="demoClickLine(event, 5)" tabindex="0">
-        <span class="text-stone-400 text-right pr-2 select-none bg-stone-50 dark:bg-stone-900">5</span>
+        <span class="text-stone-500 text-right pr-2 select-none bg-stone-50 dark:bg-stone-900">5</span>
         <span class="px-3 py-0.5">Authorship is a flat 'user' literal in v1.</span>
       </div>
     </div>
 
     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-2">Gutter numbering</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-2">Gutter numbering</p>
         <p class="text-stone-700 dark:text-stone-300">1-indexed. Matches the <code>feedback.target.annotation.line</code> shape used by existing line overlays in <code>review-ui-mockup.html</code>.</p>
       </div>
       <div class="p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-2">Multiple annotations per line</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-2">Multiple annotations per line</p>
         <p class="text-stone-700 dark:text-stone-300">Allowed. Existing pins render as small numbered pills inline; clicking the row creates a new annotation at the same line.</p>
       </div>
     </div>
@@ -334,36 +334,36 @@
       <div>
         <div class="w-full h-72 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-stone-950 flex items-center justify-center">
           <div class="text-center">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-2">HTML iframe preview</p>
+            <p class="text-xs font-bold uppercase tracking-widest text-stone-500 mb-2">HTML iframe preview</p>
             <p class="text-sm text-stone-500">sandboxed · not annotatable in-surface</p>
           </div>
         </div>
         <div class="mt-2 flex items-center justify-between">
-          <a href="#" class="text-[10px] text-teal-600 dark:text-teal-400 hover:underline">Open in new tab ↗</a>
-          <span class="text-[10px] text-stone-400">Add feedback via the form →</span>
+          <a href="#" class="text-xs text-teal-600 dark:text-teal-400 hover:underline">Open in new tab ↗</a>
+          <span class="text-xs text-stone-500">Add feedback via the form →</span>
         </div>
       </div>
 
       <!-- Location form -->
       <div class="p-3 rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50/40 dark:bg-teal-900/10">
-        <p class="text-[10px] font-bold uppercase tracking-widest text-teal-700 dark:text-teal-300 mb-3">Add feedback on this preview</p>
-        <label class="block text-[10px] font-medium text-stone-500 dark:text-stone-400 mb-1">Page (optional — PDF only)</label>
+        <p class="text-xs font-bold uppercase tracking-widest text-teal-700 dark:text-teal-300 mb-3">Add feedback on this preview</p>
+        <label class="block text-xs font-medium text-stone-500 dark:text-stone-400 mb-1">Page (optional — PDF only)</label>
         <input type="number" min="1" placeholder="3"
-               class="w-full text-xs p-2 mb-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-teal-500 focus:outline-none"/>
-        <label class="block text-[10px] font-medium text-stone-500 dark:text-stone-400 mb-1">Region / where to look</label>
+               class="w-full text-xs p-2 mb-2 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 focus:outline-none"/>
+        <label class="block text-xs font-medium text-stone-500 dark:text-stone-400 mb-1">Region / where to look</label>
         <input type="text" placeholder='e.g. "top-right CTA" or "§ 3.2"'
-               class="w-full text-xs p-2 mb-3 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-1 focus:ring-teal-500 focus:outline-none"/>
+               class="w-full text-xs p-2 mb-3 border border-stone-300 dark:border-stone-600 rounded-md bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 focus:outline-none"/>
         <button class="w-full px-3 py-2 text-xs font-semibold rounded-md bg-teal-600 hover:bg-teal-700 text-white transition-colors">
           Continue to popover →
         </button>
-        <p class="mt-2 text-[10px] text-stone-500 dark:text-stone-400">
+        <p class="mt-2 text-xs text-stone-500 dark:text-stone-400">
           The popover opens with the captured <code>{page, region}</code> preselected so the reviewer only types title + body.
         </p>
       </div>
     </div>
 
     <div class="mt-5 p-4 rounded-lg bg-stone-100 dark:bg-stone-800/60 text-xs">
-      <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-2">Why not click-through?</p>
+      <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-2">Why not click-through?</p>
       <ul class="list-disc pl-5 space-y-1 text-stone-700 dark:text-stone-300">
         <li><strong>Sandboxed srcdoc</strong>: <code>sandbox="allow-same-origin"</code> blocks parent script access; we can't attach a click listener inside.</li>
         <li><strong>Cross-origin PDFs</strong>: the PDF viewer consumes all mouse events; the parent never sees them.</li>
@@ -384,7 +384,7 @@
     <div class="overflow-x-auto">
       <table class="w-full text-sm border-collapse">
         <thead>
-          <tr class="text-[10px] font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-700">
+          <tr class="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-700">
             <th class="text-left py-2 pr-4">Focus</th>
             <th class="text-left py-2 pr-4">Key</th>
             <th class="text-left py-2 pr-4">Action</th>
@@ -394,37 +394,37 @@
         <tbody class="divide-y divide-stone-100 dark:divide-stone-800">
           <tr>
             <td class="py-2 pr-4">Line row (text / md)</td>
-            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded" aria-keyshortcuts="c">C</kbd></td>
+            <td class="py-2 pr-4"><kbd class="text-xs font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded" aria-keyshortcuts="c">C</kbd></td>
             <td class="py-2 pr-4">Open popover at focused line (create annotation)</td>
             <td class="py-2 text-xs text-stone-500">left edge of row + gutter offset</td>
           </tr>
           <tr>
             <td class="py-2 pr-4">Artifact wrapper (image / svg)</td>
-            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded" aria-keyshortcuts="c">C</kbd></td>
+            <td class="py-2 pr-4"><kbd class="text-xs font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded" aria-keyshortcuts="c">C</kbd></td>
             <td class="py-2 pr-4">Open popover centered on artifact, <code>{x:0.5, y:0.5}</code></td>
             <td class="py-2 text-xs text-stone-500">center of artifact bounds</td>
           </tr>
           <tr>
             <td class="py-2 pr-4">Iframe wrapper (html / pdf)</td>
-            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded" aria-keyshortcuts="c">C</kbd></td>
+            <td class="py-2 pr-4"><kbd class="text-xs font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded" aria-keyshortcuts="c">C</kbd></td>
             <td class="py-2 pr-4">Focus the location form's <em>region</em> input</td>
             <td class="py-2 text-xs text-stone-500">n/a (form first, popover after)</td>
           </tr>
           <tr>
             <td class="py-2 pr-4">Anywhere inside popover</td>
-            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">Esc</kbd></td>
+            <td class="py-2 pr-4"><kbd class="text-xs font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">Esc</kbd></td>
             <td class="py-2 pr-4">Cancel & restore focus to origin element</td>
             <td class="py-2 text-xs text-stone-500">—</td>
           </tr>
           <tr>
             <td class="py-2 pr-4">Popover title / body input</td>
-            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">⌘/Ctrl</kbd>+<kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">Enter</kbd></td>
+            <td class="py-2 pr-4"><kbd class="text-xs font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">⌘/Ctrl</kbd>+<kbd class="text-xs font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">Enter</kbd></td>
             <td class="py-2 pr-4">Save (same as clicking Create)</td>
             <td class="py-2 text-xs text-stone-500">—</td>
           </tr>
           <tr>
             <td class="py-2 pr-4">Existing feedback item in sidebar</td>
-            <td class="py-2 pr-4"><kbd class="text-[10px] font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">Enter</kbd></td>
+            <td class="py-2 pr-4"><kbd class="text-xs font-mono px-1.5 py-0.5 bg-stone-100 dark:bg-stone-800 rounded">Enter</kbd></td>
             <td class="py-2 pr-4">Scroll artifact into view + flash the corresponding pin</td>
             <td class="py-2 text-xs text-stone-500">—</td>
           </tr>
@@ -485,7 +485,7 @@
 }</pre>
 
     <div class="mt-4 p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs">
-      <p class="font-bold uppercase tracking-widest text-[10px] text-amber-700 dark:text-amber-300 mb-2">Invariants the server MUST enforce</p>
+      <p class="font-bold uppercase tracking-widest text-xs text-amber-700 dark:text-amber-300 mb-2">Invariants the server MUST enforce</p>
       <ul class="list-disc pl-5 space-y-1 text-amber-900 dark:text-amber-100">
         <li><code>target.annotation</code> is <strong>required</strong> for <code>origin: "user-visual"</code>. Reject the request without it.</li>
         <li>Exactly one of <code>{x,y}</code>, <code>{line}</code>, <code>{page,region}</code>, or <code>{region}</code> must be present. Mixing shapes is rejected.</li>
@@ -503,22 +503,22 @@
     <h2 class="text-lg font-semibold mb-4">10. Creation flow — end-to-end</h2>
     <div class="flex flex-col md:flex-row items-stretch gap-3 text-xs">
       <div class="flex-1 p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-1">① Gesture</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-1">① Gesture</p>
         <p>User clicks image/svg/line or submits iframe form.</p>
       </div>
-      <div class="flex items-center justify-center md:w-8 text-stone-400">→</div>
+      <div class="flex items-center justify-center md:w-8 text-stone-500">→</div>
       <div class="flex-1 p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-1">② Capture</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-1">② Capture</p>
         <p>Compute <code>{x,y}</code> | <code>{line}</code> | <code>{page,region}</code>. Stash in <code>annContext</code>.</p>
       </div>
-      <div class="flex items-center justify-center md:w-8 text-stone-400">→</div>
+      <div class="flex items-center justify-center md:w-8 text-stone-500">→</div>
       <div class="flex-1 p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-1">③ Popover</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-1">③ Popover</p>
         <p>Anchor popover near cursor (or form); focus title field.</p>
       </div>
-      <div class="flex items-center justify-center md:w-8 text-stone-400">→</div>
+      <div class="flex items-center justify-center md:w-8 text-stone-500">→</div>
       <div class="flex-1 p-3 rounded-lg bg-stone-100 dark:bg-stone-800/60">
-        <p class="font-bold uppercase tracking-widest text-[10px] text-stone-500 dark:text-stone-400 mb-1">④ Save</p>
+        <p class="font-bold uppercase tracking-widest text-xs text-stone-500 dark:text-stone-400 mb-1">④ Save</p>
         <p>POST to <code>haiku_feedback</code> with target + annotation; append to sidebar.</p>
       </div>
     </div>

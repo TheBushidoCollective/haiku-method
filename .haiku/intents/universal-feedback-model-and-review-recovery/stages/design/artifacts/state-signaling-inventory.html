@@ -7,20 +7,24 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>tailwind.config = { darkMode: 'class' };</script>
   <style>
+
+    /* unit-16: max-w-page token — see knowledge/DESIGN-TOKENS.md §1.3 */
+    :root { --max-page-width: 1400px; }
+    .max-w-page { max-width: var(--max-page-width); }
     body { font-family: system-ui, -apple-system, sans-serif; }
-    .dark-wrap { background: #0c0a09; padding: 1rem; border-radius: 0.5rem; }
+    .dark-wrap { background: #0c0a09; padding: 1rem; border-radius: 0.5rem; } <!-- svg-palette-exempt (unit-16 DESIGN-TOKENS.md §1.4) -->
   </style>
 </head>
 <body class="bg-stone-50 text-stone-900 min-h-screen">
 
 <header class="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-stone-200">
-  <div class="max-w-[1400px] mx-auto px-5 py-3">
+  <div class="max-w-page mx-auto px-5 py-3">
     <h1 class="text-lg font-semibold">State Signaling Inventory — Every Status, Two Signals, Both Card Widths</h1>
     <p class="text-xs text-stone-600">Unit 11 · closes FB-24 · every feedback card carries (1) color + (2) shape/icon + (3) text prefix so status survives color-blindness, monochrome rendering, and truncated compact widths.</p>
   </div>
 </header>
 
-<main class="max-w-[1400px] mx-auto px-5 py-6 space-y-10">
+<main class="max-w-page mx-auto px-5 py-6 space-y-10">
 
   <!-- Section 1: Signal matrix -->
   <section aria-labelledby="sec-matrix">
@@ -81,7 +85,7 @@
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-400 bg-amber-50/60 border-stone-200 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
             <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-xs font-bold leading-none">⏱</span>
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-100 text-rose-700 border-rose-200"><span aria-hidden="true">🛡️</span> Review Agent</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-100 text-rose-700 border-rose-200"><span aria-hidden="true">🔍</span> Review Agent</span>
             <span class="flex-1"></span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800" aria-label="Status: pending">pending</span>
           </div>
@@ -92,7 +96,7 @@
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-400 bg-amber-50/60 border-stone-200">
           <div class="flex items-center gap-2 mb-1">
             <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-xs font-bold leading-none">⏱</span>
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-100 text-rose-700 border-rose-200"><span aria-hidden="true">🛡️</span> Review Agent</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-100 text-rose-700 border-rose-200"><span aria-hidden="true">🔍</span> Review Agent</span>
             <span class="flex-1"></span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800" aria-label="Status: pending">pending</span>
           </div>
@@ -110,7 +114,7 @@
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-400 bg-blue-50/60 border-stone-200 cursor-pointer">
           <div class="flex items-center gap-2 mb-1">
             <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-500 text-white text-xs font-bold leading-none">↗</span>
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-violet-100 text-violet-700 border-violet-200"><span aria-hidden="true">🔀</span> External PR</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-violet-100 text-violet-700 border-violet-200"><span aria-hidden="true">🔗</span> External PR</span>
             <span class="flex-1"></span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800" aria-label="Status: addressed">addressed</span>
           </div>
@@ -122,7 +126,7 @@
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-400 bg-blue-50/60 border-stone-200">
           <div class="flex items-center gap-2 mb-1">
             <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-500 text-white text-xs font-bold leading-none">↗</span>
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-violet-100 text-violet-700 border-violet-200"><span aria-hidden="true">🔀</span> External PR</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-violet-100 text-violet-700 border-violet-200"><span aria-hidden="true">🔗</span> External PR</span>
             <span class="flex-1"></span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800" aria-label="Status: addressed">addressed</span>
           </div>
@@ -141,7 +145,7 @@
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-green-500 bg-green-50/60 border-stone-200 cursor-pointer" style="max-width: 320px;">
           <div class="flex items-center gap-2 mb-1">
             <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-600 text-white text-xs font-bold leading-none">&check;</span>
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-100 text-sky-700 border-sky-200"><span aria-hidden="true">👁️</span> Annotation</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-100 text-sky-700 border-sky-200"><span aria-hidden="true">✎</span> Annotation</span>
             <span class="flex-1"></span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800" aria-label="Status: closed">closed</span>
           </div>
@@ -152,13 +156,13 @@
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-green-500 bg-green-50/60 border-stone-200">
           <div class="flex items-center gap-2 mb-1">
             <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-600 text-white text-xs font-bold leading-none">&check;</span>
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-100 text-sky-700 border-sky-200"><span aria-hidden="true">👁️</span> Annotation</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-100 text-sky-700 border-sky-200"><span aria-hidden="true">✎</span> Annotation</span>
             <span class="flex-1"></span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800" aria-label="Status: closed">closed</span>
           </div>
           <p class="text-xs font-medium text-stone-700"><span class="text-green-700 font-semibold">Closed &middot;</span> Button spacing inconsistent on tablet</p>
           <div class="text-xs text-stone-700 mt-2">
-            <p>At 768–1024px, the Approve and Request Changes buttons rendered with uneven horizontal gaps. Verified via screenshot diff.</p>
+            <p>At the intermediate <code>lg</code> breakpoint (1024px, the old single-width step), the Approve and Request Changes buttons rendered with uneven horizontal gaps. Verified via screenshot diff.</p>
           </div>
           <p class="text-xs text-stone-600 mt-2">FB-04 · Visit 1 · user-visual · closed by jwaldrip on 2026-04-17</p>
         </article>
@@ -170,7 +174,7 @@
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-400 bg-stone-100 border-stone-200 cursor-pointer" style="max-width: 320px;">
           <div class="flex items-center gap-2 mb-1">
             <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-stone-500 text-white text-xs font-bold leading-none">&times;</span>
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-100 text-teal-700 border-teal-200"><span aria-hidden="true">✨</span> Agent</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-100 text-teal-700 border-teal-200"><span aria-hidden="true">🤖</span> Agent</span>
             <span class="flex-1"></span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-200 text-stone-700" aria-label="Status: rejected">rejected</span>
           </div>
@@ -181,7 +185,7 @@
         <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-400 bg-stone-100 border-stone-200">
           <div class="flex items-center gap-2 mb-1">
             <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-stone-500 text-white text-xs font-bold leading-none">&times;</span>
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-100 text-teal-700 border-teal-200"><span aria-hidden="true">✨</span> Agent</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-100 text-teal-700 border-teal-200"><span aria-hidden="true">🤖</span> Agent</span>
             <span class="flex-1"></span>
             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-200 text-stone-700" aria-label="Status: rejected">rejected</span>
           </div>
@@ -204,22 +208,22 @@
 
         <!-- PENDING dark -->
         <div class="space-y-2">
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-400">pending · compact</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-500">pending · compact</p>
           <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-500 bg-amber-950/25 border-stone-700 cursor-pointer">
             <div class="flex items-center gap-2 mb-1">
               <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-400 text-stone-900 text-xs font-bold leading-none">⏱</span>
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-900/30 text-rose-400 border-rose-800"><span aria-hidden="true">🛡️</span> Review Agent</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-900/30 text-rose-400 border-rose-800"><span aria-hidden="true">🔍</span> Review Agent</span>
               <span class="flex-1"></span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-900/30 text-amber-300" aria-label="Status: pending">pending</span>
             </div>
             <p class="text-xs font-medium text-stone-200 truncate">FB-12 · "Missing error state on empty comments list"</p>
             <p class="text-xs text-stone-300 mt-0.5">Visit 1 · adversarial-review · parent-agent</p>
           </article>
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-400">pending · expanded</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-500">pending · expanded</p>
           <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-500 bg-amber-950/25 border-stone-700">
             <div class="flex items-center gap-2 mb-1">
               <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-400 text-stone-900 text-xs font-bold leading-none">⏱</span>
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-900/30 text-rose-400 border-rose-800"><span aria-hidden="true">🛡️</span> Review Agent</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-900/30 text-rose-400 border-rose-800"><span aria-hidden="true">🔍</span> Review Agent</span>
               <span class="flex-1"></span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-900/30 text-amber-300" aria-label="Status: pending">pending</span>
             </div>
@@ -231,11 +235,11 @@
 
         <!-- ADDRESSED dark -->
         <div class="space-y-2">
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-400">addressed · compact</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-500">addressed · compact</p>
           <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-500 bg-blue-950/25 border-stone-700 cursor-pointer">
             <div class="flex items-center gap-2 mb-1">
               <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-400 text-stone-900 text-xs font-bold leading-none">↗</span>
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-violet-900/30 text-violet-400 border-violet-800"><span aria-hidden="true">🔀</span> External PR</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-violet-900/30 text-violet-400 border-violet-800"><span aria-hidden="true">🔗</span> External PR</span>
               <span class="flex-1"></span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-900/30 text-blue-300" aria-label="Status: addressed">addressed</span>
             </div>
@@ -243,11 +247,11 @@
             <p class="text-xs text-blue-400 mt-1">Addressed by commit <code>ab12c3</code></p>
             <p class="text-xs text-stone-300 mt-0.5">Visit 2 · external-pr</p>
           </article>
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-400">addressed · expanded</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-500">addressed · expanded</p>
           <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-500 bg-blue-950/25 border-stone-700">
             <div class="flex items-center gap-2 mb-1">
               <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-400 text-stone-900 text-xs font-bold leading-none">↗</span>
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-violet-900/30 text-violet-400 border-violet-800"><span aria-hidden="true">🔀</span> External PR</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-violet-900/30 text-violet-400 border-violet-800"><span aria-hidden="true">🔗</span> External PR</span>
               <span class="flex-1"></span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-900/30 text-blue-300" aria-label="Status: addressed">addressed</span>
             </div>
@@ -259,53 +263,53 @@
 
         <!-- CLOSED dark -->
         <div class="space-y-2">
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-400">closed · compact</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-500">closed · compact</p>
           <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-green-400 bg-green-950/25 border-stone-700 cursor-pointer" style="max-width: 320px;">
             <div class="flex items-center gap-2 mb-1">
               <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-xs font-bold leading-none">&check;</span>
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-900/30 text-sky-400 border-sky-800"><span aria-hidden="true">👁️</span> Annotation</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-900/30 text-sky-400 border-sky-800"><span aria-hidden="true">✎</span> Annotation</span>
               <span class="flex-1"></span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-900/30 text-green-300" aria-label="Status: closed">closed</span>
             </div>
             <p class="text-xs font-medium text-stone-200 truncate"><span class="text-green-400 font-semibold">Closed &middot;</span> Button spacing inconsistent on tablet</p>
             <p class="text-xs text-stone-300 mt-0.5">FB-04 · Visit 1 · user-visual</p>
           </article>
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-400">closed · expanded</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-500">closed · expanded</p>
           <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-green-400 bg-green-950/25 border-stone-700">
             <div class="flex items-center gap-2 mb-1">
               <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-xs font-bold leading-none">&check;</span>
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-900/30 text-sky-400 border-sky-800"><span aria-hidden="true">👁️</span> Annotation</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-sky-900/30 text-sky-400 border-sky-800"><span aria-hidden="true">✎</span> Annotation</span>
               <span class="flex-1"></span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-900/30 text-green-300" aria-label="Status: closed">closed</span>
             </div>
             <p class="text-xs font-medium text-stone-200"><span class="text-green-400 font-semibold">Closed &middot;</span> Button spacing inconsistent on tablet</p>
-            <div class="text-xs text-stone-300 mt-2"><p>Fixed in commit ab12c3. Verified on 768/1024 breakpoints.</p></div>
+            <div class="text-xs text-stone-300 mt-2"><p>Fixed in commit ab12c3. Verified at the intermediate <code>lg</code> breakpoint (1024px).</p></div>
             <p class="text-xs text-stone-300 mt-2">FB-04 · Visit 1 · user-visual · closed by jwaldrip</p>
           </article>
         </div>
 
         <!-- REJECTED dark -->
         <div class="space-y-2">
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-400">rejected · compact</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-500">rejected · compact</p>
           <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-500 bg-stone-800/50 border-stone-700 cursor-pointer" style="max-width: 320px;">
             <div class="flex items-center gap-2 mb-1">
               <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-stone-400 text-stone-900 text-xs font-bold leading-none">&times;</span>
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-900/30 text-teal-400 border-teal-800"><span aria-hidden="true">✨</span> Agent</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-900/30 text-teal-400 border-teal-800"><span aria-hidden="true">🤖</span> Agent</span>
               <span class="flex-1"></span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-700 text-stone-200" aria-label="Status: rejected">rejected</span>
             </div>
-            <p class="text-xs font-medium text-stone-400 truncate"><span class="text-stone-200 font-semibold no-underline">Rejected &middot;</span> <span class="line-through decoration-stone-400">Consider using a state machine library</span></p>
+            <p class="text-xs font-medium text-stone-500 truncate"><span class="text-stone-200 font-semibold no-underline">Rejected &middot;</span> <span class="line-through decoration-stone-400">Consider using a state machine library</span></p>
             <p class="text-xs text-stone-300 mt-0.5">FB-07 · Visit 1 · agent</p>
           </article>
-          <p class="text-xs font-bold uppercase tracking-widest text-stone-400">rejected · expanded</p>
+          <p class="text-xs font-bold uppercase tracking-widest text-stone-500">rejected · expanded</p>
           <article tabindex="0" class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-500 bg-stone-800/50 border-stone-700">
             <div class="flex items-center gap-2 mb-1">
               <span aria-hidden="true" class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-stone-400 text-stone-900 text-xs font-bold leading-none">&times;</span>
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-900/30 text-teal-400 border-teal-800"><span aria-hidden="true">✨</span> Agent</span>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-900/30 text-teal-400 border-teal-800"><span aria-hidden="true">🤖</span> Agent</span>
               <span class="flex-1"></span>
               <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-stone-700 text-stone-200" aria-label="Status: rejected">rejected</span>
             </div>
-            <p class="text-xs font-medium text-stone-400"><span class="text-stone-200 font-semibold no-underline">Rejected &middot;</span> <span class="line-through decoration-stone-400">Consider using a state machine library</span></p>
+            <p class="text-xs font-medium text-stone-500"><span class="text-stone-200 font-semibold no-underline">Rejected &middot;</span> <span class="line-through decoration-stone-400">Consider using a state machine library</span></p>
             <div class="text-xs text-stone-300 mt-2"><p>Existing FSM is four states. Library would be overkill.</p></div>
             <p class="text-xs text-stone-300 mt-2">FB-07 · Visit 1 · agent · rejected by jwaldrip</p>
           </article>

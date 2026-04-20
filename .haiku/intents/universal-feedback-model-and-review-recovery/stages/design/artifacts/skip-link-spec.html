@@ -83,7 +83,7 @@
     <!-- ===== Header ===== -->
     <header class="flex items-start justify-between border-b border-stone-200 dark:border-stone-700 pb-4">
       <div>
-        <p class="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">universal-feedback-model-and-review-recovery · stage: design · unit-12</p>
+        <p class="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-500">universal-feedback-model-and-review-recovery · stage: design · unit-12</p>
         <h1 class="text-2xl font-semibold text-stone-900 dark:text-stone-100 mt-1">Skip-link spec</h1>
         <p class="text-sm text-stone-500 dark:text-stone-400 mt-2 max-w-3xl">
           Canonical visually-hidden-until-focused skip link pattern for every sticky-header layout. Closes <strong>FB-30</strong>. Reference behavior: pressing Tab on any affected artifact makes the skip link visible in the top-left of the viewport.
@@ -134,7 +134,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- Light -->
         <div class="relative rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden bg-stone-50">
-          <p class="absolute top-2 right-3 text-[10px] font-semibold uppercase tracking-wider text-stone-500 z-[1]">Light · default</p>
+          <p class="absolute top-2 right-3 text-xs font-semibold uppercase tracking-wider text-stone-500 z-[1]">Light · default</p>
           <div class="chrome-bar h-8"></div>
           <div class="h-48 relative overflow-hidden">
             <!-- No visible skip link - it's sr-only -->
@@ -149,7 +149,7 @@
 
         <!-- Dark -->
         <div class="relative rounded-xl border border-stone-700 overflow-hidden bg-stone-950 dark">
-          <p class="absolute top-2 right-3 text-[10px] font-semibold uppercase tracking-wider text-stone-400 z-[1]">Dark · default</p>
+          <p class="absolute top-2 right-3 text-xs font-semibold uppercase tracking-wider text-stone-500 z-[1]">Dark · default</p>
           <div class="chrome-bar h-8"></div>
           <div class="h-48 relative overflow-hidden">
             <div class="p-4 space-y-2">
@@ -173,7 +173,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- Light · focused -->
         <div class="relative rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden bg-stone-50">
-          <p class="absolute top-2 right-3 text-[10px] font-semibold uppercase tracking-wider text-stone-500 z-[1]">Light · focused</p>
+          <p class="absolute top-2 right-3 text-xs font-semibold uppercase tracking-wider text-stone-500 z-[1]">Light · focused</p>
           <div class="chrome-bar h-8"></div>
           <div class="h-48 relative overflow-hidden">
             <span class="force-focus font-medium">Skip to main content</span>
@@ -188,7 +188,7 @@
 
         <!-- Dark · focused -->
         <div class="relative rounded-xl border border-stone-700 overflow-hidden bg-stone-950 dark">
-          <p class="absolute top-2 right-3 text-[10px] font-semibold uppercase tracking-wider text-stone-400 z-[1]">Dark · focused</p>
+          <p class="absolute top-2 right-3 text-xs font-semibold uppercase tracking-wider text-stone-500 z-[1]">Dark · focused</p>
           <div class="chrome-bar h-8"></div>
           <div class="h-48 relative overflow-hidden">
             <span class="force-focus font-medium">Skip to main content</span>
@@ -213,7 +213,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- Light -->
         <div class="relative rounded-xl border border-stone-200 dark:border-stone-700 overflow-hidden bg-stone-50">
-          <p class="absolute top-2 right-3 text-[10px] font-semibold uppercase tracking-wider text-stone-500 z-[1]">Light · focused (second)</p>
+          <p class="absolute top-2 right-3 text-xs font-semibold uppercase tracking-wider text-stone-500 z-[1]">Light · focused (second)</p>
           <div class="chrome-bar h-8"></div>
           <div class="h-48 relative overflow-hidden">
             <span class="force-focus variant-right font-medium">Skip to feedback list</span>
@@ -228,7 +228,7 @@
 
         <!-- Dark -->
         <div class="relative rounded-xl border border-stone-700 overflow-hidden bg-stone-950 dark">
-          <p class="absolute top-2 right-3 text-[10px] font-semibold uppercase tracking-wider text-stone-400 z-[1]">Dark · focused (second)</p>
+          <p class="absolute top-2 right-3 text-xs font-semibold uppercase tracking-wider text-stone-500 z-[1]">Dark · focused (second)</p>
           <div class="chrome-bar h-8"></div>
           <div class="h-48 relative overflow-hidden">
             <span class="force-focus variant-right font-medium">Skip to feedback list</span>
@@ -301,14 +301,14 @@
               <td class="px-3 py-2 text-teal-600 dark:text-teal-400">yes</td>
               <td class="px-3 py-2 text-teal-600 dark:text-teal-400">yes (1 — main-content only; no sidebar surface)</td>
               <td class="px-3 py-2 text-teal-600 dark:text-teal-400">yes (main)</td>
-              <td class="px-3 py-2 text-stone-400 dark:text-stone-500">n/a (spec has no feedback list)</td>
+              <td class="px-3 py-2 text-stone-500 dark:text-stone-500">n/a (spec has no feedback list)</td>
             </tr>
             <tr>
               <td class="px-3 py-2 font-mono text-stone-700 dark:text-stone-200">keyboard-shortcut-map.html</td>
-              <td class="px-3 py-2 text-stone-400 dark:text-stone-500">no (scroll page)</td>
+              <td class="px-3 py-2 text-stone-500 dark:text-stone-500">no (scroll page)</td>
               <td class="px-3 py-2 text-teal-600 dark:text-teal-400">yes (1 — defensive)</td>
               <td class="px-3 py-2 text-teal-600 dark:text-teal-400">yes (container)</td>
-              <td class="px-3 py-2 text-stone-400 dark:text-stone-500">n/a</td>
+              <td class="px-3 py-2 text-stone-500 dark:text-stone-500">n/a</td>
             </tr>
           </tbody>
         </table>
@@ -339,7 +339,7 @@
       </ul>
     </section>
 
-    <footer class="text-[11px] text-stone-400 dark:text-stone-500 pt-6 border-t border-stone-200 dark:border-stone-700">
+    <footer class="text-[11px] text-stone-500 dark:text-stone-500 pt-6 border-t border-stone-200 dark:border-stone-700">
       Closes <strong>FB-30</strong> · Companion: <code>keyboard-shortcut-map.html</code>, <code>focus-order-spec.md</code>, <code>feedback-inline-desktop.html</code>
     </footer>
   </div>

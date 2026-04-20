@@ -90,6 +90,98 @@ When stage-progress-strip is embedded inside review-context-header (or any page)
 - Focusable via `tabindex="0"` (visitable) or omitted (disabled)
 - Focus-visible ring per `focus-ring-spec.html §1`
 
+### 4.1 Tablist ARIA shape (added by unit-16)
+
+Tab surfaces that use `role="tablist"` (e.g. `feedback-inline-desktop.html`, `feedback-inline-mobile.html`) MUST follow the [WAI-ARIA Authoring Practices tab pattern](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/):
+
+- Wrapper: `<div role="tablist" aria-label="{label}" aria-orientation="horizontal">` (use `vertical` for column-style tab rails)
+- Each tab: `<button role="tab" aria-selected="{bool}" aria-controls="{panelId}" tabindex="{0|-1}">`. Exactly one tab in the set carries `aria-selected="true"` and `tabindex="0"`; every other tab carries `aria-selected="false"` and `tabindex="-1"`. This is the "roving tabindex" contract.
+- Panels: `<div role="tabpanel" id="{panelId}" aria-labelledby="{tabId}" tabindex="0">` (the `tabindex="0"` on the panel lets keyboard users enter the panel body).
+
+### 4.2 Inactive-tab contrast floor (reaffirmed by unit-16 gate)
+
+Inactive tabs (those carrying `tabindex="-1"` in the roving set) **MUST** use the stone-500+ text token so they pass AA:
+
+- Light mode: `text-stone-500` (4.61:1 on white — floor) — never use the stone-400 shade on light surfaces (fails 4.5:1 body-text AA on every card background).
+- Dark mode: `dark:text-stone-400` (OK on `stone-800`+).
+
+Forbidden combinations are enumerated in `knowledge/DESIGN-TOKENS.md §1.1a` and re-checked by the `text-(stone|gray)-400` grep in unit-16 gate 4.
+
+### 4.3 Roving tabindex — arrow-key handler (canonical sample)
+
+Tablists **MUST** implement roving tabindex with arrow-key navigation so keyboard users can move between tabs using `←` / `→` (horizontal) or `↑` / `↓` (vertical). Pressing `Home` jumps to the first tab, `End` to the last. Focus visibly moves; `aria-selected` follows focus (activating the panel the newly-focused tab controls).
+
+Canonical JS — the dev stage can adopt this verbatim; names are descriptive and the helper is framework-agnostic:
+
+```js
+/**
+ * Attach roving-tabindex arrow-key handling to a tablist.
+ *
+ * Contract:
+ *   - Wrapper element must have role="tablist" and aria-orientation="horizontal" | "vertical".
+ *   - Tabs must have role="tab" children with stable ids; exactly one tab starts with
+ *     tabindex="0" + aria-selected="true"; the others start tabindex="-1" + aria-selected="false".
+ *   - onSelect(tabEl) is invoked whenever the active tab changes (user pressed arrow / Home / End,
+ *     or clicked a tab). Use it to update the associated tabpanel's hidden state.
+ *
+ * WAI-ARIA Authoring Practices reference:
+ *   https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
+ */
+function attachRovingTabindex(tablistEl, onSelect) {
+  const tabs = Array.from(tablistEl.querySelectorAll('[role="tab"]'));
+  const orientation = tablistEl.getAttribute('aria-orientation') || 'horizontal';
+  const nextKey = orientation === 'vertical' ? 'ArrowDown' : 'ArrowRight';
+  const prevKey = orientation === 'vertical' ? 'ArrowUp'   : 'ArrowLeft';
+
+  function activate(idx) {
+    const wrapped = (idx + tabs.length) % tabs.length;
+    tabs.forEach((t, i) => {
+      const active = i === wrapped;
+      t.setAttribute('aria-selected', String(active));
+      t.setAttribute('tabindex', active ? '0' : '-1');
+      if (active) {
+        t.focus();
+        onSelect && onSelect(t);
+      }
+    });
+  }
+
+  tablistEl.addEventListener('keydown', (e) => {
+    const currentIdx = tabs.indexOf(document.activeElement);
+    if (currentIdx < 0) return;
+    if (e.key === nextKey)      { e.preventDefault(); activate(currentIdx + 1); }
+    else if (e.key === prevKey) { e.preventDefault(); activate(currentIdx - 1); }
+    else if (e.key === 'Home')  { e.preventDefault(); activate(0); }
+    else if (e.key === 'End')   { e.preventDefault(); activate(tabs.length - 1); }
+  });
+
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => activate(i));
+  });
+}
+
+// Usage:
+//   const tablist = document.querySelector('[role="tablist"]');
+//   attachRovingTabindex(tablist, (activeTab) => {
+//     const panelId = activeTab.getAttribute('aria-controls');
+//     document.querySelectorAll('[role="tabpanel"]').forEach(p => p.hidden = p.id !== panelId);
+//   });
+```
+
+**Behavior summary:**
+
+| Key | Horizontal tablist | Vertical tablist |
+|---|---|---|
+| `→` / `ArrowRight` | next tab (wrap) | — (no-op) |
+| `←` / `ArrowLeft` | previous tab (wrap) | — (no-op) |
+| `↓` / `ArrowDown` | — (no-op) | next tab (wrap) |
+| `↑` / `ArrowUp` | — (no-op) | previous tab (wrap) |
+| `Home` | first tab | first tab |
+| `End` | last tab | last tab |
+| `Tab` (when focus inside tablist) | leaves the tablist and moves to the next focusable element — this is native behavior because only one tab has `tabindex="0"` at any time. | same |
+
+The dev stage SHOULD wire this handler to every tablist rendered by the feedback-UI (desktop + mobile). The sample above is production-ready and matches the WAI-ARIA Authoring Practices reference implementation.
+
 ## 5. Origin legend component (closes FB-33)
 
 The `FeedbackOriginIcon` component has a dedicated legend/glossary, placed either:
@@ -146,7 +238,7 @@ Every page-level artifact **MUST** include a skip link as the first focusable el
           focus-visible:z-[100] focus-visible:px-3 focus-visible:py-2
           focus-visible:bg-teal-600 focus-visible:text-white focus-visible:rounded-md
           focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2
-          dark:focus-visible:ring-offset-gray-900">
+          dark:focus-visible:ring-offset-stone-900">
   Skip to main content
 </a>
 ```

@@ -60,7 +60,7 @@ quality_gates:
     rationale (one line each) so future readers don't resurrect them.
     component-inventory.md cross-links back to DESIGN-BRIEF §2 rather than
     duplicating component specs.
-status: active
+status: completed
 bolt: 3
 hat: feedback-assessor
 started_at: '2026-04-20T01:54:22Z'
@@ -104,8 +104,9 @@ iterations:
     result: advance
   - hat: feedback-assessor
     started_at: '2026-04-20T02:47:50Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-20T02:50:42Z'
+    result: advance
+completed_at: '2026-04-20T02:50:42Z'
 ---
 # DESIGN-BRIEF / DESIGN-TOKENS alignment
 
@@ -164,13 +165,13 @@ The feedback-assessor hat will verify each FB item's concrete claim
 
 ## Completion criteria
 
-- [ ] All 5 quality_gates pass
-- [ ] DESIGN-BRIEF §2 is the authoritative component inventory with a
+- [x] All 5 quality_gates pass
+- [x] DESIGN-BRIEF §2 is the authoritative component inventory with a
       "Retired components" subsection
-- [ ] DESIGN-TOKENS.md §2.1 (badge shades) and §2.2 (origin emoji)
+- [x] DESIGN-TOKENS.md §2.1 (badge shades) and §2.2 (origin emoji)
       match DESIGN-BRIEF exactly
-- [ ] aria-landmark-spec.md §6 emoji table matches DESIGN-BRIEF §2
-- [ ] footer-button-copy-spec.md is now an alias pointing at
+- [x] aria-landmark-spec.md §6 emoji table matches DESIGN-BRIEF §2
+- [x] footer-button-copy-spec.md is now an alias pointing at
       DESIGN-BRIEF §2 rather than duplicating specs
-- [ ] component-inventory.md cross-links to DESIGN-BRIEF §2 for each
+- [x] component-inventory.md cross-links to DESIGN-BRIEF §2 for each
       component rather than duplicating

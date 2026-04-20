@@ -2,7 +2,7 @@
 title: >-
   Feedback status badge text-shade disagrees between DESIGN-BRIEF and
   DESIGN-TOKENS
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:50:56Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-17-design-brief-tokens-alignment
 ---
 
 unit-10 Completion criteria (line 154-155) require DESIGN-BRIEF §2 and §6 to match DESIGN-TOKENS.md on pending/addressed/closed/rejected status-badge shade pairs. They do not.

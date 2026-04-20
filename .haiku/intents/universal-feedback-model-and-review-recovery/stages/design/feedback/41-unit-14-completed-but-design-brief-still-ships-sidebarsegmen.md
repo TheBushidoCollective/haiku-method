@@ -2,7 +2,7 @@
 title: >-
   unit-14 "completed" but DESIGN-BRIEF still ships SidebarSegmentedControl +
   Mine split + FAB + MobileFeedbackSheet
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:51:17Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-17-design-brief-tokens-alignment
 ---
 
 unit-14 (`unit-14-component-naming-and-copy.md`) status: `completed`. Completion criteria line 120 asserts `SidebarSegmentedControl removed; AgentFeedbackToggle added; FAB abbreviation removed; Mobile prefix resolved`. None of those sweeps landed in DESIGN-BRIEF.md.

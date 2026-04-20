@@ -2,7 +2,7 @@
 title: >-
   Origin-icon emoji set in DESIGN-BRIEF diverges from artifacts and
   aria-landmark-spec
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-19T17:51:56Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-17-design-brief-tokens-alignment
 ---
 
 unit-13 completion criteria line 209 asserts: "DESIGN-BRIEF §2 and every artifact render the SAME emoji for each origin". They do not.

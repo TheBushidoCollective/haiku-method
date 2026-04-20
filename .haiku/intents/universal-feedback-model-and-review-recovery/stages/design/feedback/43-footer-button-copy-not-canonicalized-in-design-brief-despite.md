@@ -1,6 +1,6 @@
 ---
 title: Footer-button copy not canonicalized in DESIGN-BRIEF despite unit-14 claim
-status: pending
+status: closed
 origin: adversarial-review
 author: consistency
 author_type: agent
@@ -8,7 +8,7 @@ created_at: '2026-04-19T17:51:34Z'
 iteration: 2
 visit: 2
 source_ref: null
-closed_by: null
+closed_by: unit-17-design-brief-tokens-alignment
 ---
 
 unit-14 completion criteria line 122 claims `pending → "Dismiss"` and line 124 claims "DESIGN-BRIEF §2, §3, feedback-card-states.html §1, and unit-05 body text all use the canonical verbs + hyphenation".

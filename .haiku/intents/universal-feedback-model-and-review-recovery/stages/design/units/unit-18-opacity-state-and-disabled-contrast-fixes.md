@@ -21,6 +21,7 @@ outputs:
   - knowledge/DESIGN-TOKENS.md
   - stages/design/artifacts/contrast-and-type-audit.md
   - stages/design/artifacts/annotation-popover-states.html
+  - stages/design/artifacts/unit-18-design-review.md
 quality_gates:
   - >-
     `grep -rEn 'opacity-70|opacity-50' stages/design/artifacts/ | grep -v
@@ -67,10 +68,10 @@ quality_gates:
     tokens above. DESIGN-TOKENS.md §3 adds the canonical
     closed/rejected/pending/addressed background tokens.
 status: active
-bolt: 1
-hat: design-reviewer
+bolt: 2
+hat: designer
 started_at: '2026-04-20T01:54:04Z'
-hat_started_at: '2026-04-20T02:00:09Z'
+hat_started_at: '2026-04-20T02:16:54Z'
 iterations:
   - hat: designer
     started_at: '2026-04-20T01:54:04Z'
@@ -78,6 +79,22 @@ iterations:
     result: advance
   - hat: design-reviewer
     started_at: '2026-04-20T02:00:09Z'
+    completed_at: '2026-04-20T02:16:54Z'
+    result: reject
+    reason: >-
+      QG1/QG2/QG3 fail repo-wide (gates grep all of stages/design/artifacts/,
+      not the 7 declared inputs). 6 material hits in sibling artifacts:
+      revisit-modal-states.html:100,155,460 (opacity-50 on disabled buttons),
+      agent-feedback-toggle-spec.html:181 (opacity-50 on label wrapper),
+      review-ui-mockup.html:136,153 (opacity-60 on disabled stage buttons),
+      review-ui-mockup.html:856 (bg-gray-100 text-gray-400 = 2.9:1),
+      footer-button-copy-spec.md:63 (documents opacity-50 as standard). Plus 2
+      tokens-doc drifts: DESIGN-TOKENS.md §1.7:165 still canonicalizes
+      disabled:opacity-50 and §2.3 lists old closed/rejected backgrounds. See
+      stages/design/artifacts/unit-18-design-review.md §7 for the numbered sweep
+      and §9 for sign-off criteria.
+  - hat: designer
+    started_at: '2026-04-20T02:16:54Z'
     completed_at: null
     result: null
 ---

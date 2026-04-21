@@ -17,10 +17,10 @@ import { useEffect } from "react"
 import { LiveRegionShell } from "./a11y"
 import { SkipLink } from "./components/SkipLink"
 import {
-	DirectionPageModule,
-	QuestionPageModule,
-	ReviewCurrentPageModule,
-	ReviewPageModule,
+	DirectionModule,
+	QuestionModule,
+	ReviewCurrentModule,
+	ReviewModule,
 } from "./pages"
 import { parseRoute, type ParsedRoute } from "./routing/parseRoute"
 import { NotFoundShell, ShellLayout } from "./shell/ShellLayout"
@@ -51,25 +51,25 @@ function RoutedApp({ route }: { route: ParsedRoute }): React.ReactElement {
 		case "review":
 			return (
 				<ShellLayout title="Review">
-					<ReviewPageModule sessionId={route.sessionId} />
+					<ReviewModule sessionId={route.sessionId} />
 				</ShellLayout>
 			)
 		case "review-current":
 			return (
 				<ShellLayout title="Review">
-					<ReviewCurrentPageModule />
+					<ReviewCurrentModule />
 				</ShellLayout>
 			)
 		case "question":
 			return (
 				<ShellLayout title="Question">
-					<QuestionPageModule sessionId={route.sessionId} />
+					<QuestionModule sessionId={route.sessionId} />
 				</ShellLayout>
 			)
 		case "direction":
 			return (
 				<ShellLayout title="Design Direction">
-					<DirectionPageModule sessionId={route.sessionId} />
+					<DirectionModule sessionId={route.sessionId} />
 				</ShellLayout>
 			)
 	}

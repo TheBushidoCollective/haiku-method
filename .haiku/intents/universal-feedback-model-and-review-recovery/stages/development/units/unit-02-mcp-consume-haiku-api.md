@@ -1,5 +1,5 @@
 ---
-title: MCP consumes haiku-api (validation, authz, size caps)
+title: 'MCP consumes haiku-api (validation, authz, size caps)'
 type: implementation
 depends_on:
   - unit-01-extract-haiku-api-package
@@ -8,11 +8,17 @@ quality_gates:
   - test
 inputs:
   - knowledge/ARCHITECTURE.md
-status: pending
-bolt: 0
-hat: ""
+status: active
+bolt: 1
+hat: planner
+started_at: '2026-04-21T03:55:47Z'
+hat_started_at: '2026-04-21T03:55:47Z'
+iterations:
+  - hat: planner
+    started_at: '2026-04-21T03:55:47Z'
+    completed_at: null
+    result: null
 ---
-
 # MCP consumes haiku-api
 
 Refactor `packages/haiku/src/http.ts` to use `haiku-api` for validation + shared types. **User-visible behavior unchanged for happy paths**; new rejection paths added for malformed / oversized / unauthorized requests.

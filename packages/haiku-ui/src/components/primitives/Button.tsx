@@ -1,4 +1,5 @@
 import { type ButtonHTMLAttributes, forwardRef } from "react"
+import { focusRingClass } from "../../a11y/focus"
 
 export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost"
 export type ButtonSize = "sm" | "md" | "lg"
@@ -40,9 +41,6 @@ const sizeClasses: Record<ButtonSize, string> = {
 	lg: "px-6 py-3 text-sm font-semibold rounded-lg",
 }
 
-const FOCUS_RING =
-	"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
-
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 	function Button(
 		{
@@ -59,7 +57,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 			? variantDisabled[variant]
 			: variantEnabled[variant]
 		const combined =
-			`inline-flex items-center justify-center transition-colors ${sizeClasses[size]} ${variantClass} ${FOCUS_RING} ${className}`.trim()
+			`inline-flex items-center justify-center transition-colors ${sizeClasses[size]} ${variantClass} ${focusRingClass} ${className}`.trim()
 
 		return (
 			<button

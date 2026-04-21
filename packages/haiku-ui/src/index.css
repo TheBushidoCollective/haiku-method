@@ -47,6 +47,49 @@
 	--content-max: 1400px;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Touch target helpers (unit-05 a11y/touch-target.ts) —
+   canonical source: touch-target-audit.md §2–§3 + DESIGN-TOKENS.md §1.7.1.
+   Every pointer-activated control on mobile/tablet MUST meet 44×44.
+   ───────────────────────────────────────────────────────────────────────── */
+.touch-target {
+	position: relative;
+	min-height: 44px;
+	min-width: 44px;
+}
+.touch-target.touch-target--hit-area {
+	min-height: unset;
+	min-width: unset;
+}
+.touch-target.touch-target--hit-area::before {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 44px;
+	height: 44px;
+	transform: translate(-50%, -50%);
+	border-radius: inherit;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Canonical global reduced-motion guard (unit-05 a11y) —
+   per motion-and-reduced-motion-spec.md §10.rule. Individual components
+   MAY layer per-keyframe `animation: none` overrides for decorative
+   pulses on top of this baseline. Using 0.01ms (not `none`) preserves the
+   static end-state for transitions that convey state.
+   ───────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
 /* Hide tab panels that are not active */
 [role="tabpanel"][hidden] {
 	display: none;

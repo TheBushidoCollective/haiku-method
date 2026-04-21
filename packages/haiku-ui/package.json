@@ -7,7 +7,8 @@
 		"dev": "vite",
 		"build": "tsc -b && vite build",
 		"typecheck": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "vitest run",
+		"audit:lighthouse": "node scripts/audit-lighthouse.mjs"
 	},
 	"dependencies": {
 		"@haiku/shared": "file:../shared",
@@ -23,13 +24,16 @@
 		"remark-html": "^16.0.0"
 	},
 	"devDependencies": {
+		"@lhci/cli": "0.14.0",
 		"@tailwindcss/typography": "^0.5.19",
 		"@tailwindcss/vite": "^4.1.4",
 		"@testing-library/react": "^16.0.0",
+		"@testing-library/user-event": "14.5.2",
 		"@types/react": "^19.1.2",
 		"@types/react-dom": "^19.1.2",
 		"@vitejs/plugin-react": "^4.4.1",
 		"jsdom": "^25.0.0",
+		"lighthouse": "12.3.0",
 		"tailwindcss": "^4.1.4",
 		"typescript": "^5.7.0",
 		"vite": "^6.3.2",

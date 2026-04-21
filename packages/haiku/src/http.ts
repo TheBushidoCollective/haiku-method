@@ -31,7 +31,7 @@ import {
 	type WsServerMessage,
 	type ZodIssueWire,
 } from "haiku-api"
-import { z, type ZodTypeAny } from "zod"
+import type { ZodTypeAny, z } from "zod"
 import { ensureOnStageBranch } from "./git-worktree.js"
 import { handleOrchestratorTool } from "./orchestrator.js"
 import { REVIEW_APP_HTML } from "./review-app-html.js"
@@ -104,9 +104,7 @@ async function parseJsonBody<S extends ZodTypeAny>(
 	req: Request,
 	schema: S,
 	opts: { maxBytes?: number } = {},
-): Promise<
-	{ ok: true; data: z.infer<S> } | { ok: false; response: Response }
-> {
+): Promise<{ ok: true; data: z.infer<S> } | { ok: false; response: Response }> {
 	const maxBytes = opts.maxBytes ?? DEFAULT_BODY_MAX_BYTES
 	let raw: string
 	try {
@@ -141,7 +139,9 @@ async function parseJsonBody<S extends ZodTypeAny>(
 				{
 					code: "invalid_json",
 					message:
-						err instanceof Error ? err.message : "Request body is not valid JSON",
+						err instanceof Error
+							? err.message
+							: "Request body is not valid JSON",
 					path: [],
 				},
 			]),
@@ -172,10 +172,7 @@ async function resolvePathSafe(
 ): Promise<{ ok: true; path: string } | { ok: false }> {
 	const resolvedRoot = resolve(root)
 	const resolved = resolve(resolvedRoot, requested)
-	if (
-		!resolved.startsWith(`${resolvedRoot}/`) &&
-		resolved !== resolvedRoot
-	) {
+	if (!resolved.startsWith(`${resolvedRoot}/`) && resolved !== resolvedRoot) {
 		return { ok: false }
 	}
 	try {
@@ -303,9 +300,7 @@ async function handleDecidePost(
 	const decision =
 		parsed.data.decision === "approved" ? "approved" : "changes_requested"
 	const feedback = parsed.data.feedback ?? ""
-	const annotations = parsed.data.annotations as
-		| ReviewAnnotations
-		| undefined
+	const annotations = parsed.data.annotations as ReviewAnnotations | undefined
 
 	updateSession(sessionId, {
 		status: "decided",
@@ -458,12 +453,15 @@ async function handleFileGet(
 		return respondWithFile(safe.path)
 	}
 
-	// Every allowed base rejected the path. If ALL rejections were traversal
-	// escapes (resolved outside root), return 403; otherwise 404. For the
-	// /files alias we historically returned 404 — callers distinguish by
-	// presence of the file on disk, not by path shape. We keep 404 to avoid
-	// breaking that contract.
-	return new Response(escaped ? "Not found" : "Not found", { status: 404 })
+	// Every allowed base rejected the path. If every rejection was a traversal
+	// escape (resolved outside root), return 403 to match the rest of the
+	// stream-handler contract — the unit spec requires path-traversal fixtures
+	// to return 403 on every file-serve route. Missing-file (not traversal)
+	// behaviour is handled earlier in respondWithFile's readFile fallback.
+	if (escaped) {
+		return Response.json({ error: "forbidden_path_traversal" }, { status: 403 })
+	}
+	return new Response("Not found", { status: 404 })
 }
 
 /**
@@ -478,10 +476,7 @@ async function serveUnderRoot(
 ): Promise<Response> {
 	const safe = await resolvePathSafe(rootDir, filePath)
 	if (!safe.ok) {
-		return Response.json(
-			{ error: "forbidden_path_traversal" },
-			{ status: 403 },
-		)
+		return Response.json({ error: "forbidden_path_traversal" }, { status: 403 })
 	}
 	return respondWithFile(safe.path)
 }
@@ -762,10 +757,12 @@ function encodeWebSocketFrame(payload: Buffer): Buffer {
  *  - `{ payload, opcode, consumed }` on success; payload is `null` for
  *    non-text frames (close, binary, continuation).
  */
-type DecodeResult =
+function decodeWebSocketFrame(
+	buf: Buffer,
+):
 	| { payload: string | null; opcode: number; consumed: number }
 	| { tooLarge: true; consumed: number }
-function decodeWebSocketFrame(buf: Buffer): DecodeResult | null {
+	| null {
 	if (buf.length < 2) return null
 
 	const opcode = buf[0] & 0x0f

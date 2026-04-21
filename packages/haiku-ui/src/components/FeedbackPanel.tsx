@@ -185,9 +185,9 @@ export function FeedbackPanel({ items, loading, onUpdate, onDelete }: Props) {
 											{item.body}
 										</p>
 
-										{item.addressed_by && (
+										{item.closed_by && (
 											<p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-												Addressed by: {item.addressed_by}
+												Closed by: {item.closed_by}
 											</p>
 										)}
 

@@ -3,8 +3,11 @@ import { useRef, useState } from "react"
 import { remark } from "remark"
 import remarkGfm from "remark-gfm"
 import remarkHtml from "remark-html"
+import type { QuestionSessionPayload } from "haiku-api"
 import { submitAnswers, tryCloseTab } from "../hooks/useSession"
-import type { QuestionAnswer, SessionData } from "../types"
+import type { QuestionAnswer } from "../types"
+
+type SessionData = QuestionSessionPayload
 import { Card, SectionHeading } from "./Card"
 import { type InlineComment, InlineComments } from "./InlineComments"
 import { SubmitSuccess } from "./SubmitSuccess"

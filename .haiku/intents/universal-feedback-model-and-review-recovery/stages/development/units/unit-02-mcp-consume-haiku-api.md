@@ -10,14 +10,20 @@ inputs:
   - knowledge/ARCHITECTURE.md
 status: active
 bolt: 1
-hat: planner
+hat: builder
 started_at: '2026-04-21T03:55:47Z'
-hat_started_at: '2026-04-21T03:55:47Z'
+hat_started_at: '2026-04-21T04:02:12Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T03:55:47Z'
+    completed_at: '2026-04-21T04:02:12Z'
+    result: advance
+  - hat: builder
+    started_at: '2026-04-21T04:02:12Z'
     completed_at: null
     result: null
+outputs:
+  - stages/development/artifacts/unit-02-tactical-plan.md
 ---
 # MCP consumes haiku-api
 

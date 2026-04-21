@@ -1,5 +1,5 @@
 ---
-title: A11y foundations — landmarks, live regions, focus, keyboard nav
+title: 'A11y foundations — landmarks, live regions, focus, keyboard nav'
 type: implementation
 depends_on:
   - unit-04-design-token-system
@@ -16,11 +16,17 @@ inputs:
   - stages/design/artifacts/skip-link-spec.html
   - stages/design/artifacts/touch-target-audit.md
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
-status: pending
-bolt: 0
-hat: ""
+status: active
+bolt: 1
+hat: planner
+started_at: '2026-04-21T06:58:35Z'
+hat_started_at: '2026-04-21T06:58:35Z'
+iterations:
+  - hat: planner
+    started_at: '2026-04-21T06:58:35Z'
+    completed_at: null
+    result: null
 ---
-
 # A11y foundations
 
 Establish the accessibility layer every feature component builds on: canonical aria-landmarks, live-region sequencing, focus-ring tokens, keyboard navigation primitives, touch-target helpers, reduced-motion guards.

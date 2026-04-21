@@ -15,9 +15,9 @@ inputs:
   - stages/design/artifacts/stage-progress-strip.html
 status: active
 bolt: 2
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T07:26:57Z'
-hat_started_at: '2026-04-21T13:19:14Z'
+hat_started_at: '2026-04-21T13:35:27Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T07:26:57Z'
@@ -44,6 +44,10 @@ iterations:
       needs a fix before this unit can be approved.
   - hat: builder
     started_at: '2026-04-21T13:19:14Z'
+    completed_at: '2026-04-21T13:35:27Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T13:35:27Z'
     completed_at: null
     result: null
 outputs:

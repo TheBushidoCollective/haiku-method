@@ -14,9 +14,9 @@ inputs:
   - knowledge/DESIGN-TOKENS.md
 status: active
 bolt: 1
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T03:24:59Z'
-hat_started_at: '2026-04-21T03:29:17Z'
+hat_started_at: '2026-04-21T03:43:50Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T03:24:59Z'
@@ -24,8 +24,36 @@ iterations:
     result: advance
   - hat: builder
     started_at: '2026-04-21T03:29:17Z'
+    completed_at: '2026-04-21T03:43:50Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T03:43:50Z'
     completed_at: null
     result: null
+outputs:
+  - package-lock.json
+  - package.json
+  - packages/haiku-api/README.md
+  - packages/haiku-api/package.json
+  - packages/haiku-api/scripts/emit-openapi.mjs
+  - packages/haiku-api/src/index.ts
+  - packages/haiku-api/src/openapi.ts
+  - packages/haiku-api/src/routes.ts
+  - packages/haiku-api/src/schemas/common.ts
+  - packages/haiku-api/src/schemas/direction.ts
+  - packages/haiku-api/src/schemas/feedback.ts
+  - packages/haiku-api/src/schemas/files.ts
+  - packages/haiku-api/src/schemas/question.ts
+  - packages/haiku-api/src/schemas/review.ts
+  - packages/haiku-api/src/schemas/session.ts
+  - packages/haiku-api/src/schemas/websocket.ts
+  - packages/haiku-api/src/version.ts
+  - packages/haiku-api/test/helpers.mjs
+  - packages/haiku-api/test/openapi.test.mjs
+  - packages/haiku-api/test/routes.test.mjs
+  - packages/haiku-api/test/run-all.mjs
+  - packages/haiku-api/test/schemas.test.mjs
+  - packages/haiku-api/tsconfig.json
 ---
 # Extract haiku-api package
 

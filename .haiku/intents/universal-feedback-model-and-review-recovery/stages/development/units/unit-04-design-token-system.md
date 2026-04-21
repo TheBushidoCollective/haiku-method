@@ -10,11 +10,17 @@ inputs:
   - knowledge/DESIGN-TOKENS.md
   - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/contrast-and-type-audit.md
-status: pending
-bolt: 0
-hat: ""
+status: active
+bolt: 1
+hat: planner
+started_at: '2026-04-21T06:19:55Z'
+hat_started_at: '2026-04-21T06:19:55Z'
+iterations:
+  - hat: planner
+    started_at: '2026-04-21T06:19:55Z'
+    completed_at: null
+    result: null
 ---
-
 # Design token system
 
 Implement the token system defined in `knowledge/DESIGN-TOKENS.md` across `packages/haiku-ui/`: tailwind config, CSS custom properties, a primitive component layer. Ship the token-scoped audit scripts every downstream unit will lean on.

@@ -15,9 +15,9 @@ inputs:
   - stages/design/artifacts/feedback-lifecycle-transitions.html
 status: active
 bolt: 2
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T07:27:01Z'
-hat_started_at: '2026-04-21T07:46:00Z'
+hat_started_at: '2026-04-21T13:25:33Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T07:27:01Z'
@@ -44,10 +44,50 @@ iterations:
       builder checklist in FB-07.
   - hat: builder
     started_at: '2026-04-21T07:46:00Z'
+    completed_at: '2026-04-21T13:25:33Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T13:25:33Z'
     completed_at: null
     result: null
 outputs:
   - stages/development/artifacts/unit-08-tactical-plan.md
+  - package-lock.json
+  - packages/haiku-ui/package.json
+  - packages/haiku-ui/src/components/FeedbackPanel.tsx
+  - packages/haiku-ui/src/components/feedback/FeedbackItem.tsx
+  - packages/haiku-ui/src/components/feedback/FeedbackList.tsx
+  - packages/haiku-ui/src/components/feedback/FeedbackOriginIcon.tsx
+  - packages/haiku-ui/src/components/feedback/FeedbackStatusBadge.tsx
+  - packages/haiku-ui/src/components/feedback/FeedbackSummaryBar.tsx
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/FeedbackItem.states.test.tsx
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/FeedbackList.keyboard.test.tsx
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/FeedbackList.states.test.tsx
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/FeedbackList.virtualization.test.tsx
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/FeedbackOriginIcon.states.test.tsx
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/FeedbackStatusBadge.states.test.tsx
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/FeedbackSummaryBar.states.test.tsx
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/__snapshots__/FeedbackItem.states.test.tsx.snap
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/__snapshots__/FeedbackList.states.test.tsx.snap
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/__snapshots__/FeedbackOriginIcon.states.test.tsx.snap
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/__snapshots__/FeedbackStatusBadge.states.test.tsx.snap
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/__snapshots__/FeedbackSummaryBar.states.test.tsx.snap
+  - packages/haiku-ui/src/components/feedback/__tests__/mockItems.ts
+  - packages/haiku-ui/src/components/feedback/index.ts
+  - packages/haiku-ui/src/components/feedback/tokens.ts
+  - packages/haiku-ui/src/components/feedback/useFeedbackListKeyboardNav.ts
 ---
 # Feedback component cluster
 

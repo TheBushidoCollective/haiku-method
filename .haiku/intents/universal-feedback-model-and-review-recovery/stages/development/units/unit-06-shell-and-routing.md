@@ -14,10 +14,10 @@ inputs:
   - stages/design/artifacts/skip-link-spec.html
   - stages/design/artifacts/stage-progress-strip.html
 status: active
-bolt: 1
-hat: reviewer
+bolt: 2
+hat: builder
 started_at: '2026-04-21T07:26:57Z'
-hat_started_at: '2026-04-21T08:00:59Z'
+hat_started_at: '2026-04-21T13:19:14Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T07:26:57Z'
@@ -29,6 +29,21 @@ iterations:
     result: advance
   - hat: reviewer
     started_at: '2026-04-21T08:00:59Z'
+    completed_at: '2026-04-21T13:19:14Z'
+    result: reject
+    reason: >-
+      Completion-criterion failure on the Lighthouse gate. (1) FB-08:
+      audit-lighthouse.mjs fixture registry uses /api/sessions/:id (plural) but
+      the canonical haiku-api path is /api/session/:id (singular) — three of
+      four pinned URLs render the "Session not found" error state, so Lighthouse
+      measures a11y of an error page rather than the loaded shell. (2) FB-09:
+      `node packages/haiku-ui/scripts/audit-lighthouse.mjs` exits 1 (NO_FCP) in
+      the test environment, not the required 0. App.tsx shell refactor, routing,
+      ThemeToggle, SkipLink, Header, pages/, parity snapshot, and all 95 unit
+      tests (tsc + vitest) pass — the shell work is solid; the gate harness
+      needs a fix before this unit can be approved.
+  - hat: builder
+    started_at: '2026-04-21T13:19:14Z'
     completed_at: null
     result: null
 outputs:

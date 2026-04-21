@@ -16,6 +16,32 @@ inputs:
 status: pending
 bolt: 0
 hat: ""
+outputs:
+  - stages/development/artifacts/unit-06-tactical-plan.md
+  - package-lock.json
+  - packages/haiku-ui/package.json
+  - packages/haiku-ui/index.html
+  - packages/haiku-ui/lighthouserc.json
+  - packages/haiku-ui/scripts/audit-lighthouse.mjs
+  - packages/haiku-ui/src/App.tsx
+  - packages/haiku-ui/src/main.tsx
+  - packages/haiku-ui/src/theme.ts
+  - packages/haiku-ui/src/routing/parseRoute.ts
+  - packages/haiku-ui/src/routing/__tests__/parseRoute.test.ts
+  - packages/haiku-ui/src/components/SkipLink.tsx
+  - packages/haiku-ui/src/components/Header.tsx
+  - packages/haiku-ui/src/components/ThemeToggle.tsx
+  - packages/haiku-ui/src/components/__tests__/ThemeToggle.test.tsx
+  - packages/haiku-ui/src/pages/index.ts
+  - packages/haiku-ui/src/pages/review/index.tsx
+  - packages/haiku-ui/src/pages/review-current/index.tsx
+  - packages/haiku-ui/src/pages/question/index.tsx
+  - packages/haiku-ui/src/pages/direction/index.tsx
+  - packages/haiku-ui/src/shell/ShellLayout.tsx
+  - packages/haiku-ui/src/shell/PageTitleContext.tsx
+  - packages/haiku-ui/tests/parity.spec.tsx
+  - packages/haiku-ui/tests/skip-link.spec.tsx
+  - packages/haiku-ui/tests/__snapshots__/parity.spec.tsx.snap
 ---
 
 # Shell and routing refactor

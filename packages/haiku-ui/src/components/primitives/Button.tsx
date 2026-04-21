@@ -1,4 +1,5 @@
 import { type ButtonHTMLAttributes, forwardRef } from "react"
+import { focusRingClass } from "../../a11y/focus"
 
 export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost"
 export type ButtonSize = "sm" | "md" | "lg"
@@ -30,8 +31,7 @@ const variantDisabled: Record<ButtonVariant, string> = {
 		"bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed",
 	danger:
 		"bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed",
-	ghost:
-		"bg-transparent text-stone-500 dark:text-stone-400 cursor-not-allowed",
+	ghost: "bg-transparent text-stone-500 dark:text-stone-400 cursor-not-allowed",
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -39,9 +39,6 @@ const sizeClasses: Record<ButtonSize, string> = {
 	md: "px-4 py-2.5 text-sm font-semibold rounded-lg",
 	lg: "px-6 py-3 text-sm font-semibold rounded-lg",
 }
-
-const FOCUS_RING =
-	"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 	function Button(
@@ -59,12 +56,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 			? variantDisabled[variant]
 			: variantEnabled[variant]
 		const combined =
-			`inline-flex items-center justify-center transition-colors ${sizeClasses[size]} ${variantClass} ${FOCUS_RING} ${className}`.trim()
+			`inline-flex items-center justify-center transition-colors ${sizeClasses[size]} ${variantClass} ${focusRingClass} ${className}`.trim()
 
 		return (
 			<button
 				{...rest}
-				// biome-ignore lint/a11y/useButtonType: type is explicitly forwarded via destructured default
 				type={type}
 				ref={ref}
 				disabled={disabled}

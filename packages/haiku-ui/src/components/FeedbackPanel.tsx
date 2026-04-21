@@ -4,8 +4,8 @@ import type { FeedbackItemData } from "../types"
 // ── Design tokens from DESIGN-TOKENS.md ─────────────────────────────────
 
 // Canonical mapping per DESIGN-TOKENS §2.1. `rejected` foreground lifted from
-// text-stone-500 (4.40:1 AA FAIL on bg-stone-100) to text-stone-600 (6.99:1 AAA)
-// per FB-15; dark lifted from text-stone-400 to text-stone-300 for symmetric AA.
+// the pre-FB-15 stone-500 pair (4.40:1 — AA FAIL on bg-stone-100) to stone-600
+// (6.99:1 AAA). Dark-mode lifted one step for symmetric AA margin.
 const feedbackStatusColors: Record<string, string> = {
 	pending:
 		"bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",

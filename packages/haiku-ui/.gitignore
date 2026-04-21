@@ -1,0 +1,5 @@
+# Built artifacts
+dist/
+
+# Audit reports (regenerated on every audit run)
+reports/

@@ -20,6 +20,14 @@ inputs:
 status: pending
 bolt: 0
 hat: ""
+outputs:
+  - stages/development/artifacts/unit-11-tactical-plan.md
+  - packages/haiku-ui/package.json
+  - packages/haiku-ui/src/api/client.ts
+  - packages/haiku-ui/src/components/RevisitModal.tsx
+  - packages/haiku-ui/src/components/AssessorSummaryCard.tsx
+  - packages/haiku-ui/src/components/__tests__/RevisitModal.test.tsx
+  - packages/haiku-ui/src/components/__tests__/AssessorSummaryCard.test.tsx
 ---
 
 # RevisitModal + AssessorSummaryCard

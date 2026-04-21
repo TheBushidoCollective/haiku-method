@@ -1349,20 +1349,75 @@ export function mergeUnitWorktree(
 			"--allow-empty",
 		])
 
-		// Merge in a temp worktree for the stage branch. Never touch the
-		// main repo's checked-out branch.
-		withTempWorktree(stageBranch, (tmpPath) => {
-			run([
+		// Merge strategy: if the MCP's current checkout is already on the
+		// stage branch, merge directly here (temp-worktree would fail with
+		// "branch already used by worktree"). Otherwise use a temp worktree
+		// so we don't disturb whatever branch the user happens to be on.
+		//
+		// Conflict handling: the unit .md file under stages/<stage>/units/
+		// routinely conflicts because the FSM writes iteration/hat state to
+		// it from the stage-branch side while the unit branch carries a
+		// frozen-at-fork copy. For those files only, take the stage side
+		// (the live FSM state) — the unit worktree has no business mutating
+		// its own state file. Non-unit-md conflicts still surface as real
+		// conflicts the agent must resolve.
+		const onStageBranch = getCurrentBranch() === stageBranch
+		const mergeHere = (cwd?: string) => {
+			const mergeArgs = [
 				"git",
-				"-C",
-				tmpPath,
+				...(cwd ? ["-C", cwd] : []),
 				"merge",
 				unitBranch,
 				"--no-edit",
 				"-m",
 				`haiku: merge ${unit} into ${stage}`,
-			])
-		})
+			]
+			try {
+				run(mergeArgs)
+			} catch (err) {
+				const unitMdRel = `.haiku/intents/${slug}/stages/${stage}/units/${unit}.md`
+				const conflicts = tryRun([
+					"git",
+					...(cwd ? ["-C", cwd] : []),
+					"diff",
+					"--name-only",
+					"--diff-filter=U",
+				])
+					.split("\n")
+					.filter(Boolean)
+				// Only auto-resolve the unit-md conflict. Any other conflict
+				// is real — abort and surface.
+				const nonUnitMd = conflicts.filter((p) => p !== unitMdRel)
+				if (conflicts.length > 0 && nonUnitMd.length === 0) {
+					run([
+						"git",
+						...(cwd ? ["-C", cwd] : []),
+						"checkout",
+						"--ours",
+						unitMdRel,
+					])
+					run([
+						"git",
+						...(cwd ? ["-C", cwd] : []),
+						"add",
+						unitMdRel,
+					])
+					run([
+						"git",
+						...(cwd ? ["-C", cwd] : []),
+						"commit",
+						"--no-edit",
+					])
+				} else {
+					throw err
+				}
+			}
+		}
+		if (onStageBranch) {
+			mergeHere()
+		} else {
+			withTempWorktree(stageBranch, (tmpPath) => mergeHere(tmpPath))
+		}
 
 		// Reap the unit worktree and local branch — its work is now on the
 		// stage branch. Do NOT delete the remote unit branch here: if the

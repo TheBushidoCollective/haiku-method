@@ -135,58 +135,62 @@ export function DesignPicker({ session, sessionId, wsRef }: Props) {
 					{archetypes.map((arch) => {
 						const isSelected = arch.name === selectedArchetype
 						return (
-							// biome-ignore lint/a11y/useSemanticElements: custom card-style radio option — a real <input type="radio"> can't carry the rich preview/title/description card content inline, and the role="radio" + aria-checked + tabIndex pattern is ARIA-equivalent
-							<button
-								key={arch.name}
-								type="button"
-								role="radio"
-								aria-checked={isSelected}
-								tabIndex={isSelected ? 0 : -1}
-								onClick={() => selectArchetype(arch.name)}
-								className={`group relative rounded-xl border-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-stone-900 text-left ${
-									isSelected
-										? "border-teal-600 dark:border-teal-400 bg-teal-50 dark:bg-teal-900/20"
-										: "border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500"
-								}`}
-							>
-								<div className="p-4">
-									<div className="flex items-center gap-2 mb-2">
-										<span
-											className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-												isSelected
-													? "border-teal-600 dark:border-teal-400"
-													: "border-stone-300 dark:border-stone-600"
-											}`}
-										>
-											{isSelected && (
-												<span className="w-2.5 h-2.5 rounded-full bg-teal-600 dark:bg-teal-400" />
-											)}
-										</span>
-										<h3 className="font-semibold text-stone-900 dark:text-stone-100">
-											{arch.name}
-										</h3>
+							<div key={arch.name} className="relative">
+								{/* biome-ignore lint/a11y/useSemanticElements: custom card-style radio option — a real <input type="radio"> can't carry the rich preview/title/description card content inline, and the role="radio" + aria-checked + tabIndex pattern is ARIA-equivalent */}
+								<button
+									type="button"
+									role="radio"
+									aria-checked={isSelected}
+									tabIndex={isSelected ? 0 : -1}
+									onClick={() => selectArchetype(arch.name)}
+									className={`group relative block w-full rounded-xl border-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-stone-900 text-left ${
+										isSelected
+											? "border-teal-600 dark:border-teal-400 bg-teal-50 dark:bg-teal-900/20"
+											: "border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500"
+									}`}
+								>
+									<div className="p-4 pb-10">
+										<div className="flex items-center gap-2 mb-2">
+											<span
+												className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+													isSelected
+														? "border-teal-600 dark:border-teal-400"
+														: "border-stone-300 dark:border-stone-600"
+												}`}
+											>
+												{isSelected && (
+													<span className="w-2.5 h-2.5 rounded-full bg-teal-600 dark:bg-teal-400" />
+												)}
+											</span>
+											<h3 className="font-semibold text-stone-900 dark:text-stone-100">
+												{arch.name}
+											</h3>
+										</div>
+										<p className="text-sm text-stone-600 dark:text-stone-400 mb-3">
+											{arch.description}
+										</p>
+										<iframe
+											srcDoc={arch.preview_html}
+											sandbox=""
+											title={`Preview: ${arch.name}`}
+											className="w-full h-48 rounded-lg border border-stone-200 dark:border-stone-700 bg-white pointer-events-none"
+										/>
 									</div>
-									<p className="text-sm text-stone-600 dark:text-stone-400 mb-3">
-										{arch.description}
-									</p>
-									<iframe
-										srcDoc={arch.preview_html}
-										sandbox=""
-										title={`Preview: ${arch.name}`}
-										className="w-full h-48 rounded-lg border border-stone-200 dark:border-stone-700 bg-white pointer-events-none"
-									/>
-									<button
-										type="button"
-										onClick={(e) => {
-											e.stopPropagation()
-											openPreviewModal(arch.name, arch.preview_html)
-										}}
-										className="mt-2 text-xs text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-200 underline underline-offset-2"
-									>
-										View Full Size
-									</button>
-								</div>
-							</button>
+								</button>
+								{/* "View Full Size" is a sibling of the radio card — nesting it
+								    inside the role="radio" button violates axe's nested-
+								    interactive rule (WCAG 2.1 AA). Positioning it absolutely
+								    inside the relative wrapper keeps the visual layout while
+								    keeping the DOM flat. */}
+								<button
+									type="button"
+									onClick={() => openPreviewModal(arch.name, arch.preview_html)}
+									className="absolute bottom-3 left-4 text-xs text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-200 underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 rounded-sm"
+									aria-label={`View full size preview: ${arch.name}`}
+								>
+									View Full Size
+								</button>
+							</div>
 						)
 					})}
 				</div>

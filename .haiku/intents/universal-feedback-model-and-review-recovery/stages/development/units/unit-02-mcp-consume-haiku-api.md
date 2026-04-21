@@ -9,10 +9,10 @@ quality_gates:
 inputs:
   - knowledge/ARCHITECTURE.md
 status: active
-bolt: 1
-hat: reviewer
+bolt: 2
+hat: builder
 started_at: '2026-04-21T03:55:47Z'
-hat_started_at: '2026-04-21T04:26:33Z'
+hat_started_at: '2026-04-21T04:31:35Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T03:55:47Z'
@@ -24,6 +24,28 @@ iterations:
     result: advance
   - hat: reviewer
     started_at: '2026-04-21T04:26:33Z'
+    completed_at: '2026-04-21T04:31:35Z'
+    result: reject
+    reason: >-
+      Missing test coverage for a declared completion criterion: "Path traversal
+      on file-serve routes → 403." Implementation is correct (serveUnderRoot
+      returns 403 via resolvePathSafe) but no test exercises it against
+      /mockups/:id/, /wireframe/:id/, or /stage-artifacts/:id/. The existing
+      path-traversal tests in http-feedback.test.mjs only cover the feedback
+      slug validator (400). Add a small fixture set (e.g. "../etc/passwd",
+      "%2E%2E%2Fetc", encoded/symlink cases) against
+      mockup/wireframe/stage-artifact endpoints asserting 403 +
+      {error:'forbidden_path_traversal'}. Also consider whether handleFileGet
+      should return 403 or 404 on escape — the implementation currently returns
+      404 with a "backwards-compatible contract" comment, but the unit spec
+      explicitly lists handleFileGet as one of the stream handlers that must
+      return 403. Either align the behavior (preferred) or document the 404
+      carve-out in the unit spec. All other completion criteria pass: typecheck
+      clean in both packages, 505+108 tests pass, test-baseline diff shows 0
+      regressions, security invariants (1 MB/128 KB caps, WS 1008/1009,
+      transport invariant, cross-session guard) all tested.
+  - hat: builder
+    started_at: '2026-04-21T04:31:35Z'
     completed_at: null
     result: null
 outputs:

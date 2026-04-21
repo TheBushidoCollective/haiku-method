@@ -1,5 +1,5 @@
 ---
-title: AgentFeedbackToggle (role=switch, canonical aria-label, 44px target)
+title: 'AgentFeedbackToggle (role=switch, canonical aria-label, 44px target)'
 type: implementation
 depends_on:
   - unit-04-design-token-system
@@ -12,11 +12,17 @@ inputs:
   - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/agent-feedback-toggle-spec.html
   - stages/design/artifacts/comments-list-with-agent-toggle.html
-status: pending
-bolt: 0
-hat: ""
+status: active
+bolt: 1
+hat: planner
+started_at: '2026-04-21T07:27:04Z'
+hat_started_at: '2026-04-21T07:27:04Z'
+iterations:
+  - hat: planner
+    started_at: '2026-04-21T07:27:04Z'
+    completed_at: null
+    result: null
 ---
-
 # AgentFeedbackToggle
 
 Dedicated unit because prior implementation shipped a div-label masquerading as a switch. Proper toggle semantics, canonical aria-label, 44×44 hit area, reduced-motion animation guard. Regression guard for div-toggle + aria-label-drift + sub-44 target + animation-ignores-prefers-reduced classes of issue.

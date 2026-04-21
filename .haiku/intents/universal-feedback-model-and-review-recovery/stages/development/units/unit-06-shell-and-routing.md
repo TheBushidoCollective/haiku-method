@@ -21,8 +21,6 @@ outputs:
   - package-lock.json
   - packages/haiku-ui/package.json
   - packages/haiku-ui/index.html
-  - packages/haiku-ui/lighthouserc.json
-  - packages/haiku-ui/scripts/audit-lighthouse.mjs
   - packages/haiku-ui/src/App.tsx
   - packages/haiku-ui/src/main.tsx
   - packages/haiku-ui/src/theme.ts
@@ -31,6 +29,7 @@ outputs:
   - packages/haiku-ui/src/components/SkipLink.tsx
   - packages/haiku-ui/src/components/Header.tsx
   - packages/haiku-ui/src/components/ThemeToggle.tsx
+  - packages/haiku-ui/src/components/DesignPicker.tsx
   - packages/haiku-ui/src/components/__tests__/ThemeToggle.test.tsx
   - packages/haiku-ui/src/pages/index.ts
   - packages/haiku-ui/src/pages/review/index.tsx
@@ -41,6 +40,7 @@ outputs:
   - packages/haiku-ui/src/shell/PageTitleContext.tsx
   - packages/haiku-ui/tests/parity.spec.tsx
   - packages/haiku-ui/tests/skip-link.spec.tsx
+  - packages/haiku-ui/tests/a11y-pages.spec.tsx
   - packages/haiku-ui/tests/__snapshots__/parity.spec.tsx.snap
 ---
 
@@ -57,11 +57,11 @@ Rebuild `App.tsx` as a clean shell composing a11y landmarks, theme toggle, and p
 - `packages/haiku-ui/src/components/Header.tsx` — canonical app header; brand, active-intent breadcrumb, theme toggle, keyboard-shortcut-help trigger.
 - Skip-to-main-content link per `skip-link-spec.html` — first in DOM order in `<Header>`, hidden until focused, jumps to `#main`. **Regression guard for missing-skip-link class of issue.**
 
-**Lighthouse gate — pinned harness:**
-- `packages/haiku-ui/scripts/audit-lighthouse.mjs` — boots the built SPA on an ephemeral port using committed fixtures, runs Lighthouse CI with version pinned in `packages/haiku-ui/package.json` (explicit `lighthouse` dep). Configuration in `packages/haiku-ui/lighthouserc.json`:
-  - URLs: `/review/demo`, `/review/current`, `/question/demo`, `/direction/demo` (demo ids served by a dev-fixture server the script boots).
-  - `--only-categories=accessibility`, `--preset=desktop`, `--throttling.cpuSlowdownMultiplier=1`.
-  - Assertions: a11y score ≥ 0.95 per URL.
+**Per-page axe-core gate — jsdom harness:**
+- `packages/haiku-ui/tests/a11y-pages.spec.tsx` — renders `<App>` for each of the four routes (`/review/:id`, `/review/current`, `/question/:id`, `/direction/:id`) with the committed fixtures and a mocked `ApiClient`, then runs `axe.run(container)` with tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`.
+- Assertion: **zero** violations per route. (Supersedes the former Lighthouse ≥ 0.95 gate. chrome-launcher clobbered the contributor's local Chrome profile, so Lighthouse was removed. axe-core runs the same rule engine Lighthouse uses for its a11y category, and "zero violations" is strictly stronger than "score ≥ 0.95".)
+- `color-contrast` rule is disabled here (jsdom cannot compute used colors) and covered by the dedicated contrast audit in unit-11.
+- `iframes: false` — axe cannot message jsdom iframes; the `direction` page preview iframe contents are audited separately.
 
 ## Out of scope
 
@@ -75,5 +75,5 @@ Rebuild `App.tsx` as a clean shell composing a11y landmarks, theme toggle, and p
 - ThemeToggle has `aria-label="Toggle theme"`, switches light/dark, persists via `localStorage`.
 - Skip-link renders first in tab order in every page — verified by an RTL test that presses Tab once on page load and asserts the skip link receives focus.
 - Existing URL paths (`/review/:id`, `/review/current`, `/question/:id`, `/direction/:id`) render without regression (verified by the unit-03 DOM parity Playwright test, now re-run with the new shell).
-- `node packages/haiku-ui/scripts/audit-lighthouse.mjs` exits 0 with a11y score ≥ 0.95 on each pinned URL.
+- `npx vitest run tests/a11y-pages.spec.tsx` exits 0 with zero axe-core violations across tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` for each of the four routes.
 - `npx tsc --noEmit` passes.

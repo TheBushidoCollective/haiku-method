@@ -1,5 +1,5 @@
 ---
-title: Extract haiku-ui package (React shell, consumes haiku-api)
+title: 'Extract haiku-ui package (React shell, consumes haiku-api)'
 type: implementation
 depends_on:
   - unit-01-extract-haiku-api-package
@@ -10,11 +10,17 @@ quality_gates:
   - build
 inputs:
   - knowledge/ARCHITECTURE.md
-status: pending
-bolt: 0
-hat: ""
+status: active
+bolt: 1
+hat: planner
+started_at: '2026-04-21T05:00:32Z'
+hat_started_at: '2026-04-21T05:00:32Z'
+iterations:
+  - hat: planner
+    started_at: '2026-04-21T05:00:32Z'
+    completed_at: null
+    result: null
 ---
-
 # Extract haiku-ui package
 
 Move `packages/haiku/review-app/` → `packages/haiku-ui/` as its own workspace package. Consume types from `haiku-api`. **No visual change.** This is a pure relocation + dependency rewiring; design-alignment work happens in later units.

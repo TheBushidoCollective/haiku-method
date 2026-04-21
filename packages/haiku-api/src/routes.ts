@@ -12,6 +12,11 @@
 
 import type { ZodTypeAny } from "zod"
 import {
+	DEFAULT_BODY_MAX_BYTES,
+	FEEDBACK_BODY_MAX_BYTES,
+	type RouteTransport,
+} from "./schemas/common.js"
+import {
 	DirectionSelectRequestSchema,
 	DirectionSelectResponseSchema,
 } from "./schemas/direction.js"
@@ -27,6 +32,10 @@ import {
 	QuestionAnswerRequestSchema,
 	QuestionAnswerResponseSchema,
 } from "./schemas/question.js"
+import {
+	RevisitRequestSchema,
+	RevisitResponseSchema,
+} from "./schemas/revisit.js"
 import {
 	ReviewDecisionRequestSchema,
 	ReviewDecisionResponseSchema,
@@ -54,6 +63,13 @@ export interface RouteSpec {
 	summary: string
 	/** Optional — tag grouping in the emitted OpenAPI document. */
 	tag?: string
+	/** Transport invariant. v1 hardcodes every route to `loopback`; any drift
+	 *  should be caught by the transport-invariant test. */
+	transport: RouteTransport
+	/** Per-route request-body cap in bytes. Absent → use DEFAULT_BODY_MAX_BYTES.
+	 *  Tighter than the global 1 MiB cap for routes like feedback that should
+	 *  reject oversize bodies early. */
+	maxBodyBytes?: number
 }
 
 /**
@@ -76,6 +92,7 @@ export const paths = {
 	questionPage: (id: string) => `/question/${id}`,
 	questionAnswer: (id: string, _?: never) => `/question/${id}/answer`,
 	reviewCurrent: () => "/api/review/current",
+	revisit: (id: string) => `/api/revisit/${id}`,
 	feedbackList: (intent: string, stage: string) =>
 		`/api/feedback/${intent}/${stage}`,
 	feedbackItem: (intent: string, stage: string, id: string) =>
@@ -100,6 +117,7 @@ export const routes: readonly RouteSpec[] = [
 		response: null,
 		summary: "Serve a file from a session's file-bundle root (raw stream).",
 		tag: "files",
+		transport: "loopback",
 	},
 
 	// Session API ────────────────────────────────────────────────────────
@@ -111,6 +129,7 @@ export const routes: readonly RouteSpec[] = [
 		response: SessionPayloadSchema,
 		summary: "Return session JSON for the SPA to render.",
 		tag: "session",
+		transport: "loopback",
 	},
 	{
 		method: "HEAD",
@@ -120,6 +139,7 @@ export const routes: readonly RouteSpec[] = [
 		response: HeartbeatResponseSchema,
 		summary: "Client presence ping. 200 if session exists, 404 otherwise.",
 		tag: "session",
+		transport: "loopback",
 	},
 
 	// Review pane (always-available) ─────────────────────────────────────
@@ -131,6 +151,7 @@ export const routes: readonly RouteSpec[] = [
 		response: null,
 		summary: "Serve the always-available review pane (HTML SPA entry).",
 		tag: "review",
+		transport: "loopback",
 	},
 	{
 		method: "GET",
@@ -140,6 +161,7 @@ export const routes: readonly RouteSpec[] = [
 		response: null,
 		summary: "Serve the review page for a session (HTML SPA entry).",
 		tag: "review",
+		transport: "loopback",
 	},
 	{
 		method: "POST",
@@ -149,6 +171,7 @@ export const routes: readonly RouteSpec[] = [
 		response: ReviewDecisionResponseSchema,
 		summary: "Submit a review decision (approved | changes_requested).",
 		tag: "review",
+		transport: "loopback",
 	},
 
 	// Mockup / wireframe / stage-artifact file serving ───────────────────
@@ -160,6 +183,7 @@ export const routes: readonly RouteSpec[] = [
 		response: null,
 		summary: "Serve a mockup asset for a review session (raw stream).",
 		tag: "files",
+		transport: "loopback",
 	},
 	{
 		method: "GET",
@@ -169,6 +193,7 @@ export const routes: readonly RouteSpec[] = [
 		response: null,
 		summary: "Serve a wireframe asset for a review session (raw stream).",
 		tag: "files",
+		transport: "loopback",
 	},
 	{
 		method: "GET",
@@ -178,6 +203,7 @@ export const routes: readonly RouteSpec[] = [
 		response: null,
 		summary: "Serve a stage artifact for a review session (raw stream).",
 		tag: "files",
+		transport: "loopback",
 	},
 
 	// Design direction ───────────────────────────────────────────────────
@@ -189,6 +215,7 @@ export const routes: readonly RouteSpec[] = [
 		response: null,
 		summary: "Serve the design-direction selection page (HTML SPA entry).",
 		tag: "direction",
+		transport: "loopback",
 	},
 	{
 		method: "POST",
@@ -198,6 +225,7 @@ export const routes: readonly RouteSpec[] = [
 		response: DirectionSelectResponseSchema,
 		summary: "Record a design-direction archetype + parameter selection.",
 		tag: "direction",
+		transport: "loopback",
 	},
 
 	// Question ───────────────────────────────────────────────────────────
@@ -209,6 +237,7 @@ export const routes: readonly RouteSpec[] = [
 		response: null,
 		summary: "Serve an image referenced by a question session (raw stream).",
 		tag: "question",
+		transport: "loopback",
 	},
 	{
 		method: "GET",
@@ -218,6 +247,7 @@ export const routes: readonly RouteSpec[] = [
 		response: null,
 		summary: "Serve the question page (HTML SPA entry).",
 		tag: "question",
+		transport: "loopback",
 	},
 	{
 		method: "POST",
@@ -227,6 +257,7 @@ export const routes: readonly RouteSpec[] = [
 		response: QuestionAnswerResponseSchema,
 		summary: "Submit answers for a question session.",
 		tag: "question",
+		transport: "loopback",
 	},
 
 	// Review current snapshot ────────────────────────────────────────────
@@ -238,6 +269,20 @@ export const routes: readonly RouteSpec[] = [
 		response: ReviewCurrentPayloadSchema,
 		summary: "Return the current active intent + stage status snapshot.",
 		tag: "review",
+		transport: "loopback",
+	},
+
+	// Revisit ────────────────────────────────────────────────────────────
+	{
+		method: "POST",
+		pathTemplate: "/api/revisit/{sessionId}",
+		operationId: "postRevisit",
+		request: RevisitRequestSchema,
+		response: RevisitResponseSchema,
+		summary:
+			"Request a stage revisit from the review UI. Optionally includes reasons that are written as feedback files before rollback.",
+		tag: "review",
+		transport: "loopback",
 	},
 
 	// Feedback CRUD ──────────────────────────────────────────────────────
@@ -250,6 +295,7 @@ export const routes: readonly RouteSpec[] = [
 		summary:
 			"List feedback items for an intent's stage (optionally filter by status).",
 		tag: "feedback",
+		transport: "loopback",
 	},
 	{
 		method: "POST",
@@ -259,6 +305,8 @@ export const routes: readonly RouteSpec[] = [
 		response: FeedbackCreateResponseSchema,
 		summary: "Create a new feedback item in an intent's stage.",
 		tag: "feedback",
+		transport: "loopback",
+		maxBodyBytes: FEEDBACK_BODY_MAX_BYTES,
 	},
 	{
 		method: "PUT",
@@ -268,6 +316,8 @@ export const routes: readonly RouteSpec[] = [
 		response: FeedbackUpdateResponseSchema,
 		summary: "Update status or closed_by on a feedback item.",
 		tag: "feedback",
+		transport: "loopback",
+		maxBodyBytes: FEEDBACK_BODY_MAX_BYTES,
 	},
 	{
 		method: "DELETE",
@@ -277,6 +327,7 @@ export const routes: readonly RouteSpec[] = [
 		response: FeedbackDeleteResponseSchema,
 		summary: "Delete a feedback item (blocks open items via 409).",
 		tag: "feedback",
+		transport: "loopback",
 	},
 
 	// Health ─────────────────────────────────────────────────────────────
@@ -288,6 +339,7 @@ export const routes: readonly RouteSpec[] = [
 		response: null,
 		summary: "Plain-text keepalive check used by the tunnel.",
 		tag: "health",
+		transport: "loopback",
 	},
 
 	// WebSocket upgrade ──────────────────────────────────────────────────
@@ -300,8 +352,20 @@ export const routes: readonly RouteSpec[] = [
 		summary:
 			"WebSocket upgrade for a session. Client and server envelopes are defined in schemas/websocket.ts.",
 		tag: "websocket",
+		transport: "loopback",
 	},
 ] as const
+
+/** Look up the per-route body cap for a given method + path template. */
+export function routeBodyLimit(
+	method: RouteSpec["method"],
+	pathTemplate: string,
+): number {
+	const entry = routes.find(
+		(r) => r.method === method && r.pathTemplate === pathTemplate,
+	)
+	return entry?.maxBodyBytes ?? DEFAULT_BODY_MAX_BYTES
+}
 
 /** Return every route that has both a request and a response schema. Used by
  *  the OpenAPI emitter to collect schemas for `components.schemas`. */

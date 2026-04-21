@@ -14,10 +14,10 @@ inputs:
   - stages/design/artifacts/skip-link-spec.html
   - stages/design/artifacts/stage-progress-strip.html
 status: active
-bolt: 2
-hat: reviewer
+bolt: 3
+hat: builder
 started_at: '2026-04-21T07:26:57Z'
-hat_started_at: '2026-04-21T13:35:27Z'
+hat_started_at: '2026-04-21T13:50:20Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T07:26:57Z'
@@ -48,6 +48,16 @@ iterations:
     result: advance
   - hat: reviewer
     started_at: '2026-04-21T13:35:27Z'
+    completed_at: '2026-04-21T13:50:20Z'
+    result: reject
+    reason: >-
+      FB-10: audit-lighthouse.mjs static-asset server only matches top-level
+      dist entries, so /assets/*.js requests fall through to SPA fallback and
+      return HTML. Lighthouse sees a blank page (NO_FCP) on every pinned URL and
+      the script exits 1 — completion criterion "exits 0 with a11y score >= 0.95
+      on each pinned URL" is not met. All other criteria pass.
+  - hat: builder
+    started_at: '2026-04-21T13:50:20Z'
     completed_at: null
     result: null
 outputs:

@@ -14,10 +14,10 @@ inputs:
   - stages/design/artifacts/state-coverage-grid.md
   - stages/design/artifacts/feedback-lifecycle-transitions.html
 status: active
-bolt: 1
-hat: reviewer
+bolt: 2
+hat: builder
 started_at: '2026-04-21T07:27:01Z'
-hat_started_at: '2026-04-21T07:39:08Z'
+hat_started_at: '2026-04-21T07:46:00Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T07:27:01Z'
@@ -29,6 +29,21 @@ iterations:
     result: advance
   - hat: reviewer
     started_at: '2026-04-21T07:39:08Z'
+    completed_at: '2026-04-21T07:46:00Z'
+    result: reject
+    reason: >-
+      REQUEST CHANGES — builder produced zero implementation. No
+      packages/haiku-ui/src/components/feedback/ directory exists; react-window
+      not added to haiku-ui/package.json; no FeedbackItem / FeedbackList /
+      FeedbackStatusBadge / FeedbackOriginIcon / FeedbackSummaryBar / index.ts;
+      no __tests__ (state-matrix snapshots, virtualization perf, keyboard-nav,
+      aria-label); legacy components/FeedbackPanel.tsx still renders {origin}
+      slug (C4 regression guard). Unit branch contains only the planner's
+      tactical-plan commit (14a36445). Every completion criterion (C1-C7) fails
+      by non-existence of deliverables. Full CoVe evidence + complete bolt-2
+      builder checklist in FB-07.
+  - hat: builder
+    started_at: '2026-04-21T07:46:00Z'
     completed_at: null
     result: null
 outputs:

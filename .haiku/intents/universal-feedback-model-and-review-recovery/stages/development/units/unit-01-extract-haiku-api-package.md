@@ -35,9 +35,10 @@ outputs:
   - packages/haiku-api/test/openapi.test.mjs
   - package.json
   - package-lock.json
-status: pending
+status: completed
 bolt: 0
-hat: ""
+hat: ''
+completed_at: '2026-04-21T03:46:45Z'
 ---
 
 # Extract haiku-api package

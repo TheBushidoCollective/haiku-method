@@ -12,9 +12,9 @@ inputs:
   - stages/design/artifacts/contrast-and-type-audit.md
 status: active
 bolt: 1
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T06:19:55Z'
-hat_started_at: '2026-04-21T06:26:43Z'
+hat_started_at: '2026-04-21T06:51:47Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T06:19:55Z'
@@ -22,10 +22,46 @@ iterations:
     result: advance
   - hat: builder
     started_at: '2026-04-21T06:26:43Z'
+    completed_at: '2026-04-21T06:51:47Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T06:51:47Z'
     completed_at: null
     result: null
 outputs:
   - stages/development/artifacts/unit-04-tactical-plan.md
+  - packages/haiku-ui/.gitignore
+  - packages/haiku-ui/audit-config.json
+  - packages/haiku-ui/scripts/audit-banned-patterns.mjs
+  - packages/haiku-ui/scripts/audit-contrast.mjs
+  - packages/haiku-ui/scripts/verify-tokens.mjs
+  - packages/haiku-ui/src/components/CriteriaChecklist.tsx
+  - packages/haiku-ui/src/components/DesignPicker.tsx
+  - packages/haiku-ui/src/components/FeedbackPanel.tsx
+  - packages/haiku-ui/src/components/QuestionPage.tsx
+  - packages/haiku-ui/src/components/ReviewCurrentPage.tsx
+  - packages/haiku-ui/src/components/ReviewPage.tsx
+  - packages/haiku-ui/src/components/ReviewSidebar.tsx
+  - packages/haiku-ui/src/components/StageProgressStrip.tsx
+  - packages/haiku-ui/src/components/StatusBadge.tsx
+  - packages/haiku-ui/src/components/Tabs.tsx
+  - packages/haiku-ui/src/components/primitives/Badge.tsx
+  - packages/haiku-ui/src/components/primitives/Button.tsx
+  - packages/haiku-ui/src/components/primitives/Card.tsx
+  - packages/haiku-ui/src/components/primitives/Chip.tsx
+  - packages/haiku-ui/src/components/primitives/Divider.tsx
+  - packages/haiku-ui/src/components/primitives/Input.tsx
+  - packages/haiku-ui/src/components/primitives/__tests__/Badge.test.tsx
+  - packages/haiku-ui/src/components/primitives/__tests__/Button.test.tsx
+  - packages/haiku-ui/src/components/primitives/__tests__/Card.test.tsx
+  - packages/haiku-ui/src/components/primitives/__tests__/Chip.test.tsx
+  - packages/haiku-ui/src/components/primitives/__tests__/Divider.test.tsx
+  - packages/haiku-ui/src/components/primitives/__tests__/Input.test.tsx
+  - packages/haiku-ui/src/components/primitives/index.ts
+  - packages/haiku-ui/src/index.css
+  - packages/haiku-ui/tailwind.config.ts
+  - packages/haiku-ui/tests/__snapshots__/parity.spec.tsx.snap
+  - packages/haiku-ui/vitest.config.ts
 ---
 # Design token system
 

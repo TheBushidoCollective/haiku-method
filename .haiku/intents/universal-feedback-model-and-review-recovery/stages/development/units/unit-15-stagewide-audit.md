@@ -1,5 +1,5 @@
 ---
-title: Stage-wide audit — contrast, state coverage, banned patterns
+title: Stage-wide audit — contrast (rendered), state coverage, banned patterns, bundle, runtime parity
 type: audit
 depends_on:
   - unit-07-review-page-desktop-and-mobile
@@ -15,10 +15,17 @@ quality_gates:
   - test
   - build
 inputs:
+  - knowledge/DESIGN-TOKENS.md
+  - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/contrast-and-type-audit.md
   - stages/design/artifacts/state-coverage-grid.md
   - stages/design/artifacts/touch-target-audit.md
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
+  - stages/design/artifacts/footer-button-copy-spec.md
+  - stages/design/artifacts/focus-ring-spec.html
+  - stages/design/artifacts/keyboard-shortcut-map.html
+  - stages/design/artifacts/aria-live-sequencing-spec.md
+  - stages/design/artifacts/aria-landmark-spec.md
 status: pending
 bolt: 0
 hat: ""
@@ -26,38 +33,59 @@ hat: ""
 
 # Stage-wide audit
 
-Single final unit that runs the full audit surface after every component unit lands. Gates: contrast, state coverage, touch targets, banned patterns, reduced-motion, live-region plumbing.
+Single final unit. Runs the superset audits after every component unit lands. Every gate is a deterministic executable — no prose gates.
 
 ## Scope
 
-- **Contrast audit** — every token pair used on any surface passes WCAG 1.4.3 AA for text, 1.4.11 Non-Text for UI components. Script: `packages/haiku-ui/scripts/audit-contrast.mjs` walks the rendered DOM via headless browser and measures every foreground/background pair.
-- **State coverage** — every §2 component in DESIGN-BRIEF renders default/hover/focus/active/disabled/error × status-variants per state-coverage-grid.md. Storybook-style snapshot test covers the matrix.
-- **Touch-target audit** — every interactive element measures ≥44×44 via computed bounding rect. Script: `packages/haiku-ui/scripts/audit-touch-targets.mjs`.
-- **Banned patterns** — grep sweep confirms zero occurrences of:
-  - `text-\[9px\]`, `text-\[10px\]` outside approved exemptions
-  - `text-gray-\d+` anywhere
-  - Banned stone-400/500 pairs on light/white backgrounds
-  - `opacity-(50|60|70)` on card/button roots
-  - `focus:ring-1` (canonical is `focus-visible:ring-2`)
-  - Standalone "Reject", "Close", "Address" as button labels (canonical verbs: Dismiss, Verify & Close, Reopen)
-  - Hyphenated "Re-open" (canonical is "Reopen")
-  - Raw hex color values
-  - `max-w-\[1400px\]` literal
-  - `lg:w-96` on sidebar context
-- **Reduced-motion** — every animation declares `@media (prefers-reduced-motion: reduce)` override or uses `motionSafeClass` helper.
-- **Live-region plumbing** — `#feedback-live-polite` and `#feedback-live-assertive` mounted exactly once in the shell; `useAnnounce` targets only those IDs.
-- **Keyboard-navigation spec compliance** — every shortcut in keyboard-navigation-spec.md is wired via `useShortcut`; no scope conflicts.
-- **OpenAPI ↔ runtime parity** — every endpoint described in `haiku-api/dist/openapi.json` is reachable against a running MCP; every MCP route has a matching OpenAPI entry.
+**New audit scripts owned by this unit:**
+
+- `packages/haiku-ui/scripts/audit-touch-targets.mjs` — headless-browser walk of the built SPA; every interactive element (computed via `[role=button], [role=switch], button, [tabindex="0"]`, etc.) measures `getBoundingClientRect()` ≥ 44×44. Exit 0 on pass.
+- `packages/haiku-ui/scripts/audit-bundle-size.mjs` — compares `dist/index.html` gzipped size against `packages/haiku-ui/budget.json` (`haiku-ui-bundle.gzip.max = 500KB`); fails on absolute cap or 5% regression vs `packages/haiku-ui/budget-baseline.json` (updated only via explicit PR).
+- `packages/haiku-ui/scripts/audit-state-coverage.mjs` — asserts every §2 component from DESIGN-BRIEF has a `__snapshots__/{Component}.states.test.tsx.snap` file with ≥ (6 × status-variants) snapshot entries. Per-component cardinality ≤ 36.
+- Extends `packages/haiku-ui/scripts/audit-contrast.mjs` with `--mode=rendered`: headless browser, walks DOM of every page served by fixtures, deduplicates pairs by `(fg-token, bg-token, font-size-bucket)`, asserts WCAG pass. **30s wall-clock budget**; unique-pair count asserted < 200 to catch explosions.
+- Extends `packages/haiku-ui/audit-config.json` with `stage-wide` profile:
+  - Token-layer bans (inherited from `tokens` profile).
+  - **XSS sinks**: `dangerouslySetInnerHTML`, `innerHTML\\s*=`, `\\beval\\(`, `new Function\\(`, `document\\.write\\(` — scope `packages/haiku-ui/src/**/*.{ts,tsx}` and `packages/haiku-api/src/**/*.ts`; exclusions in `__tests__` and allow-listed lines with `// audit-allow: <reason>` comment.
+  - **Button-verb bans**: `<[Bb]utton[^>]*>\\s*(Reject|Close|Address|Re-open)\\s*<|aria-label=["'](Reject|Close|Address|Re-open)["']` scoped to `packages/haiku-ui/src/**/*.{ts,tsx}`.
+  - **Hyphenated "Re-open"**: same scope as verb bans.
+  - **Raw hex colors**: scope to `src/**/*.{ts,tsx,css}` excluding `index.css` (where custom-property definitions live), `__snapshots__`, `scripts/**`.
+  - **`max-w-\\[1400px\\]` literal**: full scope.
+  - **Sidebar `lg:w-96` regression**: scope to sidebar-relevant files (audit-config notes the rationale).
+  - **`focus:ring-1`**: full scope.
+- `packages/haiku-api/scripts/audit-openapi-parity.mjs` (owned by unit-01, invoked here) — run against a test MCP + `dist/openapi.json`, bounded probe, 30s budget.
+
+**Lighthouse audit (pinned)** — reuses `packages/haiku-ui/scripts/audit-lighthouse.mjs` from unit-06 at full URL set; asserts a11y ≥ 0.95 on every page.
+
+**Reduced-motion audit** — a headless walk of the built SPA with `prefers-reduced-motion: reduce` emulated; asserts every animated element either uses `motion-safe:*` classes or has a `@media (prefers-reduced-motion: reduce)` override.
+
+**Keyboard-shortcut spec compliance** — parses `keyboard-shortcut-map.html §2` table, asserts every `(key, scope)` row has a matching `useShortcut(key, ..., { scope })` registration in the source.
+
+**Live-region plumbing** — grep + AST scan: `#feedback-live-polite` and `#feedback-live-assertive` mounted exactly once across the app; `useAnnounce` call sites only target those IDs.
+
+**Snapshot execution budget** — test runner parallelization ceiling 5 minutes wall-clock for state-coverage snapshots (Vitest `--threads` enabled).
 
 ## Out of scope
 
-- Any new feature work (all component/page units must have landed first).
+- Any new feature work (must have landed in prior units).
 
 ## Completion Criteria
 
-- All audit scripts exit 0.
-- All snapshot tests pass.
-- `npx tsc --noEmit` passes repo-wide.
-- `npm test` passes repo-wide.
-- Lighthouse a11y score on built bundle ≥ 95.
-- OpenAPI spec + MCP route surface reconciled (zero drift).
+All of these commands exit 0:
+
+- `npx tsc --noEmit` (repo-wide)
+- `npm test` (all packages; baselines preserved from unit-02's `test-baseline.json`)
+- `node packages/haiku-ui/scripts/verify-tokens.mjs`
+- `node packages/haiku-ui/scripts/audit-contrast.mjs --mode=tokens`
+- `node packages/haiku-ui/scripts/audit-contrast.mjs --mode=rendered` (30s budget)
+- `node packages/haiku-ui/scripts/audit-touch-targets.mjs`
+- `node packages/haiku-ui/scripts/audit-bundle-size.mjs`
+- `node packages/haiku-ui/scripts/audit-state-coverage.mjs`
+- `node packages/haiku-ui/scripts/audit-banned-patterns.mjs --profile=stage-wide`
+- `node packages/haiku-ui/scripts/audit-lighthouse.mjs` (all four URLs, a11y ≥ 0.95)
+- `node packages/haiku-api/scripts/audit-openapi-parity.mjs`
+
+Additional:
+- Reduced-motion audit script output shows 100% of animated elements compliant.
+- Keyboard-shortcut compliance: every row from `keyboard-shortcut-map.html §2` has a matching registration (script reports orphaned map rows or unregistered source bindings and exits non-zero on any).
+- Live-region mount count: exactly 1 for each of `#feedback-live-polite` and `#feedback-live-assertive`.
+- State-coverage snapshot suite completes within 5-minute wall-clock budget.

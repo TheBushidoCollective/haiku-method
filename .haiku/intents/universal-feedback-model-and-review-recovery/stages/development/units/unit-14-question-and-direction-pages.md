@@ -2,14 +2,17 @@
 title: Question page + Direction page refactors
 type: implementation
 depends_on:
-  - unit-06-shell-and-routing
   - unit-04-design-token-system
   - unit-05-a11y-foundations
+  - unit-06-shell-and-routing
 quality_gates:
   - typecheck
   - test
 inputs:
-  - knowledge/DESIGN-BRIEF.md
+  - knowledge/DESIGN-TOKENS.md
+  - stages/design/DESIGN-BRIEF.md
+  - stages/design/artifacts/aria-landmark-spec.md
+  - stages/design/artifacts/aria-live-sequencing-spec.md
   - stages/design/artifacts/state-signaling-inventory.html
 status: pending
 bolt: 0
@@ -18,30 +21,59 @@ hat: ""
 
 # Question page + Direction page refactors
 
-Bring the other two session-typed pages (`/question/:id`, `/direction/:id`) onto the new design foundation. Both are simpler than review, grouped into one unit.
+Bring the other two session-typed pages onto the new design foundation. Both are simpler than review, grouped into one unit.
+
+**Note on visual baselines.** DESIGN-BRIEF does not include dedicated mockups for the question or direction pages. This unit does NOT assert "zero visual regression vs design mockups" — there are none. Instead, the completion criteria are functional (DOM structure, a11y tree, token compliance).
 
 ## Scope
 
-**`packages/haiku-ui/src/pages/question/QuestionPage.tsx`:**
-- Renders the visual question payload from `haiku-api` question-session schema.
-- Image carousel (when multiple images) with keyboard arrow support.
-- Response form (multi-choice or free-text per question type); validated via `haiku-api` question-answer schema.
-- Submits via typed `ApiClient`, closes on 200, announces completion via live-region.
+### `packages/haiku-ui/src/pages/question/QuestionPage.tsx`
 
-**`packages/haiku-ui/src/pages/direction/DirectionPage.tsx`:**
-- Renders design-direction options from the direction-session schema.
-- Card grid with preview images; each card is a `<button role="radio">` in a `role="radiogroup"`.
-- Parameter sliders (card density, group-by-visit, origin badge) using canonical Input primitive from the token layer.
-- Comment + annotations fields optional; submitted together via direction-select endpoint.
+- Renders `QuestionSession` payload from `haiku-api`.
+- Image carousel when multiple images — `role="region" aria-roledescription="carousel"`, arrow-key navigation between images.
+- Response form: discriminated on `question.type`:
+  - `multi-choice` → `<fieldset><legend>…</legend><input type="radio" ... /></fieldset>`.
+  - `free-text` → `<textarea>` with label.
+- Validated via `QuestionAnswerRequest` Zod schema.
+- Submits via `ApiClient.answerQuestion(sessionId, ...)`. On 200: live-region announce "Answer submitted", close page.
+
+### `packages/haiku-ui/src/pages/direction/DirectionPage.tsx`
+
+- Renders `DirectionSession` payload.
+- Card grid with preview images; each card is `<input type="radio" name="direction" />` inside a `<label>` with visible card content. Wrapping `<fieldset role="radiogroup" aria-labelledby="direction-prompt-title">`.
+- Parameter controls (card density, group-by-visit, origin badge) use the canonical Input primitive from unit-04.
+- Optional comment + annotations fields submit together.
+- Validated via `DirectionSelectRequest` Zod.
+- Submits via `ApiClient.selectDirection(sessionId, ...)`.
+
+## Test fixtures committed in this unit
+
+- `packages/haiku-ui/test-fixtures/question-session.json`:
+  - Two variants: `multi-choice` (5 options, 2 images) and `free-text` (1 image).
+- `packages/haiku-ui/test-fixtures/direction-session.json`:
+  - Three direction cards, each with preview image + 3 params.
 
 ## Out of scope
 
-- Any changes to the question/direction payload shapes (that's haiku-api's job).
+- Backend question/direction payload shapes (owned by haiku-api).
 
 ## Completion Criteria
 
-- Both pages render real session payloads from a running MCP with zero visual regression vs the design mockups.
-- Keyboard navigation: Tab reaches all interactive elements; Arrow keys navigate carousel + radiogroup.
-- `aria-label` or `aria-labelledby` on every control.
-- All text meets WCAG 1.4.3 AA per the design token system.
+**Question page:**
+- Renders against the committed fixtures at `/question/demo-multi-choice` and `/question/demo-free-text` — boots via the fixture server from unit-06.
+- Multi-choice: `screen.getByRole('radiogroup', { name: /.+/ })` resolves; every radio is keyboard-navigable via Arrow keys; selected radio has `aria-checked="true"`.
+- Free-text: textarea is labeled; submit enabled only when non-empty; label:for association verified.
+- Carousel: arrow keys advance images; `aria-current="true"` on the active slide.
+- On submit success: live-region announces "Answer submitted".
+
+**Direction page:**
+- Renders against `direction-session.json`.
+- Radiogroup is keyboard-navigable; selection updates `aria-checked`.
+- Parameter inputs use canonical primitives (grep in `DirectionPage.tsx` for non-primitive `<input>` tags returns zero).
+- Submit posts the direction + optional comment.
+
+**Shared:**
+- Every interactive element has visible focus ring via `focusRingClass`.
+- `audit-contrast.mjs --mode=tokens` passes for page text against token backgrounds.
+- `audit-banned-patterns.mjs --profile=tokens` returns zero hits.
 - `npx tsc --noEmit` passes.

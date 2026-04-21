@@ -8,6 +8,8 @@ quality_gates:
   - typecheck
   - test
 inputs:
+  - knowledge/DESIGN-TOKENS.md
+  - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/stage-progress-strip.html
   - stages/design/artifacts/touch-target-audit.md
 status: pending
@@ -17,28 +19,40 @@ hat: ""
 
 # StageProgressStrip
 
-Visible navigation of the intent's stage progression. Fixes FB-07 (hit area), FB-14 (upcoming-stage contrast), FB-65 (future stages unreachable by keyboard).
+Visible navigation of the intent's stage progression. Regression guards against: sub-44 hit area; upcoming-stage contrast fail; future stages at `tabindex=-1` unreachable by keyboard.
 
 ## Scope
 
 - `packages/haiku-ui/src/components/StageProgressStrip.tsx`:
-  - `<nav aria-label="Stage progress">` wrapper.
-  - Each stage node is a `<button>` (not a div) — tabbable, activates on Enter/Space.
-  - Visible glyph per state: ✓ (completed), ◆ (in-progress), ○ (upcoming); color tokens per design.
-  - 44×44 hit zone on every node via `touchTargetClass` (hidden `::before`); visible glyph unchanged.
-  - Upcoming-stage border/glyph contrast meets WCAG 1.4.11 (≥3:1) — `border-stone-400 dark:border-stone-500`, `text-stone-600 dark:text-stone-300`.
-  - Future stages are keyboard-reachable (no `tabindex="-1"`); clicking a future stage is disabled (visual dimming + `aria-disabled="true"`) but focus is allowed.
-  - Desktop, mobile, revisit, and all-completed variants all share the same node primitive.
+  - `<nav aria-label="Stage progress">`.
+  - Each stage node is a `<button>` (not a div). Tabbable; activates on Enter/Space.
+  - Glyph per state: ✓ completed, ◆ in-progress, ○ upcoming. Visible glyph dimensions 20×20 circle, 22×22 diamond — **values sourced from DESIGN-TOKENS `--stage-glyph-*` tokens added by unit-04**, not hardcoded.
+  - 44×44 hit zone via `touchTargetClass` (hidden `::before`); visible glyph unchanged.
+  - Upcoming-stage colors: `border-stone-400 dark:border-stone-500`, glyph + label `text-stone-600 dark:text-stone-300` (≥ 3:1 non-text contrast, ≥ 4.5:1 text contrast — verified by audit-contrast).
+  - Future stages are keyboard-reachable (no `tabindex="-1"`). Clicking a future stage is disabled via `aria-disabled="true"` (visual dimming), but focus IS allowed.
+  - Variants: desktop, mobile, revisit, all-completed — all share the same node primitive.
+  - In-progress stage has `aria-current="step"`.
 
 ## Out of scope
 
-- The underlying stage state fetching / routing (consumed from session payload).
+- Underlying stage-state fetching (consumed from session payload).
 
 ## Completion Criteria
 
-- Every stage node's computed hit-zone from `getBoundingClientRect()` is ≥ 44×44.
-- Keyboard Tab reaches every stage node in DOM order (grep `tabindex="-1"` in stage nodes returns zero).
-- Upcoming-stage contrast passes WCAG 1.4.11 (verified by contrast audit script).
-- Visible glyph geometry per design: 20×20 circle, 22×22 diamond, same as design mockup.
-- `aria-current="step"` set on the in-progress node.
+**Touch target:**
+- RTL test mounts `<StageProgressStrip>` with 6 stages, queries each node's `getBoundingClientRect()`, asserts width ≥ 44 and height ≥ 44.
+
+**Keyboard reach:**
+- RTL test confirms Tab reaches every stage node in DOM order.
+- `audit-banned-patterns.mjs --profile=tokens` regex `tabindex=["']-1["']` scoped to `StageProgressStrip.tsx` returns zero hits.
+
+**Contrast:**
+- `audit-contrast.mjs --mode=tokens` reports WCAG 1.4.11 pass for the upcoming-stage border and ≥ 4.5:1 for the label text.
+
+**Glyph geometry:**
+- RTL test renders circle + diamond glyphs; `getBoundingClientRect()` matches `--stage-glyph-circle` (20×20) and `--stage-glyph-diamond` (22×22) tokens from DESIGN-TOKENS.
+
+**aria-current:**
+- When props.activeStage is set, the matching node has `aria-current="step"` — RTL asserts.
+
 - `npx tsc --noEmit` passes.

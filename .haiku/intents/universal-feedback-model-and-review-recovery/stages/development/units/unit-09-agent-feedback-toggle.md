@@ -8,6 +8,8 @@ quality_gates:
   - typecheck
   - test
 inputs:
+  - knowledge/DESIGN-TOKENS.md
+  - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/agent-feedback-toggle-spec.html
   - stages/design/artifacts/comments-list-with-agent-toggle.html
 status: pending
@@ -17,30 +19,47 @@ hat: ""
 
 # AgentFeedbackToggle
 
-Dedicated unit because the prior implementation shipped a div-label masquerading as a switch (FB-32 / FB-53 regression). Proper toggle semantics, canonical aria-label, 44×44 hit area, reduced-motion animation guard.
+Dedicated unit because prior implementation shipped a div-label masquerading as a switch. Proper toggle semantics, canonical aria-label, 44×44 hit area, reduced-motion animation guard. Regression guard for div-toggle + aria-label-drift + sub-44 target + animation-ignores-prefers-reduced classes of issue.
 
 ## Scope
 
 - `packages/haiku-ui/src/components/feedback/AgentFeedbackToggle.tsx`:
-  - Native `<button type="button" role="switch" aria-checked="false">` (default OFF per DESIGN-BRIEF §2).
-  - `aria-label="Show agent feedback inline"` — exact canonical string, no drift. Grep rule enforces.
-  - Visible count chip when OFF: `text-[11px] font-semibold uppercase tracking-wide text-stone-700 dark:text-stone-200` (exemption-approved).
-  - 44×44 hit area via `touchTargetClass` from a11y foundations.
+  - Native `<button type="button" role="switch" aria-checked="false">`.
+  - Default state on mount is `aria-checked="false"` (OFF) per DESIGN-BRIEF §2.
+  - `aria-label="Show agent feedback inline"` — exact canonical string enforced by banned-patterns audit.
+  - Visible count chip when OFF: `text-[11px] font-semibold uppercase tracking-wide text-stone-700 dark:text-stone-200` (per §2 exemption for ≥11px semibold).
+  - 44×44 hit area via `touchTargetClass`.
   - Focus ring via `focusRingClass`.
-  - Switch toggle animation gated by `useReducedMotion()`.
-  - Announce state change via `useAnnounce('polite', 'Agent feedback now visible' | 'Agent feedback hidden')`.
+  - Toggle animation gated by `useReducedMotion()` — swapped for an opacity-free crossfade under `prefers-reduced-motion: reduce`.
+  - State change triggers `useAnnounce('polite', isOn ? 'Agent feedback now visible' : 'Agent feedback hidden')`.
 
 ## Out of scope
 
-- The feedback list's render-when-enabled behavior (handled in unit-07 / unit-08 cluster integration).
+- List-render-when-enabled behavior (integrated in review-page units).
 
 ## Completion Criteria
 
-- Keyboard: Space or Enter toggles when focused. Tab reaches it in the expected position.
-- Screen reader announces as "Show agent feedback inline, switch, off/on".
-- `aria-checked` toggles between "true" and "false" strings.
-- Default state on page load is `aria-checked="false"`.
-- Grep for the exact string `"Show agent feedback inline"` matches every AgentFeedbackToggle render — and grep for `"Show agent feedback"` without `inline` returns zero (FB-10 regression guard).
-- Touch target is 44×44 regardless of visual glyph size.
-- Animation disabled under `prefers-reduced-motion: reduce`.
+**Keyboard:**
+- Space or Enter toggles when focused — RTL test asserts transition on both keys.
+- Tab reaches the toggle in the expected DOM position.
+
+**Accessibility tree (replaces SR-specific assertions):**
+- `screen.getByRole('switch', { name: /^Show agent feedback inline$/ })` resolves — confirms role + accessible name.
+- `aria-checked` transitions `'false' ↔ 'true'` on activation (string literals; not booleans).
+- Default render has `aria-checked="false"`.
+
+**Canonical string enforcement:**
+- Banned-patterns audit config includes `"Show agent feedback"(?! inline)` with scope `packages/haiku-ui/src/**/*.{ts,tsx}` — `audit-banned-patterns.mjs` returns zero hits.
+- Banned-patterns audit also asserts ≥ 1 occurrence of `"Show agent feedback inline"` in `components/feedback/AgentFeedbackToggle.tsx` — presence-side check.
+
+**Touch target:**
+- Test renders toggle, measures `getBoundingClientRect()` on the `<button>`, asserts width ≥ 44 and height ≥ 44.
+
+**Reduced motion:**
+- With matchMedia stub set to `reduce`, assert the toggle's animation class is the no-motion variant (grep DOM).
+
+**Live-region announce:**
+- Toggle on → `within(politeLiveRegion).findByText('Agent feedback now visible')`.
+- Toggle off → same for 'Agent feedback hidden'.
+
 - `npx tsc --noEmit` passes.

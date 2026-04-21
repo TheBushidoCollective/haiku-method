@@ -8,9 +8,11 @@ quality_gates:
   - typecheck
   - test
 inputs:
-  - knowledge/DESIGN-BRIEF.md
+  - knowledge/DESIGN-TOKENS.md
+  - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/feedback-card-states.html
   - stages/design/artifacts/state-coverage-grid.md
+  - stages/design/artifacts/feedback-lifecycle-transitions.html
 status: pending
 bolt: 0
 hat: ""
@@ -18,16 +20,25 @@ hat: ""
 
 # Feedback component cluster
 
-The core set of components that render feedback items in any page. Built as a coherent cluster because they share state, tokens, and a11y patterns. Each must cover the full six-state grid (default / hover / focus / active / disabled / error) per state-coverage-grid.md.
+The components that render feedback items in any page. Built as a cluster because they share state, tokens, and a11y patterns. Every component covers the full six-state × status-variant matrix per `state-coverage-grid.md`.
 
 ## Scope
 
-- `packages/haiku-ui/src/components/feedback/FeedbackItem.tsx` — single feedback row: title, body excerpt, origin badge, status badge, author, timestamp, expand/collapse. Uses `aria-expanded`; focus preserved across status changes per DESIGN-BRIEF §2.
-- `FeedbackList.tsx` — list with group headers (by visit), keyboard navigation (ArrowDown/Up), virtualization if >50 items.
-- `FeedbackStatusBadge.tsx` — status variants: pending, addressed, closed, rejected. Color semantics per DESIGN-BRIEF §2 + DESIGN-TOKENS §2.1. `aria-label="Status: {status}"` on every instance (fixes FB-12).
-- `FeedbackOriginIcon.tsx` — origin emoji per canonical map (🔍 adversarial-review, 👤 user-visual, 🧩 user-chat, 📦 external-pr, etc.); uses `{originLabels[origin]}` as visible label (fixes FB-13).
-- `FeedbackSummaryBar.tsx` — count breakdown by status at the top of the list.
-- All six states per component rendered and tested in a Storybook-style isolated harness.
+- `packages/haiku-ui/src/components/feedback/FeedbackItem.tsx` — single row: title, body excerpt, origin badge, status badge, author, timestamp, expand/collapse. `aria-expanded` reflects state; focus preserved across status changes.
+- `FeedbackList.tsx` — list with visit-grouped headers. **Virtualization via `react-window` (new dep declared in haiku-ui package.json) when item count exceeds 50.** `FeedbackItem` nodes beyond the viewport window are unmounted.
+- `FeedbackStatusBadge.tsx` — variants: pending, addressed, closed, rejected. Tokens per DESIGN-TOKENS §2.1 / DESIGN-BRIEF §2 (including the contrast-resolved rejected variant at `text-stone-600 dark:text-stone-300`). Every instance has `aria-label="Status: {status}"` — regression guard for inconsistent-aria-label class.
+- `FeedbackOriginIcon.tsx` — canonical emoji map: `🔍 adversarial-review`, `👤 user-visual`, `🧩 user-chat`, `📦 external-pr`, etc. Visible label uses `originLabels[origin]`, not the raw slug — regression guard for slug-rendering class.
+- `FeedbackSummaryBar.tsx` — count breakdown by status at list top.
+
+**Keyboard navigation + virtualization coordination:**
+- ArrowDown/Up on focused `FeedbackItem` advances focus to the next/prev item.
+- When the next/prev item is outside the rendered window, the virtualizer scrolls to mount it first; focus lands on the newly-mounted item in the next paint (verified in tests).
+- Enter activates the focused item (toggles expand/collapse).
+
+**State matrix tests:**
+- For each component above, a Vitest + RTL snapshot test at `packages/haiku-ui/src/components/feedback/__tests__/<Component>.states.test.tsx` renders every cell of the (default | hover | focus | active | disabled | error) × status-variant grid and compares against committed snapshots.
+- Cardinality ≤ 36 cells per component; components exceeding split into sub-matrices with justified groupings.
+- Snapshots include a header recording the token hash (source: `verify-tokens.mjs` output); token-intentional changes update the header + regenerate the snapshot deliberately.
 
 ## Out of scope
 
@@ -37,9 +48,10 @@ The core set of components that render feedback items in any page. Built as a co
 
 ## Completion Criteria
 
-- State-coverage grid for each component passes — every cell in the default/hover/focus/active/disabled/error × status-variant matrix is rendered, tested, and visually confirmed.
-- Zero use of opacity on card roots (per unit-04 enforcement + FB-46 / FB-61 regression).
-- Status badges all carry `aria-label="Status: {status}"` — grep confirms parity.
-- Origin icons render via `originLabels[origin]` map — grep for raw `{origin}` in templates returns zero in component source.
-- Keyboard ArrowDown/Up navigates list; Enter activates the focused item.
+- Every component's state-matrix snapshot test passes; snapshots exist at `__snapshots__/` and diffs are reviewer-surfaced on change.
+- Zero opacity on card roots — `audit-banned-patterns.mjs --profile=tokens` catches `opacity-50/60/70` regressions on `<FeedbackItem>` root.
+- Every status badge carries `aria-label="Status: {status}"` — RTL test asserts presence on all four status variants.
+- Origin icons render via `originLabels[origin]` — `audit-banned-patterns.mjs` regex `\{origin\}(?!Labels)` returns zero hits in feedback component source.
+- Virtualization perf test: render `FeedbackList` with 500 mock items, query `document.querySelectorAll('[data-testid="feedback-item"]').length` ≤ 30 at steady state.
+- Keyboard nav test: render list of 100 items, press ArrowDown from index 0 to 99 in a loop, assert focus lands on the correct item at each step (no skips, no dropped keystrokes).
 - `npx tsc --noEmit` passes.

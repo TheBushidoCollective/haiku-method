@@ -2,14 +2,17 @@
 title: Annotation canvas UX
 type: implementation
 depends_on:
+  - unit-01-extract-haiku-api-package
   - unit-05-a11y-foundations
   - unit-07-review-page-desktop-and-mobile
 quality_gates:
   - typecheck
   - test
 inputs:
+  - knowledge/DESIGN-TOKENS.md
+  - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/annotation-popover-states.html
-  - knowledge/DESIGN-BRIEF.md
+  - stages/design/artifacts/annotation-gesture-spec.html
 status: pending
 bolt: 0
 hat: ""
@@ -17,27 +20,74 @@ hat: ""
 
 # Annotation canvas UX
 
-Pin-drop + popover UX for annotating stage artifacts (mockups, wireframes). Fixes FB-17 (pin markers at tabindex="-1" making keyboard users unable to annotate).
+Pin-drop + popover UX for annotating stage artifacts. Regression guard for pin-markers-at-tabindex-negative-one + draft-data-loss classes.
+
+## Popover semantics decision
+
+**Non-modal popover.** The popover anchors to a pin, does not take focus aggressively, and dismisses on blur/Escape. This matches the annotation UX where users drag/zoom artifacts behind the popover. Semantics: `role="group"` with `aria-labelledby={titleId}` and `aria-label="Annotation draft"`. NOT `role="dialog"`. Manual focus management on open/close.
 
 ## Scope
 
 - `packages/haiku-ui/src/pages/review/AnnotationCanvas.tsx`:
-  - Overlay layer on top of `ArtifactsPane` that captures pointer + keyboard events.
-  - Pin markers as `<button>` elements (not `<div>`), keyboard-activatable.
-  - Popover on click/focus with feedback-draft form; Zod-validated against `haiku-api` feedback-create schema.
-  - Draft persistence debounced to localStorage to survive navigation (fixes prior pre-design data loss).
-  - Keyboard: N to start new annotation at a named anchor, Arrow keys to move focus between pins, Esc to cancel draft, Enter to save.
-  - Keyboard shortcuts registered via `useShortcut` with scope `annotation-canvas` — conflict-checked against global shortcut map.
+  - Overlay layer over `ArtifactsPane` using **a single delegated pointer listener + single delegated keydown listener** on the canvas root. No per-pin event handlers (verified by listener-count test).
+  - Pin markers as `<button>` elements with `tabindex="0"`. Regression guard: `audit-banned-patterns.mjs --profile=tokens` catches `tabindex=["']-1["']` in `AnnotationCanvas.tsx`.
+  - Popover on click/focus with draft form; validated against `haiku-api`'s `FeedbackCreateRequest` **including the `anchor` field** (pageId, x, y, viewportWidth, viewportHeight — added to schema in unit-01).
+  - Keyboard:
+    - `N` starts a new annotation at current focus anchor.
+    - Arrow keys move focus between pins using a pre-sorted index by `(y, x)` rebuilt **only when the pin collection changes**, not per keystroke.
+    - `Escape` cancels draft; focus returns to pin.
+    - `Enter` saves.
+  - Shortcuts registered via `useShortcut` with scope `annotation-canvas` — conflict-checked.
+
+**Draft persistence:**
+- Debounce interval: 500ms trailing edge. Verified by fake-timer test.
+- Payload cap: 64 KB per session. Oversize drafts drop oldest-pin-first + polite live-region warning.
+- Key format: `haiku-ui:annotation-draft:{sessionId}`.
+- Cleanup:
+  - On successful submit: key deleted.
+  - On sheet close: key retained (draft-carry-forward).
+  - Boot-time sweep: drafts whose sessionId isn't in the current session payload are deleted.
+- localStorage read-back: re-parses against `haiku-api`'s `FeedbackCreateRequest` schema; invalid drafts discarded.
+- Quota handling: catches `QuotaExceededError`, surfaces via `useAnnounce('assertive', 'Draft too large to save locally')`.
+
+**XSS hardening:**
+- Body rendered as React text children only.
+- `audit-banned-patterns.mjs --profile=stage-wide` catches `dangerouslySetInnerHTML`, `innerHTML\\s*=`, `\\beval\\(`, `new Function\\(`, `document\\.write\\(` in annotation path.
+
+**Perf budget:**
+- Canvas supports ≥ 200 pins. Playwright perf test at `packages/haiku-ui/tests/annotation-perf.spec.ts`:
+  - Mounts canvas with 200 fixture pins.
+  - Asserts first paint ≤ 100ms.
+  - Presses ArrowRight in a loop 200 times; asserts each keypress-to-paint ≤ 16ms.
 
 ## Out of scope
 
-- Feedback storage (handled by `haiku_feedback` tool on backend — already shipped).
+- Backend feedback storage (already shipped).
 
 ## Completion Criteria
 
-- Keyboard user can: tab to canvas, press N to start annotation at current focus anchor, fill popover, press Enter to save, tab between existing pins via Arrow keys.
-- Pin markers have `tabindex="0"` (grep for `tabindex="-1"` on pin elements returns zero).
-- Draft survives page reload (localStorage).
-- Popover dismisses on Esc and focus returns to the pin.
-- Popover has `role="dialog"` + `aria-labelledby` pointing to its title.
+**Keyboard a11y:**
+- Tab reaches canvas; `N` starts annotation at current anchor — verified.
+- `audit-banned-patterns.mjs` regex `tabindex=["']-1["']` in `AnnotationCanvas.tsx` returns zero.
+- Arrow-key traversal across 200 pins lands focus on the correct pin at each step.
+
+**Draft persistence:**
+- Fake-timer test: 10 rapid edits → exactly 1 localStorage write at t=500ms.
+- Oversize draft: write 70KB draft, assert oldest pin dropped, `haiku-ui:annotation-draft:{sessionId}` ≤ 64KB.
+- Reload survives: mount → draft → unmount → remount with same sessionId → form prefills.
+- Real page reload test in Playwright: same behavior.
+- Schema re-validation: planted invalid JSON in localStorage → component boots cleanly, key removed.
+- Quota: `QuotaExceededError` caught; assertive live-region announces the warning.
+
+**Popover semantics:**
+- Popover root has `role="group"` and `aria-labelledby` pointing to its title; `aria-label="Annotation draft"` (redundant but explicit).
+- On popover dismiss, focus returns to the pin.
+
+**XSS:**
+- `audit-banned-patterns.mjs --profile=stage-wide` returns zero hits for XSS sinks in `pages/review/**`.
+
+**Perf:**
+- Listener-count test: with 200 pins mounted, `getEventListeners(canvasRoot)` shows ≤ 3 total (one pointer, one keydown, one document-level focus).
+- Perf Playwright test meets 100ms first paint + 16ms/keypress budgets.
+
 - `npx tsc --noEmit` passes.

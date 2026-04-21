@@ -8,7 +8,8 @@ quality_gates:
   - typecheck
   - test
 inputs:
-  - knowledge/DESIGN-BRIEF.md
+  - knowledge/DESIGN-TOKENS.md
+  - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/feedback-inline-mobile.html
 status: pending
 bolt: 0
@@ -17,30 +18,35 @@ hat: ""
 
 # FeedbackSheet — mobile bottom sheet
 
-Proper dialog semantics + focus trap + background inert on the mobile feedback sheet. Fixes FB-22 / FB-51 regression (prior implementation omitted dialog role and focus trap).
+Proper dialog semantics + focus trap + inert background on the mobile feedback sheet. Regression guard for missing-dialog-role + no-focus-trap + non-inert-background classes.
+
+**Decision — no fallback for browsers without native `<dialog>`.** All modern browsers (Safari 15.4+, Firefox 98+, Chromium all) support native `<dialog>`. Requiring it simplifies the spec and avoids polyfill complexity. Documented in `packages/haiku-ui/BROWSER-SUPPORT.md` as part of this unit.
 
 ## Scope
 
 - `packages/haiku-ui/src/components/feedback/FeedbackSheet.tsx`:
-  - Uses native `<dialog>` element with `role="dialog"` and `aria-modal="true"`.
-  - `aria-labelledby` points to the sheet's title; `aria-describedby` optional summary.
-  - Open/close via `dialog.showModal()` / `dialog.close()` — native focus trap + inert-background handled by the platform.
-  - Fallback focus trap via `useFocusTrap` (from a11y foundations) for browsers without `<dialog>` support.
-  - Backdrop `::backdrop` styled per design, dismissable via click outside OR Escape key.
-  - FeedbackFloatingButton (FAB) is the trigger; focus returns to the FAB on close.
-  - Reduced-motion respected — slide-up animation disabled under `prefers-reduced-motion`.
+  - Native `<dialog>` element with `role="dialog"`, `aria-modal="true"`, `aria-labelledby={titleId}`.
+  - Opens via `dialog.showModal()`; closes via `dialog.close()`. Native focus trap + top-layer + background inert handled by the platform.
+  - `::backdrop` styled per design; click closes; Escape closes (native).
+  - FAB (FeedbackFloatingButton) is the trigger; focus returns to FAB on close via `dialog.addEventListener('close', ...)` saving the activeElement before `showModal`.
+  - Slide-up animation gated by `useReducedMotion()`.
+- `packages/haiku-ui/BROWSER-SUPPORT.md` — documents `<dialog>` as required; lists minimum browser versions.
 
 ## Out of scope
 
 - FeedbackList/FeedbackItem internals (unit-08).
-- AgentFeedbackToggle inside the sheet (unit-09 — composed here).
+- AgentFeedbackToggle (unit-09 — composed inside the sheet).
 
 ## Completion Criteria
 
-- Focus on open lands on first focusable element inside the sheet (not the dialog itself).
-- Tab cycles only inside the sheet; Shift+Tab from the first focusable wraps to the last, and vice versa.
-- Escape closes; click on backdrop closes.
-- Focus returns to FAB trigger on close.
-- Background content is `inert` while sheet is open — confirmed by a11y test that tries to reach body buttons via Tab.
-- Screen reader announces "Feedback, dialog" on open.
+- Sheet root has `role="dialog" aria-modal="true" aria-labelledby={titleId}`; the element at `#{titleId}` contains visible text `Feedback` — asserted via RTL.
+- On open:
+  - Focus lands on the first focusable child (not the dialog itself) — RTL: `expect(within(sheet).getByRole('button', {name: /dismiss/i})).toHaveFocus()`.
+  - `document.body` child elements outside the sheet have `inert` set by the native `<dialog>` — verified by querying a known button outside the sheet and asserting `el.closest('[inert]') !== null` OR by native behavior: pressing Tab does not traverse outside the sheet (RTL user-event simulation).
+- On close (via Escape, backdrop click, or dismiss button):
+  - `dialog.close()` called.
+  - Focus returns to FAB — RTL asserts `FAB.toHaveFocus()`.
+- Accessibility tree: `screen.getByRole('dialog', { name: /feedback/i })` resolves when open.
+- Reduced-motion: with matchMedia stub `reduce`, slide-up animation class is the no-motion variant.
+- Browser-support doc exists.
 - `npx tsc --noEmit` passes.

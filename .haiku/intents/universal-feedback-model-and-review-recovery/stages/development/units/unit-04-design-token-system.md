@@ -1,5 +1,5 @@
 ---
-title: Design token system in haiku-ui
+title: Design token system + token-scoped audit scripts
 type: implementation
 depends_on:
   - unit-03-extract-haiku-ui-package
@@ -8,7 +8,7 @@ quality_gates:
   - test
 inputs:
   - knowledge/DESIGN-TOKENS.md
-  - knowledge/DESIGN-BRIEF.md
+  - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/contrast-and-type-audit.md
 status: pending
 bolt: 0
@@ -17,33 +17,57 @@ hat: ""
 
 # Design token system
 
-Implement the token system defined in `knowledge/DESIGN-TOKENS.md` across `packages/haiku-ui/`: tailwind config, CSS custom properties, and a typography + color + spacing primitive layer every downstream component builds on.
+Implement the token system defined in `knowledge/DESIGN-TOKENS.md` across `packages/haiku-ui/`: tailwind config, CSS custom properties, a primitive component layer. Ship the token-scoped audit scripts every downstream unit will lean on.
 
 ## Scope
 
-- `packages/haiku-ui/tailwind.config.ts` — extend palette, radii, shadows, spacing, breakpoints per DESIGN-TOKENS §1. Explicitly remove any banned colors (raw hex, gray-* left over from pre-stone migration) from the generated class surface.
-- `packages/haiku-ui/src/index.css` — CSS custom properties for light + dark theme variables; apply via `:root` and `.dark`.
-- `packages/haiku-ui/src/components/primitives/` — primitive components for Button, Badge, Card, Chip, Divider, Input — typed variants matching DESIGN-TOKENS §2.
-- Remove every `text-[9px]`, `text-[10px]`, banned `text-gray-*`, banned `text-stone-400/500` pair from existing source. (Runs as a grep-driven pass; every hit either deletes the class or replaces with a token-approved equivalent.)
-- Remove every `opacity-50/60/70` applied to card roots, buttons, titles, metadata — per DESIGN-BRIEF §2 and DESIGN-TOKENS §1.7.
-- Canonicalize sidebar width to `w-80 xl:w-96` wherever the sidebar renders.
-- Canonicalize max-width to a named token (e.g. `max-w-content`) replacing literal `max-w-[1400px]`.
-- Breakpoint threshold: consolidate `1024` vs `1280` drift to the brief's canonical value.
+**Token implementation:**
+- `packages/haiku-ui/tailwind.config.ts` — extend palette, radii, shadows, spacing, breakpoints, typography per DESIGN-TOKENS §1. Remove banned colors (raw hex, leftover `gray-*`) from the generated class surface via `safelist` + content allow-list.
+- `packages/haiku-ui/src/index.css` — CSS custom properties for light + dark theme variables; applied via `:root` + `.dark`.
+- `packages/haiku-ui/src/components/primitives/` — `Button`, `Badge`, `Card`, `Chip`, `Divider`, `Input` — typed variants matching DESIGN-TOKENS §2.
+- Canonical container tokens:
+  - `--sidebar-width: 20rem` (mobile), `--sidebar-width-xl: 24rem` — applied as `w-[var(--sidebar-width)] xl:w-[var(--sidebar-width-xl)]` — replaces all `w-80 xl:w-96` / `lg:w-96` drift.
+  - `--content-max: 1400px` → `max-w-[var(--content-max)]` replaces `max-w-[1400px]` literals.
+
+**Source migration pass (grep-driven):**
+- Replace banned `text-[9px]`, `text-[10px]` with token-approved sizes (or explicit §2 exemptions flagged inline in prose).
+- Replace banned `text-gray-*` with `text-stone-*` or semantic tokens.
+- Replace banned `text-stone-400/500` paired with light/white backgrounds per banned-pairs table in `contrast-and-type-audit.md §3` (authoritative source — criterion cites the section directly).
+- Replace `opacity-50|60|70` on card roots, buttons, titles, metadata with token-approved disabled patterns per DESIGN-TOKENS §1.7.
+- Replace `focus:ring-1` with `focus-visible:ring-2`.
+
+**Audit scripts owned by this unit:**
+- `packages/haiku-ui/scripts/verify-tokens.mjs`:
+  - Parses `knowledge/DESIGN-TOKENS.md` token tables.
+  - Reads resolved `tailwind.config.ts` + `src/index.css` custom properties.
+  - Asserts every declared token is present; fails on missing or value-mismatched tokens.
+  - Exit 0 on parity, non-zero with specific diff on failure.
+- `packages/haiku-ui/scripts/audit-contrast.mjs --mode=tokens`:
+  - Enumerates default token pairs (fg × bg × font-size-bucket).
+  - Computes WCAG contrast via a deterministic formula.
+  - Asserts WCAG 1.4.3 AA for text, 1.4.11 Non-Text for UI.
+  - Deduplicates by `(fg-token, bg-token, font-size-bucket)` tuple — one test per unique pair.
+  - Outputs report to `packages/haiku-ui/reports/contrast-tokens.json`.
+- `packages/haiku-ui/scripts/audit-banned-patterns.mjs`:
+  - Config at `packages/haiku-ui/audit-config.json` enumerating banned regexes and their scopes.
+  - Supports `--profile=tokens` (this unit's subset) and `--profile=stage-wide` (unit-15's full set).
+  - Each regex has an explicit file-glob scope and exclusion glob (tests, `__snapshots__`, documentation spec files under `stages/design/artifacts/**` are allow-listed).
+  - Sharpened patterns:
+    - banned `{origin}` JSX: regex `\{origin\}(?!Labels)` excludes `{originLabels[origin]}`.
+    - banned button verbs: match `<[Bb]utton[^>]*>\s*(Reject|Close|Address|Re-open)\s*</` and `aria-label=["'](Reject|Close|Address|Re-open)["']` only.
+    - banned `Show agent feedback` without trailing `inline`: regex `"Show agent feedback"(?! inline)`.
+  - Exit 0 iff every regex returns zero hits in its scope.
 
 ## Out of scope
 
-- Touching component internals beyond swapping class strings (behavior changes live in per-component units).
-- Writing new components.
+- Component internals beyond class-string swaps (per-component behavior lives in later units).
+- Rendered-DOM contrast audit (that's unit-15's `--mode=rendered`).
 
 ## Completion Criteria
 
-- Tailwind config and CSS custom-property layer match DESIGN-TOKENS.md exactly.
-- Grep for banned patterns returns zero hits in `packages/haiku-ui/src/`:
-  - `text-\[9px\]`, `text-\[10px\]`
-  - `text-gray-[0-9]+`
-  - `text-stone-(400|500)` paired with light/white backgrounds (per banned-pairs table)
-  - `opacity-(50|60|70)` on root-level card/button elements
-  - `max-w-\[1400px\]` literal
-  - `lg:w-96` on sidebar context (use `xl:w-96`)
-- Contrast audit script (`packages/haiku-ui/scripts/audit-contrast.mjs`) runs across the primitive layer and all default token pairs and passes WCAG 1.4.3 AA for text, 1.4.11 Non-Text for UI components.
+- `node packages/haiku-ui/scripts/verify-tokens.mjs` exits 0 with parity report.
+- `node packages/haiku-ui/scripts/audit-contrast.mjs --mode=tokens` exits 0.
+- `node packages/haiku-ui/scripts/audit-banned-patterns.mjs --profile=tokens` exits 0.
+- Grep for the banned patterns in `packages/haiku-ui/src/**/*.{ts,tsx,css}` returns zero hits (exclusions per audit-config.json).
+- Every primitive component has a vitest + RTL test at `packages/haiku-ui/src/components/primitives/__tests__/<name>.test.tsx` asserting variant output + disabled state.
 - `npx tsc --noEmit` passes.

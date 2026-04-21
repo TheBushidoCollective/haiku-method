@@ -7,9 +7,13 @@ quality_gates:
   - typecheck
   - test
 inputs:
+  - knowledge/DESIGN-TOKENS.md
+  - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/aria-landmark-spec.md
   - stages/design/artifacts/aria-live-sequencing-spec.md
-  - stages/design/artifacts/keyboard-navigation-spec.md
+  - stages/design/artifacts/keyboard-shortcut-map.html
+  - stages/design/artifacts/focus-ring-spec.html
+  - stages/design/artifacts/skip-link-spec.html
   - stages/design/artifacts/touch-target-audit.md
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
 status: pending
@@ -19,28 +23,39 @@ hat: ""
 
 # A11y foundations
 
-Establish the accessibility layer every feature component builds on: canonical aria-landmarks, live-region sequencing, focus-ring tokens, keyboard navigation primitives, touch-target helpers, and reduced-motion guards.
+Establish the accessibility layer every feature component builds on: canonical aria-landmarks, live-region sequencing, focus-ring tokens, keyboard navigation primitives, touch-target helpers, reduced-motion guards.
 
 ## Scope
 
-- `packages/haiku-ui/src/a11y/landmarks.tsx` — typed shell landmarks (`<Header>`, `<Main>`, `<Aside>`, `<Nav aria-label="...">`, `<FooterBar>`) per aria-landmark-spec §1-2. Single source of truth for landmark structure; pages compose these.
-- `packages/haiku-ui/src/a11y/live-regions.tsx` — `<LiveRegion id="feedback-live-polite" aria-live="polite">` and `<LiveRegion id="feedback-live-assertive" aria-live="assertive" role="alert">` mounted once in the shell. `useAnnounce(severity, message)` hook posts into them per aria-live-sequencing-spec §2.2 and §3.1.
-- `packages/haiku-ui/src/a11y/focus.ts` — `focusRingClass` (canonical teal ring per focus-ring-spec), `focusVisibleOnly(...)` helper, focus-trap primitive `useFocusTrap(ref, enabled)` for modal/sheet use.
-- `packages/haiku-ui/src/a11y/keyboard.ts` — keyboard-map registry per keyboard-navigation-spec. `useShortcut(key, handler, { scope })` hook with scope-conflict detection (rejects duplicate bindings at dev time).
-- `packages/haiku-ui/src/a11y/touch-target.ts` — `touchTargetClass` utility that renders a transparent `::before` hit-zone of 44×44 without changing visible geometry. Applied by default to any interactive element whose visible size is < 44px.
-- `packages/haiku-ui/src/a11y/reduced-motion.ts` — `useReducedMotion()` hook + `motionSafeClass` helper; pairs with token-layer transitions so every animation honors `prefers-reduced-motion: reduce`.
+- `packages/haiku-ui/src/a11y/landmarks.tsx` — `<Header>`, `<Main>`, `<Aside>`, `<Nav aria-label="...">`, `<FooterBar>` primitives per `aria-landmark-spec.md §1-2`.
+- `packages/haiku-ui/src/a11y/live-regions.tsx` — `<LiveRegion id="feedback-live-polite" aria-live="polite">` + `<LiveRegion id="feedback-live-assertive" aria-live="assertive" role="alert">` mounted once in the shell. `useAnnounce(severity, message)` hook targets only those two IDs per `aria-live-sequencing-spec.md §2.2` + `§3.1`.
+- `packages/haiku-ui/src/a11y/focus.ts`:
+  - `focusRingClass` — canonical token per `focus-ring-spec.html`.
+  - `focusVisibleOnly(...)` helper.
+  - `useFocusTrap(ref, enabled)` — traps Tab/Shift+Tab wrap, ignores disabled elements, restores focus to the trigger on close.
+- `packages/haiku-ui/src/a11y/keyboard.ts` — `useShortcut(key, handler, { scope })` hook. Keyboard-shortcut-map is parsed from `keyboard-shortcut-map.html §2` (bindings table) at dev time; scope-conflict detection **throws in dev mode** on duplicate `(key, scope)` bindings. Conflict rule test covers `R` (review shortcut) overlapping SR browse mode — guard must scope R to contexts where SR isn't in browse mode.
+- `packages/haiku-ui/src/a11y/touch-target.ts` — `touchTargetClass` utility that renders a transparent `::before` hit-zone of ≥44×44 without changing visible geometry. Per `touch-target-audit.md §2-3`.
+- `packages/haiku-ui/src/a11y/reduced-motion.ts` — `useReducedMotion()` + `motionSafeClass`. Per `motion-and-reduced-motion-spec.md`.
+
+**Test harness notes:**
+- Tests under `a11y/__tests__/` use Vitest with `@testing-library/react`. JSDOM's `matchMedia` is stubbed via `packages/haiku-ui/src/a11y/__tests__/matchMedia.stub.ts` — exports a helper that installs a controllable `matchMedia` before the test and emits `change` events to verify `useReducedMotion` reactivity.
 
 ## Out of scope
 
-- Applying these to specific feature components (that's per-component units).
-- Adding new keyboard shortcuts beyond what the spec defines.
+- Applying these to specific feature components (per-component units).
+- Adding new shortcuts beyond what `keyboard-shortcut-map.html` defines.
 
 ## Completion Criteria
 
-- Every primitive above exists and is exported from `packages/haiku-ui/src/a11y/index.ts`.
-- `useShortcut` throws (dev mode) on duplicate bindings within a scope, per keyboard-navigation-spec §4 conflict-prevention requirement.
-- `useFocusTrap` correctly restores focus to the trigger on close, handles Tab/Shift+Tab wrap, ignores disabled elements.
-- `touchTargetClass` passes the visual regression test (hit-zone geometry invisible, measurable with `getBoundingClientRect`).
-- `useReducedMotion` reacts to `prefers-reduced-motion` media-query changes at runtime.
-- A11y unit tests (`packages/haiku-ui/src/a11y/__tests__/*`) pass.
+- Every primitive above exists and exports from `packages/haiku-ui/src/a11y/index.ts`.
+- `useShortcut` throws on duplicate bindings within a scope — verified by a test that registers a duplicate and asserts it throws with `KeyboardShortcutConflict`.
+- `useFocusTrap` tests:
+  - Focus on open lands on first focusable child (not the container).
+  - Tab from last focusable wraps to first; Shift+Tab from first wraps to last.
+  - Disabled elements skipped.
+  - On close, focus returns to the element that had focus at open.
+- `touchTargetClass` — test renders a 20×20 icon button, measures `getBoundingClientRect()` on the wrapper, asserts ≥44×44.
+- `useReducedMotion` test uses the `matchMedia.stub.ts` helper, emits a `change` event from `no-preference` → `reduce`, asserts the hook's return value updates via `rerender`.
+- `useAnnounce` test: calls with `('polite', 'hello')`, queries `#feedback-live-polite`, asserts it contains `hello`; same for assertive.
 - `npx tsc --noEmit` passes.
+- `npm test -w haiku-ui` passes.

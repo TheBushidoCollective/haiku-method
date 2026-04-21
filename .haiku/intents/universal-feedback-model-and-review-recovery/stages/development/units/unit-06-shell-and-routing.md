@@ -13,9 +13,9 @@ inputs:
   - stages/design/artifacts/aria-landmark-spec.md
   - stages/design/artifacts/skip-link-spec.html
   - stages/design/artifacts/stage-progress-strip.html
-status: pending
+status: completed
 bolt: 0
-hat: ""
+hat: ''
 outputs:
   - stages/development/artifacts/unit-06-tactical-plan.md
   - package-lock.json
@@ -42,6 +42,7 @@ outputs:
   - packages/haiku-ui/tests/skip-link.spec.tsx
   - packages/haiku-ui/tests/a11y-pages.spec.tsx
   - packages/haiku-ui/tests/__snapshots__/parity.spec.tsx.snap
+completed_at: '2026-04-21T14:59:35Z'
 ---
 
 # Shell and routing refactor

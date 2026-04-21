@@ -20,7 +20,7 @@
  */
 
 import { spawn } from "node:child_process"
-import { readFile, readdir, writeFile } from "node:fs/promises"
+import { readdir, readFile, writeFile } from "node:fs/promises"
 import { createServer } from "node:http"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
@@ -76,7 +76,9 @@ async function runBuild() {
 			stdio: "inherit",
 		})
 		child.on("exit", (code) =>
-			code === 0 ? resolveExit(undefined) : rejectExit(new Error(`vite build exit ${code}`)),
+			code === 0
+				? resolveExit(undefined)
+				: rejectExit(new Error(`vite build exit ${code}`)),
 		)
 		child.on("error", rejectExit)
 	})
@@ -135,7 +137,10 @@ async function bootServer() {
 				}
 
 				// Feedback list endpoint — empty
-				if (pathname.startsWith("/api/intents/") && pathname.endsWith("/feedback")) {
+				if (
+					pathname.startsWith("/api/intents/") &&
+					pathname.endsWith("/feedback")
+				) {
 					res.writeHead(200, { "content-type": "application/json" })
 					res.end(JSON.stringify({ items: [] }))
 					return

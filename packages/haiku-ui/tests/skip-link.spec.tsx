@@ -10,11 +10,11 @@
  * missing-skip-link class of issue — see unit-06 scope.
  */
 
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { cleanup, render, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { ReviewSessionPayload, SessionPayload } from "haiku-api"
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { App } from "../src/App"
 import type { ApiClient } from "../src/api/client"
@@ -88,9 +88,7 @@ describe("Skip link (FB-30 regression guard)", () => {
 		// focus). We simulate anchor activation by directly invoking focus() on
 		// the target — `user.click` on an anchor in jsdom does not execute the
 		// default hash-navigation side effect that moves focus.
-		const main = container.querySelector(
-			"#main-content",
-		) as HTMLElement | null
+		const main = container.querySelector("#main-content") as HTMLElement | null
 		expect(main).not.toBeNull()
 		main?.focus()
 		expect(document.activeElement).toBe(main)

@@ -14,10 +14,10 @@
 
 import {
 	createContext,
+	type ReactNode,
 	useContext,
 	useEffect,
 	useState,
-	type ReactNode,
 } from "react"
 
 export interface PageTitleValue {

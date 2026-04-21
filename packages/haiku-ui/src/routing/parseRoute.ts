@@ -32,8 +32,7 @@ const DIRECTION_RE = /^\/direction\/([^/]+)\/?$/
 
 export function parseRoute(pathname?: string): ParsedRoute | null {
 	const path =
-		pathname ??
-		(typeof window === "undefined" ? "/" : window.location.pathname)
+		pathname ?? (typeof window === "undefined" ? "/" : window.location.pathname)
 
 	// Path-traversal guard — a `..` segment in the URL should never reach a loader.
 	const segments = path.split("/")
@@ -47,17 +46,17 @@ export function parseRoute(pathname?: string): ParsedRoute | null {
 	}
 
 	const review = REVIEW_RE.exec(path)
-	if (review && review[1]) {
+	if (review?.[1]) {
 		return { pageType: "review", sessionId: review[1] }
 	}
 
 	const question = QUESTION_RE.exec(path)
-	if (question && question[1]) {
+	if (question?.[1]) {
 		return { pageType: "question", sessionId: question[1] }
 	}
 
 	const direction = DIRECTION_RE.exec(path)
-	if (direction && direction[1]) {
+	if (direction?.[1]) {
 		return { pageType: "direction", sessionId: direction[1] }
 	}
 

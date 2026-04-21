@@ -10,7 +10,7 @@
     // class to <html> synchronously, before React mounts. See App.tsx for
     // the post-mount side of this contract (matchMedia listener for live
     // system-preference updates when no explicit choice is stored).
-    (function () {
+    (() => {
       try {
         var stored = localStorage.getItem("haiku-review-theme");
         var isDark =
@@ -19,7 +19,7 @@
             window.matchMedia &&
             window.matchMedia("(prefers-color-scheme: dark)").matches);
         if (isDark) document.documentElement.classList.add("dark");
-      } catch (e) {
+      } catch (_e) {
         /* localStorage denied — safe to ignore; light mode renders by default */
       }
     })();

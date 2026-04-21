@@ -22,7 +22,7 @@ import {
 	ReviewCurrentModule,
 	ReviewModule,
 } from "./pages"
-import { parseRoute, type ParsedRoute } from "./routing/parseRoute"
+import { type ParsedRoute, parseRoute } from "./routing/parseRoute"
 import { NotFoundShell, ShellLayout } from "./shell/ShellLayout"
 import { applyThemePreference, THEME_KEY } from "./theme"
 

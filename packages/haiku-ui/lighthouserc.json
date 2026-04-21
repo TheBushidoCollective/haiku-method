@@ -1,23 +1,23 @@
 {
-  "ci": {
-    "collect": {
-      "url": [
-        "http://localhost:LIGHTHOUSE_PORT/review/demo",
-        "http://localhost:LIGHTHOUSE_PORT/review/current",
-        "http://localhost:LIGHTHOUSE_PORT/question/demo",
-        "http://localhost:LIGHTHOUSE_PORT/direction/demo"
-      ],
-      "settings": {
-        "onlyCategories": ["accessibility"],
-        "preset": "desktop",
-        "throttling": { "cpuSlowdownMultiplier": 1 }
-      }
-    },
-    "assert": {
-      "assertions": {
-        "categories:accessibility": ["error", { "minScore": 0.95 }]
-      }
-    },
-    "upload": { "target": "filesystem" }
-  }
+	"ci": {
+		"collect": {
+			"url": [
+				"http://localhost:LIGHTHOUSE_PORT/review/demo",
+				"http://localhost:LIGHTHOUSE_PORT/review/current",
+				"http://localhost:LIGHTHOUSE_PORT/question/demo",
+				"http://localhost:LIGHTHOUSE_PORT/direction/demo"
+			],
+			"settings": {
+				"onlyCategories": ["accessibility"],
+				"preset": "desktop",
+				"throttling": { "cpuSlowdownMultiplier": 1 }
+			}
+		},
+		"assert": {
+			"assertions": {
+				"categories:accessibility": ["error", { "minScore": 0.95 }]
+			}
+		},
+		"upload": { "target": "filesystem" }
+	}
 }

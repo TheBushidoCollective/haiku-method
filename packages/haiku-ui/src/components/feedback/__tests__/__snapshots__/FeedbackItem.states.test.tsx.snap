@@ -1,0 +1,1492 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`FeedbackItem — state matrix > renders every (status × interaction) cell (snapshot with token-hash header) 1`] = `
+<div
+  data-token-hash="b576ef1a670ec9d6"
+>
+  <div
+    data-status-row="pending"
+  >
+    <div
+      class="state-default"
+      data-cell-state="default"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-400 dark:border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-01"
+        data-status="pending"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔍
+            </span>
+            <span>
+              Review Agent
+            </span>
+          </span>
+          <span
+            aria-label="Status: pending"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+          >
+            pending
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-01
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-01
+           · Visit 
+          1
+           · 
+          Review Agent
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-hover"
+      data-cell-state="hover"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-400 dark:border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-01"
+        data-status="pending"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔍
+            </span>
+            <span>
+              Review Agent
+            </span>
+          </span>
+          <span
+            aria-label="Status: pending"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+          >
+            pending
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-01
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-01
+           · Visit 
+          1
+           · 
+          Review Agent
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-focus"
+      data-cell-state="focus"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-400 dark:border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-01"
+        data-status="pending"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔍
+            </span>
+            <span>
+              Review Agent
+            </span>
+          </span>
+          <span
+            aria-label="Status: pending"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+          >
+            pending
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-01
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-01
+           · Visit 
+          1
+           · 
+          Review Agent
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-active"
+      data-cell-state="active"
+    >
+      <div
+        aria-expanded="true"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-400 dark:border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-01"
+        data-status="pending"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔍
+            </span>
+            <span>
+              Review Agent
+            </span>
+          </span>
+          <span
+            aria-label="Status: pending"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+          >
+            pending
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-01
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-01
+           · Visit 
+          1
+           · 
+          Review Agent
+        </p>
+        <div
+          class="mt-2"
+        >
+          <p
+            class="text-xs text-stone-700 dark:text-stone-300 whitespace-pre-wrap"
+          >
+            Body copy for FB-01. Lorem ipsum dolor sit amet.
+          </p>
+          <div
+            class="flex gap-1 mt-2 flex-wrap"
+          >
+            <button
+              aria-label="Dismiss feedback FB-01"
+              class="text-xs font-medium px-2 py-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+              data-action="dismiss"
+              type="button"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      aria-disabled="true"
+      class="state-disabled pointer-events-none"
+      data-cell-state="disabled"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-400 dark:border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-01"
+        data-status="pending"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔍
+            </span>
+            <span>
+              Review Agent
+            </span>
+          </span>
+          <span
+            aria-label="Status: pending"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+          >
+            pending
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-01
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-01
+           · Visit 
+          1
+           · 
+          Review Agent
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-error ring-1 ring-red-500"
+      data-cell-state="error"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-amber-400 dark:border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-01"
+        data-status="pending"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔍
+            </span>
+            <span>
+              Review Agent
+            </span>
+          </span>
+          <span
+            aria-label="Status: pending"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+          >
+            pending
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-01
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-01
+           · Visit 
+          1
+           · 
+          Review Agent
+        </p>
+      </div>
+    </div>
+  </div>
+  <div
+    data-status-row="addressed"
+  >
+    <div
+      class="state-default"
+      data-cell-state="default"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-400 dark:border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-02"
+        data-status="addressed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              💬
+            </span>
+            <span>
+              Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: addressed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+          >
+            addressed
+          </span>
+          <span
+            aria-label="2 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            2
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-02
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-02
+           · Visit 
+          2
+           · 
+          Comment
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-hover"
+      data-cell-state="hover"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-400 dark:border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-02"
+        data-status="addressed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              💬
+            </span>
+            <span>
+              Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: addressed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+          >
+            addressed
+          </span>
+          <span
+            aria-label="2 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            2
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-02
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-02
+           · Visit 
+          2
+           · 
+          Comment
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-focus"
+      data-cell-state="focus"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-400 dark:border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-02"
+        data-status="addressed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              💬
+            </span>
+            <span>
+              Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: addressed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+          >
+            addressed
+          </span>
+          <span
+            aria-label="2 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            2
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-02
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-02
+           · Visit 
+          2
+           · 
+          Comment
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-active"
+      data-cell-state="active"
+    >
+      <div
+        aria-expanded="true"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-400 dark:border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-02"
+        data-status="addressed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              💬
+            </span>
+            <span>
+              Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: addressed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+          >
+            addressed
+          </span>
+          <span
+            aria-label="2 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            2
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-02
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-02
+           · Visit 
+          2
+           · 
+          Comment
+        </p>
+        <div
+          class="mt-2"
+        >
+          <p
+            class="text-xs text-stone-700 dark:text-stone-300 whitespace-pre-wrap"
+          >
+            Body copy for FB-02. Lorem ipsum dolor sit amet.
+          </p>
+          <div
+            class="flex gap-1 mt-2 flex-wrap"
+          >
+            <button
+              aria-label="Verify and close feedback FB-02"
+              class="text-xs font-medium px-2 py-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-300 dark:hover:bg-green-900/40"
+              data-action="verify-close"
+              type="button"
+            >
+              Verify & Close
+            </button>
+            <button
+              aria-label="Reopen feedback FB-02"
+              class="text-xs font-medium px-2 py-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/40"
+              data-action="reopen"
+              type="button"
+            >
+              Reopen
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      aria-disabled="true"
+      class="state-disabled pointer-events-none"
+      data-cell-state="disabled"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-400 dark:border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-02"
+        data-status="addressed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              💬
+            </span>
+            <span>
+              Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: addressed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+          >
+            addressed
+          </span>
+          <span
+            aria-label="2 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            2
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-02
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-02
+           · Visit 
+          2
+           · 
+          Comment
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-error ring-1 ring-red-500"
+      data-cell-state="error"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-blue-400 dark:border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-02"
+        data-status="addressed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              💬
+            </span>
+            <span>
+              Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: addressed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+          >
+            addressed
+          </span>
+          <span
+            aria-label="2 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            2
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-02
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-02
+           · Visit 
+          2
+           · 
+          Comment
+        </p>
+      </div>
+    </div>
+  </div>
+  <div
+    data-status-row="closed"
+  >
+    <div
+      class="state-default"
+      data-cell-state="default"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-green-500 dark:border-l-green-400 bg-green-50/60 dark:bg-green-950/25 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-03"
+        data-status="closed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              ✎
+            </span>
+            <span>
+              Annotation
+            </span>
+          </span>
+          <span
+            aria-label="Status: closed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+          >
+            closed
+          </span>
+          <span
+            aria-label="3 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            3
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-03
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-03
+           · Visit 
+          3
+           · 
+          Annotation
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-hover"
+      data-cell-state="hover"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-green-500 dark:border-l-green-400 bg-green-50/60 dark:bg-green-950/25 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-03"
+        data-status="closed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              ✎
+            </span>
+            <span>
+              Annotation
+            </span>
+          </span>
+          <span
+            aria-label="Status: closed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+          >
+            closed
+          </span>
+          <span
+            aria-label="3 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            3
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-03
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-03
+           · Visit 
+          3
+           · 
+          Annotation
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-focus"
+      data-cell-state="focus"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-green-500 dark:border-l-green-400 bg-green-50/60 dark:bg-green-950/25 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-03"
+        data-status="closed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              ✎
+            </span>
+            <span>
+              Annotation
+            </span>
+          </span>
+          <span
+            aria-label="Status: closed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+          >
+            closed
+          </span>
+          <span
+            aria-label="3 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            3
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-03
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-03
+           · Visit 
+          3
+           · 
+          Annotation
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-active"
+      data-cell-state="active"
+    >
+      <div
+        aria-expanded="true"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-green-500 dark:border-l-green-400 bg-green-50/60 dark:bg-green-950/25 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-03"
+        data-status="closed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              ✎
+            </span>
+            <span>
+              Annotation
+            </span>
+          </span>
+          <span
+            aria-label="Status: closed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+          >
+            closed
+          </span>
+          <span
+            aria-label="3 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            3
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-03
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-03
+           · Visit 
+          3
+           · 
+          Annotation
+        </p>
+        <div
+          class="mt-2"
+        >
+          <p
+            class="text-xs text-stone-700 dark:text-stone-300 whitespace-pre-wrap"
+          >
+            Body copy for FB-03. Lorem ipsum dolor sit amet.
+          </p>
+          <p
+            class="text-xs text-blue-600 dark:text-blue-400 mt-1"
+          >
+            Closed by: 
+            unit-99-assessor
+          </p>
+          <div
+            class="flex gap-1 mt-2 flex-wrap"
+          >
+            <button
+              aria-label="Reopen feedback FB-03"
+              class="text-xs font-medium px-2 py-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/40"
+              data-action="reopen"
+              type="button"
+            >
+              Reopen
+            </button>
+            <button
+              aria-label="Delete feedback FB-03"
+              class="text-xs font-medium px-2 py-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              data-action="delete"
+              type="button"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      aria-disabled="true"
+      class="state-disabled pointer-events-none"
+      data-cell-state="disabled"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-green-500 dark:border-l-green-400 bg-green-50/60 dark:bg-green-950/25 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-03"
+        data-status="closed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              ✎
+            </span>
+            <span>
+              Annotation
+            </span>
+          </span>
+          <span
+            aria-label="Status: closed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+          >
+            closed
+          </span>
+          <span
+            aria-label="3 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            3
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-03
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-03
+           · Visit 
+          3
+           · 
+          Annotation
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-error ring-1 ring-red-500"
+      data-cell-state="error"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-green-500 dark:border-l-green-400 bg-green-50/60 dark:bg-green-950/25 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-03"
+        data-status="closed"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              ✎
+            </span>
+            <span>
+              Annotation
+            </span>
+          </span>
+          <span
+            aria-label="Status: closed"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+          >
+            closed
+          </span>
+          <span
+            aria-label="3 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+          >
+            3
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-03
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-03
+           · Visit 
+          3
+           · 
+          Annotation
+        </p>
+      </div>
+    </div>
+  </div>
+  <div
+    data-status-row="rejected"
+  >
+    <div
+      class="state-default"
+      data-cell-state="default"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-400 dark:border-l-stone-500 bg-stone-100 dark:bg-stone-800/50 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-04"
+        data-status="rejected"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔗
+            </span>
+            <span>
+              PR Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: rejected"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+          >
+            rejected
+          </span>
+          <span
+            aria-label="4 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+          >
+            4
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-04
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-04
+           · Visit 
+          4
+           · 
+          PR Comment
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-hover"
+      data-cell-state="hover"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-400 dark:border-l-stone-500 bg-stone-100 dark:bg-stone-800/50 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-04"
+        data-status="rejected"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔗
+            </span>
+            <span>
+              PR Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: rejected"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+          >
+            rejected
+          </span>
+          <span
+            aria-label="4 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+          >
+            4
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-04
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-04
+           · Visit 
+          4
+           · 
+          PR Comment
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-focus"
+      data-cell-state="focus"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-400 dark:border-l-stone-500 bg-stone-100 dark:bg-stone-800/50 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-04"
+        data-status="rejected"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔗
+            </span>
+            <span>
+              PR Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: rejected"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+          >
+            rejected
+          </span>
+          <span
+            aria-label="4 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+          >
+            4
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-04
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-04
+           · Visit 
+          4
+           · 
+          PR Comment
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-active"
+      data-cell-state="active"
+    >
+      <div
+        aria-expanded="true"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-400 dark:border-l-stone-500 bg-stone-100 dark:bg-stone-800/50 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-04"
+        data-status="rejected"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔗
+            </span>
+            <span>
+              PR Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: rejected"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+          >
+            rejected
+          </span>
+          <span
+            aria-label="4 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+          >
+            4
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-04
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-04
+           · Visit 
+          4
+           · 
+          PR Comment
+        </p>
+        <div
+          class="mt-2"
+        >
+          <p
+            class="text-xs text-stone-700 dark:text-stone-300 whitespace-pre-wrap"
+          >
+            Body copy for FB-04. Lorem ipsum dolor sit amet.
+          </p>
+          <div
+            class="flex gap-1 mt-2 flex-wrap"
+          >
+            <button
+              aria-label="Reopen feedback FB-04"
+              class="text-xs font-medium px-2 py-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/40"
+              data-action="reopen"
+              type="button"
+            >
+              Reopen
+            </button>
+            <button
+              aria-label="Delete feedback FB-04"
+              class="text-xs font-medium px-2 py-1 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              data-action="delete"
+              type="button"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      aria-disabled="true"
+      class="state-disabled pointer-events-none"
+      data-cell-state="disabled"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-400 dark:border-l-stone-500 bg-stone-100 dark:bg-stone-800/50 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-04"
+        data-status="rejected"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔗
+            </span>
+            <span>
+              PR Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: rejected"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+          >
+            rejected
+          </span>
+          <span
+            aria-label="4 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+          >
+            4
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-04
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-04
+           · Visit 
+          4
+           · 
+          PR Comment
+        </p>
+      </div>
+    </div>
+    <div
+      class="state-error ring-1 ring-red-500"
+      data-cell-state="error"
+    >
+      <div
+        aria-expanded="false"
+        class="p-2.5 rounded-lg border border-l-[3px] border-l-stone-400 dark:border-l-stone-500 bg-stone-100 dark:bg-stone-800/50 hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-feedback-id="FB-04"
+        data-status="rejected"
+        data-testid="feedback-item"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          class="flex items-center gap-2 mb-1 flex-wrap"
+        >
+          <span
+            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+          >
+            <span
+              aria-hidden="true"
+            >
+              🔗
+            </span>
+            <span>
+              PR Comment
+            </span>
+          </span>
+          <span
+            aria-label="Status: rejected"
+            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+          >
+            rejected
+          </span>
+          <span
+            aria-label="4 visits"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+          >
+            4
+            x
+          </span>
+        </div>
+        <p
+          class="text-xs font-medium text-stone-800 dark:text-stone-200 truncate"
+        >
+          Fixture feedback item FB-04
+        </p>
+        <p
+          class="text-xs text-stone-600 dark:text-stone-300"
+        >
+          FB-04
+           · Visit 
+          4
+           · 
+          PR Comment
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+`;

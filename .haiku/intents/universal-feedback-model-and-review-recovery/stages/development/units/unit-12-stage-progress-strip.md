@@ -15,6 +15,8 @@ inputs:
 status: pending
 bolt: 0
 hat: ""
+outputs:
+  - stages/development/artifacts/unit-12-tactical-plan.md
 ---
 
 # StageProgressStrip

@@ -14,9 +14,9 @@ inputs:
   - stages/design/artifacts/comments-list-with-agent-toggle.html
 status: active
 bolt: 1
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T07:27:04Z'
-hat_started_at: '2026-04-21T07:32:17Z'
+hat_started_at: '2026-04-21T07:55:58Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T07:27:04Z'
@@ -24,10 +24,20 @@ iterations:
     result: advance
   - hat: builder
     started_at: '2026-04-21T07:32:17Z'
+    completed_at: '2026-04-21T07:55:58Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T07:55:58Z'
     completed_at: null
     result: null
 outputs:
   - stages/development/artifacts/unit-09-tactical-plan.md
+  - packages/haiku-ui/audit-config.json
+  - packages/haiku-ui/scripts/audit-banned-patterns.mjs
+  - packages/haiku-ui/src/components/feedback/AgentFeedbackToggle.tsx
+  - >-
+    packages/haiku-ui/src/components/feedback/__tests__/AgentFeedbackToggle.test.tsx
+  - packages/haiku-ui/tests/audit-banned-patterns.test.ts
 ---
 # AgentFeedbackToggle
 

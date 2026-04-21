@@ -1,6 +1,6 @@
 ---
 title: 'unit-03: compare-bundle.mjs exits non-zero — no-regression proof missing'
-status: pending
+status: addressed
 origin: adversarial-review
 author: agent
 author_type: agent
@@ -8,7 +8,7 @@ created_at: '2026-04-21T05:51:14Z'
 iteration: 0
 visit: 0
 source_ref: unit-03-extract-haiku-ui-package/reviewer/bolt-1
-closed_by: null
+closed_by: 'fix-loop:FB-03:bolt-2'
 bolt: 0
 upstream_stage: null
 ---
@@ -51,4 +51,3 @@ Either:
 2. Broaden the volatile-line stripper in `compare-bundle.mjs` so the new rAF/ApiClient/zod code paths are tolerated (carefully — this is a real scope expansion), then re-run and attach passing output to the unit.
 
 Confidence: **high** — exit code is 1, builder admits it.
-

@@ -17,6 +17,10 @@ bolt: 0
 hat: ""
 outputs:
   - stages/development/artifacts/unit-12-tactical-plan.md
+  - packages/haiku-ui/src/components/StageProgressStrip.tsx
+  - packages/haiku-ui/src/index.css
+  - packages/haiku-ui/audit-config.json
+  - packages/haiku-ui/tests/StageProgressStrip.test.tsx
 ---
 
 # StageProgressStrip

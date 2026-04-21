@@ -54,7 +54,7 @@ Single final unit. Runs the superset audits after every component unit lands. Ev
   - **`focus:ring-1`**: full scope.
 - `packages/haiku-api/scripts/audit-openapi-parity.mjs` (owned by unit-01, invoked here) — run against a test MCP + `dist/openapi.json`, bounded probe, 30s budget.
 
-**Lighthouse audit (pinned)** — reuses `packages/haiku-ui/scripts/audit-lighthouse.mjs` from unit-06 at full URL set; asserts a11y ≥ 0.95 on every page.
+**A11y audit** — axe-core RTL tests (already established in unit-06) cover every page against WCAG 2.1 AA. No Lighthouse — `chrome-launcher` was clobbering local dev Chrome. A Playwright-sandboxed axe audit lands as a follow-up unit; out of scope here.
 
 **Reduced-motion audit** — a headless walk of the built SPA with `prefers-reduced-motion: reduce` emulated; asserts every animated element either uses `motion-safe:*` classes or has a `@media (prefers-reduced-motion: reduce)` override.
 
@@ -81,8 +81,8 @@ All of these commands exit 0:
 - `node packages/haiku-ui/scripts/audit-bundle-size.mjs`
 - `node packages/haiku-ui/scripts/audit-state-coverage.mjs`
 - `node packages/haiku-ui/scripts/audit-banned-patterns.mjs --profile=stage-wide`
-- `node packages/haiku-ui/scripts/audit-lighthouse.mjs` (all four URLs, a11y ≥ 0.95)
 - `node packages/haiku-api/scripts/audit-openapi-parity.mjs`
+- `packages/haiku-ui/scripts/audit-lighthouse.mjs` does NOT exist (grep `lighthouse` across `packages/haiku-ui/package.json` + `packages/haiku-ui/scripts/` returns zero matches).
 
 Additional:
 - Reduced-motion audit script output shows 100% of animated elements compliant.

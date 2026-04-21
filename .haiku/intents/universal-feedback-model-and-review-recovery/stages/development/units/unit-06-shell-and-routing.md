@@ -15,9 +15,9 @@ inputs:
   - stages/design/artifacts/stage-progress-strip.html
 status: active
 bolt: 3
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T07:26:57Z'
-hat_started_at: '2026-04-21T13:50:20Z'
+hat_started_at: '2026-04-21T14:54:42Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T07:26:57Z'
@@ -58,16 +58,19 @@ iterations:
       on each pinned URL" is not met. All other criteria pass.
   - hat: builder
     started_at: '2026-04-21T13:50:20Z'
+    completed_at: '2026-04-21T14:54:42Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T14:54:42Z'
     completed_at: null
     result: null
 outputs:
   - stages/development/artifacts/unit-06-tactical-plan.md
   - package-lock.json
   - packages/haiku-ui/index.html
-  - packages/haiku-ui/lighthouserc.json
   - packages/haiku-ui/package.json
-  - packages/haiku-ui/scripts/audit-lighthouse.mjs
   - packages/haiku-ui/src/App.tsx
+  - packages/haiku-ui/src/components/DesignPicker.tsx
   - packages/haiku-ui/src/components/Header.tsx
   - packages/haiku-ui/src/components/SkipLink.tsx
   - packages/haiku-ui/src/components/ThemeToggle.tsx
@@ -84,6 +87,7 @@ outputs:
   - packages/haiku-ui/src/shell/ShellLayout.tsx
   - packages/haiku-ui/src/theme.ts
   - packages/haiku-ui/tests/__snapshots__/parity.spec.tsx.snap
+  - packages/haiku-ui/tests/a11y-pages.spec.tsx
   - packages/haiku-ui/tests/parity.spec.tsx
   - packages/haiku-ui/tests/skip-link.spec.tsx
 ---
@@ -100,11 +104,9 @@ Rebuild `App.tsx` as a clean shell composing a11y landmarks, theme toggle, and p
 - `packages/haiku-ui/src/components/Header.tsx` — canonical app header; brand, active-intent breadcrumb, theme toggle, keyboard-shortcut-help trigger.
 - Skip-to-main-content link per `skip-link-spec.html` — first in DOM order in `<Header>`, hidden until focused, jumps to `#main`. **Regression guard for missing-skip-link class of issue.**
 
-**Lighthouse gate — pinned harness:**
-- `packages/haiku-ui/scripts/audit-lighthouse.mjs` — boots the built SPA on an ephemeral port using committed fixtures, runs Lighthouse CI with version pinned in `packages/haiku-ui/package.json` (explicit `lighthouse` dep). Configuration in `packages/haiku-ui/lighthouserc.json`:
-  - URLs: `/review/demo`, `/review/current`, `/question/demo`, `/direction/demo` (demo ids served by a dev-fixture server the script boots).
-  - `--only-categories=accessibility`, `--preset=desktop`, `--throttling.cpuSlowdownMultiplier=1`.
-  - Assertions: a11y score ≥ 0.95 per URL.
+**A11y gate:**
+- axe-core assertions inside the existing RTL tests — verified by an RTL test that renders each page with a fixture session and runs `axe(container)` asserting zero violations in categories `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`.
+- No headless-browser Lighthouse. **Lighthouse was removed** — the chrome-launcher Lighthouse uses was clobbering the developer's local Chrome profile. `packages/haiku-ui/scripts/audit-lighthouse.mjs` and the `lighthouse` / `@lhci/cli` deps must be DELETED if they exist from prior bolts. A proper Playwright-sandboxed axe audit can land as a follow-up unit; out of scope here.
 
 ## Out of scope
 
@@ -118,5 +120,6 @@ Rebuild `App.tsx` as a clean shell composing a11y landmarks, theme toggle, and p
 - ThemeToggle has `aria-label="Toggle theme"`, switches light/dark, persists via `localStorage`.
 - Skip-link renders first in tab order in every page — verified by an RTL test that presses Tab once on page load and asserts the skip link receives focus.
 - Existing URL paths (`/review/:id`, `/review/current`, `/question/:id`, `/direction/:id`) render without regression (verified by the unit-03 DOM parity Playwright test, now re-run with the new shell).
-- `node packages/haiku-ui/scripts/audit-lighthouse.mjs` exits 0 with a11y score ≥ 0.95 on each pinned URL.
+- axe-core RTL test passes with zero WCAG 2.1 AA violations across every page (`review`, `review-current`, `question`, `direction`).
+- `packages/haiku-ui/scripts/audit-lighthouse.mjs`, `packages/haiku-ui/lighthouserc.json`, and the `lighthouse` / `@lhci/cli` deps are REMOVED from the package (grep confirms zero occurrences).
 - `npx tsc --noEmit` passes.

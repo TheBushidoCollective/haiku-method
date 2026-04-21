@@ -9,10 +9,10 @@ quality_gates:
 inputs:
   - knowledge/ARCHITECTURE.md
 status: active
-bolt: 3
-hat: reviewer
+bolt: 4
+hat: builder
 started_at: '2026-04-21T03:55:47Z'
-hat_started_at: '2026-04-21T04:42:41Z'
+hat_started_at: '2026-04-21T04:48:43Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T03:55:47Z'
@@ -67,6 +67,16 @@ iterations:
     result: advance
   - hat: reviewer
     started_at: '2026-04-21T04:42:41Z'
+    completed_at: '2026-04-21T04:48:43Z'
+    result: reject
+    reason: >-
+      Missing path-traversal 403 tests on stream handlers (explicit completion
+      criterion: handleFileGet/Mockup/Wireframe/StageArtifact); one local type
+      literal (DecodeResult) remains in http.ts; FileServeParamsSchema in
+      haiku-api not wired into stream handlers. See
+      artifacts/unit-02-review-findings.md for evidence + required fixes.
+  - hat: builder
+    started_at: '2026-04-21T04:48:43Z'
     completed_at: null
     result: null
 outputs:
@@ -86,6 +96,7 @@ outputs:
   - packages/haiku/test/external-review.test.mjs
   - packages/haiku/test/http-feedback.test.mjs
   - packages/haiku/test/server-tools.test.mjs
+  - stages/development/artifacts/unit-02-review-findings.md
 ---
 # MCP consumes haiku-api
 

@@ -13,7 +13,7 @@ inputs:
   - stages/design/artifacts/aria-landmark-spec.md
   - stages/design/artifacts/skip-link-spec.html
   - stages/design/artifacts/stage-progress-strip.html
-status: active
+status: completed
 bolt: 3
 hat: reviewer
 started_at: '2026-04-21T07:26:57Z'
@@ -62,8 +62,8 @@ iterations:
     result: advance
   - hat: reviewer
     started_at: '2026-04-21T14:54:42Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-21T14:59:35Z'
+    result: advance
 outputs:
   - stages/development/artifacts/unit-06-tactical-plan.md
   - package-lock.json
@@ -90,6 +90,7 @@ outputs:
   - packages/haiku-ui/tests/a11y-pages.spec.tsx
   - packages/haiku-ui/tests/parity.spec.tsx
   - packages/haiku-ui/tests/skip-link.spec.tsx
+completed_at: '2026-04-21T14:59:35Z'
 ---
 # Shell and routing refactor
 

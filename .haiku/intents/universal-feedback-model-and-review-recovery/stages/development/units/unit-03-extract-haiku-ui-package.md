@@ -11,10 +11,10 @@ quality_gates:
 inputs:
   - knowledge/ARCHITECTURE.md
 status: active
-bolt: 1
-hat: reviewer
+bolt: 2
+hat: builder
 started_at: '2026-04-21T05:00:32Z'
-hat_started_at: '2026-04-21T05:46:46Z'
+hat_started_at: '2026-04-21T05:52:52Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T05:00:32Z'
@@ -26,6 +26,19 @@ iterations:
     result: advance
   - hat: reviewer
     started_at: '2026-04-21T05:46:46Z'
+    completed_at: '2026-04-21T05:52:52Z'
+    result: reject
+    reason: >-
+      REQUEST CHANGES — 3 high-confidence findings filed (FB-02/03/04): (1)
+      bundle-size budget silently raised from spec's 500 KB to 1024 KB (actual
+      gzipped blob is 906 KB, 406 KB over spec); (2) compare-bundle.mjs exits
+      non-zero — builder admits as "intentional fail"; (3) DOM-parity test is a
+      vitest zod schema check, not a Playwright DOM snapshot test. All three are
+      hard completion criteria. Builder should either do the scope work or
+      reject back with upstream findings against the criterion authors — can't
+      self-certify past spec contracts.
+  - hat: builder
+    started_at: '2026-04-21T05:52:52Z'
     completed_at: null
     result: null
 outputs:

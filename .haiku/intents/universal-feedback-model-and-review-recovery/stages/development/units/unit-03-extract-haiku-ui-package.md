@@ -12,9 +12,9 @@ inputs:
   - knowledge/ARCHITECTURE.md
 status: active
 bolt: 1
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T05:00:32Z'
-hat_started_at: '2026-04-21T05:06:17Z'
+hat_started_at: '2026-04-21T05:46:46Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T05:00:32Z'
@@ -22,10 +22,70 @@ iterations:
     result: advance
   - hat: builder
     started_at: '2026-04-21T05:06:17Z'
+    completed_at: '2026-04-21T05:46:46Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T05:46:46Z'
     completed_at: null
     result: null
 outputs:
   - stages/development/artifacts/unit-03-tactical-plan.md
+  - .gitignore
+  - stages/development/artifacts/bundle-baseline.html
+  - stages/development/artifacts/unit-03-extract-haiku-ui-notes.md
+  - package.json
+  - packages/haiku-ui/README.md
+  - packages/haiku-ui/budget.json
+  - packages/haiku-ui/index.html
+  - packages/haiku-ui/package.json
+  - packages/haiku-ui/src/App.tsx
+  - packages/haiku-ui/src/api/client.ts
+  - packages/haiku-ui/src/api/context.tsx
+  - packages/haiku-ui/src/components/AnnotationCanvas.tsx
+  - packages/haiku-ui/src/components/Card.tsx
+  - packages/haiku-ui/src/components/CriteriaChecklist.tsx
+  - packages/haiku-ui/src/components/DesignPicker.tsx
+  - packages/haiku-ui/src/components/FeedbackPanel.tsx
+  - packages/haiku-ui/src/components/InlineComments.tsx
+  - packages/haiku-ui/src/components/MarkdownViewer.tsx
+  - packages/haiku-ui/src/components/MermaidDiagram.tsx
+  - packages/haiku-ui/src/components/MermaidFlow.tsx
+  - packages/haiku-ui/src/components/QuestionPage.tsx
+  - packages/haiku-ui/src/components/ReviewContextHeader.tsx
+  - packages/haiku-ui/src/components/ReviewCurrentPage.tsx
+  - packages/haiku-ui/src/components/ReviewPage.tsx
+  - packages/haiku-ui/src/components/ReviewSidebar.tsx
+  - packages/haiku-ui/src/components/StageProgressStrip.tsx
+  - packages/haiku-ui/src/components/StatusBadge.tsx
+  - packages/haiku-ui/src/components/SubmitSuccess.tsx
+  - packages/haiku-ui/src/components/Tabs.tsx
+  - packages/haiku-ui/src/components/ThemeToggle.tsx
+  - packages/haiku-ui/src/components/mermaid-flow/detect.ts
+  - packages/haiku-ui/src/components/mermaid-flow/layout.ts
+  - packages/haiku-ui/src/components/mermaid-flow/parser.ts
+  - packages/haiku-ui/src/hooks/useFeedback.ts
+  - packages/haiku-ui/src/hooks/useSession.ts
+  - packages/haiku-ui/src/hooks/useSessionWebSocket.ts
+  - packages/haiku-ui/src/index.css
+  - packages/haiku-ui/src/main.tsx
+  - packages/haiku-ui/src/parsed.ts
+  - packages/haiku-ui/src/types.ts
+  - packages/haiku-ui/src/vite-env.d.ts
+  - packages/haiku-ui/test-fixtures/direction-session.json
+  - packages/haiku-ui/test-fixtures/question-session.json
+  - packages/haiku-ui/test-fixtures/review-session.json
+  - packages/haiku-ui/tests/parity.spec.ts
+  - packages/haiku-ui/tests/use-session-websocket.test.tsx
+  - packages/haiku-ui/tsconfig.json
+  - packages/haiku-ui/vite.config.ts
+  - packages/haiku-ui/vitest.config.ts
+  - packages/haiku/package.json
+  - packages/haiku/review-app/package-lock.json
+  - packages/haiku/review-app/src/types.ts
+  - packages/haiku/scripts/build-review-app.mjs
+  - packages/haiku/scripts/bundle-haiku-ui.mjs
+  - packages/haiku/scripts/compare-bundle.mjs
+  - packages/haiku/src/http.ts
 ---
 # Extract haiku-ui package
 

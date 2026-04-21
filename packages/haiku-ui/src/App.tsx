@@ -1,11 +1,21 @@
+import type { ReviewSessionPayload } from "haiku-api"
 import { useEffect, useState } from "react"
 import { DesignPicker } from "./components/DesignPicker"
 import { QuestionPage } from "./components/QuestionPage"
 import { ReviewCurrentPage } from "./components/ReviewCurrentPage"
-import { ReviewPage } from "./components/ReviewPage"
+import { ReviewPage, type ReviewPageSessionData } from "./components/ReviewPage"
 import { ThemeToggle } from "./components/ThemeToggle"
 import { useSession, useSessionWebSocket } from "./hooks/useSession"
 import type { ReviewCurrentResponse } from "./types"
+
+// Cast narrowed review session to the SPA-local view that expresses the
+// parsed-markdown fields with their concrete types. haiku-api intentionally
+// leaves those fields as LooseRecord (opaque); the SPA knows the shapes.
+function asReviewPageSession(
+	session: ReviewSessionPayload,
+): ReviewPageSessionData {
+	return session as unknown as ReviewPageSessionData
+}
 
 function parseRoute(): { pageType: string; sessionId: string } | null {
 	const path = window.location.pathname
@@ -124,7 +134,11 @@ function SessionLoader({
 				}
 			>
 				{session.session_type === "review" && (
-					<ReviewPage session={session} sessionId={sessionId} wsRef={wsRef} />
+					<ReviewPage
+						session={asReviewPageSession(session)}
+						sessionId={sessionId}
+						wsRef={wsRef}
+					/>
 				)}
 				{session.session_type === "question" && (
 					<QuestionPage session={session} sessionId={sessionId} wsRef={wsRef} />

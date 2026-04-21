@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/react"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
+import { ApiClientProvider } from "./api/context"
 import "./index.css"
 import { App } from "./App"
 
@@ -39,6 +40,8 @@ const root = document.getElementById("root")
 if (!root) throw new Error("Missing #root element — check index.html")
 createRoot(root).render(
 	<StrictMode>
-		<App />
+		<ApiClientProvider>
+			<App />
+		</ApiClientProvider>
 	</StrictMode>,
 )

@@ -34,7 +34,7 @@ import {
 import type { ZodTypeAny, z } from "zod"
 import { ensureOnStageBranch } from "./git-worktree.js"
 import { handleOrchestratorTool } from "./orchestrator.js"
-import { REVIEW_APP_HTML } from "./review-app-html.js"
+import { HAIKU_UI_HTML } from "./haiku-ui-html.js"
 import type {
 	QuestionAnnotations,
 	QuestionAnswer,
@@ -199,7 +199,7 @@ export function getActualPort(): number | null {
 
 /** Serve the React SPA for any page route — the SPA reads the session ID from the URL */
 function serveSpa(): Response {
-	return new Response(REVIEW_APP_HTML, {
+	return new Response(HAIKU_UI_HTML, {
 		headers: { "Content-Type": "text/html; charset=utf-8" },
 	})
 }

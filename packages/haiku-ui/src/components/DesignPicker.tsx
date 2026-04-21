@@ -1,8 +1,10 @@
+import type { DirectionSessionPayload } from "haiku-api"
 import { useCallback, useState } from "react"
 import { submitDesignDirection, tryCloseTab } from "../hooks/useSession"
-import type { SessionData } from "../types"
 import { Card, SectionHeading } from "./Card"
 import { SubmitSuccess } from "./SubmitSuccess"
+
+type SessionData = DirectionSessionPayload
 
 interface Props {
 	session: SessionData

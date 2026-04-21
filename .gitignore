@@ -43,7 +43,7 @@ website/public/ai-dlc-plugin.zip
 # Build artifacts (packages/haiku)
 packages/haiku/src/templates/tailwind.css
 packages/haiku/src/templates/tailwind-generated.ts
-packages/haiku/src/review-app-html.ts
+packages/haiku/src/haiku-ui-html.ts
 
 # Terraform
 .terraform/

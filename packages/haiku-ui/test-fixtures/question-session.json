@@ -1,0 +1,15 @@
+{
+	"session_id": "test-question-1",
+	"session_type": "question",
+	"status": "pending",
+	"title": "Test Question",
+	"context": "Pick one.",
+	"questions": [
+		{
+			"question": "Which option?",
+			"options": ["A", "B", "C"],
+			"multiSelect": false
+		}
+	],
+	"image_urls": []
+}

@@ -1,0 +1,28 @@
+{
+	"session_id": "test-direction-1",
+	"session_type": "design_direction",
+	"status": "pending",
+	"title": "Test Direction",
+	"intent_slug": "test-direction-intent",
+	"archetypes": [
+		{
+			"name": "minimal",
+			"description": "A minimal archetype",
+			"preview_html": "<div/>",
+			"default_parameters": { "density": 0.5 }
+		}
+	],
+	"parameters": [
+		{
+			"name": "density",
+			"label": "Density",
+			"description": "How dense",
+			"min": 0,
+			"max": 1,
+			"step": 0.01,
+			"default": 0.5,
+			"labels": { "low": "sparse", "high": "dense" }
+		}
+	],
+	"selection": null
+}

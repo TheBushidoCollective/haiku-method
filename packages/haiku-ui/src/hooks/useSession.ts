@@ -1,48 +1,10 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
+import { useApiClient } from "../api/context"
 import type { QuestionAnswer, ReviewAnnotations, SessionData } from "../types"
 
-/**
- * Maintains a WebSocket connection to the server for the given session.
- * The submit functions below will try sending via WS first, falling back
- * to HTTP POST if the connection is unavailable.
- */
-export function useSessionWebSocket(sessionId: string) {
-	const wsRef = useRef<WebSocket | null>(null)
-
-	useEffect(() => {
-		const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-		let ws: WebSocket
-		try {
-			ws = new WebSocket(
-				`${protocol}//${window.location.host}/ws/session/${sessionId}`,
-			)
-		} catch {
-			// WebSocket not supported or URL invalid — no-op, HTTP fallback works
-			return
-		}
-
-		ws.onopen = () => {
-			// connected
-		}
-
-		ws.onclose = () => {
-			if (wsRef.current === ws) wsRef.current = null
-		}
-
-		ws.onerror = () => {
-			if (wsRef.current === ws) wsRef.current = null
-		}
-
-		wsRef.current = ws
-
-		return () => {
-			ws.close()
-			if (wsRef.current === ws) wsRef.current = null
-		}
-	}, [sessionId])
-
-	return wsRef
-}
+// Re-export from the extracted module so existing `import { useSessionWebSocket }
+// from "./useSession"` paths continue to work during migration.
+export { useSessionWebSocket } from "./useSessionWebSocket"
 
 /** Try to send data via WebSocket. Returns true if sent, false otherwise. */
 function trySendViaWs(
@@ -61,19 +23,14 @@ export function useSession(sessionId: string) {
 	const [session, setSession] = useState<SessionData | null>(null)
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState<string | null>(null)
+	const client = useApiClient()
 
 	useEffect(() => {
 		let cancelled = false
 
 		async function fetchSession() {
 			try {
-				const res = await fetch(`/api/session/${sessionId}`, {
-					headers: { "bypass-tunnel-reminder": "1" },
-				})
-				if (!res.ok) {
-					throw new Error(`HTTP ${res.status}`)
-				}
-				const data: SessionData = await res.json()
+				const data = await client.fetchSession(sessionId)
 				if (!cancelled) {
 					setSession(data)
 					setLoading(false)
@@ -93,7 +50,7 @@ export function useSession(sessionId: string) {
 		return () => {
 			cancelled = true
 		}
-	}, [sessionId])
+	}, [sessionId, client])
 
 	return { session, loading, error }
 }

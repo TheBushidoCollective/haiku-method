@@ -65,7 +65,7 @@ export function useFeedback(intent: string | null, stage: string | null) {
 	const updateFeedback = useCallback(
 		async (
 			feedbackId: string,
-			fields: { status?: string; addressed_by?: string },
+			fields: { status?: string; closed_by?: string },
 		) => {
 			if (!(intent && stage)) return null
 			const res = await fetch(

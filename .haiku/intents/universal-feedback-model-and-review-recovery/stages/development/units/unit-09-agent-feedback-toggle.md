@@ -1,5 +1,5 @@
 ---
-title: AgentFeedbackToggle (role=switch, canonical aria-label, 44px target)
+title: 'AgentFeedbackToggle (role=switch, canonical aria-label, 44px target)'
 type: implementation
 depends_on:
   - unit-04-design-token-system
@@ -14,13 +14,15 @@ inputs:
   - stages/design/artifacts/comments-list-with-agent-toggle.html
 outputs:
   - ../../../packages/haiku-ui/src/components/feedback/AgentFeedbackToggle.tsx
-  - ../../../packages/haiku-ui/src/components/feedback/__tests__/AgentFeedbackToggle.test.tsx
+  - >-
+    ../../../packages/haiku-ui/src/components/feedback/__tests__/AgentFeedbackToggle.test.tsx
   - ../../../packages/haiku-ui/tests/audit-banned-patterns.test.ts
   - ../../../packages/haiku-ui/audit-config.json
   - ../../../packages/haiku-ui/scripts/audit-banned-patterns.mjs
-status: pending
+status: completed
 bolt: 0
-hat: ""
+hat: ''
+completed_at: '2026-04-21T13:02:59Z'
 ---
 
 # AgentFeedbackToggle

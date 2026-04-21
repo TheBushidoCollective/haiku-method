@@ -17,9 +17,9 @@ inputs:
   - stages/design/artifacts/assessor-summary-card.html
   - stages/design/artifacts/review-flow-with-feedback-assessor.html
   - stages/design/artifacts/rollback-reason-banner.html
-status: pending
+status: completed
 bolt: 0
-hat: ""
+hat: ''
 outputs:
   - stages/development/artifacts/unit-11-tactical-plan.md
   - packages/haiku-ui/package.json
@@ -28,6 +28,7 @@ outputs:
   - packages/haiku-ui/src/components/AssessorSummaryCard.tsx
   - packages/haiku-ui/src/components/__tests__/RevisitModal.test.tsx
   - packages/haiku-ui/src/components/__tests__/AssessorSummaryCard.test.tsx
+completed_at: '2026-04-21T15:41:46Z'
 ---
 
 # RevisitModal + AssessorSummaryCard

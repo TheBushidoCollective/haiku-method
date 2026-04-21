@@ -1,6 +1,6 @@
 ---
 title: 'unit-03: bundle-size budget silently raised from 500 KB to 1024 KB'
-status: pending
+status: addressed
 origin: adversarial-review
 author: agent
 author_type: agent
@@ -8,7 +8,7 @@ created_at: '2026-04-21T05:50:56Z'
 iteration: 0
 visit: 0
 source_ref: unit-03-extract-haiku-ui-package/reviewer/bolt-1
-closed_by: null
+closed_by: 'fix-loop:FB-02:bolt-2'
 bolt: 0
 upstream_stage: null
 ---
@@ -39,4 +39,3 @@ Pick one:
 2. **Reject the unit back to the planner** with an upstream finding against whoever authored the 500 KB ceiling. If the pre-move bundle was already 929 KB, the ceiling was never achievable by a pure-relocation unit, and that's a product/elaboration miss, not a builder miss. But the reviewer cannot silently approve the builder's `1048576` substitution — the ceiling has to come from the spec author, not the builder.
 
 Confidence: **high** — the measurement is direct, the spec text is unambiguous, and the `budget.json` edit is in the diff.
-

@@ -3,11 +3,12 @@
  * 100 frames in a tight loop collapse to exactly one onUpdate callback
  * per animation frame.
  */
-import { describe, expect, it, vi } from "vitest"
+
 import { act, render } from "@testing-library/react"
 import { useEffect } from "react"
-import { ApiClientProvider } from "../src/api/context"
+import { describe, expect, it, vi } from "vitest"
 import type { ApiClient } from "../src/api/client"
+import { ApiClientProvider } from "../src/api/context"
 import { useSessionWebSocket } from "../src/hooks/useSessionWebSocket"
 
 class FakeWebSocket {
@@ -51,7 +52,7 @@ function makeClient(ws: FakeWebSocket): ApiClient {
 }
 
 function Harness({
-	ws,
+	ws: _ws,
 	onUpdate,
 }: {
 	ws: FakeWebSocket

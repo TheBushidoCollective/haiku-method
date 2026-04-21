@@ -21,18 +21,18 @@
  */
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, render, waitFor } from "@testing-library/react"
-import type { ReactNode } from "react"
 import type {
 	DirectionSessionPayload,
 	QuestionSessionPayload,
 	ReviewSessionPayload,
 	SessionPayload,
 } from "haiku-api"
+import type { ReactNode } from "react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { App } from "../src/App"
 import type { ApiClient } from "../src/api/client"
 import { ApiClientProvider } from "../src/api/context"
-import { App } from "../src/App"
 import { normalizeDomSnapshot } from "./dom-parity-transformer"
 
 type FixtureRoute = {
@@ -209,8 +209,5 @@ function assertStructuralMarkers(
 }
 
 function escapeHtml(s: string): string {
-	return s
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
+	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }

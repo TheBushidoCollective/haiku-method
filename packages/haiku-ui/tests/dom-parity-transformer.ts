@@ -17,15 +17,12 @@
  * snapshot before comparison. Both sides are stripped, so noise cancels.
  */
 
-const VOLATILE_ATTRS = [
-	"data-reactid",
-	"data-reactroot",
-	"data-react-checksum",
-]
+const VOLATILE_ATTRS = ["data-reactid", "data-reactroot", "data-react-checksum"]
 
 const USE_ID_PATTERN = /:r[a-z0-9]+:/gi
 const REACT_USE_ID_PATTERN = /«r\d+»/g
-const ANIMATION_TIMING_PATTERN = /(animation-delay|transition-delay):\s*[\d.]+m?s/gi
+const ANIMATION_TIMING_PATTERN =
+	/(animation-delay|transition-delay):\s*[\d.]+m?s/gi
 
 export function normalizeDomSnapshot(html: string): string {
 	let out = html

@@ -32,9 +32,7 @@ if (typeof window !== "undefined") {
 						_type: string,
 						cb: EventListener | ((e: MediaQueryListEvent) => void),
 					) => {
-						const i = listeners.indexOf(
-							cb as (e: MediaQueryListEvent) => void,
-						)
+						const i = listeners.indexOf(cb as (e: MediaQueryListEvent) => void)
 						if (i >= 0) listeners.splice(i, 1)
 					},
 					dispatchEvent: (_ev: Event) => true,
@@ -44,7 +42,10 @@ if (typeof window !== "undefined") {
 		})
 	}
 
-	if (typeof (window as { ResizeObserver?: unknown }).ResizeObserver === "undefined") {
+	if (
+		typeof (window as { ResizeObserver?: unknown }).ResizeObserver ===
+		"undefined"
+	) {
 		class ResizeObserverStub {
 			observe() {}
 			unobserve() {}

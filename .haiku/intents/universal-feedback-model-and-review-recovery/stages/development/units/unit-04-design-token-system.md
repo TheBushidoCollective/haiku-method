@@ -24,9 +24,10 @@ outputs:
   - packages/haiku-ui/src/components/primitives/Chip.tsx
   - packages/haiku-ui/src/components/primitives/Divider.tsx
   - packages/haiku-ui/src/components/primitives/Input.tsx
-status: pending
+status: completed
 bolt: 0
-hat: ""
+hat: ''
+completed_at: '2026-04-21T06:57:56Z'
 ---
 
 # Design token system

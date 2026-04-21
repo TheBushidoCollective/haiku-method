@@ -26,7 +26,6 @@ import {
 	type ReviewDecisionResponse,
 	RevisitRequestSchema,
 	type RevisitResponse,
-	routes as apiRoutes,
 	type ValidationError,
 	WsClientMessageSchema,
 	type WsServerMessage,

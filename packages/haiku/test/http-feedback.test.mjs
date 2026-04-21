@@ -242,7 +242,9 @@ async function run() {
 		)
 		assert.strictEqual(res.status, 400)
 		const data = await res.json()
-		assert.ok(data.error.includes("Invalid request body"))
+		assert.strictEqual(data.error, "validation_failed")
+		assert.ok(Array.isArray(data.issues))
+		assert.ok(data.issues.length > 0)
 	})
 
 	await test("POST returns 400 for empty body", async () => {

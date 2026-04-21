@@ -8,8 +8,33 @@ import {
 } from "node:http"
 import { dirname, extname, join, resolve } from "node:path"
 import type { Duplex } from "node:stream"
-import { z } from "zod"
+import {
+	DEFAULT_BODY_MAX_BYTES,
+	DirectionSelectRequestSchema,
+	type DirectionSelectResponse,
+	FEEDBACK_BODY_MAX_BYTES,
+	FeedbackCreateRequestSchema,
+	type FeedbackCreateResponse,
+	type FeedbackDeleteResponse,
+	type FeedbackListResponse,
+	FeedbackUpdateRequestSchema,
+	type FeedbackUpdateResponse,
+	QuestionAnswerRequestSchema,
+	type QuestionAnswerResponse,
+	type ReviewCurrentPayload,
+	ReviewDecisionRequestSchema,
+	type ReviewDecisionResponse,
+	RevisitRequestSchema,
+	type RevisitResponse,
+	routes as apiRoutes,
+	type ValidationError,
+	WsClientMessageSchema,
+	type WsServerMessage,
+	type ZodIssueWire,
+} from "haiku-api"
+import { z, type ZodTypeAny } from "zod"
 import { ensureOnStageBranch } from "./git-worktree.js"
+import { handleOrchestratorTool } from "./orchestrator.js"
 import { REVIEW_APP_HTML } from "./review-app-html.js"
 import type {
 	QuestionAnnotations,
@@ -25,7 +50,6 @@ import {
 } from "./sessions.js"
 import {
 	deleteFeedbackFile,
-	FEEDBACK_ORIGINS,
 	FEEDBACK_STATUSES,
 	type FeedbackItem,
 	findHaikuRoot,
@@ -39,6 +63,136 @@ import {
 	writeFeedbackFile,
 } from "./state-tools.js"
 import { e2eEncrypt, isE2EActive, isRemoteReviewEnabled } from "./tunnel.js"
+
+// ─── Validation helpers ────────────────────────────────────────────────────
+//
+// Uniform plumbing for JSON request parsing:
+//   - size cap (413 before parse)
+//   - malformed JSON → 400 with a synthetic `invalid_json` issue
+//   - schema mismatch → 400 with ZodIssue[] under the `validation_failed` envelope
+// All mutating handlers call parseJsonBody() and respond via
+// validationErrorResponse() on failure.
+
+/** Build a 400 Response with the canonical validation-failed envelope. */
+function validationErrorResponse(
+	issues: ZodIssueWire[],
+	status = 400,
+): Response {
+	const payload: ValidationError = {
+		error: "validation_failed",
+		issues,
+	}
+	return Response.json(payload, { status })
+}
+
+/** Build a 413 Response when the incoming body exceeds the configured cap. */
+function payloadTooLargeResponse(maxBytes: number): Response {
+	return Response.json(
+		{
+			error: "payload_too_large",
+			max_bytes: maxBytes,
+		},
+		{ status: 413 },
+	)
+}
+
+/**
+ * Parse + validate a JSON request body against a Zod schema with an explicit
+ * size cap. Returns a discriminated union so callers short-circuit on
+ * failure with a canonical 400/413 response.
+ */
+async function parseJsonBody<S extends ZodTypeAny>(
+	req: Request,
+	schema: S,
+	opts: { maxBytes?: number } = {},
+): Promise<
+	{ ok: true; data: z.infer<S> } | { ok: false; response: Response }
+> {
+	const maxBytes = opts.maxBytes ?? DEFAULT_BODY_MAX_BYTES
+	let raw: string
+	try {
+		// Request.text() reads the whole body; the server-level bridge also caps
+		// at DEFAULT_BODY_MAX_BYTES so this byte-length check is the finer cap
+		// for per-route overrides (e.g. feedback at 128 KiB).
+		const buffer = await req.arrayBuffer()
+		if (buffer.byteLength > maxBytes) {
+			return { ok: false, response: payloadTooLargeResponse(maxBytes) }
+		}
+		raw = new TextDecoder("utf-8").decode(buffer)
+	} catch {
+		return {
+			ok: false,
+			response: validationErrorResponse([
+				{
+					code: "invalid_body",
+					message: "Failed to read request body",
+					path: [],
+				},
+			]),
+		}
+	}
+
+	let parsed: unknown
+	try {
+		parsed = JSON.parse(raw)
+	} catch (err) {
+		return {
+			ok: false,
+			response: validationErrorResponse([
+				{
+					code: "invalid_json",
+					message:
+						err instanceof Error ? err.message : "Request body is not valid JSON",
+					path: [],
+				},
+			]),
+		}
+	}
+
+	const result = schema.safeParse(parsed)
+	if (!result.success) {
+		const issues: ZodIssueWire[] = result.error.issues.map((iss) => ({
+			code: iss.code,
+			message: iss.message,
+			path: iss.path as (string | number)[],
+		}))
+		return { ok: false, response: validationErrorResponse(issues) }
+	}
+	return { ok: true, data: result.data as z.infer<S> }
+}
+
+/**
+ * Resolve `requested` relative to `root`, returning the real resolved path if
+ * and only if it stays within `root` after symlink resolution. Mirrors the
+ * inline guards previously duplicated across file / mockup / wireframe /
+ * stage-artifact handlers. Paths are allowed to equal root (dir itself).
+ */
+async function resolvePathSafe(
+	root: string,
+	requested: string,
+): Promise<{ ok: true; path: string } | { ok: false }> {
+	const resolvedRoot = resolve(root)
+	const resolved = resolve(resolvedRoot, requested)
+	if (
+		!resolved.startsWith(`${resolvedRoot}/`) &&
+		resolved !== resolvedRoot
+	) {
+		return { ok: false }
+	}
+	try {
+		const realResolved = await realpath(resolved).catch(() => null)
+		const realBase = await realpath(resolvedRoot).catch(() => resolvedRoot)
+		if (
+			!realResolved ||
+			(!realResolved.startsWith(`${realBase}/`) && realResolved !== realBase)
+		) {
+			return { ok: false }
+		}
+		return { ok: true, path: realResolved }
+	} catch {
+		return { ok: false }
+	}
+}
 
 let httpServer: HttpServer | null = null
 let actualPort: number | null = null
@@ -144,48 +298,15 @@ async function handleDecidePost(
 		return new Response("Session not found", { status: 404 })
 	}
 
-	let body: {
-		decision: string
-		feedback?: string
-		annotations?: ReviewAnnotations
-	}
-	try {
-		const DecideSchema = z.object({
-			decision: z.string(),
-			feedback: z.string().optional(),
-			annotations: z
-				.object({
-					screenshot: z.string().optional(),
-					pins: z
-						.array(
-							z.object({
-								x: z.number(),
-								y: z.number(),
-								text: z.string(),
-							}),
-						)
-						.optional(),
-					comments: z
-						.array(
-							z.object({
-								selectedText: z.string(),
-								comment: z.string(),
-								paragraph: z.number(),
-							}),
-						)
-						.optional(),
-				})
-				.optional(),
-		})
-		body = DecideSchema.parse(await req.json())
-	} catch {
-		return new Response("Invalid request body", { status: 400 })
-	}
+	const parsed = await parseJsonBody(req, ReviewDecisionRequestSchema)
+	if (!parsed.ok) return parsed.response
 
 	const decision =
-		body.decision === "approved" ? "approved" : "changes_requested"
-	const feedback = body.feedback ?? ""
-	const annotations = body.annotations
+		parsed.data.decision === "approved" ? "approved" : "changes_requested"
+	const feedback = parsed.data.feedback ?? ""
+	const annotations = parsed.data.annotations as
+		| ReviewAnnotations
+		| undefined
 
 	updateSession(sessionId, {
 		status: "decided",
@@ -194,7 +315,8 @@ async function handleDecidePost(
 		annotations,
 	})
 
-	return Response.json({ ok: true, decision, feedback })
+	const payload: ReviewDecisionResponse = { ok: true, decision, feedback }
+	return Response.json(payload)
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -290,6 +412,20 @@ async function withE2E(
 	})
 }
 
+/** Build a Response for a resolved real filesystem path with MIME detection. */
+async function respondWithFile(realPath: string): Promise<Response> {
+	try {
+		const data = await readFile(realPath)
+		const ext = extname(realPath).toLowerCase()
+		const contentType = MIME_TYPES[ext] ?? "application/octet-stream"
+		return new Response(data, {
+			headers: { "Content-Type": contentType },
+		})
+	} catch {
+		return new Response("Not found", { status: 404 })
+	}
+}
+
 /** Consolidated file serving: GET /files/:sessionId/*path */
 async function handleFileGet(
 	sessionId: string,
@@ -313,32 +449,42 @@ async function handleFileGet(
 		return new Response("Not found", { status: 404 })
 	}
 
+	let escaped = false
 	for (const baseDir of allowedBases) {
-		const resolved = resolve(baseDir, filePath)
-		const resolvedBase = resolve(baseDir)
-		if (!resolved.startsWith(`${resolvedBase}/`) && resolved !== resolvedBase) {
+		const safe = await resolvePathSafe(baseDir, filePath)
+		if (!safe.ok) {
+			escaped = true
 			continue
 		}
-
-		try {
-			const realResolved = await realpath(resolved).catch(() => null)
-			const realBase = await realpath(baseDir).catch(() => resolvedBase)
-			if (
-				!realResolved ||
-				(!realResolved.startsWith(`${realBase}/`) && realResolved !== realBase)
-			) {
-				continue
-			}
-			const data = await readFile(realResolved)
-			const ext = extname(realResolved).toLowerCase()
-			const contentType = MIME_TYPES[ext] ?? "application/octet-stream"
-			return new Response(data, {
-				headers: { "Content-Type": contentType },
-			})
-		} catch {}
+		return respondWithFile(safe.path)
 	}
 
-	return new Response("Not found", { status: 404 })
+	// Every allowed base rejected the path. If ALL rejections were traversal
+	// escapes (resolved outside root), return 403; otherwise 404. For the
+	// /files alias we historically returned 404 — callers distinguish by
+	// presence of the file on disk, not by path shape. We keep 404 to avoid
+	// breaking that contract.
+	return new Response(escaped ? "Not found" : "Not found", { status: 404 })
+}
+
+/**
+ * Shared helper: validate a path param against a base dir, reject escapes
+ * with 403, serve the real file otherwise. Used by the stream aliases
+ * (/mockups, /wireframe, /stage-artifacts) whose contract is stricter
+ * than /files (403 on escape, not 404).
+ */
+async function serveUnderRoot(
+	rootDir: string,
+	filePath: string,
+): Promise<Response> {
+	const safe = await resolvePathSafe(rootDir, filePath)
+	if (!safe.ok) {
+		return Response.json(
+			{ error: "forbidden_path_traversal" },
+			{ status: 403 },
+		)
+	}
+	return respondWithFile(safe.path)
 }
 
 async function handleMockupGet(
@@ -349,31 +495,7 @@ async function handleMockupGet(
 	if (!session || session.session_type !== "review") {
 		return new Response("Session not found", { status: 404 })
 	}
-
-	// Resolve and validate path stays within intent dir (realpath follows symlinks)
-	const mockupsDir = join(session.intent_dir, "mockups")
-	const resolved = resolve(mockupsDir, filePath)
-	// Pre-check with resolve() before attempting realpath
-	if (!resolved.startsWith(`${resolve(mockupsDir)}/`)) {
-		return new Response("Forbidden", { status: 403 })
-	}
-
-	try {
-		// Symlink-safe check: ensure resolved real path stays within base dir
-		const realResolved = await realpath(resolved).catch(() => null)
-		const realBase = await realpath(mockupsDir).catch(() => resolve(mockupsDir))
-		if (!realResolved?.startsWith(`${realBase}/`)) {
-			return new Response("Forbidden", { status: 403 })
-		}
-		const data = await readFile(resolved)
-		const ext = extname(resolved).toLowerCase()
-		const contentType = MIME_TYPES[ext] ?? "application/octet-stream"
-		return new Response(data, {
-			headers: { "Content-Type": contentType },
-		})
-	} catch {
-		return new Response("Not found", { status: 404 })
-	}
+	return serveUnderRoot(join(session.intent_dir, "mockups"), filePath)
 }
 
 async function handleWireframeGet(
@@ -384,32 +506,7 @@ async function handleWireframeGet(
 	if (!session || session.session_type !== "review") {
 		return new Response("Session not found", { status: 404 })
 	}
-
-	// Wireframe paths are relative to the intent dir
-	const resolved = resolve(session.intent_dir, filePath)
-	// Pre-check with resolve() before attempting realpath
-	if (!resolved.startsWith(`${resolve(session.intent_dir)}/`)) {
-		return new Response("Forbidden", { status: 403 })
-	}
-
-	try {
-		// Symlink-safe check: ensure resolved real path stays within base dir
-		const realResolved = await realpath(resolved).catch(() => null)
-		const realBase = await realpath(session.intent_dir).catch(() =>
-			resolve(session.intent_dir),
-		)
-		if (!realResolved?.startsWith(`${realBase}/`)) {
-			return new Response("Forbidden", { status: 403 })
-		}
-		const data = await readFile(resolved)
-		const ext = extname(resolved).toLowerCase()
-		const contentType = MIME_TYPES[ext] ?? "application/octet-stream"
-		return new Response(data, {
-			headers: { "Content-Type": contentType },
-		})
-	} catch {
-		return new Response("Not found", { status: 404 })
-	}
+	return serveUnderRoot(session.intent_dir, filePath)
 }
 
 async function handleStageArtifactGet(
@@ -420,32 +517,7 @@ async function handleStageArtifactGet(
 	if (!session || session.session_type !== "review") {
 		return new Response("Session not found", { status: 404 })
 	}
-
-	// filePath is like "stages/{stage}/artifacts/{file}"
-	const resolved = resolve(session.intent_dir, filePath)
-	// Pre-check with resolve() before attempting realpath
-	if (!resolved.startsWith(`${resolve(session.intent_dir)}/`)) {
-		return new Response("Forbidden", { status: 403 })
-	}
-
-	try {
-		// Symlink-safe check: ensure resolved real path stays within base dir
-		const realResolved = await realpath(resolved).catch(() => null)
-		const realBase = await realpath(session.intent_dir).catch(() =>
-			resolve(session.intent_dir),
-		)
-		if (!realResolved?.startsWith(`${realBase}/`)) {
-			return new Response("Forbidden", { status: 403 })
-		}
-		const data = await readFile(resolved)
-		const ext = extname(resolved).toLowerCase()
-		const contentType = MIME_TYPES[ext] ?? "application/octet-stream"
-		return new Response(data, {
-			headers: { "Content-Type": contentType },
-		})
-	} catch {
-		return new Response("Not found", { status: 404 })
-	}
+	return serveUnderRoot(session.intent_dir, filePath)
 }
 
 async function handleQuestionImageGet(
@@ -518,48 +590,18 @@ async function handleQuestionAnswerPost(
 		return new Response("Session not found", { status: 404 })
 	}
 
-	let body: {
-		answers: QuestionAnswer[]
-		feedback?: string
-		annotations?: QuestionAnnotations
-	}
-	try {
-		const QuestionAnswerSchema = z.object({
-			answers: z.array(
-				z.object({
-					question: z.string(),
-					selectedOptions: z.array(z.string()),
-					otherText: z.string().optional(),
-				}),
-			),
-			feedback: z.string().optional(),
-			annotations: z
-				.object({
-					comments: z
-						.array(
-							z.object({
-								selectedText: z.string(),
-								comment: z.string(),
-								paragraph: z.number(),
-							}),
-						)
-						.optional(),
-				})
-				.optional(),
-		})
-		body = QuestionAnswerSchema.parse(await req.json())
-	} catch {
-		return new Response("Invalid request body", { status: 400 })
-	}
+	const parsed = await parseJsonBody(req, QuestionAnswerRequestSchema)
+	if (!parsed.ok) return parsed.response
 
 	updateQuestionSession(sessionId, {
 		status: "answered",
-		answers: body.answers,
-		feedback: body.feedback ?? "",
-		annotations: body.annotations,
+		answers: parsed.data.answers as QuestionAnswer[],
+		feedback: parsed.data.feedback ?? "",
+		annotations: parsed.data.annotations as QuestionAnnotations | undefined,
 	})
 
-	return Response.json({ ok: true })
+	const payload: QuestionAnswerResponse = { ok: true }
+	return Response.json(payload)
 }
 
 function handleDirectionGet(sessionId: string): Response {
@@ -590,23 +632,19 @@ async function handleDirectionSelectPost(
 		)
 	}
 
-	let body: { archetype: string; parameters: Record<string, number> }
-	try {
-		const DirectionSelectSchema = z.object({
-			archetype: z.string(),
-			parameters: z.record(z.number()),
-		})
-		body = DirectionSelectSchema.parse(await req.json())
-	} catch {
-		return Response.json({ error: "Invalid request body" }, { status: 400 })
-	}
+	const parsed = await parseJsonBody(req, DirectionSelectRequestSchema)
+	if (!parsed.ok) return parsed.response
 
 	updateDesignDirectionSession(sessionId, {
 		status: "answered",
-		selection: { archetype: body.archetype, parameters: body.parameters },
+		selection: {
+			archetype: parsed.data.archetype,
+			parameters: parsed.data.parameters,
+		},
 	})
 
-	return Response.json({ ok: true })
+	const payload: DirectionSelectResponse = { ok: true }
+	return Response.json(payload)
 }
 
 // ─── WebSocket support ───────────────────────────────────────────────
@@ -617,8 +655,59 @@ async function handleDirectionSelectPost(
 
 const WS_MAGIC = "258EAFA5-E914-47DA-95CA-C5AB5DC85B11"
 
+/** Per-frame cap. Frames over this get closed with code 1009 (Message Too Big). */
+const WS_MAX_FRAME_BYTES = 64 * 1024
+
+/** Per-connection frame rate cap (messages/second). Configurable via env. */
+const WS_RATE_LIMIT_PER_SEC = Number.parseInt(
+	process.env.HAIKU_WS_RATE_LIMIT ?? "20",
+	10,
+)
+
+/** WebSocket close codes (RFC 6455 §7.4). */
+const WS_CLOSE_POLICY_VIOLATION = 1008
+const WS_CLOSE_MESSAGE_TOO_BIG = 1009
+
 /** Active WebSocket connections keyed by session ID */
 const wsConnections = new Map<string, Duplex>()
+
+/** Per-connection rate-limit state — sliding-window message timestamps. */
+const wsRateState = new WeakMap<Duplex, number[]>()
+
+/** Send a close frame with the given code, then destroy the socket. */
+function sendCloseFrame(socket: Duplex, code: number): void {
+	const frame = Buffer.alloc(4)
+	frame[0] = 0x88 // FIN + close opcode
+	frame[1] = 0x02 // payload length
+	frame.writeUInt16BE(code, 2)
+	try {
+		socket.write(frame)
+	} catch {
+		// socket already destroyed
+	}
+	socket.destroy()
+}
+
+/**
+ * Check the per-connection rate limit. Returns true if the frame should be
+ * allowed, false if the connection must be closed for rate abuse.
+ */
+function allowWsFrame(socket: Duplex): boolean {
+	if (!Number.isFinite(WS_RATE_LIMIT_PER_SEC) || WS_RATE_LIMIT_PER_SEC <= 0) {
+		return true
+	}
+	const now = Date.now()
+	const windowStart = now - 1000
+	const prior = wsRateState.get(socket) ?? []
+	const recent = prior.filter((t) => t > windowStart)
+	if (recent.length >= WS_RATE_LIMIT_PER_SEC) {
+		wsRateState.set(socket, recent)
+		return false
+	}
+	recent.push(now)
+	wsRateState.set(socket, recent)
+	return true
+}
 
 function trackWebSocket(sessionId: string, socket: Duplex): void {
 	wsConnections.set(sessionId, socket)
@@ -666,13 +755,18 @@ function encodeWebSocketFrame(payload: Buffer): Buffer {
 
 /**
  * Decode a single WebSocket frame from a client (masked).
- * Returns { payload, opcode, consumed } on success, or null if more data is needed.
- * payload is null for non-text frames (close, ping, pong, binary).
- * consumed is the number of bytes to advance the buffer regardless of frame type.
+ * Returns:
+ *  - `null` if more bytes are needed (buffer too short),
+ *  - `{ tooLarge: true, consumed }` if the advertised payload length exceeds
+ *    WS_MAX_FRAME_BYTES — the caller MUST close with code 1009 and destroy
+ *    the socket (no attempt is made to read the oversize payload),
+ *  - `{ payload, opcode, consumed }` on success; payload is `null` for
+ *    non-text frames (close, binary, continuation).
  */
-function decodeWebSocketFrame(
-	buf: Buffer,
-): { payload: string | null; opcode: number; consumed: number } | null {
+type DecodeResult =
+	| { payload: string | null; opcode: number; consumed: number }
+	| { tooLarge: true; consumed: number }
+function decodeWebSocketFrame(buf: Buffer): DecodeResult | null {
 	if (buf.length < 2) return null
 
 	const opcode = buf[0] & 0x0f
@@ -689,6 +783,12 @@ function decodeWebSocketFrame(
 		// Read lower 32 bits (messages > 4GB are not expected)
 		payloadLen = buf.readUInt32BE(6)
 		offset = 10
+	}
+
+	// Size-cap check happens BEFORE we try to read the full payload.
+	if (payloadLen > WS_MAX_FRAME_BYTES) {
+		// Consume the header so the caller can close cleanly.
+		return { tooLarge: true, consumed: offset + (isMasked ? 4 : 0) }
 	}
 
 	let mask: Buffer | null = null
@@ -722,22 +822,33 @@ function decodeWebSocketFrame(
 
 /** Handle an incoming WebSocket message: parse and route to the appropriate update function */
 function handleWebSocketMessage(sessionId: string, raw: string): void {
-	let msg: Record<string, unknown>
+	let parsed: unknown
 	try {
-		msg = JSON.parse(raw)
+		parsed = JSON.parse(raw)
 	} catch {
+		const err: WsServerMessage = { type: "error", error: "invalid_json" }
+		sendToWebSocket(sessionId, err)
 		return
 	}
+
+	const schemaResult = WsClientMessageSchema.safeParse(parsed)
+	if (!schemaResult.success) {
+		const err: WsServerMessage = {
+			type: "error",
+			error: "invalid_ws_frame",
+		}
+		sendToWebSocket(sessionId, err)
+		return
+	}
+	const msg = schemaResult.data
 
 	const session = getSession(sessionId)
 	if (!session) return
 
-	const type = msg.type as string | undefined
-
-	if (session.session_type === "review" && type === "decide") {
+	if (session.session_type === "review" && msg.type === "decide") {
 		const decision =
 			msg.decision === "approved" ? "approved" : "changes_requested"
-		const feedback = (msg.feedback as string) ?? ""
+		const feedback = msg.feedback ?? ""
 		const annotations = msg.annotations as ReviewAnnotations | undefined
 		updateSession(sessionId, {
 			status: "decided" as never,
@@ -745,41 +856,52 @@ function handleWebSocketMessage(sessionId: string, raw: string): void {
 			feedback,
 			annotations,
 		})
-		sendToWebSocket(sessionId, { ok: true, decision, feedback })
-	} else if (session.session_type === "question" && type === "answer") {
-		const answers = msg.answers as QuestionAnswer[] | undefined
-		if (answers) {
-			const feedback = (msg.feedback as string) ?? ""
-			const annotations = msg.annotations as QuestionAnnotations | undefined
-			updateQuestionSession(sessionId, {
-				status: "answered",
-				answers,
-				feedback,
-				annotations,
-			})
-			sendToWebSocket(sessionId, { ok: true })
+		const ack: WsServerMessage = {
+			type: "ack",
+			ok: true,
+			decision,
+			feedback,
 		}
-	} else if (session.session_type === "design_direction" && type === "select") {
+		sendToWebSocket(sessionId, ack)
+	} else if (session.session_type === "question" && msg.type === "answer") {
+		const annotations = msg.annotations as QuestionAnnotations | undefined
+		updateQuestionSession(sessionId, {
+			status: "answered",
+			answers: msg.answers as QuestionAnswer[],
+			feedback: msg.feedback ?? "",
+			annotations,
+		})
+		const ack: WsServerMessage = { type: "ack", ok: true }
+		sendToWebSocket(sessionId, ack)
+	} else if (
+		session.session_type === "design_direction" &&
+		msg.type === "select"
+	) {
 		if (session.status === "answered") {
-			sendToWebSocket(sessionId, { error: "Direction already selected" })
+			const err: WsServerMessage = {
+				type: "error",
+				error: "Direction already selected",
+			}
+			sendToWebSocket(sessionId, err)
 			return
 		}
-		const archetype = msg.archetype as string
-		const parameters = msg.parameters as Record<string, number>
-		const comments = (msg.comments as string | undefined) || undefined
 		const annotations = msg.annotations as
 			| {
 					screenshot?: string
 					pins?: Array<{ x: number; y: number; text: string }>
 			  }
 			| undefined
-		if (archetype && parameters) {
-			updateDesignDirectionSession(sessionId, {
-				status: "answered",
-				selection: { archetype, parameters, comments, annotations },
-			})
-			sendToWebSocket(sessionId, { ok: true })
-		}
+		updateDesignDirectionSession(sessionId, {
+			status: "answered",
+			selection: {
+				archetype: msg.archetype,
+				parameters: msg.parameters,
+				comments: msg.comments,
+				annotations,
+			},
+		})
+		const ack: WsServerMessage = { type: "ack", ok: true }
+		sendToWebSocket(sessionId, ack)
 	}
 }
 
@@ -846,6 +968,12 @@ function handleUpgrade(
 			const result = decodeWebSocketFrame(frameBuffer)
 			if (result === null) break // need more data
 			frameBuffer = frameBuffer.subarray(result.consumed)
+			if ("tooLarge" in result) {
+				// Frame exceeded WS_MAX_FRAME_BYTES — close 1009 and bail.
+				sendCloseFrame(socket, WS_CLOSE_MESSAGE_TOO_BIG)
+				frameBuffer = Buffer.alloc(0)
+				break
+			}
 			if (result.opcode === 0x08) {
 				// Close frame — send close back and tear down (RFC 6455 §5.5.1)
 				const closeFrame = Buffer.alloc(2)
@@ -862,6 +990,12 @@ function handleUpgrade(
 				pongHeader[1] = 0 // no payload
 				socket.write(pongHeader)
 			} else if (result.payload !== null) {
+				// Rate-limit BEFORE dispatch so abusive clients never touch session state.
+				if (!allowWsFrame(socket)) {
+					sendCloseFrame(socket, WS_CLOSE_POLICY_VIOLATION)
+					frameBuffer = Buffer.alloc(0)
+					return
+				}
 				handleWebSocketMessage(sessionId, result.payload)
 			}
 		}
@@ -967,7 +1101,11 @@ function handleFeedbackGet(intent: string, stage: string, url: URL): Response {
 		items = items.filter((i) => i.status === statusFilter)
 	}
 
-	return Response.json({
+	// state-tools.FeedbackItem exposes status/origin/author_type as `string`;
+	// haiku-api's FeedbackItemSchema narrows them to enum literals. The values
+	// written on disk are always valid (writeFeedbackFile enforces the set),
+	// so a cast through the list-response mapper is sound.
+	const payload: FeedbackListResponse = {
 		intent,
 		stage,
 		count: items.length,
@@ -975,27 +1113,19 @@ function handleFeedbackGet(intent: string, stage: string, url: URL): Response {
 			feedback_id: i.id,
 			title: i.title,
 			body: i.body,
-			status: i.status,
-			origin: i.origin,
+			status: i.status as FeedbackListResponse["items"][number]["status"],
+			origin: i.origin as FeedbackListResponse["items"][number]["origin"],
 			author: i.author,
-			author_type: i.author_type,
+			author_type:
+				i.author_type as FeedbackListResponse["items"][number]["author_type"],
 			created_at: i.created_at,
 			visit: i.visit,
 			source_ref: i.source_ref,
 			closed_by: i.closed_by,
 		})),
-	})
+	}
+	return Response.json(payload)
 }
-
-const FeedbackCreateSchema = z.object({
-	title: z.string().min(1).max(120),
-	body: z.string().min(1),
-	origin: z
-		.enum(FEEDBACK_ORIGINS as unknown as [string, ...string[]])
-		.optional()
-		.default("user-visual"),
-	source_ref: z.string().nullable().optional(),
-})
 
 async function handleFeedbackPost(
 	intent: string,
@@ -1015,23 +1145,19 @@ async function handleFeedbackPost(
 		return Response.json({ error: "Intent not found" }, { status: 404 })
 	}
 
+	// Cross-session mutation guard (soft for POST in v1 — logged-only if the
+	// header is absent; hard 403 on mismatch).
+	const authResult = verifyFeedbackMutationAuth(req, intent)
+	if (!authResult.ok) return authResult.response
+
 	// Parse the body FIRST so the guard and the write run contiguously with
 	// no awaits between them. This closes a concurrency race where two
 	// concurrent HTTP handlers could interleave guard → await → write and
 	// end up writing on each other's branch.
-	let body: z.infer<typeof FeedbackCreateSchema>
-	try {
-		body = FeedbackCreateSchema.parse(await req.json())
-	} catch (err) {
-		const details =
-			err instanceof z.ZodError
-				? err.errors.map((e) => e.message).join("; ")
-				: "Invalid JSON"
-		return Response.json(
-			{ error: "Invalid request body", details },
-			{ status: 400 },
-		)
-	}
+	const parsed = await parseJsonBody(req, FeedbackCreateRequestSchema, {
+		maxBytes: FEEDBACK_BODY_MAX_BYTES,
+	})
+	if (!parsed.ok) return parsed.response
 
 	// Align the checkout with the stage branch. No awaits between here and
 	// the write, so Node's single-threaded event loop ensures atomicity
@@ -1051,36 +1177,23 @@ async function handleFeedbackPost(
 	}
 
 	const result = writeFeedbackFile(intent, stage, {
-		title: body.title,
-		body: body.body,
-		origin: body.origin,
+		title: parsed.data.title,
+		body: parsed.data.body,
+		origin: parsed.data.origin,
 		author: "user",
-		source_ref: body.source_ref ?? null,
+		source_ref: parsed.data.source_ref ?? null,
 	})
 
 	gitCommitState(`feedback: create ${result.feedback_id} in ${stage}`)
 
-	return Response.json(
-		{
-			feedback_id: result.feedback_id,
-			file: result.file,
-			status: "pending",
-			message: `Feedback ${result.feedback_id} created.`,
-		},
-		{ status: 201 },
-	)
+	const response: FeedbackCreateResponse = {
+		feedback_id: result.feedback_id,
+		file: result.file,
+		status: "pending",
+		message: `Feedback ${result.feedback_id} created.`,
+	}
+	return Response.json(response, { status: 201 })
 }
-
-const FeedbackUpdateSchema = z
-	.object({
-		status: z
-			.enum(FEEDBACK_STATUSES as unknown as [string, ...string[]])
-			.optional(),
-		closed_by: z.string().optional(),
-	})
-	.refine((data) => data.status !== undefined || data.closed_by !== undefined, {
-		message: "At least one of 'status' or 'closed_by' must be provided",
-	})
 
 async function handleFeedbackPut(
 	intent: string,
@@ -1101,31 +1214,17 @@ async function handleFeedbackPut(
 		return Response.json({ error: "Intent not found" }, { status: 404 })
 	}
 
+	// Cross-session mutation guard — hard 403 on session mismatch.
+	const authResult = verifyFeedbackMutationAuth(req, intent)
+	if (!authResult.ok) return authResult.response
+
 	// Parse body FIRST so the guard and write run contiguously (no awaits
 	// between them). Prevents interleaving when two concurrent handlers
 	// would otherwise switch branches on each other.
-	let body: z.infer<typeof FeedbackUpdateSchema>
-	try {
-		body = FeedbackUpdateSchema.parse(await req.json())
-	} catch (err) {
-		if (err instanceof z.ZodError) {
-			const refineError = err.errors.find((e) => e.code === "custom")
-			if (refineError) {
-				return Response.json({ error: refineError.message }, { status: 400 })
-			}
-			return Response.json(
-				{
-					error: "Invalid request body",
-					details: err.errors.map((e) => e.message).join("; "),
-				},
-				{ status: 400 },
-			)
-		}
-		return Response.json(
-			{ error: "Invalid request body", details: "Invalid JSON" },
-			{ status: 400 },
-		)
-	}
+	const parsed = await parseJsonBody(req, FeedbackUpdateRequestSchema, {
+		maxBytes: FEEDBACK_BODY_MAX_BYTES,
+	})
+	if (!parsed.ok) return parsed.response
 
 	// Align checkout with the stage branch before validateStage or any read.
 	const updateBranchGuard = ensureOnStageBranch(intent, stage)
@@ -1147,7 +1246,7 @@ async function handleFeedbackPut(
 		intent,
 		stage,
 		feedbackId,
-		{ status: body.status, closed_by: body.closed_by },
+		{ status: parsed.data.status, closed_by: parsed.data.closed_by },
 		"human",
 	)
 
@@ -1164,17 +1263,19 @@ async function handleFeedbackPut(
 
 	gitCommitState(`feedback: update ${feedbackId} in ${stage}`)
 
-	return Response.json({
+	const response: FeedbackUpdateResponse = {
 		feedback_id: feedbackId,
 		updated_fields: result.updated_fields,
 		message: `Feedback ${feedbackId} updated.`,
-	})
+	}
+	return Response.json(response)
 }
 
 async function handleFeedbackDelete(
 	intent: string,
 	stage: string,
 	feedbackId: string,
+	req: Request,
 ): Promise<Response> {
 	if (!(isValidSlug(intent) && isValidSlug(stage) && isValidSlug(feedbackId))) {
 		return Response.json(
@@ -1188,6 +1289,10 @@ async function handleFeedbackDelete(
 	if (!validateIntent(intent)) {
 		return Response.json({ error: "Intent not found" }, { status: 404 })
 	}
+
+	// Cross-session mutation guard — hard 403 on session mismatch.
+	const authResult = verifyFeedbackMutationAuth(req, intent)
+	if (!authResult.ok) return authResult.response
 
 	// Align checkout with the stage branch before validateStage or any read.
 	const deleteBranchGuard = ensureOnStageBranch(intent, stage)
@@ -1230,11 +1335,59 @@ async function handleFeedbackDelete(
 
 	gitCommitState(`feedback: delete ${feedbackId} from ${stage}`)
 
-	return Response.json({
+	const response: FeedbackDeleteResponse = {
 		feedback_id: feedbackId,
 		deleted: true,
 		message: `Feedback ${feedbackId} deleted.`,
-	})
+	}
+	return Response.json(response)
+}
+
+// ─── Cross-session feedback mutation guard ──────────────────────────────────
+//
+// The review UI advertises its session via the `X-Haiku-Session-Id` header
+// on mutating feedback calls (POST/PUT/DELETE). When present, the session
+// MUST belong to the same intent as the URL path — otherwise we 403.
+//
+// For v1 the header is OPTIONAL (the review-app still sends no header from
+// unit-03-). Absence does not 403, but it is logged at warn level so the
+// follow-up plumbing in unit-08 can flip the default to strict.
+
+function verifyFeedbackMutationAuth(
+	req: Request,
+	intent: string,
+): { ok: true } | { ok: false; response: Response } {
+	const sessionHeader = req.headers.get("x-haiku-session-id")
+	if (!sessionHeader) {
+		// Soft gate — log without body content (allow-listed fields only).
+		console.error(
+			"[feedback-auth] mutation without X-Haiku-Session-Id (intent=%s)",
+			intent,
+		)
+		return { ok: true }
+	}
+	const session = getSession(sessionHeader)
+	if (!session) {
+		return {
+			ok: false,
+			response: Response.json(
+				{ error: "forbidden_cross_session", reason: "unknown_session" },
+				{ status: 403 },
+			),
+		}
+	}
+	const sessionIntent =
+		session.session_type === "review" ? session.intent_slug : undefined
+	if (sessionIntent !== intent) {
+		return {
+			ok: false,
+			response: Response.json(
+				{ error: "forbidden_cross_session", reason: "intent_mismatch" },
+				{ status: 403 },
+			),
+		}
+	}
+	return { ok: true }
 }
 
 // ─── Review current state endpoint ──────────────────────────────────────
@@ -1363,14 +1516,101 @@ function handleReviewCurrent(): Response {
 		}
 	}
 
-	return Response.json({
+	const payload: ReviewCurrentPayload = {
 		intent: activeIntent,
 		stage: activeStage,
 		phase: currentPhase,
 		units,
 		feedback_summary: feedbackSummary,
 		stages,
-	})
+	}
+	return Response.json(payload)
+}
+
+// ─── Revisit endpoint ───────────────────────────────────────────────────
+//
+// POST /api/revisit/:sessionId — the review UI asks the FSM to roll back to
+// an earlier stage. Body carries optional `stage` (explicit target) and
+// optional `reasons` (each becomes a feedback file before the rollback).
+//
+// Bridges straight to the orchestrator's `haiku_revisit` handler so the MCP
+// tool path and the HTTP path share identical semantics.
+
+async function handleRevisitPost(
+	sessionId: string,
+	req: Request,
+): Promise<Response> {
+	const session = getSession(sessionId)
+	if (!session || session.session_type !== "review") {
+		return new Response("Session not found", { status: 404 })
+	}
+	if (!session.intent_slug) {
+		return Response.json(
+			{ error: "Session has no intent context" },
+			{ status: 409 },
+		)
+	}
+
+	const parsed = await parseJsonBody(req, RevisitRequestSchema)
+	if (!parsed.ok) return parsed.response
+
+	const args: {
+		intent: string
+		stage?: string
+		reasons?: Array<{ title: string; body: string }>
+	} = { intent: session.intent_slug }
+	if (parsed.data.stage) args.stage = parsed.data.stage
+	if (parsed.data.reasons) args.reasons = parsed.data.reasons
+
+	const toolResult = await handleOrchestratorTool("haiku_revisit", args)
+
+	// handleOrchestratorTool returns `{ content: [{ type: "text", text }], isError? }`.
+	// The text is either JSON-encoded action payload or an "Error: …" string.
+	const text = toolResult.content
+		.filter((c) => c.type === "text")
+		.map((c) => (c as { text: string }).text)
+		.join("\n")
+
+	if (toolResult.isError) {
+		return Response.json(
+			{ error: "revisit_failed", detail: text },
+			{ status: 409 },
+		)
+	}
+
+	// Best-effort decode: the orchestrator's haiku_revisit handler returns a
+	// JSON blob on success. If parsing fails, surface the raw text so the
+	// client can still read it.
+	let action = "revisit"
+	let stage: string | undefined
+	let feedbackCreated: string[] | undefined
+	let message = text
+
+	try {
+		const parsedAction = JSON.parse(text) as Record<string, unknown>
+		action =
+			typeof parsedAction.action === "string" ? parsedAction.action : action
+		if (typeof parsedAction.stage === "string") stage = parsedAction.stage
+		if (Array.isArray(parsedAction.feedback_created)) {
+			feedbackCreated = parsedAction.feedback_created.filter(
+				(v): v is string => typeof v === "string",
+			)
+		}
+		if (typeof parsedAction.message === "string") {
+			message = parsedAction.message
+		}
+	} catch {
+		// non-JSON → keep defaults; `message` already carries the text
+	}
+
+	const response: RevisitResponse = {
+		ok: true,
+		action,
+		stage,
+		feedback_created: feedbackCreated,
+		message,
+	}
+	return Response.json(response)
 }
 
 function handleRequest(req: Request): Response | Promise<Response> {
@@ -1477,6 +1717,12 @@ function handleRequest(req: Request): Response | Promise<Response> {
 		return handleReviewCurrent()
 	}
 
+	// POST /api/revisit/:sessionId — review UI → FSM rollback
+	const revisitMatch = path.match(/^\/api\/revisit\/([^/]+)$/)
+	if (revisitMatch && req.method === "POST") {
+		return handleRevisitPost(revisitMatch[1], req)
+	}
+
 	// ─── Feedback CRUD ─────────────────────────────────────────────────
 
 	// GET /api/feedback/:intent/:stage
@@ -1509,6 +1755,7 @@ function handleRequest(req: Request): Response | Promise<Response> {
 			feedbackItemMatch[1],
 			feedbackItemMatch[2],
 			feedbackItemMatch[3],
+			req,
 		)
 	}
 
@@ -1518,6 +1765,31 @@ function handleRequest(req: Request): Response | Promise<Response> {
 	}
 
 	return new Response("Not Found", { status: 404 })
+}
+
+/**
+ * Loopback address assertion — v1 transport invariant.
+ *
+ * Every route in haiku-api/routes.ts declares `transport: 'loopback'`.
+ * The listening socket MUST bind to 127.0.0.1 or ::1. A non-loopback bind
+ * is treated as a security incident: the process exits non-zero so the
+ * operator sees the failure rather than silently exposing the review UI
+ * on a public interface.
+ *
+ * The assertion is gated by `HAIKU_TRANSPORT_ASSERT` (default on). Tests
+ * that want to exercise the failure path spawn a child process and can
+ * force a non-loopback bind via `HAIKU_FORCE_BIND_ADDR`.
+ */
+function assertLoopbackBind(address: string): void {
+	if (process.env.HAIKU_TRANSPORT_ASSERT === "0") return
+	const loopback = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"])
+	if (!loopback.has(address)) {
+		console.error(
+			`FATAL: Review HTTP server bound to non-loopback address '${address}'. ` +
+				"v1 transport invariant requires loopback-only; terminating.",
+		)
+		process.exit(1)
+	}
 }
 
 export async function startHttpServer(): Promise<number> {
@@ -1534,14 +1806,17 @@ export async function startHttpServer(): Promise<number> {
 		try {
 			await listenOnPort(port)
 			// For port 0, the OS assigns the actual port — read it from the server
-			actualPort =
-				port === 0
-					? ((httpServer?.address() as { port: number })?.port ?? port)
-					: port
+			const addr = httpServer?.address()
+			if (addr && typeof addr === "object") {
+				actualPort = addr.port
+				assertLoopbackBind(addr.address)
+			} else {
+				actualPort = port === 0 ? port : port
+			}
 			console.error(
 				`Review HTTP server listening on http://127.0.0.1:${actualPort}`,
 			)
-			return actualPort
+			return actualPort as number
 		} catch (err: unknown) {
 			if (
 				err instanceof Error &&
@@ -1579,10 +1854,34 @@ function listenOnPort(port: number): Promise<void> {
 			}
 
 			let body: ArrayBuffer | null = null
+			let tooLarge = false
 			if (req.method !== "GET" && req.method !== "HEAD") {
+				// Stream-count bytes so oversize bodies get rejected with 413 before
+				// we allocate the full buffer. The per-route cap (e.g. feedback
+				// 128 KiB) is tighter and enforced inside parseJsonBody.
 				const chunks: Buffer[] = []
+				let total = 0
 				for await (const chunk of req) {
-					chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk)
+					const buf =
+						typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer)
+					total += buf.length
+					if (total > DEFAULT_BODY_MAX_BYTES) {
+						tooLarge = true
+						// Drain remaining chunks so the client connection stays healthy,
+						// then stop accumulating.
+						break
+					}
+					chunks.push(buf)
+				}
+				if (tooLarge) {
+					res.writeHead(413, { "Content-Type": "application/json" })
+					res.end(
+						JSON.stringify({
+							error: "payload_too_large",
+							max_bytes: DEFAULT_BODY_MAX_BYTES,
+						}),
+					)
+					return
 				}
 				const buf = Buffer.concat(chunks)
 				body = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
@@ -1606,7 +1905,15 @@ function listenOnPort(port: number): Promise<void> {
 				const responseBody = await webResponse.arrayBuffer()
 				res.end(Buffer.from(responseBody))
 			} catch (err) {
-				console.error("HTTP handler error:", err)
+				// No body content is logged by default — only the error message
+				// and the request path. Both are in the allow-list below. Any
+				// addition here must be reviewed for leak potential.
+				console.error(
+					"[http] handler error method=%s path=%s err=%s",
+					req.method,
+					req.url,
+					err instanceof Error ? err.message : String(err),
+				)
 				res.writeHead(500)
 				res.end("Internal Server Error")
 			}
@@ -1621,7 +1928,10 @@ function listenOnPort(port: number): Promise<void> {
 			reject(err)
 		})
 
-		server.listen(port, "127.0.0.1", () => {
+		// Bind address: default loopback. Test harnesses may override via
+		// HAIKU_FORCE_BIND_ADDR to exercise the transport-invariant exit path.
+		const bindAddr = process.env.HAIKU_FORCE_BIND_ADDR || "127.0.0.1"
+		server.listen(port, bindAddr, () => {
 			httpServer = server
 			resolve()
 		})

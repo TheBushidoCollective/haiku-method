@@ -18,14 +18,20 @@ inputs:
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
 status: active
 bolt: 1
-hat: planner
+hat: builder
 started_at: '2026-04-21T06:58:35Z'
-hat_started_at: '2026-04-21T06:58:35Z'
+hat_started_at: '2026-04-21T07:04:11Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T06:58:35Z'
+    completed_at: '2026-04-21T07:04:11Z'
+    result: advance
+  - hat: builder
+    started_at: '2026-04-21T07:04:11Z'
     completed_at: null
     result: null
+outputs:
+  - stages/development/artifacts/unit-05-tactical-plan.md
 ---
 # A11y foundations
 

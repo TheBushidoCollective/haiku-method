@@ -12,9 +12,9 @@ inputs:
   - knowledge/ARCHITECTURE.md
 status: active
 bolt: 2
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T05:00:32Z'
-hat_started_at: '2026-04-21T05:52:52Z'
+hat_started_at: '2026-04-21T06:12:23Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T05:00:32Z'
@@ -39,6 +39,10 @@ iterations:
       self-certify past spec contracts.
   - hat: builder
     started_at: '2026-04-21T05:52:52Z'
+    completed_at: '2026-04-21T06:12:23Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T06:12:23Z'
     completed_at: null
     result: null
 outputs:
@@ -87,18 +91,21 @@ outputs:
   - packages/haiku-ui/test-fixtures/direction-session.json
   - packages/haiku-ui/test-fixtures/question-session.json
   - packages/haiku-ui/test-fixtures/review-session.json
-  - packages/haiku-ui/tests/parity.spec.ts
+  - packages/haiku-ui/tests/parity.spec.tsx
+  - packages/haiku-ui/tests/dom-parity-transformer.ts
+  - packages/haiku-ui/tests/setup.ts
   - packages/haiku-ui/tests/use-session-websocket.test.tsx
+  - packages/haiku-ui/tests/__snapshots__/parity.spec.tsx.snap
   - packages/haiku-ui/tsconfig.json
   - packages/haiku-ui/vite.config.ts
   - packages/haiku-ui/vitest.config.ts
   - packages/haiku/package.json
-  - packages/haiku/review-app/package-lock.json
-  - packages/haiku/review-app/src/types.ts
-  - packages/haiku/scripts/build-review-app.mjs
   - packages/haiku/scripts/bundle-haiku-ui.mjs
   - packages/haiku/scripts/compare-bundle.mjs
   - packages/haiku/src/http.ts
+  - packages/haiku/review-app/package-lock.json
+  - packages/haiku/review-app/src/types.ts
+  - packages/haiku/scripts/build-review-app.mjs
 ---
 # Extract haiku-ui package
 

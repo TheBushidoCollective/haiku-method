@@ -15,14 +15,20 @@ inputs:
   - stages/design/artifacts/stage-progress-strip.html
 status: active
 bolt: 1
-hat: planner
+hat: builder
 started_at: '2026-04-21T07:26:57Z'
-hat_started_at: '2026-04-21T07:26:57Z'
+hat_started_at: '2026-04-21T07:33:19Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T07:26:57Z'
+    completed_at: '2026-04-21T07:33:19Z'
+    result: advance
+  - hat: builder
+    started_at: '2026-04-21T07:33:19Z'
     completed_at: null
     result: null
+outputs:
+  - stages/development/artifacts/unit-06-tactical-plan.md
 ---
 # Shell and routing refactor
 

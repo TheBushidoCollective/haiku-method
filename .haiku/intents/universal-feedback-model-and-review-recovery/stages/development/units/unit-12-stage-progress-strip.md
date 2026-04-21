@@ -22,6 +22,7 @@ iterations:
     started_at: '2026-04-21T07:26:59Z'
     completed_at: null
     result: null
+outputs: '["stages/development/artifacts/unit-12-tactical-plan.md"]'
 ---
 # StageProgressStrip
 

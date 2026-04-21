@@ -19,7 +19,7 @@
  * single-key primitive.
  */
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 
 // ── Registry ───────────────────────────────────────────────────────────────
 
@@ -195,7 +195,9 @@ export class KeyboardShortcutConflict extends Error {
 	public readonly key: string
 	public readonly scope: string
 	constructor(key: string, scope: string, existingAction?: string) {
-		const suffix = existingAction ? ` (existing handler: ${existingAction})` : ""
+		const suffix = existingAction
+			? ` (existing handler: ${existingAction})`
+			: ""
 		super(
 			`KeyboardShortcutConflict: duplicate binding for key="${key}" scope="${scope}"${suffix}`,
 		)
@@ -293,6 +295,18 @@ export function useShortcut(
 	handler: (event: KeyboardEvent) => void,
 	opts: UseShortcutOptions,
 ): void {
+	// Stash the latest handler/guard/allowInInput in refs so the registered
+	// callback always sees the most recent closure without re-registering the
+	// hook (which would thrash the registry on every parent render).
+	const handlerRef = useRef(handler)
+	const guardRef = useRef(opts.guard)
+	const allowInInputRef = useRef(opts.allowInInput)
+	useEffect(() => {
+		handlerRef.current = handler
+		guardRef.current = opts.guard
+		allowInInputRef.current = opts.allowInInput
+	})
+
 	useEffect(() => {
 		const k = registryKey(key, opts.scope)
 		if (registry.has(k)) {
@@ -306,11 +320,16 @@ export function useShortcut(
 			}
 			return
 		}
-		registry.set(k, {
-			handler,
-			guard: opts.guard,
-			allowInInput: opts.allowInInput,
+		const entry: RegistryEntry = {
+			handler: (event) => handlerRef.current(event),
+			guard: () => (guardRef.current ? guardRef.current() : true),
+		}
+		Object.defineProperty(entry, "allowInInput", {
+			get() {
+				return allowInInputRef.current
+			},
 		})
+		registry.set(k, entry)
 		listenerRefCount += 1
 		installListenerIfNeeded()
 
@@ -319,9 +338,6 @@ export function useShortcut(
 			listenerRefCount = Math.max(0, listenerRefCount - 1)
 			uninstallListenerIfUnused()
 		}
-		// We deliberately do NOT depend on handler/guard identity — the hook is
-		// "register once per key+scope"; identity churn would thrash the registry.
-		// biome-ignore lint/correctness/useExhaustiveDependencies: see above
 	}, [key, opts.scope])
 }
 

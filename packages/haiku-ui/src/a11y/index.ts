@@ -9,31 +9,7 @@
  * canvas, question page) consumes primitives from this module.
  */
 
-export {
-	Aside,
-	FooterBar,
-	Header,
-	Main,
-	Nav,
-} from "./landmarks"
-export type {
-	AsideProps,
-	FooterBarProps,
-	HeaderProps,
-	MainProps,
-	NavProps,
-} from "./landmarks"
-
-export {
-	ASSERTIVE_REGION_ID,
-	LiveRegion,
-	LiveRegionShell,
-	POLITE_REGION_ID,
-	announce,
-	useAnnounce,
-} from "./live-regions"
-export type { LiveRegionProps, Severity } from "./live-regions"
-
+export type { FocusRingVariant } from "./focus"
 export {
 	focusRingClass,
 	focusRingCompactClass,
@@ -41,15 +17,34 @@ export {
 	focusVisibleOnly,
 	useFocusTrap,
 } from "./focus"
-export type { FocusRingVariant } from "./focus"
-
+export type { ShortcutBinding, UseShortcutOptions } from "./keyboard"
 export {
 	KEYBOARD_SHORTCUT_REGISTRY,
 	KeyboardShortcutConflict,
 	useShortcut,
 } from "./keyboard"
-export type { ShortcutBinding, UseShortcutOptions } from "./keyboard"
-
-export { touchTargetClass, touchTargetHitAreaClass } from "./touch-target"
-
+export type {
+	AsideProps,
+	FooterBarProps,
+	HeaderProps,
+	MainProps,
+	NavProps,
+} from "./landmarks"
+export {
+	Aside,
+	FooterBar,
+	Header,
+	Main,
+	Nav,
+} from "./landmarks"
+export type { LiveRegionProps, Severity } from "./live-regions"
+export {
+	ASSERTIVE_REGION_ID,
+	announce,
+	LiveRegion,
+	LiveRegionShell,
+	POLITE_REGION_ID,
+	useAnnounce,
+} from "./live-regions"
 export { motionSafeClass, useReducedMotion } from "./reduced-motion"
+export { touchTargetClass, touchTargetHitAreaClass } from "./touch-target"

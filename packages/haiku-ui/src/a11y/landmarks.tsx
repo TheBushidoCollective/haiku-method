@@ -16,11 +16,7 @@
  * units (e.g., skip-link consumers moving focus to <Main>) can call `.focus()`.
  */
 
-import {
-	forwardRef,
-	type HTMLAttributes,
-	type ReactNode,
-} from "react"
+import { forwardRef, type HTMLAttributes, type ReactNode } from "react"
 
 // ── <Header> ───────────────────────────────────────────────────────────────
 
@@ -31,6 +27,7 @@ export const Header = forwardRef<HTMLElement, HeaderProps>(function Header(
 	ref,
 ) {
 	return (
+		// biome-ignore lint/a11y/noInteractiveElementToNoninteractiveRole: explicit role="banner" per aria-landmark-spec.md §1 row 1 (belt-and-suspenders, IE11 fallback).
 		<header {...rest} ref={ref} role="banner">
 			{children}
 		</header>
@@ -39,7 +36,8 @@ export const Header = forwardRef<HTMLElement, HeaderProps>(function Header(
 
 // ── <Nav> ──────────────────────────────────────────────────────────────────
 
-export interface NavProps extends Omit<HTMLAttributes<HTMLElement>, "aria-label"> {
+export interface NavProps
+	extends Omit<HTMLAttributes<HTMLElement>, "aria-label"> {
 	/** Required accessible name. Typical: "Stage progress". */
 	ariaLabel: string
 	children?: ReactNode
@@ -76,6 +74,7 @@ export const Main = forwardRef<HTMLElement, MainProps>(function Main(
 			{...rest}
 			ref={ref}
 			id="main-content"
+			// biome-ignore lint/a11y/noRedundantRoles: explicit role="main" per aria-landmark-spec.md §1 row 3 (IE11 fallback, belt-and-suspenders).
 			role="main"
 			aria-label={ariaLabel}
 			tabIndex={-1}
@@ -87,7 +86,8 @@ export const Main = forwardRef<HTMLElement, MainProps>(function Main(
 
 // ── <Aside> ────────────────────────────────────────────────────────────────
 
-export interface AsideProps extends Omit<HTMLAttributes<HTMLElement>, "aria-label"> {
+export interface AsideProps
+	extends Omit<HTMLAttributes<HTMLElement>, "aria-label"> {
 	/** Required accessible name. Typical: "Review sidebar". */
 	ariaLabel: string
 	children?: ReactNode
@@ -98,7 +98,13 @@ export const Aside = forwardRef<HTMLElement, AsideProps>(function Aside(
 	ref,
 ) {
 	return (
-		<aside {...rest} ref={ref} role="complementary" aria-label={ariaLabel}>
+		<aside
+			{...rest}
+			ref={ref}
+			// biome-ignore lint/a11y/noRedundantRoles: explicit role="complementary" per aria-landmark-spec.md §1 row 4 (spec: "MUST NOT be <div>", explicit role clarifies).
+			role="complementary"
+			aria-label={ariaLabel}
+		>
 			{children}
 		</aside>
 	)

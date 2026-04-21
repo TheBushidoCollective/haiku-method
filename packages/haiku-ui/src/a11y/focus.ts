@@ -11,7 +11,7 @@
  * discovery), swap it in then — not speculatively here.
  */
 
-import { useEffect, type RefObject } from "react"
+import { type RefObject, useEffect } from "react"
 
 // ── Canonical focus-ring tokens ────────────────────────────────────────────
 
@@ -80,11 +80,11 @@ export function focusVisibleOnly(className: string): string {
  * receive focus.
  */
 const TABBABLE_SELECTOR = [
-	'a[href]',
-	'button:not([disabled])',
+	"a[href]",
+	"button:not([disabled])",
 	'input:not([disabled]):not([type="hidden"])',
-	'select:not([disabled])',
-	'textarea:not([disabled])',
+	"select:not([disabled])",
+	"textarea:not([disabled])",
 	'[tabindex]:not([tabindex="-1"]):not([disabled])',
 ].join(",")
 

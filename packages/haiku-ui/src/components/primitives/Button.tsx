@@ -31,8 +31,7 @@ const variantDisabled: Record<ButtonVariant, string> = {
 		"bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed",
 	danger:
 		"bg-stone-100 text-stone-600 border border-stone-400 dark:bg-stone-800 dark:text-stone-300 dark:border-stone-500 cursor-not-allowed",
-	ghost:
-		"bg-transparent text-stone-500 dark:text-stone-400 cursor-not-allowed",
+	ghost: "bg-transparent text-stone-500 dark:text-stone-400 cursor-not-allowed",
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -62,7 +61,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 		return (
 			<button
 				{...rest}
-				// biome-ignore lint/a11y/useButtonType: type is explicitly forwarded via destructured default
 				type={type}
 				ref={ref}
 				disabled={disabled}

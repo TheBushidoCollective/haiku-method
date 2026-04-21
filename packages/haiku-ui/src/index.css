@@ -78,14 +78,21 @@
    MAY layer per-keyframe `animation: none` overrides for decorative
    pulses on top of this baseline. Using 0.01ms (not `none`) preserves the
    static end-state for transitions that convey state.
+
+   The `!important` declarations are mandated verbatim by the spec so this
+   baseline always wins over component-level transition/animation rules.
    ───────────────────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
 	*::after {
+		/* biome-ignore lint/complexity/noImportantStyles: required by motion-and-reduced-motion-spec.md §10.rule (must override component transitions). */
 		animation-duration: 0.01ms !important;
+		/* biome-ignore lint/complexity/noImportantStyles: required by motion-and-reduced-motion-spec.md §10.rule. */
 		animation-iteration-count: 1 !important;
+		/* biome-ignore lint/complexity/noImportantStyles: required by motion-and-reduced-motion-spec.md §10.rule. */
 		transition-duration: 0.01ms !important;
+		/* biome-ignore lint/complexity/noImportantStyles: required by motion-and-reduced-motion-spec.md §10.rule. */
 		scroll-behavior: auto !important;
 	}
 }

@@ -16,6 +16,23 @@ inputs:
   - stages/design/artifacts/skip-link-spec.html
   - stages/design/artifacts/touch-target-audit.md
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
+outputs:
+  - packages/haiku-ui/src/a11y/index.ts
+  - packages/haiku-ui/src/a11y/landmarks.tsx
+  - packages/haiku-ui/src/a11y/live-regions.tsx
+  - packages/haiku-ui/src/a11y/focus.ts
+  - packages/haiku-ui/src/a11y/keyboard.ts
+  - packages/haiku-ui/src/a11y/touch-target.ts
+  - packages/haiku-ui/src/a11y/reduced-motion.ts
+  - packages/haiku-ui/src/a11y/__tests__/matchMedia.stub.ts
+  - packages/haiku-ui/src/a11y/__tests__/landmarks.test.tsx
+  - packages/haiku-ui/src/a11y/__tests__/live-regions.test.tsx
+  - packages/haiku-ui/src/a11y/__tests__/focus.test.tsx
+  - packages/haiku-ui/src/a11y/__tests__/keyboard.test.tsx
+  - packages/haiku-ui/src/a11y/__tests__/touch-target.test.tsx
+  - packages/haiku-ui/src/a11y/__tests__/reduced-motion.test.tsx
+  - packages/haiku-ui/src/components/primitives/Button.tsx
+  - packages/haiku-ui/src/index.css
 status: pending
 bolt: 0
 hat: ""

@@ -11,6 +11,30 @@ inputs:
   - stages/development/state.json
   - knowledge/DESIGN-BRIEF.md
   - knowledge/DESIGN-TOKENS.md
+outputs:
+  - packages/haiku-api/package.json
+  - packages/haiku-api/tsconfig.json
+  - packages/haiku-api/README.md
+  - packages/haiku-api/src/index.ts
+  - packages/haiku-api/src/version.ts
+  - packages/haiku-api/src/routes.ts
+  - packages/haiku-api/src/openapi.ts
+  - packages/haiku-api/src/schemas/common.ts
+  - packages/haiku-api/src/schemas/review.ts
+  - packages/haiku-api/src/schemas/direction.ts
+  - packages/haiku-api/src/schemas/question.ts
+  - packages/haiku-api/src/schemas/feedback.ts
+  - packages/haiku-api/src/schemas/files.ts
+  - packages/haiku-api/src/schemas/session.ts
+  - packages/haiku-api/src/schemas/websocket.ts
+  - packages/haiku-api/scripts/emit-openapi.mjs
+  - packages/haiku-api/test/run-all.mjs
+  - packages/haiku-api/test/helpers.mjs
+  - packages/haiku-api/test/schemas.test.mjs
+  - packages/haiku-api/test/routes.test.mjs
+  - packages/haiku-api/test/openapi.test.mjs
+  - package.json
+  - package-lock.json
 status: pending
 bolt: 0
 hat: ""

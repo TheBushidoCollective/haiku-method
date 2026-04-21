@@ -45,6 +45,12 @@
 	--sidebar-width: 20rem;
 	--sidebar-width-xl: 24rem;
 	--content-max: 1400px;
+	/* Stage progress strip glyph sizes (unit-12) — canonical source:
+	   knowledge/DESIGN-TOKENS.md §1.7.1 + stages/design/artifacts/
+	   stage-progress-strip.html. Consumed via Tailwind arbitrary values:
+	   w-[var(--stage-glyph-circle)] / w-[var(--stage-glyph-diamond)]. */
+	--stage-glyph-circle: 20px;
+	--stage-glyph-diamond: 22px;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

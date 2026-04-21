@@ -15,9 +15,9 @@ inputs:
   - stages/design/artifacts/feedback-lifecycle-transitions.html
 status: active
 bolt: 1
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T07:27:01Z'
-hat_started_at: '2026-04-21T07:35:43Z'
+hat_started_at: '2026-04-21T07:39:08Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T07:27:01Z'
@@ -25,6 +25,10 @@ iterations:
     result: advance
   - hat: builder
     started_at: '2026-04-21T07:35:43Z'
+    completed_at: '2026-04-21T07:39:08Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T07:39:08Z'
     completed_at: null
     result: null
 outputs:

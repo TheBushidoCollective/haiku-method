@@ -38,6 +38,7 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: pending"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+            role="img"
           >
             pending
           </span>
@@ -89,6 +90,7 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: pending"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+            role="img"
           >
             pending
           </span>
@@ -140,6 +142,7 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: pending"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+            role="img"
           >
             pending
           </span>
@@ -191,6 +194,7 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: pending"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+            role="img"
           >
             pending
           </span>
@@ -264,6 +268,7 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: pending"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+            role="img"
           >
             pending
           </span>
@@ -315,6 +320,7 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: pending"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+            role="img"
           >
             pending
           </span>
@@ -370,12 +376,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: addressed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+            role="img"
           >
             addressed
           </span>
           <span
             aria-label="2 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             2
             x
@@ -428,12 +436,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: addressed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+            role="img"
           >
             addressed
           </span>
           <span
             aria-label="2 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             2
             x
@@ -486,12 +496,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: addressed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+            role="img"
           >
             addressed
           </span>
           <span
             aria-label="2 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             2
             x
@@ -544,12 +556,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: addressed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+            role="img"
           >
             addressed
           </span>
           <span
             aria-label="2 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             2
             x
@@ -632,12 +646,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: addressed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+            role="img"
           >
             addressed
           </span>
           <span
             aria-label="2 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             2
             x
@@ -690,12 +706,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: addressed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+            role="img"
           >
             addressed
           </span>
           <span
             aria-label="2 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             2
             x
@@ -752,12 +770,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: closed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+            role="img"
           >
             closed
           </span>
           <span
             aria-label="3 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             3
             x
@@ -810,12 +830,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: closed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+            role="img"
           >
             closed
           </span>
           <span
             aria-label="3 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             3
             x
@@ -868,12 +890,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: closed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+            role="img"
           >
             closed
           </span>
           <span
             aria-label="3 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             3
             x
@@ -926,12 +950,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: closed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+            role="img"
           >
             closed
           </span>
           <span
             aria-label="3 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             3
             x
@@ -1020,12 +1046,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: closed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+            role="img"
           >
             closed
           </span>
           <span
             aria-label="3 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             3
             x
@@ -1078,12 +1106,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: closed"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+            role="img"
           >
             closed
           </span>
           <span
             aria-label="3 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
+            role="img"
           >
             3
             x
@@ -1140,12 +1170,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: rejected"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+            role="img"
           >
             rejected
           </span>
           <span
             aria-label="4 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+            role="img"
           >
             4
             x
@@ -1198,12 +1230,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: rejected"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+            role="img"
           >
             rejected
           </span>
           <span
             aria-label="4 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+            role="img"
           >
             4
             x
@@ -1256,12 +1290,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: rejected"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+            role="img"
           >
             rejected
           </span>
           <span
             aria-label="4 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+            role="img"
           >
             4
             x
@@ -1314,12 +1350,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: rejected"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+            role="img"
           >
             rejected
           </span>
           <span
             aria-label="4 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+            role="img"
           >
             4
             x
@@ -1402,12 +1440,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: rejected"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+            role="img"
           >
             rejected
           </span>
           <span
             aria-label="4 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+            role="img"
           >
             4
             x
@@ -1460,12 +1500,14 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <span
             aria-label="Status: rejected"
             class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+            role="img"
           >
             rejected
           </span>
           <span
             aria-label="4 visits"
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+            role="img"
           >
             4
             x

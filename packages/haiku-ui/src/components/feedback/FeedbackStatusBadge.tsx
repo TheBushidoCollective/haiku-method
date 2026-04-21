@@ -28,8 +28,14 @@ export function FeedbackStatusBadge({
 	const classes = [BASE_CLASSES, feedbackStatusColors[status], className]
 		.filter(Boolean)
 		.join(" ")
+	// `role="img"` is the canonical non-live role that accepts aria-label on
+	// a non-interactive container — `<span>` with no role rejects aria-label
+	// per Biome's `useAriaPropsSupportedByRole` rule. We use img rather than
+	// `role="status"` because the latter is a live region and would re-
+	// announce on every re-render (DESIGN-BRIEF §2 status transitions drive
+	// their own `useAnnounce` call — the badge itself is passive).
 	return (
-		<span className={classes} aria-label={`Status: ${status}`}>
+		<span className={classes} role="img" aria-label={`Status: ${status}`}>
 			{status}
 		</span>
 	)

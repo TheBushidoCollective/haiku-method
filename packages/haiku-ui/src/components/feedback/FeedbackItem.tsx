@@ -46,10 +46,6 @@ export interface FeedbackItemProps {
 	onStatusChange?: (id: string, nextStatus: FeedbackStatus) => void
 	/** Optional delete handler — rendered only for closed/rejected items. */
 	onDelete?: (id: string) => void
-	/** For virtualized lists: total item count (WCAG list-size signal). */
-	ariaSetSize?: number
-	/** For virtualized lists: 1-based index in the full list. */
-	ariaPosInSet?: number
 	/** `style` prop from react-window virtualizer (absolute position). */
 	style?: React.CSSProperties
 	className?: string
@@ -72,8 +68,7 @@ const REOPEN_CLASSES =
 	"dark:bg-amber-900/20 dark:text-amber-300 dark:hover:bg-amber-900/40"
 
 const DELETE_CLASSES =
-	"text-red-600 hover:bg-red-50 " +
-	"dark:text-red-400 dark:hover:bg-red-900/20"
+	"text-red-600 hover:bg-red-50 " + "dark:text-red-400 dark:hover:bg-red-900/20"
 
 function statusAnnouncement(id: string, next: FeedbackStatus): string {
 	if (next === "rejected") return `Feedback ${id} marked as rejected`
@@ -85,17 +80,7 @@ function statusAnnouncement(id: string, next: FeedbackStatus): string {
 
 export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 	function FeedbackItem(
-		{
-			item,
-			isExpanded,
-			onToggle,
-			onStatusChange,
-			onDelete,
-			ariaSetSize,
-			ariaPosInSet,
-			style,
-			className,
-		},
+		{ item, isExpanded, onToggle, onStatusChange, onDelete, style, className },
 		forwardedRef,
 	): React.ReactElement {
 		const localCardRef = useRef<HTMLDivElement | null>(null)
@@ -132,8 +117,7 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 			// Checking both covers the jsdom case where button removal resets
 			// activeElement to <body> before the layout effect runs.
 			const hadFocusInside =
-				focusedBeforeChangeRef.current ||
-				card.contains(document.activeElement)
+				focusedBeforeChangeRef.current || card.contains(document.activeElement)
 			focusedBeforeChangeRef.current = false
 			if (hadFocusInside) {
 				card.focus()
@@ -152,14 +136,15 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 		)
 
 		const handleStatusChange = useCallback(
-			(next: FeedbackStatus) => (event: React.MouseEvent<HTMLButtonElement>) => {
-				event.stopPropagation()
-				const card = localCardRef.current
-				focusedBeforeChangeRef.current = Boolean(
-					card && card.contains(document.activeElement),
-				)
-				if (onStatusChange) onStatusChange(item.feedback_id, next)
-			},
+			(next: FeedbackStatus) =>
+				(event: React.MouseEvent<HTMLButtonElement>) => {
+					event.stopPropagation()
+					const card = localCardRef.current
+					focusedBeforeChangeRef.current = Boolean(
+						card?.contains(document.activeElement),
+					)
+					if (onStatusChange) onStatusChange(item.feedback_id, next)
+				},
 			[item.feedback_id, onStatusChange],
 		)
 
@@ -189,7 +174,7 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 			.join(" ")
 
 		return (
-			// biome-ignore lint/a11y/noStaticElementInteractions: feedback card is a disclosure toggle; nested interactive children (action buttons) preclude a native <button> wrapper
+			// biome-ignore lint/a11y/useSemanticElements: a native <button> cannot wrap the nested action buttons this card contains (invalid HTML). The disclosure pattern here uses role=button on the card root intentionally.
 			<div
 				ref={setCardRef}
 				data-testid="feedback-item"
@@ -198,8 +183,6 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 				role="button"
 				tabIndex={0}
 				aria-expanded={isExpanded}
-				aria-setsize={ariaSetSize}
-				aria-posinset={ariaPosInSet}
 				className={rootClasses}
 				style={style}
 				onClick={onToggle}
@@ -211,6 +194,7 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 					{item.visit > 1 && (
 						<span
 							className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none ${visitPillClass}`}
+							role="img"
 							aria-label={`${item.visit} visits`}
 						>
 							{item.visit}x

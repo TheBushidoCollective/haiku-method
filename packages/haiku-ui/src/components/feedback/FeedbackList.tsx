@@ -22,8 +22,8 @@
  */
 
 import { useCallback, useLayoutEffect, useRef, useState } from "react"
-import { FixedSizeList } from "react-window"
 import type { FixedSizeList as FixedSizeListType } from "react-window"
+import { FixedSizeList } from "react-window"
 import type { FeedbackItemData } from "../../types"
 import { FeedbackItem } from "./FeedbackItem"
 import type { FeedbackStatus } from "./tokens"
@@ -63,11 +63,21 @@ interface VirtualRowProps {
 	}
 }
 
-function VirtualRow({ index, style, data }: VirtualRowProps): React.ReactElement {
+function VirtualRow({
+	index,
+	style,
+	data,
+}: VirtualRowProps): React.ReactElement {
 	const item = data.items[index]
 	const isExpanded = data.expandedId === item.feedback_id
 	return (
-		<div style={style}>
+		// biome-ignore lint/a11y/useSemanticElements: react-window's FixedSizeList renders rows in an inner <div> — we cannot swap this virtualized row to a native <li> without controlling the parent list element (which would require innerElementType=ul across the virtualizer boundary).
+		<div
+			style={style}
+			role="listitem"
+			aria-setsize={data.items.length}
+			aria-posinset={index + 1}
+		>
 			<FeedbackItem
 				ref={(node) => {
 					data.itemRefs.current[index] = node
@@ -79,8 +89,6 @@ function VirtualRow({ index, style, data }: VirtualRowProps): React.ReactElement
 				}
 				onStatusChange={data.onStatusChange}
 				onDelete={data.onDelete}
-				ariaSetSize={data.items.length}
-				ariaPosInSet={index + 1}
 			/>
 		</div>
 	)
@@ -229,13 +237,16 @@ export function FeedbackList({
 			data-testid="feedback-list"
 			data-state="default"
 			data-virtualized="false"
-			role="list"
 			className={`space-y-2 ${className ?? ""}`}
 		>
 			{items.map((item, index) => {
 				const isExpanded = expandedId === item.feedback_id
 				return (
-					<li key={item.feedback_id} role="listitem">
+					<li
+						key={item.feedback_id}
+						aria-setsize={items.length}
+						aria-posinset={index + 1}
+					>
 						<FeedbackItem
 							ref={(node) => {
 								itemRefs.current[index] = node
@@ -247,8 +258,6 @@ export function FeedbackList({
 							}
 							onStatusChange={onStatusChange}
 							onDelete={onDelete}
-							ariaSetSize={items.length}
-							ariaPosInSet={index + 1}
 						/>
 					</li>
 				)
@@ -256,4 +265,3 @@ export function FeedbackList({
 		</ul>
 	)
 }
-

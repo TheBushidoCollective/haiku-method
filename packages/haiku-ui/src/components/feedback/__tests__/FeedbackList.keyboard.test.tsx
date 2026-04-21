@@ -1,0 +1,156 @@
+/**
+ * Keyboard navigation test for FeedbackList.
+ *
+ * Unit spec completion criterion:
+ *   "Keyboard nav test: render list of 100 items, press ArrowDown from index
+ *    0 to 99 in a loop, assert focus lands on the correct item at each step
+ *    (no skips, no dropped keystrokes)."
+ *
+ * Non-virtualized branch at 100 items is the simpler path to exercise the
+ * hook (every row is mounted; ArrowDown moves focus to the next row). The
+ * virtualization-coordination path is covered indirectly here because the
+ * useFeedbackListKeyboardNav hook is branch-agnostic — the same focusedIndex
+ * bookkeeping runs whether `scrollToIndex` is wired or not. A smoke case
+ * for the virtualized branch is exercised in `FeedbackList.virtualization`.
+ */
+
+import { act, cleanup, fireEvent, render } from "@testing-library/react"
+import { afterEach, describe, expect, it } from "vitest"
+import { FeedbackList, VIRTUALIZE_THRESHOLD } from "../FeedbackList"
+import { mockItems } from "./mockItems"
+
+afterEach(() => {
+	cleanup()
+})
+
+function flushRaf(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+describe("FeedbackList — keyboard navigation", () => {
+	it("ArrowDown from index 0 → 99 lands on the correct item at each step (non-virtualized, 100 items ≤ threshold + 50)", async () => {
+		// 100 items is above the default threshold; to exercise the simple
+		// per-item mounted loop we drop the threshold by passing a height
+		// large enough for the virtualized branch to still render everything.
+		// Easier: use a non-virtualized branch below the threshold.
+		// But the spec says "100 items" — so we keep 100 and rely on the
+		// virtualized branch, asserting each navigated index lands focus on
+		// the mounted node.
+		const items = mockItems(100)
+		const { container } = render(
+			<FeedbackList items={items} height={600} itemSize={44} />,
+		)
+		// Focus the first item.
+		const listContainer = container.querySelector(
+			"[data-testid='feedback-list']",
+		) as HTMLElement
+		expect(listContainer).not.toBeNull()
+		const firstItem = container.querySelector(
+			"[data-feedback-id='FB-01']",
+		) as HTMLElement
+		expect(firstItem).not.toBeNull()
+		firstItem.focus()
+		expect(document.activeElement).toBe(firstItem)
+
+		for (let i = 0; i < 99; i++) {
+			const targetId = `FB-${String(i + 2).padStart(2, "0")}`
+			// Fire ArrowDown on the list container (keyboard listener is attached there).
+			await act(async () => {
+				fireEvent.keyDown(listContainer, { key: "ArrowDown" })
+				await flushRaf()
+			})
+			const mounted = container.querySelector(
+				`[data-feedback-id='${targetId}']`,
+			) as HTMLElement | null
+			expect(
+				mounted,
+				`item ${targetId} must be mounted after ArrowDown to index ${i + 1}`,
+			).not.toBeNull()
+			expect(
+				document.activeElement,
+				`activeElement after ArrowDown to index ${i + 1}`,
+			).toBe(mounted)
+		}
+	})
+
+	it("ArrowUp walks back up without skipping", async () => {
+		const items = mockItems(10)
+		const { container } = render(<FeedbackList items={items} />)
+		expect(items.length).toBeLessThanOrEqual(VIRTUALIZE_THRESHOLD)
+		const listContainer = container.querySelector(
+			"[data-testid='feedback-list']",
+		) as HTMLElement
+		const last = container.querySelector(
+			"[data-feedback-id='FB-10']",
+		) as HTMLElement
+		last.focus()
+		for (let i = 9; i > 0; i--) {
+			const targetId = `FB-${String(i).padStart(2, "0")}`
+			await act(async () => {
+				fireEvent.keyDown(listContainer, { key: "ArrowUp" })
+				await flushRaf()
+			})
+			const mounted = container.querySelector(
+				`[data-feedback-id='${targetId}']`,
+			) as HTMLElement
+			expect(document.activeElement).toBe(mounted)
+		}
+	})
+
+	it("ArrowDown is clamped at the last index (no wrap)", async () => {
+		const items = mockItems(3)
+		const { container } = render(<FeedbackList items={items} />)
+		const listContainer = container.querySelector(
+			"[data-testid='feedback-list']",
+		) as HTMLElement
+		const last = container.querySelector(
+			"[data-feedback-id='FB-03']",
+		) as HTMLElement
+		last.focus()
+		await act(async () => {
+			fireEvent.keyDown(listContainer, { key: "ArrowDown" })
+			await flushRaf()
+		})
+		expect(document.activeElement).toBe(last)
+	})
+
+	it("ArrowUp is clamped at index 0 (no wrap)", async () => {
+		const items = mockItems(3)
+		const { container } = render(<FeedbackList items={items} />)
+		const listContainer = container.querySelector(
+			"[data-testid='feedback-list']",
+		) as HTMLElement
+		const first = container.querySelector(
+			"[data-feedback-id='FB-01']",
+		) as HTMLElement
+		first.focus()
+		await act(async () => {
+			fireEvent.keyDown(listContainer, { key: "ArrowUp" })
+			await flushRaf()
+		})
+		expect(document.activeElement).toBe(first)
+	})
+
+	it("Enter activates (clicks) the currently-focused item", async () => {
+		const items = mockItems(5)
+		const { container } = render(<FeedbackList items={items} />)
+		const listContainer = container.querySelector(
+			"[data-testid='feedback-list']",
+		) as HTMLElement
+		const first = container.querySelector(
+			"[data-feedback-id='FB-01']",
+		) as HTMLElement
+		first.focus()
+		// Default state: not expanded.
+		expect(first.getAttribute("aria-expanded")).toBe("false")
+		await act(async () => {
+			fireEvent.keyDown(listContainer, { key: "Enter" })
+			await flushRaf()
+		})
+		// After Enter, the focused item should toggle expansion.
+		const updated = container.querySelector(
+			"[data-feedback-id='FB-01']",
+		) as HTMLElement
+		expect(updated.getAttribute("aria-expanded")).toBe("true")
+	})
+})

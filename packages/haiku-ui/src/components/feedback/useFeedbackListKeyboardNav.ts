@@ -35,11 +35,16 @@ export interface FeedbackListKeyboardNavHandle {
 }
 
 function raf(cb: () => void): void {
-	if (typeof requestAnimationFrame === "function") {
-		requestAnimationFrame(cb)
+	// Use a microtask-like next-tick — we want the focus call to run AFTER
+	// the React commit that scheduled it, but not hold until a browser paint
+	// (which jsdom never produces). `queueMicrotask` runs after the current
+	// event-loop task (the keydown handler) completes, which is after React
+	// has flushed state-driven re-renders. `setTimeout(cb, 0)` is the
+	// fallback for environments without queueMicrotask.
+	if (typeof queueMicrotask === "function") {
+		queueMicrotask(cb)
 		return
 	}
-	// Fallback for non-browser test envs that don't stub rAF.
 	setTimeout(cb, 0)
 }
 
@@ -62,12 +67,27 @@ export function useFeedbackListKeyboardNav({
 	}, [])
 
 	useEffect(() => {
-		const container = containerRef.current
-		if (!container) return
+		const containerNode = containerRef.current
+		if (!containerNode) return
+
+		// Resolve the focused index from the DOM rather than trusting the
+		// hook-local state — user-driven focus (clicking on an item, tab
+		// focus, tests calling .focus() imperatively) does not flow through
+		// setFocusedIndex. We snap to whichever item currently has focus
+		// inside the container, falling back to focusedIndexRef.
+		const resolveCurrentIndex = (): number => {
+			const active = document.activeElement
+			if (active && containerNode.contains(active)) {
+				for (let i = 0; i < itemRefs.current.length; i++) {
+					if (itemRefs.current[i] === active) return i
+				}
+			}
+			return focusedIndexRef.current
+		}
 
 		function move(delta: number): void {
 			if (itemCount === 0) return
-			const current = focusedIndexRef.current
+			const current = resolveCurrentIndex()
 			const next = Math.max(0, Math.min(itemCount - 1, current + delta))
 			if (next === current) return
 			focusedIndexRef.current = next
@@ -91,7 +111,7 @@ export function useFeedbackListKeyboardNav({
 				return
 			}
 			if (event.key === "Enter") {
-				const current = focusedIndexRef.current
+				const current = resolveCurrentIndex()
 				const node = itemRefs.current[current]
 				if (node) {
 					event.preventDefault()
@@ -100,9 +120,9 @@ export function useFeedbackListKeyboardNav({
 			}
 		}
 
-		container.addEventListener("keydown", onKeyDown)
+		containerNode.addEventListener("keydown", onKeyDown)
 		return () => {
-			container.removeEventListener("keydown", onKeyDown)
+			containerNode.removeEventListener("keydown", onKeyDown)
 		}
 	}, [containerRef, itemCount, itemRefs, scrollToIndex])
 

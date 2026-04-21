@@ -1,59 +1,30 @@
-import { useState } from "react"
+/**
+ * FeedbackPanel — compatibility shim.
+ *
+ * Unit-08 replaces the monolithic pre-cluster implementation with a clustered
+ * layout under `./feedback/*`. To avoid touching every consumer call-site in
+ * the same unit, this file re-exports a drop-in wrapper that mounts
+ * `FeedbackList` inside the existing tabs + filter-pills chrome.
+ *
+ * Scope for downstream unification:
+ *   - unit-09 (`AgentFeedbackToggle`) replaces the Feedback/Mine tab block.
+ *   - unit-11 (copy audit) will rewrite the filter pills against the
+ *     canonical `FeedbackSummaryBar`.
+ * When both units land, this file can be deleted and consumers can import
+ * `FeedbackList` / `FeedbackSummaryBar` from `./feedback` directly.
+ *
+ * The shim preserves the pre-unit-08 `Props = { items, loading, onUpdate,
+ * onDelete }` signature exactly so `ReviewPage.tsx` and `ReviewCurrentPage.tsx`
+ * keep working without a single line changed.
+ */
+
+import { useMemo, useState } from "react"
 import type { FeedbackItemData } from "../types"
+import type { FeedbackStatus } from "./feedback"
+import { FeedbackList } from "./feedback"
 
-// ── Design tokens from DESIGN-TOKENS.md ─────────────────────────────────
-
-// Canonical mapping per DESIGN-TOKENS §2.1. `rejected` foreground lifted from
-// the pre-FB-15 stone-500 pair (4.40:1 — AA FAIL on bg-stone-100) to stone-600
-// (6.99:1 AAA). Dark-mode lifted one step for symmetric AA margin.
-const feedbackStatusColors: Record<string, string> = {
-	pending:
-		"bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-	addressed: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-	closed:
-		"bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-	rejected:
-		"bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
-}
-
-const originColors: Record<string, string> = {
-	"adversarial-review":
-		"bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
-	"external-pr":
-		"bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
-	"external-mr":
-		"bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
-	"user-visual": "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
-	"user-chat": "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
-	agent: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
-}
-
-// Canonical per DESIGN-TOKENS §2.3 (unit-18 QG4 / QG5 gates align with rendered
-// feedback-card-states.html and contrast-and-type-audit.md §1/§2 math).
-const statusBorderLeft: Record<string, string> = {
-	pending: "border-l-[3px] border-l-amber-400 dark:border-l-amber-500",
-	addressed: "border-l-[3px] border-l-blue-400 dark:border-l-blue-500",
-	closed: "border-l-[3px] border-l-green-500 dark:border-l-green-400",
-	rejected: "border-l-[3px] border-l-stone-400 dark:border-l-stone-500",
-}
-
-const statusBackground: Record<string, string> = {
-	pending: "bg-amber-50/50 dark:bg-amber-950/20",
-	addressed: "bg-blue-50/50 dark:bg-blue-950/20",
-	closed: "bg-green-50/60 dark:bg-green-950/25",
-	rejected: "bg-stone-100 dark:bg-stone-800/50",
-}
-
-function visitCounterClasses(visits: number): string {
-	if (visits <= 1) return "hidden"
-	if (visits <= 3)
-		return "bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300"
-	if (visits <= 5)
-		return "bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-	return "bg-red-200 text-red-800 dark:bg-red-900/40 dark:text-red-300"
-}
-
-// ── Component ───────────────────────────────────────────────────────────
+type FilterMode = "all" | "pending" | "addressed"
+type TabMode = "feedback" | "mine"
 
 interface Props {
 	items: FeedbackItemData[]
@@ -62,24 +33,33 @@ interface Props {
 	onDelete?: (feedbackId: string) => void
 }
 
-type FilterMode = "all" | "pending" | "addressed"
-type TabMode = "feedback" | "mine"
-
-export function FeedbackPanel({ items, loading, onUpdate, onDelete }: Props) {
+export function FeedbackPanel({
+	items,
+	loading,
+	onUpdate,
+	onDelete,
+}: Props): React.ReactElement {
 	const [tab, setTab] = useState<TabMode>("feedback")
 	const [filter, setFilter] = useState<FilterMode>("all")
-	const [expandedId, setExpandedId] = useState<string | null>(null)
 
-	const filtered = items.filter((item) => {
-		if (tab === "mine" && item.author_type !== "human") return false
-		if (filter === "pending" && item.status !== "pending") return false
-		if (filter === "addressed" && item.status !== "addressed") return false
-		return true
-	})
+	const filtered = useMemo<FeedbackItemData[]>(
+		() =>
+			items.filter((item) => {
+				if (tab === "mine" && item.author_type !== "human") return false
+				if (filter === "pending" && item.status !== "pending") return false
+				if (filter === "addressed" && item.status !== "addressed") return false
+				return true
+			}),
+		[items, tab, filter],
+	)
+
+	const handleStatusChange = (id: string, next: FeedbackStatus): void => {
+		if (onUpdate) onUpdate(id, { status: next })
+	}
 
 	return (
 		<div className="flex flex-col h-full">
-			{/* Segmented toggle */}
+			{/* Segmented toggle — unit-09 AgentFeedbackToggle target. */}
 			<div className="shrink-0 px-4 py-3 border-b border-stone-200 dark:border-stone-700">
 				<div className="flex gap-1 p-0.5 rounded-lg bg-stone-100 dark:bg-stone-800">
 					<button
@@ -88,7 +68,7 @@ export function FeedbackPanel({ items, loading, onUpdate, onDelete }: Props) {
 						className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
 							tab === "feedback"
 								? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-sm"
-								: "text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300"
+								: "text-stone-600 dark:text-stone-300 hover:text-stone-800 dark:hover:text-stone-200"
 						}`}
 					>
 						Feedback ({items.length})
@@ -99,14 +79,12 @@ export function FeedbackPanel({ items, loading, onUpdate, onDelete }: Props) {
 						className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
 							tab === "mine"
 								? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-sm"
-								: "text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300"
+								: "text-stone-600 dark:text-stone-300 hover:text-stone-800 dark:hover:text-stone-200"
 						}`}
 					>
 						Mine ({items.filter((i) => i.author_type === "human").length})
 					</button>
 				</div>
-
-				{/* Status filter pills */}
 				<div className="flex gap-1.5 mt-2">
 					{(["all", "pending", "addressed"] as const).map((f) => (
 						<button
@@ -116,7 +94,7 @@ export function FeedbackPanel({ items, loading, onUpdate, onDelete }: Props) {
 							className={`px-2 py-1 text-xs font-medium rounded-full border transition-colors cursor-pointer ${
 								filter === f
 									? "bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-400 dark:border-teal-700"
-									: "border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400 hover:border-stone-300 dark:hover:border-stone-600"
+									: "border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600"
 							}`}
 						>
 							{f.charAt(0).toUpperCase() + f.slice(1)}
@@ -124,137 +102,13 @@ export function FeedbackPanel({ items, loading, onUpdate, onDelete }: Props) {
 					))}
 				</div>
 			</div>
-
-			{/* Feedback list */}
-			<div className="flex-1 overflow-y-auto p-3 space-y-2">
-				{loading && (
-					<div className="flex justify-center py-4">
-						<div className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-teal-500" />
-					</div>
-				)}
-
-				{!loading && filtered.length === 0 && (
-					<p className="text-xs text-stone-600 dark:text-stone-300 italic p-4 text-center">
-						No feedback items match the current filter.
-					</p>
-				)}
-
-				{!loading &&
-					filtered.map((item) => {
-						const isExpanded = expandedId === item.feedback_id
-						return (
-							// biome-ignore lint/a11y/noStaticElementInteractions: feedback card is a disclosure toggle; semantic button would break nested interactive content (action buttons, links) inside the card
-							<div
-								key={item.feedback_id}
-								className={`p-2.5 rounded-lg border ${statusBorderLeft[item.status] || ""} ${statusBackground[item.status] || ""} hover:border-teal-400 dark:hover:border-teal-500 transition-colors cursor-pointer group`}
-								onClick={() =>
-									setExpandedId(isExpanded ? null : item.feedback_id)
-								}
-								onKeyDown={(e) => {
-									if (e.key === "Enter" || e.key === " ") {
-										e.preventDefault()
-										setExpandedId(isExpanded ? null : item.feedback_id)
-									}
-								}}
-							>
-								<div className="flex items-center gap-2 mb-1 flex-wrap">
-									{/* Status badge */}
-									<span
-										className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${feedbackStatusColors[item.status] || ""}`}
-									>
-										{item.status}
-									</span>
-
-									{/* Origin badge */}
-									<span
-										className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${originColors[item.origin] || originColors.agent}`}
-									>
-										{item.origin}
-									</span>
-
-									{/* Visit counter (FB-02 lift to 11px font-bold per DESIGN-TOKENS §2.4) */}
-									<span
-										className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none ${visitCounterClasses(item.visit)}`}
-									>
-										{item.visit}x
-									</span>
-								</div>
-
-								<p className="text-xs font-medium text-stone-800 dark:text-stone-200 truncate">
-									{item.title}
-								</p>
-
-								{/* Expanded body */}
-								{isExpanded && (
-									<div className="mt-2">
-										<p className="text-xs text-stone-700 dark:text-stone-300 whitespace-pre-wrap">
-											{item.body}
-										</p>
-
-										{item.closed_by && (
-											<p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-												Closed by: {item.closed_by}
-											</p>
-										)}
-
-										{/* Action buttons */}
-										<div className="flex gap-1 mt-2">
-											{item.status === "pending" && onUpdate && (
-												<button
-													type="button"
-													onClick={(e) => {
-														e.stopPropagation()
-														onUpdate(item.feedback_id, { status: "closed" })
-													}}
-													className="text-xs font-medium px-2 py-1 rounded-md bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40 transition-colors"
-												>
-													Close
-												</button>
-											)}
-											{item.status === "pending" && onUpdate && (
-												<button
-													type="button"
-													onClick={(e) => {
-														e.stopPropagation()
-														onUpdate(item.feedback_id, { status: "rejected" })
-													}}
-													className="text-xs font-medium px-2 py-1 rounded-md bg-stone-100 text-stone-500 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700 transition-colors"
-												>
-													Reject
-												</button>
-											)}
-											{(item.status === "closed" ||
-												item.status === "rejected") &&
-												onUpdate && (
-													<button
-														type="button"
-														onClick={(e) => {
-															e.stopPropagation()
-															onUpdate(item.feedback_id, { status: "pending" })
-														}}
-														className="text-xs font-medium px-2 py-1 rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40 transition-colors"
-													>
-														Reopen
-													</button>
-												)}
-											{item.status !== "pending" && onDelete && (
-												<button
-													type="button"
-													onClick={(e) => {
-														e.stopPropagation()
-														onDelete(item.feedback_id)
-													}}
-													className="text-xs font-medium px-2 py-1 rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-												>
-													Delete
-												</button>
-											)}
-										</div>
-									</div>
-								)}
-							</div>
-						)
-					})}
+			<div className="flex-1 overflow-y-auto p-3">
+				<FeedbackList
+					items={filtered}
+					isLoading={loading}
+					onStatusChange={handleStatusChange}
+					onDelete={onDelete}
+				/>
 			</div>
 		</div>
 	)

@@ -21,13 +21,10 @@
 
 import { act, cleanup, fireEvent, render } from "@testing-library/react"
 import { useState } from "react"
-import { afterEach, describe, expect, it, vi } from "vitest"
-import {
-	LiveRegionShell,
-	POLITE_REGION_ID,
-} from "../../../a11y"
+import { afterEach, describe, expect, it } from "vitest"
+import { LiveRegionShell, POLITE_REGION_ID } from "../../../a11y"
 import { FeedbackItem } from "../FeedbackItem"
-import { TOKEN_HASH, type FeedbackStatus } from "../tokens"
+import { type FeedbackStatus, TOKEN_HASH } from "../tokens"
 import { mockItems } from "./mockItems"
 
 afterEach(() => {
@@ -77,10 +74,7 @@ function Matrix(): React.ReactElement {
 			{STATUSES.map((status, statusIdx) => (
 				<div key={status} data-status-row={status}>
 					{INTERACTION_STATES.map((interaction) => (
-						<StateWrapper
-							key={`${status}-${interaction}`}
-							state={interaction}
-						>
+						<StateWrapper key={`${status}-${interaction}`} state={interaction}>
 							<FeedbackItem
 								item={{ ...items[statusIdx], status }}
 								isExpanded={interaction === "active"}
@@ -102,7 +96,7 @@ describe("FeedbackItem — state matrix", () => {
 		expect(container.firstChild).toMatchSnapshot()
 	})
 
-	it("every status badge in the matrix carries aria-label=\"Status: {status}\"", () => {
+	it('every status badge in the matrix carries aria-label="Status: {status}"', () => {
 		const { queryAllByLabelText } = render(<Matrix />)
 		// Each status appears once per interaction state (6 per status).
 		// 4 statuses × 6 interactions = 24 badge instances total.
@@ -196,7 +190,9 @@ describe("FeedbackItem — canonical verbs", () => {
 
 function ControllableFeedbackItem({
 	initialStatus,
-}: { initialStatus: FeedbackStatus }): React.ReactElement {
+}: {
+	initialStatus: FeedbackStatus
+}): React.ReactElement {
 	const [status, setStatus] = useState<FeedbackStatus>(initialStatus)
 	const [isExpanded, setIsExpanded] = useState(true)
 	const items = mockItems(1)
@@ -247,12 +243,12 @@ describe("FeedbackItem — focus preservation on status change", () => {
 		const dismiss = container.querySelector<HTMLButtonElement>(
 			"[data-action='dismiss']",
 		)
-		expect(dismiss).not.toBeNull()
+		if (!dismiss) throw new Error("dismiss button missing")
 		// Simulate keyboard focus on the dismiss button, then click it.
-		dismiss!.focus()
+		dismiss.focus()
 		expect(document.activeElement).toBe(dismiss)
 		await act(async () => {
-			fireEvent.click(dismiss!)
+			fireEvent.click(dismiss)
 		})
 		const card = container.querySelector<HTMLDivElement>(
 			"[data-testid='feedback-item']",
@@ -272,8 +268,9 @@ describe("FeedbackItem — screen-reader announcement on status change", () => {
 		const dismiss = container.querySelector<HTMLButtonElement>(
 			"[data-action='dismiss']",
 		)
+		if (!dismiss) throw new Error("dismiss button missing")
 		await act(async () => {
-			fireEvent.click(dismiss!)
+			fireEvent.click(dismiss)
 		})
 		expect(polite?.textContent).toBe("Feedback FB-01 marked as rejected")
 	})
@@ -286,8 +283,9 @@ describe("FeedbackItem — screen-reader announcement on status change", () => {
 		const verify = container.querySelector<HTMLButtonElement>(
 			"[data-action='verify-close']",
 		)
+		if (!verify) throw new Error("verify-close button missing")
 		await act(async () => {
-			fireEvent.click(verify!)
+			fireEvent.click(verify)
 		})
 		expect(polite?.textContent).toBe("Feedback FB-01 marked as closed")
 	})
@@ -300,12 +298,10 @@ describe("FeedbackItem — screen-reader announcement on status change", () => {
 		const reopen = container.querySelector<HTMLButtonElement>(
 			"[data-action='reopen']",
 		)
+		if (!reopen) throw new Error("reopen button missing")
 		await act(async () => {
-			fireEvent.click(reopen!)
+			fireEvent.click(reopen)
 		})
 		expect(polite?.textContent).toBe("Feedback FB-01 reopened")
 	})
 })
-
-// Guard against dead imports flagged by Biome.
-void vi

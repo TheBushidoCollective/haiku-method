@@ -61,9 +61,9 @@ export function FeedbackSummaryBar({
 	if (items.length === 0) return null
 
 	return (
-		<div
+		<fieldset
 			data-testid="feedback-summary-bar"
-			className={`flex flex-wrap items-center gap-1.5 ${className ?? ""}`}
+			className={`flex flex-wrap items-center gap-1.5 border-0 p-0 m-0 ${className ?? ""}`}
 			aria-label="Feedback counts by status"
 		>
 			{VISIBLE_STATUSES.map((status) => {
@@ -95,6 +95,6 @@ export function FeedbackSummaryBar({
 					</button>
 				)
 			})}
-		</div>
+		</fieldset>
 	)
 }

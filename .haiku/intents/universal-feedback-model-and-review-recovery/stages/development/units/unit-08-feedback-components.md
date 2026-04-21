@@ -18,6 +18,24 @@ bolt: 0
 hat: ""
 outputs:
   - stages/development/artifacts/unit-08-tactical-plan.md
+  - packages/haiku-ui/src/components/feedback/tokens.ts
+  - packages/haiku-ui/src/components/feedback/FeedbackStatusBadge.tsx
+  - packages/haiku-ui/src/components/feedback/FeedbackOriginIcon.tsx
+  - packages/haiku-ui/src/components/feedback/FeedbackItem.tsx
+  - packages/haiku-ui/src/components/feedback/FeedbackList.tsx
+  - packages/haiku-ui/src/components/feedback/FeedbackSummaryBar.tsx
+  - packages/haiku-ui/src/components/feedback/useFeedbackListKeyboardNav.ts
+  - packages/haiku-ui/src/components/feedback/index.ts
+  - packages/haiku-ui/src/components/feedback/__tests__/mockItems.ts
+  - packages/haiku-ui/src/components/feedback/__tests__/FeedbackStatusBadge.states.test.tsx
+  - packages/haiku-ui/src/components/feedback/__tests__/FeedbackOriginIcon.states.test.tsx
+  - packages/haiku-ui/src/components/feedback/__tests__/FeedbackItem.states.test.tsx
+  - packages/haiku-ui/src/components/feedback/__tests__/FeedbackList.states.test.tsx
+  - packages/haiku-ui/src/components/feedback/__tests__/FeedbackList.virtualization.test.tsx
+  - packages/haiku-ui/src/components/feedback/__tests__/FeedbackList.keyboard.test.tsx
+  - packages/haiku-ui/src/components/feedback/__tests__/FeedbackSummaryBar.states.test.tsx
+  - packages/haiku-ui/src/components/FeedbackPanel.tsx
+  - packages/haiku-ui/package.json
 ---
 
 # Feedback component cluster

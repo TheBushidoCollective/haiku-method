@@ -18,10 +18,7 @@
  * import synchronous and browser-free (module-load time).
  */
 
-import type {
-	FeedbackOrigin,
-	FeedbackStatus,
-} from "haiku-api"
+import type { FeedbackOrigin, FeedbackStatus } from "haiku-api"
 
 // ── §2.1 Feedback status colors ─────────────────────────────────────────────
 
@@ -32,12 +29,10 @@ export const feedbackStatusColors: Record<FeedbackStatus, string> = {
 		"bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
 	fixing:
 		"bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-	addressed:
-		"bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+	addressed: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
 	closed:
 		"bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-	rejected:
-		"bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
+	rejected: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
 }
 
 /** Status dot (compact indicator) from DESIGN-TOKENS §2.1. */
@@ -78,10 +73,8 @@ export const originColors: Record<FeedbackOrigin, string> = {
 		"bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
 	"external-mr":
 		"bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
-	"user-visual":
-		"bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
-	"user-chat":
-		"bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
+	"user-visual": "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
+	"user-chat": "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
 	agent: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
 }
 
@@ -102,7 +95,9 @@ export const originIcons: Record<FeedbackOrigin, string> = {
 
 /**
  * Human-readable labels — screen readers announce the label, not the slug.
- * This is the regression guard for the `{origin}` bare-JSX audit rule.
+ * Components MUST render originLabels[x] rather than the bare slug; that
+ * rule is the regression guard enforced by the stage-wide banned-patterns
+ * audit (see audit-config.json `banned-origin-jsx-bare`).
  */
 export const originLabels: Record<FeedbackOrigin, string> = {
 	"adversarial-review": "Review Agent",
@@ -137,7 +132,9 @@ function djb2Hex16(input: string): string {
 	let hash = 5381n
 	for (let i = 0; i < input.length; i++) {
 		// djb2: hash = ((hash << 5) + hash) + c
-		hash = (((hash << 5n) + hash) & 0xffffffffffffffffn) + BigInt(input.charCodeAt(i))
+		hash =
+			(((hash << 5n) + hash) & 0xffffffffffffffffn) +
+			BigInt(input.charCodeAt(i))
 	}
 	return (hash & 0xffffffffffffffffn).toString(16).padStart(16, "0").slice(-16)
 }

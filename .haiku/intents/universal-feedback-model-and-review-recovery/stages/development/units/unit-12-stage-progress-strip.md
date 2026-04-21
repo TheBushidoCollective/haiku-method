@@ -1,5 +1,5 @@
 ---
-title: StageProgressStrip — 44px targets, full keyboard reach
+title: 'StageProgressStrip — 44px targets, full keyboard reach'
 type: implementation
 depends_on:
   - unit-04-design-token-system
@@ -12,11 +12,17 @@ inputs:
   - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/stage-progress-strip.html
   - stages/design/artifacts/touch-target-audit.md
-status: pending
-bolt: 0
-hat: ""
+status: active
+bolt: 1
+hat: planner
+started_at: '2026-04-21T07:26:59Z'
+hat_started_at: '2026-04-21T07:26:59Z'
+iterations:
+  - hat: planner
+    started_at: '2026-04-21T07:26:59Z'
+    completed_at: null
+    result: null
 ---
-
 # StageProgressStrip
 
 Visible navigation of the intent's stage progression. Regression guards against: sub-44 hit area; upcoming-stage contrast fail; future stages at `tabindex=-1` unreachable by keyboard.

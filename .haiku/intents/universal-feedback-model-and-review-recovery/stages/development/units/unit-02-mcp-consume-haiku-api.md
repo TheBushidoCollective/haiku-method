@@ -10,9 +10,9 @@ inputs:
   - knowledge/ARCHITECTURE.md
 status: active
 bolt: 4
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T03:55:47Z'
-hat_started_at: '2026-04-21T04:48:43Z'
+hat_started_at: '2026-04-21T04:56:00Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T03:55:47Z'
@@ -77,6 +77,10 @@ iterations:
       artifacts/unit-02-review-findings.md for evidence + required fixes.
   - hat: builder
     started_at: '2026-04-21T04:48:43Z'
+    completed_at: '2026-04-21T04:56:00Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T04:56:00Z'
     completed_at: null
     result: null
 outputs:
@@ -97,6 +101,7 @@ outputs:
   - packages/haiku/test/http-feedback.test.mjs
   - packages/haiku/test/server-tools.test.mjs
   - stages/development/artifacts/unit-02-review-findings.md
+  - packages/haiku/test/http-streams.test.mjs
 ---
 # MCP consumes haiku-api
 

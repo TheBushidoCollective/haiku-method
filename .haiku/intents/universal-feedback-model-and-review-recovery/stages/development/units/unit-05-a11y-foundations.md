@@ -18,9 +18,9 @@ inputs:
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
 status: active
 bolt: 1
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T06:58:35Z'
-hat_started_at: '2026-04-21T07:04:11Z'
+hat_started_at: '2026-04-21T07:22:39Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T06:58:35Z'
@@ -28,10 +28,31 @@ iterations:
     result: advance
   - hat: builder
     started_at: '2026-04-21T07:04:11Z'
+    completed_at: '2026-04-21T07:22:39Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T07:22:39Z'
     completed_at: null
     result: null
 outputs:
   - stages/development/artifacts/unit-05-tactical-plan.md
+  - package-lock.json
+  - packages/haiku-ui/src/a11y/__tests__/focus.test.tsx
+  - packages/haiku-ui/src/a11y/__tests__/keyboard.test.tsx
+  - packages/haiku-ui/src/a11y/__tests__/landmarks.test.tsx
+  - packages/haiku-ui/src/a11y/__tests__/live-regions.test.tsx
+  - packages/haiku-ui/src/a11y/__tests__/matchMedia.stub.ts
+  - packages/haiku-ui/src/a11y/__tests__/reduced-motion.test.tsx
+  - packages/haiku-ui/src/a11y/__tests__/touch-target.test.tsx
+  - packages/haiku-ui/src/a11y/focus.ts
+  - packages/haiku-ui/src/a11y/index.ts
+  - packages/haiku-ui/src/a11y/keyboard.ts
+  - packages/haiku-ui/src/a11y/landmarks.tsx
+  - packages/haiku-ui/src/a11y/live-regions.tsx
+  - packages/haiku-ui/src/a11y/reduced-motion.ts
+  - packages/haiku-ui/src/a11y/touch-target.ts
+  - packages/haiku-ui/src/components/primitives/Button.tsx
+  - packages/haiku-ui/src/index.css
 ---
 # A11y foundations
 

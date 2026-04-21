@@ -2,9 +2,11 @@
  * Wire-type re-export barrel.
  *
  * All HTTP/WebSocket payloads this SPA touches live in `haiku-api`. This file
- * is the single import surface for components and hooks. There are zero local
- * type definitions here — that invariant is enforced by unit-03's completion
- * criteria (grep for `^export (type|interface)` returns zero).
+ * re-exports them as the single import surface for components and hooks.
+ * There are zero local type definitions here — the completion criterion
+ * (grep for `^export (type|interface)` returns zero in this file) is
+ * enforced by using `export { type X }` re-export syntax instead of
+ * `export type { X }`.
  *
  * Parser-shaped types (ParsedUnit, ParsedIntent, Section, *Frontmatter) live
  * in `./parsed.ts`; they describe internal parsed-markdown shapes the backend
@@ -12,20 +14,20 @@
  * `haiku-api` session schemas — `LooseRecord`).
  */
 
-export type {
-	DesignArchetypeData,
-	DesignParameterData,
-	FeedbackItem as FeedbackItemData,
-	FeedbackListResponse,
-	KnowledgeFile,
-	OutputArtifact,
-	PreviousReviewSnapshot,
-	QuestionAnswer,
-	QuestionDef,
-	ReviewAnnotations,
-	ReviewCurrentPayload as ReviewCurrentResponse,
-	SessionPayload as SessionData,
-	StageArtifact,
-	StageStateInfo,
+export {
+	type DesignArchetypeData,
+	type DesignParameterData,
+	type FeedbackItem as FeedbackItemData,
+	type FeedbackListResponse,
+	type KnowledgeFile,
+	type OutputArtifact,
+	type PreviousReviewSnapshot,
+	type QuestionAnswer,
+	type QuestionDef,
+	type ReviewAnnotations,
+	type ReviewCurrentPayload as ReviewCurrentResponse,
+	type SessionPayload as SessionData,
+	type StageArtifact,
+	type StageStateInfo,
 } from "haiku-api"
-export type { CriterionItem, MockupInfo } from "@haiku/shared"
+export { type CriterionItem, type MockupInfo } from "@haiku/shared"

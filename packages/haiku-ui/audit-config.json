@@ -97,6 +97,16 @@
 					"pattern": "\"Show agent feedback\"(?! inline)",
 					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx}"],
 					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				},
+				{
+					"id": "require-agent-feedback-toggle-canonical",
+					"description": "AgentFeedbackToggle.tsx MUST contain the canonical 'Show agent feedback inline' string at least once (presence-side check per unit-09 Completion Criteria).",
+					"pattern": "Show agent feedback inline",
+					"requirePresence": true,
+					"scope": [
+						"packages/haiku-ui/src/components/feedback/AgentFeedbackToggle.tsx"
+					],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
 				}
 			]
 		}

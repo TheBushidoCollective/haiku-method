@@ -13,11 +13,17 @@ inputs:
   - stages/design/artifacts/feedback-card-states.html
   - stages/design/artifacts/state-coverage-grid.md
   - stages/design/artifacts/feedback-lifecycle-transitions.html
-status: pending
-bolt: 0
-hat: ""
+status: active
+bolt: 1
+hat: planner
+started_at: '2026-04-21T07:27:01Z'
+hat_started_at: '2026-04-21T07:27:01Z'
+iterations:
+  - hat: planner
+    started_at: '2026-04-21T07:27:01Z'
+    completed_at: null
+    result: null
 ---
-
 # Feedback component cluster
 
 The components that render feedback items in any page. Built as a cluster because they share state, tokens, and a11y patterns. Every component covers the full six-state × status-variant matrix per `state-coverage-grid.md`.

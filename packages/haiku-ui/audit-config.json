@@ -1,0 +1,104 @@
+{
+	"profiles": {
+		"tokens": {
+			"description": "unit-04 token-scoped banned-pattern audit — enforces the DESIGN-TOKENS §1.1a banned-pairs + §1.4 typography floor + §1.7 disabled-opacity ban + §2.6 canonical button verbs.",
+			"rules": [
+				{
+					"id": "banned-text-small",
+					"description": "text-[9px] / text-[10px] banned on user-facing info (WCAG 1.4.4 Resize Text)",
+					"pattern": "text-\\[(9|10)px\\]",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx,css}"],
+					"exclude": [
+						"**/__tests__/**",
+						"**/__snapshots__/**",
+						"**/*.test.{ts,tsx}",
+						"**/*.spec.{ts,tsx}"
+					]
+				},
+				{
+					"id": "banned-text-gray",
+					"description": "text-gray-* banned in SPA (use text-stone-* or semantic tokens)",
+					"pattern": "text-gray-\\d",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx,css}"],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				},
+				{
+					"id": "banned-stone-400-light",
+					"description": "text-stone-400 without a dark: qualifier collapses below 4.5:1 on any light card surface (DESIGN-TOKENS §1.1a)",
+					"pattern": "(?<![:\\w-])text-stone-400\\b",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx}"],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				},
+				{
+					"id": "banned-opacity-state",
+					"description": "opacity-50|60|70 on interactive/card roots (use token-based disabled per DESIGN-TOKENS §1.7)",
+					"pattern": "\\bopacity-(50|60|70)\\b",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx}"],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				},
+				{
+					"id": "banned-disabled-opacity",
+					"description": "disabled:opacity-* (any) banned — α-composite collapses text contrast below AA",
+					"pattern": "disabled:opacity-\\d",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx}"],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				},
+				{
+					"id": "banned-focus-ring-1",
+					"description": "focus:ring-1 banned (use focus-visible:ring-2)",
+					"pattern": "focus:ring-1\\b",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx,css}"],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				},
+				{
+					"id": "banned-sidebar-drift",
+					"description": "w-80 + (lg|xl):w-96 drift; use canonical w-[var(--sidebar-width)] xl:w-[var(--sidebar-width-xl)]",
+					"pattern": "w-80\\s+(lg|xl):w-96",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx}"],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				},
+				{
+					"id": "banned-content-max-literal",
+					"description": "max-w-[1400px] literal; use max-w-[var(--content-max)]",
+					"pattern": "max-w-\\[1400px\\]",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx}"],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				},
+				{
+					"id": "banned-button-verb-content",
+					"description": "Reject/Close/Address/Re-open banned as literal button text (DESIGN-TOKENS §2.6); canonical verbs are Dismiss / Verify & Close / Reopen",
+					"pattern": "<[Bb]utton[^>]*>\\s*(Reject|Close|Address|Re-open)\\s*</",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx}"],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				},
+				{
+					"id": "banned-button-verb-aria",
+					"description": "Reject/Close/Address/Re-open banned as aria-label (DESIGN-TOKENS §2.6)",
+					"pattern": "aria-label=[\"'](Reject|Close|Address|Re-open)[\"']",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx}"],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				}
+			]
+		},
+		"stage-wide": {
+			"description": "unit-15 stage-wide audit superset — reserved. Adds the sharpened {origin} JSX regex and 'Show agent feedback' (?! inline) sentinel plus any downstream-component bans.",
+			"extends": "tokens",
+			"rules": [
+				{
+					"id": "banned-origin-jsx-bare",
+					"description": "bare {origin} JSX without originLabels[origin] — render the human label, not the raw slug (unit-15 / DESIGN-TOKENS §2.2)",
+					"pattern": "\\{origin\\}(?!Labels)",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx}"],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				},
+				{
+					"id": "banned-agent-feedback-toggle-copy",
+					"description": "copy must be 'Show agent feedback inline' (trailing word preserves the inline-interleaved semantics)",
+					"pattern": "\"Show agent feedback\"(?! inline)",
+					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx}"],
+					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				}
+			]
+		}
+	}
+}

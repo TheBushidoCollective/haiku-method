@@ -12,6 +12,10 @@ export default defineConfig({
 			"tests/**/*.test.tsx",
 			"tests/**/*.spec.ts",
 			"tests/**/*.spec.tsx",
+			"src/**/*.test.ts",
+			"src/**/*.test.tsx",
+			"src/**/*.spec.ts",
+			"src/**/*.spec.tsx",
 		],
 	},
 })

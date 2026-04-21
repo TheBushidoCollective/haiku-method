@@ -448,7 +448,7 @@ export function ReviewPage({ session, sessionId, wsRef }: Props) {
 					)}
 				</div>
 				{/* Sticky review sidebar with tabbed content */}
-				<aside className="hidden md:flex w-80 lg:w-96 shrink-0 sticky top-16 h-[calc(100vh-4rem)] flex-col bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700">
+				<aside className="hidden md:flex w-[var(--sidebar-width)] xl:w-[var(--sidebar-width-xl)] shrink-0 sticky top-16 h-[calc(100vh-4rem)] flex-col bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700">
 					{/* Tab for switching between Comments and Feedback */}
 					<div className="shrink-0 px-3 py-2 border-b border-stone-200 dark:border-stone-700">
 						<div className="flex gap-1 p-0.5 rounded-lg bg-stone-100 dark:bg-stone-800">
@@ -1004,7 +1004,7 @@ function UnitReview({
 							<li className="flex items-center gap-1">
 								<span
 									aria-hidden="true"
-									className="text-stone-400 dark:text-stone-600"
+									className="text-stone-600 dark:text-stone-300"
 								>
 									/
 								</span>
@@ -1305,7 +1305,7 @@ function OutputArtifactsTab({
 													/>
 												</button>
 												{expandedImage !== a.relativePath && (
-													<p className="text-xs text-stone-400 dark:text-stone-500 mt-1">
+													<p className="text-xs text-stone-600 dark:text-stone-300 mt-1">
 														Click to expand
 													</p>
 												)}
@@ -1386,7 +1386,7 @@ function UnitsTable({
 							<h3 className="text-sm font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
 								{stage.charAt(0).toUpperCase() + stage.slice(1)}
 							</h3>
-							<span className="text-xs text-stone-400 dark:text-stone-500">
+							<span className="text-xs text-stone-600 dark:text-stone-300">
 								{completed}/{stageUnits.length} complete
 							</span>
 						</div>
@@ -1457,7 +1457,7 @@ function UnitsTable({
 																	{u.title}
 																	{(isChanged || isNew) && (
 																		<span
-																			className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider align-middle ${
+																			className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wider align-middle ${
 																				isNew
 																					? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"
 																					: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"
@@ -1511,7 +1511,7 @@ function UnitsTable({
 															</button>
 															{(isChanged || isNew) && (
 																<span
-																	className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${
+																	className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wider ${
 																		isNew
 																			? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"
 																			: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"

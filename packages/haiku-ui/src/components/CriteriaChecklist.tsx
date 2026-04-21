@@ -28,7 +28,7 @@ export function CriteriaChecklist({ criteria }: Props) {
 						className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded ${
 							c.checked
 								? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
-								: "bg-stone-100 text-stone-400 dark:bg-stone-800"
+								: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
 						}`}
 					>
 						{c.checked ? (

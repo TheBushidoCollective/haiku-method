@@ -8,7 +8,6 @@
  */
 
 import {
-	paths,
 	type DirectionSelectRequest,
 	type DirectionSelectResponse,
 	type FeedbackCreateRequest,
@@ -18,6 +17,7 @@ import {
 	type FeedbackStatus,
 	type FeedbackUpdateRequest,
 	type FeedbackUpdateResponse,
+	paths,
 	type QuestionAnswerRequest,
 	type QuestionAnswerResponse,
 	type ReviewCurrentPayload,

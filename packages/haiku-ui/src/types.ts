@@ -14,20 +14,20 @@
  * `haiku-api` session schemas — `LooseRecord`).
  */
 
-export {
-	type DesignArchetypeData,
-	type DesignParameterData,
-	type FeedbackItem as FeedbackItemData,
-	type FeedbackListResponse,
-	type KnowledgeFile,
-	type OutputArtifact,
-	type PreviousReviewSnapshot,
-	type QuestionAnswer,
-	type QuestionDef,
-	type ReviewAnnotations,
-	type ReviewCurrentPayload as ReviewCurrentResponse,
-	type SessionPayload as SessionData,
-	type StageArtifact,
-	type StageStateInfo,
+export type { CriterionItem, MockupInfo } from "@haiku/shared"
+export type {
+	DesignArchetypeData,
+	DesignParameterData,
+	FeedbackItem as FeedbackItemData,
+	FeedbackListResponse,
+	KnowledgeFile,
+	OutputArtifact,
+	PreviousReviewSnapshot,
+	QuestionAnswer,
+	QuestionDef,
+	ReviewAnnotations,
+	ReviewCurrentPayload as ReviewCurrentResponse,
+	SessionPayload as SessionData,
+	StageArtifact,
+	StageStateInfo,
 } from "haiku-api"
-export { type CriterionItem, type MockupInfo } from "@haiku/shared"

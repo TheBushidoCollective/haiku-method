@@ -1,10 +1,10 @@
 import { CriteriaChecklist, MarkdownViewer, StatusBadge } from "@haiku/shared"
+import type { ReviewSessionPayload } from "haiku-api"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { remark } from "remark"
 import remarkGfm from "remark-gfm"
 import remarkHtml from "remark-html"
 import { useFeedback } from "../hooks/useFeedback"
-import type { ReviewSessionPayload } from "haiku-api"
 import type { ParsedIntent, ParsedUnit, Section } from "../parsed"
 import type {
 	CriterionItem,
@@ -32,6 +32,7 @@ export type ReviewPageSessionData = Omit<
 }
 
 type SessionData = ReviewPageSessionData
+
 import { AnnotationCanvas, type AnnotationPin } from "./AnnotationCanvas"
 import { Card, SectionHeading } from "./Card"
 import { FeedbackPanel } from "./FeedbackPanel"

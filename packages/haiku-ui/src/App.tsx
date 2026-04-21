@@ -1,8 +1,4 @@
-import type {
-	DirectionSessionPayload,
-	QuestionSessionPayload,
-	ReviewSessionPayload,
-} from "haiku-api"
+import type { ReviewSessionPayload } from "haiku-api"
 import { useEffect, useState } from "react"
 import { DesignPicker } from "./components/DesignPicker"
 import { QuestionPage } from "./components/QuestionPage"

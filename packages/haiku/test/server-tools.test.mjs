@@ -547,6 +547,160 @@ test("string properties use type 'string'", () => {
 	assert.strictEqual(intentGet.inputSchema.properties.field.type, "string")
 })
 
+// ── haiku-api contract invariants ──────────────────────────────────────────
+//
+// These are cheap structural checks that catch drift in the wire contract.
+// If any route drops the `transport: 'loopback'` annotation the FSM refuses
+// to start — this test fails loudly at the same level.
+
+console.log("\n=== haiku-api contract invariants ===")
+
+const { routes: apiRoutes, routeBodyLimit } = await import("haiku-api")
+
+test("every route declares transport='loopback'", () => {
+	for (const r of apiRoutes) {
+		assert.strictEqual(
+			r.transport,
+			"loopback",
+			`${r.method} ${r.pathTemplate} transport drift: ${r.transport}`,
+		)
+	}
+})
+
+test("every route has a unique operationId", () => {
+	const seen = new Set()
+	for (const r of apiRoutes) {
+		assert.ok(!seen.has(r.operationId), `duplicate ${r.operationId}`)
+		seen.add(r.operationId)
+	}
+})
+
+test("feedback POST/PUT routes have 128 KiB cap", () => {
+	assert.strictEqual(
+		routeBodyLimit("POST", "/api/feedback/{intent}/{stage}"),
+		131072,
+	)
+	assert.strictEqual(
+		routeBodyLimit("PUT", "/api/feedback/{intent}/{stage}/{feedbackId}"),
+		131072,
+	)
+})
+
+test("review decide route uses default 1 MiB cap", () => {
+	assert.strictEqual(
+		routeBodyLimit("POST", "/review/{sessionId}/decide"),
+		1_048_576,
+	)
+})
+
+test("revisit endpoint is in the route table", () => {
+	const r = apiRoutes.find(
+		(route) =>
+			route.method === "POST" && route.pathTemplate === "/api/revisit/{sessionId}",
+	)
+	assert.ok(r, "missing revisit route")
+	assert.strictEqual(r.operationId, "postRevisit")
+})
+
+// ── Server-level body cap + transport invariant ───────────────────────────
+//
+// These tests spawn a child Node process and exercise the real HTTP server.
+// The transport-invariant test specifically forces a non-loopback bind
+// (HAIKU_FORCE_BIND_ADDR=0.0.0.0) and asserts the process exits non-zero.
+
+console.log("\n=== Server-level body cap + transport invariant ===")
+
+import { spawn } from "node:child_process"
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, chmodSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join, dirname as pathDirname } from "node:path"
+import { fileURLToPath } from "node:url"
+
+const here = pathDirname(fileURLToPath(import.meta.url))
+const haikuPkgRoot = join(here, "..")
+
+async function runInChild({ env = {}, scriptBody, timeoutMs = 15000 }) {
+	const childTmp = mkdtempSync(join(tmpdir(), "haiku-server-tools-"))
+	const scriptPath = join(childTmp, "child.mjs")
+	writeFileSync(scriptPath, scriptBody, "utf8")
+	return await new Promise((resolve) => {
+		const child = spawn(
+			process.execPath,
+			["--import", "tsx", scriptPath],
+			{
+				cwd: haikuPkgRoot,
+				env: { ...process.env, ...env },
+				stdio: ["ignore", "pipe", "pipe"],
+			},
+		)
+		let stdout = ""
+		let stderr = ""
+		child.stdout.on("data", (b) => {
+			stdout += b.toString("utf8")
+		})
+		child.stderr.on("data", (b) => {
+			stderr += b.toString("utf8")
+		})
+		const to = setTimeout(() => {
+			child.kill("SIGKILL")
+		}, timeoutMs)
+		child.on("exit", (code, signal) => {
+			clearTimeout(to)
+			rmSync(childTmp, { recursive: true, force: true })
+			resolve({ code, signal, stdout, stderr })
+		})
+	})
+}
+
+const serverAsyncTests = []
+function asyncTest(name, fn) {
+	serverAsyncTests.push({ name, fn })
+}
+
+asyncTest(
+	"transport invariant: process exits non-zero on non-loopback bind",
+	async () => {
+		const res = await runInChild({
+			env: { HAIKU_FORCE_BIND_ADDR: "0.0.0.0" },
+			scriptBody: `
+import { startHttpServer } from "${haikuPkgRoot}/src/http.ts"
+await startHttpServer().catch(() => {})
+`,
+		})
+		// Node may exit 1 (assertLoopbackBind → process.exit(1)) OR the child
+		// may kill itself earlier during bind (EACCES on some systems). We
+		// accept any non-zero code; 0 means the invariant silently passed —
+		// a regression.
+		assert.notStrictEqual(res.code, 0, `expected non-zero exit, got ${res.code} / signal=${res.signal} / stderr=${res.stderr}`)
+	},
+)
+
+asyncTest("server body > 1 MiB returns 413 at bridge level", async () => {
+	const { startHttpServer } = await import("../src/http.ts")
+	const port = await startHttpServer()
+	const huge = "x".repeat(2 * 1024 * 1024) // 2 MiB — above 1 MiB cap
+	const res = await fetch(`http://127.0.0.1:${port}/review/does-not-exist/decide`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ decision: "approved", feedback: huge }),
+	})
+	assert.strictEqual(res.status, 413)
+	const data = await res.json()
+	assert.strictEqual(data.error, "payload_too_large")
+})
+
+// Run async tests sequentially.
+for (const { name, fn } of serverAsyncTests) {
+	try {
+		await fn()
+		passed++
+		console.log(`  ✓ ${name}`)
+	} catch (e) {
+		failed++
+		console.log(`  ✗ ${name}: ${e.message}`)
+	}
+}
+
 // ── Summary ───────────────────────────────────────────────────────────────
 
 console.log(`\n${passed} passed, ${failed} failed\n`)

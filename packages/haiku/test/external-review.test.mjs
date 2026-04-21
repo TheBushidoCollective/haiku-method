@@ -658,6 +658,194 @@ try {
 		)
 	})
 
+	// ── WebSocket hardening: frame cap + rate limit ──────────────────────
+
+	console.log("\n=== WebSocket hardening (size cap, rate limit) ===")
+
+	await (async () => {
+		const { startHttpServer } = await import("../src/http.ts")
+		const { createSession } = await import("../src/sessions.ts")
+		const { createHash } = await import("node:crypto")
+		const net = await import("node:net")
+
+		const { projDir, intentDirPath, slug } = createProject(
+			"ws-hardening-intent",
+			{},
+		)
+		process.chdir(projDir)
+		const port = await startHttpServer()
+		const session = createSession({
+			intent_slug: slug,
+			intent_dir: intentDirPath,
+			review_type: "intent",
+			target: "review",
+		})
+
+		function wsHandshake(socket, key) {
+			const req =
+				`GET /ws/session/${session.session_id} HTTP/1.1\r\n` +
+				`Host: 127.0.0.1:${port}\r\n` +
+				"Upgrade: websocket\r\n" +
+				"Connection: Upgrade\r\n" +
+				`Sec-WebSocket-Key: ${key}\r\n` +
+				"Sec-WebSocket-Version: 13\r\n\r\n"
+			socket.write(req)
+		}
+
+		function makeClientFrame(payload, opcode = 0x01) {
+			const payloadBuf =
+				typeof payload === "string" ? Buffer.from(payload, "utf8") : payload
+			const len = payloadBuf.length
+			const mask = Buffer.from([0, 0, 0, 0]) // all-zero mask (noop)
+			let header
+			if (len < 126) {
+				header = Buffer.alloc(2)
+				header[0] = 0x80 | opcode // FIN + opcode
+				header[1] = 0x80 | len // MASK + length
+			} else if (len < 65536) {
+				header = Buffer.alloc(4)
+				header[0] = 0x80 | opcode
+				header[1] = 0x80 | 126
+				header.writeUInt16BE(len, 2)
+			} else {
+				header = Buffer.alloc(10)
+				header[0] = 0x80 | opcode
+				header[1] = 0x80 | 127
+				header.writeUInt32BE(0, 2)
+				header.writeUInt32BE(len, 6)
+			}
+			return Buffer.concat([header, mask, payloadBuf])
+		}
+
+		function decodeCloseFrame(buf) {
+			// Caller only needs the 16-bit status code. The first 2 bytes are
+			// the WS header (FIN+opcode + payload length), so the code is at
+			// offset 2 for a normal close frame with 2-byte body.
+			if (buf.length < 4) return null
+			if ((buf[0] & 0x0f) !== 0x08) return null
+			return buf.readUInt16BE(2)
+		}
+
+		await test("WS frame > 64 KiB closes with 1009", async () => {
+			const socket = net.createConnection(port, "127.0.0.1")
+			const key = Buffer.from("ws-frame-oversize-test").toString("base64")
+			await new Promise((resolve, reject) => {
+				socket.once("connect", resolve)
+				socket.once("error", reject)
+			})
+			wsHandshake(socket, key)
+
+			// Read the handshake response (ignore; just ensure we consume bytes).
+			await new Promise((resolve) => {
+				socket.once("data", (buf) => {
+					// Response ends after \r\n\r\n — we just need to wait for it.
+					// Node may deliver upgrade response in chunks; a single chunk
+					// in loopback is enough in practice.
+					if (buf.toString("utf8").includes("101")) resolve()
+					else resolve()
+				})
+			})
+
+			// Oversize frame: 70 KiB > 64 KiB cap.
+			const big = Buffer.alloc(70 * 1024, 0x61) // 'a'
+			socket.write(makeClientFrame(big))
+
+			const closeCode = await new Promise((resolve) => {
+				socket.on("data", (data) => {
+					const code = decodeCloseFrame(data)
+					if (code !== null) resolve(code)
+				})
+				socket.on("close", () => resolve(null))
+				setTimeout(() => resolve("timeout"), 3000)
+			})
+			assert.strictEqual(closeCode, 1009, `expected close 1009, got ${closeCode}`)
+			socket.destroy()
+		})
+
+		await test("WS > 20 msg/sec closes with 1008", async () => {
+			// Create a fresh session so the rate-limit state starts clean.
+			const rlSession = createSession({
+				intent_slug: slug,
+				intent_dir: intentDirPath,
+				review_type: "intent",
+				target: "review",
+			})
+			const socket = net.createConnection(port, "127.0.0.1")
+			const key = Buffer.from("ws-rate-limit-test").toString("base64")
+			await new Promise((resolve, reject) => {
+				socket.once("connect", resolve)
+				socket.once("error", reject)
+			})
+			const req =
+				`GET /ws/session/${rlSession.session_id} HTTP/1.1\r\n` +
+				`Host: 127.0.0.1:${port}\r\n` +
+				"Upgrade: websocket\r\n" +
+				"Connection: Upgrade\r\n" +
+				`Sec-WebSocket-Key: ${key}\r\n` +
+				"Sec-WebSocket-Version: 13\r\n\r\n"
+			socket.write(req)
+
+			// Accumulator for all inbound data — we parse close frame out of
+			// the combined stream rather than relying on single chunks.
+			let closeCode = null
+			socket.on("data", (data) => {
+				if (closeCode !== null) return
+				// Skip past HTTP 101 handshake if still present.
+				let buf = data
+				const headerEnd = buf.indexOf("\r\n\r\n")
+				if (headerEnd >= 0 && buf.slice(0, headerEnd).includes("101")) {
+					buf = buf.slice(headerEnd + 4)
+				}
+				while (buf.length >= 2) {
+					if ((buf[0] & 0x0f) === 0x08 && buf.length >= 4) {
+						closeCode = buf.readUInt16BE(2)
+						break
+					}
+					// Skip simple unmasked server frames (ack/error). Decode
+					// length to advance: opcode byte, len byte, optional ext.
+					const opcode = buf[0] & 0x0f
+					let len = buf[1] & 0x7f
+					let offset = 2
+					if (len === 126) {
+						if (buf.length < 4) break
+						len = buf.readUInt16BE(2)
+						offset = 4
+					} else if (len === 127) {
+						if (buf.length < 10) break
+						len = buf.readUInt32BE(6)
+						offset = 10
+					}
+					if (buf.length < offset + len) break
+					if (opcode === 0x08 && buf.length >= offset + 2) {
+						closeCode = buf.readUInt16BE(offset)
+						break
+					}
+					buf = buf.slice(offset + len)
+				}
+			})
+
+			// Wait for handshake completion before sending frames.
+			await new Promise((resolve) => setTimeout(resolve, 50))
+
+			// Send 30 minimal frames to ensure we push past the 20/sec cap.
+			const frameBuf = makeClientFrame(
+				JSON.stringify({ type: "decide", decision: "approved" }),
+			)
+			for (let i = 0; i < 30; i++) {
+				socket.write(frameBuf)
+			}
+
+			// Wait for close frame to propagate.
+			await new Promise((resolve) => setTimeout(resolve, 500))
+			assert.strictEqual(
+				closeCode,
+				1008,
+				`expected close 1008, got ${closeCode}`,
+			)
+			socket.destroy()
+		})
+	})()
+
 	// ── Cleanup ───────────────────────────────────────────────────────────
 
 	console.log(`\n${passed} passed, ${failed} failed\n`)

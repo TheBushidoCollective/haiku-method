@@ -9,10 +9,10 @@ quality_gates:
 inputs:
   - knowledge/ARCHITECTURE.md
 status: active
-bolt: 2
-hat: reviewer
+bolt: 3
+hat: builder
 started_at: '2026-04-21T03:55:47Z'
-hat_started_at: '2026-04-21T04:34:27Z'
+hat_started_at: '2026-04-21T04:39:29Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T03:55:47Z'
@@ -50,6 +50,19 @@ iterations:
     result: advance
   - hat: reviewer
     started_at: '2026-04-21T04:34:27Z'
+    completed_at: '2026-04-21T04:39:29Z'
+    result: reject
+    reason: >-
+      Completion criterion "Stream handlers ... path-traversal fixture set
+      returns 403 (not 200, not 400)" has no test coverage. The 403 branch in
+      serveUnderRoot / resolvePathSafe is reachable by code but no test in
+      packages/haiku/test/*.mjs exercises the /mockups, /wireframe,
+      /stage-artifacts, or /files stream endpoints with a traversal payload.
+      handleFileGet also returns 404 (not 403) on traversal, disagreeing with
+      the unit spec. See FB-01 for required test fixtures and the
+      FileServeParamsSchema wiring follow-up.
+  - hat: builder
+    started_at: '2026-04-21T04:39:29Z'
     completed_at: null
     result: null
 outputs:

@@ -10,6 +10,9 @@ quality_gates:
   - build
 inputs:
   - knowledge/ARCHITECTURE.md
+outputs:
+  - stages/development/artifacts/bundle-baseline.html
+  - stages/development/artifacts/unit-03-extract-haiku-ui-notes.md
 status: pending
 bolt: 0
 hat: ""

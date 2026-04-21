@@ -16,6 +16,8 @@ inputs:
 status: pending
 bolt: 0
 hat: ""
+outputs:
+  - stages/development/artifacts/unit-08-tactical-plan.md
 ---
 
 # Feedback component cluster

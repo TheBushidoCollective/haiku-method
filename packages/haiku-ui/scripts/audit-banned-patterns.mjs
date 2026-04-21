@@ -14,7 +14,7 @@
  * Canonical source: knowledge/DESIGN-TOKENS.md §1.1a (banned pairs), §1.4
  * (typography floor), §1.7 (disabled-opacity ban), §2.6 (canonical verbs).
  */
-import { readFile, readdir, stat } from "node:fs/promises"
+import { readdir, readFile, stat } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -61,7 +61,7 @@ function globToRegExp(glob) {
 			const alt = glob
 				.slice(i + 1, end)
 				.split(",")
-				.map((s) => s.replace(/([.+^$()|\[\]\\])/g, "\\$1"))
+				.map((s) => s.replace(/([.+^$()|[\]\\])/g, "\\$1"))
 				.join("|")
 			out += `(?:${alt})`
 			i = end + 1
@@ -96,13 +96,11 @@ async function walk(dir, acc = []) {
 	return acc
 }
 
-function matchAny(relPath, globs) {
-	return globs.some((glob) => globToRegExp(glob).test(relPath))
-}
-
 async function loadProfile(config, name, seen = new Set()) {
 	if (seen.has(name)) {
-		throw new Error(`audit-config profile cycle: ${[...seen, name].join(" → ")}`)
+		throw new Error(
+			`audit-config profile cycle: ${[...seen, name].join(" → ")}`,
+		)
 	}
 	seen.add(name)
 	const profile = config.profiles?.[name]
@@ -137,19 +135,24 @@ async function main() {
 	}
 
 	// Pre-compile each rule's scope + exclude globs + pattern.
+	// Rules default to ban-mode (fail on any hit). Rules with
+	// `requirePresence: true` invert: they fail when zero hits are found in
+	// the declared scope. See unit-09 tactical plan §9 — the audit script
+	// doubles as a presence-check for the canonical aria-label string.
 	const compiled = rules.map((rule) => {
 		if (
 			typeof rule.pattern !== "string" ||
 			!Array.isArray(rule.scope) ||
-			!Array.isArray(rule.exclude)
+			!Array.isArray(rule.exclude ?? [])
 		) {
-			throw new Error(`Rule '${rule.id}' missing pattern/scope/exclude`)
+			throw new Error(`Rule '${rule.id}' missing pattern/scope`)
 		}
 		return {
 			...rule,
 			regex: new RegExp(rule.pattern, "g"),
 			scopeRegex: rule.scope.map(globToRegExp),
-			excludeRegex: rule.exclude.map(globToRegExp),
+			excludeRegex: (rule.exclude ?? []).map(globToRegExp),
+			requirePresence: rule.requirePresence === true,
 		}
 	})
 
@@ -159,6 +162,7 @@ async function main() {
 	let totalHits = 0
 	const hitsByRule = new Map()
 
+	const failedRules = new Set()
 	for (const rule of compiled) {
 		let ruleHits = 0
 		for (const absFile of all) {
@@ -178,36 +182,56 @@ async function main() {
 			}
 			// Rewind the regex before every use — `g` flag keeps lastIndex state.
 			rule.regex.lastIndex = 0
-			let match
 			const lines = content.split("\n")
 			for (let i = 0; i < lines.length; i += 1) {
 				const line = lines[i]
 				const localRe = new RegExp(rule.pattern, "g")
-				while ((match = localRe.exec(line)) !== null) {
-					totalHits += 1
+				let match = localRe.exec(line)
+				while (match !== null) {
 					ruleHits += 1
-					console.log(
-						`BANNED [${rule.id}] ${rel}:${i + 1} — ${rule.description}`,
-					)
-					console.log(`  → ${line.trim()}`)
+					if (!rule.requirePresence) {
+						totalHits += 1
+						console.log(
+							`BANNED [${rule.id}] ${rel}:${i + 1} — ${rule.description}`,
+						)
+						console.log(`  → ${line.trim()}`)
+					}
 					if (match.index === localRe.lastIndex) localRe.lastIndex += 1
+					match = localRe.exec(line)
 				}
 			}
 		}
 		hitsByRule.set(rule.id, ruleHits)
+		if (rule.requirePresence && ruleHits === 0) {
+			failedRules.add(rule.id)
+			console.log(`REQUIRED [${rule.id}] missing — ${rule.description}`)
+			console.log(
+				`  → pattern /${rule.pattern}/ not found in scope ${rule.scope.join(", ")}`,
+			)
+		}
 	}
 
 	console.log("")
+	const failCount = totalHits + failedRules.size
 	console.log(
-		`audit-banned-patterns · profile=${profileName} · ${compiled.length} rules · ${totalHits} hits`,
+		`audit-banned-patterns · profile=${profileName} · ${compiled.length} rules · ${totalHits} banned hit${totalHits === 1 ? "" : "s"} · ${failedRules.size} required-presence missing`,
 	)
 	for (const rule of compiled) {
 		const n = hitsByRule.get(rule.id) ?? 0
-		const marker = n === 0 ? "OK" : "FAIL"
-		console.log(`  [${marker}] ${rule.id} — ${n} hit${n === 1 ? "" : "s"}`)
+		const requiredMissing = rule.requirePresence && n === 0
+		let marker
+		if (rule.requirePresence) {
+			marker = requiredMissing ? "FAIL" : "OK"
+		} else {
+			marker = n === 0 ? "OK" : "FAIL"
+		}
+		const suffix = rule.requirePresence
+			? ` (required-presence, ${n} match${n === 1 ? "" : "es"})`
+			: ` — ${n} hit${n === 1 ? "" : "s"}`
+		console.log(`  [${marker}] ${rule.id}${suffix}`)
 	}
 
-	process.exit(totalHits === 0 ? 0 : 1)
+	process.exit(failCount === 0 ? 0 : 1)
 }
 
 // Guard against Node ESM top-level await not available in older versions —

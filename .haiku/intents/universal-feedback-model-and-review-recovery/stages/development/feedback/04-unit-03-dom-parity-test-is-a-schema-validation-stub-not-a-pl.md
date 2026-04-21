@@ -2,7 +2,7 @@
 title: >-
   unit-03: DOM-parity test is a schema-validation stub, not a Playwright DOM
   parity test
-status: pending
+status: addressed
 origin: adversarial-review
 author: agent
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-21T05:51:41Z'
 iteration: 0
 visit: 0
 source_ref: unit-03-extract-haiku-ui-package/reviewer/bolt-1
-closed_by: null
+closed_by: 'fix-loop:FB-04:bolt-2'
 bolt: 0
 upstream_stage: null
 ---
@@ -55,4 +55,3 @@ Implement what the spec asked for:
 If capturing true pre-move snapshots genuinely requires infra that's out of scope, the correct move is to reject back to the planner / refiner with an upstream finding — not to silently ship a schema check and rename it "parity."
 
 Confidence: **high** — the delta between "Playwright test that captures the rendered DOM tree and asserts match against committed snapshots" and "vitest that `safeParse`s three JSON files" is not a matter of taste.
-

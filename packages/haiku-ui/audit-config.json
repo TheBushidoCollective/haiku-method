@@ -77,6 +77,13 @@
 					"pattern": "aria-label=[\"'](Reject|Close|Address|Re-open)[\"']",
 					"scope": ["packages/haiku-ui/src/**/*.{ts,tsx}"],
 					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
+				},
+				{
+					"id": "banned-tabindex-negative-stageprogress",
+					"description": "tabindex=-1 banned in StageProgressStrip.tsx — future stages MUST remain keyboard-reachable (unit-12 completion criteria)",
+					"pattern": "tabindex=[\"']-1[\"']",
+					"scope": ["packages/haiku-ui/src/components/StageProgressStrip.tsx"],
+					"exclude": []
 				}
 			]
 		},

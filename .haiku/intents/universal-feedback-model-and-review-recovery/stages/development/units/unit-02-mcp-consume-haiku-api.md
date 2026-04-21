@@ -8,6 +8,21 @@ quality_gates:
   - test
 inputs:
   - knowledge/ARCHITECTURE.md
+outputs:
+  - packages/haiku-api/src/schemas/revisit.ts
+  - packages/haiku-api/src/schemas/common.ts
+  - packages/haiku-api/src/routes.ts
+  - packages/haiku-api/src/index.ts
+  - packages/haiku-api/test/routes.test.mjs
+  - packages/haiku-api/test/schemas.test.mjs
+  - packages/haiku/package.json
+  - packages/haiku/src/http.ts
+  - packages/haiku/scripts/capture-test-baseline.mjs
+  - packages/haiku/test/http-feedback.test.mjs
+  - packages/haiku/test/external-review.test.mjs
+  - packages/haiku/test/server-tools.test.mjs
+  - stages/development/artifacts/test-baseline.json
+  - stages/development/artifacts/test-deltas.json
 status: pending
 bolt: 0
 hat: ""

@@ -10,6 +10,20 @@ inputs:
   - knowledge/DESIGN-TOKENS.md
   - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/contrast-and-type-audit.md
+outputs:
+  - packages/haiku-ui/src/index.css
+  - packages/haiku-ui/tailwind.config.ts
+  - packages/haiku-ui/audit-config.json
+  - packages/haiku-ui/scripts/verify-tokens.mjs
+  - packages/haiku-ui/scripts/audit-contrast.mjs
+  - packages/haiku-ui/scripts/audit-banned-patterns.mjs
+  - packages/haiku-ui/src/components/primitives/index.ts
+  - packages/haiku-ui/src/components/primitives/Button.tsx
+  - packages/haiku-ui/src/components/primitives/Badge.tsx
+  - packages/haiku-ui/src/components/primitives/Card.tsx
+  - packages/haiku-ui/src/components/primitives/Chip.tsx
+  - packages/haiku-ui/src/components/primitives/Divider.tsx
+  - packages/haiku-ui/src/components/primitives/Input.tsx
 status: pending
 bolt: 0
 hat: ""

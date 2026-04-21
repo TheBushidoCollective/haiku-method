@@ -10,7 +10,7 @@ quality_gates:
   - build
 inputs:
   - knowledge/ARCHITECTURE.md
-status: active
+status: completed
 bolt: 2
 hat: builder
 started_at: '2026-04-21T05:00:32Z'
@@ -99,6 +99,7 @@ outputs:
   - packages/haiku/scripts/bundle-haiku-ui.mjs
   - packages/haiku/scripts/compare-bundle.mjs
   - packages/haiku/src/http.ts
+completed_at: '2026-04-21T06:19:07Z'
 ---
 # Extract haiku-ui package
 

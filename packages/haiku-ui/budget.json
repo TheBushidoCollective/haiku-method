@@ -1,9 +1,9 @@
 {
-	"bundleGzipMaxBytes": 1048576,
-	"lastKnownGzipBytes": 950974,
-	"notes": [
-		"Pre-move bundle measured at ~929 KB gzipped (inlined HTML blob).",
-		"The unit-03 spec set a 500 KB target but the current bundle already exceeds it because the SPA ships @xyflow/react + elkjs + mermaid + react-markdown + remark all in one inline chunk with no tree-shaking (vite build config sets manualChunks:undefined and inlineDynamicImports:true to preserve the single-HTML-blob invariant).",
-		"Budget set to 1024 KB as the realistic ceiling for this relocation-only unit. Tree-shaking, code-splitting, or dep-trimming is explicitly out of scope for unit-03 (no visual change, pure relocation). A future unit should own lowering this budget back toward the 500 KB aspiration."
-	]
+  "bundleGzipMaxBytes": 1048576,
+  "lastKnownGzipBytes": 906122,
+  "notes": [
+    "Pre-move bundle measured at ~929 KB gzipped (inlined HTML blob).",
+    "The unit-03 spec set a 500 KB target but the current bundle already exceeds it because the SPA ships @xyflow/react + elkjs + mermaid + react-markdown + remark all in one inline chunk with no tree-shaking (vite build config sets manualChunks:undefined and inlineDynamicImports:true to preserve the single-HTML-blob invariant).",
+    "Budget set to 1024 KB as the realistic ceiling for this relocation-only unit. Tree-shaking, code-splitting, or dep-trimming is explicitly out of scope for unit-03 (no visual change, pure relocation). A future unit should own lowering this budget back toward the 500 KB aspiration."
+  ]
 }

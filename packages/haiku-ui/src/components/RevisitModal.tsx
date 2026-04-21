@@ -149,19 +149,14 @@ export function RevisitModal({
 	}, [open, onClose])
 
 	// Focus-first-input override — useFocusTrap focuses the first tabbable
-	// child, which is the close button. Spec requires the first reason input.
-	// Defer to rAF so React has flushed the trap's effect first.
+	// child (the close button). Spec requires focus on the first reason input.
+	// Effect declaration order matters: this fires AFTER the trap's effect
+	// (they're in the same commit), so the override is deterministic without
+	// needing rAF deferrals. Doing this synchronously also keeps jsdom +
+	// userEvent.type timing clean — a deferred rAF can steal focus mid-type.
 	useEffect(() => {
 		if (!open) return
-		let cancelled = false
-		const id = requestAnimationFrame(() => {
-			if (cancelled) return
-			firstTitleInputRef.current?.focus()
-		})
-		return () => {
-			cancelled = true
-			cancelAnimationFrame(id)
-		}
+		firstTitleInputRef.current?.focus()
 	}, [open])
 
 	// Reset local state when the modal closes to avoid stale drafts on reopen.
@@ -247,10 +242,12 @@ export function RevisitModal({
 
 	return (
 		<div
-			// Backdrop — decorative. Clicks that originate on the backdrop itself
-			// (not inside the dialog) dismiss. The dialog body stops propagation.
+			// Backdrop. The visual scrim is decorative, but we can't set
+			// aria-hidden on this wrapper because it wraps the dialog too —
+			// aria-hidden cascades and would remove the dialog from the a11y tree.
+			// Clicks that originate on the backdrop itself (not inside the dialog)
+			// dismiss; the dialog body stops propagation to prevent false hits.
 			data-testid="revisit-modal-backdrop"
-			aria-hidden="true"
 			className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
 			onMouseDown={(e) => {
 				if (e.target === e.currentTarget) onClose()

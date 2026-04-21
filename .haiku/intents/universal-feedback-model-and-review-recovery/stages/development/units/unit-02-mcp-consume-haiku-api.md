@@ -10,9 +10,9 @@ inputs:
   - knowledge/ARCHITECTURE.md
 status: active
 bolt: 1
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T03:55:47Z'
-hat_started_at: '2026-04-21T04:02:12Z'
+hat_started_at: '2026-04-21T04:26:33Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T03:55:47Z'
@@ -20,10 +20,29 @@ iterations:
     result: advance
   - hat: builder
     started_at: '2026-04-21T04:02:12Z'
+    completed_at: '2026-04-21T04:26:33Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T04:26:33Z'
     completed_at: null
     result: null
 outputs:
   - stages/development/artifacts/unit-02-tactical-plan.md
+  - stages/development/artifacts/test-baseline.json
+  - stages/development/artifacts/test-deltas.json
+  - package-lock.json
+  - packages/haiku-api/src/index.ts
+  - packages/haiku-api/src/routes.ts
+  - packages/haiku-api/src/schemas/common.ts
+  - packages/haiku-api/src/schemas/revisit.ts
+  - packages/haiku-api/test/routes.test.mjs
+  - packages/haiku-api/test/schemas.test.mjs
+  - packages/haiku/package.json
+  - packages/haiku/scripts/capture-test-baseline.mjs
+  - packages/haiku/src/http.ts
+  - packages/haiku/test/external-review.test.mjs
+  - packages/haiku/test/http-feedback.test.mjs
+  - packages/haiku/test/server-tools.test.mjs
 ---
 # MCP consumes haiku-api
 

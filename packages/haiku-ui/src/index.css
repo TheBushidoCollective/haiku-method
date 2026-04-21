@@ -4,6 +4,49 @@
 /* Dark mode: auto-detect from system, toggleable via class on <html> */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Design tokens — canonical source: knowledge/DESIGN-TOKENS.md §1 + §2.
+   Tailwind v4 reads @theme blocks as the scale override surface. Arbitrary
+   CSS custom properties live in :root and are consumed via
+   w-[var(--sidebar-width)] / max-w-[var(--content-max)] / similar.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@theme {
+	/* Feedback semantic color aliases (DESIGN-TOKENS §2.1) — exposed as
+	   --color-* so Tailwind will emit matching utilities (bg-feedback-pending-fg
+	   etc.) for consumers that want the semantic name. The literal stone/amber/
+	   etc. tokens below remain the primary mechanism. */
+	--color-feedback-pending-fg: oklch(47.38% 0.114 60.94);
+	--color-feedback-pending-bg: oklch(96.43% 0.048 95.62);
+	--color-feedback-addressed-fg: oklch(33.46% 0.158 259.21);
+	--color-feedback-addressed-bg: oklch(93.2% 0.032 255.59);
+	--color-feedback-closed-fg: oklch(41.06% 0.112 141.66);
+	--color-feedback-closed-bg: oklch(96.2% 0.048 146.63);
+	--color-feedback-rejected-fg: oklch(36.5% 0.011 75.35);
+	--color-feedback-rejected-bg: oklch(96.6% 0.003 75.35);
+
+	/* Origin semantic aliases (DESIGN-TOKENS §2.2) */
+	--color-origin-adversarial-fg: oklch(44.55% 0.165 12.49);
+	--color-origin-adversarial-bg: oklch(94.49% 0.024 15.16);
+	--color-origin-external-fg: oklch(44.55% 0.172 292.34);
+	--color-origin-external-bg: oklch(94.81% 0.033 290.98);
+	--color-origin-user-fg: oklch(45.32% 0.14 232.65);
+	--color-origin-user-bg: oklch(95.17% 0.027 228.25);
+	--color-origin-agent-fg: oklch(44.51% 0.095 188.25);
+	--color-origin-agent-bg: oklch(95.12% 0.04 178.72);
+}
+
+/* Canonical container tokens (DESIGN-TOKENS §2.5 + unit-04 spec §Scope).
+   Consumed via Tailwind arbitrary values: w-[var(--sidebar-width)],
+   w-[var(--sidebar-width-xl)], max-w-[var(--content-max)]. They live in
+   :root (NOT @theme) because they are raw CSS custom properties for layout,
+   not Tailwind scale tokens. */
+:root {
+	--sidebar-width: 20rem;
+	--sidebar-width-xl: 24rem;
+	--content-max: 1400px;
+}
+
 /* Hide tab panels that are not active */
 [role="tabpanel"][hidden] {
 	display: none;
@@ -13,6 +56,11 @@ html {
 	transition:
 		background-color 0.2s,
 		color 0.2s;
+}
+@media (prefers-reduced-motion: reduce) {
+	html {
+		transition: none;
+	}
 }
 /* Prevent table overflow — wrap in scrollable container */
 table {
@@ -49,6 +97,14 @@ pre {
 .annotation-pin:hover {
 	transform: translate(-50%, -50%) scale(1.2);
 }
+@media (prefers-reduced-motion: reduce) {
+	.annotation-pin {
+		transition: none;
+	}
+	.annotation-pin:hover {
+		transform: translate(-50%, -50%);
+	}
+}
 .annotation-pin.selected {
 	outline: 2px solid #3b82f6;
 	outline-offset: 2px;
@@ -65,6 +121,11 @@ pre {
 .inline-highlight:hover,
 .inline-highlight.active {
 	background-color: rgba(251, 191, 36, 0.5);
+}
+@media (prefers-reduced-motion: reduce) {
+	.inline-highlight {
+		transition: none;
+	}
 }
 
 /* Comment sidebar entries */
@@ -86,4 +147,32 @@ pre {
 }
 .margin-comment {
 	border-left: 3px solid rgba(251, 191, 36, 0.7);
+}
+@media (prefers-reduced-motion: reduce) {
+	.comment-entry,
+	.margin-comment {
+		transition: none;
+	}
+}
+
+/* Feedback status-change flash (DESIGN-TOKENS §5) — cosmetic, drops entirely
+   under prefers-reduced-motion. */
+@keyframes feedback-status-change {
+	0% {
+		opacity: 1;
+	}
+	30% {
+		opacity: 0.6;
+	}
+	100% {
+		opacity: 1;
+	}
+}
+.feedback-status-changed {
+	animation: feedback-status-change 0.4s ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) {
+	.feedback-status-changed {
+		animation: none;
+	}
 }

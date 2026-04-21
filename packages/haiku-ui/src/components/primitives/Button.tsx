@@ -11,8 +11,8 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 /**
  * Variant class strings derived from DESIGN-BRIEF §2 + DESIGN-TOKENS §1.9.
  * Disabled state uses token-based muted backgrounds + full-opacity text per
- * DESIGN-TOKENS §1.7 — NEVER `opacity-50` or similar composite-opacity tricks
- * (banned repo-wide because α-composite collapses text contrast below AA).
+ * DESIGN-TOKENS §1.7 — never composite-opacity shortcuts (they collapse
+ * text contrast below AA and are banned repo-wide by audit-banned-patterns).
  */
 const variantEnabled: Record<ButtonVariant, string> = {
 	primary: "bg-teal-600 hover:bg-teal-700 text-white",

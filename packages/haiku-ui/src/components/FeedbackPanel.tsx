@@ -3,13 +3,17 @@ import type { FeedbackItemData } from "../types"
 
 // ── Design tokens from DESIGN-TOKENS.md ─────────────────────────────────
 
+// Canonical mapping per DESIGN-TOKENS §2.1. `rejected` foreground lifted from
+// text-stone-500 (4.40:1 AA FAIL on bg-stone-100) to text-stone-600 (6.99:1 AAA)
+// per FB-15; dark lifted from text-stone-400 to text-stone-300 for symmetric AA.
 const feedbackStatusColors: Record<string, string> = {
 	pending:
 		"bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
 	addressed: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
 	closed:
 		"bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-	rejected: "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400",
+	rejected:
+		"bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
 }
 
 const originColors: Record<string, string> = {
@@ -24,18 +28,20 @@ const originColors: Record<string, string> = {
 	agent: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
 }
 
+// Canonical per DESIGN-TOKENS §2.3 (unit-18 QG4 / QG5 gates align with rendered
+// feedback-card-states.html and contrast-and-type-audit.md §1/§2 math).
 const statusBorderLeft: Record<string, string> = {
 	pending: "border-l-[3px] border-l-amber-400 dark:border-l-amber-500",
 	addressed: "border-l-[3px] border-l-blue-400 dark:border-l-blue-500",
-	closed: "border-l-[3px] border-l-green-400 dark:border-l-green-500",
-	rejected: "border-l-[3px] border-l-stone-300 dark:border-l-stone-600",
+	closed: "border-l-[3px] border-l-green-500 dark:border-l-green-400",
+	rejected: "border-l-[3px] border-l-stone-400 dark:border-l-stone-500",
 }
 
 const statusBackground: Record<string, string> = {
 	pending: "bg-amber-50/50 dark:bg-amber-950/20",
 	addressed: "bg-blue-50/50 dark:bg-blue-950/20",
-	closed: "bg-green-50/30 dark:bg-green-950/15",
-	rejected: "bg-stone-50 dark:bg-stone-800/30",
+	closed: "bg-green-50/60 dark:bg-green-950/25",
+	rejected: "bg-stone-100 dark:bg-stone-800/50",
 }
 
 function visitCounterClasses(visits: number): string {
@@ -128,7 +134,7 @@ export function FeedbackPanel({ items, loading, onUpdate, onDelete }: Props) {
 				)}
 
 				{!loading && filtered.length === 0 && (
-					<p className="text-xs text-stone-400 dark:text-stone-500 italic p-4 text-center">
+					<p className="text-xs text-stone-600 dark:text-stone-300 italic p-4 text-center">
 						No feedback items match the current filter.
 					</p>
 				)}
@@ -166,9 +172,9 @@ export function FeedbackPanel({ items, loading, onUpdate, onDelete }: Props) {
 										{item.origin}
 									</span>
 
-									{/* Visit counter */}
+									{/* Visit counter (FB-02 lift to 11px font-bold per DESIGN-TOKENS §2.4) */}
 									<span
-										className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none ${visitCounterClasses(item.visit)}`}
+										className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold leading-none ${visitCounterClasses(item.visit)}`}
 									>
 										{item.visit}x
 									</span>

@@ -79,7 +79,7 @@ export function Tabs({ groupId, tabs }: Props) {
 							onClick={() => !disabled && activate(tab.id)}
 							className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
 								disabled
-									? "border-transparent text-stone-400 dark:text-stone-600 cursor-not-allowed"
+									? "border-transparent text-stone-600 dark:text-stone-300 cursor-not-allowed"
 									: isActive
 										? "border-teal-600 text-teal-600 dark:border-teal-400 dark:text-teal-400"
 										: "border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:border-stone-300 dark:hover:border-stone-600 cursor-pointer"

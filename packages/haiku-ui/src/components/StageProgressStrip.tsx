@@ -52,7 +52,7 @@ export function StageProgressStrip({
 										? "w-3.5 h-3.5 rounded-full bg-teal-500 dark:bg-teal-400 cursor-pointer hover:scale-125"
 										: isClickable
 											? "w-3.5 h-3.5 rounded-full border-2 border-stone-400 dark:border-stone-500 bg-transparent cursor-pointer hover:border-teal-400 dark:hover:border-teal-400"
-											: "w-3.5 h-3.5 rounded-full border-2 border-stone-300 dark:border-stone-600 bg-transparent cursor-not-allowed opacity-60"
+											: "w-3.5 h-3.5 rounded-full border border-stone-300 dark:border-stone-600 bg-transparent cursor-not-allowed"
 							}`}
 						>
 							{isCurrent && (
@@ -62,12 +62,12 @@ export function StageProgressStrip({
 
 						{/* Stage label (below on larger screens) */}
 						<span
-							className={`hidden sm:block ml-1 text-[10px] font-medium uppercase tracking-wider whitespace-nowrap ${
+							className={`hidden sm:block ml-1 text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap ${
 								isCurrent
 									? "text-teal-600 dark:text-teal-400 font-bold"
 									: isCompleted
-										? "text-stone-600 dark:text-stone-400"
-										: "text-stone-400 dark:text-stone-500"
+										? "text-stone-600 dark:text-stone-300"
+										: "text-stone-600 dark:text-stone-300"
 							}`}
 						>
 							{stage.name}

@@ -166,13 +166,13 @@ export function ReviewCurrentPage({ data }: Props) {
 						</div>
 					)}
 
-					<p className="text-xs text-stone-400 dark:text-stone-500 mt-4 text-center italic">
+					<p className="text-xs text-stone-600 dark:text-stone-300 mt-4 text-center italic">
 						Read-only overview. Open during a gate review for decision buttons.
 					</p>
 				</div>
 
 				{/* Feedback sidebar */}
-				<aside className="hidden md:flex w-80 lg:w-96 shrink-0 sticky top-16 h-[calc(100vh-4rem)] flex-col bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700">
+				<aside className="hidden md:flex w-[var(--sidebar-width)] xl:w-[var(--sidebar-width-xl)] shrink-0 sticky top-16 h-[calc(100vh-4rem)] flex-col bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700">
 					<FeedbackPanel
 						items={items}
 						loading={loading}

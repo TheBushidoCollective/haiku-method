@@ -73,7 +73,7 @@ export function ReviewSidebar({
 	const Wrapper = embedded ? "div" : "aside"
 	const wrapperClass = embedded
 		? "flex flex-col flex-1 min-h-0"
-		: "hidden md:flex w-80 lg:w-96 shrink-0 sticky top-16 h-[calc(100vh-4rem)] flex-col bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700"
+		: "hidden md:flex w-[var(--sidebar-width)] xl:w-[var(--sidebar-width-xl)] shrink-0 sticky top-16 h-[calc(100vh-4rem)] flex-col bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700"
 
 	if (showClose) {
 		return (
@@ -230,7 +230,7 @@ export function ReviewSidebar({
 			{/* Comments list */}
 			<div className="flex-1 overflow-y-auto p-3 space-y-2">
 				{comments.length === 0 && (
-					<p className="text-xs text-stone-400 dark:text-stone-500 italic p-2 text-center">
+					<p className="text-xs text-stone-600 dark:text-stone-300 italic p-2 text-center">
 						No comments yet. Select text or drop pins to add feedback.
 					</p>
 				)}
@@ -266,7 +266,7 @@ export function ReviewSidebar({
 							</span>
 							<button
 								type="button"
-								className="text-stone-400 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+								className="text-stone-600 dark:text-stone-300 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
 								aria-label="Delete"
 								onClick={(e) => {
 									e.stopPropagation()
@@ -282,7 +282,7 @@ export function ReviewSidebar({
 							// biome-ignore lint/a11y/useKeyWithClickEvents: same; suppression-only, nested textarea owns keyboard
 							<div onClick={(e) => e.stopPropagation()}>
 								<textarea
-									className="w-full text-xs p-1.5 border border-stone-300 dark:border-stone-600 rounded bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 resize-none focus:ring-1 focus:ring-teal-500"
+									className="w-full text-xs p-1.5 border border-stone-300 dark:border-stone-600 rounded bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
 									rows={2}
 									value={editText}
 									onChange={(e) => setEditText(e.target.value)}
@@ -337,7 +337,7 @@ export function ReviewSidebar({
 								{c.comment && (
 									<button
 										type="button"
-										className="text-xs text-stone-400 hover:text-teal-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
+										className="text-xs text-stone-600 dark:text-stone-300 hover:text-teal-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
 										onClick={(e) => {
 											e.stopPropagation()
 											setEditingId(c.id)
@@ -359,9 +359,9 @@ export function ReviewSidebar({
 				<div className="flex gap-2">
 					<textarea
 						ref={generalRef}
-						className={`flex-1 text-xs p-2 border rounded-lg bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 resize-none focus:ring-1 focus:ring-teal-500 ${
+						className={`flex-1 text-xs p-2 border rounded-lg bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 ${
 							promptForComment
-								? "border-amber-500 ring-1 ring-amber-500"
+								? "border-amber-500 ring-2 ring-amber-500"
 								: "border-stone-300 dark:border-stone-600"
 						}`}
 						rows={2}
@@ -383,7 +383,8 @@ export function ReviewSidebar({
 						type="button"
 						onClick={handleAddGeneral}
 						disabled={!generalText.trim() || submitting}
-						className="self-end px-3 py-1.5 text-xs font-medium bg-teal-600 hover:bg-teal-700 text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+						aria-disabled={!generalText.trim() || submitting}
+						className="self-end px-3 py-1.5 text-xs font-medium bg-teal-600 hover:bg-teal-700 text-white rounded-lg disabled:bg-green-300 disabled:text-green-800 dark:disabled:bg-green-900/40 dark:disabled:text-green-200 disabled:cursor-not-allowed transition-colors"
 					>
 						Add
 					</button>
@@ -401,7 +402,8 @@ export function ReviewSidebar({
 							type="button"
 							onClick={handleApproveClick}
 							disabled={submitting}
-							className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+							aria-disabled={submitting}
+							className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:bg-stone-100 disabled:text-stone-600 disabled:border disabled:border-stone-400 dark:disabled:bg-stone-800 dark:disabled:text-stone-300 dark:disabled:border-stone-500 disabled:cursor-not-allowed ${
 								hasComments
 									? "bg-stone-200 dark:bg-stone-700 hover:bg-stone-300 dark:hover:bg-stone-600 text-stone-600 dark:text-stone-300"
 									: "bg-teal-600 hover:bg-teal-700 text-white"
@@ -415,7 +417,8 @@ export function ReviewSidebar({
 							type="button"
 							onClick={() => setShowExternalConfirm(true)}
 							disabled={submitting}
-							className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+							aria-disabled={submitting}
+							className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:bg-stone-100 disabled:text-stone-600 disabled:border disabled:border-stone-400 dark:disabled:bg-stone-800 dark:disabled:text-stone-300 dark:disabled:border-stone-500 disabled:cursor-not-allowed ${
 								hasComments
 									? "bg-stone-200 dark:bg-stone-700 hover:bg-stone-300 dark:hover:bg-stone-600 text-stone-600 dark:text-stone-300"
 									: "bg-indigo-600 hover:bg-indigo-700 text-white"
@@ -428,7 +431,7 @@ export function ReviewSidebar({
 						type="button"
 						onClick={handleRequestChanges}
 						disabled={submitting}
-						className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+						className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors disabled:bg-stone-100 disabled:text-stone-600 disabled:border disabled:border-stone-400 dark:disabled:bg-stone-800 dark:disabled:text-stone-300 dark:disabled:border-stone-500 disabled:cursor-not-allowed ${
 							hasComments
 								? "bg-amber-600 hover:bg-amber-700 text-white"
 								: "bg-stone-200 dark:bg-stone-700 hover:bg-stone-300 dark:hover:bg-stone-600 text-stone-700 dark:text-stone-200"

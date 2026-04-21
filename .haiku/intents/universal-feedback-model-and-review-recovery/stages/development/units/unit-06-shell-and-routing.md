@@ -13,11 +13,17 @@ inputs:
   - stages/design/artifacts/aria-landmark-spec.md
   - stages/design/artifacts/skip-link-spec.html
   - stages/design/artifacts/stage-progress-strip.html
-status: pending
-bolt: 0
-hat: ""
+status: active
+bolt: 1
+hat: planner
+started_at: '2026-04-21T07:26:57Z'
+hat_started_at: '2026-04-21T07:26:57Z'
+iterations:
+  - hat: planner
+    started_at: '2026-04-21T07:26:57Z'
+    completed_at: null
+    result: null
 ---
-
 # Shell and routing refactor
 
 Rebuild `App.tsx` as a clean shell composing a11y landmarks, theme toggle, and page-routing. Each page-type is a lazy-loaded module consuming the session from `haiku-api`.

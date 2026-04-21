@@ -1,5 +1,5 @@
 ---
-title: A11y foundations — landmarks, live regions, focus, keyboard nav
+title: 'A11y foundations — landmarks, live regions, focus, keyboard nav'
 type: implementation
 depends_on:
   - unit-04-design-token-system
@@ -33,9 +33,10 @@ outputs:
   - packages/haiku-ui/src/a11y/__tests__/reduced-motion.test.tsx
   - packages/haiku-ui/src/components/primitives/Button.tsx
   - packages/haiku-ui/src/index.css
-status: pending
+status: completed
 bolt: 0
-hat: ""
+hat: ''
+completed_at: '2026-04-21T07:25:29Z'
 ---
 
 # A11y foundations

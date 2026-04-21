@@ -16,7 +16,7 @@ inputs:
   - stages/design/artifacts/skip-link-spec.html
   - stages/design/artifacts/touch-target-audit.md
   - stages/design/artifacts/motion-and-reduced-motion-spec.md
-status: active
+status: completed
 bolt: 1
 hat: reviewer
 started_at: '2026-04-21T06:58:35Z'
@@ -32,8 +32,8 @@ iterations:
     result: advance
   - hat: reviewer
     started_at: '2026-04-21T07:22:39Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-21T07:25:29Z'
+    result: advance
 outputs:
   - stages/development/artifacts/unit-05-tactical-plan.md
   - package-lock.json
@@ -53,6 +53,7 @@ outputs:
   - packages/haiku-ui/src/a11y/touch-target.ts
   - packages/haiku-ui/src/components/primitives/Button.tsx
   - packages/haiku-ui/src/index.css
+completed_at: '2026-04-21T07:25:29Z'
 ---
 # A11y foundations
 

@@ -17,6 +17,7 @@ import type { ReviewSessionPayload } from "haiku-api"
 import { useEffect } from "react"
 import { ReviewPage, type ReviewPageSessionData } from "../../components/ReviewPage"
 import { useSession, useSessionWebSocket } from "../../hooks/useSession"
+import { usePageTitle } from "../../shell/PageTitleContext"
 
 // Cast narrowed review session to the SPA-local view that expresses the
 // parsed-markdown fields with their concrete types. haiku-api intentionally
@@ -36,12 +37,15 @@ export function ReviewPageModule({
 }: ReviewPageModuleProps): React.ReactElement {
 	const { session, loading, error } = useSession(sessionId)
 	const wsRef = useSessionWebSocket(sessionId)
+	const dynamicTitle =
+		session && session.session_type === "review" && session.intent?.title
+			? `Review: ${session.intent.title}`
+			: null
+	usePageTitle(dynamicTitle)
 
 	useEffect(() => {
-		if (session && session.session_type === "review" && session.intent?.title) {
-			document.title = `Review: ${session.intent.title}`
-		}
-	}, [session])
+		if (dynamicTitle) document.title = dynamicTitle
+	}, [dynamicTitle])
 
 	if (loading) return <LoadingState message="Loading session..." />
 	if (error || !session) return <ErrorState error={error} />

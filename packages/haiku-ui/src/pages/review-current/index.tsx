@@ -16,6 +16,7 @@ import type { ReviewCurrentPayload } from "haiku-api"
 import { useEffect, useState } from "react"
 import { useApiClient } from "../../api/context"
 import { ReviewCurrentPage } from "../../components/ReviewCurrentPage"
+import { usePageTitle } from "../../shell/PageTitleContext"
 import type { ReviewCurrentResponse } from "../../types"
 
 export function ReviewCurrentPageModule(): React.ReactElement {
@@ -54,9 +55,12 @@ export function ReviewCurrentPageModule(): React.ReactElement {
 		}
 	}, [client])
 
+	const dynamicTitle = data ? `Review: ${data.intent}` : null
+	usePageTitle(dynamicTitle)
+
 	useEffect(() => {
-		if (data) document.title = `Review: ${data.intent}`
-	}, [data])
+		if (dynamicTitle) document.title = dynamicTitle
+	}, [dynamicTitle])
 
 	if (loading) {
 		return (

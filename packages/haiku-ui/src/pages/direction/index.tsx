@@ -12,6 +12,7 @@
 import { useEffect } from "react"
 import { DesignPicker } from "../../components/DesignPicker"
 import { useSession, useSessionWebSocket } from "../../hooks/useSession"
+import { usePageTitle } from "../../shell/PageTitleContext"
 
 export interface DirectionPageModuleProps {
 	sessionId: string
@@ -22,12 +23,15 @@ export function DirectionPageModule({
 }: DirectionPageModuleProps): React.ReactElement {
 	const { session, loading, error } = useSession(sessionId)
 	const wsRef = useSessionWebSocket(sessionId)
+	const dynamicTitle =
+		session && session.session_type === "design_direction"
+			? session.title || "Design Direction"
+			: null
+	usePageTitle(dynamicTitle)
 
 	useEffect(() => {
-		if (session && session.session_type === "design_direction") {
-			document.title = session.title || "Design Direction"
-		}
-	}, [session])
+		if (dynamicTitle) document.title = dynamicTitle
+	}, [dynamicTitle])
 
 	if (loading) {
 		return (

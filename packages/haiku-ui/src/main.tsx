@@ -17,24 +17,12 @@ if (sentryDsn) {
 	})
 }
 
-// Apply dark mode based on system preference or stored preference
-function applyTheme() {
-	const KEY = "haiku-review-theme"
-	const stored = localStorage.getItem(KEY)
-	if (
-		stored === "dark" ||
-		(!stored && window.matchMedia("(prefers-color-scheme: dark)").matches)
-	) {
-		document.documentElement.classList.add("dark")
-	} else {
-		document.documentElement.classList.remove("dark")
-	}
-}
-
-applyTheme()
-window
-	.matchMedia("(prefers-color-scheme: dark)")
-	.addEventListener("change", applyTheme)
+// Theme bootstrap lives in two places now:
+//   - Synchronously in `index.html`'s <head> to prevent FOUC.
+//   - Reactively in `App.tsx`'s mount useEffect (matchMedia listener + React
+//     state sync via <ThemeToggle/>).
+// Keeping it out of main.tsx avoids a three-way race when the stored value
+// and the system preference disagree.
 
 const root = document.getElementById("root")
 if (!root) throw new Error("Missing #root element — check index.html")

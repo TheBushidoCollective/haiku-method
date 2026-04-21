@@ -8,6 +8,7 @@
 import { useEffect } from "react"
 import { QuestionPage } from "../../components/QuestionPage"
 import { useSession, useSessionWebSocket } from "../../hooks/useSession"
+import { usePageTitle } from "../../shell/PageTitleContext"
 
 export interface QuestionPageModuleProps {
 	sessionId: string
@@ -18,12 +19,15 @@ export function QuestionPageModule({
 }: QuestionPageModuleProps): React.ReactElement {
 	const { session, loading, error } = useSession(sessionId)
 	const wsRef = useSessionWebSocket(sessionId)
+	const dynamicTitle =
+		session && session.session_type === "question" && session.title
+			? session.title
+			: null
+	usePageTitle(dynamicTitle)
 
 	useEffect(() => {
-		if (session && session.session_type === "question" && session.title) {
-			document.title = session.title
-		}
-	}, [session])
+		if (dynamicTitle) document.title = dynamicTitle
+	}, [dynamicTitle])
 
 	if (loading) {
 		return (

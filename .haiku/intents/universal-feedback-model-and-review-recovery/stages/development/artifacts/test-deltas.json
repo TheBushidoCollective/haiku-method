@@ -1,9 +1,9 @@
 {
-  "compared_at": "2026-04-21T04:42:09.013Z",
+  "compared_at": "2026-04-21T04:55:02.608Z",
   "baseline_head": "bbf55667e939f988445b00c076be3053d6f50229",
-  "current_head": "6c475d783eb902de1007c5ea7978b9fdcf7b7879",
+  "current_head": "670d70a3db787861f12fcf0f252bed8b64adc448",
   "summary": {
-    "added": 47,
+    "added": 55,
     "removed": 2,
     "regressed": 0
   },
@@ -194,6 +194,41 @@
       "passed": true
     },
     {
+      "file": "http-streams.test.mjs",
+      "name": "GET /files traversal returns 403 with typed error",
+      "passed": true
+    },
+    {
+      "file": "http-streams.test.mjs",
+      "name": "GET /files on a legitimate file inside intent_dir returns 200",
+      "passed": true
+    },
+    {
+      "file": "http-streams.test.mjs",
+      "name": "GET /mockups traversal returns 403 with typed error",
+      "passed": true
+    },
+    {
+      "file": "http-streams.test.mjs",
+      "name": "GET /mockups on a legitimate mockup file returns 200",
+      "passed": true
+    },
+    {
+      "file": "http-streams.test.mjs",
+      "name": "GET /wireframe traversal returns 403 with typed error",
+      "passed": true
+    },
+    {
+      "file": "http-streams.test.mjs",
+      "name": "GET /stage-artifacts traversal returns 403 with typed error",
+      "passed": true
+    },
+    {
+      "file": "http-streams.test.mjs",
+      "name": "GET /mockups with absolute path fixture returns 403",
+      "passed": true
+    },
+    {
       "file": "server-tools.test.mjs",
       "name": "every route declares transport='loopback'",
       "passed": true
@@ -236,6 +271,11 @@
     {
       "file": "state-tools-handlers.test.mjs",
       "name": "http-feedback.test.mjs              35 passed, 0 failed",
+      "passed": true
+    },
+    {
+      "file": "state-tools-handlers.test.mjs",
+      "name": "http-streams.test.mjs               7 passed, 0 failed",
       "passed": true
     },
     {

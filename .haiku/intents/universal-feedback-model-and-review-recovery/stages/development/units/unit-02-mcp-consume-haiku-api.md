@@ -19,6 +19,7 @@ outputs:
   - packages/haiku/src/http.ts
   - packages/haiku/scripts/capture-test-baseline.mjs
   - packages/haiku/test/http-feedback.test.mjs
+  - packages/haiku/test/http-streams.test.mjs
   - packages/haiku/test/external-review.test.mjs
   - packages/haiku/test/server-tools.test.mjs
   - stages/development/artifacts/test-baseline.json

@@ -12,6 +12,12 @@ inputs:
   - stages/design/DESIGN-BRIEF.md
   - stages/design/artifacts/agent-feedback-toggle-spec.html
   - stages/design/artifacts/comments-list-with-agent-toggle.html
+outputs:
+  - ../../../packages/haiku-ui/src/components/feedback/AgentFeedbackToggle.tsx
+  - ../../../packages/haiku-ui/src/components/feedback/__tests__/AgentFeedbackToggle.test.tsx
+  - ../../../packages/haiku-ui/tests/audit-banned-patterns.test.ts
+  - ../../../packages/haiku-ui/audit-config.json
+  - ../../../packages/haiku-ui/scripts/audit-banned-patterns.mjs
 status: pending
 bolt: 0
 hat: ""

@@ -15,9 +15,9 @@ inputs:
   - stages/design/artifacts/stage-progress-strip.html
 status: active
 bolt: 1
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T07:26:57Z'
-hat_started_at: '2026-04-21T07:33:19Z'
+hat_started_at: '2026-04-21T08:00:59Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T07:26:57Z'
@@ -25,10 +25,38 @@ iterations:
     result: advance
   - hat: builder
     started_at: '2026-04-21T07:33:19Z'
+    completed_at: '2026-04-21T08:00:59Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T08:00:59Z'
     completed_at: null
     result: null
 outputs:
   - stages/development/artifacts/unit-06-tactical-plan.md
+  - package-lock.json
+  - packages/haiku-ui/index.html
+  - packages/haiku-ui/lighthouserc.json
+  - packages/haiku-ui/package.json
+  - packages/haiku-ui/scripts/audit-lighthouse.mjs
+  - packages/haiku-ui/src/App.tsx
+  - packages/haiku-ui/src/components/Header.tsx
+  - packages/haiku-ui/src/components/SkipLink.tsx
+  - packages/haiku-ui/src/components/ThemeToggle.tsx
+  - packages/haiku-ui/src/components/__tests__/ThemeToggle.test.tsx
+  - packages/haiku-ui/src/main.tsx
+  - packages/haiku-ui/src/pages/direction/index.tsx
+  - packages/haiku-ui/src/pages/index.ts
+  - packages/haiku-ui/src/pages/question/index.tsx
+  - packages/haiku-ui/src/pages/review-current/index.tsx
+  - packages/haiku-ui/src/pages/review/index.tsx
+  - packages/haiku-ui/src/routing/__tests__/parseRoute.test.ts
+  - packages/haiku-ui/src/routing/parseRoute.ts
+  - packages/haiku-ui/src/shell/PageTitleContext.tsx
+  - packages/haiku-ui/src/shell/ShellLayout.tsx
+  - packages/haiku-ui/src/theme.ts
+  - packages/haiku-ui/tests/__snapshots__/parity.spec.tsx.snap
+  - packages/haiku-ui/tests/parity.spec.tsx
+  - packages/haiku-ui/tests/skip-link.spec.tsx
 ---
 # Shell and routing refactor
 

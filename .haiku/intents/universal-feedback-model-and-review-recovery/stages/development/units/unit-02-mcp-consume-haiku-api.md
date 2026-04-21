@@ -1,5 +1,5 @@
 ---
-title: MCP consumes haiku-api (validation, authz, size caps)
+title: 'MCP consumes haiku-api (validation, authz, size caps)'
 type: implementation
 depends_on:
   - unit-01-extract-haiku-api-package
@@ -24,9 +24,10 @@ outputs:
   - packages/haiku/test/server-tools.test.mjs
   - stages/development/artifacts/test-baseline.json
   - stages/development/artifacts/test-deltas.json
-status: pending
+status: completed
 bolt: 0
-hat: ""
+hat: ''
+completed_at: '2026-04-21T04:59:02Z'
 ---
 
 # MCP consumes haiku-api

@@ -10,9 +10,9 @@ inputs:
   - knowledge/ARCHITECTURE.md
 status: active
 bolt: 2
-hat: builder
+hat: reviewer
 started_at: '2026-04-21T03:55:47Z'
-hat_started_at: '2026-04-21T04:31:35Z'
+hat_started_at: '2026-04-21T04:34:27Z'
 iterations:
   - hat: planner
     started_at: '2026-04-21T03:55:47Z'
@@ -46,6 +46,10 @@ iterations:
       transport invariant, cross-session guard) all tested.
   - hat: builder
     started_at: '2026-04-21T04:31:35Z'
+    completed_at: '2026-04-21T04:34:27Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-21T04:34:27Z'
     completed_at: null
     result: null
 outputs:

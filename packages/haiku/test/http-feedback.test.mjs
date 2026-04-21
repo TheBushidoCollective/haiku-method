@@ -242,7 +242,9 @@ async function run() {
 		)
 		assert.strictEqual(res.status, 400)
 		const data = await res.json()
-		assert.ok(data.error.includes("Invalid request body"))
+		assert.strictEqual(data.error, "validation_failed")
+		assert.ok(Array.isArray(data.issues))
+		assert.ok(data.issues.length > 0)
 	})
 
 	await test("POST returns 400 for empty body", async () => {
@@ -514,6 +516,178 @@ async function run() {
 		assert.strictEqual(res.status, 400)
 		const data = await res.json()
 		assert.ok(data.error.includes("Invalid slug"))
+	})
+
+	// ── Typed validation envelope ────────────────────────────────────────────
+
+	console.log("\n=== Typed validation envelope ===")
+
+	await test("POST malformed JSON body returns 400 with invalid_json issue", async () => {
+		const res = await fetch(
+			`${baseUrl}/api/feedback/${intentSlug}/${stageName}`,
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: "{not json",
+			},
+		)
+		assert.strictEqual(res.status, 400)
+		const data = await res.json()
+		assert.strictEqual(data.error, "validation_failed")
+		assert.ok(Array.isArray(data.issues))
+		assert.ok(data.issues.some((i) => i.code === "invalid_json"))
+	})
+
+	await test("PUT with empty body returns 400 with validation_failed", async () => {
+		const res = await fetch(
+			`${baseUrl}/api/feedback/${intentSlug}/${stageName}/FB-01`,
+			{
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({}),
+			},
+		)
+		assert.strictEqual(res.status, 400)
+		const data = await res.json()
+		assert.strictEqual(data.error, "validation_failed")
+		assert.ok(Array.isArray(data.issues))
+	})
+
+	// ── Feedback body size cap (128 KiB) ─────────────────────────────────────
+
+	console.log("\n=== Feedback body size cap (128 KiB) ===")
+
+	await test("POST body > 128 KiB returns 413", async () => {
+		const huge = "x".repeat(130 * 1024) // 130 KiB, above the 128 KiB cap
+		const res = await fetch(
+			`${baseUrl}/api/feedback/${intentSlug}/${stageName}`,
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ title: "big", body: huge }),
+			},
+		)
+		assert.strictEqual(res.status, 413)
+		const data = await res.json()
+		assert.strictEqual(data.error, "payload_too_large")
+		assert.strictEqual(data.max_bytes, 131072)
+	})
+
+	await test("POST body at the cap still accepted (happy path)", async () => {
+		// 100 KiB body — comfortably inside the 128 KiB cap.
+		const fitting = "x".repeat(100 * 1024)
+		const res = await fetch(
+			`${baseUrl}/api/feedback/${intentSlug}/${stageName}`,
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ title: "within cap", body: fitting }),
+			},
+		)
+		assert.strictEqual(res.status, 201)
+	})
+
+	// ── Cross-session mutation guard ─────────────────────────────────────────
+
+	console.log("\n=== Cross-session mutation guard ===")
+
+	await test("PUT with mismatched X-Haiku-Session-Id returns 403", async () => {
+		const { createSession } = await import("../src/sessions.ts")
+		// Fake session belonging to a different intent.
+		const other = createSession({
+			intent_slug: "different-intent",
+			intent_dir: projDir,
+			review_type: "intent",
+			target: "review",
+		})
+		const res = await fetch(
+			`${baseUrl}/api/feedback/${intentSlug}/${stageName}/FB-01`,
+			{
+				method: "PUT",
+				headers: {
+					"Content-Type": "application/json",
+					"X-Haiku-Session-Id": other.session_id,
+				},
+				body: JSON.stringify({ status: "addressed" }),
+			},
+		)
+		assert.strictEqual(res.status, 403)
+		const data = await res.json()
+		assert.strictEqual(data.error, "forbidden_cross_session")
+	})
+
+	await test("DELETE with unknown session header returns 403", async () => {
+		const res = await fetch(
+			`${baseUrl}/api/feedback/${intentSlug}/${stageName}/FB-01`,
+			{
+				method: "DELETE",
+				headers: { "X-Haiku-Session-Id": "does-not-exist" },
+			},
+		)
+		assert.strictEqual(res.status, 403)
+		const data = await res.json()
+		assert.strictEqual(data.error, "forbidden_cross_session")
+	})
+
+	await test("PUT with matching session header proceeds", async () => {
+		const { createSession } = await import("../src/sessions.ts")
+		const matching = createSession({
+			intent_slug: intentSlug,
+			intent_dir: intentDirPath,
+			review_type: "intent",
+			target: "review",
+		})
+		// Seed a feedback item we know exists
+		const create = writeFeedbackFile(intentSlug, stageName, {
+			title: "for-auth-test",
+			body: "body",
+			origin: "agent",
+			author: "tester",
+			source_ref: null,
+		})
+		const res = await fetch(
+			`${baseUrl}/api/feedback/${intentSlug}/${stageName}/${create.feedback_id}`,
+			{
+				method: "PUT",
+				headers: {
+					"Content-Type": "application/json",
+					"X-Haiku-Session-Id": matching.session_id,
+				},
+				body: JSON.stringify({ status: "addressed" }),
+			},
+		)
+		assert.strictEqual(res.status, 200)
+	})
+
+	// ── Revisit endpoint ─────────────────────────────────────────────────────
+
+	console.log("\n=== POST /api/revisit/:sessionId ===")
+
+	await test("POST /api/revisit/:id rejects malformed JSON", async () => {
+		const { createSession } = await import("../src/sessions.ts")
+		const revSession = createSession({
+			intent_slug: intentSlug,
+			intent_dir: intentDirPath,
+			review_type: "intent",
+			target: "review",
+		})
+		const res = await fetch(`${baseUrl}/api/revisit/${revSession.session_id}`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: "{bad",
+		})
+		assert.strictEqual(res.status, 400)
+		const data = await res.json()
+		assert.strictEqual(data.error, "validation_failed")
+	})
+
+	await test("POST /api/revisit/:id returns 404 for missing session", async () => {
+		const res = await fetch(`${baseUrl}/api/revisit/nonexistent-session-id`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({}),
+		})
+		assert.strictEqual(res.status, 404)
 	})
 
 	// ── Cleanup ───────────────────────────────────────────────────────────────

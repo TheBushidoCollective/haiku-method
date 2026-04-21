@@ -42,6 +42,7 @@ const EXPECTED = [
 	["GET", "/question/{sessionId}"],
 	["POST", "/question/{sessionId}/answer"],
 	["GET", "/api/review/current"],
+	["POST", "/api/revisit/{sessionId}"],
 	["GET", "/api/feedback/{intent}/{stage}"],
 	["POST", "/api/feedback/{intent}/{stage}"],
 	["PUT", "/api/feedback/{intent}/{stage}/{feedbackId}"],

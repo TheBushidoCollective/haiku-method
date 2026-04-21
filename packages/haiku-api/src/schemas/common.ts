@@ -102,3 +102,53 @@ export const SessionStatusSchema = z
 		"Runtime status across review | question | design_direction sessions.",
 	)
 export type SessionStatus = z.infer<typeof SessionStatusSchema>
+
+// ─── Validation + route metadata ─────────────────────────────────────────
+
+/** Structural ZodIssue shape (kept open-ended — Zod versions tweak subtypes). */
+export const ZodIssueWireSchema = z
+	.object({
+		code: z.string(),
+		message: z.string(),
+		path: z.array(z.union([z.string(), z.number()])),
+	})
+	.passthrough()
+	.describe(
+		"Structural ZodIssue on the wire — we expose code/message/path at minimum; extra keys are preserved via passthrough.",
+	)
+export type ZodIssueWire = z.infer<typeof ZodIssueWireSchema>
+
+/** Uniform 400 envelope returned whenever a request body fails schema validation
+ *  (including malformed JSON, which surfaces as a synthetic `invalid_json` issue). */
+export const ValidationErrorSchema = z
+	.object({
+		error: z.literal("validation_failed"),
+		issues: z.array(ZodIssueWireSchema),
+	})
+	.describe(
+		"Uniform 400 response for request-body validation failure (malformed JSON, schema mismatch, oversize)",
+	)
+export type ValidationError = z.infer<typeof ValidationErrorSchema>
+
+/** Transport label for a route. v1 only allows loopback — this is the
+ *  security invariant: every declared route must be reachable only via the
+ *  local 127.0.0.1 / ::1 listener (legitimate remote access is muxed via the
+ *  tunnel, which itself fronts a loopback bind). */
+export const RouteTransportSchema = z.enum(["loopback"]).describe(
+	"Transport invariant — routes in haiku-api MUST declare 'loopback'.",
+)
+export type RouteTransport = z.infer<typeof RouteTransportSchema>
+
+/** Default body-size cap for JSON request bodies (1 MiB). */
+export const DEFAULT_BODY_MAX_BYTES = 1_048_576 as const
+
+/** Tighter cap for feedback-bearing endpoints (128 KiB). */
+export const FEEDBACK_BODY_MAX_BYTES = 131_072 as const
+
+/** Per-route body-size caps. Routes not listed default to DEFAULT_BODY_MAX_BYTES.
+ *  The http.ts bridge enforces the default at the server level; the handler
+ *  enforces the per-route cap before schema parse. */
+export const ROUTE_BODY_LIMITS = {
+	default: DEFAULT_BODY_MAX_BYTES,
+	feedback: FEEDBACK_BODY_MAX_BYTES,
+} as const

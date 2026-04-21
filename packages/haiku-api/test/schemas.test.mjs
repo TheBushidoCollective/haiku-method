@@ -618,4 +618,186 @@ if (typeof buildOpenApi !== "function") {
 	throw new Error("buildOpenApi not exported from haiku-api barrel")
 }
 
+// ─── revisit / validation / route metadata ───────────────────────────────
+
+import {
+	DEFAULT_BODY_MAX_BYTES,
+	FEEDBACK_BODY_MAX_BYTES,
+	routeBodyLimit,
+	routes,
+	RevisitReasonSchema,
+	RevisitRequestSchema,
+	RevisitResponseSchema,
+	ROUTE_BODY_LIMITS,
+	RouteTransportSchema,
+	ValidationErrorSchema,
+	ZodIssueWireSchema,
+} from "../dist/index.js"
+
+describe("schemas/revisit.ts — RevisitReasonSchema", () => {
+	test("parses valid", () => {
+		assertValid(RevisitReasonSchema, { title: "t", body: "b" })
+	})
+	test("rejects invalid", () => {
+		assertInvalid(RevisitReasonSchema, { title: "", body: "b" })
+		assertInvalid(RevisitReasonSchema, { title: "t" })
+	})
+})
+
+describe("schemas/revisit.ts — RevisitRequestSchema", () => {
+	test("parses valid (empty)", () => {
+		assertValid(RevisitRequestSchema, {})
+	})
+	test("parses valid (with stage + reasons)", () => {
+		assertValid(RevisitRequestSchema, {
+			stage: "development",
+			reasons: [{ title: "t", body: "b" }],
+		})
+	})
+	test("rejects invalid (stage not a string)", () => {
+		assertInvalid(RevisitRequestSchema, { stage: 5 })
+	})
+})
+
+describe("schemas/revisit.ts — RevisitResponseSchema", () => {
+	test("parses valid (minimum)", () => {
+		assertValid(RevisitResponseSchema, {
+			ok: true,
+			action: "revisit",
+			message: "rolled back",
+		})
+	})
+	test("parses valid (full)", () => {
+		assertValid(RevisitResponseSchema, {
+			ok: true,
+			action: "revisit",
+			stage: "design",
+			feedback_created: ["FB-01", "FB-02"],
+			message: "rolled back",
+		})
+	})
+	test("rejects invalid (missing action)", () => {
+		assertInvalid(RevisitResponseSchema, { ok: true, message: "bad" })
+	})
+})
+
+describe("schemas/common.ts — ValidationErrorSchema", () => {
+	test("parses valid", () => {
+		assertValid(ValidationErrorSchema, {
+			error: "validation_failed",
+			issues: [{ code: "invalid_type", message: "bad", path: ["title"] }],
+		})
+		assertValid(ValidationErrorSchema, {
+			error: "validation_failed",
+			issues: [],
+		})
+	})
+	test("rejects invalid", () => {
+		assertInvalid(ValidationErrorSchema, { error: "other", issues: [] })
+	})
+})
+
+describe("schemas/common.ts — ZodIssueWireSchema", () => {
+	test("parses valid (extra keys passthrough)", () => {
+		assertValid(ZodIssueWireSchema, {
+			code: "invalid_type",
+			message: "bad",
+			path: ["a", 0],
+			expected: "string",
+		})
+	})
+	test("rejects invalid (missing code)", () => {
+		assertInvalid(ZodIssueWireSchema, { message: "bad", path: [] })
+	})
+})
+
+describe("schemas/common.ts — RouteTransportSchema", () => {
+	test("parses valid", () => {
+		assertValid(RouteTransportSchema, "loopback")
+	})
+	test("rejects invalid", () => {
+		assertInvalid(RouteTransportSchema, "public")
+	})
+})
+
+describe("routes.ts — transport invariant + body caps", () => {
+	test("every route declares transport='loopback'", () => {
+		for (const r of routes) {
+			if (r.transport !== "loopback") {
+				throw new Error(`Route ${r.operationId} has non-loopback transport`)
+			}
+		}
+	})
+
+	test("ROUTE_BODY_LIMITS is sane", () => {
+		if (ROUTE_BODY_LIMITS.default !== DEFAULT_BODY_MAX_BYTES) {
+			throw new Error("ROUTE_BODY_LIMITS.default drift")
+		}
+		if (ROUTE_BODY_LIMITS.feedback !== FEEDBACK_BODY_MAX_BYTES) {
+			throw new Error("ROUTE_BODY_LIMITS.feedback drift")
+		}
+		if (DEFAULT_BODY_MAX_BYTES !== 1_048_576) {
+			throw new Error("DEFAULT_BODY_MAX_BYTES drift")
+		}
+		if (FEEDBACK_BODY_MAX_BYTES !== 131_072) {
+			throw new Error("FEEDBACK_BODY_MAX_BYTES drift")
+		}
+	})
+
+	test("feedback POST/PUT routes advertise 128 KiB cap", () => {
+		const post = routes.find(
+			(r) =>
+				r.method === "POST" &&
+				r.pathTemplate === "/api/feedback/{intent}/{stage}",
+		)
+		const put = routes.find(
+			(r) =>
+				r.method === "PUT" &&
+				r.pathTemplate === "/api/feedback/{intent}/{stage}/{feedbackId}",
+		)
+		if (post?.maxBodyBytes !== FEEDBACK_BODY_MAX_BYTES) {
+			throw new Error("POST /api/feedback cap drift")
+		}
+		if (put?.maxBodyBytes !== FEEDBACK_BODY_MAX_BYTES) {
+			throw new Error("PUT /api/feedback cap drift")
+		}
+	})
+
+	test("routeBodyLimit() returns feedback cap for feedback POST", () => {
+		const cap = routeBodyLimit("POST", "/api/feedback/{intent}/{stage}")
+		if (cap !== FEEDBACK_BODY_MAX_BYTES) {
+			throw new Error(`feedback cap drift: ${cap}`)
+		}
+	})
+
+	test("routeBodyLimit() returns default for non-feedback POST", () => {
+		const cap = routeBodyLimit("POST", "/review/{sessionId}/decide")
+		if (cap !== DEFAULT_BODY_MAX_BYTES) {
+			throw new Error(`review decide cap drift: ${cap}`)
+		}
+	})
+
+	test("routeBodyLimit() returns default for unknown route", () => {
+		const cap = routeBodyLimit("POST", "/does/not/exist")
+		if (cap !== DEFAULT_BODY_MAX_BYTES) {
+			throw new Error(`unknown cap drift: ${cap}`)
+		}
+	})
+
+	test("revisit route exists with RevisitRequestSchema", () => {
+		const r = routes.find(
+			(route) =>
+				route.method === "POST" &&
+				route.pathTemplate === "/api/revisit/{sessionId}",
+		)
+		if (!r) throw new Error("missing revisit route")
+		if (r.request !== RevisitRequestSchema) {
+			throw new Error("revisit request schema drift")
+		}
+		if (r.response !== RevisitResponseSchema) {
+			throw new Error("revisit response schema drift")
+		}
+	})
+})
+
 summary()

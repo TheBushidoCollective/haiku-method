@@ -220,9 +220,7 @@ export class GitLabProvider implements BrowseProvider {
 	}
 
 	/** Fetch the most recent MR for a given source branch. Returns nulls on failure. */
-	private async fetchMrForBranch(
-		branchName: string,
-	): Promise<{
+	private async fetchMrForBranch(branchName: string): Promise<{
 		prUrl: string | null
 		prStatus: string | null
 		prNumber: number | null
@@ -910,27 +908,32 @@ export class GitLabProvider implements BrowseProvider {
 			// Try each trust level, highest first
 			let parsed: HaikuStageState | null = null
 
-			// Level 3: Stage branch (highest trust for its own stage)
-			if (stageBranchResult) {
+			// Level 3: Stage branch (highest trust for its own stage).
+			// stageBranchResult is only populated from stageBranchPromises, which is
+			// derived from the same stageBranches map — so if stageBranchResult is
+			// non-null, stageBranchRef is too. Guard explicitly instead of asserting
+			// so the invariant stays visible if either map source ever widens.
+			if (stageBranchResult && stageBranchRef) {
 				parsed = this.parseStageFromBlobs(
 					slug,
 					stageName,
 					stageBranchResult,
 					activeStage,
 					stageNames,
-					stageBranchRef!.branch,
+					stageBranchRef.branch,
 				)
 			}
 
-			// Level 2: Intent branch
-			if (!parsed && intentData) {
+			// Level 2: Intent branch. intentBranch is non-null here because
+			// intentData being non-null implies we successfully fetched from it.
+			if (!parsed && intentData && intentBranch) {
 				parsed = this.parseStageFromBlobs(
 					slug,
 					stageName,
 					intentData,
 					activeStage,
 					stageNames,
-					intentBranch!,
+					intentBranch,
 				)
 			}
 

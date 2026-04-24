@@ -75,10 +75,14 @@ export function parseFrontmatter(
 	try {
 		return tryParse(raw)
 	} catch (e) {
-		if (isDuplicateKeyError(e)) {
-			const { text, removed } = dedupeFrontmatterKeys(raw)
-			if (removed.length > 0) {
-				try {
+		const wasDuplicateKey = isDuplicateKeyError(e)
+		if (wasDuplicateKey) {
+			// Attempt dedupe recovery. Both the dedupe and the reparse are guarded
+			// so anything unexpected (weird encoding, shared-util bug) falls through
+			// to the empty-frontmatter fallback — parseFrontmatter must never throw.
+			try {
+				const { text, removed } = dedupeFrontmatterKeys(raw)
+				if (removed.length > 0) {
 					const parsed = tryParse(text)
 					if (context) {
 						console.warn(
@@ -103,9 +107,9 @@ export function parseFrontmatter(
 						)
 					}
 					return parsed
-				} catch {
-					// Dedupe didn't help — fall through to empty-frontmatter fallback.
 				}
+			} catch {
+				// Dedupe didn't help — fall through, tagged as dedupe-failed below.
 			}
 		}
 		const err = e instanceof Error ? e : new Error(String(e))
@@ -114,10 +118,11 @@ export function parseFrontmatter(
 				`[haiku-browse] Failed to parse frontmatter at ${context.path}:`,
 				err.message,
 			)
-			// Send top-level YAML key names only (no values) — frontmatter can contain
-			// user content, team/branch names, or credential-adjacent fields that
-			// shouldn't leave the host environment.
-			const keyMatches = raw.match(/^([A-Za-z_][A-Za-z0-9_-]*):/gm) ?? []
+			// Extract keys from the --- fenced block only — running the regex over
+			// the whole document would capture `word:` patterns in markdown body
+			// (URLs, assignees, arbitrary prose) and ship them to Sentry.
+			const fmBlock = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? ""
+			const keyMatches = fmBlock.match(/^([A-Za-z_][A-Za-z0-9_-]*):/gm) ?? []
 			const frontmatterKeys = Array.from(
 				new Set(keyMatches.map((k) => k.replace(/:$/, ""))),
 			)
@@ -125,7 +130,11 @@ export function parseFrontmatter(
 				tags: {
 					component: "haiku-browse",
 					provider: context.provider,
-					kind: "frontmatter-parse",
+					// Distinguish irrecoverable dedupe failures from generic parse errors
+					// so Sentry triage can separate "bad YAML" from "dedupe-can't-save-it".
+					kind: wasDuplicateKey
+						? "frontmatter-dedupe-failed"
+						: "frontmatter-parse",
 				},
 				extra: {
 					slug: context.slug,

@@ -657,15 +657,22 @@ export class GitHubProvider implements BrowseProvider {
 			// Try each trust level, highest first
 			let parsed: HaikuStageState | null = null
 
-			// Level 3: Stage branch (highest trust for its own stage)
-			if (stageBranchResult?.repository?.stagesTree?.entries) {
+			// Level 3: Stage branch (highest trust for its own stage).
+			// stageBranchResult is only populated from stageBranchPromises, which is
+			// derived from the same stageBranches map — so if stageBranchResult is
+			// non-null, stageBranchRef is too. Guard explicitly instead of asserting
+			// so the invariant stays visible if either map source ever widens.
+			if (
+				stageBranchResult?.repository?.stagesTree?.entries &&
+				stageBranchRef
+			) {
 				parsed = this.parseStageFromTree(
 					slug,
 					stageName,
 					stageBranchResult.repository.stagesTree.entries,
 					activeStage,
 					stageNames,
-					stageBranchRef!.branch,
+					stageBranchRef.branch,
 				)
 			}
 

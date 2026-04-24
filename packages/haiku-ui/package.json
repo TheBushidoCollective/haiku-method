@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"build": "tsc -b && vite build",
+		"build": "vite build && tsc -b",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
 		"audit:tokens": "node scripts/verify-tokens.mjs && node scripts/audit-contrast.mjs --mode=tokens && node scripts/audit-banned-patterns.mjs --profile=tokens",

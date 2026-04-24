@@ -27,7 +27,7 @@ export class LocalProvider implements BrowseProvider {
 
 	async init(): Promise<boolean> {
 		try {
-			this.haikuDir = await this.root.getDirectoryHandle(".haiku")
+			await this.root.getDirectoryHandle(".haiku")
 			return true
 		} catch {
 			return false

@@ -2772,13 +2772,63 @@ export function completeUnitIteration(
 // interpretation. Each rule has a specific failure mode that maps to a
 // concrete error message for the caller.
 
-const FSM_DRIVEN_UNIT_FIELDS = [
+// FSM-driven unit FM fields. Agents MUST NOT set these — the FSM owns
+// transitions via haiku_unit_advance_hat / haiku_unit_reject_hat /
+// haiku_unit_increment_bolt. validateUnitFrontmatter rejects writes that
+// include any of these. Tool descriptions and dispatch contracts are
+// generated from this constant so the allow/forbid lists can't drift.
+export const FSM_DRIVEN_UNIT_FIELDS = [
 	"status",
 	"hat",
 	"bolt",
 	"iterations",
 	"started_at",
 	"completed_at",
+] as const
+
+// FM fields agents are explicitly allowed to author via haiku_unit_write.
+// Plus stage-specific fields (additionalProperties: true on the schema).
+// Worked YAML examples for these live in FSM_CONTRACTS_ELABORATE_UNIVERSAL.
+export const AGENT_AUTHORABLE_UNIT_FIELDS = [
+	"title",
+	"depends_on",
+	"inputs",
+	"outputs",
+	"quality_gates",
+	"model",
+	"closes",
+] as const
+
+// FB FM fields the FSM owns (mutates over the FB lifecycle). Agents
+// observe these when reading FB context but MUST NOT set them — they
+// can't anyway since haiku_feedback_write is body-only. Reference list
+// for the fix-loop dispatch contract.
+export const FSM_DRIVEN_FB_FIELDS = [
+	"status",
+	"hat",
+	"bolt",
+	"iterations",
+	"closed_by",
+	"integrator_attempts",
+	"replies",
+] as const
+
+// FB FM fields set at creation time (by haiku_feedback) and immutable
+// thereafter. Reference list — not enforced by a validator since the
+// only write path (haiku_feedback_write) doesn't touch FM.
+export const CREATE_TIME_FB_FIELDS = [
+	"title",
+	"origin",
+	"author",
+	"author_type",
+	"created_at",
+	"iteration",
+	"visit",
+	"source_ref",
+	"upstream_stage",
+	"resolution",
+	"attachment",
+	"inline_anchor",
 ] as const
 
 export function validateUnitFrontmatter(
@@ -4615,8 +4665,11 @@ export const stateToolDefs = [
 	},
 	{
 		name: "haiku_unit_write",
-		description:
-			"Create or fully rewrite a unit file. This is the ONLY agent-callable path for authoring units — generic file Write/Edit on `units/*.md` is denied at the hook layer. The body is freeform markdown; the optional `frontmatter` is validated against the FM schema (no FSM-driven fields like status/hat/bolt allowed; depends_on entries must be strings with no self-reference and no cycles among declared units; etc.). Lifecycle: only allowed when the unit doesn't exist yet OR when its status is `pending`. Active and completed units are immutable.",
+		description: `Create or fully rewrite a unit file. This is the ONLY agent-callable path for authoring units — generic file Write/Edit on \`units/*.md\` is denied at the hook layer. The body is freeform markdown; the optional \`frontmatter\` is validated against the FM schema (depends_on entries must be strings with no self-reference and no cycles among declared units; etc.). Lifecycle: only allowed when the unit doesn't exist yet OR when its status is \`pending\`. Active and completed units are immutable.
+
+Allowed FM fields (agent-authorable): ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")} — plus any stage-specific fields the per-stage \`phases/ELABORATION.md\` documents.
+
+Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}.`,
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -4634,8 +4687,67 @@ export const stateToolDefs = [
 				},
 				frontmatter: {
 					type: "object",
-					description:
-						"Optional frontmatter. Allowed fields: title, depends_on, inputs, outputs, quality_gates, model, closes, plus any stage-specific fields. Forbidden (FSM-driven): status, hat, bolt, iterations, started_at, completed_at — including these returns a validation error.",
+					description: `Optional frontmatter. Allowed: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}, plus stage-specific. Forbidden (FSM-driven, validator returns \`fsm_field_forbidden\`): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}.`,
+					properties: {
+						title: {
+							type: "string",
+							minLength: 1,
+							description:
+								"Unit title — non-empty string. Defaults to first H1 in the body, or to the unit name.",
+						},
+						depends_on: {
+							type: "array",
+							items: { type: "string" },
+							description:
+								"Names of sibling units in the SAME stage that must complete before this one. Each entry must resolve to an actual sibling. No self-reference. No cycles. (Cross-sibling and cycle checks are runtime — they need the full stage DAG, not expressible in this schema.)",
+						},
+						inputs: {
+							type: "array",
+							items: { type: "string" },
+							description:
+								"Cross-stage inputs this unit reads — paths to artifacts produced by prior stages.",
+						},
+						outputs: {
+							type: "array",
+							items: { type: "string" },
+							description:
+								"Artifacts this unit produces. Used downstream and by validation.",
+						},
+						quality_gates: {
+							type: "array",
+							items: {
+								type: "object",
+								properties: {
+									name: { type: "string" },
+									command: { type: "string" },
+									dir: { type: "string" },
+								},
+								required: ["name", "command"],
+							},
+							description:
+								"Build-class only: list of `{name, command, dir?}` executable gate objects. Run at advance_hat time; non-zero exit blocks. Prose strings are silently skipped — they give no enforcement.",
+						},
+						model: {
+							type: "string",
+							enum: ["haiku", "sonnet", "opus"],
+							description:
+								"Subagent tier for this unit's hats. `haiku` = mechanical, `sonnet` = standard (default), `opus` = deep reasoning. Cascade: unit > hat > stage > studio.",
+						},
+						closes: {
+							type: "array",
+							items: { type: "string" },
+							description:
+								"On revisit iterations, list of FB IDs this unit addresses (e.g. `[FB-01, FB-03]`). Every pending FB must be claimed by some unit's `closes:` to allow advancement.",
+						},
+					},
+					// Reject FSM-driven field smuggling at the schema layer. Strict
+					// MCP clients catch it before the call goes out; the server
+					// validator is the second gate (and emits the structured
+					// `fsm_field_forbidden` error code clients need).
+					propertyNames: {
+						not: { enum: [...FSM_DRIVEN_UNIT_FIELDS] },
+					},
+					additionalProperties: true,
 				},
 			},
 			required: ["intent", "stage", "unit", "body"],
@@ -5017,8 +5129,13 @@ export const stateToolDefs = [
 	},
 	{
 		name: "haiku_feedback_write",
-		description:
-			"Update a feedback file's body content. This is the architecture-mandated path for fixer hats to populate the FB body with diagnosis (root cause, proposed action, file:line refs) per the FB-as-unit model. Generic Write/Edit on feedback/*.md is denied at the hook layer. Lifecycle: only pending or addressed (under-fix) FBs accept body rewrites. Closed and rejected FBs are immutable. Frontmatter is FSM-controlled and cannot be set through this tool — use haiku_feedback_update for status transitions and haiku_feedback_reject for rejections.",
+		description: `Update a feedback file's body content. This is the architecture-mandated path for fixer hats to populate the FB body with diagnosis (root cause, proposed action, file:line refs) per the FB-as-unit model. Generic Write/Edit on feedback/*.md is denied at the hook layer. Lifecycle: only pending or addressed (under-fix) FBs accept body rewrites. Closed and rejected FBs are immutable.
+
+Frontmatter is FSM-controlled and cannot be set through this tool. For reference (when reading FB context):
+  • FSM-driven (mutated over the FB lifecycle): ${FSM_DRIVEN_FB_FIELDS.join(", ")}
+  • Set at creation, immutable thereafter: ${CREATE_TIME_FB_FIELDS.join(", ")}
+
+Use haiku_feedback_update for status transitions and haiku_feedback_reject for rejections.`,
 		inputSchema: {
 			type: "object" as const,
 			properties: {

@@ -19,6 +19,7 @@ import {
 	dedupeFrontmatterKeys,
 	isDuplicateKeyError,
 } from "@haiku/shared/frontmatter"
+import { Ajv } from "ajv"
 import matter from "gray-matter"
 import { getPendingVersion, hasPendingUpdate } from "./auto-update.js"
 import { features, resolvePluginRoot } from "./config.js"
@@ -2772,37 +2773,130 @@ export function completeUnitIteration(
 // interpretation. Each rule has a specific failure mode that maps to a
 // concrete error message for the caller.
 
-// FSM-driven unit FM fields. Agents MUST NOT set these — the FSM owns
-// transitions via haiku_unit_advance_hat / haiku_unit_reject_hat /
-// haiku_unit_increment_bolt. validateUnitFrontmatter rejects writes that
-// include any of these. Tool descriptions and dispatch contracts are
-// generated from this constant so the allow/forbid lists can't drift.
-export const FSM_DRIVEN_UNIT_FIELDS = [
-	"status",
-	"hat",
-	"bolt",
-	"iterations",
-	"started_at",
-	"completed_at",
-] as const
+// ── Unit frontmatter — SCHEMA IS THE SSOT ─────────────────────────────────
+//
+// `UNIT_FRONTMATTER_SCHEMA` below is plain JSONSchema and is the single
+// source of truth for what an agent can submit via haiku_unit_write.
+// AJV validates input against it — no custom field-by-field code for
+// the static rules. The compiled validator at `validateUnitSchema`
+// runs on every haiku_unit_write call.
+//
+// What JSONSchema covers (enforced by AJV):
+//   - allow-list of properties + per-field types
+//   - `model` enum
+//   - `quality_gates` inner shape (`{name, command, dir?}` with required keys)
+//   - `title` minLength
+//   - `propertyNames.not.enum` forbids FSM-driven fields
+//
+// What JSONSchema can NOT cover (runtime context required, lives in
+// validateUnitFrontmatter as additional steps):
+//   - depends_on self-reference (needs the unit's own name)
+//   - depends_on resolves to actual siblings (needs sibling list)
+//   - depends_on doesn't form a cycle (needs full stage DAG)
+//   - body placeholder strings (needs body inspection)
+//   - ghost-FB closes references (needs FB list)
 
-// FM fields agents are explicitly allowed to author via haiku_unit_write.
-// Plus stage-specific fields (additionalProperties: true on the schema).
-// Worked YAML examples for these live in FSM_CONTRACTS_ELABORATE_UNIVERSAL.
-export const AGENT_AUTHORABLE_UNIT_FIELDS = [
-	"title",
-	"depends_on",
-	"inputs",
-	"outputs",
-	"quality_gates",
-	"model",
-	"closes",
-] as const
+export const UNIT_FRONTMATTER_SCHEMA = {
+	type: "object",
+	properties: {
+		title: {
+			type: "string",
+			minLength: 1,
+			description:
+				"Unit title — non-empty string. Defaults to first H1 in the body, or to the unit name.",
+		},
+		depends_on: {
+			type: "array",
+			items: { type: "string" },
+			description:
+				"Names of sibling units in the SAME stage that must complete before this one. Each entry must resolve to an actual sibling. No self-reference. No cycles. (Cross-sibling and cycle checks are runtime — they need the full stage DAG, not expressible in this schema.)",
+		},
+		inputs: {
+			type: "array",
+			items: { type: "string" },
+			description:
+				"Cross-stage inputs this unit reads — paths to artifacts produced by prior stages.",
+		},
+		outputs: {
+			type: "array",
+			items: { type: "string" },
+			description:
+				"Artifacts this unit produces. Used downstream and by validation.",
+		},
+		quality_gates: {
+			type: "array",
+			items: {
+				type: "object",
+				properties: {
+					name: { type: "string" },
+					command: { type: "string" },
+					dir: { type: "string" },
+				},
+				required: ["name", "command"],
+			},
+			description:
+				"Build-class only: list of `{name, command, dir?}` executable gate objects. Run at advance_hat time; non-zero exit blocks. Prose strings are silently skipped — they give no enforcement.",
+		},
+		model: {
+			type: "string",
+			enum: ["haiku", "sonnet", "opus"],
+			description:
+				"Subagent tier for this unit's hats. `haiku` = mechanical, `sonnet` = standard (default), `opus` = deep reasoning. Cascade: unit > hat > stage > studio.",
+		},
+		closes: {
+			type: "array",
+			items: { type: "string" },
+			description:
+				"On revisit iterations, list of FB IDs this unit addresses (e.g. `[FB-01, FB-03]`). Every pending FB must be claimed by some unit's `closes:` to allow advancement.",
+		},
+	},
+	// FSM-driven fields. Agents MUST NOT set these — the FSM owns
+	// transitions via haiku_unit_advance_hat / haiku_unit_reject_hat /
+	// haiku_unit_increment_bolt. AJV's propertyNames check rejects any
+	// of these at validate time; strict MCP clients reject at parse
+	// time before the call goes out.
+	propertyNames: {
+		not: {
+			enum: [
+				"status",
+				"hat",
+				"bolt",
+				"iterations",
+				"started_at",
+				"completed_at",
+			],
+		},
+	},
+	// Stage-specific fields are allowed (per-stage `phases/ELABORATION.md`
+	// documents them). Schema can't enumerate stage-specific fields
+	// without reading every stage def.
+	additionalProperties: true,
+}
 
-// FB FM fields the FSM owns (mutates over the FB lifecycle). Agents
-// observe these when reading FB context but MUST NOT set them — they
-// can't anyway since haiku_feedback_write is body-only. Reference list
-// for the fix-loop dispatch contract.
+// AJV-compiled validator — instantiated once at module load. Runs on every
+// haiku_unit_write call. Returns boolean + populates `validateUnitSchema.errors`.
+const ajv = new Ajv({ allErrors: true, strict: false })
+const validateUnitSchema = ajv.compile(UNIT_FRONTMATTER_SCHEMA)
+
+// Field-name lists used by tool descriptions and dispatch contracts.
+// These read DIRECTLY from the schema — JSONSchema is the SSOT, these
+// are just convenience accessors so callers don't repeat the path.
+export const AGENT_AUTHORABLE_UNIT_FIELDS = Object.keys(
+	UNIT_FRONTMATTER_SCHEMA.properties,
+) as ReadonlyArray<string>
+
+export const FSM_DRIVEN_UNIT_FIELDS = UNIT_FRONTMATTER_SCHEMA.propertyNames.not
+	.enum as ReadonlyArray<string>
+
+// ── Feedback frontmatter — reference (no input schema) ────────────────────
+//
+// haiku_feedback_write is body-only — there is no input schema for FB
+// frontmatter to be the SSOT for. These constants are pure documentation,
+// consumed only by the fix-loop dispatch contract so fix-mode hats know
+// what FM fields they'll see when reading FB context. If a future tool
+// needs to accept FB FM input, it should bring its own schema and these
+// constants would derive from it (matching the unit pattern above).
+
 export const FSM_DRIVEN_FB_FIELDS = [
 	"status",
 	"hat",
@@ -2813,9 +2907,6 @@ export const FSM_DRIVEN_FB_FIELDS = [
 	"replies",
 ] as const
 
-// FB FM fields set at creation time (by haiku_feedback) and immutable
-// thereafter. Reference list — not enforced by a validator since the
-// only write path (haiku_feedback_write) doesn't touch FM.
 export const CREATE_TIME_FB_FIELDS = [
 	"title",
 	"origin",
@@ -2831,6 +2922,54 @@ export const CREATE_TIME_FB_FIELDS = [
 	"inline_anchor",
 ] as const
 
+/**
+ * Translate an AJV error into a structured error string with a stable
+ * named code prefix. The code is what consumers (tests, error
+ * reporters, the agent) match on; the message gives the agent a
+ * remediation hint.
+ *
+ * AJV emits errors keyed by `keyword` + `instancePath`. We map the
+ * combinations we actually use in UNIT_FRONTMATTER_SCHEMA to the
+ * pre-existing named codes (`fsm_field_forbidden`, `depends_on_shape`,
+ * `title_shape`, `model_shape`, `closes_shape`, `quality_gates_shape`)
+ * so callers — including tests — keep matching on the same codes they
+ * matched on before AJV took over the static rules.
+ */
+function ajvErrorToCode(err: {
+	keyword: string
+	instancePath: string
+	params: Record<string, unknown>
+	message?: string
+}): string {
+	// `propertyNames.not.enum` rejection — AJV reports this as keyword
+	// `propertyNames` with the offending field in `params.propertyName`.
+	if (err.keyword === "propertyNames") {
+		const field = (err.params.propertyName as string) ?? "<unknown>"
+		return `fsm_field_forbidden: '${field}' is FSM-driven and must not be set by agents. The FSM owns this field via haiku_unit_advance_hat / haiku_unit_increment_bolt / etc.`
+	}
+	// Map per-field by inspecting the JSON-pointer instancePath
+	// (e.g. "/depends_on" or "/quality_gates/0/command").
+	const seg = err.instancePath.split("/").filter(Boolean)
+	const top = seg[0]
+	switch (top) {
+		case "title":
+			return `title_shape: title must be a non-empty string, or omit the field (it will default to the unit name). (${err.message ?? err.keyword})`
+		case "model":
+			return `model_shape: model must be 'haiku', 'sonnet', or 'opus'. Omit the field to fall through to hat/stage/studio defaults.`
+		case "depends_on":
+			return `depends_on_shape: depends_on must be a list of unit names (strings), or omit the field entirely for units with no dependencies. (${err.message ?? err.keyword} at ${err.instancePath})`
+		case "closes":
+			return `closes_shape: closes must be a list of FB ID strings, or omit the field for units that don't address feedback. (${err.message ?? err.keyword} at ${err.instancePath})`
+		case "quality_gates":
+			return `quality_gates_shape: quality_gates must be a list of {name, command, dir?} objects with non-empty name+command. Prose-only gates are silently skipped — write a real command. (${err.message ?? err.keyword} at ${err.instancePath})`
+		case "inputs":
+		case "outputs":
+			return `${top}_shape: ${top} must be a list of strings. (${err.message ?? err.keyword} at ${err.instancePath})`
+		default:
+			return `frontmatter_shape: ${err.message ?? err.keyword} at ${err.instancePath || "/"}`
+	}
+}
+
 export function validateUnitFrontmatter(
 	frontmatter: Record<string, unknown>,
 	context: {
@@ -2843,110 +2982,33 @@ export function validateUnitFrontmatter(
 ): { valid: true } | { valid: false; errors: string[] } {
 	const errors: string[] = []
 
-	// Rule 1: no FSM-driven fields. Agents author non-lifecycle fields only.
-	for (const field of FSM_DRIVEN_UNIT_FIELDS) {
-		if (field in frontmatter) {
-			errors.push(
-				`fsm_field_forbidden: '${field}' is FSM-driven and must not be set by agents. The FSM owns this field via haiku_unit_advance_hat / haiku_unit_increment_bolt / etc.`,
-			)
+	// Step 1: schema-based static rules — AJV consumes
+	// UNIT_FRONTMATTER_SCHEMA. Catches forbidden FSM fields, type errors,
+	// `model` enum, `quality_gates` inner shape, `title` minLength, and
+	// general type/array shape for depends_on / inputs / outputs / closes.
+	const ok = validateUnitSchema(frontmatter)
+	if (!ok && validateUnitSchema.errors) {
+		for (const err of validateUnitSchema.errors) {
+			errors.push(ajvErrorToCode(err))
 		}
 	}
 
-	// Rule 2: depends_on must be an array of strings, no self-reference,
-	// every entry must resolve to a sibling unit name (excluding self).
-	if ("depends_on" in frontmatter) {
-		const dep = frontmatter.depends_on
-		if (!Array.isArray(dep)) {
-			errors.push(
-				"depends_on_shape: depends_on must be a list of unit names (strings), or omit the field entirely for units with no dependencies.",
-			)
-		} else {
-			for (const entry of dep) {
-				if (typeof entry !== "string") {
-					errors.push(
-						`depends_on_shape: every depends_on entry must be a string (unit name); got ${typeof entry} '${String(entry)}'.`,
-					)
-					continue
-				}
-				if (entry === context.unit) {
-					errors.push(
-						`depends_on_self_reference: unit '${context.unit}' lists itself in depends_on. A unit cannot depend on itself.`,
-					)
-				}
-				if (!context.siblingUnits.includes(entry) && entry !== context.unit) {
-					errors.push(
-						`depends_on_unresolved: depends_on entry '${entry}' does not resolve to a unit in stage '${context.stage}'. Sibling units in this stage: [${context.siblingUnits.join(", ")}].`,
-					)
-				}
+	// Step 2: context-dependent rules — these need runtime data
+	// (the unit's own name, the sibling list) and can't be expressed
+	// in JSONSchema. Run only if depends_on passed the schema's array-of-
+	// strings shape check; otherwise the AJV errors above already cover it.
+	if (Array.isArray(frontmatter.depends_on)) {
+		for (const entry of frontmatter.depends_on) {
+			if (typeof entry !== "string") continue // already flagged by AJV
+			if (entry === context.unit) {
+				errors.push(
+					`depends_on_self_reference: unit '${context.unit}' lists itself in depends_on. A unit cannot depend on itself.`,
+				)
 			}
-		}
-	}
-
-	// Rule 3: title must be a non-empty string if present.
-	if ("title" in frontmatter) {
-		const t = frontmatter.title
-		if (typeof t !== "string" || t.trim() === "") {
-			errors.push(
-				"title_shape: title must be a non-empty string, or omit the field (it will default to the unit name).",
-			)
-		}
-	}
-
-	// Rule 4: model must be one of haiku|sonnet|opus if present.
-	if ("model" in frontmatter) {
-		const m = frontmatter.model
-		if (m !== "haiku" && m !== "sonnet" && m !== "opus") {
-			errors.push(
-				`model_shape: model must be 'haiku', 'sonnet', or 'opus' (got '${String(m)}'). Omit the field to fall through to hat/stage/studio defaults.`,
-			)
-		}
-	}
-
-	// Rule 5: closes (when present) must be an array of FB ID strings.
-	if ("closes" in frontmatter) {
-		const c = frontmatter.closes
-		if (!Array.isArray(c)) {
-			errors.push(
-				"closes_shape: closes must be a list of FB IDs (strings), or omit the field for units that don't address feedback.",
-			)
-		} else {
-			for (const entry of c) {
-				if (typeof entry !== "string") {
-					errors.push(
-						`closes_shape: every closes entry must be a string FB ID; got ${typeof entry} '${String(entry)}'.`,
-					)
-				}
-			}
-		}
-	}
-
-	// Rule 6: quality_gates (when present) must be an array of executable
-	// gate objects (per FSM_CONTRACTS_ELABORATE_BLOCK in orchestrator.ts).
-	if ("quality_gates" in frontmatter) {
-		const qg = frontmatter.quality_gates
-		if (!Array.isArray(qg)) {
-			errors.push(
-				"quality_gates_shape: quality_gates must be a list of {name, command, dir?} objects, or omit the field.",
-			)
-		} else {
-			for (let i = 0; i < qg.length; i++) {
-				const g = qg[i] as Record<string, unknown>
-				if (!g || typeof g !== "object") {
-					errors.push(
-						`quality_gates_shape[${i}]: each entry must be an object with at least {name, command}.`,
-					)
-					continue
-				}
-				if (typeof g.name !== "string" || g.name.trim() === "") {
-					errors.push(
-						`quality_gates_shape[${i}]: name must be a non-empty string.`,
-					)
-				}
-				if (typeof g.command !== "string" || g.command.trim() === "") {
-					errors.push(
-						`quality_gates_shape[${i}]: command must be a non-empty shell command string. Prose-only gates are silently skipped — write a real command.`,
-					)
-				}
+			if (!context.siblingUnits.includes(entry) && entry !== context.unit) {
+				errors.push(
+					`depends_on_unresolved: depends_on entry '${entry}' does not resolve to a unit in stage '${context.stage}'. Sibling units in this stage: [${context.siblingUnits.join(", ")}].`,
+				)
 			}
 		}
 	}
@@ -4685,69 +4747,13 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 					description:
 						"Full markdown body of the unit. Must be substantive (no placeholders like TBD, TODO, '...').",
 				},
+				// Schema is the SSOT (defined in UNIT_FRONTMATTER_SCHEMA).
+				// AJV validates input against it on every call; this
+				// inputSchema reference is what strict MCP clients use to
+				// reject malformed calls before they go out.
 				frontmatter: {
-					type: "object",
+					...UNIT_FRONTMATTER_SCHEMA,
 					description: `Optional frontmatter. Allowed: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}, plus stage-specific. Forbidden (FSM-driven, validator returns \`fsm_field_forbidden\`): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}.`,
-					properties: {
-						title: {
-							type: "string",
-							minLength: 1,
-							description:
-								"Unit title — non-empty string. Defaults to first H1 in the body, or to the unit name.",
-						},
-						depends_on: {
-							type: "array",
-							items: { type: "string" },
-							description:
-								"Names of sibling units in the SAME stage that must complete before this one. Each entry must resolve to an actual sibling. No self-reference. No cycles. (Cross-sibling and cycle checks are runtime — they need the full stage DAG, not expressible in this schema.)",
-						},
-						inputs: {
-							type: "array",
-							items: { type: "string" },
-							description:
-								"Cross-stage inputs this unit reads — paths to artifacts produced by prior stages.",
-						},
-						outputs: {
-							type: "array",
-							items: { type: "string" },
-							description:
-								"Artifacts this unit produces. Used downstream and by validation.",
-						},
-						quality_gates: {
-							type: "array",
-							items: {
-								type: "object",
-								properties: {
-									name: { type: "string" },
-									command: { type: "string" },
-									dir: { type: "string" },
-								},
-								required: ["name", "command"],
-							},
-							description:
-								"Build-class only: list of `{name, command, dir?}` executable gate objects. Run at advance_hat time; non-zero exit blocks. Prose strings are silently skipped — they give no enforcement.",
-						},
-						model: {
-							type: "string",
-							enum: ["haiku", "sonnet", "opus"],
-							description:
-								"Subagent tier for this unit's hats. `haiku` = mechanical, `sonnet` = standard (default), `opus` = deep reasoning. Cascade: unit > hat > stage > studio.",
-						},
-						closes: {
-							type: "array",
-							items: { type: "string" },
-							description:
-								"On revisit iterations, list of FB IDs this unit addresses (e.g. `[FB-01, FB-03]`). Every pending FB must be claimed by some unit's `closes:` to allow advancement.",
-						},
-					},
-					// Reject FSM-driven field smuggling at the schema layer. Strict
-					// MCP clients catch it before the call goes out; the server
-					// validator is the second gate (and emits the structured
-					// `fsm_field_forbidden` error code clients need).
-					propertyNames: {
-						not: { enum: [...FSM_DRIVEN_UNIT_FIELDS] },
-					},
-					additionalProperties: true,
 				},
 			},
 			required: ["intent", "stage", "unit", "body"],

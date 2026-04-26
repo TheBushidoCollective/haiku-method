@@ -9,6 +9,7 @@ import {
 	mkdirSync,
 	readdirSync,
 	readFileSync,
+	rmSync,
 	statSync,
 	unlinkSync,
 	writeFileSync,
@@ -4118,6 +4119,34 @@ export const stateToolDefs = [
 		},
 	},
 	{
+		name: "haiku_unit_read",
+		description:
+			"Read a unit's body content (and title). Returns ONLY the body and title — frontmatter is FSM-internal and not exposed to agents per the architecture's FM-is-FSM-only rule. Use this when a hat needs to read another unit's substance (sibling references, prior-stage knowledge artifacts) without interpreting FM. Returns { title, body } as JSON.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string" },
+				stage: { type: "string" },
+				unit: { type: "string" },
+			},
+			required: ["intent", "stage", "unit"],
+		},
+	},
+	{
+		name: "haiku_unit_delete",
+		description:
+			"Delete a unit. ONLY permitted when the unit's status is `pending`. Active and completed units are immutable per the forward-only lifecycle rule — once a unit has informed downstream work, deleting it would silently invalidate that work. Returns an error naming the rule when called against a non-pending unit.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string" },
+				stage: { type: "string" },
+				unit: { type: "string" },
+			},
+			required: ["intent", "stage", "unit"],
+		},
+	},
+	{
 		name: "haiku_decision_record",
 		description:
 			"Record an elaboration decision in the stage's decision_log, OR declare 'no architectural decisions in scope' for the stage. Used in collaborative-mode stages to track meaningful human-AI knowledge-unification moments instead of counting interaction turns. Each entry is an architectural choice the user picked between options, OR a choice the agent made and surfaced for veto-style approval. Padding questions don't count.",
@@ -4472,6 +4501,26 @@ export const stateToolDefs = [
 		},
 	},
 	{
+		name: "haiku_feedback_read",
+		description:
+			"Read a feedback file's body content (and title). Returns ONLY the body and title — frontmatter is FSM-internal and not exposed to agents per the architecture's FM-is-FSM-only rule. Use this when a fixer hat needs to read its own FB diagnosis or when a reviewer needs to read prior findings on the same artifact. Returns { title, body } as JSON. Omit `stage` to read an intent-scope FB.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string", description: "Intent slug" },
+				stage: {
+					type: "string",
+					description: "Stage name (optional — omit for intent-scope FBs)",
+				},
+				feedback_id: {
+					type: "string",
+					description: "Feedback ID, e.g. FB-01",
+				},
+			},
+			required: ["intent", "feedback_id"],
+		},
+	},
+	{
 		name: "haiku_release_notes",
 		description:
 			"Extract release notes from CHANGELOG.md — a specific version or the 5 most recent entries.",
@@ -4647,12 +4696,15 @@ export function handleStateTool(
 			)
 		}
 		case "haiku_unit_set": {
-			// Guard: only `status = "completed"` is FSM-protected. Agents may
-			// freely change status to pending/active/blocked and set any other
-			// field for legitimate repair — the FSM owns the completion moment
-			// exclusively (via advance_hat's auto-complete on the last hat).
-			// Direct "completed" writes bypass merge-back, scope validation,
-			// and the feedback-assessor, so they're the only value blocked.
+			// Guards (architecture rules §1.1, §1.3):
+			//   1. status: completed is FSM-protected (always — only the FSM
+			//      auto-completes via advance_hat).
+			//   2. Lifecycle immutability — once a unit is `active` or
+			//      `completed`, all FM writes are denied. The forward-only
+			//      lifecycle rule means downstream work has been informed by
+			//      the unit's spec; mutating it would silently invalidate
+			//      that work. The FSM is the only legitimate writer at that
+			//      point (advance_hat, increment_bolt, reject_hat).
 			const field = args.field as string
 			const value = args.value
 			if (field === "status" && value === "completed") {
@@ -4662,7 +4714,7 @@ export function handleStateTool(
 						field,
 						value,
 						message:
-							'Cannot set status to "completed" directly — unit completion is FSM-controlled. Call `haiku_unit_advance_hat` to let the FSM auto-complete the unit\'s last hat, which runs scope validation, feedback-assessor closure, and worktree merge-back. Setting status to other values (pending, active, blocked) is fine.',
+							'Cannot set status to "completed" directly — unit completion is FSM-controlled. Call `haiku_unit_advance_hat` to let the FSM auto-complete the unit\'s last hat, which runs scope validation, feedback-assessor closure, and worktree merge-back.',
 					}),
 				)
 			}
@@ -4676,6 +4728,33 @@ export function handleStateTool(
 				args.stage as string,
 				args.unit as string,
 			)
+			// Enforce lifecycle: only `pending` units accept arbitrary FM
+			// writes. The FSM-driven lifecycle fields (status, hat, bolt,
+			// iterations) are exempt because the FSM tools call setFrontmatterField
+			// directly (not through this MCP-callable case); agent calls go
+			// through here.
+			const FSM_DRIVEN_FIELDS = new Set([
+				"status",
+				"hat",
+				"bolt",
+				"iterations",
+				"started_at",
+				"completed_at",
+			])
+			if (existsSync(path) && !FSM_DRIVEN_FIELDS.has(field)) {
+				const { data: currentFm } = parseFrontmatter(readFileSync(path, "utf8"))
+				const currentStatus = (currentFm.status as string) || "pending"
+				if (currentStatus === "active" || currentStatus === "completed") {
+					return text(
+						JSON.stringify({
+							error: "lifecycle_violation",
+							current_status: currentStatus,
+							field,
+							message: `Cannot set field '${field}' on unit '${args.unit}' — status is '${currentStatus}'. Per the forward-only lifecycle rule (architecture §1.3), units become immutable once they enter active or completed status. Pending units only.`,
+						}),
+					)
+				}
+			}
 			setFrontmatterField(path, args.field as string, args.value)
 			return text("ok")
 		}
@@ -5700,6 +5779,90 @@ export function handleStateTool(
 				bolt: String(current + 1),
 			})
 			return text(String(current + 1))
+		}
+
+		// ── Unit body-only read (architecture rule §1.1: no FM exposed) ──
+		case "haiku_unit_read": {
+			const readBranchErr = enforceStageBranch(
+				args.intent as string,
+				args.stage as string,
+			)
+			if (readBranchErr) return readBranchErr
+			const path = unitPath(
+				args.intent as string,
+				args.stage as string,
+				args.unit as string,
+			)
+			if (!existsSync(path)) {
+				return text(
+					JSON.stringify({
+						error: "unit_not_found",
+						intent: args.intent,
+						stage: args.stage,
+						unit: args.unit,
+						message: `No unit '${args.unit}' in stage '${args.stage}'.`,
+					}),
+				)
+			}
+			const { data, body } = parseFrontmatter(readFileSync(path, "utf8"))
+			// Title resolves from FM `title:` if present, else first H1, else
+			// the unit name. We expose ONLY the title and body — every other
+			// FM field is FSM-internal per architecture §1.1.
+			const fmTitle =
+				typeof data.title === "string" ? (data.title as string) : ""
+			const h1Match = body.match(/^#\s+(.+)$/m)
+			const title = fmTitle || (h1Match ? h1Match[1].trim() : (args.unit as string))
+			return text(JSON.stringify({ title, body }, null, 2))
+		}
+
+		// ── Unit delete (architecture rule §1.3: pending only) ──
+		case "haiku_unit_delete": {
+			const delBranchErr = enforceStageBranch(
+				args.intent as string,
+				args.stage as string,
+			)
+			if (delBranchErr) return delBranchErr
+			const path = unitPath(
+				args.intent as string,
+				args.stage as string,
+				args.unit as string,
+			)
+			if (!existsSync(path)) {
+				return text(
+					JSON.stringify({
+						error: "unit_not_found",
+						intent: args.intent,
+						stage: args.stage,
+						unit: args.unit,
+						message: `No unit '${args.unit}' in stage '${args.stage}'.`,
+					}),
+				)
+			}
+			const { data } = parseFrontmatter(readFileSync(path, "utf8"))
+			const status = (data.status as string) || "pending"
+			if (status !== "pending") {
+				return text(
+					JSON.stringify({
+						error: "lifecycle_violation",
+						current_status: status,
+						required_status: "pending",
+						message: `Cannot delete unit '${args.unit}' — status is '${status}'. Per the forward-only lifecycle rule (architecture §1.3), units become immutable once they enter active or completed status because downstream work has been informed by them. Pending units only.`,
+					}),
+				)
+			}
+			rmSync(path)
+			sealIntentState(args.intent as string)
+			emitTelemetry("haiku.unit.deleted", {
+				intent: args.intent as string,
+				stage: args.stage as string,
+				unit: args.unit as string,
+			})
+			return text(
+				JSON.stringify({
+					ok: true,
+					message: `Deleted pending unit '${args.unit}'.`,
+				}),
+			)
 		}
 
 		case "haiku_decision_record": {
@@ -7146,6 +7309,71 @@ export function handleStateTool(
 				items: allItems,
 			}
 			return text(JSON.stringify(listResponse, null, 2))
+		}
+
+		// ── Feedback body-only read (architecture rule §1.1: no FM exposed) ──
+		case "haiku_feedback_read": {
+			const intentArg = args.intent as string
+			const stageArg = (args.stage as string) || ""
+			const fbId = args.feedback_id as string
+			if (!intentArg || !fbId) {
+				return text(
+					JSON.stringify({
+						error: "missing_args",
+						message: "intent and feedback_id are required.",
+					}),
+				)
+			}
+			// Locate the FB file. Stage-scope FBs live in stages/<stage>/feedback/;
+			// intent-scope FBs (from the intent-completion review) live in
+			// intents/<slug>/feedback/. The on-disk filename has a numeric
+			// prefix + slug, so we resolve by reading the directory and
+			// matching the FB id from frontmatter.
+			const dir = stageArg
+				? feedbackDir(intentArg, stageArg)
+				: feedbackDir(intentArg, "")
+			if (!existsSync(dir)) {
+				return text(
+					JSON.stringify({
+						error: "feedback_not_found",
+						intent: intentArg,
+						stage: stageArg || null,
+						feedback_id: fbId,
+						message: `No feedback directory at ${dir}.`,
+					}),
+				)
+			}
+			let foundPath: string | null = null
+			let foundData: Record<string, unknown> | null = null
+			let foundBody: string | null = null
+			for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
+				const p = join(dir, f)
+				const { data, body } = parseFrontmatter(readFileSync(p, "utf8"))
+				if ((data.id as string) === fbId || (data.feedback_id as string) === fbId) {
+					foundPath = p
+					foundData = data
+					foundBody = body
+					break
+				}
+			}
+			if (!foundPath || !foundBody) {
+				return text(
+					JSON.stringify({
+						error: "feedback_not_found",
+						intent: intentArg,
+						stage: stageArg || null,
+						feedback_id: fbId,
+						message: `No feedback file matching ${fbId} in ${dir}.`,
+					}),
+				)
+			}
+			const fmTitle =
+				typeof foundData?.title === "string"
+					? (foundData.title as string)
+					: ""
+			const h1Match = foundBody.match(/^#\s+(.+)$/m)
+			const title = fmTitle || (h1Match ? h1Match[1].trim() : fbId)
+			return text(JSON.stringify({ title, body: foundBody }, null, 2))
 		}
 
 		case "haiku_version_info": {

@@ -320,9 +320,9 @@ const FSM_CONTRACTS_FIX_LOOP_BLOCK = [
 	"> Read the artifact, verify the finding, state the gap *before* editing. Bolts spent on guesses don't come back.",
 	"",
 	"- The fix loop runs the stage's `fix_hats:` sequence against every eligible pending finding in parallel. Each finding's hat chain is serial (e.g. designer → feedback-assessor); chains run in parallel across findings. The feedback file IS the scope — do NOT synthesize a new unit spec.",
-	'- Every hat in the sequence reads the feedback body + the flagged artifact path and acts within its mandate. The sequence typically ends with a `feedback-assessor` hat that independently verifies the fix and, if satisfied, calls `haiku_feedback_update { status: "closed", closed_by: "fix-loop:<bolt-id>" }`.',
-	"- If the feedback-assessor is NOT satisfied, it leaves the feedback open (no `closed_by`, no status change). The FSM increments the bolt counter and may dispatch another loop, up to 3 bolts per finding. Exceeding 3 escalates to the human.",
-	"- A fix-loop hat is NOT a unit hat. Do NOT call `haiku_unit_advance_hat` or `haiku_unit_reject_hat` — those are for unit execution. The fix-loop is orchestrated by the parent; each fix hat completes its work and returns, and the parent calls `haiku_run_next` after every wave completes to advance.",
+	"- Every hat in the sequence reads the feedback body + the flagged artifact path and acts within its mandate. The sequence typically ends with a `feedback-assessor` hat that independently verifies the fix and, if satisfied, calls `haiku_feedback_advance_hat { intent, stage, feedback_id }` (intent-scope FBs: omit `stage`). When the LAST hat in `fix_hats` calls advance, the FSM auto-closes the FB and records `closed_by: fix-loop:<fbId>:bolt-<N>`. To reject the calling hat's work and re-dispatch the prior hat, use `haiku_feedback_reject_hat { ..., reason }` instead.",
+	"- If the assessor finds the fix incomplete, it calls `haiku_feedback_reject_hat` (FSM bumps bolt and re-dispatches the prior hat) up to 3 bolts per finding. Exceeding 3 escalates to the human. Do NOT call `haiku_feedback_update { status: closed }` for closure — completion is FSM-driven via the last hat's advance_hat call.",
+	"- The fix-loop's hat-progression tools mirror the unit equivalents but target FBs: `haiku_feedback_advance_hat` / `haiku_feedback_reject_hat` (NOT `haiku_unit_advance_hat` / `haiku_unit_reject_hat` — those operate on units). Each fix hat completes its work, calls advance_hat against the FB, and returns; the parent calls `haiku_run_next` after every wave completes.",
 	"- Parallel chains may edit the same artifact concurrently. Each final hat validates closure independently — a chain whose fix was clobbered by another chain will leave its finding open, and the next bolt will retry. Budget is spent, not lost.",
 	"",
 	"#### Per-hat action rules live in the subagent prompts",
@@ -5770,8 +5770,24 @@ function buildRunInstructions(
 					)
 				}
 
-				// Universal FSM contracts still apply
-				sections.push(FSM_CONTRACTS_ELABORATE_BLOCK)
+				// Universal FSM contracts always apply; build-class addendum
+				// only when no per-stage `phases/ELABORATION.md` override
+				// exists. Mirror the fresh-elaborate path's split so research
+				// stages (which have role-correct ELABORATION.md) don't get
+				// build-class rules injected on iterative re-entry.
+				sections.push(FSM_CONTRACTS_ELABORATE_UNIVERSAL)
+				const iterativeOverride = readPhaseOverride(
+					studio,
+					stage,
+					"ELABORATION",
+				)
+				if (iterativeOverride) {
+					sections.push(
+						`### Phase: Elaboration Override\n\n${iterativeOverride.body}`,
+					)
+				} else {
+					sections.push(FSM_CONTRACTS_ELABORATE_BUILD_ADDENDUM)
+				}
 
 				// Prior-stage enumeration + inputs + feedback context follow
 				// the same logic as fresh elaborate — fall through after the
@@ -5787,9 +5803,9 @@ function buildRunInstructions(
 						"",
 						"**Step 2: Decide the response.** Based on what changed, pick one:",
 						"",
-						"**A. New units are needed.** Draft them as `unit-NN-<slug>.md` under `.haiku/intents/.../stages/<stage>/units/`. Continue the file-naming sequence from the highest existing number. Each new unit's `inputs:` MUST reference the prior-stage artifacts it builds on. Then call `haiku_run_next`.",
+						"**A. New units are needed.** Author each via `haiku_unit_write { intent, stage, unit, body, frontmatter? }` (the `unit` argument follows `unit-NN-<slug>` naming, continuing the sequence from the highest existing number). Each new unit's `inputs:` MUST reference the prior-stage artifacts it builds on. Generic Write/Edit on `units/*.md` is denied at the hook layer — the MCP tool is the only authoring path. Then call `haiku_run_next`.",
 						"",
-						"**B. Pending units need revision.** Edit their `.md` files in place (the FSM guard permits editing units whose `status` is NOT `completed`). Then call `haiku_run_next`.",
+						"**B. Pending units need revision.** Rewrite the body via `haiku_unit_write` (full body rewrite, only on pending units) or update individual frontmatter fields via `haiku_unit_set`. The hook denies generic Edit/Write on unit files; the MCP tools enforce the pending-only lifecycle so active/completed units stay immutable. Then call `haiku_run_next`.",
 						"",
 						"**C. No changes needed — nothing has evolved that warrants new work in this stage.** Call `haiku_run_next` immediately without adding or modifying any units. The FSM compares the pre-elaborate unit count to the post-elaborate count; if unchanged AND no pending units exist, it advances directly to the gate (skipping pre-review + execute + review — there's nothing new to review or execute).",
 						"",
@@ -7325,7 +7341,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 			)
 
 			sections.push(
-				'### Parallel Fix-Chain Dispatch\n\nEach finding below has its own hat chain. **Within a chain, hats run serially.** **Across chains, findings run in parallel.** The final hat in each chain validates closure and calls `haiku_feedback_update { status: "closed" }`. If a chain leaves its feedback open, the FSM loops that finding again on the next `haiku_run_next` — up to the bolt cap.\n',
+				"### Parallel Fix-Chain Dispatch\n\nEach finding below has its own hat chain. **Within a chain, hats run serially.** **Across chains, findings run in parallel.** The final hat in each chain validates closure and calls `haiku_feedback_advance_hat { intent, stage, feedback_id }` — when the LAST hat in `fix_hats` calls advance, the FSM auto-closes the FB and records `closed_by`. If the assessor finds the fix incomplete, it calls `haiku_feedback_reject_hat { ..., reason }` instead; the FSM bumps bolt and re-dispatches the prior hat up to the bolt cap.\n",
 			)
 
 			// Emit one grouped subagent block set per finding.
@@ -7601,7 +7617,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 			sections.push(icHeader.join("\n"))
 
 			sections.push(
-				'### Parallel Fix-Chain Dispatch\n\nEach finding below has its own hat chain. **Within a chain, hats run serially.** **Across chains, findings run in parallel.** The final hat in each chain validates closure and calls `haiku_feedback_update { status: "closed" }` (omit `stage`). If a chain leaves its feedback open, the FSM loops that finding again on the next `haiku_run_next` — up to the bolt cap.\n',
+				"### Parallel Fix-Chain Dispatch\n\nEach finding below has its own hat chain. **Within a chain, hats run serially.** **Across chains, findings run in parallel.** The final hat in each chain validates closure and calls `haiku_feedback_advance_hat { intent, feedback_id }` (omit `stage` — intent scope) — when the LAST hat in studio fix_hats calls advance, the FSM auto-closes the FB and records `closed_by`. If the assessor finds the fix incomplete, it calls `haiku_feedback_reject_hat { ..., reason }` instead; the FSM bumps bolt and re-dispatches the prior hat up to the bolt cap.\n",
 			)
 
 			for (const {
@@ -8137,7 +8153,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 						"review agents",
 					),
 					"",
-					`If any reviewer returned findings (anything other than \`No findings.\`), aggregate them by unit file, EDIT the relevant unit.md files directly to address each finding, commit, then call \`haiku_run_next { intent: "${slug}" }\` to re-enter review. If every reviewer returned \`No findings.\`, call \`haiku_run_next { intent: "${slug}" }\` to open the user-facing gate. NO feedback files are created at pre-execute — there is nothing built to critique against.`,
+					`If any reviewer returned findings (anything other than \`No findings.\`), aggregate them by unit, then **rewrite each affected unit via \`haiku_unit_write { intent, stage, unit, body, frontmatter? }\`** (full body rewrite of pending units), or update individual frontmatter fields via \`haiku_unit_set\` for narrow changes. Generic \`Edit\`/\`Write\` on \`units/*.md\` is denied at the hook layer — use the MCP tools. Commit, then call \`haiku_run_next { intent: "${slug}" }\` to re-enter review. If every reviewer returned \`No findings.\`, call \`haiku_run_next { intent: "${slug}" }\` to open the user-facing gate. NO feedback files are created at pre-execute — there is nothing built to critique against.`,
 				].join("\n"),
 			)
 			break
@@ -8161,7 +8177,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 				`**${pendingCount} pending spec-level feedback item(s) block the advance to execute.**`,
 			)
 			sections.push(
-				`**Resolution mode: SPEC EDIT (not new units).** This is NOT additive-elaboration. The findings are about bugs in existing unit specs — fix them by editing the unit.md files in \`${unitsDir}\`. Do not draft new units.`,
+				`**Resolution mode: SPEC EDIT (not new units).** This is NOT additive-elaboration. The findings are about bugs in existing unit specs — fix them via \`haiku_unit_write\` (full body rewrite of pending units in \`${unitsDir}\`) or \`haiku_unit_set\` (individual frontmatter fields). Generic \`Edit\`/\`Write\` on \`units/*.md\` is denied at the hook layer; use the MCP tools. Do not draft new units.`,
 			)
 			sections.push(
 				`### Pending Spec Findings\n\n${pendingItems
@@ -8172,7 +8188,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 					.join("\n")}`,
 			)
 			sections.push(
-				`### Mechanics\n\n1. Read each pending feedback file IN FULL — the body carries the concrete spec edit the reviewer proposed.\n2. Apply the edit to the referenced unit.md file (frontmatter or body as appropriate).\n3. Close the feedback via \`haiku_feedback_update { intent: "${slug}", stage: "${stage}", feedback_id: "FB-NN", status: "closed", closed_by: "<unit-name>" }\`. If you disagree with a finding, reject it with \`haiku_feedback_reject\` and a concrete reason.\n4. When zero pending feedback remains, call \`haiku_run_next\` to advance to execute.`,
+				`### Mechanics\n\n1. Read each pending feedback file IN FULL via \`haiku_feedback_read { intent: "${slug}", stage: "${stage}", feedback_id: "FB-NN" }\` — the body carries the concrete spec edit the reviewer proposed.\n2. Apply the edit to the referenced unit via \`haiku_unit_write\` (full body rewrite, only on pending units) or \`haiku_unit_set\` (individual frontmatter field). Generic \`Edit\`/\`Write\` is denied at the hook layer.\n3. Close the spec-feedback via \`haiku_feedback_update { intent: "${slug}", stage: "${stage}", feedback_id: "FB-NN", status: "closed", closed_by: "<unit-name>" }\`. (Spec-level feedback at pre-execute uses \`haiku_feedback_update\` for closure — distinct from the FB-as-unit fix-loop where closure is FSM-driven via \`haiku_feedback_advance_hat\`.) If you disagree with a finding, reject it with \`haiku_feedback_reject\` and a concrete reason.\n4. When zero pending feedback remains, call \`haiku_run_next\` to advance to execute.`,
 			)
 			break
 		}

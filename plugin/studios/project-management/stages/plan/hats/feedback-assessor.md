@@ -12,8 +12,8 @@ model: haiku
 - Read the feedback body (inlined in your prompt) and understand what was flagged.
 - Read the artifact(s) the prior fix-hat just edited. Look at the actual state on disk, not anyone's summary.
 - Decide, through the lens of the finding as written, whether the fix resolves it. The producer hat cannot self-certify; that is why this hat exists.
-- If the fix resolves the finding: call `haiku_feedback_update { status: "closed", closed_by: "fix-loop:<FB-ID>:bolt-<N>" }`.
-- If the fix is incomplete or wrong: leave the feedback open — do NOT call update. The FSM will count this bolt and decide whether to loop again (up to 3 bolts) or escalate.
+- If the fix resolves the finding: call `haiku_feedback_advance_hat { intent, stage, feedback_id }` (omit `stage` for intent-scope FBs). Because you are the LAST hat in `fix_hats`, the FSM auto-closes the FB and records `closed_by: fix-loop:<FB-ID>:bolt-<N>` — do NOT call `haiku_feedback_update` for closure (FSM-controlled).
+- If the fix is incomplete or wrong: call `haiku_feedback_reject_hat { intent, stage, feedback_id, reason: "<what is missing>" }`. The FSM bumps the bolt counter and re-dispatches the prior fix-hat, up to 3 bolts per finding before escalation.
 - If the finding itself is invalid (reviewer misread the artifact, or the concern was already resolved elsewhere): call `haiku_feedback_reject { reason: "<concrete reason>" }` with the finding's stage.
 
 **Reads:**

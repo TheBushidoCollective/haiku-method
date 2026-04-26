@@ -6,22 +6,21 @@ status: canonical
 
 # H·AI·K·U Studio Architecture
 
-This document is the canonical reference for how studios, stages, units, hats, and feedback fit together. Every studio under `plugin/studios/` MUST conform to these rules. Every reviewer of an existing studio change MUST check the change against this doc.
+Canonical reference for how studios, stages, units, hats, and feedback fit together. Every studio under `plugin/studios/` MUST conform. Every reviewer of a studio change MUST check the change against this doc.
 
-If implementation drifts from this document, **the document is right** unless an explicit RFC supersedes it.
+If implementation drifts, **the document is right** unless an explicit revision proposal supersedes it.
 
 ## 1. Hard boundaries
 
 ### 1.1 Frontmatter is FSM-only
 
-Frontmatter on FSM-managed files (`unit-NN-*.md`, `FB-NN-*.md`, intent.md, state.json, iteration.json) is reserved for the FSM. Agents MAY write frontmatter when authoring a file (e.g., the elaborator drafts a unit with `depends_on:` and `inputs:`), but agents MUST NOT **interpret** frontmatter for any mechanical purpose.
+Frontmatter on FSM-managed files (`unit-NN-*.md`, `FB-NN-*.md`, `intent.md`, `state.json`, iteration files) is reserved for the FSM. Agents MAY write frontmatter when authoring a file (the elaborator drafts a unit with declared inputs/outputs); agents MUST NOT **interpret** frontmatter for any mechanical purpose.
 
-Concretely:
 - Reviewer hats do not grep `depends_on:` to detect DAG inversions. The FSM rejects bad DAG writes at the source.
 - Verifier hats do not validate frontmatter schema. The FSM validates schema at every write.
 - Fixer hats do not read another unit's frontmatter to plan a change. They read body content.
 
-The single exception is the FSM itself (orchestrator code, MCP tool internals). FSM internals MAY read FM freely. No agent-callable MCP tool exposes FM to the agent.
+The single exception is the FSM itself (orchestrator code, MCP tool internals). FSM internals MAY read FM freely. **No agent-callable MCP tool exposes FM to the agent.**
 
 ### 1.2 The FSM owns CRUDL on units and feedback
 
@@ -35,9 +34,9 @@ All Create/Read/Update/Delete/List operations on `units/*.md` and `feedback/*.md
 | Delete (pending only) | `haiku_unit_delete` | `haiku_feedback_delete` |
 | List | `haiku_unit_list` | `haiku_feedback_list` |
 
-`haiku_unit_get` (which currently exposes FM) becomes FSM-internal only. Agent-callable reads return body + title; FM stays inside the FSM.
+`haiku_unit_get` (which exposes FM) becomes FSM-internal only. Agent-callable reads return body + title; FM stays inside the FSM.
 
-### 1.3 Lifecycle and immutability
+### 1.3 Lifecycle is forward-only
 
 Units (and feedback files) move forward only:
 
@@ -45,39 +44,94 @@ Units (and feedback files) move forward only:
 pending → active → completed
 ```
 
-There are no reverse transitions. No `unwind`, no `reset`, no `revisit_unit`. Once a unit becomes active or completed, the work it informed cannot be unwound.
+There are no reverse transitions. No `unwind`, no `reset`, no `revisit_unit`. Once a unit is active or completed, the work it informed cannot be unwound.
 
 | Status | Mutable? | Notes |
 |---|---|---|
-| pending | yes — body, FM (via `_set`/`_write`), delete via `_delete` | Pre-execute review is the LAST opportunity to fix |
-| active | no — locked except for FSM-driven hat progression | Hat output gets appended via FSM-controlled flows; the unit's spec itself does not change |
+| pending | yes — body, FM (via `_set`/`_write`), delete via `_delete` | Pre-execute review is the LAST chance to fix |
+| active | no — locked except for FSM-driven hat progression | Spec is frozen; hat outputs append via FSM-controlled flows |
 | completed | no — fully immutable | New work that addresses defects becomes NEW pending units in the next iteration |
 
-**Stage revisit creates new pending units; it never modifies completed units.** If a closed FB diagnoses a defect in a completed unit, the next elaborate iteration creates a corrective unit (or a follow-up unit) — it does not edit the original. This is why front-loading review (verifier hats + pre-execute review) matters.
+**Stage revisit creates new pending units; it never modifies completed units.** If a closed FB diagnoses a defect in a completed unit, the next elaborate iteration creates a corrective unit (or a follow-up unit) — it does not edit the original. Front-loading review (verifier hats + pre-execute review) is therefore critical.
 
-## 2. Hat sequence pattern: plan → do → verify
+## 2. Stage anatomy
+
+### 2.1 Phases (FSM-driven)
+
+Every stage has the same FSM lifecycle:
+
+| Phase | Purpose | Who acts |
+|---|---|---|
+| **elaborate** | Authors the unit set for THIS stage | The elaborate-phase agent (one per stage; named per studio) |
+| **execute** | Each unit runs through the per-unit hat chain | Per-unit subagents, one hat at a time |
+| **review** | Adversarial reviewers inspect completed units | Stage-level review agents |
+| **gate** | Approval to advance | Human (`ask`) or external (`external`) or auto (`auto`) |
+
+**Critical:** units are created **only** in the elaborate phase of THIS stage. Execution NEVER creates units. A different stage NEVER creates units for this stage.
+
+Each stage is responsible for its own unit set. `inception` does not pre-author units for `development`. `development`'s elaborate phase authors `development`'s units, drawing on `inception`'s knowledge artifacts as inputs.
+
+### 2.2 Units are stage-appropriate, not universal
+
+The shape of a "unit" depends on the stage's role:
+
+| Stage role | What a unit IS | Examples |
+|---|---|---|
+| **Research / distillation** (inception, market-research, discovery) | A knowledge topic to investigate | "Competitive landscape", "User persona", "Technical feasibility" |
+| **Design / synthesis** (design, prototype, options) | A design component or option set | "Auth flow design", "Navigation pattern", "Data model option A" |
+| **Build / execution** (development, firmware, manufacturing) | A discrete piece of work to execute | "Implement /api/users", "Wire up auth middleware", "Ship database migration" |
+| **Validation / certification** (validation, certify) | A verification surface to test | "API contract test pass", "FCC pre-cert sweep", "Penetration test of auth boundary" |
+| **Operational** (deployment, cutover, launch) | An operational step to perform | "Run blue-green deploy", "Migrate production data", "Flip DNS" |
+| **Adversarial / security** (software/security, security-assessment) | An attack surface or threat boundary | "Auth flow surface", "Data layer surface", "Public API surface" |
+
+A studio author defines what a unit IS for each of their stages by writing the stage's elaborate-phase contract.
+
+### 2.3 The rally-race test
+
+Hats form a **rally race**: each hat receives a baton from the previous hat and hands a more-evolved baton to the next. **If the baton between two hats does not matter, they are not a hat sequence — they are a list of activities and need a different structure.**
+
+Failure modes:
+- Activities that run independently and don't pass anything meaningful between them are stage-level activities, not hats. Express them as separate stage phases or as parallel review-agents, not as `hats:`.
+- Activities where hat N+1 doesn't actually consume hat N's output are misnamed hats; restructure or rename.
+
+## 3. Hat sequence pattern: plan → do → verify
 
 Every stage's `hats:` list MUST follow `plan → do → verify`, in that order, as the leading three roles. Additional hats (e.g., adversarial loops) MAY follow but never precede.
 
 ```yaml
-hats: [planner, doer, verifier]                          # minimum
-hats: [planner, doer, verifier, red-team, blue-team]     # plan-do-verify + adversarial
+hats: [planner, doer, verifier]                           # minimum
+hats: [planner, doer, verifier, red-team, blue-team]      # plan-do-verify + adversarial
 ```
 
-### 2.1 Plan role
+### 3.1 Hat-name discipline (CRITICAL)
 
-Reads the stage inputs (decisions, knowledge, prior-stage outputs) and produces an internal plan or a structured spec to guide the do role. May be named: `researcher`, `analyst`, `planner`, `strategist`, `designer`, `architect`, `threat-modeler`, etc.
+**Hat names MUST be distinct from phase names.** The prior model used `elaborator` as both a hat name and the elaborate phase, which created confusion at every layer of the architecture (this document, the orchestrator, the per-stage hats).
 
-### 2.2 Do role
+Reserved phase names that MUST NOT be used as hat names: `elaborate`, `execute`, `review`, `gate`. Stage-appropriate hat names instead:
 
-Executes the plan. Produces the artifact(s) the stage is responsible for. May be named: `elaborator`, `builder`, `writer`, `engineer`, `creator`, `drafter`, etc.
+| Stage role | Plan hat | Do hat | Verify hat |
+|---|---|---|---|
+| Research / distillation | `researcher` | `distiller`, `synthesizer` | `verifier`, `validator` |
+| Design / synthesis | `designer`, `architect` | `synthesizer`, `composer` | `design-reviewer`, `verifier` |
+| Build / execution | `planner`, `architect` | `builder`, `engineer`, `implementer` | `reviewer`, `verifier` |
+| Validation / certification | `analyst`, `planner` | `tester`, `validator` | `auditor`, `certifier` |
+| Operational | `coordinator`, `planner` | `operator`, `executor` | `verifier`, `qa` |
+| Adversarial | `threat-modeler` | `red-team`, `attacker` | `blue-team`, `security-reviewer` |
 
-### 2.3 Verify role
+### 3.2 Plan role
 
-The terminal hat. Validates the do role's output against the stage's body-level quality rules. Calls `haiku_unit_advance_hat` (success) or `haiku_unit_reject_hat` (failure).
+Reads the stage inputs (decisions, knowledge from prior stages, sibling units' outputs) and produces an internal plan or structured spec to guide the do role. **Baton handoff: plan artifact.**
+
+### 3.3 Do role
+
+Executes the plan. Produces the artifact(s) the unit is responsible for. **Baton handoff: the unit's body content.**
+
+### 3.4 Verify role
+
+Terminal hat. Validates the do role's output against the stage's body-level quality rules. Calls `haiku_unit_advance_hat` (success) or `haiku_unit_reject_hat` (failure). **Baton: validated output OR a structured rejection that names the failed criterion.**
 
 The verify role's mandate is **body-only**. It does not read frontmatter for mechanical checks. Examples of legitimate verify-role rules:
-- Are all sections of the unit spec populated with substantive content?
+- Are all sections of the unit body populated with substantive content?
 - Does the body contradict any open Decision in the intent's decision register?
 - Is the body internally consistent (does it cite sibling units' content correctly)?
 - Does the body answer the unit's own open questions?
@@ -87,60 +141,133 @@ Examples of illegitimate verify-role rules (these are FSM responsibilities):
 - ❌ Is the YAML frontmatter schema valid?
 - ❌ Does the unit's `inputs:` match the prior stage's `outputs:`?
 
-The verify hat may be named `verifier`, `reviewer`, `validator`, `assessor`, `auditor`, `qa`, `tester`, `critic`, `fact-checker`, or any equivalent that makes the role clear in the studio's vocabulary.
+### 3.5 Adversarial loops
 
-### 2.4 Adversarial loops
-
-Studios with adversarial workflows (security-assessment, software/security, etc.) MAY include adversarial hats AFTER the plan-do-verify triplet. The adversarial hats are exempt from the verify-role rules but the plan-do-verify front loop is mandatory.
+Studios with adversarial workflows (security-assessment, software/security, etc.) MAY include adversarial hats AFTER the plan-do-verify triplet. Adversarial hats are exempt from the body-only rule but the plan-do-verify front loop is mandatory.
 
 ```yaml
-# software/security
-hats: [threat-modeler, security-engineer, security-reviewer, red-team, blue-team, security-final-reviewer]
+# software/security — units = attack surfaces
+hats: [threat-modeler, security-engineer, security-reviewer, red-team, blue-team, attack-resolver]
 #       ↑ plan          ↑ do                ↑ verify         ↑ adversarial loop  ↑ adversarial verify
 ```
 
-## 3. Fix-loop pattern
+## 4. Stage roles in detail
 
-Findings (FBs) raised by adversarial reviewers are addressed by the fix-loop. The fix-loop is mechanically identical to unit execution, with the FB file as the work artifact.
+### 4.1 Research / distillation stages (inception-class)
 
-### 3.1 FB-as-unit
+**Purpose:** Take the user's intent ("as a user I want to X") and turn it into a broad set of distinct knowledge artifacts. Market research, user problem, technical landscape, distilled WHY and high-level HOW. Outputs feed every downstream stage.
+
+**Units:** Knowledge topics. Each unit corresponds to one investigable question or knowledge surface.
+
+**Per-unit hat chain:** `researcher → distiller → verifier` (or stage-equivalent names).
+- Researcher gathers raw findings on THIS topic
+- Distiller turns raw findings into a structured, actionable knowledge artifact for THIS topic
+- Verifier validates the artifact
+
+**Baton:** topic shell → research notes → distilled artifact → validated artifact.
+
+**Stage outputs:** Per-topic knowledge artifacts. **NOT** execution-unit specs for downstream stages; downstream stages create their own units in their own elaborate phase.
+
+**Examples:** software/inception, hwdev/inception, libdev/inception, gamedev/concept, hwdev/requirements, product-strategy/discovery.
+
+### 4.2 Design / synthesis stages
+
+**Purpose:** Take the upstream knowledge and translate it into a designed solution. Architectural design, UX design, atomic design, API design.
+
+**Units:** Design components or option sets. The DAG reflects the studio's design discipline (atomic design has hierarchy: atoms → molecules → organisms; software design might have layers: data → service → API).
+
+**Per-unit hat chain:** `designer → synthesizer → verifier` (or equivalent).
+
+**Examples:** software/design, hwdev/design, libdev/inception's API surface portion (currently bundled with inception — see §6 known issues).
+
+### 4.3 Build / execution stages
+
+**Purpose:** Take the designed solution and build it. Source code, hardware boards, training content, marketing assets.
+
+**Units:** Discrete executable pieces of work. Each unit's spec includes acceptance criteria, completion criteria, executable verification (`quality_gates:`).
+
+**Per-unit hat chain:** `planner → builder → reviewer` (or equivalent).
+
+**This is the only stage role where execution-unit specs (with `depends_on:`, `quality_gates:`, executable verify-commands) make sense.** They're authored in build-stage's elaborate phase, NOT in upstream stages.
+
+**Examples:** software/development, hwdev/firmware, hwdev/manufacturing, libdev/development.
+
+### 4.4 Validation / certification stages
+
+**Purpose:** Verify the built product against requirements / standards / contracts.
+
+**Units:** Verification surfaces — one per testable boundary or compliance area.
+
+**Per-unit hat chain:** `analyst → tester → certifier` (or equivalent).
+
+**Examples:** hwdev/validation, software/security (as adversarial-loop variant), quality-assurance/certify, compliance/certify.
+
+### 4.5 Operational stages
+
+**Purpose:** Perform a step in deploying or operating the system.
+
+**Units:** Operational steps. Often sequential (cutover step 1 must complete before step 2).
+
+**Per-unit hat chain:** `coordinator → operator → verifier` (or equivalent).
+
+**Examples:** software/operations, migration/cutover, marketing/launch, dev-evangelism/publish.
+
+## 5. Fix-loop pattern
+
+Findings (FBs) raised by adversarial reviewers are addressed by the fix-loop. The fix-loop is **mechanically identical to unit execution**, with the FB file as the work artifact.
+
+### 5.1 FB-as-unit
 
 When a fix-loop dispatches against an FB:
 - The FB file IS the unit. The fixer hats read it, edit it, and complete it via `haiku_unit_advance_hat` against the FB.
-- Fixer hats MUST NOT edit unit files. The flagged unit is read-only context (read via `haiku_unit_read`); the fixer's deliverable is the FB body populated with diagnosis, root cause, proposed action.
-- The same plan-do-verify pattern applies. The stage's `fix_hats:` list MUST contain at least three hats forming the loop. The terminal hat validates the FB body and calls `haiku_unit_advance_hat` against the FB.
+- Fixer hats MUST NOT edit unit files. The flagged unit is read-only context (read via `haiku_unit_read`); the fixer's deliverable is the FB body populated with diagnosis, root cause, recommended action.
+- The same plan-do-verify pattern applies. The stage's `fix_hats:` list MUST contain at least three hats forming the loop. Terminal hat validates the FB body and calls `haiku_unit_advance_hat` against the FB.
 - FSM lifecycle enforcement is identical: FBs go pending → active → completed.
 
-### 3.2 Closed FBs become input, not patches
+### 5.2 Closed FBs become input, not patches
 
 A "completed" FB means its diagnosis is well-formed. It does NOT mean the underlying defect is patched. Patching happens during the next iteration of the upstream stage:
-- The FSM rolls the stage back to elaborate (or whichever phase produces the artifact type).
-- Closed FBs are inlined into the elaborator's dispatch as additional context.
-- The elaborator authors NEW pending units that address the findings.
-- Existing completed units are not modified. (See §1.3 — forward-only.)
+- The FSM rolls the stage back to elaborate.
+- Closed FBs are inlined into the elaborate-phase agent's dispatch as additional context.
+- The elaborate-phase agent authors NEW pending units that address the findings.
+- Existing completed units are NOT modified. (See §1.3 — forward-only.)
 
-This is why front-loading matters. By the time a defect surfaces at the gate, the original units that contain it are permanent. The corrective work happens above them.
+This is why front-loading matters. By the time a defect surfaces at the gate, the original units that contain it are permanent. Corrective work happens on top of them, never to them.
 
-## 4. Hook boundary
+## 6. Hook boundary
 
 The PreToolUse hook denies generic file Read/Write/Edit on FSM-managed paths. The hook redirects the agent at the appropriate MCP tool.
 
 Denied paths (Read/Write/Edit):
 - `.haiku/intents/*/stages/*/units/*.md`
-- `.haiku/intents/*/stages/*/feedback/*.md`
+- `.haiku/intents/*/stages/*/feedback/*.md` and `.haiku/intents/*/feedback/*.md` (intent-scope)
 - `.haiku/intents/*/intent.md`
 - `.haiku/intents/*/stages/*/state.json`
 
 Denial message format: `"This file is FSM-managed. Use \`haiku_unit_read { intent: \"<slug>\", stage: \"<stage>\", unit: \"<unit>\" }\` instead."`
 
-Bash commands referencing these paths are **soft-warned** (logged, not blocked). Routine MCP usage is the path of least resistance; persistent Bash bypass is anomalous and shows up in audit telemetry.
+Bash commands referencing these paths are **soft-warned** (logged, not blocked). The threat model is "honest agent reaches for the wrong tool by habit," not "adversarial agent." Routine MCP usage is the path of least resistance; persistent Bash bypass is anomalous and shows up in audit telemetry.
 
-## 5. Studio-author checklist
+## 7. Known structural issues to fix
+
+These are points where the current implementation contradicts this document. They MUST be reconciled — fix the implementation, not the document.
+
+1. **`FSM_CONTRACTS_ELABORATE_BLOCK` (orchestrator.ts:140) bakes in execution-unit semantics for every stage's elaborate phase.** It mandates `depends_on:`, executable `quality_gates:`, completion-criteria pairs, etc. These are correct for build/execution stages but wrong for research/distillation stages (where units are knowledge topics, not executable work). Split the contract by stage role.
+2. **`software/inception` (and inception-class siblings) currently produce execution-unit specs for the whole intent.** This is wrong per §2.1 (every stage creates its own units) and §4.1 (inception's units are knowledge topics). Restructure these stages.
+3. **Hat name `elaborator` collides with phase name `elaborate`.** Rename per-studio to stage-appropriate names (see §3.1 table).
+4. **`software/development` (and other build-class stages) need their own elaborate phase that authors execution-unit specs from upstream knowledge.** Currently they consume pre-authored units from upstream — that inversion is the source of the FB-01 class of bugs.
+5. **Existing `haiku_unit_get` MCP tool exposes frontmatter to agents.** Per §1.1 and §1.2, it must become FSM-internal only.
+
+## 8. Studio-author checklist
 
 When adding or modifying a stage:
 
+- [ ] Stage role identified (research/design/build/validation/operational/adversarial)
+- [ ] What a "unit" IS for this stage is documented in the stage's elaborate contract
 - [ ] `hats:` list has at least 3 entries
 - [ ] First hat is plan-class, second is do-class, third is verify-class
+- [ ] Hat names are distinct from phase names (no `elaborate`/`execute`/`review`/`gate`)
+- [ ] Each hat-to-hat handoff has a meaningful baton (rally-race test)
 - [ ] Verify hat's mandate is body-only (no FM interpretation)
 - [ ] If `fix_hats:` is set, it also has at least 3 entries forming plan-do-verify
 - [ ] Adversarial hats (if any) come AFTER the plan-do-verify triplet
@@ -154,12 +281,13 @@ When adding or modifying an FSM tool:
 - [ ] Read tools return body + title only unless the caller is FSM-internal
 - [ ] Tool errors name the rule that fired ("status is `active`; units become immutable once started")
 
-## 6. Source of truth
+## 9. Source of truth
 
 This document supersedes any conflicting guidance in:
 - `website/content/papers/haiku-method.md`
 - Per-studio `STUDIO.md` files
 - Per-stage `STAGE.md` files
 - Hat mandate files (`hats/*.md`)
+- `FSM_CONTRACTS_ELABORATE_BLOCK` and related orchestrator constants
 
 When a discrepancy is found, fix the downstream artifact, not this document — unless an explicit revision proposal is approved that updates this file first.

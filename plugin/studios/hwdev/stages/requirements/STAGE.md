@@ -1,7 +1,7 @@
 ---
 name: requirements
 description: Functional, safety, and regulatory requirements
-hats: [systems-engineer, compliance-officer, elaborator, verifier]
+hats: [systems-engineer, compliance-officer, elaborator]
 fix_hats: [systems-engineer, feedback-assessor]
 review: [external, ask]
 elaboration: collaborative

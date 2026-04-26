@@ -78,10 +78,7 @@ function classifyPath(absPath: string): FsmPathClassification {
  * tool. Different kinds of files have different tool surfaces; we name
  * the specific call shape so the agent doesn't have to guess.
  */
-function redirectMessage(
-	toolName: string,
-	cls: FsmPathClassification,
-): string {
+function redirectMessage(toolName: string, cls: FsmPathClassification): string {
 	const op =
 		toolName === "Read"
 			? "read"
@@ -113,8 +110,10 @@ function redirectMessage(
 			op === "read"
 				? `haiku_feedback_read { intent: "${intent}", ${stagePart}feedback_id: "${name}" }`
 				: op === "create or overwrite"
-					? `haiku_feedback { intent: "${intent}", ${stagePart}title: "...", body: "...", origin: "...", author: "..." }`
-					: `haiku_feedback_update { intent: "${intent}", ${stagePart}feedback_id: "${name}", ... }`
+					? // Existing FB → rewrite body via haiku_feedback_write.
+						// Brand-new FB → use haiku_feedback (omit feedback_id).
+						`haiku_feedback_write { intent: "${intent}", ${stagePart}feedback_id: "${name}", body: "..." }\n  (or haiku_feedback { intent: "${intent}", ${stagePart}title: "...", body: "...", origin: "...", author: "..." } if you're creating a brand-new finding)`
+					: `haiku_feedback_write { intent: "${intent}", ${stagePart}feedback_id: "${name}", body: "..." }`
 		return (
 			`BLOCKED: Cannot ${op} feedback file '${name}.md' via generic ${toolName}. ` +
 			`Feedback files are FSM-managed and act as the unit-of-work for fix-loop hats — use the MCP tool instead:\n` +
@@ -125,8 +124,9 @@ function redirectMessage(
 	if (cls.kind === "intent") {
 		return (
 			`BLOCKED: Cannot ${op} intent.md via generic ${toolName}. Intent files ` +
-			`are FSM-managed — use haiku_intent_get / haiku_intent_set / haiku_run_next, ` +
-			`or call /haiku:repair if state is genuinely corrupted.`
+			`are FSM-managed — use haiku_intent_get to read fields, haiku_run_next ` +
+			`to drive the lifecycle, or call /haiku:repair if state is genuinely corrupted. ` +
+			`Direct edits skip the integrity checksum and the FSM's invariants.`
 		)
 	}
 	if (cls.kind === "stage_state") {

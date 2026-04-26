@@ -8,7 +8,11 @@ status: canonical
 
 Canonical reference for how studios, stages, units, hats, and feedback fit together. Every studio under `plugin/studios/` MUST conform. Every reviewer of a studio change MUST check the change against this doc.
 
-If implementation drifts, **the document is right** unless an explicit revision proposal supersedes it.
+**Conflict resolution:** when this document and the implementation disagree, the default presumption is that this document captures the intended target state and the implementation should be brought into line — UNLESS one of the following applies:
+- The conflict is a documentation bug (this doc misrepresents what was actually agreed; fix the doc).
+- A specific implementation choice has shipped and is in production use; revising to match this doc would break working behavior. In that case, file a revision proposal that updates this doc first, then change the implementation in a follow-up.
+
+This is consistent with `CLAUDE.md` and `.claude/rules/architecture-prototype-sync.md`: the canonical source of truth depends on what's drifting from what. For runtime visualizations (the prototype), the orchestrator code is canonical when they conflict. For structural rules across studios/stages/hats/feedback, this document is canonical because there's no single implementation file that fully encodes them.
 
 ## 1. Hard boundaries
 
@@ -219,20 +223,22 @@ Findings (FBs) raised by adversarial reviewers are addressed by the fix-loop. Th
 ### 5.1 FB-as-unit
 
 When a fix-loop dispatches against an FB:
-- The FB file IS the unit. The fixer hats read it, edit it, and complete it via `haiku_unit_advance_hat` against the FB.
-- Fixer hats MUST NOT edit unit files. The flagged unit is read-only context (read via `haiku_unit_read`); the fixer's deliverable is the FB body populated with diagnosis, root cause, recommended action.
-- The same plan-do-verify pattern applies. The stage's `fix_hats:` list MUST contain at least three hats forming the loop. Terminal hat validates the FB body and calls `haiku_unit_advance_hat` against the FB.
-- FSM lifecycle enforcement is identical: FBs go pending → active → completed.
+- The FB file IS the unit. The fixer hats read it, edit its body, and complete it via `haiku_feedback_advance_hat` against the FB (the FB-scoped mirror of `haiku_unit_advance_hat`; the unit-scoped tool cannot target an FB).
+- Fixer hats MUST NOT edit unit files. The flagged unit is read-only context (read via `haiku_unit_read`); the fixer's deliverable is the FB body (written via `haiku_feedback_write`) populated with diagnosis, root cause, and recommended action.
+- The same plan-do-verify pattern applies. The stage's `fix_hats:` list typically contains the implementer hat (per the `fix_hats must be implementer` repo convention) followed by `feedback-assessor` as the terminal verifier — minimum 2 entries today; longer chains are encouraged for stages where a planner step adds value before the implementer runs. The terminal hat validates the FB body and calls `haiku_feedback_advance_hat` to close the FB.
+- FSM lifecycle enforcement is identical: FBs go pending → active (in fix-loop) → completed.
 
-### 5.2 Closed FBs become input, not patches
+### 5.2 Closed FBs as input to the next iteration (target state)
 
-A "completed" FB means its diagnosis is well-formed. It does NOT mean the underlying defect is patched. Patching happens during the next iteration of the upstream stage:
-- The FSM rolls the stage back to elaborate.
-- Closed FBs are inlined into the elaborate-phase agent's dispatch as additional context.
-- The elaborate-phase agent authors NEW pending units that address the findings.
-- Existing completed units are NOT modified. (See §1.3 — forward-only.)
+A "completed" FB under the FB-as-unit model means its diagnosis is well-formed and the work-of-record is the FB body. The architectural target is that the underlying defect is then patched through the next iteration of the upstream stage's elaborate phase, which consumes the closed FB diagnoses as input and authors new pending units that build on (never modify) completed units.
 
-This is why front-loading matters. By the time a defect surfaces at the gate, the original units that contain it are permanent. Corrective work happens on top of them, never to them.
+**Current implementation status:** the FB-as-unit dispatch is wired (commits in this PR). Fixers diagnose into the FB body, the FSM auto-closes on advance_hat, and the closed FB persists with its diagnosis. The "elaborate-phase consumes closed FBs as input on next iteration" path is the natural follow-up but is not yet a single explicit code path — today, when a stage's gate revisits elaborate (via `elaborate_revisit`, `feedback_revisit`, or similar), the elaborate-phase prompt has access to the stage's `feedback/` directory contents and is instructed to draft new units that close pending feedback. Closed FBs serve as historical diagnosis the elaborator can inline. Wiring an explicit "consume closed FBs from prior iteration" injection into the elaborate dispatch is a tracked follow-up — see §7.
+
+What's strictly enforced today regardless of the consumer path:
+- Existing completed units are never modified by the fix-loop (the hook blocks unit-file edits; fixer prompts forbid them).
+- New corrective work, when authored, becomes new pending units (per §1.3 forward-only).
+
+This is why front-loading matters either way. By the time a defect surfaces at the gate, the original units that contain it are permanent. Corrective work happens on top of them, never to them.
 
 ## 6. Hook boundary
 
@@ -289,7 +295,7 @@ When adding or modifying a stage:
 - [ ] Hat names are distinct from phase names (no `elaborate`/`execute`/`review`/`gate`)
 - [ ] Each hat-to-hat handoff has a meaningful baton (rally-race test)
 - [ ] Verify hat's mandate is body-only (no FM interpretation)
-- [ ] If `fix_hats:` is set, it also has at least 3 entries forming plan-do-verify
+- [ ] If `fix_hats:` is set, it has at least 2 entries — `[<implementer>, feedback-assessor]` is the conventional minimum (the implementer per the `fix_hats must be implementer` rule; `feedback-assessor` as the terminal verifier). Longer plan-do-verify chains are encouraged where a separate planner step adds value before the implementer.
 - [ ] Adversarial hats (if any) come AFTER the plan-do-verify triplet
 - [ ] Hat mandate files exist for every named hat (`hats/{name}.md`)
 - [ ] No mandate file references `depends_on:`, `inputs:`, `outputs:`, `status:`, or any other FM field as something the agent should read or interpret

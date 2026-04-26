@@ -52,6 +52,7 @@ import {
 	readReflectionDefs,
 	readStageArtifactDefs,
 	readStageDef,
+	readStudioFixHatPaths,
 	resolveStudio,
 } from "./studio-reader.js"
 import {
@@ -2594,7 +2595,9 @@ export function validateUnitFrontmatter(
 					continue
 				}
 				if (typeof g.name !== "string" || g.name.trim() === "") {
-					errors.push(`quality_gates_shape[${i}]: name must be a non-empty string.`)
+					errors.push(
+						`quality_gates_shape[${i}]: name must be a non-empty string.`,
+					)
 				}
 				if (typeof g.command !== "string" || g.command.trim() === "") {
 					errors.push(
@@ -2615,9 +2618,7 @@ export function validateUnitFrontmatter(
 // acyclic. Used by haiku_unit_write to refuse writes that introduce a
 // cycle (the new edge plus existing depends_on form a back-reference).
 
-export function detectDagCycles(
-	dag: Record<string, string[]>,
-): string[] {
+export function detectDagCycles(dag: Record<string, string[]>): string[] {
 	const WHITE = 0
 	const GRAY = 1
 	const BLACK = 2
@@ -6082,7 +6083,8 @@ export function handleStateTool(
 			const fmTitle =
 				typeof data.title === "string" ? (data.title as string) : ""
 			const h1Match = body.match(/^#\s+(.+)$/m)
-			const title = fmTitle || (h1Match ? h1Match[1].trim() : (args.unit as string))
+			const title =
+				fmTitle || (h1Match ? h1Match[1].trim() : (args.unit as string))
 			return text(JSON.stringify({ title, body }, null, 2))
 		}
 
@@ -6152,8 +6154,7 @@ export function handleStateTool(
 			const stageArg = args.stage as string
 			const unitName = args.unit as string
 			const body = (args.body as string) ?? ""
-			const fmInput =
-				(args.frontmatter as Record<string, unknown>) ?? {}
+			const fmInput = (args.frontmatter as Record<string, unknown>) ?? {}
 
 			if (!body || body.trim().length === 0) {
 				return text(
@@ -7409,9 +7410,7 @@ export function handleStateTool(
 					? feedbackDir(intent, stage)
 					: feedbackDir(intent, "")
 				if (existsSync(fbDir)) {
-					for (const f of readdirSync(fbDir).filter((n) =>
-						n.endsWith(".md"),
-					)) {
+					for (const f of readdirSync(fbDir).filter((n) => n.endsWith(".md"))) {
 						const p = join(fbDir, f)
 						const { data } = parseFrontmatter(readFileSync(p, "utf8"))
 						if (
@@ -7808,7 +7807,10 @@ export function handleStateTool(
 			for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
 				const p = join(dir, f)
 				const { data, body } = parseFrontmatter(readFileSync(p, "utf8"))
-				if ((data.id as string) === fbId || (data.feedback_id as string) === fbId) {
+				if (
+					(data.id as string) === fbId ||
+					(data.feedback_id as string) === fbId
+				) {
 					foundPath = p
 					foundData = data
 					foundBody = body
@@ -7827,9 +7829,7 @@ export function handleStateTool(
 				)
 			}
 			const fmTitle =
-				typeof foundData?.title === "string"
-					? (foundData.title as string)
-					: ""
+				typeof foundData?.title === "string" ? (foundData.title as string) : ""
 			const h1Match = foundBody.match(/^#\s+(.+)$/m)
 			const title = fmTitle || (h1Match ? h1Match[1].trim() : fbId)
 			return text(JSON.stringify({ title, body: foundBody }, null, 2))
@@ -7887,7 +7887,10 @@ export function handleStateTool(
 			for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
 				const p = join(dir, f)
 				const { data } = parseFrontmatter(readFileSync(p, "utf8"))
-				if ((data.id as string) === fbId || (data.feedback_id as string) === fbId) {
+				if (
+					(data.id as string) === fbId ||
+					(data.feedback_id as string) === fbId
+				) {
 					foundPath = p
 					foundFm = data
 					break
@@ -7920,7 +7923,10 @@ export function handleStateTool(
 			}
 
 			// Persist body, preserve FM unchanged.
-			writeFileSync(foundPath, matter.stringify(newBody.trimEnd() + "\n", foundFm))
+			writeFileSync(
+				foundPath,
+				matter.stringify(newBody.trimEnd() + "\n", foundFm),
+			)
 			sealIntentState(intentArg)
 			emitTelemetry("haiku.feedback.body_rewritten", {
 				intent: intentArg,
@@ -7984,7 +7990,10 @@ export function handleStateTool(
 			for (const f of readdirSync(fbAdvDir).filter((n) => n.endsWith(".md"))) {
 				const p = join(fbAdvDir, f)
 				const { data, body } = parseFrontmatter(readFileSync(p, "utf8"))
-				if ((data.id as string) === fbId || (data.feedback_id as string) === fbId) {
+				if (
+					(data.id as string) === fbId ||
+					(data.feedback_id as string) === fbId
+				) {
 					advPath = p
 					advFm = data
 					advBody = body
@@ -8015,28 +8024,38 @@ export function handleStateTool(
 				)
 			}
 
-			// Resolve fix_hats sequence. Stage-scoped: from STAGE.md. Intent-
-			// scoped: not handled here yet (intent-completion review uses
-			// studio-level fix-hats; that path will route through this tool
-			// once the orchestrator dispatch is updated).
+			// Resolve fix_hats sequence. Stage-scoped: from STAGE.md.
+			// Intent-scoped: from the studio's `fix-hats/` directory (mirrors
+			// how the orchestrator's intent_completion_fix dispatch resolves
+			// the chain — Object.keys(readStudioFixHatPaths(studio)) order).
 			let fixHats: string[] = []
+			const intentFmPath = join(intentDir(intentArg), "intent.md")
+			let studioName = "software"
+			if (existsSync(intentFmPath)) {
+				const { data: intentFm } = parseFrontmatter(
+					readFileSync(intentFmPath, "utf8"),
+				)
+				studioName = (intentFm.studio as string) || "software"
+			}
 			if (stageArg) {
-				const intentFmPath = join(intentDir(intentArg), "intent.md")
-				if (existsSync(intentFmPath)) {
-					const { data: intentFm } = parseFrontmatter(readFileSync(intentFmPath, "utf8"))
-					const studioName = (intentFm.studio as string) || "software"
-					const sd = readStageDef(studioName, stageArg)
-					if (sd?.data?.fix_hats && Array.isArray(sd.data.fix_hats)) {
-						fixHats = sd.data.fix_hats as string[]
-					}
+				const sd = readStageDef(studioName, stageArg)
+				if (sd?.data?.fix_hats && Array.isArray(sd.data.fix_hats)) {
+					fixHats = sd.data.fix_hats as string[]
 				}
+			} else {
+				// Intent-scope FB — use studio-level fix-hats.
+				const studioFixHatPaths = readStudioFixHatPaths(studioName)
+				fixHats = Object.keys(studioFixHatPaths)
 			}
 			if (fixHats.length === 0) {
 				return text(
 					JSON.stringify({
 						error: "no_fix_hats",
-						stage: stageArg,
-						message: `Stage '${stageArg}' has no \`fix_hats:\` configured. The fix-loop FB-as-unit model requires a fix_hats sequence on STAGE.md (or studio-level for intent-scope FBs, not yet supported here).`,
+						stage: stageArg || null,
+						scope: stageArg ? "stage" : "intent",
+						message: stageArg
+							? `Stage '${stageArg}' has no \`fix_hats:\` configured in STAGE.md. The fix-loop FB-as-unit model requires a fix_hats sequence.`
+							: `Studio '${studioName}' has no fix-hats in \`plugin/studios/${studioName}/fix-hats/\`. Intent-completion fix loops require at least one studio-level fix-hat.`,
 					}),
 				)
 			}
@@ -8149,7 +8168,10 @@ export function handleStateTool(
 			for (const f of readdirSync(fbRejDir).filter((n) => n.endsWith(".md"))) {
 				const p = join(fbRejDir, f)
 				const { data, body } = parseFrontmatter(readFileSync(p, "utf8"))
-				if ((data.id as string) === fbId || (data.feedback_id as string) === fbId) {
+				if (
+					(data.id as string) === fbId ||
+					(data.feedback_id as string) === fbId
+				) {
 					rejPath = p
 					rejFm = data
 					rejBody = body
@@ -8177,23 +8199,35 @@ export function handleStateTool(
 				)
 			}
 
-			// Resolve fix_hats to find prior hat.
+			// Resolve fix_hats to find prior hat. Stage-scoped: from STAGE.md.
+			// Intent-scoped: from the studio's `fix-hats/` directory.
 			let fixHatsRej: string[] = []
 			const intentFmPath = join(intentDir(intentArg), "intent.md")
-			if (existsSync(intentFmPath) && stageArg) {
-				const { data: intentFm } = parseFrontmatter(readFileSync(intentFmPath, "utf8"))
-				const studioName = (intentFm.studio as string) || "software"
-				const sd = readStageDef(studioName, stageArg)
+			let studioNameRej = "software"
+			if (existsSync(intentFmPath)) {
+				const { data: intentFm } = parseFrontmatter(
+					readFileSync(intentFmPath, "utf8"),
+				)
+				studioNameRej = (intentFm.studio as string) || "software"
+			}
+			if (stageArg) {
+				const sd = readStageDef(studioNameRej, stageArg)
 				if (sd?.data?.fix_hats && Array.isArray(sd.data.fix_hats)) {
 					fixHatsRej = sd.data.fix_hats as string[]
 				}
+			} else {
+				const studioFixHatPaths = readStudioFixHatPaths(studioNameRej)
+				fixHatsRej = Object.keys(studioFixHatPaths)
 			}
 			if (fixHatsRej.length === 0) {
 				return text(
 					JSON.stringify({
 						error: "no_fix_hats",
-						stage: stageArg,
-						message: `Stage '${stageArg}' has no \`fix_hats:\` configured.`,
+						stage: stageArg || null,
+						scope: stageArg ? "stage" : "intent",
+						message: stageArg
+							? `Stage '${stageArg}' has no \`fix_hats:\` configured.`
+							: `Studio '${studioNameRej}' has no fix-hats in \`plugin/studios/${studioNameRej}/fix-hats/\`.`,
 					}),
 				)
 			}

@@ -289,7 +289,8 @@ export function FeedbackSidebar({
 			</div>
 
 			{/* Feedback list — scrollable; delegated click surfaces item id */}
-			{/* biome-ignore lint/a11y/noStaticElementInteractions: delegated click is the idiomatic way to bridge list-item clicks to the parent highlight controller without wrapping every item. Keyboard nav already lives on FeedbackItem's disclosure button. */}
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: delegated click bridges list-item clicks to the parent highlight controller without wrapping every item */}
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: keyboard nav lives on the contained FeedbackItem disclosure buttons; this wrapper is mouse-position-routing only */}
 			<div className="flex flex-col flex-1 min-h-0" onClick={handleBodyClick}>
 				<FeedbackPanelBody
 					items={items}
@@ -329,10 +330,14 @@ export function FeedbackSidebar({
 					className="w-full text-xs p-2 border border-stone-300 dark:border-stone-600 rounded-lg bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-teal-500 focus:outline-none resize-none disabled:bg-stone-100 disabled:text-stone-500 dark:disabled:bg-stone-800 dark:disabled:text-stone-400 disabled:cursor-not-allowed"
 				/>
 				<div className="flex items-center gap-2">
-					<label className="text-[11px] font-semibold text-stone-600 dark:text-stone-300 shrink-0">
+					<label
+						htmlFor="feedback-resolution-route"
+						className="text-[11px] font-semibold text-stone-600 dark:text-stone-300 shrink-0"
+					>
 						Route:
 					</label>
 					<select
+						id="feedback-resolution-route"
 						value={composerResolution ?? ""}
 						onChange={(e) => {
 							const v = e.target.value

@@ -71,10 +71,9 @@ export function useFeedback(intent: string | null, stage: string | null) {
 								{ headers: readHeaders(FETCH_HEADERS) },
 							)
 						: Promise.resolve<Response | null>(null),
-					fetch(
-						`/api/feedback-intent/${encodeURIComponent(intent)}${qs}`,
-						{ headers: readHeaders(FETCH_HEADERS) },
-					),
+					fetch(`/api/feedback-intent/${encodeURIComponent(intent)}${qs}`, {
+						headers: readHeaders(FETCH_HEADERS),
+					}),
 				])
 				const merged: FeedbackItemData[] = []
 				if (stageRes) {

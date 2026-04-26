@@ -258,7 +258,7 @@ const FSM_CONTRACTS_ELABORATE_BUILD_ADDENDUM = [
 // Back-compat alias for any external callers that still import the old
 // constant name. Composes universal + build-class so callers see the
 // pre-split behavior.
-const FSM_CONTRACTS_ELABORATE_BLOCK =
+const _FSM_CONTRACTS_ELABORATE_BLOCK =
 	FSM_CONTRACTS_ELABORATE_UNIVERSAL +
 	"\n\n" +
 	FSM_CONTRACTS_ELABORATE_BUILD_ADDENDUM

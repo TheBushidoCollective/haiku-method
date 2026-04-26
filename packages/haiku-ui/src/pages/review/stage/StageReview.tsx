@@ -465,6 +465,7 @@ export function StageReview({
 				name: a.name,
 			})),
 		],
+		// biome-ignore lint/correctness/useExhaustiveDependencies: knowledgeVMs/outputVMs are derived arrays that change identity each render but only the contained name strings matter for walkthrough order; recomputing on every render is the intended behavior
 		[units, knowledgeVMs, outputVMs],
 	)
 	const walkIndex = detail
@@ -1848,12 +1849,12 @@ function ArtifactThumbnail({
 		const safe = DOMPurify.sanitize(artifact.body, {
 			USE_PROFILES: { svg: true, svgFilters: true },
 		})
+		// audit-allow: DOMPurify-sanitized SVG render path — same contract as the detail view at line 1713
 		return (
 			<div
 				aria-hidden="true"
 				className="shrink-0 w-24 h-16 rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-950 overflow-hidden flex items-center justify-center p-1 [&>svg]:max-w-full [&>svg]:max-h-full"
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized via DOMPurify svg profile above — same contract as SvgPreview.
-				// audit-allow: DOMPurify-sanitized SVG render path — same contract as the detail view at line 1713
+				// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized via DOMPurify svg profile above — same contract as SvgPreview
 				dangerouslySetInnerHTML={{ __html: safe }}
 			/>
 		)
@@ -1871,7 +1872,7 @@ function ArtifactThumbnail({
 			<iframe
 				srcDoc={artifact.body}
 				sandbox="allow-scripts allow-same-origin"
-				title=""
+				title={`Preview of ${artifact.name || "artifact"}`}
 				tabIndex={-1}
 				className="absolute top-0 left-0 border-0"
 				style={{
@@ -1893,11 +1894,11 @@ function SvgPreview({ body }: { body: string }) {
 			}),
 		[body],
 	)
+	// audit-allow: DOMPurify-sanitized SVG render path
 	return (
 		<div
 			className="relative bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-md p-4 overflow-auto max-h-96"
-			// biome-ignore lint/security/noDangerouslySetInnerHtml: body is sanitized via DOMPurify with the svg profile — same contract as shared/section-helpers.ts::markdownToSimpleHtml.
-			// audit-allow: DOMPurify-sanitized SVG render path
+			// biome-ignore lint/security/noDangerouslySetInnerHtml: body is sanitized via DOMPurify with the svg profile — same contract as shared/section-helpers.ts::markdownToSimpleHtml
 			dangerouslySetInnerHTML={{ __html: safe }}
 		/>
 	)

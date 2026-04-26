@@ -193,9 +193,7 @@ export function StageProgressStrip({
 												? "text-teal-500 dark:text-teal-500"
 												: "text-transparent select-none"
 									}`}
-									aria-hidden={
-										pending === 0 && !(isCurrent && stage.sublabel)
-									}
+									aria-hidden={pending === 0 && !(isCurrent && stage.sublabel)}
 								>
 									{pending > 0
 										? `${pending} pending`

@@ -58,7 +58,6 @@ export function AttachmentLightbox({
 
 	return (
 		<div
-			// biome-ignore lint/a11y/useSemanticElements: native <dialog> element still has inconsistent focus-trap semantics in ShadowDOM + routed-render contexts; role=dialog + explicit focus management is the safer path here
 			role="dialog"
 			aria-modal="true"
 			aria-label={title ? `Attachment: ${title}` : "Attachment"}

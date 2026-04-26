@@ -205,8 +205,7 @@ try {
 		const r = await runGuard({
 			tool_name: "Edit",
 			tool_input: {
-				file_path:
-					".haiku/intents/test-intent/stages/inception/state.json",
+				file_path: ".haiku/intents/test-intent/stages/inception/state.json",
 				old_string: "active",
 				new_string: "completed",
 			},
@@ -245,8 +244,7 @@ try {
 		const r = await runGuard({
 			tool_name: "Write",
 			tool_input: {
-				file_path:
-					".haiku/worktrees/test-intent/unit-01/some-source-file.ts",
+				file_path: ".haiku/worktrees/test-intent/unit-01/some-source-file.ts",
 				content: "...",
 			},
 		})
@@ -260,7 +258,8 @@ try {
 		const r = await runGuard({
 			tool_name: "Bash",
 			tool_input: {
-				command: "cat .haiku/intents/test-intent/stages/inception/units/unit-01-foo.md",
+				command:
+					"cat .haiku/intents/test-intent/stages/inception/units/unit-01-foo.md",
 			},
 		})
 		assert.ok(!r.blocked, "Bash is not in this hook's scope")

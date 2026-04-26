@@ -12,8 +12,8 @@
     // system-preference updates when no explicit choice is stored).
     (() => {
       try {
-        var stored = localStorage.getItem("haiku-review-theme");
-        var isDark =
+        const stored = localStorage.getItem("haiku-review-theme");
+        const isDark =
           stored === "dark" ||
           (!stored &&
             window.matchMedia &&

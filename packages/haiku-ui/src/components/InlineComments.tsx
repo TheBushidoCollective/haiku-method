@@ -326,7 +326,7 @@ export function InlineComments({
 		}
 		document.addEventListener("mouseup", handleUp)
 		return () => document.removeEventListener("mouseup", handleUp)
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// biome-ignore lint/correctness/useExhaustiveDependencies: evaluateSelection is the only stable dep we want; including the rAF deps would re-attach mouseup on every render
 	}, [evaluateSelection])
 
 	function handleShowCommentInput() {

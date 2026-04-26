@@ -6266,7 +6266,7 @@ export function handleStateTool(
 			if (isCreate && !existsSync(stageUnitsDir)) {
 				mkdirSync(stageUnitsDir, { recursive: true })
 			}
-			writeFileSync(path, matter.stringify(body.trimEnd() + "\n", finalFm))
+			writeFileSync(path, matter.stringify(`${body.trimEnd()}\n`, finalFm))
 			sealIntentState(intentArg)
 			emitTelemetry(isCreate ? "haiku.unit.created" : "haiku.unit.rewritten", {
 				intent: intentArg,
@@ -7925,7 +7925,7 @@ export function handleStateTool(
 			// Persist body, preserve FM unchanged.
 			writeFileSync(
 				foundPath,
-				matter.stringify(newBody.trimEnd() + "\n", foundFm),
+				matter.stringify(`${newBody.trimEnd()}\n`, foundFm),
 			)
 			sealIntentState(intentArg)
 			emitTelemetry("haiku.feedback.body_rewritten", {
@@ -8119,7 +8119,7 @@ export function handleStateTool(
 				status: newStatus,
 			}
 			if (closedBy) newFm.closed_by = closedBy
-			writeFileSync(advPath, matter.stringify(advBody.trimEnd() + "\n", newFm))
+			writeFileSync(advPath, matter.stringify(`${advBody.trimEnd()}\n`, newFm))
 			sealIntentState(intentArg)
 			emitTelemetry(
 				isLast ? "haiku.feedback.closed" : "haiku.feedback.hat_advanced",
@@ -8299,7 +8299,7 @@ export function handleStateTool(
 				bolt: curBoltRej + 1,
 				iterations,
 			}
-			writeFileSync(rejPath, matter.stringify(rejBody.trimEnd() + "\n", newFm))
+			writeFileSync(rejPath, matter.stringify(`${rejBody.trimEnd()}\n`, newFm))
 			sealIntentState(intentArg)
 			emitTelemetry("haiku.feedback.hat_rejected", {
 				intent: intentArg,

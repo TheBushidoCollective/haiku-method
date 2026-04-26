@@ -425,13 +425,14 @@ function extractTestNames(filePath) {
 		/\b(?:it|test|describe)(?:\.(?:skip|only|todo)|\.each\s*\([\s\S]*?\))?\s*\(\s*(['"`])((?:\\.|(?!\1)[\s\S])*?)\1/g
 	const out = []
 	const rel = filePath.replace(`${REPO_ROOT}/`, "")
-	let m
-	while ((m = re.exec(text))) {
+	let m = re.exec(text)
+	while (m !== null) {
 		let raw = m[2]
 		raw = raw.replace(/\\(.)/g, (_, c) => c)
 		raw = raw.replace(/\$\{[^}]*\}/g, " ")
 		const trimmed = raw.trim()
 		if (trimmed) out.push({ name: trimmed, source: `ui:${rel}` })
+		m = re.exec(text)
 	}
 	return out
 }

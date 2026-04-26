@@ -94,18 +94,6 @@ export function StageContent({
 	)
 
 	const isUnitReview = session.review_type === "unit" && !!session.target
-	if (isUnitReview) {
-		return (
-			<ArtifactsPane
-				session={session}
-				sessionId={sessionId}
-				getAnnotations={getAnnotations}
-				wsRef={wsRef}
-				onInlineCommentsChange={setInlineComments}
-				onPinsChange={setPins}
-			/>
-		)
-	}
 
 	// `inlineComments` and `pins` are consumed by the sidebar composer
 	// via `getAnnotations()`; StageReview itself only needs the setters
@@ -277,7 +265,6 @@ export function StageContent({
 			},
 		})
 		setHighlightFeedbackId(null)
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		highlightFeedbackId,
 		stageFeedback,
@@ -287,6 +274,19 @@ export function StageContent({
 		setHighlightFeedbackId,
 		navigate,
 	])
+
+	if (isUnitReview) {
+		return (
+			<ArtifactsPane
+				session={session}
+				sessionId={sessionId}
+				getAnnotations={getAnnotations}
+				wsRef={wsRef}
+				onInlineCommentsChange={setInlineComments}
+				onPinsChange={setPins}
+			/>
+		)
+	}
 
 	return (
 		<StageReview

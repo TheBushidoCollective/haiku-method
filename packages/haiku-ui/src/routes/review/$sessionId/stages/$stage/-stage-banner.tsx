@@ -27,8 +27,10 @@ export function PhaseStepper({
 	const isStageComplete =
 		stageStatus === "completed" || stageStatus === "complete"
 	return (
+		// biome-ignore lint/a11y/useSemanticElements: a fieldset would force a legend + form-context semantics that don't apply here; role=group on a div is the right minimal grouping
 		<div
 			className="inline-flex items-center gap-2"
+			role="group"
 			aria-label={`Phase ${activeIndex + 1} of ${STAGE_PHASES.length}`}
 		>
 			<span className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
@@ -54,6 +56,7 @@ export function PhaseStepper({
 							 */}
 							<span
 								className="relative inline-flex items-center justify-center p-1 -m-1 group focus:outline-none"
+								role="img"
 								aria-label={tooltip}
 							>
 								<span

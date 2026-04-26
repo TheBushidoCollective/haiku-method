@@ -7,6 +7,7 @@ Three-component project: **plugin** (Claude Code plugin), **paper** (methodology
 - Paper is the source of truth for methodology concepts
 - Plugin is the source of truth for implementation
 - Website presents both to users
+- **`plugin/studios/ARCHITECTURE.md` is the canonical source of truth for studio/stage/unit/hat/feedback structure.** When the implementation contradicts it, fix the implementation. When the paper drifts from it, fix the paper. Read this doc before making any structural change to studios, stages, hats, or the FSM tools.
 
 ## Sync Discipline (CRITICAL)
 

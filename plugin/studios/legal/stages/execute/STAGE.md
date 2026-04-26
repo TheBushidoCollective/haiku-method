@@ -1,7 +1,7 @@
 ---
 name: execute
 description: Finalize documents and coordinate signatures
-hats: [closer, administrator]
+hats: [closer, administrator, verifier]
 fix_hats: [closer, feedback-assessor]
 review: await
 elaboration: autonomous

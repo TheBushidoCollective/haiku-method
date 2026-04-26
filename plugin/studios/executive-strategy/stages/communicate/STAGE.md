@@ -1,7 +1,7 @@
 ---
 name: communicate
 description: Develop stakeholder communications and rollout plan
-hats: [communicator, planner]
+hats: [communicator, planner, verifier]
 fix_hats: [communicator, feedback-assessor]
 review: ask
 elaboration: autonomous

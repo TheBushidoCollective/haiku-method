@@ -1,7 +1,7 @@
 ---
 name: plan
 description: Create work breakdown, allocate resources, and define timeline
-hats: [planner, estimator]
+hats: [planner, estimator, verifier]
 fix_hats: [planner, feedback-assessor]
 review: ask
 elaboration: collaborative

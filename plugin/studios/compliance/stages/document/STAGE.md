@@ -1,7 +1,7 @@
 ---
 name: document
 description: Create evidence packages, audit trails, and compliance documentation
-hats: [evidence-collector, documentation-writer]
+hats: [evidence-collector, documentation-writer, verifier]
 fix_hats: [evidence-collector, feedback-assessor]
 review: ask
 elaboration: autonomous

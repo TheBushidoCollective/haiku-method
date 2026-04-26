@@ -1,7 +1,7 @@
 ---
 name: close
 description: Period close, reconciliation, and financial sign-off
-hats: [controller, reconciler]
+hats: [controller, reconciler, verifier]
 fix_hats: [controller, feedback-assessor]
 review: external
 elaboration: autonomous

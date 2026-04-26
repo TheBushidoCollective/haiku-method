@@ -1,7 +1,7 @@
 ---
 name: reporting
 description: Create financial reports and dashboards for stakeholders
-hats: [reporter, visualizer]
+hats: [reporter, visualizer, verifier]
 fix_hats: [reporter, feedback-assessor]
 review: ask
 elaboration: autonomous

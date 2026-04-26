@@ -1,7 +1,7 @@
 ---
 name: design
 description: Design curriculum structure and learning paths
-hats: [designer, subject-expert]
+hats: [designer, subject-expert, verifier]
 fix_hats: [designer, feedback-assessor]
 review: ask
 elaboration: collaborative

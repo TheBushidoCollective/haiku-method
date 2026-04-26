@@ -1,7 +1,7 @@
 ---
 name: develop
 description: Create training content and materials
-hats: [developer, editor]
+hats: [developer, editor, verifier]
 fix_hats: [developer, feedback-assessor]
 review: ask
 elaboration: autonomous

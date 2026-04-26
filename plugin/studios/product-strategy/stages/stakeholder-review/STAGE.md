@@ -1,7 +1,7 @@
 ---
 name: stakeholder-review
 description: Present to stakeholders, gather feedback, gain alignment
-hats: [presenter, feedback-synthesizer]
+hats: [presenter, feedback-synthesizer, verifier]
 fix_hats: [presenter, feedback-assessor]
 review: external
 elaboration: collaborative

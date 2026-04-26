@@ -137,15 +137,18 @@ function resolveStudioFilePath(subpath: string): string | null {
 //
 // If a rule changes here, it changes for every studio at once.
 
-const FSM_CONTRACTS_ELABORATE_BLOCK = [
+// FSM_CONTRACTS_ELABORATE_UNIVERSAL — rules that apply to every stage
+// regardless of role. These are framework-enforced invariants:
+// file naming, MCP tool contracts, FSM-driven field protection, lifecycle
+// mechanics, no-placeholders, model selection, revisit semantics. Injected
+// into every elaborate dispatch.
+const FSM_CONTRACTS_ELABORATE_UNIVERSAL = [
 	"### FSM Contracts (REQUIRED — global framework rules)",
 	"",
 	"> ## ⟁ NO UNIT ADVANCES WITHOUT A VERIFICATION PATH.",
 	"> Every acceptance criterion pairs with a command, condition, or review-agent mandate that proves it. No exceptions.",
 	"",
 	"These rules apply to **every studio and every stage**. They are enforced by the framework, not by prose. Re-stating them in per-studio files is forbidden (they would drift).",
-	"",
-	"> ⚠ **Stage-role caveat:** several rules below assume **build-class** stages whose units are executable artifacts (source code, hardware, deployments). For **research / distillation / specification** stages whose units are knowledge artifacts (market research, distilled insight, requirements obligations), the executable-verify-command rules don't apply — those units are validated by substance and accountability, not by shell exit codes. Read your stage's `phases/ELABORATION.md` (injected as **Phase: Elaboration Override** above this block) for the role-correct shape. The architecture's planned split of this block by stage role is tracked as a known issue in `plugin/studios/ARCHITECTURE.md` §7.",
 	"",
 	"#### Unit file naming",
 	"",
@@ -158,22 +161,6 @@ const FSM_CONTRACTS_ELABORATE_BLOCK = [
 	"- Each unit's `depends_on:` frontmatter lists the names of units in the **same stage** that must complete before this unit starts. Omit the field (or empty list) for units with no dependencies.",
 	"- The DAG MUST be acyclic. The FSM computes topological waves; a cycle blocks the advance.",
 	"- Cross-stage dependencies go in the stage's `inputs:` (STAGE.md) and resolve to concrete output files from prior stages.",
-	"",
-	"#### Quality gates",
-	"",
-	"- `quality_gates:` frontmatter MUST be a list of **executable gate objects** — `{ name, command, dir? }` — not prose strings. The FSM runs each `command` at `haiku_unit_advance_hat` time; non-zero exit blocks the advance. Prose-only gates are silently skipped and give no enforcement.",
-	"- Canonical shape:",
-	"",
-	"  ```yaml",
-	"  quality_gates:",
-	"    - name: no-banned-tokens",
-	"      command: \"! grep -rnE 'bg-gray-|text-gray-' .haiku/intents/{slug}/stages/{stage}/artifacts/\"",
-	"      dir: .            # optional; default repo root",
-	"  ```",
-	"",
-	"- **Scope rule**: gate commands MUST audit the **full stage artifact directory** (e.g. `stages/{stage}/artifacts/`), not only the unit's declared `inputs:`. Enforcement scope must match rule scope — narrower enforcement lets regressions accumulate on files no unit audited.",
-	"- Commands should be idempotent and fast (< 5s each). Negate banned-pattern greps (`! grep …`) so exit 0 means the gate passes.",
-	"- Prose descriptions of what the gate *means* belong in the unit body under `## Completion criteria`, NOT in the frontmatter.",
 	"",
 	"#### Model selection (`model:` frontmatter on each unit)",
 	"",
@@ -208,29 +195,73 @@ const FSM_CONTRACTS_ELABORATE_BLOCK = [
 	"#### Unit content quality (validated at advance)",
 	"",
 	"- Placeholder strings are forbidden in unit specs and frontmatter. The FSM rejects unit advancement when any of these appear: `TBD`, `tbd`, `similar to`, `add error handling`, `etc.`, or a literal `...` placeholder. Either write the concrete value or surface it as a question.",
+	"",
+	"#### Red flags (STOP and re-read this contract if you catch yourself thinking)",
+	"",
+	"- \"I'll write `TBD` for the parts I'm unsure about\" — placeholders block advancement; write the concrete value or surface it as a question.",
+	'- "I\'ll add `similar to unit-XX` to save typing" — copy the relevant content explicitly; cross-references rot when the source changes.',
+	'- "This unit can be huge; the executor will figure it out" — units that take more than one bolt to scope are decomposition failures, not execution failures.',
+	'- "I\'ll batch the missing info as assumptions in the spec" — assumptions become silent regressions; ask the user instead.',
+	"",
+	"---",
+	"",
+	"**Stage-role guidance:** the rules above are universal. The role-specific rules — what counts as a verifiable criterion, what frontmatter fields the role's units carry, what shape the unit body takes — live in the per-stage `phases/ELABORATION.md` (injected as **Phase: Elaboration Override** above this block). For build-class stages without a per-stage override, the build-class addendum below applies as the default. Per architecture §4 + §7, the canonical fix is to author a per-stage ELABORATION.md for every stage; the build-class addendum is the back-compat default.",
+].join("\n")
+
+// FSM_CONTRACTS_ELABORATE_BUILD_ADDENDUM — additional rules that apply
+// only to build-class stages (whose units are executable artifacts:
+// source code, hardware boards, deployments). Injected when a stage has
+// no per-stage `phases/ELABORATION.md` override (back-compat default for
+// unmigrated stages). Stages with their own ELABORATION.md are assumed
+// to have role-correct guidance and skip this addendum.
+const FSM_CONTRACTS_ELABORATE_BUILD_ADDENDUM = [
+	"### Build-class addendum (default for stages without `phases/ELABORATION.md`)",
+	"",
+	"These rules apply to stages whose units are executable artifacts. If your stage produces knowledge artifacts, design specs, requirement obligations, or operational steps, author a per-stage `phases/ELABORATION.md` to override these rules with role-correct guidance.",
+	"",
+	"#### Quality gates",
+	"",
+	"- `quality_gates:` frontmatter MUST be a list of **executable gate objects** — `{ name, command, dir? }` — not prose strings. The FSM runs each `command` at `haiku_unit_advance_hat` time; non-zero exit blocks the advance. Prose-only gates are silently skipped and give no enforcement.",
+	"- Canonical shape:",
+	"",
+	"  ```yaml",
+	"  quality_gates:",
+	"    - name: no-banned-tokens",
+	"      command: \"! grep -rnE 'bg-gray-|text-gray-' .haiku/intents/{slug}/stages/{stage}/artifacts/\"",
+	"      dir: .            # optional; default repo root",
+	"  ```",
+	"",
+	"- **Scope rule**: gate commands MUST audit the **full stage artifact directory** (e.g. `stages/{stage}/artifacts/`), not only the unit's declared `inputs:`.",
+	"- Commands should be idempotent and fast (< 5s each). Negate banned-pattern greps (`! grep …`) so exit 0 means the gate passes.",
+	"- Prose descriptions of what the gate *means* belong in the unit body under `## Completion criteria`, NOT in the frontmatter.",
+	"",
+	"#### Acceptance criteria (build-class)",
+	"",
 	"- Every acceptance criterion MUST be testable: include the command or condition that proves it. `tests pass` is rejected; the verify-command must be concrete and exit-code-driven (e.g. `pnpm test --run path/to/file` exits 0, or `pytest tests/foo.py` exits 0, or `cargo test --test bar` exits 0 — match the project's actual stack).",
-	"- Criteria are drafted as **pairs**: the goal-prose lives in the unit body under `## Completion criteria`; the executable check lives in the unit's `quality_gates:` frontmatter. Two coupled fields, written together at elaboration time. Per-stage ELABORATION.md files supply domain-specific examples; this contract supplies the rule.",
+	"- Criteria are drafted as **pairs**: the goal-prose lives in the unit body under `## Completion criteria`; the executable check lives in the unit's `quality_gates:` frontmatter.",
 	"- A criterion that cannot be expressed as a command/condition is a spec gap — surface it (`ask_user_visual_question` or reject the elaborate phase), do not paper over with prose.",
 	"",
 	"##### Specific-but-unverifiable criteria (a common failure mode)",
 	"",
-	"Criteria that *sound* concrete but have no executable check produce specs that look complete but the FSM cannot enforce. Watch for these shapes — they apply across every studio:",
+	"Criteria that *sound* concrete but have no executable check produce specs that look complete but the FSM cannot enforce. Watch for these shapes:",
 	"",
 	'- "X is well-organized" / "Output is clean" — no command proves "well-organized"',
 	'- "Performance is acceptable" / "Process is fast" — needs a numeric threshold AND a measurement command (e.g. `p95 < 200ms`)',
 	'- "X is user-friendly" / "Output is professional" — needs a review pass or a literal allow-list of acceptable phrasings',
 	'- "Coverage is comprehensive" / "Treatment is thorough" — needs a structural check counting items, not a subjective judgment',
 	"",
-	"Per-studio ELABORATION.md files may add domain-specific bad-unverifiable examples (e.g. design's *Visual hierarchy is clear*, product's *Behavior is intuitive*). The ones above are universal; do not restate them in studio files.",
+	"#### Build-class red flag",
 	"",
-	"#### Red flags (STOP and re-read this contract if you catch yourself thinking)",
-	"",
-	"- \"I'll write `TBD` for the parts I'm unsure about\" — placeholders block advancement; write the concrete value or surface it as a question.",
-	'- "I\'ll add `similar to unit-XX` to save typing" — copy the relevant content explicitly; cross-references rot when the source changes.',
 	'- "The criteria are obvious; I\'ll keep them prose" — every criterion needs a command or condition that proves it.',
-	'- "This unit can be huge; the executor will figure it out" — units that take more than one bolt to scope are decomposition failures, not execution failures.',
-	'- "I\'ll batch the missing info as assumptions in the spec" — assumptions become silent regressions; ask the user instead.',
 ].join("\n")
+
+// Back-compat alias for any external callers that still import the old
+// constant name. Composes universal + build-class so callers see the
+// pre-split behavior.
+const FSM_CONTRACTS_ELABORATE_BLOCK =
+	FSM_CONTRACTS_ELABORATE_UNIVERSAL +
+	"\n\n" +
+	FSM_CONTRACTS_ELABORATE_BUILD_ADDENDUM
 
 const FSM_CONTRACTS_EXECUTE_BLOCK = [
 	"### FSM Contracts (REQUIRED — reminder during execute)",
@@ -5824,7 +5855,24 @@ function buildRunInstructions(
 			// Universal FSM Contracts — global rules the framework enforces,
 			// injected here (not per-STAGE.md / per-studio artifact) so the
 			// rules have ONE source of truth and can't drift per studio.
-			sections.push(FSM_CONTRACTS_ELABORATE_BLOCK)
+			sections.push(FSM_CONTRACTS_ELABORATE_UNIVERSAL)
+
+			// Build-class addendum — only injected when the stage has no
+			// per-stage `phases/ELABORATION.md`. Stages with their own
+			// override are assumed to have role-correct authoring guidance
+			// (research/design/operational/etc.) and shouldn't get the
+			// build-class rules layered on top — those would contradict
+			// the role-specific override (e.g. requiring executable
+			// quality_gates on a knowledge-artifact stage).
+			//
+			// This is the core of architecture §7 issue #1: the universal
+			// block historically baked in build-class assumptions that
+			// don't apply to research/design/operational stages. The split
+			// + conditional injection lets each stage get role-correct
+			// guidance while preserving back-compat for unmigrated stages.
+			if (!elaborationOverride) {
+				sections.push(FSM_CONTRACTS_ELABORATE_BUILD_ADDENDUM)
+			}
 
 			// Resolve upstream stage inputs — load actual content from prior stages
 			if (stageDef?.data?.inputs && Array.isArray(stageDef.data.inputs)) {

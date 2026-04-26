@@ -1,7 +1,7 @@
 ---
 name: narrative
 description: Craft story arcs, key messages, and takeaways
-hats: [storyteller, editor]
+hats: [storyteller, editor, verifier]
 fix_hats: [storyteller, feedback-assessor]
 review: ask
 elaboration: collaborative

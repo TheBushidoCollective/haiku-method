@@ -1,7 +1,7 @@
 ---
 name: cutover
 description: Plan and execute the production cutover with rollback procedures
-hats: [cutover-coordinator, rollback-engineer]
+hats: [cutover-coordinator, rollback-engineer, verifier]
 fix_hats: [cutover-coordinator, feedback-assessor]
 review: external
 elaboration: collaborative

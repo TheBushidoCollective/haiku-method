@@ -1,7 +1,7 @@
 ---
 name: operations
 description: Deployment, monitoring, and operational readiness
-hats: [ops-engineer, sre]
+hats: [ops-engineer, sre, verifier]
 fix_hats: [ops-engineer, feedback-assessor]
 review: auto
 elaboration: autonomous

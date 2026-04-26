@@ -1482,6 +1482,192 @@ body
 		assert.strictEqual(parsed.error, "rationale_required")
 	})
 
+	// ── haiku_unit_read (body+title only — no FM exposure per ARCH §1.1) ─────
+
+	console.log("\n=== haiku_unit_read ===")
+
+	test("haiku_unit_read returns body and title only — no FM exposed", () => {
+		const result = handleStateTool("haiku_unit_read", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-01-discovery",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.ok("title" in parsed)
+		assert.ok("body" in parsed)
+		// Critical: NO frontmatter fields exposed
+		assert.ok(!("status" in parsed))
+		assert.ok(!("depends_on" in parsed))
+		assert.ok(!("hat" in parsed))
+		assert.ok(!("bolt" in parsed))
+	})
+
+	test("haiku_unit_read returns unit_not_found for missing unit", () => {
+		const result = handleStateTool("haiku_unit_read", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-doesnotexist",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "unit_not_found")
+	})
+
+	// ── haiku_unit_delete (pending only — ARCH §1.3 lifecycle) ──────────────
+
+	console.log("\n=== haiku_unit_delete ===")
+
+	test("haiku_unit_delete refuses to delete an active unit", () => {
+		const result = handleStateTool("haiku_unit_delete", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-01-discovery", // status: active
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "active")
+		assert.strictEqual(parsed.required_status, "pending")
+	})
+
+	test("haiku_unit_delete returns unit_not_found for missing unit", () => {
+		const result = handleStateTool("haiku_unit_delete", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-doesnotexist",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "unit_not_found")
+	})
+
+	// ── haiku_unit_set lifecycle enforcement (ARCH §1.3) ─────────────────────
+
+	console.log("\n=== haiku_unit_set lifecycle ===")
+
+	test("haiku_unit_set blocks non-FSM field writes on active units", () => {
+		const result = handleStateTool("haiku_unit_set", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-01-discovery", // active
+			field: "depends_on",
+			value: "[unit-02]",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "active")
+	})
+
+	test("haiku_unit_set still blocks status=completed direct write (FSM-protected)", () => {
+		const result = handleStateTool("haiku_unit_set", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-02-elaborate",
+			field: "status",
+			value: "completed",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "fsm_completion_protected")
+	})
+
+	test("haiku_unit_set allows non-FSM field writes on pending units", () => {
+		// Earlier tests mutate unit-02-elaborate's status to "active"; reset it
+		// to pending so the lifecycle-allow path is exercised here. Status is
+		// FSM-driven so it's exempt from the lifecycle gate (the FSM-completion
+		// guard above handles status:completed; pending/active/blocked stay
+		// agent-settable for legitimate repair).
+		setFrontmatterField(
+			unitPath(intentSlug, "inception", "unit-02-elaborate"),
+			"status",
+			"pending",
+		)
+		const result = handleStateTool("haiku_unit_set", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-02-elaborate",
+			field: "model",
+			value: "sonnet",
+		})
+		assert.ok(getTextResult(result).includes("ok"))
+	})
+
+	// ── haiku_unit_write (FM validators + DAG cycle detection + lifecycle) ──
+
+	console.log("\n=== haiku_unit_write ===")
+
+	test("haiku_unit_write rejects FSM-driven fields in frontmatter", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-test-fsm",
+			body: "## Mission\n\nTest unit body.",
+			frontmatter: { status: "active" }, // forbidden
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "frontmatter_validation_failed")
+		assert.ok(parsed.errors.some((e) => e.includes("fsm_field_forbidden")))
+	})
+
+	test("haiku_unit_write rejects depends_on self-reference", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-self-ref",
+			body: "## Mission\n\nSelf-referencing unit.",
+			frontmatter: { depends_on: ["unit-99-self-ref"] }, // self-ref
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "frontmatter_validation_failed")
+		assert.ok(parsed.errors.some((e) => e.includes("self_reference")))
+	})
+
+	test("haiku_unit_write rejects unresolved depends_on entry", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-test-dep",
+			body: "## Mission\n\nUnit depending on phantom.",
+			frontmatter: { depends_on: ["unit-77-does-not-exist"] },
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "frontmatter_validation_failed")
+		assert.ok(parsed.errors.some((e) => e.includes("depends_on_unresolved")))
+	})
+
+	test("haiku_unit_write rejects empty body", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-empty",
+			body: "",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "empty_body")
+	})
+
+	test("haiku_unit_write refuses to rewrite an active unit", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-01-discovery", // active
+			body: "## Mission\n\nTrying to rewrite an active unit.",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "active")
+	})
+
+	test("haiku_unit_write succeeds on a new unit with valid FM", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-valid",
+			body: "## Mission\n\nA valid new unit.",
+			frontmatter: { title: "Valid test unit", model: "sonnet" },
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.ok, true)
+		assert.strictEqual(parsed.created, true)
+		assert.strictEqual(parsed.unit, "unit-99-valid")
+	})
+
 	// ── unknown tool ──────────────────────────────────────────────────────────
 
 	console.log("\n=== unknown tool ===")

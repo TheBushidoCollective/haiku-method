@@ -5,9 +5,9 @@ H·AI·K·U = Human + AI Knowledge Unification — a universal lifecycle framewo
 Three-component project: **plugin** (Claude Code plugin), **paper** (methodology spec), **website** (Next.js 15 static site).
 
 - Paper is the source of truth for methodology concepts
-- Plugin is the source of truth for implementation
-- Website presents both to users
-- **`plugin/studios/ARCHITECTURE.md` is the canonical source of truth for studio/stage/unit/hat/feedback structure.** When the implementation contradicts it, fix the implementation. When the paper drifts from it, fix the paper. Read this doc before making any structural change to studios, stages, hats, or the FSM tools.
+- Plugin is the source of truth for implementation (orchestrator, MCP tools, hooks, runtime behavior)
+- **`plugin/studios/ARCHITECTURE.md` is the structural reference for studio/stage/unit/hat/feedback boundaries within the plugin** — the rules and contracts that apply across studios, distinct from any single implementation file. Read it before structural changes; conflict resolution between this doc and the plugin code is described in the doc's intro.
+- Website presents all of the above to users
 
 ## Sync Discipline (CRITICAL)
 

@@ -4211,20 +4211,11 @@ export const stateToolDefs = [
 		},
 	},
 	// Unit tools
-	{
-		name: "haiku_unit_get",
-		description: "Read a field from a unit's frontmatter",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				stage: { type: "string" },
-				unit: { type: "string" },
-				field: { type: "string" },
-			},
-			required: ["intent", "stage", "unit", "field"],
-		},
-	},
+	// haiku_unit_get — REMOVED from the agent-callable schema per
+	// architecture §1.1 / §1.2 (FM is FSM-only; agent-callable reads must
+	// return body + title only via haiku_unit_read). The case handler in
+	// handleStateTool is retained for FSM-internal callers (orchestrator,
+	// state-integrity, etc.) but agents can no longer reach it through MCP.
 	{
 		name: "haiku_unit_set",
 		description: "Set a field in a unit's frontmatter",

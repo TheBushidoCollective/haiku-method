@@ -262,6 +262,8 @@ Phase 2 verifier rollout (parallel agent dispatch, commit `af417f69` and earlier
 - 91/120 stages now have a `verifier` (or other verify-class) terminal hat in their `hats:` list.
 - The 29 stages without explicit `verifier` already end in a verify-class hat (`reviewer`, `validator`, `assessor`, `auditor`, `qa`, etc.) or were intentionally left for separate restructure (3 adversarial-loop stages: software/security, security-assessment/exploitation, ideation/review).
 
+6. ⏳ **24 `review-agents/cross-stage-consistency.md` files reference FM-derived paths** (e.g., "verify that stages' declared outputs exist at the paths their unit frontmatter promised"). Per §1.1 this is FM-interpretation for a mechanical purpose and should be FSM-enforced at `haiku_unit_advance_hat` time instead of agent-validated post-hoc. The strict fix: strip these references and add an FSM-level output-existence check. The current behavior is defensive validation pending that FSM enforcement and is left in place to avoid removing the only existing safety net.
+
 Implemented in this PR (✅):
 - Architecture document itself, with the boundary rules, lifecycle, hat patterns, FB-as-unit fix-loop semantic, and stage-role taxonomy.
 - Path-boundary hook (PreToolUse) denying generic Read/Write/Edit on FSM-managed paths, with redirect messages naming the right MCP tool.

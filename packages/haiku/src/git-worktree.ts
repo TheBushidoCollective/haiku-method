@@ -739,7 +739,7 @@ export function fixChainWorktreePath(
 	feedbackId: string,
 ): string {
 	return join(
-		process.cwd(),
+		primaryRepoRoot(),
 		".haiku",
 		"worktrees",
 		slug,
@@ -1492,7 +1492,7 @@ export function discoveryWorktreePath(
 	template: string,
 ): string {
 	return join(
-		process.cwd(),
+		primaryRepoRoot(),
 		".haiku",
 		"worktrees",
 		slug,

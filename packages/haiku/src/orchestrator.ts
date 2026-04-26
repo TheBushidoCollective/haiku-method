@@ -708,7 +708,7 @@ function resolveStudioStages(studio: string): string[] {
 	if (info) return info.stages
 	const pluginRoot = resolvePluginRoot()
 	for (const base of [
-		join(process.cwd(), ".haiku", "studios"),
+		join(primaryRepoRoot(), ".haiku", "studios"),
 		join(pluginRoot, "studios"),
 	]) {
 		const studioFile = join(base, studio, "STUDIO.md")
@@ -727,7 +727,7 @@ function resolveStageHats(studio: string, stage: string): string[] {
 	const dir = info ? info.dir : studio
 	const pluginRoot = resolvePluginRoot()
 	for (const base of [
-		join(process.cwd(), ".haiku", "studios"),
+		join(primaryRepoRoot(), ".haiku", "studios"),
 		join(pluginRoot, "studios"),
 	]) {
 		const stageFile = join(base, dir, "stages", stage, "STAGE.md")
@@ -753,7 +753,7 @@ function resolveStageFixHats(studio: string, stage: string): string[] {
 	const dir = info ? info.dir : studio
 	const pluginRoot = resolvePluginRoot()
 	for (const base of [
-		join(process.cwd(), ".haiku", "studios"),
+		join(primaryRepoRoot(), ".haiku", "studios"),
 		join(pluginRoot, "studios"),
 	]) {
 		const stageFile = join(base, dir, "stages", stage, "STAGE.md")
@@ -903,7 +903,7 @@ function resolveStageReview(studio: string, stage: string): string {
 	const dir = info ? info.dir : studio
 	const pluginRoot = resolvePluginRoot()
 	for (const base of [
-		join(process.cwd(), ".haiku", "studios"),
+		join(primaryRepoRoot(), ".haiku", "studios"),
 		join(pluginRoot, "studios"),
 	]) {
 		const stageFile = join(base, dir, "stages", stage, "STAGE.md")
@@ -931,7 +931,7 @@ function resolveStageMetadata(
 	const dir = info ? info.dir : studio
 	const pluginRoot = resolvePluginRoot()
 	for (const base of [
-		join(process.cwd(), ".haiku", "studios"),
+		join(primaryRepoRoot(), ".haiku", "studios"),
 		join(pluginRoot, "studios"),
 	]) {
 		const stageFile = join(base, dir, "stages", stage, "STAGE.md")
@@ -1139,7 +1139,7 @@ function validateStageOutputs(
 
 	// Read output definitions from the stage's outputs/ directory
 	for (const base of [
-		join(process.cwd(), ".haiku", "studios"),
+		join(primaryRepoRoot(), ".haiku", "studios"),
 		join(pluginRoot, "studios"),
 	]) {
 		const outputsDir = join(base, studio, "stages", stage, "outputs")
@@ -1160,9 +1160,13 @@ function validateStageOutputs(
 			// Skip project-tree outputs (code, deployment configs) — can't validate a specific path
 			if (location.startsWith("(")) continue
 
-			// Resolve location with intent slug
+			// Resolve location with intent slug. `.haiku/`-rooted paths
+			// anchor at the primary repo (where state lives); other
+			// repo-relative paths anchor at cwd (the working worktree).
 			const resolved = location.replace("{intent-slug}", slug)
-			const absPath = join(process.cwd(), resolved)
+			const absPath = resolved.startsWith(".haiku/")
+				? join(primaryRepoRoot(), resolved)
+				: join(process.cwd(), resolved)
 
 			if (resolved.endsWith("/")) {
 				// Directory — check at least one file exists
@@ -1356,7 +1360,7 @@ function validateDiscoveryArtifacts(
 
 	// Read discovery definitions from the stage's discovery/ directory
 	for (const base of [
-		join(process.cwd(), ".haiku", "studios"),
+		join(primaryRepoRoot(), ".haiku", "studios"),
 		join(pluginRoot, "studios"),
 	]) {
 		const discoveryDir = join(base, studio, "stages", stage, "discovery")
@@ -1379,9 +1383,13 @@ function validateDiscoveryArtifacts(
 			// Skip project-tree locations (code, deployment configs) — can't validate a specific path
 			if (location.startsWith("(")) continue
 
-			// Resolve location with intent slug
+			// Resolve location with intent slug. `.haiku/`-rooted paths
+			// anchor at the primary repo (where state lives); other
+			// repo-relative paths anchor at cwd (the working worktree).
 			const resolved = location.replace("{intent-slug}", slug)
-			const absPath = join(process.cwd(), resolved)
+			const absPath = resolved.startsWith(".haiku/")
+				? join(primaryRepoRoot(), resolved)
+				: join(process.cwd(), resolved)
 
 			if (resolved.endsWith("/")) {
 				// Directory — check at least one file exists
@@ -2093,10 +2101,11 @@ function runIntentCompletionReview(
 				continue
 			}
 
-			// fb.file is repo-relative (e.g. `.haiku/intents/.../feedback/NN.md`)
-			// so it joins from process.cwd(), NOT findHaikuRoot() — findHaikuRoot
-			// already returns `<cwd>/.haiku` which would double the prefix.
-			const fbAbsPath = join(process.cwd(), fb.file)
+			// fb.file is `.haiku/`-rooted relative path (e.g.
+			// `.haiku/intents/.../feedback/NN.md`). Anchors at the primary
+			// repo root since all H·AI·K·U state lives there regardless of
+			// which (sub-)worktree is the current cwd.
+			const fbAbsPath = join(primaryRepoRoot(), fb.file)
 			const { data: fbFM } = parseFrontmatter(readFileSync(fbAbsPath, "utf8"))
 			const prevAttempts = Number(
 				(fbFM as { integrator_attempts?: number }).integrator_attempts ?? 0,
@@ -2748,7 +2757,7 @@ export function runNext(slug: string): OrchestratorAction {
 		const pluginRoot = resolvePluginRoot()
 		let elaborationMode = "collaborative"
 		for (const base of [
-			join(process.cwd(), ".haiku", "studios"),
+			join(primaryRepoRoot(), ".haiku", "studios"),
 			join(pluginRoot, "studios"),
 		]) {
 			const stageFile = join(base, studio, "stages", currentStage, "STAGE.md")
@@ -3739,10 +3748,11 @@ export function runNext(slug: string): OrchestratorAction {
 				// Conflict detected — increment integrator attempt counter
 				// on the feedback frontmatter and route to the integrator
 				// (or escalate if we've already burned the budget).
-				// fb.file is repo-relative (e.g. `.haiku/intents/.../feedback/NN.md`)
-				// so it joins from process.cwd(), NOT findHaikuRoot() — findHaikuRoot
-				// already returns `<cwd>/.haiku` which would double the prefix.
-				const fbAbsPath = join(process.cwd(), fb.file)
+				// fb.file is `.haiku/`-rooted relative path (e.g.
+				// `.haiku/intents/.../feedback/NN.md`). Anchors at the primary
+				// repo root since all H·AI·K·U state lives there regardless of
+				// which (sub-)worktree is the current cwd.
+				const fbAbsPath = join(primaryRepoRoot(), fb.file)
 				const { data: fbFM } = parseFrontmatter(readFileSync(fbAbsPath, "utf8"))
 				const prevAttempts = Number(
 					(fbFM as { integrator_attempts?: number }).integrator_attempts ?? 0,
@@ -6014,18 +6024,19 @@ function buildRunInstructions(
 						const templatePath = join(discoveryDir, f)
 						// Parse the template's frontmatter for its `location:`
 						// field. Resolves studio-agnostically:
-						// `.haiku/knowledge/...` paths go under the repo root
-						// (process.cwd()); anything else is treated as relative
-						// to the intent dir. Templates without a `location:`
-						// fall back to the legacy <NAME>.md convention under
-						// `knowledge/` so older studios still work.
+						// `.haiku/knowledge/...` paths go under the primary repo
+						// root (where all H·AI·K·U state lives); anything else
+						// is treated as relative to the intent dir. Templates
+						// without a `location:` fall back to the legacy
+						// <NAME>.md convention under `knowledge/` so older
+						// studios still work.
 						const tplRaw = readFileSync(templatePath, "utf8")
 						const { data: tplFM } = parseFrontmatter(tplRaw)
 						const loc = (tplFM as { location?: unknown }).location
 						let outputPath: string | null = null
 						if (typeof loc === "string" && loc.length > 0) {
 							if (loc.startsWith(".haiku/")) {
-								outputPath = join(process.cwd(), loc)
+								outputPath = join(primaryRepoRoot(), loc)
 							} else if (loc.startsWith("/")) {
 								outputPath = loc
 							} else {
@@ -6235,7 +6246,7 @@ function buildRunInstructions(
 
 			// Check for ticketing provider
 			try {
-				const settingsPath = join(process.cwd(), ".haiku", "settings.yml")
+				const settingsPath = join(primaryRepoRoot(), ".haiku", "settings.yml")
 				if (existsSync(settingsPath)) {
 					const settingsRaw = readFileSync(settingsPath, "utf8")
 					if (settingsRaw.includes("ticketing")) {
@@ -6564,7 +6575,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 			// Check for ticketing provider — move ticket to "In Progress"
 			if (action.action === "start_unit") {
 				try {
-					const settingsPath = join(process.cwd(), ".haiku", "settings.yml")
+					const settingsPath = join(primaryRepoRoot(), ".haiku", "settings.yml")
 					if (existsSync(settingsPath)) {
 						const settingsRaw = readFileSync(settingsPath, "utf8")
 						if (settingsRaw.includes("ticketing")) {
@@ -8888,7 +8899,7 @@ export async function handleOrchestratorTool(
 					if (gateContext === "intent_review") {
 						// Intent approved — mark as reviewed AND advance phase to execute
 						const intentFilePath = join(
-							process.cwd(),
+							primaryRepoRoot(),
 							intentDirPath,
 							"intent.md",
 						)
@@ -8997,7 +9008,7 @@ export async function handleOrchestratorTool(
 				// (elaborate phase with no completed units in the stage), persist
 				// nothing — the reviewer's comments go inline in the action and
 				// the agent edits unit specs directly.
-				const intentDirPathAbs = join(process.cwd(), intentDirPath)
+				const intentDirPathAbs = join(primaryRepoRoot(), intentDirPath)
 				const preExecute =
 					gateContext === "elaborate_to_execute" ||
 					gateContext === "intent_review"
@@ -9122,7 +9133,7 @@ export async function handleOrchestratorTool(
 
 				// Log full error to .haiku/ for debugging
 				try {
-					const logDir = join(process.cwd(), ".haiku", "logs")
+					const logDir = join(primaryRepoRoot(), ".haiku", "logs")
 					mkdirSync(logDir, { recursive: true })
 					writeFileSync(
 						join(logDir, "gate-review-error.log"),
@@ -9213,7 +9224,7 @@ export async function handleOrchestratorTool(
 							if (decision === "approve") {
 								if (gateContext === "intent_review") {
 									const intentFilePath = join(
-										process.cwd(),
+										primaryRepoRoot(),
 										intentDirPath,
 										"intent.md",
 									)

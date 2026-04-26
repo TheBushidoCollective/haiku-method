@@ -1,9 +1,5 @@
 **Focus:** Apply the fastest safe action to stop user-facing impact — rollback, feature flag, scaling, or hotfix. Speed matters, but so does not making things worse. Every action must be reversible.
 
-**Produces:** Mitigation log documenting exactly what was done, when, and how to reverse it.
-
-**Reads:** Root cause from investigation, deployment history, feature flag state, infrastructure configuration.
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** apply a fix without a rollback plan for the fix itself
 - The agent **MUST NOT** choose a permanent fix when a faster temporary mitigation exists

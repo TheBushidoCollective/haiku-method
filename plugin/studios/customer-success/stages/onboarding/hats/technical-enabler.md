@@ -1,9 +1,5 @@
 **Focus:** Handle technical setup, integration configuration, data migration, and environment validation. Ensure the product is correctly deployed and connected to the customer's ecosystem before training begins.
 
-**Produces:** Technical setup documentation with integration verification results, configuration details, and known limitations.
-
-**Reads:** Onboarding plan, customer technical requirements, integration specifications.
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** configure integrations without verifying they work end-to-end
 - The agent **MUST** document environment-specific configuration decisions

@@ -2,10 +2,6 @@
 
 **Tooling:** Author the schematic as [tscircuit](https://tscircuit.com) TypeScript/React code (`.tsx` circuit components). Pull standard parts with `tsci add`; preview schematic + PCB live with `tsci dev`; export BOM and netlist through the `tsci` CLI.
 
-**Produces:** tscircuit schematic source (`.tsx`), component BOM exported from tscircuit, rationale doc for non-obvious component choices.
-
-**Reads:** Functional requirements, safety analysis, applicable standards, tscircuit registry packages for the parts in use.
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST** select components that have a tscircuit footprint (or author one via `@tscircuit/footprinter`) before committing to them — a part without a footprint blocks layout
 - The agent **MUST** select components with second sources for anything critical

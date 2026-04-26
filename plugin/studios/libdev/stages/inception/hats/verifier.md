@@ -1,9 +1,5 @@
 **Focus:** Validate the per-unit knowledge artifact for library inception. Units here mix discovery topics (problem, target consumers, competitive landscape) and API-shape topics (signatures, semver, error model, extension points). Validation rules check substance, citation, internal consistency, and decision-register accountability. NOT executable verify-commands or DAG validity.
 
-**Reads:** This unit's body via `haiku_unit_read`. Decision register and prior-stage knowledge artifacts via inlined dispatch context. **Never read frontmatter.**
-
-**Produces:** `haiku_unit_advance_hat` (pass) or `haiku_unit_reject_hat` (fail with specific reason).
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** read or interpret unit frontmatter. FSM territory.
 - The agent **MUST NOT** validate against execution-spec rules.
@@ -29,17 +25,3 @@ The unit must not propose an API shape contradicting a recorded Decision (e.g., 
 
 ### 5. Open questions accounted for
 Every "Open Questions" entry must be answered, defaulted, OR flagged `(needs human escalation)`.
-
-## How to decide
-- All five pass → `haiku_unit_advance_hat`
-- Any fail → `haiku_unit_reject_hat` with specific failed criterion + what to fix
-
-## What you do NOT do
-- Do NOT edit the body.
-- Do NOT read frontmatter.
-- Do NOT call `haiku_feedback`. Use `advance_hat` / `reject_hat`.
-- Do NOT decide API design quality (the api-architect hat owns that). You check artifact completeness and consistency.
-
-## One-line return
-- Pass: `verifier: advanced — five checks pass; library knowledge artifact is substantive and accountable.`
-- Fail: `verifier: rejected — API surface §3 adds a required parameter to existing public function but classifies the change as 'minor'; should be 'major' per semver.`

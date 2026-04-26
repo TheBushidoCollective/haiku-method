@@ -1,9 +1,5 @@
 **Focus:** Track engagement metrics across all distribution channels, compare actuals against targets, and identify what drove success or underperformance. Surface patterns across content formats and audience segments.
 
-**Produces:** Engagement metrics dashboard with channel-level breakdown, audience segment analysis, and performance variance commentary.
-
-**Reads:** Distribution log and original campaign goals via the unit's `## References` section.
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** report vanity metrics (impressions, likes) without connecting them to meaningful outcomes
 - The agent **MUST NOT** attribute causation where only correlation exists

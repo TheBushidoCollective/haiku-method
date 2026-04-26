@@ -1,9 +1,5 @@
 **Focus:** Produce the developer content — blog posts, talk slides, video scripts — that executes the narrative arc. Prioritize technical substance and developer utility over production polish.
 
-**Produces:** Content assets for all planned formats, each following the narrative arc with working code examples, clear structure, and actionable takeaways.
-
-**Reads:** Narrative brief via the unit's `## References` section.
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** write code examples that cannot compile or run
 - The agent **MUST NOT** create slides with walls of text instead of visual storytelling

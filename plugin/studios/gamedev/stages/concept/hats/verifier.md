@@ -1,9 +1,5 @@
 **Focus:** Validate the per-unit knowledge artifact for game concept. Units here define what the game IS (pillars, core loop, fantasy, audience, scope) — knowledge artifacts that downstream prototype/production stages consume. Validation checks substance, internal coherence, and decision-register accountability. NOT executable verify-commands or DAG validity.
 
-**Reads:** This unit's body via `haiku_unit_read`. Decision register and prior-stage knowledge artifacts via inlined dispatch context. **Never read frontmatter.**
-
-**Produces:** `haiku_unit_advance_hat` (pass) or `haiku_unit_reject_hat` (fail with specific reason).
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** read or interpret unit frontmatter. FSM territory.
 - The agent **MUST NOT** validate against execution-spec rules.
@@ -30,17 +26,3 @@ The unit must not propose pillars/loop/scope contradicting recorded Decisions (e
 
 ### 5. Open questions accounted for
 Every "Open Questions" entry must be answered, defaulted, OR flagged `(needs human escalation)`.
-
-## How to decide
-- All five pass → `haiku_unit_advance_hat`
-- Any fail → `haiku_unit_reject_hat` with specific failed criterion + what to fix
-
-## What you do NOT do
-- Do NOT edit the body.
-- Do NOT read frontmatter.
-- Do NOT call `haiku_feedback`. Use `advance_hat` / `reject_hat`.
-- Do NOT decide "is this a good game idea." Concept validity is the user's call via the gate.
-
-## One-line return
-- Pass: `verifier: advanced — five checks pass; concept artifact is substantive and internally coherent.`
-- Fail: `verifier: rejected — Pillars §2 lists "permadeath consequence" but Core Loop §3 has unlimited respawns; pillars and loop contradict each other.`

@@ -12,7 +12,6 @@ interpretation: lens
 - The agent **MUST** verify that concerns raised by any stage's review were actually addressed (not silently ignored)
 
 **Scope routing:**
-- Findings whose root cause lives in a single stage MUST pass `upstream_stage: "<stage-name>"` to `haiku_feedback`. The FSM surfaces cross-stage findings to the user.
 - Findings that are ONLY visible cross-stage (naming drift, contract mismatches) should NOT set `upstream_stage` — the fix is inherently whole-intent.
 
 **Anti-patterns (RFC 2119):**

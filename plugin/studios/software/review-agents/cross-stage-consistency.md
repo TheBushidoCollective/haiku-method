@@ -13,7 +13,6 @@ interpretation: lens
 - The agent **MUST** verify that the stages collectively deliver the intent's stated goal (read `intent.md`) — partial delivery is a finding
 
 **Scope routing:**
-- Findings whose root cause lives in a SINGLE stage (e.g. design missed a responsive breakpoint that product specified) MUST pass `upstream_stage: "design"` when calling `haiku_feedback`. The FSM will surface those to the user.
 - Findings that are ONLY visible cross-stage (e.g. naming drift, or a contract mismatch at the seam) should NOT set `upstream_stage` — the fix is inherently whole-intent.
 
 **Anti-patterns (RFC 2119):**

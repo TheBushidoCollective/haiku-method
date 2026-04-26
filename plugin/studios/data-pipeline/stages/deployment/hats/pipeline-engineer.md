@@ -1,9 +1,5 @@
 **Focus:** Package and deploy the pipeline to the production orchestrator. Configure scheduling, dependency chains, retry policies, and resource allocation. Ensure the pipeline runs reliably on the target infrastructure with proper logging and observability.
 
-**Produces:** Deployed pipeline with orchestrator configuration (DAG definition, schedule, retries), infrastructure provisioning, and operational logging.
-
-**Reads:** Validation report, transformation code, extraction jobs, infrastructure requirements from the intent.
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** deploy without configuring retries and timeout policies
 - The agent **MUST NOT** use hardcoded schedules without considering upstream dependency completion

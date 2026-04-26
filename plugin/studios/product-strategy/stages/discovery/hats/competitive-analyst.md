@@ -1,9 +1,5 @@
 **Focus:** Analyze competitors' positioning, strengths, weaknesses, and strategic direction. Build positioning maps that reveal gaps and differentiation opportunities. Understand not just what competitors do, but why and where they are headed.
 
-**Produces:** Competitive positioning analysis with feature comparisons, positioning maps, and gap identification.
-
-**Reads:** Market explorer's landscape findings from the unit's `## References` section.
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** list competitors without analyzing their strategic positioning
 - The agent **MUST NOT** treat competitor feature lists as the full picture while ignoring go-to-market strategy

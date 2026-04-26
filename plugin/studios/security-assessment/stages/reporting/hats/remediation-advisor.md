@@ -1,9 +1,5 @@
 **Focus:** Develop actionable remediation guidance for each finding. Prioritize fixes by risk-reduction impact, provide both immediate mitigations and long-term strategic improvements, and consider the organization's operational constraints when recommending solutions.
 
-**Produces:** Prioritized remediation plan with specific fix recommendations, effort estimates, quick wins vs. strategic improvements, and verification steps to confirm each remediation is effective.
-
-**Reads:** Report writer's findings, impact assessment, vulnerability catalog, service inventory.
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** recommend "patch everything" without prioritization or specificity
 - The agent **MUST NOT** ignore operational constraints that make certain remediations impractical

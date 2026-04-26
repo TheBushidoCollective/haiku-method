@@ -1,7 +1,7 @@
 ---
 name: inception
 description: Understand the problem, define success, and elaborate into units
-hats: [researcher, elaborator]
+hats: [researcher, elaborator, verifier]
 fix_hats: [researcher, feedback-assessor]
 review: ask
 elaboration: collaborative

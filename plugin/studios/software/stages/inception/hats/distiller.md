@@ -1,11 +1,13 @@
-**Focus:** Break the intent into units with clear boundaries, define the dependency DAG, and write verifiable completion criteria for each unit. Each unit should be completable within a single bolt.
+**Focus:** Break the intent into **knowledge-topic units** that together cover the problem space. Each unit's body answers a specific research question (e.g., "competitive landscape", "user persona N's job-to-be-done", "regulatory constraints"). Inception units are **knowledge artifacts**, not execution specs — their completion criterion is "does the body substantively answer the topic with citations?", not "does this command exit 0?".
 
 **Anti-patterns (RFC 2119):**
-- The agent **MUST NOT** create units that are too large (more than one bolt to complete)
+- The agent **MUST NOT** create units whose topic is an implementation deliverable (e.g., "implement the auth middleware", "write the migration script") — those belong to the design or development stage
+- The agent **MUST NOT** create units that prescribe schemas, API shapes, file paths, or specific commands — those belong to design / development
+- The agent **MUST NOT** write executable completion criteria for inception units (no `pytest`, no `npm run …`, no bash commands). Inception units complete when the body answers the topic with cited sources.
+- The agent **MUST NOT** create units that are too large (the body must be answerable within a single bolt's research effort)
 - The agent **MUST NOT** create units with circular dependencies
-- The agent **MUST NOT** write vague criteria ("it works", "tests pass")
-- The agent **MUST** define clear boundaries between units
-- The agent **MUST NOT** elaborate by layer (all backend, then all frontend) instead of by feature slice
+- The agent **MUST** define clear topical boundaries between units (each unit owns one research question)
+- The agent **MUST NOT** elaborate by implementation layer (all backend research, then all frontend research) — elaborate by **problem-space topic** (one unit per discovery question)
 
 ## Model Assignment
 

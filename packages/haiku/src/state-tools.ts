@@ -8131,7 +8131,9 @@ export function handleStateTool(
 				// OR by filename numeric prefix (files created by createFeedback which
 				// does not embed an id field in frontmatter).
 				const fileNumMatch = f.match(/^(\d+)-/)
-				const fileNum = fileNumMatch ? Number.parseInt(fileNumMatch[1], 10) : null
+				const fileNum = fileNumMatch
+					? Number.parseInt(fileNumMatch[1], 10)
+					: null
 				if (
 					(data.id as string) === fbId ||
 					(data.feedback_id as string) === fbId ||

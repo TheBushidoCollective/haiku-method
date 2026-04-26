@@ -1668,6 +1668,115 @@ body
 		assert.strictEqual(parsed.unit, "unit-99-valid")
 	})
 
+	// ── Feedback CRUDL (body-only reads, lifecycle on write/update) ─────────
+
+	console.log("\n=== haiku_feedback_read / write lifecycle ===")
+
+	// Stand up a feedback file for the FB tests below.
+	const fbDir = join(intentDirPath, "stages", "inception", "feedback")
+	mkdirSync(fbDir, { recursive: true })
+	writeFileSync(
+		join(fbDir, "01-test-finding.md"),
+		`---
+id: FB-91
+title: Test finding for FB-as-unit MCP tests
+status: pending
+origin: adversarial-review
+author: completeness
+author_type: agent
+created_at: 2026-04-26T00:00:00Z
+---
+
+Body of the test finding.
+`,
+	)
+	writeFileSync(
+		join(fbDir, "02-closed-finding.md"),
+		`---
+id: FB-92
+title: Closed test finding
+status: closed
+closed_by: test
+origin: adversarial-review
+author: completeness
+author_type: agent
+created_at: 2026-04-26T00:00:00Z
+---
+
+Closed body content.
+`,
+	)
+
+	test("haiku_feedback_read returns body+title only — no FM", () => {
+		const result = handleStateTool("haiku_feedback_read", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-91",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.ok("title" in parsed)
+		assert.ok("body" in parsed)
+		assert.ok(!("status" in parsed))
+		assert.ok(!("origin" in parsed))
+		assert.ok(!("author" in parsed))
+	})
+
+	test("haiku_feedback_write succeeds on pending FB", () => {
+		const result = handleStateTool("haiku_feedback_write", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-91",
+			body: "Updated diagnosis: root cause is X; proposed action: Y.",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.ok, true)
+	})
+
+	test("haiku_feedback_write rejects empty body", () => {
+		const result = handleStateTool("haiku_feedback_write", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-91",
+			body: "",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "empty_body")
+	})
+
+	test("haiku_feedback_write blocks rewrites of closed (terminal) FBs", () => {
+		const result = handleStateTool("haiku_feedback_write", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-92",
+			body: "Trying to rewrite closed FB.",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "closed")
+	})
+
+	test("haiku_feedback_update blocks updates on terminal FBs", () => {
+		const result = handleStateTool("haiku_feedback_update", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-92",
+			status: "pending",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "closed")
+	})
+
+	test("haiku_feedback_read returns feedback_not_found for missing FB", () => {
+		const result = handleStateTool("haiku_feedback_read", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-NONEXISTENT",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "feedback_not_found")
+	})
+
 	// ── unknown tool ──────────────────────────────────────────────────────────
 
 	console.log("\n=== unknown tool ===")

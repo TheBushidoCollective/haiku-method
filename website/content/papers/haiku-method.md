@@ -547,6 +547,20 @@ The framework is intentionally extensible through studios rather than through co
 | **Stage** | A lifecycle phase within a studio. Contains hat definitions, review gate, input/output contracts, and unit type constraints. |
 | **Studio** | A named lifecycle template mapping the four-phase model to domain-specific stages. Defines stage order, persistence type, and delivery mechanism. |
 | **Unit** | A discrete piece of work within an intent, scoped to a single stage. Has verifiable completion criteria and dependency relationships forming a DAG. |
+| **FB-as-Unit** | The fix-loop's structural rule: a feedback finding (FB) IS the unit-of-work for the fix-loop hats. Fixers populate the FB body with diagnosis (root cause, proposed action, references) via `haiku_feedback_write`; flagged units stay read-only via `haiku_unit_read`. The fix-loop hat chain progresses via `haiku_feedback_advance_hat` (mirror of the unit equivalent); the FSM auto-closes the FB when the last hat advances. Closed FBs become input to the next iteration of the upstream stage's elaborate phase, which authors corrective work — completed units are never modified. Implementation contract in `plugin/studios/ARCHITECTURE.md` §5. |
+| **Frontmatter-is-FSM-only** | Architectural rule: frontmatter on FSM-managed files (units, feedback, intent, state) is reserved for the FSM. Agents may write FM when authoring (the elaborator drafts a unit's `inputs:`) but MUST NOT *interpret* FM for any mechanical purpose. DAG validity, schema, cross-references, and lifecycle are FSM responsibilities, validated at write time inside the MCP tools. Reviewer hats and verifier hats validate body content only. The `haiku_unit_read` and `haiku_feedback_read` MCP tools enforce this by returning `{title, body}` only — no FM exposed. Implementation contract in `plugin/studios/ARCHITECTURE.md` §1.1. |
+| **Forward-only Lifecycle** | Architectural rule: units (and FBs) move only `pending → active → completed`. There are no reverse transitions — no unwind, no reset. Once a unit is active or completed, downstream work has been informed by it; mutating it would silently invalidate that work. Stage revisits create new pending units that build on completed work; they never modify completed units. The MCP tools enforce this at write time (`haiku_unit_write` accepts only pending; `haiku_unit_set` blocks non-FSM field writes on active/completed; `haiku_unit_delete` is pending-only). Implementation contract in `plugin/studios/ARCHITECTURE.md` §1.3. |
+| **Plan-Do-Verify** | Hat-sequence pattern: every stage's `hats:` list MUST be at least three roles forming a plan → do → verify chain. Hat-to-hat handoff must be a meaningful baton (the rally-race test). Hat names MUST be distinct from phase names (`elaborate`, `execute`, `review`, `gate`). Adversarial loops (red-team / blue-team / etc.) MAY follow the triplet but never precede. Implementation contract in `plugin/studios/ARCHITECTURE.md` §3. |
+
+---
+
+## Implementation Contract Reference
+
+The methodology described in this paper is implemented in the H·AI·K·U plugin under `plugin/`. The canonical structural reference for studio/stage/unit/hat/feedback boundaries — including the boundary rules, lifecycle, hat patterns, and FB-as-unit fix-loop semantics summarized in the glossary above — lives at:
+
+**`plugin/studios/ARCHITECTURE.md`**
+
+This document supersedes any conflicting implementation guidance. It is the source of truth for how the plugin enforces the methodology — the abstract concepts in this paper map to the concrete rules and MCP tool contracts there. When extending or modifying the plugin, read ARCHITECTURE.md first.
 
 ---
 

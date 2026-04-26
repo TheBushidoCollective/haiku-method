@@ -4730,6 +4730,31 @@ export const stateToolDefs = [
 		},
 	},
 	{
+		name: "haiku_feedback_write",
+		description:
+			"Update a feedback file's body content. This is the architecture-mandated path for fixer hats to populate the FB body with diagnosis (root cause, proposed action, file:line refs) per the FB-as-unit model. Generic Write/Edit on feedback/*.md is denied at the hook layer. Lifecycle: only pending or addressed (under-fix) FBs accept body rewrites. Closed and rejected FBs are immutable. Frontmatter is FSM-controlled and cannot be set through this tool — use haiku_feedback_update for status transitions and haiku_feedback_reject for rejections.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string", description: "Intent slug" },
+				stage: {
+					type: "string",
+					description: "Stage name (optional — omit for intent-scope FBs)",
+				},
+				feedback_id: {
+					type: "string",
+					description: "Feedback ID, e.g. FB-01",
+				},
+				body: {
+					type: "string",
+					description:
+						"Full markdown body to write. Replaces the prior body entirely.",
+				},
+			},
+			required: ["intent", "feedback_id", "body"],
+		},
+	},
+	{
 		name: "haiku_release_notes",
 		description:
 			"Extract release notes from CHANGELOG.md — a specific version or the 5 most recent entries.",
@@ -7338,6 +7363,40 @@ export function handleStateTool(
 			)
 			if (feedbackUpdateBranchErr) return feedbackUpdateBranchErr
 
+			// Lifecycle enforcement (architecture §1.3 forward-only): refuse
+			// updates when the FB is already in a terminal state (closed or
+			// rejected). This prevents accidental "re-opening" or status flips
+			// after the fix-loop assessor has signed off.
+			{
+				const fbDir = stage
+					? feedbackDir(intent, stage)
+					: feedbackDir(intent, "")
+				if (existsSync(fbDir)) {
+					for (const f of readdirSync(fbDir).filter((n) =>
+						n.endsWith(".md"),
+					)) {
+						const p = join(fbDir, f)
+						const { data } = parseFrontmatter(readFileSync(p, "utf8"))
+						if (
+							(data.id as string) === feedbackId ||
+							(data.feedback_id as string) === feedbackId
+						) {
+							const cur = (data.status as string) || "pending"
+							if (cur === "closed" || cur === "rejected") {
+								return text(
+									JSON.stringify({
+										error: "lifecycle_violation",
+										current_status: cur,
+										message: `Cannot update feedback '${feedbackId}' — status is '${cur}'. Per the forward-only lifecycle rule, closed and rejected feedback are terminal. To raise a related concern, file a NEW feedback via haiku_feedback.`,
+									}),
+								)
+							}
+							break
+						}
+					}
+				}
+			}
+
 			const updateResult = updateFeedbackFile(
 				intent,
 				stage,
@@ -7737,6 +7796,113 @@ export function handleStateTool(
 			const h1Match = foundBody.match(/^#\s+(.+)$/m)
 			const title = fmTitle || (h1Match ? h1Match[1].trim() : fbId)
 			return text(JSON.stringify({ title, body: foundBody }, null, 2))
+		}
+
+		// ── Feedback body write (architecture FB-as-unit, lifecycle-bound) ──
+		case "haiku_feedback_write": {
+			const intentArg = args.intent as string
+			const stageArg = (args.stage as string) || ""
+			const fbId = args.feedback_id as string
+			const newBody = (args.body as string) ?? ""
+
+			if (!intentArg || !fbId) {
+				return text(
+					JSON.stringify({
+						error: "missing_args",
+						message: "intent and feedback_id are required.",
+					}),
+				)
+			}
+			if (!newBody || newBody.trim().length === 0) {
+				return text(
+					JSON.stringify({
+						error: "empty_body",
+						message:
+							"body is required and must be substantive. Empty FB bodies cannot pass the assessor's spec-match check.",
+					}),
+				)
+			}
+
+			const fbWriteBranchErr = enforceStageBranch(
+				intentArg,
+				stageArg || undefined,
+			)
+			if (fbWriteBranchErr) return fbWriteBranchErr
+
+			// Locate the FB file by id (filename has numeric prefix + slug, so
+			// we read the directory and match on FM id field).
+			const dir = stageArg
+				? feedbackDir(intentArg, stageArg)
+				: feedbackDir(intentArg, "")
+			if (!existsSync(dir)) {
+				return text(
+					JSON.stringify({
+						error: "feedback_not_found",
+						intent: intentArg,
+						stage: stageArg || null,
+						feedback_id: fbId,
+						message: `No feedback directory at ${dir}.`,
+					}),
+				)
+			}
+			let foundPath: string | null = null
+			let foundFm: Record<string, unknown> | null = null
+			for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
+				const p = join(dir, f)
+				const { data } = parseFrontmatter(readFileSync(p, "utf8"))
+				if ((data.id as string) === fbId || (data.feedback_id as string) === fbId) {
+					foundPath = p
+					foundFm = data
+					break
+				}
+			}
+			if (!foundPath || !foundFm) {
+				return text(
+					JSON.stringify({
+						error: "feedback_not_found",
+						intent: intentArg,
+						stage: stageArg || null,
+						feedback_id: fbId,
+						message: `No feedback file matching ${fbId} in ${dir}.`,
+					}),
+				)
+			}
+
+			// Lifecycle enforcement: closed/rejected FBs are terminal and
+			// immutable. Pending and addressed (under-fix) accept body
+			// rewrites — the fixer hat populates the FB body with diagnosis.
+			const status = (foundFm.status as string) || "pending"
+			if (status === "closed" || status === "rejected") {
+				return text(
+					JSON.stringify({
+						error: "lifecycle_violation",
+						current_status: status,
+						message: `Cannot rewrite feedback '${fbId}' — status is '${status}'. Per the forward-only lifecycle rule, closed and rejected feedback are terminal and immutable. To raise a related concern, file a NEW feedback via haiku_feedback.`,
+					}),
+				)
+			}
+
+			// Persist body, preserve FM unchanged.
+			writeFileSync(foundPath, matter.stringify(newBody.trimEnd() + "\n", foundFm))
+			sealIntentState(intentArg)
+			emitTelemetry("haiku.feedback.body_rewritten", {
+				intent: intentArg,
+				stage: stageArg || "",
+				feedback_id: fbId,
+			})
+			return text(
+				JSON.stringify(
+					{
+						ok: true,
+						feedback_id: fbId,
+						stage: stageArg || null,
+						intent: intentArg,
+						message: `Rewrote body of feedback '${fbId}' (status preserved as '${status}').`,
+					},
+					null,
+					2,
+				),
+			)
 		}
 
 		case "haiku_version_info": {

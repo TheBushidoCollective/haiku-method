@@ -1799,13 +1799,62 @@ Body for advance test.
 `,
 	)
 
-	// Note: full advance/reject hat happy-path tests require the studio's
-	// STAGE.md to be resolvable from the test cwd, which the test harness
-	// doesn't currently set up (intent points at studio: software, but the
-	// studio dir resolution paths aren't reachable from tmp/). The
-	// lifecycle-refusal cases below DO work because they short-circuit
-	// before the fix_hats lookup. Happy-path coverage lives in the
-	// orchestrator-integration tests where studio resolution is wired.
+	// Set up a project-local studio override so readStageDef can resolve
+	// fix_hats from the test cwd. studioSearchPaths() looks at
+	// process.cwd()/.haiku/studios first — write a minimal STAGE.md there.
+	mkdirSync(join(projDir, ".haiku/studios/software/stages/inception"), {
+		recursive: true,
+	})
+	writeFileSync(
+		join(projDir, ".haiku/studios/software/stages/inception/STAGE.md"),
+		`---
+name: inception
+description: Test inception stage
+hats: [researcher, distiller, verifier]
+fix_hats: [fixer, feedback-assessor]
+review: ask
+elaboration: collaborative
+inputs: []
+---
+
+Test stage.
+`,
+	)
+
+	test("haiku_feedback_advance_hat: full 2-hat sequence closes on assessor's call (B4 regression)", () => {
+		// Per the off-by-one bug the reviewer flagged: under a 2-hat
+		// sequence [fixer, feedback-assessor], the fixer's advance moves
+		// hat to fixer (status=addressed). The assessor's advance MUST
+		// then close the FB — not require a third call. The earlier
+		// implementation indexed isLast against the stored hat (fixer),
+		// computing 0===1=false for length=2, leaving status=addressed
+		// after assessor's advance.
+		// Call 1: fixer claims (no curHat, isFirst). hat → fixer, status → addressed.
+		const r1 = handleStateTool("haiku_feedback_advance_hat", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-93",
+		})
+		const p1 = JSON.parse(getTextResult(r1))
+		assert.strictEqual(p1.ok, true)
+		assert.strictEqual(p1.calling_hat, "fixer")
+		assert.strictEqual(p1.closed, false)
+
+		// Call 2: assessor advances (curHat=fixer). MUST close.
+		const r2 = handleStateTool("haiku_feedback_advance_hat", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-93",
+		})
+		const p2 = JSON.parse(getTextResult(r2))
+		assert.strictEqual(p2.ok, true)
+		assert.strictEqual(p2.calling_hat, "feedback-assessor")
+		assert.strictEqual(
+			p2.closed,
+			true,
+			"2-hat sequence MUST close on assessor's advance — this is the B4 off-by-one regression",
+		)
+	})
 
 	test("haiku_feedback_advance_hat refuses on already-closed FB (FB-92)", () => {
 		const result = handleStateTool("haiku_feedback_advance_hat", {

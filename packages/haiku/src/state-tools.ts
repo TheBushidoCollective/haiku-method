@@ -8060,41 +8060,57 @@ export function handleStateTool(
 				)
 			}
 
-			// Determine current hat. If unset (first dispatch), start at the
-			// first hat. If set, find its index and advance.
+			// Determine the CALLING hat — the hat that just finished its work
+			// and is calling advance now. The `hat` field on disk represents
+			// the hat that LAST advanced (i.e. the prior caller's hat); the
+			// caller's hat is the one immediately after it in the fix_hats
+			// chain. On the very first call, the caller is fixHats[0].
+			//
+			// Earlier this handler indexed `isLast` against the stored hat
+			// (the prior finisher), which made 2-hat sequences fail to close
+			// on the assessor's call: stored=fixer (idx 0), curIdx=0,
+			// curIdx === fixHats.length-1 → false for length=2. The fix:
+			// index `isLast` against the CALLING hat's position.
 			const curHat = (advFm.hat as string) || ""
 			const curBolt = (advFm.bolt as number) || 1
 			const curIdx = curHat ? fixHats.indexOf(curHat) : -1
-			const isFirst = curIdx === -1
-			const isLast = !isFirst && curIdx === fixHats.length - 1
+			const callingIdx = curIdx + 1
+			const callingHat = fixHats[callingIdx]
+			if (!callingHat) {
+				// curIdx pointed at the last hat already — the FB should have
+				// closed on the prior advance. This is a defensive guard for
+				// a state that shouldn't be reachable under correct dispatch.
+				return text(
+					JSON.stringify({
+						error: "no_hat_to_advance",
+						message: `FB '${fbId}' is at hat '${curHat}', already the last hat in fix_hats. The FB should have closed on the prior advance call. State may be inconsistent.`,
+					}),
+				)
+			}
+			const isLast = callingIdx === fixHats.length - 1
 
-			// Append iteration record (the just-completed hat's work).
+			// Append iteration record for the just-completed (calling) hat.
 			const iterations = Array.isArray(advFm.iterations)
 				? (advFm.iterations as Array<Record<string, unknown>>).slice()
 				: []
-			if (curHat) {
-				iterations.push({
-					bolt: curBolt,
-					hat: curHat,
-					completed_at: timestamp(),
-					result: isLast ? "closed" : "advanced",
-				})
-			}
+			iterations.push({
+				bolt: curBolt,
+				hat: callingHat,
+				completed_at: timestamp(),
+				result: isLast ? "closed" : "advanced",
+			})
 
-			let nextHat: string
 			let newStatus = advStatus
 			let closedBy: string | undefined
-			if (isFirst) {
-				nextHat = fixHats[0]
-				newStatus = "addressed"
-			} else if (isLast) {
-				nextHat = curHat
+			if (isLast) {
 				newStatus = "closed"
 				closedBy = `fix-loop:${fbId}:bolt-${curBolt}`
 			} else {
-				nextHat = fixHats[curIdx + 1]
 				newStatus = "addressed"
 			}
+			// Always store the calling hat in the FM `hat` field so the next
+			// advance can correctly compute "the next caller is at storage+1".
+			const nextHat = callingHat
 
 			const newFm: Record<string, unknown> = {
 				...advFm,
@@ -8114,19 +8130,20 @@ export function handleStateTool(
 					hat: nextHat,
 				},
 			)
+			const nextDispatchedHat = isLast ? null : fixHats[callingIdx + 1]
 			return text(
 				JSON.stringify(
 					{
 						ok: true,
 						feedback_id: fbId,
 						stage: stageArg || null,
-						previous_hat: curHat || null,
-						current_hat: nextHat,
+						calling_hat: callingHat,
+						next_dispatched_hat: nextDispatchedHat,
 						closed: isLast,
 						bolt: curBolt,
 						message: isLast
-							? `FB '${fbId}' closed by ${closedBy} (last hat in fix_hats sequence).`
-							: `FB '${fbId}' advanced to hat '${nextHat}' (${curIdx + 2}/${fixHats.length}).`,
+							? `FB '${fbId}' closed by ${closedBy} after '${callingHat}' (last hat in fix_hats sequence ${callingIdx + 1}/${fixHats.length}).`
+							: `FB '${fbId}': '${callingHat}' (${callingIdx + 1}/${fixHats.length}) finished; next hat to dispatch is '${nextDispatchedHat}'.`,
 					},
 					null,
 					2,
@@ -8232,21 +8249,45 @@ export function handleStateTool(
 				)
 			}
 
-			const curHatRej = (rejFm.hat as string) || fixHatsRej[0]
+			// Mirror the corrected advance_hat semantic (storage `hat` field
+			// = the hat that LAST called advance/reject; the CALLING hat is
+			// at storage_idx + 1 in the fix_hats chain). The earlier
+			// implementation indexed against the storage hat, which under
+			// the corrected advance semantic would re-dispatch the WRONG
+			// hat (asking the calling hat to retry instead of sending work
+			// back to the prior hat to redo).
+			const curHatRej = (rejFm.hat as string) || ""
 			const curBoltRej = (rejFm.bolt as number) || 1
-			const curIdxRej = fixHatsRej.indexOf(curHatRej)
+			const curIdxRej = curHatRej ? fixHatsRej.indexOf(curHatRej) : -1
+			const callingIdxRej = curIdxRej + 1
+			const callingHatRej = fixHatsRej[callingIdxRej]
+			if (!callingHatRej) {
+				return text(
+					JSON.stringify({
+						error: "no_hat_to_reject",
+						message: `FB '${fbId}' has no hat to reject — already past the last hat in fix_hats (storage at '${curHatRej}').`,
+					}),
+				)
+			}
 
-			// Move back one hat (or stay at first hat if already there).
-			const prevIdx = Math.max(0, curIdxRej - 1)
-			const prevHat = fixHatsRej[prevIdx]
+			// Compute the new storage so the next dispatch picks the prior
+			// hat (the one whose work the calling hat is rejecting). If the
+			// calling hat IS the first hat in the chain, no prior hat exists
+			// — bump bolt and let the same hat retry (storage stays empty).
+			const newStoredIdxRej = callingIdxRej - 2
+			const newStoredHatRej =
+				newStoredIdxRej >= 0 ? fixHatsRej[newStoredIdxRej] : ""
+			const nextDispatchedHatRej =
+				callingIdxRej > 0 ? fixHatsRej[callingIdxRej - 1] : callingHatRej
 
-			// Append rejection iteration record + bump bolt.
+			// Append rejection iteration record (the calling hat's work was
+			// rejected) and bump bolt.
 			const iterations = Array.isArray(rejFm.iterations)
 				? (rejFm.iterations as Array<Record<string, unknown>>).slice()
 				: []
 			iterations.push({
 				bolt: curBoltRej,
-				hat: curHatRej,
+				hat: callingHatRej,
 				completed_at: timestamp(),
 				result: "rejected",
 				reason: reason || "(no reason provided)",
@@ -8254,7 +8295,7 @@ export function handleStateTool(
 
 			const newFm: Record<string, unknown> = {
 				...rejFm,
-				hat: prevHat,
+				hat: newStoredHatRej,
 				bolt: curBoltRej + 1,
 				iterations,
 			}
@@ -8264,7 +8305,7 @@ export function handleStateTool(
 				intent: intentArg,
 				stage: stageArg || "",
 				feedback_id: fbId,
-				hat: curHatRej,
+				hat: callingHatRej,
 				new_bolt: String(curBoltRej + 1),
 			})
 			return text(
@@ -8272,11 +8313,14 @@ export function handleStateTool(
 					{
 						ok: true,
 						feedback_id: fbId,
-						rejected_hat: curHatRej,
-						previous_hat: prevHat,
+						rejecting_hat: callingHatRej,
+						next_dispatched_hat: nextDispatchedHatRej,
 						new_bolt: curBoltRej + 1,
 						reason,
-						message: `FB '${fbId}' hat '${curHatRej}' rejected — moving back to '${prevHat}', bolt incremented to ${curBoltRej + 1}.`,
+						message:
+							callingIdxRej > 0
+								? `FB '${fbId}' hat '${callingHatRej}' rejected — sending back to '${nextDispatchedHatRej}', bolt incremented to ${curBoltRej + 1}.`
+								: `FB '${fbId}' first hat '${callingHatRej}' rejected — no prior hat to send back to; same hat will retry, bolt incremented to ${curBoltRej + 1}.`,
 					},
 					null,
 					2,

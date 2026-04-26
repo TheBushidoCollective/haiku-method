@@ -1,5 +1,5 @@
 ---
-name: elaborator
+name: distiller
 stage: requirements
 studio: hwdev
 ---

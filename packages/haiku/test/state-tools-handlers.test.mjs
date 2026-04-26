@@ -1777,6 +1777,58 @@ Closed body content.
 		assert.strictEqual(parsed.error, "feedback_not_found")
 	})
 
+	// ── haiku_feedback_advance_hat / _reject_hat (FB-as-unit progression) ──
+
+	console.log("\n=== haiku_feedback_advance_hat / _reject_hat ===")
+
+	// Stand up a fresh FB for advance/reject testing (separate from the FB-92
+	// closed fixture above to avoid coupling tests).
+	writeFileSync(
+		join(fbDir, "03-advance-test.md"),
+		`---
+id: FB-93
+title: Advance test FB
+status: pending
+origin: adversarial-review
+author: completeness
+author_type: agent
+created_at: 2026-04-26T00:00:00Z
+---
+
+Body for advance test.
+`,
+	)
+
+	// Note: full advance/reject hat happy-path tests require the studio's
+	// STAGE.md to be resolvable from the test cwd, which the test harness
+	// doesn't currently set up (intent points at studio: software, but the
+	// studio dir resolution paths aren't reachable from tmp/). The
+	// lifecycle-refusal cases below DO work because they short-circuit
+	// before the fix_hats lookup. Happy-path coverage lives in the
+	// orchestrator-integration tests where studio resolution is wired.
+
+	test("haiku_feedback_advance_hat refuses on already-closed FB (FB-92)", () => {
+		const result = handleStateTool("haiku_feedback_advance_hat", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-92",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "closed")
+	})
+
+	test("haiku_feedback_reject_hat refuses on already-closed FB", () => {
+		const result = handleStateTool("haiku_feedback_reject_hat", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-92",
+			reason: "test",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+	})
+
 	// ── unknown tool ──────────────────────────────────────────────────────────
 
 	console.log("\n=== unknown tool ===")

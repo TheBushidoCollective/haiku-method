@@ -1,9 +1,3 @@
----
-name: evaluator
-stage: evaluate
-studio: executive-strategy
----
-
 **Focus:** Apply multi-criteria evaluation to score and compare strategic options using a consistent, transparent framework.
 
 **Responsibilities:**

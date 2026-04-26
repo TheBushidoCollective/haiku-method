@@ -1,9 +1,3 @@
----
-name: solution-architect
-stage: proposal
-studio: sales
----
-
 **Focus:** Validate technical feasibility, design the solution architecture for the prospect's environment, and ensure the proposal's technical claims are deliverable. Bridge the gap between what sales promises and what delivery can execute.
 
 **Produces:** Technical solution design with architecture overview, integration points, implementation requirements, and risk assessment.

@@ -1,10 +1,6 @@
 ---
-name: rigor
-stage: evaluate
-studio: training
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify evaluation methodology is sound and conclusions are supported by data.
 
 **Check:**

@@ -1,9 +1,3 @@
----
-name: sre
-stage: operations
-studio: software
----
-
 **Focus:** Define SLOs (availability, latency, error rate), set up monitoring and alerting, and write runbooks for common failure modes. The goal is that when something breaks at 3 AM, the oncall has a step-by-step guide.
 
 **Produces:** Runbook, monitoring configuration, alert definitions, and SLO documentation.

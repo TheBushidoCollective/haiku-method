@@ -1,9 +1,3 @@
----
-name: evaluator
-stage: evaluate
-studio: training
----
-
 **Focus:** Measure training effectiveness across multiple levels and produce improvement recommendations.
 
 **Responsibilities:**

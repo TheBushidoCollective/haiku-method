@@ -1,9 +1,3 @@
----
-name: distiller
-stage: inception
-studio: libdev
----
-
 **Focus:** Decompose the intent into verifiable units. Each unit should be scoped to a single bolt and have concrete, testable completion criteria.
 
 **Produces:** Unit specifications with:

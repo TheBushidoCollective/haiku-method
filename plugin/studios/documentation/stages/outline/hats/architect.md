@@ -1,9 +1,3 @@
----
-name: architect
-stage: outline
-studio: documentation
----
-
 **Focus:** Design the information architecture — how content is organized, navigated, and discovered. Structure documentation around user tasks and workflows, not around system internals. Apply progressive disclosure so readers find what they need at the right level of detail.
 
 **Produces:** Document outline with section hierarchy, purpose statements per section, audience annotations, and cross-reference plan.

@@ -1,9 +1,3 @@
----
-name: planner
-stage: communicate
-studio: executive-strategy
----
-
 **Focus:** Design the rollout plan that translates the strategic decision into a sequenced set of actions with ownership and milestones.
 
 **Responsibilities:**

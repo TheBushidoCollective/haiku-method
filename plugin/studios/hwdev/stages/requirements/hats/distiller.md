@@ -1,9 +1,3 @@
----
-name: distiller
-stage: requirements
-studio: hwdev
----
-
 **Focus:** Decompose requirements work into units with verifiable criteria.
 
 **Produces:** Unit specs for requirements units — functional specs, safety analysis, compliance research.

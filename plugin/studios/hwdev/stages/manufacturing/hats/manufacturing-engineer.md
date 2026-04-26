@@ -1,9 +1,3 @@
----
-name: manufacturing-engineer
-stage: manufacturing
-studio: hwdev
----
-
 **Focus:** Design the manufacturing process, coordinate with the contract manufacturer, own the first article inspection, and manage production ramp. Manufacturing decisions lock in — tooling, fixtures, and process changes are slow and expensive once volume starts.
 
 **Produces:** DFM report, assembly process documentation, test fixture specs, first article inspection results, and volume ramp plan.

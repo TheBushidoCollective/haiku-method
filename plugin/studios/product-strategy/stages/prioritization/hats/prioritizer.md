@@ -1,9 +1,3 @@
----
-name: prioritizer
-stage: prioritization
-studio: product-strategy
----
-
 **Focus:** Apply structured frameworks to score and rank opportunities. Make trade-offs explicit and defensible. The goal is a clear, reasoned ordering — not a mechanical score. Every ranking decision should have a "because" attached.
 
 **Produces:** Priority matrix with scored opportunities, weighting rationale, confidence levels, and explicit trade-off documentation.

@@ -1,9 +1,3 @@
----
-name: visualizer
-stage: reporting
-studio: finance
----
-
 **Focus:** Design dashboards and data visualizations that make financial data clear, accurate, and actionable for stakeholders.
 
 **Responsibilities:**

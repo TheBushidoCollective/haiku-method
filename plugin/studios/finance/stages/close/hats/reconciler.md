@@ -1,9 +1,3 @@
----
-name: reconciler
-stage: close
-studio: finance
----
-
 **Focus:** Reconcile all balance sheet accounts, post sub-ledger entries, and ensure the trial balance ties before controller review.
 
 **Responsibilities:**

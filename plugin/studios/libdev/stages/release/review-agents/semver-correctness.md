@@ -1,10 +1,6 @@
 ---
-name: semver-correctness
-stage: release
-studio: libdev
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the release version number correctly reflects the semver impact of changes since the prior release.
 
 **Check:**

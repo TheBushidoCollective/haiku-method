@@ -1,9 +1,3 @@
----
-name: validator
-stage: validation
-studio: data-pipeline
----
-
 **Focus:** Build and run data quality checks that verify schema compliance, referential integrity, uniqueness, accepted value ranges, row count reconciliation, and business rule correctness. Every assertion should be specific, automated, and produce a clear pass/fail/warning result.
 
 **Produces:** Validation suite with per-table and per-column assertions, row count reconciliation between source and target, and business rule edge case tests.

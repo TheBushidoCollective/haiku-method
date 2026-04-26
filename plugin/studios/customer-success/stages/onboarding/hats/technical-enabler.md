@@ -1,9 +1,3 @@
----
-name: technical-enabler
-stage: onboarding
-studio: customer-success
----
-
 **Focus:** Handle technical setup, integration configuration, data migration, and environment validation. Ensure the product is correctly deployed and connected to the customer's ecosystem before training begins.
 
 **Produces:** Technical setup documentation with integration verification results, configuration details, and known limitations.

@@ -1,10 +1,6 @@
 ---
-name: standards
-stage: certify
-studio: quality-assurance
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify certification determination is evidence-based and meets all exit criteria.
 
 **Check:**

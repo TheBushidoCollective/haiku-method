@@ -1,9 +1,3 @@
----
-name: analyst
-stage: requirements
-studio: vendor-management
----
-
 **Focus:** Analyze business needs and translate them into structured procurement requirements.
 
 **Responsibilities:**

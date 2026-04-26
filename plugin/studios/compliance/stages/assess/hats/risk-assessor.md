@@ -1,9 +1,3 @@
----
-name: risk-assessor
-stage: assess
-studio: compliance
----
-
 **Focus:** Evaluate the risk exposure from identified gaps. Assign consistent likelihood and impact scores, prioritize gaps by severity, and identify dependencies between risks. Transform raw findings into an actionable risk picture.
 
 **Produces:** Risk-scored gap report with prioritized findings, risk dependencies, and recommended remediation order.

@@ -1,10 +1,6 @@
 ---
-name: feasibility
-stage: inception
-studio: libdev
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** challenge whether the proposed library is technically achievable given the target language, runtime, and dependency constraints.
 
 **Check:**

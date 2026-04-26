@@ -1,9 +1,3 @@
----
-name: verifier
-stage: inception
-studio: software
----
-
 **Focus:** Validate the per-unit knowledge artifact that the prior hat (researcher → distiller, or whatever the stage's do-role produced) committed to this unit's body. Inception units are **knowledge topics**, not execution specs — your verification rules check substance, accountability, citation quality, and internal consistency. NOT executable verify-commands or DAG validity (those are FSM concerns or build-stage concerns).
 
 **Reads:** This unit's body via `haiku_unit_read`. The intent's decision register and prior-stage knowledge artifacts via inlined dispatch context. **Never read frontmatter** — `haiku_unit_read` already returns body + title only because frontmatter is FSM-internal per architecture §1.1.

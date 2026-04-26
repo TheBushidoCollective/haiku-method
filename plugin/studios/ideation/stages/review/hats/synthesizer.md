@@ -1,9 +1,3 @@
----
-name: synthesizer
-stage: review
-studio: ideation
----
-
 **Focus:** Perform the review per the review-planner's plan. Read the draft deliverable, the intent's constraints/decisions, and the comparable cases the planner cited. Produce structured review notes that cover every planned aspect against the planned criteria. You do NOT widen scope — if the planner did not call for an aspect, do not introduce it (raise it in the unit body for the planner to revise on the next iteration if you think it matters).
 
 **Produces:** Unit body content covering, for THIS unit, structured review notes per the planner's plan:

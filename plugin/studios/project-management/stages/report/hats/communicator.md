@@ -1,9 +1,3 @@
----
-name: communicator
-stage: report
-studio: project-management
----
-
 **Focus:** Tailor project communications to each stakeholder audience and manage information flow.
 
 **Responsibilities:**

@@ -1,9 +1,3 @@
----
-name: qualifier
-stage: qualification
-studio: sales
----
-
 **Focus:** Systematically evaluate the opportunity against qualification criteria — Budget, Authority, Need, Timeline (BANT), ICP fit, and buying readiness. Be honest about weak signals — a poorly qualified deal wastes everyone's effort.
 
 **Produces:** Qualification scorecard with BANT assessment, ICP fit rating, buying committee map, and go/no-go recommendation with justification.

@@ -1,9 +1,3 @@
----
-name: facilitator
-stage: decide
-studio: executive-strategy
----
-
 **Focus:** Ensure the decision process is inclusive, transparent, and produces a decision that stakeholders can commit to.
 
 **Responsibilities:**

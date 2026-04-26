@@ -1,9 +1,3 @@
----
-name: recruiter
-stage: sourcing
-studio: hr
----
-
 **Focus:** Manage the sourcing process, ensure pipeline quality, and maintain candidate experience throughout outreach.
 
 **Responsibilities:**

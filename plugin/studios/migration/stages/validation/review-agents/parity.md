@@ -1,10 +1,6 @@
 ---
-name: parity
-stage: validation
-studio: migration
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the migrated system achieves functional parity with the source.
 
 **Check:**

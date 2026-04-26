@@ -1,9 +1,3 @@
----
-name: topic-scout
-stage: research
-studio: dev-evangelism
----
-
 **Focus:** Scan the technical landscape for trending topics, underserved content areas, and opportunities where the team's expertise can fill a gap. Analyze conference programs, blog ecosystems, and community discussions to identify high-value content topics.
 
 **Produces:** Topic landscape with trending themes, competitive content analysis, content gap map, and recommended topic shortlist ranked by audience demand and team credibility.

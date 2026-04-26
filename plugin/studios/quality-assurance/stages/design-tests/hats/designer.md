@@ -1,9 +1,3 @@
----
-name: designer
-stage: design-tests
-studio: quality-assurance
----
-
 **Focus:** Design test cases that provide comprehensive coverage of requirements while enabling efficient execution.
 
 **Responsibilities:**

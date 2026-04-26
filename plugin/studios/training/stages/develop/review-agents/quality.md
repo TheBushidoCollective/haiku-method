@@ -1,10 +1,6 @@
 ---
-name: quality
-stage: develop
-studio: training
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify training materials are complete, accurate, and accessible.
 
 **Check:**

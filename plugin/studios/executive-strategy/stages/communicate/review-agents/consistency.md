@@ -1,10 +1,6 @@
 ---
-name: consistency
-stage: communicate
-studio: executive-strategy
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify communications are consistent across audiences and the rollout plan is actionable.
 
 **Check:**

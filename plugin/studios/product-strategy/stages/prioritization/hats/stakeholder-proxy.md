@@ -1,9 +1,3 @@
----
-name: stakeholder-proxy
-stage: prioritization
-studio: product-strategy
----
-
 **Focus:** Represent the perspectives of key stakeholders — business, engineering, sales, support — who are not in the room. Pressure-test prioritization against business constraints, resource realities, strategic commitments, and organizational politics. Surface the objections before stakeholders do.
 
 **Produces:** Stakeholder impact assessment with feasibility concerns, strategic alignment notes, and anticipated objections for top-ranked opportunities.

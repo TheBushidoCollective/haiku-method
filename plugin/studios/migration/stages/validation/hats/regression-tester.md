@@ -1,9 +1,3 @@
----
-name: regression-tester
-stage: validation
-studio: migration
----
-
 **Focus:** Confirm that downstream consumers and application logic produce identical results when reading from the migrated target instead of the original source. Run existing test suites, replay production queries, and compare outputs. Surface any behavioral difference, no matter how small.
 
 **Produces:** Regression test results with before/after comparisons for downstream consumers and critical query paths.

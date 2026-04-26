@@ -1,9 +1,3 @@
----
-name: pipeline-engineer
-stage: deployment
-studio: data-pipeline
----
-
 **Focus:** Package and deploy the pipeline to the production orchestrator. Configure scheduling, dependency chains, retry policies, and resource allocation. Ensure the pipeline runs reliably on the target infrastructure with proper logging and observability.
 
 **Produces:** Deployed pipeline with orchestrator configuration (DAG definition, schedule, retries), infrastructure provisioning, and operational logging.

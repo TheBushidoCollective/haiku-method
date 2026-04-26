@@ -1,9 +1,3 @@
----
-name: executive-sponsor
-stage: renewal
-studio: customer-success
----
-
 **Focus:** Provide executive-level engagement for the renewal — deliver the business review narrative, reinforce strategic alignment, and signal organizational commitment. Operate at the CxO level to frame the partnership's future.
 
 **Produces:** Executive business review narrative with strategic value story, partnership vision, and executive-level talking points.

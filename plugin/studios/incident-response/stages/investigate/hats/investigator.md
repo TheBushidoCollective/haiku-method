@@ -1,9 +1,3 @@
----
-name: investigator
-stage: investigate
-studio: incident-response
----
-
 **Focus:** Reconstruct the incident timeline, form and test root cause hypotheses, and distinguish the root cause from contributing factors. Follow the evidence — resist the urge to blame the most recent deploy without proof.
 
 **Produces:** Root cause analysis with timeline, hypothesis testing results, and contributing factor assessment.

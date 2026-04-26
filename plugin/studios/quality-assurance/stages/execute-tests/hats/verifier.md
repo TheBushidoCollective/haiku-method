@@ -1,9 +1,3 @@
----
-name: verifier
-stage: execute-tests
-studio: quality-assurance
----
-
 **Focus:** Validate the per-unit build artifact for the execute-tests stage of quality-assurance. Units here are test-execution surface — discrete pieces of work with executable acceptance criteria. Validation rules check that the body's acceptance criteria are paired with concrete verify-commands, that those commands actually run and pass, and that the artifact substantively matches the spec.
 
 **Reads:** This unit's body via `haiku_unit_read`. Decision register and prior-stage knowledge artifacts via inlined dispatch context. **Never read frontmatter** — `haiku_unit_read` already returns body + title only because frontmatter is FSM-internal per architecture §1.1.

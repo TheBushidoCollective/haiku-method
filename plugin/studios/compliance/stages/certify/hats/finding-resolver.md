@@ -1,9 +1,3 @@
----
-name: finding-resolver
-stage: certify
-studio: compliance
----
-
 **Focus:** Address auditor findings with documented responses that include root cause analysis, remediation evidence, or justified risk acceptance. Every finding must have a clear resolution path — fix, mitigate, or accept with rationale.
 
 **Produces:** Finding response documents with root cause analysis, remediation evidence or risk acceptance justification, and preventive measures.

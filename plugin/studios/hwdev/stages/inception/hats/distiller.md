@@ -1,9 +1,3 @@
----
-name: distiller
-stage: inception
-studio: hwdev
----
-
 **Focus:** Decompose the intent into research units with verifiable criteria.
 
 **Produces:** Unit specs for research units with clear scope, dependencies, and verification.

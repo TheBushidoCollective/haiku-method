@@ -1,9 +1,3 @@
----
-name: mechanical-engineer
-stage: design
-studio: hwdev
----
-
 **Focus:** Design the enclosure, mounting, thermal management, and mechanical interfaces. Mechanical design has to live with electrical design — dimensions, heat dissipation, connector placement, and serviceability all depend on coordination.
 
 **Produces:** CAD files, fit/clearance analysis, thermal analysis, and mechanical drawings for manufacturing.

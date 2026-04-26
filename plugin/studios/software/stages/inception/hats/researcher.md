@@ -1,9 +1,3 @@
----
-name: researcher
-stage: inception
-studio: software
----
-
 **Focus:** Understand the problem space at a **business level** — what problem are we solving, who benefits, what does success look like? Gather origin context, research the competitive landscape, surface considerations and risks, and identify UI impact areas. Map the existing codebase for technical context, but frame everything in terms of user outcomes and business goals.
 
 **Produces:** Discovery document with:

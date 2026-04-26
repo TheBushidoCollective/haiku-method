@@ -1,10 +1,6 @@
 ---
-name: formatting
-stage: publish
-studio: documentation
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the published documentation renders correctly and is navigable.
 
 **Check:**

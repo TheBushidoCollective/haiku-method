@@ -1,9 +1,3 @@
----
-name: verifier
-stage: review
-studio: documentation
----
-
 **Focus:** Validate the per-unit operational artifact for the review stage of documentation. Units here are doc-review pass — operational steps with concrete preconditions, actions, and post-condition checks. Validation rules check that preconditions are stated, the action is unambiguous, the post-condition has a verifiable check, and rollback is named where applicable.
 
 **Reads:** This unit's body via `haiku_unit_read`. Decision register and prior-stage knowledge artifacts via inlined dispatch context. **Never read frontmatter** — `haiku_unit_read` already returns body + title only because frontmatter is FSM-internal per architecture §1.1.

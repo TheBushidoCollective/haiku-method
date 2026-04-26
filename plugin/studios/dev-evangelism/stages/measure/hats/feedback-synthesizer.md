@@ -1,9 +1,3 @@
----
-name: feedback-synthesizer
-stage: measure
-studio: dev-evangelism
----
-
 **Focus:** Gather and categorize developer feedback from comments, community discussions, and direct responses. Synthesize qualitative signals into actionable themes and identify follow-up content opportunities.
 
 **Produces:** Feedback synthesis with categorized themes, sentiment analysis, notable quotes, and prioritized follow-up recommendations.

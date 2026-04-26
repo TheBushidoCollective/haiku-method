@@ -1,10 +1,6 @@
 ---
-name: misuse-resistance
-stage: security
-studio: libdev
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the library's public API is resistant to unsafe use by consumers. Libraries that are easy to misuse are effectively insecure regardless of the internal code quality.
 
 **Check:**

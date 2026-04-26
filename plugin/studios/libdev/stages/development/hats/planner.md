@@ -1,9 +1,3 @@
----
-name: planner
-stage: development
-studio: libdev
----
-
 **Focus:** Plan how to implement the library against the API surface defined in inception. Sequence the work so public-facing primitives are built first (they're the hardest to change later) and internal implementation follows.
 
 **Produces:** Implementation plan with:

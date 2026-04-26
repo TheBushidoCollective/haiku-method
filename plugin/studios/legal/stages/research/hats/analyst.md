@@ -1,9 +1,3 @@
----
-name: analyst
-stage: research
-studio: legal
----
-
 **Focus:** Analyze research findings in the context of the specific matter and develop legal strategy recommendations.
 
 **Responsibilities:**

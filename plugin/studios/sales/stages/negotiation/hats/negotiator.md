@@ -1,9 +1,3 @@
----
-name: negotiator
-stage: negotiation
-studio: sales
----
-
 **Focus:** Manage the negotiation process — handle objections with evidence, propose creative deal structures, protect value while finding mutually acceptable terms. Every concession should be traded, not given.
 
 **Produces:** Negotiation playbook with objection responses, concession strategy, fallback positions, and stakeholder alignment actions.

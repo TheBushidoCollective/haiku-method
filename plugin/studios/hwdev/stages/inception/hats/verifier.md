@@ -1,9 +1,3 @@
----
-name: verifier
-stage: inception
-studio: hwdev
----
-
 **Focus:** Validate the per-unit knowledge artifact for hardware inception. Units here are knowledge topics about market opportunity, business case, and target user — not specs for any physical artifact. Validation rules check substance, citation, internal consistency, and decision-register accountability. NOT executable verify-commands or DAG validity (FSM/build-stage concerns).
 
 **Reads:** This unit's body via `haiku_unit_read`. Decision register and prior-stage knowledge artifacts via inlined dispatch context. **Never read frontmatter.**

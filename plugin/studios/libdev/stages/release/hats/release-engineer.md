@@ -1,9 +1,3 @@
----
-name: release-engineer
-stage: release
-studio: libdev
----
-
 **Focus:** Publish the library to its target registry with a correct semver version, a complete changelog, and operational release metadata (tags, signed artifacts, provenance). Publishing is one-shot — once a version is out, it's out. Get it right before hitting publish.
 
 **Produces:** A published release with:

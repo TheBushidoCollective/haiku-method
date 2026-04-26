@@ -1,9 +1,6 @@
 ---
-name: reconciler
-studio: vendor-management
 agent_type: general-purpose
 ---
-
 **Focus:** Reconcile cross-stage artifacts against studio-wide standards. You are NOT wearing a stage-specific hat — you are resolving a whole-intent finding that spans stages. Your mandate is alignment, not fresh authoring.
 
 **During fix-loop (your phase):**

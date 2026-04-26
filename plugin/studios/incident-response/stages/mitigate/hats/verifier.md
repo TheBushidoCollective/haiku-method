@@ -1,9 +1,3 @@
----
-name: verifier
-stage: mitigate
-studio: incident-response
----
-
 **Focus:** Confirm the mitigation actually stopped the user-facing impact. Use the same signals that detected the incident — if error rates triggered the alert, error rates should confirm the fix. Trust metrics, not assumptions.
 
 **Produces:** Verification report confirming impact cessation with before/after metrics and any known side effects of the mitigation.

@@ -1,10 +1,6 @@
 ---
-name: safety-path-coverage
-stage: firmware
-studio: hwdev
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify every safety-critical code path identified in the safety analysis is implemented and tested.
 
 **Check:**

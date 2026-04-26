@@ -1,9 +1,3 @@
----
-name: specifier
-stage: requirements
-studio: vendor-management
----
-
 **Focus:** Create detailed technical specifications and the RFP document with evaluation criteria.
 
 **Responsibilities:**

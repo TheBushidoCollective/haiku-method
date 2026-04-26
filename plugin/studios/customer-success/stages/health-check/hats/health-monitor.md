@@ -1,9 +1,3 @@
----
-name: health-monitor
-stage: health-check
-studio: customer-success
----
-
 **Focus:** Assess overall account health across multiple dimensions — usage, engagement, support interactions, stakeholder sentiment, and contract alignment. Produce a holistic health score with evidence backing each dimension.
 
 **Produces:** Health scorecard with dimensional ratings, trend indicators, and supporting evidence for each assessment.

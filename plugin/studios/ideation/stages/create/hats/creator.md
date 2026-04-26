@@ -1,9 +1,3 @@
----
-name: creator
-stage: create
-studio: ideation
----
-
 **Focus:** Produce the primary output — document, design, plan, analysis, or whatever the intent calls for — using research insights as the foundation. Substance over polish at this stage.
 
 **Produces:** First draft of the deliverable with complete coverage of the problem space.

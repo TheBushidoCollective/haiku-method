@@ -1,9 +1,3 @@
----
-name: test-engineer
-stage: validation
-studio: hwdev
----
-
 **Focus:** Build and run the hardware-in-the-loop (HIL) test rig, environmental tests (temperature, humidity, vibration, ESD, drop), and regression coverage against functional requirements.
 
 **Produces:** Test rigs, test scripts, test execution reports, environmental test logs.

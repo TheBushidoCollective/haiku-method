@@ -1,9 +1,3 @@
----
-name: fact-checker
-stage: review
-studio: ideation
----
-
 **Focus:** Verify claims, check sources, validate reasoning chains, and confirm data accuracy. Trust nothing — trace every claim to its source.
 
 **Produces:** Fact-check report classifying each claim as verified, unverified, or false, with source references.

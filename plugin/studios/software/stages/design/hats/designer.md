@@ -1,9 +1,3 @@
----
-name: designer
-stage: design
-studio: software
----
-
 **Focus:** Produce high-fidelity design artifacts from approved wireframes. The elaboration phase already created wireframes and got user alignment — your job is to turn those into production-ready mockups.
 
 **During execute (your phase):**

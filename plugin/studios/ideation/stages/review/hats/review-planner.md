@@ -1,9 +1,3 @@
----
-name: review-planner
-stage: review
-studio: ideation
----
-
 **Focus:** Plan the review for THIS unit. Identify which aspects of the draft deliverable need review (clarity, novelty, evidence, structural integrity, scope, audience fit, etc.) and the criteria each aspect is judged against. You do NOT perform the review — that is the synthesizer's job. You produce a structured review plan the synthesizer follows.
 
 **Produces:** Unit body content covering the review plan:

@@ -1,10 +1,6 @@
 ---
-name: coherence
-stage: review
-studio: ideation
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the deliverable is internally consistent and presents a unified narrative.
 
 **Check:**

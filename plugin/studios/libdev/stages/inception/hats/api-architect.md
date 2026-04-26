@@ -1,9 +1,3 @@
----
-name: api-architect
-stage: inception
-studio: libdev
----
-
 **Focus:** Design the public API surface — the contract that consumers will depend on. This is load-bearing work because once published, changing the public surface breaks every consumer. Decisions here set the semver policy and dictate how painful every future release will be.
 
 **Produces:** API Surface document with:

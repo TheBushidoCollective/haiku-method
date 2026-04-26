@@ -1,10 +1,6 @@
 ---
-name: correctness
-stage: development
-studio: libdev
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the implementation matches the API surface contract and the unit completion criteria.
 
 **Check:**

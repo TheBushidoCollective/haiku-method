@@ -1,9 +1,3 @@
----
-name: qa
-stage: polish
-studio: gamedev
----
-
 **Focus:** Find bugs and regressions before players do. Polish-phase QA is about volume and coverage — touch every system, every content piece, every platform, and catch what the team missed.
 
 **Produces:** Bug reports with repro steps, severity, and reproducibility rate; regression test plans; platform coverage matrices.

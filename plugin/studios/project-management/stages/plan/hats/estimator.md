@@ -1,9 +1,3 @@
----
-name: estimator
-stage: plan
-studio: project-management
----
-
 **Focus:** Produce effort estimates for work packages using historical data, expert judgment, or analogous estimation.
 
 **Responsibilities:**

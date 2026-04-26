@@ -1,10 +1,6 @@
 ---
-name: clarity
-stage: stakeholder-review
-studio: product-strategy
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the presentation is clear, complete, and anticipates stakeholder concerns.
 
 **Check:**

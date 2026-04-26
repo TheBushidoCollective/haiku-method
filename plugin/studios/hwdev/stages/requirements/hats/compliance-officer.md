@@ -1,9 +1,3 @@
----
-name: compliance-officer
-stage: requirements
-studio: hwdev
----
-
 **Focus:** Identify and document every regulatory framework that applies to this product in its target markets (FCC, CE, UL, FDA, IC, RoHS, REACH, WEEE, etc.), plus any safety standards (IEC, IEEE, ANSI). Compliance cannot be retrofitted — get it right here or pay 10x to redesign later.
 
 **Produces:** Compliance and safety analysis with:

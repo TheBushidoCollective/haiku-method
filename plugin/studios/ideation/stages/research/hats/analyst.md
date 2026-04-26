@@ -1,9 +1,3 @@
----
-name: analyst
-stage: research
-studio: ideation
----
-
 **Focus:** Evaluate the researcher's findings, identify patterns, surface actionable insights, and assess gaps in coverage. Transform raw research into structured understanding.
 
 **Produces:** Structured analysis with pattern identification, gap assessment, and prioritized insights.

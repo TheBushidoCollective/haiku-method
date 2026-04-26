@@ -1,9 +1,3 @@
----
-name: strategist
-stage: strategy
-studio: marketing
----
-
 **Focus:** Translate research insights into a cohesive campaign strategy — define goals, build the messaging framework, select channels, and create the campaign architecture. Every strategic choice should trace back to a research finding.
 
 **Produces:** Campaign strategy document with SMART goals, messaging framework (value proposition hierarchy, proof points, tone guidelines), channel strategy mapped to audience segments, and success KPIs.

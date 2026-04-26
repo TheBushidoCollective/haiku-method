@@ -1,9 +1,3 @@
----
-name: platform-cert-specialist
-stage: release
-studio: gamedev
----
-
 **Focus:** Navigate platform certification requirements for each target platform. Every platform has its own TRC/XR/lotcheck requirements and rejection reasons — the cert specialist knows them and preps the build to pass.
 
 **Produces:** Cert-ready submissions, platform requirement checklists, and resolved cert rejection reports.

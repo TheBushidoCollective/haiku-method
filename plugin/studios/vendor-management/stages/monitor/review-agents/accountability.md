@@ -1,10 +1,6 @@
 ---
-name: accountability
-stage: monitor
-studio: vendor-management
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify performance monitoring is objective and SLA compliance is accurately tracked.
 
 **Check:**

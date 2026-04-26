@@ -1,9 +1,3 @@
----
-name: coordinator
-stage: deliver
-studio: training
----
-
 **Focus:** Manage delivery logistics to ensure sessions run smoothly and all participants have what they need.
 
 **Responsibilities:**

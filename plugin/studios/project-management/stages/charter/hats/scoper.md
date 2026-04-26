@@ -1,9 +1,3 @@
----
-name: scoper
-stage: charter
-studio: project-management
----
-
 **Focus:** Define the project boundaries, identify constraints and assumptions, and map stakeholders.
 
 **Responsibilities:**

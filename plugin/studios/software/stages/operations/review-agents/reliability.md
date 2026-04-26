@@ -1,10 +1,6 @@
 ---
-name: reliability
-stage: operations
-studio: software
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the deployment and operational configuration supports reliable production operation.
 
 **Check:**

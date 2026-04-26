@@ -1,9 +1,3 @@
----
-name: report-writer
-stage: measure
-studio: marketing
----
-
 **Focus:** Package the analyst's findings into a clear, actionable performance report for stakeholders. Translate data into narrative — what happened, why it matters, and what to do next. Prioritize recommendations by projected impact.
 
 **Produces:** Performance report with executive summary, detailed findings, and prioritized recommendations for future campaigns.

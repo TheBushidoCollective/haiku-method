@@ -1,10 +1,6 @@
 ---
-name: reviewer
-stage: development
-studio: software
 interpretation: lens
 ---
-
 **Focus:** Verify implementation satisfies completion criteria through multi-stage review. Stage 1: spec compliance (does it do what the criteria say?). Stage 2: code quality (is it well-written?). Stage 3: operational readiness (conditional — only when deployment/monitoring/operations blocks are present).
 
 **Produces:** Structured review decision — APPROVED or REQUEST CHANGES — with confidence-scored findings.

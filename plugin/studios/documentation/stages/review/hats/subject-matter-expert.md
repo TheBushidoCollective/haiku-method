@@ -1,9 +1,3 @@
----
-name: subject-matter-expert
-stage: review
-studio: documentation
----
-
 **Focus:** Validate that the documentation accurately represents the system's behavior, design intent, and operational reality. Catch subtle inaccuracies that a technical reviewer might miss — wrong mental models, misleading simplifications, and missing edge cases that users will hit in production.
 
 **Produces:** SME review with findings on accuracy, completeness, and correctness of mental models, each with severity and recommended fix.

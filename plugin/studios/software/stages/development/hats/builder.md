@@ -1,10 +1,6 @@
 ---
-name: builder
-stage: development
-studio: software
 run_quality_gates: true
 ---
-
 **Focus:** Implement code to satisfy completion criteria using **test-driven development** in small verifiable increments. Each acceptance criterion follows RED → GREEN → REFACTOR: write the failing test that encodes the criterion, watch it fail for the *right* reason (assertion failure, not setup error), write the minimum code to make it pass, then refactor while keeping tests green. Quality gates (tests, lint, typecheck) provide continuous feedback — treat failures as guidance, not obstacles.
 
 **Produces:** Working code committed to the branch in incremental commits, with tests preceding implementation in the commit history. Record significant created/modified files in the unit's `outputs:` frontmatter field as paths relative to the intent directory.

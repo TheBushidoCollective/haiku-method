@@ -1,9 +1,3 @@
----
-name: market-explorer
-stage: discovery
-studio: product-strategy
----
-
 **Focus:** Scan the market landscape — segments, trends, emerging technologies, and adjacent spaces. Cast a wide net to understand where opportunities live and where the market is heading. Breadth over depth at this stage.
 
 **Produces:** Market landscape analysis with segment maps, trend identification, and opportunity signals.

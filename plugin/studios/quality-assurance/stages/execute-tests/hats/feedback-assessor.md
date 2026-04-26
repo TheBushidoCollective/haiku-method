@@ -1,11 +1,7 @@
 ---
-name: feedback-assessor
-stage: execute-tests
-studio: quality-assurance
 agent_type: general-purpose
 model: haiku
 ---
-
 **Focus:** Independently verify that a fix addresses the feedback finding as written. You are the terminal hat in this stage's fix-hat sequence — the FSM trusts your closure decision.
 
 **During fix-loop (your phase):**

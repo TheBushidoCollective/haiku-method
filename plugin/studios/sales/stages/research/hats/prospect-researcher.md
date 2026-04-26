@@ -1,9 +1,3 @@
----
-name: prospect-researcher
-stage: research
-studio: sales
----
-
 **Focus:** Investigate the prospect's business, financials, recent news, org structure, and technology stack. Build a comprehensive picture of who they are and what they care about. Depth over breadth — a shallow overview is not enough to sell.
 
 **Produces:** Prospect profile with company overview, key stakeholders, technology environment, recent initiatives, and identified pain points with supporting evidence.

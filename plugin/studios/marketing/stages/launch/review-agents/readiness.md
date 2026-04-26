@@ -1,10 +1,6 @@
 ---
-name: readiness
-stage: launch
-studio: marketing
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify all launch components are in place and coordinated.
 
 **Check:**

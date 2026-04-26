@@ -1,10 +1,6 @@
 ---
-name: rigor
-stage: research
-studio: marketing
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify market research is based on evidence, not assumptions.
 
 **Check:**

@@ -1,9 +1,3 @@
----
-name: game-designer
-stage: prototype
-studio: gamedev
----
-
 **Focus:** Iterate the core loop during prototype. The designer's job here is to watch playtests, identify what's not landing, and change the design — not defend the concept doc.
 
 **Produces:** Design iterations based on playtest observations, tuning changes, and core loop refinements.

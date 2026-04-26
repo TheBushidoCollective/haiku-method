@@ -1,9 +1,3 @@
----
-name: gameplay-engineer
-stage: production
-studio: gamedev
----
-
 **Focus:** Implement the validated core loop at production quality. Unlike prototype code, production code is maintainable, testable, and survives the full project. Build the systems that the rest of content and design lean on.
 
 **Produces:** Production-quality gameplay code — systems, state machines, input handling, simulation loops.

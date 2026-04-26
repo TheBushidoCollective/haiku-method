@@ -1,9 +1,3 @@
----
-name: verifier
-stage: inception
-studio: libdev
----
-
 **Focus:** Validate the per-unit knowledge artifact for library inception. Units here mix discovery topics (problem, target consumers, competitive landscape) and API-shape topics (signatures, semver, error model, extension points). Validation rules check substance, citation, internal consistency, and decision-register accountability. NOT executable verify-commands or DAG validity.
 
 **Reads:** This unit's body via `haiku_unit_read`. Decision register and prior-stage knowledge artifacts via inlined dispatch context. **Never read frontmatter.**

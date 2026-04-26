@@ -1,10 +1,6 @@
 ---
-name: consistency
-stage: screening
-studio: hr
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify screening decisions are consistent and traceable to job requirements.
 
 **Check:**

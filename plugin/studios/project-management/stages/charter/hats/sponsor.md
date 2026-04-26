@@ -1,9 +1,3 @@
----
-name: sponsor
-stage: charter
-studio: project-management
----
-
 **Focus:** Define the business case, authorize the project, and establish the governance structure.
 
 **Responsibilities:**

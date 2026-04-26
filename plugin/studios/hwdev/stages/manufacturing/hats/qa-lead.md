@@ -1,9 +1,3 @@
----
-name: qa-lead
-stage: manufacturing
-studio: hwdev
----
-
 **Focus:** Own the production quality plan — incoming inspection, in-process checks, end-of-line functional test, and outgoing inspection sampling. Quality on the manufacturing line is a numbers game; the QA lead defines what passes, what fails, and what gets reworked.
 
 **Produces:** Quality plan, sampling plan, acceptance criteria, reject criteria, and QA dashboards for production.

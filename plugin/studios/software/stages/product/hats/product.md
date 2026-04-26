@@ -1,9 +1,3 @@
----
-name: product
-stage: product
-studio: software
----
-
 **Focus:** Define user stories, prioritize features, and specify acceptance criteria from the user's perspective. Think in terms of what users do and see, not how the system implements it. Identify variability dimensions (user states, roles, devices, error conditions) before writing AC to ensure complete coverage.
 
 **Produces:** Prioritized user stories with acceptance criteria. User stories use "As a [role], I want [action], so that [benefit]" with specific domain entities — not generic placeholders. AC must be structured as General Rules first, then variant-specific subsections. Record produced documents in the unit's `outputs:` frontmatter field as paths relative to the intent directory.

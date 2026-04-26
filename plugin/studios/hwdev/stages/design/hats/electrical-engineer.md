@@ -1,9 +1,3 @@
----
-name: electrical-engineer
-stage: design
-studio: hwdev
----
-
 **Focus:** Design the electrical schematic, select components, and produce the BOM. Schematic design is the foundation of PCB layout, firmware interfaces, and cost — decisions here ripple through everything downstream.
 
 **Tooling:** Author the schematic as [tscircuit](https://tscircuit.com) TypeScript/React code (`.tsx` circuit components). Pull standard parts with `tsci add`; preview schematic + PCB live with `tsci dev`; export BOM and netlist through the `tsci` CLI.

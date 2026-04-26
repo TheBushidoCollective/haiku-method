@@ -1,9 +1,3 @@
----
-name: controller
-stage: close
-studio: finance
----
-
 **Focus:** Oversee the period close process, ensure compliance with accounting standards, and approve the final financial position.
 
 **Responsibilities:**

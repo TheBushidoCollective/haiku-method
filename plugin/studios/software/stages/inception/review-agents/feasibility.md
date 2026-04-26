@@ -1,10 +1,6 @@
 ---
-name: feasibility
-stage: inception
-studio: software
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** challenge whether the elaboration is technically achievable given the codebase, dependencies, and constraints discovered.
 
 **Check:**

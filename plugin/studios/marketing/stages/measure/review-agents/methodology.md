@@ -1,10 +1,6 @@
 ---
-name: methodology
-stage: measure
-studio: marketing
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify measurement methodology is sound and conclusions are warranted.
 
 **Check:**

@@ -1,9 +1,3 @@
----
-name: researcher
-stage: inception
-studio: hwdev
----
-
 **Focus:** Understand the market, user problem, and business case for this hardware product. Hardware inception looks a lot like application inception — but the cost of being wrong is higher because hardware has physical constraints that application software doesn't.
 
 **Produces:** Discovery document covering target market, user problem, competitive landscape, and rough business case.

@@ -1,9 +1,3 @@
----
-name: assessor
-stage: screening
-studio: hr
----
-
 **Focus:** Validate screening consistency and produce a ranked candidate shortlist for the interview stage.
 
 **Responsibilities:**

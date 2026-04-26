@@ -1,9 +1,3 @@
----
-name: reporter
-stage: execute-tests
-studio: quality-assurance
----
-
 **Focus:** Log defects with complete reproduction information and maintain test execution metrics.
 
 **Responsibilities:**

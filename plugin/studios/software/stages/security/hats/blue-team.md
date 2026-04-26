@@ -1,9 +1,3 @@
----
-name: blue-team
-stage: security
-studio: software
----
-
 **Focus:** Defense verification — implement security controls for identified threats, add security tests that prove the controls work, and validate monitoring coverage for security events. Fix root causes, not symptoms.
 
 **Produces:** Mitigations with tests proving effectiveness, updated monitoring for security events.

@@ -1,10 +1,6 @@
 ---
-name: completeness
-stage: discovery
-studio: data-pipeline
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify all data sources, schemas, and constraints are documented.
 
 **Check:**

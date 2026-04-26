@@ -1,9 +1,3 @@
----
-name: market-researcher
-stage: research
-studio: marketing
----
-
 **Focus:** Explore the competitive landscape, gather market data, and map the positioning terrain. Identify what competitors are saying, where they're saying it, and what gaps exist in the market conversation.
 
 **Produces:** Raw market research with competitor campaign analysis, channel presence mapping, and positioning landscape organized by segment.

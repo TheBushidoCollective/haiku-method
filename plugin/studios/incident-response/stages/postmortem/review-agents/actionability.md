@@ -1,10 +1,6 @@
 ---
-name: actionability
-stage: postmortem
-studio: incident-response
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the postmortem produces actionable improvements, not just a narrative.
 
 **Check:**

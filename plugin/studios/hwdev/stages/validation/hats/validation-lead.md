@@ -1,9 +1,3 @@
----
-name: validation-lead
-stage: validation
-studio: hwdev
----
-
 **Focus:** Own the overall validation plan, coordinate between test-engineer and compliance-officer, and judge release readiness based on aggregate validation results.
 
 **Produces:** Validation plan, validation status reports, release-readiness verdict.

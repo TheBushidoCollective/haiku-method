@@ -1,9 +1,3 @@
----
-name: playtester
-stage: prototype
-studio: gamedev
----
-
 **Focus:** Run playtests with real players outside the team and capture honest feedback on whether the core loop is fun. The team always thinks their prototype is fun — playtesters are how you find out.
 
 **Produces:** Playtest reports with:

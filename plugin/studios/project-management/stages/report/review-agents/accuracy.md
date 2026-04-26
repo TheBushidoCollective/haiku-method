@@ -1,10 +1,6 @@
 ---
-name: accuracy
-stage: report
-studio: project-management
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify reports accurately represent project state and forecasts are based on current velocity.
 
 **Check:**

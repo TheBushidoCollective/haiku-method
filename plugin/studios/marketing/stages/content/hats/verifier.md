@@ -1,9 +1,3 @@
----
-name: verifier
-stage: content
-studio: marketing
----
-
 **Focus:** Validate the per-unit design/synthesis artifact for the content stage of marketing. Units here are content artifact — designed outputs that downstream stages execute against. Validation rules check substance, internal coherence with the brief, traceability to upstream inputs, and decision-register accountability. NOT executable verify-commands.
 
 **Reads:** This unit's body via `haiku_unit_read`. Decision register and prior-stage knowledge artifacts via inlined dispatch context. **Never read frontmatter** — `haiku_unit_read` already returns body + title only because frontmatter is FSM-internal per architecture §1.1.

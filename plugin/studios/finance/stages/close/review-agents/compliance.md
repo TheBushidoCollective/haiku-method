@@ -1,10 +1,6 @@
 ---
-name: compliance
-stage: close
-studio: finance
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify period close complies with accounting standards and all accounts are properly reconciled.
 
 **Check:**

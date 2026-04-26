@@ -1,10 +1,6 @@
 ---
-name: thoroughness
-stage: discovery
-studio: product-strategy
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the market landscape analysis is comprehensive and evidence-based.
 
 **Check:**

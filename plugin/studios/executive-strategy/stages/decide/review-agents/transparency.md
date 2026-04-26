@@ -1,10 +1,6 @@
 ---
-name: transparency
-stage: decide
-studio: executive-strategy
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the decision process is transparent and the recommendation is supported by evidence.
 
 **Check:**

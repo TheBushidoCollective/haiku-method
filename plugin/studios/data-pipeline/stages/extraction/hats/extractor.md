@@ -1,9 +1,3 @@
----
-name: extractor
-stage: extraction
-studio: data-pipeline
----
-
 **Focus:** Implement extraction logic that reliably moves data from sources to the staging area. Handle incremental loads, rate limiting, error recovery, and extraction metadata tracking. Prioritize correctness and idempotency over speed.
 
 **Produces:** Extraction jobs for each source with full-loadd and incremental-loadd paths, error handling, retry logic, and extraction metadata (batch ID, timestamp, source identifier).

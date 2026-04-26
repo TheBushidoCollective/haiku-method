@@ -1,9 +1,3 @@
----
-name: verifier
-stage: validation
-studio: hwdev
----
-
 **Focus:** Validate the per-unit verification artifact for the validation stage of hwdev. Units here are verification surface — verification surfaces that test built artifacts against requirements, contracts, or standards. Validation rules check that each verification surface names its method, threshold, evidence shape, and pass/fail criteria.
 
 **Reads:** This unit's body via `haiku_unit_read`. Decision register and prior-stage knowledge artifacts via inlined dispatch context. **Never read frontmatter** — `haiku_unit_read` already returns body + title only because frontmatter is FSM-internal per architecture §1.1.

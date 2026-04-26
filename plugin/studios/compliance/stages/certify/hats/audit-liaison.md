@@ -1,9 +1,3 @@
----
-name: audit-liaison
-stage: certify
-studio: compliance
----
-
 **Focus:** Prepare the organization for external audit by organizing evidence per the auditor's request format, verifying completeness, and anticipating auditor questions. Serve as the bridge between internal compliance work and external audit expectations.
 
 **Produces:** Audit readiness checklist, organized evidence submission per auditor request list, and pre-audit self-assessment.

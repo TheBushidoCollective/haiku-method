@@ -1,9 +1,3 @@
----
-name: verifier
-stage: charter
-studio: project-management
----
-
 **Focus:** Validate the per-unit knowledge artifact for the charter stage of project-management. Units here are charter artifact — knowledge artifacts that downstream stages consume. Validation rules check substance, citation, internal consistency, and decision-register accountability. NOT executable verify-commands or DAG validity (FSM/build-stage concerns).
 
 **Reads:** This unit's body via `haiku_unit_read`. Decision register and prior-stage knowledge artifacts via inlined dispatch context. **Never read frontmatter** — `haiku_unit_read` already returns body + title only because frontmatter is FSM-internal per architecture §1.1.

@@ -1,9 +1,3 @@
----
-name: modeler
-stage: options
-studio: executive-strategy
----
-
 **Focus:** Build financial and operational models for each strategic option to quantify investment, returns, and resource requirements.
 
 **Responsibilities:**

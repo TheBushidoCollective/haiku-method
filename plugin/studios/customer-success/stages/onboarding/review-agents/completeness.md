@@ -1,10 +1,6 @@
 ---
-name: completeness
-stage: onboarding
-studio: customer-success
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the onboarding plan covers all steps to initial value realization.
 
 **Check:**

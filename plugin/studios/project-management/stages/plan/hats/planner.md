@@ -1,9 +1,3 @@
----
-name: planner
-stage: plan
-studio: project-management
----
-
 **Focus:** Decompose the scope into a work breakdown structure with dependencies, resource assignments, and sequencing.
 
 **Responsibilities:**

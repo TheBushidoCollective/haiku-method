@@ -1,10 +1,6 @@
 ---
-name: feasibility
-stage: charter
-studio: project-management
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify project scope is feasible and success criteria are measurable.
 
 **Check:**

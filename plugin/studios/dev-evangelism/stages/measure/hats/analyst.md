@@ -1,9 +1,3 @@
----
-name: analyst
-stage: measure
-studio: dev-evangelism
----
-
 **Focus:** Track engagement metrics across all distribution channels, compare actuals against targets, and identify what drove success or underperformance. Surface patterns across content formats and audience segments.
 
 **Produces:** Engagement metrics dashboard with channel-level breakdown, audience segment analysis, and performance variance commentary.

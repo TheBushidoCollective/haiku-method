@@ -1,10 +1,6 @@
 ---
-name: completeness
-stage: review
-studio: documentation
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the documentation fully addresses the gaps identified in the audit.
 
 **Check:**

@@ -1,9 +1,3 @@
----
-name: growth-strategist
-stage: expansion
-studio: customer-success
----
-
 **Focus:** Identify expansion opportunities by aligning product capabilities with the customer's evolving needs and strategic priorities. Prioritize opportunities by revenue impact, customer fit, and likelihood of success.
 
 **Produces:** Expansion opportunity map with prioritized recommendations, revenue projections, and customer alignment evidence.

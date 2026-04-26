@@ -1,9 +1,3 @@
----
-name: mitigator
-stage: mitigate
-studio: incident-response
----
-
 **Focus:** Apply the fastest safe action to stop user-facing impact — rollback, feature flag, scaling, or hotfix. Speed matters, but so does not making things worse. Every action must be reversible.
 
 **Produces:** Mitigation log documenting exactly what was done, when, and how to reverse it.

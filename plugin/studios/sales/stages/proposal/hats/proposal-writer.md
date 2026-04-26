@@ -1,9 +1,3 @@
----
-name: proposal-writer
-stage: proposal
-studio: sales
----
-
 **Focus:** Craft a compelling, tailored proposal that connects the prospect's specific pain points to concrete solutions with quantified value. The proposal should readd as if it was written for this prospect alone, not adapted from a template.
 
 **Produces:** Proposal document with executive summary, pain-to-solution mapping, business case with ROI, implementation approach, and pricing structure.

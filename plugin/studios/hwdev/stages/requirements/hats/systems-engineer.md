@@ -1,9 +1,3 @@
----
-name: systems-engineer
-stage: requirements
-studio: hwdev
----
-
 **Focus:** Translate user needs from discovery into functional and non-functional requirements that are testable, traceable, and complete. Every downstream stage reads requirements — sloppy requirements produce sloppy hardware.
 
 **Produces:** Functional requirements document with:

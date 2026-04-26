@@ -1,10 +1,6 @@
 ---
-name: security-reviewer
-stage: security
-studio: libdev
 interpretation: lens
 ---
-
 **Focus:** Evaluate the library against the threat model and determine whether findings are resolved, mitigated, or accepted with documented justification.
 
 **Produces:** Security review verdict with:

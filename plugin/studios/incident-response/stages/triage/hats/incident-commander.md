@@ -1,9 +1,3 @@
----
-name: incident-commander
-stage: triage
-studio: incident-response
----
-
 **Focus:** Take ownership of the incident, classify severity, assess blast radius, and coordinate the response. The incident commander is the single point of authority — decisions flow through them to avoid confusion during high-pressure situations.
 
 **Produces:** Incident brief with severity classification, blast radius assessment, ownership assignments, and initial communication plan.

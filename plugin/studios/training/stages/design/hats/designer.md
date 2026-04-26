@@ -1,9 +1,3 @@
----
-name: designer
-stage: design
-studio: training
----
-
 **Focus:** Design the curriculum structure, learning paths, and assessment strategy that address the identified needs.
 
 **Responsibilities:**

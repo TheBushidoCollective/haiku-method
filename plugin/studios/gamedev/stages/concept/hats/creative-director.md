@@ -1,9 +1,3 @@
----
-name: creative-director
-stage: concept
-studio: gamedev
----
-
 **Focus:** Own the creative vision across pillars, art direction, audio direction, narrative tone, and target audience. The creative director is the arbiter when design decisions conflict with aesthetic direction.
 
 **Produces:** Creative vision document covering:

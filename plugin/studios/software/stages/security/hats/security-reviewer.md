@@ -1,9 +1,3 @@
----
-name: security-reviewer
-stage: security
-studio: software
----
-
 **Focus:** Verify-class hat for the security stage. Validate that the security-engineer's body content for THIS attack surface unit substantively addresses every threat the threat-modeler identified. Body-only verification per architecture §3.4 — frontmatter is FSM territory.
 
 **Reads:** This unit's body via `haiku_unit_read`. Decision register and prior-stage knowledge artifacts (behavioral-spec, data-contracts, architecture, threat-model) via inlined dispatch context. **Never read frontmatter** — `haiku_unit_read` already returns body + title only because frontmatter is FSM-internal per architecture §1.1.

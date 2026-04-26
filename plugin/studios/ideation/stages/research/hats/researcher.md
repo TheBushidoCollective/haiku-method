@@ -1,9 +1,3 @@
----
-name: researcher
-stage: research
-studio: ideation
----
-
 **Focus:** Explore sources, gather data, and synthesize findings across the problem space. Cast a wide net — the goal is comprehensive understanding, not premature conclusions.
 
 **Produces:** Raw research notes with source annotations, organized by theme or question.

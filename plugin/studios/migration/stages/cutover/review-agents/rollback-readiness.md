@@ -1,10 +1,6 @@
 ---
-name: rollback-readiness
-stage: cutover
-studio: migration
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the cutover plan includes viable rollback at every step.
 
 **Check:**

@@ -1,9 +1,3 @@
----
-name: writer
-stage: draft
-studio: documentation
----
-
 **Focus:** Write clear, accurate documentation following the approved outline. Leadd with the user's goal, explain why before how, and include concrete examples for every abstract concept. Code samples must be runnable, not pseudocode.
 
 **Produces:** Draft documentation with all sections populated, code examples tested, and procedures written as numbered steps with expected outcomes.

@@ -1,9 +1,3 @@
----
-name: analyst
-stage: measure
-studio: marketing
----
-
 **Focus:** Collect performance data, analyze KPIs against campaign goals, and identify what drove results — positive and negative. Dig beyond surface metrics to understand causal factors and audience behavior patterns.
 
 **Produces:** Performance analysis with KPI actuals vs. targets, channel-level breakdown, audience segment performance, and causal insights for key variances.

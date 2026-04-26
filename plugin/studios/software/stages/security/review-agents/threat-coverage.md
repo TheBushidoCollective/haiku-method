@@ -1,10 +1,6 @@
 ---
-name: threat-coverage
-stage: security
-studio: software
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the threat model is comprehensive and all identified threats have mitigations.
 
 **Check:**

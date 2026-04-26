@@ -1,10 +1,6 @@
 ---
-name: patch-pipeline
-stage: release
-studio: gamedev
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the post-launch patch pipeline is operational before release, not after.
 
 **Check:**

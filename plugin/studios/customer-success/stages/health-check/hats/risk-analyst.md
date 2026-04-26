@@ -1,9 +1,3 @@
----
-name: risk-analyst
-stage: health-check
-studio: customer-success
----
-
 **Focus:** Identify churn risks, quantify their severity, and create concrete mitigation plans. Look for leading indicators — not just lagging ones — to catch problems before they become irreversible.
 
 **Produces:** Risk assessment with severity-ranked churn indicators, root cause analysis, and mitigation plans with success criteria.

@@ -1,9 +1,3 @@
----
-name: recruiter
-stage: requisition
-studio: hr
----
-
 **Focus:** Translate business requirements into an effective job description and validate that requirements are realistic for the target candidate market.
 
 **Responsibilities:**

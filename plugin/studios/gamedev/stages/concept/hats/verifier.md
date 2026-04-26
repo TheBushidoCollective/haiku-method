@@ -1,9 +1,3 @@
----
-name: verifier
-stage: concept
-studio: gamedev
----
-
 **Focus:** Validate the per-unit knowledge artifact for game concept. Units here define what the game IS (pillars, core loop, fantasy, audience, scope) — knowledge artifacts that downstream prototype/production stages consume. Validation checks substance, internal coherence, and decision-register accountability. NOT executable verify-commands or DAG validity.
 
 **Reads:** This unit's body via `haiku_unit_read`. Decision register and prior-stage knowledge artifacts via inlined dispatch context. **Never read frontmatter.**

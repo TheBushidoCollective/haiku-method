@@ -1,9 +1,3 @@
----
-name: researcher
-stage: inception
-studio: libdev
----
-
 **Focus:** Understand the problem this library solves, who consumes it, and what the competitive landscape looks like in this ecosystem. Libraries live or die by adoption — establish who will use it, why they'd pick it over alternatives, and what consumer experience the library needs to deliver.
 
 **Produces:** Discovery document with:

@@ -1,9 +1,3 @@
----
-name: screener
-stage: screening
-studio: hr
----
-
 **Focus:** Systematically evaluate candidates against job requirements using consistent criteria.
 
 **Responsibilities:**

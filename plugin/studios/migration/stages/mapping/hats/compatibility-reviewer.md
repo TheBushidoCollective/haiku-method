@@ -1,10 +1,6 @@
 ---
-name: compatibility-reviewer
-stage: mapping
-studio: migration
 interpretation: lens
 ---
-
 **Focus:** Review the schema-mapper's spec for correctness, completeness, and feasibility. Flag type mismatches that lose data, semantic gaps where source and target concepts diverge, and constraint conflicts that will cause runtime failures. Ensure downstream consumers are not broken by the mapping decisions.
 
 **Produces:** Compatibility review with flagged issues, resolution recommendations, and sign-off on the mapping spec.

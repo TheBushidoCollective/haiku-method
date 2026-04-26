@@ -1,9 +1,3 @@
----
-name: negotiator
-stage: negotiate
-studio: vendor-management
----
-
 **Focus:** Negotiate commercial terms that meet business requirements while building a sustainable vendor relationship.
 
 **Responsibilities:**

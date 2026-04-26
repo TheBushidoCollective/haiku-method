@@ -1,9 +1,3 @@
----
-name: editor
-stage: draft
-studio: legal
----
-
 **Focus:** Review draft documents for internal consistency, proper cross-references, and adherence to house style and formatting standards.
 
 **Responsibilities:**

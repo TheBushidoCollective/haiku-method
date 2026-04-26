@@ -1,9 +1,3 @@
----
-name: evidence-collector
-stage: document
-studio: compliance
----
-
 **Focus:** Gather, organize, and catalog evidence artifacts that demonstrate control implementation. Ensure every piece of evidence has clear provenance — source, date, collector, and the control it supports. Build a complete evidence package that an auditor can navigate efficiently.
 
 **Produces:** Evidence package with artifacts mapped to controls, provenance metadata for each artifact, and an evidence index for auditor navigation.

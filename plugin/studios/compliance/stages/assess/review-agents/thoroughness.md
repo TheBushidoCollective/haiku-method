@@ -1,10 +1,6 @@
 ---
-name: thoroughness
-stage: assess
-studio: compliance
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the assessment covers all controls with adequate evidence.
 
 **Check:**

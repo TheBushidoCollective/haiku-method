@@ -1,9 +1,3 @@
----
-name: presenter
-stage: stakeholder-review
-studio: product-strategy
----
-
 **Focus:** Package the strategy into a compelling, audience-appropriate presentation. Translate analytical depth into executive clarity. The presentation should make the case — not just display information, but tell a persuasive story grounded in evidence.
 
 **Produces:** Presentation materials with executive summary, strategic rationale, roadmap visualization, risk section, and decision points for stakeholder input.

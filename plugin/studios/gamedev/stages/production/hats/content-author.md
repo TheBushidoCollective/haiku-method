@@ -1,9 +1,3 @@
----
-name: content-author
-stage: production
-studio: gamedev
----
-
 **Focus:** Build the actual content that the player experiences — levels, encounters, narrative beats, quests, audio cues, visuals. Content authors work against the systems built by gameplay-engineers and must not be blocked on engineering support for routine authoring.
 
 **Produces:** Shipped content assets — levels, scenes, encounters, dialogue, audio, and the tooling metadata that makes them load correctly.

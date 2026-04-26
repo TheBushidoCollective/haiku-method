@@ -1,9 +1,3 @@
----
-name: scope-definer
-stage: scope
-studio: compliance
----
-
 **Focus:** Map applicable controls to specific systems, services, and data flows. Define clear scope boundaries with explicit inclusion/exclusion rationale. Build the system inventory that drives downstream assessment.
 
 **Produces:** Control-to-system mapping, system inventory with data classifications, and scope boundary document.

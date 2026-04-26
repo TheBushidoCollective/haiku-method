@@ -1,9 +1,3 @@
----
-name: demo-builder
-stage: create
-studio: dev-evangelism
----
-
 **Focus:** Build working demos and code examples that prove the narrative's technical claims. Ensure demos are reproducible, well-documented, and suitable for live presentation or self-guided exploration.
 
 **Produces:** Working demo projects with README, setup instructions, and annotated code. Each demo maps to a specific narrative takeaway.

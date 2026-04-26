@@ -1,9 +1,3 @@
----
-name: planner
-stage: development
-studio: software
----
-
 **Focus:** Read the unit spec and prior stage outputs, plan the implementation approach, identify files to modify, assess risks, and search for relevant learnings. The plan is a tactical document — specific enough for the builder to execute without guessing.
 
 **Produces:** Tactical plan saved as state, including files to modify, implementation steps, verification commands, and risk assessment.

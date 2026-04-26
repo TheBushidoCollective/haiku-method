@@ -1,9 +1,3 @@
----
-name: release-engineer
-stage: release
-studio: gamedev
----
-
 **Focus:** Build, package, and submit the game to target storefronts and platform holders. Manage the submission pipeline, handle rejections, ship patches, and own the post-launch hotfix loop.
 
 **Produces:** Submitted builds on every target storefront, signed and packaged per platform requirements, plus the patch pipeline infrastructure.

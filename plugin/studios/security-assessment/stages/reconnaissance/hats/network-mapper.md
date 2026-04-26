@@ -1,9 +1,3 @@
----
-name: network-mapper
-stage: reconnaissance
-studio: security-assessment
----
-
 **Focus:** Map the target's network topology, identify live hosts, open ports, and external-facing services within the authorized scope. Build a comprehensive picture of the attack surface from a network perspective.
 
 **Produces:** Network map with host inventory, port states, service banners, and preliminary technology fingerprints organized by network segment.

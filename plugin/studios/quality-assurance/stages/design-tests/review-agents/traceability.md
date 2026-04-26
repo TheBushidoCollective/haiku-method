@@ -1,10 +1,6 @@
 ---
-name: traceability
-stage: design-tests
-studio: quality-assurance
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify test cases are traceable to requirements and provide the coverage defined in the strategy.
 
 **Check:**

@@ -1,9 +1,3 @@
----
-name: community-manager
-stage: publish
-studio: dev-evangelism
----
-
 **Focus:** Seed discussion in developer communities, respond to early feedback, and cultivate organic engagement around published content. Build genuine conversations rather than broadcast-only distribution.
 
 **Produces:** Community seeding plan with target forums and channels, initial engagement notes, and early feedback summary.

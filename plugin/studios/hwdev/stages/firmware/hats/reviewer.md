@@ -1,10 +1,6 @@
 ---
-name: reviewer
-stage: firmware
-studio: hwdev
 interpretation: lens
 ---
-
 **Focus:** Review firmware against functional requirements, safety analysis, and memory/flash budgets.
 
 **Produces:** Review verdict with per-requirement traceability and budget compliance.

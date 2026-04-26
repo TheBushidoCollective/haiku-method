@@ -1,9 +1,3 @@
----
-name: game-designer
-stage: concept
-studio: gamedev
----
-
 **Focus:** Define the game's pillars, core loop, fantasy, and player experience. Decisions here lock in what the rest of production builds toward — vague pillars produce muddled games.
 
 **Produces:** Concept doc sections covering:

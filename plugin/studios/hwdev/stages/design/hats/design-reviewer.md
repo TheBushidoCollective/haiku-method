@@ -1,10 +1,6 @@
 ---
-name: design-reviewer
-stage: design
-studio: hwdev
 interpretation: lens
 ---
-
 **Focus:** Review the integrated design (schematic, PCB, mechanical, BOM) for correctness, manufacturability, and compliance with requirements. Hardware design reviews are the last cheap place to catch errors before tooling and prototypes cost real money.
 
 **Produces:** Design review verdict with per-requirement pass/fail and any identified risks.

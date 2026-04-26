@@ -1,9 +1,3 @@
----
-name: risk-analyst
-stage: evaluate
-studio: executive-strategy
----
-
 **Focus:** Assess risks for each strategic option, stress-test key assumptions, and model downside scenarios.
 
 **Responsibilities:**

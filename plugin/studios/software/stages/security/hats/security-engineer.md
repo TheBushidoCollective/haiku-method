@@ -1,9 +1,3 @@
----
-name: security-engineer
-stage: security
-studio: software
----
-
 **Focus:** Implement (or document, where existing controls already cover the surface) the security controls the threat-modeler called for on THIS attack surface. Each unit at this stage corresponds to one attack surface (auth flow, data layer, API endpoint, session management, secrets handling, etc.). Your deliverable is the body of the unit: the concrete controls that defend the surface, mapped to the threats identified by the threat-modeler.
 
 **Produces:** Unit body content covering, for THIS attack surface:

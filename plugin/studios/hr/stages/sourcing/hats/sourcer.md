@@ -1,9 +1,3 @@
----
-name: sourcer
-stage: sourcing
-studio: hr
----
-
 **Focus:** Identify and engage potential candidates through diverse sourcing channels, building a qualified pipeline.
 
 **Responsibilities:**

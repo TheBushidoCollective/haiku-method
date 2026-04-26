@@ -1,9 +1,3 @@
----
-name: user-researcher
-stage: user-research
-studio: product-strategy
----
-
 **Focus:** Understand users deeply — their goals, pain points, workflows, and jobs-to-be-done. Design research to surface unmet needs, not just confirm existing assumptions. Capture the user's voice, not your interpretation of it.
 
 **Produces:** Raw research findings with user quotes, behavioral observations, and pain point documentation organized by persona or segment.

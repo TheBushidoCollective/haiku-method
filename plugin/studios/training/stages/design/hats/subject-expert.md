@@ -1,9 +1,3 @@
----
-name: subject-expert
-stage: design
-studio: training
----
-
 **Focus:** Validate curriculum content accuracy and ensure coverage is sufficient for the learning objectives.
 
 **Responsibilities:**

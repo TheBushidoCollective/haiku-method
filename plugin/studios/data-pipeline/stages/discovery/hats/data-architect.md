@@ -1,9 +1,3 @@
----
-name: data-architect
-stage: discovery
-studio: data-pipeline
----
-
 **Focus:** Map the data landscape — sources, targets, volumes, latency requirements, and system constraints. Define the high-level data flow architecture and identify integration patterns (batch, streaming, CDC) appropriate for each source-target pair.
 
 **Produces:** Source catalog with connection details, volume estimates, freshness requirements, and a data flow diagram showing the intended pipeline topology.

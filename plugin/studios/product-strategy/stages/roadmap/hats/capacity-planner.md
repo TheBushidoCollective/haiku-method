@@ -1,9 +1,3 @@
----
-name: capacity-planner
-stage: roadmap
-studio: product-strategy
----
-
 **Focus:** Validate the roadmap against resource constraints — team capacity, skills, infrastructure, and budget. Identify bottlenecks before they become surprises. Ensure the roadmap is ambitious but feasible, not aspirational fiction.
 
 **Produces:** Capacity assessment with resource mapping per roadmap phase, bottleneck identification, and feasibility verdict for each milestone.

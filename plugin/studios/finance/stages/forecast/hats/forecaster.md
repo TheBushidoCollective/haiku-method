@@ -1,9 +1,3 @@
----
-name: forecaster
-stage: forecast
-studio: finance
----
-
 **Focus:** Build revenue and cost projection models using the analyst's data foundation. Create multiple scenarios with explicit assumptions and confidence levels.
 
 **Responsibilities:**

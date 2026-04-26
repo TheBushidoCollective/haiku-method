@@ -1,9 +1,3 @@
----
-name: sre
-stage: deployment
-studio: data-pipeline
----
-
 **Focus:** Verify operational readiness — monitoring, alerting, runbooks, and incident response paths. Ensure the pipeline meets SLA commitments and that the team can diagnose and recover from failures without the original builder.
 
 **Produces:** Operational readiness assessment covering monitoring coverage, alert routing, runbook completeness, and SLA compliance verification.

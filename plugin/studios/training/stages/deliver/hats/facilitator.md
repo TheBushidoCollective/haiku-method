@@ -1,9 +1,3 @@
----
-name: facilitator
-stage: deliver
-studio: training
----
-
 **Focus:** Deliver training sessions effectively and capture learner engagement data and content improvement opportunities.
 
 **Responsibilities:**

@@ -1,9 +1,3 @@
----
-name: compliance-officer
-stage: review
-studio: legal
----
-
 **Focus:** Verify the document complies with all applicable regulations across relevant jurisdictions.
 
 **Responsibilities:**

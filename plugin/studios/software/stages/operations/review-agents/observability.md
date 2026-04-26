@@ -1,10 +1,6 @@
 ---
-name: observability
-stage: operations
-studio: software
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the system is observable enough to diagnose issues in production.
 
 **Check:**

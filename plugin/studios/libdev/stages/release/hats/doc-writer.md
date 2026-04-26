@@ -1,9 +1,3 @@
----
-name: doc-writer
-stage: release
-studio: libdev
----
-
 **Focus:** Update the library's public documentation to reflect the release: API reference, migration guides for breaking changes, and consumer guidance surfaced from the security review.
 
 **Produces:** Documentation updates:

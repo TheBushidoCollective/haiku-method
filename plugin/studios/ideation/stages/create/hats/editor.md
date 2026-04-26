@@ -1,9 +1,3 @@
----
-name: editor
-stage: create
-studio: ideation
----
-
 **Focus:** Refine structure, improve clarity, strengthen arguments, and ensure coherence. The editor serves the creator's intent — sharpening, not rewriting.
 
 **Produces:** Polished draft ready for adversarial review.

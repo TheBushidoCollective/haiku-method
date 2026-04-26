@@ -1,9 +1,3 @@
----
-name: consultant
-stage: needs-analysis
-studio: training
----
-
 **Focus:** Validate that identified training needs align with business objectives and recommend the appropriate learning intervention.
 
 **Responsibilities:**

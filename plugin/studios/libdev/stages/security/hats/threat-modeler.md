@@ -1,9 +1,3 @@
----
-name: threat-modeler
-stage: security
-studio: libdev
----
-
 **Focus:** Model threats specific to this library: supply chain risks, misuse by consumers, injection surfaces, and the downstream impact of vulnerabilities in library code. Library threat modeling differs from app threat modeling because the library is a *source* of risk for downstream applications, not a direct victim.
 
 **Produces:** Threat model document with:

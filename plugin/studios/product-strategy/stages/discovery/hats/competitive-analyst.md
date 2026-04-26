@@ -1,9 +1,3 @@
----
-name: competitive-analyst
-stage: discovery
-studio: product-strategy
----
-
 **Focus:** Analyze competitors' positioning, strengths, weaknesses, and strategic direction. Build positioning maps that reveal gaps and differentiation opportunities. Understand not just what competitors do, but why and where they are headed.
 
 **Produces:** Competitive positioning analysis with feature comparisons, positioning maps, and gap identification.

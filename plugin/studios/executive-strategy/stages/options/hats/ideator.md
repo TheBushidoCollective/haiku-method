@@ -1,9 +1,3 @@
----
-name: ideator
-stage: options
-studio: executive-strategy
----
-
 **Focus:** Generate genuinely differentiated strategic options that span a range of risk/reward profiles.
 
 **Responsibilities:**

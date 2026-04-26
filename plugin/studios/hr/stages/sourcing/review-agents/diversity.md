@@ -1,10 +1,6 @@
 ---
-name: diversity
-stage: sourcing
-studio: hr
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify candidate pipeline is sourced from diverse channels and represents a varied candidate pool.
 
 **Check:**

@@ -248,15 +248,26 @@ Denial message format: `"This file is FSM-managed. Use \`haiku_unit_read { inten
 
 Bash commands referencing these paths are **soft-warned** (logged, not blocked). The threat model is "honest agent reaches for the wrong tool by habit," not "adversarial agent." Routine MCP usage is the path of least resistance; persistent Bash bypass is anomalous and shows up in audit telemetry.
 
-## 7. Known structural issues to fix
+## 7. Known structural issues — status
 
-These are points where the current implementation contradicts this document. They MUST be reconciled — fix the implementation, not the document.
+Tracking the gap between this document and the implementation. Fix the implementation, not the document. Items marked ✅ have been reconciled in the current PR; ⏳ are still ahead.
 
-1. **`FSM_CONTRACTS_ELABORATE_BLOCK` (orchestrator.ts:140) bakes in execution-unit semantics for every stage's elaborate phase.** It mandates `depends_on:`, executable `quality_gates:`, completion-criteria pairs, etc. These are correct for build/execution stages but wrong for research/distillation stages (where units are knowledge topics, not executable work). Split the contract by stage role.
-2. **`software/inception` (and inception-class siblings) currently produce execution-unit specs for the whole intent.** This is wrong per §2.1 (every stage creates its own units) and §4.1 (inception's units are knowledge topics). Restructure these stages.
-3. **Hat name `elaborator` collides with phase name `elaborate`.** Rename per-studio to stage-appropriate names (see §3.1 table).
-4. **`software/development` (and other build-class stages) need their own elaborate phase that authors execution-unit specs from upstream knowledge.** Currently they consume pre-authored units from upstream — that inversion is the source of the FB-01 class of bugs.
-5. **Existing `haiku_unit_get` MCP tool exposes frontmatter to agents.** Per §1.1 and §1.2, it must become FSM-internal only.
+1. ⏳ **`FSM_CONTRACTS_ELABORATE_BLOCK` (orchestrator.ts:140) bakes in execution-unit semantics for every stage's elaborate phase.** It mandates `depends_on:`, executable `quality_gates:`, completion-criteria pairs, etc. These are correct for build/execution stages but wrong for research/distillation stages. Split the contract by stage role. **Partially mitigated:** a stage-role caveat now precedes the block pointing readers at per-stage `phases/ELABORATION.md`, and the 5 inception-class stages have their own ELABORATION.md providing the role-correct shape. Full split (and adding ELABORATION.md to remaining build/research stages) still ahead.
+2. ⏳ **Inception-class stages structurally over-reach** by producing execution-unit specs. **Partially mitigated:** the 5 inception-class stages now have research-stage ELABORATION.md guidance + body-only knowledge-artifact verifier hats, which steer new authoring toward knowledge topics. Cleanup of any pre-existing execution-spec drift in those stages still ahead.
+3. ⏳ **Hat name `elaborator` collides with phase name `elaborate`.** Rename per-studio to stage-appropriate names (see §3.1 table). Mechanical cleanup still ahead.
+4. ⏳ **`software/development` (and other build-class stages) need their own elaborate phase that authors execution-unit specs from upstream knowledge.** Currently `software/development/phases/ELABORATION.md` is build-class-correct (criteria + verify-commands), so the contract exists; auditing that other build-class stages have the same is still ahead.
+5. ⏳ **Existing `haiku_unit_get` MCP tool exposes frontmatter to agents.** Per §1.1 and §1.2, it must become FSM-internal only. The new `haiku_unit_read` ships the body-only replacement; migration of `haiku_unit_get` callers + removal from agent-callable list is still ahead.
+
+Implemented in this PR (✅):
+- Architecture document itself, with the boundary rules, lifecycle, hat patterns, FB-as-unit fix-loop semantic, and stage-role taxonomy.
+- Path-boundary hook (PreToolUse) denying generic Read/Write/Edit on FSM-managed paths, with redirect messages naming the right MCP tool.
+- New MCP tools: `haiku_unit_write` (with FM validators + DAG cycle detection + lifecycle), `haiku_unit_read` (body+title only), `haiku_unit_delete` (pending only); FB equivalents `haiku_feedback_write` and `haiku_feedback_read`; FB-as-unit progression tools `haiku_feedback_advance_hat` and `haiku_feedback_reject_hat` (mirrors of unit equivalents).
+- Lifecycle enforcement on `haiku_unit_set` (active/completed → locked) and `haiku_feedback_update` (terminal-state-protected).
+- Elaborate dispatch routes unit authoring through `haiku_unit_write` (no more raw Write).
+- Both fix-loop dispatches (`review_fix` per-stage and `intent_completion_fix` studio-level) rewritten for FB-as-unit: fixers edit FB body via `haiku_feedback_write`, read flagged units read-only via `haiku_unit_read`, progress through fix_hats via `haiku_feedback_advance_hat`. Closure is FSM-driven via the last-hat advance.
+- 5 canonical inception-class verifier hats (software/inception, hwdev/inception, hwdev/requirements, libdev/inception, gamedev/concept) — body-only knowledge-artifact validation.
+- 5 inception-class `phases/ELABORATION.md` files providing research-stage authoring guidance.
+- `CLAUDE.md` cites this document as the canonical structural source of truth and adds 6 concept-mapping rows for the new architecture surface.
 
 ## 8. Studio-author checklist
 

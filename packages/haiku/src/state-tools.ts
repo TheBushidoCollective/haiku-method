@@ -8121,12 +8121,21 @@ export function handleStateTool(
 			let foundPath: string | null = null
 			let foundData: Record<string, unknown> | null = null
 			let foundBody: string | null = null
+			// Derive numeric part from fbId: "FB-01" → 1, "FB-1" → 1, "1" → 1
+			const fbNumMatch = fbId.match(/^(?:FB-)?(\d+)$/i)
+			const fbNum = fbNumMatch ? Number.parseInt(fbNumMatch[1], 10) : null
 			for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
 				const p = join(dir, f)
 				const { data, body } = parseFrontmatter(readFileSync(p, "utf8"))
+				// Match by frontmatter id/feedback_id field (future files),
+				// OR by filename numeric prefix (files created by createFeedback which
+				// does not embed an id field in frontmatter).
+				const fileNumMatch = f.match(/^(\d+)-/)
+				const fileNum = fileNumMatch ? Number.parseInt(fileNumMatch[1], 10) : null
 				if (
 					(data.id as string) === fbId ||
-					(data.feedback_id as string) === fbId
+					(data.feedback_id as string) === fbId ||
+					(fbNum !== null && fileNum === fbNum)
 				) {
 					foundPath = p
 					foundData = data
@@ -8201,12 +8210,25 @@ export function handleStateTool(
 			}
 			let foundPath: string | null = null
 			let foundFm: Record<string, unknown> | null = null
+			// Derive numeric part from fbId: "FB-01" → 1, "FB-1" → 1, "1" → 1
+			const fbWriteNumMatch = fbId.match(/^(?:FB-)?(\d+)$/i)
+			const fbWriteNum = fbWriteNumMatch
+				? Number.parseInt(fbWriteNumMatch[1], 10)
+				: null
 			for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
 				const p = join(dir, f)
 				const { data } = parseFrontmatter(readFileSync(p, "utf8"))
+				// Match by frontmatter id/feedback_id field (future files),
+				// OR by filename numeric prefix (files created by createFeedback which
+				// does not embed an id field in frontmatter).
+				const fileWriteNumMatch = f.match(/^(\d+)-/)
+				const fileWriteNum = fileWriteNumMatch
+					? Number.parseInt(fileWriteNumMatch[1], 10)
+					: null
 				if (
 					(data.id as string) === fbId ||
-					(data.feedback_id as string) === fbId
+					(data.feedback_id as string) === fbId ||
+					(fbWriteNum !== null && fileWriteNum === fbWriteNum)
 				) {
 					foundPath = p
 					foundFm = data
@@ -8304,12 +8326,25 @@ export function handleStateTool(
 			let advPath: string | null = null
 			let advFm: Record<string, unknown> | null = null
 			let advBody = ""
+			// Derive numeric part from fbId: "FB-01" → 1, "FB-1" → 1, "1" → 1
+			const fbAdvNumMatch = fbId.match(/^(?:FB-)?(\d+)$/i)
+			const fbAdvNum = fbAdvNumMatch
+				? Number.parseInt(fbAdvNumMatch[1], 10)
+				: null
 			for (const f of readdirSync(fbAdvDir).filter((n) => n.endsWith(".md"))) {
 				const p = join(fbAdvDir, f)
 				const { data, body } = parseFrontmatter(readFileSync(p, "utf8"))
+				// Match by frontmatter id/feedback_id field (future files),
+				// OR by filename numeric prefix (files created by createFeedback which
+				// does not embed an id field in frontmatter).
+				const fileAdvNumMatch = f.match(/^(\d+)-/)
+				const fileAdvNum = fileAdvNumMatch
+					? Number.parseInt(fileAdvNumMatch[1], 10)
+					: null
 				if (
 					(data.id as string) === fbId ||
-					(data.feedback_id as string) === fbId
+					(data.feedback_id as string) === fbId ||
+					(fbAdvNum !== null && fileAdvNum === fbAdvNum)
 				) {
 					advPath = p
 					advFm = data
@@ -8499,12 +8534,25 @@ export function handleStateTool(
 			let rejPath: string | null = null
 			let rejFm: Record<string, unknown> | null = null
 			let rejBody = ""
+			// Derive numeric part from fbId: "FB-01" → 1, "FB-1" → 1, "1" → 1
+			const fbRejNumMatch = fbId.match(/^(?:FB-)?(\d+)$/i)
+			const fbRejNum = fbRejNumMatch
+				? Number.parseInt(fbRejNumMatch[1], 10)
+				: null
 			for (const f of readdirSync(fbRejDir).filter((n) => n.endsWith(".md"))) {
 				const p = join(fbRejDir, f)
 				const { data, body } = parseFrontmatter(readFileSync(p, "utf8"))
+				// Match by frontmatter id/feedback_id field (future files),
+				// OR by filename numeric prefix (files created by createFeedback which
+				// does not embed an id field in frontmatter).
+				const fileRejNumMatch = f.match(/^(\d+)-/)
+				const fileRejNum = fileRejNumMatch
+					? Number.parseInt(fileRejNumMatch[1], 10)
+					: null
 				if (
 					(data.id as string) === fbId ||
-					(data.feedback_id as string) === fbId
+					(data.feedback_id as string) === fbId ||
+					(fbRejNum !== null && fileRejNum === fbRejNum)
 				) {
 					rejPath = p
 					rejFm = data

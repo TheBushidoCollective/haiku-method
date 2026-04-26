@@ -145,6 +145,8 @@ const FSM_CONTRACTS_ELABORATE_BLOCK = [
 	"",
 	"These rules apply to **every studio and every stage**. They are enforced by the framework, not by prose. Re-stating them in per-studio files is forbidden (they would drift).",
 	"",
+	"> ⚠ **Stage-role caveat:** several rules below assume **build-class** stages whose units are executable artifacts (source code, hardware, deployments). For **research / distillation / specification** stages whose units are knowledge artifacts (market research, distilled insight, requirements obligations), the executable-verify-command rules don't apply — those units are validated by substance and accountability, not by shell exit codes. Read your stage's `phases/ELABORATION.md` (injected as **Phase: Elaboration Override** above this block) for the role-correct shape. The architecture's planned split of this block by stage role is tracked as a known issue in `plugin/studios/ARCHITECTURE.md` §7.",
+	"",
 	"#### Unit file naming",
 	"",
 	"- `stages/{stage}/units/unit-NN-slug.md` — zero-padded NN (`01`, `02`, … `10`, `11`); kebab-case slug; `.md` extension.",

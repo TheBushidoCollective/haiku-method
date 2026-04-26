@@ -51,6 +51,7 @@ import {
 	readOperationDefs,
 	readReflectionDefs,
 	readStageArtifactDefs,
+	readStageDef,
 	resolveStudio,
 } from "./studio-reader.js"
 import {
@@ -4755,6 +4756,51 @@ export const stateToolDefs = [
 		},
 	},
 	{
+		name: "haiku_feedback_advance_hat",
+		description:
+			"Advance an FB to the next hat in the stage's `fix_hats:` sequence. Per the architecture's FB-as-unit model: each fixer hat operates on the FB body (via haiku_feedback_write) and then calls this tool to progress. When called on the last hat in the fix_hats sequence, the FSM auto-completes the FB (status → closed, closed_by recorded, iteration appended). Mirrors haiku_unit_advance_hat for FBs.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string", description: "Intent slug" },
+				stage: {
+					type: "string",
+					description: "Stage name (optional — omit for intent-scope FBs)",
+				},
+				feedback_id: {
+					type: "string",
+					description: "Feedback ID, e.g. FB-01",
+				},
+			},
+			required: ["intent", "feedback_id"],
+		},
+	},
+	{
+		name: "haiku_feedback_reject_hat",
+		description:
+			"Reject the current fix-hat's work on an FB — moves back to the previous hat and increments the FB's bolt counter. Pass `reason` so the FB's iteration history records why the hat was rejected. Mirrors haiku_unit_reject_hat for FBs.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string", description: "Intent slug" },
+				stage: {
+					type: "string",
+					description: "Stage name (optional — omit for intent-scope FBs)",
+				},
+				feedback_id: {
+					type: "string",
+					description: "Feedback ID, e.g. FB-01",
+				},
+				reason: {
+					type: "string",
+					description:
+						"Short explanation of why the current hat's work was rejected (recorded in the FB iteration history).",
+				},
+			},
+			required: ["intent", "feedback_id"],
+		},
+	},
+	{
 		name: "haiku_release_notes",
 		description:
 			"Extract release notes from CHANGELOG.md — a specific version or the 5 most recent entries.",
@@ -7898,6 +7944,314 @@ export function handleStateTool(
 						stage: stageArg || null,
 						intent: intentArg,
 						message: `Rewrote body of feedback '${fbId}' (status preserved as '${status}').`,
+					},
+					null,
+					2,
+				),
+			)
+		}
+
+		// ── Feedback advance/reject hat (FB-as-unit model, architecture §5) ──
+		// These mirror haiku_unit_advance_hat / haiku_unit_reject_hat but for
+		// FB files. Each fixer hat populates the FB body via haiku_feedback_write
+		// and then calls advance to progress through the stage's fix_hats:
+		// sequence. When the last hat advances, the FSM auto-closes the FB.
+		case "haiku_feedback_advance_hat": {
+			const intentArg = args.intent as string
+			const stageArg = (args.stage as string) || ""
+			const fbId = args.feedback_id as string
+			if (!intentArg || !fbId) {
+				return text(
+					JSON.stringify({
+						error: "missing_args",
+						message: "intent and feedback_id are required.",
+					}),
+				)
+			}
+
+			const fbBranchErr = enforceStageBranch(intentArg, stageArg || undefined)
+			if (fbBranchErr) return fbBranchErr
+
+			// Locate FB file by id.
+			const fbAdvDir = stageArg
+				? feedbackDir(intentArg, stageArg)
+				: feedbackDir(intentArg, "")
+			if (!existsSync(fbAdvDir)) {
+				return text(
+					JSON.stringify({
+						error: "feedback_not_found",
+						intent: intentArg,
+						stage: stageArg || null,
+						feedback_id: fbId,
+						message: `No feedback directory at ${fbAdvDir}.`,
+					}),
+				)
+			}
+			let advPath: string | null = null
+			let advFm: Record<string, unknown> | null = null
+			let advBody = ""
+			for (const f of readdirSync(fbAdvDir).filter((n) => n.endsWith(".md"))) {
+				const p = join(fbAdvDir, f)
+				const { data, body } = parseFrontmatter(readFileSync(p, "utf8"))
+				if ((data.id as string) === fbId || (data.feedback_id as string) === fbId) {
+					advPath = p
+					advFm = data
+					advBody = body
+					break
+				}
+			}
+			if (!advPath || !advFm) {
+				return text(
+					JSON.stringify({
+						error: "feedback_not_found",
+						intent: intentArg,
+						stage: stageArg || null,
+						feedback_id: fbId,
+						message: `No feedback file matching ${fbId} in ${fbAdvDir}.`,
+					}),
+				)
+			}
+
+			// Lifecycle: don't advance terminal FBs.
+			const advStatus = (advFm.status as string) || "pending"
+			if (advStatus === "closed" || advStatus === "rejected") {
+				return text(
+					JSON.stringify({
+						error: "lifecycle_violation",
+						current_status: advStatus,
+						message: `Cannot advance hat on FB '${fbId}' — already ${advStatus} (terminal).`,
+					}),
+				)
+			}
+
+			// Resolve fix_hats sequence. Stage-scoped: from STAGE.md. Intent-
+			// scoped: not handled here yet (intent-completion review uses
+			// studio-level fix-hats; that path will route through this tool
+			// once the orchestrator dispatch is updated).
+			let fixHats: string[] = []
+			if (stageArg) {
+				const intentFmPath = join(intentDir(intentArg), "intent.md")
+				if (existsSync(intentFmPath)) {
+					const { data: intentFm } = parseFrontmatter(readFileSync(intentFmPath, "utf8"))
+					const studioName = (intentFm.studio as string) || "software"
+					const sd = readStageDef(studioName, stageArg)
+					if (sd?.data?.fix_hats && Array.isArray(sd.data.fix_hats)) {
+						fixHats = sd.data.fix_hats as string[]
+					}
+				}
+			}
+			if (fixHats.length === 0) {
+				return text(
+					JSON.stringify({
+						error: "no_fix_hats",
+						stage: stageArg,
+						message: `Stage '${stageArg}' has no \`fix_hats:\` configured. The fix-loop FB-as-unit model requires a fix_hats sequence on STAGE.md (or studio-level for intent-scope FBs, not yet supported here).`,
+					}),
+				)
+			}
+
+			// Determine current hat. If unset (first dispatch), start at the
+			// first hat. If set, find its index and advance.
+			const curHat = (advFm.hat as string) || ""
+			const curBolt = (advFm.bolt as number) || 1
+			const curIdx = curHat ? fixHats.indexOf(curHat) : -1
+			const isFirst = curIdx === -1
+			const isLast = !isFirst && curIdx === fixHats.length - 1
+
+			// Append iteration record (the just-completed hat's work).
+			const iterations = Array.isArray(advFm.iterations)
+				? (advFm.iterations as Array<Record<string, unknown>>).slice()
+				: []
+			if (curHat) {
+				iterations.push({
+					bolt: curBolt,
+					hat: curHat,
+					completed_at: timestamp(),
+					result: isLast ? "closed" : "advanced",
+				})
+			}
+
+			let nextHat: string
+			let newStatus = advStatus
+			let closedBy: string | undefined
+			if (isFirst) {
+				nextHat = fixHats[0]
+				newStatus = "addressed"
+			} else if (isLast) {
+				nextHat = curHat
+				newStatus = "closed"
+				closedBy = `fix-loop:${fbId}:bolt-${curBolt}`
+			} else {
+				nextHat = fixHats[curIdx + 1]
+				newStatus = "addressed"
+			}
+
+			const newFm: Record<string, unknown> = {
+				...advFm,
+				hat: nextHat,
+				iterations,
+				status: newStatus,
+			}
+			if (closedBy) newFm.closed_by = closedBy
+			writeFileSync(advPath, matter.stringify(advBody.trimEnd() + "\n", newFm))
+			sealIntentState(intentArg)
+			emitTelemetry(
+				isLast ? "haiku.feedback.closed" : "haiku.feedback.hat_advanced",
+				{
+					intent: intentArg,
+					stage: stageArg || "",
+					feedback_id: fbId,
+					hat: nextHat,
+				},
+			)
+			return text(
+				JSON.stringify(
+					{
+						ok: true,
+						feedback_id: fbId,
+						stage: stageArg || null,
+						previous_hat: curHat || null,
+						current_hat: nextHat,
+						closed: isLast,
+						bolt: curBolt,
+						message: isLast
+							? `FB '${fbId}' closed by ${closedBy} (last hat in fix_hats sequence).`
+							: `FB '${fbId}' advanced to hat '${nextHat}' (${curIdx + 2}/${fixHats.length}).`,
+					},
+					null,
+					2,
+				),
+			)
+		}
+
+		case "haiku_feedback_reject_hat": {
+			const intentArg = args.intent as string
+			const stageArg = (args.stage as string) || ""
+			const fbId = args.feedback_id as string
+			const reason = (args.reason as string) || ""
+			if (!intentArg || !fbId) {
+				return text(
+					JSON.stringify({
+						error: "missing_args",
+						message: "intent and feedback_id are required.",
+					}),
+				)
+			}
+
+			const rejBranchErr = enforceStageBranch(intentArg, stageArg || undefined)
+			if (rejBranchErr) return rejBranchErr
+
+			const fbRejDir = stageArg
+				? feedbackDir(intentArg, stageArg)
+				: feedbackDir(intentArg, "")
+			if (!existsSync(fbRejDir)) {
+				return text(
+					JSON.stringify({
+						error: "feedback_not_found",
+						message: `No feedback directory at ${fbRejDir}.`,
+					}),
+				)
+			}
+			let rejPath: string | null = null
+			let rejFm: Record<string, unknown> | null = null
+			let rejBody = ""
+			for (const f of readdirSync(fbRejDir).filter((n) => n.endsWith(".md"))) {
+				const p = join(fbRejDir, f)
+				const { data, body } = parseFrontmatter(readFileSync(p, "utf8"))
+				if ((data.id as string) === fbId || (data.feedback_id as string) === fbId) {
+					rejPath = p
+					rejFm = data
+					rejBody = body
+					break
+				}
+			}
+			if (!rejPath || !rejFm) {
+				return text(
+					JSON.stringify({
+						error: "feedback_not_found",
+						feedback_id: fbId,
+						message: `No feedback file matching ${fbId} in ${fbRejDir}.`,
+					}),
+				)
+			}
+
+			const rejStatus = (rejFm.status as string) || "pending"
+			if (rejStatus === "closed" || rejStatus === "rejected") {
+				return text(
+					JSON.stringify({
+						error: "lifecycle_violation",
+						current_status: rejStatus,
+						message: `Cannot reject hat on FB '${fbId}' — already ${rejStatus} (terminal).`,
+					}),
+				)
+			}
+
+			// Resolve fix_hats to find prior hat.
+			let fixHatsRej: string[] = []
+			const intentFmPath = join(intentDir(intentArg), "intent.md")
+			if (existsSync(intentFmPath) && stageArg) {
+				const { data: intentFm } = parseFrontmatter(readFileSync(intentFmPath, "utf8"))
+				const studioName = (intentFm.studio as string) || "software"
+				const sd = readStageDef(studioName, stageArg)
+				if (sd?.data?.fix_hats && Array.isArray(sd.data.fix_hats)) {
+					fixHatsRej = sd.data.fix_hats as string[]
+				}
+			}
+			if (fixHatsRej.length === 0) {
+				return text(
+					JSON.stringify({
+						error: "no_fix_hats",
+						stage: stageArg,
+						message: `Stage '${stageArg}' has no \`fix_hats:\` configured.`,
+					}),
+				)
+			}
+
+			const curHatRej = (rejFm.hat as string) || fixHatsRej[0]
+			const curBoltRej = (rejFm.bolt as number) || 1
+			const curIdxRej = fixHatsRej.indexOf(curHatRej)
+
+			// Move back one hat (or stay at first hat if already there).
+			const prevIdx = Math.max(0, curIdxRej - 1)
+			const prevHat = fixHatsRej[prevIdx]
+
+			// Append rejection iteration record + bump bolt.
+			const iterations = Array.isArray(rejFm.iterations)
+				? (rejFm.iterations as Array<Record<string, unknown>>).slice()
+				: []
+			iterations.push({
+				bolt: curBoltRej,
+				hat: curHatRej,
+				completed_at: timestamp(),
+				result: "rejected",
+				reason: reason || "(no reason provided)",
+			})
+
+			const newFm: Record<string, unknown> = {
+				...rejFm,
+				hat: prevHat,
+				bolt: curBoltRej + 1,
+				iterations,
+			}
+			writeFileSync(rejPath, matter.stringify(rejBody.trimEnd() + "\n", newFm))
+			sealIntentState(intentArg)
+			emitTelemetry("haiku.feedback.hat_rejected", {
+				intent: intentArg,
+				stage: stageArg || "",
+				feedback_id: fbId,
+				hat: curHatRej,
+				new_bolt: String(curBoltRej + 1),
+			})
+			return text(
+				JSON.stringify(
+					{
+						ok: true,
+						feedback_id: fbId,
+						rejected_hat: curHatRej,
+						previous_hat: prevHat,
+						new_bolt: curBoltRej + 1,
+						reason,
+						message: `FB '${fbId}' hat '${curHatRej}' rejected — moving back to '${prevHat}', bolt incremented to ${curBoltRej + 1}.`,
 					},
 					null,
 					2,

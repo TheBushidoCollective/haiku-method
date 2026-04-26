@@ -30,7 +30,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { isGitRepo } from "./state-tools.js"
+import { isGitRepo, primaryRepoRoot } from "./state-tools.js"
 
 function run(args: string[], cwd?: string): string {
 	return execFileSync(args[0], args.slice(1), {
@@ -723,7 +723,7 @@ export function readFileFromBranch(
 
 /** Absolute path to a unit's worktree under `.haiku/worktrees/{slug}/{unit}`. */
 export function unitWorktreePath(slug: string, unit: string): string {
-	return join(process.cwd(), ".haiku", "worktrees", slug, unit)
+	return join(primaryRepoRoot(), ".haiku", "worktrees", slug, unit)
 }
 
 /**
@@ -1339,7 +1339,7 @@ export function createUnitWorktree(
 		)
 	const stageBranch = ensureStageBranch(slug, stage)
 	const unitBranch = `haiku/${slug}/${unit}`
-	const worktreeBase = join(process.cwd(), ".haiku", "worktrees", slug)
+	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
 	const worktreePath = join(worktreeBase, unit)
 
 	try {
@@ -1525,7 +1525,7 @@ export function createDiscoveryWorktree(
 	const baseBranch = ensureStageBranch(slug, stage)
 	const discBranch = discoveryBranchName(slug, stage, template)
 	const worktreePath = discoveryWorktreePath(slug, stage, template)
-	const worktreeBase = join(process.cwd(), ".haiku", "worktrees", slug)
+	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
 
 	try {
 		if (existsSync(worktreePath)) return worktreePath
@@ -1740,7 +1740,7 @@ export function createFixChainWorktree(
 		scope === "intent" ? `haiku/${slug}/main` : ensureStageBranch(slug, scope)
 	const fixBranch = fixChainBranchName(slug, scope, feedbackId)
 	const worktreePath = fixChainWorktreePath(slug, scope, feedbackId)
-	const worktreeBase = join(process.cwd(), ".haiku", "worktrees", slug)
+	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
 
 	try {
 		if (existsSync(worktreePath)) return worktreePath
@@ -1970,7 +1970,7 @@ export function cleanupFixChainWorktree(
  * Clean up all worktrees for an intent.
  */
 export function cleanupIntentWorktrees(slug: string): void {
-	const worktreeBase = join(process.cwd(), ".haiku", "worktrees", slug)
+	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
 	try {
 		rmSync(worktreeBase, { recursive: true, force: true })
 	} catch {

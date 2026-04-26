@@ -1641,6 +1641,68 @@ export function isGitRepo(): boolean {
  *  called in production — the process runs with a single cwd. */
 export function _resetIsGitRepoForTests(): void {
 	_isGitRepo = null
+	_primaryRepoRoot = null
+}
+
+// Cache keyed by cwd so test suites that chdir between project dirs each
+// get their own primary-root resolution (production never changes cwd, so
+// the cache effectively becomes a single-entry hit).
+let _primaryRepoRoot: { cwd: string; root: string } | null = null
+
+/** Return the primary repo root — the parent of the canonical `.git/`
+ *  directory, regardless of which worktree (primary or sub-) is the
+ *  current cwd. All H·AI·K·U state (intents, worktrees, knowledge) lives
+ *  here so that running the FSM from a sub-worktree (e.g.
+ *  `.claude/worktrees/foo/`) doesn't fork state into the sub-worktree.
+ *
+ *  This matches Claude Code's convention where `.claude/worktrees/` are
+ *  always created relative to the primary repo, never to a nested
+ *  worktree.
+ *
+ *  Falls back to `process.cwd()` in non-git environments (tests use
+ *  non-git temp dirs and rely on this fallback).
+ */
+export function primaryRepoRoot(): string {
+	const cwd = process.cwd()
+	if (_primaryRepoRoot !== null && _primaryRepoRoot.cwd === cwd) {
+		return _primaryRepoRoot.root
+	}
+	if (!isGitRepo()) {
+		_primaryRepoRoot = { cwd, root: cwd }
+		return cwd
+	}
+	let root: string
+	try {
+		// `git rev-parse --git-common-dir` resolves to the SHARED .git dir
+		// — for the primary worktree it returns the primary's .git; for any
+		// linked worktree it returns the SAME .git path (not the linked
+		// worktree's .git file). The parent of that is the primary repo
+		// root.
+		const gitCommonDir = execFileSync(
+			"git",
+			["rev-parse", "--git-common-dir"],
+			{
+				encoding: "utf8",
+				stdio: ["ignore", "pipe", "pipe"],
+			},
+		).trim()
+		// Empty output means git is stubbed (test environments use a fake
+		// `git` binary that just `exit 0`). Fall back to cwd so tests stay
+		// scoped to their tmp project dir.
+		if (!gitCommonDir) {
+			root = cwd
+		} else {
+			const absCommonDir = gitCommonDir.startsWith("/")
+				? gitCommonDir
+				: resolve(cwd, gitCommonDir)
+			// dirname strips trailing /.git → primary worktree path
+			root = resolve(absCommonDir, "..")
+		}
+	} catch {
+		root = cwd
+	}
+	_primaryRepoRoot = { cwd, root }
+	return root
 }
 
 // ── Inline quality gates (for hookless harnesses) ─────────────────────────
@@ -1741,7 +1803,18 @@ function runInlineQualityGates(
 // ── Path resolution ────────────────────────────────────────────────────────
 
 export function findHaikuRoot(): string {
-	// Walk up from cwd looking for .haiku/
+	// Anchor at the primary repo root in git environments — H·AI·K·U state
+	// lives at `<primary>/.haiku/` regardless of which worktree (primary or
+	// sub-) is the current cwd. Running the FSM from a sub-worktree
+	// (`.claude/worktrees/foo/`) reads/writes the same canonical state as
+	// running from the primary; per the architectural invariant that no
+	// two agents work on the same intent concurrently, there's nothing to
+	// isolate by sub-worktree.
+	if (isGitRepo()) {
+		return join(primaryRepoRoot(), ".haiku")
+	}
+	// Non-git fallback: walk up from cwd looking for .haiku/ (tests, non-
+	// git environments).
 	let dir = process.cwd()
 	for (let i = 0; i < 20; i++) {
 		if (existsSync(join(dir, ".haiku"))) return join(dir, ".haiku")

@@ -80,6 +80,7 @@ import {
 	MAX_INTEGRATOR_ATTEMPTS,
 	MAX_STAGE_ITERATIONS,
 	parseFrontmatter,
+	primaryRepoRoot,
 	readFeedbackFiles,
 	readJson,
 	setFrontmatterField,
@@ -3480,7 +3481,7 @@ export function runNext(slug: string): OrchestratorAction {
 
 		if (activeUnits.length > 0) {
 			const worktreeFor = (unitName: string): string | null => {
-				const p = join(process.cwd(), ".haiku", "worktrees", slug, unitName)
+				const p = join(primaryRepoRoot(), ".haiku", "worktrees", slug, unitName)
 				return existsSync(p) ? p : null
 			}
 

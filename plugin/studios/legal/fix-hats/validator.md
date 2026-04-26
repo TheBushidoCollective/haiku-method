@@ -11,7 +11,7 @@ model: haiku
 - Read the feedback body (inlined) and understand what was flagged.
 - Read the artifacts the reconciler just edited. Look at the actual state on disk, not the reconciler's summary.
 - Decide, through the lens of the finding as written, whether the fix resolves it.
-- If the fix resolves the finding: call `haiku_feedback_update { status: "closed", closed_by: "intent-fix:<FB-ID>:bolt-<N>" }` with `stage` omitted.
+- If the fix resolves the finding: call `haiku_feedback_advance_hat { intent, feedback_id }` (omit `stage` — intent scope). Because you are the LAST hat in the studio `fix_hats` sequence, the FSM auto-closes the FB and records `closed_by: intent-fix:<FB-ID>:bolt-<N>` — do NOT call `haiku_feedback_update` for closure (FSM-controlled).
 - If NOT resolved: leave the feedback open. The FSM will count this bolt and decide whether to loop again.
 - If the finding is invalid: call `haiku_feedback_reject { reason: "<concrete reason>" }` with `stage` omitted.
 

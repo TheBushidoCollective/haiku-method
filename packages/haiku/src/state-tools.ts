@@ -2469,6 +2469,187 @@ export function completeUnitIteration(
 	writeFileSync(unitFile, matter.stringify(body, data))
 }
 
+// ── Unit frontmatter validation (architecture rule §1.1: FSM owns FM) ────
+//
+// Called from haiku_unit_write before persisting an agent-authored unit.
+// Returns either { valid: true } or { valid: false, errors: string[] }.
+// Validators are MECHANICAL and DETERMINISTIC — no LLM judgment, no
+// interpretation. Each rule has a specific failure mode that maps to a
+// concrete error message for the caller.
+
+const FSM_DRIVEN_UNIT_FIELDS = [
+	"status",
+	"hat",
+	"bolt",
+	"iterations",
+	"started_at",
+	"completed_at",
+] as const
+
+export function validateUnitFrontmatter(
+	frontmatter: Record<string, unknown>,
+	context: {
+		intent: string
+		stage: string
+		unit: string
+		/** Names of all sibling units (without .md), used for DAG validation. */
+		siblingUnits: string[]
+	},
+): { valid: true } | { valid: false; errors: string[] } {
+	const errors: string[] = []
+
+	// Rule 1: no FSM-driven fields. Agents author non-lifecycle fields only.
+	for (const field of FSM_DRIVEN_UNIT_FIELDS) {
+		if (field in frontmatter) {
+			errors.push(
+				`fsm_field_forbidden: '${field}' is FSM-driven and must not be set by agents. The FSM owns this field via haiku_unit_advance_hat / haiku_unit_increment_bolt / etc.`,
+			)
+		}
+	}
+
+	// Rule 2: depends_on must be an array of strings, no self-reference,
+	// every entry must resolve to a sibling unit name (excluding self).
+	if ("depends_on" in frontmatter) {
+		const dep = frontmatter.depends_on
+		if (!Array.isArray(dep)) {
+			errors.push(
+				"depends_on_shape: depends_on must be a list of unit names (strings), or omit the field entirely for units with no dependencies.",
+			)
+		} else {
+			for (const entry of dep) {
+				if (typeof entry !== "string") {
+					errors.push(
+						`depends_on_shape: every depends_on entry must be a string (unit name); got ${typeof entry} '${String(entry)}'.`,
+					)
+					continue
+				}
+				if (entry === context.unit) {
+					errors.push(
+						`depends_on_self_reference: unit '${context.unit}' lists itself in depends_on. A unit cannot depend on itself.`,
+					)
+				}
+				if (!context.siblingUnits.includes(entry) && entry !== context.unit) {
+					errors.push(
+						`depends_on_unresolved: depends_on entry '${entry}' does not resolve to a unit in stage '${context.stage}'. Sibling units in this stage: [${context.siblingUnits.join(", ")}].`,
+					)
+				}
+			}
+		}
+	}
+
+	// Rule 3: title must be a non-empty string if present.
+	if ("title" in frontmatter) {
+		const t = frontmatter.title
+		if (typeof t !== "string" || t.trim() === "") {
+			errors.push(
+				"title_shape: title must be a non-empty string, or omit the field (it will default to the unit name).",
+			)
+		}
+	}
+
+	// Rule 4: model must be one of haiku|sonnet|opus if present.
+	if ("model" in frontmatter) {
+		const m = frontmatter.model
+		if (m !== "haiku" && m !== "sonnet" && m !== "opus") {
+			errors.push(
+				`model_shape: model must be 'haiku', 'sonnet', or 'opus' (got '${String(m)}'). Omit the field to fall through to hat/stage/studio defaults.`,
+			)
+		}
+	}
+
+	// Rule 5: closes (when present) must be an array of FB ID strings.
+	if ("closes" in frontmatter) {
+		const c = frontmatter.closes
+		if (!Array.isArray(c)) {
+			errors.push(
+				"closes_shape: closes must be a list of FB IDs (strings), or omit the field for units that don't address feedback.",
+			)
+		} else {
+			for (const entry of c) {
+				if (typeof entry !== "string") {
+					errors.push(
+						`closes_shape: every closes entry must be a string FB ID; got ${typeof entry} '${String(entry)}'.`,
+					)
+				}
+			}
+		}
+	}
+
+	// Rule 6: quality_gates (when present) must be an array of executable
+	// gate objects (per FSM_CONTRACTS_ELABORATE_BLOCK in orchestrator.ts).
+	if ("quality_gates" in frontmatter) {
+		const qg = frontmatter.quality_gates
+		if (!Array.isArray(qg)) {
+			errors.push(
+				"quality_gates_shape: quality_gates must be a list of {name, command, dir?} objects, or omit the field.",
+			)
+		} else {
+			for (let i = 0; i < qg.length; i++) {
+				const g = qg[i] as Record<string, unknown>
+				if (!g || typeof g !== "object") {
+					errors.push(
+						`quality_gates_shape[${i}]: each entry must be an object with at least {name, command}.`,
+					)
+					continue
+				}
+				if (typeof g.name !== "string" || g.name.trim() === "") {
+					errors.push(`quality_gates_shape[${i}]: name must be a non-empty string.`)
+				}
+				if (typeof g.command !== "string" || g.command.trim() === "") {
+					errors.push(
+						`quality_gates_shape[${i}]: command must be a non-empty shell command string. Prose-only gates are silently skipped — write a real command.`,
+					)
+				}
+			}
+		}
+	}
+
+	return errors.length === 0 ? { valid: true } : { valid: false, errors }
+}
+
+// ── DAG cycle detection (architecture §1.1: FSM enforces DAG validity) ──
+//
+// Given a stage's complete unit set + each unit's depends_on, returns the
+// names of any units involved in a cycle. Empty array means the DAG is
+// acyclic. Used by haiku_unit_write to refuse writes that introduce a
+// cycle (the new edge plus existing depends_on form a back-reference).
+
+export function detectDagCycles(
+	dag: Record<string, string[]>,
+): string[] {
+	const WHITE = 0
+	const GRAY = 1
+	const BLACK = 2
+	const color: Record<string, number> = {}
+	const cycleNodes = new Set<string>()
+	for (const node of Object.keys(dag)) color[node] = WHITE
+
+	function visit(node: string): boolean {
+		if (color[node] === GRAY) {
+			cycleNodes.add(node)
+			return true
+		}
+		if (color[node] === BLACK) return false
+		color[node] = GRAY
+		const deps = dag[node] || []
+		let foundCycle = false
+		for (const dep of deps) {
+			if (!(dep in dag)) continue // unresolved entries are caught elsewhere
+			if (visit(dep)) {
+				cycleNodes.add(node)
+				foundCycle = true
+			}
+		}
+		color[node] = BLACK
+		return foundCycle
+	}
+
+	for (const node of Object.keys(dag)) {
+		if (color[node] === WHITE) visit(node)
+	}
+	return [...cycleNodes].sort()
+}
+
 // ── Frontmatter helpers ────────────────────────────────────────────────────
 
 function normalizeDates(
@@ -4144,6 +4325,34 @@ export const stateToolDefs = [
 				unit: { type: "string" },
 			},
 			required: ["intent", "stage", "unit"],
+		},
+	},
+	{
+		name: "haiku_unit_write",
+		description:
+			"Create or fully rewrite a unit file. This is the ONLY agent-callable path for authoring units — generic file Write/Edit on `units/*.md` is denied at the hook layer. The body is freeform markdown; the optional `frontmatter` is validated against the FM schema (no FSM-driven fields like status/hat/bolt allowed; depends_on entries must be strings with no self-reference and no cycles among declared units; etc.). Lifecycle: only allowed when the unit doesn't exist yet OR when its status is `pending`. Active and completed units are immutable.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string" },
+				stage: { type: "string" },
+				unit: {
+					type: "string",
+					description:
+						"Unit name without `.md` extension, e.g. `unit-01-foo`. Convention: `unit-NN-slug` with zero-padded NN.",
+				},
+				body: {
+					type: "string",
+					description:
+						"Full markdown body of the unit. Must be substantive (no placeholders like TBD, TODO, '...').",
+				},
+				frontmatter: {
+					type: "object",
+					description:
+						"Optional frontmatter. Allowed fields: title, depends_on, inputs, outputs, quality_gates, model, closes, plus any stage-specific fields. Forbidden (FSM-driven): status, hat, bolt, iterations, started_at, completed_at — including these returns a validation error.",
+				},
+			},
+			required: ["intent", "stage", "unit", "body"],
 		},
 	},
 	{
@@ -5862,6 +6071,160 @@ export function handleStateTool(
 					ok: true,
 					message: `Deleted pending unit '${args.unit}'.`,
 				}),
+			)
+		}
+
+		// ── Unit write (create or full-rewrite, pending only) ──
+		// The architecture-mandated path for authoring unit files. Generic
+		// Write/Edit on units/*.md is denied at the hook layer; this is the
+		// only way agents can put a unit on disk. FM is validated; lifecycle
+		// is enforced; FSM-driven fields are stripped (the FSM owns them).
+		case "haiku_unit_write": {
+			const writeBranchErr = enforceStageBranch(
+				args.intent as string,
+				args.stage as string,
+			)
+			if (writeBranchErr) return writeBranchErr
+
+			const intentArg = args.intent as string
+			const stageArg = args.stage as string
+			const unitName = args.unit as string
+			const body = (args.body as string) ?? ""
+			const fmInput =
+				(args.frontmatter as Record<string, unknown>) ?? {}
+
+			if (!body || body.trim().length === 0) {
+				return text(
+					JSON.stringify({
+						error: "empty_body",
+						message:
+							"body is required and must be substantive. Empty bodies cannot pass downstream verification.",
+					}),
+				)
+			}
+
+			const path = unitPath(intentArg, stageArg, unitName)
+
+			// Lifecycle enforcement: only pending OR new units may be (re)written.
+			let isCreate = true
+			if (existsSync(path)) {
+				const { data: existingFm } = parseFrontmatter(
+					readFileSync(path, "utf8"),
+				)
+				const currentStatus = (existingFm.status as string) || "pending"
+				if (currentStatus !== "pending") {
+					return text(
+						JSON.stringify({
+							error: "lifecycle_violation",
+							current_status: currentStatus,
+							message: `Cannot rewrite unit '${unitName}' — status is '${currentStatus}'. Per the forward-only lifecycle rule (architecture §1.3), units become immutable once active or completed. To address a defect in a completed unit, draft a NEW pending unit in the next elaborate iteration; do not modify the original.`,
+						}),
+					)
+				}
+				isCreate = false
+			}
+
+			// Build sibling list for DAG validation. The new/rewritten unit
+			// is included so self-reference detection works.
+			const stageUnitsDir = join(stageDir(intentArg, stageArg), "units")
+			const siblingUnits: string[] = []
+			if (existsSync(stageUnitsDir)) {
+				for (const f of readdirSync(stageUnitsDir).filter((n) =>
+					n.endsWith(".md"),
+				)) {
+					siblingUnits.push(f.replace(/\.md$/, ""))
+				}
+			}
+			if (!siblingUnits.includes(unitName)) siblingUnits.push(unitName)
+
+			// FM validation (mechanical rules from validateUnitFrontmatter).
+			const validation = validateUnitFrontmatter(fmInput, {
+				intent: intentArg,
+				stage: stageArg,
+				unit: unitName,
+				siblingUnits,
+			})
+			if (!validation.valid) {
+				return text(
+					JSON.stringify({
+						error: "frontmatter_validation_failed",
+						errors: validation.errors,
+						message: `Frontmatter failed validation. Fix each error and call again. Architecture §1.1 mandates that the FSM enforces FM validity at write time, so the agent never sees defects sneak through.`,
+					}),
+				)
+			}
+
+			// DAG cycle check — assemble the full stage DAG including the
+			// proposed write, then run cycle detection.
+			const dag: Record<string, string[]> = {}
+			if (existsSync(stageUnitsDir)) {
+				for (const f of readdirSync(stageUnitsDir).filter((n) =>
+					n.endsWith(".md"),
+				)) {
+					const sibName = f.replace(/\.md$/, "")
+					if (sibName === unitName) continue
+					const { data: sibFm } = parseFrontmatter(
+						readFileSync(join(stageUnitsDir, f), "utf8"),
+					)
+					dag[sibName] = Array.isArray(sibFm.depends_on)
+						? (sibFm.depends_on as string[])
+						: []
+				}
+			}
+			dag[unitName] = Array.isArray(fmInput.depends_on)
+				? (fmInput.depends_on as string[])
+				: []
+			const cycleNodes = detectDagCycles(dag)
+			if (cycleNodes.length > 0) {
+				return text(
+					JSON.stringify({
+						error: "dag_cycle_detected",
+						cycle_nodes: cycleNodes,
+						message: `Writing unit '${unitName}' with depends_on=[${(fmInput.depends_on as string[] | undefined)?.join(", ") ?? ""}] would create a dependency cycle involving: [${cycleNodes.join(", ")}]. The FSM rejects writes that produce a cyclic DAG. Reorder dependencies or restructure the units.`,
+					}),
+				)
+			}
+
+			// All validators passed. Persist. Set FSM-driven fields to their
+			// initial values (status: pending, etc.) — agents never touch
+			// these.
+			const finalFm: Record<string, unknown> = {
+				...fmInput,
+				status: "pending",
+			}
+			// Title default: if absent, derive from body's first H1 or fall
+			// back to unit name.
+			if (!("title" in finalFm)) {
+				const h1 = body.match(/^#\s+(.+)$/m)
+				finalFm.title = h1 ? h1[1].trim() : unitName
+			}
+
+			// Ensure parent directory exists for create paths.
+			if (isCreate && !existsSync(stageUnitsDir)) {
+				mkdirSync(stageUnitsDir, { recursive: true })
+			}
+			writeFileSync(path, matter.stringify(body.trimEnd() + "\n", finalFm))
+			sealIntentState(intentArg)
+			emitTelemetry(isCreate ? "haiku.unit.created" : "haiku.unit.rewritten", {
+				intent: intentArg,
+				stage: stageArg,
+				unit: unitName,
+			})
+			return text(
+				JSON.stringify(
+					{
+						ok: true,
+						created: isCreate,
+						unit: unitName,
+						stage: stageArg,
+						intent: intentArg,
+						message: isCreate
+							? `Created unit '${unitName}' in stage '${stageArg}' (status: pending).`
+							: `Rewrote unit '${unitName}' in stage '${stageArg}' (status preserved as pending).`,
+					},
+					null,
+					2,
+				),
 			)
 		}
 

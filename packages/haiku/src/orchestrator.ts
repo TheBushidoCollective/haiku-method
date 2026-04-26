@@ -7318,33 +7318,23 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 						`You are the **${hat}** hat running in **fix-mode** against feedback **${fbId}** (bolt ${fixBolt} of ${fixMaxBolts}) in stage **${fixStage}** of intent **${slug}**.`,
 						"",
 					]
+					// Per FB-as-unit semantic (architecture §5): fixers edit the FB
+					// body via haiku_feedback_write (canonical FSM path), which writes
+					// to the actual FB file location. Worktree isolation for raw file
+					// editing is no longer needed — the MCP write tool serializes
+					// access. We still note any allocated worktree for legacy
+					// callers, but fixers are instructed to use the MCP tools
+					// regardless of worktree allocation.
 					if (fbWorktree) {
 						promptLines.push(
-							"## Isolation worktree (REQUIRED)",
-							`Do ALL work for this chain inside the dedicated worktree at:`,
-							``,
-							`    ${fbWorktree}`,
-							``,
-							`This worktree is on branch \`${fbBranch}\`, forked from the stage branch at dispatch time. It exists so parallel fix chains cannot clobber each other. Prior bolts' fix commits live on this branch ONLY — the parent checkout does NOT contain them.`,
-							"",
-							`**Rules (mandatory — violating these breaks the fix loop):**`,
-							`- **Your FIRST Bash command MUST be \`cd "${fbWorktree}"\`.** Every shell command that follows runs in the worktree. Verify with \`pwd\`.`,
-							`- **For Read / Edit / Write, prefix repo-relative paths with \`${fbWorktree}/\` to form the absolute path.** Example: feedback referencing \`.haiku/intents/${slug}/stages/${fixStage}/foo.md\` MUST be read as \`${fbWorktree}/.haiku/intents/${slug}/stages/${fixStage}/foo.md\`. Reading the parent-checkout path returns the pre-fix content (prior bolts' commits live on the worktree branch only) and will cause the assessor to wrongly conclude no fix was applied.`,
-							`- For git: either rely on the \`cd\` above, or prefix every command with \`git -C "${fbWorktree}"\`. Do NOT run bare \`git\` from the parent tree — you will read the wrong HEAD and commit on the wrong branch.`,
-							`- Commit frequently inside the worktree with messages like \`haiku: fix ${fbId} bolt ${fixBolt} (${hat})\`. Do NOT push.`,
-							`- Do NOT run \`git worktree remove\`, \`git branch -d\`, or \`git merge\` — the FSM owns the merge-back on the next \`haiku_run_next\` after this chain's final hat closes the finding.`,
-							"",
-						)
-					} else {
-						promptLines.push(
-							"## Parallel-batch warning",
-							`This fix loop is running in parallel with other findings. Multiple chains may edit the **same files** at overlapping times (no isolation worktree is allocated in this environment). When you edit, read the file immediately before writing so you don't clobber another chain's change. If your edit depends on state another chain may have already fixed, verify the current file content rather than trusting the feedback body's line numbers verbatim. The assessor will catch incomplete fixes and the FSM will retry on the next bolt.`,
+							"## Worktree allocation (informational)",
+							`The FSM allocated an isolation worktree at \`${fbWorktree}\` (branch \`${fbBranch}\`) — historically used for raw file edits. Under the new FB-as-unit semantic you do NOT need to operate inside this worktree: \`haiku_feedback_write\` and \`haiku_unit_read\` write to / read from the canonical FSM file locations directly, with serialized access. Ignore the worktree unless you have a specific reason to use it.`,
 							"",
 						)
 					}
 					promptLines.push(
 						"## Required context (inlined below)",
-						"You are NOT wearing this hat to build a new unit. You are wearing it to resolve ONE specific feedback finding on artifacts that already exist.",
+						"Your work artifact is the FB file (architecture §5: FB-as-unit). The flagged unit is read-only context.",
 						"",
 					)
 					if (stageBasePath) {
@@ -7368,43 +7358,43 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 					}
 					promptLines.push(
 						"",
-						"## Fix-mode scope (STRICT)",
+						"## Fix-mode scope (STRICT — FB-as-unit semantic per architecture §5)",
 						`- You are addressing ONE finding: **${fbId}** — _${fbTitle}_.`,
-						`- Read the feedback body (above) carefully. It contains file:line references and the reviewer's concern.`,
-						`- The artifact(s) the feedback flags live in \`.haiku/intents/${slug}/stages/${fixStage}/\` — edit them in place.`,
-						"- Do NOT create a new unit spec. Do NOT modify unit FSM fields. Do NOT touch unrelated artifacts. Stay in scope.",
-						"- Do NOT call `haiku_unit_advance_hat` or `haiku_unit_reject_hat` — this is NOT unit execution.",
+						`- The FB file IS your unit. Your work artifact is the FB body, NOT the flagged unit.`,
+						`- Per architecture §1.3 (forward-only lifecycle), completed units are IMMUTABLE. You MUST NOT edit the flagged unit. The actual fix is APPLIED in the next iteration of the upstream stage's elaborate phase via the closed FB diagnoses you produce here.`,
+						`- Edit the FB body via \`haiku_feedback_write\`. Read the flagged unit (read-only) via \`haiku_unit_read\` for context.`,
+						`- Progress through the fix_hats chain via \`haiku_feedback_advance_hat\` (mirror of haiku_unit_advance_hat for FBs). On reject, use \`haiku_feedback_reject_hat\` with a reason.`,
+						`- Do NOT call \`haiku_feedback_update\` for closure — the FSM auto-closes the FB when the LAST hat in fix_hats calls advance_hat.`,
+						`- Generic Write/Edit on units/*.md or feedback/*.md is denied at the hook layer.`,
 						"",
 						"## Instructions",
 						"",
 					)
 					let step = 1
-					if (isGitRepo()) {
-						const commitTarget = fbWorktree
-							? `the isolation worktree (\`git -C "${fbWorktree}" add -A && git -C "${fbWorktree}" commit -m "..."\`)`
-							: "the current branch"
-						promptLines.push(
-							`${step++}. Work on ${commitTarget}. Commit the fix with a message like \`haiku: fix ${fbId} bolt ${fixBolt} (${hat})\` — do NOT push.`,
-						)
-					}
 					if (isLast) {
 						promptLines.push(
-							`${step++}. **Assess closure (two-stage, both must pass).**`,
-							`   - **Stage A — Spec match.** Read the edited artifact(s)${fbWorktree ? ` using \`${fbWorktree}/<repo-relative-path>\` as the absolute path (the parent checkout does NOT contain this bolt's commits — reading it returns the pre-fix content and you will incorrectly conclude no fix was applied)` : ""} and re-read the feedback body. Does the edit make the finding's requirement true as written? A partial gesture is not a fix.`,
-							`   - **Stage B — Quality / regression.** Inspect the diff (\`${fbWorktree ? `git -C "${fbWorktree}" show HEAD` : "git show HEAD"}\`). Does the edit introduce a regression — broken neighboring behavior, scope creep into unrelated files, banned patterns, or violations of the stage's quality rules?`,
+							`${step++}. **Read current state.**`,
+							`   - The FB body is inlined above. Read what prior hats have written into it (root cause, proposed action, references).`,
+							`   - Read the flagged unit body via \`haiku_unit_read { intent: "${slug}", stage: "${fixStage}", unit: "<unit-name>" }\` if you need to verify the diagnosis against the actual artifact. The unit is READ-ONLY.`,
+							`${step++}. **Validate the diagnosis (two-stage, both must pass).**`,
+							`   - **Stage A — Substance.** Does the FB body contain (a) a clear root-cause statement naming the specific defect, (b) a concrete proposed action the next elaborate phase can apply, and (c) accurate file:line references that resolve in the flagged unit?`,
+							`   - **Stage B — Coherence.** Does the proposed action actually resolve the finding as written? A partial gesture or vague "review this section" is not a complete diagnosis.`,
 							`${step++}. **Decide:**`,
-							`   - **A passes AND B passes** → call \`haiku_feedback_update { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", status: "closed", closed_by: "fix-loop:${fbId}:bolt-${fixBolt}" }\`.`,
-							`   - **A fails** → leave the feedback status as-is (the FSM counts this bolt and may dispatch another).`,
-							`   - **A passes, B fails** → leave the feedback open AND log the regression as a new finding via \`haiku_feedback({ intent: "${slug}", stage: "${fixStage}", title: "<regression from fix-loop:${fbId}>", body: "<diff hunk + concrete impact>", origin: "adversarial-review", author: "fix-assessor" })\`. Do NOT close the original — the fix is not complete until both stages pass.`,
-							`   - **Finding is invalid** (reviewer misread the artifact) → call \`haiku_feedback_reject { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", reason: "<concrete reason>" }\` INSTEAD of closing.`,
-							`${step++}. Return a one-line summary: \`fix-assessor: closed | open | rejected — <reason>\`. Use a verb of completed action; zero hedging words (\`should\`, \`seems\`, \`probably\`).`,
+							`   - **A passes AND B passes** → call \`haiku_feedback_advance_hat { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}" }\`. This is the LAST hat in the fix_hats chain — the FSM auto-closes the FB and records \`closed_by: fix-loop:${fbId}:bolt-${fixBolt}\`. The next iteration of the upstream stage's elaborate phase consumes this closed FB and authors corrective work.`,
+							`   - **Either fails** → call \`haiku_feedback_reject_hat { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", reason: "<specific failed criterion + what to fix>" }\`. The FSM bumps bolt and routes back to the previous hat.`,
+							`   - **Finding is invalid** (reviewer misread the artifact entirely; nothing to fix) → call \`haiku_feedback_reject { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", reason: "<concrete reason invalid>" }\`. (Note: \`haiku_feedback_reject\` is the legacy "this finding is invalid" tool; \`haiku_feedback_reject_hat\` is the new "this hat's work is incomplete" tool.)`,
+							`${step++}. Return a one-line summary: \`${hat}: advanced | rejected — <reason>\`. Verb of completed action; zero hedging words.`,
 						)
 					} else {
 						promptLines.push(
-							`${step++}. **Verify the finding before editing.** Read the flagged artifact at the file:line refs in the feedback body. Three failure modes route to \`haiku_feedback_reject\` instead of an edit:\n   - **Stale / misread**: the file no longer matches what the reviewer flagged, or the citation points at the wrong location → \`haiku_feedback_reject { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", reason: "stale — <what changed>" }\` or \`"misread — <what they cited vs. what's there>"\`.\n   - **Ambiguous / unclear** — *high bar*: rejection is **terminal and permanent**, the finding is gone with no in-band channel for the reviewer to clarify. Reject for ambiguity ONLY when (a) NO charitable interpretation exists, OR (b) multiple interpretations are equally plausible AND each requires a *materially different* fix (not just minor variations). On close calls — when one interpretation is clearly the most charitable given the reviewer's mandate, the surrounding artifact context, and the file:line refs — proceed with that interpretation, **state it as an explicit assumption in your bolt summary** ("assumed the finding meant X based on Y"), and let the assessor's two-stage closure check catch wrong interpretations on bolt N+1. The bolt cap (${MAX_FIX_LOOP_BOLTS}) is the safety net.\n     - When you DO reject for true ambiguity, structure the reason as a clarification request the reviewer can act on: \`"needs clarification — original concern: <one-line restate>; specific ambiguity: <what's unclear>; suggested clarification format: <example, e.g. 'name the input field and the validation rule'>"\`.\n     - ✗ Body says: *"the validation is weak"* → genuinely vague; no charitable interpretation isolates a target. Reject with the structured clarification format.\n     - ✗ Body says: *"rename it to foo"* in one place and *"rename it to bar"* elsewhere → two interpretations with materially different fixes. Reject.\n     - ✓ Body says: *"the validation accepts negative quantities; it must reject them with HTTP 400 and message 'quantity must be positive'"* → actionable. Proceed.\n     - ✓ Body says: *"the error handling here is weak"* with a file:line ref pointing at a try/catch swallowing all exceptions → charitable interpretation is clear (swallow → narrow + rethrow). Proceed; state the assumption in your summary.\n   - **Invalid**: the finding describes correct behavior or doesn't identify a real defect → \`haiku_feedback_reject { ... reason: "<concrete reason invalid>" }\`.\n\n   Otherwise the finding is actionable — proceed. Do NOT acknowledge the finding in prose ("good catch", "you're right"); the fix in code is the acknowledgement.`,
-							`${step++}. **Investigate.**\n   - Read the flagged artifact at the references in the feedback body. Establish the **current state** — what makes the finding true right now.\n   - Establish the **desired state** — what specifically would make the finding false.\n   - State the **gap** in one sentence. That's the root cause; the fix is a transition from current to desired.\n   - Look for a **comparable working sibling** — another artifact in this stage, an approved template, a passing test, a previously-shipped version, anything that demonstrates the desired state in a related context. Note the relevant differences. Skip this substep only if the artifact is genuinely greenfield with no comparable reference.${fixBolt > 1 ? `\n   - Bolt ${fixBolt} > 1: read \`${fbWorktree ? `git -C "${fbWorktree}" show HEAD` : "git show HEAD"}\` for the prior bolt's edit. **Did you find a meaningfully different root cause from the prior attempt?** If yes, plan a different shape and proceed. If no, you're about to burn a bolt repeating the prior approach — call \`haiku_feedback_reject\` with reason "needs human escalation — N attempts converged on same surface fix" instead of editing.` : ""}`,
-							`${step++}. **Apply the fix** within your hat's mandate. Edit ONLY the artifact(s) flagged by the finding — out-of-scope edits are a scope violation; if you notice a separate issue, log it via \`haiku_feedback\` rather than editing it now. Save changes.`,
-							`${step++}. Return a one-line summary using a verb of completed action (\`edited X\`, \`added Y\`, \`updated Z\`). Zero hedging words (\`should\`, \`seems\`, \`probably\`, \`might\`).`,
+							`${step++}. **Read current state.**`,
+							`   - The FB body is inlined above. Read it carefully — the reviewer's concern, file:line refs, and any prior-hat additions to the diagnosis.`,
+							`   - Read the flagged unit body via \`haiku_unit_read { intent: "${slug}", stage: "${fixStage}", unit: "<unit-name>" }\` to ground your investigation in the actual artifact. READ-ONLY.`,
+							`${step++}. **Verify the finding before diagnosing.** Three rejection paths route to \`haiku_feedback_reject\` (NOT \`haiku_feedback_reject_hat\` — the latter is a hat-progression reject; this is a "this finding is invalid" reject):\n   - **Stale / misread**: the artifact no longer matches what the reviewer flagged, or the citation points at the wrong location → \`haiku_feedback_reject { ..., reason: "stale — <what changed>" }\` or \`"misread — <what they cited vs. what's there>"\`.\n   - **Ambiguous / unclear** — *high bar*: rejection is terminal. Reject for ambiguity ONLY when no charitable interpretation exists OR multiple interpretations require materially different fixes. Otherwise proceed with the most charitable interpretation, stating the assumption in your bolt summary. The bolt cap (${MAX_FIX_LOOP_BOLTS}) is the safety net.\n     - When you DO reject for true ambiguity, structure the reason as a clarification request: \`"needs clarification — original concern: <one-line>; specific ambiguity: <what's unclear>; suggested clarification format: <example>"\`.\n   - **Invalid**: the finding describes correct behavior or doesn't identify a real defect → \`haiku_feedback_reject { ..., reason: "<concrete reason invalid>" }\`.\n\n   Otherwise the finding is actionable — proceed.`,
+							`${step++}. **Diagnose.** Within your hat's mandate (see Hat Mandate above):\n   - Establish the **current state** of the flagged unit — what makes the finding true right now (cite file:line refs).\n   - Establish the **desired state** — what specifically would make the finding false.\n   - State the **gap** in one sentence. That's the root cause; the proposed action is a transition from current to desired.\n   - Look for a **comparable working sibling** — another unit, an approved template, a previously-shipped version that demonstrates the desired state. Note the relevant differences.${fixBolt > 1 ? `\n   - Bolt ${fixBolt} > 1: read the FB body's prior diagnosis (above). **Did you find a meaningfully different root cause?** If yes, refine the diagnosis. If no, you're about to burn a bolt repeating prior analysis — call \`haiku_feedback_reject { ..., reason: "needs human escalation — N attempts converged on same diagnosis" }\` instead.` : ""}`,
+							`${step++}. **Write the updated diagnosis to the FB body** via \`haiku_feedback_write { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", body: "<full markdown>" }\`. Sections to include: root cause (cite file:line), proposed action (concrete change-set the elaborate-phase agent can apply), references (sibling units / decisions / external sources). Preserve prior-hat content; ADD to it, don't erase.`,
+							`${step++}. **Advance to the next hat** via \`haiku_feedback_advance_hat { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}" }\`. The FSM moves the FB to the next hat in the fix_hats chain.`,
+							`${step++}. Return a one-line summary using a verb of completed action (\`diagnosed X\`, \`identified Y\`, \`refined Z\`). Zero hedging words.`,
 						)
 					}
 

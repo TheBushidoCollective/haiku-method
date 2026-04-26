@@ -14,7 +14,7 @@ import {
 	unlinkSync,
 	writeFileSync,
 } from "node:fs"
-import { join, resolve } from "node:path"
+import { join, resolve, sep } from "node:path"
 import {
 	dedupeFrontmatterKeys,
 	isDuplicateKeyError,
@@ -1163,6 +1163,226 @@ function buildRepairReport(
 		)
 	}
 
+	return lines.join("\n")
+}
+
+// ── Worktree-location migration ────────────────────────────────────────────
+//
+// Pre-fix, H·AI·K·U created `.haiku/worktrees/` relative to `process.cwd()`,
+// so running the FSM from a sub-worktree (e.g. Claude's
+// `.claude/worktrees/foo/`) forked all state and unit worktrees into that
+// sub-worktree instead of the primary repo. After the fix, the new code
+// always anchors at the primary repo — but existing misplaced worktrees
+// don't move themselves. This helper detects them and migrates them.
+
+interface MisplacedWorktreeMove {
+	old: string
+	new: string
+	branch: string
+}
+
+interface MisplacedWorktreeSkip {
+	path: string
+	reason: string
+}
+
+export interface WorktreeMigrationResult {
+	moved: MisplacedWorktreeMove[]
+	skipped: MisplacedWorktreeSkip[]
+	cleanedSkeletons: string[]
+}
+
+/** Parse `git worktree list --porcelain` into structured records. */
+function listGitWorktrees(): Array<{ path: string; branch: string | null }> {
+	if (!isGitRepo()) return []
+	let raw: string
+	try {
+		raw = execFileSync("git", ["worktree", "list", "--porcelain"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		})
+	} catch {
+		return []
+	}
+	const out: Array<{ path: string; branch: string | null }> = []
+	let cur: { path: string; branch: string | null } | null = null
+	for (const line of raw.split("\n")) {
+		if (line.startsWith("worktree ")) {
+			if (cur) out.push(cur)
+			cur = { path: line.slice("worktree ".length).trim(), branch: null }
+		} else if (line.startsWith("branch ") && cur) {
+			cur.branch = line.slice("branch ".length).trim()
+		} else if (line === "" && cur) {
+			out.push(cur)
+			cur = null
+		}
+	}
+	if (cur) out.push(cur)
+	return out
+}
+
+/** Check if a worktree has uncommitted changes. */
+function isWorktreeDirty(worktreePath: string): boolean {
+	try {
+		const out = execFileSync(
+			"git",
+			["-C", worktreePath, "status", "--porcelain"],
+			{ encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+		)
+		return out.trim().length > 0
+	} catch {
+		// If we can't check, treat as dirty so we don't risk data loss.
+		return true
+	}
+}
+
+/**
+ * Scan for git worktrees registered at `<somewhere>/.haiku/worktrees/...`
+ * where `<somewhere>` is NOT the primary repo, and try to relocate each
+ * via `git worktree move` to the primary's `.haiku/worktrees/`. Also
+ * sweep up empty `.haiku/worktrees/` skeleton directories left behind by
+ * the pre-fix code.
+ *
+ * Safety:
+ * - Worktrees with uncommitted changes are skipped (data preservation).
+ * - Worktrees whose target path already exists are skipped (collision).
+ * - Empty skeleton dirs (no files, no .git pointer) are removed.
+ *
+ * Returns a structured result for inclusion in the repair report.
+ */
+export function migrateMisplacedWorktrees(): WorktreeMigrationResult {
+	const result: WorktreeMigrationResult = {
+		moved: [],
+		skipped: [],
+		cleanedSkeletons: [],
+	}
+	if (!isGitRepo()) return result
+
+	const primary = primaryRepoRoot()
+	const haikuPrefix = `${sep}.haiku${sep}worktrees${sep}`
+
+	// Pass 1: registered git worktrees that live outside primary.
+	for (const wt of listGitWorktrees()) {
+		const idx = wt.path.indexOf(haikuPrefix)
+		if (idx === -1) continue
+		const root = wt.path.slice(0, idx)
+		if (root === primary) continue // already correctly placed
+		const tail = wt.path.slice(idx) // `/.haiku/worktrees/<slug>/<unit>`
+		const target = primary + tail
+
+		if (existsSync(target)) {
+			result.skipped.push({
+				path: wt.path,
+				reason: `target already exists: ${target}`,
+			})
+			continue
+		}
+		if (isWorktreeDirty(wt.path)) {
+			result.skipped.push({
+				path: wt.path,
+				reason:
+					"uncommitted changes — commit/stash inside the worktree, then re-run haiku_repair",
+			})
+			continue
+		}
+		try {
+			// Ensure parent dir exists before move.
+			const targetParent = target.slice(0, target.lastIndexOf(sep))
+			mkdirSync(targetParent, { recursive: true })
+			execFileSync("git", ["worktree", "move", wt.path, target], {
+				encoding: "utf8",
+				stdio: ["ignore", "pipe", "pipe"],
+			})
+			result.moved.push({
+				old: wt.path,
+				new: target,
+				branch: wt.branch ?? "(detached)",
+			})
+		} catch (err) {
+			result.skipped.push({
+				path: wt.path,
+				reason: `git worktree move failed: ${err instanceof Error ? err.message : String(err)}`,
+			})
+		}
+	}
+
+	// Pass 2: empty `.haiku/worktrees/` skeleton dirs (no .git pointer
+	// inside, no files). Walk every git worktree's root to find them.
+	const rootsToScan = new Set<string>()
+	for (const wt of listGitWorktrees()) {
+		if (wt.path !== primary) rootsToScan.add(wt.path)
+	}
+	for (const root of rootsToScan) {
+		const skel = join(root, ".haiku", "worktrees")
+		if (!existsSync(skel)) continue
+		// If anything inside is a real git worktree (still registered) or
+		// contains files, leave it alone. We only sweep pure-empty trees.
+		let hasFiles = false
+		try {
+			const walk = (dir: string): void => {
+				if (hasFiles) return
+				for (const entry of readdirSync(dir, { withFileTypes: true })) {
+					const p = join(dir, entry.name)
+					if (entry.isFile() || entry.isSymbolicLink()) {
+						hasFiles = true
+						return
+					}
+					if (entry.isDirectory()) walk(p)
+				}
+			}
+			walk(skel)
+		} catch {
+			hasFiles = true // bail on permission errors
+		}
+		if (hasFiles) continue
+		try {
+			rmSync(skel, { recursive: true, force: true })
+			result.cleanedSkeletons.push(skel)
+			// Also remove the parent `.haiku/` dir if now empty (the whole
+			// skeleton was just `.haiku/worktrees/...`).
+			const parent = join(root, ".haiku")
+			if (existsSync(parent) && readdirSync(parent).length === 0) {
+				rmSync(parent, { recursive: true, force: true })
+			}
+		} catch {
+			// Best-effort cleanup; don't fail the whole migration.
+		}
+	}
+
+	return result
+}
+
+/** Render the worktree-migration result as a markdown section. */
+function buildWorktreeMigrationReport(result: WorktreeMigrationResult): string {
+	if (
+		result.moved.length === 0 &&
+		result.skipped.length === 0 &&
+		result.cleanedSkeletons.length === 0
+	) {
+		return ""
+	}
+	const lines: string[] = ["## Worktree Migration", ""]
+	if (result.moved.length > 0) {
+		lines.push(`Moved ${result.moved.length} misplaced worktree(s):`)
+		for (const m of result.moved) {
+			lines.push(`- \`${m.branch}\`: ${m.old} → ${m.new}`)
+		}
+		lines.push("")
+	}
+	if (result.skipped.length > 0) {
+		lines.push(`Skipped ${result.skipped.length} worktree(s):`)
+		for (const s of result.skipped) {
+			lines.push(`- ${s.path} — ${s.reason}`)
+		}
+		lines.push("")
+	}
+	if (result.cleanedSkeletons.length > 0) {
+		lines.push(
+			`Cleaned ${result.cleanedSkeletons.length} empty skeleton dir(s):`,
+		)
+		for (const p of result.cleanedSkeletons) lines.push(`- ${p}`)
+		lines.push("")
+	}
 	return lines.join("\n")
 }
 
@@ -4882,7 +5102,7 @@ export const stateToolDefs = [
 	{
 		name: "haiku_repair",
 		description:
-			"Scan intents for metadata issues and auto-apply safe fixes. In a git repo, scans all intent branches sequentially, auto-applies safe fixes, syncs changes, and opens PRs/MRs for already-merged branches. In filesystem mode, scans intents in the current working directory. Pass `intent` to repair a single intent only. Pass `skip_branches: true` to force cwd-only mode in a git repo. Pass `apply: false` to scan without applying fixes.",
+			"Scan intents for metadata issues and auto-apply safe fixes. In a git repo, scans all intent branches sequentially, auto-applies safe fixes, syncs changes, and opens PRs/MRs for already-merged branches. In filesystem mode, scans intents in the current working directory. Also relocates any worktrees misplaced by older H·AI·K·U versions (which rooted `.haiku/worktrees/` at cwd instead of the primary repo) — clean worktrees are moved via `git worktree move`; dirty ones are reported for manual resolution. Pass `intent` to repair a single intent only. Pass `skip_branches: true` to force cwd-only mode in a git repo. Pass `apply: false` to scan without applying fixes.",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -7232,6 +7452,16 @@ export function handleStateTool(
 			const repairAutoApply = args.apply !== false // default true
 			const repairSkipBranches = args.skip_branches === true
 
+			// First: migrate any worktrees that were created at the wrong
+			// path by the pre-fix code (when haiku rooted worktrees at
+			// `process.cwd()` instead of the primary repo). Runs regardless
+			// of mode — the migration is structural and benefits both
+			// single-cwd and multi-branch repair flows.
+			const migration = repairAutoApply
+				? migrateMisplacedWorktrees()
+				: { moved: [], skipped: [], cleanedSkeletons: [] }
+			const migrationReport = buildWorktreeMigrationReport(migration)
+
 			// Multi-branch path: in a git repo, no single-intent restriction, branches not skipped.
 			// Runs whether or not active haiku/<slug>/main branches exist — the archived pass
 			// handles the case where all intents have already been merged and their branches deleted.
@@ -7240,9 +7470,12 @@ export function handleStateTool(
 					const { summaries, mainline, archivedSummary } =
 						repairAllBranches(repairAutoApply)
 					if (summaries.length > 0 || archivedSummary) {
-						return text(
-							buildMultiBranchReport(summaries, mainline, archivedSummary),
+						const body = buildMultiBranchReport(
+							summaries,
+							mainline,
+							archivedSummary,
 						)
+						return text(migrationReport ? `${migrationReport}\n${body}` : body)
 					}
 					// No active branches AND no archived intents — fall through to cwd repair
 				} catch (err) {
@@ -7256,7 +7489,11 @@ export function handleStateTool(
 			try {
 				findHaikuRoot()
 			} catch {
-				return text("No .haiku/ directory found.")
+				return text(
+					migrationReport
+						? `${migrationReport}\nNo .haiku/ directory found.`
+						: "No .haiku/ directory found.",
+				)
 			}
 
 			let cwdResult: RepairCwdResult
@@ -7271,9 +7508,16 @@ export function handleStateTool(
 			if (repairIntentArg && cwdResult.scanned === 0) {
 				return text(`Intent '${repairIntentArg}' not found.`)
 			}
-			if (cwdResult.scanned === 0) return text("No intents found.")
+			if (cwdResult.scanned === 0) {
+				return text(
+					migrationReport
+						? `${migrationReport}\nNo intents found.`
+						: "No intents found.",
+				)
+			}
 
-			return text(buildRepairReport(cwdResult))
+			const body = buildRepairReport(cwdResult)
+			return text(migrationReport ? `${migrationReport}\n${body}` : body)
 		}
 
 		// ── Feedback ──

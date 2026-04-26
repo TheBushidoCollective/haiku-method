@@ -30,7 +30,10 @@ import {
 	mergeDiscoveryWorktree,
 	mergeFixChainWorktree,
 } from "../src/git-worktree.ts"
-import { _resetIsGitRepoForTests } from "../src/state-tools.ts"
+import {
+	_resetIsGitRepoForTests,
+	migrateMisplacedWorktrees,
+} from "../src/state-tools.ts"
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -506,6 +509,120 @@ await test("discoveryBranchName conventions", () => {
 		discoveryBranchName("my-intent", "development", "architecture"),
 		"haiku/my-intent/discovery-development-architecture",
 	)
+})
+
+// ── migrateMisplacedWorktrees ──────────────────────────────────────────────
+//
+// Pre-fix code created `.haiku/worktrees/...` relative to `process.cwd()`,
+// so running haiku from a sub-worktree (e.g. Claude's `.claude/worktrees/`)
+// scattered state. The migration helper relocates registered worktrees
+// back under primary and sweeps empty skeleton dirs.
+
+console.log("\n=== migrateMisplacedWorktrees ===")
+
+await test("relocates clean worktree from sub to primary", () => {
+	const { tmp, slug } = setupRepo()
+	try {
+		// Stand up a sub-worktree of the primary at /tmp/sub
+		const sub = join(tmp, ".claude", "worktrees", "sub")
+		mkdirSync(join(tmp, ".claude", "worktrees"), { recursive: true })
+		git(tmp, "worktree", "add", sub, "main")
+
+		// Manually create a misplaced unit worktree at sub/.haiku/worktrees/...
+		// (this is what the buggy code would have produced).
+		const unitBranch = `haiku/${slug}/unit-99-misplaced`
+		git(tmp, "branch", unitBranch, "main")
+		const oldPath = join(sub, ".haiku", "worktrees", slug, "unit-99-misplaced")
+		git(tmp, "worktree", "add", oldPath, unitBranch)
+
+		// Run migration from primary's cwd.
+		process.chdir(tmp)
+		const result = migrateMisplacedWorktrees()
+
+		const expectedTail = join(".haiku", "worktrees", slug, "unit-99-misplaced")
+		assert.strictEqual(result.moved.length, 1, "one worktree moved")
+		// macOS resolves /var → /private/var via symlink in git output, so
+		// compare by tail rather than absolute prefix.
+		assert.ok(
+			result.moved[0].new.endsWith(expectedTail),
+			`moved path should end with ${expectedTail}, got ${result.moved[0].new}`,
+		)
+		assert.ok(existsSync(result.moved[0].new), "new path exists on disk")
+		assert.ok(!existsSync(oldPath), "old path is gone")
+
+		// git worktree list should reflect the move.
+		const wtList = git(tmp, "worktree", "list", "--porcelain")
+		assert.ok(wtList.includes(expectedTail), "git knows the new path")
+		assert.ok(!wtList.includes(oldPath), "git no longer references old path")
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
+await test("skips worktree with uncommitted changes", () => {
+	const { tmp, slug } = setupRepo()
+	try {
+		const sub = join(tmp, ".claude", "worktrees", "sub")
+		mkdirSync(join(tmp, ".claude", "worktrees"), { recursive: true })
+		git(tmp, "worktree", "add", sub, "main")
+
+		const unitBranch = `haiku/${slug}/unit-99-dirty`
+		git(tmp, "branch", unitBranch, "main")
+		const oldPath = join(sub, ".haiku", "worktrees", slug, "unit-99-dirty")
+		git(tmp, "worktree", "add", oldPath, unitBranch)
+		writeFileSync(join(oldPath, "wip.md"), "uncommitted\n")
+
+		process.chdir(tmp)
+		const result = migrateMisplacedWorktrees()
+
+		assert.strictEqual(result.moved.length, 0, "nothing moved")
+		assert.strictEqual(result.skipped.length, 1, "one skipped")
+		assert.match(result.skipped[0].reason, /uncommitted/)
+		assert.ok(existsSync(oldPath), "dirty worktree left in place")
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
+await test("removes empty skeleton dirs from sub-worktrees", () => {
+	const { tmp } = setupRepo()
+	try {
+		const sub = join(tmp, ".claude", "worktrees", "sub")
+		mkdirSync(join(tmp, ".claude", "worktrees"), { recursive: true })
+		git(tmp, "worktree", "add", sub, "main")
+
+		// Pure-empty skeleton (no .git pointer, no files).
+		const skel = join(sub, ".haiku", "worktrees", "ghost-intent", "ghost-unit")
+		mkdirSync(skel, { recursive: true })
+
+		process.chdir(tmp)
+		const result = migrateMisplacedWorktrees()
+
+		assert.strictEqual(result.cleanedSkeletons.length, 1)
+		assert.ok(!existsSync(join(sub, ".haiku", "worktrees")))
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
+await test("leaves correctly-placed worktrees alone", () => {
+	const { tmp, slug, stage } = setupRepo()
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+		const wt = createFixChainWorktree(slug, stage, "FB-99")
+		assert.ok(wt && existsSync(wt), "fix-chain worktree created at primary")
+
+		const result = migrateMisplacedWorktrees()
+		assert.strictEqual(
+			result.moved.length,
+			0,
+			"correctly-placed worktree not touched",
+		)
+		assert.ok(existsSync(wt), "still in place")
+	} finally {
+		cleanupRepo(tmp)
+	}
 })
 
 // ── Summary ────────────────────────────────────────────────────────────────

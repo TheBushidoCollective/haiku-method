@@ -477,9 +477,15 @@ function checkoutOrCreate(branch: string, baseBranch?: string): string {
 			run(["git", "checkout", branch])
 		}
 	} else if (baseBranch) {
-		// baseBranch must exist — let it throw if not so the caller knows
-		run(["git", "checkout", baseBranch])
-		run(["git", "checkout", "-b", branch])
+		// Create + check out the new branch directly from baseBranch in
+		// one op. The previous form (`git checkout baseBranch` followed
+		// by `git checkout -b branch`) round-tripped through baseBranch's
+		// working tree for no reason, mutating the index/working tree
+		// twice and adding an extra dirty-tree failure surface. Git's
+		// `checkout -b <new> <start-ref>` does the create + switch
+		// atomically; baseBranch must exist or this throws so the caller
+		// can recover.
+		run(["git", "checkout", "-b", branch, baseBranch])
 	} else {
 		try {
 			run(["git", "checkout", "-b", branch])

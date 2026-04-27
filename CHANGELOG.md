@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.105.12] - 2026-04-27
+
+### Added
+- New MCP tools enabling programmatic management of units and feedback items throughout their lifecycle.
+- Path-boundary protection ensuring that FSM-managed files cannot be accidentally modified by agents or scripts.
+- Canonical ARCHITECTURE.md reference documenting studio, stage, hat, unit, and feedback structures.
+
+### Changed
+- Fix loops now dispatch review feedback through stage-level hat sequences with FSM-enforced lifecycle progression.
+- Elaboration-phase criteria explicitly defined per stage in phases/ELABORATION.md files.
+
+### Removed
+- Studio-level reconciler and validator fix hats, replaced by stage-level feedback-driven fix dispatch.
+
 ## [1.105.10] - 2026-04-25
 
 ### Added

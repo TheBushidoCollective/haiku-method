@@ -5,8 +5,9 @@ H·AI·K·U = Human + AI Knowledge Unification — a universal lifecycle framewo
 Three-component project: **plugin** (Claude Code plugin), **paper** (methodology spec), **website** (Next.js 15 static site).
 
 - Paper is the source of truth for methodology concepts
-- Plugin is the source of truth for implementation
-- Website presents both to users
+- Plugin is the source of truth for implementation (orchestrator, MCP tools, hooks, runtime behavior)
+- **`plugin/studios/ARCHITECTURE.md` is the structural reference for studio/stage/unit/hat/feedback boundaries within the plugin** — the rules and contracts that apply across studios, distinct from any single implementation file. Read it before structural changes; conflict resolution between this doc and the plugin code is described in the doc's intro.
+- Website presents all of the above to users
 
 ## Sync Discipline (CRITICAL)
 
@@ -85,6 +86,12 @@ When modifying any component, check if other components need corresponding updat
 | Providers | Memory Providers section | `plugin/schemas/providers/*.json`, `plugin/providers/*.md` | config.sh |
 | Harness | N/A (implementation detail) | `--harness <name>` MCP arg or `HAIKU_HARNESS` env var; capability registry in `harness.ts`, instruction adaptation in `harness-instructions.ts` | harness.ts, harness-instructions.ts, orchestrator.ts, server.ts |
 | Operations | Operation phase | /haiku:operate prompt | prompts/complex.ts |
+| Architecture (canonical) | N/A — implementation reference | `plugin/studios/ARCHITECTURE.md` — boundaries, lifecycle, hat patterns, FB-as-unit fix-loop semantics. Read before any structural change to studios, stages, hats, or FSM tools | ARCHITECTURE.md |
+| FSM-managed file boundary | Quality Enforcement | PreToolUse hook denies generic Read/Write/Edit on `units/*.md`, `feedback/*.md`, `intent.md`, `stages/*/state.json`. Agents go through MCP tools only; redirect messages name the right tool | hooks/guard-fsm-fields.ts |
+| Unit CRUDL (MCP) | N/A — implementation | `haiku_unit_write` (create/rewrite, FM validators, DAG cycle detection, pending-only lifecycle), `haiku_unit_read` (body+title only — no FM exposed), `haiku_unit_set` (FM field update, lifecycle-enforced), `haiku_unit_delete` (pending only), `haiku_unit_list` | state-tools.ts |
+| Feedback CRUDL (MCP) | N/A — implementation | `haiku_feedback_write` (body update, lifecycle-enforced), `haiku_feedback_read` (body+title only), `haiku_feedback` (create), `haiku_feedback_update` (status transitions, terminal-state-protected), `haiku_feedback_reject` (mark invalid), `haiku_feedback_delete`, `haiku_feedback_list` | state-tools.ts |
+| FB-as-unit fix loop | Fix Loop / architecture §5 | Fixer hats edit the FB body via `haiku_feedback_write`; flagged units are read-only via `haiku_unit_read`. Hat progression via `haiku_feedback_advance_hat` / `haiku_feedback_reject_hat` (mirrors of unit equivalents). FSM auto-closes the FB when the last hat in `fix_hats:` calls advance. Closed FBs become input to the next iteration of the upstream stage's elaborate phase, which authors corrective work — completed units are never modified (forward-only lifecycle) | state-tools.ts (`haiku_feedback_advance_hat`, `haiku_feedback_reject_hat`), orchestrator.ts (`review_fix`, `intent_completion_fix` dispatches) |
+| Verifier hat | architecture §3 (plan-do-verify) | Terminal hat in every per-unit hat sequence. Body-only mandate (FM is FSM territory). Validates substance, citation, internal consistency, decision-register consistency. Calls `haiku_unit_advance_hat` on pass, `haiku_unit_reject_hat` on fail | plugin/studios/{studio}/stages/{stage}/hats/verifier.md |
 
 ## H·AI·K·U Terminology (CRITICAL)
 

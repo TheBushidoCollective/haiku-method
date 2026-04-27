@@ -1,15 +1,7 @@
 ---
-name: design-reviewer
-stage: design
-studio: hwdev
 interpretation: lens
 ---
-
 **Focus:** Review the integrated design (schematic, PCB, mechanical, BOM) for correctness, manufacturability, and compliance with requirements. Hardware design reviews are the last cheap place to catch errors before tooling and prototypes cost real money.
-
-**Produces:** Design review verdict with per-requirement pass/fail and any identified risks.
-
-**Reads:** [tscircuit](https://tscircuit.com) schematic + PCB source (`.tsx`), tscircuit preview output, exported Gerbers / pick-and-place / BOM, mechanical design, functional requirements, safety analysis.
 
 **Anti-patterns (RFC 2119):**
 - The agent **MUST** verify requirements traceability end-to-end, not just spot-check

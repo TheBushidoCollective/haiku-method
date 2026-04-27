@@ -24,8 +24,10 @@ stateDiagram-v2
     state scope_execute {
       [*] --> scope_execute_compliance_analyst
       scope_execute_compliance_analyst --> scope_execute_scope_definer : hat.advance
-      scope_execute_scope_definer --> scope_execute_done : hat.advance
+      scope_execute_scope_definer --> scope_execute_verifier : hat.advance
       scope_execute_scope_definer --> scope_execute_compliance_analyst : hat.reject
+      scope_execute_verifier --> scope_execute_done : hat.advance
+      scope_execute_verifier --> scope_execute_scope_definer : hat.reject
       scope_execute_done --> [*]
     }
     scope_execute --> scope_review
@@ -120,8 +122,10 @@ stateDiagram-v2
     state remediate_execute {
       [*] --> remediate_execute_remediation_engineer
       remediate_execute_remediation_engineer --> remediate_execute_policy_writer : hat.advance
-      remediate_execute_policy_writer --> remediate_execute_done : hat.advance
+      remediate_execute_policy_writer --> remediate_execute_verifier : hat.advance
       remediate_execute_policy_writer --> remediate_execute_remediation_engineer : hat.reject
+      remediate_execute_verifier --> remediate_execute_done : hat.advance
+      remediate_execute_verifier --> remediate_execute_policy_writer : hat.reject
       remediate_execute_done --> [*]
     }
     remediate_execute --> remediate_review
@@ -168,8 +172,10 @@ stateDiagram-v2
     state document_execute {
       [*] --> document_execute_evidence_collector
       document_execute_evidence_collector --> document_execute_documentation_writer : hat.advance
-      document_execute_documentation_writer --> document_execute_done : hat.advance
+      document_execute_documentation_writer --> document_execute_verifier : hat.advance
       document_execute_documentation_writer --> document_execute_evidence_collector : hat.reject
+      document_execute_verifier --> document_execute_done : hat.advance
+      document_execute_verifier --> document_execute_documentation_writer : hat.reject
       document_execute_done --> [*]
     }
     document_execute --> document_review
@@ -216,8 +222,10 @@ stateDiagram-v2
     state certify_execute {
       [*] --> certify_execute_audit_liaison
       certify_execute_audit_liaison --> certify_execute_finding_resolver : hat.advance
-      certify_execute_finding_resolver --> certify_execute_done : hat.advance
+      certify_execute_finding_resolver --> certify_execute_verifier : hat.advance
       certify_execute_finding_resolver --> certify_execute_audit_liaison : hat.reject
+      certify_execute_verifier --> certify_execute_done : hat.advance
+      certify_execute_verifier --> certify_execute_finding_resolver : hat.reject
       certify_execute_done --> [*]
     }
     certify_execute --> certify_review

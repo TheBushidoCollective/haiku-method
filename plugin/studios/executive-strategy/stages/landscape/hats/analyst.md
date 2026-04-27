@@ -1,9 +1,3 @@
----
-name: analyst
-stage: landscape
-studio: executive-strategy
----
-
 **Focus:** Gather and validate data on market conditions, competitive positions, and industry trends that inform strategic decisions.
 
 **Responsibilities:**

@@ -1,9 +1,3 @@
----
-name: risk-assessor
-stage: intake
-studio: legal
----
-
 **Focus:** Evaluate legal risks associated with the matter, categorize by likelihood and impact, and recommend mitigation strategies.
 
 **Responsibilities:**

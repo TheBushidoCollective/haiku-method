@@ -1,10 +1,6 @@
 ---
-name: cert-readiness
-stage: release
-studio: gamedev
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the build meets every platform certification requirement before submission. Failed cert wastes days or weeks of the launch window.
 
 **Check:**

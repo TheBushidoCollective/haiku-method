@@ -1,10 +1,6 @@
 ---
-name: data-integrity
-stage: migrate
-studio: migration
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify migration scripts preserve data integrity.
 
 **Check:**

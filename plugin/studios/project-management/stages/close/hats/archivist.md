@@ -1,9 +1,3 @@
----
-name: archivist
-stage: close
-studio: project-management
----
-
 **Focus:** Capture lessons learned and ensure project documentation is complete, organized, and accessible for future reference.
 
 **Responsibilities:**

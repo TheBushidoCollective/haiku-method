@@ -1,7 +1,7 @@
 ---
 name: interview
 description: Conduct structured interviews and evaluate candidates
-hats: [interviewer, evaluator]
+hats: [interviewer, evaluator, verifier]
 fix_hats: [interviewer, feedback-assessor]
 review: ask
 elaboration: collaborative

@@ -1,14 +1,4 @@
----
-name: audience-analyst
-stage: research
-studio: dev-evangelism
----
-
 **Focus:** Map the developer audience — skill levels, technology stacks, pain points, learning preferences, and where they consume technical content. Transform community signals into targetable audience segments.
-
-**Produces:** Developer audience segments with technical profiles, content format preferences, and community presence mapping.
-
-**Reads:** Intent problem statement, any existing analytics or community data.
 
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** define developer segments solely by job title without considering skill level and technology context

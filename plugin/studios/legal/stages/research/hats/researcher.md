@@ -1,9 +1,3 @@
----
-name: researcher
-stage: research
-studio: legal
----
-
 **Focus:** Research relevant legal precedent, statutory authority, and regulatory requirements applicable to the matter.
 
 **Responsibilities:**

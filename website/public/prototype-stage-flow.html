@@ -2913,6 +2913,21 @@
   <strong>Hover anything for a tooltip · click for full detail.</strong>
 </p>
 
+<aside style="margin: 1rem auto; max-width: 900px; padding: 1rem; border-left: 4px solid #ef4444; background: #fef2f2; font-size: 0.9em;">
+  <strong>Architecture v3 (2026-04-26 — not yet reflected in the per-stage visualizations below):</strong>
+  <p style="margin: 0.5rem 0;">
+    The canonical structural reference is now <code>plugin/studios/ARCHITECTURE.md</code>.
+    It supersedes the prototype where they conflict — fix the prototype, not the doc.
+  </p>
+  <ul style="margin: 0.5rem 0 0 1rem;">
+    <li><strong>FB-as-unit fix loop</strong> — fixers no longer mutate the flagged unit. They edit the FB body via <code>haiku_feedback_write</code>, read the unit read-only via <code>haiku_unit_read</code>, and progress the fix-hat chain via <code>haiku_feedback_advance_hat</code>. The FSM auto-closes the FB on the last hat's advance. Closed FBs become input to the next iteration of the upstream stage's elaborate phase, which authors corrective work — completed units are NEVER modified (forward-only lifecycle).</li>
+    <li><strong>Path-boundary hook</strong> — generic <code>Read</code> / <code>Write</code> / <code>Edit</code> / <code>MultiEdit</code> on <code>units/*.md</code>, <code>feedback/*.md</code>, <code>intent.md</code>, and <code>stages/*/state.json</code> is denied at the <code>PreToolUse</code> hook layer. Agents are redirected at the appropriate MCP tool by name. Replaces the prior content-matching status-completed check.</li>
+    <li><strong>New MCP CRUDL surface</strong> — <code>haiku_unit_write</code> (FM validators + DAG cycle detection + pending-only lifecycle), <code>haiku_unit_read</code> (body+title only — no FM exposed), <code>haiku_unit_delete</code> (pending only); FB equivalents <code>haiku_feedback_write</code> and <code>haiku_feedback_read</code>; FB-as-unit progression <code>haiku_feedback_advance_hat</code> / <code>haiku_feedback_reject_hat</code>. <code>haiku_unit_get</code> removed from the agent-callable schema (FM is FSM-only per architecture §1.1).</li>
+    <li><strong>Plan-do-verify pattern</strong> — every stage's <code>hats:</code> list now follows plan → do → verify (verifier hat present in 91/120 stages; remainder already had verify-class final hats). Adversarial loops (red-team / blue-team) come AFTER the triplet, never before.</li>
+    <li><strong>Universal contract block split</strong> — <code>FSM_CONTRACTS_ELABORATE_BLOCK</code> split into <code>UNIVERSAL</code> (all stages) + <code>BUILD_CLASS_ADDENDUM</code> (only injected when no per-stage <code>phases/ELABORATION.md</code> override exists). The 5 inception-class stages now skip the build-class addendum and use their own knowledge-artifact ELABORATION.md.</li>
+  </ul>
+</aside>
+
 <aside style="margin: 1rem auto; max-width: 900px; padding: 1rem; border-left: 4px solid #14b8a6; background: #f0fdfa; font-size: 0.9em;">
   <strong>Churn-reduction v1 (2026-04-19 — not yet reflected in the per-stage visualizations below):</strong>
   <ul style="margin: 0.5rem 0 0 1rem;">

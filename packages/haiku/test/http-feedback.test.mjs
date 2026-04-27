@@ -511,23 +511,20 @@ async function run() {
 	// Stage-scope endpoint must not leak intent-scope items — the
 	// merging happens client-side. Server-side the two surfaces are
 	// separate buckets.
-	await test(
-		"GET /api/feedback/:intent/:stage does NOT include intent-scope items",
-		async () => {
-			const res = await fetch(
-				`${baseUrl}/api/feedback/${intentSlug}/${stageName}`,
+	await test("GET /api/feedback/:intent/:stage does NOT include intent-scope items", async () => {
+		const res = await fetch(
+			`${baseUrl}/api/feedback/${intentSlug}/${stageName}`,
+		)
+		assert.strictEqual(res.status, 200)
+		const data = await res.json()
+		for (const item of data.items) {
+			assert.strictEqual(
+				item.scope,
+				"stage",
+				`stage endpoint leaked an intent-scope item: ${item.feedback_id}`,
 			)
-			assert.strictEqual(res.status, 200)
-			const data = await res.json()
-			for (const item of data.items) {
-				assert.strictEqual(
-					item.scope,
-					"stage",
-					`stage endpoint leaked an intent-scope item: ${item.feedback_id}`,
-				)
-			}
-		},
-	)
+		}
+	})
 
 	// ── Path traversal rejection (security) ──────────────────────────────────
 

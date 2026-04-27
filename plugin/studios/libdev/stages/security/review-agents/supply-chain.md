@@ -1,10 +1,6 @@
 ---
-name: supply-chain
-stage: security
-studio: libdev
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the library's dependency tree is audited and free of known-vulnerable dependencies before release.
 
 **Check:**

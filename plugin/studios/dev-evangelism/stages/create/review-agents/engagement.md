@@ -1,10 +1,6 @@
 ---
-name: engagement
-stage: create
-studio: dev-evangelism
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify content is compelling and structured for developer engagement.
 
 **Check:**

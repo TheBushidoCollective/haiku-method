@@ -24,9 +24,11 @@ stateDiagram-v2
     inception_elaborate --> inception_review_fix : feedback.pending
     state inception_execute {
       [*] --> inception_execute_researcher
-      inception_execute_researcher --> inception_execute_elaborator : hat.advance
-      inception_execute_elaborator --> inception_execute_done : hat.advance
-      inception_execute_elaborator --> inception_execute_researcher : hat.reject
+      inception_execute_researcher --> inception_execute_distiller : hat.advance
+      inception_execute_distiller --> inception_execute_verifier : hat.advance
+      inception_execute_distiller --> inception_execute_researcher : hat.reject
+      inception_execute_verifier --> inception_execute_done : hat.advance
+      inception_execute_verifier --> inception_execute_distiller : hat.reject
       inception_execute_done --> [*]
     }
     inception_execute --> inception_review
@@ -73,10 +75,12 @@ stateDiagram-v2
     state requirements_execute {
       [*] --> requirements_execute_systems_engineer
       requirements_execute_systems_engineer --> requirements_execute_compliance_officer : hat.advance
-      requirements_execute_compliance_officer --> requirements_execute_elaborator : hat.advance
+      requirements_execute_compliance_officer --> requirements_execute_distiller : hat.advance
       requirements_execute_compliance_officer --> requirements_execute_systems_engineer : hat.reject
-      requirements_execute_elaborator --> requirements_execute_done : hat.advance
-      requirements_execute_elaborator --> requirements_execute_compliance_officer : hat.reject
+      requirements_execute_distiller --> requirements_execute_verifier : hat.advance
+      requirements_execute_distiller --> requirements_execute_compliance_officer : hat.reject
+      requirements_execute_verifier --> requirements_execute_done : hat.advance
+      requirements_execute_verifier --> requirements_execute_distiller : hat.reject
       requirements_execute_done --> [*]
     }
     requirements_execute --> requirements_review
@@ -228,8 +232,10 @@ stateDiagram-v2
       validation_execute_test_engineer --> validation_execute_compliance_officer : hat.advance
       validation_execute_compliance_officer --> validation_execute_validation_lead : hat.advance
       validation_execute_compliance_officer --> validation_execute_test_engineer : hat.reject
-      validation_execute_validation_lead --> validation_execute_done : hat.advance
+      validation_execute_validation_lead --> validation_execute_verifier : hat.advance
       validation_execute_validation_lead --> validation_execute_compliance_officer : hat.reject
+      validation_execute_verifier --> validation_execute_done : hat.advance
+      validation_execute_verifier --> validation_execute_validation_lead : hat.reject
       validation_execute_done --> [*]
     }
     validation_execute --> validation_review
@@ -276,8 +282,10 @@ stateDiagram-v2
     state manufacturing_execute {
       [*] --> manufacturing_execute_manufacturing_engineer
       manufacturing_execute_manufacturing_engineer --> manufacturing_execute_qa_lead : hat.advance
-      manufacturing_execute_qa_lead --> manufacturing_execute_done : hat.advance
+      manufacturing_execute_qa_lead --> manufacturing_execute_verifier : hat.advance
       manufacturing_execute_qa_lead --> manufacturing_execute_manufacturing_engineer : hat.reject
+      manufacturing_execute_verifier --> manufacturing_execute_done : hat.advance
+      manufacturing_execute_verifier --> manufacturing_execute_qa_lead : hat.reject
       manufacturing_execute_done --> [*]
     }
     manufacturing_execute --> manufacturing_review

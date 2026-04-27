@@ -24,8 +24,10 @@ stateDiagram-v2
     state reconnaissance_execute {
       [*] --> reconnaissance_execute_osint_analyst
       reconnaissance_execute_osint_analyst --> reconnaissance_execute_network_mapper : hat.advance
-      reconnaissance_execute_network_mapper --> reconnaissance_execute_done : hat.advance
+      reconnaissance_execute_network_mapper --> reconnaissance_execute_verifier : hat.advance
       reconnaissance_execute_network_mapper --> reconnaissance_execute_osint_analyst : hat.reject
+      reconnaissance_execute_verifier --> reconnaissance_execute_done : hat.advance
+      reconnaissance_execute_verifier --> reconnaissance_execute_network_mapper : hat.reject
       reconnaissance_execute_done --> [*]
     }
     reconnaissance_execute --> reconnaissance_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state enumeration_execute {
       [*] --> enumeration_execute_enumerator
       enumeration_execute_enumerator --> enumeration_execute_vulnerability_scanner : hat.advance
-      enumeration_execute_vulnerability_scanner --> enumeration_execute_done : hat.advance
+      enumeration_execute_vulnerability_scanner --> enumeration_execute_verifier : hat.advance
       enumeration_execute_vulnerability_scanner --> enumeration_execute_enumerator : hat.reject
+      enumeration_execute_verifier --> enumeration_execute_done : hat.advance
+      enumeration_execute_verifier --> enumeration_execute_vulnerability_scanner : hat.reject
       enumeration_execute_done --> [*]
     }
     enumeration_execute --> enumeration_review
@@ -118,10 +122,16 @@ stateDiagram-v2
     exploitation_elaborate --> exploitation_execute : elaborate.advance
     exploitation_elaborate --> exploitation_review_fix : feedback.pending
     state exploitation_execute {
-      [*] --> exploitation_execute_exploit_developer
-      exploitation_execute_exploit_developer --> exploitation_execute_attack_operator : hat.advance
-      exploitation_execute_attack_operator --> exploitation_execute_done : hat.advance
-      exploitation_execute_attack_operator --> exploitation_execute_exploit_developer : hat.reject
+      [*] --> exploitation_execute_attack_strategist
+      exploitation_execute_attack_strategist --> exploitation_execute_exploit_developer : hat.advance
+      exploitation_execute_exploit_developer --> exploitation_execute_exploit_reviewer : hat.advance
+      exploitation_execute_exploit_developer --> exploitation_execute_attack_strategist : hat.reject
+      exploitation_execute_exploit_reviewer --> exploitation_execute_attack_operator : hat.advance
+      exploitation_execute_exploit_reviewer --> exploitation_execute_exploit_developer : hat.reject
+      exploitation_execute_attack_operator --> exploitation_execute_verifier : hat.advance
+      exploitation_execute_attack_operator --> exploitation_execute_exploit_reviewer : hat.reject
+      exploitation_execute_verifier --> exploitation_execute_done : hat.advance
+      exploitation_execute_verifier --> exploitation_execute_attack_operator : hat.reject
       exploitation_execute_done --> [*]
     }
     exploitation_execute --> exploitation_review
@@ -216,8 +226,10 @@ stateDiagram-v2
     state reporting_execute {
       [*] --> reporting_execute_report_writer
       reporting_execute_report_writer --> reporting_execute_remediation_advisor : hat.advance
-      reporting_execute_remediation_advisor --> reporting_execute_done : hat.advance
+      reporting_execute_remediation_advisor --> reporting_execute_verifier : hat.advance
       reporting_execute_remediation_advisor --> reporting_execute_report_writer : hat.reject
+      reporting_execute_verifier --> reporting_execute_done : hat.advance
+      reporting_execute_verifier --> reporting_execute_remediation_advisor : hat.reject
       reporting_execute_done --> [*]
     }
     reporting_execute --> reporting_review

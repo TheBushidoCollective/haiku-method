@@ -1,10 +1,6 @@
 ---
-name: closure
-stage: close
-studio: project-management
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify all deliverables are accepted, open items are transferred, and lessons are actionable.
 
 **Check:**

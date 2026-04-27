@@ -1,10 +1,6 @@
 ---
-name: performance-targets
-stage: polish
-studio: gamedev
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify performance targets are met on every target platform before release.
 
 **Check:**

@@ -665,7 +665,6 @@ try {
 	await (async () => {
 		const { startHttpServer } = await import("../src/http.ts")
 		const { createSession } = await import("../src/sessions.ts")
-		const { createHash } = await import("node:crypto")
 		const net = await import("node:net")
 
 		const { projDir, intentDirPath, slug } = createProject(

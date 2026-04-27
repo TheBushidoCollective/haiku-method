@@ -24,8 +24,10 @@ stateDiagram-v2
     state research_execute {
       [*] --> research_execute_audience_analyst
       research_execute_audience_analyst --> research_execute_topic_scout : hat.advance
-      research_execute_topic_scout --> research_execute_done : hat.advance
+      research_execute_topic_scout --> research_execute_verifier : hat.advance
       research_execute_topic_scout --> research_execute_audience_analyst : hat.reject
+      research_execute_verifier --> research_execute_done : hat.advance
+      research_execute_verifier --> research_execute_topic_scout : hat.reject
       research_execute_done --> [*]
     }
     research_execute --> research_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state narrative_execute {
       [*] --> narrative_execute_storyteller
       narrative_execute_storyteller --> narrative_execute_editor : hat.advance
-      narrative_execute_editor --> narrative_execute_done : hat.advance
+      narrative_execute_editor --> narrative_execute_verifier : hat.advance
       narrative_execute_editor --> narrative_execute_storyteller : hat.reject
+      narrative_execute_verifier --> narrative_execute_done : hat.advance
+      narrative_execute_verifier --> narrative_execute_editor : hat.reject
       narrative_execute_done --> [*]
     }
     narrative_execute --> narrative_review
@@ -120,8 +124,10 @@ stateDiagram-v2
     state create_execute {
       [*] --> create_execute_content_creator
       create_execute_content_creator --> create_execute_demo_builder : hat.advance
-      create_execute_demo_builder --> create_execute_done : hat.advance
+      create_execute_demo_builder --> create_execute_verifier : hat.advance
       create_execute_demo_builder --> create_execute_content_creator : hat.reject
+      create_execute_verifier --> create_execute_done : hat.advance
+      create_execute_verifier --> create_execute_demo_builder : hat.reject
       create_execute_done --> [*]
     }
     create_execute --> create_review
@@ -168,8 +174,10 @@ stateDiagram-v2
     state publish_execute {
       [*] --> publish_execute_distributor
       publish_execute_distributor --> publish_execute_community_manager : hat.advance
-      publish_execute_community_manager --> publish_execute_done : hat.advance
+      publish_execute_community_manager --> publish_execute_verifier : hat.advance
       publish_execute_community_manager --> publish_execute_distributor : hat.reject
+      publish_execute_verifier --> publish_execute_done : hat.advance
+      publish_execute_verifier --> publish_execute_community_manager : hat.reject
       publish_execute_done --> [*]
     }
     publish_execute --> publish_review
@@ -216,8 +224,10 @@ stateDiagram-v2
     state measure_execute {
       [*] --> measure_execute_analyst
       measure_execute_analyst --> measure_execute_feedback_synthesizer : hat.advance
-      measure_execute_feedback_synthesizer --> measure_execute_done : hat.advance
+      measure_execute_feedback_synthesizer --> measure_execute_verifier : hat.advance
       measure_execute_feedback_synthesizer --> measure_execute_analyst : hat.reject
+      measure_execute_verifier --> measure_execute_done : hat.advance
+      measure_execute_verifier --> measure_execute_feedback_synthesizer : hat.reject
       measure_execute_done --> [*]
     }
     measure_execute --> measure_review

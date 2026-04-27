@@ -24,9 +24,11 @@ stateDiagram-v2
     inception_elaborate --> inception_review_fix : feedback.pending
     state inception_execute {
       [*] --> inception_execute_researcher
-      inception_execute_researcher --> inception_execute_elaborator : hat.advance
-      inception_execute_elaborator --> inception_execute_done : hat.advance
-      inception_execute_elaborator --> inception_execute_researcher : hat.reject
+      inception_execute_researcher --> inception_execute_distiller : hat.advance
+      inception_execute_distiller --> inception_execute_verifier : hat.advance
+      inception_execute_distiller --> inception_execute_researcher : hat.reject
+      inception_execute_verifier --> inception_execute_done : hat.advance
+      inception_execute_verifier --> inception_execute_distiller : hat.reject
       inception_execute_done --> [*]
     }
     inception_execute --> inception_review
@@ -221,8 +223,10 @@ stateDiagram-v2
     state operations_execute {
       [*] --> operations_execute_ops_engineer
       operations_execute_ops_engineer --> operations_execute_sre : hat.advance
-      operations_execute_sre --> operations_execute_done : hat.advance
+      operations_execute_sre --> operations_execute_verifier : hat.advance
       operations_execute_sre --> operations_execute_ops_engineer : hat.reject
+      operations_execute_verifier --> operations_execute_done : hat.advance
+      operations_execute_verifier --> operations_execute_sre : hat.reject
       operations_execute_done --> [*]
     }
     operations_execute --> operations_review
@@ -268,13 +272,15 @@ stateDiagram-v2
     security_elaborate --> security_review_fix : feedback.pending
     state security_execute {
       [*] --> security_execute_threat_modeler
-      security_execute_threat_modeler --> security_execute_red_team : hat.advance
+      security_execute_threat_modeler --> security_execute_security_engineer : hat.advance
+      security_execute_security_engineer --> security_execute_security_reviewer : hat.advance
+      security_execute_security_engineer --> security_execute_threat_modeler : hat.reject
+      security_execute_security_reviewer --> security_execute_red_team : hat.advance
+      security_execute_security_reviewer --> security_execute_security_engineer : hat.reject
       security_execute_red_team --> security_execute_blue_team : hat.advance
-      security_execute_red_team --> security_execute_threat_modeler : hat.reject
-      security_execute_blue_team --> security_execute_security_reviewer : hat.advance
+      security_execute_red_team --> security_execute_security_reviewer : hat.reject
+      security_execute_blue_team --> security_execute_done : hat.advance
       security_execute_blue_team --> security_execute_red_team : hat.reject
-      security_execute_security_reviewer --> security_execute_done : hat.advance
-      security_execute_security_reviewer --> security_execute_blue_team : hat.reject
       security_execute_done --> [*]
     }
     security_execute --> security_review
@@ -283,24 +289,24 @@ stateDiagram-v2
     state security_review_fix {
       [*] --> security_review_fix_bolt_1
       state security_review_fix_bolt_1 {
-        [*] --> security_review_fix_bolt_1_threat_modeler
-        security_review_fix_bolt_1_threat_modeler --> security_review_fix_bolt_1_feedback_assessor : fix.advance
+        [*] --> security_review_fix_bolt_1_security_engineer
+        security_review_fix_bolt_1_security_engineer --> security_review_fix_bolt_1_feedback_assessor : fix.advance
         security_review_fix_bolt_1_feedback_assessor --> security_review_fix_bolt_1_validated : fix.advance
         security_review_fix_bolt_1_validated --> [*]
       }
       security_review_fix_bolt_1 --> security_review_fix_done : feedback.closed
       security_review_fix_bolt_1 --> security_review_fix_bolt_2 : feedback.open
       state security_review_fix_bolt_2 {
-        [*] --> security_review_fix_bolt_2_threat_modeler
-        security_review_fix_bolt_2_threat_modeler --> security_review_fix_bolt_2_feedback_assessor : fix.advance
+        [*] --> security_review_fix_bolt_2_security_engineer
+        security_review_fix_bolt_2_security_engineer --> security_review_fix_bolt_2_feedback_assessor : fix.advance
         security_review_fix_bolt_2_feedback_assessor --> security_review_fix_bolt_2_validated : fix.advance
         security_review_fix_bolt_2_validated --> [*]
       }
       security_review_fix_bolt_2 --> security_review_fix_done : feedback.closed
       security_review_fix_bolt_2 --> security_review_fix_bolt_3 : feedback.open
       state security_review_fix_bolt_3 {
-        [*] --> security_review_fix_bolt_3_threat_modeler
-        security_review_fix_bolt_3_threat_modeler --> security_review_fix_bolt_3_feedback_assessor : fix.advance
+        [*] --> security_review_fix_bolt_3_security_engineer
+        security_review_fix_bolt_3_security_engineer --> security_review_fix_bolt_3_feedback_assessor : fix.advance
         security_review_fix_bolt_3_feedback_assessor --> security_review_fix_bolt_3_validated : fix.advance
         security_review_fix_bolt_3_validated --> [*]
       }

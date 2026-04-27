@@ -1,10 +1,6 @@
 ---
-name: accuracy
-stage: assess
-studio: compliance
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify assessment findings accurately reflect the current state.
 
 **Check:**

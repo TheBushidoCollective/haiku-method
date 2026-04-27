@@ -1,11 +1,14 @@
 #!/usr/bin/env npx tsx
 // Tests for the guard-workflow-fields PreToolUse hook.
-// Covers both the status=completed guard AND the intent-completion
-// phase-flag guards, plus the Edit/MultiEdit projected-content reconstruction
-// that prevents slice-only bypasses.
+//
+// The hook enforces the FSM-ownership boundary: generic file
+// Read/Write/Edit/MultiEdit on FSM-managed paths is denied; agents must
+// use the MCP tools instead. This is path-boundary based (not content-
+// matching) so it can't be bypassed by clever Edit slices and it doesn't
+// false-positive on legitimate edits to non-status fields.
 
 import assert from "node:assert"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { guardFsmFields } from "../src/hooks/guard-workflow-fields.ts"
@@ -13,26 +16,6 @@ import { guardFsmFields } from "../src/hooks/guard-workflow-fields.ts"
 const tmp = mkdtempSync(join(tmpdir(), "haiku-guard-test-"))
 const origCwd = process.cwd()
 process.chdir(tmp)
-
-// Seed a fake intent file so Edit-based tests can project against it.
-const intentDir = join(tmp, ".haiku/intents/test-intent")
-mkdirSync(intentDir, { recursive: true })
-const intentFile = join(intentDir, "intent.md")
-writeFileSync(
-	intentFile,
-	`---
-title: Test
-studio: software
-status: active
-phase: active
-active_stage: plan
-started_at: 2026-04-20T00:00:00Z
-completed_at: null
----
-
-Body.
-`,
-)
 
 let passed = 0
 let failed = 0
@@ -44,23 +27,23 @@ function test(name, fn) {
 			return r.then(
 				() => {
 					passed++
-					console.log(`  \u2713 ${name}`)
+					console.log(`  ✓ ${name}`)
 				},
 				(e) => {
 					failed++
-					console.log(`  \u2717 ${name}: ${e.message}`)
+					console.log(`  ✗ ${name}: ${e.message}`)
 				},
 			)
 		}
 		passed++
-		console.log(`  \u2713 ${name}`)
+		console.log(`  ✓ ${name}`)
 	} catch (e) {
 		failed++
-		console.log(`  \u2717 ${name}: ${e.message}`)
+		console.log(`  ✗ ${name}: ${e.message}`)
 	}
 }
 
-// The hook calls process.exit(2) on block. We wrap it to capture instead.
+// The hook calls process.exit(2) on block. Wrap it so tests can assert.
 function runGuard(input) {
 	const origExit = process.exit
 	const origStderr = process.stderr.write.bind(process.stderr)
@@ -105,34 +88,133 @@ function runGuard(input) {
 }
 
 try {
-	console.log("\n=== guard-workflow-fields: status=completed block ===")
+	console.log("\n=== guard-workflow-fields: unit file boundary ===")
 
-	await test("Write status: completed is blocked on intent.md", async () => {
+	await test("Write to unit.md is blocked, redirects to haiku_unit_write", async () => {
+		const r = await runGuard({
+			tool_name: "Write",
+			tool_input: {
+				file_path:
+					".haiku/intents/test-intent/stages/inception/units/unit-01-foo.md",
+				content: "---\nstatus: pending\n---\n",
+			},
+		})
+		assert.ok(r.blocked, "expected blocked")
+		assert.ok(
+			r.stderr.includes("haiku_unit_write"),
+			"redirect message must name the right MCP tool",
+		)
+		assert.ok(
+			r.stderr.includes("unit-01-foo"),
+			"redirect message must name the unit",
+		)
+	})
+
+	await test("Read on unit.md is blocked, redirects to haiku_unit_read", async () => {
+		const r = await runGuard({
+			tool_name: "Read",
+			tool_input: {
+				file_path:
+					".haiku/intents/test-intent/stages/inception/units/unit-01-foo.md",
+			},
+		})
+		assert.ok(r.blocked, "Read on FSM-managed unit must be blocked")
+		assert.ok(r.stderr.includes("haiku_unit_read"))
+	})
+
+	await test("Edit on unit.md is blocked, redirects to haiku_unit_set", async () => {
+		const r = await runGuard({
+			tool_name: "Edit",
+			tool_input: {
+				file_path:
+					".haiku/intents/test-intent/stages/inception/units/unit-01-foo.md",
+				old_string: "x",
+				new_string: "y",
+			},
+		})
+		assert.ok(r.blocked)
+		assert.ok(r.stderr.includes("haiku_unit_set"))
+	})
+
+	await test("MultiEdit on unit.md is blocked", async () => {
+		const r = await runGuard({
+			tool_name: "MultiEdit",
+			tool_input: {
+				file_path:
+					".haiku/intents/test-intent/stages/inception/units/unit-01-foo.md",
+				edits: [{ old_string: "a", new_string: "b" }],
+			},
+		})
+		assert.ok(r.blocked)
+	})
+
+	console.log("\n=== guard-workflow-fields: feedback file boundary ===")
+
+	await test("Write on stage-scope FB is blocked, redirects to haiku_feedback", async () => {
+		const r = await runGuard({
+			tool_name: "Write",
+			tool_input: {
+				file_path:
+					".haiku/intents/test-intent/stages/inception/feedback/01-some-finding.md",
+				content: "---\nstatus: open\n---\n",
+			},
+		})
+		assert.ok(r.blocked)
+		assert.ok(r.stderr.includes("haiku_feedback"))
+	})
+
+	await test("Read on intent-scope FB is blocked, redirects to haiku_feedback_read", async () => {
+		const r = await runGuard({
+			tool_name: "Read",
+			tool_input: {
+				file_path: ".haiku/intents/test-intent/feedback/01-cross-stage.md",
+			},
+		})
+		assert.ok(r.blocked)
+		assert.ok(r.stderr.includes("haiku_feedback_read"))
+	})
+
+	await test("Edit on FB is blocked", async () => {
+		const r = await runGuard({
+			tool_name: "Edit",
+			tool_input: {
+				file_path:
+					".haiku/intents/test-intent/stages/inception/feedback/01-finding.md",
+				old_string: "a",
+				new_string: "b",
+			},
+		})
+		assert.ok(r.blocked)
+	})
+
+	console.log("\n=== guard-workflow-fields: intent and stage-state boundary ===")
+
+	await test("Write on intent.md is blocked", async () => {
 		const r = await runGuard({
 			tool_name: "Write",
 			tool_input: {
 				file_path: ".haiku/intents/test-intent/intent.md",
-				content: "---\nstatus: completed\n---\n",
+				content: "---\nstatus: active\n---\n",
 			},
 		})
-		assert.ok(r.blocked, "expected blocked")
-		assert.ok(r.stderr.includes("completed"))
+		assert.ok(r.blocked)
+		assert.ok(r.stderr.includes("intent.md"))
 	})
 
-	await test("Edit that rewrites status to completed via slice is caught", async () => {
-		// Agent tries the bypass: old_string="active", new_string="completed".
-		// The new_string slice alone doesn't contain "status:", but projecting
-		// the edit onto the real file DOES produce status: completed.
+	await test("Edit on stage state.json is blocked", async () => {
 		const r = await runGuard({
 			tool_name: "Edit",
 			tool_input: {
-				file_path: ".haiku/intents/test-intent/intent.md",
-				old_string: "status: active",
-				new_string: "status: completed",
+				file_path: ".haiku/intents/test-intent/stages/inception/state.json",
+				old_string: "active",
+				new_string: "completed",
 			},
 		})
-		assert.ok(r.blocked, "expected blocked — slice-only bypass must be caught")
+		assert.ok(r.blocked)
+		assert.ok(r.stderr.includes("state.json"))
 	})
+
+	console.log("\n=== guard-workflow-fields: pass-through paths ===")
 
 	await test("Edit on non-haiku file passes through", async () => {
 		const r = await runGuard({
@@ -146,64 +228,41 @@ try {
 		assert.ok(!r.blocked, "non-haiku files should not be guarded")
 	})
 
-	console.log("\n=== guard-workflow-fields: intent-completion phase spoofing ===")
-
-	await test("Edit that sets phase: awaiting_completion_review via slice is blocked", async () => {
-		// Bypass attempt: old_string="active" (matching the phase: active line),
-		// new_string="awaiting_completion_review". Without projected-content
-		// reconstruction, the hook sees only "awaiting_completion_review" with
-		// no "phase:" prefix and the regex misses it. With projection, it
-		// matches the realized line in the file.
+	await test("Read on a hat mandate file passes through", async () => {
 		const r = await runGuard({
-			tool_name: "Edit",
+			tool_name: "Read",
 			tool_input: {
-				file_path: ".haiku/intents/test-intent/intent.md",
-				old_string: "phase: active",
-				new_string: "phase: awaiting_completion_review",
+				file_path: "plugin/studios/software/stages/inception/hats/verifier.md",
 			},
 		})
-		assert.ok(r.blocked, "phase spoofing via slice must be caught")
+		assert.ok(!r.blocked, "hat mandate files are not FSM-managed state")
 	})
 
-	await test("Edit setting completion_review_dispatched: true is blocked", async () => {
+	await test("Write on .haiku/worktrees content passes through", async () => {
+		// Worktree paths are isolation copies — the FSM owns merge-back, but
+		// agents do legitimate authoring inside worktrees during execution.
 		const r = await runGuard({
-			tool_name: "Edit",
+			tool_name: "Write",
 			tool_input: {
-				file_path: ".haiku/intents/test-intent/intent.md",
-				old_string: "phase: active\n",
-				new_string: "phase: active\ncompletion_review_dispatched: true\n",
+				file_path: ".haiku/worktrees/test-intent/unit-01/some-source-file.ts",
+				content: "...",
 			},
 		})
-		assert.ok(r.blocked, "dispatched=true spoofing must be caught")
+		assert.ok(!r.blocked, "non-state worktree files are not boundary-guarded")
 	})
 
-	await test("MultiEdit with a spoofing edit is blocked", async () => {
+	await test("Bash tool is not handled by this hook", async () => {
+		// Bash bypass is explicitly out of scope for this hook; a separate
+		// soft-warn hook handles audit logging. This test asserts we don't
+		// accidentally fire on Bash.
 		const r = await runGuard({
-			tool_name: "MultiEdit",
+			tool_name: "Bash",
 			tool_input: {
-				file_path: ".haiku/intents/test-intent/intent.md",
-				edits: [
-					{ old_string: "Body.", new_string: "Body updated." },
-					{
-						old_string: "phase: active",
-						new_string: "phase: awaiting_completion_review",
-					},
-				],
+				command:
+					"cat .haiku/intents/test-intent/stages/inception/units/unit-01-foo.md",
 			},
 		})
-		assert.ok(r.blocked, "MultiEdit must be guarded the same as Edit")
-	})
-
-	await test("legitimate phase: active edit is NOT blocked", async () => {
-		const r = await runGuard({
-			tool_name: "Edit",
-			tool_input: {
-				file_path: ".haiku/intents/test-intent/intent.md",
-				old_string: "phase: active",
-				new_string: "phase: active", // no-op write
-			},
-		})
-		assert.ok(!r.blocked, "legitimate writes should pass")
+		assert.ok(!r.blocked, "Bash is not in this hook's scope")
 	})
 
 	console.log(`\n${passed} passed, ${failed} failed\n`)

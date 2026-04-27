@@ -1,10 +1,6 @@
 ---
-name: objectivity
-stage: evaluate
-studio: vendor-management
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify vendor evaluation is objective and scoring is consistent across vendors.
 
 **Check:**

@@ -1,9 +1,3 @@
----
-name: allocator
-stage: budget
-studio: finance
----
-
 **Focus:** Distribute resources across departments and cost centers according to the budget owner's priorities, ensuring allocations are feasible and traceable.
 
 **Responsibilities:**

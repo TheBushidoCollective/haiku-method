@@ -1,9 +1,3 @@
----
-name: analyst
-stage: needs-analysis
-studio: training
----
-
 **Focus:** Identify and quantify skills gaps by comparing current competency levels against target requirements.
 
 **Responsibilities:**

@@ -1,10 +1,6 @@
 ---
-name: cert-completion
-stage: validation
-studio: hwdev
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify every regulatory framework identified in requirements has an obtained certification before manufacturing ramp.
 
 **Check:**

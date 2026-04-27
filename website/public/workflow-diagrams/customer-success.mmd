@@ -24,8 +24,10 @@ stateDiagram-v2
     state onboarding_execute {
       [*] --> onboarding_execute_onboarding_lead
       onboarding_execute_onboarding_lead --> onboarding_execute_technical_enabler : hat.advance
-      onboarding_execute_technical_enabler --> onboarding_execute_done : hat.advance
+      onboarding_execute_technical_enabler --> onboarding_execute_verifier : hat.advance
       onboarding_execute_technical_enabler --> onboarding_execute_onboarding_lead : hat.reject
+      onboarding_execute_verifier --> onboarding_execute_done : hat.advance
+      onboarding_execute_verifier --> onboarding_execute_technical_enabler : hat.reject
       onboarding_execute_done --> [*]
     }
     onboarding_execute --> onboarding_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state adoption_execute {
       [*] --> adoption_execute_adoption_coach
       adoption_execute_adoption_coach --> adoption_execute_usage_analyst : hat.advance
-      adoption_execute_usage_analyst --> adoption_execute_done : hat.advance
+      adoption_execute_usage_analyst --> adoption_execute_verifier : hat.advance
       adoption_execute_usage_analyst --> adoption_execute_adoption_coach : hat.reject
+      adoption_execute_verifier --> adoption_execute_done : hat.advance
+      adoption_execute_verifier --> adoption_execute_usage_analyst : hat.reject
       adoption_execute_done --> [*]
     }
     adoption_execute --> adoption_review
@@ -120,8 +124,10 @@ stateDiagram-v2
     state health_check_execute {
       [*] --> health_check_execute_health_monitor
       health_check_execute_health_monitor --> health_check_execute_risk_analyst : hat.advance
-      health_check_execute_risk_analyst --> health_check_execute_done : hat.advance
+      health_check_execute_risk_analyst --> health_check_execute_verifier : hat.advance
       health_check_execute_risk_analyst --> health_check_execute_health_monitor : hat.reject
+      health_check_execute_verifier --> health_check_execute_done : hat.advance
+      health_check_execute_verifier --> health_check_execute_risk_analyst : hat.reject
       health_check_execute_done --> [*]
     }
     health_check_execute --> health_check_review
@@ -168,8 +174,10 @@ stateDiagram-v2
     state expansion_execute {
       [*] --> expansion_execute_growth_strategist
       expansion_execute_growth_strategist --> expansion_execute_value_consultant : hat.advance
-      expansion_execute_value_consultant --> expansion_execute_done : hat.advance
+      expansion_execute_value_consultant --> expansion_execute_verifier : hat.advance
       expansion_execute_value_consultant --> expansion_execute_growth_strategist : hat.reject
+      expansion_execute_verifier --> expansion_execute_done : hat.advance
+      expansion_execute_verifier --> expansion_execute_value_consultant : hat.reject
       expansion_execute_done --> [*]
     }
     expansion_execute --> expansion_review
@@ -216,8 +224,10 @@ stateDiagram-v2
     state renewal_execute {
       [*] --> renewal_execute_renewal_manager
       renewal_execute_renewal_manager --> renewal_execute_executive_sponsor : hat.advance
-      renewal_execute_executive_sponsor --> renewal_execute_done : hat.advance
+      renewal_execute_executive_sponsor --> renewal_execute_verifier : hat.advance
       renewal_execute_executive_sponsor --> renewal_execute_renewal_manager : hat.reject
+      renewal_execute_verifier --> renewal_execute_done : hat.advance
+      renewal_execute_verifier --> renewal_execute_executive_sponsor : hat.reject
       renewal_execute_done --> [*]
     }
     renewal_execute --> renewal_review

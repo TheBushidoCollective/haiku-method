@@ -1,7 +1,7 @@
 ---
 name: inception
 description: Market research, user problem, and business case
-hats: [researcher, elaborator]
+hats: [researcher, distiller, verifier]
 fix_hats: [researcher, feedback-assessor]
 review: ask
 elaboration: collaborative

@@ -186,7 +186,7 @@ function diff() {
 	console.log(`Wrote ${deltasFile}`)
 	if (regressed.length > 0) {
 		console.error("Regressions (previously passing tests now failing):")
-		for (const { base, cur } of regressed) {
+		for (const { base } of regressed) {
 			console.error(`  - ${base.file} :: ${base.name}`)
 		}
 		process.exit(1)

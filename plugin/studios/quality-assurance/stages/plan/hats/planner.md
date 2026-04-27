@@ -1,9 +1,3 @@
----
-name: planner
-stage: plan
-studio: quality-assurance
----
-
 **Focus:** Plan the execution logistics including resource allocation, environment needs, and scheduling.
 
 **Responsibilities:**

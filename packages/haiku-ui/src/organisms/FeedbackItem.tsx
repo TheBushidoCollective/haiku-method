@@ -352,6 +352,7 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 					{resolutionBadge && (
 						<span
 							className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold leading-none ${resolutionBadge.classes}`}
+							role="status"
 							aria-label={`Resolution: ${resolutionBadge.label}`}
 						>
 							{resolutionBadge.label}
@@ -490,9 +491,9 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 								aria-label={`Replies on ${item.feedback_id}`}
 								className="mt-3 space-y-2 border-l-2 border-stone-200 dark:border-stone-700 pl-3"
 							>
-								{item.replies.map((r, idx) => (
+								{item.replies.map((r) => (
 									<li
-										key={`${item.feedback_id}-reply-${idx}`}
+										key={`${item.feedback_id}-reply-${r.author}-${r.created_at}`}
 										className="text-xs"
 									>
 										<div className="flex items-center gap-2 mb-0.5">
@@ -516,8 +517,9 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 							</ul>
 						)}
 						{replyOpen && (
+							// biome-ignore lint/a11y/noStaticElementInteractions: container stops click propagation so typing inside the textarea doesn't bubble to the card's click-to-expand handler
+							// biome-ignore lint/a11y/useKeyWithClickEvents: stop-propagation only, no semantic action; keyboard interactions are on the contained inputs
 							<div
-								// biome-ignore lint/a11y/noStaticElementInteractions: stop propagation so typing inside the textarea doesn't bubble to the card's click-to-expand/click-to-jump handler.
 								onClick={(e) => e.stopPropagation()}
 								className="mt-3 space-y-2 border-l-2 border-indigo-300 dark:border-indigo-700 pl-3"
 							>

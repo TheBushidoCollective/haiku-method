@@ -56,6 +56,7 @@ export default function BrowseError({
 				{/* Actions */}
 				<div className="flex items-center justify-center gap-4">
 					<button
+						type="button"
 						onClick={reset}
 						className="rounded-lg bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-500"
 					>
@@ -72,6 +73,7 @@ export default function BrowseError({
 				{/* Collapsible error details */}
 				<div className="mt-8">
 					<button
+						type="button"
 						onClick={() => setShowDetails(!showDetails)}
 						className="text-xs text-stone-400 transition hover:text-stone-600 dark:hover:text-stone-300"
 					>

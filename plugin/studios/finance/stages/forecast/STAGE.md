@@ -1,7 +1,7 @@
 ---
 name: forecast
 description: Research market conditions and develop revenue projections
-hats: [analyst, forecaster]
+hats: [analyst, forecaster, verifier]
 fix_hats: [analyst, feedback-assessor]
 review: ask
 elaboration: collaborative

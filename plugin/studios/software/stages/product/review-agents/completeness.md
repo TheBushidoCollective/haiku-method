@@ -1,10 +1,6 @@
 ---
-name: completeness
-stage: product
-studio: software
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify behavioral specifications and data contracts fully cover the intent with no ambiguous or missing scenarios.
 
 **Check:**

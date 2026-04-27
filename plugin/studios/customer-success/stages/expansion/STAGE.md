@@ -1,7 +1,7 @@
 ---
 name: expansion
 description: Identify and pursue upsell/cross-sell opportunities
-hats: [growth-strategist, value-consultant]
+hats: [growth-strategist, value-consultant, verifier]
 fix_hats: [growth-strategist, feedback-assessor]
 review: [ask, await]
 elaboration: collaborative

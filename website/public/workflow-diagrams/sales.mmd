@@ -24,8 +24,10 @@ stateDiagram-v2
     state research_execute {
       [*] --> research_execute_prospect_researcher
       research_execute_prospect_researcher --> research_execute_industry_analyst : hat.advance
-      research_execute_industry_analyst --> research_execute_done : hat.advance
+      research_execute_industry_analyst --> research_execute_verifier : hat.advance
       research_execute_industry_analyst --> research_execute_prospect_researcher : hat.reject
+      research_execute_verifier --> research_execute_done : hat.advance
+      research_execute_verifier --> research_execute_industry_analyst : hat.reject
       research_execute_done --> [*]
     }
     research_execute --> research_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state qualification_execute {
       [*] --> qualification_execute_qualifier
       qualification_execute_qualifier --> qualification_execute_deal_strategist : hat.advance
-      qualification_execute_deal_strategist --> qualification_execute_done : hat.advance
+      qualification_execute_deal_strategist --> qualification_execute_verifier : hat.advance
       qualification_execute_deal_strategist --> qualification_execute_qualifier : hat.reject
+      qualification_execute_verifier --> qualification_execute_done : hat.advance
+      qualification_execute_verifier --> qualification_execute_deal_strategist : hat.reject
       qualification_execute_done --> [*]
     }
     qualification_execute --> qualification_review
@@ -120,8 +124,10 @@ stateDiagram-v2
     state proposal_execute {
       [*] --> proposal_execute_proposal_writer
       proposal_execute_proposal_writer --> proposal_execute_solution_architect : hat.advance
-      proposal_execute_solution_architect --> proposal_execute_done : hat.advance
+      proposal_execute_solution_architect --> proposal_execute_verifier : hat.advance
       proposal_execute_solution_architect --> proposal_execute_proposal_writer : hat.reject
+      proposal_execute_verifier --> proposal_execute_done : hat.advance
+      proposal_execute_verifier --> proposal_execute_solution_architect : hat.reject
       proposal_execute_done --> [*]
     }
     proposal_execute --> proposal_review
@@ -216,8 +222,10 @@ stateDiagram-v2
     state close_execute {
       [*] --> close_execute_closer
       close_execute_closer --> close_execute_handoff_coordinator : hat.advance
-      close_execute_handoff_coordinator --> close_execute_done : hat.advance
+      close_execute_handoff_coordinator --> close_execute_verifier : hat.advance
       close_execute_handoff_coordinator --> close_execute_closer : hat.reject
+      close_execute_verifier --> close_execute_done : hat.advance
+      close_execute_verifier --> close_execute_handoff_coordinator : hat.reject
       close_execute_done --> [*]
     }
     close_execute --> close_review

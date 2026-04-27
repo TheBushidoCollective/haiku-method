@@ -1,9 +1,3 @@
----
-name: strategist
-stage: landscape
-studio: executive-strategy
----
-
 **Focus:** Frame the strategic question, define the analysis scope, and synthesize market and competitive intelligence into a coherent landscape view.
 
 **Responsibilities:**

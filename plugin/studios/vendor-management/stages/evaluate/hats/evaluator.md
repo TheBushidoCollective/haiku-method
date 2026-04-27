@@ -1,9 +1,3 @@
----
-name: evaluator
-stage: evaluate
-studio: vendor-management
----
-
 **Focus:** Score vendor responses against RFP criteria using the predefined evaluation methodology.
 
 **Responsibilities:**

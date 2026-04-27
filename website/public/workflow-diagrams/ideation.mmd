@@ -23,8 +23,10 @@ stateDiagram-v2
     state research_execute {
       [*] --> research_execute_researcher
       research_execute_researcher --> research_execute_analyst : hat.advance
-      research_execute_analyst --> research_execute_done : hat.advance
+      research_execute_analyst --> research_execute_verifier : hat.advance
       research_execute_analyst --> research_execute_researcher : hat.reject
+      research_execute_verifier --> research_execute_done : hat.advance
+      research_execute_verifier --> research_execute_analyst : hat.reject
       research_execute_done --> [*]
     }
     research_execute --> research_review
@@ -71,8 +73,10 @@ stateDiagram-v2
     state create_execute {
       [*] --> create_execute_creator
       create_execute_creator --> create_execute_editor : hat.advance
-      create_execute_editor --> create_execute_done : hat.advance
+      create_execute_editor --> create_execute_verifier : hat.advance
       create_execute_editor --> create_execute_creator : hat.reject
+      create_execute_verifier --> create_execute_done : hat.advance
+      create_execute_verifier --> create_execute_editor : hat.reject
       create_execute_done --> [*]
     }
     create_execute --> create_review
@@ -117,8 +121,14 @@ stateDiagram-v2
     review_elaborate --> review_execute : elaborate.advance
     review_elaborate --> review_review_fix : feedback.pending
     state review_execute {
-      [*] --> review_execute_critic
+      [*] --> review_execute_review_planner
+      review_execute_review_planner --> review_execute_synthesizer : hat.advance
+      review_execute_synthesizer --> review_execute_reviewer : hat.advance
+      review_execute_synthesizer --> review_execute_review_planner : hat.reject
+      review_execute_reviewer --> review_execute_critic : hat.advance
+      review_execute_reviewer --> review_execute_synthesizer : hat.reject
       review_execute_critic --> review_execute_fact_checker : hat.advance
+      review_execute_critic --> review_execute_reviewer : hat.reject
       review_execute_fact_checker --> review_execute_done : hat.advance
       review_execute_fact_checker --> review_execute_critic : hat.reject
       review_execute_done --> [*]
@@ -129,24 +139,24 @@ stateDiagram-v2
     state review_review_fix {
       [*] --> review_review_fix_bolt_1
       state review_review_fix_bolt_1 {
-        [*] --> review_review_fix_bolt_1_critic
-        review_review_fix_bolt_1_critic --> review_review_fix_bolt_1_feedback_assessor : fix.advance
+        [*] --> review_review_fix_bolt_1_synthesizer
+        review_review_fix_bolt_1_synthesizer --> review_review_fix_bolt_1_feedback_assessor : fix.advance
         review_review_fix_bolt_1_feedback_assessor --> review_review_fix_bolt_1_validated : fix.advance
         review_review_fix_bolt_1_validated --> [*]
       }
       review_review_fix_bolt_1 --> review_review_fix_done : feedback.closed
       review_review_fix_bolt_1 --> review_review_fix_bolt_2 : feedback.open
       state review_review_fix_bolt_2 {
-        [*] --> review_review_fix_bolt_2_critic
-        review_review_fix_bolt_2_critic --> review_review_fix_bolt_2_feedback_assessor : fix.advance
+        [*] --> review_review_fix_bolt_2_synthesizer
+        review_review_fix_bolt_2_synthesizer --> review_review_fix_bolt_2_feedback_assessor : fix.advance
         review_review_fix_bolt_2_feedback_assessor --> review_review_fix_bolt_2_validated : fix.advance
         review_review_fix_bolt_2_validated --> [*]
       }
       review_review_fix_bolt_2 --> review_review_fix_done : feedback.closed
       review_review_fix_bolt_2 --> review_review_fix_bolt_3 : feedback.open
       state review_review_fix_bolt_3 {
-        [*] --> review_review_fix_bolt_3_critic
-        review_review_fix_bolt_3_critic --> review_review_fix_bolt_3_feedback_assessor : fix.advance
+        [*] --> review_review_fix_bolt_3_synthesizer
+        review_review_fix_bolt_3_synthesizer --> review_review_fix_bolt_3_feedback_assessor : fix.advance
         review_review_fix_bolt_3_feedback_assessor --> review_review_fix_bolt_3_validated : fix.advance
         review_review_fix_bolt_3_validated --> [*]
       }
@@ -166,7 +176,9 @@ stateDiagram-v2
     deliver_elaborate --> deliver_review_fix : feedback.pending
     state deliver_execute {
       [*] --> deliver_execute_publisher
-      deliver_execute_publisher --> deliver_execute_done : hat.advance
+      deliver_execute_publisher --> deliver_execute_verifier : hat.advance
+      deliver_execute_verifier --> deliver_execute_done : hat.advance
+      deliver_execute_verifier --> deliver_execute_publisher : hat.reject
       deliver_execute_done --> [*]
     }
     deliver_execute --> deliver_review

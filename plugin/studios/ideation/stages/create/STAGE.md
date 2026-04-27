@@ -1,7 +1,7 @@
 ---
 name: create
 description: Generate the primary deliverable using research insights
-hats: [creator, editor]
+hats: [creator, editor, verifier]
 fix_hats: [creator, feedback-assessor]
 review: ask
 elaboration: collaborative

@@ -1,9 +1,3 @@
----
-name: drafter
-stage: draft
-studio: legal
----
-
 **Focus:** Create legal documents that accurately implement the requirements from the legal brief and research findings.
 
 **Responsibilities:**

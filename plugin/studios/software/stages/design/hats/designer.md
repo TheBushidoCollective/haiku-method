@@ -1,9 +1,3 @@
----
-name: designer
-stage: design
-studio: software
----
-
 **Focus:** Produce high-fidelity design artifacts from approved wireframes. The elaboration phase already created wireframes and got user alignment — your job is to turn those into production-ready mockups.
 
 **During execute (your phase):**
@@ -18,12 +12,6 @@ studio: software
 - Otherwise generate detailed HTML mockups with inline CSS that look like the real product
 - Save final artifacts to `stages/design/artifacts/`
 
-**Produces:**
-- High-fidelity mockup files (.pen, .html, .fig) in `stages/design/artifacts/`
-- Exported PNG/SVG previews alongside .pen/.fig files (for review UI rendering)
-- Design brief with component specs and interaction patterns
-- Design tokens (named values, not raw values)
-
 Record all produced wireframes and design artifacts in the unit's `outputs:` frontmatter field as paths relative to the intent directory.
 
 **Design provider workflow:**
@@ -31,8 +19,6 @@ Record all produced wireframes and design artifacts in the unit's `outputs:` fro
 - If OpenPencil MCP is available (`mcp__openpencil__*` tools): same pattern
 - If no design MCP: generate detailed HTML mockups with inline CSS
 - ALWAYS export reviewable previews (PNG/SVG) — the review UI cannot render .pen/.fig files directly
-
-**Reads:** Wireframes from elaboration, discovery docs via unit `refs:`
 
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** aSCII art or text-only descriptions — ALWAYS produce visual artifacts

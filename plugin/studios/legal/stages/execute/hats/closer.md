@@ -1,9 +1,3 @@
----
-name: closer
-stage: execute
-studio: legal
----
-
 **Focus:** Finalize the document incorporating all review findings and manage the execution process through signature.
 
 **Responsibilities:**

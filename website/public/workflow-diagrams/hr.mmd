@@ -24,8 +24,10 @@ stateDiagram-v2
     state requisition_execute {
       [*] --> requisition_execute_hiring_manager
       requisition_execute_hiring_manager --> requisition_execute_recruiter : hat.advance
-      requisition_execute_recruiter --> requisition_execute_done : hat.advance
+      requisition_execute_recruiter --> requisition_execute_verifier : hat.advance
       requisition_execute_recruiter --> requisition_execute_hiring_manager : hat.reject
+      requisition_execute_verifier --> requisition_execute_done : hat.advance
+      requisition_execute_verifier --> requisition_execute_recruiter : hat.reject
       requisition_execute_done --> [*]
     }
     requisition_execute --> requisition_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state sourcing_execute {
       [*] --> sourcing_execute_sourcer
       sourcing_execute_sourcer --> sourcing_execute_recruiter : hat.advance
-      sourcing_execute_recruiter --> sourcing_execute_done : hat.advance
+      sourcing_execute_recruiter --> sourcing_execute_verifier : hat.advance
       sourcing_execute_recruiter --> sourcing_execute_sourcer : hat.reject
+      sourcing_execute_verifier --> sourcing_execute_done : hat.advance
+      sourcing_execute_verifier --> sourcing_execute_recruiter : hat.reject
       sourcing_execute_done --> [*]
     }
     sourcing_execute --> sourcing_review
@@ -168,8 +172,10 @@ stateDiagram-v2
     state interview_execute {
       [*] --> interview_execute_interviewer
       interview_execute_interviewer --> interview_execute_evaluator : hat.advance
-      interview_execute_evaluator --> interview_execute_done : hat.advance
+      interview_execute_evaluator --> interview_execute_verifier : hat.advance
       interview_execute_evaluator --> interview_execute_interviewer : hat.reject
+      interview_execute_verifier --> interview_execute_done : hat.advance
+      interview_execute_verifier --> interview_execute_evaluator : hat.reject
       interview_execute_done --> [*]
     }
     interview_execute --> interview_review
@@ -216,8 +222,10 @@ stateDiagram-v2
     state offer_execute {
       [*] --> offer_execute_compensator
       offer_execute_compensator --> offer_execute_closer : hat.advance
-      offer_execute_closer --> offer_execute_done : hat.advance
+      offer_execute_closer --> offer_execute_verifier : hat.advance
       offer_execute_closer --> offer_execute_compensator : hat.reject
+      offer_execute_verifier --> offer_execute_done : hat.advance
+      offer_execute_verifier --> offer_execute_closer : hat.reject
       offer_execute_done --> [*]
     }
     offer_execute --> offer_review

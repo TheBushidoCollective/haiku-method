@@ -1,10 +1,6 @@
 ---
-name: quality-plan
-stage: manufacturing
-studio: hwdev
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the production quality plan will catch defects before they ship.
 
 **Check:**

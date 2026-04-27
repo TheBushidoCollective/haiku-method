@@ -1,10 +1,6 @@
 ---
-name: rigor
-stage: landscape
-studio: executive-strategy
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify landscape analysis is evidence-based and covers all relevant dimensions.
 
 **Check:**

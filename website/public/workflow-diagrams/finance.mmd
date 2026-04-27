@@ -24,8 +24,10 @@ stateDiagram-v2
     state forecast_execute {
       [*] --> forecast_execute_analyst
       forecast_execute_analyst --> forecast_execute_forecaster : hat.advance
-      forecast_execute_forecaster --> forecast_execute_done : hat.advance
+      forecast_execute_forecaster --> forecast_execute_verifier : hat.advance
       forecast_execute_forecaster --> forecast_execute_analyst : hat.reject
+      forecast_execute_verifier --> forecast_execute_done : hat.advance
+      forecast_execute_verifier --> forecast_execute_forecaster : hat.reject
       forecast_execute_done --> [*]
     }
     forecast_execute --> forecast_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state budget_execute {
       [*] --> budget_execute_budget_owner
       budget_execute_budget_owner --> budget_execute_allocator : hat.advance
-      budget_execute_allocator --> budget_execute_done : hat.advance
+      budget_execute_allocator --> budget_execute_verifier : hat.advance
       budget_execute_allocator --> budget_execute_budget_owner : hat.reject
+      budget_execute_verifier --> budget_execute_done : hat.advance
+      budget_execute_verifier --> budget_execute_allocator : hat.reject
       budget_execute_done --> [*]
     }
     budget_execute --> budget_review
@@ -168,8 +172,10 @@ stateDiagram-v2
     state reporting_execute {
       [*] --> reporting_execute_reporter
       reporting_execute_reporter --> reporting_execute_visualizer : hat.advance
-      reporting_execute_visualizer --> reporting_execute_done : hat.advance
+      reporting_execute_visualizer --> reporting_execute_verifier : hat.advance
       reporting_execute_visualizer --> reporting_execute_reporter : hat.reject
+      reporting_execute_verifier --> reporting_execute_done : hat.advance
+      reporting_execute_verifier --> reporting_execute_visualizer : hat.reject
       reporting_execute_done --> [*]
     }
     reporting_execute --> reporting_review
@@ -216,8 +222,10 @@ stateDiagram-v2
     state close_execute {
       [*] --> close_execute_controller
       close_execute_controller --> close_execute_reconciler : hat.advance
-      close_execute_reconciler --> close_execute_done : hat.advance
+      close_execute_reconciler --> close_execute_verifier : hat.advance
       close_execute_reconciler --> close_execute_controller : hat.reject
+      close_execute_verifier --> close_execute_done : hat.advance
+      close_execute_verifier --> close_execute_reconciler : hat.reject
       close_execute_done --> [*]
     }
     close_execute --> close_review

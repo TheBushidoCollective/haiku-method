@@ -24,8 +24,10 @@ stateDiagram-v2
     state research_execute {
       [*] --> research_execute_market_researcher
       research_execute_market_researcher --> research_execute_audience_analyst : hat.advance
-      research_execute_audience_analyst --> research_execute_done : hat.advance
+      research_execute_audience_analyst --> research_execute_verifier : hat.advance
       research_execute_audience_analyst --> research_execute_market_researcher : hat.reject
+      research_execute_verifier --> research_execute_done : hat.advance
+      research_execute_verifier --> research_execute_audience_analyst : hat.reject
       research_execute_done --> [*]
     }
     research_execute --> research_review
@@ -120,8 +122,10 @@ stateDiagram-v2
     state content_execute {
       [*] --> content_execute_content_creator
       content_execute_content_creator --> content_execute_copy_editor : hat.advance
-      content_execute_copy_editor --> content_execute_done : hat.advance
+      content_execute_copy_editor --> content_execute_verifier : hat.advance
       content_execute_copy_editor --> content_execute_content_creator : hat.reject
+      content_execute_verifier --> content_execute_done : hat.advance
+      content_execute_verifier --> content_execute_copy_editor : hat.reject
       content_execute_done --> [*]
     }
     content_execute --> content_review
@@ -168,8 +172,10 @@ stateDiagram-v2
     state launch_execute {
       [*] --> launch_execute_campaign_manager
       launch_execute_campaign_manager --> launch_execute_channel_coordinator : hat.advance
-      launch_execute_channel_coordinator --> launch_execute_done : hat.advance
+      launch_execute_channel_coordinator --> launch_execute_verifier : hat.advance
       launch_execute_channel_coordinator --> launch_execute_campaign_manager : hat.reject
+      launch_execute_verifier --> launch_execute_done : hat.advance
+      launch_execute_verifier --> launch_execute_channel_coordinator : hat.reject
       launch_execute_done --> [*]
     }
     launch_execute --> launch_review
@@ -216,8 +222,10 @@ stateDiagram-v2
     state measure_execute {
       [*] --> measure_execute_analyst
       measure_execute_analyst --> measure_execute_report_writer : hat.advance
-      measure_execute_report_writer --> measure_execute_done : hat.advance
+      measure_execute_report_writer --> measure_execute_verifier : hat.advance
       measure_execute_report_writer --> measure_execute_analyst : hat.reject
+      measure_execute_verifier --> measure_execute_done : hat.advance
+      measure_execute_verifier --> measure_execute_report_writer : hat.reject
       measure_execute_done --> [*]
     }
     measure_execute --> measure_review

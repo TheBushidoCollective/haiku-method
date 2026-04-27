@@ -24,8 +24,10 @@ stateDiagram-v2
     state discovery_execute {
       [*] --> discovery_execute_market_explorer
       discovery_execute_market_explorer --> discovery_execute_competitive_analyst : hat.advance
-      discovery_execute_competitive_analyst --> discovery_execute_done : hat.advance
+      discovery_execute_competitive_analyst --> discovery_execute_verifier : hat.advance
       discovery_execute_competitive_analyst --> discovery_execute_market_explorer : hat.reject
+      discovery_execute_verifier --> discovery_execute_done : hat.advance
+      discovery_execute_verifier --> discovery_execute_competitive_analyst : hat.reject
       discovery_execute_done --> [*]
     }
     discovery_execute --> discovery_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state user_research_execute {
       [*] --> user_research_execute_user_researcher
       user_research_execute_user_researcher --> user_research_execute_insights_synthesizer : hat.advance
-      user_research_execute_insights_synthesizer --> user_research_execute_done : hat.advance
+      user_research_execute_insights_synthesizer --> user_research_execute_verifier : hat.advance
       user_research_execute_insights_synthesizer --> user_research_execute_user_researcher : hat.reject
+      user_research_execute_verifier --> user_research_execute_done : hat.advance
+      user_research_execute_verifier --> user_research_execute_insights_synthesizer : hat.reject
       user_research_execute_done --> [*]
     }
     user_research_execute --> user_research_review
@@ -120,8 +124,10 @@ stateDiagram-v2
     state prioritization_execute {
       [*] --> prioritization_execute_prioritizer
       prioritization_execute_prioritizer --> prioritization_execute_stakeholder_proxy : hat.advance
-      prioritization_execute_stakeholder_proxy --> prioritization_execute_done : hat.advance
+      prioritization_execute_stakeholder_proxy --> prioritization_execute_verifier : hat.advance
       prioritization_execute_stakeholder_proxy --> prioritization_execute_prioritizer : hat.reject
+      prioritization_execute_verifier --> prioritization_execute_done : hat.advance
+      prioritization_execute_verifier --> prioritization_execute_stakeholder_proxy : hat.reject
       prioritization_execute_done --> [*]
     }
     prioritization_execute --> prioritization_review
@@ -168,8 +174,10 @@ stateDiagram-v2
     state roadmap_execute {
       [*] --> roadmap_execute_roadmap_architect
       roadmap_execute_roadmap_architect --> roadmap_execute_capacity_planner : hat.advance
-      roadmap_execute_capacity_planner --> roadmap_execute_done : hat.advance
+      roadmap_execute_capacity_planner --> roadmap_execute_verifier : hat.advance
       roadmap_execute_capacity_planner --> roadmap_execute_roadmap_architect : hat.reject
+      roadmap_execute_verifier --> roadmap_execute_done : hat.advance
+      roadmap_execute_verifier --> roadmap_execute_capacity_planner : hat.reject
       roadmap_execute_done --> [*]
     }
     roadmap_execute --> roadmap_review
@@ -216,8 +224,10 @@ stateDiagram-v2
     state stakeholder_review_execute {
       [*] --> stakeholder_review_execute_presenter
       stakeholder_review_execute_presenter --> stakeholder_review_execute_feedback_synthesizer : hat.advance
-      stakeholder_review_execute_feedback_synthesizer --> stakeholder_review_execute_done : hat.advance
+      stakeholder_review_execute_feedback_synthesizer --> stakeholder_review_execute_verifier : hat.advance
       stakeholder_review_execute_feedback_synthesizer --> stakeholder_review_execute_presenter : hat.reject
+      stakeholder_review_execute_verifier --> stakeholder_review_execute_done : hat.advance
+      stakeholder_review_execute_verifier --> stakeholder_review_execute_feedback_synthesizer : hat.reject
       stakeholder_review_execute_done --> [*]
     }
     stakeholder_review_execute --> stakeholder_review_review

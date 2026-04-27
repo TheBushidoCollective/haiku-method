@@ -1,9 +1,3 @@
----
-name: compensator
-stage: offer
-studio: hr
----
-
 **Focus:** Develop compensation packages that are competitive, equitable, and aligned with internal compensation structures.
 
 **Responsibilities:**

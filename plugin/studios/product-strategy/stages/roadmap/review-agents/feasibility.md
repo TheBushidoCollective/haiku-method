@@ -1,10 +1,6 @@
 ---
-name: feasibility
-stage: roadmap
-studio: product-strategy
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the roadmap is achievable given capacity and dependencies.
 
 **Check:**

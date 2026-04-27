@@ -1,10 +1,6 @@
 ---
-name: accuracy
-stage: mapping
-studio: migration
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify source-to-target mappings are correct and complete.
 
 **Check:**

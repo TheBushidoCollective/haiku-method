@@ -1,10 +1,6 @@
 ---
-name: rigor
-stage: qualification
-studio: sales
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify qualification assessment is honest and not inflated.
 
 **Check:**

@@ -1,10 +1,6 @@
 ---
-name: security
-stage: development
-studio: software
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** identify security vulnerabilities introduced by the implementation.
 
 **Check:**

@@ -24,8 +24,10 @@ stateDiagram-v2
     state plan_execute {
       [*] --> plan_execute_strategist
       plan_execute_strategist --> plan_execute_planner : hat.advance
-      plan_execute_planner --> plan_execute_done : hat.advance
+      plan_execute_planner --> plan_execute_verifier : hat.advance
       plan_execute_planner --> plan_execute_strategist : hat.reject
+      plan_execute_verifier --> plan_execute_done : hat.advance
+      plan_execute_verifier --> plan_execute_planner : hat.reject
       plan_execute_done --> [*]
     }
     plan_execute --> plan_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state design_tests_execute {
       [*] --> design_tests_execute_designer
       design_tests_execute_designer --> design_tests_execute_automator : hat.advance
-      design_tests_execute_automator --> design_tests_execute_done : hat.advance
+      design_tests_execute_automator --> design_tests_execute_verifier : hat.advance
       design_tests_execute_automator --> design_tests_execute_designer : hat.reject
+      design_tests_execute_verifier --> design_tests_execute_done : hat.advance
+      design_tests_execute_verifier --> design_tests_execute_automator : hat.reject
       design_tests_execute_done --> [*]
     }
     design_tests_execute --> design_tests_review
@@ -120,8 +124,10 @@ stateDiagram-v2
     state execute_tests_execute {
       [*] --> execute_tests_execute_tester
       execute_tests_execute_tester --> execute_tests_execute_reporter : hat.advance
-      execute_tests_execute_reporter --> execute_tests_execute_done : hat.advance
+      execute_tests_execute_reporter --> execute_tests_execute_verifier : hat.advance
       execute_tests_execute_reporter --> execute_tests_execute_tester : hat.reject
+      execute_tests_execute_verifier --> execute_tests_execute_done : hat.advance
+      execute_tests_execute_verifier --> execute_tests_execute_reporter : hat.reject
       execute_tests_execute_done --> [*]
     }
     execute_tests_execute --> execute_tests_review
@@ -168,8 +174,10 @@ stateDiagram-v2
     state analyze_execute {
       [*] --> analyze_execute_analyst
       analyze_execute_analyst --> analyze_execute_statistician : hat.advance
-      analyze_execute_statistician --> analyze_execute_done : hat.advance
+      analyze_execute_statistician --> analyze_execute_verifier : hat.advance
       analyze_execute_statistician --> analyze_execute_analyst : hat.reject
+      analyze_execute_verifier --> analyze_execute_done : hat.advance
+      analyze_execute_verifier --> analyze_execute_statistician : hat.reject
       analyze_execute_done --> [*]
     }
     analyze_execute --> analyze_review

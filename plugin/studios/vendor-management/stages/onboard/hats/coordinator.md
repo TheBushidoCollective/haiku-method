@@ -1,9 +1,3 @@
----
-name: coordinator
-stage: onboard
-studio: vendor-management
----
-
 **Focus:** Manage the onboarding process across all stakeholders and ensure organizational readiness.
 
 **Responsibilities:**

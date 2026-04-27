@@ -24,8 +24,10 @@ stateDiagram-v2
     state needs_analysis_execute {
       [*] --> needs_analysis_execute_analyst
       needs_analysis_execute_analyst --> needs_analysis_execute_consultant : hat.advance
-      needs_analysis_execute_consultant --> needs_analysis_execute_done : hat.advance
+      needs_analysis_execute_consultant --> needs_analysis_execute_verifier : hat.advance
       needs_analysis_execute_consultant --> needs_analysis_execute_analyst : hat.reject
+      needs_analysis_execute_verifier --> needs_analysis_execute_done : hat.advance
+      needs_analysis_execute_verifier --> needs_analysis_execute_consultant : hat.reject
       needs_analysis_execute_done --> [*]
     }
     needs_analysis_execute --> needs_analysis_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state design_execute {
       [*] --> design_execute_designer
       design_execute_designer --> design_execute_subject_expert : hat.advance
-      design_execute_subject_expert --> design_execute_done : hat.advance
+      design_execute_subject_expert --> design_execute_verifier : hat.advance
       design_execute_subject_expert --> design_execute_designer : hat.reject
+      design_execute_verifier --> design_execute_done : hat.advance
+      design_execute_verifier --> design_execute_subject_expert : hat.reject
       design_execute_done --> [*]
     }
     design_execute --> design_review
@@ -120,8 +124,10 @@ stateDiagram-v2
     state develop_execute {
       [*] --> develop_execute_developer
       develop_execute_developer --> develop_execute_editor : hat.advance
-      develop_execute_editor --> develop_execute_done : hat.advance
+      develop_execute_editor --> develop_execute_verifier : hat.advance
       develop_execute_editor --> develop_execute_developer : hat.reject
+      develop_execute_verifier --> develop_execute_done : hat.advance
+      develop_execute_verifier --> develop_execute_editor : hat.reject
       develop_execute_done --> [*]
     }
     develop_execute --> develop_review
@@ -168,8 +174,10 @@ stateDiagram-v2
     state deliver_execute {
       [*] --> deliver_execute_facilitator
       deliver_execute_facilitator --> deliver_execute_coordinator : hat.advance
-      deliver_execute_coordinator --> deliver_execute_done : hat.advance
+      deliver_execute_coordinator --> deliver_execute_verifier : hat.advance
       deliver_execute_coordinator --> deliver_execute_facilitator : hat.reject
+      deliver_execute_verifier --> deliver_execute_done : hat.advance
+      deliver_execute_verifier --> deliver_execute_coordinator : hat.reject
       deliver_execute_done --> [*]
     }
     deliver_execute --> deliver_review
@@ -216,8 +224,10 @@ stateDiagram-v2
     state evaluate_execute {
       [*] --> evaluate_execute_evaluator
       evaluate_execute_evaluator --> evaluate_execute_analyst : hat.advance
-      evaluate_execute_analyst --> evaluate_execute_done : hat.advance
+      evaluate_execute_analyst --> evaluate_execute_verifier : hat.advance
       evaluate_execute_analyst --> evaluate_execute_evaluator : hat.reject
+      evaluate_execute_verifier --> evaluate_execute_done : hat.advance
+      evaluate_execute_verifier --> evaluate_execute_analyst : hat.reject
       evaluate_execute_done --> [*]
     }
     evaluate_execute --> evaluate_review

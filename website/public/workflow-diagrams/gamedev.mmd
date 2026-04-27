@@ -24,10 +24,12 @@ stateDiagram-v2
     state concept_execute {
       [*] --> concept_execute_game_designer
       concept_execute_game_designer --> concept_execute_creative_director : hat.advance
-      concept_execute_creative_director --> concept_execute_elaborator : hat.advance
+      concept_execute_creative_director --> concept_execute_distiller : hat.advance
       concept_execute_creative_director --> concept_execute_game_designer : hat.reject
-      concept_execute_elaborator --> concept_execute_done : hat.advance
-      concept_execute_elaborator --> concept_execute_creative_director : hat.reject
+      concept_execute_distiller --> concept_execute_verifier : hat.advance
+      concept_execute_distiller --> concept_execute_creative_director : hat.reject
+      concept_execute_verifier --> concept_execute_done : hat.advance
+      concept_execute_verifier --> concept_execute_distiller : hat.reject
       concept_execute_done --> [*]
     }
     concept_execute --> concept_review
@@ -76,8 +78,10 @@ stateDiagram-v2
       prototype_execute_prototype_engineer --> prototype_execute_game_designer : hat.advance
       prototype_execute_game_designer --> prototype_execute_playtester : hat.advance
       prototype_execute_game_designer --> prototype_execute_prototype_engineer : hat.reject
-      prototype_execute_playtester --> prototype_execute_done : hat.advance
+      prototype_execute_playtester --> prototype_execute_verifier : hat.advance
       prototype_execute_playtester --> prototype_execute_game_designer : hat.reject
+      prototype_execute_verifier --> prototype_execute_done : hat.advance
+      prototype_execute_verifier --> prototype_execute_playtester : hat.reject
       prototype_execute_done --> [*]
     }
     prototype_execute --> prototype_review
@@ -228,8 +232,10 @@ stateDiagram-v2
     state release_execute {
       [*] --> release_execute_release_engineer
       release_execute_release_engineer --> release_execute_platform_cert_specialist : hat.advance
-      release_execute_platform_cert_specialist --> release_execute_done : hat.advance
+      release_execute_platform_cert_specialist --> release_execute_verifier : hat.advance
       release_execute_platform_cert_specialist --> release_execute_release_engineer : hat.reject
+      release_execute_verifier --> release_execute_done : hat.advance
+      release_execute_verifier --> release_execute_platform_cert_specialist : hat.reject
       release_execute_done --> [*]
     }
     release_execute --> release_review

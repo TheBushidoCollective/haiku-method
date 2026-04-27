@@ -357,7 +357,7 @@ export function AnnotationCanvas({ imageUrl, onPinsChange }: Props) {
 			</div>
 
 			{/* Canvas area — full width, no sidebar */}
-			{/* biome-ignore lint/a11y/useKeyWithMouseEvents: delegated keydown is for pin traversal, not a substitute for mouse handlers */}
+			{/* biome-ignore lint/a11y/useSemanticElements: keep div with explicit role for delegated keydown + focus management */}
 			<div
 				ref={wrapperRef}
 				role="group"

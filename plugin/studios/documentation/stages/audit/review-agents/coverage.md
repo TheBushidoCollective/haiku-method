@@ -1,10 +1,6 @@
 ---
-name: coverage
-stage: audit
-studio: documentation
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the audit identified all documentation gaps and priorities are correctly ranked.
 
 **Check:**

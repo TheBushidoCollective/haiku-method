@@ -1,9 +1,3 @@
----
-name: interviewer
-stage: interview
-studio: hr
----
-
 **Focus:** Conduct structured interviews that elicit behavioral evidence of candidate competencies.
 
 **Responsibilities:**

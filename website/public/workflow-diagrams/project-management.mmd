@@ -24,8 +24,10 @@ stateDiagram-v2
     state charter_execute {
       [*] --> charter_execute_sponsor
       charter_execute_sponsor --> charter_execute_scoper : hat.advance
-      charter_execute_scoper --> charter_execute_done : hat.advance
+      charter_execute_scoper --> charter_execute_verifier : hat.advance
       charter_execute_scoper --> charter_execute_sponsor : hat.reject
+      charter_execute_verifier --> charter_execute_done : hat.advance
+      charter_execute_verifier --> charter_execute_scoper : hat.reject
       charter_execute_done --> [*]
     }
     charter_execute --> charter_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state plan_execute {
       [*] --> plan_execute_planner
       plan_execute_planner --> plan_execute_estimator : hat.advance
-      plan_execute_estimator --> plan_execute_done : hat.advance
+      plan_execute_estimator --> plan_execute_verifier : hat.advance
       plan_execute_estimator --> plan_execute_planner : hat.reject
+      plan_execute_verifier --> plan_execute_done : hat.advance
+      plan_execute_verifier --> plan_execute_estimator : hat.reject
       plan_execute_done --> [*]
     }
     plan_execute --> plan_review
@@ -168,8 +172,10 @@ stateDiagram-v2
     state report_execute {
       [*] --> report_execute_reporter
       report_execute_reporter --> report_execute_communicator : hat.advance
-      report_execute_communicator --> report_execute_done : hat.advance
+      report_execute_communicator --> report_execute_verifier : hat.advance
       report_execute_communicator --> report_execute_reporter : hat.reject
+      report_execute_verifier --> report_execute_done : hat.advance
+      report_execute_verifier --> report_execute_communicator : hat.reject
       report_execute_done --> [*]
     }
     report_execute --> report_review
@@ -216,8 +222,10 @@ stateDiagram-v2
     state close_execute {
       [*] --> close_execute_closer
       close_execute_closer --> close_execute_archivist : hat.advance
-      close_execute_archivist --> close_execute_done : hat.advance
+      close_execute_archivist --> close_execute_verifier : hat.advance
       close_execute_archivist --> close_execute_closer : hat.reject
+      close_execute_verifier --> close_execute_done : hat.advance
+      close_execute_verifier --> close_execute_archivist : hat.reject
       close_execute_done --> [*]
     }
     close_execute --> close_review

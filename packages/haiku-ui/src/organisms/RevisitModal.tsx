@@ -157,6 +157,7 @@ export function RevisitModal({
 	}
 
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: backdrop click-to-close; keyboard close path is the document-level Escape handler
 		<div
 			data-testid="revisit-modal-backdrop"
 			className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
@@ -164,8 +165,7 @@ export function RevisitModal({
 				if (e.target === e.currentTarget) onClose()
 			}}
 		>
-			{/* biome-ignore lint/a11y/noStaticElementInteractions: click handlers are event-boundary containment, keyboard path is document-level Escape + focus trap. */}
-			{/* biome-ignore lint/a11y/useKeyWithClickEvents: same. */}
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: stop-propagation only, no semantic action; keyboard interactions are on the contained inputs */}
 			<div
 				ref={dialogRef}
 				role="dialog"

@@ -1,9 +1,3 @@
----
-name: analyst
-stage: forecast
-studio: finance
----
-
 **Focus:** Research market conditions, economic indicators, and industry trends that inform revenue and cost projections. Build the data foundation that the forecaster uses to construct models.
 
 **Responsibilities:**

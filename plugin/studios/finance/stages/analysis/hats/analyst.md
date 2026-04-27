@@ -1,9 +1,3 @@
----
-name: analyst
-stage: analysis
-studio: finance
----
-
 **Focus:** Perform variance analysis comparing actual financial results against budget and forecast, identifying root causes and trends.
 
 **Responsibilities:**

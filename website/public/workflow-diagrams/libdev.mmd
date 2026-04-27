@@ -23,10 +23,12 @@ stateDiagram-v2
     state inception_execute {
       [*] --> inception_execute_researcher
       inception_execute_researcher --> inception_execute_api_architect : hat.advance
-      inception_execute_api_architect --> inception_execute_elaborator : hat.advance
+      inception_execute_api_architect --> inception_execute_distiller : hat.advance
       inception_execute_api_architect --> inception_execute_researcher : hat.reject
-      inception_execute_elaborator --> inception_execute_done : hat.advance
-      inception_execute_elaborator --> inception_execute_api_architect : hat.reject
+      inception_execute_distiller --> inception_execute_verifier : hat.advance
+      inception_execute_distiller --> inception_execute_api_architect : hat.reject
+      inception_execute_verifier --> inception_execute_done : hat.advance
+      inception_execute_verifier --> inception_execute_distiller : hat.reject
       inception_execute_done --> [*]
     }
     inception_execute --> inception_review
@@ -171,8 +173,10 @@ stateDiagram-v2
     state release_execute {
       [*] --> release_execute_release_engineer
       release_execute_release_engineer --> release_execute_doc_writer : hat.advance
-      release_execute_doc_writer --> release_execute_done : hat.advance
+      release_execute_doc_writer --> release_execute_verifier : hat.advance
       release_execute_doc_writer --> release_execute_release_engineer : hat.reject
+      release_execute_verifier --> release_execute_done : hat.advance
+      release_execute_verifier --> release_execute_doc_writer : hat.reject
       release_execute_done --> [*]
     }
     release_execute --> release_review

@@ -1,10 +1,6 @@
 ---
-name: data-quality
-stage: transformation
-studio: data-pipeline
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify transformations produce correct, consistent output that matches the target schema.
 
 **Check:**

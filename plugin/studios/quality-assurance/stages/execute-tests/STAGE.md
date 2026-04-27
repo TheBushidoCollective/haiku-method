@@ -1,7 +1,7 @@
 ---
 name: execute-tests
 description: Execute tests and log defects
-hats: [tester, reporter]
+hats: [tester, reporter, verifier]
 fix_hats: [tester, feedback-assessor]
 review: auto
 elaboration: autonomous

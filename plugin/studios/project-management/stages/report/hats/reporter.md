@@ -1,9 +1,3 @@
----
-name: reporter
-stage: report
-studio: project-management
----
-
 **Focus:** Create project dashboards and status reports that accurately represent project health for stakeholders.
 
 **Responsibilities:**

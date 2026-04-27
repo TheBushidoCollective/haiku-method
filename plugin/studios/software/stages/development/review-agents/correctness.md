@@ -1,10 +1,6 @@
 ---
-name: correctness
-stage: development
-studio: software
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the implementation correctly satisfies the behavioral specification and completion criteria.
 
 **Check:**

@@ -1,9 +1,3 @@
----
-name: analyst
-stage: evaluate
-studio: training
----
-
 **Focus:** Analyze evaluation data to identify patterns, validate statistical significance, and connect outcomes to original learning needs.
 
 **Responsibilities:**

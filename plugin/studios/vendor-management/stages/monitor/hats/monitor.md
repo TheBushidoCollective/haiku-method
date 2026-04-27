@@ -1,9 +1,3 @@
----
-name: monitor
-stage: monitor
-studio: vendor-management
----
-
 **Focus:** Track vendor performance against contractual SLAs and operational expectations.
 
 **Responsibilities:**

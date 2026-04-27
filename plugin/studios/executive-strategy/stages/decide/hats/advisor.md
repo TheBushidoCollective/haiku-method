@@ -1,9 +1,3 @@
----
-name: advisor
-stage: decide
-studio: executive-strategy
----
-
 **Focus:** Synthesize evaluation results into a clear recommendation with supporting rationale and acknowledged risks.
 
 **Responsibilities:**

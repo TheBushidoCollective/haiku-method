@@ -1,9 +1,3 @@
----
-name: integrator
-stage: onboard
-studio: vendor-management
----
-
 **Focus:** Implement technical integration between vendor systems and the organization's existing infrastructure.
 
 **Responsibilities:**

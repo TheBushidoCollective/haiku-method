@@ -1,9 +1,3 @@
----
-name: risk-monitor
-stage: track
-studio: project-management
----
-
 **Focus:** Continuously reassess project risks, track risk triggers, and ensure mitigation actions are on track.
 
 **Responsibilities:**

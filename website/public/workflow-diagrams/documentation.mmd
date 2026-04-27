@@ -24,8 +24,10 @@ stateDiagram-v2
     state audit_execute {
       [*] --> audit_execute_auditor
       audit_execute_auditor --> audit_execute_gap_analyst : hat.advance
-      audit_execute_gap_analyst --> audit_execute_done : hat.advance
+      audit_execute_gap_analyst --> audit_execute_verifier : hat.advance
       audit_execute_gap_analyst --> audit_execute_auditor : hat.reject
+      audit_execute_verifier --> audit_execute_done : hat.advance
+      audit_execute_verifier --> audit_execute_gap_analyst : hat.reject
       audit_execute_done --> [*]
     }
     audit_execute --> audit_review
@@ -168,8 +170,10 @@ stateDiagram-v2
     state review_execute {
       [*] --> review_execute_editor
       review_execute_editor --> review_execute_subject_matter_expert : hat.advance
-      review_execute_subject_matter_expert --> review_execute_done : hat.advance
+      review_execute_subject_matter_expert --> review_execute_verifier : hat.advance
       review_execute_subject_matter_expert --> review_execute_editor : hat.reject
+      review_execute_verifier --> review_execute_done : hat.advance
+      review_execute_verifier --> review_execute_subject_matter_expert : hat.reject
       review_execute_done --> [*]
     }
     review_execute --> review_review
@@ -215,7 +219,9 @@ stateDiagram-v2
     publish_elaborate --> publish_review_fix : feedback.pending
     state publish_execute {
       [*] --> publish_execute_publisher
-      publish_execute_publisher --> publish_execute_done : hat.advance
+      publish_execute_publisher --> publish_execute_verifier : hat.advance
+      publish_execute_verifier --> publish_execute_done : hat.advance
+      publish_execute_verifier --> publish_execute_publisher : hat.reject
       publish_execute_done --> [*]
     }
     publish_execute --> publish_review

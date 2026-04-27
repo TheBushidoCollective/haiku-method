@@ -1,7 +1,7 @@
 ---
 name: research
 description: Research precedent and review regulatory requirements
-hats: [researcher, analyst]
+hats: [researcher, analyst, verifier]
 fix_hats: [researcher, feedback-assessor]
 review: auto
 elaboration: autonomous

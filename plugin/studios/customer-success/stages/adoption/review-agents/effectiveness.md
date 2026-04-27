@@ -1,10 +1,6 @@
 ---
-name: effectiveness
-stage: adoption
-studio: customer-success
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify adoption strategies are evidence-based and measurable.
 
 **Check:**

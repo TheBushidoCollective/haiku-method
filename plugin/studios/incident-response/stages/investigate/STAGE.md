@@ -1,7 +1,7 @@
 ---
 name: investigate
 description: Root cause analysis, log analysis, and timeline reconstruction
-hats: [investigator, log-analyst]
+hats: [investigator, log-analyst, verifier]
 fix_hats: [investigator, feedback-assessor]
 review: auto
 elaboration: autonomous

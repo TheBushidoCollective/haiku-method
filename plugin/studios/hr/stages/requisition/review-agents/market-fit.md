@@ -1,10 +1,6 @@
 ---
-name: market-fit
-stage: requisition
-studio: hr
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify role requirements are realistic for the target candidate market.
 
 **Check:**

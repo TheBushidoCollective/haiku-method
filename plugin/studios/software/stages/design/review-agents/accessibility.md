@@ -1,7 +1,4 @@
 ---
-name: accessibility
-stage: design
-studio: software
 applies_to:
   - "*.html"
   - "*.htm"
@@ -11,7 +8,6 @@ applies_to:
   - "*.svelte"
 interpretation: lens
 ---
-
 <!--
   `applies_to:` gates this review agent by output kind. The web a11y checks
   below (contrast, touch targets, focus indicators, SR flow) presume DOM /

@@ -1,10 +1,6 @@
 ---
-name: alignment
-stage: design
-studio: training
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify curriculum design addresses identified needs and uses appropriate instructional strategies.
 
 **Check:**

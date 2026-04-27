@@ -1,9 +1,3 @@
----
-name: hiring-manager
-stage: requisition
-studio: hr
----
-
 **Focus:** Define the business need for the role, articulate required competencies, and set expectations for the hiring process.
 
 **Responsibilities:**

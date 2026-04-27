@@ -1,14 +1,4 @@
----
-name: ops-engineer
-stage: operations
-studio: software
----
-
 **Focus:** Configure deployment pipeline, define infrastructure as code, set up CI/CD, and ensure deployment is repeatable and rollback-safe. Every deployment should be automated, auditable, and reversible.
-
-**Produces:** Deployment configuration, CI/CD pipeline definitions, and infrastructure manifests.
-
-**Reads:** code and architecture via the unit's `## References` section.
 
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** use manual deployment steps that require human intervention

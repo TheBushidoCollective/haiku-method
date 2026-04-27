@@ -1,91 +1,155 @@
-// guard-workflow-fields — PreToolUse hook for Write/Edit
+// guard-workflow-fields — PreToolUse hook for Read/Write/Edit/MultiEdit
 //
-// Blocks direct file edits that attempt to spoof workflow-controlled fields on
-// haiku state files (intent.md, stage state.json, unit.md). On hookless
-// harnesses, tampering is caught by the checksum in `state-integrity.ts`;
-// on hook-capable harnesses (Claude Code/Kiro), the checksum is a no-op so
-// THIS hook is the primary line of defense. Keep the blocked-field list in
-// sync with `workflow-fields.ts` / `state-integrity.ts`, or agents will find a
-// way to mutate workflow state without either gate catching it.
+// Enforces the FSM-ownership boundary on H·AI·K·U state files. Generic
+// file Read/Write/Edit on FSM-managed paths is denied; agents must use
+// the MCP tools (haiku_unit_*, haiku_feedback_*, haiku_run_next).
 //
-// What's blocked:
-//   - `status: completed` on any state file (the canonical check-in field)
-//   - Intent-completion review flags (`phase: awaiting_completion_review`,
-//     `completion_review_dispatched: true`, `completion_review_skipped`).
-//     These drive the pre-intent-completion review branch in `runNext`;
-//     a hand-edited `true` skips or shortcuts the studio-level review
-//     without the workflow engine ever actually running it.
+// Scope:
+//   - units/*.md   — created/read/updated only via haiku_unit_*  tools
+//   - feedback/*.md — created/read/updated only via haiku_feedback_* tools
+//   - intent.md, stages/*/state.json, iteration files — FSM-internal
 //
-// Other field transitions (status → pending/active/blocked, phase →
-// elaborate/execute/review/gate) remain agent-editable for legitimate
-// state repair via `/haiku:repair` and similar tools.
+// Why this is broader than the prior "block status=completed" check:
+// the old check fired on any edit whose post-edit content contained
+// `status: completed`, which incorrectly blocked legitimate edits to
+// other frontmatter fields on already-completed units. It also could
+// be bypassed by writing the file via Bash (cat/sed/python). The path-
+// boundary approach is both narrower (only fires on genuinely off-limit
+// operations) and stronger (agents are funnelled through MCP tools that
+// enforce lifecycle, FM validity, and integrity sealing in one place).
+//
+// Bash bypass is acknowledged but not blocked here — see the soft Bash
+// warn rule below. The threat model is "honest agent reaches for the
+// wrong tool by habit," not "adversarial agent tries to subvert the
+// FSM." For honest agents, the redirect message in the denial output
+// names the right MCP tool to use.
 
-import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { defineHook } from "./define.js"
 
 function out(s: string): void {
 	process.stderr.write(s)
 }
 
+interface FsmPathClassification {
+	kind: "unit" | "feedback" | "intent" | "stage_state" | null
+	intent?: string
+	stage?: string
+	name?: string // unit name or feedback id (without .md)
+}
+
 /**
- * Compute the FULL file content that will exist on disk after the
- * proposed edit. Regex-matching only the Edit `new_string` slice is
- * unsafe — an agent can set `old_string: "active"`,
- * `new_string: "awaiting_completion_review"` and produce
- * `phase: awaiting_completion_review` in the file without the slice
- * itself ever containing the field name. We reconstruct the post-write
- * content so the regexes operate on reality, not on a sliver of it.
+ * Classify a file path relative to .haiku/intents/ structure. Returns
+ * `kind: null` when the path is not FSM-managed.
  */
-function projectedContent(
-	toolName: string,
-	absPath: string,
-	toolInput: Record<string, unknown>,
-): string | null {
-	if (toolName === "Write") {
-		return (toolInput.content as string) || ""
-	}
-	if (toolName === "Edit") {
-		const oldStr = (toolInput.old_string as string) || ""
-		const newStr = (toolInput.new_string as string) || ""
-		const replaceAll = toolInput.replace_all === true
-		if (!existsSync(absPath)) return newStr // file being created via Edit is rare; fall back
-		const current = readFileSync(absPath, "utf8")
-		if (!oldStr) return current + newStr
-		return replaceAll
-			? current.split(oldStr).join(newStr)
-			: current.replace(oldStr, newStr)
-	}
-	if (toolName === "MultiEdit") {
-		const edits =
-			(toolInput.edits as Array<{
-				old_string?: string
-				new_string?: string
-				replace_all?: boolean
-			}>) || []
-		let projected = existsSync(absPath) ? readFileSync(absPath, "utf8") : ""
-		for (const e of edits) {
-			const o = e.old_string || ""
-			const n = e.new_string || ""
-			if (!o) {
-				projected = projected + n
-				continue
-			}
-			projected =
-				e.replace_all === true
-					? projected.split(o).join(n)
-					: projected.replace(o, n)
+function classifyPath(absPath: string): FsmPathClassification {
+	const unitMatch = absPath.match(
+		/\.haiku\/intents\/([^/]+)\/stages\/([^/]+)\/units\/([^/]+)\.md$/,
+	)
+	if (unitMatch) {
+		return {
+			kind: "unit",
+			intent: unitMatch[1],
+			stage: unitMatch[2],
+			name: unitMatch[3],
 		}
-		return projected
 	}
-	return null
+	const fbMatch = absPath.match(
+		/\.haiku\/intents\/([^/]+)\/(?:stages\/([^/]+)\/)?feedback\/([^/]+)\.md$/,
+	)
+	if (fbMatch) {
+		return {
+			kind: "feedback",
+			intent: fbMatch[1],
+			stage: fbMatch[2] || undefined,
+			name: fbMatch[3],
+		}
+	}
+	if (/\.haiku\/intents\/[^/]+\/intent\.md$/.test(absPath)) {
+		return { kind: "intent" }
+	}
+	if (/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/state\.json$/.test(absPath)) {
+		return { kind: "stage_state" }
+	}
+	return { kind: null }
+}
+
+/**
+ * Build the redirect message that points the agent at the correct MCP
+ * tool. Different kinds of files have different tool surfaces; we name
+ * the specific call shape so the agent doesn't have to guess.
+ */
+function redirectMessage(toolName: string, cls: FsmPathClassification): string {
+	const op =
+		toolName === "Read"
+			? "read"
+			: toolName === "Write"
+				? "create or overwrite"
+				: "edit"
+	const intent = cls.intent ?? "<slug>"
+	const stage = cls.stage ?? "<stage>"
+	const name = cls.name ?? "<name>"
+
+	if (cls.kind === "unit") {
+		const tool =
+			op === "read"
+				? `haiku_unit_read { intent: "${intent}", stage: "${stage}", unit: "${name}" }`
+				: op === "create or overwrite"
+					? `haiku_unit_write { intent: "${intent}", stage: "${stage}", unit: "${name}", body: "...", frontmatter: { ... } }`
+					: `haiku_unit_set { intent: "${intent}", stage: "${stage}", unit: "${name}", field: "...", value: "..." }`
+		return (
+			`BLOCKED: Cannot ${op} unit file '${name}.md' via generic ${toolName}. ` +
+			`Unit files are FSM-managed — use the MCP tool instead:\n` +
+			`  ${tool}\n` +
+			`Generic file access bypasses lifecycle enforcement (pending → active → completed), ` +
+			`frontmatter validation (DAG, schema, cross-references), and integrity sealing.`
+		)
+	}
+	if (cls.kind === "feedback") {
+		const stagePart = cls.stage ? `stage: "${stage}", ` : ""
+		const tool =
+			op === "read"
+				? `haiku_feedback_read { intent: "${intent}", ${stagePart}feedback_id: "${name}" }`
+				: op === "create or overwrite"
+					? // Existing FB → rewrite body via haiku_feedback_write.
+						// Brand-new FB → use haiku_feedback (omit feedback_id).
+						`haiku_feedback_write { intent: "${intent}", ${stagePart}feedback_id: "${name}", body: "..." }\n  (or haiku_feedback { intent: "${intent}", ${stagePart}title: "...", body: "...", origin: "...", author: "..." } if you're creating a brand-new finding)`
+					: `haiku_feedback_write { intent: "${intent}", ${stagePart}feedback_id: "${name}", body: "..." }`
+		return (
+			`BLOCKED: Cannot ${op} feedback file '${name}.md' via generic ${toolName}. ` +
+			`Feedback files are FSM-managed and act as the unit-of-work for fix-loop hats — use the MCP tool instead:\n` +
+			`  ${tool}\n` +
+			`Generic file access bypasses fix-loop lifecycle and worktree isolation.`
+		)
+	}
+	if (cls.kind === "intent") {
+		return (
+			`BLOCKED: Cannot ${op} intent.md via generic ${toolName}. Intent files ` +
+			`are FSM-managed — use haiku_intent_get to read fields, haiku_run_next ` +
+			`to drive the lifecycle, or call /haiku:repair if state is genuinely corrupted. ` +
+			`Direct edits skip the integrity checksum and the FSM's invariants.`
+		)
+	}
+	if (cls.kind === "stage_state") {
+		return (
+			`BLOCKED: Cannot ${op} stage state.json via generic ${toolName}. Stage state ` +
+			`is FSM-internal — every legitimate write happens via haiku_run_next or a ` +
+			`dedicated MCP tool. Hand-editing breaks the integrity checksum and the ` +
+			`forward-only lifecycle invariants.`
+		)
+	}
+	return ""
 }
 
 export async function guardFsmFields(
 	input: Record<string, unknown>,
 ): Promise<void> {
 	const toolName = (input.tool_name as string) || ""
-	if (toolName !== "Write" && toolName !== "Edit" && toolName !== "MultiEdit")
+	if (
+		toolName !== "Read" &&
+		toolName !== "Write" &&
+		toolName !== "Edit" &&
+		toolName !== "MultiEdit"
+	)
 		return
 
 	const toolInput = (input.tool_input || {}) as Record<string, unknown>
@@ -93,71 +157,19 @@ export async function guardFsmFields(
 	if (!filePath) return
 
 	const absPath = resolve(process.cwd(), filePath)
+	const cls = classifyPath(absPath)
+	if (cls.kind === null) return
 
-	// Only guard haiku state files.
-	const isIntentFile = /\.haiku\/intents\/[^/]+\/intent\.md$/.test(absPath)
-	const isStageState =
-		/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/state\.json$/.test(absPath)
-	const isUnitFile =
-		/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/units\/[^/]+\.md$/.test(absPath)
-	if (!(isIntentFile || isStageState || isUnitFile)) return
-
-	const content = projectedContent(toolName, absPath, toolInput) ?? ""
-	if (!content) return
-
-	const kind = isIntentFile ? "intent" : isStageState ? "stage" : "unit"
-
-	// Detect status=completed writes in either YAML frontmatter or JSON body.
-	// YAML: `status: completed` (optionally quoted)
-	// JSON: `"status": "completed"`
-	const yamlCompleted = /^\s*status:\s*["']?completed\b["']?/m.test(content)
-	const jsonCompleted = /"status"\s*:\s*"completed"/.test(content)
-
-	if (yamlCompleted || jsonCompleted) {
-		out(
-			`BLOCKED: Cannot directly set status to "completed" on ${kind} files. ` +
-				`Completion is workflow-controlled — use the MCP tools (haiku_run_next, ` +
-				`haiku_unit_advance_hat) so scope validation, feedback closure, ` +
-				`worktree merge-back, and integrity sealing run. Setting status to ` +
-				`other values (pending, active, blocked) via direct edit is fine.`,
-		)
-		process.exit(2)
-	}
-
-	// Intent-only guards: hand-editing completion-review phase flags would
-	// let an agent enter or exit the studio-level adversarial review
-	// without the workflow engine actually running it. These fields are written only
-	// by `workflowEnterIntentCompletionReview`, `runIntentCompletionReview`, and
-	// the gate-rejection handler — every legitimate path reseals the
-	// integrity checksum. A direct edit would also skip the reseal.
-	if (isIntentFile) {
-		const entering =
-			/^\s*phase:\s*["']?awaiting_completion_review\b["']?/m.test(content)
-		const dispatchedTrue = /^\s*completion_review_dispatched:\s*true\b/m.test(
-			content,
-		)
-		const skippedTrue = /^\s*completion_review_skipped:\s*true\b/m.test(content)
-		if (entering || dispatchedTrue || skippedTrue) {
-			const offending = entering
-				? "phase: awaiting_completion_review"
-				: dispatchedTrue
-					? "completion_review_dispatched: true"
-					: "completion_review_skipped: true"
-			out(
-				`BLOCKED: Cannot directly set \`${offending}\` on intent files. ` +
-					`The intent-completion review phase is workflow-controlled — call ` +
-					`haiku_run_next to enter it, or approve the gate_review to exit. ` +
-					`Hand-editing this field would short-circuit the studio-level ` +
-					`adversarial review without running it.`,
-			)
-			process.exit(2)
-		}
-	}
+	out(redirectMessage(toolName, cls))
+	process.exit(2)
 }
+
+import { defineHook } from "./define.js"
 
 export default defineHook({
 	name: "guard-workflow-fields",
-	description: "PreToolUse Write/Edit/MultiEdit: block hand-edits that spoof workflow-controlled fields.",
+	description:
+		"PreToolUse Read/Write/Edit/MultiEdit: enforce workflow-ownership boundary on .haiku state files (units, feedback, intent.md, stage state.json) — agents must use the corresponding MCP tools.",
 	async handle(input, _ctx) {
 		await guardFsmFields(input)
 	},

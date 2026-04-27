@@ -1,6 +1,6 @@
 ---
 name: coverage-mapping
-location: .haiku/intents/{intent-slug}/knowledge/COVERAGE-MAPPING.md
+location: .haiku/intents/{intent-slug}/product/COVERAGE-MAPPING.md
 scope: intent
 format: text
 required: true

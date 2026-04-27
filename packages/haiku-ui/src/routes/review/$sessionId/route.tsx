@@ -282,10 +282,15 @@ function ReviewLayoutLoaded({
 	const intentStageOrder =
 		(session.intent?.frontmatter?.stages as string[] | undefined) ?? []
 	const stageStateKeys = Object.keys(stageStates)
+	// Show every stage in the studio's ordered list, even ones that
+	// haven't started yet — the stepper conveys "where we are in the
+	// whole pipeline," and hiding future stages makes a 5-stage flow
+	// look like a 1-stage flow until the user reaches the end. Stages
+	// with no state are rendered as `pending`. When the intent doesn't
+	// declare a stage list (legacy / repair), fall back to the started
+	// set so we show *something*.
 	const orderedStageNames =
-		intentStageOrder.length > 0
-			? intentStageOrder.filter((s) => stageStateKeys.includes(s))
-			: stageStateKeys
+		intentStageOrder.length > 0 ? intentStageOrder : stageStateKeys
 	const stageProgressData = orderedStageNames.map((name) => {
 		const state = stageStates[name] as
 			| { status?: string; visits?: number; pending_feedback?: number }

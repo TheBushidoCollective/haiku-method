@@ -1,9 +1,3 @@
----
-name: certifier
-stage: certify
-studio: quality-assurance
----
-
 **Focus:** Evaluate all quality evidence against exit criteria and make a certification determination.
 
 **Responsibilities:**

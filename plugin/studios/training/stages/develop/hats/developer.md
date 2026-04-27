@@ -1,9 +1,3 @@
----
-name: developer
-stage: develop
-studio: training
----
-
 **Focus:** Create training content and materials that implement the curriculum design.
 
 **Responsibilities:**

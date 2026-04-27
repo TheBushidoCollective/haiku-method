@@ -1,10 +1,6 @@
 ---
-name: performance
-stage: development
-studio: software
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** identify performance regressions or inefficiencies in the implementation.
 
 **Check:**

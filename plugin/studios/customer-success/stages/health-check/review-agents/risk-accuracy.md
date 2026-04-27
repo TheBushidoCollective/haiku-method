@@ -1,10 +1,6 @@
 ---
-name: risk-accuracy
-stage: health-check
-studio: customer-success
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify health scores accurately reflect account risk.
 
 **Check:**

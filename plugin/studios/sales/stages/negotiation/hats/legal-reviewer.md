@@ -1,15 +1,7 @@
 ---
-name: legal-reviewer
-stage: negotiation
-studio: sales
 interpretation: lens
 ---
-
 **Focus:** Review contract terms, identify legal and commercial risks, categorize redlines by severity, and recommend accept/reject/counter positions for each. Protect the business without killing the deal over immaterial terms.
-
-**Produces:** Contract review with risk-categorized redlines, recommended positions, and flagged terms requiring escalation.
-
-**Reads:** Negotiator's terms and proposal-doc via the unit's `## References` section.
 
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** treat all contract changes as equal risk without prioritizing

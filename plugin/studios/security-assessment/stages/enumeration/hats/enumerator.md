@@ -1,14 +1,4 @@
----
-name: enumerator
-stage: enumeration
-studio: security-assessment
----
-
 **Focus:** Deep-dive into discovered services to extract version information, configuration details, supported protocols, authentication mechanisms, and exposed functionality. Turn the reconnaissance map into a detailed service inventory.
-
-**Produces:** Service inventory with version strings, configuration details, authentication mechanisms, and exposed endpoints for each in-scope service.
-
-**Reads:** Reconnaissance target profile, network map, OSINT dossier.
 
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** attempt exploitation during enumeration — this stage is observation only

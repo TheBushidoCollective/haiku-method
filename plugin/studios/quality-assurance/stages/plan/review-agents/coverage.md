@@ -1,10 +1,6 @@
 ---
-name: coverage
-stage: plan
-studio: quality-assurance
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify test strategy provides adequate coverage of quality dimensions and risks.
 
 **Check:**

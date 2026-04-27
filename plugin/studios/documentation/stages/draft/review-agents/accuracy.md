@@ -1,10 +1,6 @@
 ---
-name: accuracy
-stage: draft
-studio: documentation
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify all technical content is factually correct against the current codebase.
 
 **Check:**

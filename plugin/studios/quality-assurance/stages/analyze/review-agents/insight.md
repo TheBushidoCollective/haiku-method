@@ -1,10 +1,6 @@
 ---
-name: insight
-stage: analyze
-studio: quality-assurance
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify quality analysis produces actionable insights, not just metrics.
 
 **Check:**

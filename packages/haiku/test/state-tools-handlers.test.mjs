@@ -528,7 +528,7 @@ try {
 			slug: intentSlug,
 			field: "title",
 		})
-		assert.strictEqual(getTextResult(result), "Test Intent")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "Test Intent")
 	})
 
 	test("reads studio from intent", () => {
@@ -536,7 +536,7 @@ try {
 			slug: intentSlug,
 			field: "studio",
 		})
-		assert.strictEqual(getTextResult(result), "software")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "software")
 	})
 
 	test("reads status from intent", () => {
@@ -544,7 +544,7 @@ try {
 			slug: intentSlug,
 			field: "status",
 		})
-		assert.strictEqual(getTextResult(result), "active")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "active")
 	})
 
 	test("reads mode from intent", () => {
@@ -552,31 +552,35 @@ try {
 			slug: intentSlug,
 			field: "mode",
 		})
-		assert.strictEqual(getTextResult(result), "continuous")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "continuous")
 	})
 
-	test("returns empty string for missing field", () => {
+	test("returns null value for missing field", () => {
 		const result = handleStateTool("haiku_intent_get", {
 			slug: intentSlug,
 			field: "nonexistent",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.value, null)
 	})
 
-	test("returns empty string for missing intent", () => {
+	test("returns found:false for missing intent", () => {
 		const result = handleStateTool("haiku_intent_get", {
 			slug: "does-not-exist",
 			field: "title",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.value, null)
 	})
 
-	test("returns null fields as empty string", () => {
+	test("returns null value for fields whose YAML value is null", () => {
 		const result = handleStateTool("haiku_intent_get", {
 			slug: intentSlug,
 			field: "completed_at",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, null)
 	})
 
 	// ── haiku_intent_list ─────────────────────────────────────────────────────
@@ -585,7 +589,7 @@ try {
 
 	test("lists all intents", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		assert.ok(Array.isArray(intents))
 		assert.ok(
 			intents.length >= 2,
@@ -595,7 +599,7 @@ try {
 
 	test("intent list includes slug and status", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		const testIntent = intents.find((i) => i.slug === intentSlug)
 		assert.ok(testIntent, "test-intent should be in the list")
 		assert.strictEqual(testIntent.status, "active")
@@ -604,7 +608,7 @@ try {
 
 	test("intent list includes completed intents", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		const second = intents.find((i) => i.slug === "second-intent")
 		assert.ok(second, "second-intent should be in the list")
 		assert.strictEqual(second.status, "completed")
@@ -612,7 +616,7 @@ try {
 
 	test("intent list filters archived intents by default", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		const archived = intents.find((i) => i.slug === "archived-intent")
 		assert.strictEqual(
 			archived,
@@ -623,7 +627,7 @@ try {
 
 	test("intent list omits archived field in default response", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		for (const i of intents) {
 			assert.strictEqual(
 				"archived" in i,
@@ -637,7 +641,7 @@ try {
 		const result = handleStateTool("haiku_intent_list", {
 			include_archived: true,
 		})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		const archived = intents.find((i) => i.slug === "archived-intent")
 		assert.ok(
 			archived,
@@ -652,7 +656,7 @@ try {
 		const result = handleStateTool("haiku_intent_list", {
 			include_archived: true,
 		})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		const testIntent = intents.find((i) => i.slug === intentSlug)
 		assert.ok(testIntent)
 		assert.strictEqual(testIntent.archived, false)
@@ -835,7 +839,7 @@ try {
 
 	test("haiku_intent_list still works (no slug to validate)", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		assert.ok(Array.isArray(intents))
 		assert.ok(intents.length >= 1)
 	})
@@ -874,7 +878,7 @@ body
 			stage: "inception",
 			field: "phase",
 		})
-		assert.strictEqual(getTextResult(result), "elaborate")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "elaborate")
 	})
 
 	test("reads status from stage state", () => {
@@ -883,25 +887,29 @@ body
 			stage: "inception",
 			field: "status",
 		})
-		assert.strictEqual(getTextResult(result), "active")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "active")
 	})
 
-	test("returns empty for missing stage field", () => {
+	test("returns null for missing stage field", () => {
 		const result = handleStateTool("haiku_stage_get", {
 			intent: intentSlug,
 			stage: "inception",
 			field: "nonexistent",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.value, null)
 	})
 
-	test("returns empty for missing stage directory", () => {
+	test("returns null for missing stage directory", () => {
 		const result = handleStateTool("haiku_stage_get", {
 			intent: intentSlug,
 			stage: "nonexistent",
 			field: "phase",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.value, null)
 	})
 
 	// ── haiku_unit_get ────────────────────────────────────────────────────────
@@ -1026,7 +1034,7 @@ body
 			intent: intentSlug,
 			stage: "inception",
 		})
-		const units = JSON.parse(getTextResult(result))
+		const units = JSON.parse(getTextResult(result)).units
 		assert.ok(Array.isArray(units))
 		assert.strictEqual(units.length, 2)
 	})
@@ -1036,7 +1044,7 @@ body
 			intent: intentSlug,
 			stage: "inception",
 		})
-		const units = JSON.parse(getTextResult(result))
+		const units = JSON.parse(getTextResult(result)).units
 		const u1 = units.find((u) => u.name === "unit-01-discovery")
 		assert.ok(u1)
 		assert.strictEqual(u1.status, "active")
@@ -1049,7 +1057,7 @@ body
 			intent: intentSlug,
 			stage: "development",
 		})
-		const units = JSON.parse(getTextResult(result))
+		const units = JSON.parse(getTextResult(result)).units
 		assert.deepStrictEqual(units, [])
 	})
 
@@ -1058,7 +1066,7 @@ body
 			intent: intentSlug,
 			stage: "nonexistent",
 		})
-		const units = JSON.parse(getTextResult(result))
+		const units = JSON.parse(getTextResult(result)).units
 		assert.deepStrictEqual(units, [])
 	})
 
@@ -1130,7 +1138,7 @@ body
 		const result = handleStateTool("haiku_knowledge_list", {
 			intent: intentSlug,
 		})
-		const files = JSON.parse(getTextResult(result))
+		const files = JSON.parse(getTextResult(result)).files
 		assert.ok(Array.isArray(files))
 		assert.ok(files.includes("discovery.md"))
 		assert.ok(files.includes("architecture.md"))
@@ -1140,7 +1148,7 @@ body
 		const result = handleStateTool("haiku_knowledge_list", {
 			intent: "second-intent",
 		})
-		const files = JSON.parse(getTextResult(result))
+		const files = JSON.parse(getTextResult(result)).files
 		assert.deepStrictEqual(files, [])
 	})
 
@@ -1153,17 +1161,20 @@ body
 			intent: intentSlug,
 			name: "discovery.md",
 		})
-		const text = getTextResult(result)
-		assert.ok(text.includes("# Discovery Document"))
-		assert.ok(text.includes("Key findings here"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, true)
+		assert.ok(parsed.content.includes("# Discovery Document"))
+		assert.ok(parsed.content.includes("Key findings here"))
 	})
 
-	test("returns empty for missing knowledge file", () => {
+	test("returns found:false for missing knowledge file", () => {
 		const result = handleStateTool("haiku_knowledge_read", {
 			intent: intentSlug,
 			name: "nonexistent.md",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.content, "")
 	})
 
 	// ── haiku_settings_get ────────────────────────────────────────────────────
@@ -1172,33 +1183,35 @@ body
 
 	test("reads top-level setting", () => {
 		const result = handleStateTool("haiku_settings_get", { field: "studio" })
-		assert.strictEqual(getTextResult(result), "software")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "software")
 	})
 
 	test("reads nested setting with dot notation", () => {
 		const result = handleStateTool("haiku_settings_get", {
 			field: "stack.compute",
 		})
-		assert.strictEqual(getTextResult(result), "lambda")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "lambda")
 	})
 
 	test("reads nested setting deep", () => {
 		const result = handleStateTool("haiku_settings_get", { field: "stack.db" })
-		assert.strictEqual(getTextResult(result), "postgres")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "postgres")
 	})
 
-	test("returns empty for missing setting", () => {
+	test("returns null for missing setting", () => {
 		const result = handleStateTool("haiku_settings_get", {
 			field: "nonexistent",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.value, null)
 	})
 
-	test("returns JSON for object settings", () => {
+	test("returns object for object-typed settings", () => {
 		const result = handleStateTool("haiku_settings_get", { field: "stack" })
-		const parsed = JSON.parse(getTextResult(result))
-		assert.strictEqual(parsed.compute, "lambda")
-		assert.strictEqual(parsed.db, "postgres")
+		const value = JSON.parse(getTextResult(result)).value
+		assert.strictEqual(value.compute, "lambda")
+		assert.strictEqual(value.db, "postgres")
 	})
 
 	// ── haiku_unit_advance_hat: unit_outputs_empty backpressure ───────────────
@@ -1480,6 +1493,405 @@ body
 		})
 		const parsed = JSON.parse(getTextResult(result))
 		assert.strictEqual(parsed.error, "rationale_required")
+	})
+
+	// ── haiku_unit_read (body+title only — no FM exposure per ARCH §1.1) ─────
+
+	console.log("\n=== haiku_unit_read ===")
+
+	test("haiku_unit_read returns body and title only — no FM exposed", () => {
+		const result = handleStateTool("haiku_unit_read", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-01-discovery",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.ok("title" in parsed)
+		assert.ok("body" in parsed)
+		// Critical: NO frontmatter fields exposed
+		assert.ok(!("status" in parsed))
+		assert.ok(!("depends_on" in parsed))
+		assert.ok(!("hat" in parsed))
+		assert.ok(!("bolt" in parsed))
+	})
+
+	test("haiku_unit_read returns unit_not_found for missing unit", () => {
+		const result = handleStateTool("haiku_unit_read", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-doesnotexist",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "unit_not_found")
+	})
+
+	// ── haiku_unit_delete (pending only — ARCH §1.3 lifecycle) ──────────────
+
+	console.log("\n=== haiku_unit_delete ===")
+
+	test("haiku_unit_delete refuses to delete an active unit", () => {
+		const result = handleStateTool("haiku_unit_delete", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-01-discovery", // status: active
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "active")
+		assert.strictEqual(parsed.required_status, "pending")
+	})
+
+	test("haiku_unit_delete returns unit_not_found for missing unit", () => {
+		const result = handleStateTool("haiku_unit_delete", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-doesnotexist",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "unit_not_found")
+	})
+
+	// ── haiku_unit_set lifecycle enforcement (ARCH §1.3) ─────────────────────
+
+	console.log("\n=== haiku_unit_set lifecycle ===")
+
+	test("haiku_unit_set blocks non-FSM field writes on active units", () => {
+		const result = handleStateTool("haiku_unit_set", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-01-discovery", // active
+			field: "depends_on",
+			value: "[unit-02]",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "active")
+	})
+
+	test("haiku_unit_set still blocks status=completed direct write (FSM-protected)", () => {
+		const result = handleStateTool("haiku_unit_set", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-02-elaborate",
+			field: "status",
+			value: "completed",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "fsm_completion_protected")
+	})
+
+	test("haiku_unit_set allows non-FSM field writes on pending units", () => {
+		// Earlier tests mutate unit-02-elaborate's status to "active"; reset it
+		// to pending so the lifecycle-allow path is exercised here. Status is
+		// FSM-driven so it's exempt from the lifecycle gate (the FSM-completion
+		// guard above handles status:completed; pending/active/blocked stay
+		// agent-settable for legitimate repair).
+		setFrontmatterField(
+			unitPath(intentSlug, "inception", "unit-02-elaborate"),
+			"status",
+			"pending",
+		)
+		const result = handleStateTool("haiku_unit_set", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-02-elaborate",
+			field: "model",
+			value: "sonnet",
+		})
+		assert.ok(getTextResult(result).includes("ok"))
+	})
+
+	// ── haiku_unit_write (FM validators + DAG cycle detection + lifecycle) ──
+
+	console.log("\n=== haiku_unit_write ===")
+
+	test("haiku_unit_write rejects FSM-driven fields in frontmatter", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-test-fsm",
+			body: "## Mission\n\nTest unit body.",
+			frontmatter: { status: "active" }, // forbidden
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "frontmatter_validation_failed")
+		assert.ok(parsed.errors.some((e) => e.includes("fsm_field_forbidden")))
+	})
+
+	test("haiku_unit_write rejects depends_on self-reference", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-self-ref",
+			body: "## Mission\n\nSelf-referencing unit.",
+			frontmatter: { depends_on: ["unit-99-self-ref"] }, // self-ref
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "frontmatter_validation_failed")
+		assert.ok(parsed.errors.some((e) => e.includes("self_reference")))
+	})
+
+	test("haiku_unit_write rejects unresolved depends_on entry", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-test-dep",
+			body: "## Mission\n\nUnit depending on phantom.",
+			frontmatter: { depends_on: ["unit-77-does-not-exist"] },
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "frontmatter_validation_failed")
+		assert.ok(parsed.errors.some((e) => e.includes("depends_on_unresolved")))
+	})
+
+	test("haiku_unit_write rejects empty body", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-empty",
+			body: "",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "empty_body")
+	})
+
+	test("haiku_unit_write refuses to rewrite an active unit", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-01-discovery", // active
+			body: "## Mission\n\nTrying to rewrite an active unit.",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "active")
+	})
+
+	test("haiku_unit_write succeeds on a new unit with valid FM", () => {
+		const result = handleStateTool("haiku_unit_write", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: "unit-99-valid",
+			body: "## Mission\n\nA valid new unit.",
+			frontmatter: { title: "Valid test unit", model: "sonnet" },
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.ok, true)
+		assert.strictEqual(parsed.created, true)
+		assert.strictEqual(parsed.unit, "unit-99-valid")
+	})
+
+	// ── Feedback CRUDL (body-only reads, lifecycle on write/update) ─────────
+
+	console.log("\n=== haiku_feedback_read / write lifecycle ===")
+
+	// Stand up a feedback file for the FB tests below.
+	const fbDir = join(intentDirPath, "stages", "inception", "feedback")
+	mkdirSync(fbDir, { recursive: true })
+	// FB fixtures match the canonical on-disk format produced by
+	// writeFeedbackFile() — ID is encoded ONLY in the filename's numeric
+	// prefix (`01-`, `02-`), never in frontmatter. Files include an
+	// explicit `id:` field would mask the lifecycle guard / lookup bug
+	// where handlers fall back to numeric-prefix matching when no FM id
+	// is present.
+	writeFileSync(
+		join(fbDir, "01-test-finding.md"),
+		`---
+title: Test finding for FB-as-unit MCP tests
+status: pending
+origin: adversarial-review
+author: completeness
+author_type: agent
+created_at: 2026-04-26T00:00:00Z
+---
+
+Body of the test finding.
+`,
+	)
+	writeFileSync(
+		join(fbDir, "02-closed-finding.md"),
+		`---
+title: Closed test finding
+status: closed
+closed_by: test
+origin: adversarial-review
+author: completeness
+author_type: agent
+created_at: 2026-04-26T00:00:00Z
+---
+
+Closed body content.
+`,
+	)
+
+	test("haiku_feedback_read returns body+title only — no FM", () => {
+		const result = handleStateTool("haiku_feedback_read", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-01",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.ok("title" in parsed)
+		assert.ok("body" in parsed)
+		assert.ok(!("status" in parsed))
+		assert.ok(!("origin" in parsed))
+		assert.ok(!("author" in parsed))
+	})
+
+	test("haiku_feedback_write succeeds on pending FB", () => {
+		const result = handleStateTool("haiku_feedback_write", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-01",
+			body: "Updated diagnosis: root cause is X; proposed action: Y.",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.ok, true)
+	})
+
+	test("haiku_feedback_write rejects empty body", () => {
+		const result = handleStateTool("haiku_feedback_write", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-01",
+			body: "",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "empty_body")
+	})
+
+	test("haiku_feedback_write blocks rewrites of closed (terminal) FBs", () => {
+		const result = handleStateTool("haiku_feedback_write", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-02",
+			body: "Trying to rewrite closed FB.",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "closed")
+	})
+
+	test("haiku_feedback_update blocks updates on terminal FBs", () => {
+		const result = handleStateTool("haiku_feedback_update", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-02",
+			status: "pending",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "closed")
+	})
+
+	test("haiku_feedback_read returns feedback_not_found for missing FB", () => {
+		const result = handleStateTool("haiku_feedback_read", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-NONEXISTENT",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "feedback_not_found")
+	})
+
+	// ── haiku_feedback_advance_hat / _reject_hat (FB-as-unit progression) ──
+
+	console.log("\n=== haiku_feedback_advance_hat / _reject_hat ===")
+
+	// Stand up a fresh FB for advance/reject testing (separate from the FB-02
+	// closed fixture above to avoid coupling tests).
+	writeFileSync(
+		join(fbDir, "03-advance-test.md"),
+		`---
+title: Advance test FB
+status: pending
+origin: adversarial-review
+author: completeness
+author_type: agent
+created_at: 2026-04-26T00:00:00Z
+---
+
+Body for advance test.
+`,
+	)
+
+	// Set up a project-local studio override so readStageDef can resolve
+	// fix_hats from the test cwd. studioSearchPaths() looks at
+	// process.cwd()/.haiku/studios first — write a minimal STAGE.md there.
+	mkdirSync(join(projDir, ".haiku/studios/software/stages/inception"), {
+		recursive: true,
+	})
+	writeFileSync(
+		join(projDir, ".haiku/studios/software/stages/inception/STAGE.md"),
+		`---
+name: inception
+description: Test inception stage
+hats: [researcher, distiller, verifier]
+fix_hats: [fixer, feedback-assessor]
+review: ask
+elaboration: collaborative
+inputs: []
+---
+
+Test stage.
+`,
+	)
+
+	test("haiku_feedback_advance_hat: full 2-hat sequence closes on assessor's call (B4 regression)", () => {
+		// Per the off-by-one bug the reviewer flagged: under a 2-hat
+		// sequence [fixer, feedback-assessor], the fixer's advance moves
+		// hat to fixer (status=addressed). The assessor's advance MUST
+		// then close the FB — not require a third call. The earlier
+		// implementation indexed isLast against the stored hat (fixer),
+		// computing 0===1=false for length=2, leaving status=addressed
+		// after assessor's advance.
+		// Call 1: fixer claims (no curHat, isFirst). hat → fixer, status → addressed.
+		const r1 = handleStateTool("haiku_feedback_advance_hat", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-03",
+		})
+		const p1 = JSON.parse(getTextResult(r1))
+		assert.strictEqual(p1.ok, true)
+		assert.strictEqual(p1.calling_hat, "fixer")
+		assert.strictEqual(p1.closed, false)
+
+		// Call 2: assessor advances (curHat=fixer). MUST close.
+		const r2 = handleStateTool("haiku_feedback_advance_hat", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-03",
+		})
+		const p2 = JSON.parse(getTextResult(r2))
+		assert.strictEqual(p2.ok, true)
+		assert.strictEqual(p2.calling_hat, "feedback-assessor")
+		assert.strictEqual(
+			p2.closed,
+			true,
+			"2-hat sequence MUST close on assessor's advance — this is the B4 off-by-one regression",
+		)
+	})
+
+	test("haiku_feedback_advance_hat refuses on already-closed FB (FB-02)", () => {
+		const result = handleStateTool("haiku_feedback_advance_hat", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-02",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
+		assert.strictEqual(parsed.current_status, "closed")
+	})
+
+	test("haiku_feedback_reject_hat refuses on already-closed FB", () => {
+		const result = handleStateTool("haiku_feedback_reject_hat", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: "FB-02",
+			reason: "test",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "lifecycle_violation")
 	})
 
 	// ── unknown tool ──────────────────────────────────────────────────────────

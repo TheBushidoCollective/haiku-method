@@ -1,9 +1,3 @@
----
-name: closer
-stage: close
-studio: project-management
----
-
 **Focus:** Confirm all deliverables are accepted, transfer ownership, and close out open items.
 
 **Responsibilities:**

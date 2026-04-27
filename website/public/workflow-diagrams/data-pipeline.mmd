@@ -24,8 +24,10 @@ stateDiagram-v2
     state discovery_execute {
       [*] --> discovery_execute_data_architect
       discovery_execute_data_architect --> discovery_execute_schema_analyst : hat.advance
-      discovery_execute_schema_analyst --> discovery_execute_done : hat.advance
+      discovery_execute_schema_analyst --> discovery_execute_verifier : hat.advance
       discovery_execute_schema_analyst --> discovery_execute_data_architect : hat.reject
+      discovery_execute_verifier --> discovery_execute_done : hat.advance
+      discovery_execute_verifier --> discovery_execute_schema_analyst : hat.reject
       discovery_execute_done --> [*]
     }
     discovery_execute --> discovery_review
@@ -120,8 +122,10 @@ stateDiagram-v2
     state transformation_execute {
       [*] --> transformation_execute_transformer
       transformation_execute_transformer --> transformation_execute_data_modeler : hat.advance
-      transformation_execute_data_modeler --> transformation_execute_done : hat.advance
+      transformation_execute_data_modeler --> transformation_execute_verifier : hat.advance
       transformation_execute_data_modeler --> transformation_execute_transformer : hat.reject
+      transformation_execute_verifier --> transformation_execute_done : hat.advance
+      transformation_execute_verifier --> transformation_execute_data_modeler : hat.reject
       transformation_execute_done --> [*]
     }
     transformation_execute --> transformation_review
@@ -216,8 +220,10 @@ stateDiagram-v2
     state deployment_execute {
       [*] --> deployment_execute_pipeline_engineer
       deployment_execute_pipeline_engineer --> deployment_execute_sre : hat.advance
-      deployment_execute_sre --> deployment_execute_done : hat.advance
+      deployment_execute_sre --> deployment_execute_verifier : hat.advance
       deployment_execute_sre --> deployment_execute_pipeline_engineer : hat.reject
+      deployment_execute_verifier --> deployment_execute_done : hat.advance
+      deployment_execute_verifier --> deployment_execute_sre : hat.reject
       deployment_execute_done --> [*]
     }
     deployment_execute --> deployment_review

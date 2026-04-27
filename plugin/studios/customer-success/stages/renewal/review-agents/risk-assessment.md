@@ -1,10 +1,6 @@
 ---
-name: risk-assessment
-stage: renewal
-studio: customer-success
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the renewal strategy accounts for all risk factors.
 
 **Check:**

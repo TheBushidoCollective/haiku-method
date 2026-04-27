@@ -1,10 +1,6 @@
 ---
-name: authority
-stage: research
-studio: legal
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify research is based on authoritative, current sources and analysis is applicable to the matter.
 
 **Check:**

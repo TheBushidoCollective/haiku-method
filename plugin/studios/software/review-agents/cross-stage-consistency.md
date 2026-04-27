@@ -1,10 +1,7 @@
 ---
-name: cross-stage-consistency
-studio: software
 scope: intent
 interpretation: lens
 ---
-
 **Mandate:** Verify the intent's artifacts are internally consistent across stages. You are the ONLY reviewer that sees the whole intent at once — inception, product, design, development, security, operations. Your job is to catch the seams.
 
 **Check:**
@@ -16,7 +13,6 @@ interpretation: lens
 - The agent **MUST** verify that the stages collectively deliver the intent's stated goal (read `intent.md`) — partial delivery is a finding
 
 **Scope routing:**
-- Findings whose root cause lives in a SINGLE stage (e.g. design missed a responsive breakpoint that product specified) MUST pass `upstream_stage: "design"` when calling `haiku_feedback`. The workflow engine will surface those to the user.
 - Findings that are ONLY visible cross-stage (e.g. naming drift, or a contract mismatch at the seam) should NOT set `upstream_stage` — the fix is inherently whole-intent.
 
 **Anti-patterns (RFC 2119):**

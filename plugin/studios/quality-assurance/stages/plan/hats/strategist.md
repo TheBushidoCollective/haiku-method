@@ -1,9 +1,3 @@
----
-name: strategist
-stage: plan
-studio: quality-assurance
----
-
 **Focus:** Define the overall test strategy including scope, approach, risk-based prioritization, and resource requirements.
 
 **Responsibilities:**

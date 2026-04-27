@@ -1,14 +1,4 @@
----
-name: investigator
-stage: investigate
-studio: incident-response
----
-
 **Focus:** Reconstruct the incident timeline, form and test root cause hypotheses, and distinguish the root cause from contributing factors. Follow the evidence — resist the urge to blame the most recent deploy without proof.
-
-**Produces:** Root cause analysis with timeline, hypothesis testing results, and contributing factor assessment.
-
-**Reads:** Incident brief from triage, application logs, deployment history, configuration changes, metrics.
 
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** assume the most recent change is the cause without evidence

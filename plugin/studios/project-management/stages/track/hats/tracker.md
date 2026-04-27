@@ -1,9 +1,3 @@
----
-name: tracker
-stage: track
-studio: project-management
----
-
 **Focus:** Monitor work package progress, identify deviations from plan, and maintain current status across all project activities.
 
 **Responsibilities:**

@@ -24,8 +24,10 @@ stateDiagram-v2
     state requirements_execute {
       [*] --> requirements_execute_analyst
       requirements_execute_analyst --> requirements_execute_specifier : hat.advance
-      requirements_execute_specifier --> requirements_execute_done : hat.advance
+      requirements_execute_specifier --> requirements_execute_verifier : hat.advance
       requirements_execute_specifier --> requirements_execute_analyst : hat.reject
+      requirements_execute_verifier --> requirements_execute_done : hat.advance
+      requirements_execute_verifier --> requirements_execute_specifier : hat.reject
       requirements_execute_done --> [*]
     }
     requirements_execute --> requirements_review
@@ -168,8 +170,10 @@ stateDiagram-v2
     state onboard_execute {
       [*] --> onboard_execute_integrator
       onboard_execute_integrator --> onboard_execute_coordinator : hat.advance
-      onboard_execute_coordinator --> onboard_execute_done : hat.advance
+      onboard_execute_coordinator --> onboard_execute_verifier : hat.advance
       onboard_execute_coordinator --> onboard_execute_integrator : hat.reject
+      onboard_execute_verifier --> onboard_execute_done : hat.advance
+      onboard_execute_verifier --> onboard_execute_coordinator : hat.reject
       onboard_execute_done --> [*]
     }
     onboard_execute --> onboard_review
@@ -216,8 +220,10 @@ stateDiagram-v2
     state monitor_execute {
       [*] --> monitor_execute_monitor
       monitor_execute_monitor --> monitor_execute_relationship_manager : hat.advance
-      monitor_execute_relationship_manager --> monitor_execute_done : hat.advance
+      monitor_execute_relationship_manager --> monitor_execute_verifier : hat.advance
       monitor_execute_relationship_manager --> monitor_execute_monitor : hat.reject
+      monitor_execute_verifier --> monitor_execute_done : hat.advance
+      monitor_execute_verifier --> monitor_execute_relationship_manager : hat.reject
       monitor_execute_done --> [*]
     }
     monitor_execute --> monitor_review

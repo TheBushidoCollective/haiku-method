@@ -1,9 +1,3 @@
----
-name: automator
-stage: design-tests
-studio: quality-assurance
----
-
 **Focus:** Assess automation feasibility and design the automation strategy for the test suite.
 
 **Responsibilities:**

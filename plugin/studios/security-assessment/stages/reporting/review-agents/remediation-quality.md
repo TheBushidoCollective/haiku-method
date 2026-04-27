@@ -1,10 +1,6 @@
 ---
-name: remediation-quality
-stage: reporting
-studio: security-assessment
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify findings are actionable and remediation guidance is specific.
 
 **Check:**

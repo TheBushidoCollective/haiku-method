@@ -24,8 +24,10 @@ stateDiagram-v2
     state landscape_execute {
       [*] --> landscape_execute_strategist
       landscape_execute_strategist --> landscape_execute_analyst : hat.advance
-      landscape_execute_analyst --> landscape_execute_done : hat.advance
+      landscape_execute_analyst --> landscape_execute_verifier : hat.advance
       landscape_execute_analyst --> landscape_execute_strategist : hat.reject
+      landscape_execute_verifier --> landscape_execute_done : hat.advance
+      landscape_execute_verifier --> landscape_execute_analyst : hat.reject
       landscape_execute_done --> [*]
     }
     landscape_execute --> landscape_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state options_execute {
       [*] --> options_execute_ideator
       options_execute_ideator --> options_execute_modeler : hat.advance
-      options_execute_modeler --> options_execute_done : hat.advance
+      options_execute_modeler --> options_execute_verifier : hat.advance
       options_execute_modeler --> options_execute_ideator : hat.reject
+      options_execute_verifier --> options_execute_done : hat.advance
+      options_execute_verifier --> options_execute_modeler : hat.reject
       options_execute_done --> [*]
     }
     options_execute --> options_review
@@ -120,8 +124,10 @@ stateDiagram-v2
     state evaluate_execute {
       [*] --> evaluate_execute_evaluator
       evaluate_execute_evaluator --> evaluate_execute_risk_analyst : hat.advance
-      evaluate_execute_risk_analyst --> evaluate_execute_done : hat.advance
+      evaluate_execute_risk_analyst --> evaluate_execute_verifier : hat.advance
       evaluate_execute_risk_analyst --> evaluate_execute_evaluator : hat.reject
+      evaluate_execute_verifier --> evaluate_execute_done : hat.advance
+      evaluate_execute_verifier --> evaluate_execute_risk_analyst : hat.reject
       evaluate_execute_done --> [*]
     }
     evaluate_execute --> evaluate_review
@@ -168,8 +174,10 @@ stateDiagram-v2
     state decide_execute {
       [*] --> decide_execute_advisor
       decide_execute_advisor --> decide_execute_facilitator : hat.advance
-      decide_execute_facilitator --> decide_execute_done : hat.advance
+      decide_execute_facilitator --> decide_execute_verifier : hat.advance
       decide_execute_facilitator --> decide_execute_advisor : hat.reject
+      decide_execute_verifier --> decide_execute_done : hat.advance
+      decide_execute_verifier --> decide_execute_facilitator : hat.reject
       decide_execute_done --> [*]
     }
     decide_execute --> decide_review
@@ -216,8 +224,10 @@ stateDiagram-v2
     state communicate_execute {
       [*] --> communicate_execute_communicator
       communicate_execute_communicator --> communicate_execute_planner : hat.advance
-      communicate_execute_planner --> communicate_execute_done : hat.advance
+      communicate_execute_planner --> communicate_execute_verifier : hat.advance
       communicate_execute_planner --> communicate_execute_communicator : hat.reject
+      communicate_execute_verifier --> communicate_execute_done : hat.advance
+      communicate_execute_verifier --> communicate_execute_planner : hat.reject
       communicate_execute_done --> [*]
     }
     communicate_execute --> communicate_review

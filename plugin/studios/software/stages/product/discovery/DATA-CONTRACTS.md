@@ -1,6 +1,6 @@
 ---
 name: data-contracts
-location: .haiku/intents/{intent-slug}/knowledge/DATA-CONTRACTS.md
+location: .haiku/intents/{intent-slug}/product/DATA-CONTRACTS.md
 scope: intent
 format: text
 required: true

@@ -1,15 +1,7 @@
 ---
-name: reviewer
-stage: resolve
-studio: incident-response
 interpretation: lens
 ---
-
 **Focus:** Review the permanent fix for correctness, completeness, and safety. Verify it addresses the root cause, not just the trigger. Ensure regression tests are meaningful and the deployment plan is sound.
-
-**Produces:** Review assessment covering code correctness, test adequacy, deployment risk, and whether the fix fully addresses the root cause.
-
-**Reads:** Engineer's fix, root cause from investigation, mitigation log, regression tests.
 
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** rubber-stamp because the incident is resolved and urgency has passed

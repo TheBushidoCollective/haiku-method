@@ -1,10 +1,6 @@
 ---
-name: specificity
-stage: requirements
-studio: vendor-management
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify requirements are specific enough for objective vendor evaluation.
 
 **Check:**

@@ -1,10 +1,6 @@
 ---
-name: thoroughness
-stage: research
-studio: ideation
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify research covers the problem space without significant blind spots.
 
 **Check:**

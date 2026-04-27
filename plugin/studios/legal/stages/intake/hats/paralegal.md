@@ -1,9 +1,3 @@
----
-name: paralegal
-stage: intake
-studio: legal
----
-
 **Focus:** Gather and organize all relevant facts, identify the parties and jurisdictions, and prepare the foundational legal brief.
 
 **Responsibilities:**

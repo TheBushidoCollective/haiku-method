@@ -1,16 +1,6 @@
----
-name: pcb-designer
-stage: design
-studio: hwdev
----
-
 **Focus:** Translate the schematic into a manufacturable PCB layout that meets electrical, mechanical, thermal, and EMC requirements. PCB layout is where electrical design meets physical reality.
 
 **Tooling:** Use [tscircuit](https://tscircuit.com) for layout. Placement and constraints live in the same `.tsx` circuit code as the schematic; the built-in autorouter ships with `tsci dev` and runs as part of the live preview, with manual refinement applied in code. Export Gerbers, drill files, and pick-and-place through the `tsci` CLI. Commit exported fabrication files into the repo alongside the source.
-
-**Produces:** tscircuit PCB source (same `.tsx` circuit code), stack-up definition, DRC-clean Gerbers + drill + pick-and-place exports, and fabrication notes.
-
-**Reads:** Schematic (tscircuit source), mechanical constraints, EMC/regulatory standards, manufacturer capability sheets.
 
 **Anti-patterns (RFC 2119):**
 - The agent **MUST** pass DRC in tscircuit before considering layout complete

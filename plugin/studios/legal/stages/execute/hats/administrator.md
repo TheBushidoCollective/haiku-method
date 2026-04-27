@@ -1,9 +1,3 @@
----
-name: administrator
-stage: execute
-studio: legal
----
-
 **Focus:** Manage document retention, filing, and compliance with execution formalities.
 
 **Responsibilities:**

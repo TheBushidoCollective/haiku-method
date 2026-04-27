@@ -1,7 +1,7 @@
 ---
 name: inception
 description: Understand the problem, define API surface, and elaborate into units
-hats: [researcher, api-architect, elaborator]
+hats: [researcher, api-architect, distiller, verifier]
 fix_hats: [researcher, feedback-assessor]
 review: ask
 elaboration: collaborative

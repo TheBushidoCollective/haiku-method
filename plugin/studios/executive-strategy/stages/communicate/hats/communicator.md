@@ -1,9 +1,3 @@
----
-name: communicator
-stage: communicate
-studio: executive-strategy
----
-
 **Focus:** Craft stakeholder communications that convey the strategic decision clearly, consistently, and with appropriate context for each audience.
 
 **Responsibilities:**

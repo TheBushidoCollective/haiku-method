@@ -1,8 +1,8 @@
 ---
 name: security
 description: Threat modeling, security review, and vulnerability assessment
-hats: [threat-modeler, red-team, blue-team, security-reviewer]
-fix_hats: [threat-modeler, feedback-assessor]
+hats: [threat-modeler, security-engineer, security-reviewer, red-team, blue-team]
+fix_hats: [security-engineer, feedback-assessor]
 review: [external, ask]
 elaboration: autonomous
 inputs:

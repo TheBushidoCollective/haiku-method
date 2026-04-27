@@ -24,8 +24,10 @@ stateDiagram-v2
     state triage_execute {
       [*] --> triage_execute_incident_commander
       triage_execute_incident_commander --> triage_execute_first_responder : hat.advance
-      triage_execute_first_responder --> triage_execute_done : hat.advance
+      triage_execute_first_responder --> triage_execute_verifier : hat.advance
       triage_execute_first_responder --> triage_execute_incident_commander : hat.reject
+      triage_execute_verifier --> triage_execute_done : hat.advance
+      triage_execute_verifier --> triage_execute_first_responder : hat.reject
       triage_execute_done --> [*]
     }
     triage_execute --> triage_review
@@ -72,8 +74,10 @@ stateDiagram-v2
     state investigate_execute {
       [*] --> investigate_execute_investigator
       investigate_execute_investigator --> investigate_execute_log_analyst : hat.advance
-      investigate_execute_log_analyst --> investigate_execute_done : hat.advance
+      investigate_execute_log_analyst --> investigate_execute_verifier : hat.advance
       investigate_execute_log_analyst --> investigate_execute_investigator : hat.reject
+      investigate_execute_verifier --> investigate_execute_done : hat.advance
+      investigate_execute_verifier --> investigate_execute_log_analyst : hat.reject
       investigate_execute_done --> [*]
     }
     investigate_execute --> investigate_review
@@ -216,8 +220,10 @@ stateDiagram-v2
     state postmortem_execute {
       [*] --> postmortem_execute_postmortem_author
       postmortem_execute_postmortem_author --> postmortem_execute_action_item_tracker : hat.advance
-      postmortem_execute_action_item_tracker --> postmortem_execute_done : hat.advance
+      postmortem_execute_action_item_tracker --> postmortem_execute_verifier : hat.advance
       postmortem_execute_action_item_tracker --> postmortem_execute_postmortem_author : hat.reject
+      postmortem_execute_verifier --> postmortem_execute_done : hat.advance
+      postmortem_execute_verifier --> postmortem_execute_action_item_tracker : hat.reject
       postmortem_execute_done --> [*]
     }
     postmortem_execute --> postmortem_review

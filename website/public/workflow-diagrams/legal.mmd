@@ -72,8 +72,10 @@ stateDiagram-v2
     state research_execute {
       [*] --> research_execute_researcher
       research_execute_researcher --> research_execute_analyst : hat.advance
-      research_execute_analyst --> research_execute_done : hat.advance
+      research_execute_analyst --> research_execute_verifier : hat.advance
       research_execute_analyst --> research_execute_researcher : hat.reject
+      research_execute_verifier --> research_execute_done : hat.advance
+      research_execute_verifier --> research_execute_analyst : hat.reject
       research_execute_done --> [*]
     }
     research_execute --> research_review
@@ -120,8 +122,10 @@ stateDiagram-v2
     state draft_execute {
       [*] --> draft_execute_drafter
       draft_execute_drafter --> draft_execute_editor : hat.advance
-      draft_execute_editor --> draft_execute_done : hat.advance
+      draft_execute_editor --> draft_execute_verifier : hat.advance
       draft_execute_editor --> draft_execute_drafter : hat.reject
+      draft_execute_verifier --> draft_execute_done : hat.advance
+      draft_execute_verifier --> draft_execute_editor : hat.reject
       draft_execute_done --> [*]
     }
     draft_execute --> draft_review
@@ -168,8 +172,10 @@ stateDiagram-v2
     state review_execute {
       [*] --> review_execute_reviewer
       review_execute_reviewer --> review_execute_compliance_officer : hat.advance
-      review_execute_compliance_officer --> review_execute_done : hat.advance
+      review_execute_compliance_officer --> review_execute_verifier : hat.advance
       review_execute_compliance_officer --> review_execute_reviewer : hat.reject
+      review_execute_verifier --> review_execute_done : hat.advance
+      review_execute_verifier --> review_execute_compliance_officer : hat.reject
       review_execute_done --> [*]
     }
     review_execute --> review_review
@@ -216,8 +222,10 @@ stateDiagram-v2
     state execute_execute {
       [*] --> execute_execute_closer
       execute_execute_closer --> execute_execute_administrator : hat.advance
-      execute_execute_administrator --> execute_execute_done : hat.advance
+      execute_execute_administrator --> execute_execute_verifier : hat.advance
       execute_execute_administrator --> execute_execute_closer : hat.reject
+      execute_execute_verifier --> execute_execute_done : hat.advance
+      execute_execute_verifier --> execute_execute_administrator : hat.reject
       execute_execute_done --> [*]
     }
     execute_execute --> execute_review

@@ -1,10 +1,6 @@
 ---
-name: reliability
-stage: deployment
-studio: data-pipeline
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the deployed pipeline is resilient and observable in production.
 
 **Check:**

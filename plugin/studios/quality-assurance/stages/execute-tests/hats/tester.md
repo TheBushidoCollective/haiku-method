@@ -1,9 +1,3 @@
----
-name: tester
-stage: execute-tests
-studio: quality-assurance
----
-
 **Focus:** Execute test cases systematically, document results with evidence, and ensure test environment fidelity.
 
 **Responsibilities:**

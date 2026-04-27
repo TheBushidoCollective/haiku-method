@@ -1,10 +1,6 @@
 ---
-name: relevance
-stage: research
-studio: sales
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify prospect research is relevant and actionable for the sales process.
 
 **Check:**

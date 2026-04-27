@@ -1,7 +1,7 @@
 ---
 name: launch
 description: Coordinate multi-channel launch, schedule distribution, and activate campaigns
-hats: [campaign-manager, channel-coordinator]
+hats: [campaign-manager, channel-coordinator, verifier]
 fix_hats: [campaign-manager, feedback-assessor]
 review: ask
 elaboration: autonomous

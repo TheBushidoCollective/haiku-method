@@ -1,9 +1,3 @@
----
-name: closer
-stage: offer
-studio: hr
----
-
 **Focus:** Manage the offer process from preparation through candidate acceptance, including negotiation and contingency planning.
 
 **Responsibilities:**

@@ -1,7 +1,7 @@
 ---
 name: needs-analysis
 description: Conduct skills gap analysis and define learning objectives
-hats: [analyst, consultant]
+hats: [analyst, consultant, verifier]
 fix_hats: [analyst, feedback-assessor]
 review: auto
 elaboration: collaborative

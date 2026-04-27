@@ -1,9 +1,3 @@
----
-name: reporter
-stage: reporting
-studio: finance
----
-
 **Focus:** Create financial reports tailored to each stakeholder audience, ensuring accuracy, completeness, and appropriate disclosure.
 
 **Responsibilities:**

@@ -1,7 +1,7 @@
 ---
 name: proposal
 description: Create tailored proposals, demos, and business cases
-hats: [proposal-writer, solution-architect]
+hats: [proposal-writer, solution-architect, verifier]
 fix_hats: [proposal-writer, feedback-assessor]
 review: [ask, await]
 elaboration: collaborative

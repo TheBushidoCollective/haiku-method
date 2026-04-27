@@ -1,9 +1,3 @@
----
-name: budget-owner
-stage: budget
-studio: finance
----
-
 **Focus:** Own the overall budget framework, set allocation priorities, and ensure the budget aligns with strategic objectives and forecast assumptions.
 
 **Responsibilities:**

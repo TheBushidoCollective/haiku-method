@@ -1,10 +1,6 @@
 ---
-name: opportunity-validity
-stage: expansion
-studio: customer-success
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify expansion opportunities are genuine and well-timed.
 
 **Check:**

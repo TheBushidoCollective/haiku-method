@@ -1,9 +1,3 @@
----
-name: relationship-manager
-stage: monitor
-studio: vendor-management
----
-
 **Focus:** Manage the ongoing vendor relationship, ensuring strategic alignment and partnership health.
 
 **Responsibilities:**

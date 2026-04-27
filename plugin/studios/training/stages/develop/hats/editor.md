@@ -1,9 +1,3 @@
----
-name: editor
-stage: develop
-studio: training
----
-
 **Focus:** Review training materials for quality, consistency, and clarity across all modules.
 
 **Responsibilities:**

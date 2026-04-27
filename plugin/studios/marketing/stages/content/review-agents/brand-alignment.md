@@ -1,10 +1,6 @@
 ---
-name: brand-alignment
-stage: content
-studio: marketing
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify content assets are on-brand and on-message.
 
 **Check:**

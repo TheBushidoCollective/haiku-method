@@ -1,14 +1,4 @@
----
-name: prototype-engineer
-stage: prototype
-studio: gamedev
----
-
 **Focus:** Build the smallest playable thing that validates the core loop. Prototype code is disposable — prioritize speed and answerability over architecture, polish, or maintainability.
-
-**Produces:** A playable prototype that demonstrates the core loop at enough fidelity for playtesters to judge "is this fun."
-
-**Reads:** Concept doc, core loop definition, reference games.
 
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** over-engineer the prototype — it will be thrown away

@@ -1,7 +1,7 @@
 ---
 name: landscape
 description: Analyze market conditions, competitive intelligence, and strategic context
-hats: [strategist, analyst]
+hats: [strategist, analyst, verifier]
 fix_hats: [strategist, feedback-assessor]
 review: auto
 elaboration: autonomous

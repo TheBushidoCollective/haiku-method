@@ -120,8 +120,10 @@ stateDiagram-v2
     state migrate_execute {
       [*] --> migrate_execute_migration_engineer
       migrate_execute_migration_engineer --> migrate_execute_integration_tester : hat.advance
-      migrate_execute_integration_tester --> migrate_execute_done : hat.advance
+      migrate_execute_integration_tester --> migrate_execute_verifier : hat.advance
       migrate_execute_integration_tester --> migrate_execute_migration_engineer : hat.reject
+      migrate_execute_verifier --> migrate_execute_done : hat.advance
+      migrate_execute_verifier --> migrate_execute_integration_tester : hat.reject
       migrate_execute_done --> [*]
     }
     migrate_execute --> migrate_review
@@ -168,8 +170,10 @@ stateDiagram-v2
     state validation_execute {
       [*] --> validation_execute_validator
       validation_execute_validator --> validation_execute_regression_tester : hat.advance
-      validation_execute_regression_tester --> validation_execute_done : hat.advance
+      validation_execute_regression_tester --> validation_execute_verifier : hat.advance
       validation_execute_regression_tester --> validation_execute_validator : hat.reject
+      validation_execute_verifier --> validation_execute_done : hat.advance
+      validation_execute_verifier --> validation_execute_regression_tester : hat.reject
       validation_execute_done --> [*]
     }
     validation_execute --> validation_review
@@ -216,8 +220,10 @@ stateDiagram-v2
     state cutover_execute {
       [*] --> cutover_execute_cutover_coordinator
       cutover_execute_cutover_coordinator --> cutover_execute_rollback_engineer : hat.advance
-      cutover_execute_rollback_engineer --> cutover_execute_done : hat.advance
+      cutover_execute_rollback_engineer --> cutover_execute_verifier : hat.advance
       cutover_execute_rollback_engineer --> cutover_execute_cutover_coordinator : hat.reject
+      cutover_execute_verifier --> cutover_execute_done : hat.advance
+      cutover_execute_verifier --> cutover_execute_rollback_engineer : hat.reject
       cutover_execute_done --> [*]
     }
     cutover_execute --> cutover_review

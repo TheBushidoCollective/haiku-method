@@ -1,10 +1,6 @@
 ---
-name: safety
-stage: mitigate
-studio: incident-response
 interpretation: lens
 ---
-
 **Mandate:** The agent **MUST** verify the mitigation stops the bleeding without introducing new risks.
 
 **Check:**

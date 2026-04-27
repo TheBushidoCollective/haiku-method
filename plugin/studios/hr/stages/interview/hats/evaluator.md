@@ -1,9 +1,3 @@
----
-name: evaluator
-stage: interview
-studio: hr
----
-
 **Focus:** Synthesize interview feedback across all interviewers and produce a comparative candidate assessment with hire recommendations.
 
 **Responsibilities:**

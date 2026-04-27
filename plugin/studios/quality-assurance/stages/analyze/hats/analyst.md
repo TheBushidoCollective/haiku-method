@@ -1,9 +1,3 @@
----
-name: analyst
-stage: analyze
-studio: quality-assurance
----
-
 **Focus:** Analyze test results to identify quality patterns, root causes, and actionable improvement opportunities.
 
 **Responsibilities:**

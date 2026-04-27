@@ -1,9 +1,3 @@
----
-name: statistician
-stage: analyze
-studio: quality-assurance
----
-
 **Focus:** Validate quality metrics with statistical rigor and ensure trend analysis is sound.
 
 **Responsibilities:**

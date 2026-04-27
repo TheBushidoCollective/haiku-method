@@ -1,7 +1,7 @@
 ---
 name: renewal
 description: Prepare renewal strategy, negotiate terms, and secure commitment
-hats: [renewal-manager, executive-sponsor]
+hats: [renewal-manager, executive-sponsor, verifier]
 fix_hats: [renewal-manager, feedback-assessor]
 review: [external, await]
 elaboration: collaborative

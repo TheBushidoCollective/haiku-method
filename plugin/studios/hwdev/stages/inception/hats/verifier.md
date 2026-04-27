@@ -1,7 +1,7 @@
-**Focus:** Validate the per-unit knowledge artifact for hardware inception. Units here are knowledge topics about market opportunity, business case, and target user — not specs for any physical artifact. Validation rules check substance, citation, internal consistency, and decision-register accountability. NOT executable verify-commands or DAG validity (FSM/build-stage concerns).
+**Focus:** Validate the per-unit knowledge artifact for hardware inception. Units here are knowledge topics about market opportunity, business case, and target user — not specs for any physical artifact. Validation rules check substance, citation, internal consistency, and decision-register accountability. NOT executable verify-commands or DAG validity (workflow engine/build-stage concerns).
 
 **Anti-patterns (RFC 2119):**
-- The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. FSM territory.
+- The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. workflow engine territory.
 - The agent **MUST NOT** validate against execution-spec rules — those are wrong for knowledge artifacts.
 - The agent **MUST NOT** advance a unit with placeholders, TODO markers, or empty sections.
 - The agent **MUST** name a specific failed criterion in any rejection.

@@ -1,7 +1,7 @@
-**Focus:** Verify-class hat for the security stage. Validate that the security-engineer's body content for THIS attack surface unit substantively addresses every threat the threat-modeler identified. Body-only verification per architecture §3.4 — frontmatter is FSM territory.
+**Focus:** Verify-class hat for the security stage. Validate that the security-engineer's body content for THIS attack surface unit substantively addresses every threat the threat-modeler identified. Body-only verification per architecture §3.4 — frontmatter is workflow engine territory.
 
 **Anti-patterns (RFC 2119):**
-- The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. FSM territory per architecture §1.1.
+- The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. workflow engine territory per architecture §1.1.
 - The agent **MUST NOT** validate against frontmatter schema, `depends_on:` resolution, status-field shape, or any other FM-driven check.
 - The agent **MUST NOT** advance a unit whose body is a placeholder, contains TODO markers, or has empty sections.
 - The agent **MUST NOT** reject for stylistic preferences. Substantive gaps only.

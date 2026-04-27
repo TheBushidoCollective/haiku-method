@@ -30,7 +30,7 @@ The core issue wasn't speed. We could generate code, docs, and plans quickly. Th
 
 **The AI shouldn't manage its own lifecycle.** That's the single idea that changed everything.
 
-Instead of asking the AI to plan, execute, and review its own work, H·AI·K·U separates the concerns. A finite state machine drives the workflow. The AI follows the actions. Humans review at meaningful boundaries. No one — human or AI — can skip steps.
+Instead of asking the AI to plan, execute, and review its own work, H·AI·K·U separates the concerns. A workflow engine drives the lifecycle. The AI follows the actions. Humans review at meaningful boundaries. No one — human or AI — can skip steps.
 
 This isn't about slowing things down. It's about making every step count. When the AI knows what stage it's in, what hat it's wearing, and what criteria define "done," the output quality goes up dramatically. And when the human reviews at gate boundaries instead of reviewing everything, the collaboration becomes sustainable.
 

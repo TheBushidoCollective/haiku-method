@@ -11,13 +11,13 @@ interface StageInfo {
 
 interface Props {
 	stages: StageInfo[]
-	/** The FSM-active stage — always rendered as the current/diamond
+	/** The workflow engine-active stage — always rendered as the current/diamond
 	 *  marker, regardless of which stage the reviewer is browsing. */
 	currentStage: string
 	/** Optional: the stage the reviewer is currently VIEWING in the
 	 *  main pane (may differ from `currentStage` after a stepper click).
 	 *  Gets an underline / teal ring so the reviewer knows where they
-	 *  are without losing sight of where the FSM actually sits. */
+	 *  are without losing sight of where the workflow engine actually sits. */
 	viewingStage?: string
 	onStageClick?: (stageName: string) => void
 }
@@ -41,7 +41,7 @@ interface Props {
  *     stage via the stepper, the marker gains a thick teal ring, the
  *     label is underlined in teal, and the sublabel slot shows
  *     "viewing" so the reviewer can see where they are without losing
- *     the FSM-current diamond.
+ *     the workflow engine-current diamond.
  */
 export function StageProgressStrip({
 	stages,
@@ -55,7 +55,7 @@ export function StageProgressStrip({
 		<nav className="px-4 sm:px-6 py-3" aria-label="Stage progress">
 			<ol className="flex justify-center items-start gap-0">
 				{stages.map((stage, i) => {
-					// "current" means the FSM is actively working this stage.
+					// "current" means the workflow engine is actively working this stage.
 					// Once a stage's status flips to `completed`, its checkmark
 					// wins over the diamond even if the active-stage resolver
 					// still names it (e.g. post-final-stage in intent-review
@@ -108,10 +108,10 @@ export function StageProgressStrip({
 					const ariaLabel = `Stage ${stage.name}, ${statusSuffix}${pendingSuffix}`
 
 					// "Viewing" is a distinct affordance from "current": when the
-					// reviewer has stepped back to a prior stage, the FSM-current
+					// reviewer has stepped back to a prior stage, the workflow engine-current
 					// diamond stays put, and the stage the reviewer is BROWSING
 					// gets a teal ring + underline + `aria-current="location"` so
-					// they can see where they are without losing the FSM pointer.
+					// they can see where they are without losing the workflow engine pointer.
 					const isViewingDifferent = isViewing && !isCurrent
 					return (
 						<li key={stage.name} className="w-24">
@@ -233,7 +233,7 @@ function StageMarker({
 	hasPending: boolean
 	/** FB-01: when the reviewer has stepped back to a prior stage via the
 	 *  stepper, the marker gains a thick teal ring so they can see where
-	 *  they are without losing sight of the FSM-current diamond. */
+	 *  they are without losing sight of the workflow engine-current diamond. */
 	isViewing?: boolean
 }) {
 	if (isCurrent) {

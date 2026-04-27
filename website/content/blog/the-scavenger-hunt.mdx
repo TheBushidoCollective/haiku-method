@@ -5,7 +5,7 @@ date: 2026-04-12
 author: Jason Waldrip
 category: Architecture
 tags:
-  - fsm
+  - workflow
   - orchestrator
   - hooks
   - ai-dlc
@@ -136,7 +136,7 @@ This diagram is static; the [interactive runtime map](/prototype-stage-flow.html
 
 ## Stages and phases
 
-Every studio is a named lifecycle template — a DAG of stages, each running its own phase FSM. H·AI·K·U ships with 24 studios (software, ideation, legal, hwdev, incident-response, marketing, hr, finance, and 16 more). The shape is the same across all of them; only the stage names and gate types differ. The default software studio has six stages in strict order: **inception → design → product → development → operations → security**. Every stage walks the same phase sequence: `pending → elaborate → execute → review → gate`. The orchestrator enforces the transitions; the agent can only move forward when the preconditions are actually met, not when it thinks they are.
+Every studio is a named lifecycle template — a DAG of stages, each running its own phase workflow engine. H·AI·K·U ships with 24 studios (software, ideation, legal, hwdev, incident-response, marketing, hr, finance, and 16 more). The shape is the same across all of them; only the stage names and gate types differ. The default software studio has six stages in strict order: **inception → design → product → development → operations → security**. Every stage walks the same phase sequence: `pending → elaborate → execute → review → gate`. The orchestrator enforces the transitions; the agent can only move forward when the preconditions are actually met, not when it thinks they are.
 
 Two seams demand a human:
 

@@ -39,7 +39,7 @@ Adversarial-stage criteria specify **threats considered, mitigations declared, a
 
 Security artifacts are validated by the verify-class hat declared in `STAGE.md` (currently `security-reviewer`). Per architecture §3.5, adversarial hats are exempt from the body-only rule, but a stage that is ENTIRELY adversarial (no plan-do-verify front loop) is an architecture violation worth flagging in a separate restructure proposal.
 
-The verifier checks **threats considered against the surface scope, mitigations declared with verification approach, decision-register accountability** — body-content checks. Frontmatter is not interpreted; FSM owns DAG and lifecycle.
+The verifier checks **threats considered against the surface scope, mitigations declared with verification approach, decision-register accountability** — body-content checks. Frontmatter is not interpreted; workflow engine owns DAG and lifecycle.
 
 ## Anti-patterns
 

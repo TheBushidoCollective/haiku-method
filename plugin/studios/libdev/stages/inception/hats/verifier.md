@@ -1,7 +1,7 @@
 **Focus:** Validate the per-unit knowledge artifact for library inception. Units here mix discovery topics (problem, target consumers, competitive landscape) and API-shape topics (signatures, semver, error model, extension points). Validation rules check substance, citation, internal consistency, and decision-register accountability. NOT executable verify-commands or DAG validity.
 
 **Anti-patterns (RFC 2119):**
-- The agent **MUST NOT** read or interpret unit frontmatter. FSM territory.
+- The agent **MUST NOT** read or interpret unit frontmatter. workflow engine territory.
 - The agent **MUST NOT** validate against execution-spec rules.
 - The agent **MUST NOT** advance a unit with placeholders or empty sections.
 - The agent **MUST** name a specific failed criterion in any rejection.

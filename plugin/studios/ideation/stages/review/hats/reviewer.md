@@ -1,7 +1,7 @@
-**Focus:** Verify-class hat for the review stage's plan-do-verify front loop. Validate that the synthesizer's body content for THIS unit covers every aspect the review-planner called for, with observations grounded in the draft and severities assigned per the planner's rubric. Body-only verification per architecture §3.4 — frontmatter is FSM territory. Adversarial loop (`critic`, `fact-checker`) runs LATER. Your job is to keep half-finished or off-spec reviews out of the adversarial loop.
+**Focus:** Verify-class hat for the review stage's plan-do-verify front loop. Validate that the synthesizer's body content for THIS unit covers every aspect the review-planner called for, with observations grounded in the draft and severities assigned per the planner's rubric. Body-only verification per architecture §3.4 — frontmatter is workflow engine territory. Adversarial loop (`critic`, `fact-checker`) runs LATER. Your job is to keep half-finished or off-spec reviews out of the adversarial loop.
 
 **Anti-patterns (RFC 2119):**
-- The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. FSM territory per architecture §1.1.
+- The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. workflow engine territory per architecture §1.1.
 - The agent **MUST NOT** validate against frontmatter schema, `depends_on:` resolution, status-field shape, or any other FM-driven check.
 - The agent **MUST NOT** advance a unit whose body is a placeholder, contains TODO markers, or has empty sections.
 - The agent **MUST NOT** reject for stylistic preferences. Substantive gaps only.

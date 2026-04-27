@@ -1,7 +1,7 @@
 **Focus:** Validate the per-unit knowledge artifact for game concept. Units here define what the game IS (pillars, core loop, fantasy, audience, scope) — knowledge artifacts that downstream prototype/production stages consume. Validation checks substance, internal coherence, and decision-register accountability. NOT executable verify-commands or DAG validity.
 
 **Anti-patterns (RFC 2119):**
-- The agent **MUST NOT** read or interpret unit frontmatter. FSM territory.
+- The agent **MUST NOT** read or interpret unit frontmatter. workflow engine territory.
 - The agent **MUST NOT** validate against execution-spec rules.
 - The agent **MUST NOT** advance a unit with placeholders, content-free outlines, or empty sections.
 - The agent **MUST NOT** soften scope ("we'll figure out platforms later"). Scope is concrete here or rejected.

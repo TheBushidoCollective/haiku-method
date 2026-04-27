@@ -178,7 +178,7 @@ const emit: WorkflowHandler = (ctx, rootArg) => {
 					)
 				}
 
-				emitTelemetry("haiku.fsm.safe_repair", {
+				emitTelemetry("haiku.workflow.safe_repair", {
 					intent: slug,
 					active_stage: currentStage,
 					synthesized_stages: synthesized.join(","),
@@ -222,7 +222,7 @@ const emit: WorkflowHandler = (ctx, rootArg) => {
 				// incomplete prior and treat it as the new currentStage.
 				currentStage = incompletePrior[0]
 				setFrontmatterField(intentFile, "active_stage", currentStage)
-				emitTelemetry("haiku.fsm.consistency_fix", {
+				emitTelemetry("haiku.workflow.consistency_fix", {
 					intent: slug,
 					stale_stage: activeStage,
 					corrected_stage: currentStage,

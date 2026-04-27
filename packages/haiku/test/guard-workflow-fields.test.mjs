@@ -11,7 +11,7 @@ import assert from "node:assert"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { guardFsmFields } from "../src/hooks/guard-workflow-fields.ts"
+import { guardWorkflowFields } from "../src/hooks/guard-workflow-fields.ts"
 
 const tmp = mkdtempSync(join(tmpdir(), "haiku-guard-test-"))
 const origCwd = process.cwd()
@@ -59,7 +59,7 @@ function runGuard(input) {
 	}
 	let error = null
 	try {
-		const r = guardFsmFields(input)
+		const r = guardWorkflowFields(input)
 		if (r && typeof r.then === "function")
 			return r
 				.finally(() => {

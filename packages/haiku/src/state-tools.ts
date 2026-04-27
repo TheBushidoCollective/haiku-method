@@ -24,7 +24,7 @@ import { Ajv } from "ajv"
 import matter from "gray-matter"
 import { getPendingVersion, hasPendingUpdate } from "./auto-update.js"
 import { features, resolvePluginRoot } from "./config.js"
-// fsm-fields module retained for state-integrity sealing; no direct imports
+// workflow-fields module retained for state-integrity sealing; no direct imports
 // needed here since the completion-only guard is narrow to status/completed.
 import {
 	addTempWorktree,
@@ -763,7 +763,7 @@ function scanOneIntent(
 						fix: `Set status to one of: ${validStatuses.join(", ")}`,
 					})
 				} else if (isBeforeActive && (state.status as string) !== "completed") {
-					// Stage before active_stage should be completed — FSM will
+					// Stage before active_stage should be completed — workflow engine will
 					// reset active_stage backwards if it isn't
 					issues.push({
 						intent: slug,
@@ -775,13 +775,13 @@ function scanOneIntent(
 				}
 			} else if (isBeforeActive) {
 				// Missing state.json for a stage before active_stage — synthesize
-				// a completion record so the FSM doesn't reset backwards
+				// a completion record so the workflow engine doesn't reset backwards
 				issues.push({
 					intent: slug,
 					field: `stages/${stageName}/state.json`,
 					severity: "warning",
 					message:
-						"Missing state.json for stage before active_stage — FSM will reset backwards",
+						"Missing state.json for stage before active_stage — workflow engine will reset backwards",
 					fix: `Create state.json with status: "completed" (stage is before active_stage '${repairActiveStage}')`,
 				})
 			}
@@ -1171,7 +1171,7 @@ function buildRepairReport(
 // ── Worktree-location migration ────────────────────────────────────────────
 //
 // Pre-fix, H·AI·K·U created `.haiku/worktrees/` relative to `process.cwd()`,
-// so running the FSM from a sub-worktree (e.g. Claude's
+// so running the workflow engine from a sub-worktree (e.g. Claude's
 // `.claude/worktrees/foo/`) forked all state and unit worktrees into that
 // sub-worktree instead of the primary repo. After the fix, the new code
 // always anchors at the primary repo — but existing misplaced worktrees
@@ -1871,7 +1871,7 @@ let _primaryRepoRoot: { cwd: string; root: string } | null = null
 /** Return the primary repo root — the parent of the canonical `.git/`
  *  directory, regardless of which worktree (primary or sub-) is the
  *  current cwd. All H·AI·K·U state (intents, worktrees, knowledge) lives
- *  here so that running the FSM from a sub-worktree (e.g.
+ *  here so that running the workflow engine from a sub-worktree (e.g.
  *  `.claude/worktrees/foo/`) doesn't fork state into the sub-worktree.
  *
  *  This matches Claude Code's convention where `.claude/worktrees/` are
@@ -2213,7 +2213,7 @@ function getUnitWorktreeChanges(
  * Compute the allowed write scope for a stage. Derives from:
  *   - Stage output templates' `location:` fields (with `scope:` intent|repo)
  *   - Stage discovery templates' `location:` fields (for pre-execute hats)
- *   - Always-allowed FSM metadata paths
+ *   - Always-allowed workflow engine metadata paths
  *
  * Returns { intentGlobs, repoGlobs, repoWildcard } where:
  *   - intentGlobs: globs to match against intent-relative paths
@@ -2233,7 +2233,7 @@ function computeStageScope(
 		// Unit spec itself — only THIS unit's file. Cross-unit writes
 		// (unit-04 writing to unit-05.md) are a scope violation.
 		`stages/${stage}/units/${unitBase}.md`,
-		// Stage FSM bookkeeping
+		// Stage workflow engine bookkeeping
 		`stages/${stage}/state.json`,
 		`stages/${stage}/iteration.json`,
 		// Feedback written by reviewers to this stage (reviewer agents,
@@ -2350,7 +2350,7 @@ function pathInStageScope(
  * track-outputs PostToolUse hook (which keeps working for real-time CC
  * tracking but isn't required).
  *
- * Always-allowed FSM metadata paths (state.json, iteration.json, unit
+ * Always-allowed workflow engine metadata paths (state.json, iteration.json, unit
  * spec, feedback/, state/, .integrity.json) are excluded — those are
  * harness bookkeeping, not unit deliverables.
  */
@@ -2407,14 +2407,14 @@ function autoPopulateOutputs(
 
 /**
  * Validate that the unit's writes stay within the stage's declared scope
- * (output templates + always-allowed FSM metadata). Called at unit
+ * (output templates + always-allowed workflow engine metadata). Called at unit
  * completion (last hat advance_hat) BEFORE the worktree merges back.
  *
  * Scope source of truth:
  *   - Stage's output templates' `location:` + `scope:` fields (intent|repo)
  *   - Templates with `scope: repo` and descriptive locations ("(project
  *     source tree)") grant a repo-wide wildcard
- *   - Always-allowed FSM metadata (unit spec, state files, feedback dir,
+ *   - Always-allowed workflow engine metadata (unit spec, state files, feedback dir,
  *     intent state dir, integrity, knowledge)
  *
  * Unit.outputs[] is AUTO-POPULATED from the diff as a side effect — no
@@ -2491,7 +2491,7 @@ export interface StageIteration {
 	feedback_signature?: string
 }
 
-/** Maximum number of agent-invoked iterations allowed before the FSM
+/** Maximum number of agent-invoked iterations allowed before the workflow engine
  *  escalates to the human. User-invoked revisits (`trigger: "user-revisit"`)
  *  are NOT capped — explicit user intent always wins.
  *
@@ -2743,7 +2743,7 @@ export function completeUnitIteration(
 	writeFileSync(unitFile, matter.stringify(body, data))
 }
 
-// ── Unit frontmatter validation (architecture rule §1.1: FSM owns FM) ────
+// ── Unit frontmatter validation (architecture rule §1.1: workflow engine owns FM) ────
 //
 // Called from haiku_unit_write before persisting an agent-authored unit.
 // Returns either { valid: true } or { valid: false, errors: string[] }.
@@ -2764,7 +2764,7 @@ export function completeUnitIteration(
 //   - `model` enum
 //   - `quality_gates` inner shape (`{name, command, dir?}` with required keys)
 //   - `title` minLength
-//   - `propertyNames.not.enum` forbids FSM-driven fields
+//   - `propertyNames.not.enum` forbids workflow-driven fields
 //
 // What JSONSchema can NOT cover (runtime context required, lives in
 // validateUnitFrontmatter as additional steps):
@@ -2846,7 +2846,7 @@ export const UNIT_FRONTMATTER_SCHEMA = {
 				"On revisit iterations, list of FB IDs this unit addresses (e.g. `[FB-01, FB-03]`). Every pending FB must be claimed by some unit's `closes:` to allow advancement.",
 		},
 	},
-	// FSM-driven fields. Agents MUST NOT set these — the FSM owns
+	// workflow-driven fields. Agents MUST NOT set these — the workflow engine owns
 	// transitions via haiku_unit_advance_hat / haiku_unit_reject_hat /
 	// haiku_unit_increment_bolt. AJV's propertyNames check rejects any
 	// of these at validate time; strict MCP clients reject at parse
@@ -2979,7 +2979,7 @@ function ajvErrorToCode(err: {
 	// `propertyNames` with the offending field in `params.propertyName`.
 	if (err.keyword === "propertyNames") {
 		const field = (err.params.propertyName as string) ?? "<unknown>"
-		return `fsm_field_forbidden: '${field}' is FSM-driven and must not be set by agents. The FSM owns this field via haiku_unit_advance_hat / haiku_unit_increment_bolt / etc.`
+		return `fsm_field_forbidden: '${field}' is workflow-driven and must not be set by agents. The workflow engine owns this field via haiku_unit_advance_hat / haiku_unit_increment_bolt / etc.`
 	}
 	// Map per-field by inspecting the JSON-pointer instancePath
 	// (e.g. "/depends_on" or "/quality_gates/0/command").
@@ -3017,7 +3017,7 @@ export function validateUnitFrontmatter(
 	const errors: string[] = []
 
 	// Step 1: schema-based static rules — AJV consumes
-	// UNIT_FRONTMATTER_SCHEMA. Catches forbidden FSM fields, type errors,
+	// UNIT_FRONTMATTER_SCHEMA. Catches forbidden workflow engine fields, type errors,
 	// `model` enum, `quality_gates` inner shape, `title` minLength, and
 	// general type/array shape for depends_on / inputs / outputs / closes.
 	const ok = validateUnitSchema(frontmatter)
@@ -3050,7 +3050,7 @@ export function validateUnitFrontmatter(
 	return errors.length === 0 ? { valid: true } : { valid: false, errors }
 }
 
-// ── DAG cycle detection (architecture §1.1: FSM enforces DAG validity) ──
+// ── DAG cycle detection (architecture §1.1: workflow engine enforces DAG validity) ──
 //
 // Given a stage's complete unit set + each unit's depends_on, returns the
 // names of any units involved in a cycle. Empty array means the DAG is
@@ -3111,7 +3111,7 @@ export function parseFrontmatter(raw: string): {
 } {
 	// Auto-recover from duplicate top-level YAML keys by keeping the last
 	// occurrence and reparsing. haiku_repair separately flags these files so
-	// they get rewritten on disk; this keeps the FSM running in the meantime.
+	// they get rewritten on disk; this keeps the workflow engine running in the meantime.
 	const tryParse = (text: string) => {
 		const { data, content } = matter(text)
 		return {
@@ -3234,7 +3234,7 @@ export function setFrontmatterField(
 
 /** Write a unit frontmatter field to BOTH the parent worktree's copy AND
  *  the unit's dedicated worktree (if one exists). The dual write is what
- *  keeps the FSM's reads (parent) in sync with the merge commits produced
+ *  keeps the workflow engine's reads (parent) in sync with the merge commits produced
  *  by `mergeUnitWorktree` (unit worktree). Missing either side causes the
  *  status-drift bug where a unit completes in one view but appears active
  *  in the other. */
@@ -3416,7 +3416,7 @@ function injectPushWarning(
 
 /**
  * Callback for runNext — registered by orchestrator at startup to avoid circular imports.
- * Used by advance_hat to internally progress the FSM after unit completion.
+ * Used by advance_hat to internally progress the workflow engine after unit completion.
  */
 let _runNext:
 	| ((slug: string) => { action: string; [key: string]: unknown })
@@ -3701,7 +3701,7 @@ export type FeedbackOrigin = (typeof FEEDBACK_ORIGINS)[number]
  *                writes `closed_by: <unit>` on the feedback item but DOES
  *                NOT change its status — the agent doing the work cannot
  *                self-certify.
- *   fixing     — the FSM is mid-fix-loop on this finding (one or more
+ *   fixing     — the workflow engine is mid-fix-loop on this finding (one or more
  *                `fix_hats` bolts have run against it).
  *   addressed  — an independent actor (feedback-assessor hat, human via the
  *                review UI, or another agent) verified the closure.
@@ -3729,11 +3729,11 @@ export const FEEDBACK_STATUSES = [
 export const MAX_FIX_LOOP_BOLTS = 3
 
 /**
- * Cap on how many times the FSM will dispatch the integrator subagent
+ * Cap on how many times the workflow engine will dispatch the integrator subagent
  * against a single fix-chain merge conflict before giving up and
  * escalating to the human. Each attempt is:
  *   1. merge base → fix-chain worktree produces conflict markers
- *   2. FSM returns `integrate_fix_chains` action
+ *   2. workflow engine returns `integrate_fix_chains` action
  *   3. Integrator subagent resolves markers + `git add`s the files
  *   4. Next `haiku_run_next` retries the merge via
  *      `mergeFixChainWorktree` which now sees `MERGE_HEAD` and commits
@@ -3902,7 +3902,7 @@ export interface FeedbackItem {
 	// `null` means untriaged; FBs with `triaged_at: null` block the
 	// pre-tick gate.
 	triaged_at: string | null
-	// How the FSM should resolve this finding. `null` = caller has no
+	// How the workflow engine should resolve this finding. `null` = caller has no
 	// preference; the feedback router defaults to `stage_revisit`.
 	// Legal values: question | inline_fix | stage_revisit.
 	resolution: string | null
@@ -3913,7 +3913,7 @@ export interface FeedbackItem {
 	// Per-bolt history of the fix loop. Mirror of the unit file's
 	// `iterations:` frontmatter so reviewers can audit exactly which
 	// hat fired, when, with what outcome. Empty for brand-new findings
-	// the FSM hasn't dispatched yet.
+	// the workflow engine hasn't dispatched yet.
 	iterations: FeedbackIteration[]
 	// Inline-text anchor for comments attached to a span of rendered
 	// markdown. When present, the sidebar can surface a "jump to
@@ -3951,9 +3951,9 @@ export function writeFeedbackFile(
 		 *  reviewer/agent confirmed placement, so the pre-tick gate can
 		 *  proceed. Leave `null` (the default) for ad-hoc reviewer
 		 *  feedback that needs the agent's classification step before
-		 *  any further FSM work. */
+		 *  any further workflow engine work. */
 		triaged_at?: string | null
-		/** Routing hint for the FSM's feedback resolver. Accepts the
+		/** Routing hint for the workflow engine's feedback resolver. Accepts the
 		 *  three `FeedbackResolution` literals; anything else is coerced
 		 *  to null so legacy callers keep working. */
 		resolution?: string | null
@@ -4227,7 +4227,7 @@ function parseFeedbackIterations(
  * current file, appends, writes back. Callers are the orchestrator
  * (on bolt dispatch start) and the validator closure path (on bolt
  * finish). If the file doesn't exist (shouldn't happen in normal
- * operation), this is a no-op so startup races don't crash the FSM.
+ * operation), this is a no-op so startup races don't crash the workflow engine.
  */
 export function appendFeedbackIteration(
 	slug: string,
@@ -4654,7 +4654,7 @@ export function updateFeedbackFile(
 
 /**
  * Append a reply to a feedback thread. `close_as_answered` flips the
- * parent's `status` to `answered` in the same write so the FSM sees
+ * parent's `status` to `answered` in the same write so the workflow engine sees
  * the item as resolved on the next tick.
  */
 export function appendFeedbackReply(
@@ -4706,7 +4706,7 @@ export function appendFeedbackReply(
 
 /**
  * Increment the fix-loop bolt counter on a feedback item and set status to
- * "fixing". Called by the FSM before dispatching a fix-hat sequence against
+ * "fixing". Called by the workflow engine before dispatching a fix-hat sequence against
  * the finding. Returns the new bolt number, or null if the file is missing.
  * Does NOT validate the ceiling — callers must check MAX_FIX_LOOP_BOLTS
  * themselves so they can choose to escalate vs. continue.
@@ -4749,7 +4749,7 @@ export function deleteFeedbackFile(
 
 	// Guard: cannot delete open items — "pending" or "fixing". Deleting
 	// a mid-fix-loop finding under the fix-hat's feet erases the in-flight
-	// work's paper trail and leaves the FSM picking a different target
+	// work's paper trail and leaves the workflow engine picking a different target
 	// (or opening the gate) on the next tick. Close or reject first.
 	//
 	// Note: items with `closed_by` set but status still "pending" are
@@ -4893,9 +4893,9 @@ export const stateToolDefs = [
 	},
 	// Unit tools
 	// haiku_unit_get — REMOVED from the agent-callable schema per
-	// architecture §1.1 / §1.2 (FM is FSM-only; agent-callable reads must
+	// architecture §1.1 / §1.2 (FM is workflow engine-only; agent-callable reads must
 	// return body + title only via haiku_unit_read). The case handler in
-	// handleStateTool is retained for FSM-internal callers (orchestrator,
+	// handleStateTool is retained for workflow engine-internal callers (orchestrator,
 	// state-integrity, etc.) but agents can no longer reach it through MCP.
 	{
 		name: "haiku_unit_set",
@@ -4982,7 +4982,7 @@ export const stateToolDefs = [
 	{
 		name: "haiku_unit_advance_hat",
 		description:
-			"Advance a unit to the next hat in the sequence. When called on the last hat, auto-completes the unit and progresses the FSM. The system resolves the current hat, next hat, and stage internally.",
+			"Advance a unit to the next hat in the sequence. When called on the last hat, auto-completes the unit and progresses the workflow engine. The system resolves the current hat, next hat, and stage internally.",
 		inputSchema: {
 			type: "object" as const,
 			properties: { intent: { type: "string" }, unit: { type: "string" } },
@@ -5073,7 +5073,7 @@ export const stateToolDefs = [
 	{
 		name: "haiku_unit_read",
 		description:
-			"Read a unit's body content (and title). Returns ONLY the body and title — frontmatter is FSM-internal and not exposed to agents per the architecture's FM-is-FSM-only rule. Use this when a hat needs to read another unit's substance (sibling references, prior-stage knowledge artifacts) without interpreting FM. Returns { title, body } as JSON.",
+			"Read a unit's body content (and title). Returns ONLY the body and title — frontmatter is workflow engine-internal and not exposed to agents per the architecture's FM-is-workflow engine-only rule. Use this when a hat needs to read another unit's substance (sibling references, prior-stage knowledge artifacts) without interpreting FM. Returns { title, body } as JSON.",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -5094,7 +5094,7 @@ export const stateToolDefs = [
 				body: {
 					type: "string",
 					description:
-						"Full markdown body. Frontmatter is intentionally not exposed (FSM-only per architecture §1.1).",
+						"Full markdown body. Frontmatter is intentionally not exposed (workflow engine-only per architecture §1.1).",
 				},
 				error: { type: "string", description: "On not-found / wrong-stage." },
 			},
@@ -5130,7 +5130,7 @@ export const stateToolDefs = [
 
 Allowed FM fields (agent-authorable): ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")} — plus any stage-specific fields the per-stage \`phases/ELABORATION.md\` documents.
 
-Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}.`,
+Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidden\`): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}.`,
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -5152,7 +5152,7 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 				// reject malformed calls before they go out.
 				frontmatter: {
 					...UNIT_FRONTMATTER_SCHEMA,
-					description: `Optional frontmatter. Allowed: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}, plus stage-specific. Forbidden (FSM-driven, validator returns \`fsm_field_forbidden\`): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}.`,
+					description: `Optional frontmatter. Allowed: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}, plus stage-specific. Forbidden (workflow-driven, validator returns \`fsm_field_forbidden\`): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}.`,
 				},
 			},
 			required: ["intent", "stage", "unit", "body"],
@@ -5474,7 +5474,7 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 	{
 		name: "haiku_review_open",
 		description:
-			'Open an ad-hoc review pane in the browser for the active intent and BLOCK until the reviewer clicks Done or Request Changes (or the pane times out at 30min). The UI swaps Approve for Done/Close, shows an "Ad-hoc review" badge, and never mutates FSM state on its own. Return value is a concrete next-step instruction: on Done the tool returns "no changes requested"; on Request Changes it returns a nudge to call haiku_run_next so the durable feedback routes through the normal fix-loop / revisit path.',
+			'Open an ad-hoc review pane in the browser for the active intent and BLOCK until the reviewer clicks Done or Request Changes (or the pane times out at 30min). The UI swaps Approve for Done/Close, shows an "Ad-hoc review" badge, and never mutates workflow engine state on its own. Return value is a concrete next-step instruction: on Done the tool returns "no changes requested"; on Request Changes it returns a nudge to call haiku_run_next so the durable feedback routes through the normal fix-loop / revisit path.',
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -5787,7 +5787,7 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 	{
 		name: "haiku_feedback_read",
 		description:
-			"Read a feedback file's body content (and title). Returns ONLY the body and title — frontmatter is FSM-internal and not exposed to agents per the architecture's FM-is-FSM-only rule. Use this when a fixer hat needs to read its own FB diagnosis or when a reviewer needs to read prior findings on the same artifact. Returns { title, body } as JSON. Omit `stage` to read an intent-scope FB.",
+			"Read a feedback file's body content (and title). Returns ONLY the body and title — frontmatter is workflow engine-internal and not exposed to agents per the architecture's FM-is-workflow engine-only rule. Use this when a fixer hat needs to read its own FB diagnosis or when a reviewer needs to read prior findings on the same artifact. Returns { title, body } as JSON. Omit `stage` to read an intent-scope FB.",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -5816,8 +5816,8 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 		name: "haiku_feedback_write",
 		description: `Update a feedback file's body content. This is the architecture-mandated path for fixer hats to populate the FB body with diagnosis (root cause, proposed action, file:line refs) per the FB-as-unit model. Generic Write/Edit on feedback/*.md is denied at the hook layer. Lifecycle: only pending or addressed (under-fix) FBs accept body rewrites. Closed and rejected FBs are immutable.
 
-Frontmatter is FSM-controlled and cannot be set through this tool. For reference (when reading FB context):
-  • FSM-driven (mutated over the FB lifecycle): ${FSM_DRIVEN_FB_FIELDS.join(", ")}
+Frontmatter is workflow engine-controlled and cannot be set through this tool. For reference (when reading FB context):
+  • workflow-driven (mutated over the FB lifecycle): ${FSM_DRIVEN_FB_FIELDS.join(", ")}
   • Set at creation, immutable thereafter: ${CREATE_TIME_FB_FIELDS.join(", ")}
 
 Use haiku_feedback_update for status transitions and haiku_feedback_reject for rejections.`,
@@ -5857,7 +5857,7 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 	{
 		name: "haiku_feedback_advance_hat",
 		description:
-			"Advance an FB to the next hat in the stage's `fix_hats:` sequence. Per the architecture's FB-as-unit model: each fixer hat operates on the FB body (via haiku_feedback_write) and then calls this tool to progress. When called on the last hat in the fix_hats sequence, the FSM auto-completes the FB (status → closed, closed_by recorded, iteration appended). Mirrors haiku_unit_advance_hat for FBs.",
+			"Advance an FB to the next hat in the stage's `fix_hats:` sequence. Per the architecture's FB-as-unit model: each fixer hat operates on the FB body (via haiku_feedback_write) and then calls this tool to progress. When called on the last hat in the fix_hats sequence, the workflow engine auto-completes the FB (status → closed, closed_by recorded, iteration appended). Mirrors haiku_unit_advance_hat for FBs.",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -6160,13 +6160,13 @@ export function handleStateTool(
 		}
 		case "haiku_unit_set": {
 			// Guards (architecture rules §1.1, §1.3):
-			//   1. status: completed is FSM-protected (always — only the FSM
+			//   1. status: completed is workflow engine-protected (always — only the workflow engine
 			//      auto-completes via advance_hat).
 			//   2. Lifecycle immutability — once a unit is `active` or
 			//      `completed`, all FM writes are denied. The forward-only
 			//      lifecycle rule means downstream work has been informed by
 			//      the unit's spec; mutating it would silently invalidate
-			//      that work. The FSM is the only legitimate writer at that
+			//      that work. The workflow engine is the only legitimate writer at that
 			//      point (advance_hat, increment_bolt, reject_hat).
 			const field = args.field as string
 			const value = args.value
@@ -6177,7 +6177,7 @@ export function handleStateTool(
 						field,
 						value,
 						message:
-							'Cannot set status to "completed" directly — unit completion is FSM-controlled. Call `haiku_unit_advance_hat` to let the FSM auto-complete the unit\'s last hat, which runs scope validation, feedback-assessor closure, and worktree merge-back.',
+							'Cannot set status to "completed" directly — unit completion is workflow engine-controlled. Call `haiku_unit_advance_hat` to let the workflow engine auto-complete the unit\'s last hat, which runs scope validation, feedback-assessor closure, and worktree merge-back.',
 					},
 					{ isError: true },
 				)
@@ -6193,8 +6193,8 @@ export function handleStateTool(
 				args.unit as string,
 			)
 			// Enforce lifecycle: only `pending` units accept arbitrary FM
-			// writes. The FSM-driven lifecycle fields (status, hat, bolt,
-			// iterations) are exempt because the FSM tools call setFrontmatterField
+			// writes. The workflow-driven lifecycle fields (status, hat, bolt,
+			// iterations) are exempt because the workflow engine tools call setFrontmatterField
 			// directly (not through this MCP-callable case); agent calls go
 			// through here.
 			const FSM_DRIVEN_FIELDS = new Set([
@@ -6482,9 +6482,9 @@ export function handleStateTool(
 
 			// ── Per-hat opt-in quality gates with auto-reject ─────────────
 			// A hat may declare `run_quality_gates: true` in its frontmatter.
-			// When the agent calls advance_hat from such a hat, the FSM runs
+			// When the agent calls advance_hat from such a hat, the workflow engine runs
 			// the unit's quality_gates BEFORE allowing the transition. On
-			// failure, the FSM auto-rejects the hat (bolt+1, same hat retries)
+			// failure, the workflow engine auto-rejects the hat (bolt+1, same hat retries)
 			// rather than returning an error and asking the agent to fix-and-
 			// retry. This eliminates the agent decision point ("is this gate
 			// failure something I fix here, or do I reject_hat?") — gate fail
@@ -6672,7 +6672,7 @@ export function handleStateTool(
 								message:
 									`Cannot complete unit: ${scopeResult.violations.length} file(s) were written outside the stage's declared scope.\n\n` +
 									`Out-of-bounds files:\n${scopeResult.violations.map((v) => `  - ${v}`).join("\n")}\n\n` +
-									`Allowed paths (stage output templates + FSM metadata):\n${allowedSummary}\n\n` +
+									`Allowed paths (stage output templates + workflow engine metadata):\n${allowedSummary}\n\n` +
 									`To resolve (in the unit worktree): (a) drop ALL unit commits with \`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${advStage})\` — recommended if the unit just started and few commits landed; or (b) amend the bad file out of the latest commit with \`git rm <file> && git commit --amend --no-edit\`; or (c) whole-commit rollback with \`git revert --no-edit <commit-sha>\` for each bad commit.\n\nNOTE: \`git checkout HEAD -- <file>\` does NOT work on committed files (it's a no-op when the file matches HEAD). Use one of the above.\n\nAlternatively: (d) update the stage's output template \`location:\` / \`scope:\` if this pattern is legitimate, or (e) call \`haiku_revisit\` if the scope itself is wrong.`,
 							},
 							{ isError: true },
@@ -6714,7 +6714,7 @@ export function handleStateTool(
 						{
 							error: "unit_outputs_empty",
 							message:
-								"Cannot complete unit: no outputs were produced. Every unit must write at least one artifact that the FSM can detect (stage artifact under `stages/<stage>/...` excluding `units/`/`state.json`, knowledge document under `knowledge/`, or a file matching a stage output template `location:`). The FSM auto-populates `outputs:` from the git diff at advance time; if you've written files but they're not showing up, verify they've been committed in the unit worktree, or add them explicitly to the unit's `outputs:` frontmatter field.",
+								"Cannot complete unit: no outputs were produced. Every unit must write at least one artifact that the workflow engine can detect (stage artifact under `stages/<stage>/...` excluding `units/`/`state.json`, knowledge document under `knowledge/`, or a file matching a stage output template `location:`). The workflow engine auto-populates `outputs:` from the git diff at advance time; if you've written files but they're not showing up, verify they've been committed in the unit worktree, or add them explicitly to the unit's `outputs:` frontmatter field.",
 						},
 						{ isError: true },
 					)
@@ -6787,7 +6787,7 @@ export function handleStateTool(
 				// outputs[] before we validate non-emptiness).
 
 				completeUnitIteration(advPath, "advance")
-				// Dual-write: parent (for FSM reads) AND unit worktree (so
+				// Dual-write: parent (for workflow engine reads) AND unit worktree (so
 				// the merge commit captures the completion state).
 				setUnitFrontmatterField(
 					args.intent as string,
@@ -6858,7 +6858,7 @@ export function handleStateTool(
 
 				// Merge the unit branch into its STAGE branch. Units ALWAYS
 				// fan in to their stage branch regardless of whatever branch
-				// the MCP's parent worktree happens to be on — the FSM works
+				// the MCP's parent worktree happens to be on — the workflow engine works
 				// in the scope of the stage, not the parent worktree.
 				// `mergeUnitWorktree` uses a temp worktree so the MCP's
 				// checkout is never disturbed.
@@ -6900,7 +6900,7 @@ export function handleStateTool(
 						? ""
 						: ` (${mergeResult.message})`
 
-				// Internally call runNext to progress the FSM state, but DO NOT
+				// Internally call runNext to progress the workflow engine state, but DO NOT
 				// return orchestration-level actions (start_units, start_unit) to
 				// the caller — those are for the PARENT agent, not the subagent
 				// that just finished its hat. The subagent's job ends here; the
@@ -6920,7 +6920,7 @@ export function handleStateTool(
 					])
 					if (subagentLocalActions.has(next.action as string)) {
 						return text(
-							`Unit ${args.unit} completed (last hat)${mergeNote}. FSM next action (${next.action}) is for the parent orchestrator — this subagent's job ends here. The parent will call haiku_run_next when all wave subagents return.${pushWarning(completeGit)}`,
+							`Unit ${args.unit} completed (last hat)${mergeNote}. workflow engine next action (${next.action}) is for the parent orchestrator — this subagent's job ends here. The parent will call haiku_run_next when all wave subagents return.${pushWarning(completeGit)}`,
 						)
 					}
 					// Phase/stage-level transitions (advance_phase, review, advance_stage,
@@ -7004,7 +7004,7 @@ export function handleStateTool(
 							message:
 								`Cannot advance hat '${currentHat}': ${scopeResult.violations.length} file(s) were written outside the stage's declared scope.\n\n` +
 								`Out-of-bounds files:\n${scopeResult.violations.map((v) => `  - ${v}`).join("\n")}\n\n` +
-								`Allowed paths (stage output templates + FSM metadata):\n${allowedSummary}\n\n` +
+								`Allowed paths (stage output templates + workflow engine metadata):\n${allowedSummary}\n\n` +
 								`Revert the out-of-bounds commits in the unit worktree: drop all unit commits with \`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${advStage})\`, or amend a single file out with \`git rm <file> && git commit --amend --no-edit\`, or \`git revert --no-edit <commit-sha>\` for a whole commit. NOTE: \`git checkout HEAD -- <file>\` is a no-op on committed files. Or update the stage's output template if this pattern is legitimate. Do NOT advance with scope violations — downstream hats will run blind.`,
 						},
 						{ isError: true },
@@ -7188,7 +7188,7 @@ export function handleStateTool(
 							scope: scopeResult.scope,
 							message:
 								`Cannot reject hat: the unit worktree still contains ${scopeResult.violations.length} out-of-scope write(s) that must be reverted first. ` +
-								`Attempt ${newAttempts}/${MAX_UNIT_BOLTS} — after ${MAX_UNIT_BOLTS} scope-violation rejects, the FSM escalates to the user.\n\n` +
+								`Attempt ${newAttempts}/${MAX_UNIT_BOLTS} — after ${MAX_UNIT_BOLTS} scope-violation rejects, the workflow engine escalates to the user.\n\n` +
 								`Out-of-bounds files:\n${scopeResult.violations.map((v) => `  - ${v}`).join("\n")}\n\n` +
 								`Revert the out-of-bounds commits in the unit worktree: drop all unit commits with \`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${rejectStage})\`, or amend a single file out with \`git rm <file> && git commit --amend --no-edit\`, or \`git revert --no-edit <commit-sha>\` for a whole commit. NOTE: \`git checkout HEAD -- <file>\` is a NO-OP on committed files and will not clear the violation. After the revert, call reject_hat again.`,
 						},
@@ -7361,7 +7361,7 @@ export function handleStateTool(
 			const { data, body } = parseFrontmatter(readFileSync(path, "utf8"))
 			// Title resolves from FM `title:` if present, else first H1, else
 			// the unit name. We expose ONLY the title and body — every other
-			// FM field is FSM-internal per architecture §1.1.
+			// FM field is workflow engine-internal per architecture §1.1.
 			const fmTitle =
 				typeof data.title === "string" ? (data.title as string) : ""
 			const h1Match = body.match(/^#\s+(.+)$/m)
@@ -7424,7 +7424,7 @@ export function handleStateTool(
 		// The architecture-mandated path for authoring unit files. Generic
 		// Write/Edit on units/*.md is denied at the hook layer; this is the
 		// only way agents can put a unit on disk. FM is validated; lifecycle
-		// is enforced; FSM-driven fields are stripped (the FSM owns them).
+		// is enforced; workflow-driven fields are stripped (the workflow engine owns them).
 		case "haiku_unit_write": {
 			const writeBranchErr = enforceStageBranch(
 				args.intent as string,
@@ -7497,7 +7497,7 @@ export function handleStateTool(
 					{
 						error: "frontmatter_validation_failed",
 						errors: validation.errors,
-						message: `Frontmatter failed validation. Fix each error and call again. Architecture §1.1 mandates that the FSM enforces FM validity at write time, so the agent never sees defects sneak through.`,
+						message: `Frontmatter failed validation. Fix each error and call again. Architecture §1.1 mandates that the workflow engine enforces FM validity at write time, so the agent never sees defects sneak through.`,
 					},
 					{ isError: true },
 				)
@@ -7529,13 +7529,13 @@ export function handleStateTool(
 					{
 						error: "dag_cycle_detected",
 						cycle_nodes: cycleNodes,
-						message: `Writing unit '${unitName}' with depends_on=[${(fmInput.depends_on as string[] | undefined)?.join(", ") ?? ""}] would create a dependency cycle involving: [${cycleNodes.join(", ")}]. The FSM rejects writes that produce a cyclic DAG. Reorder dependencies or restructure the units.`,
+						message: `Writing unit '${unitName}' with depends_on=[${(fmInput.depends_on as string[] | undefined)?.join(", ") ?? ""}] would create a dependency cycle involving: [${cycleNodes.join(", ")}]. The workflow engine rejects writes that produce a cyclic DAG. Reorder dependencies or restructure the units.`,
 					},
 					{ isError: true },
 				)
 			}
 
-			// All validators passed. Persist. Set FSM-driven fields to their
+			// All validators passed. Persist. Set workflow-driven fields to their
 			// initial values (status: pending, etc.) — agents never touch
 			// these.
 			const finalFm: Record<string, unknown> = {
@@ -9315,7 +9315,7 @@ export function handleStateTool(
 		// These mirror haiku_unit_advance_hat / haiku_unit_reject_hat but for
 		// FB files. Each fixer hat populates the FB body via haiku_feedback_write
 		// and then calls advance to progress through the stage's fix_hats:
-		// sequence. When the last hat advances, the FSM auto-closes the FB.
+		// sequence. When the last hat advances, the workflow engine auto-closes the FB.
 		case "haiku_feedback_advance_hat": {
 			const intentArg = args.intent as string
 			const stageArg = (args.stage as string) || ""

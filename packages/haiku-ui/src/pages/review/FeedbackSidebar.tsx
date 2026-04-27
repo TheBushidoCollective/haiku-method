@@ -220,13 +220,13 @@ export function FeedbackSidebar({
 			? "Adds a pending feedback item. Persisted immediately — the next run_next picks it up via the normal fix-loop."
 			: mode === "request"
 				? `${pendingCount} pending item${pendingCount === 1 ? "" : "s"} already persisted. Request Changes closes this pane; the next run_next routes each item through the normal fix-loop.`
-				: "Ad-hoc review — no gate to advance. Done closes the pane without touching the FSM."
+				: "Ad-hoc review — no gate to advance. Done closes the pane without touching the workflow engine."
 		: mode === "add"
 			? 'Adds a pending feedback item. Use the Route dropdown to steer the agent, or leave it on "Let agent decide" and the triage pass will classify.'
 			: mode === "request"
 				? `Hands ${pendingCount} item${pendingCount === 1 ? "" : "s"} to the agent on ${stage ?? "(stage)"}. Each routes per its resolution: reply, inline fix, stage revisit, or upstream rewind.`
 				: mode === "approve"
-					? "No feedback pending — approving advances the FSM to the next stage."
+					? "No feedback pending — approving advances the workflow engine to the next stage."
 					: `Type a comment above or click into another stage.`
 
 	return (

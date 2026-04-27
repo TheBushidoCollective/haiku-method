@@ -118,7 +118,7 @@ function gateBadgeCopy(mode: GateMode): { label: string; classes: string } {
 
 /**
  * Derive the "what phase/gate is active for this stage right now" label.
- * The FSM exposes `phase` on stage_state; we map it to the canonical
+ * The workflow engine exposes `phase` on stage_state; we map it to the canonical
  * mockup's gate-phase nouns: "Final Review Gate" when the stage is at
  * its close-out review, "In Review" for mid-review, etc.
  */

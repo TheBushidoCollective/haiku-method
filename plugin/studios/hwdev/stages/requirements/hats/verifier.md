@@ -1,7 +1,7 @@
 **Focus:** Validate the per-unit requirement-spec artifact for hardware requirements. Units here are requirement domains (functional / safety / regulatory / environmental / reliability) — testable obligations that downstream stages verify against. Validation rules check substance, completeness against the requirement category, and downstream-testability. Hardware requirement defects cascade into PCB redesigns and cert failures — be strict.
 
 **Anti-patterns (RFC 2119):**
-- The agent **MUST NOT** read or interpret unit frontmatter. FSM territory.
+- The agent **MUST NOT** read or interpret unit frontmatter. workflow engine territory.
 - The agent **MUST NOT** validate against build-stage executable verify-commands — requirements are testable obligations specifying what downstream `validation` MUST verify, not commands themselves.
 - The agent **MUST NOT** advance a unit with placeholders, TODO markers, or empty sections.
 - The agent **MUST NOT** soften regulatory requirements (e.g., advancing a regulatory unit that defers the framework choice). Reject — regulatory frameworks cannot be retrofitted.

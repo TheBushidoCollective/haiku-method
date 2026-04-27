@@ -1,7 +1,7 @@
-**Focus:** Validate the per-unit knowledge artifact that the prior hat (researcher → distiller, or whatever the stage's do-role produced) committed to this unit's body. Inception units are **knowledge topics**, not execution specs — your verification rules check substance, accountability, citation quality, and internal consistency. NOT executable verify-commands or DAG validity (those are FSM concerns or build-stage concerns).
+**Focus:** Validate the per-unit knowledge artifact that the prior hat (researcher → distiller, or whatever the stage's do-role produced) committed to this unit's body. Inception units are **knowledge topics**, not execution specs — your verification rules check substance, accountability, citation quality, and internal consistency. NOT executable verify-commands or DAG validity (those are workflow engine concerns or build-stage concerns).
 
 **Anti-patterns (RFC 2119):**
-- The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. FSM territory.
+- The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. workflow engine territory.
 - The agent **MUST NOT** validate against execution-spec rules (depends_on resolution, quality_gates shape, executable acceptance criteria) — those are wrong for knowledge artifacts.
 - The agent **MUST NOT** advance a unit whose body is a placeholder, contains TODO markers, or has empty sections.
 - The agent **MUST NOT** reject for stylistic preferences. Substantive gaps only.

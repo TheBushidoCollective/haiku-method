@@ -101,7 +101,7 @@ export function preTickConsistency(
 		}
 		if (declared !== derived) {
 			setFrontmatterField(intentFile, "active_stage", derived)
-			emitTelemetry("haiku.fsm.consistency_fix", {
+			emitTelemetry("haiku.workflow.consistency_fix", {
 				intent: slug,
 				stale_stage: declared,
 				corrected_stage: derived,
@@ -147,7 +147,7 @@ export function preTickConsistency(
 		// incomplete prior and proceed (next derive-state will pick up).
 		const corrected = incompletePrior[0]
 		setFrontmatterField(intentFile, "active_stage", corrected)
-		emitTelemetry("haiku.fsm.consistency_fix", {
+		emitTelemetry("haiku.workflow.consistency_fix", {
 			intent: slug,
 			stale_stage: activeStage,
 			corrected_stage: corrected,
@@ -217,7 +217,7 @@ export function preTickConsistency(
 		)
 	}
 
-	emitTelemetry("haiku.fsm.safe_repair", {
+	emitTelemetry("haiku.workflow.safe_repair", {
 		intent: slug,
 		active_stage: currentStage,
 		synthesized_stages: synthesized.join(","),

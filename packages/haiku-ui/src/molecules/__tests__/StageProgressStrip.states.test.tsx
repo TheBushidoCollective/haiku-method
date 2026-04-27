@@ -205,10 +205,10 @@ describe("StageProgressStrip — state matrix", () => {
 	// ── FB-01: "you are here" indicator when viewing a previous stage ─────────
 	//
 	// When the reviewer clicks the stepper to go back to a previous (completed)
-	// stage, the FSM-current stage keeps its teal diamond, and the VIEWED stage
+	// stage, the workflow engine-current stage keeps its teal diamond, and the VIEWED stage
 	// picks up a teal ring + underlined label + `aria-current="location"` +
 	// "viewing" sublabel so the reviewer can see where they are without losing
-	// sight of the FSM pointer.
+	// sight of the workflow engine pointer.
 
 	it("viewing-different: completed stage gains amber ring on marker + location aria", () => {
 		render(
@@ -226,13 +226,13 @@ describe("StageProgressStrip — state matrix", () => {
 		// Sublabel slot reads "viewing"
 		expect(viewed.textContent).toMatch(/viewing/i)
 		// Marker picks up a thick amber ring (stands out against the
-		// teal FSM-current diamond).
+		// teal workflow engine-current diamond).
 		const marker = viewed.querySelector('[aria-hidden="true"].rounded-full')
 		expect(marker?.className).toMatch(/ring-4/)
 		expect(marker?.className).toMatch(/ring-amber-400/)
 	})
 
-	it("viewing-different: FSM-current stage still carries aria-current='step'", () => {
+	it("viewing-different: workflow engine-current stage still carries aria-current='step'", () => {
 		render(
 			<StageProgressStrip
 				stages={STAGES}

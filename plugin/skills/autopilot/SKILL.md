@@ -5,7 +5,7 @@ description: Full autonomous workflow — elaborate, plan, build, review, and de
 
 # Autopilot
 
-Run the full H·AI·K·U lifecycle autonomously from description to delivery. Autopilot is an intent-level flag (not a mode) — it tells the FSM to promote `ask` review gates to `auto`, so the lifecycle advances without human intervention on stage gates. External gates and the intent-completion review still pause (structural signals the FSM can't synthesize).
+Run the full H·AI·K·U lifecycle autonomously from description to delivery. Autopilot is an intent-level flag (not a mode) — it tells the workflow engine to promote `ask` review gates to `auto`, so the lifecycle advances without human intervention on stage gates. External gates and the intent-completion review still pause (structural signals the workflow engine can't synthesize).
 
 ## Process
 
@@ -24,10 +24,10 @@ Run the full H·AI·K·U lifecycle autonomously from description to delivery. Au
 
 ## Guardrails
 
-- **Pause on blockers or ambiguity.** If the FSM returns an error or a decision that can't be inferred from the intent's goals, stop and surface it to the user. Never guess.
+- **Pause on blockers or ambiguity.** If the workflow engine returns an error or a decision that can't be inferred from the intent's goals, stop and surface it to the user. Never guess.
 - **Pause on scope explosion.** If elaborate produces more than 5 units in a single stage, stop and ask the user to confirm scope — that's a signal the task is bigger than it looked and autopilot may not be appropriate.
 - **Pause before PR creation.** Even when `haiku_run_next` reaches `external_review_requested`, surface the PR creation step to the user — don't open PRs autonomously.
-- **Stop on phase-level failures.** `error`, `max_bolts_exceeded`, `unit_scope_violation` not clearable after one retry, or any FSM rejection that persists across two calls → stop and report.
+- **Stop on phase-level failures.** `error`, `max_bolts_exceeded`, `unit_scope_violation` not clearable after one retry, or any workflow engine rejection that persists across two calls → stop and report.
 
 ## Combined with other skills
 

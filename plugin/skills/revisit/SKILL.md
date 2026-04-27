@@ -14,7 +14,7 @@ Return to a specific stage or phase to address issues found during execution.
 2. **Revisit** — Call `haiku_revisit { intent: "<slug>" }` or `haiku_revisit { intent: "<slug>", stage: "<stage>" }`.
 
    - With `stage`: jumps directly to that stage (must be current or earlier)
-   - Without `stage`: the FSM infers the target:
+   - Without `stage`: the workflow engine infers the target:
      - If in execute/review/gate phase → revisits elaborate in the current stage
      - If already in elaborate phase → revisits the previous stage
 

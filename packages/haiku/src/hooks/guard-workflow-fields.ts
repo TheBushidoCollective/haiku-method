@@ -1,13 +1,13 @@
 // guard-workflow-fields — PreToolUse hook for Read/Write/Edit/MultiEdit
 //
-// Enforces the FSM-ownership boundary on H·AI·K·U state files. Generic
-// file Read/Write/Edit on FSM-managed paths is denied; agents must use
+// Enforces the workflow engine-ownership boundary on H·AI·K·U state files. Generic
+// file Read/Write/Edit on workflow-managed paths is denied; agents must use
 // the MCP tools (haiku_unit_*, haiku_feedback_*, haiku_run_next).
 //
 // Scope:
 //   - units/*.md   — created/read/updated only via haiku_unit_*  tools
 //   - feedback/*.md — created/read/updated only via haiku_feedback_* tools
-//   - intent.md, stages/*/state.json, iteration files — FSM-internal
+//   - intent.md, stages/*/state.json, iteration files — workflow engine-internal
 //
 // Why this is broader than the prior "block status=completed" check:
 // the old check fired on any edit whose post-edit content contained
@@ -21,7 +21,7 @@
 // Bash bypass is acknowledged but not blocked here — see the soft Bash
 // warn rule below. The threat model is "honest agent reaches for the
 // wrong tool by habit," not "adversarial agent tries to subvert the
-// FSM." For honest agents, the redirect message in the denial output
+// workflow engine." For honest agents, the redirect message in the denial output
 // names the right MCP tool to use.
 
 import { resolve } from "node:path"
@@ -30,7 +30,7 @@ function out(s: string): void {
 	process.stderr.write(s)
 }
 
-interface FsmPathClassification {
+interface WorkflowPathClassification {
 	kind: "unit" | "feedback" | "intent" | "stage_state" | null
 	intent?: string
 	stage?: string
@@ -39,9 +39,9 @@ interface FsmPathClassification {
 
 /**
  * Classify a file path relative to .haiku/intents/ structure. Returns
- * `kind: null` when the path is not FSM-managed.
+ * `kind: null` when the path is not workflow-managed.
  */
-function classifyPath(absPath: string): FsmPathClassification {
+function classifyPath(absPath: string): WorkflowPathClassification {
 	const unitMatch = absPath.match(
 		/\.haiku\/intents\/([^/]+)\/stages\/([^/]+)\/units\/([^/]+)\.md$/,
 	)
@@ -78,7 +78,10 @@ function classifyPath(absPath: string): FsmPathClassification {
  * tool. Different kinds of files have different tool surfaces; we name
  * the specific call shape so the agent doesn't have to guess.
  */
-function redirectMessage(toolName: string, cls: FsmPathClassification): string {
+function redirectMessage(
+	toolName: string,
+	cls: WorkflowPathClassification,
+): string {
 	const op =
 		toolName === "Read"
 			? "read"
@@ -98,7 +101,7 @@ function redirectMessage(toolName: string, cls: FsmPathClassification): string {
 					: `haiku_unit_set { intent: "${intent}", stage: "${stage}", unit: "${name}", field: "...", value: "..." }`
 		return (
 			`BLOCKED: Cannot ${op} unit file '${name}.md' via generic ${toolName}. ` +
-			`Unit files are FSM-managed — use the MCP tool instead:\n` +
+			`Unit files are workflow-managed — use the MCP tool instead:\n` +
 			`  ${tool}\n` +
 			`Generic file access bypasses lifecycle enforcement (pending → active → completed), ` +
 			`frontmatter validation (DAG, schema, cross-references), and integrity sealing.`
@@ -116,7 +119,7 @@ function redirectMessage(toolName: string, cls: FsmPathClassification): string {
 					: `haiku_feedback_write { intent: "${intent}", ${stagePart}feedback_id: "${name}", body: "..." }`
 		return (
 			`BLOCKED: Cannot ${op} feedback file '${name}.md' via generic ${toolName}. ` +
-			`Feedback files are FSM-managed and act as the unit-of-work for fix-loop hats — use the MCP tool instead:\n` +
+			`Feedback files are workflow-managed and act as the unit-of-work for fix-loop hats — use the MCP tool instead:\n` +
 			`  ${tool}\n` +
 			`Generic file access bypasses fix-loop lifecycle and worktree isolation.`
 		)
@@ -124,15 +127,15 @@ function redirectMessage(toolName: string, cls: FsmPathClassification): string {
 	if (cls.kind === "intent") {
 		return (
 			`BLOCKED: Cannot ${op} intent.md via generic ${toolName}. Intent files ` +
-			`are FSM-managed — use haiku_intent_get to read fields, haiku_run_next ` +
+			`are workflow-managed — use haiku_intent_get to read fields, haiku_run_next ` +
 			`to drive the lifecycle, or call /haiku:repair if state is genuinely corrupted. ` +
-			`Direct edits skip the integrity checksum and the FSM's invariants.`
+			`Direct edits skip the integrity checksum and the workflow engine's invariants.`
 		)
 	}
 	if (cls.kind === "stage_state") {
 		return (
 			`BLOCKED: Cannot ${op} stage state.json via generic ${toolName}. Stage state ` +
-			`is FSM-internal — every legitimate write happens via haiku_run_next or a ` +
+			`is workflow engine-internal — every legitimate write happens via haiku_run_next or a ` +
 			`dedicated MCP tool. Hand-editing breaks the integrity checksum and the ` +
 			`forward-only lifecycle invariants.`
 		)
@@ -140,7 +143,7 @@ function redirectMessage(toolName: string, cls: FsmPathClassification): string {
 	return ""
 }
 
-export async function guardFsmFields(
+export async function guardWorkflowFields(
 	input: Record<string, unknown>,
 ): Promise<void> {
 	const toolName = (input.tool_name as string) || ""
@@ -171,6 +174,6 @@ export default defineHook({
 	description:
 		"PreToolUse Read/Write/Edit/MultiEdit: enforce workflow-ownership boundary on .haiku state files (units, feedback, intent.md, stage state.json) — agents must use the corresponding MCP tools.",
 	async handle(input, _ctx) {
-		await guardFsmFields(input)
+		await guardWorkflowFields(input)
 	},
 })

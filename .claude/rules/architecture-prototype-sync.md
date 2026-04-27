@@ -6,11 +6,11 @@ The interactive runtime-architecture map at `website/public/prototype-stage-flow
 
 ## Auto-generated workflow diagrams (per studio)
 
-The per-studio Mermaid `stateDiagram-v2` files at `website/public/fsm-diagrams/<studio>.mmd` are derived from the xstate machine in `packages/haiku/src/orchestrator/fsm/` and the StudioConfig built from `plugin/studios/<studio>/`. They show every stage's full phase progression, every hat sequence enumerated inside `execute`, and every (bolt × fix-hat) combination inside `review_fix`.
+The per-studio Mermaid `stateDiagram-v2` files at `website/public/workflow-diagrams/<studio>.mmd` are derived from the workflow engine in `packages/haiku/src/orchestrator/workflow/` and the StudioConfig built from `plugin/studios/<studio>/`. They show every stage's full phase progression, every hat sequence enumerated inside `execute`, and every (bolt × fix-hat) combination inside `review_fix`.
 
 **Regenerate after any studio change:**
 ```
-bun run --cwd packages/haiku export:fsm-diagrams
+bun run --cwd packages/haiku export:workflow-diagrams
 ```
 (Also runs automatically as part of `bun run --cwd packages/haiku build` via the prebuild hook.)
 
@@ -77,7 +77,7 @@ These are NOT yet wired into the per-stage visualizations in `prototype-stage-fl
 ## Recently closed gaps (track for related follow-up)
 
 - **Discovery fan-out via subagents** (closed 2026-04-14) — the orchestrator now injects a `## Discovery Fan-Out (REQUIRED)` section into the elaborate-phase `tool_use_result`, instructing the agent to spawn one `Task` subagent per declared `discovery/*.md` template (research + production). Per-studio hat md files do not carry this instruction; it's workflow-level so it applies uniformly across studios. Affected file: `packages/haiku/src/orchestrator.ts` (elaborate case, after `discoveryFiles` loop). Prototype reflects this in step ② of Elaborate ("the workflow engine fans out one ↗ subagent per artifact") and in the `elab-to-gate` injection list.
-- **MCP tool list correction** (closed 2026-04-14) — Orchestrator actor modal now lists the real 27 tools across `orchestrator.ts`, `state-tools.ts`, and `server.ts`, grouped by category (FSM drivers · state tools · review-server). Removed the previously-invented tool names.
+- **MCP tool list correction** (closed 2026-04-14) — Orchestrator actor modal now lists the real 27 tools across `orchestrator.ts`, `state-tools.ts`, and `server.ts`, grouped by category (workflow drivers · state tools · review-server). Removed the previously-invented tool names.
 - **Hat progression mechanism** (closed 2026-04-14) — `hat-to-hat` payload now correctly reflects that the **subagent** calls `haiku_unit_advance_hat` (success) or `haiku_unit_reject_hat` (failure), and the orchestrator internally progresses the workflow engine in the same call. Not a `haiku_run_next` tick. The action in the modal is now `haiku_unit_advance_hat`.
 - **Missing tools `haiku_select_studio` and `haiku_intent_reset`** (closed 2026-04-14) — added to `TOOL_SPECS` with full input/output/writes. `haiku_select_studio` is now referenced as a clickable pill in the studio-detection step of the intent creation card. `haiku_unit_start`, `haiku_unit_advance_hat`, `haiku_unit_reject_hat` also added.
 - **`ask_user_visual_question`** (closed 2026-04-14) — added to `TOOL_SPECS` and referenced as a clickable pill in the elaborate ① conversation step, noting the agent uses it for structured visual decisions instead of inline chat options.

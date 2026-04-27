@@ -27,5 +27,5 @@ description: Start a new H·AI·K·U intent — describe what you want to accomp
 ## Notes
 
 - Default to **continuous** mode (stages auto-advance)
-- Do NOT ask the user to pick a studio — the FSM handles studio selection via elicitation
+- Do NOT ask the user to pick a studio — the workflow engine handles studio selection via elicitation
 - If the user already provided a detailed description, skip prelaboration and go straight to step 3

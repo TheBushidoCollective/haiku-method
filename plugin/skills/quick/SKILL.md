@@ -5,7 +5,7 @@ description: Quick mode for small tasks — single-stage intent with auto-advanc
 
 # Quick Mode
 
-A quick task is a regular intent restricted to a single stage. No special FSM mode — just `intent.stages: [<one-stage>]` as an allow-list, which the orchestrator's `resolveIntentStages` honors.
+A quick task is a regular intent restricted to a single stage. No special workflow engine mode — just `intent.stages: [<one-stage>]` as an allow-list, which the orchestrator's `resolveIntentStages` honors.
 
 ## Process
 
@@ -16,8 +16,8 @@ A quick task is a regular intent restricted to a single stage. No special FSM mo
    - `description`: 2–5 sentences of context.
 3. **Pick the studio** with `haiku_select_studio`. The response includes `all_studio_stages`.
 4. **Ask the user which stage to run** using `AskUserQuestion` (NOT `ask_user_visual_question` — no visual artifact here). Pass `all_studio_stages` as `options[]`.
-5. **Restrict the intent to the chosen stage.** Direct-edit `intent.md` frontmatter to add `stages: [<chosen-stage>]`. This is an allow-list that narrows the studio's stage sequence — the FSM reads it via `resolveIntentStages` and filters out every other stage.
-6. **Drive the lifecycle** by calling `haiku_run_next { intent: "<slug>" }`. The FSM starts at the chosen stage, runs its phases (elaborate → review → execute → review → gate), and completes the intent when that stage's gate passes.
+5. **Restrict the intent to the chosen stage.** Direct-edit `intent.md` frontmatter to add `stages: [<chosen-stage>]`. This is an allow-list that narrows the studio's stage sequence — the workflow engine reads it via `resolveIntentStages` and filters out every other stage.
+6. **Drive the lifecycle** by calling `haiku_run_next { intent: "<slug>" }`. The workflow engine starts at the chosen stage, runs its phases (elaborate → review → execute → review → gate), and completes the intent when that stage's gate passes.
 
 ## Guardrails
 

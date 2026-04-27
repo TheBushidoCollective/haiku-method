@@ -16,17 +16,17 @@ This is consistent with `CLAUDE.md` and `.claude/rules/architecture-prototype-sy
 
 ## 1. Hard boundaries
 
-### 1.1 Frontmatter is FSM-only
+### 1.1 Frontmatter is workflow engine-only
 
-Frontmatter on FSM-managed files (`unit-NN-*.md`, `FB-NN-*.md`, `intent.md`, `state.json`, iteration files) is reserved for the FSM. Agents MAY write frontmatter when authoring a file (the elaborator drafts a unit with declared inputs/outputs); agents MUST NOT **interpret** frontmatter for any mechanical purpose.
+Frontmatter on workflow-managed files (`unit-NN-*.md`, `FB-NN-*.md`, `intent.md`, `state.json`, iteration files) is reserved for the workflow engine. Agents MAY write frontmatter when authoring a file (the elaborator drafts a unit with declared inputs/outputs); agents MUST NOT **interpret** frontmatter for any mechanical purpose.
 
-- Reviewer hats do not grep `depends_on:` to detect DAG inversions. The FSM rejects bad DAG writes at the source.
-- Verifier hats do not validate frontmatter schema. The FSM validates schema at every write.
+- Reviewer hats do not grep `depends_on:` to detect DAG inversions. The workflow engine rejects bad DAG writes at the source.
+- Verifier hats do not validate frontmatter schema. The workflow engine validates schema at every write.
 - Fixer hats do not read another unit's frontmatter to plan a change. They read body content.
 
-The single exception is the FSM itself (orchestrator code, MCP tool internals). FSM internals MAY read FM freely. **No agent-callable MCP tool exposes FM to the agent.**
+The single exception is the workflow engine itself (orchestrator code, MCP tool internals). workflow engine internals MAY read FM freely. **No agent-callable MCP tool exposes FM to the agent.**
 
-### 1.2 The FSM owns CRUDL on units and feedback
+### 1.2 The workflow engine owns CRUDL on units and feedback
 
 All Create/Read/Update/Delete/List operations on `units/*.md` and `feedback/*.md` go through MCP tools. Generic file Read/Write/Edit on these paths is denied at the hook layer.
 
@@ -38,7 +38,7 @@ All Create/Read/Update/Delete/List operations on `units/*.md` and `feedback/*.md
 | Delete (pending only) | `haiku_unit_delete` | `haiku_feedback_delete` |
 | List | `haiku_unit_list` | `haiku_feedback_list` |
 
-`haiku_unit_get` (which exposes FM) becomes FSM-internal only. Agent-callable reads return body + title; FM stays inside the FSM.
+`haiku_unit_get` (which exposes FM) becomes workflow engine-internal only. Agent-callable reads return body + title; FM stays inside the workflow engine.
 
 ### 1.3 Lifecycle is forward-only
 
@@ -53,16 +53,16 @@ There are no reverse transitions. No `unwind`, no `reset`, no `revisit_unit`. On
 | Status | Mutable? | Notes |
 |---|---|---|
 | pending | yes — body, FM (via `_set`/`_write`), delete via `_delete` | Pre-execute review is the LAST chance to fix |
-| active | no — locked except for FSM-driven hat progression | Spec is frozen; hat outputs append via FSM-controlled flows |
+| active | no — locked except for workflow-driven hat progression | Spec is frozen; hat outputs append via workflow engine-controlled flows |
 | completed | no — fully immutable | New work that addresses defects becomes NEW pending units in the next iteration |
 
 **Stage revisit creates new pending units; it never modifies completed units.** If a closed FB diagnoses a defect in a completed unit, the next elaborate iteration creates a corrective unit (or a follow-up unit) — it does not edit the original. Front-loading review (verifier hats + pre-execute review) is therefore critical.
 
 ## 2. Stage anatomy
 
-### 2.1 Phases (FSM-driven)
+### 2.1 Phases (workflow-driven)
 
-Every stage has the same FSM lifecycle:
+Every stage has the same workflow engine lifecycle:
 
 | Phase | Purpose | Who acts |
 |---|---|---|
@@ -140,7 +140,7 @@ The verify role's mandate is **body-only**. It does not read frontmatter for mec
 - Is the body internally consistent (does it cite sibling units' content correctly)?
 - Does the body answer the unit's own open questions?
 
-Examples of illegitimate verify-role rules (these are FSM responsibilities):
+Examples of illegitimate verify-role rules (these are workflow engine responsibilities):
 - ❌ Does `depends_on:` resolve to existing units?
 - ❌ Is the YAML frontmatter schema valid?
 - ❌ Does the unit's `inputs:` match the prior stage's `outputs:`?
@@ -226,13 +226,13 @@ When a fix-loop dispatches against an FB:
 - The FB file IS the unit. The fixer hats read it, edit its body, and complete it via `haiku_feedback_advance_hat` against the FB (the FB-scoped mirror of `haiku_unit_advance_hat`; the unit-scoped tool cannot target an FB).
 - Fixer hats MUST NOT edit unit files. The flagged unit is read-only context (read via `haiku_unit_read`); the fixer's deliverable is the FB body (written via `haiku_feedback_write`) populated with diagnosis, root cause, and recommended action.
 - The same plan-do-verify pattern applies. The stage's `fix_hats:` list typically contains the implementer hat (per the `fix_hats must be implementer` repo convention) followed by `feedback-assessor` as the terminal verifier — minimum 2 entries today; longer chains are encouraged for stages where a planner step adds value before the implementer runs. The terminal hat validates the FB body and calls `haiku_feedback_advance_hat` to close the FB.
-- FSM lifecycle enforcement is identical: FBs go pending → active (in fix-loop) → completed.
+- workflow engine lifecycle enforcement is identical: FBs go pending → active (in fix-loop) → completed.
 
 ### 5.2 Closed FBs as input to the next iteration (target state)
 
 A "completed" FB under the FB-as-unit model means its diagnosis is well-formed and the work-of-record is the FB body. The architectural target is that the underlying defect is then patched through the next iteration of the upstream stage's elaborate phase, which consumes the closed FB diagnoses as input and authors new pending units that build on (never modify) completed units.
 
-**Current implementation status:** the FB-as-unit dispatch is wired (commits in this PR). Fixers diagnose into the FB body, the FSM auto-closes on advance_hat, and the closed FB persists with its diagnosis. The "elaborate-phase consumes closed FBs as input on next iteration" path is the natural follow-up but is not yet a single explicit code path — today, when a stage's gate revisits elaborate (via `elaborate_revisit`, `feedback_revisit`, or similar), the elaborate-phase prompt has access to the stage's `feedback/` directory contents and is instructed to draft new units that close pending feedback. Closed FBs serve as historical diagnosis the elaborator can inline. Wiring an explicit "consume closed FBs from prior iteration" injection into the elaborate dispatch is a tracked follow-up — see §7.
+**Current implementation status:** the FB-as-unit dispatch is wired (commits in this PR). Fixers diagnose into the FB body, the workflow engine auto-closes on advance_hat, and the closed FB persists with its diagnosis. The "elaborate-phase consumes closed FBs as input on next iteration" path is the natural follow-up but is not yet a single explicit code path — today, when a stage's gate revisits elaborate (via `elaborate_revisit`, `feedback_revisit`, or similar), the elaborate-phase prompt has access to the stage's `feedback/` directory contents and is instructed to draft new units that close pending feedback. Closed FBs serve as historical diagnosis the elaborator can inline. Wiring an explicit "consume closed FBs from prior iteration" injection into the elaborate dispatch is a tracked follow-up — see §7.
 
 What's strictly enforced today regardless of the consumer path:
 - Existing completed units are never modified by the fix-loop (the hook blocks unit-file edits; fixer prompts forbid them).
@@ -242,7 +242,7 @@ This is why front-loading matters either way. By the time a defect surfaces at t
 
 ## 6. Hook boundary
 
-The PreToolUse hook denies generic file Read/Write/Edit on FSM-managed paths. The hook redirects the agent at the appropriate MCP tool.
+The PreToolUse hook denies generic file Read/Write/Edit on workflow-managed paths. The hook redirects the agent at the appropriate MCP tool.
 
 Denied paths (Read/Write/Edit):
 - `.haiku/intents/*/stages/*/units/*.md`
@@ -250,7 +250,7 @@ Denied paths (Read/Write/Edit):
 - `.haiku/intents/*/intent.md`
 - `.haiku/intents/*/stages/*/state.json`
 
-Denial message format: `"This file is FSM-managed. Use \`haiku_unit_read { intent: \"<slug>\", stage: \"<stage>\", unit: \"<unit>\" }\` instead."`
+Denial message format: `"This file is workflow-managed. Use \`haiku_unit_read { intent: \"<slug>\", stage: \"<stage>\", unit: \"<unit>\" }\` instead."`
 
 Bash commands referencing these paths are **soft-warned** (logged, not blocked). The threat model is "honest agent reaches for the wrong tool by habit," not "adversarial agent." Routine MCP usage is the path of least resistance; persistent Bash bypass is anomalous and shows up in audit telemetry.
 
@@ -262,7 +262,7 @@ Tracking the gap between this document and the implementation. Fix the implement
 2. ⏳ **Inception-class stages structurally over-reach.** **Mostly mitigated:** the 5 inception-class stages now have research-stage ELABORATION.md guidance + body-only knowledge-artifact verifier hats, which steer NEW authoring toward knowledge topics. Cleanup of any pre-existing execution-spec drift in these stages' artifacts (in real intents that have already used them) still ahead — but new intents will use the corrected guidance.
 3. ✅ **Hat name `elaborator` collides with phase name `elaborate`** — renamed to `distiller` (role-correct per §3.1) in all 5 inception-class stages: software/inception, hwdev/inception, hwdev/requirements, libdev/inception, gamedev/concept. Other studios' non-inception `elaborator` hats are correctly the do-hat of build chains and don't have the same collision (optional polish: rename them to stage-appropriate `builder`/`composer`/etc., but not architecturally required).
 4. ✅ **Build-class stages need their own ELABORATION.md.** `software/development/phases/ELABORATION.md` was already correct; the Phase 2 rollout (parallel agent) added per-stage ELABORATION.md to almost all stages across all 22 studios. Verified 109/120 stages now have a `phases/ELABORATION.md`.
-5. ✅ **`haiku_unit_get` migration to FSM-internal.** Removed from agent-callable schema (`stateToolDefs`); handler retained for FSM-internal callers.
+5. ✅ **`haiku_unit_get` migration to workflow engine-internal.** Removed from agent-callable schema (`stateToolDefs`); handler retained for workflow engine-internal callers.
 
 Phase 2 verifier rollout (parallel agent dispatch, commit `af417f69` and earlier):
 - 91/120 stages now have a `verifier` (or other verify-class) terminal hat in their `hats:` list.
@@ -271,15 +271,15 @@ Phase 2 verifier rollout (parallel agent dispatch, commit `af417f69` and earlier
 Phase 3 adversarial-loop restructure (commit `b4d914cc`):
 - ✅ All 3 previously-flagged adversarial-loop stages (software/security, security-assessment/exploitation, ideation/review) restructured to put plan-do-verify before adversarial hats per §3.5. Added 6 new hat mandate files for the new plan/do/verify roles inserted (security-engineer, attack-strategist, exploit-reviewer, review-planner, synthesizer, reviewer).
 
-6. ⏳ **24 `review-agents/cross-stage-consistency.md` files reference FM-derived paths** (e.g., "verify that stages' declared outputs exist at the paths their unit frontmatter promised"). Per §1.1 this is FM-interpretation for a mechanical purpose and should be FSM-enforced at `haiku_unit_advance_hat` time instead of agent-validated post-hoc. The strict fix: strip these references and add an FSM-level output-existence check. The current behavior is defensive validation pending that FSM enforcement and is left in place to avoid removing the only existing safety net.
+6. ⏳ **24 `review-agents/cross-stage-consistency.md` files reference FM-derived paths** (e.g., "verify that stages' declared outputs exist at the paths their unit frontmatter promised"). Per §1.1 this is FM-interpretation for a mechanical purpose and should be workflow engine-enforced at `haiku_unit_advance_hat` time instead of agent-validated post-hoc. The strict fix: strip these references and add an workflow engine-level output-existence check. The current behavior is defensive validation pending that workflow engine enforcement and is left in place to avoid removing the only existing safety net.
 
 Implemented in this PR (✅):
 - Architecture document itself, with the boundary rules, lifecycle, hat patterns, FB-as-unit fix-loop semantic, and stage-role taxonomy.
-- Path-boundary hook (PreToolUse) denying generic Read/Write/Edit on FSM-managed paths, with redirect messages naming the right MCP tool.
+- Path-boundary hook (PreToolUse) denying generic Read/Write/Edit on workflow-managed paths, with redirect messages naming the right MCP tool.
 - New MCP tools: `haiku_unit_write` (with FM validators + DAG cycle detection + lifecycle), `haiku_unit_read` (body+title only), `haiku_unit_delete` (pending only); FB equivalents `haiku_feedback_write` and `haiku_feedback_read`; FB-as-unit progression tools `haiku_feedback_advance_hat` and `haiku_feedback_reject_hat` (mirrors of unit equivalents).
 - Lifecycle enforcement on `haiku_unit_set` (active/completed → locked) and `haiku_feedback_update` (terminal-state-protected).
 - Elaborate dispatch routes unit authoring through `haiku_unit_write` (no more raw Write).
-- Both fix-loop dispatches (`review_fix` per-stage and `intent_completion_fix` studio-level) rewritten for FB-as-unit: fixers edit FB body via `haiku_feedback_write`, read flagged units read-only via `haiku_unit_read`, progress through fix_hats via `haiku_feedback_advance_hat`. Closure is FSM-driven via the last-hat advance.
+- Both fix-loop dispatches (`review_fix` per-stage and `intent_completion_fix` studio-level) rewritten for FB-as-unit: fixers edit FB body via `haiku_feedback_write`, read flagged units read-only via `haiku_unit_read`, progress through fix_hats via `haiku_feedback_advance_hat`. Closure is workflow-driven via the last-hat advance.
 - 5 canonical inception-class verifier hats (software/inception, hwdev/inception, hwdev/requirements, libdev/inception, gamedev/concept) — body-only knowledge-artifact validation.
 - 5 inception-class `phases/ELABORATION.md` files providing research-stage authoring guidance.
 - `CLAUDE.md` cites this document as the canonical structural source of truth and adds 6 concept-mapping rows for the new architecture surface.
@@ -300,11 +300,11 @@ When adding or modifying a stage:
 - [ ] Hat mandate files exist for every named hat (`hats/{name}.md`)
 - [ ] No mandate file references `depends_on:`, `inputs:`, `outputs:`, `status:`, or any other FM field as something the agent should read or interpret
 
-When adding or modifying an FSM tool:
+When adding or modifying an workflow engine tool:
 
 - [ ] Writes that affect frontmatter run the appropriate validators
 - [ ] Lifecycle enforcement (pending/active/completed) is checked
-- [ ] Read tools return body + title only unless the caller is FSM-internal
+- [ ] Read tools return body + title only unless the caller is workflow engine-internal
 - [ ] Tool errors name the rule that fired ("status is `active`; units become immutable once started")
 
 ## 9. Source of truth

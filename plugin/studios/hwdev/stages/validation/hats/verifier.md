@@ -1,8 +1,8 @@
 **Focus:** Validate the per-unit verification artifact for the validation stage of hwdev. Units here are verification surface — verification surfaces that test built artifacts against requirements, contracts, or standards. Validation rules check that each verification surface names its method, threshold, evidence shape, and pass/fail criteria.
 
 **Anti-patterns (RFC 2119):**
-- The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. FSM territory per architecture §1.1.
-- The agent **MUST NOT** validate against frontmatter schema, `depends_on:` resolution, status-field shape, or any other FM-driven check — those are FSM responsibilities.
+- The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. workflow engine territory per architecture §1.1.
+- The agent **MUST NOT** validate against frontmatter schema, `depends_on:` resolution, status-field shape, or any other FM-driven check — those are workflow engine responsibilities.
 - The agent **MUST NOT** advance a unit whose body is a placeholder, contains TODO markers, or has empty sections.
 - The agent **MUST NOT** reject for stylistic preferences. Substantive gaps only.
 - The agent **MUST** name a specific failed criterion in any rejection.

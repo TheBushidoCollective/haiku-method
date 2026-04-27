@@ -1,5 +1,5 @@
 // orchestrator/actions.ts — Pure helpers that build OrchestratorAction
-// payloads + summary shapes. No FSM-state mutation; everything here
+// payloads + summary shapes. No workflow engine-state mutation; everything here
 // returns a value, doesn't write disk.
 //
 // Contents:

@@ -1,10 +1,10 @@
 /**
  * /review/:sessionId (no sub-route) — land on the currently-active stage.
  *
- * The FSM typically has exactly one stage in status="active" while work
+ * The workflow engine typically has exactly one stage in status="active" while work
  * is in-flight; redirect to that stage so deep links open on real
  * content. When there is no active stage (unit-scoped reviews, intent
- * reviews with no FSM progress yet), fall through to the intent-scoped
+ * reviews with no workflow engine progress yet), fall through to the intent-scoped
  * `<ArtifactsPane>` — same fallback the pre-router shell rendered.
  */
 

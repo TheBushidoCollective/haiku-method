@@ -2505,7 +2505,7 @@
     border-left: 2px solid #e4a72b;
   }
 
-  /* Seed → specification — illustrates the explosion in detail the FSM produces */
+  /* Seed → specification — illustrates the explosion in detail the workflow engine produces */
   .seed-to-spec {
     margin-top: 12px;
     padding: 10px 12px;
@@ -2669,7 +2669,7 @@
     color: var(--muted);
   }
 
-  /* Actors strip — the runtime players above the FSM diagram */
+  /* Actors strip — the runtime players above the workflow engine diagram */
   .actors-strip {
     margin: 0 24px 16px;
     padding: 14px 16px;
@@ -2912,7 +2912,7 @@
 
 <h1>H·AI·K·U Runtime Architecture</h1>
 <p class="subtitle">
-  Every actor, every FSM tick, every state write — the software studio's full intent lifecycle on one page.
+  Every actor, every workflow engine tick, every state write — the software studio's full intent lifecycle on one page.
   Five runtime players at the top, hooks down the left, the intent flow in the middle, the knowledge pool on the right.
   Inside an intent: pre-elab → six stages (each with its own phase machine: <code>pending → elaborate → pre-review → execute → review → fix-loop → gate</code>) → optional studio-level intent-completion review → final PR/MR gate → delivery → operations.
   <strong>Hover anything for a tooltip · click for full detail.</strong>
@@ -2997,7 +2997,7 @@
   <aside class="sidebar hooks" id="hooks-sidebar">
     <h2>Hooks</h2>
     <p class="desc">
-      Spinal reflexes — they intercept the agent's tool calls between FSM ticks. The agent can't see them; they just block or inject. Hover any hook to highlight where it fires.
+      Spinal reflexes — they intercept the agent's tool calls between workflow engine ticks. The agent can't see them; they just block or inject. Hover any hook to highlight where it fires.
     </p>
     <div id="hooks-list"></div>
   </aside>
@@ -3219,7 +3219,7 @@ function effectiveMode(idx, mode, continuousFromIdx) {
 }
 
 // discrete: every gate becomes external (per-stage PR on a per-stage branch)
-// autopilot: every gate becomes auto (no human review, FSM advances) — represents the /haiku:autopilot skill behavior
+// autopilot: every gate becomes auto (no human review, workflow engine advances) — represents the /haiku:autopilot skill behavior
 // continuous: keeps declared gate type, branches converge on /main
 function effectiveGate(stage, mode) {
   if (mode === "discrete") return { type: "external (discrete)", options: ["external"] }
@@ -3298,7 +3298,7 @@ function renderStudio() {
           if (slugs.length === 0) return ""
           return `
             <div class="elab-step">
-              <div class="step-label">② discovery artifacts <span style="text-transform:none; letter-spacing:0; color:#7c3aed; font-weight:600;">· FSM fans out one ↗ subagent per artifact via self-contained <code>&lt;subagent tool="Task"&gt;</code> blocks — parent relays verbatim, no assembly required</span></div>
+              <div class="step-label">② discovery artifacts <span style="text-transform:none; letter-spacing:0; color:#7c3aed; font-weight:600;">· workflow engine fans out one ↗ subagent per artifact via self-contained <code>&lt;subagent tool="Task"&gt;</code> blocks — parent relays verbatim, no assembly required</span></div>
               <div class="elab-discovery">
                 ${slugs.map(s => `<span class="disc artifact" data-artifact="${lower}.${s}" title="${escHTML(defs[s].path)} — MCP constructs a complete <subagent tool=&quot;Task&quot;> prompt per discovery artifact (intent context, stage scope, template, Content Guide + Quality Signals all embedded); parent relays verbatim">${escHTML(s)} <span style="color:#7c3aed; font-weight:700;">↗</span></span>`).join("")}
               </div>
@@ -3344,7 +3344,7 @@ function renderStudio() {
         <div class="elab-step">
           <div class="step-label">② findings block advance; resolution = spec edit (NOT new units)</div>
           <div style="font-size:10px; color:#4b5563; line-height:1.5; padding:4px 0;">
-            FSM emits <code>pre_review_revisit</code> action. Agent edits existing unit files, closes each feedback item, calls <code>haiku_run_next</code>. Zero pending = advance to specs gate.
+            workflow engine emits <code>pre_review_revisit</code> action. Agent edits existing unit files, closes each feedback item, calls <code>haiku_run_next</code>. Zero pending = advance to specs gate.
           </div>
         </div>
       </div>
@@ -3513,7 +3513,7 @@ function renderStudio() {
             ⚡ auto
           </div>
           <div class="gate-auto-sub">
-            no review — FSM advances${isLast ? " · intent_complete" : ` to <strong>${nextStageName}</strong>`}
+            no review — workflow engine advances${isLast ? " · intent_complete" : ` to <strong>${nextStageName}</strong>`}
           </div>
         </div>
       `
@@ -3615,7 +3615,7 @@ function renderStudio() {
       ${templates.length > 0 ? `
         <section class="aux-card templates">
           <header>
-            <h3>Intent templates <span class="meta">per-studio · ⚠ files exist, no current FSM wiring</span></h3>
+            <h3>Intent templates <span class="meta">per-studio · ⚠ files exist, no current workflow engine wiring</span></h3>
           </header>
           <div class="prose" style="font-size:11px; color:var(--muted); margin-bottom:6px;">
             Per-studio template files (e.g. <code>new-feature</code>, <code>bugfix</code>, <code>refactor</code>) with structured frontmatter declaring parameters and default unit shapes. <strong>Honest disclosure:</strong> these files exist on disk but no current orchestrator/skill code path reads them — they're documentation-as-spec / aspirational starter shapes the agent <em>could</em> consult at intent-creation time. Click any to read the template.
@@ -3687,7 +3687,7 @@ function renderStudio() {
         <div class="integration">
           <div class="integration-title">📡 Sentry / Telemetry</div>
           <div class="integration-desc">
-            On every FSM transition the orchestrator emits structured events to Sentry (when <code>SENTRY_DSN</code> is set). Captured: action name, intent, stage, phase, timing. Used to detect stuck intents, regressions in stage durations, and gate-failure patterns across teams. Source: <code>packages/haiku/src/server.ts</code> Sentry init + per-tool spans.
+            On every workflow engine transition the orchestrator emits structured events to Sentry (when <code>SENTRY_DSN</code> is set). Captured: action name, intent, stage, phase, timing. Used to detect stuck intents, regressions in stage durations, and gate-failure patterns across teams. Source: <code>packages/haiku/src/server.ts</code> Sentry init + per-tool spans.
           </div>
         </div>
       </section>
@@ -3699,7 +3699,7 @@ function renderStudio() {
         <div class="prose" style="font-size:12px; line-height:1.55;">
           Resolved at <code>resolveEffectiveBranchMode()</code> in <code>orchestrator.ts:626–646</code>. Determines the git topology for an intent.
           <ul style="margin:8px 0; padding-left:20px;">
-            <li><strong style="color:#1d4ed8;">continuous</strong> — single intent branch <code>haiku/{slug}/main</code>. All units commit to it as they complete. One PR for the whole intent at the final gate. Auto-commits via <code>gitCommitState()</code> happen on every FSM mutation.</li>
+            <li><strong style="color:#1d4ed8;">continuous</strong> — single intent branch <code>haiku/{slug}/main</code>. All units commit to it as they complete. One PR for the whole intent at the final gate. Auto-commits via <code>gitCommitState()</code> happen on every workflow engine mutation.</li>
             <li><strong style="color:#7c2d12;">discrete</strong> — per-stage branches: <code>haiku/{slug}/inception</code>, <code>haiku/{slug}/design</code>, etc. One PR per stage at each external/ask gate. After stage approval, the branch merges into <code>haiku/{slug}/main</code> (the hub branch) and the next stage branches off from there.</li>
             <li><strong style="color:#a16207;">hybrid</strong> — discrete until <code>continuous_from</code>, then collapses into the continuous topology. Lets you keep ceremony for upstream stages (inception/design/product) and accelerate downstream (development onward).</li>
           </ul>
@@ -3778,7 +3778,7 @@ function renderStudio() {
     <section class="post-intent ops">
       <header>
         <h2>Operations <span style="font-size:10px; font-weight:500; color: var(--muted); margin-left:6px; letter-spacing:0; text-transform:none;">· mix of automated observability and user-invoked response, not H·AI·K·U</span></h2>
-        <span class="subtitle-line">ongoing · outside the FSM</span>
+        <span class="subtitle-line">ongoing · outside the workflow engine</span>
       </header>
       <div class="post-steps">
         <div class="post-step">
@@ -4095,11 +4095,11 @@ function payloadFor(stage, idx, mStage, key, opts = {}) {
         { path: `.haiku/intents/{slug}/intent.md`, change: "frontmatter: `active_stage: \"inception\"`, `status: \"in_progress\"`" },
         { path: `.haiku/intents/{slug}/stages/${stageLower}/state.json`, change: "`{ phase: \"elaborate\", elaboration_turns: 0 }` (creates the file)" },
       ],
-      instructions: `Orchestrator advances the FSM into \`${stage.name}.elaborate\`. The agent should now don the first hat and begin elaboration with the user.`,
+      instructions: `Orchestrator advances the workflow engine into \`${stage.name}.elaborate\`. The agent should now don the first hat and begin elaboration with the user.`,
     },
     "elab-to-prereview": {
       injection: [
-        { hook: "MCP tool result", target: "agent's `tool_use_result`", what: "`action: pre_review` — FSM dispatches conditional review agents against unit SPECS (not artifacts — they don't exist yet)" },
+        { hook: "MCP tool result", target: "agent's `tool_use_result`", what: "`action: pre_review` — workflow engine dispatches conditional review agents against unit SPECS (not artifacts — they don't exist yet)" },
         { hook: "filterReviewAgentsByScope()", target: "agent dispatch list", what: "**Conditional review agents** — agents whose `applies_to:` globs don't match any stage artifact are skipped. E.g. web a11y agent skipped on backend-only stages." },
         { hook: "readReviewAgentPaths()", target: "subagent prompt", what: "each review agent's mandate is inlined into a self-contained `<subagent>` block targeting the unit .md files" },
       ],
@@ -4119,11 +4119,11 @@ function payloadFor(stage, idx, mStage, key, opts = {}) {
       writes: [
         { path: `.haiku/intents/{slug}/stages/${stageLower}/state.json`, change: "`pre_review_dispatched: true`, `pre_review_dispatched_at: <timestamp>`" },
       ],
-      instructions: `Agent spawns conditional review agents in parallel against every unit .md file. Reviewers audit the PLAN for missing inputs, prose-only gates, unfalsifiable criteria, sibling conflicts — NOT artifacts (they don't exist yet). Findings are logged via \`haiku_feedback\`. After all subagents complete, agent calls \`haiku_run_next\`. Zero findings → advance to specs gate. Pending findings → FSM emits \`pre_review_revisit\` with spec-edit instructions (modify existing units, don't draft new ones).`,
+      instructions: `Agent spawns conditional review agents in parallel against every unit .md file. Reviewers audit the PLAN for missing inputs, prose-only gates, unfalsifiable criteria, sibling conflicts — NOT artifacts (they don't exist yet). Findings are logged via \`haiku_feedback\`. After all subagents complete, agent calls \`haiku_run_next\`. Zero findings → advance to specs gate. Pending findings → workflow engine emits \`pre_review_revisit\` with spec-edit instructions (modify existing units, don't draft new ones).`,
     },
     "prereview-to-gate": {
       injection: [
-        { hook: "readFeedbackFiles()", target: "orchestrator decision", what: "if any pending feedback exists, FSM returns `pre_review_revisit` with a spec-edit mandate; otherwise falls through to the specs gate" },
+        { hook: "readFeedbackFiles()", target: "orchestrator decision", what: "if any pending feedback exists, workflow engine returns `pre_review_revisit` with a spec-edit mandate; otherwise falls through to the specs gate" },
       ],
       action: "advance_phase",
       summary: `pre-review clear — open ${isFirst ? "intent_review" : "elaborate_to_execute"} specs gate`,
@@ -4140,7 +4140,7 @@ function payloadFor(stage, idx, mStage, key, opts = {}) {
       writes: [
         { path: `.haiku/intents/{slug}/stages/${stageLower}/state.json`, change: "no write — falls through to auto/ask gate decision" },
       ],
-      instructions: `Pre-review audit has completed and all spec-level findings are resolved. The FSM advances to the normal specs gate (auto-advance or opens the review UI, depending on the stage's \`review:\` type).`,
+      instructions: `Pre-review audit has completed and all spec-level findings are resolved. The workflow engine advances to the normal specs gate (auto-advance or opens the review UI, depending on the stage's \`review:\` type).`,
     },
     "elab-to-gate": {
       injection: [
@@ -4150,11 +4150,11 @@ function payloadFor(stage, idx, mStage, key, opts = {}) {
         { hook: "readStageDef()", target: "agent prompt", what: "**Stage body** — the STAGE.md body content (criteria guidance, completion signals, overlap awareness) is injected as stage-level context for elaboration." },
         { hook: "resolveStageInputs()", target: "agent prompt", what: "**Upstream stage inputs** — artifacts produced by prior stages (discovery docs, output artifacts) are resolved and their content loaded (up to 3000 chars) as mandatory context." },
         { hook: "design MCP detection", target: "agent prompt (conditional)", what: "**Design provider MCPs** — if the stage includes design hats, instructions to use pencil/openpencil/figma MCP tools are injected." },
-        { hook: "FSM elaborate-tick instruction", target: "agent prompt (this same `haiku_run_next` call)", what: "**Discovery Fan-Out (REQUIRED)** — orchestrator enumerates the stage's `discovery/*.md` templates and produces one self-contained `<subagent tool=\"Task\">` block per artifact. Each block is a complete prompt (intent context, stage scope, template Content Guide + Quality Signals all embedded). The parent relays each block verbatim — no assembly required. Lives in `orchestrator.ts` elaborate-case `tool_use_result`." },
-        { hook: "FSM elaborate-tick instruction", target: "agent prompt (this same `haiku_run_next` call)", what: "**`<subagent tool=\"Task\">` self-contained prompts** — each discovery subagent block contains the full behavioral prompt (intent description, stage scope, discovery template with Content Guide and Quality Signals, output path instructions). MCP constructs exact subagent prompts; parent relays verbatim." },
+        { hook: "workflow engine elaborate-tick instruction", target: "agent prompt (this same `haiku_run_next` call)", what: "**Discovery Fan-Out (REQUIRED)** — orchestrator enumerates the stage's `discovery/*.md` templates and produces one self-contained `<subagent tool=\"Task\">` block per artifact. Each block is a complete prompt (intent context, stage scope, template Content Guide + Quality Signals all embedded). The parent relays each block verbatim — no assembly required. Lives in `orchestrator.ts` elaborate-case `tool_use_result`." },
+        { hook: "workflow engine elaborate-tick instruction", target: "agent prompt (this same `haiku_run_next` call)", what: "**`<subagent tool=\"Task\">` self-contained prompts** — each discovery subagent block contains the full behavioral prompt (intent description, stage scope, discovery template with Content Guide and Quality Signals, output path instructions). MCP constructs exact subagent prompts; parent relays verbatim." },
         { hook: "readPhaseOverride()", target: "agent prompt prepend", what: "**Phase override injection** — `phases/ELABORATION.md` is read via `readPhaseOverride()` and injected during elaborate, providing studio-level elaboration guidance." },
         { hook: "readStageArtifactDefs()", target: "agent prompt prepend", what: "**Stage Output Expectations** — output definitions from `outputs/*.md` are injected as 'Stage Output Expectations' so the agent can plan units with knowledge of what artifacts each stage must produce (name, location, format, content guide)." },
-        { hook: "FSM_CONTRACTS_ELABORATE_BLOCK", target: "agent prompt prepend", what: "**Universal contract block split** — `UNIVERSAL` (all stages: lifecycle rules, naming, DAG semantics) is always injected. `BUILD_CLASS_ADDENDUM` (executable `quality_gates: [{name, command}]`, runnable verify-commands) is injected ONLY when no per-stage `phases/ELABORATION.md` override exists. The 5 inception-class stages skip the build-class addendum and use their own knowledge-artifact ELABORATION.md instead." },
+        { hook: "UNIVERSAL_CONTRACT_BLOCK", target: "agent prompt prepend", what: "**Universal contract block split** — `UNIVERSAL` (all stages: lifecycle rules, naming, DAG semantics) is always injected. `BUILD_CLASS_ADDENDUM` (executable `quality_gates: [{name, command}]`, runnable verify-commands) is injected ONLY when no per-stage `phases/ELABORATION.md` override exists. The 5 inception-class stages skip the build-class addendum and use their own knowledge-artifact ELABORATION.md instead." },
       ],
       action: "gate_review",
       summary: `elaboration complete — open ${isFirst ? "intent_review" : "elaborate_to_execute"} gate`,
@@ -4186,7 +4186,7 @@ function payloadFor(stage, idx, mStage, key, opts = {}) {
         { hook: "track-outputs", target: "unit frontmatter", what: `records files \`${opts.from}\` wrote into the unit's \`outputs:\` so the next hat sees them` },
       ],
       // NOTE: this transition is NOT a haiku_run_next call. It's the subagent calling
-      // haiku_unit_advance_hat, which internally progresses the FSM and returns the next hat
+      // haiku_unit_advance_hat, which internally progresses the workflow engine and returns the next hat
       // in the same tool call. The mini ↻ chip on the back-arrow represents this internal tick.
       action: "haiku_unit_advance_hat",
       summary: `subagent calls advance_hat → ${opts.from} done, next: ${opts.to}`,
@@ -4208,7 +4208,7 @@ function payloadFor(stage, idx, mStage, key, opts = {}) {
         { path: `.haiku/intents/{slug}/stages/${stageLower}/units/${opts.unit}.md`, change: `frontmatter: \`hat: "${opts.to}"\`, \`bolt: bolt+1\` (status stays \`in_progress\`)` },
         { path: `.haiku/intents/{slug}/stages/${stageLower}/units/${opts.unit}.md`, change: `\`outputs:\` array updated by \`track-outputs\` with files \`${opts.from}\` wrote` },
       ],
-      instructions: `**Not a \`haiku_run_next\` tick.** The subagent itself calls \`haiku_unit_advance_hat\` when it finishes the current hat. The orchestrator internally progresses the FSM and returns the next hat — the subagent doffs \`${opts.from}\` and dons \`${opts.to}\` without involving the parent agent. On failure the subagent calls \`haiku_unit_reject_hat\` instead — that's the red back-arc.`,
+      instructions: `**Not a \`haiku_run_next\` tick.** The subagent itself calls \`haiku_unit_advance_hat\` when it finishes the current hat. The orchestrator internally progresses the workflow engine and returns the next hat — the subagent doffs \`${opts.from}\` and dons \`${opts.to}\` without involving the parent agent. On failure the subagent calls \`haiku_unit_reject_hat\` instead — that's the red back-arc.`,
     },
     "wave-to-wave": {
       injection: [
@@ -4237,7 +4237,7 @@ function payloadFor(stage, idx, mStage, key, opts = {}) {
         { path: `.haiku/intents/{slug}/stages/${stageLower}/units/{new-wave-unit}.md`, change: `frontmatter: \`status: "in_progress"\`, \`hat: "${stage.hats[0]}"\`, \`bolt: 0\`` },
         { path: `.haiku/worktrees/{new-wave-unit}/`, change: "git worktree created for each newly-eligible unit" },
       ],
-      instructions: `There's no "wave" tool — \`haiku_run_next\` simply returns \`start_unit(s)\` for whichever units have just become eligible. \`computeUnitWaves\` is a pure scheduling function; the FSM has no explicit wave concept beyond which units are currently eligible. For multi-unit waves, \`start_units\` produces one self-contained \`<subagent tool="Agent">\` block per unit — all context (hat instructions, unit spec, stage scope, output requirements, upstream artifacts) embedded inside each block. MCP constructs exact subagent prompts; parent relays each block verbatim, no assembly required. The model cascade is resolved for the hat to select the subagent model.`,
+      instructions: `There's no "wave" tool — \`haiku_run_next\` simply returns \`start_unit(s)\` for whichever units have just become eligible. \`computeUnitWaves\` is a pure scheduling function; the workflow engine has no explicit wave concept beyond which units are currently eligible. For multi-unit waves, \`start_units\` produces one self-contained \`<subagent tool="Agent">\` block per unit — all context (hat instructions, unit spec, stage scope, output requirements, upstream artifacts) embedded inside each block. MCP constructs exact subagent prompts; parent relays each block verbatim, no assembly required. The model cascade is resolved for the hat to select the subagent model.`,
     },
     "execute-to-review": {
       injection: [
@@ -4297,7 +4297,7 @@ function payloadFor(stage, idx, mStage, key, opts = {}) {
       writes: [
         { path: `.haiku/intents/{slug}/stages/${stageLower}/state.json`, change: "on success: `quality_gates_passed: true`. on failure: `quality_gate_failures: [...]` (cleared on next pass)" },
       ],
-      instructions: `This is the same \`haiku_run_next\` tick from above, returning AFTER gates have run. **On failure** the agent gets back \`fix_quality_gates\` with structured findings — agent fixes in place, calls \`haiku_run_next\` again, gates rerun. **On success** the agent gets back \`action: "review"\` (orchestrator.ts:1628) and the FSM has already advanced \`phase\` to \`gate\` internally; the instructions wrap one self-contained \`<subagent tool="Task">\` block per review-agent (${stage.reviewAgents.map(a => `\`${a}\``).join(", ")}). Each block is a complete prompt with review instructions and commands to obtain the diff — parent relays verbatim, no assembly required. Cross-stage agents are loaded via the \`review-agents-include\` field in STAGE.md. (Adversarial review of the elaboration specs is folded into the gate review — there's no separate \`review_elaboration\` round-trip.)`,
+      instructions: `This is the same \`haiku_run_next\` tick from above, returning AFTER gates have run. **On failure** the agent gets back \`fix_quality_gates\` with structured findings — agent fixes in place, calls \`haiku_run_next\` again, gates rerun. **On success** the agent gets back \`action: "review"\` (orchestrator.ts:1628) and the workflow engine has already advanced \`phase\` to \`gate\` internally; the instructions wrap one self-contained \`<subagent tool="Task">\` block per review-agent (${stage.reviewAgents.map(a => `\`${a}\``).join(", ")}). Each block is a complete prompt with review instructions and commands to obtain the diff — parent relays verbatim, no assembly required. Cross-stage agents are loaded via the \`review-agents-include\` field in STAGE.md. (Adversarial review of the elaboration specs is folded into the gate review — there's no separate \`review_elaboration\` round-trip.)`,
     },
     "review-to-gate": {
       injection: [
@@ -4357,7 +4357,7 @@ function payloadFor(stage, idx, mStage, key, opts = {}) {
         ? "`fsmIntentComplete()` fires; `intent.md` `status` flips to `completed`. The PR/MR final gate then opens for delivery."
         : (mStage === "discrete"
           ? "`fsmStageCompleteDiscrete()` pauses the intent. The user must run `/haiku:pickup` to resume the next stage."
-          : "`fsmAdvanceStage()` moves the FSM into the next stage's `pending` phase. Auto-advances on next `haiku_run_next` call."),
+          : "`workflowAdvanceStage()` moves the workflow engine into the next stage's `pending` phase. Auto-advances on next `haiku_run_next` call."),
     },
   }
   return map[key]
@@ -4444,7 +4444,7 @@ const ACTORS = {
       "Approve / Request Changes / Open PR / External-Review decisions",
       "Slash commands (clickable in the diagram): `/haiku:start`, `/haiku:pickup`, `/haiku:autopilot`, `/haiku:revisit`",
     ],
-    notes: "**The slash-command skills (not a separate operating-mode axis)** are the user's invocation entry points:\n\n• `/haiku:start` — create a new intent and kick off stage 1.\n• `/haiku:pickup` — resume an active intent: just calls `haiku_run_next` on whichever intent is active. No mode change.\n• `/haiku:autopilot` — wraps `haiku_run_next` in a loop, behaves *as if* ask gates were auto, only pauses for external review or scope-check guardrails (e.g. `>5 units` triggers a pause). It's a workflow wrapper, **not an FSM mode** — there's no `autopilot` value the orchestrator branches on.\n• `/haiku:revisit` — bounce back to a prior stage's elaborate.\n\n**Note on terminology drift:** the AI-DLC paper describes three operating modes — HITL / OHOTL / AHOTL — and that taxonomy is still in `paper/` and several `docs/` files. The implementation has moved past it: the only stored mode is `intent.mode` (continuous/discrete/hybrid). The user's level of involvement is now a function of (a) the gate type per stage in `STAGE.md` and (b) which skill they invoked. The prototype reflects the implementation, not the legacy paper.",
+    notes: "**The slash-command skills (not a separate operating-mode axis)** are the user's invocation entry points:\n\n• `/haiku:start` — create a new intent and kick off stage 1.\n• `/haiku:pickup` — resume an active intent: just calls `haiku_run_next` on whichever intent is active. No mode change.\n• `/haiku:autopilot` — wraps `haiku_run_next` in a loop, behaves *as if* ask gates were auto, only pauses for external review or scope-check guardrails (e.g. `>5 units` triggers a pause). It's a workflow wrapper, **not an workflow engine mode** — there's no `autopilot` value the orchestrator branches on.\n• `/haiku:revisit` — bounce back to a prior stage's elaborate.\n\n**Note on terminology drift:** the AI-DLC paper describes three operating modes — HITL / OHOTL / AHOTL — and that taxonomy is still in `paper/` and several `docs/` files. The implementation has moved past it: the only stored mode is `intent.mode` (continuous/discrete/hybrid). The user's level of involvement is now a function of (a) the gate type per stage in `STAGE.md` and (b) which skill they invoked. The prototype reflects the implementation, not the legacy paper.",
   },
   agent: {
     icon: "🤖",
@@ -4456,11 +4456,11 @@ const ACTORS = {
       "Filesystem (Read/Edit/Write — gated by hooks)",
     ],
     owns: [
-      "Conversation context (transient — `/clear` survivable thanks to the FSM)",
+      "Conversation context (transient — `/clear` survivable thanks to the workflow engine)",
       "The current hat's behavior (loaded from `hats/{hat}.md`)",
       "The active worktree (one per unit)",
     ],
-    notes: "**Stateless between FSM ticks.** Every `haiku_run_next` re-injects what the agent needs to know via the `inject-context` hook. If the agent loses context mid-run, the next tick brings it right back.",
+    notes: "**Stateless between workflow engine ticks.** Every `haiku_run_next` re-injects what the agent needs to know via the `inject-context` hook. If the agent loses context mid-run, the next tick brings it right back.",
   },
   hooks: {
     icon: "🛡",
@@ -4468,12 +4468,12 @@ const ACTORS = {
     role: "The spinal reflexes. Run inside Claude Code's hook system — between every agent tool call. Can't decide anything; can only block / inject.",
     talks_to: [
       "Agent (intercept tool calls)",
-      "Filesystem (read FSM state for injection)",
+      "Filesystem (read workflow engine state for injection)",
     ],
     owns: [
       "Bolt counter increment (`enforce-iteration`)",
       "Edit-scope enforcement (`workflow-guard`)",
-      "FSM-managed frontmatter protection (`guard-fsm-fields`)",
+      "workflow-managed frontmatter protection (`guard-workflow-fields`)",
       "Quality-gate execution (`quality-gate`)",
       "Output tracking (`track-outputs`)",
     ],
@@ -4482,21 +4482,21 @@ const ACTORS = {
   orchestrator: {
     icon: "🧠",
     name: "Orchestrator (MCP server)",
-    role: "The brain. An MCP server (`packages/haiku/src/server.ts`) that exposes 33 `haiku_*` tools. On every tick it reads FSM state from disk, validates preconditions, and returns the next action.",
+    role: "The brain. An MCP server (`packages/haiku/src/server.ts`) that exposes 33 `haiku_*` tools. On every tick it reads workflow engine state from disk, validates preconditions, and returns the next action.",
     talks_to: [
       "Agent (responds to tool calls)",
-      "Filesystem (reads + writes FSM state)",
+      "Filesystem (reads + writes workflow engine state)",
       "Review web UI (`_openReviewAndWait()` blocks until a click)",
       "Quality gates (spawns child processes)",
       "Telemetry / Sentry (emit events)",
     ],
     owns: [
-      "All FSM state mutations (only the orchestrator may write `state.json` or FSM-managed frontmatter)",
+      "All workflow engine state mutations (only the orchestrator may write `state.json` or workflow-managed frontmatter)",
       "Studio definitions are read-only — orchestrator consumes `STUDIO.md`, `STAGE.md`, `hats/`, `review-agents/`",
       "Wave scheduling (`computeUnitWaves` topological sort)",
       "Gate type resolution (`auto`, `ask`, `external`, `[external, ask]`, `await`)",
     ],
-    notes: "**Core principle — the FSM enforces, not the agent.** The agent is the body executing actions; the orchestrator is the brain owning state mutations and validating preconditions. If you have to *trust* the agent to follow the rules, you'll find out it didn't the moment something goes wrong. Hooks make rules physical; the orchestrator makes them stateful. That's why you see `_openReviewAndWait()` blocking, `guard-fsm-fields` rejecting agent edits to FSM frontmatter, and `enforce-iteration` bumping the bolt counter without asking — every guarantee is enforced, not requested.\n\n**The full MCP tool surface — 33 tools across orchestrator.ts, state-tools.ts, server.ts:**\n\n**FSM drivers** (orchestrator.ts):\n- `haiku_run_next` — the tick. Reads state, validates, returns next action.\n- `haiku_intent_create` — creates a new intent.md.\n- `haiku_select_studio` — pick / change the studio for an intent.\n- `haiku_revisit` — bounce back to a prior stage's elaborate.\n- `haiku_intent_reset` — nuke an intent and start over.\n- `haiku_intent_archive` — flip `archived: true` in intent.md frontmatter; `haiku_run_next` refuses to advance archived intents.\n- `haiku_intent_unarchive` — removes the `archived` key from intent.md frontmatter (clean restore — no `archived: false` marker left behind), so `haiku_run_next` ticks resume on a previously-archived intent.\n\n**State tools** (state-tools.ts) — read/write specific state without going through a full FSM tick:\n- `haiku_intent_get`, `haiku_intent_list`\n- `haiku_stage_get`\n- `haiku_unit_get`, `haiku_unit_set`, `haiku_unit_list`\n- `haiku_unit_start`, `haiku_unit_advance_hat`, `haiku_unit_reject_hat`, `haiku_unit_increment_bolt` — subagent-only progression tools\n- `haiku_knowledge_list`, `haiku_knowledge_read` — discovery/output artifact access\n- `haiku_studio_list`, `haiku_studio_get`, `haiku_studio_stage_get`\n- `haiku_settings_get`\n- `haiku_dashboard`, `haiku_capacity` — overview tools\n- `haiku_reflect`, `haiku_review`, `haiku_backlog`, `haiku_seed`, `haiku_release_notes` — workflow helpers\n- `haiku_repair` — scan intents for metadata issues, auto-apply safe fixes, push repair branches, open PRs for merged branches\n- `haiku_version_info` — read the running H·AI·K·U MCP binary and plugin versions\n\n**Review-server tool** (server.ts):\n- `haiku_feedback` — capture user feedback from the review UI.\n\nThe agent calls these. Hooks intercept the agent's tool invocations between calls.\n\n**Auto-commits:** the orchestrator calls `gitCommitState()` on every FSM mutation — `state.json` writes, intent.md frontmatter changes, unit-status transitions all become commits on the active branch. Commit messages are `haiku: {action description}`. The agent doesn't make these commits; the orchestrator does. This is what makes a H·AI·K·U intent's full history reconstructable from git alone.",
+    notes: "**Core principle — the workflow engine enforces, not the agent.** The agent is the body executing actions; the orchestrator is the brain owning state mutations and validating preconditions. If you have to *trust* the agent to follow the rules, you'll find out it didn't the moment something goes wrong. Hooks make rules physical; the orchestrator makes them stateful. That's why you see `_openReviewAndWait()` blocking, `guard-workflow-fields` rejecting agent edits to workflow engine frontmatter, and `enforce-iteration` bumping the bolt counter without asking — every guarantee is enforced, not requested.\n\n**The full MCP tool surface — 33 tools across orchestrator.ts, state-tools.ts, server.ts:**\n\n**workflow engine drivers** (orchestrator.ts):\n- `haiku_run_next` — the tick. Reads state, validates, returns next action.\n- `haiku_intent_create` — creates a new intent.md.\n- `haiku_select_studio` — pick / change the studio for an intent.\n- `haiku_revisit` — bounce back to a prior stage's elaborate.\n- `haiku_intent_reset` — nuke an intent and start over.\n- `haiku_intent_archive` — flip `archived: true` in intent.md frontmatter; `haiku_run_next` refuses to advance archived intents.\n- `haiku_intent_unarchive` — removes the `archived` key from intent.md frontmatter (clean restore — no `archived: false` marker left behind), so `haiku_run_next` ticks resume on a previously-archived intent.\n\n**State tools** (state-tools.ts) — read/write specific state without going through a full workflow engine tick:\n- `haiku_intent_get`, `haiku_intent_list`\n- `haiku_stage_get`\n- `haiku_unit_get`, `haiku_unit_set`, `haiku_unit_list`\n- `haiku_unit_start`, `haiku_unit_advance_hat`, `haiku_unit_reject_hat`, `haiku_unit_increment_bolt` — subagent-only progression tools\n- `haiku_knowledge_list`, `haiku_knowledge_read` — discovery/output artifact access\n- `haiku_studio_list`, `haiku_studio_get`, `haiku_studio_stage_get`\n- `haiku_settings_get`\n- `haiku_dashboard`, `haiku_capacity` — overview tools\n- `haiku_reflect`, `haiku_review`, `haiku_backlog`, `haiku_seed`, `haiku_release_notes` — workflow helpers\n- `haiku_repair` — scan intents for metadata issues, auto-apply safe fixes, push repair branches, open PRs for merged branches\n- `haiku_version_info` — read the running H·AI·K·U MCP binary and plugin versions\n\n**Review-server tool** (server.ts):\n- `haiku_feedback` — capture user feedback from the review UI.\n\nThe agent calls these. Hooks intercept the agent's tool invocations between calls.\n\n**Auto-commits:** the orchestrator calls `gitCommitState()` on every workflow engine mutation — `state.json` writes, intent.md frontmatter changes, unit-status transitions all become commits on the active branch. Commit messages are `haiku: {action description}`. The agent doesn't make these commits; the orchestrator does. This is what makes a H·AI·K·U intent's full history reconstructable from git alone.",
   },
   webui: {
     icon: "🌐",
@@ -4556,21 +4556,21 @@ const HOOKS = [
   { group: "guardrails", name: "workflow-guard",
     desc: "Blocks `Edit` / `Write` outside the active unit's worktree. The agent literally cannot edit files belonging to a different unit/stage.",
     fires: ["cylinder", "phase[execute]"], file: "packages/haiku/src/hooks/workflow-guard.ts" },
-  { group: "guardrails", name: "guard-fsm-fields",
-    desc: "Blocks direct edits to FSM-managed frontmatter (status, phase, gate_outcome, bolt). Only the orchestrator may write these.",
-    fires: ["unit", "phase[elaborate]"], file: "packages/haiku/src/hooks/guard-fsm-fields.ts" },
+  { group: "guardrails", name: "guard-workflow-fields",
+    desc: "Blocks direct edits to workflow-managed frontmatter (status, phase, gate_outcome, bolt). Only the orchestrator may write these.",
+    fires: ["unit", "phase[elaborate]"], file: "packages/haiku/src/hooks/guard-workflow-fields.ts" },
   { group: "guardrails", name: "enforce-iteration",
     desc: "Bumps the bolt counter on each `haiku_run_next` tick where a unit is active, ensuring every cycle is recorded.",
     fires: ["call-chip-hat", "hat-arrow-wrap"], file: "packages/haiku/src/hooks/enforce-iteration.ts" },
   { group: "guardrails", name: "redirect-plan-mode",
-    desc: "When the agent enters Claude Code's plan mode, this hook redirects the planning result back through the haiku FSM rather than letting the agent free-plan.",
+    desc: "When the agent enters Claude Code's plan mode, this hook redirects the planning result back through the haiku workflow engine rather than letting the agent free-plan.",
     fires: ["phase[elaborate]"], file: "packages/haiku/src/hooks/redirect-plan-mode.ts" },
   { group: "guardrails", name: "ensure-deps",
     desc: "Verifies that every unit's `depends_on` are complete before letting the agent enter or progress within a unit.",
     fires: ["wave", "phase[execute]"], file: "packages/haiku/src/hooks/ensure-deps.ts (validate-unit-type companion)" },
 
   { group: "context injection", name: "inject-context",
-    desc: "Prepends the relevant FSM state to every agent prompt so the agent doesn't have to ask. Stage, phase, current unit, current hat, what's done, what's next.",
+    desc: "Prepends the relevant workflow engine state to every agent prompt so the agent doesn't have to ask. Stage, phase, current unit, current hat, what's done, what's next.",
     fires: ["call-chip"], file: "packages/haiku/src/hooks/inject-context.ts" },
   { group: "context injection", name: "inject-state-file",
     desc: "Companion to inject-context: writes a transient `.haiku/_inject.md` snapshot of state.json so the agent can read structured context.",
@@ -4585,7 +4585,7 @@ const HOOKS = [
     desc: "Runtime hook running inside spawned subagents. Plays the same role as inject-context for the subagent's tool calls.",
     fires: ["hat"], file: "packages/haiku/src/hooks/subagent-hook.ts" },
   { group: "context injection", name: "context-monitor",
-    desc: "Watches the agent's token budget. Triggers a `/clear`-friendly state save if approaching context limits — relying on the FSM to resume from disk.",
+    desc: "Watches the agent's token budget. Triggers a `/clear`-friendly state save if approaching context limits — relying on the workflow engine to resume from disk.",
     fires: ["call-chip"], file: "packages/haiku/src/hooks/context-monitor.ts" },
 
   { group: "quality", name: "quality-gate",
@@ -4774,7 +4774,7 @@ function openSubagentModal(stageKey, hatName) {
         <li><strong>fresh context per hat</strong> — each hat needs its own loaded instructions (<code>hats/{hat}.md</code>) and its own focused conversation. A subagent gives that without bloating the parent's context.</li>
         <li><strong>parallel by default at the wave level</strong> — when a wave starts, the parent spawns one subagent per unit IN A SINGLE MESSAGE (orchestrator.ts:2509). Wave units run in parallel.</li>
         <li><strong>scoped responsibility</strong> — the subagent is told exactly what unit, what hat, what files. The parent doesn't have to context-shift between units.</li>
-        <li><strong>FSM-driven hand-off</strong> — subagent finishes its hat, calls <code>haiku_unit_advance_hat</code>, the FSM either advances to the next hat (spawning another subagent) or auto-completes the unit if this was the last hat.</li>
+        <li><strong>workflow-driven hand-off</strong> — subagent finishes its hat, calls <code>haiku_unit_advance_hat</code>, the workflow engine either advances to the next hat (spawning another subagent) or auto-completes the unit if this was the last hat.</li>
       </ul>
     </div>
     <div class="modal-section">
@@ -4811,13 +4811,13 @@ function openSubagentModal(stageKey, hatName) {
   document.getElementById("modal-backdrop").classList.add("open")
 }
 
-// Schema reference docs — clickable from any state.json path or fsm-managed-fields mention
+// Schema reference docs — clickable from any state.json path or workflow-managed-fields mention
 const SCHEMA_DOCS = {
   "state.json": {
     title: ".haiku/intents/{slug}/stages/{stage}/state.json",
-    summary: "Per-stage FSM state — only the orchestrator writes this. Hooks may read it; the agent never writes directly (`guard-fsm-fields` blocks).",
+    summary: "Per-stage workflow engine state — only the orchestrator writes this. Hooks may read it; the agent never writes directly (`guard-workflow-fields` blocks).",
     fields: [
-      { key: "phase", type: `"pending" | "elaborate" | "execute" | "review" | "gate"`, desc: "Current phase the FSM is in for this stage." },
+      { key: "phase", type: `"pending" | "elaborate" | "execute" | "review" | "gate"`, desc: "Current phase the workflow engine is in for this stage." },
       { key: "elaboration_turns", type: "number", desc: "Counter of user-agent back-and-forth turns during elaborate. Used by the `≥ 3 turns` validation gate." },
       { key: "gate_context", type: `"intent_review" | "elaborate_to_execute" | null`, desc: "Which gate semantics fired most recently. Drives whether reject bounces to `pending` (intent_review, first stage) or stays in `elaborate` (subsequent stages)." },
       { key: "gate_outcome", type: `"pending" | "approved" | "changes_requested" | "external_review" | null`, desc: "User's last gate decision. Cleared by `/haiku:revisit`." },
@@ -4831,43 +4831,43 @@ const SCHEMA_DOCS = {
   },
   "intent.md": {
     title: ".haiku/intents/{slug}/intent.md",
-    summary: "The intent file. Body is user/agent prose; frontmatter is FSM-managed (with one exception: the body itself).",
+    summary: "The intent file. Body is user/agent prose; frontmatter is workflow-managed (with one exception: the body itself).",
     fields: [
       { key: "slug", type: "string", desc: "kebab-case identifier for this intent." },
       { key: "title", type: "string", desc: "Human-readable title." },
       { key: "studio", type: "string", desc: "Studio slug (e.g., `software`, `marketing`). Settable via `haiku_select_studio`." },
       { key: "mode", type: `"continuous" | "discrete" | "hybrid"`, desc: "Execution mode." },
       { key: "continuous_from", type: "string?", desc: "Stage name where hybrid flips from discrete to continuous." },
-      { key: "active_stage", type: "string | null", desc: "FSM-managed: which stage is currently in play." },
-      { key: "intent_reviewed", type: "boolean", desc: "FSM-managed: set true when first-stage intent_review gate is approved." },
-      { key: "status", type: `"pending" | "in_progress" | "paused" | "completed"`, desc: "FSM-managed: top-level intent state. `paused` = discrete-mode pause awaiting `/haiku:pickup`." },
+      { key: "active_stage", type: "string | null", desc: "workflow-managed: which stage is currently in play." },
+      { key: "intent_reviewed", type: "boolean", desc: "workflow-managed: set true when first-stage intent_review gate is approved." },
+      { key: "status", type: `"pending" | "in_progress" | "paused" | "completed"`, desc: "workflow-managed: top-level intent state. `paused` = discrete-mode pause awaiting `/haiku:pickup`." },
     ],
-    written_by: "user (body), `haiku_intent_create` (initial frontmatter), orchestrator (FSM fields)",
+    written_by: "user (body), `haiku_intent_create` (initial frontmatter), orchestrator (workflow engine fields)",
   },
   "unit": {
     title: ".haiku/intents/{slug}/stages/{stage}/units/unit-NN-{slug}.md",
-    summary: "Per-unit work spec + state. Body is the agent's elaborated unit description; frontmatter mixes user/agent declared fields with FSM-managed ones.",
+    summary: "Per-unit work spec + state. Body is the agent's elaborated unit description; frontmatter mixes user/agent declared fields with workflow-managed ones.",
     fields: [
       { key: "type", type: "string", desc: "Unit type — must match the stage's `unit_types:` list." },
       { key: "depends_on", type: "string[]", desc: "Other unit IDs this depends on (DAG edges)." },
       { key: "inputs", type: "string[]", desc: "Resolved input artifact paths from prior stages." },
       { key: "model", type: `"haiku" | "sonnet" | "opus" | undefined`, desc: "Per-unit model override; resolved via cascade unit > hat > stage > studio." },
       { key: "outputs", type: "string[]", desc: "Files this unit produced. Recorded by `track-outputs` hook as the agent writes." },
-      { key: "status", type: `"pending" | "in_progress" | "complete"`, desc: "FSM-managed via `haiku_unit_start` / `advance_hat`." },
-      { key: "hat", type: "string", desc: "FSM-managed: current hat in the rotation." },
-      { key: "bolt", type: "number", desc: "FSM-managed: iteration counter; bumped by `enforce-iteration` hook on each `advance_hat`." },
-      { key: "bolts", type: "Array<{hat, reason, ts}>", desc: "FSM-managed: history of hat-rejections (back-edges)." },
+      { key: "status", type: `"pending" | "in_progress" | "complete"`, desc: "workflow-managed via `haiku_unit_start` / `advance_hat`." },
+      { key: "hat", type: "string", desc: "workflow-managed: current hat in the rotation." },
+      { key: "bolt", type: "number", desc: "workflow-managed: iteration counter; bumped by `enforce-iteration` hook on each `advance_hat`." },
+      { key: "bolts", type: "Array<{hat, reason, ts}>", desc: "workflow-managed: history of hat-rejections (back-edges)." },
     ],
     written_by: "agent (body, `type`, `depends_on`, `inputs`, `model`), `track-outputs` hook (`outputs`), orchestrator (`status`, `hat`, `bolt`, `bolts`)",
   },
-  "fsm-fields": {
-    title: "FSM-managed frontmatter fields (guarded by `guard-fsm-fields` hook)",
+  "workflow-fields": {
+    title: "workflow-managed frontmatter fields (guarded by `guard-workflow-fields` hook)",
     summary: "Fields the agent **cannot** write directly — only the orchestrator may mutate them. Attempting to edit them via Edit/Write is blocked at the hook layer.",
     fields: [
       { key: "intent.md `active_stage`", type: "string | null", desc: "Set by orchestrator on stage transitions." },
       { key: "intent.md `intent_reviewed`", type: "boolean", desc: "Set true on first intent_review gate approval." },
       { key: "intent.md `status`", type: "enum", desc: "Top-level intent lifecycle: pending → in_progress → paused/completed." },
-      { key: "state.json (entire file)", type: "object", desc: "Per-stage FSM state. Orchestrator-only writes." },
+      { key: "state.json (entire file)", type: "object", desc: "Per-stage workflow engine state. Orchestrator-only writes." },
       { key: "unit.md `status`", type: "enum", desc: "Set by `haiku_unit_start` / `advance_hat`." },
       { key: "unit.md `hat`", type: "string", desc: "Set by `advance_hat` / `reject_hat`." },
       { key: "unit.md `bolt`", type: "number", desc: "Bumped by `enforce-iteration` hook." },
@@ -4936,7 +4936,7 @@ function openRevisitModal(stageKey, stageIdx) {
   document.getElementById("modal-body").innerHTML = `
     <div class="modal-section">
       <h3>summary</h3>
-      <div class="prose">Bounces the FSM backwards to re-elaborate work that's already been done. Clears the target stage's <code>gate_outcome</code> and re-enters its <code>elaborate</code> phase. The accumulated knowledge pool is preserved — you don't lose discovery from later stages.</div>
+      <div class="prose">Bounces the workflow engine backwards to re-elaborate work that's already been done. Clears the target stage's <code>gate_outcome</code> and re-enters its <code>elaborate</code> phase. The accumulated knowledge pool is preserved — you don't lose discovery from later stages.</div>
     </div>
     <div class="modal-section">
       <h3>who can invoke it</h3>
@@ -5037,8 +5037,8 @@ const GATE_DETAILS = {
     flow: [
       "`haiku_run_next` is called while the stage is in `review` phase (entered automatically when the final unit completed).",
       "Orchestrator runs `validateStageOutputs()` first (hard structural check on output artifact presence), then calls `runQualityGates(slug, stage)` at `orchestrator.ts:1606`. Each configured gate runs as a child process; exit codes are captured; failure output is parsed into structured findings.",
-      "On **failure**: the same call returns `fix_quality_gates` with a `failures[]` array of `{ name, command, exit_code, output, dir }`. Phase stays `review`. Agent is instructed to fix the failures in place and call `haiku_run_next` again. The FSM never goes back to `execute` — quality gate fixes happen in the review phase.",
-      "On **success**: the FSM advances `phase` to `gate` internally (orchestrator.ts:1625) and the same call returns `action: \"review\"` (orchestrator.ts:1628) with one self-contained `<subagent tool='Task'>` block per adversarial review agent configured for the stage. The agent relays those blocks verbatim — parent doesn't assemble prompts. After the agents return, the next `haiku_run_next` tick lands in the `gate` phase.",
+      "On **failure**: the same call returns `fix_quality_gates` with a `failures[]` array of `{ name, command, exit_code, output, dir }`. Phase stays `review`. Agent is instructed to fix the failures in place and call `haiku_run_next` again. The workflow engine never goes back to `execute` — quality gate fixes happen in the review phase.",
+      "On **success**: the workflow engine advances `phase` to `gate` internally (orchestrator.ts:1625) and the same call returns `action: \"review\"` (orchestrator.ts:1628) with one self-contained `<subagent tool='Task'>` block per adversarial review agent configured for the stage. The agent relays those blocks verbatim — parent doesn't assemble prompts. After the agents return, the next `haiku_run_next` tick lands in the `gate` phase.",
       "The loop is bounded only by the agent's judgment — there is no max_quality_fails counter. If gates keep failing, the agent eventually escalates to the user.",
     ],
     gate_contexts: [
@@ -5143,7 +5143,7 @@ function openArtifactModal(key) {
 // Tool spec registry — for any clickable tool-call chip
 const TOOL_SPECS = {
   haiku_intent_create: {
-    description: "Creates a new intent. Writes `intent.md` with frontmatter (title, studio, mode) and a body (description + optional context). Called once per intent, at the very start, before any FSM tick. Studio selection happens separately via `haiku_select_studio`. The agent MUST supply BOTH a crisp title (3–8 words, ≤80 chars) and a richer description (2–5 sentences) — the title is not derived from the description.",
+    description: "Creates a new intent. Writes `intent.md` with frontmatter (title, studio, mode) and a body (description + optional context). Called once per intent, at the very start, before any workflow engine tick. Studio selection happens separately via `haiku_select_studio`. The agent MUST supply BOTH a crisp title (3–8 words, ≤80 chars) and a richer description (2–5 sentences) — the title is not derived from the description.",
     input: {
       title: "string (required) · crisp 3–8 word summary, ≤80 chars, single line, no trailing period. Rejected if missing or malformed.",
       description: "string (required) · 2–5 sentence narrative covering scope, motivation, and constraints. Stored verbatim in the intent body.",
@@ -5192,7 +5192,7 @@ const TOOL_SPECS = {
     ],
   },
   haiku_intent_reset: {
-    description: "Nukes an intent's FSM state — wipes `state.json`, unit files, worktrees, and frontmatter mutations — leaving the original `intent.md` body intact. Used when the work needs a clean restart from elaborate.",
+    description: "Nukes an intent's workflow engine state — wipes `state.json`, unit files, worktrees, and frontmatter mutations — leaving the original `intent.md` body intact. Used when the work needs a clean restart from elaborate.",
     input: {
       intent: "string · the intent slug",
       confirm: "boolean · must be true (safety guard)",
@@ -5223,7 +5223,7 @@ const TOOL_SPECS = {
     ],
   },
   haiku_intent_unarchive: {
-    description: "Reverses `haiku_intent_archive` by removing the `archived` field from `intent.md` frontmatter (clean restore — no `archived: false` marker is left behind). Once cleared, `haiku_run_next` ticks resume normally from wherever the FSM last left off. Reversible, so there is **no `confirm` guard**. Idempotent: calling on a not-archived intent returns `action: \"noop\"` instead of an error.",
+    description: "Reverses `haiku_intent_archive` by removing the `archived` field from `intent.md` frontmatter (clean restore — no `archived: false` marker is left behind). Once cleared, `haiku_run_next` ticks resume normally from wherever the workflow engine last left off. Reversible, so there is **no `confirm` guard**. Idempotent: calling on a not-archived intent returns `action: \"noop\"` instead of an error.",
     input: {
       intent: "string · the intent slug",
     },
@@ -5254,7 +5254,7 @@ const TOOL_SPECS = {
     ],
   },
   haiku_unit_advance_hat: {
-    description: "Called by a subagent when the current hat is **done successfully**. Internally progresses the FSM — either spawns the next hat or, if this was the last hat, auto-completes the unit and triggers wave/phase advancement.",
+    description: "Called by a subagent when the current hat is **done successfully**. Internally progresses the workflow engine — either spawns the next hat or, if this was the last hat, auto-completes the unit and triggers wave/phase advancement.",
     input: {
       intent: "string",
       unit: "string",
@@ -5297,7 +5297,7 @@ const TOOL_SPECS = {
       choice: "string · the option key the user selected",
       annotations: "array? · any inline comments the user made on the visuals",
     },
-    writes: ["No FSM writes — the user's choice flows back to the agent which then acts on it. Annotations may be persisted to a discovery artifact at the agent's discretion."],
+    writes: ["No workflow engine writes — the user's choice flows back to the agent which then acts on it. Annotations may be persisted to a discovery artifact at the agent's discretion."],
   },
 }
 
@@ -5316,7 +5316,7 @@ const SKILL_SPECS = {
     skill_file: "plugin/skills/start/SKILL.md",
   },
   "/haiku:pickup": {
-    description: "User-invoked slash command. Resumes whatever intent is active — just calls `haiku_run_next` and follows the returned action. **No mode change. No FSM mutation by the skill itself.** Useful after a `/clear`, after a discrete-mode pause, or to resume after closing the session.",
+    description: "User-invoked slash command. Resumes whatever intent is active — just calls `haiku_run_next` and follows the returned action. **No mode change. No workflow engine mutation by the skill itself.** Useful after a `/clear`, after a discrete-mode pause, or to resume after closing the session.",
     invocation: ["/haiku:pickup"],
     calls_tools: ["haiku_intent_list", "haiku_run_next"],
     typical_flow: [
@@ -5327,7 +5327,7 @@ const SKILL_SPECS = {
     skill_file: "plugin/skills/pickup/SKILL.md",
   },
   "/haiku:autopilot": {
-    description: "User-invoked slash command. Wraps `haiku_run_next` in a loop, behaves as if `ask` gates were `auto`, only pauses for external review or scope-check guardrails (e.g. `>5 units` triggers a pause). **It's a workflow wrapper, not an FSM mode** — no `autopilot` value is stored in `intent.mode`.",
+    description: "User-invoked slash command. Wraps `haiku_run_next` in a loop, behaves as if `ask` gates were `auto`, only pauses for external review or scope-check guardrails (e.g. `>5 units` triggers a pause). **It's a workflow wrapper, not an workflow engine mode** — no `autopilot` value is stored in `intent.mode`.",
     invocation: ["/haiku:autopilot"],
     calls_tools: ["haiku_run_next (in a loop)", "haiku_intent_list"],
     typical_flow: [
@@ -5339,13 +5339,13 @@ const SKILL_SPECS = {
     skill_file: "plugin/skills/autopilot/SKILL.md",
   },
   "/haiku:revisit": {
-    description: "User-invoked slash command. Bounces the FSM backwards to re-elaborate work that's already been done. Calls the `haiku_revisit` MCP tool — same target inference as the agent-invoked version (see the ↺ revisit chips in the diagram).",
+    description: "User-invoked slash command. Bounces the workflow engine backwards to re-elaborate work that's already been done. Calls the `haiku_revisit` MCP tool — same target inference as the agent-invoked version (see the ↺ revisit chips in the diagram).",
     invocation: ["/haiku:revisit", "/haiku:revisit <stage>"],
     calls_tools: ["haiku_revisit"],
     typical_flow: [
       "Optionally specify a target stage (otherwise inferred from current phase)",
       "Agent calls `haiku_revisit { intent, stage? }`",
-      "FSM resets the target stage's `phase` to `elaborate` and `gate_outcome` to `null`",
+      "workflow engine resets the target stage's `phase` to `elaborate` and `gate_outcome` to `null`",
       "Agent continues from elaborate of the target stage",
     ],
     skill_file: "plugin/skills/revisit/SKILL.md",
@@ -5363,12 +5363,12 @@ const SKILL_SPECS = {
     skill_file: "plugin/skills/reflect/SKILL.md",
   },
   "/haiku:operate": {
-    description: "User-invoked slash command. Runs a recurring operation template (backup verification, dependency audit, secret rotation, health check) without going through the full intent FSM. Each operation is a mini-intent with its own scope.",
+    description: "User-invoked slash command. Runs a recurring operation template (backup verification, dependency audit, secret rotation, health check) without going through the full intent workflow engine. Each operation is a mini-intent with its own scope.",
     invocation: ["/haiku:operate", "/haiku:operate <operation-name>"],
     calls_tools: ["haiku_intent_create (for the operation's mini-intent)", "haiku_run_next"],
     typical_flow: [
       "User picks an operation template (e.g. `backup-verification`)",
-      "Agent creates a mini-intent for the operation and runs it through a shortened FSM",
+      "Agent creates a mini-intent for the operation and runs it through a shortened workflow engine",
       "Operation completes and writes its outputs (e.g., audit report) into the project's knowledge pool",
       "User reviews the operation's output and either takes action or schedules a follow-up intent",
     ],
@@ -5378,8 +5378,8 @@ const SKILL_SPECS = {
   // Lifecycle / setup
   "/haiku:setup": { description: "First-time project setup — installs hooks, scaffolds `.haiku/`, picks a default studio.", invocation: ["/haiku:setup"], calls_tools: ["haiku_studio_list", "haiku_settings_get"], typical_flow: ["Detect the project's stack and propose a default studio", "Install Claude Code hooks", "Create `.haiku/settings.yml`", "Scaffold the workspace structure"], skill_file: "plugin/skills/setup/SKILL.md" },
   "/haiku:adopt": { description: "Adopt H·AI·K·U into an existing in-flight project — analyze the codebase to seed initial knowledge, infer existing patterns, surface tech debt as backlog seeds.", invocation: ["/haiku:adopt"], calls_tools: ["haiku_intent_create", "haiku_seed", "haiku_knowledge_list"], typical_flow: ["Walk the codebase", "Surface domain entities, frameworks, conventions", "Write a baseline `knowledge/` set", "Seed backlog with detected tech-debt items"], skill_file: "plugin/skills/adopt/SKILL.md" },
-  "/haiku:migrate": { description: "Migrate from legacy AI-DLC structure (skills-as-prompts) to H·AI·K·U FSM-driven structure. Reads existing artifacts and produces equivalent FSM-managed state.", invocation: ["/haiku:migrate"], calls_tools: ["haiku_intent_create", "haiku_intent_reset"], typical_flow: ["Detect AI-DLC artifacts in the workspace", "Map them to H·AI·K·U intents/stages/units", "Confirm with user before rewriting"], skill_file: "plugin/skills/migrate/SKILL.md" },
-  "/haiku:reset": { description: "Wipe an intent's FSM state via `haiku_intent_reset` (intent.md body preserved). Used when the work needs a clean restart from elaborate.", invocation: ["/haiku:reset", "/haiku:reset <intent>"], calls_tools: ["haiku_intent_reset"], typical_flow: ["Confirm with user", "Call `haiku_intent_reset { intent, confirm: true }`", "Intent ready to re-elaborate from scratch"], skill_file: "plugin/skills/reset/SKILL.md" },
+  "/haiku:migrate": { description: "Migrate from legacy AI-DLC structure (skills-as-prompts) to H·AI·K·U workflow-driven structure. Reads existing artifacts and produces equivalent workflow-managed state.", invocation: ["/haiku:migrate"], calls_tools: ["haiku_intent_create", "haiku_intent_reset"], typical_flow: ["Detect AI-DLC artifacts in the workspace", "Map them to H·AI·K·U intents/stages/units", "Confirm with user before rewriting"], skill_file: "plugin/skills/migrate/SKILL.md" },
+  "/haiku:reset": { description: "Wipe an intent's workflow engine state via `haiku_intent_reset` (intent.md body preserved). Used when the work needs a clean restart from elaborate.", invocation: ["/haiku:reset", "/haiku:reset <intent>"], calls_tools: ["haiku_intent_reset"], typical_flow: ["Confirm with user", "Call `haiku_intent_reset { intent, confirm: true }`", "Intent ready to re-elaborate from scratch"], skill_file: "plugin/skills/reset/SKILL.md" },
 
   // Workflow / utility
   "/haiku:quick": { description: "Quick mode — bypasses elaboration ceremony for trivial fixes. Skips the min-3-turns + DAG validation; goes straight to a single-unit execute.", invocation: ["/haiku:quick", "/haiku:quick <description>"], calls_tools: ["haiku_intent_create", "haiku_run_next"], typical_flow: ["Create a one-unit intent inline", "Skip elaborate (auto-approve)", "Execute the single unit", "Auto-advance through review and gate if quality gates pass"], skill_file: "plugin/skills/quick/SKILL.md" },
@@ -5387,7 +5387,7 @@ const SKILL_SPECS = {
   "/haiku:repair": { description: "Diagnose and repair a stuck/failed unit. Reads the unit's `bolts:` history to understand what went wrong, then proposes targeted fixes.", invocation: ["/haiku:repair", "/haiku:repair <unit>"], calls_tools: ["haiku_unit_get", "haiku_unit_set"], typical_flow: ["Inspect failed unit's `bolts:` history", "Diagnose pattern (test failure / type error / scope creep)", "Apply targeted fix", "Resume the unit's hat rotation"], skill_file: "plugin/skills/repair/SKILL.md" },
   "/haiku:refine": { description: "Refine an existing intent's elaboration after early feedback — tighten units, adjust criteria, drop scope. Less aggressive than `/haiku:revisit`; doesn't reset gates.", invocation: ["/haiku:refine"], calls_tools: ["haiku_unit_set", "haiku_run_next"], typical_flow: ["Re-read the user's recent feedback", "Adjust unit criteria / scope", "Re-validate the DAG", "Continue from where elaborate left off"], skill_file: "plugin/skills/refine/SKILL.md" },
   "/haiku:ideate": { description: "Brainstorm mode — produce candidate intents from a vague problem statement. Doesn't create an intent yet; returns ranked options the user picks from.", invocation: ["/haiku:ideate <topic>"], calls_tools: ["haiku_studio_list"], typical_flow: ["User describes a problem space", "Agent proposes 3-7 candidate intents", "User picks one", "Agent calls `/haiku:start` with the picked intent"], skill_file: "plugin/skills/ideate/SKILL.md" },
-  "/haiku:gate-review": { description: "Explicit user invocation of the current stage's gate review UI without waiting for the FSM to fire it. Useful for early sanity-check.", invocation: ["/haiku:gate-review"], calls_tools: ["haiku_run_next"], typical_flow: ["FSM state inspected", "If a gate is pending, opens the review UI immediately", "Otherwise tells the user no gate is currently open"], skill_file: "plugin/skills/gate-review/SKILL.md" },
+  "/haiku:gate-review": { description: "Explicit user invocation of the current stage's gate review UI without waiting for the workflow engine to fire it. Useful for early sanity-check.", invocation: ["/haiku:gate-review"], calls_tools: ["haiku_run_next"], typical_flow: ["workflow engine state inspected", "If a gate is pending, opens the review UI immediately", "Otherwise tells the user no gate is currently open"], skill_file: "plugin/skills/gate-review/SKILL.md" },
   "/haiku:composite": { description: "Manage composite intents — multi-intent orchestration with parent/child sync rules. Runs intents that span multiple repos / services.", invocation: ["/haiku:composite", "/haiku:composite <parent-intent>"], calls_tools: ["haiku_intent_list", "haiku_intent_create"], typical_flow: ["Inspect or create a parent intent that links child intents", "Sync rules govern how child intent outputs propagate up", "Useful for cross-service feature rollouts"], skill_file: "plugin/skills/composite/SKILL.md" },
 
   // Backlog / planning
@@ -5405,7 +5405,7 @@ const SKILL_SPECS = {
   "/haiku:studios": { description: "List, inspect, or switch between available studios. Useful when starting a new intent or wanting to see what studios are installed.", invocation: ["/haiku:studios", "/haiku:studios <name>"], calls_tools: ["haiku_studio_list", "haiku_studio_get"], typical_flow: ["List installed studios", "Show stage layout for a specific studio", "Hand off to `/haiku:start` if user picks one"], skill_file: "plugin/skills/studios/SKILL.md" },
   "/haiku:version": { description: "Show installed plugin version and check for updates.", invocation: ["/haiku:version"], calls_tools: ["haiku_settings_get"], typical_flow: ["Read installed plugin version", "Compare against latest release", "Offer auto-update if behind"], skill_file: "plugin/skills/version/SKILL.md" },
   "/haiku:triggers": { description: "Manage scheduled triggers — recurring intents (e.g., weekly dependency audit) that fire on a schedule via the user's CI or Claude Code scheduler.", invocation: ["/haiku:triggers", "/haiku:triggers add <cron> <skill>"], calls_tools: ["haiku_settings_get"], typical_flow: ["List existing triggers", "Add or remove a scheduled invocation", "Triggers fire `/haiku:operate` or other skills on schedule"], skill_file: "plugin/skills/triggers/SKILL.md" },
-  "/haiku:pressure-testing": { description: "Run structured pressure tests against the orchestrator + studio definitions — adversarial scenarios that exercise revisit, fix_quality_gates loops, external review timeouts. Used during studio development.", invocation: ["/haiku:pressure-testing"], calls_tools: ["haiku_intent_create", "haiku_run_next"], typical_flow: ["Run a synthetic intent through the studio", "Inject failures at known transition points", "Verify the FSM recovers correctly"], skill_file: "plugin/skills/pressure-testing/SKILL.md" },
+  "/haiku:pressure-testing": { description: "Run structured pressure tests against the orchestrator + studio definitions — adversarial scenarios that exercise revisit, fix_quality_gates loops, external review timeouts. Used during studio development.", invocation: ["/haiku:pressure-testing"], calls_tools: ["haiku_intent_create", "haiku_run_next"], typical_flow: ["Run a synthetic intent through the studio", "Inject failures at known transition points", "Verify the workflow engine recovers correctly"], skill_file: "plugin/skills/pressure-testing/SKILL.md" },
 }
 
 function openSkillModal(skillName) {
@@ -5509,7 +5509,7 @@ function openModal(payload) {
     </div>
     ${data.writes?.length ? `
     <div class="modal-section">
-      <h3>state writes (FSM persists to disk)</h3>
+      <h3>state writes (workflow engine persists to disk)</h3>
       <ul class="writes-list">
         ${data.writes.map(w => `
           <li>

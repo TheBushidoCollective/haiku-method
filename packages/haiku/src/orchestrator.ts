@@ -3903,26 +3903,52 @@ export function runNext(slug: string): OrchestratorAction {
 				}
 			}
 
-			// ── Route 1.5: human-in-the-loop for human-authored feedback ──
-			// If ANY pending item is human-authored AND has no explicit
-			// `resolution` set, the human hasn't signed off on dispatch.
-			// Open the gate review UI instead of auto-firing the fix
-			// loop — the reviewer needs to see the items, triage them
-			// (pick a resolution per item or leave them for agent
-			// triage), then click "Send to agent" which routes through
-			// `haiku_revisit` → `feedback_dispatch` (or stage rollback).
+			// ── Route 1.5: human-authored feedback awaiting triage ────────
+			// Partition the pending queue into TRIAGED (resolution set) and
+			// UNTRIAGED (human-authored, resolution null/unset). Behavior
+			// depends on the mix:
+			//
+			//   - All triaged → fall through to fix_hats / explicit-resolution
+			//     routes below. The queue moves.
+			//   - All untriaged human → open the gate review UI so the human
+			//     can classify items before any dispatch (existing behavior).
+			//   - MIX (some triaged, some untriaged) → dispatch the triaged
+			//     ones via fix_hats (so the queue keeps moving) AND surface
+			//     the untriaged items so the agent triages them on the next
+			//     tick. This is the case the prior "ANY untriaged blocks
+			//     everything" rule got wrong: it stalled completed triage
+			//     work behind a single new untriaged FB.
 			//
 			// Agent-authored findings (adversarial-review, studio-review,
-			// origin: agent) skip this short-circuit: they're the
-			// existing fix-loop contract — find, fix, move on, no human
-			// intervention required.
-			const needsHumanReview = pendingItems.some(
+			// origin: agent) are NEVER counted as untriaged — the fix-loop
+			// contract is "find, fix, move on" with no human triage step.
+			const untriagedHuman = pendingItems.filter(
 				(item) =>
 					item.author_type === "human" &&
 					(!(item as { resolution?: string | null }).resolution ||
 						(item as { resolution?: string | null }).resolution === null),
 			)
-			if (needsHumanReview) {
+			const triagedItems = pendingItems.filter(
+				(item) => !untriagedHuman.includes(item),
+			)
+			// Compute the actionable route for triaged items so the
+			// untriaged-human gate decision knows whether the triaged
+			// dispatch will actually fire. If the triaged subset has no
+			// stage_revisit / upstream_rewind AND the stage has no
+			// fix_hats, Route 2 / Route 1.6 won't fire — meaning the
+			// triaged items would just fall through to legacy Route 3.
+			// In that case, untriaged-human items still need the gate UI.
+			const triagedClassification = classifyPendingForRevisit(triagedItems)
+			const stageHasFixHats =
+				resolveStageFixHats(studio, currentStage).length > 0
+			const triagedHasActionableRoute =
+				triagedClassification.stageRevisits.length > 0 ||
+				triagedClassification.upstreamRewinds.length > 0 ||
+				(stageHasFixHats && triagedItems.length > 0)
+			if (untriagedHuman.length > 0 && !triagedHasActionableRoute) {
+				// No path to dispatch the triaged ones in this tick (or none
+				// triaged at all) — open gate review so the reviewer triages
+				// the human-authored items before any further action.
 				const stageIdxForGate = studioStages.indexOf(currentStage)
 				const nextStageForGate =
 					stageIdxForGate >= 0 && stageIdxForGate < studioStages.length - 1
@@ -3937,9 +3963,17 @@ export function runNext(slug: string): OrchestratorAction {
 					next_stage: nextStageForGate,
 					gate_type: "ask",
 					gate_context: "stage_gate",
-					message: `Stage '${currentStage}' has ${pendingItems.length} pending feedback item(s), including human-authored comments awaiting triage. Open the review UI so the reviewer can classify each (reply, inline fix, stage revisit, upstream rewind) before the agent dispatches.`,
+					message: `Stage '${currentStage}' has ${pendingItems.length} pending feedback item(s) including ${untriagedHuman.length} human-authored awaiting triage. Open the review UI so the reviewer can classify each (reply, inline fix, stage revisit, upstream rewind) before the agent dispatches.`,
 				}
 			}
+			// MIX path with actionable triaged route: triaged items flow
+			// through Routes 1.6 / 2 below; untriaged items get surfaced as
+			// an addendum to whichever action fires so the agent triages
+			// them after the dispatch completes.
+			const untriagedSurface =
+				untriagedHuman.length > 0
+					? `\n\n⚠️  ${untriagedHuman.length} human-authored finding(s) still need triage: [${untriagedHuman.map((it) => it.id).join(", ")}]. After dispatch completes, set a resolution on each (haiku_feedback_update { feedback_id, resolution: "<question|inline_fix|stage_revisit|upstream_rewind>" }) before the next gate tick — these will block advancement until classified.`
+					: ""
 
 			// ── Route 1.6: auto-dispatch on explicit rewind-causing resolutions ──
 			// If any pending item is explicitly tagged `stage_revisit` or
@@ -3947,7 +3981,11 @@ export function runNext(slug: string): OrchestratorAction {
 			// handoff, no "call run_next again." The reviewer (or triage
 			// pass) already decided; prompting the agent to dispatch adds
 			// a round trip and leaves room for the chain to stall.
-			const gateClassification = classifyPendingForRevisit(pendingItems)
+			//
+			// Reuse the classification computed above against the TRIAGED
+			// subset so untriaged human items can't accidentally route
+			// through the explicit-revisit paths.
+			const gateClassification = triagedClassification
 			if (gateClassification.stageRevisits.length > 0) {
 				// Write a deterministic audit line of which items forced the
 				// revisit — a post-revisit trace is the only way to tell from
@@ -3975,7 +4013,7 @@ export function runNext(slug: string): OrchestratorAction {
 					stage: currentStage,
 					upstream_items:
 						gateClassification.upstreamRewinds.map(summarizeFeedback),
-					message: `Stage '${currentStage}' has ${gateClassification.upstreamRewinds.length} finding(s) tagged \`upstream_rewind\`. Present them to the user and ask which upstream stage to revisit (or whether to reject / accept as-is). Do NOT call \`haiku_run_next\` until the user decides.`,
+					message: `Stage '${currentStage}' has ${gateClassification.upstreamRewinds.length} finding(s) tagged \`upstream_rewind\`. Present them to the user and ask which upstream stage to revisit (or whether to reject / accept as-is). Do NOT call \`haiku_run_next\` until the user decides.${untriagedSurface}`,
 				}
 			}
 
@@ -3992,7 +4030,7 @@ export function runNext(slug: string): OrchestratorAction {
 			// the finding stays open, and the next bolt retries. Budget is
 			// spent, not lost.
 			const fixHats = resolveStageFixHats(studio, currentStage)
-			if (fixHats.length > 0 && pendingItems.length > 0) {
+			if (fixHats.length > 0 && triagedItems.length > 0) {
 				// Ensure each fix-hat has a real mandate file. Fix-mode hats
 				// may live outside the primary `hats:` rotation (e.g. a
 				// `feedback-assessor` hat that only runs during fix loops),
@@ -4008,9 +4046,10 @@ export function runNext(slug: string): OrchestratorAction {
 					}
 				}
 
-				// Partition: eligible (under bolt cap) vs escalated (at/over).
-				// Deterministic ordering so re-entries are stable.
-				const sorted = [...pendingItems].sort((a, b) => a.num - b.num)
+				// Partition the TRIAGED subset: eligible (under bolt cap) vs
+				// escalated (at/over). Untriaged items already surfaced above
+				// — they don't enter the fix-loop dispatch.
+				const sorted = [...triagedItems].sort((a, b) => a.num - b.num)
 				const eligibleItems = sorted.filter((i) => i.bolt < MAX_FIX_LOOP_BOLTS)
 				const escalatedItems = sorted.filter(
 					(i) => i.bolt >= MAX_FIX_LOOP_BOLTS,
@@ -4101,8 +4140,12 @@ export function runNext(slug: string): OrchestratorAction {
 					max_bolts: MAX_FIX_LOOP_BOLTS,
 					items: dispatched,
 					total_pending: pendingItems.length,
+					triaged_dispatched: dispatched.length,
+					untriaged_pending: untriagedHuman.length,
 					escalated_count: escalatedItems.length,
-					message: `Dispatching fix loop for ${dispatched.length} finding(s) in parallel — stage '${currentStage}'. Per-finding hat sequence: ${fixHats.join(" → ")} (serial within chain). Chains run in parallel across findings.${escalatedItems.length > 0 ? ` ${escalatedItems.length} additional finding(s) are at the bolt cap and will escalate after these complete.` : ""}`,
+					message: `Dispatching fix loop for ${dispatched.length} finding(s) in parallel — stage '${currentStage}'. Per-finding hat sequence: ${fixHats.join(" → ")} (serial within chain). Chains run in parallel across findings.
+
+🚫 HARD RULE — DO NOT take the shortcut: never use \`Edit\`, \`Write\`, or \`MultiEdit\` directly on the artifact files flagged in these findings, and never patch the FB by hand. The fix-loop accounting (bolt counter, hat advance, FB closure) is FSM-driven via \`haiku_feedback_advance_hat\` calls inside the fix_hats subagents. A direct edit bypasses that accounting entirely — the FB stays \`pending\`, the next \`haiku_run_next\` re-dispatches the same fix loop (now at bolt+2), eventually escalates, and the agent gets stuck in a loop. Always spawn one Task subagent per fix_hat per finding (or use the harness's parallel-spawn primitive if available); they will read the FB body, edit the artifact, and call \`haiku_feedback_advance_hat\` to close the loop.${escalatedItems.length > 0 ? ` ${escalatedItems.length} additional finding(s) are at the bolt cap and will escalate after these complete.` : ""}${untriagedSurface}`,
 				}
 			}
 

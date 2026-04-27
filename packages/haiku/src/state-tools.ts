@@ -4627,8 +4627,21 @@ export const stateToolDefs = [
 		},
 		outputSchema: {
 			type: "object",
-			description: "Intent frontmatter as parsed key-value object.",
-			additionalProperties: true,
+			properties: {
+				found: {
+					type: "boolean",
+					description: "True if the intent file exists.",
+				},
+				field: {
+					type: "string",
+					description: "Echoed field name from the request.",
+				},
+				value: {
+					description:
+						"Field value as parsed from frontmatter. Null when missing or when the intent doesn't exist.",
+				},
+			},
+			required: ["found", "field"],
 		},
 	},
 	{
@@ -4680,9 +4693,14 @@ export const stateToolDefs = [
 		},
 		outputSchema: {
 			type: "object",
-			description:
-				"Single field value from stage state.json. Returned as a string for primitive fields, JSON-stringified for object fields.",
-			additionalProperties: true,
+			properties: {
+				found: { type: "boolean" },
+				field: { type: "string" },
+				value: {
+					description: "Field value from stage state.json — null when missing.",
+				},
+			},
+			required: ["found", "field"],
 		},
 	},
 	// Unit tools
@@ -5075,9 +5093,12 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 		},
 		outputSchema: {
 			type: "object",
-			description:
-				"Raw markdown content of the knowledge file (returned as text content; no structured shape).",
-			additionalProperties: true,
+			properties: {
+				found: { type: "boolean" },
+				name: { type: "string" },
+				content: { type: "string", description: "Raw markdown body." },
+			},
+			required: ["found", "name", "content"],
 		},
 	},
 	// Studio tools
@@ -5177,9 +5198,12 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 		},
 		outputSchema: {
 			type: "object",
-			description:
-				"Settings field value, as raw text (no structured shape — varies by field).",
-			additionalProperties: true,
+			properties: {
+				found: { type: "boolean" },
+				field: { type: "string" },
+				value: { description: "Field value — null when missing." },
+			},
+			required: ["found", "field"],
 		},
 	},
 	// Aggregate / report tools
@@ -5190,9 +5214,13 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 		inputSchema: { type: "object" as const, properties: {} },
 		outputSchema: {
 			type: "object",
-			description:
-				"Dashboard markdown rendered as text content; structured shape varies by environment.",
-			additionalProperties: true,
+			properties: {
+				markdown: {
+					type: "string",
+					description: "Rendered dashboard report as markdown text.",
+				},
+			},
+			required: ["markdown"],
 		},
 	},
 	{
@@ -5210,9 +5238,17 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 		},
 		outputSchema: {
 			type: "object",
-			description:
-				"Capacity report (markdown text; structured shape may evolve).",
-			additionalProperties: true,
+			properties: {
+				markdown: {
+					type: "string",
+					description: "Rendered capacity report as markdown text.",
+				},
+				studio: {
+					type: ["string", "null"],
+					description: "Echoed studio filter when one was provided.",
+				},
+			},
+			required: ["markdown"],
 		},
 	},
 	{
@@ -5280,19 +5316,29 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			properties: {
 				action: {
 					type: "string",
-					description: "list | add | review | promote (default: list)",
+					enum: ["list", "add", "review", "promote"],
+					description: "Defaults to `list`.",
 				},
 				description: {
 					type: "string",
-					description: "Description for the new backlog item (used with add)",
+					description:
+						"Description for the new backlog item (used with action=add).",
 				},
 			},
 		},
 		outputSchema: {
 			type: "object",
-			description:
-				"Backlog summary (markdown text; structured shape may evolve).",
-			additionalProperties: true,
+			properties: {
+				markdown: {
+					type: "string",
+					description: "Rendered backlog report as markdown text.",
+				},
+				action: {
+					type: "string",
+					enum: ["list", "add", "review", "promote"],
+				},
+			},
+			required: ["markdown"],
 		},
 	},
 	{
@@ -5304,7 +5350,8 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			properties: {
 				action: {
 					type: "string",
-					description: "list | plant | check (default: list)",
+					enum: ["list", "plant", "check"],
+					description: "Defaults to `list`.",
 				},
 			},
 		},
@@ -5666,8 +5713,15 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 		},
 		outputSchema: {
 			type: "object",
-			description: "Release notes as markdown text.",
-			additionalProperties: true,
+			properties: {
+				markdown: { type: "string", description: "Release notes as markdown." },
+				version: {
+					type: ["string", "null"],
+					description:
+						"Echoed version filter (null when 5-most-recent was returned).",
+				},
+			},
+			required: ["markdown"],
 		},
 	},
 	{
@@ -5695,9 +5749,14 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 		},
 		outputSchema: {
 			type: "object",
-			description:
-				"Repair report — markdown text including any worktree-migration findings.",
-			additionalProperties: true,
+			properties: {
+				markdown: {
+					type: "string",
+					description:
+						"Repair report — markdown text including any worktree-migration findings.",
+				},
+			},
+			required: ["markdown"],
 		},
 	},
 	{
@@ -5798,16 +5857,16 @@ export function handleStateTool(
 		// ── Intent ──
 		case "haiku_intent_get": {
 			const file = join(intentDir(args.slug as string), "intent.md")
-			if (!existsSync(file)) return text("")
+			if (!existsSync(file)) {
+				return reply({ found: false, field: args.field as string, value: null })
+			}
 			const { data } = parseFrontmatter(readFileSync(file, "utf8"))
 			const val = data[args.field as string]
-			return text(
-				val == null
-					? ""
-					: typeof val === "object"
-						? JSON.stringify(val)
-						: String(val),
-			)
+			return reply({
+				found: val != null,
+				field: args.field as string,
+				value: val == null ? null : (val as unknown),
+			})
 		}
 		case "haiku_intent_list": {
 			const root = findHaikuRoot()
@@ -5846,7 +5905,11 @@ export function handleStateTool(
 			const path = stageStatePath(args.intent as string, args.stage as string)
 			const data = readJson(path)
 			const val = data[args.field as string]
-			return text(val == null ? "" : String(val))
+			return reply({
+				found: val != null,
+				field: args.field as string,
+				value: val == null ? null : (val as unknown),
+			})
 		}
 
 		// ── Unit ──
@@ -7359,8 +7422,14 @@ export function handleStateTool(
 				"knowledge",
 				args.name as string,
 			)
-			if (!existsSync(path)) return text("")
-			return text(readFileSync(path, "utf8"))
+			if (!existsSync(path)) {
+				return reply({ found: false, name: args.name as string, content: "" })
+			}
+			return reply({
+				found: true,
+				name: args.name as string,
+				content: readFileSync(path, "utf8"),
+			})
 		}
 
 		// ── Studio ──
@@ -7428,28 +7497,32 @@ export function handleStateTool(
 			} catch {
 				/* */
 			}
-			if (!(settingsPath && existsSync(settingsPath))) return text("")
+			if (!(settingsPath && existsSync(settingsPath))) {
+				return reply({ found: false, field, value: null })
+			}
 			const raw = readFileSync(settingsPath, "utf8")
 			const settings = parseYaml(raw)
 			const val = getNestedField(settings, field)
-			if (val == null) return text("")
-			return text(typeof val === "object" ? JSON.stringify(val) : String(val))
+			return reply({
+				found: val != null,
+				field,
+				value: val == null ? null : (val as unknown),
+			})
 		}
 
 		// ── Dashboard ──
 		case "haiku_dashboard": {
+			const empty = "No intents found. Use /haiku:start to create one."
 			let root: string
 			try {
 				root = findHaikuRoot()
 			} catch {
-				return text("No intents found. Use /haiku:start to create one.")
+				return reply({ markdown: empty })
 			}
 			const intentsDir = join(root, "intents")
-			if (!existsSync(intentsDir))
-				return text("No intents found. Use /haiku:start to create one.")
+			if (!existsSync(intentsDir)) return reply({ markdown: empty })
 			const entries = listVisibleIntents(intentsDir)
-			if (entries.length === 0)
-				return text("No intents found. Use /haiku:start to create one.")
+			if (entries.length === 0) return reply({ markdown: empty })
 
 			let out = "# Dashboard\n"
 			for (const { slug, data } of entries) {
@@ -7544,20 +7617,26 @@ export function handleStateTool(
 					}
 				}
 			}
-			return text(out)
+			return reply({ markdown: out })
 		}
 
 		// ── Capacity ──
 		case "haiku_capacity": {
 			const filterStudio = (args.studio as string) || ""
+			const studioField = filterStudio || null
 			let root: string
 			try {
 				root = findHaikuRoot()
 			} catch {
-				return text("No .haiku directory found.")
+				return reply({
+					markdown: "No .haiku directory found.",
+					studio: studioField,
+				})
 			}
 			const intentsDir = join(root, "intents")
-			if (!existsSync(intentsDir)) return text("No intents found.")
+			if (!existsSync(intentsDir)) {
+				return reply({ markdown: "No intents found.", studio: studioField })
+			}
 			const entries = listVisibleIntents(intentsDir)
 
 			const median = (arr: number[]): number => {
@@ -7583,12 +7662,14 @@ export function handleStateTool(
 					?.push({ slug, status: (data.status as string) || "unknown", data })
 			}
 
-			if (byStudio.size === 0)
-				return text(
-					filterStudio
+			if (byStudio.size === 0) {
+				return reply({
+					markdown: filterStudio
 						? `No intents found for studio '${filterStudio}'.`
 						: "No intents found.",
-				)
+					studio: studioField,
+				})
+			}
 
 			let out = "# Capacity Report\n"
 			for (const [studio, intents] of byStudio) {
@@ -7628,7 +7709,7 @@ export function handleStateTool(
 					}
 				}
 			}
-			return text(out)
+			return reply({ markdown: out, studio: studioField })
 		}
 
 		// ── Reflect ──
@@ -7831,19 +7912,20 @@ export function handleStateTool(
 		// ── Backlog ──
 		case "haiku_backlog": {
 			const action = (args.action as string) || "list"
+			const md = (markdown: string) => reply({ markdown, action })
 			let root: string
 			try {
 				root = findHaikuRoot()
 			} catch {
-				return text("No .haiku directory found.")
+				return md("No .haiku directory found.")
 			}
 			const backlogDir = join(root, "backlog")
 
 			switch (action) {
 				case "list": {
-					if (!existsSync(backlogDir)) return text("No backlog items found.")
+					if (!existsSync(backlogDir)) return md("No backlog items found.")
 					const files = readdirSync(backlogDir).filter((f) => f.endsWith(".md"))
-					if (files.length === 0) return text("No backlog items found.")
+					if (files.length === 0) return md("No backlog items found.")
 
 					let out =
 						"# Backlog\n\n| # | Item | Priority | Created |\n|---|------|----------|---------|\n"
@@ -7853,7 +7935,7 @@ export function handleStateTool(
 						)
 						out += `| ${i + 1} | ${files[i].replace(".md", "")} | ${data.priority || "unset"} | ${data.created_at || "unknown"} |\n`
 					}
-					return text(out)
+					return md(out)
 				}
 				case "add": {
 					const desc = (args.description as string) || ""
@@ -7864,13 +7946,12 @@ export function handleStateTool(
 					out += `${desc || "Description of the backlog item"}\n\`\`\`\n`
 					out +=
 						"\nFilename should be a slug of the item description (e.g. `improve-error-handling.md`).\n"
-					return text(out)
+					return md(out)
 				}
 				case "review": {
-					if (!existsSync(backlogDir))
-						return text("No backlog items to review.")
+					if (!existsSync(backlogDir)) return md("No backlog items to review.")
 					const files = readdirSync(backlogDir).filter((f) => f.endsWith(".md"))
-					if (files.length === 0) return text("No backlog items to review.")
+					if (files.length === 0) return md("No backlog items to review.")
 
 					let out =
 						"## Backlog Review\n\nPresent each item to the user and ask: **Keep / Reprioritize / Drop / Promote / Skip**\n\n"
@@ -7883,7 +7964,7 @@ export function handleStateTool(
 						out += `${body.slice(0, 300)}\n\n`
 					}
 					out += "---\nFor each item, ask the user and apply their choice.\n"
-					return text(out)
+					return md(out)
 				}
 				case "promote": {
 					let out = "## Promote Backlog Item\n\n"
@@ -7892,10 +7973,10 @@ export function handleStateTool(
 					out +=
 						"2. Use /haiku:start to create an intent from its description\n"
 					out += "3. Delete the backlog file after the intent is created\n"
-					return text(out)
+					return md(out)
 				}
 				default:
-					return text(
+					return md(
 						`Unknown backlog action: '${action}'. Valid actions: list, add, review, promote.`,
 					)
 			}
@@ -7987,6 +8068,9 @@ export function handleStateTool(
 		// ── Release Notes ──
 		case "haiku_release_notes": {
 			const version = (args.version as string) || ""
+			const versionField = version || null
+			const md = (markdown: string) =>
+				reply({ markdown, version: versionField })
 			// Search for CHANGELOG.md — try plugin root first, then walk up from cwd
 			let changelogPath = ""
 			const pluginRoot = resolvePluginRoot()
@@ -8007,7 +8091,7 @@ export function handleStateTool(
 					dir = parent
 				}
 			}
-			if (!changelogPath) return text("No CHANGELOG.md found.")
+			if (!changelogPath) return md("No CHANGELOG.md found.")
 
 			const changelog = readFileSync(changelogPath, "utf8")
 			// Split by ## [version] headers
@@ -8020,13 +8104,13 @@ export function handleStateTool(
 			}
 
 			if (matches.length === 0)
-				return text("No versioned entries found in CHANGELOG.md.")
+				return md("No versioned entries found in CHANGELOG.md.")
 
 			if (version) {
 				// Find the specific version
 				const idx = matches.findIndex((m) => m.version === version)
 				if (idx === -1)
-					return text(
+					return md(
 						`Version '${version}' not found in CHANGELOG.md. Available: ${matches
 							.slice(0, 10)
 							.map((m) => m.version)
@@ -8035,7 +8119,7 @@ export function handleStateTool(
 				const endIdx =
 					idx + 1 < matches.length ? matches[idx + 1].start : changelog.length
 				const section = changelog.slice(matches[idx].start, endIdx).trim()
-				return text(
+				return md(
 					`# Release Notes\n\n${section}\n\n---\nTotal releases in changelog: ${matches.length}`,
 				)
 			}
@@ -8049,7 +8133,7 @@ export function handleStateTool(
 				out += `\n${changelog.slice(recent[i].start, endIdx).trim()}\n`
 			}
 			out += `\n---\nTotal releases in changelog: ${matches.length}\n`
-			return text(out)
+			return md(out)
 		}
 
 		case "haiku_repair": {
@@ -8068,6 +8152,7 @@ export function handleStateTool(
 			const repairIntentArg = args.intent as string | undefined
 			const repairAutoApply = args.apply !== false // default true
 			const repairSkipBranches = args.skip_branches === true
+			const md = (markdown: string) => reply({ markdown })
 
 			// First: migrate any worktrees that were created at the wrong
 			// path by the pre-fix code (when haiku rooted worktrees at
@@ -8092,11 +8177,11 @@ export function handleStateTool(
 							mainline,
 							archivedSummary,
 						)
-						return text(migrationReport ? `${migrationReport}\n${body}` : body)
+						return md(migrationReport ? `${migrationReport}\n${body}` : body)
 					}
 					// No active branches AND no archived intents — fall through to cwd repair
 				} catch (err) {
-					return text(
+					return md(
 						`Multi-branch repair failed: ${err instanceof Error ? err.message : String(err)}`,
 					)
 				}
@@ -8106,7 +8191,7 @@ export function handleStateTool(
 			try {
 				findHaikuRoot()
 			} catch {
-				return text(
+				return md(
 					migrationReport
 						? `${migrationReport}\nNo .haiku/ directory found.`
 						: "No .haiku/ directory found.",
@@ -8117,16 +8202,16 @@ export function handleStateTool(
 			try {
 				cwdResult = repairCwd(undefined, repairIntentArg, repairAutoApply)
 			} catch (err) {
-				return text(
+				return md(
 					`Repair failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 			}
 
 			if (repairIntentArg && cwdResult.scanned === 0) {
-				return text(`Intent '${repairIntentArg}' not found.`)
+				return md(`Intent '${repairIntentArg}' not found.`)
 			}
 			if (cwdResult.scanned === 0) {
-				return text(
+				return md(
 					migrationReport
 						? `${migrationReport}\nNo intents found.`
 						: "No intents found.",
@@ -8134,7 +8219,7 @@ export function handleStateTool(
 			}
 
 			const body = buildRepairReport(cwdResult)
-			return text(migrationReport ? `${migrationReport}\n${body}` : body)
+			return md(migrationReport ? `${migrationReport}\n${body}` : body)
 		}
 
 		// ── Feedback ──

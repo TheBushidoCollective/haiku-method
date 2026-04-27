@@ -528,7 +528,7 @@ try {
 			slug: intentSlug,
 			field: "title",
 		})
-		assert.strictEqual(getTextResult(result), "Test Intent")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "Test Intent")
 	})
 
 	test("reads studio from intent", () => {
@@ -536,7 +536,7 @@ try {
 			slug: intentSlug,
 			field: "studio",
 		})
-		assert.strictEqual(getTextResult(result), "software")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "software")
 	})
 
 	test("reads status from intent", () => {
@@ -544,7 +544,7 @@ try {
 			slug: intentSlug,
 			field: "status",
 		})
-		assert.strictEqual(getTextResult(result), "active")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "active")
 	})
 
 	test("reads mode from intent", () => {
@@ -552,31 +552,35 @@ try {
 			slug: intentSlug,
 			field: "mode",
 		})
-		assert.strictEqual(getTextResult(result), "continuous")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "continuous")
 	})
 
-	test("returns empty string for missing field", () => {
+	test("returns null value for missing field", () => {
 		const result = handleStateTool("haiku_intent_get", {
 			slug: intentSlug,
 			field: "nonexistent",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.value, null)
 	})
 
-	test("returns empty string for missing intent", () => {
+	test("returns found:false for missing intent", () => {
 		const result = handleStateTool("haiku_intent_get", {
 			slug: "does-not-exist",
 			field: "title",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.value, null)
 	})
 
-	test("returns null fields as empty string", () => {
+	test("returns null value for fields whose YAML value is null", () => {
 		const result = handleStateTool("haiku_intent_get", {
 			slug: intentSlug,
 			field: "completed_at",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, null)
 	})
 
 	// ── haiku_intent_list ─────────────────────────────────────────────────────
@@ -874,7 +878,7 @@ body
 			stage: "inception",
 			field: "phase",
 		})
-		assert.strictEqual(getTextResult(result), "elaborate")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "elaborate")
 	})
 
 	test("reads status from stage state", () => {
@@ -883,25 +887,29 @@ body
 			stage: "inception",
 			field: "status",
 		})
-		assert.strictEqual(getTextResult(result), "active")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "active")
 	})
 
-	test("returns empty for missing stage field", () => {
+	test("returns null for missing stage field", () => {
 		const result = handleStateTool("haiku_stage_get", {
 			intent: intentSlug,
 			stage: "inception",
 			field: "nonexistent",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.value, null)
 	})
 
-	test("returns empty for missing stage directory", () => {
+	test("returns null for missing stage directory", () => {
 		const result = handleStateTool("haiku_stage_get", {
 			intent: intentSlug,
 			stage: "nonexistent",
 			field: "phase",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.value, null)
 	})
 
 	// ── haiku_unit_get ────────────────────────────────────────────────────────
@@ -1153,17 +1161,20 @@ body
 			intent: intentSlug,
 			name: "discovery.md",
 		})
-		const text = getTextResult(result)
-		assert.ok(text.includes("# Discovery Document"))
-		assert.ok(text.includes("Key findings here"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, true)
+		assert.ok(parsed.content.includes("# Discovery Document"))
+		assert.ok(parsed.content.includes("Key findings here"))
 	})
 
-	test("returns empty for missing knowledge file", () => {
+	test("returns found:false for missing knowledge file", () => {
 		const result = handleStateTool("haiku_knowledge_read", {
 			intent: intentSlug,
 			name: "nonexistent.md",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.content, "")
 	})
 
 	// ── haiku_settings_get ────────────────────────────────────────────────────
@@ -1172,33 +1183,35 @@ body
 
 	test("reads top-level setting", () => {
 		const result = handleStateTool("haiku_settings_get", { field: "studio" })
-		assert.strictEqual(getTextResult(result), "software")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "software")
 	})
 
 	test("reads nested setting with dot notation", () => {
 		const result = handleStateTool("haiku_settings_get", {
 			field: "stack.compute",
 		})
-		assert.strictEqual(getTextResult(result), "lambda")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "lambda")
 	})
 
 	test("reads nested setting deep", () => {
 		const result = handleStateTool("haiku_settings_get", { field: "stack.db" })
-		assert.strictEqual(getTextResult(result), "postgres")
+		assert.strictEqual(JSON.parse(getTextResult(result)).value, "postgres")
 	})
 
-	test("returns empty for missing setting", () => {
+	test("returns null for missing setting", () => {
 		const result = handleStateTool("haiku_settings_get", {
 			field: "nonexistent",
 		})
-		assert.strictEqual(getTextResult(result), "")
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.found, false)
+		assert.strictEqual(parsed.value, null)
 	})
 
-	test("returns JSON for object settings", () => {
+	test("returns object for object-typed settings", () => {
 		const result = handleStateTool("haiku_settings_get", { field: "stack" })
-		const parsed = JSON.parse(getTextResult(result))
-		assert.strictEqual(parsed.compute, "lambda")
-		assert.strictEqual(parsed.db, "postgres")
+		const value = JSON.parse(getTextResult(result)).value
+		assert.strictEqual(value.compute, "lambda")
+		assert.strictEqual(value.db, "postgres")
 	})
 
 	// ── haiku_unit_advance_hat: unit_outputs_empty backpressure ───────────────

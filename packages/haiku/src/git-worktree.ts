@@ -87,6 +87,24 @@ export function getMainlineBranch(): string {
 	return configured || "main"
 }
 
+/** Resolve the best ref to fork a new branch from. Prefers local `<mainline>`
+ *  (matches `addTempWorktree`'s default — local may have commits not yet on
+ *  origin), falls back to `origin/<mainline>`. Returns an empty string when
+ *  no mainline ref can be located, leaving the caller to fork from HEAD. */
+export function resolveMainlineRef(): string {
+	if (!isGitRepo()) return ""
+	// `getMainlineBranch()` always returns a non-empty string (`"main"` is the
+	// hardcoded last resort), so we don't guard against empty here.
+	const mainline = getMainlineBranch()
+	if (tryRun(["git", "rev-parse", "--verify", mainline])) {
+		return mainline
+	}
+	if (tryRun(["git", "rev-parse", "--verify", `origin/${mainline}`])) {
+		return `origin/${mainline}`
+	}
+	return ""
+}
+
 /** Fetch from origin so subsequent ref lookups and worktree creations see the
  *  current remote state. Non-fatal — returns false on failure (offline, no remote). */
 export function fetchOrigin(): boolean {
@@ -477,14 +495,9 @@ function checkoutOrCreate(branch: string, baseBranch?: string): string {
 			run(["git", "checkout", branch])
 		}
 	} else if (baseBranch) {
-		// Create + check out the new branch directly from baseBranch in
-		// one op. The previous form (`git checkout baseBranch` followed
-		// by `git checkout -b branch`) round-tripped through baseBranch's
-		// working tree for no reason, mutating the index/working tree
-		// twice and adding an extra dirty-tree failure surface. Git's
-		// `checkout -b <new> <start-ref>` does the create + switch
-		// atomically; baseBranch must exist or this throws so the caller
-		// can recover.
+		// Fork from baseBranch in a single command so we never bounce the
+		// working tree through baseBranch first. baseBranch must exist —
+		// let `git checkout -b` throw if not so the caller knows.
 		run(["git", "checkout", "-b", branch, baseBranch])
 	} else {
 		try {
@@ -499,10 +512,9 @@ function checkoutOrCreate(branch: string, baseBranch?: string): string {
 /**
  * Ensure the intent's consolidation branch `haiku/<slug>/main` exists.
  * Does NOT check it out — if main already exists, this is a no-op; if
- * it doesn't, we create it with `git branch <name>` (pointing at the
- * current HEAD, which the caller is responsible for positioning —
- * `haiku_intent_create` checks out the repo mainline first so main is
- * forked from a neutral base).
+ * it doesn't, we create it with `git branch <name> [<baseRef>]`. When
+ * `baseRef` is provided we fork from that ref directly (no working-tree
+ * change required); otherwise we fork from current HEAD.
  *
  * The no-checkout contract is load-bearing: this function runs at the
  * top of every `fsmStartStage` tick, and earlier revisions that used
@@ -515,12 +527,15 @@ function checkoutOrCreate(branch: string, baseBranch?: string): string {
  *
  * No-op in non-git environments. Returns the branch name.
  */
-export function createIntentBranch(slug: string): string {
+export function createIntentBranch(slug: string, baseRef?: string): string {
 	const branch = `haiku/${slug}/main`
 	if (!isGitRepo()) return branch
 	if (branchExists(branch)) return branch
-	// Create the branch pointing at the current HEAD without switching.
-	run(["git", "branch", branch])
+	if (baseRef) {
+		run(["git", "branch", branch, baseRef])
+	} else {
+		run(["git", "branch", branch])
+	}
 	return branch
 }
 

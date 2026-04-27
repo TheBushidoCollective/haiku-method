@@ -1,10 +1,11 @@
 // tools/orchestrator/haiku_intent_create.ts — Create a new intent.
 // One per session (rejects if the session already owns an intent).
-// Forces a checkout to repo mainline FIRST so existsSync checks and
-// the eventual createIntentBranch fork happen on a known-good base
-// — otherwise a stray intents/{slug}/ on a foreign stage branch
-// could spoof an intent_exists, or createIntentBranch would fork off
-// the wrong base.
+// Forks `haiku/{slug}/main` directly off the mainline ref WITHOUT
+// checking out the repo mainline (locked / dirty mainline checkouts
+// in another worktree don't block intent creation, and intent files
+// only ever land on the haiku branch — mainline stays clean). The
+// working tree lands on the intent's own branch, so the intent is
+// resumable via `git switch`.
 //
 // Title is required and must be a deliberate 3–8 word summary, not a
 // truncated description. Slug auto-derives from title when omitted.
@@ -12,7 +13,11 @@
 import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { getMainlineBranch } from "../../git-worktree.js"
+import {
+	branchExists,
+	createIntentBranch,
+	resolveMainlineRef,
+} from "../../git-worktree.js"
 import { validateIdentifier } from "../../prompts/helpers.js"
 import { getSessionIntent, logSessionEvent } from "../../session-metadata.js"
 import {
@@ -114,21 +119,32 @@ export default defineTool({
 			}
 		}
 
-		// Force checkout of the repo mainline BEFORE ANY filesystem checks
-		// or writes for the new intent. If we ran existsSync on the
-		// current (potentially foreign) branch first, we could:
-		//   - return spurious intent_exists when a stray intents/{slug}/
-		//     dir sits on a foreign stage branch, or
-		//   - miss a genuine existing intent on mainline.
-		// Plus, subsequent createIntentBranch forks haiku/{new-slug}/main
-		// off whatever branch is current — a fresh intent must be born on
-		// the repo mainline so its haiku/{slug}/main starts from a clean
-		// base.
+		// Fork the intent's main branch directly off the mainline ref and
+		// switch the working tree to it BEFORE any filesystem checks or
+		// writes for the new intent. We never check out the repo mainline:
+		//   - `git branch <new> <ref>` forks from any ref without touching
+		//     the working tree, so a locked or stale mainline checkout in
+		//     another worktree doesn't block us.
+		//   - The working tree lands on `haiku/{slug}/main`, the intent's
+		//     own branch — making it resumable via plain `git switch`.
+		//   - Intent files (intent.md, knowledge/*) only ever land on the
+		//     haiku branch; mainline stays clean.
+		// The existsSync check on iDir then runs against the intent's
+		// branch:
+		//   - If `haiku/{slug}/main` already existed, the fork is a no-op,
+		//     checkout reveals the existing files, and we return
+		//     intent_exists.
+		//   - If a legacy intent dir lives on mainline (pre-fix repos), the
+		//     fresh fork inherits it, and existsSync still catches it.
 		const root = findHaikuRoot()
 		const iDir = join(root, "intents", slug)
+		const intentMainBranch = `haiku/${slug}/main`
 		if (isGitRepo()) {
 			try {
-				const mainlineBranch = getMainlineBranch()
+				const mainlineRef = resolveMainlineRef()
+				if (!branchExists(intentMainBranch)) {
+					createIntentBranch(slug, mainlineRef || undefined)
+				}
 				let currentBranch = ""
 				try {
 					currentBranch = execFileSync(
@@ -139,8 +155,8 @@ export default defineTool({
 				} catch {
 					/* non-fatal: detached HEAD or similar */
 				}
-				if (mainlineBranch && currentBranch !== mainlineBranch) {
-					execFileSync("git", ["checkout", mainlineBranch], {
+				if (currentBranch !== intentMainBranch) {
+					execFileSync("git", ["checkout", intentMainBranch], {
 						encoding: "utf8",
 						stdio: "pipe",
 					})
@@ -151,7 +167,7 @@ export default defineTool({
 					content: [
 						{
 							type: "text" as const,
-							text: `Error: failed to checkout repo mainline before creating intent '${slug}'. Stash or commit uncommitted changes, then retry. Raw git error: ${raw}`,
+							text: `Error: failed to switch to intent branch '${intentMainBranch}'. Stash or commit uncommitted changes, or remove the worktree holding '${intentMainBranch}' if it's checked out elsewhere, then retry. Raw git error: ${raw}`,
 						},
 					],
 					isError: true,

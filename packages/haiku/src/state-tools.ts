@@ -2816,15 +2816,33 @@ export const UNIT_FRONTMATTER_SCHEMA = {
 		},
 		inputs: {
 			type: "array",
-			items: { type: "string" },
+			items: {
+				type: "string",
+				// Path-shape check: must be a non-empty string with no
+				// embedded whitespace, must contain a `/` (any path) or `.`
+				// (file extension), and must NOT contain `:` or `,` or
+				// sentence-style punctuation. Catches freeform-text entries
+				// like "ACCEPTANCE-CRITERIA: must define edge cases" that
+				// aren't really paths.
+				pattern: "^[^\\s:,]+(?:/[^\\s:,]+)*$",
+			},
 			description:
-				"Cross-stage inputs this unit reads — paths to artifacts produced by prior stages.",
+				"Cross-stage inputs this unit reads — paths to artifacts produced by prior stages. Each entry MUST be a file/dir path (no whitespace, no colons or commas, no prose).",
 		},
 		outputs: {
 			type: "array",
-			items: { type: "string" },
+			items: {
+				type: "string",
+				// Same path-shape check as inputs. The advance gate verifies
+				// each output path actually exists as a file at unit
+				// completion (see runInlineQualityGates / outputs-empty
+				// check), so freeform sentences would slip past the
+				// non-empty check before this pattern-validation gate
+				// rejected them.
+				pattern: "^[^\\s:,]+(?:/[^\\s:,]+)*$",
+			},
 			description:
-				"Artifacts this unit produces. Used downstream and by validation.",
+				"Artifacts this unit produces. Each entry MUST be a real file path (no whitespace, no colons or commas, no prose) — the gate verifies the path exists on disk at unit completion. Use `inputs:` if you mean to declare what the unit READS; use the body's `## Completion Criteria` section if you mean to declare prose-style success conditions.",
 		},
 		quality_gates: {
 			type: "array",
@@ -6071,6 +6089,39 @@ export function handleStateTool(
 				}
 			}
 
+			// Validate every declared input path exists on disk BEFORE the
+			// unit transitions to active. The FM schema's pattern check
+			// catches freeform-text entries at write time, but a path that
+			// LOOKS valid (e.g. references a prior-stage artifact that
+			// never landed) needs a runtime gate too — without this, the
+			// unit's hats start work against missing inputs and either
+			// silently produce wrong artifacts or fail later in cryptic
+			// ways.
+			{
+				const startUnitFm = parseFrontmatter(readFileSync(uPath, "utf8")).data
+				const startInputs = Array.isArray(startUnitFm.inputs)
+					? (startUnitFm.inputs as string[])
+					: []
+				const missingInputs: string[] = []
+				for (const inp of startInputs) {
+					if (
+						!unitOutputExists(args.intent as string, args.unit as string, inp)
+					) {
+						missingInputs.push(inp)
+					}
+				}
+				if (missingInputs.length > 0) {
+					return reply(
+						{
+							error: "unit_inputs_missing",
+							missing: missingInputs,
+							message: `Cannot start unit '${args.unit}': ${missingInputs.length} declared input(s) do not exist on disk: [${missingInputs.map((p) => `'${p}'`).join(", ")}]. Each entry in \`inputs:\` MUST reference a real file (typically an artifact a prior stage produced). Verify the upstream stage actually wrote the file, OR remove the input entry if the unit doesn't actually need it.`,
+						},
+						{ isError: true },
+					)
+				}
+			}
+
 			const stageHats = resolveStageHats(args.intent as string, stage)
 			const firstHat = stageHats[0] || ""
 
@@ -6464,6 +6515,46 @@ export function handleStateTool(
 							error: "unit_outputs_empty",
 							message:
 								"Cannot complete unit: no outputs were produced. Every unit must write at least one artifact that the FSM can detect (stage artifact under `stages/<stage>/...` excluding `units/`/`state.json`, knowledge document under `knowledge/`, or a file matching a stage output template `location:`). The FSM auto-populates `outputs:` from the git diff at advance time; if you've written files but they're not showing up, verify they've been committed in the unit worktree, or add them explicitly to the unit's `outputs:` frontmatter field.",
+						},
+						{ isError: true },
+					)
+				}
+
+				// Validate every declared output path exists on disk. The
+				// FM schema's pattern check catches "Weekly carryover roll:
+				// scheduler trigger…"-style prose entries at write time,
+				// but pre-existing units (or escaped writes) need a runtime
+				// gate too: an output that claims a path the unit never
+				// produced silently passes downstream as if the artifact
+				// landed.
+				//
+				// Resolution order matches `unitOutputExists` (used by
+				// stage output-template validation): check the unit's
+				// worktree first, then the parent intent dir, then the
+				// repo root for repo-relative paths.
+				const missingOutputs: string[] = []
+				for (const out of unitOutputsAfter) {
+					if (
+						!unitOutputExists(args.intent as string, args.unit as string, out)
+					) {
+						missingOutputs.push(out)
+					}
+				}
+				if (missingOutputs.length > 0) {
+					const sf = args.state_file as string | undefined
+					if (sf)
+						logSessionEvent(sf, {
+							event: "outputs_missing",
+							intent: args.intent,
+							stage: advStage,
+							unit: args.unit,
+							missing: missingOutputs.length,
+						})
+					return reply(
+						{
+							error: "unit_outputs_missing",
+							missing: missingOutputs,
+							message: `Cannot complete unit: ${missingOutputs.length} declared output(s) do not exist on disk: [${missingOutputs.map((p) => `'${p}'`).join(", ")}]. Each entry in \`outputs:\` MUST be a real file path. If you wrote prose (e.g. "Weekly carryover roll: scheduler trigger, idempotent roll logic"), that's a completion-criteria description, not an output path — move it to the body's \`## Completion Criteria\` section and let auto-populate fill \`outputs:\` from the actual git diff.`,
 						},
 						{ isError: true },
 					)

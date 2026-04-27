@@ -1,6 +1,6 @@
 ---
 name: acceptance-criteria
-location: .haiku/intents/{intent-slug}/knowledge/ACCEPTANCE-CRITERIA.md
+location: .haiku/intents/{intent-slug}/product/ACCEPTANCE-CRITERIA.md
 scope: intent
 format: text
 required: true

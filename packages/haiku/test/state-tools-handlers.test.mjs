@@ -585,7 +585,7 @@ try {
 
 	test("lists all intents", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		assert.ok(Array.isArray(intents))
 		assert.ok(
 			intents.length >= 2,
@@ -595,7 +595,7 @@ try {
 
 	test("intent list includes slug and status", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		const testIntent = intents.find((i) => i.slug === intentSlug)
 		assert.ok(testIntent, "test-intent should be in the list")
 		assert.strictEqual(testIntent.status, "active")
@@ -604,7 +604,7 @@ try {
 
 	test("intent list includes completed intents", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		const second = intents.find((i) => i.slug === "second-intent")
 		assert.ok(second, "second-intent should be in the list")
 		assert.strictEqual(second.status, "completed")
@@ -612,7 +612,7 @@ try {
 
 	test("intent list filters archived intents by default", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		const archived = intents.find((i) => i.slug === "archived-intent")
 		assert.strictEqual(
 			archived,
@@ -623,7 +623,7 @@ try {
 
 	test("intent list omits archived field in default response", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		for (const i of intents) {
 			assert.strictEqual(
 				"archived" in i,
@@ -637,7 +637,7 @@ try {
 		const result = handleStateTool("haiku_intent_list", {
 			include_archived: true,
 		})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		const archived = intents.find((i) => i.slug === "archived-intent")
 		assert.ok(
 			archived,
@@ -652,7 +652,7 @@ try {
 		const result = handleStateTool("haiku_intent_list", {
 			include_archived: true,
 		})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		const testIntent = intents.find((i) => i.slug === intentSlug)
 		assert.ok(testIntent)
 		assert.strictEqual(testIntent.archived, false)
@@ -835,7 +835,7 @@ try {
 
 	test("haiku_intent_list still works (no slug to validate)", () => {
 		const result = handleStateTool("haiku_intent_list", {})
-		const intents = JSON.parse(getTextResult(result))
+		const intents = JSON.parse(getTextResult(result)).intents
 		assert.ok(Array.isArray(intents))
 		assert.ok(intents.length >= 1)
 	})
@@ -1026,7 +1026,7 @@ body
 			intent: intentSlug,
 			stage: "inception",
 		})
-		const units = JSON.parse(getTextResult(result))
+		const units = JSON.parse(getTextResult(result)).units
 		assert.ok(Array.isArray(units))
 		assert.strictEqual(units.length, 2)
 	})
@@ -1036,7 +1036,7 @@ body
 			intent: intentSlug,
 			stage: "inception",
 		})
-		const units = JSON.parse(getTextResult(result))
+		const units = JSON.parse(getTextResult(result)).units
 		const u1 = units.find((u) => u.name === "unit-01-discovery")
 		assert.ok(u1)
 		assert.strictEqual(u1.status, "active")
@@ -1049,7 +1049,7 @@ body
 			intent: intentSlug,
 			stage: "development",
 		})
-		const units = JSON.parse(getTextResult(result))
+		const units = JSON.parse(getTextResult(result)).units
 		assert.deepStrictEqual(units, [])
 	})
 
@@ -1058,7 +1058,7 @@ body
 			intent: intentSlug,
 			stage: "nonexistent",
 		})
-		const units = JSON.parse(getTextResult(result))
+		const units = JSON.parse(getTextResult(result)).units
 		assert.deepStrictEqual(units, [])
 	})
 
@@ -1130,7 +1130,7 @@ body
 		const result = handleStateTool("haiku_knowledge_list", {
 			intent: intentSlug,
 		})
-		const files = JSON.parse(getTextResult(result))
+		const files = JSON.parse(getTextResult(result)).files
 		assert.ok(Array.isArray(files))
 		assert.ok(files.includes("discovery.md"))
 		assert.ok(files.includes("architecture.md"))
@@ -1140,7 +1140,7 @@ body
 		const result = handleStateTool("haiku_knowledge_list", {
 			intent: "second-intent",
 		})
-		const files = JSON.parse(getTextResult(result))
+		const files = JSON.parse(getTextResult(result)).files
 		assert.deepStrictEqual(files, [])
 	})
 

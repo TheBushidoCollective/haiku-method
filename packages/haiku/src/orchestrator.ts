@@ -61,14 +61,10 @@ import {
 	verifyIntentState,
 } from "./state-integrity.js"
 import {
-	AGENT_AUTHORABLE_UNIT_FIELDS,
 	appendStageIteration,
-	CREATE_TIME_FB_FIELDS,
 	closeCurrentStageIteration,
 	countPendingFeedback,
 	type FeedbackItem,
-	FSM_DRIVEN_FB_FIELDS,
-	FSM_DRIVEN_UNIT_FIELDS,
 	findFeedbackFile,
 	findHaikuRoot,
 	getStageIterationCount,
@@ -190,46 +186,14 @@ const FSM_CONTRACTS_ELABORATE_UNIVERSAL = [
 	"- Every pending feedback id MUST be referenced by at least one new unit's `closes:` — orphans block advancement.",
 	"- Resolution paths: (a) draft new units that close findings (additive-elaboration), OR (b) fix existing unit specs and close the findings via `haiku_feedback_update status=closed` (pre-execute spec revisit), OR (c) reject stale/invalid findings via `haiku_feedback_reject` with a concrete reason.",
 	"",
-	"#### Unit frontmatter reference",
+	"#### Unit frontmatter — runtime rules JSONSchema can't express",
 	"",
-	`The \`haiku_unit_write\` validator enforces these rules at write time. Use this list when constructing the \`frontmatter\` argument:`,
+	"`haiku_unit_write`'s `inputSchema` describes every allowed/forbidden field, type, and enum — read it as tool knowledge for the field list, allowed shapes, and the FSM-driven forbid list. The rules below are the ones the schema cannot capture (they need runtime context):",
 	"",
-	`**Agent-authorable** (set freely; the validator checks shape): ${AGENT_AUTHORABLE_UNIT_FIELDS.map((f) => `\`${f}\``).join(", ")}, plus any stage-specific fields documented in the per-stage \`phases/ELABORATION.md\`.`,
-	"",
-	`**Forbidden** (FSM owns these — including any of them returns \`fsm_field_forbidden\`): ${FSM_DRIVEN_UNIT_FIELDS.map((f) => `\`${f}\``).join(", ")}.`,
-	"",
-	"Worked examples (what each canonical field looks like in YAML):",
-	"",
-	"```yaml",
-	"# Minimal unit (most common — title defaults from H1 in body)",
-	"depends_on: [unit-01-data-model]",
-	"model: sonnet",
-	"",
-	"# Unit with cross-stage inputs and produced outputs",
-	"title: API endpoint scaffolding",
-	"depends_on: [unit-02-data-model]",
-	"inputs:",
-	"  - .haiku/intents/{slug}/stages/design/outputs/api-spec.md",
-	"outputs:",
-	"  - packages/api/src/routes/users.ts",
-	"model: sonnet",
-	"",
-	"# Build-class unit with executable quality gates",
-	"depends_on: []",
-	"model: haiku",
-	"quality_gates:",
-	"  - name: typecheck",
-	"    command: pnpm tsc --noEmit",
-	"  - name: tests",
-	"    command: pnpm test --run packages/api/test/users.test.ts",
-	"",
-	"# Revisit unit (iteration > 1) — closes feedback findings",
-	"depends_on: []",
-	"model: sonnet",
-	"closes: [FB-03, FB-07]",
-	"```",
-	"",
-	"`depends_on:` entries MUST be sibling unit names in the SAME stage; cross-stage references go in `inputs:`. The FSM validates DAG acyclicity and rejects cycles at write time.",
+	"- `depends_on:` entries MUST be sibling unit names in the SAME stage. Cross-stage references go in `inputs:`. The validator resolves each entry against the actual sibling list and rejects unresolved names.",
+	"- `depends_on:` MUST NOT cycle through the stage's DAG. The FSM runs cycle detection at write time and returns `dag_cycle_detected` with the offending nodes.",
+	"- `closes:` (revisit iterations) MUST reference real pending FB IDs in this intent. Orphan FBs (pending but unclaimed) block stage advancement.",
+	"- The `body` argument MUST be substantive prose. Placeholder strings are rejected at advance time: `TBD`, `tbd`, `similar to`, `add error handling`, `etc.`, or a literal `...` placeholder. Write the concrete value or surface it as a question.",
 	"",
 	"#### MCP tool contracts — what the agent calls vs. what the FSM owns",
 	"",
@@ -371,24 +335,16 @@ const FSM_CONTRACTS_FIX_LOOP_BLOCK = [
 	"- The fix-loop's hat-progression tools mirror the unit equivalents but target FBs: `haiku_feedback_advance_hat` / `haiku_feedback_reject_hat` (NOT `haiku_unit_advance_hat` / `haiku_unit_reject_hat` — those operate on units). Each fix hat completes its work, calls advance_hat against the FB, and returns; the parent calls `haiku_run_next` after every wave completes.",
 	"- Parallel chains may edit the same artifact concurrently. Each final hat validates closure independently — a chain whose fix was clobbered by another chain will leave its finding open, and the next bolt will retry. Budget is spent, not lost.",
 	"",
-	"#### Feedback frontmatter reference (READ-ONLY for fix-mode hats)",
+	"#### Feedback frontmatter — semantics worth knowing",
 	"",
-	"`haiku_feedback_write` is body-only; FB frontmatter is FSM-controlled. When reading FB context (via `haiku_unit_read` or by inspecting the FB file), expect these fields:",
+	"`haiku_feedback_write`, `haiku_feedback_advance_hat`, and `haiku_feedback_reject_hat` ship full input/output schemas — read them as tool knowledge for argument shape, error codes, and FB FM field names. The semantic notes below are the ones the schemas can't capture:",
 	"",
-	`**FSM-driven** (mutated over the FB lifecycle): ${FSM_DRIVEN_FB_FIELDS.map((f) => `\`${f}\``).join(", ")}.`,
-	"",
-	`**Set at creation, immutable thereafter**: ${CREATE_TIME_FB_FIELDS.map((f) => `\`${f}\``).join(", ")}.`,
-	"",
-	"Field semantics worth knowing:",
-	"- `status`: `pending` (not yet under fix) → `addressed` (fix in progress) → `closed` (last fix-hat advanced) or `rejected` (manually dismissed).",
-	"- `hat`: the LAST hat that advanced — i.e. the prior caller. The next caller is at index+1 in the stage's `fix_hats:` sequence.",
-	"- `bolt`: incremented by `haiku_feedback_reject_hat` only. Hits the cap at 3 (per-finding); exceeding escalates.",
-	"- `iterations`: append-only history of `{ bolt, hat, completed_at, result }` entries — useful for diagnosing what previous hats already tried.",
-	"- `closed_by`: format `fix-loop:<fbId>:bolt-<N>`. Set by the FSM when the last hat advances.",
-	"- `upstream_stage`: present when the finding's root cause lives in a different stage. The FSM surfaces these to the human rather than fixing them in the review stage.",
-	"- `inline_anchor.file_path`: when set, this is the EXACT file the reviewer flagged. Open it first.",
-	"",
-	"To rewrite the FB body with diagnosis: `haiku_feedback_write { intent, stage?, feedback_id, body }`. To advance after fixing: `haiku_feedback_advance_hat`. To reject the prior hat's work: `haiku_feedback_reject_hat { ..., reason }`. Do NOT call `haiku_feedback_update { status: closed }` — closure is FSM-driven.",
+	"- `status` flow: `pending` (not yet under fix) → `addressed` (fix in progress) → `closed` (last fix-hat advanced) or `rejected` (manually dismissed). Closure is FSM-driven via the last `haiku_feedback_advance_hat` call — do NOT call `haiku_feedback_update { status: closed }` to close.",
+	"- `hat` field stores the LAST hat that advanced, NOT the next caller. The next caller is at index+1 in the stage's `fix_hats:` sequence.",
+	"- `bolt` is incremented by `haiku_feedback_reject_hat` only. Hits the cap at 3 per finding; exceeding escalates to the human.",
+	"- `iterations`: append-only history of `{ bolt, hat, completed_at, result }`. Inspect to learn what previous hats already tried before re-attempting.",
+	"- `upstream_stage`: when set, the finding's root cause lives in a different stage than where it was raised. The FSM surfaces these cross-stage findings to the human rather than fixing them in the review stage.",
+	"- `inline_anchor.file_path`: when set, the EXACT file the reviewer flagged. Open it first.",
 	"",
 	"#### Per-hat action rules live in the subagent prompts",
 	"",
@@ -8521,6 +8477,28 @@ export const orchestratorToolDefs = [
 				},
 			},
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				action: {
+					type: "string",
+					description:
+						"FSM action to perform: e.g. start_stage, advance_phase, gate_review, advance_stage, intent_complete, complete, error.",
+				},
+				intent: { type: "string" },
+				stage: { type: "string" },
+				phase: { type: "string" },
+				message: { type: "string" },
+				error: { type: "string" },
+				instructions: {
+					type: "string",
+					description:
+						"Optional FSM-emitted instructions for the agent (added when the action requires more than just a transition).",
+				},
+			},
+			required: ["action"],
+			additionalProperties: true,
+		},
 	},
 	// haiku_gate_approve removed — gates are handled by the FSM (review UI + elicitation fallback)
 	{
@@ -8565,6 +8543,23 @@ export const orchestratorToolDefs = [
 			},
 			required: ["title", "description"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				slug: { type: "string" },
+				title: { type: "string" },
+				studio: { type: ["string", "null"] },
+				created: { type: "boolean" },
+				message: { type: "string" },
+				instructions: {
+					type: "string",
+					description:
+						"Next-step guidance — typically directs to studio selection.",
+				},
+				error: { type: "string" },
+			},
+			required: ["message"],
+		},
 	},
 	{
 		name: "haiku_select_studio",
@@ -8582,6 +8577,16 @@ export const orchestratorToolDefs = [
 				},
 			},
 			required: ["intent"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				slug: { type: "string" },
+				studio: { type: "string" },
+				message: { type: "string" },
+				instructions: { type: "string" },
+				error: { type: "string" },
+			},
 		},
 	},
 	{
@@ -8625,6 +8630,15 @@ export const orchestratorToolDefs = [
 			},
 			required: ["intent"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				slug: { type: "string" },
+				target_stage: { type: "string" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
+		},
 	},
 	{
 		name: "haiku_intent_reset",
@@ -8636,6 +8650,15 @@ export const orchestratorToolDefs = [
 				intent: { type: "string", description: "Intent slug to reset" },
 			},
 			required: ["intent"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				slug: { type: "string" },
+				reset_to: { type: "string" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
 		},
 	},
 	{
@@ -8649,6 +8672,15 @@ export const orchestratorToolDefs = [
 			},
 			required: ["intent"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				slug: { type: "string" },
+				archived: { type: "boolean" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
+		},
 	},
 	{
 		name: "haiku_intent_unarchive",
@@ -8660,6 +8692,15 @@ export const orchestratorToolDefs = [
 				intent: { type: "string", description: "Intent slug to unarchive" },
 			},
 			required: ["intent"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				slug: { type: "string" },
+				archived: { type: "boolean" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
 		},
 	},
 ]
@@ -8707,10 +8748,24 @@ export async function handleOrchestratorTool(
 	signal?: AbortSignal,
 ): Promise<{
 	content: Array<{ type: "text"; text: string }>
+	structuredContent?: Record<string, unknown>
 	isError?: boolean
 }> {
 	const text = (s: string) => ({
 		content: [{ type: "text" as const, text: s }],
+	})
+	// Mirror the reply() helper from handleStateTool — emits both a
+	// stringified text block (backwards compat) and structuredContent
+	// matching the tool's declared outputSchema.
+	const reply = (
+		payload: Record<string, unknown>,
+		opts?: { isError?: boolean },
+	) => ({
+		content: [
+			{ type: "text" as const, text: JSON.stringify(payload, null, 2) },
+		],
+		structuredContent: payload,
+		...(opts?.isError ? { isError: true } : {}),
 	})
 
 	const validationError = validateSlugArgs(args)
@@ -9512,33 +9567,36 @@ export async function handleOrchestratorTool(
 		// Title is required: must be a crisp, human-readable summary the agent
 		// writes deliberately. We do NOT derive it by truncating the description.
 		if (!titleInput || typeof titleInput !== "string") {
-			return text(
-				JSON.stringify({
+			return reply(
+				{
 					error: "missing_title",
 					message:
 						'haiku_intent_create requires a `title` parameter — a crisp 3–8 word summary (≤80 chars, single line, no trailing period). Write it deliberately; do NOT pass a truncated description. Example: title: "Add archivable intents".',
-				}),
+				},
+				{ isError: true },
 			)
 		}
 		// Reject newlines explicitly before normalization — otherwise `\s+` would
 		// collapse them to spaces and hide the intent (a multi-line title input
 		// is a sign the agent pasted a paragraph, not wrote a title).
 		if (/[\r\n]/.test(titleInput)) {
-			return text(
-				JSON.stringify({
+			return reply(
+				{
 					error: "invalid_title",
 					message:
 						"`title` must be a single line — got newlines. Rewrite as a crisp 3–8 word summary (≤80 chars) and call again.",
-				}),
+				},
+				{ isError: true },
 			)
 		}
 		const title = titleInput.trim().replace(/\s+/g, " ")
 		if (intentTitleNeedsRepair(title)) {
-			return text(
-				JSON.stringify({
+			return reply(
+				{
 					error: "invalid_title",
 					message: `\`title\` must be non-empty and ≤80 chars after trimming. Got ${title.length} chars. Rewrite as a 3–8 word summary and call again.`,
-				}),
+				},
+				{ isError: true },
 			)
 		}
 
@@ -9619,12 +9677,13 @@ export async function handleOrchestratorTool(
 
 		// Check if intent already exists — now running on the canonical branch.
 		if (existsSync(join(iDir, "intent.md"))) {
-			return text(
-				JSON.stringify({
+			return reply(
+				{
 					error: "intent_exists",
 					slug,
 					message: `Intent '${slug}' already exists`,
-				}),
+				},
+				{ isError: true },
 			)
 		}
 
@@ -9676,18 +9735,12 @@ export async function handleOrchestratorTool(
 		if (stateFile)
 			logSessionEvent(stateFile, { event: "intent_created", intent: slug })
 
-		return text(
-			JSON.stringify(
-				{
-					action: "intent_created",
-					slug,
-					path: `.haiku/intents/${slug}`,
-					message: `Intent '${slug}' created. Call haiku_run_next { intent: "${slug}" } to begin.`,
-				},
-				null,
-				2,
-			),
-		)
+		return reply({
+			action: "intent_created",
+			slug,
+			path: `.haiku/intents/${slug}`,
+			message: `Intent '${slug}' created. Call haiku_run_next { intent: "${slug}" } to begin.`,
+		})
 	}
 
 	if (name === "haiku_select_studio") {
@@ -9697,11 +9750,12 @@ export async function handleOrchestratorTool(
 		const intentFile = join(iDir, "intent.md")
 
 		if (!existsSync(intentFile)) {
-			return text(
-				JSON.stringify({
+			return reply(
+				{
 					error: "not_found",
 					message: `Intent '${slug}' not found`,
-				}),
+				},
+				{ isError: true },
 			)
 		}
 
@@ -9838,12 +9892,10 @@ export async function handleOrchestratorTool(
 						if (reElicit.action === "accept" && reElicit.content) {
 							chosen = (reElicit.content as Record<string, string>).studio || ""
 						} else {
-							return text(
-								JSON.stringify({
-									action: "cancelled",
-									message: "Studio selection cancelled by user",
-								}),
-							)
+							return reply({
+								action: "cancelled",
+								message: "Studio selection cancelled by user",
+							})
 						}
 					} else {
 						chosen = content.studio || ""
@@ -9852,12 +9904,10 @@ export async function handleOrchestratorTool(
 					const resolved = resolveStudio(chosen)
 					selectedStudio = resolved ? resolved.dir : ""
 				} else {
-					return text(
-						JSON.stringify({
-							action: "cancelled",
-							message: "Studio selection cancelled by user",
-						}),
-					)
+					return reply({
+						action: "cancelled",
+						message: "Studio selection cancelled by user",
+					})
 				}
 			} catch {
 				return {
@@ -9878,24 +9928,18 @@ export async function handleOrchestratorTool(
 					return `- **${s.name}**${slugPart}: ${s.description || ""}`
 				})
 				.join("\n")
-			return text(
-				JSON.stringify(
-					{
-						action: "select_studio_conversational",
-						intent: slug,
-						available_studios: allStudios.map((s) => ({
-							name: s.name,
-							slug: s.slug,
-							aliases: s.aliases,
-							description: s.description,
-							category: s.category,
-						})),
-						message: `Elicitation unavailable. Ask the user which studio to use, then call haiku_select_studio { intent: "${slug}", options: ["<chosen-studio>"] } with a single option to auto-select. The option may be the canonical name, slug, or any alias.\n\nAvailable studios:\n${studioDescriptions}`,
-					},
-					null,
-					2,
-				),
-			)
+			return reply({
+				action: "select_studio_conversational",
+				intent: slug,
+				available_studios: allStudios.map((s) => ({
+					name: s.name,
+					slug: s.slug,
+					aliases: s.aliases,
+					description: s.description,
+					category: s.category,
+				})),
+				message: `Elicitation unavailable. Ask the user which studio to use, then call haiku_select_studio { intent: "${slug}", options: ["<chosen-studio>"] } with a single option to auto-select. The option may be the canonical name, slug, or any alias.\n\nAvailable studios:\n${studioDescriptions}`,
+			})
 		}
 
 		if (!selectedStudio) {
@@ -9961,20 +10005,14 @@ export async function handleOrchestratorTool(
 			studio: selectedStudio,
 		})
 
-		return text(
-			JSON.stringify(
-				{
-					action: "studio_selected",
-					intent: slug,
-					studio: selectedStudio,
-					stages: activeStages,
-					all_studio_stages: allStudioStages,
-					message: `Studio '${selectedStudio}' selected for intent '${slug}'. Call haiku_run_next { intent: "${slug}" } to begin.`,
-				},
-				null,
-				2,
-			),
-		)
+		return reply({
+			action: "studio_selected",
+			intent: slug,
+			studio: selectedStudio,
+			stages: activeStages,
+			all_studio_stages: allStudioStages,
+			message: `Studio '${selectedStudio}' selected for intent '${slug}'. Call haiku_run_next { intent: "${slug}" } to begin.`,
+		})
 	}
 
 	if (name === "haiku_revisit") {
@@ -10099,23 +10137,17 @@ export async function handleOrchestratorTool(
 					)
 				: []
 			if (pendingOnStage.length === 0) {
-				return text(
-					JSON.stringify(
-						{
-							action: "revisit_needs_reasons",
-							message:
-								"To revisit, provide reasons as feedback. Call haiku_revisit with reasons: [{title, body}] so the feedback is recorded before rolling back — or add pending feedback items via the review UI first.",
-						},
-						null,
-						2,
-					),
-				)
+				return reply({
+					action: "revisit_needs_reasons",
+					message:
+						"To revisit, provide reasons as feedback. Call haiku_revisit with reasons: [{title, body}] so the feedback is recorded before rolling back — or add pending feedback items via the review UI first.",
+				})
 			}
 			const directResult = revisit(
 				stopgapSlug,
 				args.stage as string | undefined,
 			)
-			return text(JSON.stringify(directResult, null, 2))
+			return reply(directResult as Record<string, unknown>)
 		}
 
 		// Reasons provided — write feedback files BEFORE rolling back
@@ -10212,7 +10244,9 @@ export async function handleOrchestratorTool(
 		// short-circuit BEFORE appending an iteration entry. Otherwise a retry
 		// after conflict resolution would produce a duplicate iteration record.
 		if (revisitResult.action === "error") {
-			return text(JSON.stringify(revisitResult, null, 2))
+			return reply(revisitResult as Record<string, unknown>, {
+				isError: true,
+			})
 		}
 
 		// Record a user-revisit iteration on the target stage. User-invoked
@@ -10239,24 +10273,18 @@ export async function handleOrchestratorTool(
 		})
 		syncSessionMetadata(revisitSlug, args.state_file as string | undefined)
 
-		return text(
-			JSON.stringify(
-				{
-					action: "revisit",
-					from_stage:
-						(revisitIntentData.active_stage as string) || revisitTargetStage,
-					from_phase: revisitResult.target_phase ? "gate" : "execute",
-					to_stage: revisitTargetStage,
-					to_phase: "elaborate",
-					iteration: iterResult.count,
-					visits: iterResult.count, // legacy alias — prefer `iteration`
-					feedback_created: createdFeedback,
-					message: `Revisited ${revisitTargetStage} (elaborate, iteration ${iterResult.count}). Created ${createdFeedback.length} feedback item(s).`,
-				},
-				null,
-				2,
-			),
-		)
+		return reply({
+			action: "revisit",
+			from_stage:
+				(revisitIntentData.active_stage as string) || revisitTargetStage,
+			from_phase: revisitResult.target_phase ? "gate" : "execute",
+			to_stage: revisitTargetStage,
+			to_phase: "elaborate",
+			iteration: iterResult.count,
+			visits: iterResult.count, // legacy alias — prefer `iteration`
+			feedback_created: createdFeedback,
+			message: `Revisited ${revisitTargetStage} (elaborate, iteration ${iterResult.count}). Created ${createdFeedback.length} feedback item(s).`,
+		})
 	}
 
 	if (name === "haiku_intent_reset") {
@@ -10304,9 +10332,7 @@ export async function handleOrchestratorTool(
 				result.action !== "accept" ||
 				(result.content as Record<string, string>)?.confirm !== "Reset"
 			) {
-				return text(
-					JSON.stringify({ action: "cancelled", message: "Reset cancelled." }),
-				)
+				return reply({ action: "cancelled", message: "Reset cancelled." })
 			}
 		} else {
 			return {
@@ -10405,20 +10431,14 @@ export async function handleOrchestratorTool(
 		gitCommitState(`haiku: reset intent ${slug} (deleted)`)
 
 		// Return instruction to recreate
-		return text(
-			JSON.stringify(
-				{
-					action: "intent_reset",
-					slug,
-					title,
-					description,
-					context: conversationContext,
-					message: `Intent '${slug}' has been reset. Call haiku_intent_create { title: "${title.replace(/"/g, '\\"')}", description: "${description.replace(/"/g, '\\"').replace(/\n/g, "\\n")}", slug: "${slug}"${conversationContext ? ', context: "<preserved context>"' : ""} } to recreate it.`,
-				},
-				null,
-				2,
-			),
-		)
+		return reply({
+			action: "intent_reset",
+			slug,
+			title,
+			description,
+			context: conversationContext,
+			message: `Intent '${slug}' has been reset. Call haiku_intent_create { title: "${title.replace(/"/g, '\\"')}", description: "${description.replace(/"/g, '\\"').replace(/\n/g, "\\n")}", slug: "${slug}"${conversationContext ? ', context: "<preserved context>"' : ""} } to recreate it.`,
+		})
 	}
 
 	if (name === "haiku_intent_archive") {
@@ -10442,18 +10462,12 @@ export async function handleOrchestratorTool(
 		const { data } = parseFrontmatter(readFileSync(intentFile, "utf8"))
 
 		if (data.archived === true) {
-			return text(
-				JSON.stringify(
-					{
-						action: "noop",
-						slug,
-						path: intentFile,
-						message: `Intent '${slug}' is already archived.`,
-					},
-					null,
-					2,
-				),
-			)
+			return reply({
+				action: "noop",
+				slug,
+				path: intentFile,
+				message: `Intent '${slug}' is already archived.`,
+			})
 		}
 
 		// Archive is intent-scoped metadata — land on intent-main so the mutation
@@ -10477,18 +10491,12 @@ export async function handleOrchestratorTool(
 		setFrontmatterField(intentFile, "archived", true)
 		gitCommitState(`haiku: archive intent ${slug}`)
 
-		return text(
-			JSON.stringify(
-				{
-					action: "intent_archived",
-					slug,
-					path: intentFile,
-					message: `Intent '${slug}' has been archived. Call haiku_intent_unarchive to restore it.`,
-				},
-				null,
-				2,
-			),
-		)
+		return reply({
+			action: "intent_archived",
+			slug,
+			path: intentFile,
+			message: `Intent '${slug}' has been archived. Call haiku_intent_unarchive to restore it.`,
+		})
 	}
 
 	if (name === "haiku_intent_unarchive") {
@@ -10513,18 +10521,12 @@ export async function handleOrchestratorTool(
 		const parsed = matter(raw)
 
 		if (parsed.data.archived !== true) {
-			return text(
-				JSON.stringify(
-					{
-						action: "noop",
-						slug,
-						path: intentFile,
-						message: `Intent '${slug}' is not archived.`,
-					},
-					null,
-					2,
-				),
-			)
+			return reply({
+				action: "noop",
+				slug,
+				path: intentFile,
+				message: `Intent '${slug}' is not archived.`,
+			})
 		}
 
 		// Unarchive is intent-scoped metadata — land on intent-main so the
@@ -10553,18 +10555,12 @@ export async function handleOrchestratorTool(
 		)
 		gitCommitState(`haiku: unarchive intent ${slug}`)
 
-		return text(
-			JSON.stringify(
-				{
-					action: "intent_unarchived",
-					slug,
-					path: intentFile,
-					message: `Intent '${slug}' has been unarchived.`,
-				},
-				null,
-				2,
-			),
-		)
+		return reply({
+			action: "intent_unarchived",
+			slug,
+			path: intentFile,
+			message: `Intent '${slug}' has been unarchived.`,
+		})
 	}
 
 	return text(`Unknown orchestrator tool: ${name}`)

@@ -2922,6 +2922,44 @@ export const CREATE_TIME_FB_FIELDS = [
 	"inline_anchor",
 ] as const
 
+// ── Output schema fragments (reused across tool defs) ─────────────────────
+//
+// Per MCP spec 2025-06-18 §Tool Result, when a tool declares an
+// outputSchema, the server MUST emit `structuredContent` matching it.
+// Tools below either compose these fragments or define their own shape.
+// The `reply()` helper inside handleStateTool wraps a payload as both
+// stringified text content (backwards compat) and structuredContent.
+
+// Standard error envelope. Returned (with isError: true) when a handler
+// rejects the call for a structured reason. The `error` field is a
+// stable named code (e.g. `frontmatter_validation_failed`,
+// `feedback_not_found`, `lifecycle_violation`); `message` is human-
+// readable remediation guidance.
+export const ERROR_OUTPUT_SCHEMA = {
+	type: "object",
+	properties: {
+		error: { type: "string", description: "Stable named error code." },
+		message: {
+			type: "string",
+			description: "Human-readable remediation guidance.",
+		},
+	},
+	required: ["error", "message"],
+	additionalProperties: true,
+}
+
+// Standard ok envelope for confirmation-style writes. Tools that mutate
+// state and return only a confirmation message use this.
+export const OK_OUTPUT_SCHEMA = {
+	type: "object",
+	properties: {
+		ok: { type: "boolean", const: true },
+		message: { type: "string" },
+	},
+	required: ["ok", "message"],
+	additionalProperties: true,
+}
+
 /**
  * Translate an AJV error into a structured error string with a stable
  * named code prefix. The code is what consumers (tests, error
@@ -4587,6 +4625,11 @@ export const stateToolDefs = [
 			properties: { slug: { type: "string" }, field: { type: "string" } },
 			required: ["slug", "field"],
 		},
+		outputSchema: {
+			type: "object",
+			description: "Intent frontmatter as parsed key-value object.",
+			additionalProperties: true,
+		},
 	},
 	{
 		name: "haiku_intent_list",
@@ -4601,6 +4644,26 @@ export const stateToolDefs = [
 				},
 			},
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				intents: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: {
+							slug: { type: "string" },
+							title: { type: "string" },
+							status: { type: "string" },
+							studio: { type: "string" },
+							archived: { type: "boolean" },
+						},
+						required: ["slug"],
+					},
+				},
+			},
+			required: ["intents"],
+		},
 	},
 	// Stage tools
 	{
@@ -4614,6 +4677,12 @@ export const stateToolDefs = [
 				field: { type: "string" },
 			},
 			required: ["intent", "stage", "field"],
+		},
+		outputSchema: {
+			type: "object",
+			description:
+				"Single field value from stage state.json. Returned as a string for primitive fields, JSON-stringified for object fields.",
+			additionalProperties: true,
 		},
 	},
 	// Unit tools
@@ -4636,6 +4705,20 @@ export const stateToolDefs = [
 			},
 			required: ["intent", "stage", "unit", "field", "value"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				message: { type: "string" },
+				error: { type: "string" },
+				current_status: {
+					type: "string",
+					description:
+						"On lifecycle_violation: the unit's current immutable status.",
+				},
+				field: { type: "string" },
+			},
+		},
 	},
 	{
 		name: "haiku_unit_list",
@@ -4644,6 +4727,29 @@ export const stateToolDefs = [
 			type: "object" as const,
 			properties: { intent: { type: "string" }, stage: { type: "string" } },
 			required: ["intent", "stage"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				units: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: {
+							name: { type: "string" },
+							status: {
+								type: "string",
+								description: "pending | active | completed",
+							},
+							bolt: { type: "number" },
+							hat: { type: "string" },
+							model: { type: ["string", "null"] },
+						},
+						required: ["name"],
+					},
+				},
+			},
+			required: ["units"],
 		},
 	},
 	{
@@ -4655,6 +4761,17 @@ export const stateToolDefs = [
 			properties: { intent: { type: "string" }, unit: { type: "string" } },
 			required: ["intent", "unit"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				unit: { type: "string" },
+				stage: { type: "string" },
+				first_hat: { type: "string" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
+		},
 	},
 	{
 		name: "haiku_unit_advance_hat",
@@ -4664,6 +4781,34 @@ export const stateToolDefs = [
 			type: "object" as const,
 			properties: { intent: { type: "string" }, unit: { type: "string" } },
 			required: ["intent", "unit"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				unit: { type: "string" },
+				current_hat: {
+					type: "string",
+					description: "The hat that just finished.",
+				},
+				next_hat: {
+					type: ["string", "null"],
+					description:
+						"The hat to dispatch next, or null when the unit auto-completed.",
+				},
+				completed: {
+					type: "boolean",
+					description:
+						"True if this advance closed the unit (last hat in the sequence).",
+				},
+				bolt: { type: "number" },
+				message: { type: "string" },
+				error: {
+					type: "string",
+					description: "On failure: stable named error code.",
+				},
+			},
+			required: ["message"],
 		},
 	},
 	{
@@ -4683,6 +4828,20 @@ export const stateToolDefs = [
 			},
 			required: ["intent", "unit"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				unit: { type: "string" },
+				rejecting_hat: { type: "string" },
+				next_dispatched_hat: { type: ["string", "null"] },
+				new_bolt: { type: "number" },
+				reason: { type: "string" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
+			required: ["message"],
+		},
 	},
 	{
 		name: "haiku_unit_increment_bolt",
@@ -4695,6 +4854,14 @@ export const stateToolDefs = [
 				unit: { type: "string" },
 			},
 			required: ["intent", "stage", "unit"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				new_bolt: { type: "number" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
 		},
 	},
 	{
@@ -4710,6 +4877,22 @@ export const stateToolDefs = [
 			},
 			required: ["intent", "stage", "unit"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				title: {
+					type: "string",
+					description:
+						"Unit title from frontmatter (or derived from first H1).",
+				},
+				body: {
+					type: "string",
+					description:
+						"Full markdown body. Frontmatter is intentionally not exposed (FSM-only per architecture §1.1).",
+				},
+				error: { type: "string", description: "On not-found / wrong-stage." },
+			},
+		},
 	},
 	{
 		name: "haiku_unit_delete",
@@ -4723,6 +4906,16 @@ export const stateToolDefs = [
 				unit: { type: "string" },
 			},
 			required: ["intent", "stage", "unit"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				message: { type: "string" },
+				error: { type: "string" },
+				current_status: { type: "string" },
+				required_status: { type: "string", const: "pending" },
+			},
 		},
 	},
 	{
@@ -4757,6 +4950,45 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 				},
 			},
 			required: ["intent", "stage", "unit", "body"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				created: {
+					type: "boolean",
+					description:
+						"True if a new file was created; false if an existing pending unit was rewritten.",
+				},
+				unit: { type: "string", description: "Unit name." },
+				stage: { type: "string", description: "Stage name." },
+				intent: { type: "string", description: "Intent slug." },
+				message: { type: "string" },
+				// Error path
+				error: {
+					type: "string",
+					description:
+						"Stable error code: `frontmatter_validation_failed`, `dag_cycle_detected`, `lifecycle_violation`, `missing_args`, etc.",
+				},
+				errors: {
+					type: "array",
+					items: { type: "string" },
+					description:
+						"Per-rule error messages from the FM validator (e.g. `fsm_field_forbidden: '...'`).",
+				},
+				cycle_nodes: {
+					type: "array",
+					items: { type: "string" },
+					description:
+						"On `dag_cycle_detected`: the unit names involved in the cycle.",
+				},
+				current_status: {
+					type: "string",
+					description:
+						"On `lifecycle_violation`: the current immutable status (active/completed).",
+				},
+			},
+			required: ["message"],
 		},
 	},
 	{
@@ -4807,6 +5039,14 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			},
 			required: ["intent"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
+		},
 	},
 	// Knowledge tools
 	{
@@ -4817,6 +5057,13 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			properties: { intent: { type: "string" } },
 			required: ["intent"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				files: { type: "array", items: { type: "string" } },
+			},
+			required: ["files"],
+		},
 	},
 	{
 		name: "haiku_knowledge_read",
@@ -4826,6 +5073,12 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			properties: { intent: { type: "string" }, name: { type: "string" } },
 			required: ["intent", "name"],
 		},
+		outputSchema: {
+			type: "object",
+			description:
+				"Raw markdown content of the knowledge file (returned as text content; no structured shape).",
+			additionalProperties: true,
+		},
 	},
 	// Studio tools
 	{
@@ -4833,6 +5086,27 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 		description:
 			"List all available studios with their description, stages, and category. Project-level studios (.haiku/studios/) override built-in ones on name collision.",
 		inputSchema: { type: "object" as const, properties: {} },
+		outputSchema: {
+			type: "object",
+			properties: {
+				studios: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: {
+							name: { type: "string" },
+							slug: { type: "string" },
+							description: { type: "string" },
+							category: { type: "string" },
+							stages: { type: "array", items: { type: "string" } },
+							source: { type: "string", description: "project | plugin" },
+						},
+						required: ["name", "slug"],
+					},
+				},
+			},
+			required: ["studios"],
+		},
 	},
 	{
 		name: "haiku_studio_get",
@@ -4843,6 +5117,25 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			properties: { studio: { type: "string" } },
 			required: ["studio"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				found: { type: "boolean" },
+				name: { type: "string" },
+				slug: { type: "string" },
+				aliases: { type: "array", items: { type: "string" } },
+				dir: { type: "string" },
+				description: { type: "string" },
+				category: { type: "string" },
+				stages: { type: "array", items: { type: "string" } },
+				source: { type: "string" },
+				path: { type: "string" },
+				studio_md: { type: "string" },
+				body: { type: "string" },
+			},
+			required: ["found"],
+			additionalProperties: true,
+		},
 	},
 	{
 		name: "haiku_studio_stage_get",
@@ -4852,6 +5145,18 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			type: "object" as const,
 			properties: { studio: { type: "string" }, stage: { type: "string" } },
 			required: ["studio", "stage"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				found: { type: "boolean" },
+				body: { type: "string" },
+				studio: { type: "string" },
+				studio_dir: { type: "string" },
+				stage_md: { type: "string" },
+			},
+			required: ["found"],
+			additionalProperties: true,
 		},
 	},
 	// Settings tools
@@ -4870,6 +5175,12 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			},
 			required: ["field"],
 		},
+		outputSchema: {
+			type: "object",
+			description:
+				"Settings field value, as raw text (no structured shape — varies by field).",
+			additionalProperties: true,
+		},
 	},
 	// Aggregate / report tools
 	{
@@ -4877,6 +5188,12 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 		description:
 			"Returns a formatted dashboard of all intents showing status, studio, active stage, mode, and per-stage status tables.",
 		inputSchema: { type: "object" as const, properties: {} },
+		outputSchema: {
+			type: "object",
+			description:
+				"Dashboard markdown rendered as text content; structured shape varies by environment.",
+			additionalProperties: true,
+		},
 	},
 	{
 		name: "haiku_capacity",
@@ -4891,6 +5208,12 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 				},
 			},
 		},
+		outputSchema: {
+			type: "object",
+			description:
+				"Capacity report (markdown text; structured shape may evolve).",
+			additionalProperties: true,
+		},
 	},
 	{
 		name: "haiku_reflect",
@@ -4900,6 +5223,10 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			type: "object" as const,
 			properties: { intent: { type: "string" } },
 			required: ["intent"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: { message: { type: "string" } },
 		},
 	},
 	{
@@ -4914,6 +5241,10 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 					description: "Optional: intent slug for context",
 				},
 			},
+		},
+		outputSchema: {
+			type: "object",
+			properties: { message: { type: "string" } },
 		},
 	},
 	{
@@ -4935,6 +5266,10 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 				},
 			},
 		},
+		outputSchema: {
+			type: "object",
+			properties: { message: { type: "string" } },
+		},
 	},
 	{
 		name: "haiku_backlog",
@@ -4953,6 +5288,12 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 				},
 			},
 		},
+		outputSchema: {
+			type: "object",
+			description:
+				"Backlog summary (markdown text; structured shape may evolve).",
+			additionalProperties: true,
+		},
 	},
 	{
 		name: "haiku_seed",
@@ -4966,6 +5307,10 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 					description: "list | plant | check (default: list)",
 				},
 			},
+		},
+		outputSchema: {
+			type: "object",
+			properties: { message: { type: "string" } },
 		},
 	},
 	// Feedback tools
@@ -5012,6 +5357,22 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			},
 			required: ["intent", "title", "body"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				feedback_id: { type: "string", description: "e.g. FB-01" },
+				file: {
+					type: "string",
+					description: "Repo-relative path to the FB markdown file.",
+				},
+				status: { type: "string" },
+				message: { type: "string" },
+				push_warning: {
+					type: "string",
+					description: "Set when the post-write git push failed.",
+				},
+			},
+		},
 	},
 	{
 		name: "haiku_feedback_update",
@@ -5047,6 +5408,15 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			},
 			required: ["intent", "feedback_id"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				feedback_id: { type: "string" },
+				file: { type: "string" },
+				updated_fields: { type: "object", additionalProperties: true },
+				message: { type: "string" },
+			},
+		},
 	},
 	{
 		name: "haiku_feedback_delete",
@@ -5066,6 +5436,14 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 				},
 			},
 			required: ["intent", "feedback_id"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				feedback_id: { type: "string" },
+				deleted: { type: "boolean" },
+				message: { type: "string" },
+			},
 		},
 	},
 	{
@@ -5091,6 +5469,14 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			},
 			required: ["intent", "feedback_id", "reason"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				feedback_id: { type: "string" },
+				status: { type: "string", const: "rejected" },
+				message: { type: "string" },
+			},
+		},
 	},
 	{
 		name: "haiku_feedback_list",
@@ -5112,6 +5498,16 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			},
 			required: ["intent"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				items: {
+					type: "array",
+					items: { type: "object", additionalProperties: true },
+				},
+			},
+			required: ["items"],
+		},
 	},
 	{
 		name: "haiku_feedback_read",
@@ -5131,6 +5527,14 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 				},
 			},
 			required: ["intent", "feedback_id"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				title: { type: "string" },
+				body: { type: "string" },
+				error: { type: "string" },
+			},
 		},
 	},
 	{
@@ -5162,6 +5566,18 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 			},
 			required: ["intent", "feedback_id", "body"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				feedback_id: { type: "string" },
+				stage: { type: ["string", "null"] },
+				intent: { type: "string" },
+				message: { type: "string" },
+				error: { type: "string" },
+				current_status: { type: "string" },
+			},
+		},
 	},
 	{
 		name: "haiku_feedback_advance_hat",
@@ -5181,6 +5597,20 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 				},
 			},
 			required: ["intent", "feedback_id"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				feedback_id: { type: "string" },
+				stage: { type: ["string", "null"] },
+				calling_hat: { type: "string" },
+				next_dispatched_hat: { type: ["string", "null"] },
+				closed: { type: "boolean" },
+				bolt: { type: "number" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
 		},
 	},
 	{
@@ -5207,6 +5637,19 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 			},
 			required: ["intent", "feedback_id"],
 		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				feedback_id: { type: "string" },
+				rejecting_hat: { type: "string" },
+				next_dispatched_hat: { type: ["string", "null"] },
+				new_bolt: { type: "number" },
+				reason: { type: "string" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
+		},
 	},
 	{
 		name: "haiku_release_notes",
@@ -5220,6 +5663,11 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 					description: "Optional: specific version to extract (e.g. '1.2.0')",
 				},
 			},
+		},
+		outputSchema: {
+			type: "object",
+			description: "Release notes as markdown text.",
+			additionalProperties: true,
 		},
 	},
 	{
@@ -5245,6 +5693,12 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 				},
 			},
 		},
+		outputSchema: {
+			type: "object",
+			description:
+				"Repair report — markdown text including any worktree-migration findings.",
+			additionalProperties: true,
+		},
 	},
 	{
 		name: "haiku_version_info",
@@ -5252,6 +5706,14 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 			"Return the running MCP binary version and plugin version. " +
 			"MCP version is baked into the binary at build time; plugin version is read from plugin.json at runtime.",
 		inputSchema: { type: "object" as const, properties: {} },
+		outputSchema: {
+			type: "object",
+			properties: {
+				mcp_version: { type: "string" },
+				plugin_version: { type: "string" },
+			},
+			required: ["mcp_version", "plugin_version"],
+		},
 	},
 ]
 
@@ -5294,9 +5756,31 @@ export function validateSlugArgs(
 export function handleStateTool(
 	name: string,
 	args: Record<string, unknown>,
-): { content: Array<{ type: "text"; text: string }>; isError?: boolean } {
+): {
+	content: Array<{ type: "text"; text: string }>
+	structuredContent?: Record<string, unknown>
+	isError?: boolean
+} {
 	const text = (s: string) => ({
 		content: [{ type: "text" as const, text: s }],
+	})
+
+	// `reply(payload)` is the canonical return for tools that declare an
+	// `outputSchema`. Per MCP spec 2025-06-18 §Tool Result, the server MUST
+	// emit `structuredContent` matching the schema and SHOULD also emit
+	// the same payload as serialized JSON in a TextContent block for
+	// backwards compatibility with clients that don't yet read
+	// structuredContent. This helper does both atomically so handlers
+	// can't drift the two views apart.
+	const reply = (
+		payload: Record<string, unknown>,
+		opts?: { isError?: boolean },
+	) => ({
+		content: [
+			{ type: "text" as const, text: JSON.stringify(payload, null, 2) },
+		],
+		structuredContent: payload,
+		...(opts?.isError ? { isError: true } : {}),
 	})
 
 	// Capture the CC session id from the hook-injected _session_context so
@@ -5354,7 +5838,7 @@ export function handleStateTool(
 				}
 				return base
 			})
-			return text(JSON.stringify(intents, null, 2))
+			return reply({ intents })
 		}
 
 		// ── Stage ──
@@ -5396,14 +5880,15 @@ export function handleStateTool(
 			const field = args.field as string
 			const value = args.value
 			if (field === "status" && value === "completed") {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "fsm_completion_protected",
 						field,
 						value,
 						message:
 							'Cannot set status to "completed" directly — unit completion is FSM-controlled. Call `haiku_unit_advance_hat` to let the FSM auto-complete the unit\'s last hat, which runs scope validation, feedback-assessor closure, and worktree merge-back.',
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			const unitSetBranchErr = enforceStageBranch(
@@ -5433,13 +5918,14 @@ export function handleStateTool(
 				const { data: currentFm } = parseFrontmatter(readFileSync(path, "utf8"))
 				const currentStatus = (currentFm.status as string) || "pending"
 				if (currentStatus === "active" || currentStatus === "completed") {
-					return text(
-						JSON.stringify({
+					return reply(
+						{
 							error: "lifecycle_violation",
 							current_status: currentStatus,
 							field,
 							message: `Cannot set field '${field}' on unit '${args.unit}' — status is '${currentStatus}'. Per the forward-only lifecycle rule (architecture §1.3), units become immutable once they enter active or completed status. Pending units only.`,
-						}),
+						},
+						{ isError: true },
 					)
 				}
 			}
@@ -5459,7 +5945,7 @@ export function handleStateTool(
 				stageDir(args.intent as string, args.stage as string),
 				"units",
 			)
-			if (!existsSync(dir)) return text("[]")
+			if (!existsSync(dir)) return reply({ units: [] })
 			const files = readdirSync(dir).filter((f) => f.endsWith(".md"))
 			const units = files.map((f) => {
 				const { data } = parseFrontmatter(readFileSync(join(dir, f), "utf8"))
@@ -5471,18 +5957,19 @@ export function handleStateTool(
 					model: data.model ?? null,
 				}
 			})
-			return text(JSON.stringify(units, null, 2))
+			return reply({ units })
 		}
 		case "haiku_unit_start": {
 			// Resolve stage and first hat internally
 			const stage = resolveActiveStage(args.intent as string)
 			if (!stage)
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "no_active_stage",
 						message:
 							"No active stage found for this intent. Call haiku_run_next first.",
-					}),
+					},
+					{ isError: true },
 				)
 			const unitStartBranchErr = enforceStageBranch(
 				args.intent as string,
@@ -5498,13 +5985,15 @@ export function handleStateTool(
 				)
 				if (existingFm.status === "active") {
 					const scope = resolveStageScope(args.intent as string, stage)
-					return text(
-						JSON.stringify({
+					return reply(
+						{
 							error: "unit_already_active",
 							unit: args.unit,
 							hat: existingFm.hat || "",
+							scope: scope || null,
 							message: `Unit '${args.unit}' is already active (hat: ${existingFm.hat || "unknown"}). Do not start it again — continue working on it or call haiku_unit_advance_hat when done.`,
-						}) + (scope ? `\n\n${scope}` : ""),
+						},
+						{ isError: true },
 					)
 				}
 			}
@@ -5560,11 +6049,12 @@ export function handleStateTool(
 			// Resolve stage and unit path internally
 			const unitInfo = findUnitFile(args.intent as string, args.unit as string)
 			if (!unitInfo)
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "unit_not_found",
 						message: `Unit '${args.unit}' not found in any stage of intent '${args.intent}'.`,
-					}),
+					},
+					{ isError: true },
 				)
 			const advPath = unitInfo.path
 			const advStage = unitInfo.stage
@@ -5579,12 +6069,13 @@ export function handleStateTool(
 
 			// Guard: reject if unit is already completed
 			if (unitFm.status === "completed") {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "unit_already_completed",
 						unit: args.unit,
 						message: `Unit '${args.unit}' is already completed. Cannot advance hat on a completed unit.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -5595,14 +6086,15 @@ export function handleStateTool(
 			if (hatStartedAt) {
 				const elapsed = (Date.now() - new Date(hatStartedAt).getTime()) / 1000
 				if (elapsed < 30) {
-					return text(
-						JSON.stringify({
+					return reply(
+						{
 							error: "hat_too_fast",
 							elapsed_seconds: Math.round(elapsed),
 							minimum_seconds: 30,
 							message:
 								"Cannot advance hat — the current hat started less than 30 seconds ago. Each hat must do meaningful work before advancing.",
-						}),
+						},
+						{ isError: true },
 					)
 				}
 			}
@@ -5619,12 +6111,13 @@ export function handleStateTool(
 					return !resolved.startsWith(`${resolve(iDir)}/`)
 				})
 				if (escaped.length > 0) {
-					return text(
-						JSON.stringify({
+					return reply(
+						{
 							error: "unit_outputs_escaped",
 							escaped,
 							message: `Cannot advance hat: ${escaped.length} output path(s) escape the intent directory: ${escaped.join(", ")}. Fix the outputs in the unit frontmatter.`,
-						}),
+						},
+						{ isError: true },
 					)
 				}
 				const missing = unitOutputs.filter(
@@ -5641,12 +6134,13 @@ export function handleStateTool(
 							unit: args.unit,
 							missing,
 						})
-					return text(
-						JSON.stringify({
+					return reply(
+						{
 							error: "unit_outputs_missing",
 							missing,
 							message: `Cannot advance hat: ${missing.length} declared output(s) not found in unit worktree or main intent dir: ${missing.join(", ")}. Create them (in the unit worktree if you have one, otherwise in the main intent dir) or remove them from the outputs list.`,
-						}),
+						},
+						{ isError: true },
 					)
 				}
 			}
@@ -5703,15 +6197,16 @@ export function handleStateTool(
 						if (gateResult) {
 							const currentBolt = (unitFm.bolt as number) || 1
 							if (currentBolt + 1 > MAX_UNIT_BOLTS) {
-								return text(
-									JSON.stringify({
+								return reply(
+									{
 										error: "max_bolts_exceeded",
 										reason: "quality_gate_auto_reject",
 										bolt: currentBolt,
 										max: MAX_UNIT_BOLTS,
 										failures: gateResult.failures,
 										message: `Quality gates failed on hat '${currentHat}' and the unit has hit ${MAX_UNIT_BOLTS} bolt iterations. Escalate to the user — the gates are catching real issues this hat cannot resolve in another bolt.\n\n${gateResult.failures.map((f) => `- ${f.name}: '${f.command}' exited ${f.exit_code}${f.output ? `\n  ${f.output.split("\n").slice(0, 3).join("\n  ")}` : ""}`).join("\n")}`,
-									}),
+									},
+									{ isError: true },
 								)
 							}
 
@@ -5798,7 +6293,7 @@ export function handleStateTool(
 						advPath,
 					)
 					if (qualityGates) {
-						return text(JSON.stringify(qualityGates))
+						return reply(qualityGates)
 					}
 				}
 
@@ -5845,8 +6340,8 @@ export function handleStateTool(
 						]
 							.filter(Boolean)
 							.join("\n")
-						return text(
-							JSON.stringify({
+						return reply(
+							{
 								error: "unit_scope_violation",
 								violations: scopeResult.violations,
 								scope: scopeResult.scope,
@@ -5855,7 +6350,8 @@ export function handleStateTool(
 									`Out-of-bounds files:\n${scopeResult.violations.map((v) => `  - ${v}`).join("\n")}\n\n` +
 									`Allowed paths (stage output templates + FSM metadata):\n${allowedSummary}\n\n` +
 									`To resolve (in the unit worktree): (a) drop ALL unit commits with \`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${advStage})\` — recommended if the unit just started and few commits landed; or (b) amend the bad file out of the latest commit with \`git rm <file> && git commit --amend --no-edit\`; or (c) whole-commit rollback with \`git revert --no-edit <commit-sha>\` for each bad commit.\n\nNOTE: \`git checkout HEAD -- <file>\` does NOT work on committed files (it's a no-op when the file matches HEAD). Use one of the above.\n\nAlternatively: (d) update the stage's output template \`location:\` / \`scope:\` if this pattern is legitimate, or (e) call \`haiku_revisit\` if the scope itself is wrong.`,
-							}),
+							},
+							{ isError: true },
 						)
 					}
 				}
@@ -5890,12 +6386,13 @@ export function handleStateTool(
 							stage: advStage,
 							unit: args.unit,
 						})
-					return text(
-						JSON.stringify({
+					return reply(
+						{
 							error: "unit_outputs_empty",
 							message:
 								"Cannot complete unit: no outputs were produced. Every unit must write at least one artifact that the FSM can detect (stage artifact under `stages/<stage>/...` excluding `units/`/`state.json`, knowledge document under `knowledge/`, or a file matching a stage output template `location:`). The FSM auto-populates `outputs:` from the git diff at advance time; if you've written files but they're not showing up, verify they've been committed in the unit worktree, or add them explicitly to the unit's `outputs:` frontmatter field.",
-						}),
+						},
+						{ isError: true },
 					)
 				}
 
@@ -5911,12 +6408,13 @@ export function handleStateTool(
 							unit: args.unit,
 							unchecked,
 						})
-					return text(
-						JSON.stringify({
+					return reply(
+						{
 							error: "criteria_not_met",
 							unchecked,
 							message: `Cannot complete unit: ${unchecked} completion criteria still unchecked. Address them, then call haiku_unit_advance_hat again.`,
-						}),
+						},
+						{ isError: true },
 					)
 				}
 
@@ -6015,20 +6513,17 @@ export function handleStateTool(
 						intentSlug,
 						args.unit as string,
 					)
-					return text(
-						JSON.stringify(
-							{
-								action: "merge_conflict",
-								status: "completed_merge_failed",
-								intent: args.intent,
-								unit: args.unit,
-								worktree: worktreePath,
-								error: mergeResult.message,
-								message: `Unit completed but merge to parent branch failed: ${mergeResult.message}. RESOLVE: cd to the parent branch (\`git checkout ${parentBranchName}\`), merge manually (\`git merge haiku/${intentSlug}/${args.unit} --no-edit\`), resolve any conflicts, then commit and push. If you cannot resolve, ask the user for help.`,
-							},
-							null,
-							2,
-						),
+					return reply(
+						{
+							action: "merge_conflict",
+							status: "completed_merge_failed",
+							intent: args.intent,
+							unit: args.unit,
+							worktree: worktreePath,
+							error: mergeResult.message,
+							message: `Unit completed but merge to parent branch failed: ${mergeResult.message}. RESOLVE: cd to the parent branch (\`git checkout ${parentBranchName}\`), merge manually (\`git merge haiku/${intentSlug}/${args.unit} --no-edit\`), resolve any conflicts, then commit and push. If you cannot resolve, ask the user for help.`,
+						},
+						{ isError: true },
 					)
 				}
 
@@ -6136,8 +6631,8 @@ export function handleStateTool(
 					]
 						.filter(Boolean)
 						.join("\n")
-					return text(
-						JSON.stringify({
+					return reply(
+						{
 							error: "unit_scope_violation",
 							hat: currentHat,
 							violations: scopeResult.violations,
@@ -6147,7 +6642,8 @@ export function handleStateTool(
 								`Out-of-bounds files:\n${scopeResult.violations.map((v) => `  - ${v}`).join("\n")}\n\n` +
 								`Allowed paths (stage output templates + FSM metadata):\n${allowedSummary}\n\n` +
 								`Revert the out-of-bounds commits in the unit worktree: drop all unit commits with \`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${advStage})\`, or amend a single file out with \`git rm <file> && git commit --amend --no-edit\`, or \`git revert --no-edit <commit-sha>\` for a whole commit. NOTE: \`git checkout HEAD -- <file>\` is a no-op on committed files. Or update the stage's output template if this pattern is legitimate. Do NOT advance with scope violations — downstream hats will run blind.`,
-						}),
+						},
+						{ isError: true },
 					)
 				}
 			}
@@ -6234,11 +6730,12 @@ export function handleStateTool(
 				args.unit as string,
 			)
 			if (!rejectInfo)
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "unit_not_found",
 						message: `Unit '${args.unit}' not found in any stage of intent '${args.intent}'.`,
-					}),
+					},
+					{ isError: true },
 				)
 			const failPath = rejectInfo.path
 			const rejectStage = rejectInfo.stage
@@ -6261,13 +6758,14 @@ export function handleStateTool(
 			// unit with a committed scope violation can still hit MAX_BOLTS
 			// and escalate to the user instead of deadlocking.
 			if (currentBolt + 1 > MAX_UNIT_BOLTS) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "max_bolts_exceeded",
 						bolt: currentBolt,
 						max: MAX_UNIT_BOLTS,
 						message: `Unit has exceeded ${MAX_UNIT_BOLTS} bolt iterations. Escalate to the user — this unit may need to be redesigned, split, or have a persistent scope violation manually reverted (\`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${rejectStage})\` in the unit worktree).`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -6303,20 +6801,21 @@ export function handleStateTool(
 					sealIntentState(args.intent as string)
 
 					if (newAttempts >= MAX_UNIT_BOLTS) {
-						return text(
-							JSON.stringify({
+						return reply(
+							{
 								error: "max_bolts_exceeded",
 								reason: "persistent_scope_violation",
 								attempts: newAttempts,
 								max: MAX_UNIT_BOLTS,
 								violations: scopeResult.violations,
 								message: `Unit has hit ${newAttempts} consecutive scope-violation rejects. Escalate to the user. The worktree still contains out-of-scope commits that must be reverted manually: \`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${rejectStage})\` in the unit worktree.`,
-							}),
+							},
+							{ isError: true },
 						)
 					}
 
-					return text(
-						JSON.stringify({
+					return reply(
+						{
 							error: "unit_scope_violation_on_reject",
 							bolt: currentBolt,
 							scope_reject_attempts: newAttempts,
@@ -6328,7 +6827,8 @@ export function handleStateTool(
 								`Attempt ${newAttempts}/${MAX_UNIT_BOLTS} — after ${MAX_UNIT_BOLTS} scope-violation rejects, the FSM escalates to the user.\n\n` +
 								`Out-of-bounds files:\n${scopeResult.violations.map((v) => `  - ${v}`).join("\n")}\n\n` +
 								`Revert the out-of-bounds commits in the unit worktree: drop all unit commits with \`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${rejectStage})\`, or amend a single file out with \`git rm <file> && git commit --amend --no-edit\`, or \`git revert --no-edit <commit-sha>\` for a whole commit. NOTE: \`git checkout HEAD -- <file>\` is a NO-OP on committed files and will not clear the violation. After the revert, call reject_hat again.`,
-						}),
+						},
+						{ isError: true },
 					)
 				}
 
@@ -6447,13 +6947,14 @@ export function handleStateTool(
 
 			// Enforce max bolt limit (module-level MAX_UNIT_BOLTS)
 			if (current + 1 > MAX_UNIT_BOLTS) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "max_bolts_exceeded",
 						bolt: current,
 						max: MAX_UNIT_BOLTS,
 						message: `Unit has exceeded ${MAX_UNIT_BOLTS} bolt iterations. Escalate to the user — this unit may need to be redesigned or split.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -6482,14 +6983,15 @@ export function handleStateTool(
 				args.unit as string,
 			)
 			if (!existsSync(path)) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "unit_not_found",
 						intent: args.intent,
 						stage: args.stage,
 						unit: args.unit,
 						message: `No unit '${args.unit}' in stage '${args.stage}'.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			const { data, body } = parseFrontmatter(readFileSync(path, "utf8"))
@@ -6501,7 +7003,7 @@ export function handleStateTool(
 			const h1Match = body.match(/^#\s+(.+)$/m)
 			const title =
 				fmTitle || (h1Match ? h1Match[1].trim() : (args.unit as string))
-			return text(JSON.stringify({ title, body }, null, 2))
+			return reply({ title, body })
 		}
 
 		// ── Unit delete (architecture rule §1.3: pending only) ──
@@ -6517,26 +7019,28 @@ export function handleStateTool(
 				args.unit as string,
 			)
 			if (!existsSync(path)) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "unit_not_found",
 						intent: args.intent,
 						stage: args.stage,
 						unit: args.unit,
 						message: `No unit '${args.unit}' in stage '${args.stage}'.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			const { data } = parseFrontmatter(readFileSync(path, "utf8"))
 			const status = (data.status as string) || "pending"
 			if (status !== "pending") {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "lifecycle_violation",
 						current_status: status,
 						required_status: "pending",
 						message: `Cannot delete unit '${args.unit}' — status is '${status}'. Per the forward-only lifecycle rule (architecture §1.3), units become immutable once they enter active or completed status because downstream work has been informed by them. Pending units only.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			rmSync(path)
@@ -6546,12 +7050,10 @@ export function handleStateTool(
 				stage: args.stage as string,
 				unit: args.unit as string,
 			})
-			return text(
-				JSON.stringify({
-					ok: true,
-					message: `Deleted pending unit '${args.unit}'.`,
-				}),
-			)
+			return reply({
+				ok: true,
+				message: `Deleted pending unit '${args.unit}'.`,
+			})
 		}
 
 		// ── Unit write (create or full-rewrite, pending only) ──
@@ -6573,12 +7075,13 @@ export function handleStateTool(
 			const fmInput = (args.frontmatter as Record<string, unknown>) ?? {}
 
 			if (!body || body.trim().length === 0) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "empty_body",
 						message:
 							"body is required and must be substantive. Empty bodies cannot pass downstream verification.",
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -6592,12 +7095,13 @@ export function handleStateTool(
 				)
 				const currentStatus = (existingFm.status as string) || "pending"
 				if (currentStatus !== "pending") {
-					return text(
-						JSON.stringify({
+					return reply(
+						{
 							error: "lifecycle_violation",
 							current_status: currentStatus,
 							message: `Cannot rewrite unit '${unitName}' — status is '${currentStatus}'. Per the forward-only lifecycle rule (architecture §1.3), units become immutable once active or completed. To address a defect in a completed unit, draft a NEW pending unit in the next elaborate iteration; do not modify the original.`,
-						}),
+						},
+						{ isError: true },
 					)
 				}
 				isCreate = false
@@ -6616,7 +7120,8 @@ export function handleStateTool(
 			}
 			if (!siblingUnits.includes(unitName)) siblingUnits.push(unitName)
 
-			// FM validation (mechanical rules from validateUnitFrontmatter).
+			// FM validation (AJV consumes UNIT_FRONTMATTER_SCHEMA for static
+			// rules; context-dependent checks run as additional steps).
 			const validation = validateUnitFrontmatter(fmInput, {
 				intent: intentArg,
 				stage: stageArg,
@@ -6624,12 +7129,13 @@ export function handleStateTool(
 				siblingUnits,
 			})
 			if (!validation.valid) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "frontmatter_validation_failed",
 						errors: validation.errors,
 						message: `Frontmatter failed validation. Fix each error and call again. Architecture §1.1 mandates that the FSM enforces FM validity at write time, so the agent never sees defects sneak through.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -6655,12 +7161,13 @@ export function handleStateTool(
 				: []
 			const cycleNodes = detectDagCycles(dag)
 			if (cycleNodes.length > 0) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "dag_cycle_detected",
 						cycle_nodes: cycleNodes,
 						message: `Writing unit '${unitName}' with depends_on=[${(fmInput.depends_on as string[] | undefined)?.join(", ") ?? ""}] would create a dependency cycle involving: [${cycleNodes.join(", ")}]. The FSM rejects writes that produce a cyclic DAG. Reorder dependencies or restructure the units.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -6689,22 +7196,16 @@ export function handleStateTool(
 				stage: stageArg,
 				unit: unitName,
 			})
-			return text(
-				JSON.stringify(
-					{
-						ok: true,
-						created: isCreate,
-						unit: unitName,
-						stage: stageArg,
-						intent: intentArg,
-						message: isCreate
-							? `Created unit '${unitName}' in stage '${stageArg}' (status: pending).`
-							: `Rewrote unit '${unitName}' in stage '${stageArg}' (status preserved as pending).`,
-					},
-					null,
-					2,
-				),
-			)
+			return reply({
+				ok: true,
+				created: isCreate,
+				unit: unitName,
+				stage: stageArg,
+				intent: intentArg,
+				message: isCreate
+					? `Created unit '${unitName}' in stage '${stageArg}' (status: pending).`
+					: `Rewrote unit '${unitName}' in stage '${stageArg}' (status preserved as pending).`,
+			})
 		}
 
 		case "haiku_decision_record": {
@@ -6712,23 +7213,25 @@ export function handleStateTool(
 			const requestedStage = args.stage as string | undefined
 			const stage = requestedStage || resolveActiveStage(intentArg)
 			if (!stage) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "no_active_stage",
 						message:
 							"No stage specified and no active stage found on the intent.",
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
 			const stageDir = join(intentDir(intentArg), "stages", stage)
 			const stateFile = join(stageDir, "state.json")
 			if (!existsSync(stateFile)) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "stage_state_missing",
 						message: `Stage state file not found: ${stateFile}`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			const stageState = JSON.parse(readFileSync(stateFile, "utf8")) as Record<
@@ -6741,12 +7244,13 @@ export function handleStateTool(
 
 			if (noDecisions) {
 				if (!rationale || rationale.length < 10) {
-					return text(
-						JSON.stringify({
+					return reply(
+						{
 							error: "rationale_required",
 							message:
 								"no_decisions=true requires a rationale of at least 10 characters explaining why no architectural decisions are in scope for this stage. State the convention or constraint that makes the work routine (e.g. 'all units follow the team's standard CRUD scaffolding; no architectural choices remain after design stage').",
-						}),
+						},
+						{ isError: true },
 					)
 				}
 				stageState.elaboration_no_decisions = true
@@ -6758,15 +7262,13 @@ export function handleStateTool(
 					intent: intentArg,
 					stage,
 				})
-				return text(
-					JSON.stringify({
-						ok: true,
-						intent: intentArg,
-						stage,
-						no_decisions: true,
-						rationale,
-					}),
-				)
+				return reply({
+					ok: true,
+					intent: intentArg,
+					stage,
+					no_decisions: true,
+					rationale,
+				})
 			}
 
 			const decision = (args.decision as string | undefined)?.trim()
@@ -6775,41 +7277,45 @@ export function handleStateTool(
 			const source = args.source as string | undefined
 
 			if (!decision || !options || !choice || !source) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "missing_fields",
 						message:
 							"haiku_decision_record requires `decision`, `options`, `choice`, and `source` (or `no_decisions: true` with `rationale`).",
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
 			if (!Array.isArray(options) || options.length < 2) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "options_too_few",
 						message:
 							"`options` must be an array of at least 2 concrete alternatives. A 'decision' with only one option isn't a decision — it's just doing the work. If the work is forced, use `no_decisions: true` with a rationale instead.",
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
 			if (!options.includes(choice)) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "choice_not_in_options",
 						message: `\`choice\` must match one of the entries in \`options\`. Got choice=${JSON.stringify(choice)}; options=${JSON.stringify(options)}. The decision-log is provenance — recording a choice that wasn't in the presented alternatives corrupts the very property the log exists to preserve.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
 			if (source !== "user" && source !== "autonomous-acknowledged") {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "invalid_source",
 						message:
 							'`source` must be "user" (the user picked between the options) or "autonomous-acknowledged" (you chose and surfaced the choice for the user to veto, and they did not push back).',
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -6832,22 +7338,20 @@ export function handleStateTool(
 				stage,
 				source,
 			})
-			return text(
-				JSON.stringify({
-					ok: true,
-					intent: intentArg,
-					stage,
-					decision_count: log.length,
-				}),
-			)
+			return reply({
+				ok: true,
+				intent: intentArg,
+				stage,
+				decision_count: log.length,
+			})
 		}
 
 		// ── Knowledge ──
 		case "haiku_knowledge_list": {
 			const dir = join(intentDir(args.intent as string), "knowledge")
-			if (!existsSync(dir)) return text("[]")
+			if (!existsSync(dir)) return reply({ files: [] })
 			const files = readdirSync(dir).filter((f) => f.endsWith(".md"))
-			return text(JSON.stringify(files))
+			return reply({ files })
 		}
 		case "haiku_knowledge_read": {
 			const path = join(
@@ -6876,53 +7380,43 @@ export function handleStateTool(
 				studio_md: s.studioFile,
 				body: s.body.slice(0, 200),
 			}))
-			return text(JSON.stringify(studios, null, 2))
+			return reply({ studios })
 		}
 		case "haiku_studio_get": {
 			const studio = resolveStudio(args.studio as string)
-			if (!studio) return text("")
-			return text(
-				JSON.stringify(
-					{
-						name: studio.name,
-						slug: studio.slug,
-						aliases: studio.aliases,
-						dir: studio.dir,
-						description: studio.description,
-						category: studio.category,
-						stages: studio.stages,
-						source: studio.source,
-						path: studio.path,
-						studio_md: studio.studioFile,
-						body: studio.body,
-						...studio.data,
-					},
-					null,
-					2,
-				),
-			)
+			if (!studio) return reply({ found: false })
+			return reply({
+				found: true,
+				name: studio.name,
+				slug: studio.slug,
+				aliases: studio.aliases,
+				dir: studio.dir,
+				description: studio.description,
+				category: studio.category,
+				stages: studio.stages,
+				source: studio.source,
+				path: studio.path,
+				studio_md: studio.studioFile,
+				body: studio.body,
+				...studio.data,
+			})
 		}
 		case "haiku_studio_stage_get": {
 			const studio = resolveStudio(args.studio as string)
-			if (!studio) return text("")
+			if (!studio) return reply({ found: false })
 			const sgName = args.stage as string
 			const stageFile = join(studio.path, "stages", sgName, "STAGE.md")
-			if (!existsSync(stageFile)) return text("")
+			if (!existsSync(stageFile)) return reply({ found: false })
 			const raw = readFileSync(stageFile, "utf8")
 			const { data, body } = parseFrontmatter(raw)
-			return text(
-				JSON.stringify(
-					{
-						...data,
-						body,
-						studio: studio.name,
-						studio_dir: studio.dir,
-						stage_md: stageFile,
-					},
-					null,
-					2,
-				),
-			)
+			return reply({
+				found: true,
+				...data,
+				body,
+				studio: studio.name,
+				studio_dir: studio.dir,
+				stage_md: stageFile,
+			})
 		}
 
 		// ── Settings ──
@@ -7797,9 +8291,7 @@ export function handleStateTool(
 				status: "pending",
 				message: `Feedback ${result.feedback_id} created.`,
 			}
-			return text(
-				JSON.stringify(injectPushWarning(response, gitResult), null, 2),
-			)
+			return reply(injectPushWarning(response, gitResult))
 		}
 
 		case "haiku_feedback_update": {
@@ -7859,12 +8351,13 @@ export function handleStateTool(
 						) {
 							const cur = (data.status as string) || "pending"
 							if (cur === "closed" || cur === "rejected") {
-								return text(
-									JSON.stringify({
+								return reply(
+									{
 										error: "lifecycle_violation",
 										current_status: cur,
 										message: `Cannot update feedback '${feedbackId}' — status is '${cur}'. Per the forward-only lifecycle rule, closed and rejected feedback are terminal. To raise a related concern, file a NEW feedback via haiku_feedback.`,
-									}),
+									},
+									{ isError: true },
 								)
 							}
 							break
@@ -7905,13 +8398,7 @@ export function handleStateTool(
 				updated_fields: updateResult.updated_fields,
 				message: `Feedback ${feedbackId} updated.`,
 			}
-			return text(
-				JSON.stringify(
-					injectPushWarning(updateResponse, updateGitResult),
-					null,
-					2,
-				),
-			)
+			return reply(injectPushWarning(updateResponse, updateGitResult))
 		}
 
 		case "haiku_feedback_delete": {
@@ -7963,13 +8450,7 @@ export function handleStateTool(
 					? `Feedback ${feedbackId} deleted from stage '${stage}'.`
 					: `Feedback ${feedbackId} deleted (intent-scope).`,
 			}
-			return text(
-				JSON.stringify(
-					injectPushWarning(deleteResponse, deleteGitResult),
-					null,
-					2,
-				),
-			)
+			return reply(injectPushWarning(deleteResponse, deleteGitResult))
 		}
 
 		case "haiku_feedback_reject": {
@@ -8072,13 +8553,7 @@ export function handleStateTool(
 				status: "rejected",
 				message: `Feedback ${feedbackId} rejected: ${reason}`,
 			}
-			return text(
-				JSON.stringify(
-					injectPushWarning(rejectResponse, rejectGitResult),
-					null,
-					2,
-				),
-			)
+			return reply(injectPushWarning(rejectResponse, rejectGitResult))
 		}
 
 		case "haiku_feedback_list": {
@@ -8206,7 +8681,7 @@ export function handleStateTool(
 				count: allItems.length,
 				items: allItems,
 			}
-			return text(JSON.stringify(listResponse, null, 2))
+			return reply(listResponse)
 		}
 
 		// ── Feedback body-only read (architecture rule §1.1: no FM exposed) ──
@@ -8215,11 +8690,12 @@ export function handleStateTool(
 			const stageArg = (args.stage as string) || ""
 			const fbId = args.feedback_id as string
 			if (!intentArg || !fbId) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "missing_args",
 						message: "intent and feedback_id are required.",
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			// Locate the FB file. Stage-scope FBs live in stages/<stage>/feedback/;
@@ -8231,14 +8707,15 @@ export function handleStateTool(
 				? feedbackDir(intentArg, stageArg)
 				: feedbackDir(intentArg, "")
 			if (!existsSync(dir)) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "feedback_not_found",
 						intent: intentArg,
 						stage: stageArg || null,
 						feedback_id: fbId,
 						message: `No feedback directory at ${dir}.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			let foundPath: string | null = null
@@ -8269,21 +8746,22 @@ export function handleStateTool(
 				}
 			}
 			if (!foundPath || !foundBody) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "feedback_not_found",
 						intent: intentArg,
 						stage: stageArg || null,
 						feedback_id: fbId,
 						message: `No feedback file matching ${fbId} in ${dir}.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			const fmTitle =
 				typeof foundData?.title === "string" ? (foundData.title as string) : ""
 			const h1Match = foundBody.match(/^#\s+(.+)$/m)
 			const title = fmTitle || (h1Match ? h1Match[1].trim() : fbId)
-			return text(JSON.stringify({ title, body: foundBody }, null, 2))
+			return reply({ title, body: foundBody })
 		}
 
 		// ── Feedback body write (architecture FB-as-unit, lifecycle-bound) ──
@@ -8294,20 +8772,22 @@ export function handleStateTool(
 			const newBody = (args.body as string) ?? ""
 
 			if (!intentArg || !fbId) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "missing_args",
 						message: "intent and feedback_id are required.",
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			if (!newBody || newBody.trim().length === 0) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "empty_body",
 						message:
 							"body is required and must be substantive. Empty FB bodies cannot pass the assessor's spec-match check.",
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -8323,14 +8803,15 @@ export function handleStateTool(
 				? feedbackDir(intentArg, stageArg)
 				: feedbackDir(intentArg, "")
 			if (!existsSync(dir)) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "feedback_not_found",
 						intent: intentArg,
 						stage: stageArg || null,
 						feedback_id: fbId,
 						message: `No feedback directory at ${dir}.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			let foundPath: string | null = null
@@ -8361,14 +8842,15 @@ export function handleStateTool(
 				}
 			}
 			if (!foundPath || !foundFm) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "feedback_not_found",
 						intent: intentArg,
 						stage: stageArg || null,
 						feedback_id: fbId,
 						message: `No feedback file matching ${fbId} in ${dir}.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -8377,12 +8859,13 @@ export function handleStateTool(
 			// rewrites — the fixer hat populates the FB body with diagnosis.
 			const status = (foundFm.status as string) || "pending"
 			if (status === "closed" || status === "rejected") {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "lifecycle_violation",
 						current_status: status,
 						message: `Cannot rewrite feedback '${fbId}' — status is '${status}'. Per the forward-only lifecycle rule, closed and rejected feedback are terminal and immutable. To raise a related concern, file a NEW feedback via haiku_feedback.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -8397,19 +8880,13 @@ export function handleStateTool(
 				stage: stageArg || "",
 				feedback_id: fbId,
 			})
-			return text(
-				JSON.stringify(
-					{
-						ok: true,
-						feedback_id: fbId,
-						stage: stageArg || null,
-						intent: intentArg,
-						message: `Rewrote body of feedback '${fbId}' (status preserved as '${status}').`,
-					},
-					null,
-					2,
-				),
-			)
+			return reply({
+				ok: true,
+				feedback_id: fbId,
+				stage: stageArg || null,
+				intent: intentArg,
+				message: `Rewrote body of feedback '${fbId}' (status preserved as '${status}').`,
+			})
 		}
 
 		// ── Feedback advance/reject hat (FB-as-unit model, architecture §5) ──
@@ -8422,11 +8899,12 @@ export function handleStateTool(
 			const stageArg = (args.stage as string) || ""
 			const fbId = args.feedback_id as string
 			if (!intentArg || !fbId) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "missing_args",
 						message: "intent and feedback_id are required.",
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -8438,14 +8916,15 @@ export function handleStateTool(
 				? feedbackDir(intentArg, stageArg)
 				: feedbackDir(intentArg, "")
 			if (!existsSync(fbAdvDir)) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "feedback_not_found",
 						intent: intentArg,
 						stage: stageArg || null,
 						feedback_id: fbId,
 						message: `No feedback directory at ${fbAdvDir}.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			let advPath: string | null = null
@@ -8478,26 +8957,28 @@ export function handleStateTool(
 				}
 			}
 			if (!advPath || !advFm) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "feedback_not_found",
 						intent: intentArg,
 						stage: stageArg || null,
 						feedback_id: fbId,
 						message: `No feedback file matching ${fbId} in ${fbAdvDir}.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
 			// Lifecycle: don't advance terminal FBs.
 			const advStatus = (advFm.status as string) || "pending"
 			if (advStatus === "closed" || advStatus === "rejected") {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "lifecycle_violation",
 						current_status: advStatus,
 						message: `Cannot advance hat on FB '${fbId}' — already ${advStatus} (terminal).`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -8525,15 +9006,16 @@ export function handleStateTool(
 				fixHats = Object.keys(studioFixHatPaths)
 			}
 			if (fixHats.length === 0) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "no_fix_hats",
 						stage: stageArg || null,
 						scope: stageArg ? "stage" : "intent",
 						message: stageArg
 							? `Stage '${stageArg}' has no \`fix_hats:\` configured in STAGE.md. The fix-loop FB-as-unit model requires a fix_hats sequence.`
 							: `Studio '${studioName}' has no fix-hats in \`plugin/studios/${studioName}/fix-hats/\`. Intent-completion fix loops require at least one studio-level fix-hat.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -8557,11 +9039,12 @@ export function handleStateTool(
 				// curIdx pointed at the last hat already — the FB should have
 				// closed on the prior advance. This is a defensive guard for
 				// a state that shouldn't be reachable under correct dispatch.
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "no_hat_to_advance",
 						message: `FB '${fbId}' is at hat '${curHat}', already the last hat in fix_hats. The FB should have closed on the prior advance call. State may be inconsistent.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			const isLast = callingIdx === fixHats.length - 1
@@ -8608,24 +9091,18 @@ export function handleStateTool(
 				},
 			)
 			const nextDispatchedHat = isLast ? null : fixHats[callingIdx + 1]
-			return text(
-				JSON.stringify(
-					{
-						ok: true,
-						feedback_id: fbId,
-						stage: stageArg || null,
-						calling_hat: callingHat,
-						next_dispatched_hat: nextDispatchedHat,
-						closed: isLast,
-						bolt: curBolt,
-						message: isLast
-							? `FB '${fbId}' closed by ${closedBy} after '${callingHat}' (last hat in fix_hats sequence ${callingIdx + 1}/${fixHats.length}).`
-							: `FB '${fbId}': '${callingHat}' (${callingIdx + 1}/${fixHats.length}) finished; next hat to dispatch is '${nextDispatchedHat}'.`,
-					},
-					null,
-					2,
-				),
-			)
+			return reply({
+				ok: true,
+				feedback_id: fbId,
+				stage: stageArg || null,
+				calling_hat: callingHat,
+				next_dispatched_hat: nextDispatchedHat,
+				closed: isLast,
+				bolt: curBolt,
+				message: isLast
+					? `FB '${fbId}' closed by ${closedBy} after '${callingHat}' (last hat in fix_hats sequence ${callingIdx + 1}/${fixHats.length}).`
+					: `FB '${fbId}': '${callingHat}' (${callingIdx + 1}/${fixHats.length}) finished; next hat to dispatch is '${nextDispatchedHat}'.`,
+			})
 		}
 
 		case "haiku_feedback_reject_hat": {
@@ -8634,11 +9111,12 @@ export function handleStateTool(
 			const fbId = args.feedback_id as string
 			const reason = (args.reason as string) || ""
 			if (!intentArg || !fbId) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "missing_args",
 						message: "intent and feedback_id are required.",
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -8649,11 +9127,12 @@ export function handleStateTool(
 				? feedbackDir(intentArg, stageArg)
 				: feedbackDir(intentArg, "")
 			if (!existsSync(fbRejDir)) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "feedback_not_found",
 						message: `No feedback directory at ${fbRejDir}.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 			let rejPath: string | null = null
@@ -8686,23 +9165,25 @@ export function handleStateTool(
 				}
 			}
 			if (!rejPath || !rejFm) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "feedback_not_found",
 						feedback_id: fbId,
 						message: `No feedback file matching ${fbId} in ${fbRejDir}.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
 			const rejStatus = (rejFm.status as string) || "pending"
 			if (rejStatus === "closed" || rejStatus === "rejected") {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "lifecycle_violation",
 						current_status: rejStatus,
 						message: `Cannot reject hat on FB '${fbId}' — already ${rejStatus} (terminal).`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -8727,15 +9208,16 @@ export function handleStateTool(
 				fixHatsRej = Object.keys(studioFixHatPaths)
 			}
 			if (fixHatsRej.length === 0) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "no_fix_hats",
 						stage: stageArg || null,
 						scope: stageArg ? "stage" : "intent",
 						message: stageArg
 							? `Stage '${stageArg}' has no \`fix_hats:\` configured.`
 							: `Studio '${studioNameRej}' has no fix-hats in \`plugin/studios/${studioNameRej}/fix-hats/\`.`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -8752,11 +9234,12 @@ export function handleStateTool(
 			const callingIdxRej = curIdxRej + 1
 			const callingHatRej = fixHatsRej[callingIdxRej]
 			if (!callingHatRej) {
-				return text(
-					JSON.stringify({
+				return reply(
+					{
 						error: "no_hat_to_reject",
 						message: `FB '${fbId}' has no hat to reject — already past the last hat in fix_hats (storage at '${curHatRej}').`,
-					}),
+					},
+					{ isError: true },
 				)
 			}
 
@@ -8798,24 +9281,18 @@ export function handleStateTool(
 				hat: callingHatRej,
 				new_bolt: String(curBoltRej + 1),
 			})
-			return text(
-				JSON.stringify(
-					{
-						ok: true,
-						feedback_id: fbId,
-						rejecting_hat: callingHatRej,
-						next_dispatched_hat: nextDispatchedHatRej,
-						new_bolt: curBoltRej + 1,
-						reason,
-						message:
-							callingIdxRej > 0
-								? `FB '${fbId}' hat '${callingHatRej}' rejected — sending back to '${nextDispatchedHatRej}', bolt incremented to ${curBoltRej + 1}.`
-								: `FB '${fbId}' first hat '${callingHatRej}' rejected — no prior hat to send back to; same hat will retry, bolt incremented to ${curBoltRej + 1}.`,
-					},
-					null,
-					2,
-				),
-			)
+			return reply({
+				ok: true,
+				feedback_id: fbId,
+				rejecting_hat: callingHatRej,
+				next_dispatched_hat: nextDispatchedHatRej,
+				new_bolt: curBoltRej + 1,
+				reason,
+				message:
+					callingIdxRej > 0
+						? `FB '${fbId}' hat '${callingHatRej}' rejected — sending back to '${nextDispatchedHatRej}', bolt incremented to ${curBoltRej + 1}.`
+						: `FB '${fbId}' first hat '${callingHatRej}' rejected — no prior hat to send back to; same hat will retry, bolt incremented to ${curBoltRej + 1}.`,
+			})
 		}
 
 		case "haiku_version_info": {
@@ -8828,7 +9305,7 @@ export function handleStateTool(
 			if (hasPendingUpdate())
 				info.update_note =
 					"A new version has been downloaded and will activate on the next tool call."
-			return text(JSON.stringify(info, null, 2))
+			return reply(info)
 		}
 
 		default:

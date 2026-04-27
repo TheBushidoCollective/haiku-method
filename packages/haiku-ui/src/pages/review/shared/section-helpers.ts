@@ -41,6 +41,25 @@ export function getPreamble(sections: Section[]): string {
 }
 
 /**
+ * Strip a leading YAML frontmatter block from a markdown string.
+ *
+ * Unit / intent / knowledge files carry a `---\n…\n---\n` block that
+ * the workflow engine consumes for state. Without stripping, the keys
+ * and array values surface as literal text in the rendered body
+ * (`title: …`, `inputs:` followed by bullets that look like markdown
+ * list items). Frontmatter is shown via the structured `UnitMetaPanel`
+ * so the raw YAML never reaches the markdown renderer.
+ *
+ * Idempotent: returns input unchanged when there's no leading
+ * frontmatter delimiter.
+ */
+export function stripFrontmatter(md: string): string {
+	if (!md.startsWith("---")) return md
+	const match = md.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/)
+	return match ? md.slice(match[0].length) : md
+}
+
+/**
  * Module-local memoization cache for `markdownToSimpleHtml`.
  *
  * The call sites (IntentReview, UnitReview, KnowledgeTab, OutputArtifactsTab,

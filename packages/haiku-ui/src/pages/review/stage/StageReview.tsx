@@ -25,6 +25,7 @@ import DOMPurify from "dompurify"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, SectionHeading } from "../../../atoms/Card"
 import { type TabDef, Tabs } from "../../../molecules/Tabs"
+import { UnitMetaPanel } from "../../../molecules/UnitMetaPanel"
 import { ArtifactAnnotator } from "../../../organisms/ArtifactAnnotator"
 import {
 	type InlineCommentEntry,
@@ -32,7 +33,10 @@ import {
 } from "../../../organisms/InlineComments"
 import type { ParsedUnit } from "../../../parsed"
 import type { FeedbackItemData } from "../../../types"
-import { markdownToSimpleHtml } from "../shared/section-helpers"
+import {
+	markdownToSimpleHtml,
+	stripFrontmatter,
+} from "../shared/section-helpers"
 import type { ReviewPageSessionData } from "../shared/session-data"
 import type { ReviewDetailKind, ReviewTab } from "../shared/stage-tabs"
 import {
@@ -1251,6 +1255,11 @@ function UnitDetailView({
 		type?: string
 		description?: string
 		model?: string
+		inputs?: string[]
+		outputs?: string[]
+		depends_on?: string[]
+		hat?: string
+		bolt?: number
 	}
 	const type = fm.type ?? fm.discipline ?? ""
 	const typeCls = type
@@ -1316,31 +1325,42 @@ function UnitDetailView({
 					)}
 				</div>
 				<div className="px-4 py-3">
+					<UnitMetaPanel
+						inputs={fm.inputs as string[] | undefined}
+						outputs={fm.outputs as string[] | undefined}
+						dependsOn={fm.depends_on as string[] | undefined}
+						hat={fm.hat}
+						bolt={fm.bolt}
+					/>
 					{current.rawContent &&
-						(onInlineCommentsChange ? (
-							<InlineComments
-								htmlContent={markdownToSimpleHtml(current.rawContent)}
-								rawContent={current.rawContent}
-								location={`Unit: ${current.title || current.slug}`}
-								filePath={
-									intentSlug
-										? `.haiku/intents/${intentSlug}/stages/${stageId}/units/${current.slug}.md`
-										: undefined
-								}
-								existingAnchors={deriveExistingAnchorsForUnit(
-									current.slug,
-									cardFeedback,
-								)}
-								onCommentsChange={onInlineCommentsChange}
-								onSaveInline={onSaveInline}
-								flashAnchor={flashAnchor ?? null}
-								onFlashCommentConsumed={onFlashCommentConsumed}
-							/>
-						) : (
-							<MarkdownViewer id={`unit-${current.slug}`}>
-								{current.rawContent}
-							</MarkdownViewer>
-						))}
+						(() => {
+							const body = stripFrontmatter(current.rawContent)
+							if (!body.trim()) return null
+							return onInlineCommentsChange ? (
+								<InlineComments
+									htmlContent={markdownToSimpleHtml(body)}
+									rawContent={body}
+									location={`Unit: ${current.title || current.slug}`}
+									filePath={
+										intentSlug
+											? `.haiku/intents/${intentSlug}/stages/${stageId}/units/${current.slug}.md`
+											: undefined
+									}
+									existingAnchors={deriveExistingAnchorsForUnit(
+										current.slug,
+										cardFeedback,
+									)}
+									onCommentsChange={onInlineCommentsChange}
+									onSaveInline={onSaveInline}
+									flashAnchor={flashAnchor ?? null}
+									onFlashCommentConsumed={onFlashCommentConsumed}
+								/>
+							) : (
+								<MarkdownViewer id={`unit-${current.slug}`}>
+									{body}
+								</MarkdownViewer>
+							)
+						})()}
 				</div>
 			</div>
 		</>

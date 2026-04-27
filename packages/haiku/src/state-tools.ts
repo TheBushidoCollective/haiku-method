@@ -4430,6 +4430,31 @@ export function moveFeedbackFile(
 	const newFilename = `${newNN}-${fileSlug}.md`
 	const newPath = join(targetDir, newFilename)
 
+	const fromDir = feedbackDir(slug, fromStage)
+	const oldNNMatch = found.filename.match(/^(\d+)-/)
+	const oldNN = oldNNMatch ? oldNNMatch[1] : null
+
+	// Pre-flight: check every potential sidecar collision BEFORE any
+	// filesystem writes. Defense in depth — even after
+	// deleteFeedbackFile started cleaning sidecars, an orphan could
+	// exist from older versions or out-of-band manual edits. POSIX
+	// renameSync silently overwrites, so we refuse loudly. Doing the
+	// check pre-write avoids leaving a stranded destination .md
+	// (split-brain state) when a collision is detected mid-loop.
+	if (oldNN) {
+		for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+			const oldAttachment = join(fromDir, `${oldNN}-${fileSlug}.${ext}`)
+			if (existsSync(oldAttachment)) {
+				const newAttachment = join(targetDir, `${newNN}-${fileSlug}.${ext}`)
+				if (existsSync(newAttachment)) {
+					throw new Error(
+						`moveFeedbackFile: refusing to overwrite existing attachment '${newAttachment}' — clean it up manually before retrying.`,
+					)
+				}
+			}
+		}
+	}
+
 	const content = matter.stringify(`\n${found.body.trim()}\n`, data)
 	writeFileSync(newPath, content)
 
@@ -4437,24 +4462,11 @@ export function moveFeedbackFile(
 	// follow `<NN>-<slug>.<ext>`; rename to match the new NN so the
 	// markdown <img> link in the FB body keeps pointing at the right
 	// file (the body is rewritten below to update the URL too).
-	const fromDir = feedbackDir(slug, fromStage)
-	const oldNNMatch = found.filename.match(/^(\d+)-/)
-	const oldNN = oldNNMatch ? oldNNMatch[1] : null
 	if (oldNN) {
 		for (const ext of ["png", "jpg", "jpeg", "webp"]) {
 			const oldAttachment = join(fromDir, `${oldNN}-${fileSlug}.${ext}`)
 			if (existsSync(oldAttachment)) {
 				const newAttachment = join(targetDir, `${newNN}-${fileSlug}.${ext}`)
-				// Defense in depth: even after deleteFeedbackFile started
-				// cleaning sidecars, an orphan could exist from older
-				// versions or out-of-band manual edits. renameSync on
-				// POSIX silently overwrites, so explicitly refuse rather
-				// than destroy data the caller didn't ask us to touch.
-				if (existsSync(newAttachment)) {
-					throw new Error(
-						`moveFeedbackFile: refusing to overwrite existing attachment '${newAttachment}' — clean it up manually before retrying.`,
-					)
-				}
 				renameSync(oldAttachment, newAttachment)
 				// Patch the body's attachment URL so it points at the new
 				// stage + new NN. Server route format:

@@ -285,6 +285,62 @@ try {
 		)
 	})
 
+	await test("orphan attachment in target dir → throws BEFORE writing dest .md", () => {
+		const { projDir, slug } = makeProject("orphan-collision")
+		process.chdir(projDir)
+		const tinyPng =
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII="
+		const created = writeFeedbackFile(slug, "plan", {
+			title: "Has attachment",
+			body: "x",
+			origin: "user-chat",
+			author: "user",
+			attachmentDataUrl: `data:image/png;base64,${tinyPng}`,
+		})
+		const buildDir = join(
+			projDir,
+			".haiku/intents",
+			slug,
+			"stages/build/feedback",
+		)
+		// Plant an orphan attachment in the target dir at the slot the
+		// move would write to. The move's pre-flight should refuse
+		// without touching the source .md or writing the destination.
+		mkdirSync(buildDir, { recursive: true })
+		writeFileSync(
+			join(buildDir, "01-has-attachment.png"),
+			Buffer.from(tinyPng, "base64"),
+		)
+		const orphanBefore = readFileSync(join(buildDir, "01-has-attachment.png"))
+
+		assert.throws(
+			() => moveFeedbackFile(slug, "plan", created.feedback_id, "build"),
+			/refusing to overwrite/,
+		)
+
+		// Source .md still present (move aborted).
+		const planDir = join(
+			projDir,
+			".haiku/intents",
+			slug,
+			"stages/plan/feedback",
+		)
+		const planFiles = readdirSync(planDir).filter((f) => f.endsWith(".md"))
+		assert.strictEqual(planFiles.length, 1, "source .md must still exist")
+
+		// No destination .md was written.
+		const buildMds = readdirSync(buildDir).filter((f) => f.endsWith(".md"))
+		assert.strictEqual(
+			buildMds.length,
+			0,
+			"destination .md must NOT have been written",
+		)
+
+		// Orphan attachment is untouched (byte-identical).
+		const orphanAfter = readFileSync(join(buildDir, "01-has-attachment.png"))
+		assert.ok(orphanBefore.equals(orphanAfter), "orphan attachment unchanged")
+	})
+
 	await test("returns null when FB does not exist at source", () => {
 		const { projDir, slug } = makeProject("missing-fb")
 		process.chdir(projDir)

@@ -45,7 +45,6 @@ import {
 	maybeEscalate,
 	resolveIntentStages,
 	resolveStageReview,
-	resolveStudioStages,
 	revisitCurrentStage,
 	summarizeFeedback,
 	workflowAdvanceStage,
@@ -270,7 +269,7 @@ const emit: WorkflowHandler = (ctx) => {
 				next_stage: nextStageForGate,
 				gate_type: "ask",
 				gate_context: "stage_gate",
-				message: `Stage '${currentStage}' has ${pendingItems.length} pending feedback item(s), including human-authored comments awaiting triage. Open the review UI so the reviewer can classify each (reply, inline fix, stage revisit, upstream rewind) before the agent dispatches.`,
+				message: `Stage '${currentStage}' has ${pendingItems.length} pending feedback item(s), including human-authored comments awaiting triage. Open the review UI so the reviewer can classify each (reply, inline fix, stage revisit), or call \`haiku_feedback_move\` to relocate cross-stage findings before the agent dispatches.`,
 			}
 		}
 
@@ -554,9 +553,5 @@ const emit: WorkflowHandler = (ctx) => {
 		message: `Stage '${currentStage}' complete — opening review`,
 	}
 }
-
-// resolveStudioStages is referenced by upstream-rewind classification
-// indirectly (via resolveIntentStages); ensure import retention.
-void resolveStudioStages
 
 export default emit

@@ -4320,12 +4320,19 @@ export function findFeedbackFile(
 	const dir = feedbackDir(slug, stage)
 	if (!existsSync(dir)) return null
 
-	// Normalize: "FB-03" → "03", "03" → "03"
-	const nn = feedbackId.replace(/^FB-/i, "")
-	const prefix = `${nn}-`
+	// Normalize the input id to its numeric value: "FB-03" / "FB-3" / "3"
+	// / "03" all map to 3. Files on disk are zero-padded
+	// (`02-some-slug.md`), so a string-prefix match against the un-padded
+	// input would miss them — go through the parsed integer to be robust.
+	const numMatch = feedbackId.match(/^(?:FB-)?(\d+)$/i)
+	if (!numMatch) return null
+	const targetNum = Number.parseInt(numMatch[1], 10)
 
 	const files = readdirSync(dir).filter((f) => f.endsWith(".md"))
-	const match = files.find((f) => f.startsWith(prefix))
+	const match = files.find((f) => {
+		const fileNumMatch = f.match(/^(\d+)-/)
+		return fileNumMatch && Number.parseInt(fileNumMatch[1], 10) === targetNum
+	})
 	if (!match) return null
 
 	const raw = readFileSync(join(dir, match), "utf8")
@@ -8184,9 +8191,8 @@ export function handleStateTool(
 					}
 					// No active branches AND no archived intents — fall through to cwd repair
 				} catch (err) {
-					return md(
-						`Multi-branch repair failed: ${err instanceof Error ? err.message : String(err)}`,
-					)
+					const errMsg = `Multi-branch repair failed: ${err instanceof Error ? err.message : String(err)}`
+					return md(migrationReport ? `${migrationReport}\n${errMsg}` : errMsg)
 				}
 			}
 
@@ -8205,13 +8211,15 @@ export function handleStateTool(
 			try {
 				cwdResult = repairCwd(undefined, repairIntentArg, repairAutoApply)
 			} catch (err) {
-				return md(
-					`Repair failed: ${err instanceof Error ? err.message : String(err)}`,
-				)
+				const errMsg = `Repair failed: ${err instanceof Error ? err.message : String(err)}`
+				return md(migrationReport ? `${migrationReport}\n${errMsg}` : errMsg)
 			}
 
 			if (repairIntentArg && cwdResult.scanned === 0) {
-				return md(`Intent '${repairIntentArg}' not found.`)
+				const notFound = `Intent '${repairIntentArg}' not found.`
+				return md(
+					migrationReport ? `${migrationReport}\n${notFound}` : notFound,
+				)
 			}
 			if (cwdResult.scanned === 0) {
 				return md(
@@ -8425,31 +8433,24 @@ export function handleStateTool(
 			// updates when the FB is already in a terminal state (closed or
 			// rejected). This prevents accidental "re-opening" or status flips
 			// after the fix-loop assessor has signed off.
+			//
+			// Uses findFeedbackFile() — the canonical numeric-prefix-aware
+			// resolver. The previous inline scan looked for `data.id` /
+			// `data.feedback_id` FM fields, which writeFeedbackFile() never
+			// writes; that made the guard dead code for every real FB.
 			{
-				const fbDir = stage
-					? feedbackDir(intent, stage)
-					: feedbackDir(intent, "")
-				if (existsSync(fbDir)) {
-					for (const f of readdirSync(fbDir).filter((n) => n.endsWith(".md"))) {
-						const p = join(fbDir, f)
-						const { data } = parseFrontmatter(readFileSync(p, "utf8"))
-						if (
-							(data.id as string) === feedbackId ||
-							(data.feedback_id as string) === feedbackId
-						) {
-							const cur = (data.status as string) || "pending"
-							if (cur === "closed" || cur === "rejected") {
-								return reply(
-									{
-										error: "lifecycle_violation",
-										current_status: cur,
-										message: `Cannot update feedback '${feedbackId}' — status is '${cur}'. Per the forward-only lifecycle rule, closed and rejected feedback are terminal. To raise a related concern, file a NEW feedback via haiku_feedback.`,
-									},
-									{ isError: true },
-								)
-							}
-							break
-						}
+				const found = findFeedbackFile(intent, stage, feedbackId)
+				if (found) {
+					const cur = (found.data.status as string) || "pending"
+					if (cur === "closed" || cur === "rejected") {
+						return reply(
+							{
+								error: "lifecycle_violation",
+								current_status: cur,
+								message: `Cannot update feedback '${feedbackId}' — status is '${cur}'. Per the forward-only lifecycle rule, closed and rejected feedback are terminal. To raise a related concern, file a NEW feedback via haiku_feedback.`,
+							},
+							{ isError: true },
+						)
 					}
 				}
 			}
@@ -8885,51 +8886,13 @@ export function handleStateTool(
 			)
 			if (fbWriteBranchErr) return fbWriteBranchErr
 
-			// Locate the FB file by id (filename has numeric prefix + slug, so
-			// we read the directory and match on FM id field).
-			const dir = stageArg
-				? feedbackDir(intentArg, stageArg)
-				: feedbackDir(intentArg, "")
-			if (!existsSync(dir)) {
-				return reply(
-					{
-						error: "feedback_not_found",
-						intent: intentArg,
-						stage: stageArg || null,
-						feedback_id: fbId,
-						message: `No feedback directory at ${dir}.`,
-					},
-					{ isError: true },
-				)
-			}
-			let foundPath: string | null = null
-			let foundFm: Record<string, unknown> | null = null
-			// Derive numeric part from fbId: "FB-01" → 1, "FB-1" → 1, "1" → 1
-			const fbWriteNumMatch = fbId.match(/^(?:FB-)?(\d+)$/i)
-			const fbWriteNum = fbWriteNumMatch
-				? Number.parseInt(fbWriteNumMatch[1], 10)
-				: null
-			for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
-				const p = join(dir, f)
-				const { data } = parseFrontmatter(readFileSync(p, "utf8"))
-				// Match by frontmatter id/feedback_id field (future files),
-				// OR by filename numeric prefix (files created by createFeedback which
-				// does not embed an id field in frontmatter).
-				const fileWriteNumMatch = f.match(/^(\d+)-/)
-				const fileWriteNum = fileWriteNumMatch
-					? Number.parseInt(fileWriteNumMatch[1], 10)
-					: null
-				if (
-					(data.id as string) === fbId ||
-					(data.feedback_id as string) === fbId ||
-					(fbWriteNum !== null && fileWriteNum === fbWriteNum)
-				) {
-					foundPath = p
-					foundFm = data
-					break
-				}
-			}
-			if (!foundPath || !foundFm) {
+			// Locate the FB file by id via the canonical resolver (numeric-
+			// prefix matching against the file's `NN-slug.md` name).
+			const found = findFeedbackFile(intentArg, stageArg, fbId)
+			if (!found) {
+				const dir = stageArg
+					? feedbackDir(intentArg, stageArg)
+					: feedbackDir(intentArg, "")
 				return reply(
 					{
 						error: "feedback_not_found",
@@ -8941,6 +8904,8 @@ export function handleStateTool(
 					{ isError: true },
 				)
 			}
+			const foundPath = found.path
+			const foundFm = found.data
 
 			// Lifecycle enforcement: closed/rejected FBs are terminal and
 			// immutable. Pending and addressed (under-fix) accept body
@@ -8999,52 +8964,12 @@ export function handleStateTool(
 			const fbBranchErr = enforceStageBranch(intentArg, stageArg || undefined)
 			if (fbBranchErr) return fbBranchErr
 
-			// Locate FB file by id.
-			const fbAdvDir = stageArg
-				? feedbackDir(intentArg, stageArg)
-				: feedbackDir(intentArg, "")
-			if (!existsSync(fbAdvDir)) {
-				return reply(
-					{
-						error: "feedback_not_found",
-						intent: intentArg,
-						stage: stageArg || null,
-						feedback_id: fbId,
-						message: `No feedback directory at ${fbAdvDir}.`,
-					},
-					{ isError: true },
-				)
-			}
-			let advPath: string | null = null
-			let advFm: Record<string, unknown> | null = null
-			let advBody = ""
-			// Derive numeric part from fbId: "FB-01" → 1, "FB-1" → 1, "1" → 1
-			const fbAdvNumMatch = fbId.match(/^(?:FB-)?(\d+)$/i)
-			const fbAdvNum = fbAdvNumMatch
-				? Number.parseInt(fbAdvNumMatch[1], 10)
-				: null
-			for (const f of readdirSync(fbAdvDir).filter((n) => n.endsWith(".md"))) {
-				const p = join(fbAdvDir, f)
-				const { data, body } = parseFrontmatter(readFileSync(p, "utf8"))
-				// Match by frontmatter id/feedback_id field (future files),
-				// OR by filename numeric prefix (files created by createFeedback which
-				// does not embed an id field in frontmatter).
-				const fileAdvNumMatch = f.match(/^(\d+)-/)
-				const fileAdvNum = fileAdvNumMatch
-					? Number.parseInt(fileAdvNumMatch[1], 10)
-					: null
-				if (
-					(data.id as string) === fbId ||
-					(data.feedback_id as string) === fbId ||
-					(fbAdvNum !== null && fileAdvNum === fbAdvNum)
-				) {
-					advPath = p
-					advFm = data
-					advBody = body
-					break
-				}
-			}
-			if (!advPath || !advFm) {
+			// Locate FB file by id via the canonical resolver.
+			const advFound = findFeedbackFile(intentArg, stageArg, fbId)
+			if (!advFound) {
+				const fbAdvDir = stageArg
+					? feedbackDir(intentArg, stageArg)
+					: feedbackDir(intentArg, "")
 				return reply(
 					{
 						error: "feedback_not_found",
@@ -9056,6 +8981,9 @@ export function handleStateTool(
 					{ isError: true },
 				)
 			}
+			const advPath = advFound.path
+			const advFm = advFound.data
+			const advBody = advFound.body
 
 			// Lifecycle: don't advance terminal FBs.
 			const advStatus = (advFm.status as string) || "pending"
@@ -9211,48 +9139,11 @@ export function handleStateTool(
 			const rejBranchErr = enforceStageBranch(intentArg, stageArg || undefined)
 			if (rejBranchErr) return rejBranchErr
 
-			const fbRejDir = stageArg
-				? feedbackDir(intentArg, stageArg)
-				: feedbackDir(intentArg, "")
-			if (!existsSync(fbRejDir)) {
-				return reply(
-					{
-						error: "feedback_not_found",
-						message: `No feedback directory at ${fbRejDir}.`,
-					},
-					{ isError: true },
-				)
-			}
-			let rejPath: string | null = null
-			let rejFm: Record<string, unknown> | null = null
-			let rejBody = ""
-			// Derive numeric part from fbId: "FB-01" → 1, "FB-1" → 1, "1" → 1
-			const fbRejNumMatch = fbId.match(/^(?:FB-)?(\d+)$/i)
-			const fbRejNum = fbRejNumMatch
-				? Number.parseInt(fbRejNumMatch[1], 10)
-				: null
-			for (const f of readdirSync(fbRejDir).filter((n) => n.endsWith(".md"))) {
-				const p = join(fbRejDir, f)
-				const { data, body } = parseFrontmatter(readFileSync(p, "utf8"))
-				// Match by frontmatter id/feedback_id field (future files),
-				// OR by filename numeric prefix (files created by createFeedback which
-				// does not embed an id field in frontmatter).
-				const fileRejNumMatch = f.match(/^(\d+)-/)
-				const fileRejNum = fileRejNumMatch
-					? Number.parseInt(fileRejNumMatch[1], 10)
-					: null
-				if (
-					(data.id as string) === fbId ||
-					(data.feedback_id as string) === fbId ||
-					(fbRejNum !== null && fileRejNum === fbRejNum)
-				) {
-					rejPath = p
-					rejFm = data
-					rejBody = body
-					break
-				}
-			}
-			if (!rejPath || !rejFm) {
+			const rejFound = findFeedbackFile(intentArg, stageArg, fbId)
+			if (!rejFound) {
+				const fbRejDir = stageArg
+					? feedbackDir(intentArg, stageArg)
+					: feedbackDir(intentArg, "")
 				return reply(
 					{
 						error: "feedback_not_found",
@@ -9262,6 +9153,9 @@ export function handleStateTool(
 					{ isError: true },
 				)
 			}
+			const rejPath = rejFound.path
+			const rejFm = rejFound.data
+			const rejBody = rejFound.body
 
 			const rejStatus = (rejFm.status as string) || "pending"
 			if (rejStatus === "closed" || rejStatus === "rejected") {

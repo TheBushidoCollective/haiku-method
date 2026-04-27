@@ -1688,10 +1688,15 @@ body
 	// Stand up a feedback file for the FB tests below.
 	const fbDir = join(intentDirPath, "stages", "inception", "feedback")
 	mkdirSync(fbDir, { recursive: true })
+	// FB fixtures match the canonical on-disk format produced by
+	// writeFeedbackFile() — ID is encoded ONLY in the filename's numeric
+	// prefix (`01-`, `02-`), never in frontmatter. Files include an
+	// explicit `id:` field would mask the lifecycle guard / lookup bug
+	// where handlers fall back to numeric-prefix matching when no FM id
+	// is present.
 	writeFileSync(
 		join(fbDir, "01-test-finding.md"),
 		`---
-id: FB-91
 title: Test finding for FB-as-unit MCP tests
 status: pending
 origin: adversarial-review
@@ -1706,7 +1711,6 @@ Body of the test finding.
 	writeFileSync(
 		join(fbDir, "02-closed-finding.md"),
 		`---
-id: FB-92
 title: Closed test finding
 status: closed
 closed_by: test
@@ -1724,7 +1728,7 @@ Closed body content.
 		const result = handleStateTool("haiku_feedback_read", {
 			intent: intentSlug,
 			stage: "inception",
-			feedback_id: "FB-91",
+			feedback_id: "FB-01",
 		})
 		const parsed = JSON.parse(getTextResult(result))
 		assert.ok("title" in parsed)
@@ -1738,7 +1742,7 @@ Closed body content.
 		const result = handleStateTool("haiku_feedback_write", {
 			intent: intentSlug,
 			stage: "inception",
-			feedback_id: "FB-91",
+			feedback_id: "FB-01",
 			body: "Updated diagnosis: root cause is X; proposed action: Y.",
 		})
 		const parsed = JSON.parse(getTextResult(result))
@@ -1749,7 +1753,7 @@ Closed body content.
 		const result = handleStateTool("haiku_feedback_write", {
 			intent: intentSlug,
 			stage: "inception",
-			feedback_id: "FB-91",
+			feedback_id: "FB-01",
 			body: "",
 		})
 		const parsed = JSON.parse(getTextResult(result))
@@ -1760,7 +1764,7 @@ Closed body content.
 		const result = handleStateTool("haiku_feedback_write", {
 			intent: intentSlug,
 			stage: "inception",
-			feedback_id: "FB-92",
+			feedback_id: "FB-02",
 			body: "Trying to rewrite closed FB.",
 		})
 		const parsed = JSON.parse(getTextResult(result))
@@ -1772,7 +1776,7 @@ Closed body content.
 		const result = handleStateTool("haiku_feedback_update", {
 			intent: intentSlug,
 			stage: "inception",
-			feedback_id: "FB-92",
+			feedback_id: "FB-02",
 			status: "pending",
 		})
 		const parsed = JSON.parse(getTextResult(result))
@@ -1794,12 +1798,11 @@ Closed body content.
 
 	console.log("\n=== haiku_feedback_advance_hat / _reject_hat ===")
 
-	// Stand up a fresh FB for advance/reject testing (separate from the FB-92
+	// Stand up a fresh FB for advance/reject testing (separate from the FB-02
 	// closed fixture above to avoid coupling tests).
 	writeFileSync(
 		join(fbDir, "03-advance-test.md"),
 		`---
-id: FB-93
 title: Advance test FB
 status: pending
 origin: adversarial-review
@@ -1846,7 +1849,7 @@ Test stage.
 		const r1 = handleStateTool("haiku_feedback_advance_hat", {
 			intent: intentSlug,
 			stage: "inception",
-			feedback_id: "FB-93",
+			feedback_id: "FB-03",
 		})
 		const p1 = JSON.parse(getTextResult(r1))
 		assert.strictEqual(p1.ok, true)
@@ -1857,7 +1860,7 @@ Test stage.
 		const r2 = handleStateTool("haiku_feedback_advance_hat", {
 			intent: intentSlug,
 			stage: "inception",
-			feedback_id: "FB-93",
+			feedback_id: "FB-03",
 		})
 		const p2 = JSON.parse(getTextResult(r2))
 		assert.strictEqual(p2.ok, true)
@@ -1869,11 +1872,11 @@ Test stage.
 		)
 	})
 
-	test("haiku_feedback_advance_hat refuses on already-closed FB (FB-92)", () => {
+	test("haiku_feedback_advance_hat refuses on already-closed FB (FB-02)", () => {
 		const result = handleStateTool("haiku_feedback_advance_hat", {
 			intent: intentSlug,
 			stage: "inception",
-			feedback_id: "FB-92",
+			feedback_id: "FB-02",
 		})
 		const parsed = JSON.parse(getTextResult(result))
 		assert.strictEqual(parsed.error, "lifecycle_violation")
@@ -1884,7 +1887,7 @@ Test stage.
 		const result = handleStateTool("haiku_feedback_reject_hat", {
 			intent: intentSlug,
 			stage: "inception",
-			feedback_id: "FB-92",
+			feedback_id: "FB-02",
 			reason: "test",
 		})
 		const parsed = JSON.parse(getTextResult(result))

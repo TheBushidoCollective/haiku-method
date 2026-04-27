@@ -2905,6 +2905,11 @@
 </head>
 <body>
 
+<aside style="position: fixed; top: 1rem; right: 1rem; max-width: 320px; padding: 0.65rem 0.85rem; border-left: 3px solid #6366f1; background: #eef2ff; font-size: 0.78em; line-height: 1.45; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 4px;">
+  <strong style="display: block; margin-bottom: 0.25rem;">Canonical reference</strong>
+  Structural source of truth: <code>plugin/studios/ARCHITECTURE.md</code>. When this prototype and the doc disagree, fix the prototype. Visualizations below reflect Architecture v3 + Churn-reduction v1/v2 (FB-as-unit fix loop, pre-review phase, pre-tick triage gate, studio-level intent-completion review).
+</aside>
+
 <h1>H·AI·K·U Runtime Architecture</h1>
 <p class="subtitle">
   Every actor, every FSM tick, every state write — the software studio's full intent lifecycle on one page.
@@ -2912,10 +2917,6 @@
   Inside an intent: pre-elab → six stages (each with its own phase machine: <code>pending → elaborate → pre-review → execute → review → fix-loop → gate</code>) → optional studio-level intent-completion review → final PR/MR gate → delivery → operations.
   <strong>Hover anything for a tooltip · click for full detail.</strong>
 </p>
-
-<aside style="margin: 1rem auto; max-width: 900px; padding: 0.75rem 1rem; border-left: 4px solid #6366f1; background: #eef2ff; font-size: 0.85em;">
-  <strong>Canonical reference:</strong> the structural source of truth is <code>plugin/studios/ARCHITECTURE.md</code> in the repo. When this prototype and the doc disagree, fix the prototype. The visualizations below now reflect the v3 architecture (FB-as-unit fix loop, plan-do-verify hat pattern, MCP CRUDL surface, path-boundary hook), the v1 churn-reduction set (pre-review phase, conditional review agents, executable quality-gates, MAX_STAGE_ITERATIONS=2), and the v2 churn-reduction set (stage <code>fix_hats</code> dispatch, pre-tick triage gate via <code>triaged_at:</code> + <code>haiku_feedback_move</code>, studio-level intent-completion review).
-</aside>
 
 <section class="actors-strip" id="actors-strip">
   <h2>Actors</h2>

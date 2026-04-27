@@ -8929,7 +8929,9 @@ export async function handleOrchestratorTool(
 		}
 		const intentStudio = (intentMeta.studio as string) || ""
 
-		// Helper to enrich result with preview and append instructions
+		// Helper to enrich result with preview and append instructions.
+		// Returns the formatted text blob. Pair with `replyWith()` to also
+		// emit structuredContent matching the haiku_run_next outputSchema.
 		const withInstructions = (resultObj: Record<string, unknown>): string => {
 			enrichActionWithPreview(resultObj as OrchestratorAction)
 			const instructions = buildRunInstructions(
@@ -8943,6 +8945,36 @@ export async function handleOrchestratorTool(
 			// Strip tell_user/next_step from outer JSON — they appear in the announcement section
 			const { tell_user: _tu, next_step: _ns, ...resultForJson } = resultObj
 			return `${JSON.stringify(resultForJson, null, 2)}\n\n---\n\n${adapted}`
+		}
+
+		// Pair `withInstructions` text output with structuredContent matching
+		// the haiku_run_next outputSchema. Per MCP spec 2025-06-18, when a
+		// tool declares an outputSchema, the server MUST emit structuredContent
+		// — text content alone won't satisfy strict clients. The text blob
+		// stays for backwards-compat consumers that read content directly.
+		const replyWith = (
+			resultObj: Record<string, unknown>,
+		): {
+			content: Array<{ type: "text"; text: string }>
+			structuredContent: Record<string, unknown>
+		} => {
+			const textBlob = withInstructions(resultObj)
+			// Strip the tell_user/next_step fields from structuredContent for
+			// the same reason withInstructions strips them from the JSON
+			// portion of the text blob — they belong in the announcement
+			// section of `instructions`, not the structured shape.
+			const { tell_user: _tu, next_step: _ns, ...structured } = resultObj
+			// Always include the rendered instructions string so strict
+			// clients that read structuredContent get the same prose the
+			// text blob carries.
+			structured.instructions = textBlob
+				.split("\n\n---\n\n")
+				.slice(1)
+				.join("\n\n---\n\n")
+			return {
+				content: [{ type: "text" as const, text: textBlob }],
+				structuredContent: structured,
+			}
 		}
 
 		// External review: include instructions about recording the URL
@@ -9013,7 +9045,7 @@ export async function handleOrchestratorTool(
 							message:
 								"Final review approved — intent complete. Report the completion summary to the user.",
 						}
-						return text(withInstructions(gateResult))
+						return replyWith(gateResult)
 					}
 					if (gateContext === "intent_review") {
 						// Intent approved — mark as reviewed AND advance phase to execute
@@ -9034,7 +9066,7 @@ export async function handleOrchestratorTool(
 							to_phase: nextPhase,
 							message: `Intent approved — advancing to ${nextPhase || "execute"}. IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user — the transition was already approved.`,
 						}
-						return text(withInstructions(gateResult))
+						return replyWith(gateResult)
 					}
 					if (gateContext === "elaborate_to_execute" && nextPhase) {
 						// Phase advancement (specs approved → start execution)
@@ -9048,7 +9080,7 @@ export async function handleOrchestratorTool(
 							to_phase: nextPhase,
 							message: `Specs approved — advancing to ${nextPhase}. IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user — the transition was already approved.`,
 						}
-						return text(withInstructions(gateResult))
+						return replyWith(gateResult)
 					}
 					if (nextStage) {
 						fsmAdvanceStage(slug, stage, nextStage)
@@ -9061,7 +9093,7 @@ export async function handleOrchestratorTool(
 							gate_outcome: "advanced",
 							message: `Approved — advancing to '${nextStage}'. IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user, do NOT summarize, do NOT say "want me to continue?" — the gate was already approved. Just call the tool.`,
 						}
-						return text(withInstructions(gateResult))
+						return replyWith(gateResult)
 					}
 					fsmCompleteStage(slug, stage, "advanced")
 					syncSessionMetadata(slug, args.state_file as string | undefined)
@@ -9075,7 +9107,7 @@ export async function handleOrchestratorTool(
 						approvedStudio,
 						`Stage '${stage}' approved — final stage complete.`,
 					)
-					return text(withInstructions(gateResult))
+					return replyWith(gateResult)
 				}
 				if (reviewResult.decision === "external_review") {
 					fsmCompleteStage(slug, stage, "blocked")
@@ -9089,7 +9121,7 @@ export async function handleOrchestratorTool(
 							? `External review requested. Open ONE merge request from branch 'haiku/${slug}/${stage}' to 'haiku/${slug}/main'. Do NOT open separate MRs for individual units — all unit work is already merged into the stage branch. Include the H·AI·K·U browse link in the description so reviewers can see the intent, units, and knowledge artifacts. Record the review URL via haiku_run_next { intent, external_review_url }. Run /haiku:pickup again after approval.`
 							: `External review requested. Submit the work for review through your project's review process. Record the review URL via haiku_run_next { intent, external_review_url }. Run /haiku:pickup again after approval.`,
 					}
-					return text(withInstructions(gateResult))
+					return replyWith(gateResult)
 				}
 				// Revisit-dispatch short-circuit: when the decision came in
 				// via POST /api/revisit, the HTTP bridge parks the dispatch
@@ -9110,16 +9142,14 @@ export async function handleOrchestratorTool(
 						: null
 				if (revisitAction) {
 					syncSessionMetadata(slug, args.state_file as string | undefined)
-					return text(
-						withInstructions({
-							action: revisitAction,
-							intent: slug,
-							stage,
-							message:
-								revisitAnnotations?.revisit_message ||
-								`Revisit dispatched on stage '${stage}'. Follow the instructions returned by the orchestrator.`,
-						}),
-					)
+					return replyWith({
+						action: revisitAction,
+						intent: slug,
+						stage,
+						message:
+							revisitAnnotations?.revisit_message ||
+							`Revisit dispatched on stage '${stage}'. Follow the instructions returned by the orchestrator.`,
+					})
 				}
 
 				// Feedback files only make sense when there are built artifacts
@@ -9156,7 +9186,7 @@ export async function handleOrchestratorTool(
 						feedback_ids: feedbackIds,
 						message: `Changes requested on intent: ${reviewResult.feedback || "(see annotations)"}.${feedbackSummary} Revise the intent description, then call haiku_run_next { intent: "${slug}" } again.`,
 					}
-					return text(withInstructions(gateResult))
+					return replyWith(gateResult)
 				}
 				if (gateContext === "intent_completion") {
 					// Final-review rejection — drop out of the completion-review
@@ -9199,7 +9229,7 @@ export async function handleOrchestratorTool(
 						feedback_ids: feedbackIds,
 						message: `Changes requested on intent completion: ${reviewResult.feedback || "(see annotations)"}.${feedbackSummary} The intent is no longer in final review. Call \`haiku_revisit { intent: "${slug}" }\` to revisit a stage (or a specific one via \`stage\`), then address the feedback and call \`haiku_run_next\` to drive back to final review.`,
 					}
-					return text(withInstructions(gateResult))
+					return replyWith(gateResult)
 				}
 				if (gateContext === "elaborate_to_execute") {
 					// Don't advance phase — stay in elaborate so agent can fix
@@ -9221,7 +9251,7 @@ export async function handleOrchestratorTool(
 						units_dir: `.haiku/intents/${slug}/stages/${stage}/units/`,
 						message: `Changes requested on unit specs:\n\n${reviewResult.feedback || "(see annotations)"}\n\nNothing has been built yet — NO feedback files were created. Resolve by **rewriting** the unstarted unit specs via \`haiku_unit_write\` (full body rewrite of pending units), updating individual FM fields via \`haiku_unit_set\`, deleting irrelevant units via \`haiku_unit_delete\`, or adding new unit files via \`haiku_unit_write\`. Generic file Edit/Write on \`units/*.md\` is denied at the hook layer — use the MCP tools. Do NOT draft a full new wave of units to "close feedback" — that's a post-execute flow. When the edits are done, call \`haiku_run_next { intent: "${slug}" }\` again to re-open the review gate.`,
 					}
-					return text(withInstructions(gateResult))
+					return replyWith(gateResult)
 				}
 				syncSessionMetadata(slug, args.state_file as string | undefined)
 				const gateResult = {
@@ -9233,7 +9263,7 @@ export async function handleOrchestratorTool(
 					feedback_ids: feedbackIds,
 					message: `Changes requested: ${reviewResult.feedback || "(see annotations)"}.${feedbackSummary} Address the feedback, then call haiku_run_next { intent: "${slug}" } again.`,
 				}
-				return text(withInstructions(gateResult))
+				return replyWith(gateResult)
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err)
 				const errorStack = err instanceof Error ? err.stack : ""
@@ -9364,7 +9394,7 @@ export async function handleOrchestratorTool(
 										to_phase: nextPhase,
 										message: `Intent approved — advancing to ${nextPhase || "execute"}. Call haiku_run_next immediately.`,
 									}
-									return text(withInstructions(elicitApproveResult))
+									return replyWith(elicitApproveResult)
 								}
 								if (gateContext === "elaborate_to_execute" && nextPhase) {
 									fsmAdvancePhase(slug, stage, nextPhase)
@@ -9381,7 +9411,7 @@ export async function handleOrchestratorTool(
 										message:
 											"Specs approved via elicitation — advancing to execute",
 									}
-									return text(withInstructions(elicitApproveResult))
+									return replyWith(elicitApproveResult)
 								}
 								if (nextStage) {
 									fsmAdvanceStage(slug, stage, nextStage)
@@ -9397,7 +9427,7 @@ export async function handleOrchestratorTool(
 										gate_outcome: "advanced",
 										message: "Approved via elicitation",
 									}
-									return text(withInstructions(elicitApproveResult))
+									return replyWith(elicitApproveResult)
 								}
 								// Final stage approved via elicitation — enter intent-
 								// completion bookend instead of completing silently.
@@ -9411,7 +9441,7 @@ export async function handleOrchestratorTool(
 									elicitStudio,
 									"Final stage approved via elicitation.",
 								)
-								return text(withInstructions(elicitApproveResult))
+								return replyWith(elicitApproveResult)
 							}
 							// request_changes
 							syncSessionMetadata(slug, args.state_file as string | undefined)
@@ -9426,7 +9456,7 @@ export async function handleOrchestratorTool(
 								feedback,
 								message: changeMsg,
 							}
-							return text(withInstructions(elicitChangesResult))
+							return replyWith(elicitChangesResult)
 						}
 						// User declined/cancelled elicitation — stay blocked
 						syncSessionMetadata(slug, args.state_file as string | undefined)
@@ -9437,7 +9467,7 @@ export async function handleOrchestratorTool(
 							message:
 								"Gate review cancelled. Call haiku_run_next again to retry.",
 						}
-						return text(withInstructions(elicitCancelResult))
+						return replyWith(elicitCancelResult)
 					} catch {
 						// Elicitation also failed — return error
 					}
@@ -9473,7 +9503,7 @@ export async function handleOrchestratorTool(
 				if (!studioDir) {
 					// Can't find studio — fall through to normal handling
 					syncSessionMetadata(slug, args.state_file as string | undefined)
-					return text(withInstructions(result))
+					return replyWith(result)
 				}
 
 				const activeStage = (result.stage as string) || ""
@@ -9553,7 +9583,7 @@ export async function handleOrchestratorTool(
 		}
 
 		syncSessionMetadata(slug, args.state_file as string | undefined)
-		return text(withInstructions(result))
+		return replyWith(result)
 	}
 
 	// haiku_gate_approve was removed — ask-gate approval is now handled

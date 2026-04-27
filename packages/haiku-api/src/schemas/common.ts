@@ -277,6 +277,11 @@ export const FEEDBACK_BODY_MAX_BYTES = 131_072 as const
  *  plus the text fields. Updates/deletes still use the tighter cap. */
 export const FEEDBACK_CREATE_MAX_BYTES = 8_388_608 as const
 
+/** Cap for question/direction submit routes carrying ArtifactAnnotator
+ *  screenshot bundles. Schemas allow up to 20 × 1.5 MB screenshot data URLs
+ *  plus text fields — round to 32 MiB to accommodate base64 overhead. */
+export const SESSION_ANSWER_MAX_BYTES = 33_554_432 as const
+
 /** Per-route body-size caps. Routes not listed default to DEFAULT_BODY_MAX_BYTES.
  *  The http.ts bridge enforces the default at the server level; the handler
  *  enforces the per-route cap before schema parse. */
@@ -284,4 +289,5 @@ export const ROUTE_BODY_LIMITS = {
 	default: DEFAULT_BODY_MAX_BYTES,
 	feedback: FEEDBACK_BODY_MAX_BYTES,
 	feedbackCreate: FEEDBACK_CREATE_MAX_BYTES,
+	sessionAnswer: SESSION_ANSWER_MAX_BYTES,
 } as const

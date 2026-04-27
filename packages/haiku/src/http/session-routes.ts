@@ -20,6 +20,7 @@ import {
 	type ReviewDecisionResponse,
 	RevisitRequestSchema,
 	type RevisitResponse,
+	SESSION_ANSWER_MAX_BYTES,
 } from "haiku-api"
 import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
 import { handleOrchestratorTool } from "../orchestrator.js"
@@ -108,57 +109,69 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 
 	instance.post<{
 		Params: { sessionId: string }
-	}>("/question/:sessionId/answer", async (req, reply) => {
-		if (!requireTunnelAuth(req, reply, req.params.sessionId)) return
-		const session = getSession(req.params.sessionId)
-		if (!session || session.session_type !== "question") {
-			reply.status(404).send("Session not found")
-			return
-		}
-		const parsed = parseBodyWithSchema(
-			reply,
-			req.body,
-			QuestionAnswerRequestSchema,
-		)
-		if (!parsed.ok) return
-		updateQuestionSession(req.params.sessionId, {
-			status: "answered",
-			answers: parsed.data.answers as QuestionAnswer[],
-			feedback: parsed.data.feedback ?? "",
-			annotations: parsed.data.annotations as QuestionAnnotations | undefined,
-		})
-		const payload: QuestionAnswerResponse = { ok: true }
-		reply.send(payload)
-	})
+	}>(
+		"/question/:sessionId/answer",
+		// Body may carry up to 20 ArtifactAnnotator screenshot data URLs
+		// (~1.5 MB each base64-encoded) plus text fields.
+		{ bodyLimit: SESSION_ANSWER_MAX_BYTES },
+		async (req, reply) => {
+			if (!requireTunnelAuth(req, reply, req.params.sessionId)) return
+			const session = getSession(req.params.sessionId)
+			if (!session || session.session_type !== "question") {
+				reply.status(404).send("Session not found")
+				return
+			}
+			const parsed = parseBodyWithSchema(
+				reply,
+				req.body,
+				QuestionAnswerRequestSchema,
+			)
+			if (!parsed.ok) return
+			updateQuestionSession(req.params.sessionId, {
+				status: "answered",
+				answers: parsed.data.answers as QuestionAnswer[],
+				feedback: parsed.data.feedback ?? "",
+				annotations: parsed.data.annotations as QuestionAnnotations | undefined,
+			})
+			const payload: QuestionAnswerResponse = { ok: true }
+			reply.send(payload)
+		},
+	)
 
 	instance.post<{
 		Params: { sessionId: string }
-	}>("/direction/:sessionId/select", async (req, reply) => {
-		if (!requireTunnelAuth(req, reply, req.params.sessionId)) return
-		const session = getSession(req.params.sessionId)
-		if (!session || session.session_type !== "design_direction") {
-			reply.status(404).send({ error: "Session not found or expired" })
-			return
-		}
-		if (session.status === "answered") {
-			reply
-				.status(409)
-				.send({ error: "Direction already selected for this session" })
-			return
-		}
-		const parsed = parseBodyWithSchema(
-			reply,
-			req.body,
-			DirectionSelectRequestSchema,
-		)
-		if (!parsed.ok) return
-		updateDesignDirectionSession(req.params.sessionId, {
-			status: "answered",
-			selection: parsed.data,
-		})
-		const payload: DirectionSelectResponse = { ok: true }
-		reply.send(payload)
-	})
+	}>(
+		"/direction/:sessionId/select",
+		// Body may carry up to 20 ArtifactAnnotator screenshot data URLs
+		// (~1.5 MB each base64-encoded) plus text fields.
+		{ bodyLimit: SESSION_ANSWER_MAX_BYTES },
+		async (req, reply) => {
+			if (!requireTunnelAuth(req, reply, req.params.sessionId)) return
+			const session = getSession(req.params.sessionId)
+			if (!session || session.session_type !== "design_direction") {
+				reply.status(404).send({ error: "Session not found or expired" })
+				return
+			}
+			if (session.status === "answered") {
+				reply
+					.status(409)
+					.send({ error: "Direction already selected for this session" })
+				return
+			}
+			const parsed = parseBodyWithSchema(
+				reply,
+				req.body,
+				DirectionSelectRequestSchema,
+			)
+			if (!parsed.ok) return
+			updateDesignDirectionSession(req.params.sessionId, {
+				status: "answered",
+				selection: parsed.data,
+			})
+			const payload: DirectionSelectResponse = { ok: true }
+			reply.send(payload)
+		},
+	)
 
 	// ── API: session / heartbeat / revisit ─────────────────────────────
 	instance.get<{ Params: { sessionId: string } }>(

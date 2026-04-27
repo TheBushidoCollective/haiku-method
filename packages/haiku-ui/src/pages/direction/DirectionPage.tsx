@@ -87,11 +87,12 @@ export function DirectionPage({
 	}, [])
 
 	const handleAnnotationSubmit = useCallback(
-		async (annotComment: string, screenshotDataUrl: string) => {
+		(annotComment: string, screenshotDataUrl: string) => {
 			setAnnotations((prev) => [
 				...prev,
 				{ comment: annotComment, screenshot_data_url: screenshotDataUrl },
 			])
+			return Promise.resolve()
 		},
 		[],
 	)

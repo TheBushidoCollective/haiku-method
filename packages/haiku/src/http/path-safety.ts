@@ -82,11 +82,17 @@ export async function serveFile(
 	try {
 		const data = await readFile(realPath)
 		const ext = extname(realPath).toLowerCase()
-		const contentType = MIME_TYPES[ext] ?? "application/octet-stream"
-		reply.header("Content-Type", contentType)
-		// SVG defence-in-depth: force download instead of inline render.
+		// SVG defence-in-depth: force download AND strip the MIME type
+		// claim. Some browser extensions / proxies key on Content-Type
+		// over Content-Disposition when deciding whether to render
+		// inline; serving as application/octet-stream removes that
+		// ambiguity entirely.
 		if (ext === ".svg") {
+			reply.header("Content-Type", "application/octet-stream")
 			reply.header("Content-Disposition", "attachment")
+		} else {
+			const contentType = MIME_TYPES[ext] ?? "application/octet-stream"
+			reply.header("Content-Type", contentType)
 		}
 		reply.send(data)
 	} catch {

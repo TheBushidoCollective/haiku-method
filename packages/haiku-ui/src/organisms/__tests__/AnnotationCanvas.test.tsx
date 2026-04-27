@@ -17,10 +17,17 @@
 
 import { act, cleanup, fireEvent, render } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
-import { AnnotationCanvas, type AnnotationPin } from "../AnnotationCanvas"
+import {
+	_resetPinCounterForTests,
+	AnnotationCanvas,
+	type AnnotationPin,
+} from "../AnnotationCanvas"
 
 afterEach(() => {
 	cleanup()
+	// Module-scoped pin counter is shared across tests in this file.
+	// Reset so each test sees a deterministic id sequence.
+	_resetPinCounterForTests()
 })
 
 /**

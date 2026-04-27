@@ -73,17 +73,17 @@ export function QuestionPage({
 		QuestionScreenshotAnnotation[]
 	>([])
 	const handleAnnotationSubmit = useCallback(
-		(imageIndex: number) =>
-			async (comment: string, screenshotDataUrl: string) => {
-				setAnnotations((prev) => [
-					...prev,
-					{
-						comment,
-						screenshot_data_url: screenshotDataUrl,
-						image_index: imageIndex,
-					},
-				])
-			},
+		(imageIndex: number) => (comment: string, screenshotDataUrl: string) => {
+			setAnnotations((prev) => [
+				...prev,
+				{
+					comment,
+					screenshot_data_url: screenshotDataUrl,
+					image_index: imageIndex,
+				},
+			])
+			return Promise.resolve()
+		},
 		[],
 	)
 	const removeAnnotation = useCallback((index: number) => {

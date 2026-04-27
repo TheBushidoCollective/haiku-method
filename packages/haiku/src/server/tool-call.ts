@@ -11,6 +11,7 @@
 // visually consistent.
 
 import { spawn } from "node:child_process"
+import { appendFileSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { z } from "zod"
@@ -171,7 +172,6 @@ const SESSION_CANCEL_LOG = "/tmp/haiku-session-cancel.log"
 
 function logCancel(msg: string): void {
 	try {
-		const { appendFileSync } = require("node:fs") as typeof import("node:fs")
 		appendFileSync(SESSION_CANCEL_LOG, `${new Date().toISOString()} ${msg}\n`)
 	} catch {
 		/* best-effort — don't crash the tool handler over a log write */
@@ -662,6 +662,13 @@ export async function handleToolCall(
 		if (input.archetypes) {
 			archetypes = input.archetypes
 		} else if (input.archetypes_file) {
+			// `archetypes_file` is agent-controlled. Acceptable in the
+			// current local threat model — the Claude Code agent already
+			// has full filesystem access, so this read is no
+			// privilege-escalation. TODO: scope to the active intent
+			// directory if this MCP server is ever exposed remotely
+			// (tunnel mode) so a prompt-injected agent cannot exfiltrate
+			// arbitrary files.
 			const raw = await readFile(resolve(input.archetypes_file), "utf-8")
 			archetypes = z.array(DesignArchetypeSchema).parse(JSON.parse(raw))
 		} else {

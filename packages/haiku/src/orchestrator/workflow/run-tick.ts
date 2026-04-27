@@ -71,6 +71,13 @@ export function runWorkflowTick(
 	if (!derived) return null
 
 	if (repair) {
+		// Deliberate ordering: repair short-circuits BEFORE the
+		// tamper check. preTickConsistency only flags structural
+		// inconsistencies it produced itself (machine-driven repair
+		// of disk state), so its output is trusted. Running tamper
+		// detection on an intent that's mid-repair would surface
+		// transient state as an integrity violation. The next tick
+		// (post-repair) re-runs verifyIntentState on a settled tree.
 		return {
 			state: "error",
 			context: derived.context,

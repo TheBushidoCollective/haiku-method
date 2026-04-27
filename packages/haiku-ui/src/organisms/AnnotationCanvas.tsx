@@ -28,6 +28,13 @@ function nextPinId(): string {
 	return `pin-${++_pinIdCounter}-${Date.now()}`
 }
 
+/** Test-only: reset the module-scoped pin id counter so vitest runs that
+ *  reuse this module across test cases get deterministic pin ids. Call
+ *  in `afterEach` alongside `cleanup()`. */
+export function _resetPinCounterForTests(): void {
+	_pinIdCounter = 0
+}
+
 export function AnnotationCanvas({ imageUrl, onPinsChange }: Props) {
 	const imgRef = useRef<HTMLImageElement>(null)
 	const canvasRef = useRef<HTMLCanvasElement>(null)

@@ -44,7 +44,6 @@ import {
 	resolveIntentStages,
 	resolveStageMetadata,
 	resolveStageReview,
-	resolveStudioStages,
 	summarizeFeedback,
 	validateDiscoveryArtifacts,
 	validateUnitInputs,
@@ -95,7 +94,6 @@ const emit: WorkflowHandler = (ctx) => {
 	if (phase !== "elaborate" && phase !== "decompose") return null
 
 	const studioStages = resolveIntentStages(intent, studio)
-	const _allStudioStages = resolveStudioStages(studio)
 
 	const unitsDir = join(iDir, "stages", currentStage, "units")
 	const hasUnits =

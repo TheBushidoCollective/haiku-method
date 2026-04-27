@@ -42,6 +42,9 @@ jobs:
           git pull --rebase origin main
 
       - name: Install Claude CLI
+        if: env.CLAUDE_CODE_OAUTH_TOKEN != ''
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Determine version bump type
@@ -56,9 +59,8 @@ jobs:
           #      range — catches feat/fix/breaking markers in any commit,
           #      including the bodies of merge commits.
           #   2. If regex picked patch, ask Claude haiku to look at the
-          #      actual diff in case a plain-English PR title is hiding a
+          #      diff stat in case a plain-English PR title is hiding a
           #      real feature or breaking change.
-          chmod +x .github/scripts/determine-bump-type.sh
           BUMP_TYPE=$(.github/scripts/determine-bump-type.sh)
           echo "type=$BUMP_TYPE" >> $GITHUB_OUTPUT
           case "$BUMP_TYPE" in

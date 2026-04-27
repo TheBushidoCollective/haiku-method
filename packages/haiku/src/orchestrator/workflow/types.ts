@@ -56,8 +56,8 @@ export type StateName =
 	// revisit
 	| "feedback_revisit"
 	| "feedback_dispatch"
+	| "feedback_triage"
 	| "revisited"
-	| "upstream_finding_surfaced"
 	// gates
 	| "gate_review"
 	| "intent_approved"

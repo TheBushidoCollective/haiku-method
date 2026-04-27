@@ -12,9 +12,6 @@ interpretation: lens
 - The agent **MUST** verify that stages' declared outputs exist at the paths their unit frontmatter promised — broken cross-stage references are findings
 - The agent **MUST** verify that the stages collectively deliver the intent's stated goal (read `intent.md`) — partial delivery is a finding
 
-**Scope routing:**
-- Findings that are ONLY visible cross-stage (e.g. naming drift, or a contract mismatch at the seam) should NOT set `upstream_stage` — the fix is inherently whole-intent.
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** re-litigate decisions made at each stage's gate — this is a consistency check, not a redesign
 - The agent **MUST NOT** propose new features or scope additions

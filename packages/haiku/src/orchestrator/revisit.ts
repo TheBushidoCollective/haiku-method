@@ -66,12 +66,14 @@ function readFrontmatter(filePath: string): Record<string, unknown> {
  *                          close_as_answered: true, no code delta.
  *    - `inline_fix`      → agent dispatches ONE bolt of the stage's
  *                          fix_hats against the finding.
- *    - `upstream_rewind` → surface to the human via
- *                          `upstream_finding_surfaced`. */
+ *
+ *  Cross-stage routing (formerly `upstream_rewind`) is no longer
+ *  expressed as a resolution — the pre-tick triage gate relocates
+ *  misplaced FBs via `haiku_feedback_move`, so by the time we classify
+ *  here every pending item is already in-scope for the current stage. */
 interface FeedbackClassification {
 	questions: FeedbackItem[]
 	inlineFixes: FeedbackItem[]
-	upstreamRewinds: FeedbackItem[]
 	stageRevisits: FeedbackItem[]
 	needsTriage: FeedbackItem[]
 }
@@ -82,7 +84,6 @@ export function classifyPendingForRevisit(
 	const out: FeedbackClassification = {
 		questions: [],
 		inlineFixes: [],
-		upstreamRewinds: [],
 		stageRevisits: [],
 		needsTriage: [],
 	}
@@ -95,9 +96,6 @@ export function classifyPendingForRevisit(
 				break
 			case "inline_fix":
 				out.inlineFixes.push(it)
-				break
-			case "upstream_rewind":
-				out.upstreamRewinds.push(it)
 				break
 			case "stage_revisit":
 				out.stageRevisits.push(it)
@@ -124,7 +122,7 @@ function buildFeedbackDispatchAction(
 	const sections: string[] = []
 	if (classification.needsTriage.length > 0) {
 		sections.push(
-			`### Triage — reviewer left resolution unset (${classification.needsTriage.length})\n\nFor each item below, read the title + body (and any attachment/source_ref) and decide which resolution applies:\n- **question** — the reviewer wants a reply with no code delta\n- **inline_fix** — small, scoped change; dispatch one fix_hats bolt against just this finding\n- **stage_revisit** — the stage's elaboration or execution missed something fundamental; a full re-loop is warranted\n- **upstream_rewind** — root cause lives in an upstream stage; surface to human\n\nPersist your decision by calling \`haiku_feedback_update { intent: "${slug}", stage: "${stage}", feedback_id, resolution: "<choice>" }\`. After setting resolutions on every item below, call \`haiku_run_next\` again — the router will re-classify and dispatch.\n\n${classification.needsTriage.map(summaryOf).join("\n")}`,
+			`### Triage — reviewer left resolution unset (${classification.needsTriage.length})\n\nFor each item below, read the title + body (and any attachment/source_ref) and decide which resolution applies:\n- **question** — the reviewer wants a reply with no code delta\n- **inline_fix** — small, scoped change; dispatch one fix_hats bolt against just this finding\n- **stage_revisit** — the stage's elaboration or execution missed something fundamental; a full re-loop is warranted\n\nIf the FB belongs in a different stage entirely, call \`haiku_feedback_move\` first to relocate it; the pre-tick gate will then revisit the correct stage. Persist your resolution choice by calling \`haiku_feedback_update { intent: "${slug}", stage: "${stage}", feedback_id, resolution: "<choice>" }\`. After setting resolutions on every item below, call \`haiku_run_next\` again — the router will re-classify and dispatch.\n\n${classification.needsTriage.map(summaryOf).join("\n")}`,
 		)
 	}
 	if (classification.questions.length > 0) {
@@ -137,11 +135,6 @@ function buildFeedbackDispatchAction(
 			`### Inline fixes (${classification.inlineFixes.length})\n\nFor each item below, run ONE bolt of the stage's \`fix_hats\` sequence against the single finding. The fix hat must land a real code change; a planning-only hat (planner/strategist) will fail to close the finding. On success, the feedback_assessor hat (terminal validator) flips the item to \`closed\`.\n\n${classification.inlineFixes.map(summaryOf).join("\n")}`,
 		)
 	}
-	if (classification.upstreamRewinds.length > 0) {
-		sections.push(
-			`### Upstream rewinds — SURFACE TO HUMAN (${classification.upstreamRewinds.length})\n\nThese items' root causes live in an upstream stage. DO NOT auto-fix. Present each to the user and let them choose: \`haiku_revisit { intent, stage: <upstream> }\` to roll upstream, \`haiku_feedback_reject\` to dismiss, or accept as-is.\n\n${classification.upstreamRewinds.map(summaryOf).join("\n")}`,
-		)
-	}
 	return {
 		action: "feedback_dispatch",
 		intent: slug,
@@ -150,7 +143,6 @@ function buildFeedbackDispatchAction(
 			needs_triage: classification.needsTriage.length,
 			questions: classification.questions.length,
 			inline_fixes: classification.inlineFixes.length,
-			upstream_rewinds: classification.upstreamRewinds.length,
 		},
 		message: `Resolve pending feedback on stage '${stage}' WITHOUT rolling the stage back. Dispatch each item per its resolution:\n\n${sections.join("\n\n")}\n\nAfter dispatching all items, call \`haiku_run_next { intent: "${slug}" }\` to re-check the gate.`,
 	}
@@ -184,10 +176,10 @@ export function revisit(
 
 	// Before rolling back anything, inspect the pending feedback on
 	// the active stage. If every pending item explicitly routes
-	// through a non-revisit path (question / inline_fix /
-	// upstream_rewind), return a `feedback_dispatch` action instead.
-	// The stage stays intact, the agent resolves each finding per its
-	// declared resolution, and the next run_next re-checks the gate.
+	// through a non-revisit path (question / inline_fix), return a
+	// `feedback_dispatch` action instead. The stage stays intact, the
+	// agent resolves each finding per its declared resolution, and the
+	// next run_next re-checks the gate.
 	const shouldClassify =
 		!requestedStage || requestedStage === currentActiveStage
 	if (shouldClassify) {
@@ -196,7 +188,6 @@ export function revisit(
 		const hasAny =
 			classification.questions.length +
 				classification.inlineFixes.length +
-				classification.upstreamRewinds.length +
 				classification.stageRevisits.length +
 				classification.needsTriage.length >
 			0

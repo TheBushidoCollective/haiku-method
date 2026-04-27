@@ -5,13 +5,21 @@
     "HAIKU_AUTO_UPDATE": "0"
   },
   "enabledPlugins": {
-    "haiku@haiku": true
+    "haiku@haiku": true,
+    "core@han": true,
+    "bushido@han": true
   },
   "extraKnownMarketplaces": {
     "haiku": {
       "source": {
         "source": "directory",
         "path": "."
+      }
+    },
+    "han": {
+      "source": {
+        "source": "github",
+        "repo": "thebushidocollective/han"
       }
     }
   },

@@ -184,6 +184,15 @@ function createFeedbackFile(intentDirPath, _slug, stage, title, opts = {}) {
 	const origin = opts.origin || "adversarial-review"
 	const authorType = opts.author_type || "agent"
 	const author = opts.author || "review-agent"
+	// Tests exercise the gate / fix-loop / revisit logic that runs
+	// AFTER triage. Default `triaged_at` to a fixed timestamp so the
+	// pre-tick triage gate doesn't intercept these FBs. Tests that
+	// specifically exercise the triage gate pass `opts.triaged_at:
+	// null` to keep the FB untriaged.
+	const triagedAt =
+		"triaged_at" in opts ? opts.triaged_at : "2026-04-15T21:15:00Z"
+	const triagedAtLine =
+		triagedAt === null ? "triaged_at: null" : `triaged_at: "${triagedAt}"`
 
 	writeFileSync(
 		join(feedbackDirPath, `${nn}-${fileSlug}.md`),
@@ -197,6 +206,7 @@ created_at: "2026-04-15T21:15:00Z"
 visit: ${opts.visit || 0}
 source_ref: null
 closed_by: null
+${triagedAtLine}
 ---
 
 ${opts.body || `Finding: ${title}`}
@@ -1244,7 +1254,7 @@ visit: 0
 source_ref: null
 closed_by: null
 bolt: 3
-upstream_stage: null
+triaged_at: "2026-04-15T00:00:00Z"
 ---
 
 Cannot be resolved autonomously.`,
@@ -1258,79 +1268,45 @@ Cannot be resolved autonomously.`,
 		assert.strictEqual(result.iteration, 3)
 	})
 
-	test("upstream_finding_surfaced when finding's root cause is in another stage", () => {
-		const { projDir, intentDirPath, slug, studio } = createProject(
-			"upstream-finding",
-			{
-				active_stage: "build",
-				stages: ["plan", "build"],
-				stageConfig: {
-					plan: { review: "auto", hats: ["planner"] },
-					build: { review: "auto", hats: ["builder"] },
-				},
+	test("pre-tick triage gate revisits earliest earlier stage with open feedback", () => {
+		// Replaces the legacy `upstream_finding_surfaced` test. Under
+		// the new model, cross-stage routing flows through file
+		// location: an open FB sitting on stage `plan` while active
+		// stage is `build` triggers the pre-tick triage gate to issue a
+		// revisit back to `plan`.
+		const { projDir, intentDirPath, slug } = createProject("upstream-revisit", {
+			active_stage: "build",
+			stages: ["plan", "build"],
+			stageConfig: {
+				plan: { review: "auto", hats: ["planner"] },
+				build: { review: "auto", hats: ["builder"] },
 			},
-		)
-		// build stage opts into fix_hats so the finding would otherwise
-		// dispatch there — but the upstream_stage field routes it out.
-		const buildStage = join(
-			projDir,
-			".haiku/studios",
-			studio,
-			"stages/build/STAGE.md",
-		)
-		writeFileSync(
-			buildStage,
-			readFileSync(buildStage, "utf8").replace(
-				"hats: [builder]",
-				"hats: [builder]\nfix_hats: [builder, feedback-assessor]",
-			),
-		)
-		const hatsDir = join(projDir, ".haiku/studios", studio, "stages/build/hats")
-		mkdirSync(hatsDir, { recursive: true })
-		writeFileSync(join(hatsDir, "builder.md"), `---\nname: builder\n---\n.`)
-		writeFileSync(
-			join(hatsDir, "feedback-assessor.md"),
-			`---\nname: feedback-assessor\n---\n.`,
-		)
+		})
 
-		// Mark plan as completed so the workflow engine's consistency check doesn't
-		// rewind to it. Without this, runNext's "all stages before
-		// active_stage are completed" guard would reset us to plan.
+		// Mark plan as completed so the workflow engine's consistency
+		// check doesn't rewind to it for the wrong reason.
 		createStageState(intentDirPath, "plan", {
 			status: "completed",
 			phase: "gate",
 			completed_at: "2026-04-15T00:00:00Z",
 			gate_outcome: "advanced",
 		})
-		createStageState(intentDirPath, "build", { phase: "gate" })
-		const fbDir = join(intentDirPath, "stages/build/feedback")
-		mkdirSync(fbDir, { recursive: true })
-		writeFileSync(
-			join(fbDir, "01-wrong-plan.md"),
-			`---
-title: "Plan contradicts spec"
-status: "pending"
-origin: "adversarial-review"
-author: "reviewer"
-author_type: "agent"
-created_at: "2026-04-15T00:00:00Z"
-visit: 0
-source_ref: null
-closed_by: null
-bolt: 0
-upstream_stage: plan
----
+		createStageState(intentDirPath, "build", { phase: "execute" })
 
-Plan from upstream stage is wrong.`,
-		)
+		// Open, triaged FB on the EARLIER stage (plan) — pre-tick
+		// gate should revisit `plan` regardless of build's state.
+		createFeedbackFile(intentDirPath, slug, "plan", "Plan contradicts spec", {
+			origin: "adversarial-review",
+			author: "reviewer",
+			body: "Plan from earlier stage is wrong.",
+		})
 
 		process.chdir(projDir)
 		const result = runNext(slug)
 
-		assert.strictEqual(result.action, "upstream_finding_surfaced")
-		assert.strictEqual(result.upstream_items.length, 1)
-		assert.strictEqual(result.upstream_items[0].feedback_id, "FB-01")
-		assert.strictEqual(result.upstream_items[0].upstream_stage, "plan")
+		// `revisit()` returns { action: "revisited", target_stage: "plan", ... }
+		assert.strictEqual(result.action, "revisited")
+		assert.strictEqual(result.target_stage, "plan")
 	})
 
 	// =========================================================================
@@ -1353,6 +1329,7 @@ Plan from upstream stage is wrong.`,
 			origin: "user-chat",
 			author: "user",
 			resolution: "stage_revisit",
+			triaged_at: "2026-04-15T21:15:00Z",
 		})
 		// One question — by itself would dispatch, but the stage_revisit
 		// item above makes this a rollback path.
@@ -1362,6 +1339,7 @@ Plan from upstream stage is wrong.`,
 			origin: "user-question",
 			author: "user",
 			resolution: "question",
+			triaged_at: "2026-04-15T21:15:00Z",
 		})
 
 		const result = await handleOrchestratorTool("haiku_revisit", {
@@ -1398,6 +1376,7 @@ Plan from upstream stage is wrong.`,
 			origin: "user-question",
 			author: "user",
 			resolution: "question",
+			triaged_at: "2026-04-15T21:15:00Z",
 		})
 		writeFeedbackFile(slug, "plan", {
 			title: "Rename helper",
@@ -1405,15 +1384,8 @@ Plan from upstream stage is wrong.`,
 			origin: "user-chat",
 			author: "user",
 			resolution: "inline_fix",
+			triaged_at: "2026-04-15T21:15:00Z",
 		})
-		writeFeedbackFile(slug, "plan", {
-			title: "Upstream contract wrong",
-			body: "The prior stage's schema doesn't match.",
-			origin: "user-chat",
-			author: "user",
-			resolution: "upstream_rewind",
-		})
-
 		const result = await handleOrchestratorTool("haiku_revisit", {
 			intent: slug,
 		})
@@ -1425,10 +1397,12 @@ Plan from upstream stage is wrong.`,
 		assert.strictEqual(parsed.action, "feedback_dispatch")
 		assert.strictEqual(parsed.counts.questions, 1)
 		assert.strictEqual(parsed.counts.inline_fixes, 1)
-		assert.strictEqual(parsed.counts.upstream_rewinds, 1)
 		assert.ok(parsed.message.includes("Reply to questions"))
 		assert.ok(parsed.message.includes("Inline fixes"))
-		assert.ok(parsed.message.includes("Upstream rewinds"))
+		// `upstream_rewind` is no longer a resolution — cross-stage
+		// routing happens via the pre-tick triage gate's
+		// `haiku_feedback_move`. Counts no longer carry that bucket.
+		assert.strictEqual(parsed.counts.upstream_rewinds, undefined)
 		// Stage state must be untouched — the dispatch path doesn't roll
 		// back.
 		const state = readJson(join(intentDirPath, "stages", "plan", "state.json"))
@@ -1465,6 +1439,7 @@ Plan from upstream stage is wrong.`,
 			body: "I didn't pick a resolution.",
 			origin: "user-chat",
 			author: "user",
+			triaged_at: "2026-04-15T21:15:00Z",
 		})
 
 		const result = await handleOrchestratorTool("haiku_revisit", {
@@ -1475,7 +1450,7 @@ Plan from upstream stage is wrong.`,
 		assert.strictEqual(parsed.counts.needs_triage, 1)
 		assert.strictEqual(parsed.counts.questions, 0)
 		assert.strictEqual(parsed.counts.inline_fixes, 0)
-		assert.strictEqual(parsed.counts.upstream_rewinds, 0)
+		assert.strictEqual(parsed.counts.upstream_rewinds, undefined)
 		assert.ok(parsed.message.includes("Triage"))
 		// Stage state must be untouched — dispatch path doesn't roll.
 		const state = readJson(join(intentDirPath, "stages", "plan", "state.json"))

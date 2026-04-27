@@ -2,7 +2,8 @@
 // review pass that fires once after the final stage gate passes.
 // Spawns one subagent per studio review-agent in parallel; findings
 // are logged at intent scope (no stage). Cross-stage findings get
-// `upstream_stage:` so the workflow engine surfaces them rather than fixing.
+// relocated by the pre-tick triage gate via `haiku_feedback_move` —
+// reviewers no longer pre-classify with an `upstream_stage:` field.
 
 import { readStudioReviewAgentPaths } from "../../studio-reader.js"
 import {
@@ -53,14 +54,14 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 			"## Write scope (STRICT)",
 			"**You MUST NOT write, edit, or create any file.** Your ONLY output channel is the `haiku_feedback` MCP tool. If you're tempted to fix an issue yourself, log it as feedback instead. Any file write is a scope violation.",
 			"",
-			"## Scope routing (CRITICAL)",
-			'Findings whose root cause lives in a **specific stage** MUST include `upstream_stage: "<stage-name>"`. The workflow surfaces those cross-stage findings to the human rather than routing them through the studio fix loop. Whole-intent concerns (inconsistencies across stages, missing integrations, studio-wide standard violations) do NOT have a single upstream stage — omit the field.',
+			"## Scope routing",
+			"Log every finding at intent scope — omit `stage` when calling `haiku_feedback`. The pre-tick triage gate is the single point where cross-stage findings get relocated to the right stage via `haiku_feedback_move`. Do NOT pre-classify with a stage hint.",
 			"",
 			"## Instructions",
 			"",
 			`1. Read the intent artifacts across every stage: \`.haiku/intents/${slug}/stages/*/\` and \`.haiku/intents/${slug}/knowledge/\`.`,
 			"2. Review through your mandate's lens.",
-			`3. For each issue you find, call \`haiku_feedback({ intent: "${slug}", title: "<short>", body: "<full with file:line refs>", origin: "studio-review", author: "${name}" })\`. Omit \`stage\` to log at intent scope. Include \`upstream_stage: "<name>"\` only if the finding's root cause lives in a single stage.`,
+			`3. For each issue you find, call \`haiku_feedback({ intent: "${slug}", title: "<short>", body: "<full with file:line refs>", origin: "studio-review", author: "${name}" })\`. Omit \`stage\` to log at intent scope.`,
 			"4. Return only a summary count of how many findings you logged.",
 		)
 		const prompt = reviewLines.join("\n")

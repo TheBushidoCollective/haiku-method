@@ -242,29 +242,12 @@ const emit: WorkflowHandler = (ctx) => {
 			},
 		)
 
-		// Cross-stage findings
-		const upstreamItems = pendingItems.filter(
-			(item) =>
-				item.upstream_stage !== null && item.upstream_stage !== currentStage,
-		)
-		if (upstreamItems.length > 0) {
-			emitTelemetry("haiku.gate.upstream_finding_surfaced", {
-				intent: slug,
-				stage: currentStage,
-				count: String(upstreamItems.length),
-			})
-			return {
-				action: "upstream_finding_surfaced",
-				intent: slug,
-				studio,
-				stage: currentStage,
-				upstream_items: upstreamItems.map((item) => ({
-					...summarizeFeedback(item),
-					upstream_stage: item.upstream_stage as string,
-				})),
-				message: `Stage '${currentStage}' has ${upstreamItems.length} cross-stage finding(s) whose root cause is in a DIFFERENT stage. These will NOT be auto-fixed by this stage's hats. Present them to the user and ask how to proceed — revisit the upstream stage via \`haiku_revisit\`, reject the finding with \`haiku_feedback_reject\`, or accept as-is. Do NOT call \`haiku_run_next\` until the user decides.`,
-			}
-		}
+		// Cross-stage findings are no longer modeled with an
+		// `upstream_stage:` field — the pre-tick triage gate (run-tick.ts)
+		// is now the single source of truth for misplaced feedback. Any
+		// FB whose root cause lives elsewhere is moved at triage time via
+		// `haiku_feedback_move`, so by the time we reach this gate the
+		// pendingItems for `currentStage` are guaranteed to be in-scope.
 
 		const needsHumanReview = pendingItems.some(
 			(item) =>
@@ -303,22 +286,10 @@ const emit: WorkflowHandler = (ctx) => {
 			})
 			return revisitCurrentStage(slug, iDir, intentFile, currentStage)
 		}
-		if (gateClassification.upstreamRewinds.length > 0) {
-			emitTelemetry("haiku.gate.upstream_rewind_surfaced", {
-				intent: slug,
-				stage: currentStage,
-				count: String(gateClassification.upstreamRewinds.length),
-			})
-			return {
-				action: "upstream_finding_surfaced",
-				intent: slug,
-				studio,
-				stage: currentStage,
-				upstream_items:
-					gateClassification.upstreamRewinds.map(summarizeFeedback),
-				message: `Stage '${currentStage}' has ${gateClassification.upstreamRewinds.length} finding(s) tagged \`upstream_rewind\`. Present them to the user and ask which upstream stage to revisit (or whether to reject / accept as-is). Do NOT call \`haiku_run_next\` until the user decides.`,
-			}
-		}
+		// upstream_rewind classification was tied to the deleted
+		// upstream_stage routing model. Triage now relocates FBs at the
+		// pre-tick gate via `haiku_feedback_move`; cross-stage routing
+		// flows through file location, not a resolution bucket.
 
 		// fix_hats route
 		const fixHats = resolveStageFixHatsInline(studio, currentStage)

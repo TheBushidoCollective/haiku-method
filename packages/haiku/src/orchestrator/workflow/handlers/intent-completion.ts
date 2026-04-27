@@ -192,31 +192,11 @@ const emit: WorkflowHandler = (ctx) => {
 		)
 	})
 
-	const upstreamItems = pendingItems.filter(
-		(item) => item.upstream_stage !== null,
-	)
-	if (upstreamItems.length > 0) {
-		emitTelemetry("haiku.intent.upstream_finding_surfaced", {
-			intent: slug,
-			count: String(upstreamItems.length),
-		})
-		return {
-			action: "upstream_finding_surfaced",
-			intent: slug,
-			studio,
-			stage: null,
-			upstream_items: upstreamItems.map((item) => ({
-				feedback_id: item.id,
-				title: item.title,
-				status: item.status,
-				origin: item.origin,
-				author: item.author,
-				file: item.file,
-				upstream_stage: item.upstream_stage as string,
-			})),
-			message: `Intent '${slug}' has ${upstreamItems.length} cross-stage finding(s) from the studio-level review. These will NOT be auto-fixed. Present them to the user; they can revisit upstream via \`haiku_revisit\`, reject via \`haiku_feedback_reject\`, or accept manually. Do NOT call \`haiku_run_next\` until the user decides.`,
-		}
-	}
+	// Cross-stage findings are no longer modeled with upstream_stage.
+	// The pre-tick triage gate (run-tick.ts) is the single point that
+	// classifies/relocates feedback before any handler runs, so by the
+	// time we get here the intent-scope FBs are guaranteed to be
+	// in-scope for the studio-level fix loop.
 
 	const reviewDispatched =
 		(intent.completion_review_dispatched as boolean) === true
@@ -248,10 +228,8 @@ const emit: WorkflowHandler = (ctx) => {
 		}
 	}
 
-	const inScopePending = pendingItems.filter(
-		(item) => item.upstream_stage === null,
-	)
-	if (inScopePending.length > 0) {
+	if (pendingItems.length > 0) {
+		const inScopePending = pendingItems
 		const fixHatPaths = readStudioFixHatPaths(studio)
 		const fixHatNames = Object.keys(fixHatPaths)
 		if (fixHatNames.length === 0) {

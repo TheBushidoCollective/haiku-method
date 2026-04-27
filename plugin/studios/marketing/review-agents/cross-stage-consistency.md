@@ -11,9 +11,6 @@ interpretation: lens
 - The agent **MUST** verify that the stages collectively deliver the intent's stated goal (read `intent.md`) — partial delivery is a finding
 - The agent **MUST** verify that concerns raised by any stage's review were actually addressed (not silently ignored)
 
-**Scope routing:**
-- Findings that are ONLY visible cross-stage (naming drift, contract mismatches) should NOT set `upstream_stage` — the fix is inherently whole-intent.
-
 **Anti-patterns (RFC 2119):**
 - The agent **MUST NOT** re-litigate decisions already approved at each stage's gate
 - The agent **MUST NOT** propose new features or scope additions

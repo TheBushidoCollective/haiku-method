@@ -16,6 +16,7 @@
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { verifyIntentState } from "../../state-integrity.js"
 import { type DerivedState, deriveCurrentState } from "./derive-state.js"
+import { preTickFeedbackGate } from "./feedback-triage-gate.js"
 import { dispatchHandler, WORKFLOW_STATES } from "./handlers/index.js"
 import { preTickConsistency } from "./pre-tick.js"
 import type { StateName } from "./types.js"
@@ -91,6 +92,29 @@ export function runWorkflowTick(
 			state: "error",
 			context: derived.context,
 			action: { action: "error", message: tamperError },
+		}
+	}
+
+	// Pre-tick feedback triage gate. Walks every stage from index 0
+	// through the current stage looking for open (non-terminal) FBs.
+	// Three outcomes:
+	//   - any untriaged FB found → emit `feedback_triage`
+	//   - every FB triaged but ≥ 1 on an earlier stage → emit revisit
+	//   - else → null (fall through to the normal handler chain)
+	// Intentionally runs AFTER tamper detection (we never advance on
+	// a tampered tree) and BEFORE handler dispatch (so misplaced or
+	// untriaged feedback can't be force-fixed by the wrong stage's
+	// hats).
+	const triageAction = preTickFeedbackGate(derived.context)
+	if (triageAction) {
+		const triageState: StateName =
+			triageAction.action === "feedback_triage"
+				? "feedback_triage"
+				: "revisited"
+		return {
+			state: triageState,
+			context: derived.context,
+			action: triageAction,
 		}
 	}
 

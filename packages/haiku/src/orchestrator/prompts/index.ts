@@ -32,6 +32,7 @@ import external_changes_requested from "./external_changes_requested.js"
 import external_review_requested from "./external_review_requested.js"
 import feedback_dispatch from "./feedback_dispatch.js"
 import feedback_revisit from "./feedback_revisit.js"
+import feedback_triage from "./feedback_triage.js"
 import fix_quality_gates from "./fix_quality_gates.js"
 import gate_blocked from "./gate_blocked.js"
 import gate_review from "./gate_review.js"
@@ -56,7 +57,6 @@ import type { PromptBuilder } from "./types.js"
 import unit_inputs_missing from "./unit_inputs_missing.js"
 import unit_naming_invalid from "./unit_naming_invalid.js"
 import unresolved_dependencies from "./unresolved_dependencies.js"
-import upstream_finding_surfaced from "./upstream_finding_surfaced.js"
 
 export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	string,
@@ -82,6 +82,7 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["external_review_requested", external_review_requested],
 	["feedback_dispatch", feedback_dispatch],
 	["feedback_revisit", feedback_revisit],
+	["feedback_triage", feedback_triage],
 	["fix_quality_gates", fix_quality_gates],
 	["gate_blocked", gate_blocked],
 	["gate_review", gate_review],
@@ -108,5 +109,4 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["unit_inputs_missing", unit_inputs_missing],
 	["unit_naming_invalid", unit_naming_invalid],
 	["unresolved_dependencies", unresolved_dependencies],
-	["upstream_finding_surfaced", upstream_finding_surfaced],
 ])

@@ -9,6 +9,7 @@ import {
 	mkdirSync,
 	readdirSync,
 	readFileSync,
+	renameSync,
 	rmSync,
 	statSync,
 	unlinkSync,
@@ -3891,16 +3892,19 @@ export interface FeedbackItem {
 	// sequence against this specific finding). Capped at MAX_FIX_LOOP_BOLTS;
 	// exceeding triggers an `escalate` action for human intervention.
 	bolt: number
-	// When a review agent in stage X flags an issue that is actually caused
-	// by stage Y, we record the upstream stage here. Cross-stage findings
-	// are NOT auto-routed — they are surfaced to the human via
-	// `upstream_finding_surfaced` so the user can decide whether to
-	// revisit upstream, reject the finding, or accept-as-is.
-	// `null` means same-stage (in-scope for the stage's fix loop).
-	upstream_stage: string | null
+	// Triage timestamp. The pre-tick triage gate refuses to advance a
+	// stage while any open FB (on or before the current stage) is
+	// untriaged. The triage step asks the agent to confirm placement
+	// (no-op call to `haiku_feedback_move` with same source+target) or
+	// relocate (move to the correct stage). Once `triaged_at` is set
+	// the FB is considered "in the right home" and routed by file
+	// location: earlier stage → revisit, current stage → fix loop.
+	// `null` means untriaged; FBs with `triaged_at: null` block the
+	// pre-tick gate.
+	triaged_at: string | null
 	// How the FSM should resolve this finding. `null` = caller has no
 	// preference; the feedback router defaults to `stage_revisit`.
-	// Legal values: question | inline_fix | stage_revisit | upstream_rewind.
+	// Legal values: question | inline_fix | stage_revisit.
 	resolution: string | null
 	// Append-only thread on this finding. Human replies come from the
 	// review sidebar; agent replies come from `feedback_answer` and from
@@ -3942,12 +3946,15 @@ export function writeFeedbackFile(
 		origin?: string
 		author?: string
 		source_ref?: string | null
-		/** When a reviewer in stage X flags a root cause in stage Y, pass Y
-		 *  here so the FSM surfaces it as cross-stage rather than attempting
-		 *  to fix it in stage X's fix loop. */
-		upstream_stage?: string | null
+		/** Triage timestamp. Set automatically when the FB is created via
+		 *  the studio review layer or by `haiku_feedback_move` — the
+		 *  reviewer/agent confirmed placement, so the pre-tick gate can
+		 *  proceed. Leave `null` (the default) for ad-hoc reviewer
+		 *  feedback that needs the agent's classification step before
+		 *  any further FSM work. */
+		triaged_at?: string | null
 		/** Routing hint for the FSM's feedback resolver. Accepts the
-		 *  four `FeedbackResolution` literals; anything else is coerced
+		 *  three `FeedbackResolution` literals; anything else is coerced
 		 *  to null so legacy callers keep working. */
 		resolution?: string | null
 		/** Optional `data:image/png;base64,...` URL captured by the review
@@ -4032,7 +4039,6 @@ export function writeFeedbackFile(
 		"question",
 		"inline_fix",
 		"stage_revisit",
-		"upstream_rewind",
 	])
 	const normalizedResolution =
 		typeof opts.resolution === "string" &&
@@ -4051,9 +4057,17 @@ export function writeFeedbackFile(
 		source_ref: opts.source_ref ?? null,
 		closed_by: null,
 		bolt: 0,
-		// `||` (not `??`) so an empty-string upstream_stage from a sloppy
-		// caller still normalizes to null — "" is not nullish.
-		upstream_stage: opts.upstream_stage || null,
+		// Agent-authored FBs auto-triage: the agent picked the stage in
+		// context, so there's nothing for the triage gate to relocate.
+		// Human-authored FBs (user-chat, user-visual, etc.) stay
+		// untriaged so the pre-tick gate prompts the agent to confirm
+		// or relocate before any stage work proceeds.
+		triaged_at:
+			opts.triaged_at !== undefined
+				? opts.triaged_at
+				: authorType === "agent"
+					? timestamp()
+					: null,
 		resolution: normalizedResolution,
 		replies: [],
 		...(attachmentBasename ? { attachment: attachmentBasename } : {}),
@@ -4146,10 +4160,10 @@ export function readFeedbackFiles(slug: string, stage: string): FeedbackItem[] {
 			source_ref: (data.source_ref as string) || null,
 			closed_by: (data.closed_by as string) || null,
 			bolt: typeof data.bolt === "number" ? (data.bolt as number) : 0,
-			upstream_stage:
-				typeof data.upstream_stage === "string" &&
-				(data.upstream_stage as string).length > 0
-					? (data.upstream_stage as string)
+			triaged_at:
+				typeof data.triaged_at === "string" &&
+				(data.triaged_at as string).length > 0
+					? (data.triaged_at as string)
 					: null,
 			resolution,
 			replies,
@@ -4335,6 +4349,126 @@ export function findFeedbackFile(
 		data: parsed.data,
 		body: parsed.body,
 	}
+}
+
+/**
+ * Move (or confirm placement for) a feedback file. When `fromStage` ===
+ * `toStage`, this is a no-op move that just stamps `triaged_at:` on the
+ * FM — used by the triage gate to confirm the FB is in the right home.
+ * When the stages differ the file is renamed into the target stage's
+ * `feedback/` dir, renumbered to the next free FB-NN there, and any
+ * sibling attachment file (FB-NN-slug.png/jpg/webp) is moved alongside.
+ *
+ * Lifecycle: closed and rejected FBs are immutable — caller must check
+ * status before invoking and surface a lifecycle_violation reply.
+ *
+ * Returns the new absolute path + new feedback id, or null if the FB
+ * was not found at the source location.
+ */
+export function moveFeedbackFile(
+	slug: string,
+	fromStage: string,
+	feedbackId: string,
+	toStage: string,
+): {
+	feedback_id: string
+	file: string
+	moved: boolean
+	triaged_at: string
+} | null {
+	const found = findFeedbackFile(slug, fromStage, feedbackId)
+	if (!found) return null
+
+	const triagedAt = timestamp()
+	const data: Record<string, unknown> = {
+		...found.data,
+		triaged_at: triagedAt,
+	}
+
+	// No-op move: same source + target. Just stamp triaged_at.
+	if (fromStage === toStage) {
+		const content = matter.stringify(`\n${found.body.trim()}\n`, data)
+		writeFileSync(found.path, content)
+		const relPath = fromStage
+			? `.haiku/intents/${slug}/stages/${fromStage}/feedback/${found.filename}`
+			: `.haiku/intents/${slug}/feedback/${found.filename}`
+		const fmId = data.id
+		const id =
+			typeof fmId === "string" && fmId.length > 0
+				? fmId
+				: deriveFeedbackIdFromFilename(found.filename)
+		return {
+			feedback_id: id,
+			file: relPath,
+			moved: false,
+			triaged_at: triagedAt,
+		}
+	}
+
+	// Cross-stage relocate: write into the target dir under a fresh
+	// FB-NN, then unlink the source. Parse the source slug from the
+	// filename so the target preserves the human-readable suffix.
+	const targetDir = feedbackDir(slug, toStage)
+	mkdirSync(targetDir, { recursive: true })
+	const newNum = nextFeedbackNumber(targetDir)
+	const newNN = zeroPad(newNum)
+	const fileSlugMatch = found.filename.match(/^\d+-(.+)\.md$/)
+	const fileSlug = fileSlugMatch ? fileSlugMatch[1] : "moved-feedback"
+	const newFilename = `${newNN}-${fileSlug}.md`
+	const newPath = join(targetDir, newFilename)
+
+	const content = matter.stringify(`\n${found.body.trim()}\n`, data)
+	writeFileSync(newPath, content)
+
+	// Move sidecar attachment if present. Original attachment names
+	// follow `<NN>-<slug>.<ext>`; rename to match the new NN so the
+	// markdown <img> link in the FB body keeps pointing at the right
+	// file (the body is rewritten below to update the URL too).
+	const fromDir = feedbackDir(slug, fromStage)
+	const oldNNMatch = found.filename.match(/^(\d+)-/)
+	const oldNN = oldNNMatch ? oldNNMatch[1] : null
+	if (oldNN) {
+		for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+			const oldAttachment = join(fromDir, `${oldNN}-${fileSlug}.${ext}`)
+			if (existsSync(oldAttachment)) {
+				const newAttachment = join(targetDir, `${newNN}-${fileSlug}.${ext}`)
+				renameSync(oldAttachment, newAttachment)
+				// Patch the body's attachment URL so it points at the new
+				// stage + new NN. Server route format:
+				// /api/feedback-attachment/<intent>/<stage>/<filename>
+				const newBody = found.body.replace(
+					new RegExp(
+						`/api/feedback-attachment/[^/]+/[^/]+/${oldNN}-${fileSlug}\\.${ext}`,
+						"g",
+					),
+					`/api/feedback-attachment/${encodeURIComponent(slug)}/${encodeURIComponent(toStage)}/${newNN}-${fileSlug}.${ext}`,
+				)
+				if (newBody !== found.body) {
+					writeFileSync(
+						newPath,
+						matter.stringify(`\n${newBody.trim()}\n`, data),
+					)
+				}
+			}
+		}
+	}
+
+	unlinkSync(found.path)
+
+	const relPath = toStage
+		? `.haiku/intents/${slug}/stages/${toStage}/feedback/${newFilename}`
+		: `.haiku/intents/${slug}/feedback/${newFilename}`
+	return {
+		feedback_id: `FB-${newNN}`,
+		file: relPath,
+		moved: true,
+		triaged_at: triagedAt,
+	}
+}
+
+function deriveFeedbackIdFromFilename(filename: string): string {
+	const m = filename.match(/^(\d+)-/)
+	return m ? `FB-${m[1].padStart(2, "0")}` : "FB-??"
 }
 
 /**
@@ -5398,11 +5532,6 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 					type: "string",
 					description: "Who created it (default: agent)",
 				},
-				upstream_stage: {
-					type: "string",
-					description:
-						"When the finding's root cause lives in a DIFFERENT stage than the one being reviewed, name it here. The FSM surfaces cross-stage findings to the human rather than routing them through the current stage's fix loop — the wrong hats cannot fix a different stage's artifacts.",
-				},
 			},
 			required: ["intent", "title", "body"],
 		},
@@ -5491,6 +5620,51 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 			properties: {
 				feedback_id: { type: "string" },
 				deleted: { type: "boolean" },
+				message: { type: "string" },
+			},
+		},
+	},
+	{
+		name: "haiku_feedback_move",
+		description:
+			'Triage placement for a feedback item. Pass `to_stage` equal to the source `stage` to confirm the FB belongs where it lives (sets `triaged_at` only). Pass a different `to_stage` to relocate it — the file moves to the target stage\'s feedback dir, gets renumbered to the next free FB-NN there, and `triaged_at` is set. Use "" for intent-scope (either source or target). Closed and rejected FBs are immutable; rejected with an error.',
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string", description: "Intent slug" },
+				stage: {
+					type: "string",
+					description:
+						'Current stage where the FB lives. Use "" for intent-scope feedback.',
+				},
+				feedback_id: {
+					type: "string",
+					description: "FB-NN identifier or numeric prefix",
+				},
+				to_stage: {
+					type: "string",
+					description:
+						'Target stage. Same as `stage` to confirm placement (no file move). Different to relocate. Use "" for intent-scope.',
+				},
+			},
+			required: ["intent", "feedback_id", "to_stage"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				feedback_id: {
+					type: "string",
+					description: "FB-NN id in the target location (renumbered on move).",
+				},
+				file: {
+					type: "string",
+					description: "Repo-relative path to the FB file after the operation.",
+				},
+				moved: {
+					type: "boolean",
+					description: "True when the file was relocated; false on confirm.",
+				},
+				triaged_at: { type: "string" },
 				message: { type: "string" },
 			},
 		},
@@ -8309,7 +8483,6 @@ export function handleStateTool(
 			const origin = (args.origin as string) || undefined
 			const sourceRef = (args.source_ref as string) || undefined
 			const author = (args.author as string) || undefined
-			const upstreamStage = (args.upstream_stage as string) || undefined
 
 			// Validation
 			if (!intent)
@@ -8391,54 +8564,12 @@ export function handleStateTool(
 				}
 			}
 
-			// If upstream_stage is provided, validate it names a real stage
-			// under this intent — otherwise a typo silently routes findings
-			// into a ghost stage the FSM never visits. Also reject self-
-			// reference — pointing upstream at the current stage is
-			// meaningless and would leave the FSM classifying the finding
-			// inconsistently between the stage gate (treats self-ref as
-			// in-scope) and the intent-completion layer (treats it as
-			// cross-stage).
-			if (upstreamStage) {
-				const { data: intentData } = parseFrontmatter(
-					readFileSync(intentFile, "utf8"),
-				)
-				const stages = (intentData.stages as string[]) || []
-				if (!stages.includes(upstreamStage)) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Error: upstream_stage '${upstreamStage}' is not a stage of intent '${intent}'. Valid stages: ${stages.join(", ")}`,
-							},
-						],
-						isError: true,
-					}
-				}
-				if (stage && upstreamStage === stage) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Error: upstream_stage '${upstreamStage}' equals the current stage. Omit upstream_stage for in-scope findings; set it only when the root cause lives in a DIFFERENT stage.`,
-							},
-						],
-						isError: true,
-					}
-				}
-			}
-
 			const result = writeFeedbackFile(intent, stage, {
 				title,
 				body,
 				origin,
 				author,
 				source_ref: sourceRef ?? null,
-				// Coalesce empty string to null — "" is not nullish, so `?? null`
-				// would persist the empty string on disk and leak a "present
-				// but empty" upstream_stage that readFeedbackFiles only
-				// normalizes on read. Using `||` avoids the data-hygiene drift.
-				upstream_stage: upstreamStage || null,
 			})
 
 			const gitResult = gitCommitState(
@@ -8605,6 +8736,127 @@ export function handleStateTool(
 					: `Feedback ${feedbackId} deleted (intent-scope).`,
 			}
 			return reply(injectPushWarning(deleteResponse, deleteGitResult))
+		}
+
+		case "haiku_feedback_move": {
+			const intent = args.intent as string
+			const stage = (args.stage as string) || ""
+			const feedbackId = args.feedback_id as string
+			const toStage = (args.to_stage as string) || ""
+
+			if (!intent)
+				return {
+					content: [{ type: "text", text: "Error: intent is required" }],
+					isError: true,
+				}
+			if (!feedbackId)
+				return {
+					content: [{ type: "text", text: "Error: feedback_id is required" }],
+					isError: true,
+				}
+			if (typeof args.to_stage !== "string")
+				return {
+					content: [
+						{
+							type: "text",
+							text: 'Error: to_stage is required (use "" for intent-scope)',
+						},
+					],
+					isError: true,
+				}
+
+			// Validate intent exists.
+			const moveIntentFile = join(intentDir(intent), "intent.md")
+			if (!existsSync(moveIntentFile))
+				return {
+					content: [
+						{ type: "text", text: `Error: intent '${intent}' not found` },
+					],
+					isError: true,
+				}
+
+			// Validate target stage exists if non-empty (empty = intent-scope).
+			if (toStage) {
+				const { data: intentData } = parseFrontmatter(
+					readFileSync(moveIntentFile, "utf8"),
+				)
+				const stages = (intentData.stages as string[]) || []
+				if (!stages.includes(toStage)) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Error: to_stage '${toStage}' is not a stage of intent '${intent}'. Valid stages: ${stages.join(", ")}`,
+							},
+						],
+						isError: true,
+					}
+				}
+			}
+
+			// Lifecycle enforcement: closed/rejected FBs are immutable.
+			const moveFound = findFeedbackFile(intent, stage, feedbackId)
+			if (!moveFound) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: stage
+								? `Error: feedback '${feedbackId}' not found in stage '${stage}'`
+								: `Error: feedback '${feedbackId}' not found (intent-scope)`,
+						},
+					],
+					isError: true,
+				}
+			}
+			const moveStatus = (moveFound.data.status as string) || "pending"
+			if (moveStatus === "closed" || moveStatus === "rejected") {
+				return reply(
+					{
+						error: "lifecycle_violation",
+						current_status: moveStatus,
+						message: `Cannot move feedback '${feedbackId}' — status is '${moveStatus}'. Per the forward-only lifecycle rule, closed and rejected feedback are terminal.`,
+					},
+					{ isError: true },
+				)
+			}
+
+			// Branch enforcement — both source and target paths land in
+			// stage-scoped or intent-main branches; keep agent on the
+			// right branch for the WRITE side (target).
+			const moveBranchErr = enforceStageBranch(intent, toStage || undefined)
+			if (moveBranchErr) return moveBranchErr
+
+			const moveResult = moveFeedbackFile(intent, stage, feedbackId, toStage)
+			if (!moveResult) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: stage
+								? `Error: feedback '${feedbackId}' not found in stage '${stage}'`
+								: `Error: feedback '${feedbackId}' not found (intent-scope)`,
+						},
+					],
+					isError: true,
+				}
+			}
+
+			const moveCommitMsg = moveResult.moved
+				? `feedback: move ${feedbackId} from ${stage || "intent-scope"} to ${toStage || "intent-scope"} (now ${moveResult.feedback_id})`
+				: `feedback: triage-confirm ${feedbackId} in ${stage || "intent-scope"}`
+			const moveGitResult = gitCommitState(moveCommitMsg)
+
+			const moveResponse: Record<string, unknown> = {
+				feedback_id: moveResult.feedback_id,
+				file: moveResult.file,
+				moved: moveResult.moved,
+				triaged_at: moveResult.triaged_at,
+				message: moveResult.moved
+					? `Feedback moved from ${stage || "intent-scope"} to ${toStage || "intent-scope"} as ${moveResult.feedback_id}.`
+					: `Feedback ${feedbackId} placement confirmed.`,
+			}
+			return reply(injectPushWarning(moveResponse, moveGitResult))
 		}
 
 		case "haiku_feedback_reject": {
@@ -8794,7 +9046,7 @@ export function handleStateTool(
 						source_ref: item.source_ref,
 						closed_by: item.closed_by,
 						bolt: item.bolt,
-						upstream_stage: item.upstream_stage,
+						triaged_at: item.triaged_at,
 					}
 					// Include stage field when listing across stages
 					if (!stageFilt) {
@@ -8823,7 +9075,7 @@ export function handleStateTool(
 						source_ref: item.source_ref,
 						closed_by: item.closed_by,
 						bolt: item.bolt,
-						upstream_stage: item.upstream_stage,
+						triaged_at: item.triaged_at,
 						stage: null,
 					})
 				}

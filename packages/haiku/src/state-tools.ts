@@ -2024,18 +2024,21 @@ function runInlineQualityGates(
 // ── Path resolution ────────────────────────────────────────────────────────
 
 export function findHaikuRoot(): string {
-	// Anchor at the primary repo root in git environments — H·AI·K·U state
-	// lives at `<primary>/.haiku/` regardless of which worktree (primary or
-	// sub-) is the current cwd. Running the FSM from a sub-worktree
-	// (`.claude/worktrees/foo/`) reads/writes the same canonical state as
-	// running from the primary; per the architectural invariant that no
-	// two agents work on the same intent concurrently, there's nothing to
-	// isolate by sub-worktree.
-	if (isGitRepo()) {
-		return join(primaryRepoRoot(), ".haiku")
-	}
-	// Non-git fallback: walk up from cwd looking for .haiku/ (tests, non-
-	// git environments).
+	// Walk up from cwd to find `.haiku/`. State files
+	// (`.haiku/intents/*/stages/*/state.json`, unit md files, FB md files)
+	// are PER-STAGE-BRANCH content — they MUST be written and read from
+	// whichever working tree currently has the stage branch checked out.
+	// If the user is in a sub-worktree on the stage branch, state lives in
+	// that sub-worktree's `.haiku/`; the primary repo's checkout (likely
+	// on a different branch) sees a stale or absent copy.
+	//
+	// Anchoring at the primary repo here would write per-branch state to
+	// whatever branch the primary happens to have checked out, invisible
+	// to the user's worktree on the stage branch.
+	//
+	// `.haiku/worktrees/` (git worktrees for unit isolation) is a separate
+	// concern — those use `primaryRepoRoot()` directly, since git refuses
+	// two worktrees on the same branch.
 	let dir = process.cwd()
 	for (let i = 0; i < 20; i++) {
 		if (existsSync(join(dir, ".haiku"))) return join(dir, ".haiku")

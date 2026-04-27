@@ -16,7 +16,7 @@
 //   - revisitEarlierStage        — jump to an earlier stage
 //   - uncompleteIntent           — revive a completed intent for revisit
 
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import {
@@ -297,7 +297,7 @@ function uncompleteIntent(slug: string, intentFile: string): void {
 
 export function revisitCurrentStage(
 	slug: string,
-	iDir: string,
+	_iDir: string,
 	intentFile: string,
 	currentActiveStage: string,
 ): OrchestratorAction {
@@ -333,18 +333,12 @@ export function revisitCurrentStage(
 		}
 	}
 
-	const unitsDir = join(iDir, "stages", currentActiveStage, "units")
-	if (existsSync(unitsDir)) {
-		const files = readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-		for (const f of files) {
-			const unitFile = join(unitsDir, f)
-			setFrontmatterField(unitFile, "status", "pending")
-			setFrontmatterField(unitFile, "bolt", 0)
-			setFrontmatterField(unitFile, "hat", "")
-			setFrontmatterField(unitFile, "started_at", null)
-			setFrontmatterField(unitFile, "completed_at", null)
-		}
-	}
+	// Units are NOT reset on revisit. Revisit means "we missed
+	// something" — the elaborate phase will INCREASE scope (author
+	// new units or revise specs). Existing completed work stays
+	// completed; the agent decides whether each existing unit needs
+	// changes when re-entering elaborate. Only state.json resets so
+	// the phase machinery re-runs.
 
 	resetFixLoopBolts(slug, currentActiveStage)
 
@@ -361,7 +355,7 @@ export function revisitCurrentStage(
 		intent: slug,
 		stage: currentActiveStage,
 		target_phase: "elaborate",
-		message: `Revisiting elaborate phase in stage '${currentActiveStage}' — all units re-queued`,
+		message: `Revisiting elaborate phase in stage '${currentActiveStage}' — existing units preserved; elaborate will add scope or revise specs.`,
 	}
 }
 
@@ -479,21 +473,16 @@ function revisitEarlierStage(
 	}
 	writeJson(targetPath, data)
 
-	const unitsDir = join(iDir, "stages", targetStage, "units")
-	if (existsSync(unitsDir)) {
-		const files = readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-		for (const f of files) {
-			const unitFile = join(unitsDir, f)
-			setFrontmatterField(unitFile, "status", "pending")
-			setFrontmatterField(unitFile, "bolt", 0)
-			setFrontmatterField(unitFile, "hat", "")
-			setFrontmatterField(unitFile, "started_at", null)
-			setFrontmatterField(unitFile, "completed_at", null)
-		}
-	}
+	// Units are NOT reset. Revisit increases scope — the elaborate
+	// phase decides whether to author new units, revise existing
+	// specs, or leave completed work alone. Wiping unit FM would
+	// throw away signal the agent needs to decide.
 
 	resetFixLoopBolts(slug, targetStage)
 
+	// Reset the state.json of every downstream stage (target's
+	// successors). markDownstreamStagesStale only touches state.json
+	// — units in those stages stay put.
 	markDownstreamStagesStale(slug, iDir, targetStage, intentFile)
 
 	uncompleteIntent(slug, intentFile)
@@ -512,6 +501,6 @@ function revisitEarlierStage(
 		intent: slug,
 		target_stage: targetStage,
 		reset_phase: "elaborate",
-		message: `Revisiting stage '${targetStage}' — stage reset to elaborate, all units re-queued`,
+		message: `Revisiting stage '${targetStage}' — state.json reset to elaborate; existing units preserved. Downstream stages' state.json reset; their units preserved too.`,
 	}
 }

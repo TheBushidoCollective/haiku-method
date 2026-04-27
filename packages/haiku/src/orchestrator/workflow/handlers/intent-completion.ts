@@ -14,15 +14,17 @@
 // Sub-cases handled:
 //   1. Studio-scope fix-chain reconciliation (escalate /
 //      integrate_fix_chains)
-//   2. Upstream findings → upstream_finding_surfaced (intent layer
-//      surfaces these to the human; no auto-revisit)
-//   3. First-tick review dispatch:
+//   2. First-tick review dispatch:
 //        - no studio review agents → set skipped flag, fall through
 //        - agents present → set dispatched flag, emit
 //          intent_completion_review
-//   4. In-scope pending findings → studio fix loop:
+//   3. In-scope pending findings → studio fix loop:
 //        - cap exhausted → escalate
 //        - dispatch → intent_completion_fix
+//
+// Cross-stage findings are no longer modeled — the pre-tick triage
+// gate (run-tick.ts) relocates misplaced feedback before any handler
+// runs.
 //        - error if no fix hats configured
 //   5. All findings resolved → final gate_review (intent_completion
 //      gate context)

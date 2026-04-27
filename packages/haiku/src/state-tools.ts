@@ -2901,6 +2901,7 @@ export const FSM_DRIVEN_FB_FIELDS = [
 	"closed_by",
 	"integrator_attempts",
 	"replies",
+	"triaged_at",
 ] as const
 
 export const CREATE_TIME_FB_FIELDS = [
@@ -2912,7 +2913,6 @@ export const CREATE_TIME_FB_FIELDS = [
 	"iteration",
 	"visit",
 	"source_ref",
-	"upstream_stage",
 	"resolution",
 	"attachment",
 	"inline_anchor",
@@ -4160,11 +4160,24 @@ export function readFeedbackFiles(slug: string, stage: string): FeedbackItem[] {
 			source_ref: (data.source_ref as string) || null,
 			closed_by: (data.closed_by as string) || null,
 			bolt: typeof data.bolt === "number" ? (data.bolt as number) : 0,
-			triaged_at:
-				typeof data.triaged_at === "string" &&
-				(data.triaged_at as string).length > 0
-					? (data.triaged_at as string)
-					: null,
+			// Back-compat for FBs authored before triaged_at existed:
+			// agent-authored FBs were always filed in-context, so a
+			// missing triaged_at is treated as "triaged at creation
+			// time" rather than "needs triage." Without this fallback,
+			// the pre-tick gate would force a triage round-trip on
+			// every legacy agent FB after upgrade.
+			triaged_at: (() => {
+				const explicit =
+					typeof data.triaged_at === "string" &&
+					(data.triaged_at as string).length > 0
+						? (data.triaged_at as string)
+						: null
+				if (explicit) return explicit
+				const at = (data.author_type as string) || ""
+				const createdAt = (data.created_at as string) || ""
+				if (at === "agent" && createdAt) return createdAt
+				return null
+			})(),
 			resolution,
 			replies,
 			inline_anchor: parseInlineAnchor(data),

@@ -6,14 +6,14 @@
 //
 //   1. Fix-chain worktree reconciliation (closed → merge, conflict →
 //      integrator dispatch, exhausted → escalate, open → reap).
-//   2. Pending feedback routing:
-//        a. Cross-stage upstream findings → upstream_finding_surfaced
-//        b. Human-authored items needing triage → gate_review (ask)
-//        c. Auto-dispatch resolutions:
+//   2. Pending feedback routing (cross-stage findings are pre-relocated
+//      by run-tick.ts's pre-tick triage gate, so by the time we get
+//      here every pending FB is in-scope for the current stage):
+//        a. Human-authored items needing triage → gate_review (ask)
+//        b. Auto-dispatch resolutions:
 //             - stage_revisit → revisitCurrentStage delegate
-//             - upstream_rewind → upstream_finding_surfaced
-//        d. fix_hats fix loop → review_fix (or escalate / error)
-//        e. Legacy revisit → feedback_revisit (or escalate)
+//        c. fix_hats fix loop → review_fix (or escalate / error)
+//        d. Legacy revisit → feedback_revisit (or escalate)
 //   3. External review reconciliation (only when stage already
 //      completed+blocked): branch-merge or CLI signal → advance,
 //      changes_requested → delegate, otherwise → awaiting_external_review.

@@ -2913,39 +2913,8 @@
   <strong>Hover anything for a tooltip · click for full detail.</strong>
 </p>
 
-<aside style="margin: 1rem auto; max-width: 900px; padding: 1rem; border-left: 4px solid #ef4444; background: #fef2f2; font-size: 0.9em;">
-  <strong>Architecture v3 (2026-04-26 — not yet reflected in the per-stage visualizations below):</strong>
-  <p style="margin: 0.5rem 0;">
-    The canonical structural reference is now <code>plugin/studios/ARCHITECTURE.md</code>.
-    It supersedes the prototype where they conflict — fix the prototype, not the doc.
-  </p>
-  <ul style="margin: 0.5rem 0 0 1rem;">
-    <li><strong>FB-as-unit fix loop</strong> — fixers no longer mutate the flagged unit. They edit the FB body via <code>haiku_feedback_write</code>, read the unit read-only via <code>haiku_unit_read</code>, and progress the fix-hat chain via <code>haiku_feedback_advance_hat</code>. The FSM auto-closes the FB on the last hat's advance. Closed FBs become input to the next iteration of the upstream stage's elaborate phase, which authors corrective work — completed units are NEVER modified (forward-only lifecycle).</li>
-    <li><strong>Path-boundary hook</strong> — generic <code>Read</code> / <code>Write</code> / <code>Edit</code> / <code>MultiEdit</code> on <code>units/*.md</code>, <code>feedback/*.md</code>, <code>intent.md</code>, and <code>stages/*/state.json</code> is denied at the <code>PreToolUse</code> hook layer. Agents are redirected at the appropriate MCP tool by name. Replaces the prior content-matching status-completed check.</li>
-    <li><strong>New MCP CRUDL surface</strong> — <code>haiku_unit_write</code> (FM validators + DAG cycle detection + pending-only lifecycle), <code>haiku_unit_read</code> (body+title only — no FM exposed), <code>haiku_unit_delete</code> (pending only); FB equivalents <code>haiku_feedback_write</code> and <code>haiku_feedback_read</code>; FB-as-unit progression <code>haiku_feedback_advance_hat</code> / <code>haiku_feedback_reject_hat</code>. <code>haiku_unit_get</code> removed from the agent-callable schema (FM is FSM-only per architecture §1.1).</li>
-    <li><strong>Plan-do-verify pattern</strong> — every stage's <code>hats:</code> list now follows plan → do → verify (verifier hat present in 91/120 stages; remainder already had verify-class final hats). Adversarial loops (red-team / blue-team) come AFTER the triplet, never before.</li>
-    <li><strong>Universal contract block split</strong> — <code>FSM_CONTRACTS_ELABORATE_BLOCK</code> split into <code>UNIVERSAL</code> (all stages) + <code>BUILD_CLASS_ADDENDUM</code> (only injected when no per-stage <code>phases/ELABORATION.md</code> override exists). The 5 inception-class stages now skip the build-class addendum and use their own knowledge-artifact ELABORATION.md.</li>
-  </ul>
-</aside>
-
-<aside style="margin: 1rem auto; max-width: 900px; padding: 1rem; border-left: 4px solid #14b8a6; background: #f0fdfa; font-size: 0.9em;">
-  <strong>Churn-reduction v1 (2026-04-19 — not yet reflected in the per-stage visualizations below):</strong>
-  <ul style="margin: 0.5rem 0 0 1rem;">
-    <li><strong>Pre-execution adversarial review</strong> — new phase <code>pre-review</code> between <code>elaborate</code> and <code>execute</code>. Reviewers audit unit SPECS (not artifacts yet) for missing inputs, prose-only gates, unfalsifiable criteria, sibling conflicts. Fixing spec bugs here costs far less than an execute → post-review → reject cycle. Actions: <code>pre_review</code> (dispatch), <code>pre_review_revisit</code> (spec-edit instructions, not new units).</li>
-    <li><strong>Conditional review agents</strong> — each review-agent.md declares <code>applies_to:</code> (glob list). Agents skip themselves when no stage artifact matches (e.g. web a11y agent doesn't run on backend-only dev). Filter fires at both <code>review</code> and <code>review_elaboration</code> dispatch.</li>
-    <li><strong>Executable quality-gates</strong> — universal guidance now injected into every <code>elaborate</code> action: <code>quality_gates:</code> entries MUST be <code>{name, command}</code> objects (runnable at advance_hat). Commands MUST scope to the full stage artifact directory, not the unit's <code>inputs:</code> list — enforcement scope must match rule scope.</li>
-    <li><strong>Iteration cap dropped</strong>: <code>MAX_STAGE_ITERATIONS</code> 5 → 2. Goal is 0 agent-invoked retries; &gt; 2 indicates a spec problem that escalates to the human.</li>
-  </ul>
-</aside>
-
-<aside style="margin: 1rem auto; max-width: 900px; padding: 1rem; border-left: 4px solid #a855f7; background: #faf5ff; font-size: 0.9em;">
-  <strong>Churn-reduction v2 (2026-04-19) — Feedback-as-unit fix loop + intent-completion review:</strong>
-  <ul style="margin: 0.5rem 0 0 1rem;">
-    <li><strong>Stage fix_hats</strong> — STAGE.md now declares <code>fix_hats:</code> (ordered subset of hats, typically <code>[producer, feedback-assessor]</code>). When adversarial review produces open feedback, the FSM dispatches the fix-hat sequence directly against the feedback file. No unit synthesis, no "telephone game" of feedback → unit → execute. Actions: <code>review_fix</code> (serial per finding, one per tick). Per-finding cap: 3 bolts.</li>
-    <li><strong>Pre-tick triage gate (replaces upstream-routing model, 2026-04-27)</strong> — every <code>haiku_run_next</code> tick now scans stages 0..current for open feedback before any per-state handler runs. Feedback files carry a <code>triaged_at:</code> timestamp; agent-authored items auto-triage at creation, human-authored items stay untriaged until the agent confirms placement (no-op call to <code>haiku_feedback_move</code>) or relocates them. Once everything is triaged, the gate routes by file location: a finding on an earlier stage emits a revisit; a finding on the current stage flows into the existing <code>review_fix</code> dispatch. Replaces the deleted <code>upstream_stage</code> field + <code>upstream_finding_surfaced</code> action.</li>
-    <li><strong>Intent-completion review (studio-level)</strong> — opt-in via <code>intent_completion_review: true</code>. After every stage's gate passes, the FSM runs agents from <code>plugin/studios/{studio}/review-agents/</code> against the whole intent. Findings log at intent scope; a studio-level fix loop runs <code>plugin/studios/{studio}/fix-hats/</code>. No stage revisits from this layer — cross-stage findings always surface to the human. Actions: <code>intent_completion_review</code>, <code>intent_completion_fix</code>.</li>
-    <li><strong>Seeded across all 24 studios</strong> — every stage with review agents now has <code>feedback-assessor.md</code> + <code>fix_hats: [producer, feedback-assessor]</code>. Every studio has seed <code>review-agents/cross-stage-consistency.md</code> + <code>fix-hats/{reconciler,validator}.md</code> that authors can replace with studio-specific mandates.</li>
-  </ul>
+<aside style="margin: 1rem auto; max-width: 900px; padding: 0.75rem 1rem; border-left: 4px solid #6366f1; background: #eef2ff; font-size: 0.85em;">
+  <strong>Canonical reference:</strong> the structural source of truth is <code>plugin/studios/ARCHITECTURE.md</code> in the repo. When this prototype and the doc disagree, fix the prototype. The visualizations below now reflect the v3 architecture (FB-as-unit fix loop, plan-do-verify hat pattern, MCP CRUDL surface, path-boundary hook), the v1 churn-reduction set (pre-review phase, conditional review agents, executable quality-gates, MAX_STAGE_ITERATIONS=2), and the v2 churn-reduction set (stage <code>fix_hats</code> dispatch, pre-tick triage gate via <code>triaged_at:</code> + <code>haiku_feedback_move</code>, studio-level intent-completion review).
 </aside>
 
 <section class="actors-strip" id="actors-strip">
@@ -3419,7 +3388,7 @@ function renderStudio() {
 
       <div class="phase" data-phase="execute">
         <h3>Execute</h3>
-        <div class="bolt-explainer" title="Bolt = one full hat-rotation for a unit. Starts at 1. When a hat rejects (↻), the FSM rewinds to the previous hat AND increments the bolt counter — the next full rotation is bolt N+1. Hard max: 5 bolts per unit (state-tools.ts MAX_BOLTS=5); exceeding it returns max_bolts_exceeded and escalates to the user to redesign or split the unit.">
+        <div class="bolt-explainer" title="Bolt = one full hat-rotation for a unit. Starts at 1. When a hat rejects (↻), the workflow engine rewinds to the previous hat AND increments the bolt counter — the next full rotation is bolt N+1. Hard max for stage iterations: MAX_STAGE_ITERATIONS=2 (state-tools.ts); goal is 0 agent-invoked retries, > 2 indicates a spec problem that escalates to the human. Per-finding fix-loop cap: MAX_FIX_LOOP_BOLTS=3.">
           <span class="be-chip">bolt</span>
           <span class="be-text">one full <strong>hat rotation</strong> for a unit · starts at <code>1</code> · hat rejection (↻) rewinds one hat AND increments bolt · hard max <strong>5</strong> per unit → <code>max_bolts_exceeded</code></span>
         </div>
@@ -3504,6 +3473,16 @@ function renderStudio() {
         <div class="agents-caption" style="margin-top:8px; text-align:left; display:flex; align-items:center; gap:6px;">
           ${callPillMini(stage, idx, mStage, "review-to-gate")}
           all agents approve → <code>advance_phase</code> to gate
+        </div>
+        <div class="agents-caption" style="margin-top:6px; text-align:left; font-size:11px; color: var(--muted);">
+          Conditional dispatch: each review-agent declares <code>applies_to:</code> (glob list); agents whose globs don't match any stage artifact skip themselves.
+        </div>
+      </div>
+
+      <div class="phase" data-phase="fix-loop" style="position:relative; border-left: 3px solid #f59e0b;">
+        <h3>Fix-loop <span style="font-size:10px; color: var(--muted); font-weight: normal;">(when review surfaces open feedback)</span></h3>
+        <div class="agents-caption" style="text-align:left; font-size:11px; line-height: 1.5;">
+          Stage's <code>fix_hats:</code> sequence (typically <code>[producer, feedback-assessor]</code>) is dispatched directly against the FB file via <code>review_fix</code>. <strong>FB-as-unit:</strong> fixers edit the FB body via <code>haiku_feedback_write</code> (the flagged unit is read-only via <code>haiku_unit_read</code>). The hat chain progresses via <code>haiku_feedback_advance_hat</code>; the workflow engine auto-closes the FB on the last hat's advance. Per-finding cap: <strong>3 bolts</strong> (<code>MAX_FIX_LOOP_BOLTS</code>); exceeding escalates. Closed FBs become input to the next iteration of the upstream stage's elaborate phase, which authors corrective work — completed units are NEVER modified (forward-only lifecycle).
         </div>
       </div>
 
@@ -3729,9 +3708,38 @@ function renderStudio() {
     `
   }
 
-  // Post-intent grid — Delivery + Operations side-by-side as cards
+  // Post-intent grid — Studio-level intent-completion review (optional) →
+  // Delivery + Operations side-by-side as cards.
   const postGrid = document.getElementById("post-grid")
   postGrid.innerHTML = `
+    <section class="post-intent" id="intent-completion-review" style="border-left: 3px solid #a855f7;">
+      <header>
+        <h2>Intent-completion review <span style="font-size:10px; font-weight:500; color: var(--muted); margin-left:6px; letter-spacing:0; text-transform:none;">· studio-level · default ON</span></h2>
+        <span class="subtitle-line">all stages approved → studio review-agents audit the whole intent → optional fix loop → final gate</span>
+      </header>
+      <div class="post-steps">
+        <div class="post-step">
+          <div class="step-title">📋 dispatch review-agents</div>
+          <div class="step-desc">
+            workflow runs <code>plugin/studios/{studio}/review-agents/*.md</code> against the whole intent. Findings log at intent scope (no stage). Action: <code>intent_completion_review</code>.
+          </div>
+        </div>
+        <div class="step-arrow">→</div>
+        <div class="post-step">
+          <div class="step-title">🔁 studio fix loop</div>
+          <div class="step-desc">
+            if findings exist, dispatch <code>plugin/studios/{studio}/fix-hats/*.md</code> against intent-scope FBs (mirrors stage fix_hats). Action: <code>intent_completion_fix</code>. Cross-stage findings get relocated to the right stage via <code>haiku_feedback_move</code> at the pre-tick triage gate (no auto-revisit from this layer).
+          </div>
+        </div>
+        <div class="step-arrow">→</div>
+        <div class="post-step">
+          <div class="step-title">✅ ready for final gate</div>
+          <div class="step-desc">
+            zero open intent-scope findings → falls through to delivery. Opt out per-intent with <code>intent_completion_review: false</code>.
+          </div>
+        </div>
+      </div>
+    </section>
     <section class="post-intent" id="delivery">
       <header>
         <h2>Delivery <span style="font-size:10px; font-weight:500; color: var(--muted); margin-left:6px; letter-spacing:0; text-transform:none;">· handled by your CI/CD infra, not H·AI·K·U</span></h2>
@@ -4145,6 +4153,7 @@ function payloadFor(stage, idx, mStage, key, opts = {}) {
         { hook: "FSM elaborate-tick instruction", target: "agent prompt (this same `haiku_run_next` call)", what: "**`<subagent tool=\"Task\">` self-contained prompts** — each discovery subagent block contains the full behavioral prompt (intent description, stage scope, discovery template with Content Guide and Quality Signals, output path instructions). MCP constructs exact subagent prompts; parent relays verbatim." },
         { hook: "readPhaseOverride()", target: "agent prompt prepend", what: "**Phase override injection** — `phases/ELABORATION.md` is read via `readPhaseOverride()` and injected during elaborate, providing studio-level elaboration guidance." },
         { hook: "readStageArtifactDefs()", target: "agent prompt prepend", what: "**Stage Output Expectations** — output definitions from `outputs/*.md` are injected as 'Stage Output Expectations' so the agent can plan units with knowledge of what artifacts each stage must produce (name, location, format, content guide)." },
+        { hook: "FSM_CONTRACTS_ELABORATE_BLOCK", target: "agent prompt prepend", what: "**Universal contract block split** — `UNIVERSAL` (all stages: lifecycle rules, naming, DAG semantics) is always injected. `BUILD_CLASS_ADDENDUM` (executable `quality_gates: [{name, command}]`, runnable verify-commands) is injected ONLY when no per-stage `phases/ELABORATION.md` override exists. The 5 inception-class stages skip the build-class addendum and use their own knowledge-artifact ELABORATION.md instead." },
       ],
       action: "gate_review",
       summary: `elaboration complete — open ${isFirst ? "intent_review" : "elaborate_to_execute"} gate`,
@@ -5153,7 +5162,7 @@ const TOOL_SPECS = {
     ],
   },
   haiku_run_next: {
-    description: "The orchestrator's tick. The agent calls this whenever it doesn't know what to do next. The orchestrator reads disk state, validates preconditions, and returns a structured `action` telling the agent the single next step. **All phase-level FSM transitions go through this one tool. Subagents progress through hats via `haiku_unit_advance_hat` instead.**\n\n**Archived-intent refusal:** if the intent's `intent.md` frontmatter has `archived: true`, the tick refuses to advance and returns a hint telling the caller to invoke `haiku_intent_unarchive` first. No state is mutated in the refusal path.",
+    description: "The orchestrator's tick. The agent calls this whenever it doesn't know what to do next. The orchestrator reads disk state, validates preconditions, and returns a structured `action` telling the agent the single next step. **All phase-level workflow transitions go through this one tool. Subagents progress through hats via `haiku_unit_advance_hat` instead.**\n\n**Pre-tick gate sequence (run BEFORE per-state handler dispatch):**\n1. `preTickConsistency()` — repair structural inconsistencies (may short-circuit with `safe_intent_repair`).\n2. `verifyIntentState()` — tamper detection (refuse to advance on integrity-violated intents).\n3. **Pre-tick triage gate** — scan stages 0..current + intent-scope for open feedback. Three priority outcomes:\n   - any FB lacking `triaged_at:` → emit `feedback_triage` action (agent calls `haiku_feedback_move` to confirm/relocate before any other work).\n   - all triaged + ≥ 1 FB on a stage earlier than active → emit `revisited` action targeting earliest such stage.\n   - all triaged + only current-stage FBs → fall through to per-state handler.\n4. Per-state handler dispatches the action.\n\n**Archived-intent refusal:** if the intent's `intent.md` frontmatter has `archived: true`, the tick refuses to advance and returns a hint telling the caller to invoke `haiku_intent_unarchive` first. No state is mutated in the refusal path.",
     input: {
       intent: "string · the intent slug (e.g. `add-billing`)",
     },

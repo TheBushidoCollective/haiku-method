@@ -391,5 +391,49 @@ test("side-effecting handler against isolated fixture does not pollute parent re
 	)
 })
 
+test("preTickConsistency repairs intent.md active_stage when stale (current stage's state.json is completed)", () => {
+	const { haikuRoot, cleanup } = fixture(
+		"stale-active-stage",
+		{
+			studio: "software",
+			active_stage: "product", // stale: product is actually completed
+		},
+		{
+			inception: { stage: "inception", status: "completed", phase: "gate" },
+			design: { stage: "design", status: "completed", phase: "gate" },
+			product: { stage: "product", status: "completed", phase: "gate" },
+			development: {
+				stage: "development",
+				status: "active",
+				phase: "elaborate",
+			},
+		},
+	)
+	try {
+		const result = runWorkflowTick("stale-active-stage", haikuRoot)
+		// Pre-tick rewrites intent.md active_stage from product → development.
+		// derive-state then re-reads and routes development as the current
+		// stage, returning whatever phase action that stage's state.json
+		// implies (here: phase=elaborate → state=elaborate).
+		assert.ok(result, "tick should not be null")
+		const intentPath = `${haikuRoot}/intents/stale-active-stage/intent.md`
+		const md = readFileSync(intentPath, "utf8")
+		assert.match(
+			md,
+			/active_stage:\s*['"]?development['"]?/,
+			"intent.md active_stage should be repaired to development",
+		)
+		// derive-state should now see development as current and emit a
+		// development-stage action (not a product-stage action).
+		assert.notStrictEqual(
+			result.action.action,
+			"complete",
+			"intent shouldn't be complete — development is still active",
+		)
+	} finally {
+		cleanup()
+	}
+})
+
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed === 0 ? 0 : 1)

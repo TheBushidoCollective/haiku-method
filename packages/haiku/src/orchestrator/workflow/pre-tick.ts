@@ -70,7 +70,53 @@ export function preTickConsistency(
 	const activeStage = (intent.active_stage as string) || ""
 	const currentStage = activeStage || studioStages[0]
 	const activeIdx = studioStages.indexOf(currentStage)
-	if (activeIdx <= 0) return null
+
+	// Pre-walk: sync intent.md.active_stage from state.json reality.
+	// state.json is the single source of truth for stage position
+	// (see project memory: project_state_json_owns_stage_position.md).
+	// We do this AFTER the existing in-place repair logic below has
+	// had a chance to synthesize completion for empty priors — the
+	// `syncActiveStageFromStateJson` helper is called from each
+	// `return null` path.
+	const syncActiveStageFromStateJson = () => {
+		const declared =
+			(readFm(intentFile).active_stage as string) || studioStages[0]
+		let derived = studioStages[studioStages.length - 1]
+		for (const stage of studioStages) {
+			const stPath = join(iDir, "stages", stage, "state.json")
+			const st = existsSync(stPath) ? readJson(stPath) : {}
+			const status = (st.status as string) || "pending"
+			// A stage is "done" only when status === completed AND it's
+			// not blocked at an external gate. status: completed +
+			// gate_outcome: blocked is the "awaiting external review"
+			// state — the merge hasn't happened, so the stage is still
+			// active per the contract that completion lives in the
+			// merge.
+			const gateOutcome = (st.gate_outcome as string) || ""
+			const isDone = status === "completed" && gateOutcome !== "blocked"
+			if (!isDone) {
+				derived = stage
+				break
+			}
+		}
+		if (declared !== derived) {
+			setFrontmatterField(intentFile, "active_stage", derived)
+			emitTelemetry("haiku.fsm.consistency_fix", {
+				intent: slug,
+				stale_stage: declared,
+				corrected_stage: derived,
+				reason: "intent_md_active_stage_drift",
+			})
+		}
+	}
+
+	if (activeIdx <= 0) {
+		// No priors to validate, but still sync active_stage in case the
+		// current stage's state.json shows completed (e.g., last-stage
+		// drift). This addresses the pure "intent.md is stale" scenario.
+		syncActiveStageFromStateJson()
+		return null
+	}
 
 	const incompletePrior: string[] = []
 	for (let i = 0; i < activeIdx; i++) {
@@ -82,7 +128,14 @@ export function preTickConsistency(
 			incompletePrior.push(studioStages[i])
 		}
 	}
-	if (incompletePrior.length === 0) return null
+	if (incompletePrior.length === 0) {
+		// Priors are all completed but active_stage may still be
+		// stale relative to state.json reality (e.g., current stage
+		// just transitioned to status: completed but intent.md hasn't
+		// caught up).
+		syncActiveStageFromStateJson()
+		return null
+	}
 
 	const activeUnitsDir = join(iDir, "stages", currentStage, "units")
 	const activeUnitFiles = existsSync(activeUnitsDir)
@@ -202,6 +255,8 @@ export function preTickConsistency(
 
 	// Clean repair: synthesized priors only, no manual review needed,
 	// no phase regression. Mutations are on disk; derive-state will
-	// see consistent state on the next read.
+	// see consistent state on the next read. Sync intent.md
+	// active_stage from the now-consistent state.json walk.
+	syncActiveStageFromStateJson()
 	return null
 }

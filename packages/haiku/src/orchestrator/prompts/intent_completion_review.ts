@@ -1,9 +1,8 @@
 // orchestrator/prompts/intent_completion_review.ts — Studio-level
 // review pass that fires once after the final stage gate passes.
 // Spawns one subagent per studio review-agent in parallel; findings
-// are logged at intent scope (no stage). Cross-stage findings get
-// relocated by the pre-tick triage gate via `haiku_feedback_move` —
-// reviewers no longer pre-classify with an `upstream_stage:` field.
+// are logged at intent scope (no stage). The pre-tick triage gate
+// relocates any misplaced findings via `haiku_feedback_move`.
 
 import { readStudioReviewAgentPaths } from "../../studio-reader.js"
 import {

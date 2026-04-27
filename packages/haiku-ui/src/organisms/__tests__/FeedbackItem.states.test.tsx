@@ -281,12 +281,9 @@ function ControllableFeedbackItem({
 	 */
 	onStatusChangeSpy?: (id: string, next: FeedbackStatus) => void
 	/**
-	 * Optional overrides merged into the rendered item. Used by the
-	 * upstream-stage pinning test to inject fields the wire schema does not
-	 * yet carry (see `packages/haiku-api/src/schemas/feedback.ts`
-	 * FeedbackItemSchema — `upstream_stage` is deliberately out-of-schema
-	 * today; this override lets us pin the current "no distinct affordance"
-	 * rendering so a future schema addition forces a test update).
+	 * Optional overrides merged into the rendered item. Lets a test
+	 * pin a single field (status, visit, etc.) without reconstructing
+	 * the whole fixture shape inline.
 	 */
 	itemOverrides?: Partial<FeedbackItemData>
 }): React.ReactElement {

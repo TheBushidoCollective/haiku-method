@@ -67,10 +67,10 @@ function readFrontmatter(filePath: string): Record<string, unknown> {
  *    - `inline_fix`      → agent dispatches ONE bolt of the stage's
  *                          fix_hats against the finding.
  *
- *  Cross-stage routing (formerly `upstream_rewind`) is no longer
- *  expressed as a resolution — the pre-tick triage gate relocates
- *  misplaced FBs via `haiku_feedback_move`, so by the time we classify
- *  here every pending item is already in-scope for the current stage. */
+ *  Cross-stage routing flows through file location: the pre-tick
+ *  triage gate relocates misplaced FBs via `haiku_feedback_move`, so
+ *  every pending item we classify here is already in-scope for the
+ *  current stage. */
 interface FeedbackClassification {
 	questions: FeedbackItem[]
 	inlineFixes: FeedbackItem[]

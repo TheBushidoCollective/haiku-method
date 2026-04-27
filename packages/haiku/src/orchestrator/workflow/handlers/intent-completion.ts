@@ -194,11 +194,8 @@ const emit: WorkflowHandler = (ctx) => {
 		)
 	})
 
-	// Cross-stage findings are no longer modeled with upstream_stage.
-	// The pre-tick triage gate (run-tick.ts) is the single point that
-	// classifies/relocates feedback before any handler runs, so by the
-	// time we get here the intent-scope FBs are guaranteed to be
-	// in-scope for the studio-level fix loop.
+	// By the time we reach this handler, the pre-tick triage gate has
+	// guaranteed intent-scope FBs are in-scope for the studio fix loop.
 
 	const reviewDispatched =
 		(intent.completion_review_dispatched as boolean) === true

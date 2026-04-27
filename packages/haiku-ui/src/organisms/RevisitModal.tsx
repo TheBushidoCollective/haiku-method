@@ -11,9 +11,12 @@
  *   - question         → feedback_answer (agent replies, no code delta)
  *   - inline_fix       → one fix_hats bolt against the single finding
  *   - stage_revisit    → rolls the stage back to elaborate
- *   - upstream_rewind  → surfaces to human (cross-stage finding)
  *
- * "Revisit" is one of four possible outcomes, not the default, so the
+ * Cross-stage findings are no longer expressed as a resolution — the
+ * pre-tick triage gate relocates misplaced FBs via
+ * `haiku_feedback_move` before any handler runs.
+ *
+ * "Revisit" is one of three possible outcomes, not the default, so the
  * copy intentionally says "Send to agent" rather than "Confirm revisit."
  *
  * A11y contract preserved from the earlier form-based revision:
@@ -54,8 +57,6 @@ function labelForResolution(resolution: string | null): string {
 			return "Inline fix"
 		case "stage_revisit":
 			return "Stage revisit"
-		case "upstream_rewind":
-			return "Upstream rewind"
 		default:
 			return "Agent will triage"
 	}

@@ -4554,7 +4554,7 @@ export function updateFeedbackFile(
 		return {
 			ok: false,
 			error:
-				"Error: resolution must be one of: question, inline_fix, stage_revisit (or null to clear). Cross-stage routing is now handled by `haiku_feedback_move` — `upstream_rewind` is no longer a valid resolution.",
+				"Error: resolution must be one of: question, inline_fix, stage_revisit (or null to clear). For cross-stage routing, call `haiku_feedback_move` to relocate the FB instead.",
 		}
 	}
 
@@ -5633,7 +5633,7 @@ Forbidden FM fields (FSM-driven, mutating these returns \`fsm_field_forbidden\`)
 				resolution: {
 					type: "string",
 					description:
-						"Routing hint for the feedback resolver. One of: `question` (reply, no code delta), `inline_fix` (one fix_hats bolt against this finding), `stage_revisit` (re-loop the whole stage). Pass `null` / empty to clear. Cross-stage routing (formerly `upstream_rewind`) is now handled by `haiku_feedback_move` instead.",
+						"Routing hint for the feedback resolver. One of: `question` (reply, no code delta), `inline_fix` (one fix_hats bolt against this finding), `stage_revisit` (re-loop the whole stage). Pass `null` / empty to clear. For cross-stage routing, call `haiku_feedback_move` to relocate the FB instead.",
 				},
 			},
 			required: ["intent", "feedback_id"],

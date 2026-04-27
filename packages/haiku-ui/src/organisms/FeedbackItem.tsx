@@ -44,7 +44,7 @@ import type { FeedbackItemData } from "../types"
 import { AttachmentLightbox } from "./AttachmentLightbox"
 
 const RESOLUTION_LABELS: Record<
-	"question" | "inline_fix" | "stage_revisit" | "upstream_rewind",
+	"question" | "inline_fix" | "stage_revisit",
 	{ label: string; classes: string }
 > = {
 	question: {
@@ -60,10 +60,6 @@ const RESOLUTION_LABELS: Record<
 		label: "Stage revisit",
 		classes:
 			"bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-	},
-	upstream_rewind: {
-		label: "Upstream rewind",
-		classes: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
 	},
 }
 

@@ -1398,9 +1398,8 @@ Cannot be resolved autonomously.`,
 		assert.strictEqual(parsed.counts.inline_fixes, 1)
 		assert.ok(parsed.message.includes("Reply to questions"))
 		assert.ok(parsed.message.includes("Inline fixes"))
-		// `upstream_rewind` is no longer a resolution — cross-stage
-		// routing happens via the pre-tick triage gate's
-		// `haiku_feedback_move`. Counts no longer carry that bucket.
+		// Cross-stage routing flows through `haiku_feedback_move` at
+		// the pre-tick triage gate; no resolution bucket here.
 		assert.strictEqual(parsed.counts.upstream_rewinds, undefined)
 		// Stage state must be untouched — the dispatch path doesn't roll
 		// back.

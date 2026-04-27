@@ -1,10 +1,9 @@
 // orchestrator/prompts/feedback_dispatch.ts — Pending feedback on
 // a stage that DOESN'T require rolling the stage back. The
 // orchestrator classified each item by resolution and emitted a
-// dispatch plan: needs_triage, questions, inline_fixes, and
-// upstream_rewinds. Each category is handled differently. The
-// `message` field carries the per-item playbook the orchestrator
-// rendered.
+// dispatch plan: needs_triage, questions, inline_fixes. Each
+// category is handled differently. The `message` field carries the
+// per-item playbook the orchestrator rendered.
 
 import { definePromptBuilder } from "./define.js"
 

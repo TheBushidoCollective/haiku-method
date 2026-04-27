@@ -241,12 +241,10 @@ const emit: WorkflowHandler = (ctx) => {
 			},
 		)
 
-		// Cross-stage findings are no longer modeled with an
-		// `upstream_stage:` field — the pre-tick triage gate (run-tick.ts)
-		// is now the single source of truth for misplaced feedback. Any
-		// FB whose root cause lives elsewhere is moved at triage time via
-		// `haiku_feedback_move`, so by the time we reach this gate the
-		// pendingItems for `currentStage` are guaranteed to be in-scope.
+		// By the time we reach this gate, the pre-tick triage gate
+		// (run-tick.ts) has guaranteed every pending FB lives on the
+		// correct stage — cross-stage findings are relocated via
+		// `haiku_feedback_move` before any handler dispatch.
 
 		const needsHumanReview = pendingItems.some(
 			(item) =>
@@ -285,10 +283,8 @@ const emit: WorkflowHandler = (ctx) => {
 			})
 			return revisitCurrentStage(slug, iDir, intentFile, currentStage)
 		}
-		// upstream_rewind classification was tied to the deleted
-		// upstream_stage routing model. Triage now relocates FBs at the
-		// pre-tick gate via `haiku_feedback_move`; cross-stage routing
-		// flows through file location, not a resolution bucket.
+		// Cross-stage routing flows through file location (relocated at
+		// the pre-tick triage gate); no resolution bucket needed here.
 
 		// fix_hats route
 		const fixHats = resolveStageFixHatsInline(studio, currentStage)

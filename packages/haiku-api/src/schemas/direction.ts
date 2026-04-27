@@ -97,7 +97,9 @@ export const DirectionSelectRequestSchema = z
 		DirectionRegenerateModeSchema,
 	])
 	.describe("POST /direction/:sessionId/select request body")
-export type DirectionSelectRequest = z.infer<typeof DirectionSelectRequestSchema>
+export type DirectionSelectRequest = z.infer<
+	typeof DirectionSelectRequestSchema
+>
 
 export const DirectionSelectResponseSchema = z
 	.object({

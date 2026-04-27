@@ -31,19 +31,15 @@
 // for the composite delegate; every other sub-case has a concrete
 // emission.
 
-import {
-	existsSync,
-	mkdirSync,
-	readdirSync,
-} from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import {
 	completeOrReviewIntent,
-	workflowStartStage,
 	resolveIntentStages,
 	resolveStageHats,
 	resolveStageMetadata,
 	resolveStudioStages,
+	workflowStartStage,
 } from "../../../orchestrator.js"
 import {
 	findHaikuRoot,
@@ -56,7 +52,6 @@ import {
 } from "../../../state-tools.js"
 import { emitTelemetry } from "../../../telemetry.js"
 import type { WorkflowHandler } from "./_types.js"
-import { readFileSync } from "node:fs"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
 	const raw = readFileSync(filePath, "utf8")
@@ -87,7 +82,7 @@ const emit: WorkflowHandler = (ctx, rootArg) => {
 	// findHaikuRoot at runtime. derive-state's intentDirPath is
 	// `<root>/intents/<slug>`, so we can recover root by going up two
 	// levels when no override is provided.
-	const root =
+	const _root =
 		rootArg ?? dirname(dirname(ctx.intentDirPath)).replace(/\/intents$/, "")
 	const iDir = ctx.intentDirPath
 	const intentFile = join(iDir, "intent.md")
@@ -124,9 +119,7 @@ const emit: WorkflowHandler = (ctx, rootArg) => {
 				const needsManualReview: string[] = []
 				const now = timestamp()
 				const intentStarted =
-					(intent.started_at as string) ||
-					(intent.created_at as string) ||
-					now
+					(intent.started_at as string) || (intent.created_at as string) || now
 
 				for (const stageName of incompletePrior) {
 					const priorUnitsDir = join(iDir, "stages", stageName, "units")

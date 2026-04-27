@@ -48,9 +48,7 @@ function renderStageBlock(
 	lines.push(`    [*] --> ${sid}_start_stage`)
 	lines.push(`    ${sid}_start_stage --> ${sid}_elaborate : tick`)
 	lines.push(`    ${sid}_elaborate --> ${sid}_execute : elaborate.advance`)
-	lines.push(
-		`    ${sid}_elaborate --> ${sid}_review_fix : feedback.pending`,
-	)
+	lines.push(`    ${sid}_elaborate --> ${sid}_review_fix : feedback.pending`)
 
 	// Execute sub-machine — hat enumeration.
 	if (hats.length > 0) {

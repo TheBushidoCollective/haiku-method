@@ -37,7 +37,8 @@ export async function workflowGuard(
 
 export default defineHook({
 	name: "workflow-guard",
-	description: "PreToolUse Write/Edit: warn when editing outside the active hat's scope.",
+	description:
+		"PreToolUse Write/Edit: warn when editing outside the active hat's scope.",
 	async handle(input, ctx) {
 		await workflowGuard(input, ctx.pluginRoot)
 	},

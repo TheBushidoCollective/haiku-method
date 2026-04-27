@@ -30,13 +30,7 @@ import {
 	useRef,
 	useState,
 } from "react"
-import {
-	focusRingCompactClass,
-	touchTargetClass,
-	useAnnounce,
-} from "../a11y"
-import type { FeedbackItemData } from "../types"
-import { AttachmentLightbox } from "./AttachmentLightbox"
+import { focusRingCompactClass, touchTargetClass, useAnnounce } from "../a11y"
 import { FeedbackOriginIcon } from "../atoms/FeedbackOriginIcon"
 import { FeedbackStatusBadge } from "../atoms/FeedbackStatusBadge"
 import type { FeedbackStatus } from "../atoms/feedback-tokens"
@@ -46,6 +40,8 @@ import {
 	statusBorderLeft,
 	visitCounterClasses,
 } from "../atoms/feedback-tokens"
+import type { FeedbackItemData } from "../types"
+import { AttachmentLightbox } from "./AttachmentLightbox"
 
 const RESOLUTION_LABELS: Record<
 	"question" | "inline_fix" | "stage_revisit" | "upstream_rewind",

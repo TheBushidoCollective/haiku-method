@@ -15,7 +15,6 @@
 import { createHash } from "node:crypto"
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { INTENT_FIELDS, STAGE_FIELDS, UNIT_FIELDS } from "./workflow-fields.js"
 import { getCapabilities } from "./harness.js"
 import {
 	findHaikuRoot,
@@ -23,6 +22,7 @@ import {
 	readJson,
 	stageStatePath,
 } from "./state-tools.js"
+import { INTENT_FIELDS, STAGE_FIELDS, UNIT_FIELDS } from "./workflow-fields.js"
 
 // ── Checksum computation ────────────────────────────────────────────────────
 

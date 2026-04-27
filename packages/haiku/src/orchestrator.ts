@@ -21,9 +21,9 @@
 // callers (and tests) that still import from "./orchestrator.js",
 // plus the MCP tool handler dispatch.
 
-import { dispatchOrchestratorAction } from "./orchestrator/workflow/run-tick.js"
 import { actionPromptBuilders } from "./orchestrator/prompts/index.js"
 import { orchestratorToolDefs } from "./orchestrator/tool-defs.js"
+import { dispatchOrchestratorAction } from "./orchestrator/workflow/run-tick.js"
 import { validateSlugArgs } from "./state-tools.js"
 import { orchestratorToolHandlers } from "./tools/orchestrator/index.js"
 
@@ -35,38 +35,27 @@ export { orchestratorToolDefs }
  *  `orchestrator/workflow/run-tick.js`. */
 export const runNext = dispatchOrchestratorAction
 
-// Re-exports from extracted submodules. Callers of the old monolith
-// continue to import from "./orchestrator.js"; new code can import
-// directly from the per-concern modules.
-export {
-	checkExternalState,
-	handleExternalChangesRequested,
-	type ExternalReviewState,
-} from "./orchestrator/external-review.js"
-export {
-	buildOutputRequirements,
-	runQualityGates,
-	validateDiscoveryArtifacts,
-	validateStageOutputs,
-	validateUnitInputs,
-	validateUnitNaming,
-	writeReviewFeedbackFiles,
-} from "./orchestrator/validators.js"
-export {
-	completeOrReviewIntent,
-	workflowAdvancePhase,
-	workflowAdvanceStage,
-	workflowCompleteStage,
-	workflowGateAsk,
-	workflowIntentComplete,
-	workflowStartStage,
-} from "./orchestrator/workflow/side-effects.js"
 export {
 	buildElaboratorInstruction,
 	buildGuardResponse,
 	maybeEscalate,
 	summarizeFeedback,
 } from "./orchestrator/actions.js"
+// Re-exports from extracted submodules. Callers of the old monolith
+// continue to import from "./orchestrator.js"; new code can import
+// directly from the per-concern modules.
+export {
+	checkExternalState,
+	type ExternalReviewState,
+	handleExternalChangesRequested,
+} from "./orchestrator/external-review.js"
+export { enrichActionWithPreview } from "./orchestrator/preview.js"
+export {
+	classifyPendingForRevisit,
+	resetFixLoopBolts,
+	revisit,
+	revisitCurrentStage,
+} from "./orchestrator/revisit.js"
 export {
 	buildFeedbackAssessorPrompt,
 	resolveIntentStages,
@@ -86,12 +75,23 @@ export {
 	type UnitInfo,
 } from "./orchestrator/units.js"
 export {
-	classifyPendingForRevisit,
-	resetFixLoopBolts,
-	revisit,
-	revisitCurrentStage,
-} from "./orchestrator/revisit.js"
-export { enrichActionWithPreview } from "./orchestrator/preview.js"
+	buildOutputRequirements,
+	runQualityGates,
+	validateDiscoveryArtifacts,
+	validateStageOutputs,
+	validateUnitInputs,
+	validateUnitNaming,
+	writeReviewFeedbackFiles,
+} from "./orchestrator/validators.js"
+export {
+	completeOrReviewIntent,
+	workflowAdvancePhase,
+	workflowAdvanceStage,
+	workflowCompleteStage,
+	workflowGateAsk,
+	workflowIntentComplete,
+	workflowStartStage,
+} from "./orchestrator/workflow/side-effects.js"
 
 // ── Action types ───────────────────────────────────────────────────────────
 
@@ -101,7 +101,6 @@ export interface OrchestratorAction {
 }
 
 // ── Main orchestration function ────────────────────────────────────────────
-
 
 // ── Run instruction builder ───────────────────────────────────────────────
 

@@ -258,7 +258,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
 		try {
 			const { appendFileSync } = await import("node:fs")
 			const stamp = new Date().toISOString()
-			const stack = err instanceof Error ? err.stack || err.message : String(err)
+			const stack =
+				err instanceof Error ? err.stack || err.message : String(err)
 			appendFileSync(
 				"/tmp/haiku-mcp-crashes.log",
 				`\n--- ${stamp} tool=${toolName} ---\n${stack}\n`,

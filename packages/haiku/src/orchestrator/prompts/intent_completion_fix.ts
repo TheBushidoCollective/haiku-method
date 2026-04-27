@@ -7,7 +7,11 @@
 
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { findHaikuRoot, isGitRepo, MAX_FIX_LOOP_BOLTS } from "../../state-tools.js"
+import {
+	findHaikuRoot,
+	isGitRepo,
+	MAX_FIX_LOOP_BOLTS,
+} from "../../state-tools.js"
 import { readStudioFixHatPaths } from "../../studio-reader.js"
 import {
 	batchDispatchDirective,
@@ -17,8 +21,8 @@ import {
 	readInterpretation,
 	resolveReviewAgentModel,
 } from "./_helpers.js"
-import { WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK } from "./WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK.js"
 import { definePromptBuilder } from "./define.js"
+import { WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK } from "./WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK.js"
 
 interface FixItem {
 	feedback_id: string

@@ -1,14 +1,14 @@
 import { CriteriaChecklist, MarkdownViewer, StatusBadge } from "@haiku/shared"
+import { Card, SectionHeading } from "../../../atoms/Card"
+import { type TabDef, Tabs } from "../../../molecules/Tabs"
 import {
 	AnnotationCanvas,
 	type AnnotationPin,
 } from "../../../organisms/AnnotationCanvas"
-import { Card, SectionHeading } from "../../../atoms/Card"
 import {
 	type InlineCommentEntry,
 	InlineComments,
 } from "../../../organisms/InlineComments"
-import { type TabDef, Tabs } from "../../../molecules/Tabs"
 import type { ReviewAnnotations } from "../../../types"
 import { MockupEmbeds } from "../shared/MockupEmbeds"
 import {

@@ -19,6 +19,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import matter from "gray-matter"
 import { resolvePluginRoot } from "../config.js"
+import type { OrchestratorAction } from "../orchestrator.js"
+import { resolveStudioFilePath } from "../orchestrator.js"
 import {
 	findHaikuRoot,
 	gitCommitState,
@@ -26,8 +28,6 @@ import {
 	writeFeedbackFile,
 } from "../state-tools.js"
 import { readStageArtifactDefs } from "../studio-reader.js"
-import type { OrchestratorAction } from "../orchestrator.js"
-import { resolveStudioFilePath } from "../orchestrator.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
 	if (!existsSync(filePath)) return {}
@@ -452,7 +452,8 @@ export function runQualityGates(
 		const raw = Array.isArray(data.quality_gates) ? data.quality_gates : []
 		return raw
 			.filter(
-				(g: Record<string, unknown>): g is Record<string, string> => !!g?.command,
+				(g: Record<string, unknown>): g is Record<string, string> =>
+					!!g?.command,
 			)
 			.map((g: Record<string, string>) => ({
 				name: g.name ?? "",

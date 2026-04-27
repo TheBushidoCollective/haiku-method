@@ -21,8 +21,8 @@ import {
 	inlineFile,
 	readInterpretation,
 } from "./_helpers.js"
-import { WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK } from "./WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK.js"
 import { definePromptBuilder } from "./define.js"
+import { WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK } from "./WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK.js"
 
 interface FixItem {
 	feedback_id: string
@@ -147,15 +147,11 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 				"",
 			)
 			if (stageBasePath) {
-				promptLines.push(
-					inlineFile(stageBasePath, `Stage scope: ${fixStage}`),
-				)
+				promptLines.push(inlineFile(stageBasePath, `Stage scope: ${fixStage}`))
 			}
 			if (hatPath && existsSync(hatPath)) {
 				promptLines.push(inlineFile(hatPath, `Hat mandate: ${hat}`))
-				const fixInterp = buildInterpretationBlock(
-					readInterpretation(hatPath),
-				)
+				const fixInterp = buildInterpretationBlock(readInterpretation(hatPath))
 				if (fixInterp) promptLines.push("", fixInterp)
 			}
 			if (existsSync(fbAbsPath)) {

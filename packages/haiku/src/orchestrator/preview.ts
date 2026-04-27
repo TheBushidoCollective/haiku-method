@@ -6,8 +6,8 @@
 // next without forcing every per-state handler to compose the
 // narrative itself.
 
-import { isGitRepo, MAX_STAGE_ITERATIONS } from "../state-tools.js"
 import type { OrchestratorAction } from "../orchestrator.js"
+import { isGitRepo, MAX_STAGE_ITERATIONS } from "../state-tools.js"
 
 export function enrichActionWithPreview(action: OrchestratorAction): void {
 	const stage = (action.stage as string) || ""

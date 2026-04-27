@@ -8,8 +8,8 @@
 
 import { cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
-import { FeedbackStatusBadge } from "../FeedbackStatusBadge"
 import { type FeedbackStatus, TOKEN_HASH } from "../../atoms/feedback-tokens"
+import { FeedbackStatusBadge } from "../FeedbackStatusBadge"
 
 afterEach(() => {
 	cleanup()

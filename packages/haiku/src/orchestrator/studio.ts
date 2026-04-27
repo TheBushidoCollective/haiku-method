@@ -23,10 +23,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { resolvePluginRoot } from "../config.js"
-import {
-	intentDir,
-	parseFrontmatter,
-} from "../state-tools.js"
+import { intentDir, parseFrontmatter } from "../state-tools.js"
 import { resolveStudio, studioSearchPaths } from "../studio-reader.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {

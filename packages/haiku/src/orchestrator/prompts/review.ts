@@ -4,14 +4,13 @@
 // review filters by `applies_to:` against the stage's artifacts.
 
 import { join } from "node:path"
+import { getMainlineBranch } from "../../git-worktree.js"
+import { findHaikuRoot, isGitRepo } from "../../state-tools.js"
 import {
 	filterReviewAgentsByScope,
 	readReviewAgentPaths,
 	readStageDef,
 } from "../../studio-reader.js"
-import { findHaikuRoot } from "../../state-tools.js"
-import { getMainlineBranch } from "../../git-worktree.js"
-import { isGitRepo } from "../../state-tools.js"
 import {
 	batchDispatchDirective,
 	buildInterpretationBlock,
@@ -20,8 +19,8 @@ import {
 	readInterpretation,
 	resolveReviewAgentModel,
 } from "./_helpers.js"
-import { WORKFLOW_CONTRACTS_REVIEW_BLOCK } from "./WORKFLOW_CONTRACTS_REVIEW_BLOCK.js"
 import { definePromptBuilder } from "./define.js"
+import { WORKFLOW_CONTRACTS_REVIEW_BLOCK } from "./WORKFLOW_CONTRACTS_REVIEW_BLOCK.js"
 
 export default definePromptBuilder(({ slug, studio, action }) => {
 	const stage = action.stage as string

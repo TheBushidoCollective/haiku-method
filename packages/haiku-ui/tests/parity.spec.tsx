@@ -131,11 +131,12 @@ describe("DOM parity — rendered app matches committed snapshot per fixture", (
 		// URL" and render an error state into the snapshot.
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () =>
-				new Response(
-					JSON.stringify({ items: [], count: 0 }),
-					{ status: 200, headers: { "Content-Type": "application/json" } },
-				),
+			vi.fn(
+				async () =>
+					new Response(JSON.stringify({ items: [], count: 0 }), {
+						status: 200,
+						headers: { "Content-Type": "application/json" },
+					}),
 			),
 		)
 	})

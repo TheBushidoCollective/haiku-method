@@ -27,27 +27,30 @@
 //  11. Spec gate (auto/ask): auto-advance via workflowAdvancePhase or
 //      open gate_review.
 
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { resolvePluginRoot } from "../../../config.js"
 import { topologicalSort } from "../../../dag.js"
-import {
-	buildElaboratorInstruction,
-	cleanupPreExecuteFeedback,
-	workflowAdvancePhase,
-	resolveStageMetadata,
-	resolveStageReview,
-	resolveStudioStages,
-	resolveIntentStages,
-	summarizeFeedback,
-	validateDiscoveryArtifacts,
-	validateUnitInputs,
-	validateUnitNaming,
-} from "../../../orchestrator.js"
 import {
 	discoveryBranchName,
 	discoveryWorktreePath,
 	mergeDiscoveryWorktree,
 } from "../../../git-worktree.js"
+import {
+	buildElaboratorInstruction,
+	cleanupPreExecuteFeedback,
+	isStagePreExecute,
+	listUnits,
+	resolveIntentStages,
+	resolveStageMetadata,
+	resolveStageReview,
+	resolveStudioStages,
+	summarizeFeedback,
+	validateDiscoveryArtifacts,
+	validateUnitInputs,
+	validateUnitNaming,
+	workflowAdvancePhase,
+} from "../../../orchestrator.js"
 import {
 	getStageIterationCount,
 	gitCommitState,
@@ -60,13 +63,11 @@ import {
 	timestamp,
 	writeJson,
 } from "../../../state-tools.js"
-import { resolvePluginRoot } from "../../../config.js"
 import {
 	filterReviewAgentsByScope,
 	readReviewAgentPaths,
 	studioSearchPaths,
 } from "../../../studio-reader.js"
-import { isStagePreExecute, listUnits } from "../../../orchestrator.js"
 import { emitTelemetry } from "../../../telemetry.js"
 import type { WorkflowHandler } from "./_types.js"
 
@@ -94,7 +95,7 @@ const emit: WorkflowHandler = (ctx) => {
 	if (phase !== "elaborate" && phase !== "decompose") return null
 
 	const studioStages = resolveIntentStages(intent, studio)
-	const allStudioStages = resolveStudioStages(studio)
+	const _allStudioStages = resolveStudioStages(studio)
 
 	const unitsDir = join(iDir, "stages", currentStage, "units")
 	const hasUnits =
@@ -253,9 +254,7 @@ const emit: WorkflowHandler = (ctx) => {
 	const completedUnitsList = existingUnits.filter(
 		(u) => u.status === "completed",
 	)
-	const pendingUnitsList = existingUnits.filter(
-		(u) => u.status !== "completed",
-	)
+	const pendingUnitsList = existingUnits.filter((u) => u.status !== "completed")
 	const iterativeEntryIteration = getStageIterationCount(stageState)
 
 	if (
@@ -484,10 +483,7 @@ const emit: WorkflowHandler = (ctx) => {
 		try {
 			topologicalSort({ nodes: dagNodes, edges: dagEdges, adjacency: dagAdj })
 		} catch (err) {
-			if (
-				err instanceof Error &&
-				err.message.includes("Circular dependency")
-			) {
+			if (err instanceof Error && err.message.includes("Circular dependency")) {
 				return {
 					action: "dag_cycle_detected",
 					intent: slug,
@@ -512,7 +508,8 @@ const emit: WorkflowHandler = (ctx) => {
 	if (inputsViolation) return inputsViolation
 
 	// Design direction selection enforcement
-	const designDirectionSelected = stageState.design_direction_selected as boolean
+	const designDirectionSelected =
+		stageState.design_direction_selected as boolean
 	if (!designDirectionSelected) {
 		const stageMetaForDesign = resolveStageMetadata(studio, currentStage)
 		if (stageMetaForDesign?.body?.includes("pick_design_direction")) {
@@ -553,17 +550,11 @@ const emit: WorkflowHandler = (ctx) => {
 				stageState.pre_review_dispatched = true
 				stageState.pre_review_dispatched_at = timestamp()
 				stageState.pre_review_skipped_no_agents = true
-				writeJson(
-					join(iDir, "stages", currentStage, "state.json"),
-					stageState,
-				)
+				writeJson(join(iDir, "stages", currentStage, "state.json"), stageState)
 			} else {
 				stageState.pre_review_dispatched = true
 				stageState.pre_review_dispatched_at = timestamp()
-				writeJson(
-					join(iDir, "stages", currentStage, "state.json"),
-					stageState,
-				)
+				writeJson(join(iDir, "stages", currentStage, "state.json"), stageState)
 				gitCommitState(
 					`haiku: dispatch pre-execute review on ${currentStage} unit specs`,
 				)
@@ -609,10 +600,7 @@ const emit: WorkflowHandler = (ctx) => {
 			if (!ackd) {
 				stageState.pre_review_reviewers_acknowledged = true
 				stageState.pre_review_reviewers_acknowledged_at = timestamp()
-				writeJson(
-					join(iDir, "stages", currentStage, "state.json"),
-					stageState,
-				)
+				writeJson(join(iDir, "stages", currentStage, "state.json"), stageState)
 			}
 		}
 	}

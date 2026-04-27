@@ -31,25 +31,25 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { ensureOnStageBranch } from "../../git-worktree.js"
 import { adaptInstructions } from "../../harness-instructions.js"
+import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
+import type { OrchestratorAction as OrchestratorActionType } from "../../orchestrator.js"
 import {
 	buildGuardResponse,
 	buildRunInstructions,
 	completeOrReviewIntent,
 	enrichActionWithPreview,
-	workflowAdvancePhase,
-	workflowAdvanceStage,
-	workflowCompleteStage,
-	workflowIntentComplete,
 	getElicitInput,
 	getOpenReviewAndWait,
 	isStagePreExecute,
 	listUnits,
 	type OrchestratorAction,
 	resetFixLoopBolts,
+	workflowAdvancePhase,
+	workflowAdvanceStage,
+	workflowCompleteStage,
+	workflowIntentComplete,
 	writeReviewFeedbackFiles,
 } from "../../orchestrator.js"
-import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
-import type { OrchestratorAction as OrchestratorActionType } from "../../orchestrator.js"
 
 /** Single-source dispatch: one workflow tick → one action. Handles
  *  the intent-not-found and registry-gap cases inline. */
@@ -64,6 +64,7 @@ function dispatchOrchestratorAction(slug: string): OrchestratorActionType {
 		message: `runWorkflowTick produced no action for intent '${slug}' (state: ${tick.state}). Indicates a derive-state output without a registered handler.`,
 	}
 }
+
 import { reportError } from "../../sentry.js"
 import { logSessionEvent } from "../../session-metadata.js"
 import { sealIntentState } from "../../state-integrity.js"

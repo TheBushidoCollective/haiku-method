@@ -187,7 +187,9 @@ try {
 		assert.ok(r.blocked)
 	})
 
-	console.log("\n=== guard-workflow-fields: intent and stage-state boundary ===")
+	console.log(
+		"\n=== guard-workflow-fields: intent and stage-state boundary ===",
+	)
 
 	await test("Write on intent.md is blocked", async () => {
 		const r = await runGuard({

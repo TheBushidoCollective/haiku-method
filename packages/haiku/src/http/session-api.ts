@@ -9,7 +9,10 @@ import { getSession } from "../sessions.js"
 
 /** Send the JSON response for `GET /api/session/:sessionId`. Returns
  *  404 when the session is unknown. */
-export function respondSessionApi(reply: FastifyReply, sessionId: string): void {
+export function respondSessionApi(
+	reply: FastifyReply,
+	sessionId: string,
+): void {
 	const session = getSession(sessionId)
 	if (!session) {
 		reply.status(404).send({ error: "Session not found" })

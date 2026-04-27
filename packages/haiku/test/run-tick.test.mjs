@@ -151,10 +151,7 @@ console.log("\n=== Workflow handler registry ===")
 
 test("registry contains the migrated states", () => {
 	for (const name of ["complete", "select_studio", "error"]) {
-		assert.ok(
-			WORKFLOW_STATES.has(name),
-			`registry should include '${name}'`,
-		)
+		assert.ok(WORKFLOW_STATES.has(name), `registry should include '${name}'`)
 	}
 })
 

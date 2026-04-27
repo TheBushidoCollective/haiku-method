@@ -257,10 +257,10 @@ export function DirectionPage({
 					<SectionHeading>{selected.name} preview</SectionHeading>
 					<p className="text-sm text-stone-600 dark:text-stone-300 mb-3">
 						The preview is interactive by default. Click the pencil FAB
-						(bottom-right) to enter annotation mode, draw on the surface,
-						and add a comment. Each annotation pass is screenshotted via
-						the browser's screen-share permission so the agent sees what
-						you saw — same pattern as the review UI.
+						(bottom-right) to enter annotation mode, draw on the surface, and
+						add a comment. Each annotation pass is screenshotted via the
+						browser's screen-share permission so the agent sees what you saw —
+						same pattern as the review UI.
 					</p>
 					<ArtifactAnnotator
 						artifactName={selected.name}
@@ -282,7 +282,7 @@ export function DirectionPage({
 							<ul className="space-y-2">
 								{annotations.map((a, i) => (
 									<li
-										key={`annot-${i}-${a.comment.slice(0, 16)}`}
+										key={`annot-${a.screenshot_data_url.slice(-32)}-${a.comment.slice(0, 16)}`}
 										className="flex items-start gap-3 p-2 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
 									>
 										<img
@@ -460,7 +460,9 @@ function ModeRadio({
 				disabled={disabled}
 				className={`w-4 h-4 text-teal-600 ${focusRingClass}`}
 			/>
-			<span className="text-sm text-stone-900 dark:text-stone-100">{label}</span>
+			<span className="text-sm text-stone-900 dark:text-stone-100">
+				{label}
+			</span>
 		</label>
 	)
 }

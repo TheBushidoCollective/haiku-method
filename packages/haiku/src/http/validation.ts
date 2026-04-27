@@ -5,7 +5,7 @@
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import type { FastifyReply } from "fastify"
-import { type ValidationError, type ZodIssueWire } from "haiku-api"
+import type { ValidationError, ZodIssueWire } from "haiku-api"
 import type { ZodTypeAny, z } from "zod"
 import { intentDir } from "../state-tools.js"
 

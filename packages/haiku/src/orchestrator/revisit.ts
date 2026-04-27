@@ -16,12 +16,7 @@
 //   - revisitEarlierStage        — jump to an earlier stage
 //   - uncompleteIntent           — revive a completed intent for revisit
 
-import {
-	existsSync,
-	readdirSync,
-	readFileSync,
-	writeFileSync,
-} from "node:fs"
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import {
@@ -30,7 +25,6 @@ import {
 	writeOnIntentMain,
 } from "../git-worktree.js"
 import type { OrchestratorAction } from "../orchestrator.js"
-import { resolveIntentStages } from "./studio.js"
 import { sealIntentState } from "../state-integrity.js"
 import {
 	type FeedbackItem,
@@ -46,6 +40,7 @@ import {
 	writeJson,
 } from "../state-tools.js"
 import { emitTelemetry } from "../telemetry.js"
+import { resolveIntentStages } from "./studio.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
 	if (!existsSync(filePath)) return {}

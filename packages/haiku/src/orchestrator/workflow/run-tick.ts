@@ -15,14 +15,8 @@
 
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { verifyIntentState } from "../../state-integrity.js"
-import {
-	type DerivedState,
-	deriveCurrentState,
-} from "./derive-state.js"
-import {
-	dispatchHandler,
-	WORKFLOW_STATES,
-} from "./handlers/index.js"
+import { type DerivedState, deriveCurrentState } from "./derive-state.js"
+import { dispatchHandler, WORKFLOW_STATES } from "./handlers/index.js"
 import { preTickConsistency } from "./pre-tick.js"
 import type { StateName } from "./types.js"
 

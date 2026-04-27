@@ -6,11 +6,7 @@
  * providers can't drift on what an "intent" or "stage" looks like.
  */
 
-import type {
-	HaikuArtifact,
-	HaikuIntent,
-	HaikuKnowledgeFile,
-} from "./types"
+import type { HaikuArtifact, HaikuIntent, HaikuKnowledgeFile } from "./types"
 import { normalizeIntentStatus, parseFrontmatter } from "./types"
 
 /** Map a filename to the artifact-type the SPA renders. */
@@ -106,8 +102,7 @@ export function parseIntentFromRaw(
 		studio,
 		activeStage: (data.active_stage as string) || "",
 		mode: (data.mode as string) || "continuous",
-		createdAt:
-			(data.created_at as string) || (data.created as string) || null,
+		createdAt: (data.created_at as string) || (data.created as string) || null,
 		startedAt: (data.started_at as string) || null,
 		completedAt: (data.completed_at as string) || null,
 		studioStages: (data.stages as string[]) || [],

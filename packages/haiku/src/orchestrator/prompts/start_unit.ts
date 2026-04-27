@@ -25,10 +25,7 @@ import {
 	buildOutputRequirements,
 	resolveStudioFilePath,
 } from "../../orchestrator.js"
-import {
-	parseFrontmatter,
-	readFeedbackFiles,
-} from "../../state-tools.js"
+import { parseFrontmatter, readFeedbackFiles } from "../../state-tools.js"
 import {
 	readHatDefs,
 	readStageDef,
@@ -42,8 +39,8 @@ import {
 	inlineFile,
 	readInterpretation,
 } from "./_helpers.js"
-import { SUBAGENT_ERROR_RECOVERY } from "./SUBAGENT_ERROR_RECOVERY.js"
 import { definePromptBuilder } from "./define.js"
+import { SUBAGENT_ERROR_RECOVERY } from "./SUBAGENT_ERROR_RECOVERY.js"
 
 export default definePromptBuilder(({ slug, studio, action, dir }) => {
 	const stage = action.stage as string

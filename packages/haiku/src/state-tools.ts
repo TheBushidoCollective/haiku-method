@@ -1853,6 +1853,7 @@ import {
 	setHaikuRootForTests,
 	setIsGitRepoForTests,
 } from "./state/shared.js"
+
 export {
 	_resetIsGitRepoForTests,
 	findHaikuRoot,

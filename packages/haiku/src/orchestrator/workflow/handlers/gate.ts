@@ -29,22 +29,6 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
-	checkExternalState,
-	classifyPendingForRevisit,
-	completeOrReviewIntent,
-	workflowAdvanceStage,
-	workflowCompleteStage,
-	workflowGateAsk,
-	handleExternalChangesRequested,
-	maybeEscalate,
-	resolveStageReview,
-	resolveStudioStages,
-	resolveIntentStages,
-	revisitCurrentStage,
-	summarizeFeedback,
-	type ExternalReviewState,
-} from "../../../orchestrator.js"
-import {
 	cleanupFixChainWorktree,
 	createFixChainWorktree,
 	fixChainBranchName,
@@ -52,6 +36,22 @@ import {
 	isBranchMerged,
 	mergeFixChainWorktree,
 } from "../../../git-worktree.js"
+import {
+	checkExternalState,
+	classifyPendingForRevisit,
+	completeOrReviewIntent,
+	type ExternalReviewState,
+	handleExternalChangesRequested,
+	maybeEscalate,
+	resolveIntentStages,
+	resolveStageReview,
+	resolveStudioStages,
+	revisitCurrentStage,
+	summarizeFeedback,
+	workflowAdvanceStage,
+	workflowCompleteStage,
+	workflowGateAsk,
+} from "../../../orchestrator.js"
 import {
 	appendStageIteration,
 	countPendingFeedback,
@@ -335,9 +335,7 @@ const emit: WorkflowHandler = (ctx) => {
 
 			const sorted = [...pendingItems].sort((a, b) => a.num - b.num)
 			const eligibleItems = sorted.filter((i) => i.bolt < MAX_FIX_LOOP_BOLTS)
-			const escalatedItems = sorted.filter(
-				(i) => i.bolt >= MAX_FIX_LOOP_BOLTS,
-			)
+			const escalatedItems = sorted.filter((i) => i.bolt >= MAX_FIX_LOOP_BOLTS)
 
 			if (eligibleItems.length === 0 && escalatedItems.length > 0) {
 				const target = escalatedItems[0]

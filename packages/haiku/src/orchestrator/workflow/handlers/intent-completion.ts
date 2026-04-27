@@ -36,6 +36,7 @@ import {
 	fixChainWorktreePath,
 	mergeFixChainWorktree,
 } from "../../../git-worktree.js"
+import { sealIntentState } from "../../../state-integrity.js"
 import {
 	gitCommitState,
 	incrementFeedbackBolt,
@@ -48,7 +49,6 @@ import {
 	setFrontmatterField,
 	timestamp,
 } from "../../../state-tools.js"
-import { sealIntentState } from "../../../state-integrity.js"
 import {
 	readStudioFixHatPaths,
 	readStudioReviewAgentPaths,
@@ -263,9 +263,7 @@ const emit: WorkflowHandler = (ctx) => {
 		}
 
 		const sortedScope = [...inScopePending].sort((a, b) => a.num - b.num)
-		const eligibleScope = sortedScope.filter(
-			(i) => i.bolt < MAX_FIX_LOOP_BOLTS,
-		)
+		const eligibleScope = sortedScope.filter((i) => i.bolt < MAX_FIX_LOOP_BOLTS)
 		const escalatedScope = sortedScope.filter(
 			(i) => i.bolt >= MAX_FIX_LOOP_BOLTS,
 		)

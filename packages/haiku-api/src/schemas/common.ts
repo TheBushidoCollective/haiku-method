@@ -203,10 +203,7 @@ export const QuestionAnnotationsSchema = z
 		comments: z.array(InlineCommentSchema).optional(),
 		pins: z.array(QuestionPinSchema).optional(),
 		/** Per-pass screenshot annotations from ArtifactAnnotator. */
-		screenshots: z
-			.array(QuestionScreenshotAnnotationSchema)
-			.max(20)
-			.optional(),
+		screenshots: z.array(QuestionScreenshotAnnotationSchema).max(20).optional(),
 	})
 	.describe("Annotations attached to a question answer")
 export type QuestionAnnotations = z.infer<typeof QuestionAnnotationsSchema>

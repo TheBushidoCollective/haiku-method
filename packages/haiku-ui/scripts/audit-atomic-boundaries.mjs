@@ -29,7 +29,7 @@
  * `bun run --cwd packages/haiku-ui audit:boundaries`.
  */
 
-import { readFileSync, readdirSync, statSync } from "node:fs"
+import { readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -149,7 +149,6 @@ for (const file of walk(srcRoot)) {
 				kind: "upward",
 				detail: `${fromClass.layer} → ${toClass.layer} (forbidden upward)`,
 			})
-			continue
 		}
 
 		// Otherwise the import goes downward — fine.

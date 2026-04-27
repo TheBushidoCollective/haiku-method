@@ -19,18 +19,18 @@
 
 import { existsSync } from "node:fs"
 import { join } from "node:path"
+import { createUnitWorktree } from "../../../git-worktree.js"
 import {
 	computeUnitWaves,
 	currentWaveNumber,
-	workflowAdvancePhase,
 	listUnits,
 	resolveStageHats,
 	resolveStageMetadata,
 	resolveUnitHatsInStudio,
 	validateStageOutputs,
 	validateUnitNaming,
+	workflowAdvancePhase,
 } from "../../../orchestrator.js"
-import { createUnitWorktree } from "../../../git-worktree.js"
 import type { WorkflowHandler } from "./_types.js"
 
 const emit: WorkflowHandler = (ctx) => {
@@ -54,9 +54,7 @@ const emit: WorkflowHandler = (ctx) => {
 
 	const readyUnits = units.filter(
 		(u) =>
-			u.status === "pending" &&
-			u.depsComplete &&
-			unitWave.get(u.name) === wave,
+			u.status === "pending" && u.depsComplete && unitWave.get(u.name) === wave,
 	)
 
 	if (allComplete) {

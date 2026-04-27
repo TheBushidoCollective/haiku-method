@@ -76,10 +76,7 @@ export function cleanupPreExecuteFeedback(
 	return removed
 }
 
-export function listUnits(
-	intentDirPath: string,
-	stage: string,
-): UnitInfo[] {
+export function listUnits(intentDirPath: string, stage: string): UnitInfo[] {
 	const unitsDir = join(intentDirPath, "stages", stage, "units")
 	if (!existsSync(unitsDir)) return []
 

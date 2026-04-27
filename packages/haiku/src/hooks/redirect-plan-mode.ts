@@ -28,7 +28,8 @@ export async function redirectPlanMode(
 
 export default defineHook({
 	name: "redirect-plan-mode",
-	description: "PreToolUse: intercept EnterPlanMode (Claude Code) and redirect to /haiku:start.",
+	description:
+		"PreToolUse: intercept EnterPlanMode (Claude Code) and redirect to /haiku:start.",
 	async handle(input, ctx) {
 		await redirectPlanMode(input, ctx.pluginRoot)
 	},

@@ -13,10 +13,7 @@ import {
 	buildFeedbackAssessorPrompt,
 	resolveStudioFilePath,
 } from "../../orchestrator.js"
-import {
-	parseFrontmatter,
-	readFeedbackFiles,
-} from "../../state-tools.js"
+import { parseFrontmatter, readFeedbackFiles } from "../../state-tools.js"
 import {
 	readHatDefs,
 	readStageDef,
@@ -30,8 +27,8 @@ import {
 	inlineFile,
 	readInterpretation,
 } from "./_helpers.js"
-import { SUBAGENT_ERROR_RECOVERY } from "./SUBAGENT_ERROR_RECOVERY.js"
 import { definePromptBuilder } from "./define.js"
+import { SUBAGENT_ERROR_RECOVERY } from "./SUBAGENT_ERROR_RECOVERY.js"
 
 interface UnitEntry {
 	name: string
@@ -223,8 +220,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 			if (hatInterp) prompt.push("", hatInterp)
 		}
 		prompt.push(inlineFile(unitAbsPath, `Unit spec: ${unitName}`))
-		if (outputsDir)
-			prompt.push(`- Stage output templates — \`${outputsDir}/\``)
+		if (outputsDir) prompt.push(`- Stage output templates — \`${outputsDir}/\``)
 
 		if (unitInputPaths.length > 0) {
 			prompt.push(
@@ -242,8 +238,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 				"Not required reading — open only what your unit's scope needs.",
 				"",
 				...upstreamRels.map(
-					(u) =>
-						`- **${u.label}** — \`${join(unitIntentRoot, u.relPath)}\``,
+					(u) => `- **${u.label}** — \`${join(unitIntentRoot, u.relPath)}\``,
 				),
 			)
 		}

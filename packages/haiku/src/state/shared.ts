@@ -7,12 +7,7 @@
 // would otherwise form between state-tools.ts and the new modules.
 
 import { execFileSync } from "node:child_process"
-import {
-	existsSync,
-	mkdirSync,
-	readFileSync,
-	writeFileSync,
-} from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
 	dedupeFrontmatterKeys,

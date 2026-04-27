@@ -9,11 +9,11 @@
 // avoids an execute → post-review → reject cycle.
 
 import { join } from "node:path"
+import { findHaikuRoot } from "../../state-tools.js"
 import {
 	filterReviewAgentsByScope,
 	readReviewAgentPaths,
 } from "../../studio-reader.js"
-import { findHaikuRoot } from "../../state-tools.js"
 import {
 	batchDispatchDirective,
 	inlineFile,

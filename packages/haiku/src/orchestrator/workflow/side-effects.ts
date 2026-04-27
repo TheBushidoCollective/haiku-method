@@ -23,7 +23,7 @@
 //   - workflowIntentComplete          — mark intent completed + reap branches
 
 import { execFileSync } from "node:child_process"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
 	branchExists,
@@ -56,7 +56,6 @@ import {
 	timestamp,
 	writeJson,
 } from "../../state-tools.js"
-import { readFileSync } from "node:fs"
 import { emitTelemetry } from "../../telemetry.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
@@ -279,7 +278,10 @@ function workflowEnterIntentCompletionReview(slug: string): void {
  *  Best-effort: merge conflicts don't throw. The completion-review
  *  phase still opens so a human can diagnose + reconcile manually
  *  rather than blocking the intent forever on an unresolved merge. */
-function workflowFinalizeStageIntoIntentMain(slug: string, stage: string): void {
+function workflowFinalizeStageIntoIntentMain(
+	slug: string,
+	stage: string,
+): void {
 	if (!isGitRepo()) return
 	if (!stage) return
 	const stageBranch = `haiku/${slug}/${stage}`

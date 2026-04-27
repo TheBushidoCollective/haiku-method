@@ -62,7 +62,10 @@ function fixture(slug, frontmatter, stages = {}) {
 		)
 	}
 
-	return { haikuRoot, cleanup: () => rmSync(root, { recursive: true, force: true }) }
+	return {
+		haikuRoot,
+		cleanup: () => rmSync(root, { recursive: true, force: true }),
+	}
 }
 
 console.log("=== Top-level state derivation ===")

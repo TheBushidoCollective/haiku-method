@@ -14,7 +14,7 @@
 // so feedback mis-written to a third branch would never make it
 // into the revisit.
 
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { ensureOnStageBranch } from "../../git-worktree.js"
 import {
@@ -33,8 +33,6 @@ import {
 import { emitTelemetry } from "../../telemetry.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
-
-import { readFileSync } from "node:fs"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
 	if (!existsSync(filePath)) return {}

@@ -159,7 +159,12 @@ test("intent_completion_gate finalizes to complete", () => {
 console.log("\n=== Mermaid: terminals ===")
 
 test("all four terminals link to [*]", () => {
-	for (const t of ["complete --> [*]", "error --> [*]", "escalate --> [*]", "blocked --> [*]"]) {
+	for (const t of [
+		"complete --> [*]",
+		"error --> [*]",
+		"escalate --> [*]",
+		"blocked --> [*]",
+	]) {
 		assert.ok(mermaid.includes(`  ${t}`), `terminal '${t}' missing`)
 	}
 })

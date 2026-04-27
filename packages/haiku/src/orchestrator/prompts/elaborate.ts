@@ -11,7 +11,7 @@
 //      output expectations + design-provider hint + approach
 //      selection + scope/mechanics.
 
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
 	createDiscoveryWorktree,
@@ -35,8 +35,8 @@ import {
 	emitSubagentDispatchBlock,
 	inlineFile,
 } from "./_helpers.js"
-import { WORKFLOW_CONTRACTS_ELABORATE_BLOCK } from "./WORKFLOW_CONTRACTS_ELABORATE_BLOCK.js"
 import { definePromptBuilder } from "./define.js"
+import { WORKFLOW_CONTRACTS_ELABORATE_BLOCK } from "./WORKFLOW_CONTRACTS_ELABORATE_BLOCK.js"
 
 interface PendingFeedback {
 	feedback_id: string

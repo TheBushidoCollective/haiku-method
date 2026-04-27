@@ -7,10 +7,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { ensureOnStageBranch } from "../../git-worktree.js"
-import {
-	findHaikuRoot,
-	gitCommitState,
-} from "../../state-tools.js"
+import { findHaikuRoot, gitCommitState } from "../../state-tools.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
 

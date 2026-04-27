@@ -7,7 +7,7 @@
  */
 
 import { useMemo, useState } from "react"
-import { type FeedbackStatus } from "../../atoms/feedback-tokens"
+import type { FeedbackStatus } from "../../atoms/feedback-tokens"
 import { FeedbackSummaryBar } from "../../molecules/FeedbackSummaryBar"
 import { FeedbackList } from "../../organisms/FeedbackList"
 import type { FeedbackItemData } from "../../types"

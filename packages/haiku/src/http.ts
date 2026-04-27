@@ -11,119 +11,29 @@
 // obvious case — we're only coding the project-specific bits.
 
 import { randomUUID } from "node:crypto"
-import { appendFileSync, existsSync } from "node:fs"
-import { readFile, realpath } from "node:fs/promises"
-import { dirname, extname, join, resolve } from "node:path"
 import fastifyCors from "@fastify/cors"
 import fastifyRateLimit from "@fastify/rate-limit"
 import fastifyWebsocket from "@fastify/websocket"
-import Fastify, {
-	type FastifyInstance,
-	type FastifyReply,
-	type FastifyRequest,
-} from "fastify"
-import {
-	DEFAULT_BODY_MAX_BYTES,
-	DirectionSelectRequestSchema,
-	type DirectionSelectResponse,
-	FEEDBACK_BODY_MAX_BYTES,
-	FEEDBACK_CREATE_MAX_BYTES,
-	FeedbackCreateRequestSchema,
-	type FeedbackCreateResponse,
-	type FeedbackDeleteResponse,
-	type FeedbackListResponse,
-	FeedbackReplyCreateRequestSchema,
-	type FeedbackReplyCreateResponse,
-	FeedbackUpdateRequestSchema,
-	type FeedbackUpdateResponse,
-	FileServeParamsSchema,
-	QuestionAnswerRequestSchema,
-	type QuestionAnswerResponse,
-	ReviewDecisionRequestSchema,
-	type ReviewDecisionResponse,
-	RevisitRequestSchema,
-	type RevisitResponse,
-	type ValidationError,
-	WsClientMessageSchema,
-	type WsServerMessage,
-	type ZodIssueWire,
-} from "haiku-api"
-import type { WebSocket as WsWebSocket } from "ws"
-import type { ZodTypeAny, z } from "zod"
+import Fastify, { type FastifyInstance } from "fastify"
+import { DEFAULT_BODY_MAX_BYTES } from "haiku-api"
 import { review } from "./config.js"
-import { HAIKU_UI_HTML } from "./haiku-ui-html.js"
-import { handleOrchestratorTool } from "./orchestrator.js"
-import type {
-	QuestionAnnotations,
-	QuestionAnswer,
-	ReviewAnnotations,
-} from "./sessions.js"
-import {
-	getSession,
-	recordHeartbeat,
-	updateDesignDirectionSession,
-	updateQuestionSession,
-	updateSession,
-} from "./sessions.js"
-import {
-	appendFeedbackReply,
-	deleteFeedbackFile,
-	FEEDBACK_STATUSES,
-	type FeedbackItem,
-	gitCommitStateBackgroundPush,
-	intentDir,
-	readFeedbackFiles,
-	updateFeedbackFile,
-	writeFeedbackFile,
-} from "./state-tools.js"
-import {
-	e2eEncrypt,
-	isE2EActive,
-	isRemoteReviewEnabled,
-	verifyTunnelJWT,
-} from "./tunnel.js"
-import {
-	extractTunnelToken,
-	requireTunnelAuth,
-	verifyFeedbackMutationAuth,
-} from "./http/auth.js"
-import {
-	rejectUnsafePathParam,
-	resolvePathSafe,
-	serveFile,
-	serveUnderRoot,
-} from "./http/path-safety.js"
-import { logFeedbackAction } from "./http/action-log.js"
+import { registerDefaultRoutes } from "./http/default-routes.js"
+import { e2eOnSend, extractSessionIdFromPath } from "./http/e2e.js"
 import { registerFeedbackRoutes } from "./http/feedback-api.js"
 import { registerFileServeRoutes } from "./http/file-serve.js"
 import { registerSessionRoutes } from "./http/session-routes.js"
-import { registerDefaultRoutes } from "./http/default-routes.js"
-import { registerWsUpgrade } from "./http/ws-upgrade.js"
-import { e2eOnSend, extractSessionIdFromPath } from "./http/e2e.js"
-import { respondSessionApi } from "./http/session-api.js"
 import {
-	isValidSlug,
-	parseBodyWithSchema,
-	validateIntent,
-	validateStage,
-	validationErrorReply,
-} from "./http/validation.js"
-import {
-	allowWsFrame,
 	closeSessionConnection,
-	handleWebSocketMessage,
-	logClose,
 	MAX_WS_SESSIONS,
 	sendToWebSocket,
 	wsConnections,
 } from "./http/ws.js"
+import { registerWsUpgrade } from "./http/ws-upgrade.js"
+import { isE2EActive, isRemoteReviewEnabled } from "./tunnel.js"
 
 // Re-export the WebSocket helpers external callers (orchestrator,
 // review-server bridge, server.ts) still pull from this module.
 export { closeSessionConnection, sendToWebSocket }
-
-
-
 
 // ── Resource limits (connections, WS sessions) ────────────────────────────
 //
@@ -158,11 +68,6 @@ const MAX_CONNECTIONS = ((): number => {
 	if (!Number.isFinite(parsed) || parsed <= 0) return MAX_CONNECTIONS_DEFAULT
 	return Math.max(parsed, 1)
 })()
-
-
-
-
-
 
 // ── Fastify app construction ────────────────────────────────────────────
 
@@ -353,7 +258,6 @@ async function buildApp(): Promise<FastifyInstance> {
 			return payload
 		}
 	})
-
 
 	// ── Session-scoped routes (SPA shells, mutations, session API,
 	//      revisit, asset serves) ───────────────────────────────────────

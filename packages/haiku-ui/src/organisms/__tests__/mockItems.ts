@@ -35,8 +35,11 @@
  * gives coverage without flake.
  */
 
+import type {
+	FeedbackOrigin,
+	FeedbackStatus,
+} from "../../atoms/feedback-tokens"
 import type { FeedbackItemData } from "../../types"
-import type { FeedbackOrigin, FeedbackStatus } from "../../atoms/feedback-tokens"
 
 const STATUS_CYCLE: FeedbackStatus[] = [
 	"pending",

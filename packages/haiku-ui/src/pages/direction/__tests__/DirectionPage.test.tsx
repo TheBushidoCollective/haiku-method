@@ -203,7 +203,9 @@ describe("DirectionPage — submit (select mode)", () => {
 		const textarea = screen.getByLabelText(
 			/optional comment/i,
 		) as HTMLTextAreaElement
-		fireEvent.change(textarea, { target: { value: "Lean into the typography." } })
+		fireEvent.change(textarea, {
+			target: { value: "Lean into the typography." },
+		})
 
 		fireEvent.click(
 			screen.getByRole("button", { name: /choose this direction/i }),

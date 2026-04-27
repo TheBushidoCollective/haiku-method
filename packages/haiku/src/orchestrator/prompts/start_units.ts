@@ -31,9 +31,9 @@ import {
 	inlineFile,
 	readInterpretation,
 } from "./_helpers.js"
+import { definePromptBuilder } from "./define.js"
 import { SUBAGENT_ERROR_RECOVERY } from "./SUBAGENT_ERROR_RECOVERY.js"
 import { WORKFLOW_CONTRACTS_EXECUTE_BLOCK } from "./WORKFLOW_CONTRACTS_EXECUTE_BLOCK.js"
-import { definePromptBuilder } from "./define.js"
 
 export default definePromptBuilder(({ slug, studio, action, dir }) => {
 	const stage = action.stage as string
@@ -215,8 +215,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 					"Not required reading — open only what your unit's scope needs.",
 					"",
 					...upstreamRels.map(
-						(u) =>
-							`- **${u.label}** — \`${join(unitIntentRoot, u.relPath)}\``,
+						(u) => `- **${u.label}** — \`${join(unitIntentRoot, u.relPath)}\``,
 					),
 				)
 			}

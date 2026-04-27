@@ -11,9 +11,9 @@
 // Side effect: workflowAdvancePhase to gate when gates pass.
 
 import {
-	workflowAdvancePhase,
 	runQualityGates,
 	validateStageOutputs,
+	workflowAdvancePhase,
 } from "../../../orchestrator.js"
 import type { WorkflowHandler } from "./_types.js"
 

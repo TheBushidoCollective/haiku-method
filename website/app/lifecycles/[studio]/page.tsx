@@ -2,11 +2,11 @@
 // detail page. Reads the auto-generated .mmd file at build time and
 // renders it via the existing client-side Mermaid component.
 
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { join } from "node:path"
 import { Mermaid } from "../../components/Mermaid"
 
 interface Props {

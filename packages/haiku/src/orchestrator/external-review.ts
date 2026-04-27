@@ -22,6 +22,8 @@
 // action.
 
 import { execFileSync } from "node:child_process"
+import type { OrchestratorAction } from "../orchestrator.js"
+import { maybeEscalate } from "../orchestrator.js"
 import {
 	appendStageIteration,
 	gitCommitState,
@@ -31,8 +33,6 @@ import {
 	writeJson,
 } from "../state-tools.js"
 import { emitTelemetry } from "../telemetry.js"
-import type { OrchestratorAction } from "../orchestrator.js"
-import { maybeEscalate } from "../orchestrator.js"
 
 /** Result from checking external review state.
  *  `status` describes the review state:

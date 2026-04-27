@@ -12,8 +12,12 @@
 
 import { cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
+import {
+	type FeedbackOrigin,
+	originLabels,
+	TOKEN_HASH,
+} from "../../atoms/feedback-tokens"
 import { FeedbackOriginIcon } from "../FeedbackOriginIcon"
-import { type FeedbackOrigin, originLabels, TOKEN_HASH } from "../../atoms/feedback-tokens"
 
 afterEach(() => {
 	cleanup()

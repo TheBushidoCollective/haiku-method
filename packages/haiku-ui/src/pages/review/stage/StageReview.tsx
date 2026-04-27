@@ -23,13 +23,13 @@
 import { MarkdownViewer } from "@haiku/shared"
 import DOMPurify from "dompurify"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ArtifactAnnotator } from "../../../organisms/ArtifactAnnotator"
 import { Card, SectionHeading } from "../../../atoms/Card"
+import { type TabDef, Tabs } from "../../../molecules/Tabs"
+import { ArtifactAnnotator } from "../../../organisms/ArtifactAnnotator"
 import {
 	type InlineCommentEntry,
 	InlineComments,
 } from "../../../organisms/InlineComments"
-import { type TabDef, Tabs } from "../../../molecules/Tabs"
 import type { ParsedUnit } from "../../../parsed"
 import type { FeedbackItemData } from "../../../types"
 import { markdownToSimpleHtml } from "../shared/section-helpers"
@@ -1853,8 +1853,7 @@ function ArtifactThumbnail({
 			<div
 				aria-hidden="true"
 				className="shrink-0 w-24 h-16 rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-950 overflow-hidden flex items-center justify-center p-1 [&>svg]:max-w-full [&>svg]:max-h-full"
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized via DOMPurify svg profile above — same contract as SvgPreview
-				// audit-allow: DOMPurify-sanitized SVG render path — same contract as SvgPreview / detail view
+				// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized via DOMPurify svg profile — same contract as SvgPreview / detail view // audit-allow: DOMPurify-sanitized SVG render path
 				dangerouslySetInnerHTML={{ __html: safe }}
 			/>
 		)
@@ -1897,8 +1896,7 @@ function SvgPreview({ body }: { body: string }) {
 	return (
 		<div
 			className="relative bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-md p-4 overflow-auto max-h-96"
-			// biome-ignore lint/security/noDangerouslySetInnerHtml: body is sanitized via DOMPurify with the svg profile — same contract as shared/section-helpers.ts::markdownToSimpleHtml
-			// audit-allow: DOMPurify-sanitized SVG render path
+			// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized via DOMPurify svg profile — same contract as shared/section-helpers.ts::markdownToSimpleHtml // audit-allow: DOMPurify-sanitized SVG render path
 			dangerouslySetInnerHTML={{ __html: safe }}
 		/>
 	)

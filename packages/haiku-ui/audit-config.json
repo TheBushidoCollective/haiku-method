@@ -140,9 +140,7 @@
 					"description": "AgentFeedbackToggle.tsx MUST contain the canonical 'Show agent feedback inline' string at least once (presence-side check per unit-09 Completion Criteria).",
 					"pattern": "Show agent feedback inline",
 					"requirePresence": true,
-					"scope": [
-						"packages/haiku-ui/src/molecules/AgentFeedbackToggle.tsx"
-					],
+					"scope": ["packages/haiku-ui/src/molecules/AgentFeedbackToggle.tsx"],
 					"exclude": ["**/__tests__/**", "**/__snapshots__/**"]
 				},
 				{

@@ -35,7 +35,7 @@ export default definePromptBuilder(({ slug, action }) => {
 		"1. Wait for every reviewer subagent in the prior `pre_review` wave to return.",
 		`2. Call \`haiku_run_next { intent: "${slug}" }\` — the workflow engine will re-check.`,
 		"",
-		'**Do NOT** dispatch new work or modify unit specs while pre-review is in flight. The workflow engine auto-advances when the grace window elapses or when `pre_review_reviewers_acknowledged` is set.',
+		"**Do NOT** dispatch new work or modify unit specs while pre-review is in flight. The workflow engine auto-advances when the grace window elapses or when `pre_review_reviewers_acknowledged` is set.",
 	)
 
 	return parts.filter((p) => p !== "").join("\n")

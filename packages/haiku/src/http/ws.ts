@@ -8,17 +8,17 @@
 // allocating a slot.
 
 import { appendFileSync } from "node:fs"
+import { WsClientMessageSchema, type WsServerMessage } from "haiku-api"
+import type { WebSocket as WsWebSocket } from "ws"
 import {
+	getSession,
 	type QuestionAnnotations,
 	type QuestionAnswer,
 	type ReviewAnnotations,
-	getSession,
 	updateDesignDirectionSession,
 	updateQuestionSession,
 	updateSession,
 } from "../sessions.js"
-import { WsClientMessageSchema, type WsServerMessage } from "haiku-api"
-import type { WebSocket as WsWebSocket } from "ws"
 
 const SESSION_CANCEL_LOG_PATH = "/tmp/haiku-session-cancel.log"
 

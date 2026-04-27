@@ -68,7 +68,8 @@ export async function injectStateFile(
 
 export default defineHook({
 	name: "inject-state-file",
-	description: "PreToolUse: inject state_file path + _session_context into haiku_* tool calls.",
+	description:
+		"PreToolUse: inject state_file path + _session_context into haiku_* tool calls.",
 	async handle(input, _ctx) {
 		await injectStateFile(input)
 	},

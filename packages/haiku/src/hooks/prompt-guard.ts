@@ -26,7 +26,8 @@ export async function promptGuard(
 
 export default defineHook({
 	name: "prompt-guard",
-	description: "PreToolUse Write/Edit: advisory scan for prompt injection in haiku spec writes.",
+	description:
+		"PreToolUse Write/Edit: advisory scan for prompt injection in haiku spec writes.",
 	async handle(input, ctx) {
 		await promptGuard(input, ctx.pluginRoot)
 	},

@@ -10,9 +10,9 @@
 // the haiku package's prebuild step).
 
 import { readdirSync, readFileSync, statSync } from "node:fs"
+import { join } from "node:path"
 import type { Metadata } from "next"
 import Link from "next/link"
-import { join } from "node:path"
 
 export const metadata: Metadata = {
 	title: "Studio Lifecycles - H·AI·K·U",
@@ -28,11 +28,7 @@ interface StudioSummary {
 }
 
 function listStudios(): StudioSummary[] {
-	const diagramsDir = join(
-		process.cwd(),
-		"public",
-		"workflow-diagrams",
-	)
+	const diagramsDir = join(process.cwd(), "public", "workflow-diagrams")
 	let entries: string[] = []
 	try {
 		entries = readdirSync(diagramsDir).filter((f) => f.endsWith(".mmd"))
@@ -49,7 +45,7 @@ function listStudios(): StudioSummary[] {
 			// Cheap structural counts — match the literal block markers
 			// the exporter emits. `state X {` for each stage; we sum
 			// hat enumeration by counting the `_execute_*` ids.
-			const stageCount = (body.match(/^  state \w+ \{$/gm) ?? []).length
+			const stageCount = (body.match(/^ {2}state \w+ \{$/gm) ?? []).length
 			const hatCount = (body.match(/_execute_\w+ -->/g) ?? []).length
 			out.push({ slug, stageCount, hatCount, body })
 		} catch {
@@ -68,12 +64,12 @@ export default function LifecyclesPage() {
 				Studio Lifecycles
 			</h1>
 			<p className="mb-2 text-lg text-stone-600 dark:text-stone-400">
-				Every shipped studio's workflow lifecycle as a Mermaid state
-				diagram — auto-generated from the StudioConfig.
+				Every shipped studio's workflow lifecycle as a Mermaid state diagram —
+				auto-generated from the StudioConfig.
 			</p>
 			<p className="mb-8 text-sm text-stone-500 dark:text-stone-500">
-				Diagrams enumerate every stage, every hat sequence inside execute,
-				and every (bolt × fix-hat) combination inside review_fix.
+				Diagrams enumerate every stage, every hat sequence inside execute, and
+				every (bolt × fix-hat) combination inside review_fix.
 			</p>
 
 			{studios.length === 0 ? (

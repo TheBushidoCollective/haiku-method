@@ -655,7 +655,7 @@ export async function handleToolCall(
 
 	if (name === "pick_design_direction") {
 		const input = PickDesignDirectionInput.parse(args)
-		const title = input.title ?? "Design Direction"
+		const _title = input.title ?? "Design Direction"
 
 		// Resolve archetypes: inline or from file
 		let archetypes: DesignArchetypeData[]
@@ -795,9 +795,7 @@ export async function handleToolCall(
 				parts.push(`\nComments: ${sel.comments}`)
 			}
 			if (sel.annotations?.pins?.length) {
-				parts.push(
-					`\nPin annotations (${sel.annotations.pins.length}):`,
-				)
+				parts.push(`\nPin annotations (${sel.annotations.pins.length}):`)
 				for (const pin of sel.annotations.pins) {
 					parts.push(
 						`  - [${pin.x.toFixed(1)}%, ${pin.y.toFixed(1)}%]: ${pin.text || "(no text)"}`,

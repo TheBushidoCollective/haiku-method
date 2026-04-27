@@ -19,11 +19,7 @@
 
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import {
-	intentDir,
-	parseFrontmatter,
-	readJson,
-} from "../../state-tools.js"
+import { intentDir, parseFrontmatter, readJson } from "../../state-tools.js"
 import type { StateName } from "./types.js"
 
 export interface DerivedContext {
@@ -219,5 +215,4 @@ export function deriveCurrentState(
 				context: baseContext(activeStage, stagePhase, stageState),
 			}
 	}
-
 }

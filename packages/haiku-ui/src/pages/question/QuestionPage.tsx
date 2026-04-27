@@ -192,9 +192,9 @@ export function QuestionPage({
 					<SectionHeading>Reference image</SectionHeading>
 					<p className="text-sm text-stone-600 dark:text-stone-300 mb-3">
 						The image is interactive by default. Click the pencil FAB
-						(bottom-right) to annotate — draw on the surface, add a
-						comment, submit. Each pass screenshots the rendered image so
-						Claude sees the captured spot.
+						(bottom-right) to annotate — draw on the surface, add a comment,
+						submit. Each pass screenshots the rendered image so Claude sees the
+						captured spot.
 					</p>
 					<ArtifactAnnotator
 						artifactName="reference image"
@@ -211,11 +211,13 @@ export function QuestionPage({
 
 			{annotations.length > 0 && (
 				<Card>
-					<SectionHeading>Captured annotations ({annotations.length})</SectionHeading>
+					<SectionHeading>
+						Captured annotations ({annotations.length})
+					</SectionHeading>
 					<ul className="space-y-2">
 						{annotations.map((a, i) => (
 							<li
-								key={`q-annot-${i}-${a.comment.slice(0, 16)}`}
+								key={`q-annot-${a.screenshot_data_url.slice(-32)}-${a.comment.slice(0, 16)}`}
 								className="flex items-start gap-3 p-2 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
 							>
 								<img
@@ -243,8 +245,8 @@ export function QuestionPage({
 						))}
 					</ul>
 					<p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-						These ship with your answer so the agent sees exactly what you
-						were looking at when you commented.
+						These ship with your answer so the agent sees exactly what you were
+						looking at when you commented.
 					</p>
 				</Card>
 			)}

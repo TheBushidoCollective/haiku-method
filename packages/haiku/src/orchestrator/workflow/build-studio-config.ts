@@ -13,12 +13,11 @@
 // shaper just re-runs on every call; consumers cache their machine
 // instance to avoid re-running it per request.
 
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { ModelTier } from "../../model-selection.js"
 import { parseFrontmatter } from "../../state-tools.js"
 import {
-	readHatDefs,
 	readPhaseOverride,
 	readReviewAgentPaths,
 	readStageArtifactDefs,
@@ -91,7 +90,8 @@ function buildHatConfig(name: string, mandatePath: string): HatConfig {
 		return {
 			name,
 			mandatePath,
-			agentType: typeof data.agent_type === "string" ? data.agent_type : undefined,
+			agentType:
+				typeof data.agent_type === "string" ? data.agent_type : undefined,
 			model: parseModel(data.model),
 			runQualityGates: data.run_quality_gates === true,
 			interpretation: parseInterpretation(data.interpretation),
@@ -132,13 +132,27 @@ function resolveHatPath(
 	hatName: string,
 ): string {
 	for (const base of studioSearchPaths()) {
-		const candidate = join(base, studioDir, "stages", stage, "hats", `${hatName}.md`)
+		const candidate = join(
+			base,
+			studioDir,
+			"stages",
+			stage,
+			"hats",
+			`${hatName}.md`,
+		)
 		if (existsSync(candidate)) return candidate
 	}
 	// Fallback to the plugin path even if missing — the hat may not
 	// have a mandate file yet (rare but legal). HatConfig.mandatePath
 	// being non-existent is handled downstream.
-	return join(studioSearchPaths()[0] ?? "", studioDir, "stages", stage, "hats", `${hatName}.md`)
+	return join(
+		studioSearchPaths()[0] ?? "",
+		studioDir,
+		"stages",
+		stage,
+		"hats",
+		`${hatName}.md`,
+	)
 }
 
 function buildStageConfig(
@@ -164,7 +178,9 @@ function buildStageConfig(
 	// reuse stage hats/{name}.md files (hats can behave differently
 	// in fix-mode via a `## Fix-mode scope` section in the mandate).
 	const fixHatNames = Array.isArray(data.fix_hats)
-		? (data.fix_hats as unknown[]).filter((v): v is string => typeof v === "string")
+		? (data.fix_hats as unknown[]).filter(
+				(v): v is string => typeof v === "string",
+			)
 		: []
 	const fixHats: HatConfig[] = fixHatNames.map((name) =>
 		buildHatConfig(name, resolveHatPath(studioDir, stageName, name)),
@@ -208,8 +224,7 @@ function buildStageConfig(
 					stage: typeof entry.stage === "string" ? entry.stage : "",
 					discovery:
 						typeof entry.discovery === "string" ? entry.discovery : undefined,
-					output:
-						typeof entry.output === "string" ? entry.output : undefined,
+					output: typeof entry.output === "string" ? entry.output : undefined,
 				}))
 				.filter((e) => e.stage !== "")
 		: []
@@ -273,11 +288,7 @@ function buildStageConfig(
 		stageName,
 		"ELABORATION",
 	)
-	const executionOverride = readPhaseOverride(
-		studioDir,
-		stageName,
-		"EXECUTION",
-	)
+	const executionOverride = readPhaseOverride(studioDir, stageName, "EXECUTION")
 	const reviewOverride = readPhaseOverride(studioDir, stageName, "REVIEW")
 
 	return {
@@ -313,7 +324,9 @@ export function buildStudioConfig(
 	const body = studioFile.body
 
 	const defaultStages = Array.isArray(data.stages)
-		? (data.stages as unknown[]).filter((v): v is string => typeof v === "string")
+		? (data.stages as unknown[]).filter(
+				(v): v is string => typeof v === "string",
+			)
 		: info.stages
 
 	const stages: Record<string, StageConfig> = {}

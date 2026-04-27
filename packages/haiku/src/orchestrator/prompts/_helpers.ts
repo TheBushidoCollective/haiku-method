@@ -37,7 +37,6 @@ import {
 } from "../../studio-reader.js"
 import { writeSubagentPrompt } from "../../subagent-prompt-file.js"
 
-
 /** Read the `interpretation:` field from a hat-like frontmatter file.
  *  Returns "lens" | "strict" | undefined (unset). Universal field on
  *  hat/review-agent/fix-hat frontmatter. */

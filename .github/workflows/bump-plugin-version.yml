@@ -41,56 +41,31 @@ jobs:
           git remote set-url origin git@github.com:gigsmart/haiku-method.git
           git pull --rebase origin main
 
+      - name: Install Claude CLI
+        run: npm install -g @anthropic-ai/claude-code
+
       - name: Determine version bump type
         id: bump-type
         env:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.event.after }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          # Scan EVERY commit in the push, not just the head commit. The
-          # previous form read `github.event.head_commit.message` only,
-          # which is the merge commit's subject for any multi-commit push.
-          # Merge subjects never start with `feat:` or carry
-          # `BREAKING CHANGE:`, so the workflow fell through to patch
-          # for every PR with a feat or breaking change inside it.
-          #
-          # We walk the commit range BEFORE..AFTER (the exact set of
-          # commits this push introduced to main) and pick the highest
-          # bump type any of them implies. For squash-merges that's
-          # equivalent to inspecting the single squash commit; for
-          # merge-commit PRs it correctly surfaces the feat/breaking
-          # commits inside.
-          BUMP_TYPE="patch"
-          if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            # Branch creation push (rare on main) — fall back to head only.
-            COMMITS=$(git log -1 --format='%B' HEAD)
-          else
-            # Use %B (full body) so BREAKING CHANGE: footers in the
-            # body of conventional commits are picked up alongside
-            # subject-line markers.
-            COMMITS=$(git log --format='%B%n--END--%n' "${BEFORE_SHA}..${AFTER_SHA}")
-          fi
-          # Scan each commit. Any breaking-change marker wins outright;
-          # otherwise any `feat:` upgrades patch → minor.
-          while IFS= read -r line; do
-            if echo "$line" | grep -qE '^[a-z]+(\(.+\))?!:|^BREAKING CHANGE:|^BREAKING-CHANGE:'; then
-              BUMP_TYPE="major"
-              break
-            elif echo "$line" | grep -qE '^feat(\(.+\))?:'; then
-              if [ "$BUMP_TYPE" = "patch" ]; then
-                BUMP_TYPE="minor"
-              fi
-            fi
-          done <<< "$COMMITS"
+          # Two-pass classifier (see .github/scripts/determine-bump-type.sh):
+          #   1. Conventional-commit regex over every commit in the pushed
+          #      range — catches feat/fix/breaking markers in any commit,
+          #      including the bodies of merge commits.
+          #   2. If regex picked patch, ask Claude haiku to look at the
+          #      actual diff in case a plain-English PR title is hiding a
+          #      real feature or breaking change.
+          chmod +x .github/scripts/determine-bump-type.sh
+          BUMP_TYPE=$(.github/scripts/determine-bump-type.sh)
           echo "type=$BUMP_TYPE" >> $GITHUB_OUTPUT
           case "$BUMP_TYPE" in
-            major) echo "Detected: MAJOR (breaking change in pushed range)" ;;
-            minor) echo "Detected: MINOR (feature in pushed range)" ;;
+            major) echo "Detected: MAJOR (breaking change)" ;;
+            minor) echo "Detected: MINOR (feature)" ;;
             patch) echo "Detected: PATCH (fix/chore/other)" ;;
           esac
-
-      - name: Install Claude CLI
-        run: npm install -g @anthropic-ai/claude-code
 
       - name: Bump version
         id: bump-version

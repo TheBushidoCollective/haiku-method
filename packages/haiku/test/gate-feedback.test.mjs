@@ -1512,6 +1512,32 @@ Cannot be resolved autonomously.`,
 		)
 	})
 
+	test("discrete mode + review:await is NOT coerced (await is a wait-gate, not a review type)", () => {
+		const { projDir, intentDirPath, slug } = createProject(
+			"discrete-await-not-coerced",
+			{
+				active_stage: "plan",
+				mode: "discrete",
+				stageConfig: { plan: { review: "await" } },
+			},
+		)
+		createStageState(intentDirPath, "plan", {
+			phase: "gate",
+			status: "active",
+		})
+		process.chdir(projDir)
+		const result = runNext(slug)
+		assert.strictEqual(result.action, "gate_review")
+		// Per the contract documented in gate.ts: await stays await,
+		// resolved to the existing `effectiveGateType: external` mapping
+		// (matches non-discrete behavior — no behavioral divergence).
+		assert.strictEqual(
+			result.gate_type,
+			"external",
+			`await should resolve to external in both discrete and continuous, got: ${result.gate_type}`,
+		)
+	})
+
 	test("continuous mode + review:auto still auto-advances (no coercion)", () => {
 		const { projDir, intentDirPath, slug } = createProject(
 			"continuous-auto-no-coerce",

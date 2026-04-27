@@ -490,6 +490,13 @@ const emit: WorkflowHandler = (ctx) => {
 	const rawReviewType = resolveStageReview(studio, currentStage)
 	const autopilot = intent.autopilot === true
 	const intentMode = (intent.mode as string) || "continuous"
+	// Note: `hybrid` mode intentionally does NOT inherit discrete's
+	// external-review coercion. `state-tools.ts:7836` (dashboard branch
+	// listing) treats hybrid as discrete-shaped for branch topology, but
+	// the gate handler treats them differently because hybrid is "discrete
+	// where it matters, continuous elsewhere" — per-stage PRs aren't a
+	// universal requirement. If hybrid ever needs gate enforcement, add
+	// it here explicitly rather than redefining `isDiscrete`.
 	const isDiscrete = intentMode === "discrete"
 
 	// Discrete-mode contract: every stage gate MUST open an external
@@ -500,8 +507,17 @@ const emit: WorkflowHandler = (ctx) => {
 	// regardless of what STAGE.md says. autopilot is honored too:
 	// even autopilot can't skip the external PR in discrete mode —
 	// the contract is "every stage produces a reviewable PR/MR."
+	//
+	// Exception: `await` gates are NOT review types — they're wait-on-
+	// external-event gates (customer response, pipeline completion,
+	// etc.). Coercing `await` to `await,external` would conflate two
+	// independent signals; the existing `await` → `effectiveGateType:
+	// external` mapping below already handles routing. Skip coercion
+	// when any segment of the declared type is `await`.
 	let coercedReviewType = rawReviewType
-	if (isDiscrete && !rawReviewType.includes("external")) {
+	const declaredSegments = rawReviewType.split(",").map((t) => t.trim())
+	const hasAwait = declaredSegments.includes("await")
+	if (isDiscrete && !rawReviewType.includes("external") && !hasAwait) {
 		// Compose with the existing type so users who declared `ask`
 		// still get the local-review path in addition to the external
 		// PR. `auto` becomes pure `external` (no local picker
@@ -518,9 +534,11 @@ const emit: WorkflowHandler = (ctx) => {
 	const gitAvailable = isGitRepo()
 
 	// Discrete + no-git is a contract violation — discrete mode requires
-	// external PR/MR approval, which requires a git host. Fall back to
-	// `ask` so the user has a path forward, but emit telemetry so the
-	// inconsistency surfaces.
+	// external PR/MR approval, which requires a git host. Telemetry
+	// surfaces the inconsistency. The actual graceful fallback runs a few
+	// lines below: `effectiveGateType` strips `external` from the
+	// resolved review type when `!gitAvailable`, leaving the
+	// non-external residue (or `ask` as a last-resort default).
 	if (isDiscrete && !gitAvailable) {
 		emitTelemetry("haiku.gate.discrete_no_git_fallback", {
 			intent: slug,

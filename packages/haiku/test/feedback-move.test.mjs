@@ -225,6 +225,66 @@ try {
 		assert.ok(buildFiles[1].startsWith("02-wrong-stage"))
 	})
 
+	await test("cross-stage move relocates sidecar attachment + rewrites body URL", () => {
+		const { projDir, slug } = makeProject("cross-stage-sidecar")
+		process.chdir(projDir)
+		// 1×1 transparent PNG.
+		const tinyPng =
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII="
+		const created = writeFeedbackFile(slug, "plan", {
+			title: "Has attachment",
+			body: "See screenshot.",
+			origin: "user-chat",
+			author: "user",
+			attachmentDataUrl: `data:image/png;base64,${tinyPng}`,
+		})
+		const planDir = join(
+			projDir,
+			".haiku/intents",
+			slug,
+			"stages/plan/feedback",
+		)
+		const buildDir = join(
+			projDir,
+			".haiku/intents",
+			slug,
+			"stages/build/feedback",
+		)
+		// Pre-condition: sidecar PNG exists alongside the .md.
+		const planSidecars = readdirSync(planDir).filter((f) => f.endsWith(".png"))
+		assert.strictEqual(planSidecars.length, 1, "sidecar should be seeded")
+
+		const result = moveFeedbackFile(slug, "plan", created.feedback_id, "build")
+		assert.ok(result)
+		assert.strictEqual(result.moved, true)
+
+		// Source dir: .md AND sidecar both gone.
+		const planLeftover = readdirSync(planDir)
+		assert.strictEqual(planLeftover.length, 0, "plan dir should be empty")
+
+		// Target dir: .md AND sidecar both present, both with the new NN.
+		const buildFiles = readdirSync(buildDir).sort()
+		assert.strictEqual(buildFiles.length, 2)
+		const md = buildFiles.find((f) => f.endsWith(".md"))
+		const png = buildFiles.find((f) => f.endsWith(".png"))
+		assert.ok(md && png)
+		// Filenames share the same NN-slug stem.
+		const stem = md.replace(/\.md$/, "")
+		assert.strictEqual(png, `${stem}.png`)
+
+		// Body URL was rewritten to point at build/<new NN>.
+		const newBody = readFileSync(join(buildDir, md), "utf8")
+		assert.match(
+			newBody,
+			/\/api\/feedback-attachment\/[^/]+\/build\/01-has-attachment\.png/,
+		)
+		// Old URL pointing at plan must NOT appear.
+		assert.doesNotMatch(
+			newBody,
+			/\/api\/feedback-attachment\/[^/]+\/plan\/01-has-attachment\.png/,
+		)
+	})
+
 	await test("returns null when FB does not exist at source", () => {
 		const { projDir, slug } = makeProject("missing-fb")
 		process.chdir(projDir)
@@ -399,6 +459,50 @@ try {
 		assert.ok(result.isError)
 		const parsed = JSON.parse(result.content[0].text)
 		assert.strictEqual(parsed.error, "lifecycle_violation")
+	})
+
+	await test("deleteFeedbackFile cleans sidecar attachments", async () => {
+		const { projDir, slug } = makeProject("delete-sidecar")
+		process.chdir(projDir)
+		const tinyPng =
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII="
+		const created = writeFeedbackFile(slug, "plan", {
+			title: "Will be deleted",
+			body: "Body.",
+			origin: "adversarial-review",
+			author: "review-agent",
+			attachmentDataUrl: `data:image/png;base64,${tinyPng}`,
+		})
+		const planDir = join(
+			projDir,
+			".haiku/intents",
+			slug,
+			"stages/plan/feedback",
+		)
+		// Pre: .md + sidecar both exist.
+		assert.strictEqual(readdirSync(planDir).length, 2)
+
+		// Flip status to "closed" so delete is allowed (delete refuses
+		// pending/fixing items by design).
+		const files = readdirSync(planDir).filter((f) => f.endsWith(".md"))
+		const target = join(planDir, files[0])
+		const raw = readFileSync(target, "utf8").replace(
+			/^status:\s*pending\s*$/m,
+			"status: closed",
+		)
+		writeFileSync(target, raw)
+
+		const result = await handleStateTool("haiku_feedback_delete", {
+			intent: slug,
+			stage: "plan",
+			feedback_id: created.feedback_id,
+		})
+		assert.ok(
+			!result.isError,
+			`Expected success, got: ${result.content[0].text}`,
+		)
+		// Post: dir is empty — both the .md and the .png are gone.
+		assert.strictEqual(readdirSync(planDir).length, 0)
 	})
 
 	await test("succeeds on a valid same-stage confirm via MCP", async () => {

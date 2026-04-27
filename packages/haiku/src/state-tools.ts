@@ -15,7 +15,7 @@ import {
 	unlinkSync,
 	writeFileSync,
 } from "node:fs"
-import { join, resolve, sep } from "node:path"
+import { dirname, join, resolve, sep } from "node:path"
 import {
 	dedupeFrontmatterKeys,
 	isDuplicateKeyError,
@@ -4445,6 +4445,16 @@ export function moveFeedbackFile(
 			const oldAttachment = join(fromDir, `${oldNN}-${fileSlug}.${ext}`)
 			if (existsSync(oldAttachment)) {
 				const newAttachment = join(targetDir, `${newNN}-${fileSlug}.${ext}`)
+				// Defense in depth: even after deleteFeedbackFile started
+				// cleaning sidecars, an orphan could exist from older
+				// versions or out-of-band manual edits. renameSync on
+				// POSIX silently overwrites, so explicitly refuse rather
+				// than destroy data the caller didn't ask us to touch.
+				if (existsSync(newAttachment)) {
+					throw new Error(
+						`moveFeedbackFile: refusing to overwrite existing attachment '${newAttachment}' — clean it up manually before retrying.`,
+					)
+				}
 				renameSync(oldAttachment, newAttachment)
 				// Patch the body's attachment URL so it points at the new
 				// stage + new NN. Server route format:
@@ -4754,6 +4764,28 @@ export function deleteFeedbackFile(
 	}
 
 	unlinkSync(found.path)
+
+	// Sidecar cleanup: writeFeedbackFile may have persisted a
+	// raster attachment alongside the .md as `<NN>-<slug>.<ext>`.
+	// Remove any matching sidecars so the dir doesn't accumulate
+	// orphans (orphans are invisible to nextFeedbackNumber and can
+	// collide with subsequent moves).
+	const dir = dirname(found.path)
+	const stemMatch = found.filename.match(/^(\d+-.+)\.md$/)
+	if (stemMatch) {
+		const stem = stemMatch[1]
+		for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+			const sidecar = join(dir, `${stem}.${ext}`)
+			if (existsSync(sidecar)) {
+				try {
+					unlinkSync(sidecar)
+				} catch {
+					/* best-effort — caller still got their .md deleted */
+				}
+			}
+		}
+	}
+
 	return { ok: true }
 }
 

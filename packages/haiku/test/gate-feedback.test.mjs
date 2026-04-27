@@ -1455,6 +1455,82 @@ Cannot be resolved autonomously.`,
 		assert.strictEqual(state.phase, "execute")
 	})
 
+	// ── Discrete-mode external-PR coercion ─────────────────────────────
+	console.log(
+		"\n=== Discrete mode: gate review type forced to include external ===",
+	)
+
+	test("discrete mode + review:auto coerces gate to external (no auto-advance)", () => {
+		const { projDir, intentDirPath, slug } = createProject(
+			"discrete-auto-coerce",
+			{
+				active_stage: "plan",
+				mode: "discrete",
+				stageConfig: { plan: { review: "auto" } },
+			},
+		)
+		// Stage at gate phase, no pending feedback, ready to advance.
+		createStageState(intentDirPath, "plan", {
+			phase: "gate",
+			status: "active",
+		})
+		process.chdir(projDir)
+		const result = runNext(slug)
+		// Discrete mode must NOT auto-advance — external review required.
+		assert.notStrictEqual(
+			result.action,
+			"advance_stage",
+			"discrete mode should not advance_stage from review:auto without external approval",
+		)
+		// The gate should emit gate_review with gate_type containing external.
+		assert.strictEqual(result.action, "gate_review")
+		assert.ok(
+			(result.gate_type || "").includes("external"),
+			`gate_type should include external in discrete mode, got: ${result.gate_type}`,
+		)
+	})
+
+	test("discrete mode + review:ask coerces gate to ask,external compound", () => {
+		const { projDir, intentDirPath, slug } = createProject(
+			"discrete-ask-coerce",
+			{
+				active_stage: "plan",
+				mode: "discrete",
+				stageConfig: { plan: { review: "ask" } },
+			},
+		)
+		createStageState(intentDirPath, "plan", {
+			phase: "gate",
+			status: "active",
+		})
+		process.chdir(projDir)
+		const result = runNext(slug)
+		assert.strictEqual(result.action, "gate_review")
+		assert.ok(
+			(result.gate_type || "").includes("external"),
+			`gate_type should include external (compound) in discrete mode, got: ${result.gate_type}`,
+		)
+	})
+
+	test("continuous mode + review:auto still auto-advances (no coercion)", () => {
+		const { projDir, intentDirPath, slug } = createProject(
+			"continuous-auto-no-coerce",
+			{
+				active_stage: "plan",
+				mode: "continuous",
+				stageConfig: { plan: { review: "auto" } },
+			},
+		)
+		createStageState(intentDirPath, "plan", {
+			phase: "gate",
+			status: "active",
+		})
+		process.chdir(projDir)
+		const result = runNext(slug)
+		// Continuous mode honors review:auto exactly as before — auto-advance.
+		assert.strictEqual(result.action, "advance_stage")
+	})
+
 	// ── Cleanup ───────────────────────────────────────────────────────────────
 
 	console.log(`\n${passed} passed, ${failed} failed\n`)

@@ -489,13 +489,44 @@ const emit: WorkflowHandler = (ctx) => {
 
 	const rawReviewType = resolveStageReview(studio, currentStage)
 	const autopilot = intent.autopilot === true
+	const intentMode = (intent.mode as string) || "continuous"
+	const isDiscrete = intentMode === "discrete"
+
+	// Discrete-mode contract: every stage gate MUST open an external
+	// PR/MR. The merge IS the approval signal — local "Approve" alone
+	// does not advance the stage's status to completed (see
+	// `project_discrete_approve_external_pr.md` in user memory). We
+	// coerce the stage's declared `review:` type to include `external`
+	// regardless of what STAGE.md says. autopilot is honored too:
+	// even autopilot can't skip the external PR in discrete mode —
+	// the contract is "every stage produces a reviewable PR/MR."
+	let coercedReviewType = rawReviewType
+	if (isDiscrete && !rawReviewType.includes("external")) {
+		// Compose with the existing type so users who declared `ask`
+		// still get the local-review path in addition to the external
+		// PR. `auto` becomes pure `external` (no local picker
+		// needed).
+		coercedReviewType =
+			rawReviewType === "auto" ? "external" : `${rawReviewType},external`
+	}
 	const reviewType =
-		autopilot && rawReviewType === "ask" ? "auto" : rawReviewType
+		autopilot && coercedReviewType === "ask" ? "auto" : coercedReviewType
 	const stageIdx = studioStages.indexOf(currentStage)
 	const nextStage =
 		stageIdx < studioStages.length - 1 ? studioStages[stageIdx + 1] : null
 
 	const gitAvailable = isGitRepo()
+
+	// Discrete + no-git is a contract violation — discrete mode requires
+	// external PR/MR approval, which requires a git host. Fall back to
+	// `ask` so the user has a path forward, but emit telemetry so the
+	// inconsistency surfaces.
+	if (isDiscrete && !gitAvailable) {
+		emitTelemetry("haiku.gate.discrete_no_git_fallback", {
+			intent: slug,
+			stage: currentStage,
+		})
+	}
 
 	if (reviewType === "auto") {
 		emitTelemetry("haiku.gate.auto_advanced", {

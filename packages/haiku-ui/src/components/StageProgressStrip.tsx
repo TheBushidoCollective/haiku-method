@@ -189,17 +189,25 @@ export function StageProgressStrip({
 									className={`mt-1 text-xs font-medium uppercase tracking-wider leading-none ${
 										pending > 0
 											? "text-amber-600 dark:text-amber-500 font-bold"
-											: isCurrent && stage.sublabel
-												? "text-teal-500 dark:text-teal-500"
-												: "text-transparent select-none"
+											: isViewingDifferent
+												? "text-amber-600 dark:text-amber-400"
+												: isCurrent && stage.sublabel
+													? "text-teal-500 dark:text-teal-500"
+													: "text-transparent select-none"
 									}`}
-									aria-hidden={pending === 0 && !(isCurrent && stage.sublabel)}
+									aria-hidden={
+										pending === 0 &&
+										!isViewingDifferent &&
+										!(isCurrent && stage.sublabel)
+									}
 								>
 									{pending > 0
 										? `${pending} pending`
-										: isCurrent && stage.sublabel
-											? stage.sublabel
-											: " "}
+										: isViewingDifferent
+											? "viewing"
+											: isCurrent && stage.sublabel
+												? stage.sublabel
+												: " "}
 								</span>
 							</button>
 						</li>

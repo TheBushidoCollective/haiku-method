@@ -300,12 +300,12 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
           class="w-24"
         >
           <button
-            aria-current="step"
-            aria-label="Stage inception, current"
+            aria-current="location"
+            aria-label="Stage inception, completed, currently viewing"
             class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             data-viewing="true"
-            title="inception (completed)"
+            title="inception (completed) — viewing"
             type="button"
           >
             <div
@@ -320,13 +320,24 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
               >
                 <div
                   aria-hidden="true"
-                  class="w-7 h-7 rounded-md rotate-45 bg-teal-500 dark:bg-teal-400 flex items-center justify-center shadow-md ring-4 ring-teal-200 dark:ring-teal-900/50"
+                  class="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center shadow-sm ring-4 ring-amber-400 dark:ring-amber-300"
                 >
-                  <span
-                    class="text-xs font-bold text-white -rotate-45"
+                  <svg
+                    class="w-3.5 h-3.5 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    viewBox="0 0 24 24"
                   >
-                    1
-                  </span>
+                    <title>
+                      completed
+                    </title>
+                    <path
+                      d="M5 13l4 4L19 7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
                 </div>
               </div>
               <div
@@ -335,15 +346,15 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
               />
             </div>
             <span
-              class="mt-2 text-xs font-semibold uppercase tracking-wider leading-none whitespace-nowrap text-teal-600 dark:text-teal-400"
+              class="mt-2 text-xs font-semibold uppercase tracking-wider leading-none whitespace-nowrap text-amber-600 dark:text-amber-400"
             >
               inception
             </span>
             <span
-              aria-hidden="true"
-              class="mt-1 text-xs font-medium uppercase tracking-wider leading-none text-transparent select-none"
+              aria-hidden="false"
+              class="mt-1 text-xs font-medium uppercase tracking-wider leading-none text-amber-600 dark:text-amber-400"
             >
-               
+              viewing
             </span>
           </button>
         </li>
@@ -813,12 +824,12 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
           class="w-24"
         >
           <button
-            aria-current="step"
-            aria-label="Stage review, current"
+            aria-current="location"
+            aria-label="Stage review, completed, currently viewing"
             class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="review"
             data-viewing="true"
-            title="review (completed)"
+            title="review (completed) — viewing"
             type="button"
           >
             <div
@@ -833,13 +844,24 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
               >
                 <div
                   aria-hidden="true"
-                  class="w-7 h-7 rounded-md rotate-45 bg-teal-500 dark:bg-teal-400 flex items-center justify-center shadow-md ring-4 ring-teal-200 dark:ring-teal-900/50"
+                  class="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center shadow-sm ring-4 ring-amber-400 dark:ring-amber-300"
                 >
-                  <span
-                    class="text-xs font-bold text-white -rotate-45"
+                  <svg
+                    class="w-3.5 h-3.5 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    viewBox="0 0 24 24"
                   >
-                    5
-                  </span>
+                    <title>
+                      completed
+                    </title>
+                    <path
+                      d="M5 13l4 4L19 7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
                 </div>
               </div>
               <div
@@ -848,15 +870,15 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
               />
             </div>
             <span
-              class="mt-2 text-xs font-semibold uppercase tracking-wider leading-none whitespace-nowrap text-teal-600 dark:text-teal-400"
+              class="mt-2 text-xs font-semibold uppercase tracking-wider leading-none whitespace-nowrap text-amber-600 dark:text-amber-400"
             >
               review
             </span>
             <span
-              aria-hidden="true"
-              class="mt-1 text-xs font-medium uppercase tracking-wider leading-none text-transparent select-none"
+              aria-hidden="false"
+              class="mt-1 text-xs font-medium uppercase tracking-wider leading-none text-amber-600 dark:text-amber-400"
             >
-               
+              viewing
             </span>
           </button>
         </li>
@@ -1444,12 +1466,12 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
           class="w-24"
         >
           <button
-            aria-current="step"
-            aria-label="Stage inception, current"
+            aria-current="location"
+            aria-label="Stage inception, completed, currently viewing"
             class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             data-viewing="true"
-            title="inception (completed)"
+            title="inception (completed) — viewing"
             type="button"
           >
             <div
@@ -1464,13 +1486,24 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
               >
                 <div
                   aria-hidden="true"
-                  class="w-7 h-7 rounded-md rotate-45 bg-teal-500 dark:bg-teal-400 flex items-center justify-center shadow-md ring-4 ring-teal-200 dark:ring-teal-900/50"
+                  class="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center shadow-sm ring-4 ring-amber-400 dark:ring-amber-300"
                 >
-                  <span
-                    class="text-xs font-bold text-white -rotate-45"
+                  <svg
+                    class="w-3.5 h-3.5 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    viewBox="0 0 24 24"
                   >
-                    1
-                  </span>
+                    <title>
+                      completed
+                    </title>
+                    <path
+                      d="M5 13l4 4L19 7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
                 </div>
               </div>
               <div
@@ -1479,15 +1512,15 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
               />
             </div>
             <span
-              class="mt-2 text-xs font-semibold uppercase tracking-wider leading-none whitespace-nowrap text-teal-600 dark:text-teal-400"
+              class="mt-2 text-xs font-semibold uppercase tracking-wider leading-none whitespace-nowrap text-amber-600 dark:text-amber-400"
             >
               inception
             </span>
             <span
-              aria-hidden="true"
-              class="mt-1 text-xs font-medium uppercase tracking-wider leading-none text-transparent select-none"
+              aria-hidden="false"
+              class="mt-1 text-xs font-medium uppercase tracking-wider leading-none text-amber-600 dark:text-amber-400"
             >
-               
+              viewing
             </span>
           </button>
         </li>
@@ -1718,12 +1751,12 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
           class="w-24"
         >
           <button
-            aria-current="step"
-            aria-label="Stage inception, current"
+            aria-current="location"
+            aria-label="Stage inception, completed, currently viewing"
             class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             data-viewing="true"
-            title="inception (completed)"
+            title="inception (completed) — viewing"
             type="button"
           >
             <div
@@ -1738,13 +1771,24 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
               >
                 <div
                   aria-hidden="true"
-                  class="w-7 h-7 rounded-md rotate-45 bg-teal-500 dark:bg-teal-400 flex items-center justify-center shadow-md ring-4 ring-teal-200 dark:ring-teal-900/50"
+                  class="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center shadow-sm ring-4 ring-amber-400 dark:ring-amber-300"
                 >
-                  <span
-                    class="text-xs font-bold text-white -rotate-45"
+                  <svg
+                    class="w-3.5 h-3.5 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    viewBox="0 0 24 24"
                   >
-                    1
-                  </span>
+                    <title>
+                      completed
+                    </title>
+                    <path
+                      d="M5 13l4 4L19 7"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
                 </div>
               </div>
               <div
@@ -1753,15 +1797,15 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
               />
             </div>
             <span
-              class="mt-2 text-xs font-semibold uppercase tracking-wider leading-none whitespace-nowrap text-teal-600 dark:text-teal-400"
+              class="mt-2 text-xs font-semibold uppercase tracking-wider leading-none whitespace-nowrap text-amber-600 dark:text-amber-400"
             >
               inception
             </span>
             <span
-              aria-hidden="true"
-              class="mt-1 text-xs font-medium uppercase tracking-wider leading-none text-transparent select-none"
+              aria-hidden="false"
+              class="mt-1 text-xs font-medium uppercase tracking-wider leading-none text-amber-600 dark:text-amber-400"
             >
-               
+              viewing
             </span>
           </button>
         </li>

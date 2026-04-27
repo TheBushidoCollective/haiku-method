@@ -9751,7 +9751,7 @@ export async function handleOrchestratorTool(
 					content: [
 						{
 							type: "text" as const,
-							text: `Error: failed to switch to intent branch '${intentMainBranch}'. Stash or commit uncommitted changes, then retry. Raw git error: ${raw}`,
+							text: `Error: failed to switch to intent branch '${intentMainBranch}'. Stash or commit uncommitted changes, or remove the worktree holding '${intentMainBranch}' if it's checked out elsewhere, then retry. Raw git error: ${raw}`,
 						},
 					],
 					isError: true,

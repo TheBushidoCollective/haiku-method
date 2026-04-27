@@ -93,8 +93,9 @@ export function getMainlineBranch(): string {
  *  no mainline ref can be located, leaving the caller to fork from HEAD. */
 export function resolveMainlineRef(): string {
 	if (!isGitRepo()) return ""
+	// `getMainlineBranch()` always returns a non-empty string (`"main"` is the
+	// hardcoded last resort), so we don't guard against empty here.
 	const mainline = getMainlineBranch()
-	if (!mainline) return ""
 	if (tryRun(["git", "rev-parse", "--verify", mainline])) {
 		return mainline
 	}

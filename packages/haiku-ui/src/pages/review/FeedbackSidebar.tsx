@@ -108,7 +108,7 @@ export function FeedbackSidebar({
 	// Resolution the reviewer wants this comment routed through. `null`
 	// means "let the agent triage" — the default and most common path.
 	const [composerResolution, setComposerResolution] = useState<
-		null | "question" | "inline_fix" | "stage_revisit" | "upstream_rewind"
+		null | "question" | "inline_fix" | "stage_revisit"
 	>(null)
 	const [addingComment, setAddingComment] = useState(false)
 	const [submitting, setSubmitting] = useState<DecisionKind | null>(null)
@@ -344,11 +344,7 @@ export function FeedbackSidebar({
 							setComposerResolution(
 								v === ""
 									? null
-									: (v as
-											| "question"
-											| "inline_fix"
-											| "stage_revisit"
-											| "upstream_rewind"),
+									: (v as "question" | "inline_fix" | "stage_revisit"),
 							)
 						}}
 						disabled={addingComment}
@@ -360,9 +356,6 @@ export function FeedbackSidebar({
 						<option value="inline_fix">Inline fix · one-bolt patch</option>
 						<option value="stage_revisit">
 							Stage revisit · re-run the stage
-						</option>
-						<option value="upstream_rewind">
-							Upstream rewind · surface to human
 						</option>
 					</select>
 				</div>

@@ -179,9 +179,8 @@ const FIXTURES: Fixture[] = [
  * It is intentionally a single object applied uniformly — call sites that
  * need per-item variation should map over the result and spread overrides
  * themselves. Widening the signature this way lets transition-matrix /
- * upstream-stage / edge-case tests pin one field (e.g. `status: "closed"`,
- * `visit: 3`, future `upstream_stage: "design"`) without reconstructing
- * the whole fixture shape inline.
+ * edge-case tests pin one field (e.g. `status: "closed"`, `visit: 3`)
+ * without reconstructing the whole fixture shape inline.
  *
  * Existing call sites that invoke `mockItems(n)` keep their behavior —
  * `overrides` defaults to an empty object which is a no-op spread.

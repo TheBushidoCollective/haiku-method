@@ -584,6 +584,121 @@ try {
 		assert.strictEqual(parsed.moved, false)
 		assert.ok(parsed.triaged_at)
 	})
+
+	console.log("\n=== End-to-end: triage → move → revisit chain ===")
+
+	await test("misplaced human FB triages, moves to right stage, revisits", () => {
+		// Setup: active stage is `build`, plan is completed. A reviewer
+		// files a finding on `build` that actually belongs on `plan`
+		// (origin: user-chat → triaged_at null on creation).
+		const { projDir, slug, intentDirPath, studio, stages } = makeProject(
+			"e2e-triage-move-revisit",
+			{
+				active_stage: "build",
+				stages: ["plan", "build", "review"],
+				stageStates: {
+					plan: {
+						status: "completed",
+						phase: "gate",
+						completed_at: "2026-04-15T00:00:00Z",
+					},
+					build: { status: "active", phase: "execute" },
+					review: { status: "pending", phase: "" },
+				},
+			},
+		)
+		process.chdir(projDir)
+		const created = writeFeedbackFile(slug, "build", {
+			title: "Plan-rooted issue filed on build",
+			body: "Belongs on plan.",
+			origin: "user-chat",
+			author: "user",
+		})
+
+		// Tick 1: pre-tick gate sees the untriaged FB → emits
+		// feedback_triage (NOT revisit yet — must triage first).
+		const tick1 = preTickFeedbackGate({
+			slug,
+			studio,
+			intentDirPath,
+			intent: { studio, active_stage: "build", stages },
+			currentStage: "build",
+			currentPhase: "execute",
+			stageState: { phase: "execute" },
+		})
+		assert.ok(tick1)
+		assert.strictEqual(tick1.action, "feedback_triage")
+		assert.strictEqual(tick1.items.length, 1)
+		assert.strictEqual(tick1.items[0].stage, "build")
+
+		// Agent reads the FB, decides it belongs on plan, calls
+		// haiku_feedback_move. The move relocates the file AND sets
+		// triaged_at.
+		const moveResult = moveFeedbackFile(
+			slug,
+			"build",
+			created.feedback_id,
+			"plan",
+		)
+		assert.ok(moveResult)
+		assert.strictEqual(moveResult.moved, true)
+		assert.ok(moveResult.file.includes("/stages/plan/feedback/"))
+
+		// Tick 2: pre-tick gate sees one open FB on plan (earlier than
+		// build), all triaged → emits revisit targeting plan.
+		const tick2 = preTickFeedbackGate({
+			slug,
+			studio,
+			intentDirPath,
+			intent: { studio, active_stage: "build", stages },
+			currentStage: "build",
+			currentPhase: "execute",
+			stageState: { phase: "execute" },
+		})
+		assert.ok(tick2)
+		assert.strictEqual(tick2.action, "revisited")
+		assert.strictEqual(tick2.target_stage, "plan")
+
+		// After the revisit, intent.active_stage is now "plan" (revisit
+		// helper sets it). Tick 3 perspective: with active_stage =
+		// plan, the FB on plan is now "current stage" — outcome 3,
+		// gate falls through to normal handler dispatch.
+		const tick3 = preTickFeedbackGate({
+			slug,
+			studio,
+			intentDirPath,
+			intent: { studio, active_stage: "plan", stages },
+			currentStage: "plan",
+			currentPhase: "elaborate",
+			stageState: { phase: "elaborate" },
+		})
+		// Falls through (null) — the gate handler at gate.ts handles
+		// current-stage feedback via review_fix dispatch, which lives
+		// outside this test's scope.
+		assert.strictEqual(tick3, null)
+
+		// Sanity-check: verify the FB actually lives on plan now and
+		// has triaged_at stamped.
+		const planDir = join(
+			projDir,
+			".haiku/intents",
+			slug,
+			"stages/plan/feedback",
+		)
+		const planFiles = readdirSync(planDir).filter((f) => f.endsWith(".md"))
+		assert.strictEqual(planFiles.length, 1, "FB should live on plan now")
+		const raw = readFileSync(join(planDir, planFiles[0]), "utf8")
+		assert.match(raw, /triaged_at:\s*'?20\d\d-/, "triaged_at stamped")
+		// And source dir empty.
+		const buildDir = join(
+			projDir,
+			".haiku/intents",
+			slug,
+			"stages/build/feedback",
+		)
+		const buildFiles = readdirSync(buildDir).filter((f) => f.endsWith(".md"))
+		assert.strictEqual(buildFiles.length, 0, "build dir should be empty")
+	})
 } finally {
 	process.chdir(origCwd)
 	rmSync(tmp, { recursive: true, force: true })

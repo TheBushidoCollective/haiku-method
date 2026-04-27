@@ -51,10 +51,11 @@ export type FeedbackStatus = z.infer<typeof FeedbackStatusSchema>
  *  agent — set this to steer the router: a question skips the fix
  *  loop entirely, an inline fix runs a single bolt of the stage's
  *  fix_hats against the one finding, a stage revisit re-loops the
- *  whole stage (today's default), an upstream rewind routes the
- *  finding to the agent's `upstream_finding_surfaced` path. */
+ *  whole stage (today's default). Cross-stage routing (formerly the
+ *  `upstream_rewind` resolution) is now handled by relocating the FB
+ *  via `haiku_feedback_move`, not by a resolution hint. */
 export const FeedbackResolutionSchema = z
-	.enum(["question", "inline_fix", "stage_revisit", "upstream_rewind"])
+	.enum(["question", "inline_fix", "stage_revisit"])
 	.describe(
 		"Routing hint for the FSM's feedback resolver. null = caller has no preference, router defaults to stage_revisit.",
 	)

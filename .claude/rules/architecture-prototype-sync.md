@@ -55,10 +55,19 @@ The prototype reflects the **implementation**, not the legacy paper terminology.
 
 ## Churn-reduction v2 (2026-04-19) — Feedback-as-unit fix loop + intent-completion review
 
-- **Stage `fix_hats`** — `STAGE.md` now declares `fix_hats:` as an ordered subset (or superset) of hats. When adversarial review produces open feedback, the workflow engine dispatches the fix-hat sequence directly against the feedback file. New orchestrator actions: `review_fix` (per-finding dispatch, serial, 3-bolt cap per finding), `upstream_finding_surfaced` (cross-stage routing — never auto-revisits). Fix-mode hats may live outside the main `hats:` rotation (e.g. a `feedback-assessor` hat that runs only in fix loops).
+- **Stage `fix_hats`** — `STAGE.md` now declares `fix_hats:` as an ordered subset (or superset) of hats. When adversarial review produces open feedback, the workflow engine dispatches the fix-hat sequence directly against the feedback file. New orchestrator actions: `review_fix` (per-finding dispatch, serial, 3-bolt cap per finding). Fix-mode hats may live outside the main `hats:` rotation (e.g. a `feedback-assessor` hat that runs only in fix loops).
 - **Stage feedback-assessor hat** — every stage that opts into `fix_hats` now ships `hats/feedback-assessor.md` as a terminal validator that independently decides closure. Not part of the execute rotation.
-- **Studio-level review + fix** — new directories `plugin/studios/{studio}/review-agents/` and `plugin/studios/{studio}/fix-hats/` (NOT per-stage). Fires once, after the final stage's gate passes, when `intent.intent_completion_review === true`. New orchestrator actions: `intent_completion_review` (studio-wide agent dispatch), `intent_completion_fix` (studio-level fix loop). Findings are written at intent scope (`.haiku/intents/{slug}/feedback/FB-NN.md`). Cross-stage findings from this layer always surface to the human — no auto-revisit.
-- **Upstream finding routing** — `haiku_feedback` accepts optional `upstream_stage:` marking findings whose root cause lives elsewhere. The workflow engine surfaces those rather than dispatching the wrong hats.
+- **Studio-level review + fix** — new directories `plugin/studios/{studio}/review-agents/` and `plugin/studios/{studio}/fix-hats/` (NOT per-stage). Fires once, after the final stage's gate passes, when `intent.intent_completion_review === true`. New orchestrator actions: `intent_completion_review` (studio-wide agent dispatch), `intent_completion_fix` (studio-level fix loop). Findings are written at intent scope (`.haiku/intents/{slug}/feedback/FB-NN.md`).
+
+## Pre-tick triage gate (2026-04-27) — replaces upstream-routing model
+
+- **`triaged_at:` on feedback frontmatter** — agent-authored FBs (origins: `agent`, `adversarial-review`, `studio-review`, etc.) auto-stamp `triaged_at:` at creation. Human origins (`user-chat`, `user-visual`, etc.) leave it null.
+- **Pre-tick gate** in `runWorkflowTick` (between tamper detection and per-state dispatch) walks every stage from index 0 through the current stage plus intent-scope, collecting open FBs. Three priority outcomes:
+  1. Any untriaged FB → emit `feedback_triage` action listing each item; agent classifies via `haiku_feedback_move` (no-op confirm) or `haiku_feedback_reject` (dismiss).
+  2. All triaged + ≥ 1 on a stage earlier than active → `revisit()` is invoked targeting the earliest such stage, returning the existing `revisited` action.
+  3. All triaged + open FBs only on current stage → null, falls through to existing handlers.
+- **`haiku_feedback_move`** new MCP tool. Same-stage call stamps `triaged_at:`. Cross-stage call relocates the file to the target stage's `feedback/` dir, renumbers to next free FB-NN, moves any sidecar attachment, and rewrites the body's `/api/feedback-attachment/...` URL. Pre-flight collision check refuses to overwrite existing destination attachments.
+- **No `upstream_stage:` field, no `upstream_finding_surfaced` action** — both deleted. Cross-stage routing flows through file location, not a frontmatter hint.
 
 These are NOT yet wired into the per-stage visualizations in `prototype-stage-flow.html` beyond the header banner. When adding them:
 - The stage-loop template should show a new branch at gate: pending feedback + `fix_hats` set → `review_fix` dispatch, not `feedback_revisit`.

@@ -1269,11 +1269,10 @@ Cannot be resolved autonomously.`,
 	})
 
 	test("pre-tick triage gate revisits earliest earlier stage with open feedback", () => {
-		// Replaces the legacy `upstream_finding_surfaced` test. Under
-		// the new model, cross-stage routing flows through file
-		// location: an open FB sitting on stage `plan` while active
-		// stage is `build` triggers the pre-tick triage gate to issue a
-		// revisit back to `plan`.
+		// Cross-stage routing flows through file location: an open FB
+		// sitting on stage `plan` while active stage is `build`
+		// triggers the pre-tick triage gate to issue a revisit back to
+		// `plan`.
 		const { projDir, intentDirPath, slug } = createProject("upstream-revisit", {
 			active_stage: "build",
 			stages: ["plan", "build"],

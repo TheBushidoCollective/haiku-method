@@ -52,7 +52,13 @@ if (process.argv.includes("--open")) {
 		process.platform === "darwin"
 			? ["open", url]
 			: process.platform === "win32"
-				? ["cmd", "/c", "start", "", url]
+				? [
+						"powershell",
+						"-NoProfile",
+						"-NonInteractive",
+						"-Command",
+						`Start-Process '${url.replace(/'/g, "''")}'`,
+					]
 				: ["xdg-open", url]
 	spawn(argv[0], argv.slice(1), { stdio: "ignore", detached: true }).unref()
 }

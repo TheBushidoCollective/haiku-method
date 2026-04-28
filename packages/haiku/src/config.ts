@@ -55,11 +55,12 @@ let _pluginRoot: string | null = null
  *
  * Memoized after the first call.
  *
- * **Side effect:** when path (2) succeeds, this function also writes
- * `process.env.CLAUDE_PLUGIN_ROOT = <resolved>` so that child processes
- * (hooks, spawned shells) inherit the same value without re-running
- * discovery. This is intentional — hooks rely on the env var — but callers
- * should be aware the function is not purely functional.
+ * **Side effect:** when path (2) or (3) succeeds, this function also
+ * writes `process.env.CLAUDE_PLUGIN_ROOT = <resolved>` so that child
+ * processes (hooks, spawned shells) inherit the same value without
+ * re-running discovery. This is intentional — hooks rely on the env
+ * var — but callers should be aware the function is not purely
+ * functional.
  */
 export function resolvePluginRoot(): string {
 	if (_pluginRoot !== null) return _pluginRoot

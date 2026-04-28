@@ -1,10 +1,13 @@
 // http/session-api.ts — GET /api/session/:id response shaper.
 //
 // Maps the in-memory session record (review / question / design-direction
-// shapes) to the wire-format JSON the SPA expects. Pure projection —
-// every field on the session object is read here; no mutations.
+// shapes) to the wire-format JSON the SPA expects. Mostly pure projection
+// from the cached session object, plus a fresh-on-every-request
+// `current_state` field that calls getCurrentState(slug) to defeat the
+// stale-cache divergence the SPA's stage stepper used to suffer from.
 
 import type { FastifyReply } from "fastify"
+import { getCurrentState } from "../current-state.js"
 import { getSession } from "../sessions.js"
 
 /** Send the JSON response for `GET /api/session/:sessionId`. Returns
@@ -46,6 +49,15 @@ export function respondSessionApi(
 			data.unit_mockups = obj
 		}
 		if (session.stageStates) data.stage_states = session.stageStates
+		// Read current_state fresh from disk on every request so the
+		// SPA's stage stepper can never disagree with the workflow
+		// engine's view of "which stage are we on?". The cached
+		// session.parsedIntent.frontmatter.active_stage was captured
+		// when the session was first built and goes stale as ticks land.
+		if (session.intent_slug) {
+			const current = getCurrentState(session.intent_slug)
+			if (current) data.current_state = current
+		}
 		if (session.knowledgeFiles) data.knowledge_files = session.knowledgeFiles
 		if (session.stageArtifacts) data.stage_artifacts = session.stageArtifacts
 		if (session.outputArtifacts) data.output_artifacts = session.outputArtifacts

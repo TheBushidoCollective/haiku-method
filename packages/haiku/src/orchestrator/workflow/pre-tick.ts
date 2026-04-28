@@ -19,6 +19,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { resolveIntentStages, resolveStudioStages } from "../../orchestrator.js"
+import { getCurrentState } from "../../current-state.js"
 import {
 	gitCommitState,
 	intentDir,
@@ -78,27 +79,15 @@ export function preTickConsistency(
 	// had a chance to synthesize completion for empty priors — the
 	// `syncActiveStageFromStateJson` helper is called from each
 	// `return null` path.
+	//
+	// The actual derivation lives in current-state.ts so the API and
+	// SPA can call it directly without going through pre-tick. This
+	// function is the writer that keeps the intent.md cache in step.
 	const syncActiveStageFromStateJson = () => {
 		const declared =
 			(readFm(intentFile).active_stage as string) || studioStages[0]
-		let derived = studioStages[studioStages.length - 1]
-		for (const stage of studioStages) {
-			const stPath = join(iDir, "stages", stage, "state.json")
-			const st = existsSync(stPath) ? readJson(stPath) : {}
-			const status = (st.status as string) || "pending"
-			// A stage is "done" only when status === completed AND it's
-			// not blocked at an external gate. status: completed +
-			// gate_outcome: blocked is the "awaiting external review"
-			// state — the merge hasn't happened, so the stage is still
-			// active per the contract that completion lives in the
-			// merge.
-			const gateOutcome = (st.gate_outcome as string) || ""
-			const isDone = status === "completed" && gateOutcome !== "blocked"
-			if (!isDone) {
-				derived = stage
-				break
-			}
-		}
+		const current = getCurrentState(slug, root)
+		const derived = current?.stage || studioStages[studioStages.length - 1]
 		if (declared !== derived) {
 			setFrontmatterField(intentFile, "active_stage", derived)
 			emitTelemetry("haiku.workflow.consistency_fix", {

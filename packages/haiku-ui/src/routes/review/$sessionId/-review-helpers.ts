@@ -15,19 +15,19 @@ export type GateMode = "ask" | "external" | "auto" | "await"
 export function resolveActiveStage(
 	session: ReviewPageSessionData,
 ): string | null {
+	// Server is authoritative — it computed `current_state` fresh from
+	// per-stage state.json on this very request via getCurrentState(slug)
+	// in http/session-api.ts. Trust it and bail out.
+	const current = session.current_state?.stage
+	if (typeof current === "string" && current) return current
+	// Backwards-compat fallback (only fires if the server is older than
+	// the current_state field): walk the cached stage_states and frontmatter
+	// in the same preference order the server uses internally. Slated for
+	// removal once every deployed server emits current_state.
 	const stageStates = session.stage_states ?? {}
 	const names = Object.keys(stageStates)
-	// Canonical: one of the stages has status === "active".
 	const active = names.find((s) => stageStates[s]?.status === "active")
 	if (active) return active
-	// Fallbacks, in preference order:
-	//   1. `intent.frontmatter.active_stage` — authoritative on disk,
-	//      still set after the intent moves to awaiting_completion_review
-	//      (every stage's status is "completed" by then).
-	//   2. The LAST stage in intent.stages — that's the final stage the
-	//      intent reached.
-	//   3. First stage_state key — last-resort when nothing else is
-	//      available.
 	const fm = (session.intent?.frontmatter ?? {}) as Record<string, unknown>
 	const activeFromFrontmatter = fm.active_stage
 	if (typeof activeFromFrontmatter === "string" && activeFromFrontmatter) {

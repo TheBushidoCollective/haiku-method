@@ -15,8 +15,18 @@ import { describe, summary, test } from "./helpers.mjs"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(here, "..", "..", "..")
+// Route literals were originally all in packages/haiku/src/http.ts. After
+// the god-file breakup (#245) they moved into packages/haiku/src/http/*.ts
+// — read both so the fingerprint scan still covers the full surface.
+import { readdirSync } from "node:fs"
 const httpTsPath = join(repoRoot, "packages", "haiku", "src", "http.ts")
-const httpSrc = readFileSync(httpTsPath, "utf8")
+const httpDir = join(repoRoot, "packages", "haiku", "src", "http")
+let httpSrc = readFileSync(httpTsPath, "utf8")
+for (const entry of readdirSync(httpDir, { withFileTypes: true })) {
+	if (entry.isFile() && entry.name.endsWith(".ts")) {
+		httpSrc += "\n" + readFileSync(join(httpDir, entry.name), "utf8")
+	}
+}
 
 /**
  * Path templates we expect to see represented in routes.ts. Keep this list

@@ -99,6 +99,30 @@ export type PreviousReviewSnapshot = z.infer<
 	typeof PreviousReviewSnapshotSchema
 >
 
+export const IntentCurrentStateSchema = z
+	.object({
+		studio: z.string(),
+		stage: z.string(),
+		phase: z.enum(["elaborate", "execute", "review", "gate", ""]),
+		step: z.string().optional(),
+		nextState: z
+			.object({
+				stage: z.string().optional(),
+				phase: z.enum(["elaborate", "execute", "review", "gate"]).optional(),
+				step: z.string().optional(),
+				blockedOn: z
+					.enum(["user-gate", "external-review", "feedback-fix"])
+					.nullable()
+					.optional(),
+			})
+			.nullable()
+			.optional(),
+	})
+	.describe(
+		"Unified current-state snapshot — derived fresh per request from per-stage state.json. The single source of truth for 'where is this intent right now?'.",
+	)
+export type IntentCurrentState = z.infer<typeof IntentCurrentStateSchema>
+
 export const ReviewSessionPayloadSchema = z
 	.object({
 		session_id: z.string(),
@@ -119,6 +143,7 @@ export const ReviewSessionPayloadSchema = z
 		intent_mockups: z.array(LooseRecord).optional(),
 		unit_mockups: z.record(z.array(LooseRecord)).optional(),
 		stage_states: z.record(StageStateInfoSchema).optional(),
+		current_state: IntentCurrentStateSchema.optional(),
 		knowledge_files: z.array(KnowledgeFileSchema).optional(),
 		stage_artifacts: z.array(StageArtifactSchema).optional(),
 		output_artifacts: z.array(OutputArtifactSchema).optional(),

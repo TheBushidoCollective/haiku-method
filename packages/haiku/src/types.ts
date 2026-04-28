@@ -64,6 +64,38 @@ export interface StageState {
 	gate_outcome?: string | null // advanced | paused | blocked | awaiting
 }
 
+// IntentPhase is the fixed taxonomy every studio shares. `step` (on
+// IntentCurrentState below) is studio-defined and lives outside this
+// type intentionally — different studios have different sub-phase
+// granularity.
+export type IntentPhase = "elaborate" | "execute" | "review" | "gate"
+
+export interface IntentNextStateHint {
+	stage?: string
+	phase?: IntentPhase
+	step?: string
+	blockedOn?: "user-gate" | "external-review" | "feedback-fix" | null
+}
+
+// IntentCurrentState is the unified shape every consumer (orchestrator,
+// HTTP API, browse SPA) reads to answer "where is this intent right
+// now?". Derived fresh from per-stage state.json on every call —
+// intent.md.active_stage is treated as a write-only cache for legacy
+// shell tooling, never as a read source.
+//
+// `step` and `nextState` are reserved for follow-up work — when the
+// orchestrator action handlers begin writing sub-phase steps to
+// state.json, those values will populate here. For now they are
+// left undefined; consumers should treat `phase` as the most granular
+// reliable signal.
+export interface IntentCurrentState {
+	studio: string
+	stage: string
+	phase: IntentPhase | ""
+	step?: string
+	nextState?: IntentNextStateHint | null
+}
+
 export interface DiscoveryFrontmatter {
 	intent: string
 	created: string

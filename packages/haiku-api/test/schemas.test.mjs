@@ -270,38 +270,38 @@ describe("schemas/review.ts — ReviewDecisionResponseSchema", () => {
 // Traversed by: additive-elaborate.feature (design direction selection).
 
 describe("schemas/direction.ts — DirectionSelectRequestSchema", () => {
+	// DirectionSelectRequestSchema is a discriminated union on `mode`:
+	// { mode: "select", archetype, comments?, annotations? } |
+	// { mode: "regenerate", comments? }. The `parameters` field on the
+	// older shape no longer exists; tests below cover the current surface.
 	test("parses valid", () => {
 		assertValid(DirectionSelectRequestSchema, {
+			mode: "select",
 			archetype: "minimalist",
-			parameters: { density: 3, contrast: 7 },
 		})
 	})
-	test("rejects invalid", () => {
+	test("parses valid (regenerate)", () => {
+		assertValid(DirectionSelectRequestSchema, {
+			mode: "regenerate",
+			keep: ["minimalist"],
+		})
+	})
+	test("rejects missing mode", () => {
 		assertInvalid(DirectionSelectRequestSchema, {
 			archetype: "minimalist",
-			parameters: { density: "three" },
 		})
 	})
 	test("rejects archetype longer than 64 chars", () => {
 		assertInvalid(DirectionSelectRequestSchema, {
+			mode: "select",
 			archetype: "x".repeat(65),
-			parameters: { density: 3 },
 		})
 	})
-	test("rejects parameters with more than 50 entries", () => {
-		const parameters = {}
-		for (let i = 0; i < 51; i += 1) {
-			parameters[`p${i}`] = i
-		}
+	test("rejects comments longer than 10,000 chars", () => {
 		assertInvalid(DirectionSelectRequestSchema, {
+			mode: "select",
 			archetype: "minimalist",
-			parameters,
-		})
-	})
-	test("rejects parameter keys longer than 100 chars", () => {
-		assertInvalid(DirectionSelectRequestSchema, {
-			archetype: "minimalist",
-			parameters: { ["k".repeat(101)]: 1 },
+			comments: "x".repeat(10_001),
 		})
 	})
 })
@@ -747,8 +747,8 @@ describe("schemas/websocket.ts — WsClientMessageSchema", () => {
 	test("parses valid (select)", () => {
 		assertValid(WsClientMessageSchema, {
 			type: "select",
+			mode: "select",
 			archetype: "minimalist",
-			parameters: { density: 3 },
 		})
 	})
 	test("rejects invalid", () => {
@@ -863,14 +863,16 @@ describe("schemas/websocket.ts — WsAnswerMessageSchema feedback cap", () => {
 })
 
 describe("schemas/websocket.ts — WsSelectMessageSchema caps", () => {
-	test("accepts max-length archetype (64) + comments (10,000) + nested annotation caps", () => {
+	// WsSelectMessageSchema requires `mode: "select" | "regenerate"`. No
+	// `parameters` or `annotations.screenshot` field — those were removed
+	// when the schema migrated to discriminated-union semantics.
+	test("accepts max-length archetype (64) + comments (10,000) + nested pin caps", () => {
 		assertValid(WsSelectMessageSchema, {
 			type: "select",
+			mode: "select",
 			archetype: "a".repeat(64),
-			parameters: {},
 			comments: "c".repeat(10_000),
 			annotations: {
-				screenshot: "s".repeat(65_536),
 				pins: [{ x: 0, y: 0, text: "p".repeat(1_000) }],
 			},
 		})
@@ -878,32 +880,24 @@ describe("schemas/websocket.ts — WsSelectMessageSchema caps", () => {
 	test("rejects archetype > 64", () => {
 		assertInvalid(WsSelectMessageSchema, {
 			type: "select",
+			mode: "select",
 			archetype: "a".repeat(65),
-			parameters: {},
 		})
 	})
 	test("rejects comments > 10,000", () => {
 		assertInvalid(WsSelectMessageSchema, {
 			type: "select",
+			mode: "select",
 			archetype: "a",
-			parameters: {},
 			comments: "c".repeat(10_001),
 		})
 	})
 	test("rejects annotations.pins[].text > 1,000", () => {
 		assertInvalid(WsSelectMessageSchema, {
 			type: "select",
+			mode: "select",
 			archetype: "a",
-			parameters: {},
 			annotations: { pins: [{ x: 0, y: 0, text: "p".repeat(1_001) }] },
-		})
-	})
-	test("rejects annotations.screenshot > 65,536", () => {
-		assertInvalid(WsSelectMessageSchema, {
-			type: "select",
-			archetype: "a",
-			parameters: {},
-			annotations: { screenshot: "s".repeat(65_537) },
 		})
 	})
 })

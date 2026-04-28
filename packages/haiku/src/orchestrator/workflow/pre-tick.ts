@@ -17,9 +17,9 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { getCurrentState } from "../../current-state.js"
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { resolveIntentStages, resolveStudioStages } from "../../orchestrator.js"
-import { getCurrentState } from "../../current-state.js"
 import {
 	gitCommitState,
 	intentDir,

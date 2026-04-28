@@ -81,7 +81,8 @@ export function getCurrentState(
 	if (!studio) return null
 
 	const stages = resolveIntentStages(intent, studio)
-	const fallbackStages = stages.length > 0 ? stages : resolveStudioStages(studio)
+	const fallbackStages =
+		stages.length > 0 ? stages : resolveStudioStages(studio)
 	if (fallbackStages.length === 0) {
 		return { studio, stage: "", phase: "" }
 	}

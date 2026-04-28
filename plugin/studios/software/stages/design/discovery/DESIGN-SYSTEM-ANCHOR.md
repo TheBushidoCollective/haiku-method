@@ -1,0 +1,79 @@
+---
+name: design-system-anchor
+location: .haiku/intents/{intent-slug}/knowledge/DESIGN-SYSTEM-ANCHOR.md
+scope: intent
+format: text
+required: true
+purpose: Concrete design-system specs extracted from real source — button heights, radii, color tokens, spacing scale — cited to file:line.
+---
+
+# Design System Anchor
+
+Concrete design-system specs extracted from the project's source code. Every value is cited to its source file and line number. Downstream hats (designer, design-reviewer) must use these values — not guesses.
+
+## Content Guide
+
+### 1. Atoms
+
+For each reusable atomic component found in source (e.g. Button, Surface, Card, Input, Badge):
+
+- **Component name** and its source file path
+- **Dimensions** — height, min-height, min-width, padding (cited to file:line)
+- **Border radius** (cited to file:line)
+- **States** — list any conditional styles for hover, focus, active, disabled, loading, error (cited to file:line)
+- **Variants** — any size/color/shape variants the component declares (cited to file:line)
+
+Example entry:
+```
+### Button
+Source: atorasu/atoms/Button.tsx
+
+- height: 44px             # Button.tsx:23
+- border-radius: 8px        # Button.tsx:31
+- padding-h: 16px           # Button.tsx:28
+- disabled-opacity: 0.4     # Button.tsx:47
+```
+
+### 2. Tokens
+
+Color, spacing, typography, and radius scales pulled from the project's tokens module (e.g. `atorasu/style/theme/colors.ts`, `style/spacing.ts`):
+
+- **Color tokens** — name, value, semantic alias if any (cited to file:line)
+- **Spacing scale** — each step value (cited to file:line)
+- **Typography scale** — font family, sizes, weights, line heights (cited to file:line)
+- **Radius scale** — each named radius value (cited to file:line)
+- **Shadow/elevation** — any named shadow tokens (cited to file:line)
+
+Example entry:
+```
+### Color Tokens
+Source: atorasu/style/theme/colors.ts
+
+- brand-primary: #1A73E8    # colors.ts:12
+- surface-bg: #FFFFFF       # colors.ts:18
+- text-primary: #212121     # colors.ts:24
+```
+
+### 3. Active vs Dormant Patterns
+
+Cross-reference era/status tags from the inception stage's `DISCOVERY.md` `## Existing Code Structure` section. For each prior-art file listed there:
+
+- **Active** — pattern is used in the current codebase, values are current
+- **Dormant** — era-tagged as legacy (e.g. Stripe-era, Branch-era) — flag these explicitly so the designer avoids them
+
+### 4. Open Questions
+
+Anything ambiguous from source that requires designer judgment before proceeding:
+
+- Token values that appear overridden in multiple places (list each location and value)
+- Components with undocumented variants
+- Source files listed in DISCOVERY.md that could not be located
+- Any token that has no source citation (must not be used until resolved)
+
+## Quality Signals
+
+- Every atom spec entry cites source file and line number
+- Every token entry cites source file and line number
+- No invented or approximated values — open questions section covers gaps
+- Active vs dormant flags are present for all prior-art files with era tags
+- The designer hat can read this document and produce mockups without touching source files

@@ -495,6 +495,43 @@ try {
 		assert.strictEqual(state.elaboration_turns, 3)
 	})
 
+	test("elaborate phase with leftover human FB routes to feedback_dispatch (NOT gate_review)", () => {
+		// Reproduces the bug the prior fix missed: after a Request Changes
+		// on the spec gate, the stage stays in `elaborate` phase with a
+		// triaged human FB sitting on it. The next `haiku_run_next` tick
+		// would re-emit `gate_review` from `elaborate.ts` (the `gate.ts`
+		// fix only covered the post-execute stage gate). Pre-tick triage
+		// gate now intercepts these and emits `feedback_dispatch` so the
+		// review UI never re-pops on unaddressed feedback.
+		const { projDir, intentDirPath, slug } = createProject("gate-fb-elaborate-replay", {
+			active_stage: "plan",
+			stageConfig: { plan: { review: "ask" } },
+		})
+		createStageState(intentDirPath, "plan", {
+			phase: "elaborate",
+			pre_review_dispatched: true,
+			pre_review_skipped_no_agents: true,
+			gate_outcome: "changes_requested",
+		})
+		createFeedbackFile(intentDirPath, slug, "plan", "Reviewer concern", {
+			origin: "user-chat",
+			author: "user",
+			author_type: "human",
+		})
+
+		process.chdir(projDir)
+		const result = runNext(slug)
+
+		assert.strictEqual(
+			result.action,
+			"feedback_dispatch",
+			`Expected feedback_dispatch from pre-tick gate; got ${result.action}. ` +
+				`This means a stage in elaborate phase with leftover human FB ` +
+				`re-popped the review UI instead of dispatching to the agent.`,
+		)
+		assert.strictEqual(result.stage, "plan")
+	})
+
 	test("human-authored pending feedback routes to feedback_dispatch (no UI re-open)", () => {
 		const { projDir, intentDirPath, slug } = createProject(
 			"gate-fb-summaries",

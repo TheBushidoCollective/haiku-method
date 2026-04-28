@@ -97,9 +97,12 @@ export function runWorkflowTick(
 
 	// Pre-tick feedback triage gate. Walks every stage from index 0
 	// through the current stage looking for open (non-terminal) FBs.
-	// Three outcomes:
+	// Four outcomes (see feedback-triage-gate.ts header):
 	//   - any untriaged FB found → emit `feedback_triage`
-	//   - every FB triaged but ≥ 1 on an earlier stage → emit revisit
+	//   - every FB triaged but ≥ 1 on an earlier stage → emit `revisited`
+	//   - human FB on current stage with null/question resolution →
+	//     emit `feedback_dispatch` (prevents elaborate.ts / gate.ts
+	//     from re-popping the review UI on unaddressed feedback)
 	//   - else → null (fall through to the normal handler chain)
 	// Intentionally runs AFTER tamper detection (we never advance on
 	// a tampered tree) and BEFORE handler dispatch (so misplaced or
@@ -110,7 +113,9 @@ export function runWorkflowTick(
 		const triageState: StateName =
 			triageAction.action === "feedback_triage"
 				? "feedback_triage"
-				: "revisited"
+				: triageAction.action === "feedback_dispatch"
+					? "feedback_dispatch"
+					: "revisited"
 		return {
 			state: triageState,
 			context: derived.context,

@@ -661,8 +661,11 @@ try {
 
 		// After the revisit, intent.active_stage is now "plan" (revisit
 		// helper sets it). Tick 3 perspective: with active_stage =
-		// plan, the FB on plan is now "current stage" — outcome 3,
-		// gate falls through to normal handler dispatch.
+		// plan, the FB on plan is now "current stage" — outcome 3
+		// (added 2026-04-28): a triaged human FB with no resolution on
+		// the current stage routes through `feedback_dispatch` so the
+		// agent triages / replies inline, instead of falling through to
+		// elaborate.ts (which would re-pop the review UI).
 		const tick3 = preTickFeedbackGate({
 			slug,
 			studio,
@@ -672,10 +675,9 @@ try {
 			currentPhase: "elaborate",
 			stageState: { phase: "elaborate" },
 		})
-		// Falls through (null) — the gate handler at gate.ts handles
-		// current-stage feedback via review_fix dispatch, which lives
-		// outside this test's scope.
-		assert.strictEqual(tick3, null)
+		assert.ok(tick3)
+		assert.strictEqual(tick3.action, "feedback_dispatch")
+		assert.strictEqual(tick3.stage, "plan")
 
 		// Sanity-check: verify the FB actually lives on plan now and
 		// has triaged_at stamped.

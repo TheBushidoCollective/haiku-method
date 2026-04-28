@@ -1,6 +1,6 @@
 // orchestrator/workflow/feedback-triage-gate.ts — Pre-tick check
 // that scans every stage from index 0 through the current stage for
-// open (non-terminal) feedback. Three outcomes, in priority order:
+// open (non-terminal) feedback. Four outcomes, in priority order:
 //
 //   1. Any FB without a `triaged_at:` timestamp → emit
 //      `feedback_triage` action so the agent classifies/relocates
@@ -13,13 +13,24 @@
 //      revisit machinery handles branch state, downstream
 //      invalidation, and re-entry.
 //
-//   3. All FBs triaged AND open FBs only on the current stage (or no
-//      open FBs at all) → return null. Lets the normal handler chain
-//      run (the stage's gate handler picks up current-stage feedback
-//      via the existing `review_fix` dispatch).
+//   3. All FBs triaged + at least one human-authored FB on the
+//      current stage with `resolution: null` or `resolution:
+//      "question"` → emit `feedback_dispatch` so the agent triages /
+//      replies inline. This is THE chokepoint that prevents either
+//      `elaborate.ts` (spec gate) OR `gate.ts` (post-execute stage
+//      gate) from re-popping the review UI while feedback is still
+//      pending. Without this, the spec gate handler would fire
+//      `gate_review` again on every tick when the stage is in
+//      elaborate phase with leftover FBs from a Request Changes.
+//
+//   4. All FBs triaged + only inline_fix / stage_revisit / no open
+//      FBs at all → return null. Lets the normal handler chain run
+//      (the stage's gate handler picks up current-stage inline_fix
+//      items via the existing `review_fix` dispatch).
 
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { type FeedbackItem, readFeedbackFiles } from "../../state-tools.js"
+import { buildFeedbackDispatchAction, classifyPendingForRevisit } from "../revisit.js"
 import { revisit } from "../revisit.js"
 import { resolveIntentStages } from "../studio.js"
 import type { DerivedContext } from "./derive-state.js"
@@ -132,7 +143,34 @@ export function preTickFeedbackGate(
 		}
 	}
 
-	// Outcome 3: open feedback only on current stage (or only at
-	// intent scope). Existing handlers manage that.
+	// Outcome 3: human-authored FB on the current stage with no
+	// resolution (or resolution=question) — dispatch to agent for
+	// inline triage / reply BEFORE any handler can re-pop the review
+	// UI. This catches the bug where a stage in elaborate phase with
+	// leftover FBs from a Request Changes would have `elaborate.ts`
+	// emit `gate_review` again on every tick.
+	if (currentStage) {
+		const currentStageFbs = openFeedback
+			.filter(({ stage }) => stage === currentStage)
+			.map(({ item }) => item)
+		const classification = classifyPendingForRevisit(currentStageFbs)
+		const humanNeedsTriage = classification.needsTriage.filter(
+			(item) => item.author_type === "human",
+		)
+		const humanQuestions = classification.questions.filter(
+			(item) => item.author_type === "human",
+		)
+		if (humanNeedsTriage.length > 0 || humanQuestions.length > 0) {
+			return buildFeedbackDispatchAction(slug, currentStage, {
+				needsTriage: humanNeedsTriage,
+				questions: humanQuestions,
+				inlineFixes: [],
+				stageRevisits: [],
+			})
+		}
+	}
+
+	// Outcome 4: open feedback only routes through inline_fix / revisit
+	// or sits at intent scope. Existing handlers manage those.
 	return null
 }

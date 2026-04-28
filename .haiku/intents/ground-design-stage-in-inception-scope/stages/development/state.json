@@ -1,0 +1,19 @@
+{
+  "stage": "development",
+  "status": "active",
+  "phase": "elaborate",
+  "started_at": "2026-04-28T21:37:37Z",
+  "completed_at": null,
+  "gate_entered_at": null,
+  "gate_outcome": null,
+  "visits": 1,
+  "iterations": [
+    {
+      "index": 1,
+      "started_at": "2026-04-28T21:37:37Z",
+      "completed_at": null,
+      "trigger": "initial",
+      "result": null
+    }
+  ]
+}

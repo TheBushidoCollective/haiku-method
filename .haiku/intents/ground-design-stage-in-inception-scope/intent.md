@@ -5,12 +5,8 @@ mode: continuous
 status: active
 created_at: '2026-04-28'
 stages:
-  - inception
-  - design
-  - product
   - development
-  - operations
-  - security
+active_stage: development
 ---
 
 # Ground design stage in inception scope

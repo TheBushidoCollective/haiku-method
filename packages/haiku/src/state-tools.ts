@@ -3297,6 +3297,52 @@ export function timestamp(): string {
 }
 
 /**
+ * Stage `.haiku/` for a state commit while defending against worktree-gitlink
+ * leaks (issue #262 concern 3).
+ *
+ * Why this is non-trivial: H·AI·K·U registers per-unit / per-fix git
+ * worktrees under `.haiku/worktrees/{slug}/{unit-or-fix}/`. A bare
+ * `git add .haiku` walks into those directories and stages each as a
+ * gitlink (mode 160000), because the worktree's `.git` file makes git
+ * treat it as a submodule. `.gitignore` does not protect entries that are
+ * already tracked, and a gitlink committed once on a parent commit will
+ * keep coming back as a phantom `D` after `haiku_repair`'s naive cleanup.
+ *
+ * Defense in depth:
+ *   1. Pathspec exclude on the add → blocks NEW gitlinks under
+ *      `.haiku/worktrees/` from entering the index.
+ *   2. `git rm --cached -r --ignore-unmatch -- .haiku/worktrees/` →
+ *      untracks any LEGACY gitlinks already in the index on this branch.
+ *      `--cached` leaves the working tree alone, so the worktree keeps
+ *      functioning. `--ignore-unmatch` keeps this a no-op when there's
+ *      nothing to clean.
+ */
+function stageHaikuStateForCommit(haikuRoot: string): void {
+	execFileSync(
+		"git",
+		["add", "--", ":(exclude,glob,top).haiku/worktrees/**", haikuRoot],
+		{ encoding: "utf8", stdio: "pipe" },
+	)
+	try {
+		execFileSync(
+			"git",
+			[
+				"rm",
+				"--cached",
+				"-r",
+				"--ignore-unmatch",
+				"-f",
+				"--",
+				join(haikuRoot, "worktrees"),
+			],
+			{ encoding: "utf8", stdio: "pipe" },
+		)
+	} catch {
+		/* Nothing to untrack — the common path. */
+	}
+}
+
+/**
  * Git add + commit + push for lifecycle state changes.
  * No-op in non-git environments (filesystem mode).
  * Non-fatal: git failures are logged but never crash the MCP.
@@ -3308,8 +3354,7 @@ export function gitCommitState(message: string): {
 } {
 	if (!isGitRepo()) return { committed: false, pushed: false } // Filesystem mode — no git operations
 	try {
-		const haikuRoot = findHaikuRoot()
-		execFileSync("git", ["add", haikuRoot], { encoding: "utf8", stdio: "pipe" })
+		stageHaikuStateForCommit(findHaikuRoot())
 		execFileSync("git", ["commit", "-m", message, "--allow-empty"], {
 			encoding: "utf8",
 			stdio: "pipe",
@@ -3341,8 +3386,7 @@ export function gitCommitStateBackgroundPush(message: string): {
 } {
 	if (!isGitRepo()) return { committed: false }
 	try {
-		const haikuRoot = findHaikuRoot()
-		execFileSync("git", ["add", haikuRoot], { encoding: "utf8", stdio: "pipe" })
+		stageHaikuStateForCommit(findHaikuRoot())
 		execFileSync("git", ["commit", "-m", message, "--allow-empty"], {
 			encoding: "utf8",
 			stdio: "pipe",

@@ -1,7 +1,7 @@
 {
   "stage": "development",
   "status": "active",
-  "phase": "elaborate",
+  "phase": "execute",
   "started_at": "2026-04-28T21:37:37Z",
   "completed_at": null,
   "gate_entered_at": null,
@@ -16,7 +16,7 @@
       "result": null
     }
   ],
-  "elaboration_turns": 6,
+  "elaboration_turns": 7,
   "decision_log": [
     {
       "decision": "Designer-prep is a hat, not a phase override or review-agent",
@@ -54,5 +54,7 @@
     }
   ],
   "pre_review_dispatched": true,
-  "pre_review_dispatched_at": "2026-04-28T21:46:18Z"
+  "pre_review_dispatched_at": "2026-04-28T21:46:18Z",
+  "pre_review_reviewers_acknowledged": true,
+  "pre_review_reviewers_acknowledged_at": "2026-04-28T21:56:30Z"
 }

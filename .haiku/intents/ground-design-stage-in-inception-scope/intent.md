@@ -7,6 +7,7 @@ created_at: '2026-04-28'
 stages:
   - development
 active_stage: development
+intent_reviewed: true
 ---
 
 # Ground design stage in inception scope

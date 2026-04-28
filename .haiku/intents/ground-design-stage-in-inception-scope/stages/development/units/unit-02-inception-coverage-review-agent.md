@@ -44,10 +44,10 @@ quality_gates:
   - name: biome-lint-clean
     command: bun x biome check plugin/studios/software/stages/design/
 status: active
-bolt: 4
+bolt: 5
 hat: builder
 started_at: '2026-04-28T21:57:40Z'
-hat_started_at: '2026-04-28T22:18:32Z'
+hat_started_at: '2026-04-28T22:37:38Z'
 iterations:
   - hat: planner
     started_at: '2026-04-28T21:57:40Z'
@@ -76,6 +76,11 @@ iterations:
       biome-lint-clean)
   - hat: builder
     started_at: '2026-04-28T22:18:32Z'
+    completed_at: '2026-04-28T22:37:38Z'
+    result: reject
+    reason: 'auto-reject: quality_gate_failed (haiku-tests-still-pass)'
+  - hat: builder
+    started_at: '2026-04-28T22:37:38Z'
     completed_at: null
     result: null
 ---

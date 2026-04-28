@@ -110,12 +110,30 @@ export function runWorkflowTick(
 	// hats).
 	const triageAction = preTickFeedbackGate(derived.context)
 	if (triageAction) {
+		// Explicit per-action mapping: every action `preTickFeedbackGate`
+		// can return is enumerated here. If a future outcome adds a new
+		// action type without updating this map, the `default` branch
+		// fails loudly via an `error` action rather than silently
+		// dropping into the wrong state name. Cheaper than a runtime
+		// invariant since the action surface is small + closed.
 		const triageState: StateName =
 			triageAction.action === "feedback_triage"
 				? "feedback_triage"
 				: triageAction.action === "feedback_dispatch"
 					? "feedback_dispatch"
-					: "revisited"
+					: triageAction.action === "revisited"
+						? "revisited"
+						: "error"
+		if (triageState === "error") {
+			return {
+				state: "error",
+				context: derived.context,
+				action: {
+					action: "error",
+					message: `preTickFeedbackGate emitted unmapped action '${triageAction.action}'. run-tick.ts:triageState mapping needs an entry for it.`,
+				},
+			}
+		}
 		return {
 			state: triageState,
 			context: derived.context,

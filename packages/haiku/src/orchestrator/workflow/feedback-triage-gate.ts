@@ -157,33 +157,28 @@ export function preTickFeedbackGate(
 	}
 
 	// Outcome 3: human-authored FB on the current stage with no
-	// resolution / resolution=question / resolution=stage_revisit —
-	// route BEFORE any handler can re-pop the review UI:
-	//   - stage_revisit: roll the current stage back via the revisit
-	//     helper. gate.ts already does this in gate phase, but
-	//     elaborate.ts (spec gate) doesn't, so a human-authored
-	//     stage_revisit FB sitting in elaborate phase would otherwise
-	//     loop the review UI.
-	//   - null / question: dispatch to the agent for inline triage /
-	//     reply via `feedback_dispatch`.
-	// This catches the bug where a stage in elaborate phase with
-	// leftover FBs from a Request Changes would have `elaborate.ts`
-	// emit `gate_review` again on every tick.
+	// resolution (or resolution=question) — dispatch to the agent for
+	// inline triage / reply via `feedback_dispatch`, BEFORE any handler
+	// can re-pop the review UI. This catches the bug where a stage in
+	// elaborate phase with leftover null/question FBs from a Request
+	// Changes would have `elaborate.ts` emit `gate_review` again on
+	// every tick.
+	//
+	// NOT handled here: stage_revisit-resolution FBs. `gate.ts` already
+	// triggers `revisitCurrentStage` for those when the stage is in
+	// gate phase, and we deliberately do NOT mirror that here. Calling
+	// `revisitCurrentStage` from the pre-tick gate would loop forever
+	// — the helper resets the phase to elaborate but does not close
+	// the FB, so the next tick would see the same stage_revisit FB
+	// and roll back again. Closing the FB here would mutate feedback
+	// state as a side-effect of the pre-tick check (out of scope for
+	// this PR). For now stage_revisit FBs in elaborate phase fall
+	// through; this is no worse than before this PR.
 	if (currentStage) {
 		const currentStageFbs = openFeedback
 			.filter(({ stage }) => stage === currentStage)
 			.map(({ item }) => item)
 		const classification = classifyPendingForRevisit(currentStageFbs)
-		const humanStageRevisits = classification.stageRevisits.filter(
-			(item) => item.author_type === "human",
-		)
-		if (humanStageRevisits.length > 0) {
-			// `revisit(slug, currentStage)` re-classifies and either rolls
-			// the stage back (stage_revisit present) or returns dispatch
-			// instructions — exactly what gate.ts does in gate phase, so
-			// behavior is consistent across phases.
-			return revisit(slug, currentStage)
-		}
 		const humanNeedsTriage = classification.needsTriage.filter(
 			(item) => item.author_type === "human",
 		)

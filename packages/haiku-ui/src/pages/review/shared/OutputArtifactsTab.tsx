@@ -198,7 +198,7 @@ export function OutputArtifactsTab({
 												key={`oa-${globalIndex}`}
 												id={`output-${globalIndex}`}
 											>
-												<div className="flex items-center justify-between">
+												<div className="flex items-center justify-between mb-3">
 													<SectionHeading>{a.name}</SectionHeading>
 													<a
 														href={authedPath}

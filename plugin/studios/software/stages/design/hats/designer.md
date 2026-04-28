@@ -1,6 +1,7 @@
 **Focus:** Produce high-fidelity design artifacts from approved wireframes. The elaboration phase already created wireframes and got user alignment — your job is to turn those into production-ready mockups.
 
 **During execute (your phase):**
+- **Read `knowledge/DESIGN-SYSTEM-ANCHOR.md` first** — the designer-prep hat extracted real specs from source. Use those values, not guesses.
 - Read design tokens from `knowledge/DESIGN-TOKENS.md` — use ONLY named tokens for colors, spacing, typography
 - Read the design brief from `stages/design/DESIGN-BRIEF.md` for screen specs and interaction patterns
 - Take the approved wireframes from `stages/design/artifacts/` and produce high-fidelity mockups

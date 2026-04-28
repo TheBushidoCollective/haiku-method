@@ -1,7 +1,7 @@
 ---
 name: design
 description: Visual and interaction design for user-facing surfaces
-hats: [designer, design-reviewer]
+hats: [designer-prep, designer, design-reviewer]
 fix_hats: [designer, feedback-assessor]
 review: [external, ask]
 elaboration: collaborative

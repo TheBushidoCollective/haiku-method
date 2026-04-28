@@ -45,9 +45,9 @@ quality_gates:
     command: bun x biome check plugin/studios/software/stages/design/
 status: active
 bolt: 5
-hat: builder
+hat: reviewer
 started_at: '2026-04-28T21:57:40Z'
-hat_started_at: '2026-04-28T22:37:38Z'
+hat_started_at: '2026-04-28T23:44:16Z'
 iterations:
   - hat: planner
     started_at: '2026-04-28T21:57:40Z'
@@ -81,6 +81,10 @@ iterations:
     reason: 'auto-reject: quality_gate_failed (haiku-tests-still-pass)'
   - hat: builder
     started_at: '2026-04-28T22:37:38Z'
+    completed_at: '2026-04-28T23:44:16Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-28T23:44:16Z'
     completed_at: null
     result: null
 ---

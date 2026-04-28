@@ -327,9 +327,8 @@ ${missingDiscovery
 
 After making all repairs, summarize:
 1. Which state.json files were updated and what changed
-2. Which unit frontmatter files were updated (and what inputs were added)
-3. Which discovery artifact stubs were created
-4. Any issues that could not be automatically resolved and need human attention`,
+2. Which discovery artifact stubs were created (and their paths)
+3. Any issues that could not be automatically resolved and need human attention (residual unit \`inputs:\` problems, unit content concerns, anything you spotted but cannot touch)`,
 	)
 
 	return sections.join("\n\n")

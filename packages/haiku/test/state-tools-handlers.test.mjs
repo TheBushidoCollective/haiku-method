@@ -1785,9 +1785,9 @@ body
 
 	test("haiku_unit_set rejects status writes outright (FSM-driven)", () => {
 		// `status` is FSM-driven — agents must never set it directly.
-		// fsm_field_forbidden fires before the value-specific
-		// fsm_completion_protected guard, so any status write returns the
-		// broader error.
+		// fsm_field_forbidden catches every status write (including the
+		// value=completed shape), so haiku_unit_advance_hat is the only
+		// path to a completed unit.
 		const result = handleStateTool("haiku_unit_set", {
 			intent: intentSlug,
 			stage: "inception",

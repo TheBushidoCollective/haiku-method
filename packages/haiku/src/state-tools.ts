@@ -4924,7 +4924,7 @@ export const stateToolDefs = [
 				unit: { type: "string" },
 				field: {
 					type: "string",
-					description: `Frontmatter field name. Agent-authorable fields: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}. FSM-driven fields (status, hat, bolt, iterations, started_at, completed_at) are workflow engine-owned and rejected here.`,
+					description: `Frontmatter field name. Agent-authorable fields: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}. FSM-driven fields (${FSM_DRIVEN_UNIT_FIELDS.join(", ")}) are workflow engine-owned and rejected here.`,
 				},
 				value: {
 					// Multi-type so the MCP advertises every shape the tool can
@@ -6192,9 +6192,10 @@ export function handleStateTool(
 			//      MUST NOT set it. Mirrors the AJV propertyNames check on
 			//      haiku_unit_write so both agent-write paths refuse FSM
 			//      fields uniformly.
-			//   2. fsm_completion_protected — special case for status: completed.
-			//   3. lifecycle_violation — unit is active/completed; forward-only.
-			//   4. field_type_mismatch — value's type doesn't match the
+			//      Catches every status: completed write because "status" is
+			//      in FSM_DRIVEN_UNIT_FIELDS.
+			//   2. lifecycle_violation — unit is active/completed; forward-only.
+			//   3. field_type_mismatch — value's type doesn't match the
 			//      field's UNIT_FRONTMATTER_SCHEMA declaration. Includes a
 			//      sub-schema AJV pass so quality_gates items, depends_on
 			//      string-pattern, etc. all get validated, not just the
@@ -6207,18 +6208,6 @@ export function handleStateTool(
 						error: "fsm_field_forbidden",
 						field,
 						message: `Field '${field}' is workflow-driven — set automatically by haiku_unit_advance_hat / haiku_unit_reject_hat / haiku_unit_increment_bolt. Agents must not set it directly. Forbidden fields: [${FSM_DRIVEN_UNIT_FIELDS.join(", ")}].`,
-					},
-					{ isError: true },
-				)
-			}
-			if (field === "status" && value === "completed") {
-				return reply(
-					{
-						error: "fsm_completion_protected",
-						field,
-						value,
-						message:
-							'Cannot set status to "completed" directly — unit completion is workflow engine-controlled. Call `haiku_unit_advance_hat` to let the workflow engine auto-complete the unit\'s last hat, which runs scope validation, feedback-assessor closure, and worktree merge-back.',
 					},
 					{ isError: true },
 				)

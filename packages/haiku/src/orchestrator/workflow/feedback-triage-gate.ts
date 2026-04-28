@@ -30,8 +30,11 @@
 
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { type FeedbackItem, readFeedbackFiles } from "../../state-tools.js"
-import { buildFeedbackDispatchAction, classifyPendingForRevisit } from "../revisit.js"
-import { revisit } from "../revisit.js"
+import {
+	buildFeedbackDispatchAction,
+	classifyPendingForRevisit,
+	revisit,
+} from "../revisit.js"
 import { resolveIntentStages } from "../studio.js"
 import type { DerivedContext } from "./derive-state.js"
 
@@ -43,7 +46,17 @@ interface OpenFeedbackOnStage {
 
 /** An FB is "open" if it can still block the gate — anything in a
  *  non-terminal status with no `closed_by` set. Mirrors the filter
- *  used in gate.ts so the pre-tick check stays consistent. */
+ *  used in gate.ts so the pre-tick check stays consistent.
+ *
+ *  Note: `fixing` (fix-loop in progress) and `answered` (agent
+ *  replied, awaiting human confirmation) PASS this filter intentionally
+ *  — they're not terminal. But Outcome 3 below uses
+ *  `classifyPendingForRevisit`, which buckets only `status === "pending"`
+ *  items. That's deliberate: re-dispatching a `fixing` item would
+ *  pre-empt an active fix-chain bolt; re-dispatching an `answered`
+ *  item would resend reply instructions for something the agent
+ *  already handled. Both are correctly left to fall through to the
+ *  per-state handler chain. */
 function isOpen(item: FeedbackItem): boolean {
 	if (item.closed_by) return false
 	return (
@@ -144,9 +157,16 @@ export function preTickFeedbackGate(
 	}
 
 	// Outcome 3: human-authored FB on the current stage with no
-	// resolution (or resolution=question) — dispatch to agent for
-	// inline triage / reply BEFORE any handler can re-pop the review
-	// UI. This catches the bug where a stage in elaborate phase with
+	// resolution / resolution=question / resolution=stage_revisit —
+	// route BEFORE any handler can re-pop the review UI:
+	//   - stage_revisit: roll the current stage back via the revisit
+	//     helper. gate.ts already does this in gate phase, but
+	//     elaborate.ts (spec gate) doesn't, so a human-authored
+	//     stage_revisit FB sitting in elaborate phase would otherwise
+	//     loop the review UI.
+	//   - null / question: dispatch to the agent for inline triage /
+	//     reply via `feedback_dispatch`.
+	// This catches the bug where a stage in elaborate phase with
 	// leftover FBs from a Request Changes would have `elaborate.ts`
 	// emit `gate_review` again on every tick.
 	if (currentStage) {
@@ -154,6 +174,16 @@ export function preTickFeedbackGate(
 			.filter(({ stage }) => stage === currentStage)
 			.map(({ item }) => item)
 		const classification = classifyPendingForRevisit(currentStageFbs)
+		const humanStageRevisits = classification.stageRevisits.filter(
+			(item) => item.author_type === "human",
+		)
+		if (humanStageRevisits.length > 0) {
+			// `revisit(slug, currentStage)` re-classifies and either rolls
+			// the stage back (stage_revisit present) or returns dispatch
+			// instructions — exactly what gate.ts does in gate phase, so
+			// behavior is consistent across phases.
+			return revisit(slug, currentStage)
+		}
 		const humanNeedsTriage = classification.needsTriage.filter(
 			(item) => item.author_type === "human",
 		)

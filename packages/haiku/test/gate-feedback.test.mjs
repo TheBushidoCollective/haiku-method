@@ -194,6 +194,8 @@ function createFeedbackFile(intentDirPath, _slug, stage, title, opts = {}) {
 	const triagedAtLine =
 		triagedAt === null ? "triaged_at: null" : `triaged_at: "${triagedAt}"`
 
+	const resolutionLine =
+		opts.resolution !== undefined ? `\nresolution: ${opts.resolution}` : ""
 	writeFileSync(
 		join(feedbackDirPath, `${nn}-${fileSlug}.md`),
 		`---
@@ -206,7 +208,7 @@ created_at: "2026-04-15T21:15:00Z"
 visit: ${opts.visit || 0}
 source_ref: null
 closed_by: null
-${triagedAtLine}
+${triagedAtLine}${resolutionLine}
 ---
 
 ${opts.body || `Finding: ${title}`}
@@ -493,6 +495,42 @@ try {
 		assert.strictEqual(state.started_at, "2026-04-15T10:00:00Z")
 		assert.strictEqual(state.status, "active")
 		assert.strictEqual(state.elaboration_turns, 3)
+	})
+
+	test("elaborate phase with human stage_revisit FB rolls back via revisit (NOT gate_review)", () => {
+		// Companion to the feedback_dispatch case below: if the reviewer
+		// set resolution=stage_revisit on a human FB, the pre-tick gate
+		// must call revisit() so the stage actually rolls back. Before
+		// this fix, elaborate.ts would re-emit gate_review on every
+		// tick because its handler doesn't classify pending FB.
+		const { projDir, intentDirPath, slug } = createProject(
+			"gate-fb-elaborate-stage-revisit",
+			{
+				active_stage: "plan",
+				stageConfig: { plan: { review: "ask" } },
+			},
+		)
+		createStageState(intentDirPath, "plan", {
+			phase: "elaborate",
+			pre_review_dispatched: true,
+			pre_review_skipped_no_agents: true,
+			gate_outcome: "changes_requested",
+		})
+		createFeedbackFile(intentDirPath, slug, "plan", "Plan needs full re-loop", {
+			origin: "user-chat",
+			author: "user",
+			author_type: "human",
+			resolution: "stage_revisit",
+		})
+
+		process.chdir(projDir)
+		const result = runNext(slug)
+
+		assert.strictEqual(
+			result.action,
+			"revisited",
+			`Expected revisited from pre-tick gate; got ${result.action}.`,
+		)
 	})
 
 	test("elaborate phase with leftover human FB routes to feedback_dispatch (NOT gate_review)", () => {

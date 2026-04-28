@@ -734,11 +734,16 @@ function ArtifactFullscreenModal({
 						Close
 					</button>
 				</div>
+				{/* /browse hits arbitrary remote repos, so artifact HTML is
+				    less trusted than SPA review content. allow-scripts is
+				    enough for the Tailwind CDN script the artifacts use;
+				    deliberately omitting allow-same-origin so a malicious
+				    artifact can't reach this page's origin. */}
 				<iframe
 					srcDoc={artifact.content}
 					title={artifact.name}
 					className="flex-1 border-0"
-					sandbox="allow-scripts allow-same-origin"
+					sandbox="allow-scripts"
 				/>
 			</div>
 		)
@@ -888,13 +893,16 @@ function ArtifactThumbnail({
 				className="group flex flex-col overflow-hidden rounded-lg border border-stone-200 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
 			>
 				<div className="relative aspect-[4/3] w-full overflow-hidden bg-white dark:bg-stone-900">
+					{/* See note in ArtifactFullscreenModal — sandbox is
+					    deliberately allow-scripts only (no allow-same-origin)
+					    because artifacts come from arbitrary remote repos. */}
 					<iframe
 						srcDoc={artifact.content}
 						title={artifact.name}
 						className="absolute inset-0 h-[300%] w-[300%] origin-top-left border-0"
 						style={{ transform: "scale(0.3333)", pointerEvents: "none" }}
 						tabIndex={-1}
-						sandbox="allow-scripts allow-same-origin"
+						sandbox="allow-scripts"
 					/>
 				</div>
 				<div className="border-t border-stone-100 px-3 py-2 dark:border-stone-800">

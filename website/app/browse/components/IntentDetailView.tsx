@@ -738,7 +738,7 @@ function ArtifactFullscreenModal({
 					srcDoc={artifact.content}
 					title={artifact.name}
 					className="flex-1 border-0"
-					sandbox="allow-same-origin"
+					sandbox="allow-scripts allow-same-origin"
 				/>
 			</div>
 		)
@@ -894,7 +894,7 @@ function ArtifactThumbnail({
 						className="absolute inset-0 h-[300%] w-[300%] origin-top-left border-0"
 						style={{ transform: "scale(0.3333)", pointerEvents: "none" }}
 						tabIndex={-1}
-						sandbox="allow-same-origin"
+						sandbox="allow-scripts allow-same-origin"
 					/>
 				</div>
 				<div className="border-t border-stone-100 px-3 py-2 dark:border-stone-800">

@@ -15,5 +15,44 @@
       "trigger": "initial",
       "result": null
     }
-  ]
+  ],
+  "elaboration_turns": 6,
+  "decision_log": [
+    {
+      "decision": "Designer-prep is a hat, not a phase override or review-agent",
+      "options": [
+        "New plan-class hat 'designer-prep' inserted before designer in the design stage's hats: list",
+        "Phase override on the design stage's ELABORATION.md instructing the designer to do prior-art reads itself",
+        "New review-agent 'design-system-anchor' that runs in the review phase and rejects mockups not grounded in source"
+      ],
+      "choice": "New plan-class hat 'designer-prep' inserted before designer in the design stage's hats: list",
+      "source": "autonomous-acknowledged",
+      "rationale": "Today's hats list [designer, design-reviewer] is missing the plan slot from architecture §3 (plan -> do -> verify). Adding designer-prep as a plan-class hat closes both the prior-art-grounding gap (#263 items 1, 3, 4, 6) AND brings the stage into compliance with the canonical pattern. Phase override would conflate planning with execution in one role; review-agent would catch drift after-the-fact instead of preventing it.",
+      "recorded_at": "2026-04-28T21:45:39Z"
+    },
+    {
+      "decision": "Inception-coverage is a review-agent, not a verifier hat",
+      "options": [
+        "Review-agent under design/review-agents/ that audits design output against inception's DECISIONS.md / OPEN-QUESTIONS.md / UI-SURFACES",
+        "Verifier hat at the end of the design stage's hats: list that performs the same audit as part of the per-unit verify slot"
+      ],
+      "choice": "Review-agent under design/review-agents/ that audits design output against inception's DECISIONS.md / OPEN-QUESTIONS.md / UI-SURFACES",
+      "source": "autonomous-acknowledged",
+      "rationale": "Architecture §3.4 states verifier hats are body-only — they cannot read cross-stage artifacts. Inception-coverage by definition reads inception artifacts while sitting in the design stage. A verifier hat would either require widening hat read scope (architectural drift) or silently fail. Review-agents already have intent-wide read scope, making them the canonical home for cross-stage audits.",
+      "recorded_at": "2026-04-28T21:45:45Z"
+    },
+    {
+      "decision": "Era tag is body-level annotation, not a frontmatter schema change",
+      "options": [
+        "Content-guide-only edit to DISCOVERY.md template — era tag is inline parenthetical body annotation (active / dormant / deprecated / in-flight)",
+        "New frontmatter field on inception's DISCOVERY.md output (e.g. era_inventory: {file: era}) with a validator that checks coverage"
+      ],
+      "choice": "Content-guide-only edit to DISCOVERY.md template — era tag is inline parenthetical body annotation (active / dormant / deprecated / in-flight)",
+      "source": "autonomous-acknowledged",
+      "rationale": "Per architecture §1.1, frontmatter is workflow-engine territory and additions cost discovery + validator + downstream-consumer work. The era tag is read visually by downstream hats during grounding — no programmatic consumer needs it. Inline parenthetical placement also guarantees the tag survives excerpt-into-subagent-prompt operations, which a separate frontmatter-legend would lose. Smallest-shape change that fully closes #263 item 5.",
+      "recorded_at": "2026-04-28T21:45:52Z"
+    }
+  ],
+  "pre_review_dispatched": true,
+  "pre_review_dispatched_at": "2026-04-28T21:46:18Z"
 }

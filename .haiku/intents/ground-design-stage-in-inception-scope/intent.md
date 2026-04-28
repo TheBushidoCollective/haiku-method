@@ -1,9 +1,16 @@
 ---
-title: "Ground design stage in inception scope"
-studio: ""
+title: Ground design stage in inception scope
+studio: software
 mode: continuous
 status: active
-created_at: 2026-04-28T21:35:59Z
+created_at: '2026-04-28'
+stages:
+  - inception
+  - design
+  - product
+  - development
+  - operations
+  - security
 ---
 
 # Ground design stage in inception scope

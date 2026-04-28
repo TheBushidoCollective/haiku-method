@@ -39,9 +39,9 @@ quality_gates:
     command: bun x biome check plugin/studios/software/stages/inception/
 status: active
 bolt: 5
-hat: builder
+hat: reviewer
 started_at: '2026-04-28T21:57:47Z'
-hat_started_at: '2026-04-28T22:27:17Z'
+hat_started_at: '2026-04-28T23:45:05Z'
 iterations:
   - hat: planner
     started_at: '2026-04-28T21:57:47Z'
@@ -77,6 +77,10 @@ iterations:
       biome-lint-clean)
   - hat: builder
     started_at: '2026-04-28T22:27:17Z'
+    completed_at: '2026-04-28T23:45:05Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-28T23:45:05Z'
     completed_at: null
     result: null
 ---

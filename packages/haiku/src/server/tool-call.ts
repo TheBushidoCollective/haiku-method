@@ -137,7 +137,15 @@ export function launchBrowserBestEffort(url: string, label: string): void {
 		`[haiku] ${label} ready → ${url}\n` +
 			`         Share this URL with the reviewer if the browser didn't auto-open.`,
 	)
-	const cmd = process.platform === "darwin" ? ["open", url] : ["xdg-open", url]
+	// `start` is a cmd.exe builtin, not an executable, so on Windows we shell
+	// through cmd. The empty string after `start` is the window title slot —
+	// without it, cmd consumes a quoted URL as the title and never opens it.
+	const cmd: string[] =
+		process.platform === "darwin"
+			? ["open", url]
+			: process.platform === "win32"
+				? ["cmd", "/c", "start", "", url]
+				: ["xdg-open", url]
 	try {
 		const child = spawn(cmd[0], cmd.slice(1), {
 			stdio: "ignore",

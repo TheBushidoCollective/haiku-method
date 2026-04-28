@@ -84,8 +84,10 @@ export function preTickConsistency(
 	// SPA can call it directly without going through pre-tick. This
 	// function is the writer that keeps the intent.md cache in step.
 	const syncActiveStageFromStateJson = () => {
-		const declared =
-			(readFm(intentFile).active_stage as string) || studioStages[0]
+		// `intent` was read at the top of preTickConsistency. No call site
+		// of this closure mutates intent.md before invoking it, so re-reading
+		// the frontmatter would just be a redundant fs hit.
+		const declared = (intent.active_stage as string) || studioStages[0]
 		const current = getCurrentState(slug, root)
 		const derived = current?.stage || studioStages[studioStages.length - 1]
 		if (declared !== derived) {

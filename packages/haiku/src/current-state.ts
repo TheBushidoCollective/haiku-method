@@ -79,6 +79,12 @@ export function getCurrentState(
 	if (!intent) return null
 	const studio = (intent.studio as string) || ""
 	if (!studio) return null
+	// Composite intents have their own per-studio state machinery in
+	// runNextComposite — this resolver doesn't model that shape. Mirror the
+	// pre-tick guard (orchestrator/workflow/pre-tick.ts) and bail out so
+	// the API doesn't return a stage from a single-studio walk that
+	// doesn't apply.
+	if (intent.composite) return null
 
 	const stages = resolveIntentStages(intent, studio)
 	const fallbackStages =

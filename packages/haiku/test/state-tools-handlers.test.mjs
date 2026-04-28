@@ -1026,11 +1026,13 @@ body
 		)
 	})
 
-	test("set parses JSON-stringified array values (regression: inputs.map is not a function)", () => {
-		// Older agents passed array fields as JSON-stringified strings because
-		// the schema declared `value: string`. The handler now coerces those
-		// back to native arrays before storage so the YAML output is a proper
-		// list and downstream consumers' .map() calls don't blow up.
+	test("set rejects JSON-stringified array values for array-typed fields (regression: inputs.map is not a function)", () => {
+		// Schema declares `inputs:` as `type: array`. Sending a JSON-stringified
+		// array used to silently slip through and YAML-serialize as a folded
+		// scalar (`inputs: >- [...]`), which made every downstream
+		// `unitInputs.map(...)` throw. Strict per-field validation now rejects
+		// the call with `field_type_mismatch` so the agent re-issues with a
+		// native array.
 		const unitName = "unit-99-regression-jsonstring"
 		const unitPath = join(
 			intentDirPath,
@@ -1043,28 +1045,31 @@ body
 			unitPath,
 			`---\nname: ${unitName}\nstatus: pending\nhat: ""\nbolt: 0\n---\n# ${unitName}\n`,
 		)
-		const result = handleStateTool("haiku_unit_set", {
-			intent: intentSlug,
-			stage: "inception",
-			unit: unitName,
-			field: "inputs",
-			value: '["intent.md", "knowledge/DISCOVERY.md"]',
-		})
-		assert.strictEqual(getTextResult(result), "ok")
-		const raw = readFileSync(unitPath, "utf8")
-		// Native YAML list, not a folded scalar string.
-		assert.ok(
-			raw.includes("inputs:\n  - intent.md\n  - knowledge/DISCOVERY.md"),
-			`Expected inputs to be a YAML list, got:\n${raw.slice(0, 400)}`,
-		)
-		assert.ok(
-			!raw.includes("inputs: >-"),
-			"Inputs should NOT be a folded-scalar string",
-		)
-		unlinkSync(unitPath)
+		try {
+			const result = handleStateTool("haiku_unit_set", {
+				intent: intentSlug,
+				stage: "inception",
+				unit: unitName,
+				field: "inputs",
+				value: '["intent.md", "knowledge/DISCOVERY.md"]',
+			})
+			const parsed = JSON.parse(getTextResult(result))
+			assert.strictEqual(parsed.error, "field_type_mismatch")
+			assert.strictEqual(parsed.field, "inputs")
+			assert.strictEqual(parsed.expected_type, "array")
+			assert.strictEqual(parsed.received_type, "string")
+			// File must be unchanged (rejection happens before the write).
+			const raw = readFileSync(unitPath, "utf8")
+			assert.ok(
+				!raw.includes("inputs:"),
+				"Rejected call should not have written inputs",
+			)
+		} finally {
+			unlinkSync(unitPath)
+		}
 	})
 
-	test("set accepts native arrays directly (no JSON encoding required)", () => {
+	test("set accepts native arrays for array-typed fields", () => {
 		const unitName = "unit-99-regression-native"
 		const unitPath = join(
 			intentDirPath,
@@ -1077,19 +1082,56 @@ body
 			unitPath,
 			`---\nname: ${unitName}\nstatus: pending\nhat: ""\nbolt: 0\n---\n# ${unitName}\n`,
 		)
-		const result = handleStateTool("haiku_unit_set", {
-			intent: intentSlug,
-			stage: "inception",
-			unit: unitName,
-			field: "inputs",
-			value: ["intent.md", "knowledge/X.md", "knowledge/Y.md"],
-		})
-		assert.strictEqual(getTextResult(result), "ok")
-		const raw = readFileSync(unitPath, "utf8")
-		assert.ok(raw.includes("- knowledge/X.md"), "Native array stored as YAML list")
-		assert.ok(raw.includes("- knowledge/Y.md"), "Second item present")
-		assert.ok(!raw.includes("inputs: >-"), "No folded-scalar serialization")
-		unlinkSync(unitPath)
+		try {
+			const result = handleStateTool("haiku_unit_set", {
+				intent: intentSlug,
+				stage: "inception",
+				unit: unitName,
+				field: "inputs",
+				value: ["intent.md", "knowledge/X.md", "knowledge/Y.md"],
+			})
+			assert.strictEqual(getTextResult(result), "ok")
+			const raw = readFileSync(unitPath, "utf8")
+			assert.ok(
+				raw.includes("- knowledge/X.md"),
+				"Native array stored as YAML list",
+			)
+			assert.ok(raw.includes("- knowledge/Y.md"), "Second item present")
+			assert.ok(!raw.includes("inputs: >-"), "No folded-scalar serialization")
+		} finally {
+			unlinkSync(unitPath)
+		}
+	})
+
+	test("set rejects array values for string-typed fields", () => {
+		const unitName = "unit-99-regression-string-field"
+		const unitPath = join(
+			intentDirPath,
+			"stages",
+			"inception",
+			"units",
+			`${unitName}.md`,
+		)
+		writeFileSync(
+			unitPath,
+			`---\nname: ${unitName}\nstatus: pending\nhat: ""\nbolt: 0\n---\n# ${unitName}\n`,
+		)
+		try {
+			const result = handleStateTool("haiku_unit_set", {
+				intent: intentSlug,
+				stage: "inception",
+				unit: unitName,
+				field: "title",
+				value: ["wrong", "shape"],
+			})
+			const parsed = JSON.parse(getTextResult(result))
+			assert.strictEqual(parsed.error, "field_type_mismatch")
+			assert.strictEqual(parsed.field, "title")
+			assert.strictEqual(parsed.expected_type, "string")
+			assert.strictEqual(parsed.received_type, "array")
+		} finally {
+			unlinkSync(unitPath)
+		}
 	})
 
 	// ── haiku_unit_list ───────────────────────────────────────────────────────

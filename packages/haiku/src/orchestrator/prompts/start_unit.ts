@@ -71,23 +71,23 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 		unit.endsWith(".md") ? unit : `${unit}.md`,
 	)
 
-	// Need unit inputs + model hint from its frontmatter. Defensively
-	// coerce: a `value` typed as `string` going through older versions of
-	// `haiku_unit_set` could store inputs as a JSON-stringified array
-	// (`inputs: >- ["a", "b"]`), which YAML would then parse back as a
-	// string. We try-parse strings that look like JSON arrays so the
-	// prompt builder still works on older corrupted state; non-array
-	// non-string values fall through to an empty list so downstream
-	// `.map()` calls never throw on this path.
+	// Need unit inputs + model hint from its frontmatter. New writes are
+	// type-validated at the `haiku_unit_set` boundary (array fields must
+	// receive arrays, not JSON-stringified arrays), so corruption can no
+	// longer enter from this codepath. The folded-scalar branch below is a
+	// one-time migration recovery for intents that already have
+	// `inputs: >- ["..."]` committed on disk from before that gate landed —
+	// it parses the legacy shape so the prompt builder doesn't crash and
+	// the workflow engine can drive those intents back to a healthy state.
+	// Non-array non-string values fall through to an empty list so
+	// downstream `.map()` calls never throw on this path.
 	let unitInputs: string[] = []
 	let unitModel: string | undefined
 	if (existsSync(unitFile)) {
 		const { data } = parseFrontmatter(readFileSync(unitFile, "utf8"))
 		const rawInputs = data.inputs ?? data.refs
 		if (Array.isArray(rawInputs)) {
-			unitInputs = rawInputs.filter(
-				(r): r is string => typeof r === "string",
-			)
+			unitInputs = rawInputs.filter((r): r is string => typeof r === "string")
 		} else if (typeof rawInputs === "string") {
 			const trimmed = rawInputs.trim()
 			if (trimmed.startsWith("[") && trimmed.endsWith("]")) {

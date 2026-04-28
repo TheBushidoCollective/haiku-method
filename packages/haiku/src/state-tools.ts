@@ -4899,19 +4899,36 @@ export const stateToolDefs = [
 	// state-integrity, etc.) but agents can no longer reach it through MCP.
 	{
 		name: "haiku_unit_set",
-		description:
-			"Set a field in a unit's frontmatter. `value` may be a string, number, boolean, null, array, or object — pass the native type the field expects (e.g. an array for `inputs:` / `outputs:` / `depends_on:`, a string for `model:` / `title:`). Strings that look like JSON arrays/objects are silently parsed and stored as the parsed value, so an agent that JSON.stringifies an array still produces correct YAML — but native arrays are preferred for clarity.",
+		description: `Set a field in a unit's frontmatter. \`value\` MUST match the field's declared type in the unit FM schema — array for \`inputs:\` / \`outputs:\` / \`depends_on:\` / \`closes:\` / \`quality_gates:\`, string for \`title:\` / \`model:\`. The handler validates per-field at runtime and rejects mismatches with \`field_type_mismatch\` so type drift never lands in YAML. Field-type contract (from UNIT_FRONTMATTER_SCHEMA): ${Object.entries(
+			UNIT_FRONTMATTER_SCHEMA.properties as Record<
+				string,
+				{ type?: string | string[] }
+			>,
+		)
+			.map(([k, v]) => {
+				const t = Array.isArray(v.type) ? v.type.join("|") : v.type
+				return `\`${k}\` → ${t}`
+			})
+			.join(", ")}.`,
 		inputSchema: {
 			type: "object" as const,
 			properties: {
 				intent: { type: "string" },
 				stage: { type: "string" },
 				unit: { type: "string" },
-				field: { type: "string" },
+				field: {
+					type: "string",
+					description: `Frontmatter field name. Agent-authorable fields: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}. FSM-driven fields (status, hat, bolt, iterations, started_at, completed_at) are workflow engine-owned and rejected here.`,
+				},
 				value: {
-					type: ["string", "array", "number", "boolean", "null"],
+					// Multi-type so the MCP advertises every shape the tool can
+					// accept; the handler validates per-field against the unit
+					// FM schema and rejects mismatches. An agent setting an
+					// array field MUST pass an array — JSON-stringified arrays
+					// are no longer silently parsed.
+					type: ["string", "array", "number", "boolean", "null", "object"],
 					description:
-						"The field's new value. Pass the native type the FM field expects: array for `inputs:`/`outputs:`/`depends_on:`, string for `model:`/`title:`, etc. Stringified JSON arrays/objects (`'[\"a\", \"b\"]'`) are auto-parsed to their native type before storage so the YAML output is well-formed.",
+						"The field's new value. MUST match the field's declared type in UNIT_FRONTMATTER_SCHEMA — pass an array for array-typed fields, a string for string-typed, etc. Mismatches return `field_type_mismatch` with the expected type so the agent can correct the call. Native types only; stringified JSON is rejected.",
 				},
 			},
 			required: ["intent", "stage", "unit", "field", "value"],
@@ -6174,31 +6191,7 @@ export function handleStateTool(
 			//      that work. The workflow engine is the only legitimate writer at that
 			//      point (advance_hat, increment_bolt, reject_hat).
 			const field = args.field as string
-			// Coerce JSON-stringified arrays/objects to their native type before
-			// storage. Older versions of this tool's schema declared `value` as a
-			// `string`, so agents trying to set array-typed fields like `inputs:`
-			// / `outputs:` / `depends_on:` had to JSON.stringify their array. The
-			// raw string then YAML-serialized as a folded scalar (`inputs: >- [...]`)
-			// instead of a native list, and every downstream `unitInputs.map(...)`
-			// blew up with `unitInputs.map is not a function`. Schema now accepts
-			// native types, but stringified-array inputs from older agents are
-			// still parsed and stored correctly so deployments don't bifurcate.
-			const value = ((): unknown => {
-				const raw = args.value
-				if (typeof raw !== "string") return raw
-				const trimmed = raw.trim()
-				if (
-					(trimmed.startsWith("[") && trimmed.endsWith("]")) ||
-					(trimmed.startsWith("{") && trimmed.endsWith("}"))
-				) {
-					try {
-						return JSON.parse(trimmed)
-					} catch {
-						return raw
-					}
-				}
-				return raw
-			})()
+			const value = args.value
 			if (field === "status" && value === "completed") {
 				return reply(
 					{
@@ -6244,6 +6237,43 @@ export function handleStateTool(
 							current_status: currentStatus,
 							field,
 							message: `Cannot set field '${field}' on unit '${args.unit}' — status is '${currentStatus}'. Per the forward-only lifecycle rule (architecture §1.3), units become immutable once they enter active or completed status. Pending units only.`,
+						},
+						{ isError: true },
+					)
+				}
+			}
+			// Strict per-field type validation against UNIT_FRONTMATTER_SCHEMA.
+			// Array-typed fields MUST receive arrays — JSON-stringified arrays
+			// are NOT silently parsed (they previously slipped through and
+			// YAML-serialized as folded scalars, breaking every downstream
+			// `inputs.map(...)`). The schema communicates per-field types in
+			// its description; this gate enforces them at runtime so type drift
+			// never lands on disk. Runs AFTER the lifecycle check so an active
+			// unit reports `lifecycle_violation` (the more actionable signal)
+			// rather than `field_type_mismatch`.
+			const fieldSchemaForType = (
+				UNIT_FRONTMATTER_SCHEMA.properties as Record<
+					string,
+					{ type?: string | string[] }
+				>
+			)[field]
+			if (fieldSchemaForType?.type) {
+				const expected = Array.isArray(fieldSchemaForType.type)
+					? fieldSchemaForType.type
+					: [fieldSchemaForType.type]
+				const actual = Array.isArray(value)
+					? "array"
+					: value === null
+						? "null"
+						: typeof value
+				if (!expected.includes(actual)) {
+					return reply(
+						{
+							error: "field_type_mismatch",
+							field,
+							expected_type: expected.length === 1 ? expected[0] : expected,
+							received_type: actual,
+							message: `Field '${field}' expects ${expected.length === 1 ? expected[0] : `one of [${expected.join(", ")}]`}, got ${actual}. Pass a native ${expected[0]} value — JSON-stringified ${expected[0] === "array" ? "arrays" : "values"} are not accepted (they corrupt the YAML output). Example for array fields: \`value: ["intent.md", "knowledge/DISCOVERY.md"]\`.`,
 						},
 						{ isError: true },
 					)

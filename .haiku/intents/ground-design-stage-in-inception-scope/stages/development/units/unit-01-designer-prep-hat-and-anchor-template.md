@@ -49,9 +49,9 @@ quality_gates:
     command: bun x biome check plugin/studios/software/stages/design/
 status: active
 bolt: 5
-hat: builder
+hat: reviewer
 started_at: '2026-04-28T21:57:33Z'
-hat_started_at: '2026-04-28T22:27:49Z'
+hat_started_at: '2026-04-28T23:43:23Z'
 iterations:
   - hat: planner
     started_at: '2026-04-28T21:57:33Z'
@@ -87,6 +87,10 @@ iterations:
       biome-lint-clean)
   - hat: builder
     started_at: '2026-04-28T22:27:49Z'
+    completed_at: '2026-04-28T23:43:23Z'
+    result: advance
+  - hat: reviewer
+    started_at: '2026-04-28T23:43:23Z'
     completed_at: null
     result: null
 ---

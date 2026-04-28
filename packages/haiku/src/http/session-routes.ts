@@ -10,6 +10,8 @@
 // tool dispatcher and rebroadcasts the result via session annotations
 // so the parked gate_review waiter unblocks.
 
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import type { FastifyInstance } from "fastify"
 import {
 	DirectionSelectRequestSchema,
@@ -34,6 +36,11 @@ import {
 	updateQuestionSession,
 	updateSession,
 } from "../sessions.js"
+import {
+	intentDir,
+	parseFrontmatter,
+	persistDesignDirectionSelection,
+} from "../state-tools.js"
 import { logFeedbackAction } from "./action-log.js"
 import { requireTunnelAuth } from "./auth.js"
 import { respondSessionApi } from "./session-api.js"
@@ -164,9 +171,45 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				DirectionSelectRequestSchema,
 			)
 			if (!parsed.ok) return
+
+			// Persist screenshots to disk + write paths into stage state.json
+			// BEFORE waking the MCP tool. This is the durable layer: if the
+			// MCP client times out and discards the tool result, the next
+			// haiku_run_next still finds the selection on disk and surfaces
+			// it via the design_direction_complete recovery action.
+			let selection = parsed.data
+			if (parsed.data.mode === "select") {
+				const session = getSession(req.params.sessionId)
+				const slug =
+					session?.session_type === "design_direction"
+						? session.intent_slug
+						: ""
+				const activeStage = slug ? readActiveStage(slug) : ""
+				const screenshots = parsed.data.annotations?.screenshots ?? []
+				if (slug && activeStage && screenshots.length > 0) {
+					persistDesignDirectionSelection({
+						slug,
+						stage: activeStage,
+						archetype: parsed.data.archetype,
+						...(parsed.data.comments
+							? { comments: parsed.data.comments }
+							: {}),
+						screenshots,
+					})
+					// Drop the multi-MB data URLs from the in-memory session;
+					// authoritative storage is on disk now and the workflow's
+					// design_direction_complete recovery surfaces them by
+					// path on the next haiku_run_next.
+					const { annotations: _drop, ...rest } = parsed.data
+					selection = parsed.data.annotations?.pins
+						? { ...rest, annotations: { pins: parsed.data.annotations.pins } }
+						: rest
+				}
+			}
+
 			updateDesignDirectionSession(req.params.sessionId, {
 				status: "answered",
-				selection: parsed.data,
+				selection,
 			})
 			const payload: DirectionSelectResponse = { ok: true }
 			reply.send(payload)
@@ -309,4 +352,15 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			reply.send(response)
 		},
 	)
+}
+
+function readActiveStage(slug: string): string {
+	const intentFile = join(intentDir(slug), "intent.md")
+	if (!existsSync(intentFile)) return ""
+	try {
+		const { data } = parseFrontmatter(readFileSync(intentFile, "utf8"))
+		return (data.active_stage as string) || ""
+	} catch {
+		return ""
+	}
 }

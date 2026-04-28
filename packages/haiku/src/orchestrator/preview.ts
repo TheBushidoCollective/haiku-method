@@ -205,6 +205,11 @@ export function enrichActionWithPreview(action: OrchestratorAction): void {
 			next_step = "After you select a direction, elaboration continues."
 			break
 
+		case "design_direction_complete":
+			tell_user = `You picked a design direction — I'll fold the selection (and any annotated screenshots) into elaboration.`
+			next_step = "I'll continue elaborating with the chosen archetype."
+			break
+
 		case "outputs_missing":
 			tell_user = `Stage '${stage}' is missing required output artifacts.`
 			next_step = "Create the missing artifacts, then retry."

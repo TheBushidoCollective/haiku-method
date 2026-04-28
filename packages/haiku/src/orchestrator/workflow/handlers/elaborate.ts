@@ -520,6 +520,37 @@ const emit: WorkflowHandler = (ctx) => {
 					"This stage requires a design direction selection before proceeding. Call pick_design_direction with wireframe variants — the state will be updated automatically when the user selects a direction.",
 			}
 		}
+	} else if (!stageState.design_direction_surfaced) {
+		// Recovery / surface-once: the HTTP submit route persisted the
+		// selection (+ any annotated screenshot PNGs) to state.json. The
+		// `pick_design_direction` MCP tool result may have been
+		// discarded by a cancelled MCP request, so this is the durable
+		// path that hands the selection — including screenshot paths
+		// for the agent to Read — back into the conversation. Flip the
+		// surfaced flag so we don't re-emit on every subsequent tick.
+		const dd = stageState.design_direction as
+			| {
+					archetype?: string
+					comments?: string
+					annotations?: Array<{ comment: string; screenshot_path: string }>
+			  }
+			| undefined
+		if (dd?.archetype) {
+			stageState.design_direction_surfaced = true
+			writeJson(join(iDir, "stages", currentStage, "state.json"), stageState)
+			return {
+				action: "design_direction_complete",
+				intent: slug,
+				studio,
+				stage: currentStage,
+				archetype: dd.archetype,
+				...(dd.comments ? { comments: dd.comments } : {}),
+				...(dd.annotations && dd.annotations.length > 0
+					? { annotations: dd.annotations }
+					: {}),
+				message: `Design direction "${dd.archetype}" recorded. Read any screenshot_path entries to view the user's annotations, then continue elaboration.`,
+			}
+		}
 	}
 
 	// Cross-stage naming validation

@@ -67,7 +67,7 @@ The following belong in **later stages** and **MUST NOT** appear in the discover
 - **Infrastructure resources, port numbers, deployment topology** → operations stage
 - **Performance budgets, security policies, accessibility specs** → design stage (when they shape contracts) or operations stage (when they shape runtime config)
 - **Specific shell commands, build scripts, or test runs** → development / validation stages
-- **Code-archaeology summaries that pre-bind future implementation locations** ("the new auth module will live at `packages/foo/src/bar.ts`") — design owns implementation locations; inception MUST NOT pre-commit. **Backward-looking inventory of existing code with era tags** under `## Existing Code Structure` is the explicit exception — see content guide.
+- **Code-archaeology summaries that pre-bind future implementation locations** ("the new auth module will live at `packages/foo/src/bar.ts`") — design owns implementation locations; inception MUST NOT pre-commit. **Backward-looking inventory of existing code with era-tagged references** under `## Existing Code Structure` is the explicit exception — see content guide.
 
 If the agent feels the urge to specify any of the above, that signals the wrong stage. Capture it as an **open question** or a **capability need** instead, and let the downstream stage answer it.
 

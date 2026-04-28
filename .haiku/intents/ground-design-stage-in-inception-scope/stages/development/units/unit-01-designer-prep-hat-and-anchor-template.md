@@ -47,7 +47,7 @@ quality_gates:
     command: cd packages/haiku && node test/run-all.mjs
   - name: biome-lint-clean
     command: bun x biome check plugin/studios/software/stages/design/
-status: active
+status: completed
 bolt: 5
 hat: reviewer
 started_at: '2026-04-28T21:57:33Z'
@@ -91,8 +91,9 @@ iterations:
     result: advance
   - hat: reviewer
     started_at: '2026-04-28T23:43:23Z'
-    completed_at: null
-    result: null
+    completed_at: '2026-04-28T23:46:58Z'
+    result: advance
+completed_at: '2026-04-28T23:46:58Z'
 ---
 ## Goal
 

@@ -37,7 +37,16 @@ quality_gates:
     command: cd packages/haiku && node test/run-all.mjs
   - name: biome-lint-clean
     command: bun x biome check plugin/studios/software/stages/inception/
-status: pending
+status: active
+bolt: 1
+hat: planner
+started_at: '2026-04-28T21:57:47Z'
+hat_started_at: '2026-04-28T21:57:47Z'
+iterations:
+  - hat: planner
+    started_at: '2026-04-28T21:57:47Z'
+    completed_at: null
+    result: null
 ---
 ## Goal
 

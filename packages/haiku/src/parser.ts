@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises"
-import { basename, join } from "node:path"
+import { basename, join, relative } from "node:path"
 import {
 	dedupeFrontmatterKeys,
 	isDuplicateKeyError,
@@ -331,16 +331,42 @@ const OUTPUT_HTML_EXTS = [".html", ".htm"]
 export interface OutputArtifact {
 	stage: string
 	name: string
-	type: "markdown" | "html" | "image"
-	/** Markdown and HTML content is inlined; images use a URL */
+	type: "markdown" | "html" | "image" | "file"
+	/** Markdown and HTML content is inlined; images and unknown files use relativePath */
 	content?: string
 	/** Relative path within the stage artifacts dir (for serving via HTTP) */
 	relativePath?: string
 }
 
+/** Recursively collect every file path under `dir`. Returns full absolute
+ *  paths so callers can read them and compute relative paths against
+ *  whatever root they care about. Non-fatal on missing dir. */
+async function walkArtifactsDir(dir: string): Promise<string[]> {
+	const out: string[] = []
+	let entries: Awaited<ReturnType<typeof readdir>>
+	try {
+		entries = await readdir(dir, { withFileTypes: true })
+	} catch {
+		return out
+	}
+	for (const e of entries) {
+		const p = join(dir, e.name)
+		if (e.isDirectory()) {
+			out.push(...(await walkArtifactsDir(p)))
+		} else {
+			out.push(p)
+		}
+	}
+	return out
+}
+
 /**
  * Scan stages/{stage}/artifacts/ directories for output artifacts.
- * Returns markdown/html content inline and image file references for HTTP serving.
+ * Walks recursively so nested artifacts (e.g. `artifacts/wireframes/foo.html`)
+ * surface in the review screen — not just files at the top level. Markdown
+ * and HTML bodies are inlined; images and unknown extensions are exposed via
+ * `relativePath` so the `/stage-artifacts/:sessionId/*` HTTP route can serve
+ * them.
  */
 export async function parseOutputArtifacts(
 	intentDir: string,
@@ -351,47 +377,63 @@ export async function parseOutputArtifacts(
 		const stageEntries = await readdir(stagesDir, { withFileTypes: true })
 		for (const stageEntry of stageEntries) {
 			if (!stageEntry.isDirectory()) continue
-			try {
-				const artifactsDir = join(stagesDir, stageEntry.name, "artifacts")
-				const files = await readdir(artifactsDir)
-				for (const file of files.sort()) {
-					const ext = file.substring(file.lastIndexOf(".")).toLowerCase()
-					if (file.endsWith(".md")) {
-						try {
-							const raw = await readFile(join(artifactsDir, file), "utf-8")
-							const { content } = matter(raw)
-							artifacts.push({
-								stage: stageEntry.name,
-								name: file.replace(/\.md$/, ""),
-								type: "markdown",
-								content,
-							})
-						} catch {
-							// Skip unreadable files
-						}
-					} else if (OUTPUT_HTML_EXTS.includes(ext)) {
-						try {
-							const content = await readFile(join(artifactsDir, file), "utf-8")
-							artifacts.push({
-								stage: stageEntry.name,
-								name: file.replace(/\.[^.]+$/, ""),
-								type: "html",
-								content,
-							})
-						} catch {
-							// Skip unreadable files
-						}
-					} else if (OUTPUT_IMAGE_EXTS.includes(ext)) {
+			const artifactsDir = join(stagesDir, stageEntry.name, "artifacts")
+			const files = (await walkArtifactsDir(artifactsDir)).sort()
+			for (const fullPath of files) {
+				const file = basename(fullPath)
+				const ext = file.substring(file.lastIndexOf(".")).toLowerCase()
+				// Path-from-artifacts-root preserves directory hierarchy in the
+				// artifact name, so `wireframes/knowledge-upload.html` reads as
+				// "wireframes/knowledge-upload" in the review screen instead of
+				// colliding with another `knowledge-upload` at a different depth.
+				const relFromArtifacts = relative(artifactsDir, fullPath)
+				const nameWithDir = relFromArtifacts.replace(/\.[^.]+$/, "")
+				const httpPath = `${stageEntry.name}/artifacts/${relFromArtifacts}`
+				if (ext === ".md") {
+					try {
+						const raw = await readFile(fullPath, "utf-8")
+						const { content } = matter(raw)
 						artifacts.push({
 							stage: stageEntry.name,
-							name: file.replace(/\.[^.]+$/, ""),
-							type: "image",
-							relativePath: `${stageEntry.name}/artifacts/${file}`,
+							name: nameWithDir,
+							type: "markdown",
+							content,
 						})
+					} catch {
+						// Skip unreadable files
 					}
+				} else if (OUTPUT_HTML_EXTS.includes(ext)) {
+					try {
+						const content = await readFile(fullPath, "utf-8")
+						artifacts.push({
+							stage: stageEntry.name,
+							name: nameWithDir,
+							type: "html",
+							content,
+							relativePath: httpPath,
+						})
+					} catch {
+						// Skip unreadable files
+					}
+				} else if (OUTPUT_IMAGE_EXTS.includes(ext)) {
+					artifacts.push({
+						stage: stageEntry.name,
+						name: nameWithDir,
+						type: "image",
+						relativePath: httpPath,
+					})
+				} else {
+					// Unknown extension — surface as a download link rather than
+					// silently dropping the file. A stage's artifact set should
+					// be visible in the review screen regardless of whether the
+					// renderer has a specialized view for the format.
+					artifacts.push({
+						stage: stageEntry.name,
+						name: nameWithDir,
+						type: "file",
+						relativePath: httpPath,
+					})
 				}
-			} catch {
-				// No artifacts/ directory for this stage
 			}
 		}
 	} catch {

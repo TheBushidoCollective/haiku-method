@@ -2,7 +2,7 @@
 title: >-
   designer-prep hat: wrong primary path for DISCOVERY.md — agent will fail to
   read Existing Code Structure section
-status: pending
+status: fixing
 origin: adversarial-review
 author: correctness
 author_type: agent
@@ -11,7 +11,7 @@ iteration: 1
 visit: 1
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 triaged_at: '2026-04-28T23:54:10Z'
 resolution: null
 replies: []
@@ -60,4 +60,3 @@ to:
 ```
 
 This matches the canonical `scope: intent` location and the path form used by every other cross-knowledge reference in the design hats.
-

@@ -1,6 +1,6 @@
 ---
 title: designer-prep hat references wrong path for inception DISCOVERY.md
-status: pending
+status: fixing
 origin: adversarial-review
 author: architecture
 author_type: agent
@@ -9,7 +9,7 @@ iteration: 1
 visit: 1
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 triaged_at: '2026-04-28T23:52:36Z'
 resolution: null
 replies: []

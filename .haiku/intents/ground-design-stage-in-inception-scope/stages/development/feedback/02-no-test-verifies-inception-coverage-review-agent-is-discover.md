@@ -2,7 +2,7 @@
 title: >-
   No test verifies inception-coverage review agent is discoverable via
   readReviewAgentPaths
-status: pending
+status: fixing
 origin: adversarial-review
 author: test-quality
 author_type: agent
@@ -11,7 +11,7 @@ iteration: 1
 visit: 1
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 triaged_at: '2026-04-28T23:51:30Z'
 resolution: null
 replies: []
@@ -46,4 +46,3 @@ test("design stage review agents include inception-coverage", () => {
 })
 ```
 This test validates the integration boundary — not just that a file exists at a path, but that the studio config builder discovers and loads it correctly as part of the design stage's review registry.
-

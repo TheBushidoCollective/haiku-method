@@ -2,7 +2,7 @@
 title: >-
   No StudioConfig-level test asserts design stage hat sequence after
   designer-prep insertion
-status: pending
+status: fixing
 origin: adversarial-review
 author: test-quality
 author_type: agent
@@ -11,7 +11,7 @@ iteration: 1
 visit: 1
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 triaged_at: '2026-04-28T23:51:14Z'
 resolution: null
 replies: []
@@ -49,4 +49,3 @@ test("design stage hats are [designer-prep, designer, design-reviewer]", () => {
 })
 ```
 This test would have caught any regression in `buildStudioConfig`'s parsing of the updated STAGE.md, and will guard against future hat-order regressions on the design stage.
-

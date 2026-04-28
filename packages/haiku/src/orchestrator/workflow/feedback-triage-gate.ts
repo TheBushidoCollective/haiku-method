@@ -13,20 +13,31 @@
 //      revisit machinery handles branch state, downstream
 //      invalidation, and re-entry.
 //
-//   3. All FBs triaged + at least one human-authored FB on the
-//      current stage with `resolution: null` or `resolution:
-//      "question"` → emit `feedback_dispatch` so the agent triages /
-//      replies inline. This is THE chokepoint that prevents either
-//      `elaborate.ts` (spec gate) OR `gate.ts` (post-execute stage
-//      gate) from re-popping the review UI while feedback is still
-//      pending. Without this, the spec gate handler would fire
-//      `gate_review` again on every tick when the stage is in
-//      elaborate phase with leftover FBs from a Request Changes.
+//   3. All FBs triaged + open FBs on the current stage that need
+//      agent attention. Two sub-cases:
 //
-//   4. All FBs triaged + only inline_fix / stage_revisit / no open
-//      FBs at all → return null. Lets the normal handler chain run
-//      (the stage's gate handler picks up current-stage inline_fix
-//      items via the existing `review_fix` dispatch).
+//        - Human null/question FBs always dispatch (regardless of
+//          phase) — keeps the review UI from re-popping while the
+//          reviewer's "agent decide" comment sits unaddressed.
+//
+//        - stage_revisit FBs dispatch ONLY when phase ≠ "gate". In
+//          gate phase, `gate.ts` owns rollback (it calls
+//          `revisitCurrentStage`). When the stage has already been
+//          rolled back (phase=elaborate after a prior gate revisit),
+//          the FB is stuck open until the agent verifies its concern
+//          is addressed and closes it. Without dispatching here,
+//          `elaborate.ts`'s spec gate emits `gate_review` again on
+//          every tick once pre-review is acknowledged.
+//
+//      We never call `revisitCurrentStage` from the pre-tick gate —
+//      the helper resets phase to elaborate without closing the FB,
+//      so the next tick would see the same FB and roll back again.
+//      Dispatch is the only path that breaks the loop.
+//
+//   4. All FBs triaged + only inline_fix / no open FBs at all →
+//      return null. Lets the normal handler chain run (the stage's
+//      gate handler picks up current-stage inline_fix items via
+//      the existing `review_fix` dispatch).
 
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { type FeedbackItem, readFeedbackFiles } from "../../state-tools.js"
@@ -156,41 +167,47 @@ export function preTickFeedbackGate(
 		}
 	}
 
-	// Outcome 3: human-authored FB on the current stage with no
-	// resolution (or resolution=question) — dispatch to the agent for
-	// inline triage / reply via `feedback_dispatch`, BEFORE any handler
-	// can re-pop the review UI. This catches the bug where a stage in
-	// elaborate phase with leftover null/question FBs from a Request
-	// Changes would have `elaborate.ts` emit `gate_review` again on
-	// every tick.
+	// Outcome 3: open FBs on the current stage that need agent
+	// attention.
 	//
-	// NOT handled here: stage_revisit-resolution FBs. `gate.ts` already
-	// triggers `revisitCurrentStage` for those when the stage is in
-	// gate phase, and we deliberately do NOT mirror that here. Calling
-	// `revisitCurrentStage` from the pre-tick gate would loop forever
-	// — the helper resets the phase to elaborate but does not close
-	// the FB, so the next tick would see the same stage_revisit FB
-	// and roll back again. Closing the FB here would mutate feedback
-	// state as a side-effect of the pre-tick check (out of scope for
-	// this PR). For now stage_revisit FBs in elaborate phase fall
-	// through; this is no worse than before this PR.
+	//   - Human null/question FBs always dispatch — keeps the review
+	//     UI from re-popping while the reviewer's "agent decide"
+	//     comment sits unaddressed.
+	//
+	//   - stage_revisit FBs dispatch ONLY when phase ≠ "gate". In
+	//     gate phase, `gate.ts` owns the rollback. When the stage has
+	//     already been rolled back, the FB is stuck open until the
+	//     agent verifies its concern is addressed and closes it.
+	//
+	//   We never call `revisitCurrentStage` here — the helper resets
+	//   phase to elaborate without closing the FB, so the next tick
+	//   would see the same FB and roll back again. The dispatch path
+	//   is the only one that closes the FB.
 	if (currentStage) {
 		const currentStageFbs = openFeedback
 			.filter(({ stage }) => stage === currentStage)
 			.map(({ item }) => item)
 		const classification = classifyPendingForRevisit(currentStageFbs)
+		const inGatePhase = context.currentPhase === "gate"
 		const humanNeedsTriage = classification.needsTriage.filter(
 			(item) => item.author_type === "human",
 		)
 		const humanQuestions = classification.questions.filter(
 			(item) => item.author_type === "human",
 		)
-		if (humanNeedsTriage.length > 0 || humanQuestions.length > 0) {
+		const stageRevisitsToDispatch = inGatePhase
+			? []
+			: classification.stageRevisits
+		if (
+			humanNeedsTriage.length > 0 ||
+			humanQuestions.length > 0 ||
+			stageRevisitsToDispatch.length > 0
+		) {
 			return buildFeedbackDispatchAction(slug, currentStage, {
 				needsTriage: humanNeedsTriage,
 				questions: humanQuestions,
 				inlineFixes: [],
-				stageRevisits: [],
+				stageRevisits: stageRevisitsToDispatch,
 			})
 		}
 	}

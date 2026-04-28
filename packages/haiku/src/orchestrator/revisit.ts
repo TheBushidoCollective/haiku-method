@@ -139,6 +139,11 @@ export function buildFeedbackDispatchAction(
 			`### Inline fixes (${classification.inlineFixes.length})\n\nFor each item below, run ONE bolt of the stage's \`fix_hats\` sequence against the single finding. The fix hat must land a real code change; a planning-only hat (planner/strategist) will fail to close the finding. On success, the feedback_assessor hat (terminal validator) flips the item to \`closed\`.\n\n${classification.inlineFixes.map(summaryOf).join("\n")}`,
 		)
 	}
+	if (classification.stageRevisits.length > 0) {
+		sections.push(
+			`### Close stage_revisit findings (${classification.stageRevisits.length})\n\nThese findings asked for a stage revisit. The stage has already been rolled back to elaborate (or never left it) — the rollback already happened or wasn't needed. Now you need to verify each finding is addressed by the current stage state and explicitly close it.\n\nFor each item below:\n1. Read the finding body + any attachment/source_ref.\n2. Check the stage's decision_log, current units, and knowledge artifacts to confirm the concern is addressed.\n3. If addressed: \`haiku_feedback_update { intent: "${slug}", stage: "${stage}", feedback_id, status: "closed" }\`.\n4. If not yet addressed: do the elaborate work first (record decisions via \`haiku_decision_record\`, write/revise units via \`haiku_unit_write\`, edit knowledge artifacts), then close.\n\nDo NOT roll the stage back again — gate.ts owns rollback when the stage is in gate phase, and the rollback you needed has already happened. Closing these findings is what unblocks the gate.\n\n${classification.stageRevisits.map(summaryOf).join("\n")}`,
+		)
+	}
 	return {
 		action: "feedback_dispatch",
 		intent: slug,
@@ -147,6 +152,7 @@ export function buildFeedbackDispatchAction(
 			needs_triage: classification.needsTriage.length,
 			questions: classification.questions.length,
 			inline_fixes: classification.inlineFixes.length,
+			stage_revisits: classification.stageRevisits.length,
 		},
 		message: `Resolve pending feedback on stage '${stage}' WITHOUT rolling the stage back. Dispatch each item per its resolution:\n\n${sections.join("\n\n")}\n\nAfter dispatching all items, call \`haiku_run_next { intent: "${slug}" }\` to re-check the gate.`,
 	}

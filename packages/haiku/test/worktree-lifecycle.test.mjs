@@ -55,6 +55,12 @@ function setupRepo(opts = {}) {
 	git(tmp, "init", "--initial-branch=main")
 	git(tmp, "config", "user.email", "test@haiku")
 	git(tmp, "config", "user.name", "haiku-test")
+	// Disable commit signing in the test repo so the suite runs in
+	// environments without a GPG/SSH agent (e.g. the MCP server's gate
+	// runner). The user's global `commit.gpgsign = true` would otherwise
+	// make every test commit try to talk to an absent agent socket.
+	git(tmp, "config", "commit.gpgsign", "false")
+	git(tmp, "config", "tag.gpgsign", "false")
 	writeFileSync(join(tmp, "README.md"), "# test\n")
 	git(tmp, "add", "-A")
 	git(tmp, "commit", "-m", "initial")

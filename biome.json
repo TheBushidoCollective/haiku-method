@@ -10,7 +10,7 @@
 			"packages/**",
 			"website/**",
 			"deploy/**",
-			"plugin/studios/software/stages/design/**",
+			"plugin/**",
 			"!**/dist/*",
 			"!**/bin/*",
 			"!.haiku/**/*",

@@ -1985,9 +1985,11 @@ function runInlineQualityGates(
 
 		const cwd = gate.dir ? resolve(repoRoot, gate.dir) : repoRoot
 
-		// Per-gate timeout defaults to 30s; override via HAIKU_GATE_TIMEOUT_MS.
+		// Per-gate timeout defaults to 120s; override via HAIKU_GATE_TIMEOUT_MS.
+		// Aligned with the post-execute gate runner in `validators.ts` so the
+		// inline (per-hat) and end-of-stage runners give a gate the same budget.
 		const gateTimeoutMs =
-			Number.parseInt(process.env.HAIKU_GATE_TIMEOUT_MS ?? "", 10) || 30000
+			Number.parseInt(process.env.HAIKU_GATE_TIMEOUT_MS ?? "", 10) || 120_000
 		try {
 			execSync(gateCmd, {
 				cwd,

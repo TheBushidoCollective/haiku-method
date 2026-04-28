@@ -71,12 +71,38 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 		unit.endsWith(".md") ? unit : `${unit}.md`,
 	)
 
-	// Need unit inputs + model hint from its frontmatter.
+	// Need unit inputs + model hint from its frontmatter. Defensively
+	// coerce: a `value` typed as `string` going through older versions of
+	// `haiku_unit_set` could store inputs as a JSON-stringified array
+	// (`inputs: >- ["a", "b"]`), which YAML would then parse back as a
+	// string. We try-parse strings that look like JSON arrays so the
+	// prompt builder still works on older corrupted state; non-array
+	// non-string values fall through to an empty list so downstream
+	// `.map()` calls never throw on this path.
 	let unitInputs: string[] = []
 	let unitModel: string | undefined
 	if (existsSync(unitFile)) {
 		const { data } = parseFrontmatter(readFileSync(unitFile, "utf8"))
-		unitInputs = (data.inputs as string[]) || (data.refs as string[]) || []
+		const rawInputs = data.inputs ?? data.refs
+		if (Array.isArray(rawInputs)) {
+			unitInputs = rawInputs.filter(
+				(r): r is string => typeof r === "string",
+			)
+		} else if (typeof rawInputs === "string") {
+			const trimmed = rawInputs.trim()
+			if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+				try {
+					const parsed = JSON.parse(trimmed)
+					if (Array.isArray(parsed)) {
+						unitInputs = parsed.filter(
+							(r): r is string => typeof r === "string",
+						)
+					}
+				} catch {
+					/* leave unitInputs empty */
+				}
+			}
+		}
 		unitModel = (data.model as string) || undefined
 	}
 

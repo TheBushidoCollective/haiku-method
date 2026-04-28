@@ -4899,7 +4899,8 @@ export const stateToolDefs = [
 	// state-integrity, etc.) but agents can no longer reach it through MCP.
 	{
 		name: "haiku_unit_set",
-		description: "Set a field in a unit's frontmatter",
+		description:
+			"Set a field in a unit's frontmatter. `value` may be a string, number, boolean, null, array, or object — pass the native type the field expects (e.g. an array for `inputs:` / `outputs:` / `depends_on:`, a string for `model:` / `title:`). Strings that look like JSON arrays/objects are silently parsed and stored as the parsed value, so an agent that JSON.stringifies an array still produces correct YAML — but native arrays are preferred for clarity.",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -4907,7 +4908,11 @@ export const stateToolDefs = [
 				stage: { type: "string" },
 				unit: { type: "string" },
 				field: { type: "string" },
-				value: { type: "string" },
+				value: {
+					type: ["string", "array", "number", "boolean", "null"],
+					description:
+						"The field's new value. Pass the native type the FM field expects: array for `inputs:`/`outputs:`/`depends_on:`, string for `model:`/`title:`, etc. Stringified JSON arrays/objects (`'[\"a\", \"b\"]'`) are auto-parsed to their native type before storage so the YAML output is well-formed.",
+				},
 			},
 			required: ["intent", "stage", "unit", "field", "value"],
 		},
@@ -6169,7 +6174,31 @@ export function handleStateTool(
 			//      that work. The workflow engine is the only legitimate writer at that
 			//      point (advance_hat, increment_bolt, reject_hat).
 			const field = args.field as string
-			const value = args.value
+			// Coerce JSON-stringified arrays/objects to their native type before
+			// storage. Older versions of this tool's schema declared `value` as a
+			// `string`, so agents trying to set array-typed fields like `inputs:`
+			// / `outputs:` / `depends_on:` had to JSON.stringify their array. The
+			// raw string then YAML-serialized as a folded scalar (`inputs: >- [...]`)
+			// instead of a native list, and every downstream `unitInputs.map(...)`
+			// blew up with `unitInputs.map is not a function`. Schema now accepts
+			// native types, but stringified-array inputs from older agents are
+			// still parsed and stored correctly so deployments don't bifurcate.
+			const value = ((): unknown => {
+				const raw = args.value
+				if (typeof raw !== "string") return raw
+				const trimmed = raw.trim()
+				if (
+					(trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+					(trimmed.startsWith("{") && trimmed.endsWith("}"))
+				) {
+					try {
+						return JSON.parse(trimmed)
+					} catch {
+						return raw
+					}
+				}
+				return raw
+			})()
 			if (field === "status" && value === "completed") {
 				return reply(
 					{
@@ -6220,7 +6249,7 @@ export function handleStateTool(
 					)
 				}
 			}
-			setFrontmatterField(path, args.field as string, args.value)
+			setFrontmatterField(path, field, value)
 			return text("ok")
 		}
 		case "haiku_unit_list": {

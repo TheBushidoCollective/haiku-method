@@ -9,6 +9,7 @@ import {
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	unlinkSync,
 	writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -1023,6 +1024,72 @@ body
 			raw.includes("Units elaborated with DAG"),
 			"Body criteria preserved",
 		)
+	})
+
+	test("set parses JSON-stringified array values (regression: inputs.map is not a function)", () => {
+		// Older agents passed array fields as JSON-stringified strings because
+		// the schema declared `value: string`. The handler now coerces those
+		// back to native arrays before storage so the YAML output is a proper
+		// list and downstream consumers' .map() calls don't blow up.
+		const unitName = "unit-99-regression-jsonstring"
+		const unitPath = join(
+			intentDirPath,
+			"stages",
+			"inception",
+			"units",
+			`${unitName}.md`,
+		)
+		writeFileSync(
+			unitPath,
+			`---\nname: ${unitName}\nstatus: pending\nhat: ""\nbolt: 0\n---\n# ${unitName}\n`,
+		)
+		const result = handleStateTool("haiku_unit_set", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: unitName,
+			field: "inputs",
+			value: '["intent.md", "knowledge/DISCOVERY.md"]',
+		})
+		assert.strictEqual(getTextResult(result), "ok")
+		const raw = readFileSync(unitPath, "utf8")
+		// Native YAML list, not a folded scalar string.
+		assert.ok(
+			raw.includes("inputs:\n  - intent.md\n  - knowledge/DISCOVERY.md"),
+			`Expected inputs to be a YAML list, got:\n${raw.slice(0, 400)}`,
+		)
+		assert.ok(
+			!raw.includes("inputs: >-"),
+			"Inputs should NOT be a folded-scalar string",
+		)
+		unlinkSync(unitPath)
+	})
+
+	test("set accepts native arrays directly (no JSON encoding required)", () => {
+		const unitName = "unit-99-regression-native"
+		const unitPath = join(
+			intentDirPath,
+			"stages",
+			"inception",
+			"units",
+			`${unitName}.md`,
+		)
+		writeFileSync(
+			unitPath,
+			`---\nname: ${unitName}\nstatus: pending\nhat: ""\nbolt: 0\n---\n# ${unitName}\n`,
+		)
+		const result = handleStateTool("haiku_unit_set", {
+			intent: intentSlug,
+			stage: "inception",
+			unit: unitName,
+			field: "inputs",
+			value: ["intent.md", "knowledge/X.md", "knowledge/Y.md"],
+		})
+		assert.strictEqual(getTextResult(result), "ok")
+		const raw = readFileSync(unitPath, "utf8")
+		assert.ok(raw.includes("- knowledge/X.md"), "Native array stored as YAML list")
+		assert.ok(raw.includes("- knowledge/Y.md"), "Second item present")
+		assert.ok(!raw.includes("inputs: >-"), "No folded-scalar serialization")
+		unlinkSync(unitPath)
 	})
 
 	// ── haiku_unit_list ───────────────────────────────────────────────────────

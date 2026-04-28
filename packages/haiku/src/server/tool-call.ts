@@ -691,8 +691,8 @@ export async function handleToolCall(
 		// emit a `design_direction_complete` action that surfaces the
 		// selection from durable state. Forwarding the abort here only
 		// short-circuits the wait without producing a usable response.
+		// The unused `signal` parameter is intentional — see comment above.
 		bindSessionCancellation(session.session_id, undefined)
-		void signal
 
 		// (Legacy server-rendered design-direction HTML removed —
 		// /direction/:sessionId serves HAIKU_UI_HTML.)
@@ -766,7 +766,10 @@ export async function handleToolCall(
 
 			// Select path — selection persisted by the HTTP submit route.
 			// Re-enforce stage branch since the user may have checked out
-			// another branch during the (up to 30-min) wait.
+			// another branch during the (up to 30-min) wait. Failures are
+			// non-fatal — branch state is reconciled by `haiku_run_next`'s
+			// own enforcement on the next tick — but we surface them so a
+			// debug-mode log shows when reconciliation will be needed.
 			try {
 				const intentRaw = await readFile(
 					join(findHaikuRoot(), "intents", input.intent_slug, "intent.md"),
@@ -775,10 +778,17 @@ export async function handleToolCall(
 				const activeStage =
 					(parseFrontmatter(intentRaw).data.active_stage as string) || ""
 				if (activeStage) {
-					ensureOnStageBranch(input.intent_slug, activeStage)
+					const guard = ensureOnStageBranch(input.intent_slug, activeStage)
+					if (!guard.ok) {
+						console.warn(
+							`[pick_design_direction] stage-branch enforcement failed: ${guard.message}`,
+						)
+					}
 				}
-			} catch {
-				/* non-fatal — branch state will be reconciled on next run_next */
+			} catch (err) {
+				console.warn(
+					`[pick_design_direction] post-wait branch reconciliation skipped: ${err instanceof Error ? err.message : String(err)}`,
+				)
 			}
 
 			const ackParts: string[] = [

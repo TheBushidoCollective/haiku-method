@@ -177,6 +177,13 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			// MCP client times out and discards the tool result, the next
 			// haiku_run_next still finds the selection on disk and surfaces
 			// it via the design_direction_complete recovery action.
+			//
+			// Persistence failures (disk full, permission denied, race with
+			// another writer) are non-fatal — log and fall through with the
+			// in-memory data URLs so the tool still wakes and the agent can
+			// at least receive the screenshots inline on this one call. The
+			// recovery layer just won't survive a second cancellation in
+			// that scenario.
 			let selection = parsed.data
 			if (parsed.data.mode === "select") {
 				const session = getSession(req.params.sessionId)
@@ -187,23 +194,30 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				const activeStage = slug ? readActiveStage(slug) : ""
 				const screenshots = parsed.data.annotations?.screenshots ?? []
 				if (slug && activeStage && screenshots.length > 0) {
-					persistDesignDirectionSelection({
-						slug,
-						stage: activeStage,
-						archetype: parsed.data.archetype,
-						...(parsed.data.comments
-							? { comments: parsed.data.comments }
-							: {}),
-						screenshots,
-					})
-					// Drop the multi-MB data URLs from the in-memory session;
-					// authoritative storage is on disk now and the workflow's
-					// design_direction_complete recovery surfaces them by
-					// path on the next haiku_run_next.
-					const { annotations: _drop, ...rest } = parsed.data
-					selection = parsed.data.annotations?.pins
-						? { ...rest, annotations: { pins: parsed.data.annotations.pins } }
-						: rest
+					try {
+						persistDesignDirectionSelection({
+							slug,
+							stage: activeStage,
+							archetype: parsed.data.archetype,
+							...(parsed.data.comments
+								? { comments: parsed.data.comments }
+								: {}),
+							screenshots,
+						})
+						// Drop the multi-MB data URLs from the in-memory session;
+						// authoritative storage is on disk now and the workflow's
+						// design_direction_complete recovery surfaces them by
+						// path on the next haiku_run_next.
+						const { annotations: _drop, ...rest } = parsed.data
+						selection = parsed.data.annotations?.pins
+							? { ...rest, annotations: { pins: parsed.data.annotations.pins } }
+							: rest
+					} catch (err) {
+						req.log.error(
+							{ err },
+							"persistDesignDirectionSelection failed — falling back to in-memory path",
+						)
+					}
 				}
 			}
 

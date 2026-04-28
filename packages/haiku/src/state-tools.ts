@@ -3829,10 +3829,11 @@ export interface DesignDirectionAnnotation {
  *  to it. Return value carries the persisted annotations so callers
  *  can pass them onwards (in-memory session, log, etc.).
  *
- *  Idempotent across re-submissions: filenames are NN-prefixed against
- *  what's already on disk, but state.json's `design_direction.annotations`
- *  is replaced wholesale, matching the picker's "your latest selection
- *  is the truth" semantics. */
+ *  Re-submissions replace the whole set: any prior `dd-NN-…` files are
+ *  deleted before the new annotations are written. This matches state's
+ *  "latest selection is the truth" semantics — there is no scenario
+ *  where a previously persisted screenshot stays load-bearing after a
+ *  fresh selection lands. */
 export function persistDesignDirectionSelection(opts: {
 	slug: string
 	stage: string
@@ -3850,15 +3851,22 @@ export function persistDesignDirectionSelection(opts: {
 	)
 	mkdirSync(artifactsDir, { recursive: true })
 
-	const archSlug = slugifyTitle(opts.archetype) || "selection"
-	const existing = readdirSync(artifactsDir)
-	let nn =
-		existing
-			.map((f) => Number.parseInt(f.match(/^dd-(\d+)-/)?.[1] ?? "", 10))
-			.filter((n) => Number.isFinite(n))
-			.reduce((max, n) => Math.max(max, n), 0) + 1
+	// Clear prior dd-NN-* files so re-submissions don't accumulate
+	// orphaned PNGs alongside the new set.
+	for (const f of readdirSync(artifactsDir)) {
+		if (/^dd-\d+-.*\.(png|jpe?g|webp)$/i.test(f)) {
+			try {
+				unlinkSync(join(artifactsDir, f))
+			} catch {
+				/* best-effort; persistence proceeds even if a stale file
+				   can't be removed (e.g. permission, missing) */
+			}
+		}
+	}
 
+	const archSlug = slugifyTitle(opts.archetype) || "selection"
 	const persisted: DesignDirectionAnnotation[] = []
+	let nn = 1
 	for (const ann of opts.screenshots) {
 		const m = ann.screenshot_data_url.match(
 			/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/,

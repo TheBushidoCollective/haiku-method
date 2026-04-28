@@ -129,15 +129,27 @@ function buildRepairPrompt(diagnosis: RepairDiagnosis): string {
 
 ## Constraints (CRITICAL — non-negotiable)
 
-- **NEVER modify any \`stages/*/units/*.md\` file.** Unit files are workflow-managed. The mechanical pre-tick repair has already populated any missing \`inputs:\` field before you were invoked. If you think a unit needs changes, that is OUT OF SCOPE for repair — surface it in your end-of-run summary as "needs human attention" and do not edit it.
-- **NEVER modify any \`stages/*/feedback/*.md\` file.** Feedback files are workflow-managed.
-- **NEVER modify intent.md body content.** Frontmatter is fine; body prose is not.
-- **NEVER create source code, tests, or application files.**
-- **NEVER delete any existing files.**
-- You CAN modify: intent.md frontmatter, stage \`state.json\` files (NOT inside \`units/\` or \`feedback/\` dirs).
-- You CAN create: missing discovery artifact stubs in \`knowledge/\` (empty .md files with frontmatter only), missing stage directories and their \`state.json\` files.
+You only have \`Read\`, \`Write\`, \`Glob\`, and \`Grep\` (Edit, Bash, Agent, WebSearch, WebFetch are disallowed). \`Write\` overwrites whole files at any path the cwd reaches, so the path itself is YOUR enforcement: before every \`Write\` call, verify the target path matches the allowlist below. If it doesn't, STOP and add a human-attention item to your summary instead.
 
-If you find yourself wanting to edit a unit file or a feedback file, STOP. Add the issue to your end-of-run summary as a human-attention item and move on.
+### Write-path allowlist (anything outside is forbidden)
+
+- \`intent.md\` — frontmatter edits only; preserve body prose verbatim.
+- \`stages/*/state.json\` — synthesize completion records, fix gate_outcome, etc.
+- \`knowledge/*.md\` — create missing discovery artifact stubs (frontmatter-only) when downstream stages expect them.
+- \`stages/*/state.json\` for stages that don't yet have a directory — create the dir + the file together.
+
+### Write-path denylist (touch ⇒ corruption)
+
+- \`stages/*/units/*.md\` — workflow-managed. Mechanical pre-tick repair has already populated any missing \`inputs:\` field before you were invoked. If you think a unit needs changes, that is OUT OF SCOPE — flag it for human attention.
+- \`stages/*/feedback/*.md\` — workflow-managed.
+- Source code, tests, application files anywhere — never.
+
+### Other rules
+
+- NEVER delete any existing files.
+- NEVER use \`Write\` to "patch" a file by re-reading it and writing a small change — unless you've fully read the existing content and you are preserving everything except the specific field you intended to update. Whole-file rewrites that drop fields silently caused the corruption that necessitated this prompt.
+
+If you find yourself reaching for a path under \`units/\` or \`feedback/\`, STOP. Add the issue to your end-of-run summary as a human-attention item and move on.
 
 ## What a Healthy Intent Looks Like
 

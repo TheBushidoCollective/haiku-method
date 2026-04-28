@@ -191,8 +191,15 @@ export function preTickConsistency(
 			const fm = readFm(join(activeUnitsDir, f))
 			const unitStatus = (fm.status as string) || ""
 			if (["completed", "skipped", "failed"].includes(unitStatus)) continue
-			const inputs = (fm.inputs as string[]) || (fm.refs as string[]) || []
-			if (inputs.length === 0) missingInputs.push(f)
+			// Three cases count as "missing": absent, empty array, OR
+			// non-array (e.g. a string from prior-corruption like
+			// `inputs: >- ["a","b"]` parsing back as a single string).
+			// The non-array case used to slip through `length > 0` since
+			// any non-empty string passes that check, leaving previously-
+			// corrupted units stuck.
+			const rawInputs = fm.inputs ?? fm.refs ?? []
+			const isUsable = Array.isArray(rawInputs) && rawInputs.length > 0
+			if (!isUsable) missingInputs.push(f)
 		}
 		// Mechanically populate `inputs:` on flagged units using the
 		// intent.md + knowledge/*.md fallback. Doing this here keeps
@@ -241,8 +248,22 @@ export function preTickConsistency(
 	}
 
 	if (synthesized.length > 0 || phaseRegressed || fixedInputs.length > 0) {
+		// Format: leading " — " before the first suffix, "; " between
+		// the rest. Joining with `; ` and prepending one ` — ` keeps
+		// the punctuation consistent regardless of which subset of
+		// outcomes fired.
+		const suffixes: string[] = []
+		if (synthesized.length > 0) {
+			suffixes.push(`synthesize ${synthesized.join(", ")}`)
+		}
+		if (fixedInputs.length > 0) {
+			suffixes.push(`auto-add inputs to ${fixedInputs.join(", ")}`)
+		}
+		if (phaseRegressed) {
+			suffixes.push("regress phase to elaborate")
+		}
 		gitCommitState(
-			`haiku: safe-repair ${slug}${synthesized.length > 0 ? ` — synthesize ${synthesized.join(", ")}` : ""}${fixedInputs.length > 0 ? `; auto-add inputs to ${fixedInputs.join(", ")}` : ""}${phaseRegressed ? "; regress phase to elaborate" : ""}`,
+			`haiku: safe-repair ${slug}${suffixes.length > 0 ? ` — ${suffixes.join("; ")}` : ""}`,
 		)
 	}
 

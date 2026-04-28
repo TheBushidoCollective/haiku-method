@@ -189,12 +189,24 @@ export function preTickFeedbackGate(
 			.map(({ item }) => item)
 		const classification = classifyPendingForRevisit(currentStageFbs)
 		const inGatePhase = context.currentPhase === "gate"
+		// null/question are filtered to human-authored only because
+		// agent-authored ones with those resolutions are out-of-scope
+		// here — they fall through to gate.ts's existing fix-chain /
+		// feedback_revisit paths that handle agent findings without
+		// engaging the user.
 		const humanNeedsTriage = classification.needsTriage.filter(
 			(item) => item.author_type === "human",
 		)
 		const humanQuestions = classification.questions.filter(
 			(item) => item.author_type === "human",
 		)
+		// stage_revisit is intentionally NOT filtered to human authors:
+		// once a stage_revisit FB lands and the rollback completes, it
+		// stays open until something explicitly closes it. Whether the
+		// reviewer was a person or an agent doesn't change that — both
+		// need verification-and-close. Filtering to human-only here
+		// would leave agent-authored stage_revisit FBs stuck in the
+		// same loop this fix is trying to break.
 		const stageRevisitsToDispatch = inGatePhase
 			? []
 			: classification.stageRevisits

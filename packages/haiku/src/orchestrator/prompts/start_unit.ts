@@ -71,16 +71,10 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 		unit.endsWith(".md") ? unit : `${unit}.md`,
 	)
 
-	// Need unit inputs + model hint from its frontmatter. New writes are
-	// type-validated at the `haiku_unit_set` boundary (array fields must
-	// receive arrays, not JSON-stringified arrays), so corruption can no
-	// longer enter from this codepath. The folded-scalar branch below is a
-	// one-time migration recovery for intents that already have
-	// `inputs: >- ["..."]` committed on disk from before that gate landed —
-	// it parses the legacy shape so the prompt builder doesn't crash and
-	// the workflow engine can drive those intents back to a healthy state.
-	// Non-array non-string values fall through to an empty list so
-	// downstream `.map()` calls never throw on this path.
+	// Migration recovery for intents committed before the haiku_unit_set
+	// type gate landed: legacy `inputs: >- ["..."]` (folded-scalar JSON)
+	// gets parsed back to an array so the prompt builder doesn't crash.
+	// New writes can't produce that shape anymore.
 	let unitInputs: string[] = []
 	let unitModel: string | undefined
 	if (existsSync(unitFile)) {

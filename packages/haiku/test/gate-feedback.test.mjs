@@ -608,10 +608,13 @@ try {
 		// loop. Both ticks must return `feedback_dispatch` — and
 		// neither tick may produce a side effect (state mutation /
 		// commit storm) that compounds across calls.
-		const { projDir, intentDirPath, slug } = createProject("gate-fb-elaborate-replay", {
-			active_stage: "plan",
-			stageConfig: { plan: { review: "ask" } },
-		})
+		const { projDir, intentDirPath, slug } = createProject(
+			"gate-fb-elaborate-replay",
+			{
+				active_stage: "plan",
+				stageConfig: { plan: { review: "ask" } },
+			},
+		)
 		createStageState(intentDirPath, "plan", {
 			phase: "elaborate",
 			pre_review_dispatched: true,

@@ -15,7 +15,13 @@
 // action. Otherwise the mutations land on disk and runWorkflowTick
 // continues into derive-state on the now-consistent intent.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { getCurrentState } from "../../current-state.js"

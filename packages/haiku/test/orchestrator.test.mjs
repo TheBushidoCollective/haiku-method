@@ -1232,10 +1232,7 @@ Legacy unit without inputs.
 			join(intentDirPath, "stages", "build", "state.json"),
 		)
 		assert.strictEqual(buildState.phase, "execute")
-		const unitRaw = readFileSync(
-			join(unitsDir, "unit-01-legacy.md"),
-			"utf8",
-		)
+		const unitRaw = readFileSync(join(unitsDir, "unit-01-legacy.md"), "utf8")
 		assert.match(
 			unitRaw,
 			/inputs:\s*\n\s+- intent\.md/,

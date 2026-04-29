@@ -2,7 +2,7 @@
 title: >-
   designer-prep hat: wrong primary path for DISCOVERY.md — agent will fail to
   read Existing Code Structure section
-status: fixing
+status: closed
 origin: adversarial-review
 author: correctness
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-28T23:54:10Z'
 iteration: 1
 visit: 1
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-10:bolt-2-manual'
 bolt: 2
 triaged_at: '2026-04-28T23:54:10Z'
 resolution: null

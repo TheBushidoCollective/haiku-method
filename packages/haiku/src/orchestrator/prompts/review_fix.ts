@@ -1,8 +1,10 @@
 // orchestrator/prompts/review_fix.ts — Stage-scope fix loop. Same
 // shape as intent_completion_fix but stage-scoped. Per-finding hat
-// chain runs serially; chains run in parallel. Final hat validates
-// closure (two-stage: spec match + regression). Findings still open
-// after MAX_FIX_LOOP_BOLTS escalate.
+// chain runs serially via relay (each hat calls haiku_feedback_advance_hat
+// and returns the next hat's <subagent> block for the parent to spawn);
+// chains run in parallel across findings. Dispatch is built in reverse
+// hat order so every hat's prompt embeds the next hat's relay block at
+// write time. Only the first hat's dispatch block is surfaced to the parent.
 
 import { existsSync } from "node:fs"
 import { join } from "node:path"
@@ -48,7 +50,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	const headerLines = [
 		`## Fix Loop: ${items.length} finding(s) in parallel`,
 		"",
-		`Dispatching the stage's \`fix_hats:\` sequence against ${items.length} pending finding(s) in stage **${fixStage}**. Each finding's hat chain runs serially (${fixHatsList.join(" → ")}); chains run in parallel across findings.`,
+		`Dispatching the stage's \`fix_hats:\` sequence against ${items.length} pending finding(s) in stage **${fixStage}**. Each finding's hat chain runs serially via relay (${fixHatsList.join(" → ")}); chains run in parallel across findings.`,
 	]
 	if (escalatedCount > 0) {
 		headerLines.push(
@@ -78,9 +80,12 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	)
 
 	sections.push(
-		'### Parallel Fix-Chain Dispatch\n\nEach finding below has its own hat chain. **Within a chain, hats run serially.** **Across chains, findings run in parallel.** The final hat in each chain validates closure and calls `haiku_feedback_update { status: "closed" }`. If a chain leaves its feedback open, the workflow engine loops that finding again on the next `haiku_run_next` — up to the bolt cap.\n',
+		'### Self-Extending Chain Dispatch\n\nEach finding below launches ONE subagent (the first hat). That subagent calls `haiku_feedback_advance_hat` when done and relays the next hat\'s `<subagent>` block back to the parent for spawning. **The parent spawns the relayed block — the subagent does NOT.** The chain ends when the final hat (assessor) returns without a relay block. Chains run in parallel across findings.\n',
 	)
 
+	// Build each finding's fix chain in reverse hat order so every hat's
+	// prompt can embed the next hat's relay block at write time. Only the
+	// first hat's dispatch block is surfaced to the parent.
 	for (const {
 		feedback_id: fbId,
 		feedback_file: fbFile,
@@ -94,9 +99,14 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 			`\n### Finding \`${fbId}\` — _${fbTitle}_ (bolt ${fixBolt}/${fixMaxBolts})\n`,
 		)
 
-		for (const hat of fixHatsList) {
+		let nextHatRelayBlock: string | null = null
+		let firstHatBlock = ""
+
+		for (let hatIdx = fixHatsList.length - 1; hatIdx >= 0; hatIdx--) {
+			const hat = fixHatsList[hatIdx]
 			const hatDef = allHats[hat]
-			if (!hatDef) {
+			if (!hatDef && hatIdx === 0) {
+				// Only warn in the output for the first hat (which is what the parent sees)
 				sections.push(
 					`\n> **Warning:** hat \`${hat}\` declared in \`fix_hats\` has no mandate file in \`hats/${hat}.md\`. The subagent will run without a mandate — this is likely a studio bug.\n`,
 				)
@@ -113,7 +123,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 					)
 				: null
 
-			const isLast = hat === fixHatsList[fixHatsList.length - 1]
+			const isLast = hatIdx === fixHatsList.length - 1
 			const promptLines: string[] = [
 				`You are the **${hat}** hat running in **fix-mode** against feedback **${fbId}** (bolt ${fixBolt} of ${fixMaxBolts}) in stage **${fixStage}** of intent **${slug}**.`,
 				"",
@@ -186,10 +196,10 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 					`   - **Stage A — Spec match.** Read the edited artifact(s) and the feedback body. Does the edit make the finding's requirement true as written? A partial gesture is not a fix.`,
 					`   - **Stage B — Quality / regression.** Inspect the diff (\`git show HEAD\`). Does the edit introduce a regression — broken neighboring behavior, scope creep into unrelated files, banned patterns, or violations of the stage's quality rules?`,
 					`${step++}. **Decide:**`,
-					`   - **A passes AND B passes** → call \`haiku_feedback_update { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", status: "closed", closed_by: "fix-loop:${fbId}:bolt-${fixBolt}" }\`.`,
-					`   - **A fails** → leave the feedback status as-is (the workflow engine counts this bolt and may dispatch another).`,
-					`   - **A passes, B fails** → leave the feedback open AND log the regression as a new finding via \`haiku_feedback({ intent: "${slug}", stage: "${fixStage}", title: "<regression from fix-loop:${fbId}>", body: "<diff hunk + concrete impact>", origin: "adversarial-review", author: "fix-assessor" })\`. Do NOT close the original — the fix is not complete until both stages pass.`,
-					`   - **Finding is invalid** (reviewer misread the artifact) → call \`haiku_feedback_reject { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", reason: "<concrete reason>" }\` INSTEAD of closing.`,
+					`   - **A passes AND B passes** → call \`haiku_feedback_advance_hat { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}" }\`. The workflow engine auto-closes the finding (this is the last hat in the fix_hats chain).`,
+					`   - **A fails** → leave the feedback status as-is (do NOT call \`haiku_feedback_advance_hat\`). The workflow engine counts this bolt and may dispatch another.`,
+					`   - **A passes, B fails** → leave the feedback open AND log the regression as a new finding via \`haiku_feedback({ intent: "${slug}", stage: "${fixStage}", title: "<regression from fix-loop:${fbId}>", body: "<diff hunk + concrete impact>", origin: "adversarial-review", author: "fix-assessor" })\`. Do NOT call \`haiku_feedback_advance_hat\`.`,
+					`   - **Finding is invalid** (reviewer misread the artifact) → call \`haiku_feedback_reject { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", reason: "<concrete reason>" }\`. Do NOT call \`haiku_feedback_advance_hat\`.`,
 					`${step++}. Return a one-line summary: \`fix-assessor: closed | open | rejected — <reason>\`. Use a verb of completed action; zero hedging words (\`should\`, \`seems\`, \`probably\`).`,
 				)
 			} else {
@@ -197,36 +207,61 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 					`${step++}. **Verify the finding before editing.** Read the flagged artifact at the file:line refs in the feedback body. Three failure modes route to \`haiku_feedback_reject\` instead of an edit:\n   - **Stale / misread**: the file no longer matches what the reviewer flagged, or the citation points at the wrong location → \`haiku_feedback_reject { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}", reason: "stale — <what changed>" }\` or \`"misread — <what they cited vs. what's there>"\`.\n   - **Ambiguous / unclear** — *high bar*: rejection is **terminal and permanent**, the finding is gone with no in-band channel for the reviewer to clarify. Reject for ambiguity ONLY when (a) NO charitable interpretation exists, OR (b) multiple interpretations are equally plausible AND each requires a *materially different* fix (not just minor variations). On close calls — when one interpretation is clearly the most charitable given the reviewer's mandate, the surrounding artifact context, and the file:line refs — proceed with that interpretation, **state it as an explicit assumption in your bolt summary** ("assumed the finding meant X based on Y"), and let the assessor's two-stage closure check catch wrong interpretations on bolt N+1. The bolt cap (${MAX_FIX_LOOP_BOLTS}) is the safety net.\n     - When you DO reject for true ambiguity, structure the reason as a clarification request the reviewer can act on: \`"needs clarification — original concern: <one-line restate>; specific ambiguity: <what's unclear>; suggested clarification format: <example, e.g. 'name the input field and the validation rule'>"\`.\n     - ✗ Body says: *"the validation is weak"* → genuinely vague; no charitable interpretation isolates a target. Reject with the structured clarification format.\n     - ✗ Body says: *"rename it to foo"* in one place and *"rename it to bar"* elsewhere → two interpretations with materially different fixes. Reject.\n     - ✓ Body says: *"the validation accepts negative quantities; it must reject them with HTTP 400 and message 'quantity must be positive'"* → actionable. Proceed.\n     - ✓ Body says: *"the error handling here is weak"* with a file:line ref pointing at a try/catch swallowing all exceptions → charitable interpretation is clear (swallow → narrow + rethrow). Proceed; state the assumption in your summary.\n   - **Invalid**: the finding describes correct behavior or doesn't identify a real defect → \`haiku_feedback_reject { ... reason: "<concrete reason invalid>" }\`.\n\n   Otherwise the finding is actionable — proceed. Do NOT acknowledge the finding in prose ("good catch", "you're right"); the fix in code is the acknowledgement.`,
 					`${step++}. **Investigate.**\n   - Read the flagged artifact at the references in the feedback body. Establish the **current state** — what makes the finding true right now.\n   - Establish the **desired state** — what specifically would make the finding false.\n   - State the **gap** in one sentence. That's the root cause; the fix is a transition from current to desired.\n   - Look for a **comparable working sibling** — another artifact in this stage, an approved template, a passing test, a previously-shipped version, anything that demonstrates the desired state in a related context. Note the relevant differences. Skip this substep only if the artifact is genuinely greenfield with no comparable reference.${fixBolt > 1 ? `\n   - Bolt ${fixBolt} > 1: read \`git show HEAD\` for the prior bolt's edit. **Did you find a meaningfully different root cause from the prior attempt?** If yes, plan a different shape and proceed. If no, you're about to burn a bolt repeating the prior approach — call \`haiku_feedback_reject\` with reason "needs human escalation — N attempts converged on same surface fix" instead of editing.` : ""}`,
 					`${step++}. **Apply the fix** within your hat's mandate. Edit ONLY the artifact(s) flagged by the finding — out-of-scope edits are a scope violation; if you notice a separate issue, log it via \`haiku_feedback\` rather than editing it now. Save changes.`,
-					`${step++}. Return a one-line summary using a verb of completed action (\`edited X\`, \`added Y\`, \`updated Z\`). Zero hedging words (\`should\`, \`seems\`, \`probably\`, \`might\`).`,
+					`${step++}. Return a one-line work summary using a verb of completed action (\`edited X\`, \`added Y\`, \`updated Z\`). Zero hedging words (\`should\`, \`seems\`, \`probably\`, \`might\`).`,
+				)
+				promptLines.push(
+					"",
+					"## Advance and relay (MANDATORY — do not skip)",
+					"",
+					`After completing your fix work above:`,
+					"",
+					`**If you called \`haiku_feedback_reject\`** (stale / invalid finding): do NOT call advance_hat. Return your one-line rejection reason as your final message. Stop here.`,
+					"",
+					`**Otherwise (actionable finding — normal path):**`,
+					`1. Call \`haiku_feedback_advance_hat { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}" }\` to record this hat's completion and progress the chain.`,
+					`   - On error: return the error message as your final message. Stop here.`,
+					`2. **Relay the next hat's dispatch block verbatim.** Your parent will spawn the next subagent — do NOT run it yourself. Include the block below EXACTLY as-is in your final message (after your one-line work summary):`,
+					"",
+					nextHatRelayBlock ??
+						"<!-- relay block missing — fix_hats chain has no next hat to embed; this is a studio configuration bug -->",
+					"",
+					"**CRITICAL:** Your final message must be: (1) your one-line work summary, then (2) the `<subagent>` relay block above verbatim. Nothing else. The parent reads the relay block to spawn the next hat.",
 				)
 			}
 
-			sections.push(
-				`${emitSubagentDispatchBlock({
-					unit: `fix-${fbId}`,
-					hat,
-					bolt: fixBolt,
-					agentType: hatDef?.agent_type ?? "general-purpose",
-					model: hatDef?.model,
-					promptBody: promptLines.join("\n"),
-					heading: `#### Subagent: \`${hat}\`${isLast ? " (final — validates closure)" : ""}`,
-				})}\n`,
-			)
+			const dispatchBlock = emitSubagentDispatchBlock({
+				unit: `fix-${fbId}`,
+				hat,
+				bolt: fixBolt,
+				agentType: hatDef?.agent_type ?? "general-purpose",
+				model: hatDef?.model,
+				promptBody: promptLines.join("\n"),
+				heading: `#### Subagent: \`${hat}\`${isLast ? " (final — validates closure)" : " (relays next hat to parent)"}`,
+			})
+
+			nextHatRelayBlock = dispatchBlock
+			if (hatIdx === 0) {
+				firstHatBlock = dispatchBlock
+			}
+		}
+
+		if (firstHatBlock) {
+			sections.push(`${firstHatBlock}\n`)
 		}
 	}
 
-	// Wave-based dispatch: within a finding's chain, hats run serially;
-	// across findings, chains run in parallel. The simplest way for the
-	// parent to express that is one wave per hat in the sequence,
-	// spawning all findings' subagents in a single message.
+	// Parent instructions: self-extending slot pool. Each slot starts with hat-1
+	// and self-extends via relay — no wave-by-hat coordination needed.
 	const waveLines: string[] = [
 		"### Parent Instructions (do NOT include in subagent prompts)",
 		"",
-		`**Dispatch by wave.** The hat sequence is \`${fixHatsList.join(" → ")}\`. For each hat in the sequence, run the full fan-out of ${items.length} fix chain(s) under the concurrency cap, then advance to the next hat.`,
+		`**Self-extending chain dispatch.** The fix_hats sequence is \`${fixHatsList.join(" → ")}\`. Spawn the ${items.length} first-hat subagent(s) below using the slot pool. Each hat subagent calls \`haiku_feedback_advance_hat\` when done and includes the next hat's \`<subagent>\` block in its response — spawn that block immediately (same chain, same slot). The chain ends when a subagent returns without a relay block (the final assessor hat). When ALL ${items.length} chain(s) are done, call \`haiku_run_next { intent: "${slug}" }\`.`,
+		"",
+		"**Relay rule:** When a subagent's response contains a `<subagent ...>` block, spawn it immediately as the next hop in that chain. Do NOT wait for other chains before spawning the relayed block. Each relay refills the slot until the final hat returns without one.",
 		"",
 		batchDispatchDirective(items.length, "fix chains"),
 		"",
-		`After the FINAL wave (\`${fixHatsList[fixHatsList.length - 1]}\`) completes for all findings, call \`haiku_run_next { intent: "${slug}" }\` — the workflow engine decides what happens next (advance, loop the still-open findings, or escalate).`,
+		`After ALL chains complete (pool empty, no pending relay blocks), call \`haiku_run_next { intent: "${slug}" }\` — the workflow engine decides what happens next (advance, loop still-open findings, or escalate).`,
 	]
 	if (items.length > 1) {
 		waveLines.push(

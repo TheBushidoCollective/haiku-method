@@ -21,7 +21,6 @@ import {
 	resolveStageInputs,
 } from "../../studio-reader.js"
 import {
-	batchDispatchDirective,
 	buildInterpretationBlock,
 	emitSubagentDispatchBlock,
 	inlineFile,
@@ -78,13 +77,9 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 	const hatDefs = readHatDefs(studio, stage)
 	const stageHats = (action.hats as string[]) || []
 	const firstStageHat = stageHats[0] || ""
-	const wave = action.wave as number | undefined
-	const totalWaves = action.total_waves as number | undefined
 
 	const sections: string[] = []
-	sections.push(
-		`## Parallel Execution (continue): ${entries.length} active units in ${stage}${wave !== undefined ? ` — Wave ${wave}/${totalWaves ?? "?"}` : ""}`,
-	)
+	sections.push(`## Run these ${entries.length} subagent(s) in parallel`)
 
 	for (const entry of entries) {
 		const { name: unitName, hat, bolt, worktree: wt } = entry
@@ -282,24 +277,13 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 
 	sections.push(
 		[
-			"### Parent Instructions (do NOT include in subagent prompts)",
+			"### Parent Instructions",
 			"",
-			"For each `<subagent>` block, map attributes to Task-tool parameters:",
+			`Spawn each \`<subagent>\` block above using the Task tool: \`type\` → \`subagent_type\`; \`model\` → \`model\` (omit when absent); \`prompt_file\` → prompt body is literally \`"Read <path> and execute its instructions exactly."\`. Do not add anything beyond that one-line prompt body — the workflow engine owns the authoritative prompt at the file path.`,
 			"",
-			`- \`type="..."\` → \`subagent_type\``,
-			`- \`model="..."\` → \`model\` (OMIT when absent; do NOT supply a default)`,
-			`- \`prompt_file="..."\` → prompt body is literally \`"Read <path> and execute its instructions exactly."\``,
+			`**Run all ${entries.length} in parallel.** When each subagent returns, follow its return instruction (which will be \`call haiku_run_next\`). \`haiku_run_next\` returns the next thing to do — either another subagent block to spawn, or a terminal action.`,
 			"",
-			"The workflow engine owns the authoritative prompt at `prompt_file`; do not paraphrase. Per-unit `model` attributes reflect the cascade the workflow engine resolved — dropping them defeats the selection.",
-			"",
-			batchDispatchDirective(entries.length, "units"),
-			"",
-			"**On each completion, inspect the result before (if applicable) refilling the slot:**",
-			`- \`Workflow Result: <path>\` → read that JSON file, then call \`haiku_run_next { intent: "${slug}" }\` (run_next is authoritative).`,
-			`- Plaintext "job ends here" → another subagent will emit the structured result; do NOT dispatch yet.`,
-			`- Anything else → fall back: call \`haiku_run_next { intent: "${slug}" }\`.`,
-			"",
-			"Stop driving only when run_next returns `gate_review`, `escalate`, `intent_complete`, or `error`.",
+			`Stop driving only when \`haiku_run_next\` returns a terminal action (\`gate_review\`, \`escalate\`, \`intent_complete\`, or \`error\`).`,
 		].join("\n"),
 	)
 

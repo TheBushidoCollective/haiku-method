@@ -24,7 +24,6 @@ import {
 	resolveStageInputs,
 } from "../../studio-reader.js"
 import {
-	batchDispatchDirective,
 	buildInlineSubagentContext,
 	buildInterpretationBlock,
 	emitSubagentDispatchBlock,
@@ -115,14 +114,13 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 	const parallelCaps = getCapabilities()
 
 	const worktrees = (action.worktrees as Record<string, string | null>) || {}
-	const wave = action.wave as number | undefined
-	const totalWaves = action.total_waves as number | undefined
 
 	if (parallelCaps.subagents.supported) {
-		// Subagent-capable harness: per-unit <subagent> blocks.
-		sections.push(
-			`## Parallel Execution: ${units.length} units in ${stage}${wave !== undefined ? ` — Wave ${wave}/${totalWaves ?? "?"}` : ""}`,
-		)
+		// Subagent-capable harness: per-unit <subagent> blocks. Header text
+		// keeps the parent's view minimal — no wave numbering, no hat names,
+		// no internal-state leakage. The parent's job is "spawn N subagents,
+		// follow each's return instruction." That's the entire contract.
+		sections.push(`## Run these ${units.length} subagent(s) in parallel`)
 
 		for (const unitName of units) {
 			const unitFile = join(
@@ -261,24 +259,13 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 
 		sections.push(
 			[
-				"### Parent Instructions (do NOT include in subagent prompts)",
+				"### Parent Instructions",
 				"",
-				"For each `<subagent>` block, map attributes to Task-tool parameters:",
+				`Spawn each \`<subagent>\` block above using the Task tool: \`type\` → \`subagent_type\`; \`model\` → \`model\` (omit when absent); \`prompt_file\` → prompt body is literally \`"Read <path> and execute its instructions exactly."\`. Do not add anything beyond that one-line prompt body — the workflow engine owns the authoritative prompt at the file path.`,
 				"",
-				`- \`type="..."\` → \`subagent_type\``,
-				`- \`model="..."\` → \`model\` (OMIT when absent; do NOT supply a default)`,
-				`- \`prompt_file="..."\` → prompt body is literally \`"Read <path> and execute its instructions exactly."\``,
+				`**Run all ${units.length} in parallel.** When each subagent returns, follow its return instruction (which will be \`call haiku_run_next\`). \`haiku_run_next\` returns the next thing to do — either another subagent block to spawn, or a terminal action. You do not need to track which subagent is on which step or maintain any per-unit state — the workflow engine derives all of that from on-disk state and gives you the next instruction.`,
 				"",
-				"Do NOT add text beyond that prompt body. The workflow engine owns the authoritative prompt at `prompt_file`; do not paraphrase. Per-unit `model` attributes reflect the cascade the workflow engine resolved (unit > hat > stage > studio) — dropping them wastes the selection.",
-				"",
-				batchDispatchDirective(units.length, "units"),
-				"",
-				"**On each completion, inspect the result before (if applicable) refilling the slot:**",
-				`- \`Workflow Result: <path>\` → read that JSON file, then call \`haiku_run_next { intent: "${slug}" }\` (run_next is authoritative). The workflow engine returns every still-active unit plus newly-ready work; continue the pool/batch with whatever it returns.`,
-				`- Plaintext "job ends here" → another subagent will emit the structured result; do NOT dispatch yet.`,
-				`- Anything else (non-compliant) → fall back: call \`haiku_run_next { intent: "${slug}" }\`.`,
-				"",
-				"Stop driving only when run_next returns `gate_review`, `escalate`, `intent_complete`, or `error`.",
+				`Stop driving only when \`haiku_run_next\` returns a terminal action (\`gate_review\`, \`escalate\`, \`intent_complete\`, or \`error\`).`,
 			].join("\n"),
 		)
 	} else {
@@ -287,7 +274,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 		// agent since it IS the executor.
 		if (inlineCtxParallel) sections.push(inlineCtxParallel)
 		const sharedLines: string[] = [
-			`## Parallel Execution: ${units.length} units in ${stage}${wave !== undefined ? ` — Wave ${wave}/${totalWaves ?? "?"}` : ""}`,
+			`## Execute ${units.length} unit(s)`,
 			"",
 			"## Required reading (MUST read fully before starting)",
 			"",
@@ -313,7 +300,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 			})
 			.join("\n")
 		sections.push(
-			`### Mechanics (Sequential Execution)\n\n${wave !== undefined ? `**Wave ${wave}/${totalWaves ?? "?"}** — ` : ""}${units.length} units to execute.\n\n**Your harness does not support parallel subagents.** Execute each unit sequentially in this conversation. Complete one unit fully (all hats) before starting the next.\n\n**For each unit:**\n${unitList}\n\n**Output tracking:** When your work produces artifacts (files, designs, specs, code), record them in the unit's frontmatter \`outputs:\` field as paths relative to the intent directory.\n\n**If outputs from a previous stage are missing or incorrect:** call \`haiku_revisit { intent: "${slug}" }\` to return to the prior stage for corrections.\n\nAfter completing the last unit: the \`advance_hat\` result contains the next workflow action. Follow it directly.`,
+			`### Mechanics (Sequential Execution)\n\n${units.length} unit(s) to execute.\n\n**Your harness does not support parallel subagents.** Execute each unit sequentially in this conversation. Complete one unit fully (all hats) before starting the next.\n\n**For each unit:**\n${unitList}\n\n**Output tracking:** When your work produces artifacts (files, designs, specs, code), record them in the unit's frontmatter \`outputs:\` field as paths relative to the intent directory.\n\n**If outputs from a previous stage are missing or incorrect:** call \`haiku_revisit { intent: "${slug}" }\` to return to the prior stage for corrections.\n\nAfter completing the last unit: the \`advance_hat\` result contains the next workflow action. Follow it directly.`,
 		)
 	}
 

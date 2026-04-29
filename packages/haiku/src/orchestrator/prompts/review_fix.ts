@@ -18,7 +18,6 @@ import {
 import { readHatDefs, resolveStudio } from "../../studio-reader.js"
 import { writeNextRelaySidecar } from "../../subagent-prompt-file.js"
 import {
-	batchDispatchDirective,
 	buildInterpretationBlock,
 	emitSubagentDispatchBlock,
 	inlineFile,
@@ -268,28 +267,15 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		}
 	}
 
-	// Parent instructions: self-extending slot pool. Each slot starts with hat-1
-	// and self-extends via relay — no wave-by-hat coordination needed.
 	const waveLines: string[] = [
-		"### Parent Instructions (do NOT include in subagent prompts)",
+		"### Parent Instructions",
 		"",
-		`**Self-extending chain dispatch.** The fix_hats sequence is \`${fixHatsList.join(" → ")}\`. Spawn the ${items.length} first-hat subagent(s) below using the slot pool. Each hat subagent calls \`haiku_feedback_advance_hat\` when done and includes the next hat's \`<subagent>\` block in its response — spawn that block immediately (same chain, same slot). The chain ends when a subagent returns without a relay block (the final assessor hat). When ALL ${items.length} chain(s) are done, call \`haiku_run_next { intent: "${slug}" }\`.`,
+		`Spawn each \`<subagent>\` block above using the Task tool: \`type\` → \`subagent_type\`; \`model\` → \`model\` (omit when absent); \`prompt_file\` → prompt body is literally \`"Read <path> and execute its instructions exactly."\`. Do not add anything beyond that one-line prompt body — the workflow engine owns the authoritative prompt at the file path.`,
 		"",
-		"**Relay rule (read carefully):** A subagent's response that contains a `<subagent ...>` block means **the chain is NOT done** — that finding is mid-flight. Spawn the relayed block IMMEDIATELY in the SAME slot (do NOT free the slot back to the queue, do NOT pull the next pending finding into that slot). The slot is occupied by that chain until the chain's final hat returns WITHOUT a relay block; only THEN does the slot free up for the next pending finding. Do NOT wait for other chains before spawning the relayed block.",
+		`**Run all ${items.length} in parallel.** When each subagent returns, follow its return instruction. A returned subagent's final message will either include a literal \`<subagent>\` relay block (sourced from the \`next_subagent_dispatch_block\` field of its \`haiku_feedback_advance_hat\` tool response) — spawn that immediately as the next hop in the same chain — or a one-line summary ending with \`call haiku_run_next\`. Spawn relayed blocks before pulling more work; chain completion (no more relay blocks) is what frees a slot for the next pending finding.`,
 		"",
-		batchDispatchDirective(
-			items.length,
-			"fix chains (each chain is one finding's full hat sequence — slot frees only on terminal hat completion)",
-		),
-		"",
-		`After ALL chains complete (pool empty, no pending relay blocks), call \`haiku_run_next { intent: "${slug}" }\` — the workflow engine decides what happens next (advance, loop still-open findings, or escalate).`,
+		`When ALL chains complete (no relay blocks pending, all chains terminal), call \`haiku_run_next { intent: "${slug}" }\` — the workflow engine decides what happens next.`,
 	]
-	if (items.length > 1) {
-		waveLines.push(
-			"",
-			`**Conflict note:** ${items.length} chains will be editing artifacts concurrently. Any two chains may target the same file. Each chain's final hat validates closure independently — unresolved findings simply loop with an incremented bolt rather than silently drop. No serial fallback is needed.`,
-		)
-	}
 	sections.push(waveLines.join("\n"))
 
 	return sections.join("\n\n")

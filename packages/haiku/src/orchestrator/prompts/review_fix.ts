@@ -80,7 +80,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	)
 
 	sections.push(
-		'### Self-Extending Chain Dispatch\n\nEach finding below launches ONE subagent (the first hat). That subagent calls `haiku_feedback_advance_hat` when done and relays the next hat\'s `<subagent>` block back to the parent for spawning. **The parent spawns the relayed block — the subagent does NOT.** The chain ends when the final hat (assessor) returns without a relay block. Chains run in parallel across findings.\n',
+		"### Self-Extending Chain Dispatch\n\nEach finding below launches ONE subagent (the first hat). That subagent calls `haiku_feedback_advance_hat` when done and relays the next hat's `<subagent>` block back to the parent for spawning. **The parent spawns the relayed block — the subagent does NOT.** The chain ends when the final hat (assessor) returns without a relay block. Chains run in parallel across findings.\n",
 	)
 
 	// Build each finding's fix chain in reverse hat order so every hat's
@@ -105,8 +105,11 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		for (let hatIdx = fixHatsList.length - 1; hatIdx >= 0; hatIdx--) {
 			const hat = fixHatsList[hatIdx]
 			const hatDef = allHats[hat]
-			if (!hatDef && hatIdx === 0) {
-				// Only warn in the output for the first hat (which is what the parent sees)
+			if (!hatDef) {
+				// Warn in the parent-visible output for ANY missing mandate.
+				// Even mid-chain hats spawn against the parent (via the relay
+				// block) — a missing mandate runs the subagent without scope
+				// and silently degrades the chain. Studio config bug; surface it.
 				sections.push(
 					`\n> **Warning:** hat \`${hat}\` declared in \`fix_hats\` has no mandate file in \`hats/${hat}.md\`. The subagent will run without a mandate — this is likely a studio bug.\n`,
 				)
@@ -257,9 +260,12 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		"",
 		`**Self-extending chain dispatch.** The fix_hats sequence is \`${fixHatsList.join(" → ")}\`. Spawn the ${items.length} first-hat subagent(s) below using the slot pool. Each hat subagent calls \`haiku_feedback_advance_hat\` when done and includes the next hat's \`<subagent>\` block in its response — spawn that block immediately (same chain, same slot). The chain ends when a subagent returns without a relay block (the final assessor hat). When ALL ${items.length} chain(s) are done, call \`haiku_run_next { intent: "${slug}" }\`.`,
 		"",
-		"**Relay rule:** When a subagent's response contains a `<subagent ...>` block, spawn it immediately as the next hop in that chain. Do NOT wait for other chains before spawning the relayed block. Each relay refills the slot until the final hat returns without one.",
+		"**Relay rule (read carefully):** A subagent's response that contains a `<subagent ...>` block means **the chain is NOT done** — that finding is mid-flight. Spawn the relayed block IMMEDIATELY in the SAME slot (do NOT free the slot back to the queue, do NOT pull the next pending finding into that slot). The slot is occupied by that chain until the chain's final hat returns WITHOUT a relay block; only THEN does the slot free up for the next pending finding. Do NOT wait for other chains before spawning the relayed block.",
 		"",
-		batchDispatchDirective(items.length, "fix chains"),
+		batchDispatchDirective(
+			items.length,
+			"fix chains (each chain is one finding's full hat sequence — slot frees only on terminal hat completion)",
+		),
 		"",
 		`After ALL chains complete (pool empty, no pending relay blocks), call \`haiku_run_next { intent: "${slug}" }\` — the workflow engine decides what happens next (advance, loop still-open findings, or escalate).`,
 	]

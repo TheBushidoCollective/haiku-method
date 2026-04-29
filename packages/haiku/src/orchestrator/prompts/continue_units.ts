@@ -76,6 +76,8 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 	}
 
 	const hatDefs = readHatDefs(studio, stage)
+	const stageHats = (action.hats as string[]) || []
+	const firstStageHat = stageHats[0] || ""
 	const wave = action.wave as number | undefined
 	const totalWaves = action.total_waves as number | undefined
 
@@ -250,10 +252,13 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 				`${step++}. Commit frequently inside the worktree: \`git add -A && git commit -m "..."\`. Do NOT push.`,
 			)
 		}
+		const isFirstHat = hat === firstStageHat
 		prompt.push(
 			`${step++}. When done: call \`haiku_unit_advance_hat { intent: "${slug}", unit: "${unitName}" }\``,
-			`${step++}. If blocked: call \`haiku_unit_reject_hat { intent: "${slug}", unit: "${unitName}" }\``,
-			`${step++}. **CRITICAL — Relay the Workflow Result path.** When \`advance_hat\` or \`reject_hat\` returns, its tool response contains a result-file path and instructs you to reply with exactly \`Workflow Result: <path>\`. Your FINAL MESSAGE to the parent MUST BE EXACTLY that one line — nothing before, nothing after. Do NOT summarize the work, do NOT describe what you did, do NOT paraphrase the result. The parent reads the file to drive the next workflow action. If the tool returned plaintext instead of a result path (e.g. "job ends here — parent will call haiku_run_next"), relay THAT plaintext verbatim as your final message.`,
+			isFirstHat
+				? `${step++}. **If blocked**, you are the first hat in this stage's hat sequence — there is no previous hat to reject back to. Do NOT call \`haiku_unit_reject_hat\`. Instead: surface ambiguity via \`AskUserQuestion\` (or \`ask_user_visual_question\` for visual decisions); if upstream-stage outputs are missing, call \`haiku_revisit { intent: "${slug}" }\`; if you've found a real defect in the spec or upstream artifact, log it via \`haiku_feedback\`. The first hat escalates outward, not backward.`
+				: `${step++}. If blocked: call \`haiku_unit_reject_hat { intent: "${slug}", unit: "${unitName}" }\``,
+			`${step++}. **CRITICAL — Relay the Workflow Result path.** When \`advance_hat\`${isFirstHat ? "" : " or `reject_hat`"} returns, its tool response contains a result-file path and instructs you to reply with exactly \`Workflow Result: <path>\`. Your FINAL MESSAGE to the parent MUST BE EXACTLY that one line — nothing before, nothing after. Do NOT summarize the work, do NOT describe what you did, do NOT paraphrase the result. The parent reads the file to drive the next workflow action. If the tool returned plaintext instead of a result path (e.g. "job ends here — parent will call haiku_run_next"), relay THAT plaintext verbatim as your final message.`,
 			`${step++}. Track outputs in unit frontmatter \`outputs:\` field`,
 			`${step++}. If outputs from a previous stage are missing: call \`haiku_revisit { intent: "${slug}" }\``,
 			"",

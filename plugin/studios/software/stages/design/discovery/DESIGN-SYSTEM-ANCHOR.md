@@ -20,7 +20,7 @@ For each reusable atomic component found in source (e.g. Button, Surface, Card, 
 - **Component name** and its source file path
 - **Dimensions** — height, min-height, min-width, padding (cited to file:line)
 - **Border radius** (cited to file:line)
-- **States** — list any conditional styles for hover, focus, active, disabled, loading, error (cited to file:line)
+- **States** — list any conditional styles for the canonical 8-state set: `default, hover, focus, active, disabled, error, loading, empty` (cited to file:line). Match `DESIGN-BRIEF.md`'s state vocabulary so downstream consistency review can compare like-for-like.
 - **Variants** — any size/color/shape variants the component declares (cited to file:line)
 
 Example entry:
@@ -31,27 +31,32 @@ Source: atorasu/atoms/Button.tsx
 - height: 44px             # Button.tsx:23
 - border-radius: 8px        # Button.tsx:31
 - padding-h: 16px           # Button.tsx:28
+- default: solid bg, brand-primary text  # Button.tsx:18
 - disabled-opacity: 0.4     # Button.tsx:47
+- empty: ghost variant w/ placeholder copy  # Button.tsx:55
 ```
 
 ### 2. Tokens
 
 Color, spacing, typography, and radius scales pulled from the project's tokens module (e.g. `atorasu/style/theme/colors.ts`, `style/spacing.ts`):
 
-- **Color tokens** — name, value, semantic alias if any (cited to file:line)
-- **Spacing scale** — each step value (cited to file:line)
+Every recorded color value MUST carry both its raw source value AND its named-token alias as defined in `knowledge/DESIGN-TOKENS.md`. The designer hat is forbidden from using raw hex; if a color exists in source but has no named alias yet, route the gap to `## Open Questions` rather than emitting a raw hex into the anchor — never let unaliased values flow into the design context.
+
+- **Color tokens** — name (token alias), raw value, source citation (file:line)
+- **Spacing scale** — each step's named alias and step value (cited to file:line)
 - **Typography scale** — font family, sizes, weights, line heights (cited to file:line)
-- **Radius scale** — each named radius value (cited to file:line)
+- **Radius scale** — each named radius alias and value (cited to file:line)
 - **Shadow/elevation** — any named shadow tokens (cited to file:line)
 
 Example entry:
 ```
 ### Color Tokens
-Source: atorasu/style/theme/colors.ts
+Source: atorasu/style/theme/colors.ts → mapped to knowledge/DESIGN-TOKENS.md
 
-- brand-primary: #1A73E8    # colors.ts:12
-- surface-bg: #FFFFFF       # colors.ts:18
-- text-primary: #212121     # colors.ts:24
+- color.brand.primary    = #1A73E8    # colors.ts:12 → DESIGN-TOKENS.md:8
+- color.surface.bg       = #FFFFFF    # colors.ts:18 → DESIGN-TOKENS.md:14
+- color.text.primary     = #212121    # colors.ts:24 → DESIGN-TOKENS.md:20
+- (gap) #F5A623 used in Button.tsx:62 has no named alias → see Open Questions
 ```
 
 ### 3. Active vs Dormant Patterns

@@ -49,7 +49,7 @@ process.env.PATH = `${join(tmp, "fake-bin")}:${process.env.PATH}`
 const { handleStateTool, moveFeedbackFile, writeFeedbackFile } = await import(
 	"../src/state-tools.ts"
 )
-const { preTickFeedbackGate } = await import(
+const { preTickFeedbackGate, countOpenFeedbackForGateCheck } = await import(
 	"../src/orchestrator/workflow/feedback-triage-gate.ts"
 )
 
@@ -522,6 +522,77 @@ try {
 		assert.ok(action, "expected dispatch action, got null")
 		assert.strictEqual(action.action, "feedback_dispatch")
 		assert.strictEqual(action.counts.inline_fixes, 1)
+	})
+
+	await test("countOpenFeedbackForGateCheck does NOT count `answered` items (deadlock fix)", () => {
+		// Regression for PR #275 review feedback: an `answered` FB
+		// (agent replied to a human question, awaiting human
+		// confirmation via the SPA) must NOT block gate_review.
+		// Agents can't close `answered` items — only the human can —
+		// so counting them deadlocks the workflow.
+		const { projDir, slug, stages } = makeProject(
+			"answered-fb-deadlock-check",
+			{
+				active_stage: "plan",
+				stageStates: { plan: { phase: "gate" } },
+			},
+		)
+		process.chdir(projDir)
+		// One answered FB (agent replied, awaiting human).
+		writeFeedbackFile(slug, "plan", {
+			title: "Question the agent already answered",
+			body: "Body",
+			origin: "user-chat",
+			author: "user",
+		})
+		// Manually flip status to "answered" to mirror the post-reply
+		// state. (`writeFeedbackFile` doesn't expose a `status` opt;
+		// flipping after creation matches existing test patterns
+		// elsewhere in this file.)
+		const fbDir = join(projDir, ".haiku/intents", slug, "stages/plan/feedback")
+		const fbFiles = readdirSync(fbDir).filter((f) => f.endsWith(".md"))
+		const fbPath = join(fbDir, fbFiles[0])
+		const flipped = readFileSync(fbPath, "utf8").replace(
+			/^status:\s*pending\s*$/m,
+			"status: answered",
+		)
+		writeFileSync(fbPath, flipped)
+
+		const count = countOpenFeedbackForGateCheck(
+			slug,
+			stages,
+			stages.indexOf("plan"),
+		)
+		assert.strictEqual(
+			count,
+			0,
+			`answered FB should not be counted as gate-blocking, got ${count}`,
+		)
+	})
+
+	await test("countOpenFeedbackForGateCheck DOES count pending FBs", () => {
+		// Sanity: the predicate isn't broken — it still counts truly
+		// gate-blocking items (status: pending).
+		const { projDir, slug, stages } = makeProject(
+			"pending-fb-blocks-gate-check",
+			{
+				active_stage: "plan",
+				stageStates: { plan: { phase: "gate" } },
+			},
+		)
+		process.chdir(projDir)
+		writeFeedbackFile(slug, "plan", {
+			title: "Pending FB",
+			body: "Body",
+			origin: "adversarial-review",
+			author: "review-agent",
+		})
+		const count = countOpenFeedbackForGateCheck(
+			slug,
+			stages,
+			stages.indexOf("plan"),
+		)
+		assert.strictEqual(count, 1)
 	})
 
 	await test("agent-authored FBs on current stage during gate phase → null (gate.ts owns dispatch)", () => {

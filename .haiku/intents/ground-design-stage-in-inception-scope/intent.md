@@ -2,7 +2,7 @@
 title: Ground design stage in inception scope
 studio: software
 mode: continuous
-status: active
+status: completed
 created_at: '2026-04-28'
 stages:
   - development
@@ -12,6 +12,7 @@ phase: awaiting_completion_review
 completion_review_entered_at: '2026-04-29T00:49:57Z'
 completion_review_dispatched: true
 completion_review_dispatched_at: '2026-04-29T00:50:00Z'
+completed_at: '2026-04-29T01:42:21Z'
 ---
 
 # Ground design stage in inception scope

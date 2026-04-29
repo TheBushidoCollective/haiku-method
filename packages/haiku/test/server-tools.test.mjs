@@ -155,11 +155,7 @@ for (const toolName of expectedStateTools) {
 
 console.log("\n=== Orchestrator Tool Coverage ===")
 
-const expectedOrchestratorTools = [
-	"haiku_run_next",
-	"haiku_intent_create",
-	"haiku_revisit",
-]
+const expectedOrchestratorTools = ["haiku_run_next", "haiku_intent_create"]
 
 for (const toolName of expectedOrchestratorTools) {
 	test(`orchestrator tool '${toolName}' exists`, () => {
@@ -236,11 +232,19 @@ test("haiku_intent_create has optional slug and context", () => {
 	assert.ok(!tool.inputSchema.required.includes("context"))
 })
 
-test("haiku_revisit requires intent, stage optional", () => {
+test("haiku_revisit removed — revisit flows through haiku_feedback now", () => {
 	const tool = orchestratorToolDefs.find((t) => t.name === "haiku_revisit")
-	assert.deepStrictEqual(tool.inputSchema.required, ["intent"])
-	assert.ok("intent" in tool.inputSchema.properties)
-	assert.ok("stage" in tool.inputSchema.properties)
+	assert.strictEqual(
+		tool,
+		undefined,
+		"haiku_revisit removed — use haiku_feedback with resolution: stage_revisit",
+	)
+	const fbTool = stateToolDefs.find((t) => t.name === "haiku_feedback")
+	assert.ok(fbTool, "haiku_feedback should still exist")
+	assert.ok(
+		"resolution" in fbTool.inputSchema.properties,
+		"haiku_feedback should accept resolution at creation time",
+	)
 })
 
 test("haiku_intent_list requires no arguments", () => {

@@ -96,48 +96,6 @@ export const orchestratorToolDefs = [
 		},
 	},
 	{
-		name: "haiku_revisit",
-		description:
-			"Revisit an earlier stage or phase. Passing `reasons` is preferred — each reason creates a " +
-			"feedback file before rolling back, ensuring findings are captured durably. Without reasons, " +
-			"returns a stopgap instead of rolling back. " +
-			"If `stage` is provided, jumps directly to that stage. " +
-			"Without `stage`, infers the target: if in execute/review/gate phase, revisits elaborate in the current stage; " +
-			"if already in elaborate, revisits the previous stage. " +
-			"Agents can call this when they detect missing information from a prior stage.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description:
-						"Target stage to revisit (optional — omit to let the workflow engine infer the target)",
-				},
-				reasons: {
-					type: "array",
-					description:
-						"Optional feedback reasons. Each creates a feedback file before the revisit.",
-					items: {
-						type: "object",
-						properties: {
-							title: {
-								type: "string",
-								description: "Feedback title",
-							},
-							body: {
-								type: "string",
-								description: "Feedback body (markdown)",
-							},
-						},
-						required: ["title", "body"],
-					},
-				},
-			},
-			required: ["intent"],
-		},
-	},
-	{
 		name: "haiku_intent_reset",
 		description:
 			"Reset an intent — preserves the description, deletes all state, and recreates the intent from scratch. Asks for confirmation via elicitation before proceeding.",

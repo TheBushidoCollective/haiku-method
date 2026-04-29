@@ -492,9 +492,10 @@ export default defineTool({
 				if (gateContext === "intent_completion") {
 					// Final-review rejection — drop out of the completion-
 					// review phase and route the agent back. Feedback files
-					// were written against the last stage, so the agent can
-					// call haiku_revisit to re-open that stage's elaborate
-					// phase and address them. Reset the dispatched flag so
+					// were written against the last stage; the agent invokes
+					// /haiku:revisit (or logs a stage_revisit FB directly)
+					// to re-open that stage's elaborate phase and address
+					// them. Reset the dispatched flag so
 					// the next time we re-enter the completion review phase,
 					// the studio-level reviewers RE-AUDIT the fixes instead
 					// of short-circuiting to the gate on the stale "already
@@ -530,7 +531,7 @@ export default defineTool({
 						feedback: reviewResult.feedback,
 						annotations: reviewResult.annotations,
 						feedback_ids: feedbackIds,
-						message: `Changes requested on intent completion: ${reviewResult.feedback || "(see annotations)"}.${feedbackSummary} The intent is no longer in final review. Call \`haiku_revisit { intent: "${slug}" }\` to revisit a stage (or a specific one via \`stage\`), then address the feedback and call \`haiku_run_next\` to drive back to final review.`,
+						message: `Changes requested on intent completion: ${reviewResult.feedback || "(see annotations)"}.${feedbackSummary} The intent is no longer in final review. Invoke the /haiku:revisit slash command (or log stage_revisit feedback at the target stage directly via \`haiku_feedback\` with \`resolution: "stage_revisit"\`) to re-open the relevant stage, then address the feedback and call \`haiku_run_next\` to drive back to final review.`,
 					}
 					return text(withInstructions(gateResult))
 				}

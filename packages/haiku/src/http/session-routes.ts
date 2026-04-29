@@ -25,7 +25,6 @@ import {
 	SESSION_ANSWER_MAX_BYTES,
 } from "haiku-api"
 import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
-import { handleOrchestratorTool } from "../orchestrator.js"
 import {
 	getSession,
 	type QuestionAnnotations,
@@ -37,12 +36,14 @@ import {
 	updateSession,
 } from "../sessions.js"
 import {
+	gitCommitState,
 	intentDir,
 	parseFrontmatter,
 	persistDesignDirectionSelection,
 	readJson,
 	stageStatePath,
 	timestamp,
+	writeFeedbackFile,
 	writeJson,
 } from "../state-tools.js"
 import { logFeedbackAction } from "./action-log.js"
@@ -313,79 +314,106 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			}
 			const parsed = parseBodyWithSchema(reply, req.body, RevisitRequestSchema)
 			if (!parsed.ok) return
-			const args: {
-				intent: string
-				stage?: string
-				reasons?: Array<{ title: string; body: string }>
-			} = { intent: session.intent_slug }
-			if (parsed.data.stage) args.stage = parsed.data.stage
-			if (parsed.data.reasons) args.reasons = parsed.data.reasons
-			const toolResult = await handleOrchestratorTool("haiku_revisit", args)
-			const text = toolResult.content
-				.filter((c) => c.type === "text")
-				.map((c) => (c as { text: string }).text)
-				.join("\n")
-			if (toolResult.isError) {
+
+			// Resolve target stage — explicit `stage` arg wins, else the
+			// intent's active_stage. Without one we can't write the FBs at
+			// the right location.
+			const slug = session.intent_slug
+			const targetStage = parsed.data.stage || readActiveStage(slug)
+			if (!targetStage) {
 				logFeedbackAction({
 					reqId: req.id,
 					action: "revisit",
 					status: 409,
-					intent: session.intent_slug,
-					stage: parsed.data.stage ?? null,
-					detail: `revisit_failed: ${text.slice(0, 200)}`,
+					intent: slug,
+					detail: "no_active_stage",
 				})
-				reply.status(409).send({ error: "revisit_failed", detail: text })
+				reply.status(409).send({
+					error: "no_active_stage",
+					detail: "intent has no active stage",
+				})
 				return
 			}
-			let action = "revisit"
-			let stage: string | undefined
-			let feedbackCreated: string[] | undefined
-			let message = text
-			try {
-				const parsedAction = JSON.parse(text) as Record<string, unknown>
-				action =
-					typeof parsedAction.action === "string" ? parsedAction.action : action
-				if (typeof parsedAction.stage === "string") stage = parsedAction.stage
-				if (Array.isArray(parsedAction.feedback_created)) {
-					feedbackCreated = parsedAction.feedback_created.filter(
-						(v): v is string => typeof v === "string",
-					)
-				}
-				if (typeof parsedAction.message === "string") {
-					message = parsedAction.message
-				}
-			} catch {
-				/* */
-			}
-			// Wake the gate_review waiter blocked inside the MCP tool call.
-			// Without this, `waitForSession()` stays parked for the full
-			// 30-minute timeout and the reviewer's click looks like a
-			// no-op — the HTTP response returns 200 to the browser but
-			// the agent never sees the decision.
+
+			// Two paths:
+			//   1. reasons[] provided → write each as a stage_revisit FB.
+			//      Origin "user-revisit" auto-stamps `triaged_at:` so the
+			//      pre-tick gate routes the rewind on the next tick.
+			//   2. no reasons + pending FBs already exist on the stage →
+			//      relies on the pre-tick gate seeing those FBs and routing.
+			//      No new FBs to write here.
 			//
-			// IMPORTANT: carry the revisit's action + message in
-			// `annotations.revisit_action` / `annotations.revisit_message`
-			// and keep `feedback` EMPTY. Stuffing the dispatch message
-			// into `feedback` would make the gate_review handler treat it
-			// as reviewer-typed prose and write a brand-new feedback file
-			// from the instruction text — an ouroboros bug that mirrored
-			// the dispatch message back as a new finding on the next run.
-			// The handler reads `revisit_action` on wake and short-circuits
-			// to the dispatch result verbatim.
+			// In neither case does the HTTP handler call `revisit()` directly
+			// — the rewind is a property of the next `haiku_run_next` tick's
+			// pre-tick gate, not a synchronous side effect of this endpoint.
+			// Same routing path as agent-authored stage_revisit FBs.
+			const reasons = parsed.data.reasons ?? []
+			const feedbackCreated: string[] = []
+			for (const reason of reasons) {
+				try {
+					const fb = writeFeedbackFile(slug, targetStage, {
+						title: reason.title,
+						body: reason.body,
+						origin: "user-revisit",
+						author: "user",
+						resolution: "stage_revisit",
+						// User clicked "Request Changes" — that IS the
+						// triage decision. Stamp `triaged_at` explicitly so
+						// the pre-tick gate routes the rewind on the next
+						// tick instead of asking the agent to triage the
+						// user's explicit request.
+						triaged_at: timestamp(),
+					})
+					feedbackCreated.push(fb.feedback_id)
+				} catch (err) {
+					logFeedbackAction({
+						reqId: req.id,
+						action: "revisit",
+						status: 500,
+						intent: slug,
+						stage: targetStage,
+						detail: `feedback_write_failed: ${err instanceof Error ? err.message : String(err)}`,
+					})
+					reply.status(500).send({
+						error: "feedback_write_failed",
+						detail: err instanceof Error ? err.message : String(err),
+					})
+					return
+				}
+			}
+			if (feedbackCreated.length > 0) {
+				gitCommitState(
+					`haiku: revisit feedback in ${targetStage} (${feedbackCreated.length} items)`,
+				)
+			}
+
+			const message =
+				feedbackCreated.length > 0
+					? `Created ${feedbackCreated.length} stage_revisit feedback item(s) at \`${targetStage}\`. The next \`haiku_run_next\` tick will route the rewind via the pre-tick gate.`
+					: `No new feedback items provided. The next \`haiku_run_next\` tick's pre-tick gate will route the rewind based on existing pending feedback at \`${targetStage}\` (if any).`
+
+			// Wake the gate_review waiter parked inside the agent's
+			// haiku_run_next call. Without this, the agent stays parked for
+			// the full timeout and the reviewer's click looks like a no-op.
+			// On wake, the agent's run_next call falls through to the pre-tick
+			// gate which sees the new stage_revisit FBs (or pre-existing
+			// pending FBs) and emits the correct sideline action — same
+			// routing path as agent-authored stage_revisit FBs.
 			updateSession(req.params.sessionId, {
 				status: "decided",
 				decision: "changes_requested",
 				feedback: "",
 				annotations: {
-					...(action ? { revisit_action: action } : {}),
-					...(stage ? { revisit_stage: stage } : {}),
-					...(message ? { revisit_message: message } : {}),
+					revisit_action: "revisit_pending",
+					revisit_stage: targetStage,
+					revisit_message: message,
 				} as unknown as Parameters<typeof updateSession>[1]["annotations"],
 			})
+
 			const response: RevisitResponse = {
 				ok: true,
-				action,
-				stage,
+				action: "revisit_pending",
+				stage: targetStage,
 				feedback_created: feedbackCreated,
 				message,
 			}
@@ -393,10 +421,10 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				reqId: req.id,
 				action: "revisit",
 				status: 200,
-				intent: session.intent_slug,
-				stage: stage ?? null,
-				detail: `revisit_action=${action}${
-					feedbackCreated && feedbackCreated.length > 0
+				intent: slug,
+				stage: targetStage,
+				detail: `revisit_action=revisit_pending${
+					feedbackCreated.length > 0
 						? ` feedback_created=${feedbackCreated.join(",")}`
 						: ""
 				}`,

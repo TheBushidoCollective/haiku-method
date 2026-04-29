@@ -176,8 +176,8 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 
 	console.log("\n=== orchestratorToolDefs ===")
 
-	test("has 7 orchestration tools", () => {
-		assert.strictEqual(orchestratorToolDefs.length, 7)
+	test("has 6 orchestration tools", () => {
+		assert.strictEqual(orchestratorToolDefs.length, 6)
 	})
 
 	test("haiku_run_next tool defined with intent optional (auto-resolved)", () => {
@@ -206,10 +206,13 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 		assert.ok(tool.inputSchema.required.includes("description"))
 	})
 
-	test("haiku_revisit tool defined with intent required", () => {
+	test("haiku_revisit tool is removed (revisit-via-feedback)", () => {
 		const tool = orchestratorToolDefs.find((t) => t.name === "haiku_revisit")
-		assert.ok(tool)
-		assert.ok(tool.inputSchema.required.includes("intent"))
+		assert.strictEqual(
+			tool,
+			undefined,
+			"haiku_revisit removed — use haiku_feedback with resolution: stage_revisit instead",
+		)
 	})
 
 	test("haiku_select_studio tool defined with intent required", () => {

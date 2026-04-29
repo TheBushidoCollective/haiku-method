@@ -402,15 +402,16 @@ packages/
       hooks/                    # all hooks in TypeScript
 ```
 
-### MCP Tools (23 total)
+### MCP Tools (22 total)
 
-**Orchestrator (3):**
+**Orchestrator (2):**
 
 | Tool | Purpose |
 |------|---------|
 | `haiku_run_next` | Get next orchestrator action (workflow driver) |
-| `haiku_revisit` | Revisit an earlier stage or phase |
 | `haiku_intent_create` | Create a new intent (with elicitation) |
+
+> **Revisit:** request a stage rewind by creating a feedback item with `resolution: "stage_revisit"` at the target stage via `haiku_feedback`, then call `haiku_run_next`. The pre-tick gate routes the rewind on the next tick. There is no separate revisit verb — revisit is a property of run_next mechanics.
 
 **Unit write (5):**
 
@@ -459,7 +460,7 @@ Every MCP state transition emits its OTEL event — no manual calls needed:
 | `haiku_run_next` (workflow: gate resolved) | `haiku.gate.resolved` |
 | `haiku_run_next` (workflow: intent_complete) | `haiku.intent.completed` |
 | `haiku_run_next` | `haiku.orchestrator.action` |
-| `haiku_revisit` | `haiku.revisit.stage` / `haiku.revisit.phase` |
+| `haiku_run_next` (pre-tick gate routes stage_revisit FB) | `haiku.revisit.stage` / `haiku.revisit.phase` |
 | `haiku_unit_start` | `haiku.unit.started` |
 | `haiku_unit_advance_hat` (last hat) | `haiku.unit.completed` |
 | `haiku_unit_reject_hat` | `haiku.unit.failed` |

@@ -3741,6 +3741,7 @@ export const FEEDBACK_ORIGINS = [
 	"user-visual",
 	"user-chat",
 	"user-question",
+	"user-revisit",
 	"agent",
 ] as const
 
@@ -3844,6 +3845,7 @@ const HUMAN_ORIGINS: ReadonlySet<string> = new Set([
 	"user-visual",
 	"user-chat",
 	"user-question",
+	"user-revisit",
 	"external-pr",
 	"external-mr",
 ])
@@ -5711,7 +5713,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 	{
 		name: "haiku_feedback",
 		description:
-			'Create a feedback item for an intent. Writes a markdown file with frontmatter tracking status, origin, and author. Omit `stage` to log an intent-scope finding (used by the studio-level pre-intent-completion review layer). To request a stage rewind from the agent side (planner blocked, upstream gap, etc.), pass `stage: "<earlier-stage>"` and `resolution: "stage_revisit"` — the next `haiku_run_next` will route through the pre-tick gate and emit a `revisited` action. This replaces the legacy `haiku_revisit` tool path.',
+			'Create a feedback item for an intent. Writes a markdown file with frontmatter tracking status, origin, and author. Omit `stage` to log an intent-scope finding (used by the studio-level pre-intent-completion review layer). To request a stage rewind from the agent side (planner blocked, upstream gap, etc.), pass `stage: "<earlier-stage>"` and `resolution: "stage_revisit"` — the next `haiku_run_next` will route through the pre-tick gate and emit a `revisited` action. Revisit is a property of run_next mechanics, not a separate verb.',
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -5732,7 +5734,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 				origin: {
 					type: "string",
 					description:
-						"Source: adversarial-review | studio-review | external-pr | external-mr | user-visual | user-chat | agent (default: agent)",
+						"Source: adversarial-review | studio-review | external-pr | external-mr | user-visual | user-chat | user-question | user-revisit | agent (default: agent)",
 				},
 				source_ref: {
 					type: "string",
@@ -6892,7 +6894,7 @@ export function handleStateTool(
 									`Cannot complete unit: ${scopeResult.violations.length} file(s) were written outside the stage's declared scope.\n\n` +
 									`Out-of-bounds files:\n${scopeResult.violations.map((v) => `  - ${v}`).join("\n")}\n\n` +
 									`Allowed paths (stage output templates + workflow engine metadata):\n${allowedSummary}\n\n` +
-									`To resolve (in the unit worktree): (a) drop ALL unit commits with \`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${advStage})\` — recommended if the unit just started and few commits landed; or (b) amend the bad file out of the latest commit with \`git rm <file> && git commit --amend --no-edit\`; or (c) whole-commit rollback with \`git revert --no-edit <commit-sha>\` for each bad commit.\n\nNOTE: \`git checkout HEAD -- <file>\` does NOT work on committed files (it's a no-op when the file matches HEAD). Use one of the above.\n\nAlternatively: (d) update the stage's output template \`location:\` / \`scope:\` if this pattern is legitimate, or (e) call \`haiku_revisit\` if the scope itself is wrong.`,
+									`To resolve (in the unit worktree): (a) drop ALL unit commits with \`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${advStage})\` — recommended if the unit just started and few commits landed; or (b) amend the bad file out of the latest commit with \`git rm <file> && git commit --amend --no-edit\`; or (c) whole-commit rollback with \`git revert --no-edit <commit-sha>\` for each bad commit.\n\nNOTE: \`git checkout HEAD -- <file>\` does NOT work on committed files (it's a no-op when the file matches HEAD). Use one of the above.\n\nAlternatively: (d) update the stage's output template \`location:\` / \`scope:\` if this pattern is legitimate, or (e) log a stage_revisit feedback at the upstream stage via \`haiku_feedback\` with \`resolution: "stage_revisit"\` if the scope itself is wrong.`,
 							},
 							{ isError: true },
 						)

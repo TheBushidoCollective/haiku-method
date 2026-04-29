@@ -14,7 +14,6 @@ import haiku_intent_archive from "./haiku_intent_archive.js"
 import haiku_intent_create from "./haiku_intent_create.js"
 import haiku_intent_reset from "./haiku_intent_reset.js"
 import haiku_intent_unarchive from "./haiku_intent_unarchive.js"
-import haiku_revisit from "./haiku_revisit.js"
 import haiku_run_next from "./haiku_run_next.js"
 import haiku_select_studio from "./haiku_select_studio.js"
 
@@ -25,7 +24,6 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 			haiku_intent_create,
 			haiku_intent_reset,
 			haiku_intent_unarchive,
-			haiku_revisit,
 			haiku_run_next,
 			haiku_select_studio,
 		] satisfies ToolDef[]

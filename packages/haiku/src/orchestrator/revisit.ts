@@ -2,8 +2,8 @@
 //
 // Two entry points:
 //   - revisit(slug, requestedStage?)            — public, called by
-//     haiku_revisit tool + the gate handler when stage_revisit
-//     resolution wins triage.
+//     the pre-tick feedback gate when stage_revisit resolution wins
+//     triage on an open FB at an earlier stage.
 //   - revisitCurrentStage(slug, iDir, ...)      — re-elaborate the
 //     active stage in place. Public so the gate handler can route
 //     auto-revisit findings without re-opening the classify path.
@@ -272,7 +272,7 @@ export function revisit(
 	const prevStage = studioStages[currentIdx - 1]
 	return {
 		action: "error",
-		message: `Stage '${currentActiveStage}' is already in the elaborate phase — \`haiku_revisit\` cannot infer whether you want to re-elaborate '${currentActiveStage}' or jump back to '${prevStage}'. Pass \`stage\` explicitly (\`stage: "${currentActiveStage}"\` to re-elaborate the current stage, \`stage: "${prevStage}"\` to revisit the prior one).`,
+		message: `Stage '${currentActiveStage}' is already in the elaborate phase — the revisit caller cannot infer whether you want to re-elaborate '${currentActiveStage}' or jump back to '${prevStage}'. Pass \`stage\` explicitly (\`stage: "${currentActiveStage}"\` to re-elaborate the current stage, \`stage: "${prevStage}"\` to revisit the prior one) — or, agent-side, log the stage_revisit FB at the specific target stage you want.`,
 	}
 }
 

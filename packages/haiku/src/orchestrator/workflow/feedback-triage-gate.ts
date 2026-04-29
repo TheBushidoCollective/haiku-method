@@ -104,6 +104,30 @@ function collectOpenFeedback(
 	return out
 }
 
+/** Defensive check used at every `gate_review` emit site: count
+ *  open (non-terminal, no `closed_by`) feedback items on the active
+ *  stage and earlier stages, plus intent-scope feedback. The invariant
+ *  is "no `gate_review` emitted while feedback is open" — pre-tick
+ *  + gate.ts together are supposed to enforce it, but if either
+ *  misses an edge case, the emit site returns this count so the
+ *  caller can short-circuit with an error action instead of silently
+ *  surfacing the gate to the user.
+ *
+ *  Pass `intentScopeOnly: true` for intent-completion review (where
+ *  per-stage feedback is already adjudicated by definition). */
+export function countOpenFeedbackForGateCheck(
+	slug: string,
+	studioStages: string[],
+	currentStageIdx: number,
+	intentScopeOnly = false,
+): number {
+	if (intentScopeOnly) {
+		const intentScopeItems = readFeedbackFiles(slug, "")
+		return intentScopeItems.filter(isOpen).length
+	}
+	return collectOpenFeedback(slug, studioStages, currentStageIdx).length
+}
+
 /** Run the pre-tick triage check. Returns an action when the tick
  *  should short-circuit (triage required or revisit needed); null
  *  when normal dispatch should proceed. */
@@ -167,64 +191,59 @@ export function preTickFeedbackGate(
 		}
 	}
 
-	// Outcome 3: open FBs on the current stage that need agent
-	// attention.
+	// Outcome 3: open pending FBs on the current stage that need
+	// agent attention.
 	//
-	//   - Human null/question FBs always dispatch — keeps the review
-	//     UI from re-popping while the reviewer's "agent decide"
-	//     comment sits unaddressed.
+	// Author-agnostic by design: only agents address feedback, no
+	// matter who filed it. The user's review-screen rule is "pending
+	// feedback should never surface a user-facing gate via run_next" —
+	// the SPA review UI is the manual surface for human inspection,
+	// and run_next must always route open FBs through a fix /
+	// dispatch path before any handler emits gate_review.
 	//
-	//   - stage_revisit FBs dispatch ONLY when phase ≠ "gate". In
-	//     gate phase, `gate.ts` owns the rollback. When the stage has
-	//     already been rolled back, the FB is stuck open until the
-	//     agent verifies its concern is addressed and closes it.
+	// Phase split:
+	//   - In gate phase, `gate.ts` owns the full fix-chain / rollback
+	//     / review_fix dispatch chain. Pre-tick stays out — emitting
+	//     from here would double-dispatch (e.g. firing
+	//     feedback_dispatch when gate.ts would otherwise emit
+	//     review_fix or feedback_revisit). gate.ts is responsible for
+	//     never emitting gate_review while feedback is open in gate
+	//     phase, and the defensive check at the gate_review emit
+	//     site enforces it.
+	//   - In non-gate phases (elaborate / execute / review), no
+	//     downstream handler dispatches per-FB fix work. If pre-tick
+	//     falls through, the elaborate handler emits gate_review with
+	//     feedback still open. Pre-tick is the only place that can
+	//     prevent that, so we dispatch every classification bucket
+	//     here regardless of who authored the FB.
 	//
 	//   We never call `revisitCurrentStage` here — the helper resets
 	//   phase to elaborate without closing the FB, so the next tick
 	//   would see the same FB and roll back again. The dispatch path
 	//   is the only one that closes the FB.
-	if (currentStage) {
+	if (currentStage && context.currentPhase !== "gate") {
 		const currentStageFbs = openFeedback
 			.filter(({ stage }) => stage === currentStage)
 			.map(({ item }) => item)
 		const classification = classifyPendingForRevisit(currentStageFbs)
-		const inGatePhase = context.currentPhase === "gate"
-		// null/question are filtered to human-authored only because
-		// agent-authored ones with those resolutions are out-of-scope
-		// here — they fall through to gate.ts's existing fix-chain /
-		// feedback_revisit paths that handle agent findings without
-		// engaging the user.
-		const humanNeedsTriage = classification.needsTriage.filter(
-			(item) => item.author_type === "human",
-		)
-		const humanQuestions = classification.questions.filter(
-			(item) => item.author_type === "human",
-		)
-		// stage_revisit is intentionally NOT filtered to human authors:
-		// once a stage_revisit FB lands and the rollback completes, it
-		// stays open until something explicitly closes it. Whether the
-		// reviewer was a person or an agent doesn't change that — both
-		// need verification-and-close. Filtering to human-only here
-		// would leave agent-authored stage_revisit FBs stuck in the
-		// same loop this fix is trying to break.
-		const stageRevisitsToDispatch = inGatePhase
-			? []
-			: classification.stageRevisits
 		if (
-			humanNeedsTriage.length > 0 ||
-			humanQuestions.length > 0 ||
-			stageRevisitsToDispatch.length > 0
+			classification.needsTriage.length > 0 ||
+			classification.questions.length > 0 ||
+			classification.inlineFixes.length > 0 ||
+			classification.stageRevisits.length > 0
 		) {
 			return buildFeedbackDispatchAction(slug, currentStage, {
-				needsTriage: humanNeedsTriage,
-				questions: humanQuestions,
-				inlineFixes: [],
-				stageRevisits: stageRevisitsToDispatch,
+				needsTriage: classification.needsTriage,
+				questions: classification.questions,
+				inlineFixes: classification.inlineFixes,
+				stageRevisits: classification.stageRevisits,
 			})
 		}
 	}
 
-	// Outcome 4: open feedback only routes through inline_fix / revisit
-	// or sits at intent scope. Existing handlers manage those.
+	// Outcome 4: nothing to dispatch from pre-tick — gate phase is
+	// in `gate.ts`'s territory, or only `fixing` / `answered` items
+	// remain (mid-handler state) on the current stage. Fall through
+	// to the per-state handler chain.
 	return null
 }

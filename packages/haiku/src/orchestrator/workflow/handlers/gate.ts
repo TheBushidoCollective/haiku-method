@@ -76,6 +76,7 @@ import {
 } from "../../../state-tools.js"
 import { readHatDefs, studioSearchPaths } from "../../../studio-reader.js"
 import { emitTelemetry } from "../../../telemetry.js"
+import { countOpenFeedbackForGateCheck } from "../feedback-triage-gate.js"
 import type { WorkflowHandler } from "./_types.js"
 
 // Inline copy of resolveStageFixHats (private in orchestrator). The
@@ -604,6 +605,24 @@ const emit: WorkflowHandler = (ctx) => {
 		effectiveGateType = "external"
 	} else {
 		effectiveGateType = reviewType
+	}
+
+	// Defensive invariant: never emit gate_review while open feedback
+	// exists. gate.ts itself routes pending feedback through
+	// review_fix / feedback_revisit / feedback_dispatch above; if any
+	// branch missed an item, this final check catches it before the
+	// user sees a gate with open feedback.
+	const openFbCount = countOpenFeedbackForGateCheck(
+		slug,
+		studioStages,
+		studioStages.indexOf(currentStage),
+	)
+	if (openFbCount > 0) {
+		return {
+			action: "error",
+			intent: slug,
+			message: `Refusing to emit gate_review for stage '${currentStage}' (stage gate): ${openFbCount} open feedback item(s) on or before this stage. The gate handler should have routed these through review_fix / feedback_revisit / feedback_dispatch — file a bug citing handlers/gate.ts. Workaround: close / reject the open items via the review UI first.`,
+		}
 	}
 
 	workflowGateAsk(slug, currentStage)

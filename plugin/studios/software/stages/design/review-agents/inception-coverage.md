@@ -88,7 +88,7 @@ Every finding body **MUST** include:
 
 ## Anti-patterns (RFC 2119)
 
-- `MUST NOT` hardcode artifact filenames — discover them dynamically each run
+- `MUST NOT` hardcode **inception** artifact filenames — Step 1 discovers them dynamically because inception's filenames are agent-authored and vary per intent. (Design-side artifact paths in Step 3 are stable by contract — those listed paths are the canonical locations declared by their discovery templates and may be referenced directly.)
 - `MUST NOT` summarize inception artifacts — read them in full per audit pass
 - `MUST NOT` infer coverage from titles or filenames — diff actual content
 - `MUST NOT` flag scope-creep without naming the specific inception artifact passage that omits the surface

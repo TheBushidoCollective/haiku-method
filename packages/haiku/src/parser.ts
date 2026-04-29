@@ -361,17 +361,159 @@ async function walkArtifactsDir(dir: string): Promise<string[]> {
 }
 
 /**
- * Scan stages/{stage}/artifacts/ directories for output artifacts.
- * Walks recursively so nested artifacts (e.g. `artifacts/wireframes/foo.html`)
- * surface in the review screen — not just files at the top level. Markdown
- * and HTML bodies are inlined; images and unknown extensions are exposed via
- * `relativePath` so the `/stage-artifacts/:sessionId/*` HTTP route can serve
- * them.
+ * Build an OutputArtifact entry from a file by classifying its extension.
+ * `name` is the display name (typically the path-from-some-root with the
+ * extension stripped). `relativePath` is intent-dir-relative for HTTP
+ * serving by `/stage-artifacts/:sessionId/*`. Returns null when the file
+ * can't be read.
+ */
+async function buildArtifactEntry(
+	fullPath: string,
+	stage: string,
+	name: string,
+	relativePath: string,
+): Promise<OutputArtifact | null> {
+	const ext = basename(fullPath)
+		.substring(basename(fullPath).lastIndexOf("."))
+		.toLowerCase()
+	if (ext === ".md") {
+		try {
+			const raw = await readFile(fullPath, "utf-8")
+			const { content } = matter(raw)
+			return { stage, name, type: "markdown", content }
+		} catch {
+			return null
+		}
+	}
+	if (OUTPUT_HTML_EXTS.includes(ext)) {
+		try {
+			const content = await readFile(fullPath, "utf-8")
+			return { stage, name, type: "html", content, relativePath }
+		} catch {
+			return null
+		}
+	}
+	if (OUTPUT_IMAGE_EXTS.includes(ext)) {
+		return { stage, name, type: "image", relativePath }
+	}
+	// Unknown extension — surface as a download link rather than silently
+	// dropping the file. A stage's artifact set should be visible in the
+	// review screen regardless of whether the renderer has a specialized
+	// view for the format.
+	return { stage, name, type: "file", relativePath }
+}
+
+/**
+ * Resolve a unit's `outputs:` declaration to an intent-dir-relative path.
+ * Units may declare outputs as either intent-relative (`product/foo.md`)
+ * or workspace-relative (`.haiku/intents/<slug>/product/foo.md`). We
+ * strip the workspace-relative prefix when present so both forms collapse
+ * to the same intent-dir-relative form before resolution.
+ */
+function intentRelativeOutputPath(declared: string, intentDir: string): string {
+	const intentDirName = basename(intentDir)
+	const workspacePrefix = `.haiku/intents/${intentDirName}/`
+	if (declared.startsWith(workspacePrefix)) {
+		return declared.slice(workspacePrefix.length)
+	}
+	return declared
+}
+
+/**
+ * Read every unit's `outputs:` frontmatter under `stages/<stage>/units/`,
+ * resolving each declared path against `intentDir` and classifying it by
+ * extension. Returns the [absolutePath, OutputArtifact] tuples so the caller
+ * can dedupe against the `artifacts/` walk.
+ *
+ * The "stage's outputs" surface is broader than `stages/<stage>/artifacts/`:
+ * units can declare outputs anywhere within the intent dir (e.g.
+ * `<intent>/product/ACCEPTANCE-CRITERIA.md`, `<intent>/features/*.feature`).
+ * The review screen needs to surface the full output set or downstream
+ * stages have nothing to inspect.
+ */
+async function parseUnitOutputs(
+	intentDir: string,
+): Promise<Array<{ absPath: string; artifact: OutputArtifact }>> {
+	const out: Array<{ absPath: string; artifact: OutputArtifact }> = []
+	let stageEntries: Awaited<ReturnType<typeof readdir>>
+	try {
+		stageEntries = await readdir(join(intentDir, "stages"), {
+			withFileTypes: true,
+		})
+	} catch {
+		return out
+	}
+	for (const stageEntry of stageEntries) {
+		if (!stageEntry.isDirectory()) continue
+		const stageName = stageEntry.name
+		const unitsDir = join(intentDir, "stages", stageName, "units")
+		let unitFiles: string[]
+		try {
+			unitFiles = (await readdir(unitsDir, { withFileTypes: true }))
+				.filter((e) => e.isFile() && e.name.endsWith(".md"))
+				.map((e) => e.name)
+				.sort()
+		} catch {
+			continue
+		}
+		for (const unitFile of unitFiles) {
+			const unitPath = join(unitsDir, unitFile)
+			let outputs: string[]
+			try {
+				const raw = await readFile(unitPath, "utf-8")
+				const parsed = matterWithDedupe(raw, unitPath)
+				const fmOutputs = (parsed.data as { outputs?: unknown }).outputs
+				outputs = Array.isArray(fmOutputs)
+					? fmOutputs.filter((p): p is string => typeof p === "string")
+					: []
+			} catch {
+				continue
+			}
+			for (const declared of outputs) {
+				const intentRel = intentRelativeOutputPath(declared, intentDir)
+				const absPath = join(intentDir, intentRel)
+				const nameWithDir = intentRel.replace(/\.[^.]+$/, "")
+				const entry = await buildArtifactEntry(
+					absPath,
+					stageName,
+					nameWithDir,
+					intentRel,
+				)
+				if (entry) out.push({ absPath, artifact: entry })
+			}
+		}
+	}
+	return out
+}
+
+/**
+ * Scan a stage's full output surface for review.
+ *
+ * The review screen surfaces every artifact a stage produced — not just
+ * files happening to live under `stages/<stage>/artifacts/`. Two sources
+ * are merged:
+ *
+ *   1. `stages/<stage>/artifacts/**` — recursive walk. Existing convention.
+ *   2. Each unit's `outputs:` frontmatter under `stages/<stage>/units/*.md`.
+ *      Units are the canonical declaration of what a stage produces, and
+ *      they routinely write to paths outside `artifacts/` (e.g.
+ *      `<intent>/product/ACCEPTANCE-CRITERIA.md`,
+ *      `<intent>/features/*.feature`). Without this scan, a stage whose
+ *      outputs all live outside `artifacts/` shows zero outputs in review.
+ *
+ * Dedup: artifacts/ entries take precedence — a file declared by both a
+ * unit's `outputs:` and present under `artifacts/` is emitted once, with
+ * the artifacts/ path used (matches existing relativePath conventions for
+ * the `/stage-artifacts/:sessionId/*` HTTP route).
+ *
+ * Markdown and HTML bodies are inlined; images and unknown extensions are
+ * exposed via `relativePath` so the HTTP route can serve them.
  */
 export async function parseOutputArtifacts(
 	intentDir: string,
 ): Promise<OutputArtifact[]> {
 	const artifacts: OutputArtifact[] = []
+	const seen = new Set<string>()
 	try {
 		const stagesDir = join(intentDir, "stages")
 		const stageEntries = await readdir(stagesDir, { withFileTypes: true })
@@ -380,8 +522,6 @@ export async function parseOutputArtifacts(
 			const artifactsDir = join(stagesDir, stageEntry.name, "artifacts")
 			const files = (await walkArtifactsDir(artifactsDir)).sort()
 			for (const fullPath of files) {
-				const file = basename(fullPath)
-				const ext = file.substring(file.lastIndexOf(".")).toLowerCase()
 				// Path-from-artifacts-root preserves directory hierarchy in the
 				// artifact name, so `wireframes/knowledge-upload.html` reads as
 				// "wireframes/knowledge-upload" in the review screen instead of
@@ -389,55 +529,25 @@ export async function parseOutputArtifacts(
 				const relFromArtifacts = relative(artifactsDir, fullPath)
 				const nameWithDir = relFromArtifacts.replace(/\.[^.]+$/, "")
 				const httpPath = `${stageEntry.name}/artifacts/${relFromArtifacts}`
-				if (ext === ".md") {
-					try {
-						const raw = await readFile(fullPath, "utf-8")
-						const { content } = matter(raw)
-						artifacts.push({
-							stage: stageEntry.name,
-							name: nameWithDir,
-							type: "markdown",
-							content,
-						})
-					} catch {
-						// Skip unreadable files
-					}
-				} else if (OUTPUT_HTML_EXTS.includes(ext)) {
-					try {
-						const content = await readFile(fullPath, "utf-8")
-						artifacts.push({
-							stage: stageEntry.name,
-							name: nameWithDir,
-							type: "html",
-							content,
-							relativePath: httpPath,
-						})
-					} catch {
-						// Skip unreadable files
-					}
-				} else if (OUTPUT_IMAGE_EXTS.includes(ext)) {
-					artifacts.push({
-						stage: stageEntry.name,
-						name: nameWithDir,
-						type: "image",
-						relativePath: httpPath,
-					})
-				} else {
-					// Unknown extension — surface as a download link rather than
-					// silently dropping the file. A stage's artifact set should
-					// be visible in the review screen regardless of whether the
-					// renderer has a specialized view for the format.
-					artifacts.push({
-						stage: stageEntry.name,
-						name: nameWithDir,
-						type: "file",
-						relativePath: httpPath,
-					})
+				const entry = await buildArtifactEntry(
+					fullPath,
+					stageEntry.name,
+					nameWithDir,
+					httpPath,
+				)
+				if (entry) {
+					artifacts.push(entry)
+					seen.add(fullPath)
 				}
 			}
 		}
 	} catch {
 		// No stages/ directory
+	}
+	for (const { absPath, artifact } of await parseUnitOutputs(intentDir)) {
+		if (seen.has(absPath)) continue
+		artifacts.push(artifact)
+		seen.add(absPath)
 	}
 	return artifacts
 }

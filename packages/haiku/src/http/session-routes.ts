@@ -25,6 +25,7 @@ import {
 	SESSION_ANSWER_MAX_BYTES,
 } from "haiku-api"
 import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
+import { isOpen as isFeedbackOpen } from "../orchestrator/workflow/feedback-triage-gate.js"
 import {
 	getSession,
 	type QuestionAnnotations,
@@ -354,8 +355,14 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				// if there is already an open stage_revisit FB the pre-tick gate
 				// can route off. Otherwise the click is a no-op — the user's
 				// "Request Changes" intent would silently disappear.
+				//
+				// `isFeedbackOpen` is the same predicate the pre-tick triage gate
+				// uses (closed_by + status !== closed/addressed/rejected). They
+				// MUST stay in sync — a divergence here means the HTTP handler
+				// reports "you have an open revisit" while the gate finds none,
+				// recreating the silent-no-op bug this 409 was added to prevent.
 				const hasOpenRevisit = readFeedbackFiles(slug, targetStage).some(
-					(fb) => fb.closed_by === null && fb.resolution === "stage_revisit",
+					(fb) => fb.resolution === "stage_revisit" && isFeedbackOpen(fb),
 				)
 				if (!hasOpenRevisit) {
 					logFeedbackAction({

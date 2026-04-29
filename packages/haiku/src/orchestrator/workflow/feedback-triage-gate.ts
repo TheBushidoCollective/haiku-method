@@ -68,7 +68,7 @@ interface OpenFeedbackOnStage {
  *  item would resend reply instructions for something the agent
  *  already handled. Both are correctly left to fall through to the
  *  per-state handler chain. */
-function isOpen(item: FeedbackItem): boolean {
+export function isOpen(item: FeedbackItem): boolean {
 	if (item.closed_by) return false
 	return (
 		item.status !== "closed" &&

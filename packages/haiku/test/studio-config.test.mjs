@@ -78,6 +78,30 @@ test("development stage hats are [planner, builder, reviewer]", () => {
 	assert.deepStrictEqual(hatNames, ["planner", "builder", "reviewer"])
 })
 
+test("design stage hats are [designer-prep, designer, design-reviewer]", () => {
+	const hatNames = software.stages.design.hats.map((h) => h.name)
+	assert.deepStrictEqual(hatNames, [
+		"designer-prep",
+		"designer",
+		"design-reviewer",
+	])
+})
+
+test("design stage review agents include inception-coverage", () => {
+	const agentNames = software.stages.design.reviewAgents.map((a) => a.name)
+	assert.ok(
+		agentNames.includes("inception-coverage"),
+		`expected design.reviewAgents to include 'inception-coverage', got [${agentNames.join(", ")}]`,
+	)
+	const inceptionCoverage = software.stages.design.reviewAgents.find(
+		(a) => a.name === "inception-coverage",
+	)
+	assert.ok(
+		existsSync(inceptionCoverage.mandatePath),
+		`inception-coverage mandate path must exist on disk: ${inceptionCoverage.mandatePath}`,
+	)
+})
+
 test("development stage fix_hats are [builder, feedback-assessor]", () => {
 	const fixHatNames = software.stages.development.fixHats.map((h) => h.name)
 	assert.deepStrictEqual(fixHatNames, ["builder", "feedback-assessor"])

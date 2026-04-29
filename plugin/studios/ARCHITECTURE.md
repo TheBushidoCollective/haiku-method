@@ -216,7 +216,104 @@ hats: [threat-modeler, security-engineer, security-reviewer, red-team, blue-team
 
 **Examples:** software/operations, migration/cutover, marketing/launch, dev-evangelism/publish.
 
-## 5. Fix-loop pattern
+## 5. Workflow tick semantics
+
+Everything in this document — phases, hats, fix loops, gates — runs on top of one foundational primitive: the **tick**. Studio authors don't usually need to think about tick mechanics, but every runtime contract in the system rests on this section. Plugin maintainers MUST understand it before changing the workflow engine.
+
+### 5.1 What a tick is
+
+A **tick** is one call to `haiku_run_next`. It is the agent's **only** forward-driving verb. There is no other tool the agent can call to "advance the workflow" — every advance, every wave, every stage transition, every escalation, every revisit is the result of a tick.
+
+The shape of every tick:
+
+1. The agent calls `haiku_run_next { intent: "<slug>" }`.
+2. The workflow engine reads on-disk state (intent.md frontmatter, stage state.json files, unit/feedback frontmatter) and derives the current cursor position.
+3. The engine runs **pre-advance checks** (see §5.3) that may force a sideline action.
+4. If no sideline fires, the engine emits the next mainline action.
+5. The agent receives the action, executes it, and at some point calls `haiku_run_next` again.
+
+That's the entire loop. The agent never asks "what should I do?" — they call `haiku_run_next` and the engine answers.
+
+### 5.2 Why ticks matter
+
+The tick is the engine's **reconciliation point**. Three properties fall out of this:
+
+1. **State on disk is the truth.** The engine recomputes the cursor on every tick from authoritative state (frontmatter, state.json, feedback files). The agent does not hold workflow state in their context — anything they think they remember about "what wave we're on" or "which hat is next" is incidental. The next tick will tell them what's actually next.
+
+2. **Recovery is mechanical.** After any failure (subagent crash, partial write, agent confusion), calling `haiku_run_next` re-derives the right next step. There is no hidden state to corrupt and no manual recovery path required for most failures — the engine reconstructs everything from disk.
+
+3. **Composition is pure.** A tick is a pure function of `(intent_dir_state, studio_config) → next_action`. This means: every tick is testable in isolation; sideline checks compose without ordering bugs; the engine's behavior is deterministic given the same disk state.
+
+The agent's contract is one sentence: **receive instruction, do what it says, call `haiku_run_next` unless this instruction told you not to (only terminal actions do).**
+
+### 5.3 Pre-advance checks (sidelines)
+
+Before emitting a mainline action, every tick runs a sequence of **pre-advance checks**. Each check inspects derived state for a condition that requires corrective action *before* mainline can continue. When a check fires, the tick returns a **sideline action** instead of the mainline next-step.
+
+Sideline actions follow a uniform shape: **"Something happened, here's why, do this corrective action, then call `haiku_run_next` to get your next instruction."** The agent does the corrective work, calls `haiku_run_next`, and the engine re-evaluates — the sideline either clears (mainline resumes) or re-fires (agent didn't fully address it).
+
+Current pre-advance checks, in order:
+
+| Check | Fires when | Sideline action | What the agent does |
+|---|---|---|---|
+| **Pre-tick consistency** | Cached `active_stage` is stale or state.json invariants are broken | (mutates state silently or returns `error`) | Usually invisible — auto-repairs |
+| **Feedback triage gate** | ≥ 1 open FB with `triaged_at: null` (untriaged) on or before the active stage | `feedback_triage` | Classify each via `haiku_feedback_move` (confirm or relocate) or `haiku_feedback_reject` (dismiss) |
+| **Earlier-stage feedback** | All FBs triaged, but ≥ 1 sits on a stage earlier than active | `revisited` (engine reroutes cursor) | Pick up at the rolled-back stage's elaborate phase |
+| **Current-stage open FBs** | Open FBs on active stage with resolution set | `feedback_dispatch` | Dispatch each per its resolution (question / inline_fix / stage_revisit) |
+| **Unresolved dependencies** | Unit `depends_on:` entries don't resolve | `unresolved_dependencies` | Fix the DAG, retick |
+| **DAG cycle** | `depends_on:` chain forms a cycle | `dag_cycle_detected` | Break the cycle, retick |
+| **Missing discovery artifacts** | Stage's `required: true` discovery templates lack files on disk | `discovery_missing` | Produce the artifacts, retick |
+| **Missing outputs** | Stage's `required: true` outputs lack files at end-of-stage | `outputs_missing` | Produce the artifacts, retick |
+| **Elaboration insufficient** | Elaborate phase ended with too few decisions / no `no_decisions: true` declaration | `elaboration_insufficient` | Continue collaboration or declare no_decisions |
+| **Design direction needed** | Design stage hit a multi-variant decision point | `design_direction_required` | Use `pick_design_direction` to surface variants, await user pick |
+
+Sidelines compose: a single tick can fire ANY of these in priority order. The agent does the corrective work for whatever fired, calls `haiku_run_next`, and the engine re-checks the full list. The agent never tracks "which sideline am I on" — they just follow the instruction and retick.
+
+### 5.4 Mainline actions (the non-sideline path)
+
+When all pre-advance checks pass, the tick emits one mainline action describing the next concrete forward step:
+
+| Action | Meaning | What the agent does |
+|---|---|---|
+| `start_stage` | First entry to a new stage | Acknowledge, retick |
+| `elaborate` | Stage is in elaborate phase | Collaborate with the user, draft units, record decisions |
+| `pre_review` | Pre-execute review of unit specs | Spawn review-agent subagents |
+| `start_units` | First wave of unit dispatch | Spawn N subagents in parallel |
+| `continue_units` | Mid-wave continuation (refill or new wave) | Spawn the dispatched subagents |
+| `review` | Adversarial review of stage outputs | Spawn review-agent subagents |
+| `review_fix` | Fix loop against open findings | Spawn fix-chain subagents (per-finding chains) |
+| `gate_review` | Stage gate (human or external approval) | (engine blocks; agent may surface to user) |
+| `advance_phase` | Phase boundary internal to a stage | Acknowledge, retick |
+| `advance_stage` | Stage boundary | Acknowledge, retick |
+| `intent_completion_review` | Studio-level review (intent-scope) | Spawn studio review agents |
+| `intent_completion_fix` | Studio-level fix loop | Spawn studio fix-chain subagents |
+| `intent_complete` | Terminal — intent done | Stop |
+| `escalate` | Terminal — needs human intervention | Stop and surface to user |
+| `error` | Terminal — engine cannot proceed | Stop and surface to user |
+
+The agent **never branches on action type for workflow-routing decisions**. They just follow the instruction the action's prompt builder rendered.
+
+### 5.5 Properties this gives us
+
+- **The agent's mental model is two states**: "I have N subagents to spawn" or "I have a terminal — stop." Every tick reduces to one of these.
+- **There is no agent-side coordination logic.** Wave numbers, hat sequences, slot management, bolt counters — all engine-internal.
+- **Sidelines are forced, not optional.** The agent cannot bypass an open untriaged FB to advance the gate; the pre-tick check refuses.
+- **The engine is the single point of routing truth.** A bug in cursor derivation is the only way to break the workflow — and it's testable as a pure function.
+- **Recovery is "call `haiku_run_next` again."** No special "resume" tools, no manual state edits, no "undo last action." The engine reconciles from disk every tick.
+
+### 5.6 What changes a tick's outcome
+
+The same intent at the same disk state will produce the same tick result. Things that change a tick's outcome:
+
+- **An agent edits unit/feedback bodies via MCP write tools** (the only sanctioned channels).
+- **A subagent advances or rejects a hat** (state mutation via `*_advance_hat` / `*_reject_hat`).
+- **A user approves or rejects at a gate** (sets gate state).
+- **A user adds feedback via the review UI** (creates new FB files).
+- **An out-of-band file edit** (per the `out-of-band-human-file-modifications` intent — detection still in flight).
+
+The engine reads disk, derives cursor, emits action. There is no other path.
+
+## 6. Fix-loop pattern
 
 Findings (FBs) raised by adversarial reviewers are addressed by the fix-loop. The fix-loop is **mechanically identical to unit execution**, with the FB file as the work artifact.
 
@@ -240,7 +337,7 @@ What's strictly enforced today regardless of the consumer path:
 
 This is why front-loading matters either way. By the time a defect surfaces at the gate, the original units that contain it are permanent. Corrective work happens on top of them, never to them.
 
-## 6. Hook boundary
+## 7. Hook boundary
 
 The PreToolUse hook denies generic file Read/Write/Edit on workflow-managed paths. The hook redirects the agent at the appropriate MCP tool.
 
@@ -254,7 +351,7 @@ Denial message format: `"This file is workflow-managed. Use \`haiku_unit_read { 
 
 Bash commands referencing these paths are **soft-warned** (logged, not blocked). The threat model is "honest agent reaches for the wrong tool by habit," not "adversarial agent." Routine MCP usage is the path of least resistance; persistent Bash bypass is anomalous and shows up in audit telemetry.
 
-## 7. Known structural issues — status
+## 8. Known structural issues — status
 
 Tracking the gap between this document and the implementation. Fix the implementation, not the document. Items marked ✅ have been reconciled in the current PR; ⏳ are still ahead.
 
@@ -284,7 +381,7 @@ Implemented in this PR (✅):
 - 5 inception-class `phases/ELABORATION.md` files providing research-stage authoring guidance.
 - `CLAUDE.md` cites this document as the canonical structural source of truth and adds 6 concept-mapping rows for the new architecture surface.
 
-## 8. Studio-author checklist
+## 9. Studio-author checklist
 
 When adding or modifying a stage:
 
@@ -307,7 +404,7 @@ When adding or modifying an workflow engine tool:
 - [ ] Read tools return body + title only unless the caller is workflow engine-internal
 - [ ] Tool errors name the rule that fired ("status is `active`; units become immutable once started")
 
-## 9. Source of truth
+## 10. Source of truth
 
 This document supersedes any conflicting guidance in:
 - `website/content/papers/haiku-method.md`

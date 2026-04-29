@@ -9,6 +9,7 @@ import {
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	unlinkSync,
 	writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -986,8 +987,8 @@ body
 			intent: intentSlug,
 			stage: "inception",
 			unit: "unit-02-elaborate",
-			field: "hat",
-			value: "elaborator",
+			field: "model",
+			value: "haiku",
 		})
 		assert.strictEqual(getTextResult(result), "ok")
 		// Verify
@@ -995,9 +996,9 @@ body
 			intent: intentSlug,
 			stage: "inception",
 			unit: "unit-02-elaborate",
-			field: "hat",
+			field: "model",
 		})
-		assert.strictEqual(getTextResult(check), "elaborator")
+		assert.strictEqual(getTextResult(check), "haiku")
 	})
 
 	test("set preserves body content", () => {
@@ -1005,8 +1006,8 @@ body
 			intent: intentSlug,
 			stage: "inception",
 			unit: "unit-02-elaborate",
-			field: "status",
-			value: "active",
+			field: "title",
+			value: "Updated title for unit-02",
 		})
 		const raw = readFileSync(
 			join(
@@ -1023,6 +1024,220 @@ body
 			raw.includes("Units elaborated with DAG"),
 			"Body criteria preserved",
 		)
+	})
+
+	test("set rejects JSON-stringified array values for array-typed fields (regression: inputs.map is not a function)", () => {
+		// Schema declares `inputs:` as `type: array`. Sending a JSON-stringified
+		// array used to silently slip through and YAML-serialize as a folded
+		// scalar (`inputs: >- [...]`), which made every downstream
+		// `unitInputs.map(...)` throw. Strict per-field validation now rejects
+		// the call with `field_type_mismatch` so the agent re-issues with a
+		// native array.
+		const unitName = "unit-99-regression-jsonstring"
+		const unitPath = join(
+			intentDirPath,
+			"stages",
+			"inception",
+			"units",
+			`${unitName}.md`,
+		)
+		writeFileSync(
+			unitPath,
+			`---\nname: ${unitName}\nstatus: pending\nhat: ""\nbolt: 0\n---\n# ${unitName}\n`,
+		)
+		try {
+			const result = handleStateTool("haiku_unit_set", {
+				intent: intentSlug,
+				stage: "inception",
+				unit: unitName,
+				field: "inputs",
+				value: '["intent.md", "knowledge/DISCOVERY.md"]',
+			})
+			const parsed = JSON.parse(getTextResult(result))
+			assert.strictEqual(parsed.error, "field_type_mismatch")
+			assert.strictEqual(parsed.field, "inputs")
+			assert.strictEqual(parsed.expected_type, "array")
+			assert.strictEqual(parsed.received_type, "string")
+			// File must be unchanged (rejection happens before the write).
+			const raw = readFileSync(unitPath, "utf8")
+			assert.ok(
+				!raw.includes("inputs:"),
+				"Rejected call should not have written inputs",
+			)
+		} finally {
+			unlinkSync(unitPath)
+		}
+	})
+
+	test("set accepts native arrays for array-typed fields", () => {
+		const unitName = "unit-99-regression-native"
+		const unitPath = join(
+			intentDirPath,
+			"stages",
+			"inception",
+			"units",
+			`${unitName}.md`,
+		)
+		writeFileSync(
+			unitPath,
+			`---\nname: ${unitName}\nstatus: pending\nhat: ""\nbolt: 0\n---\n# ${unitName}\n`,
+		)
+		try {
+			const result = handleStateTool("haiku_unit_set", {
+				intent: intentSlug,
+				stage: "inception",
+				unit: unitName,
+				field: "inputs",
+				value: ["intent.md", "knowledge/X.md", "knowledge/Y.md"],
+			})
+			assert.strictEqual(getTextResult(result), "ok")
+			const raw = readFileSync(unitPath, "utf8")
+			assert.ok(
+				raw.includes("- knowledge/X.md"),
+				"Native array stored as YAML list",
+			)
+			assert.ok(raw.includes("- knowledge/Y.md"), "Second item present")
+			assert.ok(!raw.includes("inputs: >-"), "No folded-scalar serialization")
+		} finally {
+			unlinkSync(unitPath)
+		}
+	})
+
+	test("set rejects array values for string-typed fields", () => {
+		const unitName = "unit-99-regression-string-field"
+		const unitPath = join(
+			intentDirPath,
+			"stages",
+			"inception",
+			"units",
+			`${unitName}.md`,
+		)
+		writeFileSync(
+			unitPath,
+			`---\nname: ${unitName}\nstatus: pending\nhat: ""\nbolt: 0\n---\n# ${unitName}\n`,
+		)
+		try {
+			const result = handleStateTool("haiku_unit_set", {
+				intent: intentSlug,
+				stage: "inception",
+				unit: unitName,
+				field: "title",
+				value: ["wrong", "shape"],
+			})
+			const parsed = JSON.parse(getTextResult(result))
+			assert.strictEqual(parsed.error, "field_type_mismatch")
+			assert.strictEqual(parsed.field, "title")
+			assert.strictEqual(parsed.expected_type, "string")
+			assert.strictEqual(parsed.received_type, "array")
+		} finally {
+			unlinkSync(unitPath)
+		}
+	})
+
+	test("set rejects FSM-driven fields with fsm_field_forbidden", () => {
+		const unitName = "unit-99-regression-fsm-forbidden"
+		const unitPath = join(
+			intentDirPath,
+			"stages",
+			"inception",
+			"units",
+			`${unitName}.md`,
+		)
+		writeFileSync(
+			unitPath,
+			`---\nname: ${unitName}\nstatus: pending\nhat: ""\nbolt: 0\n---\n# ${unitName}\n`,
+		)
+		try {
+			for (const field of [
+				"hat",
+				"bolt",
+				"iterations",
+				"started_at",
+				"completed_at",
+				"hat_started_at",
+				"scope_reject_attempts",
+			]) {
+				const result = handleStateTool("haiku_unit_set", {
+					intent: intentSlug,
+					stage: "inception",
+					unit: unitName,
+					field,
+					value: "anything",
+				})
+				const parsed = JSON.parse(getTextResult(result))
+				assert.strictEqual(
+					parsed.error,
+					"fsm_field_forbidden",
+					`Expected ${field} to be FSM-forbidden`,
+				)
+				assert.strictEqual(parsed.field, field)
+			}
+		} finally {
+			unlinkSync(unitPath)
+		}
+	})
+
+	test("set runs deep validation on quality_gates inner shape", () => {
+		const unitName = "unit-99-regression-deep-validation"
+		const unitPath = join(
+			intentDirPath,
+			"stages",
+			"inception",
+			"units",
+			`${unitName}.md`,
+		)
+		writeFileSync(
+			unitPath,
+			`---\nname: ${unitName}\nstatus: pending\nhat: ""\nbolt: 0\n---\n# ${unitName}\n`,
+		)
+		try {
+			// quality_gates items must have { name, command }; missing command
+			// should be caught by the sub-schema validator, not just the
+			// top-level array check.
+			const badGates = handleStateTool("haiku_unit_set", {
+				intent: intentSlug,
+				stage: "inception",
+				unit: unitName,
+				field: "quality_gates",
+				value: [{ name: "no-banned-tokens" }],
+			})
+			const parsedBad = JSON.parse(getTextResult(badGates))
+			assert.strictEqual(parsedBad.error, "field_value_invalid")
+			assert.strictEqual(parsedBad.field, "quality_gates")
+			// And inputs entries must match the path pattern (no spaces, no commas).
+			const badInputs = handleStateTool("haiku_unit_set", {
+				intent: intentSlug,
+				stage: "inception",
+				unit: unitName,
+				field: "inputs",
+				value: ["entry with spaces"],
+			})
+			const parsedInputs = JSON.parse(getTextResult(badInputs))
+			assert.strictEqual(parsedInputs.error, "field_value_invalid")
+			assert.strictEqual(parsedInputs.field, "inputs")
+			// And model must be one of haiku/sonnet/opus.
+			const badModel = handleStateTool("haiku_unit_set", {
+				intent: intentSlug,
+				stage: "inception",
+				unit: unitName,
+				field: "model",
+				value: "gpt-4",
+			})
+			const parsedModel = JSON.parse(getTextResult(badModel))
+			assert.strictEqual(parsedModel.error, "field_value_invalid")
+			assert.strictEqual(parsedModel.field, "model")
+			// Valid quality_gates pass.
+			const goodGates = handleStateTool("haiku_unit_set", {
+				intent: intentSlug,
+				stage: "inception",
+				unit: unitName,
+				field: "quality_gates",
+				value: [{ name: "no-banned", command: "! grep banned ." }],
+			})
+			assert.strictEqual(getTextResult(goodGates), "ok")
+		} finally {
+			unlinkSync(unitPath)
+		}
 	})
 
 	// ── haiku_unit_list ───────────────────────────────────────────────────────
@@ -1568,7 +1783,11 @@ body
 		assert.strictEqual(parsed.current_status, "active")
 	})
 
-	test("haiku_unit_set still blocks status=completed direct write (FSM-protected)", () => {
+	test("haiku_unit_set rejects status writes outright (FSM-driven)", () => {
+		// `status` is FSM-driven — agents must never set it directly.
+		// fsm_field_forbidden catches every status write (including the
+		// value=completed shape), so haiku_unit_advance_hat is the only
+		// path to a completed unit.
 		const result = handleStateTool("haiku_unit_set", {
 			intent: intentSlug,
 			stage: "inception",
@@ -1577,7 +1796,8 @@ body
 			value: "completed",
 		})
 		const parsed = JSON.parse(getTextResult(result))
-		assert.strictEqual(parsed.error, "fsm_completion_protected")
+		assert.strictEqual(parsed.error, "fsm_field_forbidden")
+		assert.strictEqual(parsed.field, "status")
 	})
 
 	test("haiku_unit_set allows non-FSM field writes on pending units", () => {

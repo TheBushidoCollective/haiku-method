@@ -9,11 +9,18 @@
 //   2. Pending feedback routing (cross-stage findings are pre-relocated
 //      by run-tick.ts's pre-tick triage gate, so by the time we get
 //      here every pending FB is in-scope for the current stage):
-//        a. Human-authored items needing triage → gate_review (ask)
-//        b. Auto-dispatch resolutions:
+//        a. Auto-dispatch resolutions:
 //             - stage_revisit → revisitCurrentStage delegate
+//        b. Human-authored needsTriage / question items → feedback_dispatch
+//             (no UI re-pop — agent triages / replies inline; was the
+//              source of the gate-review loop fixed 2026-04-27).
 //        c. fix_hats fix loop → review_fix (or escalate / error)
-//        d. Legacy revisit → feedback_revisit (or escalate)
+//        d. Legacy revisit → feedback_revisit (or escalate). NOTE: agent-
+//           authored needsTriage items with no `fix_hats` declared on
+//           STAGE.md fall through here too, which means a full stage
+//           rollback. If that's surfaced as a problem, route them
+//           through feedback_dispatch first or require fix_hats on
+//           stages that emit agent FBs.
 //   3. External review reconciliation (only when stage already
 //      completed+blocked): branch-merge or CLI signal → advance,
 //      changes_requested → delegate, otherwise → awaiting_external_review.
@@ -37,6 +44,7 @@ import {
 	mergeFixChainWorktree,
 } from "../../../git-worktree.js"
 import {
+	buildFeedbackDispatchAction,
 	checkExternalState,
 	classifyPendingForRevisit,
 	completeOrReviewIntent,
@@ -245,32 +253,6 @@ const emit: WorkflowHandler = (ctx) => {
 		// (run-tick.ts) has guaranteed every pending FB lives on the
 		// correct stage — cross-stage findings are relocated via
 		// `haiku_feedback_move` before any handler dispatch.
-
-		const needsHumanReview = pendingItems.some(
-			(item) =>
-				item.author_type === "human" &&
-				(!(item as { resolution?: string | null }).resolution ||
-					(item as { resolution?: string | null }).resolution === null),
-		)
-		if (needsHumanReview) {
-			const stageIdxForGate = studioStages.indexOf(currentStage)
-			const nextStageForGate =
-				stageIdxForGate >= 0 && stageIdxForGate < studioStages.length - 1
-					? studioStages[stageIdxForGate + 1]
-					: null
-			workflowGateAsk(slug, currentStage)
-			return {
-				action: "gate_review",
-				intent: slug,
-				studio,
-				stage: currentStage,
-				next_stage: nextStageForGate,
-				gate_type: "ask",
-				gate_context: "stage_gate",
-				message: `Stage '${currentStage}' has ${pendingItems.length} pending feedback item(s), including human-authored comments awaiting triage. Open the review UI so the reviewer can classify each (reply, inline fix, stage revisit), or call \`haiku_feedback_move\` to relocate cross-stage findings before the agent dispatches.`,
-			}
-		}
-
 		const gateClassification = classifyPendingForRevisit(pendingItems)
 		if (gateClassification.stageRevisits.length > 0) {
 			const revisitIds = gateClassification.stageRevisits
@@ -285,6 +267,43 @@ const emit: WorkflowHandler = (ctx) => {
 		}
 		// Cross-stage routing flows through file location (relocated at
 		// the pre-tick triage gate); no resolution bucket needed here.
+
+		// CONTRACT: open feedback ⇒ never engage the user. When the
+		// reviewer left a HUMAN comment routed to "Let agent decide"
+		// (resolution=null) — or filed a question — dispatch it back
+		// to the agent for inline handling instead of bouncing the
+		// user back into the review UI. The review UI was popping on
+		// every tick because the gate kept seeing the unset resolution
+		// and asking the human to triage; the human had already said
+		// "agent decide," and the loop kept the feedback unaddressed.
+		//
+		// Agent-authored items with null resolution are out of scope
+		// here — they fall through to the existing fix-chain / legacy
+		// feedback_revisit paths, which don't engage the user.
+		// inlineFixes are zeroed in the dispatch so the worktree-based
+		// fix-chain below remains the canonical path for code fixes;
+		// once the agent triages, the next tick re-enters this handler
+		// with a clean classification and falls through to fix-chain.
+		const humanNeedsTriage = gateClassification.needsTriage.filter(
+			(item) => item.author_type === "human",
+		)
+		const humanQuestions = gateClassification.questions.filter(
+			(item) => item.author_type === "human",
+		)
+		if (humanNeedsTriage.length > 0 || humanQuestions.length > 0) {
+			emitTelemetry("haiku.gate.feedback_dispatch", {
+				intent: slug,
+				stage: currentStage,
+				needs_triage: String(humanNeedsTriage.length),
+				questions: String(humanQuestions.length),
+			})
+			return buildFeedbackDispatchAction(slug, currentStage, {
+				needsTriage: humanNeedsTriage,
+				questions: humanQuestions,
+				inlineFixes: [],
+				stageRevisits: [],
+			})
+		}
 
 		// fix_hats route
 		const fixHats = resolveStageFixHatsInline(studio, currentStage)

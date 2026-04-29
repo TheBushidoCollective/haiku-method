@@ -71,12 +71,32 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 		unit.endsWith(".md") ? unit : `${unit}.md`,
 	)
 
-	// Need unit inputs + model hint from its frontmatter.
+	// Migration recovery for intents committed before the haiku_unit_set
+	// type gate landed: legacy `inputs: >- ["..."]` (folded-scalar JSON)
+	// gets parsed back to an array so the prompt builder doesn't crash.
+	// New writes can't produce that shape anymore.
 	let unitInputs: string[] = []
 	let unitModel: string | undefined
 	if (existsSync(unitFile)) {
 		const { data } = parseFrontmatter(readFileSync(unitFile, "utf8"))
-		unitInputs = (data.inputs as string[]) || (data.refs as string[]) || []
+		const rawInputs = data.inputs ?? data.refs
+		if (Array.isArray(rawInputs)) {
+			unitInputs = rawInputs.filter((r): r is string => typeof r === "string")
+		} else if (typeof rawInputs === "string") {
+			const trimmed = rawInputs.trim()
+			if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+				try {
+					const parsed = JSON.parse(trimmed)
+					if (Array.isArray(parsed)) {
+						unitInputs = parsed.filter(
+							(r): r is string => typeof r === "string",
+						)
+					}
+				} catch {
+					/* leave unitInputs empty */
+				}
+			}
+		}
 		unitModel = (data.model as string) || undefined
 	}
 

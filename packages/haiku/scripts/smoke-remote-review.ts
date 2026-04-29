@@ -48,8 +48,19 @@ console.log(url)
 console.log("")
 
 if (process.argv.includes("--open")) {
-	const cmd = process.platform === "darwin" ? "open" : "xdg-open"
-	spawn(cmd, [url], { stdio: "ignore", detached: true }).unref()
+	const argv: string[] =
+		process.platform === "darwin"
+			? ["open", url]
+			: process.platform === "win32"
+				? [
+						"powershell",
+						"-NoProfile",
+						"-NonInteractive",
+						"-Command",
+						`Start-Process '${url.replace(/'/g, "''")}'`,
+					]
+				: ["xdg-open", url]
+	spawn(argv[0], argv.slice(1), { stdio: "ignore", detached: true }).unref()
 }
 
 const holdMs = Number(process.env.SMOKE_HOLD_MS ?? 600_000)

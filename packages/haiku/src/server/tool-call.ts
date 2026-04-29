@@ -49,9 +49,6 @@ import {
 	intentFromCurrentBranch,
 	listVisibleIntents,
 	parseFrontmatter,
-	readJson,
-	stageStatePath,
-	writeJson,
 } from "../state-tools.js"
 import {
 	buildReviewUrl,
@@ -137,7 +134,24 @@ export function launchBrowserBestEffort(url: string, label: string): void {
 		`[haiku] ${label} ready → ${url}\n` +
 			`         Share this URL with the reviewer if the browser didn't auto-open.`,
 	)
-	const cmd = process.platform === "darwin" ? ["open", url] : ["xdg-open", url]
+	// On Windows we use PowerShell `Start-Process` rather than `cmd /c start`.
+	// cmd.exe interprets `&`, `|`, `^`, `<`, `>`, `%`, `!` even in argv-passed
+	// args, which would mangle a URL like `?session=a&token=b` (everything
+	// after `&` would be parsed as a separate command). PowerShell does not
+	// share that hazard. We still escape embedded single quotes by doubling
+	// them — the only character `Start-Process '...'` is sensitive to.
+	const cmd: string[] =
+		process.platform === "darwin"
+			? ["open", url]
+			: process.platform === "win32"
+				? [
+						"powershell",
+						"-NoProfile",
+						"-NonInteractive",
+						"-Command",
+						`Start-Process '${url.replace(/'/g, "''")}'`,
+					]
+				: ["xdg-open", url]
 	try {
 		const child = spawn(cmd[0], cmd.slice(1), {
 			stdio: "ignore",
@@ -687,7 +701,15 @@ export async function handleToolCall(
 			intent_slug: input.intent_slug,
 			archetypes,
 		})
-		bindSessionCancellation(session.session_id, signal)
+		// NOTE: deliberately not propagating `signal` into the session.
+		// The HTTP submit route persists the selection (+ screenshots) to
+		// disk before waking us, so even if the MCP client times out the
+		// request and discards our response, the next haiku_run_next will
+		// emit a `design_direction_complete` action that surfaces the
+		// selection from durable state. Forwarding the abort here only
+		// short-circuits the wait without producing a usable response.
+		// The unused `signal` parameter is intentional — see comment above.
+		bindSessionCancellation(session.session_id, undefined)
 
 		// (Legacy server-rendered design-direction HTML removed —
 		// /direction/:sessionId serves HAIKU_UI_HTML.)
@@ -707,7 +729,7 @@ export async function handleToolCall(
 		// Block until the user submits their selection (event-based, no polling)
 		const MAX_WAIT_DD = 30 * 60 * 1000 // 30 minutes
 		try {
-			await waitForSession(session.session_id, MAX_WAIT_DD, signal)
+			await waitForSession(session.session_id, MAX_WAIT_DD)
 		} catch {
 			return {
 				content: [
@@ -718,7 +740,8 @@ export async function handleToolCall(
 								status: "timeout",
 								url: directionUrl,
 								session_id: session.session_id,
-								message: "User did not respond within 30 minutes",
+								message:
+									"User did not respond within 30 minutes. Re-prompt or call haiku_run_next to continue.",
 							},
 							null,
 							2,
@@ -728,7 +751,12 @@ export async function handleToolCall(
 			}
 		}
 
-		// Session was updated — read the latest state
+		// Session was updated — read the latest state.
+		// All durable persistence (state.json + PNG sidecars) happened on
+		// the HTTP submit route in `session-routes.ts`; this handler just
+		// returns a short ack so the agent knows to advance. The next
+		// `haiku_run_next` emits `design_direction_complete` with the
+		// archetype, comments, and screenshot paths read from disk.
 		const updatedDirectionSession = getSession(session.session_id)
 		if (
 			updatedDirectionSession &&
@@ -738,9 +766,6 @@ export async function handleToolCall(
 		) {
 			const sel = updatedDirectionSession.selection
 
-			// Regenerate path — user wants more / different variants. Don't
-			// flip the stage flag; the agent should produce replacements for
-			// the unkept slots and call pick_design_direction again.
 			if (sel.mode === "regenerate") {
 				const parts: string[] = [
 					sel.keep.length > 0
@@ -756,100 +781,53 @@ export async function handleToolCall(
 				}
 			}
 
-			// Select path — final selection. Persist design_direction_selected
-			// to stage state so the orchestrator knows to advance.
+			// Select path — selection persisted by the HTTP submit route.
+			// Re-enforce stage branch since the user may have checked out
+			// another branch during the (up to 30-min) wait. Failures are
+			// non-fatal — branch state is reconciled by `haiku_run_next`'s
+			// own enforcement on the next tick — but we surface them so a
+			// debug-mode log shows when reconciliation will be needed.
 			try {
-				const root = findHaikuRoot()
-				const intentFile = join(root, "intents", input.intent_slug, "intent.md")
-				const intentRaw = await readFile(intentFile, "utf-8")
-				const intentFm = parseFrontmatter(intentRaw)
-				const activeStage = (intentFm.data.active_stage as string) || ""
+				const intentRaw = await readFile(
+					join(findHaikuRoot(), "intents", input.intent_slug, "intent.md"),
+					"utf-8",
+				)
+				const activeStage =
+					(parseFrontmatter(intentRaw).data.active_stage as string) || ""
 				if (activeStage) {
-					// Re-enforce stage branch after the (up to 30-min) wait —
-					// the user may have checked out another branch during the
-					// design-direction selection. Without this, the stage-state
-					// write below would land on whatever branch is current.
 					const guard = ensureOnStageBranch(input.intent_slug, activeStage)
 					if (!guard.ok) {
-						// Non-fatal: log via throw so the outer catch records it,
-						// and the orchestrator flag will need manual set.
-						throw new Error(
-							`stage-branch enforcement failed after design-direction wait: ${guard.message}`,
+						console.warn(
+							`[pick_design_direction] stage-branch enforcement failed: ${guard.message}`,
 						)
 					}
-					const ssPath = stageStatePath(input.intent_slug, activeStage)
-					const ssData = readJson(ssPath)
-					ssData.design_direction_selected = true
-					ssData.design_direction = {
-						archetype: sel.archetype,
-						...(sel.comments ? { comments: sel.comments } : {}),
-						...(sel.annotations ? { annotations: sel.annotations } : {}),
-					}
-					writeJson(ssPath, ssData)
 				}
-			} catch {
-				/* non-fatal — orchestrator flag may need manual set */
+			} catch (err) {
+				console.warn(
+					`[pick_design_direction] post-wait branch reconciliation skipped: ${err instanceof Error ? err.message : String(err)}`,
+				)
 			}
 
-			// Build a multi-part response. The first text block carries
-			// the structured selection summary; each annotation pass
-			// becomes a (text + image) pair so Claude actually SEES what
-			// the user was drawing on instead of getting an opaque data URL.
-			const parts: string[] = [
+			const ackParts: string[] = [
 				`The user selected the **${sel.archetype}** direction.`,
 			]
 			if (sel.comments) {
-				parts.push(`\nComments: ${sel.comments}`)
+				ackParts.push(`\nComments: ${sel.comments}`)
 			}
 			if (sel.annotations?.pins?.length) {
-				parts.push(`\nPin annotations (${sel.annotations.pins.length}):`)
+				ackParts.push(`\nPin annotations (${sel.annotations.pins.length}):`)
 				for (const pin of sel.annotations.pins) {
-					parts.push(
+					ackParts.push(
 						`  - [${pin.x.toFixed(1)}%, ${pin.y.toFixed(1)}%]: ${pin.text || "(no text)"}`,
 					)
 				}
 			}
-
-			type ContentBlock =
-				| { type: "text"; text: string }
-				| { type: "image"; data: string; mimeType: string }
-			const content: ContentBlock[] = [
-				{ type: "text" as const, text: parts.join("\n") },
-			]
-
-			const screenshots = sel.annotations?.screenshots ?? []
-			if (screenshots.length > 0) {
-				content.push({
-					type: "text" as const,
-					text: `\n${screenshots.length} screenshot annotation${screenshots.length === 1 ? "" : "s"} attached below — each pair is the reviewer's note + the captured surface they were drawing on.`,
-				})
-				for (let i = 0; i < screenshots.length; i++) {
-					const s = screenshots[i]
-					content.push({
-						type: "text" as const,
-						text: `\nAnnotation ${i + 1}: ${s.comment}`,
-					})
-					// Strip the `data:image/png;base64,` prefix — MCP image
-					// content blocks carry raw base64 + mimeType separately.
-					const match = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(
-						s.screenshot_data_url,
-					)
-					if (match) {
-						content.push({
-							type: "image" as const,
-							mimeType: match[1],
-							data: match[2],
-						})
-					} else {
-						content.push({
-							type: "text" as const,
-							text: `(screenshot for annotation ${i + 1} could not be decoded)`,
-						})
-					}
-				}
+			ackParts.push(
+				`\nCall \`haiku_run_next\` to continue — the workflow will surface any screenshot annotations the user attached.`,
+			)
+			return {
+				content: [{ type: "text" as const, text: ackParts.join("\n") }],
 			}
-
-			return { content }
 		}
 
 		return {

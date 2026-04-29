@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.105.25] - 2026-04-28
+
+### Fixed
+- Review displays all stage artifacts, including nested files and unrecognized file types.
+
+## [1.105.23] - 2026-04-28
+
+### Fixed
+- Worktrees are now properly isolated from version control and won't be accidentally included in commits.
+
+## [1.105.22] - 2026-04-28
+
+### Fixed
+- Unit field updates now include type validation and schema hints, giving agents clearer error messages when setting invalid field values.
+
+## [1.105.21] - 2026-04-28
+
+### Fixed
+- Plugin now reliably launches the browser on Windows and correctly detects its own installation directory across platforms.
+
+## [1.105.20] - 2026-04-28
+
+### Fixed
+
+- Design direction selections now persist if the design picker tool is cancelled, preventing loss of your screenshot choices.
+
+## [1.105.19] - 2026-04-28
+
+### Fixed
+- Feedback dispatch now reliably flows through a centralized pre-tick triage gate, ensuring consistent routing of human-authored feedback items.
+
+## [1.105.18] - 2026-04-28
+
+### Fixed
+- The review UI no longer reappears for feedback left unresolved; unaddressed findings are now routed back to the agent for inline triage.
+
+### Changed
+- Studio architecture diagrams are now native Next.js components, improving website performance and maintainability.
+
 ## [1.105.17] - 2026-04-28
 
 ### Fixed

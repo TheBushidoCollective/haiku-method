@@ -1,6 +1,6 @@
 // orchestrator/workflow/feedback-triage-gate.ts — Pre-tick check
 // that scans every stage from index 0 through the current stage for
-// open (non-terminal) feedback. Three outcomes, in priority order:
+// open (non-terminal) feedback. Four outcomes, in priority order:
 //
 //   1. Any FB without a `triaged_at:` timestamp → emit
 //      `feedback_triage` action so the agent classifies/relocates
@@ -13,14 +13,39 @@
 //      revisit machinery handles branch state, downstream
 //      invalidation, and re-entry.
 //
-//   3. All FBs triaged AND open FBs only on the current stage (or no
-//      open FBs at all) → return null. Lets the normal handler chain
-//      run (the stage's gate handler picks up current-stage feedback
-//      via the existing `review_fix` dispatch).
+//   3. All FBs triaged + open FBs on the current stage that need
+//      agent attention. Two sub-cases:
+//
+//        - Human null/question FBs always dispatch (regardless of
+//          phase) — keeps the review UI from re-popping while the
+//          reviewer's "agent decide" comment sits unaddressed.
+//
+//        - stage_revisit FBs dispatch ONLY when phase ≠ "gate". In
+//          gate phase, `gate.ts` owns rollback (it calls
+//          `revisitCurrentStage`). When the stage has already been
+//          rolled back (phase=elaborate after a prior gate revisit),
+//          the FB is stuck open until the agent verifies its concern
+//          is addressed and closes it. Without dispatching here,
+//          `elaborate.ts`'s spec gate emits `gate_review` again on
+//          every tick once pre-review is acknowledged.
+//
+//      We never call `revisitCurrentStage` from the pre-tick gate —
+//      the helper resets phase to elaborate without closing the FB,
+//      so the next tick would see the same FB and roll back again.
+//      Dispatch is the only path that breaks the loop.
+//
+//   4. All FBs triaged + only inline_fix / no open FBs at all →
+//      return null. Lets the normal handler chain run (the stage's
+//      gate handler picks up current-stage inline_fix items via
+//      the existing `review_fix` dispatch).
 
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { type FeedbackItem, readFeedbackFiles } from "../../state-tools.js"
-import { revisit } from "../revisit.js"
+import {
+	buildFeedbackDispatchAction,
+	classifyPendingForRevisit,
+	revisit,
+} from "../revisit.js"
 import { resolveIntentStages } from "../studio.js"
 import type { DerivedContext } from "./derive-state.js"
 
@@ -32,7 +57,17 @@ interface OpenFeedbackOnStage {
 
 /** An FB is "open" if it can still block the gate — anything in a
  *  non-terminal status with no `closed_by` set. Mirrors the filter
- *  used in gate.ts so the pre-tick check stays consistent. */
+ *  used in gate.ts so the pre-tick check stays consistent.
+ *
+ *  Note: `fixing` (fix-loop in progress) and `answered` (agent
+ *  replied, awaiting human confirmation) PASS this filter intentionally
+ *  — they're not terminal. But Outcome 3 below uses
+ *  `classifyPendingForRevisit`, which buckets only `status === "pending"`
+ *  items. That's deliberate: re-dispatching a `fixing` item would
+ *  pre-empt an active fix-chain bolt; re-dispatching an `answered`
+ *  item would resend reply instructions for something the agent
+ *  already handled. Both are correctly left to fall through to the
+ *  per-state handler chain. */
 function isOpen(item: FeedbackItem): boolean {
 	if (item.closed_by) return false
 	return (
@@ -132,7 +167,64 @@ export function preTickFeedbackGate(
 		}
 	}
 
-	// Outcome 3: open feedback only on current stage (or only at
-	// intent scope). Existing handlers manage that.
+	// Outcome 3: open FBs on the current stage that need agent
+	// attention.
+	//
+	//   - Human null/question FBs always dispatch — keeps the review
+	//     UI from re-popping while the reviewer's "agent decide"
+	//     comment sits unaddressed.
+	//
+	//   - stage_revisit FBs dispatch ONLY when phase ≠ "gate". In
+	//     gate phase, `gate.ts` owns the rollback. When the stage has
+	//     already been rolled back, the FB is stuck open until the
+	//     agent verifies its concern is addressed and closes it.
+	//
+	//   We never call `revisitCurrentStage` here — the helper resets
+	//   phase to elaborate without closing the FB, so the next tick
+	//   would see the same FB and roll back again. The dispatch path
+	//   is the only one that closes the FB.
+	if (currentStage) {
+		const currentStageFbs = openFeedback
+			.filter(({ stage }) => stage === currentStage)
+			.map(({ item }) => item)
+		const classification = classifyPendingForRevisit(currentStageFbs)
+		const inGatePhase = context.currentPhase === "gate"
+		// null/question are filtered to human-authored only because
+		// agent-authored ones with those resolutions are out-of-scope
+		// here — they fall through to gate.ts's existing fix-chain /
+		// feedback_revisit paths that handle agent findings without
+		// engaging the user.
+		const humanNeedsTriage = classification.needsTriage.filter(
+			(item) => item.author_type === "human",
+		)
+		const humanQuestions = classification.questions.filter(
+			(item) => item.author_type === "human",
+		)
+		// stage_revisit is intentionally NOT filtered to human authors:
+		// once a stage_revisit FB lands and the rollback completes, it
+		// stays open until something explicitly closes it. Whether the
+		// reviewer was a person or an agent doesn't change that — both
+		// need verification-and-close. Filtering to human-only here
+		// would leave agent-authored stage_revisit FBs stuck in the
+		// same loop this fix is trying to break.
+		const stageRevisitsToDispatch = inGatePhase
+			? []
+			: classification.stageRevisits
+		if (
+			humanNeedsTriage.length > 0 ||
+			humanQuestions.length > 0 ||
+			stageRevisitsToDispatch.length > 0
+		) {
+			return buildFeedbackDispatchAction(slug, currentStage, {
+				needsTriage: humanNeedsTriage,
+				questions: humanQuestions,
+				inlineFixes: [],
+				stageRevisits: stageRevisitsToDispatch,
+			})
+		}
+	}
+
+	// Outcome 4: open feedback only routes through inline_fix / revisit
+	// or sits at intent scope. Existing handlers manage those.
 	return null
 }

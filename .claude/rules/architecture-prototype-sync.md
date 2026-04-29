@@ -1,8 +1,8 @@
 # Architecture-Prototype Sync Rule
 
-The interactive runtime-architecture map at `website/public/prototype-stage-flow.html` is the canonical visualization of how H·AI·K·U actually works at runtime — actors, hooks, workflow phases per stage, every `haiku_run_next` tick, every state write, knowledge flow, modes, post-intent delivery/ops.
+The interactive runtime-architecture map lives at `/studios/<slug>/architecture` (e.g. `/studios/software/architecture`) — a real Next.js page rendered by `website/app/studios/[slug]/architecture/page.tsx` + the `ArchitectureMap` client component in the sibling `_components/` directory. The 2026-04-27 port replaced the old standalone `website/public/prototype-stage-flow.html` iframe with native React.
 
-**Whenever the architecture changes, update this prototype.** It is part of the sync surface, not a one-off.
+**Whenever the architecture changes, update this map.** It is part of the sync surface, not a one-off.
 
 ## Auto-generated workflow diagrams (per studio)
 
@@ -14,38 +14,65 @@ bun run --cwd packages/haiku export:workflow-diagrams
 ```
 (Also runs automatically as part of `bun run --cwd packages/haiku build` via the prebuild hook.)
 
-These diagrams complement the hand-maintained `prototype-stage-flow.html` — the prototype shows runtime actors / hooks / payloads in detail, the .mmd files show the structural state graph per studio. Update both together when an architecture change touches both surfaces.
+These diagrams complement the hand-maintained architecture map — the map shows runtime actors / hooks / payloads in detail, the .mmd files show the structural state graph per studio. Update both together when an architecture change touches both surfaces.
 
-## When to update the prototype
+## File layout
 
-Any change to one of the following requires verifying or updating `prototype-stage-flow.html`:
+```
+website/app/studios/[slug]/architecture/
+  page.tsx                         # server component (chrome + breadcrumb)
+  _components/
+    ArchitectureMap.tsx            # main client component (state, layout, modals)
+    Modal.tsx                      # generic modal shell + HtmlBlock helper
+    utils.ts                       # renderInline, renderMarkdown, gateFromReview, etc.
+    arch.css                       # ported CSS (was inline <style> in the legacy HTML)
+  _data/
+    types.ts                       # shared TS types
+    actors.ts                      # ACTORS registry (5 runtime players)
+    hooks.ts                       # HOOKS registry + hookFiresSelector()
+    payload-for.ts                 # payloadFor(stage, idx, mStage, key, opts)
+                                   # — every haiku_run_next transition including
+                                   # the new feedback-dispatch route (2026-04-27)
+website/public/prototype-stage-content.json   # bundled studio content (still used)
+website/_build-prototype-content.mjs          # builds the JSON sidecar from plugin/studios/
+```
 
-| Change | What to update in the prototype |
+## When to update
+
+Any change to one of the following requires verifying or updating the architecture map:
+
+| Change | What to update in the map |
 |---|---|
-| New / changed orchestrator action (e.g. new `haiku_run_next` return type) | Add or update the entry in `payloadFor(...)` registry; update validations/writes/instructions |
-| New MCP tool added/removed in `packages/haiku/src/mcp.ts` | Update `TOOL_SPECS` registry; update Orchestrator actor modal's tool list |
-| New / changed hook in `packages/haiku/src/hooks/` | Update `HOOKS` array (name, group, desc, fires, file path) |
-| New / removed stage in `plugin/studios/software/stages/` | Update `STAGES` array (name, hats, review-agents, inputs, outputs, gate); rerun `node website/_build-prototype-content.mjs` |
-| New / removed hat in any stage | Rerun `node website/_build-prototype-content.mjs`; rebuilds the bundled studio content sidecar |
-| New / removed review-agent in any stage | Rerun `node website/_build-prototype-content.mjs` |
-| New / removed discovery or output template (`discovery/*.md`, `outputs/*.md`) | Rerun `node website/_build-prototype-content.mjs`; clickable artifact chips will render the new template |
-| Phase model change (e.g. new phase, removed phase, new transition) | Update the per-stage template in `renderStudio()` and add new pills/payloads as needed |
-| Gate type change (`auto`, `ask`, `external`, `await`, combinations) | Update `effectiveGate(...)` and per-stage `gate` definitions |
-| Mode behavior change (discrete/continuous/hybrid/auto) | Update `effectiveMode(...)` + `effectiveGate(...)` + paused-chip insertion logic |
-| New runtime actor (e.g. new MCP server, new background process) | Add to `ACTORS` registry and the `.actors-strip` HTML |
-| Pre-intent flow change (`haiku_intent_create`, intent-review semantics) | Update the `.pre-intent-card` markup and `payloadFor("preelab-to-stage1", ...)` |
-| Post-intent change (delivery/ops steps, final gate semantics) | Update the `.post-intent-card` markup |
+| New / changed orchestrator action (e.g. new `haiku_run_next` return type) | Add or update the entry in `_data/payload-for.ts`; update validations/writes/instructions |
+| New MCP tool added/removed | Update the orchestrator actor's `notes` in `_data/actors.ts`; if you add a tool-spec modal, register it in `ModalKind` (`_data/types.ts`) and `ArchitectureMap.tsx`'s `renderModal` switch |
+| New / changed hook in `packages/haiku/src/hooks/` | Update `_data/hooks.ts` (`HOOKS` array: name, group, desc, fires tokens, file path) |
+| New / removed stage in `plugin/studios/<studio>/stages/` | Rerun `node website/_build-prototype-content.mjs`; the JSON sidecar drives the diagram structure |
+| New / removed hat / review-agent / discovery template / output template | Rerun `node website/_build-prototype-content.mjs` |
+| Phase model change (new phase, removed phase, new transition) | Update the per-stage rendering inside `ArchitectureMap.tsx`'s `renderStage()` and add new pills/payloads as needed |
+| Gate type change (`auto`, `ask`, `external`, `await`, combinations) | Update `effectiveGate()` (bottom of `ArchitectureMap.tsx`) and `gateFromReview()` in `utils.ts` |
+| Mode behavior change (discrete/continuous/hybrid/auto) | Update `effectiveMode()` and `effectiveGate()` |
+| New runtime actor (e.g. new MCP server, new background process) | Add to `_data/actors.ts` and to the `order` array in `renderActorsStrip()` inside `ArchitectureMap.tsx` |
+| Pre-intent flow change | Update `renderPreIntentCard()` in `ArchitectureMap.tsx` |
+| Post-intent change (delivery/ops steps, final gate semantics) | Update `renderPostIntentCard()` |
 
 ## How to update
 
-1. Edit `website/public/prototype-stage-flow.html` (or run `node website/_build-prototype-content.mjs` if the change is in `plugin/studios/`).
-2. Visually verify in the dev server: `cd website && npm run dev`, then open `http://localhost:3000/prototype-stage-flow.html`.
-3. Optionally run `node website/_screenshot.mjs` for a quick all-modes capture in `/tmp/proto-*.png`.
-4. Make sure tooltips, click modals, hover-pairing, and inputs/outputs hover-pair into the knowledge pool sidebar all still match reality.
+1. Edit the relevant file under `website/app/studios/[slug]/architecture/` (run `node website/_build-prototype-content.mjs` if the change is in `plugin/studios/`).
+2. Visually verify in the dev server: `cd website && npm run dev`, then open `http://localhost:3000/studios/software/architecture`.
+3. Make sure tooltips, click modals, hover-pairing, and inputs/outputs hover-pair into the knowledge pool sidebar all still match reality.
+4. Type-check + build before merging: `cd website && npx tsc --noEmit && npm run build`.
 
 ## Ground truth
 
-The prototype claims to be canonical. If it diverges from the orchestrator code, **the orchestrator is right and the prototype is wrong** — fix the prototype, do not fix the orchestrator to match the prototype.
+The map claims to be canonical. If it diverges from the orchestrator code, **the orchestrator is right and the map is wrong** — fix the map, do not fix the orchestrator to match.
+
+## 2026-04-27 — `feedback_dispatch` route
+
+The per-stage gate handler at `packages/haiku/src/orchestrator/workflow/handlers/gate.ts` no longer re-pops the review UI when a human-authored FB has `resolution: null`. It returns `feedback_dispatch` instead, handing the items back to the agent for inline triage / reply. The map reflects this in two places:
+
+- `_data/payload-for.ts` has a `"feedback-dispatch"` transition entry.
+- `_data/actors.ts` notes the pre-tick contract update on the orchestrator actor and the no-re-pop guarantee on the review web UI actor.
+- `ArchitectureMap.tsx`'s `renderStage()` shows the post-2026-04-27 reject branch in the gate's nested-gate footer with a clickable `feedback_dispatch` payload pill.
 
 ## Known terminology drift (followup work)
 

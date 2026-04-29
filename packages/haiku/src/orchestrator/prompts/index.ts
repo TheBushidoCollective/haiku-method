@@ -22,6 +22,7 @@ import complete from "./complete.js"
 import composite_run_stage from "./composite_run_stage.js"
 import continue_units from "./continue_units.js"
 import dag_cycle_detected from "./dag_cycle_detected.js"
+import design_direction_complete from "./design_direction_complete.js"
 import design_direction_required from "./design_direction_required.js"
 import discovery_missing from "./discovery_missing.js"
 import elaborate from "./elaborate.js"
@@ -72,6 +73,7 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["composite_run_stage", composite_run_stage],
 	["continue_units", continue_units],
 	["dag_cycle_detected", dag_cycle_detected],
+	["design_direction_complete", design_direction_complete],
 	["design_direction_required", design_direction_required],
 	["discovery_missing", discovery_missing],
 	["elaborate", elaborate],

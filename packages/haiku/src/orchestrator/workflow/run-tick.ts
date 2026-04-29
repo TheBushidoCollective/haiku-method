@@ -97,9 +97,12 @@ export function runWorkflowTick(
 
 	// Pre-tick feedback triage gate. Walks every stage from index 0
 	// through the current stage looking for open (non-terminal) FBs.
-	// Three outcomes:
+	// Four outcomes (see feedback-triage-gate.ts header):
 	//   - any untriaged FB found → emit `feedback_triage`
-	//   - every FB triaged but ≥ 1 on an earlier stage → emit revisit
+	//   - every FB triaged but ≥ 1 on an earlier stage → emit `revisited`
+	//   - human FB on current stage with null/question resolution →
+	//     emit `feedback_dispatch` (prevents elaborate.ts / gate.ts
+	//     from re-popping the review UI on unaddressed feedback)
 	//   - else → null (fall through to the normal handler chain)
 	// Intentionally runs AFTER tamper detection (we never advance on
 	// a tampered tree) and BEFORE handler dispatch (so misplaced or
@@ -107,10 +110,30 @@ export function runWorkflowTick(
 	// hats).
 	const triageAction = preTickFeedbackGate(derived.context)
 	if (triageAction) {
+		// Explicit per-action mapping: every action `preTickFeedbackGate`
+		// can return is enumerated here. If a future outcome adds a new
+		// action type without updating this map, the `default` branch
+		// fails loudly via an `error` action rather than silently
+		// dropping into the wrong state name. Cheaper than a runtime
+		// invariant since the action surface is small + closed.
 		const triageState: StateName =
 			triageAction.action === "feedback_triage"
 				? "feedback_triage"
-				: "revisited"
+				: triageAction.action === "feedback_dispatch"
+					? "feedback_dispatch"
+					: triageAction.action === "revisited"
+						? "revisited"
+						: "error"
+		if (triageState === "error") {
+			return {
+				state: "error",
+				context: derived.context,
+				action: {
+					action: "error",
+					message: `preTickFeedbackGate emitted unmapped action '${triageAction.action}'. run-tick.ts:triageState mapping needs an entry for it.`,
+				},
+			}
+		}
 		return {
 			state: triageState,
 			context: derived.context,

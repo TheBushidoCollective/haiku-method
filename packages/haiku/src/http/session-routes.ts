@@ -10,6 +10,8 @@
 // tool dispatcher and rebroadcasts the result via session annotations
 // so the parked gate_review waiter unblocks.
 
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import type { FastifyInstance } from "fastify"
 import {
 	DirectionSelectRequestSchema,
@@ -34,6 +36,15 @@ import {
 	updateQuestionSession,
 	updateSession,
 } from "../sessions.js"
+import {
+	intentDir,
+	parseFrontmatter,
+	persistDesignDirectionSelection,
+	readJson,
+	stageStatePath,
+	timestamp,
+	writeJson,
+} from "../state-tools.js"
 import { logFeedbackAction } from "./action-log.js"
 import { requireTunnelAuth } from "./auth.js"
 import { respondSessionApi } from "./session-api.js"
@@ -164,9 +175,93 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				DirectionSelectRequestSchema,
 			)
 			if (!parsed.ok) return
+
+			// Persist the selection to stage state.json BEFORE waking the
+			// MCP tool. This is the durable layer: if the MCP client times
+			// out and discards the tool result, the next haiku_run_next
+			// still finds `design_direction_selected: true` on disk and
+			// emits the `design_direction_complete` recovery action.
+			//
+			// Two write paths:
+			//   1. Full persist via persistDesignDirectionSelection — writes
+			//      annotated PNG sidecars + state.json with screenshot paths.
+			//   2. Minimal state-only fallback — used when there are no
+			//      screenshots OR the full persist threw (disk full,
+			//      permission denied, etc). Without this fallback the
+			//      elaborate handler would re-emit design_direction_required
+			//      and the agent would loop into a 409 on the closed session.
+			let selection = parsed.data
+			if (parsed.data.mode === "select") {
+				const ddSession = getSession(req.params.sessionId)
+				const slug =
+					ddSession?.session_type === "design_direction"
+						? ddSession.intent_slug
+						: ""
+				const activeStage = slug ? readActiveStage(slug) : ""
+				if (slug && activeStage) {
+					const screenshots = parsed.data.annotations?.screenshots ?? []
+					let persisted = false
+					if (screenshots.length > 0) {
+						try {
+							persistDesignDirectionSelection({
+								slug,
+								stage: activeStage,
+								archetype: parsed.data.archetype,
+								...(parsed.data.comments
+									? { comments: parsed.data.comments }
+									: {}),
+								screenshots,
+							})
+							persisted = true
+							// Drop the multi-MB data URLs from the in-memory
+							// session; authoritative storage is on disk now and
+							// the workflow surfaces them by path on the next
+							// haiku_run_next.
+							const { annotations: _drop, ...rest } = parsed.data
+							selection = parsed.data.annotations?.pins
+								? {
+										...rest,
+										annotations: { pins: parsed.data.annotations.pins },
+									}
+								: rest
+						} catch (err) {
+							req.log.error(
+								{ err },
+								"persistDesignDirectionSelection failed — falling back to minimal state write",
+							)
+						}
+					}
+					if (!persisted) {
+						// Minimal write covers (a) no-screenshot selects and
+						// (b) the persist-throw fallback. Without screenshot
+						// paths the recovery action just won't have visual
+						// context — but the workflow advances.
+						try {
+							const ssPath = stageStatePath(slug, activeStage)
+							const ssData = readJson(ssPath)
+							ssData.design_direction_selected = true
+							ssData.design_direction_selected_at = timestamp()
+							ssData.design_direction = {
+								archetype: parsed.data.archetype,
+								...(parsed.data.comments
+									? { comments: parsed.data.comments }
+									: {}),
+							}
+							delete ssData.design_direction_surfaced
+							writeJson(ssPath, ssData)
+						} catch (err) {
+							req.log.error(
+								{ err },
+								"minimal design-direction state write failed — agent may need to re-select",
+							)
+						}
+					}
+				}
+			}
+
 			updateDesignDirectionSession(req.params.sessionId, {
 				status: "answered",
-				selection: parsed.data,
+				selection,
 			})
 			const payload: DirectionSelectResponse = { ok: true }
 			reply.send(payload)
@@ -309,4 +404,15 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			reply.send(response)
 		},
 	)
+}
+
+function readActiveStage(slug: string): string {
+	const intentFile = join(intentDir(slug), "intent.md")
+	if (!existsSync(intentFile)) return ""
+	try {
+		const { data } = parseFrontmatter(readFileSync(intentFile, "utf8"))
+		return (data.active_stage as string) || ""
+	} catch {
+		return ""
+	}
 }

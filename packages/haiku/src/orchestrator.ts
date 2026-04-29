@@ -51,6 +51,7 @@ export {
 } from "./orchestrator/external-review.js"
 export { enrichActionWithPreview } from "./orchestrator/preview.js"
 export {
+	buildFeedbackDispatchAction,
 	classifyPendingForRevisit,
 	resetFixLoopBolts,
 	revisit,

@@ -10,6 +10,7 @@
 
 import { existsSync } from "node:fs"
 import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 function flag(name: string, defaultValue: boolean): boolean {
 	const raw = process.env[name]
@@ -46,15 +47,20 @@ let _pluginRoot: string | null = null
  *   2. Self-resolved from `process.argv[1]` — walks up from the bundled
  *      binary path (`plugin/bin/haiku` → plugin root) and validates the
  *      candidate by checking for `studios/` or `.claude-plugin/plugin.json`.
- *   3. Empty string — graceful degradation so project-local studios still work.
+ *   3. Self-resolved from `import.meta.url` — same walk, but anchored on
+ *      the running module file. Catches the Windows case where Claude
+ *      Code does not inject `CLAUDE_PLUGIN_ROOT` and `argv[1]` is mangled
+ *      by a `.cmd` shim or symlink.
+ *   4. Empty string — graceful degradation so project-local studios still work.
  *
  * Memoized after the first call.
  *
- * **Side effect:** when path (2) succeeds, this function also writes
- * `process.env.CLAUDE_PLUGIN_ROOT = <resolved>` so that child processes
- * (hooks, spawned shells) inherit the same value without re-running
- * discovery. This is intentional — hooks rely on the env var — but callers
- * should be aware the function is not purely functional.
+ * **Side effect:** when path (2) or (3) succeeds, this function also
+ * writes `process.env.CLAUDE_PLUGIN_ROOT = <resolved>` so that child
+ * processes (hooks, spawned shells) inherit the same value without
+ * re-running discovery. This is intentional — hooks rely on the env
+ * var — but callers should be aware the function is not purely
+ * functional.
  */
 export function resolvePluginRoot(): string {
 	if (_pluginRoot !== null) return _pluginRoot
@@ -69,26 +75,59 @@ export function resolvePluginRoot(): string {
 	// 2. Self-resolve from binary location
 	// The esbuild bundle runs as plugin/bin/haiku. In the bundled binary,
 	// process.argv[1] is the absolute path to the binary.
-	const binaryPath = process.argv[1]
-	if (binaryPath) {
-		// binary at plugin/bin/haiku → plugin root is dirname(dirname(binary))
-		const candidate = dirname(dirname(binaryPath))
-		// Validate by checking for a known marker file
-		if (
-			existsSync(join(candidate, "studios")) ||
-			existsSync(join(candidate, ".claude-plugin", "plugin.json"))
-		) {
-			_pluginRoot = candidate
-			// Also set the env var so hooks and child processes pick it up
-			process.env.CLAUDE_PLUGIN_ROOT = candidate
-			console.error(`[haiku] Self-resolved plugin root: ${candidate}`)
-			return _pluginRoot
-		}
+	const fromArgv = tryResolveFromPath(process.argv[1])
+	if (fromArgv) {
+		_pluginRoot = fromArgv
+		process.env.CLAUDE_PLUGIN_ROOT = fromArgv
+		console.error(`[haiku] Self-resolved plugin root from argv: ${fromArgv}`)
+		return _pluginRoot
 	}
 
-	// 3. Fallback: empty string (graceful degradation — project studios still work)
+	// 3. Self-resolve from import.meta.url — covers Windows cases where
+	// Claude Code does not inject CLAUDE_PLUGIN_ROOT and argv[1] is mangled
+	// by a `.cmd` shim or a symlink. import.meta.url always points at the
+	// real on-disk module location.
+	try {
+		const modulePath = fileURLToPath(import.meta.url)
+		const fromModule = tryResolveFromPath(modulePath)
+		if (fromModule) {
+			_pluginRoot = fromModule
+			process.env.CLAUDE_PLUGIN_ROOT = fromModule
+			console.error(
+				`[haiku] Self-resolved plugin root from module: ${fromModule}`,
+			)
+			return _pluginRoot
+		}
+	} catch {
+		/* fileURLToPath throws on non-file URLs; fall through to empty */
+	}
+
+	// 4. Fallback: empty string (graceful degradation — project studios still work)
 	_pluginRoot = ""
 	return _pluginRoot
+}
+
+/** Walk up from a binary or module path until we find a directory that
+ *  looks like the plugin root (has `studios/` or `.claude-plugin/plugin.json`).
+ *  Returns null when no candidate validates. Walks up to 6 levels so the
+ *  same helper handles both the bundled binary (`plugin/bin/haiku`, 2 levels
+ *  up) and the source layout during dev (`packages/haiku/src/config.ts`,
+ *  more levels up). */
+function tryResolveFromPath(start: string | undefined): string | null {
+	if (!start) return null
+	let current = dirname(start)
+	for (let i = 0; i < 6; i++) {
+		if (
+			existsSync(join(current, "studios")) ||
+			existsSync(join(current, ".claude-plugin", "plugin.json"))
+		) {
+			return current
+		}
+		const parent = dirname(current)
+		if (parent === current) return null
+		current = parent
+	}
+	return null
 }
 
 /** Feature flags. */

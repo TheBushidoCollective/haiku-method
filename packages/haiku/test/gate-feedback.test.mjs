@@ -194,6 +194,8 @@ function createFeedbackFile(intentDirPath, _slug, stage, title, opts = {}) {
 	const triagedAtLine =
 		triagedAt === null ? "triaged_at: null" : `triaged_at: "${triagedAt}"`
 
+	const resolutionLine =
+		opts.resolution !== undefined ? `\nresolution: ${opts.resolution}` : ""
 	writeFileSync(
 		join(feedbackDirPath, `${nn}-${fileSlug}.md`),
 		`---
@@ -206,7 +208,7 @@ created_at: "2026-04-15T21:15:00Z"
 visit: ${opts.visit || 0}
 source_ref: null
 closed_by: null
-${triagedAtLine}
+${triagedAtLine}${resolutionLine}
 ---
 
 ${opts.body || `Finding: ${title}`}
@@ -495,7 +497,167 @@ try {
 		assert.strictEqual(state.elaboration_turns, 3)
 	})
 
-	test("human-authored pending feedback routes to gate_review (not feedback_revisit)", () => {
+	test("elaborate phase with leftover stage_revisit FB routes to feedback_dispatch (NOT gate_review)", () => {
+		// Reproduces the user-reported bug: after a Request Changes
+		// rolled the stage back to elaborate, the user-authored FB
+		// stays pending with `resolution: stage_revisit` because no
+		// auto-close mechanism fires. Once pre-review is acknowledged
+		// (or skipped), elaborate.ts's spec gate would re-emit
+		// gate_review on every tick — review UI re-pops on
+		// unaddressed feedback. Pre-tick triage gate now dispatches
+		// stage_revisit FBs to the agent for inline closure when
+		// phase ≠ gate, breaking the loop without rolling the stage
+		// back again.
+		const { projDir, intentDirPath, slug } = createProject(
+			"gate-fb-stage-revisit-elaborate",
+			{
+				active_stage: "plan",
+				stageConfig: { plan: { review: "ask" } },
+			},
+		)
+		createStageState(intentDirPath, "plan", {
+			phase: "elaborate",
+			pre_review_dispatched: true,
+			pre_review_skipped_no_agents: true,
+			pre_review_reviewers_acknowledged: true,
+			gate_outcome: "changes_requested",
+		})
+		createFeedbackFile(intentDirPath, slug, "plan", "Stage needs rework", {
+			origin: "user-chat",
+			author: "user",
+			author_type: "human",
+			resolution: "stage_revisit",
+		})
+
+		process.chdir(projDir)
+		const tick1 = runNext(slug)
+		assert.strictEqual(
+			tick1.action,
+			"feedback_dispatch",
+			`Tick 1: expected feedback_dispatch for stage_revisit FB outside gate phase; got ${tick1.action}.`,
+		)
+		assert.strictEqual(tick1.stage, "plan")
+		assert.strictEqual(
+			tick1.counts.stage_revisits,
+			1,
+			`expected stage_revisits count of 1; got ${JSON.stringify(tick1.counts)}`,
+		)
+
+		// Replay must not loop or mutate state.
+		const stateBefore = readJson(
+			join(intentDirPath, "stages", "plan", "state.json"),
+		)
+		const tick2 = runNext(slug)
+		assert.strictEqual(
+			tick2.action,
+			"feedback_dispatch",
+			`Tick 2: expected feedback_dispatch (no loop); got ${tick2.action}.`,
+		)
+		const stateAfter = readJson(
+			join(intentDirPath, "stages", "plan", "state.json"),
+		)
+		assert.deepStrictEqual(
+			stateAfter,
+			stateBefore,
+			"pre-tick stage_revisit dispatch must not mutate state.json across ticks",
+		)
+	})
+
+	test("gate-phase stage_revisit FB still falls through to gate.ts (rollback owner)", () => {
+		// Inverse of the test above: when the stage IS in gate phase,
+		// the pre-tick gate must NOT dispatch stage_revisit FBs —
+		// gate.ts owns the rollback (calls revisitCurrentStage).
+		const { projDir, intentDirPath, slug } = createProject(
+			"gate-fb-stage-revisit-gate",
+			{
+				active_stage: "plan",
+				stageConfig: { plan: { review: "auto" } },
+			},
+		)
+		createStageState(intentDirPath, "plan", { phase: "gate" })
+		createFeedbackFile(intentDirPath, slug, "plan", "Roll it back", {
+			origin: "user-chat",
+			author: "user",
+			author_type: "human",
+			resolution: "stage_revisit",
+		})
+
+		process.chdir(projDir)
+		const result = runNext(slug)
+
+		assert.strictEqual(
+			result.action,
+			"revisited",
+			`gate-phase stage_revisit must let gate.ts handle rollback; got ${result.action}`,
+		)
+		const state = readJson(join(intentDirPath, "stages", "plan", "state.json"))
+		assert.strictEqual(state.phase, "elaborate")
+	})
+
+	test("elaborate phase with leftover human FB routes to feedback_dispatch (NOT gate_review)", () => {
+		// Reproduces the bug the prior fix missed: after a Request Changes
+		// on the spec gate, the stage stays in `elaborate` phase with a
+		// triaged human FB sitting on it. The next `haiku_run_next` tick
+		// would re-emit `gate_review` from `elaborate.ts` (the `gate.ts`
+		// fix only covered the post-execute stage gate). Pre-tick triage
+		// gate now intercepts these and emits `feedback_dispatch` so the
+		// review UI never re-pops on unaddressed feedback.
+		//
+		// Drives TWO ticks back-to-back (without the agent doing any
+		// work between them) to guard against an infinite re-dispatch
+		// loop. Both ticks must return `feedback_dispatch` — and
+		// neither tick may produce a side effect (state mutation /
+		// commit storm) that compounds across calls.
+		const { projDir, intentDirPath, slug } = createProject(
+			"gate-fb-elaborate-replay",
+			{
+				active_stage: "plan",
+				stageConfig: { plan: { review: "ask" } },
+			},
+		)
+		createStageState(intentDirPath, "plan", {
+			phase: "elaborate",
+			pre_review_dispatched: true,
+			pre_review_skipped_no_agents: true,
+			gate_outcome: "changes_requested",
+		})
+		createFeedbackFile(intentDirPath, slug, "plan", "Reviewer concern", {
+			origin: "user-chat",
+			author: "user",
+			author_type: "human",
+		})
+
+		process.chdir(projDir)
+		const tick1 = runNext(slug)
+		assert.strictEqual(
+			tick1.action,
+			"feedback_dispatch",
+			`Tick 1: expected feedback_dispatch; got ${tick1.action}.`,
+		)
+		assert.strictEqual(tick1.stage, "plan")
+
+		// Snapshot the state.json before tick 2 so we can assert no
+		// mutation happens — the pre-tick gate is read-only here.
+		const stateBefore = readJson(
+			join(intentDirPath, "stages", "plan", "state.json"),
+		)
+		const tick2 = runNext(slug)
+		assert.strictEqual(
+			tick2.action,
+			"feedback_dispatch",
+			`Tick 2: expected feedback_dispatch (no loop); got ${tick2.action}.`,
+		)
+		const stateAfter = readJson(
+			join(intentDirPath, "stages", "plan", "state.json"),
+		)
+		assert.deepStrictEqual(
+			stateAfter,
+			stateBefore,
+			"pre-tick feedback_dispatch must not mutate state.json across ticks",
+		)
+	})
+
+	test("human-authored pending feedback routes to feedback_dispatch (no UI re-open)", () => {
 		const { projDir, intentDirPath, slug } = createProject(
 			"gate-fb-summaries",
 			{
@@ -517,14 +679,20 @@ try {
 		process.chdir(projDir)
 		const result = runNext(slug)
 
-		// Resolution-aware routing: when any pending item is
-		// human-authored with no explicit `resolution`, the workflow engine must
-		// open the review UI rather than auto-firing the fix loop. The
-		// reviewer triages each item (pick a resolution or leave for
-		// agent triage), then explicitly clicks "Send to agent" which
-		// fires haiku_revisit → feedback_dispatch / stage revisit.
-		assert.strictEqual(result.action, "gate_review")
+		// Contract: open feedback ⇒ never engage the user. A human-
+		// authored FB with no explicit resolution lands in the
+		// needsTriage bucket and the gate hands it back to the agent
+		// via `feedback_dispatch` so the agent classifies / replies
+		// inline. The review UI does NOT re-open while feedback is
+		// unaddressed — that was the loop the workflow engine used
+		// to fall into when the reviewer left "Let agent decide" on
+		// a comment and walked away.
+		assert.strictEqual(result.action, "feedback_dispatch")
 		assert.strictEqual(result.stage, "plan")
+		assert.ok(
+			result.counts && result.counts.needs_triage >= 1,
+			`Expected needs_triage >= 1, got: ${JSON.stringify(result.counts)}`,
+		)
 	})
 
 	test("pure agent-authored pending feedback still auto-dispatches fix loop (no human interrupt)", () => {

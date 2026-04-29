@@ -27,7 +27,7 @@ This post is about what falls out of that flip — the architecture, the state m
 </KeyPoints>
 
 <Callout tone="info" title="Prefer to click around than read?">
-Every diagram below has a live, fully-interactive version. The [runtime architecture map](/prototype-stage-flow.html) renders the whole thing — actors, hooks, workflow phases, every `haiku_run_next` tick, every state write — and lets you click any node for its real source file. Each studio has its own view: [software](/studios/software/architecture/), [ideation](/studios/ideation/architecture/), [legal](/studios/legal/architecture/), [hwdev](/studios/hwdev/architecture/), and [20 others](/studios/). The rest of this post is the story; the map is the ground truth.
+Every diagram below has a live, fully-interactive version. The [runtime architecture map](/studios/software/architecture) renders the whole thing — actors, hooks, workflow phases, every `haiku_run_next` tick, every state write — and lets you click any node for its real source file. Each studio has its own view: [software](/studios/software/architecture/), [ideation](/studios/ideation/architecture/), [legal](/studios/legal/architecture/), [hwdev](/studios/hwdev/architecture/), and [20 others](/studios/). The rest of this post is the story; the map is the ground truth.
 </Callout>
 
 ## The download vs. the scavenger hunt
@@ -131,7 +131,7 @@ Five layers: the user, the Claude Code harness (agent + hooks), the H·AI·K·U 
 The orchestrator is the brain. Hooks are spinal reflexes. The orchestrator decides what should happen next. Hooks make sure the agent physically can't do anything else between orchestrator calls. The agent is the body that executes the current action. And everything the orchestrator knows, it knows from reading files on disk.
 
 <Callout tone="good" title="See it live">
-This diagram is static; the [interactive runtime map](/prototype-stage-flow.html) isn't. Every actor, hook, MCP tool, hat, review-agent, and artifact chip on the live page is clickable and opens the real source file (`STAGE.md`, `hats/*.md`, `review-agents/*.md`, `discovery/*.md`, `outputs/*.md`). Swap studios from the picker in the top bar, or jump straight to any studio's architecture: `/studios/<slug>/architecture`.
+This diagram is static; the [interactive runtime map](/studios/software/architecture) isn't. Every actor, hook, MCP tool, hat, review-agent, and artifact chip on the live page is clickable and opens the real source file (`STAGE.md`, `hats/*.md`, `review-agents/*.md`, `discovery/*.md`, `outputs/*.md`). Swap studios from the picker in the top bar, or jump straight to any studio's architecture: `/studios/<slug>/architecture`.
 </Callout>
 
 ## Stages and phases
@@ -151,7 +151,7 @@ Two seams demand a human:
 
 Everything else is the agent in a tight loop: call `haiku_run_next`, do the work the action described, call `haiku_run_next` again. No meetings. No status updates. No "what should I do next?" Just clues.
 
-The full state machine — six stages × five phases, every gate type, mode resolution, `/haiku:revisit` back-edges — lives in `packages/haiku/src/orchestrator.ts`. You don't have to take my word for it: the [runtime architecture map](/prototype-stage-flow.html) lays out every phase, every `haiku_run_next` action, every validation check, and every state write per stage. Toggle between continuous / discrete / hybrid / autopilot modes in the top bar to see how the gates change shape.
+The full state machine — six stages × five phases, every gate type, mode resolution, `/haiku:revisit` back-edges — lives in `packages/haiku/src/orchestrator.ts`. You don't have to take my word for it: the [runtime architecture map](/studios/software/architecture) lays out every phase, every `haiku_run_next` action, every validation check, and every state write per stage. Toggle between continuous / discrete / hybrid / autopilot modes in the top bar to see how the gates change shape.
 
 ## Where hooks come in
 
@@ -195,7 +195,7 @@ The agent never sees the whole map. It doesn't need to. It just needs the next c
 
 <Grid>
   <Card eyebrow="Interactive" title="Runtime architecture map" accent="info">
-    The full map — actors, hooks, workflow phases, MCP tools, knowledge pool, pre- and post-intent flows. Every chip clicks through to real source. [Open the map →](/prototype-stage-flow.html)
+    The full map — actors, hooks, workflow phases, MCP tools, knowledge pool, pre- and post-intent flows. Every chip clicks through to real source. [Open the map →](/studios/software/architecture)
   </Card>
   <Card eyebrow="Per studio" title="Browse by domain" accent="good">
     Same map, pre-filtered to one studio's stages and artifacts. [software](/studios/software/architecture/) · [ideation](/studios/ideation/architecture/) · [legal](/studios/legal/architecture/) · [hwdev](/studios/hwdev/architecture/) · [all 24](/studios/)

@@ -1190,17 +1190,21 @@ stages: []
 		assert.strictEqual(result.stage, "build")
 	})
 
-	test("regresses phase to elaborate when units lack inputs", () => {
+	test("auto-fills inputs and stays in execute when units lack inputs", () => {
+		// Pre-tick now mechanically populates `inputs:` using
+		// intent.md + knowledge/*.md as the fallback, instead of
+		// regressing phase and delegating to the SDK repair agent
+		// (which previously corrupted unit FM by writing JSON-encoded
+		// strings into the YAML). With the auto-fix in place, the
+		// stage stays in execute phase and the tick proceeds normally.
 		const { projDir, intentDirPath, slug } = createProject("repair-regress", {
 			active_stage: "build",
 			intent_reviewed: true,
 		})
-		// Build stage in execute phase but units missing inputs
 		createStageState(intentDirPath, "build", {
 			phase: "execute",
 			status: "active",
 		})
-		// Create unit WITHOUT inputs (empty inputs array)
 		const unitsDir = join(intentDirPath, "stages", "build", "units")
 		mkdirSync(unitsDir, { recursive: true })
 		writeFileSync(
@@ -1219,13 +1223,21 @@ Legacy unit without inputs.
 		)
 		process.chdir(projDir)
 		const result = runNext(slug)
-		assert.strictEqual(result.action, "safe_intent_repair")
-		assert.strictEqual(result.phase_regressed, true)
-		// Phase should be regressed in state.json
+		assert.notStrictEqual(
+			result.action,
+			"safe_intent_repair",
+			`expected auto-fix to skip safe_intent_repair; got ${result.action}`,
+		)
 		const buildState = readJson(
 			join(intentDirPath, "stages", "build", "state.json"),
 		)
-		assert.strictEqual(buildState.phase, "elaborate")
+		assert.strictEqual(buildState.phase, "execute")
+		const unitRaw = readFileSync(join(unitsDir, "unit-01-legacy.md"), "utf8")
+		assert.match(
+			unitRaw,
+			/inputs:\s*\n\s+- intent\.md/,
+			`expected unit FM to have a YAML-list inputs:; got:\n${unitRaw.slice(0, 300)}`,
+		)
 	})
 
 	test("does not regress phase when all units have inputs", () => {

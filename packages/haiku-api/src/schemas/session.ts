@@ -79,7 +79,7 @@ export type StageArtifact = z.infer<typeof StageArtifactSchema>
 export const OutputArtifactSchema = z.object({
 	stage: z.string(),
 	name: z.string(),
-	type: z.enum(["markdown", "html", "image"]),
+	type: z.enum(["markdown", "html", "image", "file"]),
 	content: z.string().optional(),
 	relativePath: z.string().optional(),
 })

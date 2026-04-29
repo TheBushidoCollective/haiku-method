@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getAllStudios, getStudioBySlug } from "@/lib/studios"
+import { ArchitectureMap } from "./_components/ArchitectureMap"
 
 interface Props {
 	params: Promise<{ slug: string }>
@@ -50,15 +51,9 @@ export default async function StudioArchitecturePage({ params }: Props) {
 					{titleCase(studio.name)}
 				</Link>
 				<span className="text-stone-300 dark:text-stone-600">/</span>
-				<span className="font-semibold text-stone-900 dark:text-white">
-					Architecture
-				</span>
+				<span className="font-semibold text-stone-900 dark:text-white">Architecture</span>
 			</nav>
-			<iframe
-				src={`/prototype-stage-flow.html?studio=${slug}`}
-				title={`${titleCase(studio.name)} architecture`}
-				className="block w-full border-0 h-[calc(100svh-8rem)]"
-			/>
+			<ArchitectureMap initialStudioDir={slug} />
 		</>
 	)
 }

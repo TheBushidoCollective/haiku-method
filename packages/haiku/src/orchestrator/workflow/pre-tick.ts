@@ -15,8 +15,15 @@
 // action. Otherwise the mutations land on disk and runWorkflowTick
 // continues into derive-state on the now-consistent intent.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs"
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs"
 import { join } from "node:path"
+import matter from "gray-matter"
 import { getCurrentState } from "../../current-state.js"
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { resolveIntentStages, resolveStudioStages } from "../../orchestrator.js"
@@ -184,13 +191,57 @@ export function preTickConsistency(
 	const activePhase = (activeStageState.phase as string) || ""
 	let phaseRegressed = false
 	const missingInputs: string[] = []
+	const fixedInputs: string[] = []
 	if (activePhase === "execute") {
 		for (const f of activeUnitFiles) {
 			const fm = readFm(join(activeUnitsDir, f))
 			const unitStatus = (fm.status as string) || ""
 			if (["completed", "skipped", "failed"].includes(unitStatus)) continue
-			const inputs = (fm.inputs as string[]) || (fm.refs as string[]) || []
-			if (inputs.length === 0) missingInputs.push(f)
+			// Three cases count as "missing": absent, empty array, OR
+			// non-array (e.g. a string from prior-corruption like
+			// `inputs: >- ["a","b"]` parsing back as a single string).
+			// The non-array case used to slip through `length > 0` since
+			// any non-empty string passes that check, leaving previously-
+			// corrupted units stuck.
+			const rawInputs = fm.inputs ?? fm.refs ?? []
+			const isUsable = Array.isArray(rawInputs) && rawInputs.length > 0
+			if (!isUsable) missingInputs.push(f)
+		}
+		// Mechanically populate `inputs:` on flagged units using the
+		// intent.md + knowledge/*.md fallback. Doing this here keeps
+		// the SDK repair agent out of unit files entirely — the agent
+		// previously had Edit access and corrupted FM by confusing
+		// YAML arrays with JSON-encoded strings (e.g. `inputs: >- ["a","b"]`
+		// instead of a YAML list). gray-matter's stringifier produces a
+		// proper YAML sequence for `string[]`.
+		if (missingInputs.length > 0) {
+			const knowledgeDir = join(iDir, "knowledge")
+			const fallbackInputs: string[] = ["intent.md"]
+			if (existsSync(knowledgeDir)) {
+				for (const k of readdirSync(knowledgeDir)) {
+					if (k.endsWith(".md")) fallbackInputs.push(`knowledge/${k}`)
+				}
+			}
+			const stillMissing: string[] = []
+			for (const f of missingInputs) {
+				const unitFilePath = join(activeUnitsDir, f)
+				try {
+					const raw = readFileSync(unitFilePath, "utf8")
+					const parsed = matter(raw)
+					const existing = (parsed.data.inputs as unknown[]) || []
+					if (Array.isArray(existing) && existing.length > 0) continue
+					parsed.data.inputs = fallbackInputs
+					writeFileSync(
+						unitFilePath,
+						matter.stringify(parsed.content, parsed.data),
+					)
+					fixedInputs.push(f)
+				} catch {
+					stillMissing.push(f)
+				}
+			}
+			missingInputs.length = 0
+			missingInputs.push(...stillMissing)
 		}
 		if (missingInputs.length > 0) {
 			activeStageState.phase = "elaborate"
@@ -202,9 +253,23 @@ export function preTickConsistency(
 		}
 	}
 
-	if (synthesized.length > 0 || phaseRegressed) {
+	if (synthesized.length > 0 || phaseRegressed || fixedInputs.length > 0) {
+		// Format: leading " — " before the first suffix, "; " between
+		// the rest. Joining with `; ` and prepending one ` — ` keeps
+		// the punctuation consistent regardless of which subset of
+		// outcomes fired.
+		const suffixes: string[] = []
+		if (synthesized.length > 0) {
+			suffixes.push(`synthesize ${synthesized.join(", ")}`)
+		}
+		if (fixedInputs.length > 0) {
+			suffixes.push(`auto-add inputs to ${fixedInputs.join(", ")}`)
+		}
+		if (phaseRegressed) {
+			suffixes.push("regress phase to elaborate")
+		}
 		gitCommitState(
-			`haiku: safe-repair ${slug} — synthesize ${synthesized.join(", ")}${phaseRegressed ? "; regress phase to elaborate" : ""}`,
+			`haiku: safe-repair ${slug}${suffixes.length > 0 ? ` — ${suffixes.join("; ")}` : ""}`,
 		)
 	}
 
@@ -214,6 +279,7 @@ export function preTickConsistency(
 		synthesized_stages: synthesized.join(","),
 		needs_manual_review: needsManualReview.join(","),
 		phase_regressed: String(phaseRegressed),
+		auto_fixed_inputs: fixedInputs.join(","),
 	})
 
 	if (needsManualReview.length > 0) {

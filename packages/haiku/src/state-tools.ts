@@ -2850,9 +2850,13 @@ export const UNIT_FRONTMATTER_SCHEMA = {
 	},
 	// workflow-driven fields. Agents MUST NOT set these — the workflow engine owns
 	// transitions via haiku_unit_advance_hat / haiku_unit_reject_hat /
-	// haiku_unit_increment_bolt. AJV's propertyNames check rejects any
-	// of these at validate time; strict MCP clients reject at parse
-	// time before the call goes out.
+	// haiku_unit_increment_bolt (which call setFrontmatterField directly,
+	// bypassing the agent-facing tools). AJV's propertyNames check rejects
+	// any of these at validate time; strict MCP clients reject at parse
+	// time before the call goes out. `hat_started_at` and
+	// `scope_reject_attempts` are workflow-internal counters touched only
+	// by advance_hat / reject_hat — listed here so haiku_unit_write and
+	// haiku_unit_set both refuse to set them.
 	propertyNames: {
 		not: {
 			enum: [
@@ -2862,6 +2866,8 @@ export const UNIT_FRONTMATTER_SCHEMA = {
 				"iterations",
 				"started_at",
 				"completed_at",
+				"hat_started_at",
+				"scope_reject_attempts",
 			],
 		},
 	},
@@ -3299,6 +3305,52 @@ export function timestamp(): string {
 }
 
 /**
+ * Stage `.haiku/` for a state commit while defending against worktree-gitlink
+ * leaks (issue #262 concern 3).
+ *
+ * Why this is non-trivial: H·AI·K·U registers per-unit / per-fix git
+ * worktrees under `.haiku/worktrees/{slug}/{unit-or-fix}/`. A bare
+ * `git add .haiku` walks into those directories and stages each as a
+ * gitlink (mode 160000), because the worktree's `.git` file makes git
+ * treat it as a submodule. `.gitignore` does not protect entries that are
+ * already tracked, and a gitlink committed once on a parent commit will
+ * keep coming back as a phantom `D` after `haiku_repair`'s naive cleanup.
+ *
+ * Defense in depth:
+ *   1. Pathspec exclude on the add → blocks NEW gitlinks under
+ *      `.haiku/worktrees/` from entering the index.
+ *   2. `git rm --cached -r --ignore-unmatch -- .haiku/worktrees/` →
+ *      untracks any LEGACY gitlinks already in the index on this branch.
+ *      `--cached` leaves the working tree alone, so the worktree keeps
+ *      functioning. `--ignore-unmatch` keeps this a no-op when there's
+ *      nothing to clean.
+ */
+function stageHaikuStateForCommit(haikuRoot: string): void {
+	execFileSync(
+		"git",
+		["add", "--", ":(exclude,glob,top).haiku/worktrees/**", haikuRoot],
+		{ encoding: "utf8", stdio: "pipe" },
+	)
+	try {
+		execFileSync(
+			"git",
+			[
+				"rm",
+				"--cached",
+				"-r",
+				"--ignore-unmatch",
+				"-f",
+				"--",
+				join(haikuRoot, "worktrees"),
+			],
+			{ encoding: "utf8", stdio: "pipe" },
+		)
+	} catch {
+		/* Nothing to untrack — the common path. */
+	}
+}
+
+/**
  * Git add + commit + push for lifecycle state changes.
  * No-op in non-git environments (filesystem mode).
  * Non-fatal: git failures are logged but never crash the MCP.
@@ -3310,8 +3362,7 @@ export function gitCommitState(message: string): {
 } {
 	if (!isGitRepo()) return { committed: false, pushed: false } // Filesystem mode — no git operations
 	try {
-		const haikuRoot = findHaikuRoot()
-		execFileSync("git", ["add", haikuRoot], { encoding: "utf8", stdio: "pipe" })
+		stageHaikuStateForCommit(findHaikuRoot())
 		execFileSync("git", ["commit", "-m", message, "--allow-empty"], {
 			encoding: "utf8",
 			stdio: "pipe",
@@ -3343,8 +3394,7 @@ export function gitCommitStateBackgroundPush(message: string): {
 } {
 	if (!isGitRepo()) return { committed: false }
 	try {
-		const haikuRoot = findHaikuRoot()
-		execFileSync("git", ["add", haikuRoot], { encoding: "utf8", stdio: "pipe" })
+		stageHaikuStateForCommit(findHaikuRoot())
 		execFileSync("git", ["commit", "-m", message, "--allow-empty"], {
 			encoding: "utf8",
 			stdio: "pipe",
@@ -3815,6 +3865,90 @@ export function slugifyTitle(title: string, maxLen = 60): string {
 		.replace(/-{2,}/g, "-")
 		.slice(0, maxLen)
 		.replace(/-+$/, "")
+}
+
+/** Persisted form of a design-direction screenshot annotation.
+ *  `screenshot_path` is intent-relative so it survives worktree moves. */
+export interface DesignDirectionAnnotation {
+	comment: string
+	screenshot_path: string
+}
+
+/** Decode incoming `data:image/...` URLs from the design-direction
+ *  picker, write them as raw PNG/JPEG/WebP files under
+ *  `<stage>/artifacts/design-direction/`, and update stage state.json
+ *  with paths-only annotations. State stays small; binary lives next
+ *  to it. Return value carries the persisted annotations so callers
+ *  can pass them onwards (in-memory session, log, etc.).
+ *
+ *  Re-submissions replace the whole set: any prior `dd-NN-…` files are
+ *  deleted before the new annotations are written. This matches state's
+ *  "latest selection is the truth" semantics — there is no scenario
+ *  where a previously persisted screenshot stays load-bearing after a
+ *  fresh selection lands. */
+export function persistDesignDirectionSelection(opts: {
+	slug: string
+	stage: string
+	archetype: string
+	comments?: string
+	screenshots: Array<{ comment: string; screenshot_data_url: string }>
+}): {
+	annotations: DesignDirectionAnnotation[]
+	artifactsDir: string
+} {
+	const artifactsDir = join(
+		stageDir(opts.slug, opts.stage),
+		"artifacts",
+		"design-direction",
+	)
+	mkdirSync(artifactsDir, { recursive: true })
+
+	// Clear prior dd-NN-* files so re-submissions don't accumulate
+	// orphaned PNGs alongside the new set.
+	for (const f of readdirSync(artifactsDir)) {
+		if (/^dd-\d+-.*\.(png|jpe?g|webp)$/i.test(f)) {
+			try {
+				unlinkSync(join(artifactsDir, f))
+			} catch {
+				/* best-effort; persistence proceeds even if a stale file
+				   can't be removed (e.g. permission, missing) */
+			}
+		}
+	}
+
+	const archSlug = slugifyTitle(opts.archetype) || "selection"
+	const persisted: DesignDirectionAnnotation[] = []
+	let nn = 1
+	for (const ann of opts.screenshots) {
+		const m = ann.screenshot_data_url.match(
+			/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/,
+		)
+		if (!m) continue
+		const ext = m[1] === "jpeg" ? "jpg" : m[1]
+		const filename = `dd-${zeroPad(nn)}-${archSlug}.${ext}`
+		writeFileSync(join(artifactsDir, filename), Buffer.from(m[2], "base64"))
+		persisted.push({
+			comment: ann.comment,
+			screenshot_path: `stages/${opts.stage}/artifacts/design-direction/${filename}`,
+		})
+		nn++
+	}
+
+	const ssPath = stageStatePath(opts.slug, opts.stage)
+	const ssData = readJson(ssPath)
+	ssData.design_direction_selected = true
+	ssData.design_direction_selected_at = timestamp()
+	ssData.design_direction = {
+		archetype: opts.archetype,
+		...(opts.comments ? { comments: opts.comments } : {}),
+		...(persisted.length > 0 ? { annotations: persisted } : {}),
+	}
+	// Drop any prior surfaced flag so the next run_next emits the
+	// recovery action against this fresh selection.
+	delete ssData.design_direction_surfaced
+	writeJson(ssPath, ssData)
+
+	return { annotations: persisted, artifactsDir }
 }
 
 /** Path to the feedback directory for an intent. When `stage` is falsy,
@@ -4901,15 +5035,37 @@ export const stateToolDefs = [
 	// state-integrity, etc.) but agents can no longer reach it through MCP.
 	{
 		name: "haiku_unit_set",
-		description: "Set a field in a unit's frontmatter",
+		description: `Set a field in a unit's frontmatter. \`value\` MUST match the field's declared type in the unit FM schema — array for \`inputs:\` / \`outputs:\` / \`depends_on:\` / \`closes:\` / \`quality_gates:\`, string for \`title:\` / \`model:\`. The handler validates per-field at runtime and rejects mismatches with \`field_type_mismatch\` so type drift never lands in YAML. Field-type contract (from UNIT_FRONTMATTER_SCHEMA): ${Object.entries(
+			UNIT_FRONTMATTER_SCHEMA.properties as Record<
+				string,
+				{ type?: string | string[] }
+			>,
+		)
+			.map(([k, v]) => {
+				const t = Array.isArray(v.type) ? v.type.join("|") : v.type
+				return `\`${k}\` → ${t}`
+			})
+			.join(", ")}.`,
 		inputSchema: {
 			type: "object" as const,
 			properties: {
 				intent: { type: "string" },
 				stage: { type: "string" },
 				unit: { type: "string" },
-				field: { type: "string" },
-				value: { type: "string" },
+				field: {
+					type: "string",
+					description: `Frontmatter field name. Agent-authorable fields: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}. FSM-driven fields (${FSM_DRIVEN_UNIT_FIELDS.join(", ")}) are workflow engine-owned and rejected here.`,
+				},
+				value: {
+					// Multi-type so the MCP advertises every shape the tool can
+					// accept; the handler validates per-field against the unit
+					// FM schema and rejects mismatches. An agent setting an
+					// array field MUST pass an array — JSON-stringified arrays
+					// are no longer silently parsed.
+					type: ["string", "array", "number", "boolean", "null", "object"],
+					description:
+						"The field's new value. MUST match the field's declared type in UNIT_FRONTMATTER_SCHEMA — pass an array for array-typed fields, a string for string-typed, etc. Mismatches return `field_type_mismatch` with the expected type so the agent can correct the call. Native types only; stringified JSON is rejected.",
+				},
 			},
 			required: ["intent", "stage", "unit", "field", "value"],
 		},
@@ -6161,25 +6317,27 @@ export function handleStateTool(
 			)
 		}
 		case "haiku_unit_set": {
-			// Guards (architecture rules §1.1, §1.3):
-			//   1. status: completed is workflow engine-protected (always — only the workflow engine
-			//      auto-completes via advance_hat).
-			//   2. Lifecycle immutability — once a unit is `active` or
-			//      `completed`, all FM writes are denied. The forward-only
-			//      lifecycle rule means downstream work has been informed by
-			//      the unit's spec; mutating it would silently invalidate
-			//      that work. The workflow engine is the only legitimate writer at that
-			//      point (advance_hat, increment_bolt, reject_hat).
+			// Gate order (each layer rejects with a distinct error code):
+			//   1. fsm_field_forbidden — field is workflow-driven; agents
+			//      MUST NOT set it. Mirrors the AJV propertyNames check on
+			//      haiku_unit_write so both agent-write paths refuse FSM
+			//      fields uniformly.
+			//      Catches every status: completed write because "status" is
+			//      in FSM_DRIVEN_UNIT_FIELDS.
+			//   2. lifecycle_violation — unit is active/completed; forward-only.
+			//   3. field_type_mismatch — value's type doesn't match the
+			//      field's UNIT_FRONTMATTER_SCHEMA declaration. Includes a
+			//      sub-schema AJV pass so quality_gates items, depends_on
+			//      string-pattern, etc. all get validated, not just the
+			//      top-level type.
 			const field = args.field as string
 			const value = args.value
-			if (field === "status" && value === "completed") {
+			if ((FSM_DRIVEN_UNIT_FIELDS as readonly string[]).includes(field)) {
 				return reply(
 					{
-						error: "fsm_completion_protected",
+						error: "fsm_field_forbidden",
 						field,
-						value,
-						message:
-							'Cannot set status to "completed" directly — unit completion is workflow engine-controlled. Call `haiku_unit_advance_hat` to let the workflow engine auto-complete the unit\'s last hat, which runs scope validation, feedback-assessor closure, and worktree merge-back.',
+						message: `Field '${field}' is workflow-driven — set automatically by haiku_unit_advance_hat / haiku_unit_reject_hat / haiku_unit_increment_bolt. Agents must not set it directly. Forbidden fields: [${FSM_DRIVEN_UNIT_FIELDS.join(", ")}].`,
 					},
 					{ isError: true },
 				)
@@ -6194,20 +6352,7 @@ export function handleStateTool(
 				args.stage as string,
 				args.unit as string,
 			)
-			// Enforce lifecycle: only `pending` units accept arbitrary FM
-			// writes. The workflow-driven lifecycle fields (status, hat, bolt,
-			// iterations) are exempt because the workflow engine tools call setFrontmatterField
-			// directly (not through this MCP-callable case); agent calls go
-			// through here.
-			const FSM_DRIVEN_FIELDS = new Set([
-				"status",
-				"hat",
-				"bolt",
-				"iterations",
-				"started_at",
-				"completed_at",
-			])
-			if (existsSync(path) && !FSM_DRIVEN_FIELDS.has(field)) {
+			if (existsSync(path)) {
 				const { data: currentFm } = parseFrontmatter(readFileSync(path, "utf8"))
 				const currentStatus = (currentFm.status as string) || "pending"
 				if (currentStatus === "active" || currentStatus === "completed") {
@@ -6222,7 +6367,73 @@ export function handleStateTool(
 					)
 				}
 			}
-			setFrontmatterField(path, args.field as string, args.value)
+			// Strict per-field type validation against UNIT_FRONTMATTER_SCHEMA.
+			// Array-typed fields MUST receive arrays — JSON-stringified arrays
+			// are NOT silently parsed (they previously slipped through and
+			// YAML-serialized as folded scalars, breaking every downstream
+			// `inputs.map(...)`). Stage-specific fields not declared in the
+			// schema fall through (the schema can't enumerate per-stage
+			// extensions); they'll fail later at AJV validation in
+			// haiku_unit_write if shape-broken.
+			const fieldSchemaForType = (
+				UNIT_FRONTMATTER_SCHEMA.properties as Record<
+					string,
+					{ type?: string | string[] }
+				>
+			)[field]
+			if (fieldSchemaForType?.type) {
+				const expected = Array.isArray(fieldSchemaForType.type)
+					? fieldSchemaForType.type
+					: [fieldSchemaForType.type]
+				const actual = Array.isArray(value)
+					? "array"
+					: value === null
+						? "null"
+						: typeof value
+				if (!expected.includes(actual)) {
+					const expectedRendered =
+						expected.length === 1
+							? expected[0]
+							: `one of [${expected.join(", ")}]`
+					return reply(
+						{
+							error: "field_type_mismatch",
+							field,
+							expected_type: expected.length === 1 ? expected[0] : expected,
+							received_type: actual,
+							message: `Field '${field}' expects ${expectedRendered}, got ${actual}. Pass a native ${expectedRendered} value — JSON-stringified values are not accepted (they corrupt the YAML output). Example for array fields: \`value: ["intent.md", "knowledge/DISCOVERY.md"]\`.`,
+						},
+						{ isError: true },
+					)
+				}
+				// Deep validation against the field's sub-schema. Catches
+				// inner-shape problems (e.g. quality_gates items missing
+				// `command`, depends_on items violating the path pattern,
+				// model not in the haiku/sonnet/opus enum) that the
+				// top-level type check can't see. validateUnitSchema is the
+				// same AJV-compiled validator haiku_unit_write uses, so the
+				// two write paths share one rule set.
+				const candidate = { [field]: value }
+				if (!validateUnitSchema(candidate)) {
+					const fieldErrors = (validateUnitSchema.errors || []).filter(
+						(e) =>
+							e.instancePath === `/${field}` ||
+							e.instancePath.startsWith(`/${field}/`),
+					)
+					if (fieldErrors.length > 0) {
+						return reply(
+							{
+								error: "field_value_invalid",
+								field,
+								errors: fieldErrors,
+								message: `Field '${field}' value failed schema validation: ${ajv.errorsText(fieldErrors)}.`,
+							},
+							{ isError: true },
+						)
+					}
+				}
+			}
+			setFrontmatterField(path, field, value)
 			return text("ok")
 		}
 		case "haiku_unit_list": {

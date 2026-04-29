@@ -191,6 +191,31 @@ export function OutputArtifactsTab({
 											</Card>
 										)
 									}
+									if (a.type === "file" && a.relativePath) {
+										const authedPath = authedAssetUrl(a.relativePath)
+										return (
+											<Card
+												key={`oa-${globalIndex}`}
+												id={`output-${globalIndex}`}
+											>
+												<div className="flex items-center justify-between mb-3">
+													<SectionHeading>{a.name}</SectionHeading>
+													<a
+														href={authedPath}
+														target="_blank"
+														rel="noopener noreferrer"
+														className="text-sm text-teal-600 dark:text-teal-400 hover:underline"
+													>
+														Open file &#8599;
+													</a>
+												</div>
+												<p className="text-xs text-stone-500 dark:text-stone-400 mt-2 italic">
+													No inline preview available for this file type. Open
+													in a new tab to view.
+												</p>
+											</Card>
+										)
+									}
 									return null
 								})}
 							</div>

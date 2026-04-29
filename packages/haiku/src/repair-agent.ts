@@ -69,8 +69,14 @@ export async function runRepairAgent(
 					model: "claude-haiku-4-5-20251001",
 					cwd: diagnosis.intentDir,
 					additionalDirectories: [diagnosis.studioDir],
-					allowedTools: ["Read", "Write", "Edit", "Glob", "Grep"],
-					disallowedTools: ["Bash", "Agent", "WebSearch", "WebFetch"],
+					// Edit is intentionally NOT in the allow-list — it was the
+					// mechanism that corrupted unit FM (agent edits a single
+					// field, gray-matter rewrites, scoped writes silently
+					// transform YAML lists into JSON-stuffed scalars). Write is
+					// kept for state.json synthesis and discovery stub creation;
+					// the system prompt forbids writing to unit/feedback paths.
+					allowedTools: ["Read", "Write", "Glob", "Grep"],
+					disallowedTools: ["Bash", "Agent", "WebSearch", "WebFetch", "Edit"],
 					permissionMode: "dontAsk",
 					maxTurns: 25,
 					systemPrompt,
@@ -121,13 +127,29 @@ function buildRepairPrompt(diagnosis: RepairDiagnosis): string {
 
 	return `You are a H·AI·K·U intent repair agent. Your single purpose is to fix metadata and state in H·AI·K·U intent files that are in an inconsistent state after migration from a legacy system.
 
-## Constraints (CRITICAL)
+## Constraints (CRITICAL — non-negotiable)
 
-- You MUST NOT modify unit body content (the markdown below the frontmatter)
-- You MUST NOT create source code, tests, or application files
-- You MUST NOT delete any existing files
-- You CAN modify: intent.md frontmatter, stage state.json files, unit frontmatter (inputs, depends_on, status fields)
-- You CAN create: missing discovery artifact stubs (empty .md files with frontmatter only), missing stage directories and state.json files
+You only have \`Read\`, \`Write\`, \`Glob\`, and \`Grep\` (Edit, Bash, Agent, WebSearch, WebFetch are disallowed). \`Write\` overwrites whole files at any path the cwd reaches, so the path itself is YOUR enforcement: before every \`Write\` call, verify the target path matches the allowlist below. If it doesn't, STOP and add a human-attention item to your summary instead.
+
+### Write-path allowlist (anything outside is forbidden)
+
+- \`intent.md\` — frontmatter edits only; preserve body prose verbatim.
+- \`stages/*/state.json\` — synthesize completion records, fix gate_outcome, etc.
+- \`knowledge/*.md\` — create missing discovery artifact stubs (frontmatter-only) when downstream stages expect them.
+- \`stages/*/state.json\` for stages that don't yet have a directory — create the dir + the file together.
+
+### Write-path denylist (touch ⇒ corruption)
+
+- \`stages/*/units/*.md\` — workflow-managed. Mechanical pre-tick repair has already populated any missing \`inputs:\` field before you were invoked. If you think a unit needs changes, that is OUT OF SCOPE — flag it for human attention.
+- \`stages/*/feedback/*.md\` — workflow-managed.
+- Source code, tests, application files anywhere — never.
+
+### Other rules
+
+- NEVER delete any existing files.
+- NEVER use \`Write\` to "patch" a file by re-reading it and writing a small change — unless you've fully read the existing content and you are preserving everything except the specific field you intended to update. Whole-file rewrites that drop fields silently caused the corruption that necessitated this prompt.
+
+If you find yourself reaching for a path under \`units/\` or \`feedback/\`, STOP. Add the issue to your end-of-run summary as a human-attention item and move on.
 
 ## What a Healthy Intent Looks Like
 
@@ -181,26 +203,9 @@ For a completed stage: status = "completed", phase = "gate", gate_outcome = "adv
 For an active stage: status = "active", phase is one of elaborate/execute/review/gate.
 For a pending stage: status = "pending", phase = "" or absent.
 
-### Unit Frontmatter
+### Unit Frontmatter (READ-ONLY for this agent)
 
-\`\`\`yaml
----
-name: unit-01-feature-name
-type: fullstack
-status: completed          # One of: pending, active, completed
-depends_on: []
-inputs: [intent.md, knowledge/DISCOVERY.md, stages/design/DESIGN-BRIEF.md]
-bolt: 0
-hat: ""
-started_at: "2025-01-15T00:00:00Z"
-completed_at: "2025-01-16T00:00:00Z"
----
-\`\`\`
-
-The \`inputs:\` field lists relative paths from the intent root that this unit depends on. These tell the workflow engine what upstream artifacts must exist before execution. The paths reference:
-- \`intent.md\` — the intent definition itself
-- \`knowledge/DISCOVERY.md\` — inception's discovery output
-- \`stages/{stage}/{ARTIFACT}.md\` — discovery outputs from prior stages
+Unit files in \`stages/*/units/*.md\` are workflow-managed. **You do not edit them.** They show up here only so you understand what a healthy unit looks like when reading state.
 
 ### Stage Definitions for Studio "${diagnosis.studio}"
 
@@ -267,40 +272,29 @@ For each stage listed above:
 		)
 	}
 
-	// Phase regression
+	// Phase regression — informational only. Pre-tick already
+	// mechanically populated any missing `inputs:` before invoking the
+	// SDK; if `phaseRegressed` is still true, it means at least one
+	// unit could not be auto-fixed (file read error, etc.) and the
+	// residual list is in `unitsMissingInputs`. The agent does NOT
+	// edit unit files — flag the residual for human attention.
 	if (diagnosis.phaseRegressed) {
 		sections.push(
-			`## Phase Regression
+			`## Phase Regression (informational)
 
-The active stage "${diagnosis.activeStage}" was regressed from "execute" back to "elaborate" because units are missing \`inputs:\` declarations. The stage's state.json already reflects this (phase="elaborate"). Your job is to add the missing inputs to the units listed below.`,
+The active stage "${diagnosis.activeStage}" was regressed from "execute" back to "elaborate" because some units lack \`inputs:\` declarations and the mechanical auto-fix could not populate them. **Do not edit unit files yourself.** List the affected units below in your end-of-run summary as needing human attention.`,
 		)
 	}
 
-	// Units missing inputs
 	if (diagnosis.unitsMissingInputs.length > 0) {
 		sections.push(
-			`## Units Missing \`inputs:\` Declarations
+			`## Units With Unfixable \`inputs:\` (residual after mechanical auto-fix)
 
-The following unit files in the active stage "${diagnosis.activeStage}" have no \`inputs:\` field or it is empty:
+The mechanical pre-tick repair tried to populate \`inputs:\` on these units (using \`intent.md\` + every \`knowledge/*.md\` as the fallback) and failed:
 
 ${diagnosis.unitsMissingInputs.map((u) => `- \`stages/${diagnosis.activeStage}/units/${u}\``).join("\n")}
 
-To fix each unit:
-
-1. Read the studio's STAGE.md for "${diagnosis.activeStage}" at \`${diagnosis.studioDir}/stages/${diagnosis.activeStage}/STAGE.md\` to see what upstream artifacts this stage expects (the \`inputs:\` field in STAGE.md frontmatter lists them as \`stage: X, discovery: Y\` pairs)
-2. Read the unit's content to understand what it does
-3. Add an \`inputs:\` field to the unit's YAML frontmatter with the relevant upstream artifact paths
-
-Input paths are relative to the intent root. Common patterns:
-- \`intent.md\` — the intent definition
-- \`knowledge/DISCOVERY.md\` — inception's discovery document
-- \`stages/design/DESIGN-BRIEF.md\` — design stage's brief
-- \`stages/design/DESIGN-TOKENS.md\` — design stage's tokens
-- \`stages/product/ACCEPTANCE-CRITERIA.md\` — product stage's criteria
-- \`stages/product/BEHAVIORAL-SPEC.md\` — product stage's behavioral spec
-- \`stages/product/DATA-CONTRACTS.md\` — product stage's data contracts
-
-Not every unit needs all inputs — read the unit's content and the stage definition to determine which are relevant. At minimum, every unit should have \`intent.md\` and \`knowledge/DISCOVERY.md\` as inputs, plus any stage-specific artifacts listed in the STAGE.md \`inputs:\` field.`,
+**Do NOT edit these files.** Surface them in your end-of-run summary as needing human attention. The workflow engine will refuse to advance until inputs are present, so the user will see the issue and resolve it manually.`,
 		)
 	}
 
@@ -333,9 +327,8 @@ ${missingDiscovery
 
 After making all repairs, summarize:
 1. Which state.json files were updated and what changed
-2. Which unit frontmatter files were updated (and what inputs were added)
-3. Which discovery artifact stubs were created
-4. Any issues that could not be automatically resolved and need human attention`,
+2. Which discovery artifact stubs were created (and their paths)
+3. Any issues that could not be automatically resolved and need human attention (residual unit \`inputs:\` problems, unit content concerns, anything you spotted but cannot touch)`,
 	)
 
 	return sections.join("\n\n")

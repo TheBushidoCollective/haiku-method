@@ -8,6 +8,10 @@ stages:
   - development
 active_stage: development
 intent_reviewed: true
+phase: awaiting_completion_review
+completion_review_entered_at: '2026-04-29T00:49:57Z'
+completion_review_dispatched: true
+completion_review_dispatched_at: '2026-04-29T00:50:00Z'
 ---
 
 # Ground design stage in inception scope

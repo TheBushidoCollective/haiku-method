@@ -5711,7 +5711,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 	{
 		name: "haiku_feedback",
 		description:
-			"Create a feedback item for an intent. Writes a markdown file with frontmatter tracking status, origin, and author. Omit `stage` to log an intent-scope finding (used by the studio-level pre-intent-completion review layer).",
+			'Create a feedback item for an intent. Writes a markdown file with frontmatter tracking status, origin, and author. Omit `stage` to log an intent-scope finding (used by the studio-level pre-intent-completion review layer). To request a stage rewind from the agent side (planner blocked, upstream gap, etc.), pass `stage: "<earlier-stage>"` and `resolution: "stage_revisit"` — the next `haiku_run_next` will route through the pre-tick gate and emit a `revisited` action. This replaces the legacy `haiku_revisit` tool path.',
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -5742,6 +5742,11 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 				author: {
 					type: "string",
 					description: "Who created it (default: agent)",
+				},
+				resolution: {
+					type: "string",
+					description:
+						"Optional routing hint set at creation time. One of: `question` (reply, no code delta), `inline_fix` (one fix_hats bolt against this finding), `stage_revisit` (the next pre-tick gate reroutes the cursor to this stage's elaborate phase). Agent-authored stage_revisit FBs are how the agent expresses 'I need to go back' — write the FB at the target stage, set resolution=stage_revisit, call haiku_run_next.",
 				},
 			},
 			required: ["intent", "title", "body"],
@@ -8749,6 +8754,25 @@ export function handleStateTool(
 			const origin = (args.origin as string) || undefined
 			const sourceRef = (args.source_ref as string) || undefined
 			const author = (args.author as string) || undefined
+			const resolution = (args.resolution as string) || undefined
+
+			// Validate resolution at creation time so agent-set values fail
+			// loudly instead of being silently coerced to null inside
+			// writeFeedbackFile.
+			if (
+				resolution !== undefined &&
+				!["question", "inline_fix", "stage_revisit"].includes(resolution)
+			) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: resolution must be one of: question | inline_fix | stage_revisit (got: ${JSON.stringify(resolution)})`,
+						},
+					],
+					isError: true,
+				}
+			}
 
 			// Validation
 			if (!intent)
@@ -8836,6 +8860,7 @@ export function handleStateTool(
 				origin,
 				author,
 				source_ref: sourceRef ?? null,
+				resolution: resolution ?? null,
 			})
 
 			const gitResult = gitCommitState(

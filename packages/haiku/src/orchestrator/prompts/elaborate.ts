@@ -233,7 +233,7 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 
 		if (missing.length > 0) {
 			sections.push(
-				`## ⚠ Missing Upstream Artifacts\n\nThe following inputs are declared but do not exist on disk:\n\n${missing.map((r) => `- **${r.stage}/${r.artifactName}** (${r.kind}) — expected at \`${r.resolvedPath}\``).join("\n")}\n\nThese may not have been produced yet, or may have been saved to a different location. If they are critical for this stage, consider using \`haiku_revisit\` to return to the producing stage.`,
+				`## ⚠ Missing Upstream Artifacts\n\nThe following inputs are declared but do not exist on disk:\n\n${missing.map((r) => `- **${r.stage}/${r.artifactName}** (${r.kind}) — expected at \`${r.resolvedPath}\``).join("\n")}\n\nThese may not have been produced yet, or may have been saved to a different location. If they are critical for this stage, log a stage_revisit feedback at the producing stage via \`haiku_feedback { intent, stage: "<producing-stage>", title: "<missing artifact>", body: "<what's needed>", origin: "agent", resolution: "stage_revisit" }\` and call \`haiku_run_next\` — the pre-tick gate routes the rewind.`,
 			)
 		}
 	}

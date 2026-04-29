@@ -36,10 +36,11 @@ import {
 	updateSession,
 } from "../sessions.js"
 import {
-	gitCommitState,
+	gitCommitStateBackgroundPush,
 	intentDir,
 	parseFrontmatter,
 	persistDesignDirectionSelection,
+	readFeedbackFiles,
 	readJson,
 	stageStatePath,
 	timestamp,
@@ -348,6 +349,30 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			// pre-tick gate, not a synchronous side effect of this endpoint.
 			// Same routing path as agent-authored stage_revisit FBs.
 			const reasons = parsed.data.reasons ?? []
+			if (reasons.length === 0) {
+				// Path 2: caller didn't author any new findings. Only meaningful
+				// if there is already an open stage_revisit FB the pre-tick gate
+				// can route off. Otherwise the click is a no-op — the user's
+				// "Request Changes" intent would silently disappear.
+				const hasOpenRevisit = readFeedbackFiles(slug, targetStage).some(
+					(fb) => fb.closed_by === null && fb.resolution === "stage_revisit",
+				)
+				if (!hasOpenRevisit) {
+					logFeedbackAction({
+						reqId: req.id,
+						action: "revisit",
+						status: 409,
+						intent: slug,
+						stage: targetStage,
+						detail: "nothing_to_revisit",
+					})
+					reply.status(409).send({
+						error: "nothing_to_revisit",
+						detail: `no reasons provided and no open stage_revisit feedback at ${targetStage}`,
+					})
+					return
+				}
+			}
 			const feedbackCreated: string[] = []
 			for (const reason of reasons) {
 				try {
@@ -382,7 +407,7 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				}
 			}
 			if (feedbackCreated.length > 0) {
-				gitCommitState(
+				gitCommitStateBackgroundPush(
 					`haiku: revisit feedback in ${targetStage} (${feedbackCreated.length} items)`,
 				)
 			}

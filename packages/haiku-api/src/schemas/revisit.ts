@@ -4,13 +4,14 @@
  * Traversed by: revisit-with-reasons.feature, auto-revisit.feature.
  *
  * Ground truth:
- * - Request body mirrors the `haiku_revisit` MCP tool input at
- *   packages/haiku/src/orchestrator.ts (~line 6743): `{ intent, stage?, reasons? }`.
- *   The HTTP bridge resolves `intent` from the session (sessionId → intent_slug),
- *   so clients don't send it on the wire.
- * - Response shape mirrors what the orchestrator's revisit handler returns:
- *   an action name, optional target stage, and the list of feedback IDs it
- *   wrote before rolling the FSM back.
+ * - The HTTP bridge resolves `intent` from the session (sessionId → intent_slug),
+ *   so clients don't send it on the wire. Each `reason` becomes one
+ *   `user-revisit` feedback file with `resolution: "stage_revisit"` written at
+ *   the resolved target stage.
+ * - The endpoint does NOT roll the FSM back inline — it writes the FBs,
+ *   wakes the parked `haiku_run_next` waiter, and returns immediately. The
+ *   actual rewind happens on the next tick when the pre-tick gate sees the
+ *   open `stage_revisit` FBs and routes through `revisit()`.
  */
 
 import { z } from "zod"
@@ -52,13 +53,20 @@ export const RevisitResponseSchema = z
 		action: z
 			.string()
 			.describe(
-				"The orchestrator action name returned by the revisit (e.g. 'revisit').",
+				"Always 'revisit_pending' — the actual rewind happens on the next `haiku_run_next` tick when the pre-tick gate sees the open stage_revisit FBs.",
 			),
-		stage: z.string().optional().describe("Stage the FSM rolled back to."),
+		stage: z
+			.string()
+			.optional()
+			.describe(
+				"Target stage for the rewind — FSM rollback is deferred to the next tick.",
+			),
 		feedback_created: z
 			.array(z.string())
 			.optional()
-			.describe("FB-NN identifiers written before the revisit, in order."),
+			.describe(
+				"FB-NN identifiers of the user-revisit feedback files written by this request, in order.",
+			),
 		message: z.string().describe("Human-readable summary."),
 	})
 	.describe("POST /api/revisit/:sessionId response body")

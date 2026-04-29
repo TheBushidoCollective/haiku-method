@@ -2,7 +2,7 @@
 title: >-
   inception-coverage review agent has no behavior for inception present but
   unclassifiable
-status: fixing
+status: closed
 origin: adversarial-review
 author: completeness (from product)
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-28T23:53:33Z'
 iteration: 1
 visit: 1
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-09:bolt-2-manual'
 bolt: 2
 triaged_at: '2026-04-28T23:53:33Z'
 resolution: null

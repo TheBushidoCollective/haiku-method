@@ -2,7 +2,7 @@
 title: >-
   DESIGN-SYSTEM-ANCHOR.md token example uses raw hex values, contradicting the
   named-token requirement
-status: fixing
+status: closed
 origin: adversarial-review
 author: consistency (from design)
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-28T23:52:29Z'
 iteration: 1
 visit: 1
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-03:bolt-2-manual'
 bolt: 2
 triaged_at: '2026-04-28T23:52:29Z'
 resolution: null

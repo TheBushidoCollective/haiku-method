@@ -284,6 +284,139 @@ await test("unit declares output that doesn't exist on disk — entry skipped, n
 	assert.deepStrictEqual(artifacts, [])
 })
 
+// ── Catch-all walk: any file in stages/<stage>/ that no other view claims ──
+//
+// Reviewers should see EVERYTHING the stage produced. Files that aren't in
+// artifacts/ and aren't declared by a unit's outputs: should still surface
+// (e.g. stages/<stage>/outputs/, ad-hoc README, supplementary docs). The
+// only files that get hidden are workflow-internals: STAGE.md, state.json,
+// units/, feedback/.
+
+await test("catch-all: stages/<stage>/outputs/ files surface even when no unit declares them", async () => {
+	const intentDir = mkdtempSync(join(tmp, "intent-catchall-outputs-"))
+	const stageOutputs = join(intentDir, "stages", "design", "outputs")
+	mkdirSync(stageOutputs, { recursive: true })
+	writeFileSync(
+		join(stageOutputs, "supplementary.md"),
+		"---\ntitle: Supp\n---\n# supp body",
+	)
+	writeFileSync(join(stageOutputs, "tokens.json"), '{"x": 1}')
+	const artifacts = await parseOutputArtifacts(intentDir)
+	const names = artifacts.map((a) => a.name).sort()
+	assert.ok(
+		names.includes("outputs/supplementary"),
+		`expected outputs/supplementary; got ${JSON.stringify(names)}`,
+	)
+	assert.ok(
+		names.includes("outputs/tokens"),
+		`expected outputs/tokens; got ${JSON.stringify(names)}`,
+	)
+})
+
+await test("catch-all: ad-hoc top-level files inside the stage dir surface", async () => {
+	const intentDir = mkdtempSync(join(tmp, "intent-catchall-toplevel-"))
+	const stageDir = join(intentDir, "stages", "design")
+	mkdirSync(stageDir, { recursive: true })
+	writeFileSync(
+		join(stageDir, "README.md"),
+		"---\ntitle: Readme\n---\n# stage readme body",
+	)
+	writeFileSync(join(stageDir, "notes.txt"), "loose notes")
+	const artifacts = await parseOutputArtifacts(intentDir)
+	const readme = artifacts.find((a) => a.name === "README")
+	const notes = artifacts.find((a) => a.name === "notes")
+	assert.ok(
+		readme,
+		`expected README to surface; got ${JSON.stringify(artifacts.map((a) => a.name))}`,
+	)
+	assert.strictEqual(readme.type, "markdown")
+	assert.ok(readme.content?.includes("stage readme body"))
+	assert.ok(notes, "expected notes.txt to surface as type:file")
+	assert.strictEqual(notes.type, "file")
+	assert.strictEqual(notes.relativePath, "stages/design/notes.txt")
+})
+
+await test("catch-all: workflow-internal entries are excluded (STAGE.md, state.json, units/, feedback/)", async () => {
+	const intentDir = mkdtempSync(join(tmp, "intent-catchall-internal-"))
+	const stageDir = join(intentDir, "stages", "design")
+	mkdirSync(join(stageDir, "units"), { recursive: true })
+	mkdirSync(join(stageDir, "feedback"), { recursive: true })
+	writeFileSync(join(stageDir, "STAGE.md"), "# stage def — workflow internal")
+	writeFileSync(join(stageDir, "state.json"), "{}")
+	writeFileSync(
+		join(stageDir, "units", "unit-01.md"),
+		"---\ntitle: Unit\n---\n# unit body",
+	)
+	writeFileSync(
+		join(stageDir, "feedback", "01-finding.md"),
+		"---\ntitle: FB\n---\n# fb body",
+	)
+	// One real artifact for sanity
+	writeFileSync(join(stageDir, "REAL.md"), "---\ntitle: Real\n---\n# real body")
+	const artifacts = await parseOutputArtifacts(intentDir)
+	const names = artifacts.map((a) => a.name).sort()
+	assert.deepStrictEqual(
+		names,
+		["REAL"],
+		`workflow-internal entries should be hidden; got ${JSON.stringify(names)}`,
+	)
+})
+
+await test("catch-all: nested files under non-internal subdirs surface with full path in name", async () => {
+	const intentDir = mkdtempSync(join(tmp, "intent-catchall-nested-"))
+	const deep = join(intentDir, "stages", "design", "outputs", "v2", "exports")
+	mkdirSync(deep, { recursive: true })
+	writeFileSync(join(deep, "icon.svg"), "<svg/>")
+	const artifacts = await parseOutputArtifacts(intentDir)
+	const icon = artifacts.find((a) => a.name === "outputs/v2/exports/icon")
+	assert.ok(icon, "deeply nested catch-all file should surface")
+	assert.strictEqual(icon.type, "image")
+	assert.strictEqual(
+		icon.relativePath,
+		"stages/design/outputs/v2/exports/icon.svg",
+	)
+})
+
+await test("catch-all: artifacts/ files keep their artifact-style name + path (not double-emitted)", async () => {
+	const intentDir = mkdtempSync(join(tmp, "intent-catchall-artifacts-"))
+	const stageArtifacts = join(intentDir, "stages", "design", "artifacts")
+	mkdirSync(stageArtifacts, { recursive: true })
+	writeFileSync(
+		join(stageArtifacts, "ONLY-IN-ARTIFACTS.md"),
+		"---\ntitle: Only\n---\n# from artifacts",
+	)
+	const artifacts = await parseOutputArtifacts(intentDir)
+	const matches = artifacts.filter((a) => a.name === "ONLY-IN-ARTIFACTS")
+	assert.strictEqual(
+		matches.length,
+		1,
+		`expected single entry; got ${matches.length}`,
+	)
+})
+
+await test("catch-all: unit-declared output wins over catch-all entry for the same file", async () => {
+	const intentDir = mkdtempSync(join(tmp, "intent-catchall-unit-priority-"))
+	const stageDir = join(intentDir, "stages", "design")
+	mkdirSync(join(stageDir, "units"), { recursive: true })
+	mkdirSync(join(stageDir, "outputs"), { recursive: true })
+	writeFileSync(
+		join(stageDir, "outputs", "DECLARED.md"),
+		"---\ntitle: Declared\n---\n# declared body",
+	)
+	writeFileSync(
+		join(stageDir, "units", "unit-01.md"),
+		"---\ntitle: Unit\noutputs:\n  - stages/design/outputs/DECLARED.md\n---\n# body",
+	)
+	const artifacts = await parseOutputArtifacts(intentDir)
+	const matches = artifacts.filter((a) => a.name.endsWith("DECLARED"))
+	assert.strictEqual(matches.length, 1, "single dedupe entry")
+	// Unit-declared name is intent-dir-relative
+	// (`stages/design/outputs/DECLARED`); catch-all would have been
+	// stage-dir-relative (`outputs/DECLARED`). Confirm the unit-declared
+	// version won.
+	assert.strictEqual(matches[0].name, "stages/design/outputs/DECLARED")
+})
+
 console.log(`\n${passed} passed, ${failed} failed`)
 rmSync(tmp, { recursive: true, force: true })
 process.exit(failed > 0 ? 1 : 0)

@@ -487,24 +487,99 @@ async function parseUnitOutputs(
 }
 
 /**
+ * Workflow-internal entries inside `stages/<stage>/`. These are not user
+ * artifacts and must NOT surface in the review screen's Outputs tab:
+ *
+ *   - `STAGE.md` — workflow-engine stage definition (lives in the plugin
+ *     copy; sometimes mirrored into the intent dir for traceability).
+ *   - `state.json` — workflow-engine state record.
+ *   - `units/` — unit specs (rendered by the Units tab).
+ *   - `feedback/` — feedback items (rendered by the Feedback tab).
+ *
+ * `artifacts/` is the existing canonical outputs dir and is walked
+ * separately above this exclusion list, so it doesn't appear here.
+ */
+const WORKFLOW_INTERNAL_STAGE_ENTRIES = new Set([
+	"STAGE.md",
+	"state.json",
+	"units",
+	"feedback",
+])
+
+/**
+ * Walk the full `stages/<stage>/` directory tree, returning absolute paths
+ * for files that are NOT in the workflow-internal exclusion set. The
+ * `artifacts/` directory is also skipped here since the artifacts walk
+ * above handles it (and uses a different `name`/`relativePath` convention).
+ *
+ * The fallback rule: anything else under the stage directory — at any
+ * depth, with any extension — is a stage output. Reviewers can inspect
+ * everything the stage produced, even files no other view knows about.
+ */
+async function walkStageDirRecursive(
+	stageDir: string,
+	currentRel: string = "",
+): Promise<Array<{ absPath: string; relFromStage: string }>> {
+	const out: Array<{ absPath: string; relFromStage: string }> = []
+	let entries: Awaited<ReturnType<typeof readdir>>
+	try {
+		entries = await readdir(stageDir, { withFileTypes: true })
+	} catch {
+		return out
+	}
+	for (const e of entries) {
+		// Skip workflow-internal entries at the stage root only. Once we've
+		// descended into a non-internal subdir, every file under it is fair
+		// game.
+		if (currentRel === "" && WORKFLOW_INTERNAL_STAGE_ENTRIES.has(e.name)) {
+			continue
+		}
+		// `artifacts/` is the canonical outputs dir, walked separately by
+		// the artifacts/ scan above. Skip it here to avoid double-emitting.
+		if (currentRel === "" && e.name === "artifacts") continue
+		const rel = currentRel ? `${currentRel}/${e.name}` : e.name
+		const abs = join(stageDir, e.name)
+		if (e.isDirectory()) {
+			out.push(...(await walkStageDirRecursive(abs, rel)))
+		} else if (e.isFile()) {
+			out.push({ absPath: abs, relFromStage: rel })
+		}
+	}
+	return out
+}
+
+/**
  * Scan a stage's full output surface for review.
  *
  * The review screen surfaces every artifact a stage produced — not just
- * files happening to live under `stages/<stage>/artifacts/`. Two sources
- * are merged:
+ * files happening to live under `stages/<stage>/artifacts/`. Three sources
+ * are merged in order, with the first one to claim a given absolute path
+ * winning:
  *
  *   1. `stages/<stage>/artifacts/**` — recursive walk. Existing convention.
+ *      Display name is artifacts-dir-relative (e.g. `wireframes/foo`).
+ *
  *   2. Each unit's `outputs:` frontmatter under `stages/<stage>/units/*.md`.
  *      Units are the canonical declaration of what a stage produces, and
- *      they routinely write to paths outside `artifacts/` (e.g.
- *      `<intent>/product/ACCEPTANCE-CRITERIA.md`,
- *      `<intent>/features/*.feature`). Without this scan, a stage whose
- *      outputs all live outside `artifacts/` shows zero outputs in review.
+ *      they routinely write to paths OUTSIDE the stage dir entirely (e.g.
+ *      `<intent>/product/ACCEPTANCE-CRITERIA.md`, `<intent>/features/*.feature`).
+ *      Display name is intent-dir-relative.
  *
- * Dedup: artifacts/ entries take precedence — a file declared by both a
- * unit's `outputs:` and present under `artifacts/` is emitted once, with
- * the artifacts/ path used (matches existing relativePath conventions for
- * the `/stage-artifacts/:sessionId/*` HTTP route).
+ *   3. The full `stages/<stage>/**` walk, minus workflow-internal entries
+ *      (`STAGE.md`, `state.json`, `units/`, `feedback/`) and the `artifacts/`
+ *      dir already covered by source 1. Catches anything a stage produced
+ *      inside its own dir that no unit declared explicitly — e.g. a
+ *      `stages/<stage>/outputs/foo.md` directory, ad-hoc supplementary
+ *      files, or stage-level READMEs. Display name is stage-dir-relative.
+ *
+ * The user-facing rule is "if a file isn't handled by another review
+ * view, show it under Outputs." That makes Outputs the catch-all so
+ * reviewers can never lose visibility on a file the stage put on disk.
+ *
+ * Dedup is by absolute path: source 1 wins over 2 wins over 3. This
+ * preserves existing relativePath conventions for the
+ * `/stage-artifacts/:sessionId/*` HTTP route on the artifacts/ entries
+ * and on unit-declared paths.
  *
  * Markdown and HTML bodies are inlined; images and unknown extensions are
  * exposed via `relativePath` so the HTTP route can serve them.
@@ -514,12 +589,14 @@ export async function parseOutputArtifacts(
 ): Promise<OutputArtifact[]> {
 	const artifacts: OutputArtifact[] = []
 	const seen = new Set<string>()
+	let stageNames: string[] = []
 	try {
 		const stagesDir = join(intentDir, "stages")
 		const stageEntries = await readdir(stagesDir, { withFileTypes: true })
-		for (const stageEntry of stageEntries) {
-			if (!stageEntry.isDirectory()) continue
-			const artifactsDir = join(stagesDir, stageEntry.name, "artifacts")
+		stageNames = stageEntries.filter((e) => e.isDirectory()).map((e) => e.name)
+		// Source 1: stages/<stage>/artifacts/** walk
+		for (const stageName of stageNames) {
+			const artifactsDir = join(stagesDir, stageName, "artifacts")
 			const files = (await walkArtifactsDir(artifactsDir)).sort()
 			for (const fullPath of files) {
 				// Path-from-artifacts-root preserves directory hierarchy in the
@@ -528,10 +605,10 @@ export async function parseOutputArtifacts(
 				// colliding with another `knowledge-upload` at a different depth.
 				const relFromArtifacts = relative(artifactsDir, fullPath)
 				const nameWithDir = relFromArtifacts.replace(/\.[^.]+$/, "")
-				const httpPath = `${stageEntry.name}/artifacts/${relFromArtifacts}`
+				const httpPath = `${stageName}/artifacts/${relFromArtifacts}`
 				const entry = await buildArtifactEntry(
 					fullPath,
-					stageEntry.name,
+					stageName,
 					nameWithDir,
 					httpPath,
 				)
@@ -544,10 +621,34 @@ export async function parseOutputArtifacts(
 	} catch {
 		// No stages/ directory
 	}
+	// Source 2: unit `outputs:` frontmatter (paths often outside stage dir)
 	for (const { absPath, artifact } of await parseUnitOutputs(intentDir)) {
 		if (seen.has(absPath)) continue
 		artifacts.push(artifact)
 		seen.add(absPath)
+	}
+	// Source 3: catch-all walk of every stage dir minus workflow-internal entries
+	for (const stageName of stageNames) {
+		const stageDir = join(intentDir, "stages", stageName)
+		const files = await walkStageDirRecursive(stageDir)
+		files.sort((a, b) => a.relFromStage.localeCompare(b.relFromStage))
+		for (const { absPath, relFromStage } of files) {
+			if (seen.has(absPath)) continue
+			const nameWithDir = relFromStage.replace(/\.[^.]+$/, "")
+			// HTTP path is intent-dir-relative so the existing
+			// `/stage-artifacts/:sessionId/*` route resolves correctly.
+			const httpPath = `stages/${stageName}/${relFromStage}`
+			const entry = await buildArtifactEntry(
+				absPath,
+				stageName,
+				nameWithDir,
+				httpPath,
+			)
+			if (entry) {
+				artifacts.push(entry)
+				seen.add(absPath)
+			}
+		}
 	}
 	return artifacts
 }

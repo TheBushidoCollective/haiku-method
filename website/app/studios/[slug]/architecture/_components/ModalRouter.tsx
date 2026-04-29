@@ -531,7 +531,7 @@ export function ModalRouter({
 						</ol>
 					</div>
 					<div className="modal-section">
-						<h3>pre-advance checks (sidelines, in order)</h3>
+						<h3>layer 1 — pre-advance checks (run-tick.ts, every tick)</h3>
 						<ul className="writes-list">
 							<li>
 								<HtmlBlock
@@ -545,7 +545,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**feedback triage gate** — any open FB with `triaged_at: null` → emits `feedback_triage`. Agent classifies via `haiku_feedback_move` or `haiku_feedback_reject`.",
+										"**feedback triage gate — untriaged** — any open FB with `triaged_at: null` → emits `feedback_triage`. Agent classifies via `haiku_feedback_move` or `haiku_feedback_reject`.",
 									)}
 								/>
 							</li>
@@ -553,7 +553,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**earlier-stage feedback** — all triaged but ≥ 1 sits before active → emits `revisited` (engine reroutes cursor).",
+										"**feedback triage gate — earlier-stage** — all triaged but ≥ 1 sits before active → emits `revisited` (engine reroutes cursor).",
 									)}
 								/>
 							</li>
@@ -561,7 +561,20 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**current-stage open FBs** — open FBs on active stage with resolution set → emits `feedback_dispatch`. Agent dispatches per resolution (question / inline_fix / stage_revisit).",
+										"**feedback triage gate — current-stage human comments** — human-authored open FBs with `null` or `question` resolution on the active stage → emits `feedback_dispatch`. Agent triages inline (answers questions, requests inline fixes, or requests stage_revisit). The pre-tick gate keeps the review UI from re-popping while these are unaddressed.",
+									)}
+								/>
+							</li>
+						</ul>
+					</div>
+					<div className="modal-section">
+						<h3>layer 2 — handler-internal sidelines (per-state handlers)</h3>
+						<ul className="writes-list">
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**unresolved deps / DAG cycle** (from `elaborate.ts`) → `unresolved_dependencies` or `dag_cycle_detected`. Agent fixes the DAG and reticks.",
 									)}
 								/>
 							</li>
@@ -569,7 +582,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**unresolved deps / DAG cycle** → `unresolved_dependencies` or `dag_cycle_detected`. Agent fixes the DAG and reticks.",
+										"**missing discovery / outputs** (`discovery_missing` from `elaborate.ts`, `outputs_missing` from `review.ts`) → agent produces the artifacts and reticks.",
 									)}
 								/>
 							</li>
@@ -577,7 +590,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**missing discovery / outputs** → `discovery_missing` or `outputs_missing`. Agent produces the artifacts and reticks.",
+										"**elaboration insufficient** (from `elaborate.ts`) → too few decisions recorded. Agent collaborates more or declares `no_decisions: true`.",
 									)}
 								/>
 							</li>
@@ -585,15 +598,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**elaboration insufficient** → too few decisions recorded. Agent collaborates more or declares `no_decisions: true`.",
-									)}
-								/>
-							</li>
-							<li>
-								<HtmlBlock
-									className="prose"
-									html={renderInline(
-										"**design direction needed** → `design_direction_required`. Agent surfaces variants via `pick_design_direction`.",
+										"**design direction needed** (from `elaborate.ts`) → `design_direction_required`. Agent surfaces variants via `pick_design_direction`.",
 									)}
 								/>
 							</li>
@@ -601,7 +606,7 @@ export function ModalRouter({
 						<HtmlBlock
 							className="prose"
 							html={renderInline(
-								'Sidelines compose. Agent never tracks "which sideline am I on" — they follow the instruction and retick. The engine re-evaluates the full check list on every tick.',
+								'Sidelines compose. Agent never tracks "which sideline am I on" — they follow the instruction and retick. The engine re-evaluates pre-advance checks on every tick; handler-internal checks fire only when the active state is the matching handler.',
 							)}
 						/>
 					</div>

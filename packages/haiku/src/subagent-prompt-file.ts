@@ -139,23 +139,6 @@ export function resultPathFor(opts: {
 }
 
 /**
- * Compute the deterministic prompt-file path for a (unit, hat, bolt) tuple
- * WITHOUT writing it. Used by advance_hat to emit the next-hat dispatch
- * block in its tool response — the prompt file was written by the dispatch
- * builder at fix-loop entry, so by the time advance_hat fires, the file
- * already exists at this path. Mirrors writeSubagentPrompt's slug rule.
- */
-export function subagentPromptPath(opts: {
-	unit: string
-	hat: string
-	bolt: number
-}): string {
-	const { unit, hat, bolt } = opts
-	const slug = `${unit.replace(/\.md$/, "")}-${hat}-${bolt}`
-	return join(promptDir(), `${slug}.prompt.md`)
-}
-
-/**
  * Build a `<subagent>` dispatch-block markup string for a prompt file that
  * ALREADY exists on disk (no write side effect). Used by the dispatch
  * builder to format markup, AND by tool handlers reading sidecar files.

@@ -281,7 +281,7 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 			"",
 			`Spawn each \`<subagent>\` block above using the Task tool: \`type\` → \`subagent_type\`; \`model\` → \`model\` (omit when absent); \`prompt_file\` → prompt body is literally \`"Read <path> and execute its instructions exactly."\`. Do not add anything beyond that one-line prompt body — the workflow engine owns the authoritative prompt at the file path.`,
 			"",
-			`**Run all ${entries.length} in parallel.** When each subagent returns, follow its return instruction (which will be \`call haiku_run_next\`). \`haiku_run_next\` returns the next thing to do — either another subagent block to spawn, or a terminal action.`,
+			`**Run all ${entries.length} in parallel.** Each subagent's final message will be one of: (a) \`Workflow Result: <path>\` — read that JSON file, then call \`haiku_run_next { intent: "${slug}" }\`; (b) plaintext "job ends here" — another subagent in the wave will produce the structured result; do NOT dispatch yet; (c) anything else (non-compliant) — fall back to calling \`haiku_run_next { intent: "${slug}" }\`. \`haiku_run_next\` returns the next thing to do — either another subagent block to spawn, or a terminal action.`,
 			"",
 			`Stop driving only when \`haiku_run_next\` returns a terminal action (\`gate_review\`, \`escalate\`, \`intent_complete\`, or \`error\`).`,
 		].join("\n"),

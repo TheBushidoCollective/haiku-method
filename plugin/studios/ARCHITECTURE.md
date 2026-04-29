@@ -252,22 +252,31 @@ Before emitting a mainline action, every tick runs a sequence of **pre-advance c
 
 Sideline actions follow a uniform shape: **"Something happened, here's why, do this corrective action, then call `haiku_run_next` to get your next instruction."** The agent does the corrective work, calls `haiku_run_next`, and the engine re-evaluates — the sideline either clears (mainline resumes) or re-fires (agent didn't fully address it).
 
-Current pre-advance checks, in order:
+Two layers of checks fire before a mainline action is emitted:
+
+**Layer 1 — Pre-advance checks (run-tick.ts, fire on EVERY tick before any per-state handler):**
 
 | Check | Fires when | Sideline action | What the agent does |
 |---|---|---|---|
 | **Pre-tick consistency** | Cached `active_stage` is stale or state.json invariants are broken | (mutates state silently or returns `error`) | Usually invisible — auto-repairs |
-| **Feedback triage gate** | ≥ 1 open FB with `triaged_at: null` (untriaged) on or before the active stage | `feedback_triage` | Classify each via `haiku_feedback_move` (confirm or relocate) or `haiku_feedback_reject` (dismiss) |
-| **Earlier-stage feedback** | All FBs triaged, but ≥ 1 sits on a stage earlier than active | `revisited` (engine reroutes cursor) | Pick up at the rolled-back stage's elaborate phase |
-| **Current-stage open FBs** | Open FBs on active stage with resolution set | `feedback_dispatch` | Dispatch each per its resolution (question / inline_fix / stage_revisit) |
-| **Unresolved dependencies** | Unit `depends_on:` entries don't resolve | `unresolved_dependencies` | Fix the DAG, retick |
-| **DAG cycle** | `depends_on:` chain forms a cycle | `dag_cycle_detected` | Break the cycle, retick |
-| **Missing discovery artifacts** | Stage's `required: true` discovery templates lack files on disk | `discovery_missing` | Produce the artifacts, retick |
-| **Missing outputs** | Stage's `required: true` outputs lack files at end-of-stage | `outputs_missing` | Produce the artifacts, retick |
-| **Elaboration insufficient** | Elaborate phase ended with too few decisions / no `no_decisions: true` declaration | `elaboration_insufficient` | Continue collaboration or declare no_decisions |
-| **Design direction needed** | Design stage hit a multi-variant decision point | `design_direction_required` | Use `pick_design_direction` to surface variants, await user pick |
+| **Feedback triage gate — untriaged** | ≥ 1 open FB with `triaged_at: null` on or before the active stage | `feedback_triage` | Classify each via `haiku_feedback_move` (confirm or relocate) or `haiku_feedback_reject` (dismiss) |
+| **Feedback triage gate — earlier-stage** | All FBs triaged, but ≥ 1 sits on a stage earlier than active | `revisited` (engine reroutes cursor) | Pick up at the rolled-back stage's elaborate phase |
+| **Feedback triage gate — current-stage human comments** | Human-authored open FBs on active stage with `null` or `question` resolution | `feedback_dispatch` | Triage inline (answer questions, request inline fixes, or request stage_revisit). The pre-tick gate keeps the review UI from re-popping while these are unaddressed. |
 
-Sidelines compose: a single tick can fire ANY of these in priority order. The agent does the corrective work for whatever fired, calls `haiku_run_next`, and the engine re-checks the full list. The agent never tracks "which sideline am I on" — they just follow the instruction and retick.
+**Layer 2 — Handler-internal sidelines (per-state handlers, fire only when the active state is the matching handler):**
+
+| Check | Fires from | Action | Agent response |
+|---|---|---|---|
+| **Unresolved dependencies** | `elaborate.ts` | `unresolved_dependencies` | Fix the DAG, retick |
+| **DAG cycle** | `elaborate.ts` | `dag_cycle_detected` | Break the cycle, retick |
+| **Missing discovery artifacts** | `elaborate.ts` | `discovery_missing` | Produce the artifacts, retick |
+| **Elaboration insufficient** | `elaborate.ts` | `elaboration_insufficient` | Record more decisions or declare `no_decisions: true` |
+| **Design direction needed** | `elaborate.ts` | `design_direction_required` | Use `pick_design_direction` to surface variants, await user pick |
+| **Missing outputs** | `review.ts` | `outputs_missing` | Produce the artifacts, retick |
+
+The distinction matters for plugin maintainers: adding a true pre-advance check goes in `run-tick.ts` / `feedback-triage-gate.ts`; adding a handler-internal check goes in the relevant handler file.
+
+Sidelines compose: a single tick can fire ANY pre-advance check OR any matching handler-internal check in priority order. The agent does the corrective work for whatever fired, calls `haiku_run_next`, and the engine re-checks the full list. The agent never tracks "which sideline am I on" — they just follow the instruction and retick.
 
 ### 5.4 Mainline actions (the non-sideline path)
 
@@ -317,7 +326,7 @@ The engine reads disk, derives cursor, emits action. There is no other path.
 
 Findings (FBs) raised by adversarial reviewers are addressed by the fix-loop. The fix-loop is **mechanically identical to unit execution**, with the FB file as the work artifact.
 
-### 5.1 FB-as-unit
+### 6.1 FB-as-unit
 
 When a fix-loop dispatches against an FB:
 - The FB file IS the unit. The fixer hats read it, edit its body, and complete it via `haiku_feedback_advance_hat` against the FB (the FB-scoped mirror of `haiku_unit_advance_hat`; the unit-scoped tool cannot target an FB).
@@ -325,11 +334,11 @@ When a fix-loop dispatches against an FB:
 - The same plan-do-verify pattern applies. The stage's `fix_hats:` list typically contains the implementer hat (per the `fix_hats must be implementer` repo convention) followed by `feedback-assessor` as the terminal verifier — minimum 2 entries today; longer chains are encouraged for stages where a planner step adds value before the implementer runs. The terminal hat validates the FB body and calls `haiku_feedback_advance_hat` to close the FB.
 - workflow engine lifecycle enforcement is identical: FBs go pending → active (in fix-loop) → completed.
 
-### 5.2 Closed FBs as input to the next iteration (target state)
+### 6.2 Closed FBs as input to the next iteration (target state)
 
 A "completed" FB under the FB-as-unit model means its diagnosis is well-formed and the work-of-record is the FB body. The architectural target is that the underlying defect is then patched through the next iteration of the upstream stage's elaborate phase, which consumes the closed FB diagnoses as input and authors new pending units that build on (never modify) completed units.
 
-**Current implementation status:** the FB-as-unit dispatch is wired (commits in this PR). Fixers diagnose into the FB body, the workflow engine auto-closes on advance_hat, and the closed FB persists with its diagnosis. The "elaborate-phase consumes closed FBs as input on next iteration" path is the natural follow-up but is not yet a single explicit code path — today, when a stage's gate revisits elaborate (via `elaborate_revisit`, `feedback_revisit`, or similar), the elaborate-phase prompt has access to the stage's `feedback/` directory contents and is instructed to draft new units that close pending feedback. Closed FBs serve as historical diagnosis the elaborator can inline. Wiring an explicit "consume closed FBs from prior iteration" injection into the elaborate dispatch is a tracked follow-up — see §7.
+**Current implementation status:** the FB-as-unit dispatch is wired (commits in this PR). Fixers diagnose into the FB body, the workflow engine auto-closes on advance_hat, and the closed FB persists with its diagnosis. The "elaborate-phase consumes closed FBs as input on next iteration" path is the natural follow-up but is not yet a single explicit code path — today, when a stage's gate revisits elaborate (via `elaborate_revisit`, `feedback_revisit`, or similar), the elaborate-phase prompt has access to the stage's `feedback/` directory contents and is instructed to draft new units that close pending feedback. Closed FBs serve as historical diagnosis the elaborator can inline. Wiring an explicit "consume closed FBs from prior iteration" injection into the elaborate dispatch is a tracked follow-up — see §8.
 
 What's strictly enforced today regardless of the consumer path:
 - Existing completed units are never modified by the fix-loop (the hook blocks unit-file edits; fixer prompts forbid them).

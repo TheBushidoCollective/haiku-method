@@ -73,8 +73,10 @@ stateDiagram-v2
     design_elaborate --> design_execute : elaborate.advance
     design_elaborate --> design_review_fix : feedback.pending
     state design_execute {
-      [*] --> design_execute_designer
+      [*] --> design_execute_designer_prep
+      design_execute_designer_prep --> design_execute_designer : hat.advance
       design_execute_designer --> design_execute_design_reviewer : hat.advance
+      design_execute_designer --> design_execute_designer_prep : hat.reject
       design_execute_design_reviewer --> design_execute_done : hat.advance
       design_execute_design_reviewer --> design_execute_designer : hat.reject
       design_execute_done --> [*]

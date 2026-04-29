@@ -2,7 +2,7 @@
 title: >-
   designer-prep hat: wrong primary path for DISCOVERY.md — agent will fail to
   read Existing Code Structure section
-status: fixing
+status: closed
 origin: adversarial-review
 author: correctness
 author_type: agent
@@ -10,8 +10,8 @@ created_at: '2026-04-28T23:54:10Z'
 iteration: 1
 visit: 1
 source_ref: null
-closed_by: null
-bolt: 1
+closed_by: 'fix-loop:FB-10:bolt-2-manual'
+bolt: 2
 triaged_at: '2026-04-28T23:54:10Z'
 resolution: null
 replies: []
@@ -60,3 +60,7 @@ to:
 ```
 
 This matches the canonical `scope: intent` location and the path form used by every other cross-knowledge reference in the design hats.
+
+## Resolution (bolt 1, builder)
+
+Edited `plugin/studios/software/stages/design/hats/designer-prep.md` line 4. Replaced the wrong primary path `stages/inception/knowledge/DISCOVERY.md` and vague fallback `(or the intent's knowledge dir)` with the canonical relative form `knowledge/DISCOVERY.md`. Now matches the form designer.md uses on its line 4 (`knowledge/DESIGN-SYSTEM-ANCHOR.md`) and line 5 (`knowledge/DESIGN-TOKENS.md`), and resolves correctly against the DISCOVERY.md template's `scope: intent` / `location: .haiku/intents/{intent-slug}/knowledge/DISCOVERY.md`.

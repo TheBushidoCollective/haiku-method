@@ -100,11 +100,16 @@ export type ModalKind =
 	| { kind: "gateDetail"; detailKey: string }
 	| { kind: "tool"; toolName: string; contextKey?: string }
 	| { kind: "skill"; skillName: string }
-	| { kind: "aux"; auxKind: "reflections" | "operations" | "templates"; name: string }
+	| {
+			kind: "aux"
+			auxKind: "reflections" | "operations" | "templates"
+			name: string
+	  }
 	| { kind: "unit"; stageName: string; unitId: string; model: string }
 	| { kind: "artifact"; artifactKey: string }
 	| { kind: "intentCreation" }
 	| { kind: "preTickTriage" }
+	| { kind: "tickSemantics" }
 
 export interface PayloadModalData {
 	stage: string

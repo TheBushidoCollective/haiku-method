@@ -54,6 +54,7 @@ Any change to one of the following requires verifying or updating the architectu
 | New runtime actor (e.g. new MCP server, new background process) | Add to `_data/actors.ts` and to the `order` array in `renderActorsStrip()` inside `ArchitectureMap.tsx` |
 | Pre-intent flow change | Update `renderPreIntentCard()` in `ArchitectureMap.tsx` |
 | Post-intent change (delivery/ops steps, final gate semantics) | Update `renderPostIntentCard()` |
+| New tick / pre-advance check / sideline action | Update the `tickSemantics` modal in `ModalRouter.tsx`; sync with `plugin/studios/ARCHITECTURE.md` §5 (canonical reference for tick contracts) |
 
 ## How to update
 

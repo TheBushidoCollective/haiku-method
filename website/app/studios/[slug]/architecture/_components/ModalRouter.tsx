@@ -21,7 +21,12 @@ interface ModalRouterProps {
  *  case renders a `<Modal>` with the appropriate body. Returns null when
  *  `modal` is null or the case can't resolve required content (e.g. a
  *  stage key that no longer exists in the loaded studio). */
-export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRouterProps) {
+export function ModalRouter({
+	modal,
+	onClose,
+	studioContent,
+	stages,
+}: ModalRouterProps) {
 	if (!modal) return null
 
 	switch (modal.kind) {
@@ -29,7 +34,12 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 			const a = ACTORS[modal.actorKey]
 			if (!a) return null
 			return (
-				<Modal open title={`${a.icon} ${a.name}`} subtitle="actor · runtime player" onClose={onClose}>
+				<Modal
+					open
+					title={`${a.icon} ${a.name}`}
+					subtitle="actor · runtime player"
+					onClose={onClose}
+				>
 					<div className="modal-section">
 						<h3>role</h3>
 						<HtmlBlock className="prose" html={renderInline(a.role)} />
@@ -65,7 +75,12 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 			const h = HOOK_BY_NAME[modal.hookName]
 			if (!h) return null
 			return (
-				<Modal open title={modal.hookName} subtitle={`hook · ${h.group}`} onClose={onClose}>
+				<Modal
+					open
+					title={modal.hookName}
+					subtitle={`hook · ${h.group}`}
+					onClose={onClose}
+				>
 					<div className="modal-section">
 						<h3>role</h3>
 						<HtmlBlock className="prose" html={renderInline(h.desc)} />
@@ -90,10 +105,18 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 		case "payload": {
 			const d = modal.payload
 			return (
-				<Modal open title="haiku_run_next" subtitle={`${d.stage} · ${d.key}`} onClose={onClose}>
+				<Modal
+					open
+					title="haiku_run_next"
+					subtitle={`${d.stage} · ${d.key}`}
+					onClose={onClose}
+				>
 					<div className="modal-section">
 						<h3>action</h3>
-						<div className="payload-block" style={{ fontWeight: 600, color: "#2563eb" }}>
+						<div
+							className="payload-block"
+							style={{ fontWeight: 600, color: "#2563eb" }}
+						>
 							{d.action}
 						</div>
 					</div>
@@ -103,7 +126,9 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 					</div>
 					<div className="modal-section">
 						<h3>payload returned to agent</h3>
-						<div className="payload-block">{JSON.stringify(d.payload, null, 2)}</div>
+						<div className="payload-block">
+							{JSON.stringify(d.payload, null, 2)}
+						</div>
 					</div>
 					<div className="modal-section">
 						<h3>orchestrator validations</h3>
@@ -122,7 +147,10 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 								{d.writes.map((w) => (
 									<li key={w.path + w.change}>
 										<code className="write-path">{w.path}</code>
-										<HtmlBlock className="write-change" html={renderInline(w.change)} />
+										<HtmlBlock
+											className="write-change"
+											html={renderInline(w.change)}
+										/>
 									</li>
 								))}
 							</ul>
@@ -133,13 +161,22 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 							<h3>how the result reaches the agent</h3>
 							<ul className="writes-list">
 								{d.injection.map((i) => (
-									<li key={i.hook + i.target} style={{ borderLeftColor: "#2563eb" }}>
-										<code className="write-path" style={{ color: "#1e3a8a" }}>{i.hook}</code>
+									<li
+										key={i.hook + i.target}
+										style={{ borderLeftColor: "#2563eb" }}
+									>
+										<code className="write-path" style={{ color: "#1e3a8a" }}>
+											{i.hook}
+										</code>
 										<HtmlBlock
 											className="write-change"
 											html={`→ <strong>${renderInline(i.target)}</strong>`}
 										/>
-										<HtmlBlock className="write-change" style={{ marginTop: 2 }} html={renderInline(i.what)} />
+										<HtmlBlock
+											className="write-change"
+											style={{ marginTop: 2 }}
+											html={renderInline(i.what)}
+										/>
 									</li>
 								))}
 							</ul>
@@ -164,22 +201,32 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 				>
 					<HtmlBlock
 						className="md-content"
-						html={renderMdFile({ frontmatter: s.frontmatter, content: s.stageMd })}
+						html={renderMdFile({
+							frontmatter: s.frontmatter,
+							content: s.stageMd,
+						})}
 					/>
 				</Modal>
 			)
 		}
 		case "hat": {
-			const file = studioContent?.stages?.[modal.stageKey]?.hats?.[modal.hatName]
+			const file =
+				studioContent?.stages?.[modal.stageKey]?.hats?.[modal.hatName]
 			if (!file) return null
 			return (
-				<Modal open title={`${modal.hatName} · hat`} subtitle={file.path} onClose={onClose}>
+				<Modal
+					open
+					title={`${modal.hatName} · hat`}
+					subtitle={file.path}
+					onClose={onClose}
+				>
 					<HtmlBlock className="md-content" html={renderMdFile(file)} />
 				</Modal>
 			)
 		}
 		case "reviewAgent": {
-			const file = studioContent?.stages?.[modal.stageKey]?.reviewAgents?.[modal.agentName]
+			const file =
+				studioContent?.stages?.[modal.stageKey]?.reviewAgents?.[modal.agentName]
 			if (!file) return null
 			return (
 				<Modal
@@ -212,17 +259,30 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 					<div className="modal-section">
 						<h3>tools the subagent uses</h3>
 						<ul>
-							<li><code>haiku_unit_start</code></li>
-							<li><code>haiku_unit_advance_hat</code></li>
-							<li><code>haiku_unit_reject_hat</code></li>
-							<li><code>haiku_unit_increment_bolt</code></li>
+							<li>
+								<code>haiku_unit_start</code>
+							</li>
+							<li>
+								<code>haiku_unit_advance_hat</code>
+							</li>
+							<li>
+								<code>haiku_unit_reject_hat</code>
+							</li>
+							<li>
+								<code>haiku_unit_increment_bolt</code>
+							</li>
 						</ul>
 					</div>
 				</Modal>
 			)
 		case "schema":
 			return (
-				<Modal open title={modal.schemaKey} subtitle="schema reference" onClose={onClose}>
+				<Modal
+					open
+					title={modal.schemaKey}
+					subtitle="schema reference"
+					onClose={onClose}
+				>
 					<HtmlBlock
 						className="prose"
 						html={renderInline(
@@ -248,10 +308,16 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 				</Modal>
 			)
 		case "revisit": {
-			const prev = modal.stageIdx > 0 ? stages[modal.stageIdx - 1]?.name ?? null : null
+			const prev =
+				modal.stageIdx > 0 ? (stages[modal.stageIdx - 1]?.name ?? null) : null
 			const stageName = stages[modal.stageIdx]?.name ?? modal.stageKey
 			return (
-				<Modal open title="↺ /haiku:revisit" subtitle={`${stageName} · go-back semantics`} onClose={onClose}>
+				<Modal
+					open
+					title="↺ /haiku:revisit"
+					subtitle={`${stageName} · go-back semantics`}
+					onClose={onClose}
+				>
 					<div className="modal-section">
 						<h3>summary</h3>
 						<HtmlBlock
@@ -266,7 +332,9 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 							<h3>cross-stage variant</h3>
 							<HtmlBlock
 								className="prose"
-								html={renderInline(`From **${stageName}**'s elaborate → bounces back to **${prev}**'s elaborate.`)}
+								html={renderInline(
+									`From **${stageName}**'s elaborate → bounces back to **${prev}**'s elaborate.`,
+								)}
 							/>
 						</div>
 					) : null}
@@ -358,7 +426,12 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 					: null
 			if (!def) {
 				return (
-					<Modal open title={modal.artifactKey} subtitle="no template defined" onClose={onClose}>
+					<Modal
+						open
+						title={modal.artifactKey}
+						subtitle="no template defined"
+						onClose={onClose}
+					>
 						<HtmlBlock
 							className="prose"
 							html={renderInline(
@@ -369,20 +442,215 @@ export function ModalRouter({ modal, onClose, studioContent, stages }: ModalRout
 				)
 			}
 			return (
-				<Modal open title={modal.artifactKey} subtitle={def.path} onClose={onClose}>
+				<Modal
+					open
+					title={modal.artifactKey}
+					subtitle={def.path}
+					onClose={onClose}
+				>
 					<HtmlBlock className="md-content" html={renderMdFile(def)} />
 				</Modal>
 			)
 		}
 		case "intentCreation":
 			return (
-				<Modal open title="Intent creation" subtitle="user ↔ agent · /haiku:start" onClose={onClose}>
+				<Modal
+					open
+					title="Intent creation"
+					subtitle="user ↔ agent · /haiku:start"
+					onClose={onClose}
+				>
 					<HtmlBlock
 						className="prose"
 						html={renderInline(
 							"User and agent exchange Q&A until the agent has enough to draft `intent.md`. The agent calls `haiku_select_studio` (default inferred from prompt), then `haiku_intent_create`, then `haiku_run_next` to enter the first stage's elaborate phase.",
 						)}
 					/>
+				</Modal>
+			)
+		case "tickSemantics":
+			return (
+				<Modal
+					open
+					title="⏱ workflow tick semantics"
+					subtitle="haiku_run_next is the agent's only forward-driving verb"
+					onClose={onClose}
+				>
+					<div className="modal-section">
+						<h3>what a tick is</h3>
+						<HtmlBlock
+							className="prose"
+							html={renderInline(
+								"A **tick** is one call to `haiku_run_next`. It is the agent's only forward-driving verb. There is no other tool the agent can call to advance the workflow — every advance, every wave, every stage transition, every escalation, every revisit is the result of a tick. The agent's contract is one sentence: **receive instruction, do what it says, call `haiku_run_next` unless this instruction told you not to (only terminal actions do).**",
+							)}
+						/>
+					</div>
+					<div className="modal-section">
+						<h3>shape of every tick</h3>
+						<ol className="writes-list">
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										'Agent calls `haiku_run_next { intent: "<slug>" }`.',
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"Engine reads on-disk state (intent.md frontmatter, stage state.json, unit/feedback frontmatter) and derives the current cursor.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										'**Pre-advance checks** run in priority order. If any fires → tick returns a **sideline action** ("something happened, do this corrective work, call run_next").',
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"If no sideline fires → engine emits the next **mainline action**.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"Agent receives, executes, eventually calls `haiku_run_next` again. Loop.",
+									)}
+								/>
+							</li>
+						</ol>
+					</div>
+					<div className="modal-section">
+						<h3>pre-advance checks (sidelines, in order)</h3>
+						<ul className="writes-list">
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**pre-tick consistency** — repairs cached `active_stage` drift, state.json invariants. Usually invisible.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**feedback triage gate** — any open FB with `triaged_at: null` → emits `feedback_triage`. Agent classifies via `haiku_feedback_move` or `haiku_feedback_reject`.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**earlier-stage feedback** — all triaged but ≥ 1 sits before active → emits `revisited` (engine reroutes cursor).",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**current-stage open FBs** — open FBs on active stage with resolution set → emits `feedback_dispatch`. Agent dispatches per resolution (question / inline_fix / stage_revisit).",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**unresolved deps / DAG cycle** → `unresolved_dependencies` or `dag_cycle_detected`. Agent fixes the DAG and reticks.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**missing discovery / outputs** → `discovery_missing` or `outputs_missing`. Agent produces the artifacts and reticks.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**elaboration insufficient** → too few decisions recorded. Agent collaborates more or declares `no_decisions: true`.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**design direction needed** → `design_direction_required`. Agent surfaces variants via `pick_design_direction`.",
+									)}
+								/>
+							</li>
+						</ul>
+						<HtmlBlock
+							className="prose"
+							html={renderInline(
+								'Sidelines compose. Agent never tracks "which sideline am I on" — they follow the instruction and retick. The engine re-evaluates the full check list on every tick.',
+							)}
+						/>
+					</div>
+					<div className="modal-section">
+						<h3>why tick semantics matter</h3>
+						<ul className="writes-list">
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**State on disk is the truth.** Engine recomputes cursor on every tick from authoritative state. Agent holds no workflow state.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**Recovery is mechanical.** After any failure, calling `haiku_run_next` re-derives the right next step. No manual recovery for most failures.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**Composition is pure.** Tick = pure function of `(intent_dir_state, studio_config) → next_action`. Deterministic given the same disk state.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**Sidelines are forced, not optional.** Agent cannot bypass an open untriaged FB to advance the gate.",
+									)}
+								/>
+							</li>
+						</ul>
+					</div>
+					<div className="modal-section">
+						<h3>canonical reference</h3>
+						<HtmlBlock
+							className="prose"
+							html={renderInline(
+								'`plugin/studios/ARCHITECTURE.md` §5 — "Workflow tick semantics." That document is canonical when this prototype and the architecture doc disagree on tick contracts.',
+							)}
+						/>
+					</div>
 				</Modal>
 			)
 		case "preTickTriage":

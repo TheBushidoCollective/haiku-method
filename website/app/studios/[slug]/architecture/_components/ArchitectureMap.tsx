@@ -10,7 +10,11 @@ import {
 	useState,
 } from "react"
 import { ACTORS } from "../_data/actors"
-import { payloadFor, type TransitionKey, type TransitionOpts } from "../_data/payload-for"
+import {
+	payloadFor,
+	type TransitionKey,
+	type TransitionOpts,
+} from "../_data/payload-for"
 import type {
 	DerivedStage,
 	ExecutionMode,
@@ -94,27 +98,33 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 		setActiveStudio(fallback)
 	}, [bundle, activeStudio])
 
-	const studioContent: StudioContentEntry | null = bundle?.studios?.[activeStudio] ?? null
+	const studioContent: StudioContentEntry | null =
+		bundle?.studios?.[activeStudio] ?? null
 
 	const stages: DerivedStage[] = useMemo(() => {
 		if (!studioContent) return []
-		const order = Array.isArray(studioContent.stagesOrder) ? studioContent.stagesOrder : []
+		const order = Array.isArray(studioContent.stagesOrder)
+			? studioContent.stagesOrder
+			: []
 		const out: DerivedStage[] = []
 		for (const key of order) {
 			const stage = studioContent.stages?.[key]
 			if (!stage) continue
 			const fm = stage.frontmatter ?? {}
-			const hats = Array.isArray(fm.hats) && fm.hats.length
-				? (fm.hats as string[])
-				: Object.keys(stage.hats ?? {})
+			const hats =
+				Array.isArray(fm.hats) && fm.hats.length
+					? (fm.hats as string[])
+					: Object.keys(stage.hats ?? {})
 			const reviewAgents = Object.keys(stage.reviewAgents ?? {})
 			const gate = gateFromReview(fm.review)
 			const outputsFromFm = Array.isArray(fm.outputs)
-				? (fm.outputs as Array<{ discovery?: string; output?: string } | string>)
+				? (
+						fm.outputs as Array<
+							{ discovery?: string; output?: string } | string
+						>
+					)
 						.map((o) =>
-							typeof o === "string"
-								? o
-								: (o?.discovery ?? o?.output ?? ""),
+							typeof o === "string" ? o : (o?.discovery ?? o?.output ?? ""),
 						)
 						.filter(Boolean)
 				: []
@@ -154,7 +164,11 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 	)
 
 	const studioOptions = useMemo(() => {
-		if (!bundle) return [] as Array<{ category: string; items: { dir: string; stageCount: number }[] }>
+		if (!bundle)
+			return [] as Array<{
+				category: string
+				items: { dir: string; stageCount: number }[]
+			}>
 		const list = bundle.studioList ?? []
 		const byCat = new Map<string, { dir: string; stageCount: number }[]>()
 		for (const s of list) {
@@ -174,13 +188,16 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 
 	// Artifact hover-pair: when hovering over an artifact chip, highlight all
 	// matching artifacts (including in the knowledge pool sidebar).
-	const matchArtifact = useCallback((key: string | null, query: string | null) => {
-		if (!query) {
-			setMatchedArtifact(null)
-			return
-		}
-		setMatchedArtifact(query)
-	}, [])
+	const matchArtifact = useCallback(
+		(key: string | null, query: string | null) => {
+			if (!query) {
+				setMatchedArtifact(null)
+				return
+			}
+			setMatchedArtifact(query)
+		},
+		[],
+	)
 
 	const isArtifactMatch = useCallback(
 		(key: string) => {
@@ -287,14 +304,17 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 							marginTop: 2,
 						}}
 					>
-						→ returns <strong style={{ color: "#1f2937" }}>{p.action}</strong> · {caption}
+						→ returns <strong style={{ color: "#1f2937" }}>{p.action}</strong> ·{" "}
+						{caption}
 					</span>
 				) : null}
 				<span className="arrow-glyph">↓</span>
 				<div className="call-tooltip">
 					<div className="tt-action">{p.action}</div>
 					<div className="tt-summary">{p.summary}</div>
-					<div className="tt-hint">click for full payload &amp; validations</div>
+					<div className="tt-hint">
+						click for full payload &amp; validations
+					</div>
 				</div>
 			</div>
 		)
@@ -303,14 +323,17 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 	const renderStage = (stage: DerivedStage, idx: number) => {
 		const mStage = effectiveMode(idx, mode, continuousFromIdx)
 		const stageGate = effectiveGate(stage, mStage)
-		const isAutoGate = stageGate.type === "auto" || stageGate.type.startsWith("auto ")
+		const isAutoGate =
+			stageGate.type === "auto" || stageGate.type.startsWith("auto ")
 		const isContinuousMarker = mode === "hybrid" && idx === continuousFromIdx
 		const lower = stage.name.toLowerCase()
 		const isFirst = idx === 0
 
 		return (
 			<Fragment key={stage.key}>
-				<section className={`stage${isContinuousMarker ? " continuous-marker-stage" : ""}`}>
+				<section
+					className={`stage${isContinuousMarker ? " continuous-marker-stage" : ""}`}
+				>
 					<header>
 						<button
 							type="button"
@@ -355,10 +378,21 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 						title="Click for the pre-tick triage gate flow"
 					>
 						<span>⛓ pre-tick triage gate</span>
-						<span style={{ color: "#94a3b8", fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>
+						<span
+							style={{
+								color: "#94a3b8",
+								fontWeight: 500,
+								textTransform: "none",
+								letterSpacing: 0,
+							}}
+						>
 							run-tick.ts · runs BEFORE every handler tick
 						</span>
-						<span style={{ marginLeft: "auto", color: "#94a3b8", fontWeight: 500 }}>expand ↗</span>
+						<span
+							style={{ marginLeft: "auto", color: "#94a3b8", fontWeight: 500 }}
+						>
+							expand ↗
+						</span>
 					</button>
 
 					{stage.inputs.length > 0 ? (
@@ -373,7 +407,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 										data-artifact={i}
 										onMouseEnter={() => matchArtifact(i, i)}
 										onMouseLeave={() => matchArtifact(null, null)}
-										onClick={() => setModal({ kind: "artifact", artifactKey: i })}
+										onClick={() =>
+											setModal({ kind: "artifact", artifactKey: i })
+										}
 										title={i}
 									>
 										{i}
@@ -385,8 +421,18 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 						<div className="artifacts-block">
 							<div className="artifacts-label">implicit input · seed</div>
 							<div className="artifacts in">
-								<span className="artifact" title="The first stage has no prior-stage inputs.">
-									<code style={{ fontSize: "9px", background: "transparent", border: "none", padding: 0 }}>
+								<span
+									className="artifact"
+									title="The first stage has no prior-stage inputs."
+								>
+									<code
+										style={{
+											fontSize: "9px",
+											background: "transparent",
+											border: "none",
+											padding: 0,
+										}}
+									>
 										intent.md
 									</code>{" "}
 									(frontmatter + body)
@@ -401,7 +447,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 							<button
 								type="button"
 								className="revisit-chip"
-								onClick={() => setModal({ kind: "revisit", stageKey: lower, stageIdx: idx })}
+								onClick={() =>
+									setModal({ kind: "revisit", stageKey: lower, stageIdx: idx })
+								}
 							>
 								↺ /haiku:revisit
 							</button>
@@ -425,7 +473,14 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 								<div className="elab-step">
 									<div className="step-label">
 										② discovery artifacts{" "}
-										<span style={{ textTransform: "none", letterSpacing: 0, color: "#7c3aed", fontWeight: 600 }}>
+										<span
+											style={{
+												textTransform: "none",
+												letterSpacing: 0,
+												color: "#7c3aed",
+												fontWeight: 600,
+											}}
+										>
 											· workflow engine fans out one ↗ subagent per artifact
 										</span>
 									</div>
@@ -440,10 +495,15 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 													data-artifact={key}
 													onMouseEnter={() => matchArtifact(key, key)}
 													onMouseLeave={() => matchArtifact(null, null)}
-													onClick={() => setModal({ kind: "artifact", artifactKey: key })}
+													onClick={() =>
+														setModal({ kind: "artifact", artifactKey: key })
+													}
 													title={defs[s]?.path}
 												>
-													{s} <span style={{ color: "#7c3aed", fontWeight: 700 }}>↗</span>
+													{s}{" "}
+													<span style={{ color: "#7c3aed", fontWeight: 700 }}>
+														↗
+													</span>
 												</button>
 											)
 										})}
@@ -452,7 +512,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 							)
 						})()}
 						<div className="elab-step">
-							<div className="step-label">③ units decomposed (work breakdown · DAG)</div>
+							<div className="step-label">
+								③ units decomposed (work breakdown · DAG)
+							</div>
 							<div className="units">
 								{stage.units.map((u) => (
 									<button
@@ -460,7 +522,12 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 										type="button"
 										className="unit clickable"
 										onClick={() =>
-											setModal({ kind: "unit", stageName: stage.name, unitId: u.id, model: u.model })
+											setModal({
+												kind: "unit",
+												stageName: stage.name,
+												unitId: u.id,
+												model: u.model,
+											})
 										}
 										title={`${u.id} · model: ${u.model}`}
 									>
@@ -473,12 +540,19 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 						<div className="elab-step">
 							<div className="step-label">④ validation</div>
 							<div className="elab-validate">
-								{["dag-acyclic", "unit-naming", "unit-types", "inputs-exist"].map((k) => (
+								{[
+									"dag-acyclic",
+									"unit-naming",
+									"unit-types",
+									"inputs-exist",
+								].map((k) => (
 									<button
 										key={k}
 										type="button"
 										className="check"
-										onClick={() => setModal({ kind: "validation", validationKey: k })}
+										onClick={() =>
+											setModal({ kind: "validation", validationKey: k })
+										}
 									>
 										✓ {k.replace("-", " ")}
 									</button>
@@ -487,7 +561,12 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 									<button
 										type="button"
 										className="check"
-										onClick={() => setModal({ kind: "validation", validationKey: "turns-min" })}
+										onClick={() =>
+											setModal({
+												kind: "validation",
+												validationKey: "turns-min",
+											})
+										}
 									>
 										✓ turns ≥ 3
 									</button>
@@ -507,7 +586,15 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 										type="button"
 										className="call-chip gate-pill"
 										onClick={() =>
-											p && setModal({ kind: "payload", payload: { stage: stage.name, key: "elab-to-prereview", ...p } })
+											p &&
+											setModal({
+												kind: "payload",
+												payload: {
+													stage: stage.name,
+													key: "elab-to-prereview",
+													...p,
+												},
+											})
 										}
 										title={p ? `${p.action} — ${p.summary}` : ""}
 									>
@@ -523,7 +610,8 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 									>
 										<div className="ng-head">
 											<span className="ng-caption" style={{ color: "#0f766e" }}>
-												↳ inside this call · returns <code>pre_review</code> action
+												↳ inside this call · returns <code>pre_review</code>{" "}
+												action
 											</span>
 											<span className="ig-type" style={{ color: "#0f766e" }}>
 												dispatch reviewers
@@ -538,10 +626,12 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 												lineHeight: 1.45,
 											}}
 										>
-											Conditional review agents audit every <code>unit-NN-*.md</code> file —
-											artifacts don't exist yet, so reviewers audit the <em>plan</em>. Findings
-											block advance; resolution is a spec edit. <strong>Auto mode does not skip
-											this</strong> — only the human spec gate is gated by autopilot.
+											Conditional review agents audit every{" "}
+											<code>unit-NN-*.md</code> file — artifacts don't exist
+											yet, so reviewers audit the <em>plan</em>. Findings block
+											advance; resolution is a spec edit.{" "}
+											<strong>Auto mode does not skip this</strong> — only the
+											human spec gate is gated by autopilot.
 										</div>
 									</div>
 								</>
@@ -552,7 +642,10 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 					<div className="phase-arrow">↓</div>
 
 					{isAutoGate ? (
-						<div className="gate-wrap" style={{ paddingLeft: 0, marginTop: 22 }}>
+						<div
+							className="gate-wrap"
+							style={{ paddingLeft: 0, marginTop: 22 }}
+						>
 							{(() => {
 								const p = payloadFor(stage, idx, mStage, "prereview-to-gate")
 								return (
@@ -564,7 +657,11 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 												p &&
 												setModal({
 													kind: "payload",
-													payload: { stage: stage.name, key: "prereview-to-gate", ...p },
+													payload: {
+														stage: stage.name,
+														key: "prereview-to-gate",
+														...p,
+													},
 												})
 											}
 											title={p ? `${p.action} — ${p.summary}` : ""}
@@ -580,10 +677,15 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 											}}
 										>
 											<div className="ng-head">
-												<span className="ng-caption" style={{ color: "#92400e" }}>
+												<span
+													className="ng-caption"
+													style={{ color: "#92400e" }}
+												>
 													↳ inside this call · auto-advances · no review UI
 												</span>
-												<span className="ig-type" style={{ color: "#92400e" }}>auto</span>
+												<span className="ig-type" style={{ color: "#92400e" }}>
+													auto
+												</span>
 												<span className="ig-ctx">advance_phase</span>
 											</div>
 											<div
@@ -594,8 +696,8 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 													lineHeight: 1.45,
 												}}
 											>
-												<code>review: auto</code> — no gate review, advances directly to{" "}
-												<code>execute</code>.
+												<code>review: auto</code> — no gate review, advances
+												directly to <code>execute</code>.
 											</div>
 										</div>
 									</>
@@ -603,7 +705,10 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 							})()}
 						</div>
 					) : (
-						<div className="gate-wrap" style={{ paddingLeft: 0, marginTop: 22 }}>
+						<div
+							className="gate-wrap"
+							style={{ paddingLeft: 0, marginTop: 22 }}
+						>
 							{(() => {
 								const p = payloadFor(stage, idx, mStage, "elab-to-gate")
 								return (
@@ -615,7 +720,11 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 												p &&
 												setModal({
 													kind: "payload",
-													payload: { stage: stage.name, key: "elab-to-gate", ...p },
+													payload: {
+														stage: stage.name,
+														key: "elab-to-gate",
+														...p,
+													},
 												})
 											}
 											title={p ? `${p.action} — ${p.summary}` : ""}
@@ -626,11 +735,19 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 											className="nested-gate"
 											role="button"
 											tabIndex={0}
-											onClick={() => setModal({ kind: "gateDetail", detailKey: "specs_gate_review" })}
+											onClick={() =>
+												setModal({
+													kind: "gateDetail",
+													detailKey: "specs_gate_review",
+												})
+											}
 											onKeyDown={(e) => {
 												if (e.key === "Enter" || e.key === " ") {
 													e.preventDefault()
-													setModal({ kind: "gateDetail", detailKey: "specs_gate_review" })
+													setModal({
+														kind: "gateDetail",
+														detailKey: "specs_gate_review",
+													})
 												}
 											}}
 											style={{ cursor: "pointer" }}
@@ -638,7 +755,8 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 										>
 											<div className="ng-head">
 												<span className="ng-caption">
-													↳ inside this call · opens <code>specs_gate_review</code> (blocking)
+													↳ inside this call · opens{" "}
+													<code>specs_gate_review</code> (blocking)
 												</span>
 												<span className="ig-type">ask</span>
 												<span className="ig-ctx">
@@ -649,7 +767,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 												<span className="ng-branch reject-branch">
 													↑ reject → <strong>feedback_dispatch</strong>
 												</span>
-												<span className="ng-branch approve-branch">↓ approve → execute</span>
+												<span className="ng-branch approve-branch">
+													↓ approve → execute
+												</span>
 											</div>
 										</div>
 									</>
@@ -665,9 +785,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 						<div className="bolt-explainer">
 							<span className="be-chip">bolt</span>
 							<span className="be-text">
-								one full <strong>hat rotation</strong> for a unit · starts at <code>1</code> · hat
-								rejection (↻) rewinds one hat AND increments bolt · hard max{" "}
-								<strong>5</strong> per unit
+								one full <strong>hat rotation</strong> for a unit · starts at{" "}
+								<code>1</code> · hat rejection (↻) rewinds one hat AND
+								increments bolt · hard max <strong>5</strong> per unit
 							</span>
 						</div>
 						<div className="execute-body">
@@ -675,29 +795,55 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 								<Fragment key={w.label}>
 									{wi > 0 ? (
 										<div className="wave-divider">
-											{callPill(stage, idx, mStage, "wave-to-wave", { from: String(wi), to: String(wi + 1), units: w.units }, "mini")}
+											{callPill(
+												stage,
+												idx,
+												mStage,
+												"wave-to-wave",
+												{
+													from: String(wi),
+													to: String(wi + 1),
+													units: w.units,
+												},
+												"mini",
+											)}
 										</div>
 									) : null}
 									<div className="wave">
 										<span className="wave-label">{w.label}</span>
 										<div style={{ gridColumn: 2, minWidth: 0 }}>
 											<div className="wave-atomicity">
-												↗ parent spawns {w.units.length === 1 ? "this subagent" : `all ${w.units.length} subagents`}{" "}
+												↗ parent spawns{" "}
+												{w.units.length === 1
+													? "this subagent"
+													: `all ${w.units.length} subagents`}{" "}
 												in one response
 											</div>
 											<div className="cylinders">
 												{w.units.map((uid) => {
-													const unit = stage.units.find((x) => x.id === uid) ?? { id: uid, model: "" }
+													const unit = stage.units.find(
+														(x) => x.id === uid,
+													) ?? { id: uid, model: "" }
 													return (
 														<div key={uid} className="cylinder">
 															<span className="cyl-label">
 																{unit.id}
-																{unit.model ? <span style={{ color: "#6b7280" }}> · {unit.model}</span> : null}
+																{unit.model ? (
+																	<span style={{ color: "#6b7280" }}>
+																		{" "}
+																		· {unit.model}
+																	</span>
+																) : null}
 															</span>
 															<button
 																type="button"
 																className="cyl-bolt"
-																onClick={() => setModal({ kind: "schema", schemaKey: "unit" })}
+																onClick={() =>
+																	setModal({
+																		kind: "schema",
+																		schemaKey: "unit",
+																	})
+																}
 															>
 																bolt 1
 															</button>
@@ -709,12 +855,23 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 																			tabIndex={0}
 																			className="hat clickable"
 																			onClick={() =>
-																				setModal({ kind: "hat", stageKey: lower, hatName: h })
+																				setModal({
+																					kind: "hat",
+																					stageKey: lower,
+																					hatName: h,
+																				})
 																			}
 																			onKeyDown={(e) => {
-																				if (e.key === "Enter" || e.key === " ") {
+																				if (
+																					e.key === "Enter" ||
+																					e.key === " "
+																				) {
 																					e.preventDefault()
-																					setModal({ kind: "hat", stageKey: lower, hatName: h })
+																					setModal({
+																						kind: "hat",
+																						stageKey: lower,
+																						hatName: h,
+																					})
 																				}
 																			}}
 																		>
@@ -724,7 +881,11 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 																				className="subagent-badge"
 																				onClick={(e) => {
 																					e.stopPropagation()
-																					setModal({ kind: "subagent", stageKey: lower, hatName: h })
+																					setModal({
+																						kind: "subagent",
+																						stageKey: lower,
+																						hatName: h,
+																					})
 																				}}
 																			>
 																				↗
@@ -737,23 +898,40 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 																					className="call-mini-hat call-mini"
 																					onClick={() => {
 																						const next = stage.hats[hi + 1]
-																						const p = payloadFor(stage, idx, mStage, "hat-to-hat", {
-																							from: h,
-																							to: next,
-																							unit: unit.id,
-																						})
+																						const p = payloadFor(
+																							stage,
+																							idx,
+																							mStage,
+																							"hat-to-hat",
+																							{
+																								from: h,
+																								to: next,
+																								unit: unit.id,
+																							},
+																						)
 																						if (p)
 																							setModal({
 																								kind: "payload",
-																								payload: { stage: stage.name, key: "hat-to-hat", ...p },
+																								payload: {
+																									stage: stage.name,
+																									key: "hat-to-hat",
+																									...p,
+																								},
 																							})
 																					}}
 																				>
 																					↻
 																				</button>
-																				<svg className="back-arc" viewBox="0 0 18 52" aria-hidden="true">
+																				<svg
+																					className="back-arc"
+																					viewBox="0 0 18 52"
+																					aria-hidden="true"
+																				>
 																					<path d="M 2 48 L 10 48 Q 15 48 15 43 L 15 11 Q 15 6 10 6 L 4 6" />
-																					<path className="head" d="M 2 6 l 6 -3 l 0 6 z" />
+																					<path
+																						className="head"
+																						d="M 2 6 l 6 -3 l 0 6 z"
+																					/>
 																				</svg>
 																				<span className="bolt-tick">⚡+1</span>
 																			</div>
@@ -774,7 +952,10 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 
 					<div className="phase-arrow">↓</div>
 
-					<div className="gate-wrap self-loop" style={{ paddingLeft: 0, marginTop: 22 }}>
+					<div
+						className="gate-wrap self-loop"
+						style={{ paddingLeft: 0, marginTop: 22 }}
+					>
 						{(() => {
 							const p = payloadFor(stage, idx, mStage, "execute-to-review")
 							return (
@@ -786,7 +967,11 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 											p &&
 											setModal({
 												kind: "payload",
-												payload: { stage: stage.name, key: "execute-to-review", ...p },
+												payload: {
+													stage: stage.name,
+													key: "execute-to-review",
+													...p,
+												},
 											})
 										}
 										title={p ? `${p.action} — ${p.summary}` : ""}
@@ -797,11 +982,19 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 										className="nested-gate"
 										role="button"
 										tabIndex={0}
-										onClick={() => setModal({ kind: "gateDetail", detailKey: "quality_gates" })}
+										onClick={() =>
+											setModal({
+												kind: "gateDetail",
+												detailKey: "quality_gates",
+											})
+										}
 										onKeyDown={(e) => {
 											if (e.key === "Enter" || e.key === " ") {
 												e.preventDefault()
-												setModal({ kind: "gateDetail", detailKey: "quality_gates" })
+												setModal({
+													kind: "gateDetail",
+													detailKey: "quality_gates",
+												})
 											}
 										}}
 										style={{ cursor: "pointer" }}
@@ -815,8 +1008,12 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 											<span className="ig-ctx">tests · lint · typecheck</span>
 										</div>
 										<div className="ng-branch-row">
-											<span className="ng-branch reject-branch">↑ fail → fix in place, retry</span>
-											<span className="ng-branch approve-branch">↓ pass → review agents</span>
+											<span className="ng-branch reject-branch">
+												↑ fail → fix in place, retry
+											</span>
+											<span className="ng-branch approve-branch">
+												↓ pass → review agents
+											</span>
 										</div>
 									</div>
 								</>
@@ -834,13 +1031,28 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 									key={a}
 									type="button"
 									className="agent clickable"
-									onClick={() => setModal({ kind: "reviewAgent", stageKey: lower, agentName: a })}
+									onClick={() =>
+										setModal({
+											kind: "reviewAgent",
+											stageKey: lower,
+											agentName: a,
+										})
+									}
 								>
 									{a}
 								</button>
 							))}
 						</div>
-						<div className="agents-caption" style={{ marginTop: 8, textAlign: "left", display: "flex", alignItems: "center", gap: 6 }}>
+						<div
+							className="agents-caption"
+							style={{
+								marginTop: 8,
+								textAlign: "left",
+								display: "flex",
+								alignItems: "center",
+								gap: 6,
+							}}
+						>
 							{callPill(stage, idx, mStage, "review-to-gate", {}, "mini")}
 							all agents approve → <code>advance_phase</code> to gate
 						</div>
@@ -848,43 +1060,87 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 
 					<div className="phase-arrow">↓</div>
 
-					<div className="phase" data-phase="fix-loop" style={{ borderLeft: "3px solid #f59e0b" }}>
+					<div
+						className="phase"
+						data-phase="fix-loop"
+						style={{ borderLeft: "3px solid #f59e0b" }}
+					>
 						<h3>
 							Fix-loop{" "}
-							<span style={{ fontSize: 10, color: "var(--muted)", fontWeight: "normal" }}>
+							<span
+								style={{
+									fontSize: 10,
+									color: "var(--muted)",
+									fontWeight: "normal",
+								}}
+							>
 								(when review surfaces open feedback)
 							</span>
 						</h3>
 						{(() => {
-							const fixHats = (studioContent?.stages?.[lower]?.frontmatter?.fix_hats as string[] | undefined) ?? []
+							const fixHats =
+								(studioContent?.stages?.[lower]?.frontmatter?.fix_hats as
+									| string[]
+									| undefined) ?? []
 							if (!fixHats.length) {
 								return (
 									<div
 										className="agents-caption"
-										style={{ textAlign: "left", fontSize: 11, lineHeight: 1.5, marginBottom: 6 }}
+										style={{
+											textAlign: "left",
+											fontSize: 11,
+											lineHeight: 1.5,
+											marginBottom: 6,
+										}}
 									>
-										<strong>No <code>fix_hats:</code> declared on STAGE.md</strong> — the gate falls
-										back to the legacy <code>feedback_revisit</code> action, which rolls the entire
-										stage back to elaborate (vs. running an in-place fix chain per-finding).
+										<strong>
+											No <code>fix_hats:</code> declared on STAGE.md
+										</strong>{" "}
+										— the gate falls back to the legacy{" "}
+										<code>feedback_revisit</code> action, which rolls the entire
+										stage back to elaborate (vs. running an in-place fix chain
+										per-finding).
 									</div>
 								)
 							}
 							return (
 								<div className="elab-step" style={{ marginTop: 0 }}>
-									<div className="step-label">fix_hats sequence (per finding · serial)</div>
-									<div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+									<div className="step-label">
+										fix_hats sequence (per finding · serial)
+									</div>
+									<div
+										style={{
+											display: "flex",
+											flexWrap: "wrap",
+											gap: 4,
+											alignItems: "center",
+										}}
+									>
 										{fixHats.map((h, i) => (
 											<Fragment key={h}>
 												<button
 													type="button"
 													className="hat clickable"
-													style={{ width: "auto", height: "auto", padding: "4px 10px", fontSize: 10 }}
-													onClick={() => setModal({ kind: "hat", stageKey: lower, hatName: h })}
+													style={{
+														width: "auto",
+														height: "auto",
+														padding: "4px 10px",
+														fontSize: 10,
+													}}
+													onClick={() =>
+														setModal({
+															kind: "hat",
+															stageKey: lower,
+															hatName: h,
+														})
+													}
 												>
 													{h}
 												</button>
 												{i < fixHats.length - 1 ? (
-													<span style={{ color: "var(--muted)", fontSize: 12 }}>→</span>
+													<span style={{ color: "var(--muted)", fontSize: 12 }}>
+														→
+													</span>
 												) : null}
 											</Fragment>
 										))}
@@ -894,12 +1150,18 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 						})()}
 						<div
 							className="agents-caption"
-							style={{ textAlign: "left", fontSize: 11, lineHeight: 1.5, marginTop: 8 }}
+							style={{
+								textAlign: "left",
+								fontSize: 11,
+								lineHeight: 1.5,
+								marginTop: 8,
+							}}
 						>
-							Dispatched directly against the FB file via <code>review_fix</code>.{" "}
-							<strong>FB-as-unit:</strong> fixers edit the FB body; the flagged unit stays read-only.
-							The chain progresses via <code>haiku_feedback_advance_hat</code>; the workflow engine
-							auto-closes the FB on the last hat's advance.
+							Dispatched directly against the FB file via{" "}
+							<code>review_fix</code>. <strong>FB-as-unit:</strong> fixers edit
+							the FB body; the flagged unit stays read-only. The chain
+							progresses via <code>haiku_feedback_advance_hat</code>; the
+							workflow engine auto-closes the FB on the last hat's advance.
 						</div>
 						<div
 							style={{
@@ -921,9 +1183,11 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 								}}
 							>
 								<strong>↗ escalate</strong> · per-finding cap{" "}
-								<code>MAX_FIX_LOOP_BOLTS = 3</code>; if the chain can't close the FB after 3 bolts
-								the orchestrator returns <code>action: escalate</code> with{" "}
-								<code>reason: fix_loop_cap_exceeded</code> and the human triages.
+								<code>MAX_FIX_LOOP_BOLTS = 3</code>; if the chain can't close
+								the FB after 3 bolts the orchestrator returns{" "}
+								<code>action: escalate</code> with{" "}
+								<code>reason: fix_loop_cap_exceeded</code> and the human
+								triages.
 							</div>
 							<div
 								style={{
@@ -934,10 +1198,11 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 									color: "#1e3a8a",
 								}}
 							>
-								<strong>↗ integrate_fix_chains</strong> · when a fix-chain worktree's merge back
-								into the stage branch hits conflicts, the gate dispatches an{" "}
-								<strong>integrator</strong> subagent per chain (max{" "}
-								<code>MAX_INTEGRATOR_ATTEMPTS = 3</code>; exhaustion escalates).
+								<strong>↗ integrate_fix_chains</strong> · when a fix-chain
+								worktree's merge back into the stage branch hits conflicts, the
+								gate dispatches an <strong>integrator</strong> subagent per
+								chain (max <code>MAX_INTEGRATOR_ATTEMPTS = 3</code>; exhaustion
+								escalates).
 							</div>
 						</div>
 					</div>
@@ -956,7 +1221,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 											data-artifact={key}
 											onMouseEnter={() => matchArtifact(key, key)}
 											onMouseLeave={() => matchArtifact(null, null)}
-											onClick={() => setModal({ kind: "artifact", artifactKey: key })}
+											onClick={() =>
+												setModal({ kind: "artifact", artifactKey: key })
+											}
 											title={key}
 										>
 											{o}
@@ -979,7 +1246,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 								type="button"
 								className="call-chip"
 								style={{ fontSize: 9, padding: "2px 8px" }}
-								onClick={() => setModal({ kind: "skill", skillName: "/haiku:pickup" })}
+								onClick={() =>
+									setModal({ kind: "skill", skillName: "/haiku:pickup" })
+								}
 							>
 								/haiku:pickup
 							</button>
@@ -998,9 +1267,12 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 		isAutoGate: boolean,
 	) => {
 		const isLast = idx === stages.length - 1
-		const nextStageName = !isLast ? stages[idx + 1]?.name ?? null : null
+		const nextStageName = !isLast ? (stages[idx + 1]?.name ?? null) : null
 		const stageGate = effectiveGate(stage, mStage)
-		const p = payloadFor(stage, idx, mStage, "gate-to-next-stage", { isLast, nextStageName })
+		const p = payloadFor(stage, idx, mStage, "gate-to-next-stage", {
+			isLast,
+			nextStageName,
+		})
 		const onPillClick = () => {
 			if (!p) return
 			setModal({
@@ -1023,76 +1295,96 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 						<div className="gate-body gate-auto-body">
 							<div className="gate-auto-label">⚡ auto</div>
 							<div className="gate-auto-sub">
-								no review — workflow engine advances{isLast ? " · intent_complete" : <> to <strong>{nextStageName}</strong></>}
+								no review — workflow engine advances
+								{isLast ? (
+									" · intent_complete"
+								) : (
+									<>
+										{" "}
+										to <strong>{nextStageName}</strong>
+									</>
+								)}
 							</div>
 						</div>
 					) : (
 						<div className="gate-body">
 							<div className="gate-label">gate</div>
-						<div className="gate-type">{stageGate.type}</div>
-						<ul className="gate-options">
-							{stageGate.options.map((o) => {
-								if (o === "external") {
+							<div className="gate-type">{stageGate.type}</div>
+							<ul className="gate-options">
+								{stageGate.options.map((o) => {
+									if (o === "external") {
+										return (
+											<li key={o} className="external">
+												<div className="ext-head">
+													<span className="team-icon">👥</span>
+													<span>
+														external
+														<br />
+														(team / human PR review)
+													</span>
+												</div>
+												<div className="branch-name">
+													{branchName(
+														stage.name.toLowerCase(),
+														mStage === "hybrid" ? "continuous" : mStage,
+													)}
+												</div>
+												<div className="ext-outcomes">
+													<span style={{ color: "var(--approve)" }}>
+														→ next
+													</span>
+													<span style={{ color: "var(--reject)" }}>↺ back</span>
+												</div>
+											</li>
+										)
+									}
 									return (
-										<li key={o} className="external">
-											<div className="ext-head">
-												<span className="team-icon">👥</span>
-												<span>external<br />(team / human PR review)</span>
-											</div>
-											<div className="branch-name">
-									{branchName(stage.name.toLowerCase(), mStage === "hybrid" ? "continuous" : mStage)}
-								</div>
-											<div className="ext-outcomes">
-												<span style={{ color: "var(--approve)" }}>→ next</span>
-												<span style={{ color: "var(--reject)" }}>↺ back</span>
-											</div>
+										<li key={o} className={gateClass(o)}>
+											{o}
 										</li>
 									)
-								}
-								return (
-									<li key={o} className={gateClass(o)}>
-										{o}
-									</li>
-								)
-							})}
-						</ul>
-						{stageGate.options.includes("external") ? (
-							<div
-								style={{
-									marginTop: 6,
-									padding: "5px 7px",
-									background: "#fff",
-									border: "1px dashed var(--external)",
-									borderRadius: 6,
-									fontSize: 8,
-									lineHeight: 1.4,
-									color: "#92400e",
-									fontFamily: "ui-monospace, 'SF Mono', monospace",
-								}}
-							>
-								<div style={{ fontWeight: 700, marginBottom: 2 }}>external reconciliation:</div>
-								<div>1. branch-merge detection → approved</div>
-								<div>
-									2. CLI provider probe (gh / glab / etc) → approved · changes_requested · pending
+								})}
+							</ul>
+							{stageGate.options.includes("external") ? (
+								<div
+									style={{
+										marginTop: 6,
+										padding: "5px 7px",
+										background: "#fff",
+										border: "1px dashed var(--external)",
+										borderRadius: 6,
+										fontSize: 8,
+										lineHeight: 1.4,
+										color: "#92400e",
+										fontFamily: "ui-monospace, 'SF Mono', monospace",
+									}}
+								>
+									<div style={{ fontWeight: 700, marginBottom: 2 }}>
+										external reconciliation:
+									</div>
+									<div>1. branch-merge detection → approved</div>
+									<div>
+										2. CLI provider probe (gh / glab / etc) → approved ·
+										changes_requested · pending
+									</div>
+									<div>
+										3. otherwise →{" "}
+										<code
+											style={{
+												background: "rgba(245,158,11,0.12)",
+												padding: "0 2px",
+												borderRadius: 2,
+												color: "#92400e",
+												border: "none",
+											}}
+										>
+											awaiting_external_review
+										</code>
+									</div>
 								</div>
-								<div>
-									3. otherwise →{" "}
-									<code
-										style={{
-											background: "rgba(245,158,11,0.12)",
-											padding: "0 2px",
-											borderRadius: 2,
-											color: "#92400e",
-											border: "none",
-										}}
-									>
-										awaiting_external_review
-									</code>
-								</div>
-							</div>
-						) : null}
-					</div>
-				)}
+							) : null}
+						</div>
+					)}
 				</div>
 			</aside>
 		)
@@ -1108,13 +1400,23 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 			</header>
 			<div
 				className="pre-content"
-				style={{ display: "flex", flexDirection: "column", gap: 0, alignItems: "stretch" }}
+				style={{
+					display: "flex",
+					flexDirection: "column",
+					gap: 0,
+					alignItems: "stretch",
+				}}
 			>
 				<button
 					type="button"
 					className="pre-phase creation-summary"
 					onClick={() => setModal({ kind: "intentCreation" })}
-					style={{ cursor: "pointer", textAlign: "left", border: "1.5px solid #e4a72b", background: "#fff" }}
+					style={{
+						cursor: "pointer",
+						textAlign: "left",
+						border: "1.5px solid #e4a72b",
+						background: "#fff",
+					}}
 				>
 					<h3>
 						<span>Intent creation</span>
@@ -1126,7 +1428,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 							<div className="cs-box-head">
 								<span className="cs-avatar">🧑</span> you
 							</div>
-							<div className="cs-box-sample">"i want to add billing to the app"</div>
+							<div className="cs-box-sample">
+								"i want to add billing to the app"
+							</div>
 						</div>
 						<div className="cs-arrows" aria-hidden="true">
 							<div className="cs-arrow-top">→</div>
@@ -1137,7 +1441,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 							<div className="cs-box-head">
 								<span className="cs-avatar">🤖</span> agent
 							</div>
-							<div className="cs-box-sample">"what payment provider, plans, currency?"</div>
+							<div className="cs-box-sample">
+								"what payment provider, plans, currency?"
+							</div>
 						</div>
 					</div>
 				</button>
@@ -1145,7 +1451,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 				<div className="gate-wrap" style={{ paddingLeft: 0, marginTop: 22 }}>
 					{(() => {
 						const stub = stages[0]
-						const p = stub ? payloadFor(stub, 0, "continuous", "preelab-to-stage1") : null
+						const p = stub
+							? payloadFor(stub, 0, "continuous", "preelab-to-stage1")
+							: null
 						return (
 							<>
 								<button
@@ -1155,7 +1463,11 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 										if (!p || !stub) return
 										setModal({
 											kind: "payload",
-											payload: { stage: stub.name, key: "preelab-to-stage1", ...p },
+											payload: {
+												stage: stub.name,
+												key: "preelab-to-stage1",
+												...p,
+											},
 										})
 									}}
 									title={p ? `${p.action} — ${p.summary}` : ""}
@@ -1171,14 +1483,21 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 								>
 									<div className="ng-head">
 										<span className="ng-caption" style={{ color: "#92400e" }}>
-											↳ inside this call · opens <code>intent_review</code> gate (blocking)
+											↳ inside this call · opens <code>intent_review</code> gate
+											(blocking)
 										</span>
-										<span className="ig-type" style={{ color: "#92400e" }}>ask</span>
+										<span className="ig-type" style={{ color: "#92400e" }}>
+											ask
+										</span>
 										<span className="ig-ctx">first-tick gate</span>
 									</div>
 									<div className="ng-branch-row">
-										<span className="ng-branch reject-branch">↑ request changes → loop creation</span>
-										<span className="ng-branch approve-branch">↓ approve → start_stage</span>
+										<span className="ng-branch reject-branch">
+											↑ request changes → loop creation
+										</span>
+										<span className="ng-branch approve-branch">
+											↓ approve → start_stage
+										</span>
 									</div>
 									<div
 										style={{
@@ -1189,8 +1508,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 										}}
 									>
 										The user's click <strong>is</strong> the outcome of the{" "}
-										<code>haiku_run_next</code> call. On approve: state.json created,{" "}
-										<code>phase: elaborate</code> set on the first stage.
+										<code>haiku_run_next</code> call. On approve: state.json
+										created, <code>phase: elaborate</code> set on the first
+										stage.
 									</div>
 								</div>
 							</>
@@ -1208,42 +1528,59 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 				<span className="intent-meta">final gate → delivery · operations</span>
 			</header>
 			<div className="post-grid">
-				<section className="post-intent" id="intent-completion-review" style={{ borderLeft: "3px solid #a855f7" }}>
+				<section
+					className="post-intent"
+					id="intent-completion-review"
+					style={{ borderLeft: "3px solid #a855f7" }}
+				>
 					<header>
 						<h2>
 							Intent-completion review{" "}
-							<span style={{ fontSize: 10, fontWeight: 500, color: "var(--muted)", marginLeft: 6, letterSpacing: 0, textTransform: "none" }}>
+							<span
+								style={{
+									fontSize: 10,
+									fontWeight: 500,
+									color: "var(--muted)",
+									marginLeft: 6,
+									letterSpacing: 0,
+									textTransform: "none",
+								}}
+							>
 								· studio-level · default ON
 							</span>
 						</h2>
 						<span className="subtitle-line">
-							all stages approved → studio review-agents audit the whole intent → optional fix
-							loop → final gate
+							all stages approved → studio review-agents audit the whole intent
+							→ optional fix loop → final gate
 						</span>
 					</header>
 					<div className="post-steps">
 						<div className="post-step">
 							<div className="step-title">📋 dispatch review-agents</div>
 							<div className="step-desc">
-								workflow runs <code>plugin/studios/{"{studio}"}/review-agents/*.md</code>{" "}
-								against the whole intent. Skipped when no studio review-agents are configured —
-								<code> completion_review_skipped: true</code> is set on the intent and the gate
-								falls through immediately.
+								workflow runs{" "}
+								<code>plugin/studios/{"{studio}"}/review-agents/*.md</code>{" "}
+								against the whole intent. Skipped when no studio review-agents
+								are configured —<code> completion_review_skipped: true</code> is
+								set on the intent and the gate falls through immediately.
 							</div>
 						</div>
 						<div className="step-arrow">→</div>
 						<div className="post-step">
 							<div className="step-title">🔁 studio fix loop</div>
 							<div className="step-desc">
-								if findings exist, dispatch <code>plugin/studios/{"{studio}"}/fix-hats/*.md</code>{" "}
-								against intent-scope FBs. Caps mirror the per-stage chain (3 bolts;{" "}
+								if findings exist, dispatch{" "}
+								<code>plugin/studios/{"{studio}"}/fix-hats/*.md</code> against
+								intent-scope FBs. Caps mirror the per-stage chain (3 bolts;{" "}
 								<code>integrate_fix_chains</code> on merge conflicts).
 							</div>
 						</div>
 						<div className="step-arrow">→</div>
 						<div className="post-step">
 							<div className="step-title">✅ ready for final gate</div>
-							<div className="step-desc">zero open intent-scope findings → falls through to delivery.</div>
+							<div className="step-desc">
+								zero open intent-scope findings → falls through to delivery.
+							</div>
 						</div>
 					</div>
 					<div
@@ -1259,19 +1596,31 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 						}}
 					>
 						<strong>Opt out per intent:</strong> set{" "}
-						<code>intent_completion_review: false</code> on intent.md frontmatter to skip this
-						entire layer — the final stage's gate becomes terminal.
+						<code>intent_completion_review: false</code> on intent.md
+						frontmatter to skip this entire layer — the final stage's gate
+						becomes terminal.
 					</div>
 				</section>
 				<section className="post-intent" id="delivery">
 					<header>
 						<h2>
 							Delivery{" "}
-							<span style={{ fontSize: 10, fontWeight: 500, color: "var(--muted)", marginLeft: 6, letterSpacing: 0, textTransform: "none" }}>
+							<span
+								style={{
+									fontSize: 10,
+									fontWeight: 500,
+									color: "var(--muted)",
+									marginLeft: 6,
+									letterSpacing: 0,
+									textTransform: "none",
+								}}
+							>
 								· handled by your CI/CD infra, not H·AI·K·U
 							</span>
 						</h2>
-						<span className="subtitle-line">final gate → merged → main → prod</span>
+						<span className="subtitle-line">
+							final gate → merged → main → prod
+						</span>
 					</header>
 					<div className="post-steps">
 						<div className="post-step gate-step">
@@ -1281,7 +1630,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 						<div className="step-arrow">→</div>
 						<div className="post-step">
 							<div className="step-title">🚀 merge</div>
-							<div className="step-desc">into <code>main</code></div>
+							<div className="step-desc">
+								into <code>main</code>
+							</div>
 						</div>
 						<div className="step-arrow">→</div>
 						<div className="post-step">
@@ -1367,9 +1718,54 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 		<div ref={mainRef} className="haiku-arch-map">
 			<h1>H·AI·K·U Runtime Architecture</h1>
 			<p className="subtitle">
-				Every actor, every workflow engine tick, every state write — the studio's full intent
-				lifecycle on one page. <strong>Hover anything for a tooltip · click for full detail.</strong>
+				Every actor, every workflow engine tick, every state write — the
+				studio's full intent lifecycle on one page.{" "}
+				<strong>Hover anything for a tooltip · click for full detail.</strong>
 			</p>
+
+			<div
+				style={{
+					display: "flex",
+					justifyContent: "center",
+					margin: "0 0 16px",
+				}}
+			>
+				<button
+					type="button"
+					onClick={() => setModal({ kind: "tickSemantics" })}
+					style={{
+						all: "unset",
+						display: "inline-flex",
+						alignItems: "center",
+						gap: 10,
+						padding: "8px 14px",
+						background: "#0f172a",
+						color: "#fbbf24",
+						borderRadius: 6,
+						fontSize: 11,
+						fontFamily: "ui-monospace, 'SF Mono', monospace",
+						fontWeight: 700,
+						letterSpacing: "0.04em",
+						textTransform: "uppercase",
+						cursor: "pointer",
+						boxSizing: "border-box",
+					}}
+					title="What a tick is, why it matters, and the pre-advance check pipeline"
+				>
+					<span>⏱ tick semantics</span>
+					<span
+						style={{
+							color: "#94a3b8",
+							fontWeight: 500,
+							textTransform: "none",
+							letterSpacing: 0,
+						}}
+					>
+						haiku_run_next is the agent's only forward-driving verb · click for
+						the full contract
+					</span>
+				</button>
+			</div>
 
 			{renderActorsStrip()}
 
@@ -1406,14 +1802,19 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 								checked={mode === m}
 								onChange={() => setMode(m)}
 							/>
-							<label htmlFor={`mode-${m}`}>{m === "auto" ? "autopilot" : m}</label>
+							<label htmlFor={`mode-${m}`}>
+								{m === "auto" ? "autopilot" : m}
+							</label>
 						</Fragment>
 					))}
 				</div>
 				{mode === "hybrid" ? (
 					<span className="hybrid-picker">
 						continuous_from:
-						<select value={continuousFrom} onChange={(e) => setContinuousFrom(e.target.value)}>
+						<select
+							value={continuousFrom}
+							onChange={(e) => setContinuousFrom(e.target.value)}
+						>
 							{stages.slice(1).map((s) => (
 								<option key={s.key} value={s.name.toLowerCase()}>
 									{s.name.toLowerCase()}
@@ -1437,7 +1838,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 									<code>{activeStudio}</code>
 								</span>
 							</header>
-							<div className="studio">{stages.map((s, i) => renderStage(s, i))}</div>
+							<div className="studio">
+								{stages.map((s, i) => renderStage(s, i))}
+							</div>
 						</div>
 						<div className="v-arrow approve-flow">
 							<span className="label">approve → delivery</span>
@@ -1458,8 +1861,13 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 	)
 }
 
-function effectiveGate(stage: DerivedStage, mStage: ExecutionMode): { type: string; options: string[] } {
-	if (mStage === "discrete") return { type: "external (discrete)", options: ["external"] }
-	if (mStage === "auto") return { type: "auto (autopilot · /haiku:autopilot)", options: ["advance"] }
+function effectiveGate(
+	stage: DerivedStage,
+	mStage: ExecutionMode,
+): { type: string; options: string[] } {
+	if (mStage === "discrete")
+		return { type: "external (discrete)", options: ["external"] }
+	if (mStage === "auto")
+		return { type: "auto (autopilot · /haiku:autopilot)", options: ["advance"] }
 	return stage.gate
 }

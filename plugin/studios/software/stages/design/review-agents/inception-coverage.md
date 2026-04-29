@@ -27,12 +27,26 @@ Read each file in full. **MUST NOT** infer content from filenames — classify b
 
 When `DISCOVERY.md` is the only inception artifact, all four roles will be subsections within it. Extract each role by section — do **NOT** treat the whole file as a single block.
 
+**Short-circuit on unclassifiable inception:** If inception files exist but Step 2's heading scan finds zero hits across all four roles (decisions, open questions, UI surfaces, constraints/risks), emit a single warning-severity note:
+
+> "Inception artifacts present but use non-standard headings — coverage audit cannot classify content. Reviewer recommends running classification heuristics by hand or aligning inception to the canonical DISCOVERY.md template."
+
+Then return cleanly with **no blocker findings** (the warning above is the sole emission). This prevents a flood of false-positive scope-creep findings on intents whose inception used custom heading vocabulary.
+
 ## Step 3 — Read design-stage outputs
 
-The agent **MUST** read all of the following (if present):
+The agent **MUST** dynamically enumerate the following design output locations and read each that exists:
 
 - Every file under `.haiku/intents/{slug}/stages/design/artifacts/`
 - `.haiku/intents/{slug}/stages/design/DESIGN-BRIEF.md`
+- `.haiku/intents/{slug}/knowledge/DESIGN-TOKENS.md`
+- `.haiku/intents/{slug}/knowledge/DESIGN-SYSTEM-ANCHOR.md`
+
+**Short-circuit on no design output:** If none of the above paths exist, emit a single info-severity note:
+
+> "Design stage has produced no readable artifacts yet — coverage audit skipped."
+
+Then return cleanly with no blocker findings. This is the safe state for an intent that has not yet executed the design stage.
 
 **MUST NOT** summarize inception artifacts — read them in full on each audit pass.
 

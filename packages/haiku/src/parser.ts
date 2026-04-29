@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises"
-import { basename, join, relative } from "node:path"
+import { basename, join, relative, resolve } from "node:path"
 import {
 	dedupeFrontmatterKeys,
 	isDuplicateKeyError,
@@ -373,9 +373,8 @@ async function buildArtifactEntry(
 	name: string,
 	relativePath: string,
 ): Promise<OutputArtifact | null> {
-	const ext = basename(fullPath)
-		.substring(basename(fullPath).lastIndexOf("."))
-		.toLowerCase()
+	const file = basename(fullPath)
+	const ext = file.substring(file.lastIndexOf(".")).toLowerCase()
 	if (ext === ".md") {
 		try {
 			const raw = await readFile(fullPath, "utf-8")
@@ -419,6 +418,13 @@ function intentRelativeOutputPath(declared: string, intentDir: string): string {
 	return declared
 }
 
+/** Match the unit-file naming convention used by `parseAllUnits` so we
+ *  don't process scratch files (READMEs, drafts) that happen to live
+ *  inside `units/`. Tightening the filter also reduces the attack
+ *  surface for the path-containment check below — fewer files
+ *  contributing user-controlled `outputs:` strings. */
+const UNIT_FILENAME_RE = /^unit-\d{2,}-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/
+
 /**
  * Read every unit's `outputs:` frontmatter under `stages/<stage>/units/`,
  * resolving each declared path against `intentDir` and classifying it by
@@ -430,11 +436,20 @@ function intentRelativeOutputPath(declared: string, intentDir: string): string {
  * `<intent>/product/ACCEPTANCE-CRITERIA.md`, `<intent>/features/*.feature`).
  * The review screen needs to surface the full output set or downstream
  * stages have nothing to inspect.
+ *
+ * Security: `outputs:` strings come from disk frontmatter that an
+ * adversarial agent could craft (`../../.env`, `/etc/passwd`, etc.). After
+ * resolving each declared path, we verify the absolute path is contained
+ * within `intentDir` and silently drop any that escape. The catch-all walk
+ * (source 3) doesn't need this guard because its paths come from `readdir`
+ * `Dirent` entries, not user-controlled strings.
  */
 async function parseUnitOutputs(
 	intentDir: string,
 ): Promise<Array<{ absPath: string; artifact: OutputArtifact }>> {
 	const out: Array<{ absPath: string; artifact: OutputArtifact }> = []
+	const intentDirAbs = resolve(intentDir)
+	const intentDirAbsSlash = `${intentDirAbs}/`
 	let stageEntries: Awaited<ReturnType<typeof readdir>>
 	try {
 		stageEntries = await readdir(join(intentDir, "stages"), {
@@ -450,7 +465,7 @@ async function parseUnitOutputs(
 		let unitFiles: string[]
 		try {
 			unitFiles = (await readdir(unitsDir, { withFileTypes: true }))
-				.filter((e) => e.isFile() && e.name.endsWith(".md"))
+				.filter((e) => e.isFile() && UNIT_FILENAME_RE.test(e.name))
 				.map((e) => e.name)
 				.sort()
 		} catch {
@@ -471,13 +486,25 @@ async function parseUnitOutputs(
 			}
 			for (const declared of outputs) {
 				const intentRel = intentRelativeOutputPath(declared, intentDir)
-				const absPath = join(intentDir, intentRel)
-				const nameWithDir = intentRel.replace(/\.[^.]+$/, "")
+				const absPath = resolve(intentDirAbs, intentRel)
+				// Path-containment check: silently skip anything that
+				// resolves outside the intent dir (`../../.env`,
+				// `/etc/passwd`, symlink-targeted paths, etc.). Equality
+				// check rejects `absPath === intentDirAbs` (declaring the
+				// intent dir itself as an output is meaningless).
+				if (
+					absPath !== intentDirAbs &&
+					!absPath.startsWith(intentDirAbsSlash)
+				) {
+					continue
+				}
+				const safeRel = relative(intentDirAbs, absPath)
+				const nameWithDir = safeRel.replace(/\.[^.]+$/, "")
 				const entry = await buildArtifactEntry(
 					absPath,
 					stageName,
 					nameWithDir,
-					intentRel,
+					safeRel,
 				)
 				if (entry) out.push({ absPath, artifact: entry })
 			}

@@ -232,7 +232,7 @@ await test("file present in artifacts/ AND unit outputs is emitted once", async 
 		"---\ntitle: Dup\n---\n# from artifacts",
 	)
 	writeFileSync(
-		join(stageUnits, "unit-01.md"),
+		join(stageUnits, "unit-01-foo.md"),
 		`---\ntitle: Unit\noutputs:\n  - stages/design/artifacts/DUPLICATE.md\n---\n# unit`,
 	)
 	const artifacts = await parseOutputArtifacts(intentDir)
@@ -252,7 +252,7 @@ await test("unit with no outputs frontmatter is silently skipped", async () => {
 	const stageUnits = join(intentDir, "stages", "design", "units")
 	mkdirSync(stageUnits, { recursive: true })
 	writeFileSync(
-		join(stageUnits, "unit-01.md"),
+		join(stageUnits, "unit-01-foo.md"),
 		"---\ntitle: No Outputs\n---\n# body",
 	)
 	const artifacts = await parseOutputArtifacts(intentDir)
@@ -264,7 +264,7 @@ await test("unit with non-array outputs frontmatter is silently skipped", async 
 	const stageUnits = join(intentDir, "stages", "design", "units")
 	mkdirSync(stageUnits, { recursive: true })
 	writeFileSync(
-		join(stageUnits, "unit-01.md"),
+		join(stageUnits, "unit-01-foo.md"),
 		"---\ntitle: Bad\noutputs: not-an-array\n---\n# body",
 	)
 	const artifacts = await parseOutputArtifacts(intentDir)
@@ -276,7 +276,7 @@ await test("unit declares output that doesn't exist on disk — entry skipped, n
 	const stageUnits = join(intentDir, "stages", "design", "units")
 	mkdirSync(stageUnits, { recursive: true })
 	writeFileSync(
-		join(stageUnits, "unit-01.md"),
+		join(stageUnits, "unit-01-foo.md"),
 		"---\ntitle: Missing\noutputs:\n  - product/never-written.md\n---\n# body",
 	)
 	const artifacts = await parseOutputArtifacts(intentDir)
@@ -344,7 +344,7 @@ await test("catch-all: workflow-internal entries are excluded (STAGE.md, state.j
 	writeFileSync(join(stageDir, "STAGE.md"), "# stage def — workflow internal")
 	writeFileSync(join(stageDir, "state.json"), "{}")
 	writeFileSync(
-		join(stageDir, "units", "unit-01.md"),
+		join(stageDir, "units", "unit-01-foo.md"),
 		"---\ntitle: Unit\n---\n# unit body",
 	)
 	writeFileSync(
@@ -404,7 +404,7 @@ await test("catch-all: unit-declared output wins over catch-all entry for the sa
 		"---\ntitle: Declared\n---\n# declared body",
 	)
 	writeFileSync(
-		join(stageDir, "units", "unit-01.md"),
+		join(stageDir, "units", "unit-01-foo.md"),
 		"---\ntitle: Unit\noutputs:\n  - stages/design/outputs/DECLARED.md\n---\n# body",
 	)
 	const artifacts = await parseOutputArtifacts(intentDir)
@@ -415,6 +415,112 @@ await test("catch-all: unit-declared output wins over catch-all entry for the sa
 	// stage-dir-relative (`outputs/DECLARED`). Confirm the unit-declared
 	// version won.
 	assert.strictEqual(matches[0].name, "stages/design/outputs/DECLARED")
+})
+
+// ── Path-containment security guard on unit-declared `outputs:` ──
+//
+// Unit frontmatter is on disk and could be crafted by an adversarial
+// agent. Without a containment check, a malicious unit declaring
+// `outputs: ["../../.env"]` or `outputs: ["/etc/passwd"]` would cause
+// the review session to read and inline arbitrary files outside the
+// intent dir. The guard silently drops anything that resolves outside.
+
+await test("security: unit outputs declaring traversal paths are silently dropped", async () => {
+	const intentDir = mkdtempSync(join(tmp, "intent-traversal-"))
+	const productUnits = join(intentDir, "stages", "product", "units")
+	mkdirSync(productUnits, { recursive: true })
+	// Real file outside the intent dir that the traversal would read.
+	const outside = join(tmp, "secret.env")
+	writeFileSync(outside, "SECRET=traversal")
+	// And a legitimate output inside the intent dir.
+	mkdirSync(join(intentDir, "product"), { recursive: true })
+	writeFileSync(
+		join(intentDir, "product", "OK.md"),
+		"---\ntitle: OK\n---\n# ok body",
+	)
+	writeFileSync(
+		join(productUnits, "unit-01-foo.md"),
+		`---\ntitle: Adv\noutputs:\n  - ../../secret.env\n  - product/OK.md\n---\n# body`,
+	)
+	const artifacts = await parseOutputArtifacts(intentDir)
+	const names = artifacts.map((a) => a.name).sort()
+	assert.ok(
+		!names.some((n) => n.includes("secret")),
+		`traversal path should be dropped; got ${JSON.stringify(names)}`,
+	)
+	assert.ok(
+		names.includes("product/OK"),
+		`legitimate sibling output should still surface; got ${JSON.stringify(names)}`,
+	)
+})
+
+await test("security: unit outputs with absolute path declarations are silently dropped", async () => {
+	const intentDir = mkdtempSync(join(tmp, "intent-absolute-"))
+	const productUnits = join(intentDir, "stages", "product", "units")
+	mkdirSync(productUnits, { recursive: true })
+	mkdirSync(join(intentDir, "product"), { recursive: true })
+	writeFileSync(
+		join(intentDir, "product", "OK.md"),
+		"---\ntitle: OK\n---\n# ok",
+	)
+	writeFileSync(
+		join(productUnits, "unit-01-foo.md"),
+		`---\ntitle: Abs\noutputs:\n  - /etc/passwd\n  - product/OK.md\n---\n# body`,
+	)
+	const artifacts = await parseOutputArtifacts(intentDir)
+	const names = artifacts.map((a) => a.name).sort()
+	assert.ok(
+		!names.some((n) => n.includes("passwd")),
+		`absolute path should be dropped; got ${JSON.stringify(names)}`,
+	)
+	assert.ok(names.includes("product/OK"), "legitimate sibling output preserved")
+})
+
+// ── Strict unit-filename filter ──
+//
+// Tighten to match `parseAllUnits`'s convention so scratch files
+// inside `units/` (READMEs, drafts) don't have their `outputs:`
+// frontmatter processed. Also reduces attack surface for the
+// path-containment check.
+
+await test("unit-filename filter: scratch files in units/ are ignored", async () => {
+	const intentDir = mkdtempSync(join(tmp, "intent-strict-filter-"))
+	const productUnits = join(intentDir, "stages", "product", "units")
+	mkdirSync(productUnits, { recursive: true })
+	mkdirSync(join(intentDir, "product"), { recursive: true })
+	writeFileSync(
+		join(intentDir, "product", "OK.md"),
+		"---\ntitle: OK\n---\n# ok",
+	)
+	writeFileSync(
+		join(intentDir, "product", "DRAFT-OUT.md"),
+		"---\ntitle: Draft\n---\n# draft",
+	)
+	// Real unit — outputs surface.
+	writeFileSync(
+		join(productUnits, "unit-01-foo.md"),
+		"---\ntitle: Real\noutputs:\n  - product/OK.md\n---\n# body",
+	)
+	// Scratch file with `outputs:` — should be IGNORED.
+	writeFileSync(
+		join(productUnits, "README.md"),
+		"---\ntitle: Readme\noutputs:\n  - product/DRAFT-OUT.md\n---\n# scratch",
+	)
+	// Another non-conforming filename — should also be ignored.
+	writeFileSync(
+		join(productUnits, "draft.md"),
+		"---\ntitle: Draft\noutputs:\n  - product/DRAFT-OUT.md\n---\n# draft",
+	)
+	const artifacts = await parseOutputArtifacts(intentDir)
+	const names = artifacts.map((a) => a.name).sort()
+	assert.ok(
+		names.includes("product/OK"),
+		`real unit's output should surface; got ${JSON.stringify(names)}`,
+	)
+	assert.ok(
+		!names.includes("product/DRAFT-OUT"),
+		`scratch-file outputs should NOT surface (strict filter dropped non-unit files); got ${JSON.stringify(names)}`,
+	)
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)

@@ -2,7 +2,7 @@
 title: >-
   Architecture map and workflow diagram not regenerated after hat + review-agent
   additions
-status: pending
+status: closed
 origin: studio-review
 author: cross-stage-consistency
 author_type: agent
@@ -10,7 +10,7 @@ created_at: '2026-04-29T00:52:55Z'
 iteration: 0
 visit: 0
 source_ref: null
-closed_by: null
+closed_by: 'intent-fix:FB-01:bolt-1-manual'
 bolt: 0
 triaged_at: '2026-04-29T00:52:55Z'
 resolution: null

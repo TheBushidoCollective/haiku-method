@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Pin the primary worktree to the default branch.
+#
+# Git has no pre-checkout hook, so we detect the move post-hoc and bounce
+# back. Other worktrees (linked via `git worktree add`) are unaffected — do
+# branch work there. There is no bypass — that's the point.
+
+set -e
+
+prev_head="$1"
+new_head="$2"
+branch_flag="$3"
+
+# Only branch checkouts. File-level checkouts pass flag 0.
+[ "$branch_flag" = "1" ] || exit 0
+
+# Skip linked worktrees — only enforce in the primary.
+git_dir=$(git rev-parse --git-dir)
+common_dir=$(git rev-parse --git-common-dir)
+abs_git_dir=$(cd "$git_dir" && pwd)
+abs_common_dir=$(cd "$common_dir" && pwd)
+[ "$abs_git_dir" = "$abs_common_dir" ] || exit 0
+
+# Resolve default branch from origin/HEAD; fall back to main.
+default_branch=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)
+default_branch=${default_branch:-main}
+
+# Detached HEAD returns empty.
+current_branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+
+[ "$current_branch" = "$default_branch" ] && exit 0
+
+cat >&2 <<EOF
+
+✋ blocked: primary worktree is pinned to '$default_branch'
+   destination: ${current_branch:-(detached HEAD)}
+
+   for branch work, use a worktree:
+       git worktree add ../<dir> <branch>          # existing branch
+       git worktree add -b <branch> ../<dir>       # new branch off HEAD
+
+   bouncing back to '$default_branch'...
+EOF
+
+git checkout --quiet "$default_branch"

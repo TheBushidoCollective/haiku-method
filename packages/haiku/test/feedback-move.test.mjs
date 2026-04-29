@@ -49,7 +49,7 @@ process.env.PATH = `${join(tmp, "fake-bin")}:${process.env.PATH}`
 const { handleStateTool, moveFeedbackFile, writeFeedbackFile } = await import(
 	"../src/state-tools.ts"
 )
-const { preTickFeedbackGate } = await import(
+const { preTickFeedbackGate, countOpenFeedbackForGateCheck } = await import(
 	"../src/orchestrator/workflow/feedback-triage-gate.ts"
 )
 
@@ -419,7 +419,13 @@ try {
 		assert.strictEqual(action.target_stage, "plan")
 	})
 
-	await test("triaged FB on current stage only → null (fall through)", () => {
+	await test("triaged agent-authored FB on current stage → feedback_dispatch (author-agnostic)", () => {
+		// The pre-tick gate must dispatch open pending feedback no matter
+		// who filed it. Letting agent-authored FBs fall through to null
+		// means the elaborate / gate handler downstream emits
+		// `gate_review` while feedback is still open — exactly the
+		// review-screen-with-pending-feedback bug this gate is supposed
+		// to prevent.
 		const { projDir, slug, intentDirPath, studio, stages } = makeProject(
 			"triage-current-only",
 			{
@@ -442,6 +448,191 @@ try {
 			currentStage: "plan",
 			currentPhase: "execute",
 			stageState: { phase: "execute" },
+		})
+		assert.ok(action, "expected dispatch action, got null")
+		assert.strictEqual(action.action, "feedback_dispatch")
+		assert.strictEqual(action.counts.needs_triage, 1)
+	})
+
+	await test("agent-authored stage_revisit FB on current stage in elaborate phase → feedback_dispatch", () => {
+		// Regression: this is the exact shape that hit the gate-while-
+		// feedback-open bug. After a revisit, agent-authored FBs reset
+		// to status:pending with resolution unset are buckets needsTriage
+		// here. Before this fix, the human-only filter dropped them, the
+		// pre-tick returned null, and elaborate.ts then emitted
+		// `gate_review` to the user with feedback still open.
+		const { projDir, slug, intentDirPath, studio, stages } = makeProject(
+			"triage-current-elaborate",
+			{
+				active_stage: "plan",
+				stageStates: { plan: { phase: "elaborate" } },
+			},
+		)
+		process.chdir(projDir)
+		writeFeedbackFile(slug, "plan", {
+			title: "Stage-revisit FB",
+			body: "Body",
+			origin: "adversarial-review",
+			author: "review-agent",
+			resolution: "stage_revisit",
+		})
+		const action = preTickFeedbackGate({
+			slug,
+			studio,
+			intentDirPath,
+			intent: { studio, active_stage: "plan", stages },
+			currentStage: "plan",
+			currentPhase: "elaborate",
+			stageState: { phase: "elaborate" },
+		})
+		assert.ok(action, "expected dispatch action, got null")
+		assert.strictEqual(action.action, "feedback_dispatch")
+		assert.strictEqual(action.counts.stage_revisits, 1)
+	})
+
+	await test("agent-authored inline_fix FB on current stage in execute phase → feedback_dispatch", () => {
+		// inlineFix FBs were never dispatched from pre-tick before this
+		// fix — the comment said gate.ts handles them. That's true in
+		// gate phase, but not in execute / elaborate / review phases.
+		// run_next must fix feedback no matter the author or phase.
+		const { projDir, slug, intentDirPath, studio, stages } = makeProject(
+			"triage-current-inline-fix",
+			{
+				active_stage: "plan",
+				stageStates: { plan: { phase: "execute" } },
+			},
+		)
+		process.chdir(projDir)
+		writeFeedbackFile(slug, "plan", {
+			title: "Inline-fix FB",
+			body: "Body",
+			origin: "adversarial-review",
+			author: "review-agent",
+			resolution: "inline_fix",
+		})
+		const action = preTickFeedbackGate({
+			slug,
+			studio,
+			intentDirPath,
+			intent: { studio, active_stage: "plan", stages },
+			currentStage: "plan",
+			currentPhase: "execute",
+			stageState: { phase: "execute" },
+		})
+		assert.ok(action, "expected dispatch action, got null")
+		assert.strictEqual(action.action, "feedback_dispatch")
+		assert.strictEqual(action.counts.inline_fixes, 1)
+	})
+
+	await test("countOpenFeedbackForGateCheck does NOT count `answered` items (deadlock fix)", () => {
+		// Regression for PR #275 review feedback: an `answered` FB
+		// (agent replied to a human question, awaiting human
+		// confirmation via the SPA) must NOT block gate_review.
+		// Agents can't close `answered` items — only the human can —
+		// so counting them deadlocks the workflow.
+		const { projDir, slug, stages } = makeProject(
+			"answered-fb-deadlock-check",
+			{
+				active_stage: "plan",
+				stageStates: { plan: { phase: "gate" } },
+			},
+		)
+		process.chdir(projDir)
+		// One answered FB (agent replied, awaiting human).
+		writeFeedbackFile(slug, "plan", {
+			title: "Question the agent already answered",
+			body: "Body",
+			origin: "user-chat",
+			author: "user",
+		})
+		// Manually flip status to "answered" to mirror the post-reply
+		// state. (`writeFeedbackFile` doesn't expose a `status` opt;
+		// flipping after creation matches existing test patterns
+		// elsewhere in this file.)
+		const fbDir = join(projDir, ".haiku/intents", slug, "stages/plan/feedback")
+		const fbFiles = readdirSync(fbDir).filter((f) => f.endsWith(".md"))
+		const fbPath = join(fbDir, fbFiles[0])
+		const flipped = readFileSync(fbPath, "utf8").replace(
+			/^status:\s*pending\s*$/m,
+			"status: answered",
+		)
+		writeFileSync(fbPath, flipped)
+
+		const count = countOpenFeedbackForGateCheck(
+			slug,
+			stages,
+			stages.indexOf("plan"),
+		)
+		assert.strictEqual(
+			count,
+			0,
+			`answered FB should not be counted as gate-blocking, got ${count}`,
+		)
+	})
+
+	await test("countOpenFeedbackForGateCheck DOES count pending FBs", () => {
+		// Sanity: the predicate isn't broken — it still counts truly
+		// gate-blocking items (status: pending).
+		const { projDir, slug, stages } = makeProject(
+			"pending-fb-blocks-gate-check",
+			{
+				active_stage: "plan",
+				stageStates: { plan: { phase: "gate" } },
+			},
+		)
+		process.chdir(projDir)
+		writeFeedbackFile(slug, "plan", {
+			title: "Pending FB",
+			body: "Body",
+			origin: "adversarial-review",
+			author: "review-agent",
+		})
+		const count = countOpenFeedbackForGateCheck(
+			slug,
+			stages,
+			stages.indexOf("plan"),
+		)
+		assert.strictEqual(count, 1)
+	})
+
+	await test("agent-authored FBs on current stage during gate phase → null (gate.ts owns dispatch)", () => {
+		// In gate phase, gate.ts owns the full fix-chain / review_fix /
+		// feedback_revisit / feedback_dispatch chain for current-stage
+		// pending feedback. Pre-tick must stay out entirely so we don't
+		// double-dispatch (e.g. firing feedback_dispatch from pre-tick
+		// when gate.ts would otherwise emit review_fix). The "no gate
+		// review while feedback open" invariant in gate phase is
+		// enforced by gate.ts itself plus the defensive check at the
+		// gate_review emit site.
+		const { projDir, slug, intentDirPath, studio, stages } = makeProject(
+			"triage-current-gate",
+			{
+				active_stage: "plan",
+				stageStates: { plan: { phase: "gate" } },
+			},
+		)
+		process.chdir(projDir)
+		writeFeedbackFile(slug, "plan", {
+			title: "Stage-revisit FB during gate",
+			body: "Body",
+			origin: "adversarial-review",
+			author: "review-agent",
+			resolution: "stage_revisit",
+		})
+		writeFeedbackFile(slug, "plan", {
+			title: "Untriaged-resolution FB during gate",
+			body: "Body",
+			origin: "adversarial-review",
+			author: "review-agent",
+		})
+		const action = preTickFeedbackGate({
+			slug,
+			studio,
+			intentDirPath,
+			intent: { studio, active_stage: "plan", stages },
+			currentStage: "plan",
+			currentPhase: "gate",
+			stageState: { phase: "gate" },
 		})
 		assert.strictEqual(action, null)
 	})

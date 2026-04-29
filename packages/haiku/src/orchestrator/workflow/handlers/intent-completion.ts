@@ -56,6 +56,7 @@ import {
 	readStudioReviewAgentPaths,
 } from "../../../studio-reader.js"
 import { emitTelemetry } from "../../../telemetry.js"
+import { countOpenFeedbackForGateCheck } from "../feedback-triage-gate.js"
 import type { WorkflowHandler } from "./_types.js"
 
 const emit: WorkflowHandler = (ctx) => {
@@ -320,6 +321,19 @@ const emit: WorkflowHandler = (ctx) => {
 			total_pending: inScopePending.length,
 			escalated_count: escalatedScope.length,
 			message: `Dispatching intent-completion fix loop for ${dispatchedScope.length} finding(s) in parallel. Per-finding studio fix-hats: ${fixHatNames.join(" → ")} (serial within chain). Chains run in parallel.${escalatedScope.length > 0 ? ` ${escalatedScope.length} additional finding(s) are at the bolt cap and will escalate after these complete.` : ""}`,
+		}
+	}
+
+	// Defensive invariant: never emit gate_review while open
+	// intent-scope feedback exists. intent_completion_fix dispatch
+	// above is supposed to drain these; this check catches anything
+	// that slipped through.
+	const openIntentFb = countOpenFeedbackForGateCheck(slug, [], -1, true)
+	if (openIntentFb > 0) {
+		return {
+			action: "error",
+			intent: slug,
+			message: `Refusing to emit gate_review for intent '${slug}' completion: ${openIntentFb} open intent-scope feedback item(s). The intent-completion fix loop should have dispatched these — file a bug citing handlers/intent-completion.ts. Workaround: close / reject the open items via the review UI first.`,
 		}
 	}
 

@@ -68,6 +68,7 @@ import {
 	studioSearchPaths,
 } from "../../../studio-reader.js"
 import { emitTelemetry } from "../../../telemetry.js"
+import { countOpenFeedbackForGateCheck } from "../feedback-triage-gate.js"
 import type { WorkflowHandler } from "./_types.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
@@ -663,6 +664,24 @@ const emit: WorkflowHandler = (ctx) => {
 			message: isIntentReview
 				? `Auto-gate: intent approved — advancing to execution. Call haiku_run_next { intent: "${slug}" } immediately.`
 				: `Auto-gate: specs validated — advancing to execution. Call haiku_run_next { intent: "${slug}" } immediately.`,
+		}
+	}
+
+	// Defensive invariant: never emit gate_review while open feedback
+	// exists. Pre-tick (feedback-triage-gate.ts) is the primary
+	// enforcer; if it falls through here with open feedback, that's
+	// a bug in pre-tick we want to surface loudly rather than silently
+	// surface a gate to the user.
+	const openFbCount = countOpenFeedbackForGateCheck(
+		slug,
+		studioStages,
+		studioStages.indexOf(currentStage),
+	)
+	if (openFbCount > 0) {
+		return {
+			action: "error",
+			intent: slug,
+			message: `Refusing to emit gate_review for stage '${currentStage}' (elaborate→execute): ${openFbCount} open feedback item(s) on or before this stage. The pre-tick feedback gate should have intercepted this — file a bug citing feedback-triage-gate.ts. Workaround: call haiku_run_next again to re-enter pre-tick, or close / reject the open items via the review UI first.`,
 		}
 	}
 

@@ -35,7 +35,10 @@ import {
 	readStageDef,
 	readStudio,
 } from "../../studio-reader.js"
-import { writeSubagentPrompt } from "../../subagent-prompt-file.js"
+import {
+	formatSubagentDispatchBlock,
+	writeSubagentPrompt,
+} from "../../subagent-prompt-file.js"
 
 /** Read the `interpretation:` field from a hat-like frontmatter file.
  *  Returns "lens" | "strict" | undefined (unset). Universal field on
@@ -122,13 +125,14 @@ export function emitSubagentDispatchBlock(opts: {
 		bolt,
 		content: promptBody,
 	})
-	const tool = toolAttr ? ` tool="Agent"` : ""
-	const modelAttr = model ? ` model="${model}"` : ""
-	const h = heading ?? "## Subagent Dispatch (MANDATORY — relay verbatim)"
-	return (
-		`${h}\n\n<subagent${tool} type="${agentType}"${modelAttr}` +
-		` prompt_file="${path}">\n${parentInstruction}\n</subagent>`
-	)
+	return formatSubagentDispatchBlock({
+		path,
+		parentInstruction,
+		agentType,
+		model,
+		heading,
+		toolAttr,
+	})
 }
 
 /** Resolve the model tier for a review-agent or studio-level fix-hat

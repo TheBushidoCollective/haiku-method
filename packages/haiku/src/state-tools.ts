@@ -58,6 +58,7 @@ import {
 	resolveStudio,
 } from "./studio-reader.js"
 import {
+	nextRelayPath,
 	resultPathFor,
 	setSessionId,
 	writeResultFile,
@@ -9689,17 +9690,53 @@ export function handleStateTool(
 				},
 			)
 			const nextDispatchedHat = isLast ? null : fixHats[callingIdx + 1]
+
+			// Return the next-hat dispatch block from the sidecar file the
+			// dispatch builder wrote at fix-loop entry. The block is keyed by
+			// the CALLING hat (the one whose advance triggered this code
+			// path), so we look up the sidecar for callingHat's slug.
+			//
+			// Why a sidecar instead of building inline: the dispatch builder
+			// already resolves agent_type, model, parent-instruction, and
+			// heading — duplicating that here risks drift. Sidecar = single
+			// source of truth.
+			//
+			// Why this closes #272 review issue 3: an agent that calls
+			// `haiku_feedback_reject` instead of advance_hat never reaches
+			// this code path, never reads the sidecar, never receives the
+			// `next_subagent_dispatch_block` field — so there is no relay
+			// block in their context they could mistakenly emit. Mechanics,
+			// not LLM compliance.
+			let nextSubagentDispatchBlock: string | null = null
+			if (!isLast && nextDispatchedHat) {
+				const sidecarUnit = stageArg ? `fix-${fbId}` : `intent-fix-${fbId}`
+				try {
+					const sidecar = nextRelayPath({
+						unit: sidecarUnit,
+						hat: callingHat,
+						bolt: curBolt,
+					})
+					if (existsSync(sidecar)) {
+						nextSubagentDispatchBlock = readFileSync(sidecar, "utf8")
+					}
+				} catch {
+					/* Best-effort. If the sidecar is missing or unreadable, the
+					   agent's prompt tells them to fall back to haiku_run_next. */
+				}
+			}
+
 			return reply({
 				ok: true,
 				feedback_id: fbId,
 				stage: stageArg || null,
 				calling_hat: callingHat,
 				next_dispatched_hat: nextDispatchedHat,
+				next_subagent_dispatch_block: nextSubagentDispatchBlock,
 				closed: isLast,
 				bolt: curBolt,
 				message: isLast
 					? `FB '${fbId}' closed by ${closedBy} after '${callingHat}' (last hat in fix_hats sequence ${callingIdx + 1}/${fixHats.length}).`
-					: `FB '${fbId}': '${callingHat}' (${callingIdx + 1}/${fixHats.length}) finished; next hat to dispatch is '${nextDispatchedHat}'.`,
+					: `FB '${fbId}': '${callingHat}' (${callingIdx + 1}/${fixHats.length}) finished; next hat to dispatch is '${nextDispatchedHat}'. The next-hat dispatch block is in the \`next_subagent_dispatch_block\` field of this response — relay it verbatim to your parent.`,
 			})
 		}
 

@@ -16,6 +16,7 @@ import {
 	MAX_FIX_LOOP_BOLTS,
 } from "../../state-tools.js"
 import { readHatDefs, resolveStudio } from "../../studio-reader.js"
+import { writeNextRelaySidecar } from "../../subagent-prompt-file.js"
 import {
 	batchDispatchDirective,
 	buildInterpretationBlock,
@@ -218,17 +219,14 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 					"",
 					`After completing your fix work above:`,
 					"",
-					`**If you called \`haiku_feedback_reject\`** (stale / invalid finding): do NOT call advance_hat. Return your one-line rejection reason as your final message. Stop here.`,
+					`**If you called \`haiku_feedback_reject\`** (stale / invalid finding): do NOT call advance_hat. Return your one-line rejection reason as your final message. Stop here. (You will NOT receive a next-hat dispatch block on this path — there is nothing to relay.)`,
 					"",
 					`**Otherwise (actionable finding — normal path):**`,
 					`1. Call \`haiku_feedback_advance_hat { intent: "${slug}", stage: "${fixStage}", feedback_id: "${fbId}" }\` to record this hat's completion and progress the chain.`,
 					`   - On error: return the error message as your final message. Stop here.`,
-					`2. **Relay the next hat's dispatch block verbatim.** Your parent will spawn the next subagent — do NOT run it yourself. Include the block below EXACTLY as-is in your final message (after your one-line work summary):`,
+					`2. **The tool response contains a \`next_subagent_dispatch_block\` field.** Copy its full string contents verbatim as your final message (after your one-line work summary). Your parent will spawn the relayed subagent — do NOT run it yourself. Do NOT paraphrase, summarize, or otherwise modify the block.`,
 					"",
-					nextHatRelayBlock ??
-						"<!-- relay block missing — fix_hats chain has no next hat to embed; this is a studio configuration bug -->",
-					"",
-					"**CRITICAL:** Your final message must be: (1) your one-line work summary, then (2) the `<subagent>` relay block above verbatim. Nothing else. The parent reads the relay block to spawn the next hat.",
+					"**CRITICAL:** Your final message must be: (1) your one-line work summary, then (2) the literal contents of the `next_subagent_dispatch_block` field from the advance_hat response. Nothing else. The block is delivered via the tool return value precisely so an agent on the rejection path never sees it.",
 				)
 			}
 
@@ -241,6 +239,23 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 				promptBody: promptLines.join("\n"),
 				heading: `#### Subagent: \`${hat}\`${isLast ? " (final — validates closure)" : " (relays next hat to parent)"}`,
 			})
+
+			// Write the NEXT hat's dispatch block to a sidecar keyed by THIS
+			// hat's slug. When this hat advances, advance_hat reads the
+			// sidecar and returns its contents in `next_subagent_dispatch_block`.
+			// On rejection, advance_hat is never called and the sidecar is
+			// never read — the agent has no relay block to mistakenly emit.
+			if (!isLast && nextHatRelayBlock) {
+				try {
+					writeNextRelaySidecar(
+						{ unit: `fix-${fbId}`, hat, bolt: fixBolt },
+						nextHatRelayBlock,
+					)
+				} catch {
+					/* Best-effort: if the sidecar can't be written, the prompt
+					   instructions tell the agent to fall back to haiku_run_next. */
+				}
+			}
 
 			nextHatRelayBlock = dispatchBlock
 			if (hatIdx === 0) {

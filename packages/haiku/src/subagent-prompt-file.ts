@@ -138,6 +138,85 @@ export function resultPathFor(opts: {
 	return join(promptDir(), `${slug}.result.json`)
 }
 
+/**
+ * Compute the deterministic prompt-file path for a (unit, hat, bolt) tuple
+ * WITHOUT writing it. Used by advance_hat to emit the next-hat dispatch
+ * block in its tool response — the prompt file was written by the dispatch
+ * builder at fix-loop entry, so by the time advance_hat fires, the file
+ * already exists at this path. Mirrors writeSubagentPrompt's slug rule.
+ */
+export function subagentPromptPath(opts: {
+	unit: string
+	hat: string
+	bolt: number
+}): string {
+	const { unit, hat, bolt } = opts
+	const slug = `${unit.replace(/\.md$/, "")}-${hat}-${bolt}`
+	return join(promptDir(), `${slug}.prompt.md`)
+}
+
+/**
+ * Build a `<subagent>` dispatch-block markup string for a prompt file that
+ * ALREADY exists on disk (no write side effect). Used by the dispatch
+ * builder to format markup, AND by tool handlers reading sidecar files.
+ *
+ * Lives here (not in orchestrator/prompts/_helpers.ts) to avoid a circular
+ * import: state-tools imports this; _helpers imports state-tools.
+ */
+export function formatSubagentDispatchBlock(opts: {
+	path: string
+	parentInstruction?: string
+	agentType: string
+	model?: string | null
+	heading?: string
+	toolAttr?: boolean
+}): string {
+	const { path, parentInstruction, agentType, model, heading, toolAttr } = opts
+	const instruction =
+		parentInstruction ??
+		`Read the file at \`${path}\` and execute its instructions exactly. The file is the complete, canonical subagent prompt authored by the workflow engine — do not paraphrase or skip any of it.`
+	const tool = toolAttr ? ` tool="Agent"` : ""
+	const modelAttr = model ? ` model="${model}"` : ""
+	const h = heading ?? "## Subagent Dispatch (MANDATORY — relay verbatim)"
+	return (
+		`${h}\n\n<subagent${tool} type="${agentType}"${modelAttr}` +
+		` prompt_file="${path}">\n${instruction}\n</subagent>`
+	)
+}
+
+/**
+ * Path for a "next-hat relay" sidecar file. The fix-loop dispatch builder
+ * writes the FULLY-FORMATTED next-hat `<subagent>` markup here at dispatch
+ * time, keyed by the CURRENT hat (the one whose prompt would have embedded
+ * the relay). `haiku_feedback_advance_hat` reads the sidecar after the
+ * current hat advances and returns its contents in the tool response —
+ * so the agent never sees the relay block in a prompt, only as a tool
+ * return value they only get on the actionable path. If the agent calls
+ * `haiku_feedback_reject` instead, no read happens, no block is returned,
+ * nothing to mistakenly emit.
+ */
+export function nextRelayPath(opts: {
+	unit: string
+	hat: string
+	bolt: number
+}): string {
+	const { unit, hat, bolt } = opts
+	const slug = `${unit.replace(/\.md$/, "")}-${hat}-${bolt}`
+	return join(promptDir(), `${slug}.next-relay.md`)
+}
+
+/**
+ * Write a next-hat relay sidecar file. Best-effort: the file is treated
+ * as advisory by readers — if the write fails, advance_hat falls back to
+ * just returning `next_dispatched_hat` without the prebuilt block.
+ */
+export function writeNextRelaySidecar(
+	opts: { unit: string; hat: string; bolt: number },
+	content: string,
+): void {
+	atomicWrite(nextRelayPath(opts), content)
+}
+
 export function writeResultFile(resultPath: string, payload: unknown): void {
 	atomicWrite(resultPath, JSON.stringify(payload, null, 2))
 }

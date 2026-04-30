@@ -16,13 +16,38 @@ import {
 // Helper: extract subagent prompt_file paths from an orchestrator response
 // and concatenate their contents. The workflow engine now writes subagent prompts to
 // tmpfiles and the response only carries <subagent prompt_file="..."> refs.
+// Also handles action-level prompt_files (file-based parent dispatch).
 function expandPromptFiles(responseText) {
-	const re = /<subagent[^>]*\bprompt_file="([^"]+)"/g
+	const subagentRe = /<subagent[^>]*\bprompt_file="([^"]+)"/g
+	const actionRe = /"prompt_file":\s*"([^"]+)"/g
 	let out = responseText
-	for (const match of responseText.matchAll(re)) {
+	const seen = new Set()
+	for (const match of responseText.matchAll(subagentRe)) {
 		const path = match[1]
+		if (seen.has(path)) continue
+		seen.add(path)
 		if (existsSync(path)) {
 			out += `\n\n${readFileSync(path, "utf8")}`
+		}
+	}
+	// The action prompt_file may reference subagent prompt_files inside its
+	// body — recurse one level so subagent prompts surfaced via the action
+	// file are also expanded.
+	for (const match of responseText.matchAll(actionRe)) {
+		const path = match[1]
+		if (seen.has(path)) continue
+		seen.add(path)
+		if (existsSync(path)) {
+			const body = readFileSync(path, "utf8")
+			out += `\n\n${body}`
+			for (const inner of body.matchAll(subagentRe)) {
+				const innerPath = inner[1]
+				if (seen.has(innerPath)) continue
+				seen.add(innerPath)
+				if (existsSync(innerPath)) {
+					out += `\n\n${readFileSync(innerPath, "utf8")}`
+				}
+			}
 		}
 	}
 	return out

@@ -25,6 +25,7 @@ import { actionPromptBuilders } from "./orchestrator/prompts/index.js"
 import { orchestratorToolDefs } from "./orchestrator/tool-defs.js"
 import { dispatchOrchestratorAction } from "./orchestrator/workflow/run-tick.js"
 import { validateSlugArgs } from "./state-tools.js"
+import { writeActionPromptFile } from "./subagent-prompt-file.js"
 import { orchestratorToolHandlers } from "./tools/orchestrator/index.js"
 
 export { orchestratorToolDefs }
@@ -105,14 +106,116 @@ export interface OrchestratorAction {
 
 // ── Run instruction builder ───────────────────────────────────────────────
 
+/**
+ * Action emitters whose multi-line instructional bodies are routed to a
+ * tmpfile via `writeActionPromptFile` instead of inlined in the response.
+ *
+ * The flow:
+ *   1. The per-action prompt builder renders the full body as today.
+ *   2. `buildRunInstructions` writes the body to a file, stamps
+ *      `prompt_file` on the action, and replaces the prompt-builder
+ *      output with a one-line "Read the file" pointer.
+ *   3. The action JSON returned to the agent then carries `prompt_file`
+ *      alongside the structured fields (intent, stage, items, …).
+ *
+ * `elaborate` is NOT in this set because its handler already performs
+ * the file-write itself and the prompt builder short-circuits when
+ * `action.prompt_file` is present (see PR #281). All other multi-line
+ * emitters route through here.
+ */
+const FILE_BACKED_ACTIONS: ReadonlySet<string> = new Set<string>([
+	"pre_review",
+	"review",
+	"review_fix",
+	"gate_review",
+	"intent_completion_review",
+	"intent_completion_fix",
+	"feedback_dispatch",
+	"feedback_triage",
+	"start_units",
+	"continue_units",
+	"start_unit",
+	"continue_unit",
+	"integrate_fix_chains",
+])
+
+/**
+ * Slug fragment for the action prompt-file name. Keeps the filename
+ * deterministic enough to locate, but unique enough that two ticks of
+ * the same action don't collide.
+ */
+function buildActionTickHint(action: OrchestratorAction): string {
+	const stage = (action.stage as string) || ""
+	const items = Array.isArray(action.items)
+		? `n${(action.items as unknown[]).length}`
+		: ""
+	const iteration =
+		(action.iteration as number | undefined) ??
+		(action.bolt as number | undefined)
+	return `${stage}-${items}-${iteration ?? ""}-${Date.now()}`
+}
+
 export function buildRunInstructions(
 	slug: string,
 	studio: string,
 	action: OrchestratorAction,
 	dir: string,
 ): string {
+	// All per-action prompts live in orchestrator/prompts/* per-file
+	// modules registered in actionPromptBuilders. The legacy switch is
+	// gone — unknown actions fall through to the default JSON dump
+	// below for forward-compat with new action types.
+	const perActionBuilder = actionPromptBuilders.get(action.action)
+	let perActionBody: string | null = null
+	if (perActionBuilder) {
+		perActionBody = perActionBuilder({ slug, studio, action, dir })
+	}
+
+	// File-backed dispatch: when this action is in FILE_BACKED_ACTIONS
+	// AND the prompt builder produced a multi-line body, write the body
+	// to a tmpfile, stamp `prompt_file` on the action, and replace the
+	// per-action body with a short "read the file" pointer. The action
+	// JSON below the announcement section then carries `prompt_file`,
+	// so the agent's tool response surfaces the path in both places.
+	if (
+		perActionBody &&
+		FILE_BACKED_ACTIONS.has(action.action) &&
+		!action.prompt_file
+	) {
+		try {
+			const { path } = writeActionPromptFile({
+				action: action.action,
+				intent: slug,
+				stage: (action.stage as string) || undefined,
+				content: perActionBody,
+				tickHint: buildActionTickHint(action),
+			})
+			action.prompt_file = path
+			// Keep the structured `message:` short — the inline body in
+			// the response also points to the file.
+			action.message = `Read \`${path}\` and execute its instructions exactly. The file is the canonical, authoritative ${action.action} prompt for this tick.`
+			perActionBody = [
+				`## ${action.action} Prompt (file-based)`,
+				"",
+				`The full prompt for this tick is at:`,
+				"",
+				`    ${path}`,
+				"",
+				`Read that file with the Read tool and execute its instructions exactly. The file is the canonical, authoritative ${action.action} prompt — do not paraphrase, summarize, or skip any of it.`,
+			].join("\n")
+		} catch (err) {
+			// Best-effort: leave perActionBody as the inline body. This
+			// mirrors elaborate's fallback (handlers/elaborate.ts).
+			console.error(
+				`[haiku] action prompt-file write failed for ${action.action}/${slug}: ${err instanceof Error ? err.message : String(err)}. Falling back to inline rendering.`,
+			)
+		}
+	}
+
 	// Strip tell_user/next_step from the JSON output — they appear in the
 	// announcement section already, no need to duplicate in the raw action.
+	// Note: action mutation above (prompt_file/message) is reflected in the
+	// JSON because we destructure AFTER the mutation.
 	const { tell_user, next_step, ...actionForJson } =
 		action as OrchestratorAction & { tell_user?: string; next_step?: string }
 	const actionJson = JSON.stringify(actionForJson, null, 2)
@@ -134,17 +237,9 @@ export function buildRunInstructions(
 
 	sections.push(`## Orchestrator Action\n\n\`\`\`json\n${actionJson}\n\`\`\``)
 
-	// All per-action prompts live in orchestrator/prompts/* per-file
-	// modules registered in actionPromptBuilders. The legacy switch is
-	// gone — unknown actions fall through to the default JSON dump
-	// below for forward-compat with new action types.
-	const perActionBuilder = actionPromptBuilders.get(action.action)
-	if (perActionBuilder) {
-		const built = perActionBuilder({ slug, studio, action, dir })
-		if (built !== null) {
-			sections.push(built)
-			return sections.join("\n\n")
-		}
+	if (perActionBody !== null) {
+		sections.push(perActionBody)
+		return sections.join("\n\n")
 	}
 
 	sections.push(

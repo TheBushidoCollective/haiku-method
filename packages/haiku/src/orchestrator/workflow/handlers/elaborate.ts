@@ -135,6 +135,113 @@ function readFrontmatter(filePath: string): Record<string, unknown> {
 	return data
 }
 
+/** Tool-enforced feature coverage check. For each `.feature` file
+ *  under `<intent>/features/`, walk every unit in the current stage
+ *  looking for an owner. A unit owns a feature when ANY of:
+ *
+ *    - the unit body or its closes: list cites `features/<name>.feature`
+ *    - a unit `quality_gates:` command path matches the feature's
+ *      relative path (covers test runners that target the feature)
+ *
+ *  Returns an `error` action when ≥1 feature has zero owners; null
+ *  when every feature is covered (or the features dir is absent). */
+function validateFeatureCoverage(
+	slug: string,
+	currentStage: string,
+): OrchestratorAction | null {
+	const iDir = intentDir(slug)
+	const featuresDir = join(iDir, "features")
+	if (!existsSync(featuresDir)) return null
+	let featureFiles: string[]
+	try {
+		featureFiles = readdirSync(featuresDir).filter((f) =>
+			f.endsWith(".feature"),
+		)
+	} catch {
+		return null
+	}
+	if (featureFiles.length === 0) return null
+
+	const unitsDir = join(iDir, "stages", currentStage, "units")
+	if (!existsSync(unitsDir)) {
+		// No units yet — surface the orphan list rather than blocking
+		// the elaborator before they've even drafted anything. This is
+		// rare in practice (we only enter this gate in fresh-elaborate
+		// mode after at least one unit exists), but keep the contract
+		// explicit.
+		return null
+	}
+
+	interface UnitCorpus {
+		name: string
+		body: string
+		closes: string[]
+		gateCommands: string[]
+	}
+	const unitCorpus: UnitCorpus[] = []
+	for (const f of readdirSync(unitsDir).filter((f) => f.endsWith(".md"))) {
+		const path = join(unitsDir, f)
+		try {
+			const raw = readFileSync(path, "utf8")
+			const { data, body } = parseFrontmatter(raw)
+			const closes = Array.isArray(data.closes) ? (data.closes as string[]) : []
+			const gates = Array.isArray(data.quality_gates)
+				? (data.quality_gates as Array<unknown>)
+				: []
+			const gateCommands: string[] = []
+			for (const g of gates) {
+				if (typeof g === "string") {
+					gateCommands.push(g)
+				} else if (g && typeof g === "object") {
+					const cmd = (g as Record<string, unknown>).command
+					if (typeof cmd === "string") gateCommands.push(cmd)
+					const verify = (g as Record<string, unknown>).verify
+					if (typeof verify === "string") gateCommands.push(verify)
+				}
+			}
+			unitCorpus.push({
+				name: f.replace(/\.md$/, ""),
+				body: body || "",
+				closes,
+				gateCommands,
+			})
+		} catch {
+			/* skip unreadable */
+		}
+	}
+
+	const uncovered: string[] = []
+	for (const fname of featureFiles) {
+		const relPath = `features/${fname}`
+		let owned = false
+		for (const u of unitCorpus) {
+			if (
+				u.body.includes(fname) ||
+				u.body.includes(relPath) ||
+				u.closes.some((c) => c === relPath || c.endsWith(`/${fname}`)) ||
+				u.gateCommands.some(
+					(c) => c.includes(relPath) || c.includes(`/${fname}`),
+				)
+			) {
+				owned = true
+				break
+			}
+		}
+		if (!owned) uncovered.push(relPath)
+	}
+
+	if (uncovered.length === 0) return null
+
+	return {
+		action: "error",
+		error: "feature_coverage_gap",
+		intent: slug,
+		stage: currentStage,
+		uncovered,
+		message: `Feature coverage gap: ${uncovered.length} feature file(s) under \`features/\` are not owned by any unit in stage '${currentStage}'.\n\nOrphan feature(s):\n${uncovered.map((p) => `  - ${p}`).join("\n")}\n\nFor each orphan feature, either:\n- Update an existing unit's body to cite \`${uncovered[0]}\` (or one of the orphans) so it's clear which unit owns the behavior, OR\n- Add a unit \`closes:\` entry referencing the feature path, OR\n- Reference the feature path in a unit's \`quality_gates:\` command (e.g. \`bun test ${uncovered[0]}\`), OR\n- If a feature is genuinely out of scope for this intent, delete the feature file. Do NOT leave orphans.\n\nAfter wiring coverage, call \`haiku_run_next { intent: "${slug}" }\` to re-validate.`,
+	}
+}
+
 const emit: WorkflowHandler = (ctx) => {
 	const slug = ctx.slug
 	const studio = ctx.studio
@@ -694,6 +801,19 @@ const emit: WorkflowHandler = (ctx) => {
 			}
 		}
 	}
+
+	// Feature coverage gate: every intent-root .feature file must be
+	// owned by at least one unit in the current stage. Owners count as
+	// any of:
+	//   - The unit body cites the feature filename (`features/foo.feature`
+	//     mentioned in the body, OR `closes:` cite list).
+	//   - A unit's `quality_gates:` command names a path that touches
+	//     the feature's relative path.
+	// Refusing to advance forces the spec to acknowledge every feature
+	// before the build phase opens — orphan features were the stealth
+	// path to "shipped without coverage" in earlier intents.
+	const featureCoverageError = validateFeatureCoverage(slug, currentStage)
+	if (featureCoverageError) return featureCoverageError
 
 	// Spec gate: auto-advance or open gate_review
 	const intentReviewed = intent.intent_reviewed as boolean

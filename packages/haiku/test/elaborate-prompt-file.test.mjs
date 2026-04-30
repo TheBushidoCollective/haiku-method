@@ -354,9 +354,7 @@ Software development.
 			// Find the next ### boundary (another subheading), or EOF.
 			const nextHeading = afterHeading.indexOf("\n###")
 			const section =
-				nextHeading === -1
-					? afterHeading
-					: afterHeading.slice(0, nextHeading)
+				nextHeading === -1 ? afterHeading : afterHeading.slice(0, nextHeading)
 			assert.ok(
 				section.trim().length > 0,
 				`Section under '${heading}' should not be empty`,
@@ -432,10 +430,9 @@ Software development.
 		writeFileSync(sessionSlot, "not-a-dir")
 
 		try {
-			const { projDir, intentDirPath, slug } = createProject(
-				"pf-fallback",
-				{ active_stage: "plan" },
-			)
+			const { projDir, intentDirPath, slug } = createProject("pf-fallback", {
+				active_stage: "plan",
+			})
 			createStageState(intentDirPath, "plan", { phase: "elaborate" })
 			process.chdir(projDir)
 			const result = runNext(slug)

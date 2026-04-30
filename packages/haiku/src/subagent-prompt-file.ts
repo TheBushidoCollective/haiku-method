@@ -93,9 +93,18 @@ function maybePeriodicOwnSessionCleanup(dir: string): void {
 	}
 }
 
-export interface SubagentPromptFile {
+/** Result type for action-prompt writes (e.g. elaborate). Only `path` is
+ *  returned because action-prompt callers set the action's `message` field
+ *  themselves — they never consume the pre-built instruction string. */
+export interface ActionPromptFile {
 	/** Absolute path to the written prompt file. */
 	path: string
+}
+
+/** Result type for subagent-prompt writes. Includes `parentInstruction` so
+ *  the parent Agent tool call can relay the "Read this file" directive
+ *  verbatim without re-constructing it. */
+export interface SubagentPromptFile extends ActionPromptFile {
 	/** The minimal parent-facing instruction — "Read this file and execute its instructions." */
 	parentInstruction: string
 }
@@ -124,14 +133,13 @@ export function writeSubagentPrompt(opts: {
 }
 
 /**
- * Write a per-action prompt body to a tmpfile and return the path + the
- * one-line parent-facing instruction. Mirrors `writeSubagentPrompt` but is
- * keyed by action+intent+stage instead of unit+hat+bolt — used when an
- * orchestrator action emission carries an authoritative prompt body too
- * large to inline in the tool response (e.g. `elaborate`).
- *
- * The returned message is what the action's `message:` field should be set
- * to: a short "Read <path>" line that points the agent at the file.
+ * Write a per-action prompt body to a tmpfile and return `{ path }`. Mirrors
+ * `writeSubagentPrompt` but is keyed by action+intent+stage instead of
+ * unit+hat+bolt — used when an orchestrator action emission carries an
+ * authoritative prompt body too large to inline in the tool response (e.g.
+ * `elaborate`). Callers set their own `message` field on the action object
+ * and never need the pre-built instruction string, so only `path` is
+ * returned (see `ActionPromptFile`).
  */
 export function writeActionPromptFile(opts: {
 	action: string
@@ -139,7 +147,7 @@ export function writeActionPromptFile(opts: {
 	stage?: string
 	content: string
 	tickHint?: string | number
-}): SubagentPromptFile {
+}): ActionPromptFile {
 	const { action, intent, stage, content } = opts
 	const tickHint =
 		opts.tickHint !== undefined && opts.tickHint !== null
@@ -153,9 +161,7 @@ export function writeActionPromptFile(opts: {
 	atomicWrite(path, content)
 	maybePeriodicOwnSessionCleanup(dir)
 
-	const parentInstruction = `Read the file at \`${path}\` and execute its instructions exactly. The file is the canonical, authoritative ${action} prompt for this tick — do not paraphrase or skip any of it.`
-
-	return { path, parentInstruction }
+	return { path }
 }
 
 /**

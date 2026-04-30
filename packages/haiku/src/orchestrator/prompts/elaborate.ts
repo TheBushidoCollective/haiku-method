@@ -114,10 +114,11 @@ function buildReviewAgentLensSection(
 	return lines.join("\n").trimEnd()
 }
 
-/** Build the body of a fresh-elaborate prompt as a single string.
- *  Exported so the workflow handler can write it to a tmpfile and
- *  hand the agent a `prompt_file` pointer instead of inlining the
- *  whole body in the tool response. */
+// Exported so the workflow handler (`handlers/elaborate.ts`) can write the
+// rendered body to a tmpfile and stamp `prompt_file` on the action, without
+// going through `buildRunInstructions`. The registered prompt builder below
+// short-circuits when `action.prompt_file` is set, so this is the only call
+// site that produces the full body.
 export function buildElaboratePromptBody(ctx: PromptBuilderContext): string {
 	return renderElaborate(ctx)
 }
@@ -190,8 +191,8 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 
 		sections.push(WORKFLOW_CONTRACTS_ELABORATE_BLOCK)
 
-		const reviewLenses = buildReviewAgentLensSection(studio, stage, dir)
-		if (reviewLenses) sections.push(reviewLenses)
+		const lenses = buildReviewAgentLensSection(studio, stage, dir)
+		if (lenses) sections.push(lenses)
 
 		sections.push(
 			[
@@ -242,8 +243,8 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 					)}\n\nYou MUST open every file above and read it completely before drafting units. The title is only a handle; the body carries requirements, tests, and acceptance criteria.`,
 			)
 		}
-		const revisitLenses = buildReviewAgentLensSection(studio, stage, dir)
-		if (revisitLenses) sections.push(revisitLenses)
+		const lenses = buildReviewAgentLensSection(studio, stage, dir)
+		if (lenses) sections.push(lenses)
 		sections.push(
 			`### Responsibilities\n\n- Read every \`pending_feedback[].file\` in full before drafting — the title is only a handle.\n- Draft one or more new units whose \`closes:\` frontmatter references the feedback items they resolve.\n- Every pending feedback item MUST be referenced by at least one new unit's \`closes:\` (orphans block advancement).\n- Ask the user clarifying questions (\`AskUserQuestion\` with options[]) when trade-offs are unclear; iterate across turns.\n- When the user approves the drafted units, call \`haiku_run_next\` to advance.\n\nInputs (read directly — do not inline summaries, open the actual files):\n- every \`pending_feedback[].file\` listed above\n- \`stage_metadata\` (STAGE.md body + review agents)\n- \`completed_units\` (read-only reference)\n- \`intent.md\` for overall goals`,
 		)

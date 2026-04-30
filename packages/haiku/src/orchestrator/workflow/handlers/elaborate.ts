@@ -37,7 +37,6 @@ import {
 	mergeDiscoveryWorktree,
 } from "../../../git-worktree.js"
 import {
-	buildElaboratorInstruction,
 	cleanupPreExecuteFeedback,
 	isStagePreExecute,
 	listUnits,
@@ -87,16 +86,29 @@ function withPromptFile(
 	slug: string,
 	studio: string,
 ): OrchestratorAction {
+	let body: string
 	try {
 		const dir = intentDir(slug)
-		const body = buildElaboratePromptBody({
+		body = buildElaboratePromptBody({
 			slug,
 			studio,
 			action: action as OrchestratorAction,
 			dir,
 		})
+	} catch (err) {
+		// Render failed (e.g. TypeError in prompt builder) — return the
+		// action as-is so the inline prompt-builder rethrows the real
+		// error through the normal response path.
+		console.error(
+			`[haiku] elaborate prompt-body render failed for ${slug}: ${err instanceof Error ? err.message : String(err)}. Falling back to inline rendering.`,
+		)
+		return action as OrchestratorAction
+	}
+
+	try {
 		const stage = (action.stage as string) || ""
-		const tickHint = `${(action.iteration as number | undefined) ?? 0}-${(action.elaboration_turns as number | undefined) ?? 0}-${Date.now()}`
+		const iteration = (action.iteration as number | undefined) ?? 0
+		const tickHint = `${iteration}-${Date.now()}`
 		const { path } = writeActionPromptFile({
 			action: "elaborate",
 			intent: slug,
@@ -110,8 +122,7 @@ function withPromptFile(
 		// Best-effort: if the file write fails, leave the action
 		// untouched and let the legacy inline prompt-builder render
 		// the body in the response. This keeps the workflow alive
-		// even when /tmp is unwritable, the studio reader chokes,
-		// etc.
+		// even when /tmp is unwritable.
 		console.error(
 			`[haiku] elaborate prompt-file write failed for ${slug}: ${err instanceof Error ? err.message : String(err)}. Falling back to inline rendering.`,
 		)
@@ -412,12 +423,6 @@ const emit: WorkflowHandler = (ctx) => {
 				{
 					...basePayload,
 					validation_error,
-					message: buildElaboratorInstruction({
-						visits: iteration,
-						pendingFeedbackCount: pendingFeedback.length,
-						stage: currentStage,
-						situation: `Validation error: ${validation_error}`,
-					}),
 				},
 				slug,
 				studio,
@@ -430,12 +435,6 @@ const emit: WorkflowHandler = (ctx) => {
 				{
 					...basePayload,
 					validation_error,
-					message: buildElaboratorInstruction({
-						visits: iteration,
-						pendingFeedbackCount: pendingFeedback.length,
-						stage: currentStage,
-						situation: `Validation error: ${validation_error}`,
-					}),
 				},
 				slug,
 				studio,
@@ -466,12 +465,6 @@ const emit: WorkflowHandler = (ctx) => {
 					{
 						...basePayload,
 						validation_error,
-						message: buildElaboratorInstruction({
-							visits: iteration,
-							pendingFeedbackCount: pendingFeedback.length,
-							stage: currentStage,
-							situation: `Validation error: ${validation_error}`,
-						}),
 					},
 					slug,
 					studio,
@@ -483,11 +476,6 @@ const emit: WorkflowHandler = (ctx) => {
 			return withPromptFile(
 				{
 					...basePayload,
-					message: buildElaboratorInstruction({
-						visits: iteration,
-						pendingFeedbackCount: pendingFeedback.length,
-						stage: currentStage,
-					}),
 				},
 				slug,
 				studio,

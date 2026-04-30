@@ -5601,7 +5601,9 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 			type: "object",
 			properties: {
 				ok: { type: "boolean" },
-				message: { type: "string" },
+				intent: { type: "string" },
+				stage: { type: "string" },
+				rationale: { type: "string" },
 				error: { type: "string" },
 			},
 		},
@@ -8099,10 +8101,7 @@ export function handleStateTool(
 					{ isError: true },
 				)
 			}
-			const reconState = JSON.parse(readFileSync(stateFile, "utf8")) as Record<
-				string,
-				unknown
-			>
+			const reconState = readJson(stateFile) as Record<string, unknown>
 			reconState.upstream_reconciliation_acknowledged = true
 			reconState.upstream_reconciliation_acknowledged_at = timestamp()
 			reconState.upstream_reconciliation_rationale = rationale

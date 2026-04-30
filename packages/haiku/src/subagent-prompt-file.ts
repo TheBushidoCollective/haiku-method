@@ -124,6 +124,41 @@ export function writeSubagentPrompt(opts: {
 }
 
 /**
+ * Write a per-action prompt body to a tmpfile and return the path + the
+ * one-line parent-facing instruction. Mirrors `writeSubagentPrompt` but is
+ * keyed by action+intent+stage instead of unit+hat+bolt — used when an
+ * orchestrator action emission carries an authoritative prompt body too
+ * large to inline in the tool response (e.g. `elaborate`).
+ *
+ * The returned message is what the action's `message:` field should be set
+ * to: a short "Read <path>" line that points the agent at the file.
+ */
+export function writeActionPromptFile(opts: {
+	action: string
+	intent: string
+	stage?: string
+	content: string
+	tickHint?: string | number
+}): SubagentPromptFile {
+	const { action, intent, stage, content } = opts
+	const tickHint =
+		opts.tickHint !== undefined && opts.tickHint !== null
+			? String(opts.tickHint)
+			: String(Date.now())
+	const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, "-")
+	const stagePart = stage ? `-${safe(stage)}` : ""
+	const slug = `action-${safe(action)}-${safe(intent)}${stagePart}-${safe(tickHint)}`
+	const dir = promptDir()
+	const path = join(dir, `${slug}.prompt.md`)
+	atomicWrite(path, content)
+	maybePeriodicOwnSessionCleanup(dir)
+
+	const parentInstruction = `Read the file at \`${path}\` and execute its instructions exactly. The file is the canonical, authoritative ${action} prompt for this tick — do not paraphrase or skip any of it.`
+
+	return { path, parentInstruction }
+}
+
+/**
  * Result path for the workflow response tmpfile. advance_hat/reject_hat write
  * their JSON response here; the subagent's final message is just a path line.
  * The parent reads this file instead of parsing prose.

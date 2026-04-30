@@ -6,10 +6,19 @@
 //   2. Revisit (iteration > 1) — pending feedback drove a roll-back
 //      to elaborate; emit the focused additive-elaboration block.
 //   3. Fresh elaborate — full rendering: stage def, workflow contracts,
-//      upstream inputs, prior-stage enumeration, optional discovery
-//      fan-out (early-return if any artifacts are pending), then
-//      output expectations + design-provider hint + approach
+//      review-agent lenses (inlined), upstream input REFERENCES (paths
+//      only — agent reads on demand), prior-stage REFERENCES, optional
+//      discovery fan-out (early-return if any artifacts are pending),
+//      then output expectations + design-provider hint + approach
 //      selection + scope/mechanics.
+//
+// File-based dispatch (2026-04-29): the workflow handler writes the
+// rendered body to a tmpfile and stamps `prompt_file` on the action.
+// The registered prompt builder below short-circuits when
+// `action.prompt_file` is set and emits a one-line "Read the prompt
+// file" instruction. The full body is built via
+// `buildElaboratePromptBody`, exported so the workflow handler can
+// invoke it without going through `buildRunInstructions`.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -22,10 +31,11 @@ import {
 	resolveIntentStages,
 	resolveStudioFilePath,
 } from "../../orchestrator.js"
-import { sanitizeForContext } from "../../state-integrity.js"
 import { parseFrontmatter } from "../../state-tools.js"
 import {
+	filterReviewAgentsByScope,
 	readPhaseOverride,
+	readReviewAgentPaths,
 	readStageDef,
 	resolveStageInputs,
 	studioSearchPaths,
@@ -36,6 +46,7 @@ import {
 	inlineFile,
 } from "./_helpers.js"
 import { definePromptBuilder } from "./define.js"
+import type { PromptBuilderContext } from "./types.js"
 import { WORKFLOW_CONTRACTS_ELABORATE_BLOCK } from "./WORKFLOW_CONTRACTS_ELABORATE_BLOCK.js"
 
 interface PendingFeedback {
@@ -54,7 +65,65 @@ function readFrontmatter(filePath: string): Record<string, unknown> {
 	return data
 }
 
-export default definePromptBuilder(({ slug, studio, action, dir }) => {
+/** Strip the YAML frontmatter from a review-agent file body so the
+ *  inlined "lens" content is just the mandate prose. */
+function readReviewAgentBody(absPath: string): string {
+	if (!existsSync(absPath)) return ""
+	const raw = readFileSync(absPath, "utf8")
+	try {
+		const { body } = parseFrontmatter(raw)
+		return (body || raw).trim()
+	} catch {
+		return raw.trim()
+	}
+}
+
+/** Build the "## Review-Agent Lenses (carry these while drafting)"
+ *  section. Pulls every per-stage review agent that scopes to this
+ *  stage's declared outputs (via `applies_to:` glob) and inlines its
+ *  body under a per-agent subheading. The intent is that the
+ *  elaborator drafts WITH the review lenses in mind, not blindly,
+ *  so the post-draft review pass produces fewer findings. */
+function buildReviewAgentLensSection(
+	studio: string,
+	stage: string,
+	dir: string,
+): string | null {
+	const agentPaths = filterReviewAgentsByScope(
+		readReviewAgentPaths(studio, stage),
+		join(dir, "stages", stage, "artifacts"),
+		{ studio, stage },
+	)
+	const names = Object.keys(agentPaths).sort()
+	if (names.length === 0) return null
+	const lines: string[] = [
+		"## Review-Agent Lenses (carry these while drafting)",
+		"",
+		'You will be reviewed against the following lenses. These are NOT a checklist to apply after drafting — a well-written unit shows the lens was applied because the spec was written with the lens in mind. Carry every lens while you write. There is no "review your work" step; if a lens wasn\'t internalized during drafting, no later check will save you.',
+		"",
+	]
+	for (const name of names) {
+		const body = readReviewAgentBody(agentPaths[name])
+		if (!body) continue
+		const heading = name
+			.split(/[-_]/)
+			.map((p) => (p.length === 0 ? p : p[0].toUpperCase() + p.slice(1)))
+			.join(" ")
+		lines.push(`### ${heading} lens`, "", body, "")
+	}
+	return lines.join("\n").trimEnd()
+}
+
+/** Build the body of a fresh-elaborate prompt as a single string.
+ *  Exported so the workflow handler can write it to a tmpfile and
+ *  hand the agent a `prompt_file` pointer instead of inlining the
+ *  whole body in the tool response. */
+export function buildElaboratePromptBody(ctx: PromptBuilderContext): string {
+	return renderElaborate(ctx)
+}
+
+function renderElaborate(ctx: PromptBuilderContext): string {
+	const { slug, studio, action, dir } = ctx
 	const stage = action.stage as string
 	const elaboration = (action.elaboration as string) || "collaborative"
 	const stageDef = readStageDef(studio, stage)
@@ -121,6 +190,9 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 
 		sections.push(WORKFLOW_CONTRACTS_ELABORATE_BLOCK)
 
+		const reviewLenses = buildReviewAgentLensSection(studio, stage, dir)
+		if (reviewLenses) sections.push(reviewLenses)
+
 		sections.push(
 			[
 				"### Decide — what does this iteration need?",
@@ -170,6 +242,8 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 					)}\n\nYou MUST open every file above and read it completely before drafting units. The title is only a handle; the body carries requirements, tests, and acceptance criteria.`,
 			)
 		}
+		const revisitLenses = buildReviewAgentLensSection(studio, stage, dir)
+		if (revisitLenses) sections.push(revisitLenses)
 		sections.push(
 			`### Responsibilities\n\n- Read every \`pending_feedback[].file\` in full before drafting — the title is only a handle.\n- Draft one or more new units whose \`closes:\` frontmatter references the feedback items they resolve.\n- Every pending feedback item MUST be referenced by at least one new unit's \`closes:\` (orphans block advancement).\n- Ask the user clarifying questions (\`AskUserQuestion\` with options[]) when trade-offs are unclear; iterate across turns.\n- When the user approves the drafted units, call \`haiku_run_next\` to advance.\n\nInputs (read directly — do not inline summaries, open the actual files):\n- every \`pending_feedback[].file\` listed above\n- \`stage_metadata\` (STAGE.md body + review agents)\n- \`completed_units\` (read-only reference)\n- \`intent.md\` for overall goals`,
 		)
@@ -194,7 +268,17 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 
 	sections.push(WORKFLOW_CONTRACTS_ELABORATE_BLOCK)
 
-	// Resolve upstream stage inputs — load actual content from prior stages.
+	// Review-agent lenses — inlined while drafting so the unit specs
+	// are written with the review lenses in mind, not blindly.
+	const lenses = buildReviewAgentLensSection(studio, stage, dir)
+	if (lenses) sections.push(lenses)
+
+	// Upstream context — REFERENCES, not inlined bodies. The
+	// agent reads each file on demand. This used to inline up to
+	// 3000 chars per artifact, which inflated the prompt
+	// dramatically without substantively helping the drafter.
+	const upstreamReferenceLines: string[] = []
+	let upstreamRefPaths: string[] = []
 	if (stageDef?.data?.inputs && Array.isArray(stageDef.data.inputs)) {
 		const inputs = stageDef.data.inputs as Array<{
 			stage: string
@@ -206,29 +290,19 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 		const missing = resolved.filter((r) => !r.exists)
 
 		if (found.length > 0) {
-			sections.push(
-				"## Upstream Stage Inputs (MANDATORY CONTEXT)\n\n" +
-					"These artifacts were produced by prior stages. You **MUST** read and incorporate them.\n" +
-					"When creating units, add relevant paths to the `inputs:` frontmatter field so builders have access.\n",
+			upstreamRefPaths = found.map((r) =>
+				r.resolvedPath.startsWith(`${dir}/`)
+					? r.resolvedPath.slice(dir.length + 1)
+					: r.resolvedPath,
 			)
 			for (const r of found) {
 				const relPath = r.resolvedPath.startsWith(`${dir}/`)
 					? r.resolvedPath.slice(dir.length + 1)
 					: r.resolvedPath
-				sections.push(
-					`### ${r.stage}/${r.artifactName} (${r.kind})\n` +
-						`**Path:** \`${relPath}\`\n\n` +
-						`${sanitizeForContext(r.content?.slice(0, 3000) ?? "", `upstream input: ${r.stage}/${r.artifactName}`)}${(r.content?.length ?? 0) > 3000 ? "\n...(truncated)" : ""}`,
+				upstreamReferenceLines.push(
+					`- **${r.stage}/${r.artifactName}** (${r.kind}) — \`${relPath}\``,
 				)
 			}
-			const refPaths = found.map((r) =>
-				r.resolvedPath.startsWith(`${dir}/`)
-					? r.resolvedPath.slice(dir.length + 1)
-					: r.resolvedPath,
-			)
-			sections.push(
-				`## Unit Inputs Requirement (MANDATORY)\n\nEvery unit **MUST** have a non-empty \`inputs:\` field in its frontmatter. At minimum, every unit should reference the intent document and discovery docs. Units will be **blocked from execution** if \`inputs:\` is empty.\n\nAvailable upstream artifacts:\n\`\`\`yaml\ninputs:\n${refPaths.map((p) => `  - ${p}`).join("\n")}\n\`\`\`\nInclude all inputs relevant to the unit's scope. Frontend/UI units should reference design artifacts. Backend units should reference behavioral specs and data contracts.`,
-			)
 		}
 
 		if (missing.length > 0) {
@@ -238,13 +312,10 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 		}
 	}
 
-	// Explicit "read all preceding stages" directive. The `inputs:`
-	// block above lists what the studio declared as required for this
-	// stage, but the elaboration agent MAY need context from any prior
-	// stage — not just the one immediately preceding this one, and not
-	// just the declared inputs. Enumerate them explicitly so the parent
-	// knows to look across the whole intent history before drafting
-	// units.
+	// Prior-stage reference enumeration — every preceding stage's dir
+	// is listed by path, no content inlined. The drafter reads what's
+	// relevant on demand.
+	const priorStageReferenceLines: string[] = []
 	{
 		const orderedStages = resolveIntentStages(
 			existsSync(join(dir, "intent.md"))
@@ -254,30 +325,52 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 		)
 		const myIdx = orderedStages.indexOf(stage)
 		const priorStages = myIdx > 0 ? orderedStages.slice(0, myIdx) : []
-		if (priorStages.length > 0) {
-			const enumLines: string[] = [
-				"## Prior-Stage Context (READ BEFORE DRAFTING UNITS)",
-				"",
-				`This stage (\`${stage}\`) has ${priorStages.length} preceding stage${priorStages.length === 1 ? "" : "s"} — **${priorStages.join(", ")}**. Every one of them has committed artifacts on the intent branch that may inform your unit decomposition. The \`inputs:\` block above lists what the studio formally declared as required; this block covers everything else the parent should enumerate before planning work.`,
-				"",
-				"For **each** preceding stage, read whatever applies:",
-				"",
-			]
-			for (const prior of priorStages) {
-				const priorDir = `.haiku/intents/${slug}/stages/${prior}`
-				enumLines.push(
-					`- **${prior}**`,
-					`  - Discovery / knowledge artifacts: \`${priorDir}/knowledge/\`, plus any project-scope docs under \`.haiku/knowledge/\` produced during that stage`,
-					`  - Unit specs: \`${priorDir}/units/unit-*.md\` — tell you WHAT was built and the acceptance criteria used`,
-					`  - Stage outputs: any files under \`${priorDir}/\` outside \`units/\` (e.g. \`${priorDir}/*.md\` reports, \`${priorDir}/artifacts/\`)`,
-					`  - Resolved feedback: \`${priorDir}/feedback/*.md\` — closed findings explain quality decisions and trade-offs`,
-				)
-			}
-			enumLines.push(
-				"",
-				"Do NOT limit yourself to the declared `inputs:` list when drafting units — it is the **minimum**, not the maximum. When a unit references an artifact from a prior stage you discovered via enumeration, add that path to the unit's own `inputs:` frontmatter so the execution agents (one per hat in the unit's hat sequence) have the same context.",
+		for (const prior of priorStages) {
+			const priorDir = `.haiku/intents/${slug}/stages/${prior}`
+			priorStageReferenceLines.push(
+				`- **${prior}**`,
+				`  - knowledge / discovery: \`${priorDir}/knowledge/\` (+ project-scope \`.haiku/knowledge/\` produced during that stage)`,
+				`  - unit specs: \`${priorDir}/units/unit-*.md\``,
+				`  - stage outputs: any files under \`${priorDir}/\` outside \`units/\` (\`.md\` reports, \`artifacts/\`)`,
+				`  - resolved feedback: \`${priorDir}/feedback/*.md\``,
 			)
-			sections.push(enumLines.join("\n"))
+		}
+	}
+
+	if (
+		upstreamReferenceLines.length > 0 ||
+		priorStageReferenceLines.length > 0
+	) {
+		const refSection: string[] = [
+			"## Upstream Context (read as needed during drafting)",
+			"",
+			"Paths only — do **not** require the bodies to be inlined here. Open files on demand with the Read tool when you need their substance. The list is the **minimum** the studio declared; the prior-stage block underneath enumerates everything else available across the intent's history.",
+		]
+		if (upstreamReferenceLines.length > 0) {
+			refSection.push("", "### Declared Inputs (from STAGE.md)")
+			refSection.push("", ...upstreamReferenceLines)
+		}
+		if (priorStageReferenceLines.length > 0) {
+			refSection.push(
+				"",
+				"### Prior-Stage Artifacts (read what's relevant)",
+				"",
+				"Each preceding stage in this intent has committed artifacts that may inform unit decomposition:",
+				"",
+				...priorStageReferenceLines,
+				"",
+				"Do NOT limit yourself to the declared `inputs:` list when drafting units — it is the **minimum**, not the maximum. When a unit references an artifact you discovered via prior-stage enumeration, add that path to the unit's own `inputs:` frontmatter so the execution agents (one per hat) have the same context.",
+			)
+		}
+		sections.push(refSection.join("\n"))
+
+		// Unit-inputs requirement — list the declared paths so the
+		// drafter knows what minimum set must end up in each unit's
+		// `inputs:` frontmatter.
+		if (upstreamRefPaths.length > 0) {
+			sections.push(
+				`## Unit Inputs Requirement (MANDATORY)\n\nEvery unit **MUST** have a non-empty \`inputs:\` field in its frontmatter. At minimum, every unit should reference the intent document and discovery docs. Units will be **blocked from execution** if \`inputs:\` is empty.\n\nAvailable upstream artifacts:\n\`\`\`yaml\ninputs:\n${upstreamRefPaths.map((p) => `  - ${p}`).join("\n")}\n\`\`\`\nInclude all inputs relevant to the unit's scope. Frontend/UI units should reference design artifacts. Backend units should reference behavioral specs and data contracts.`,
+			)
 		}
 	}
 
@@ -543,4 +636,29 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 	}
 
 	return sections.join("\n\n")
+}
+
+export default definePromptBuilder((ctx) => {
+	// File-based dispatch: when the workflow handler has already
+	// rendered the body to a tmpfile and stamped `prompt_file` on the
+	// action, the registered prompt builder emits a one-line "Read
+	// this file" pointer. The full body lives at `prompt_file` and
+	// is the authoritative instruction set for this tick.
+	const promptFile = ctx.action.prompt_file as string | undefined
+	if (promptFile) {
+		return [
+			"## Elaboration Prompt (file-based)",
+			"",
+			`The full elaboration prompt for this tick is at:`,
+			"",
+			`    ${promptFile}`,
+			"",
+			"Read that file with the Read tool and execute its instructions exactly. The file is the canonical, authoritative elaboration prompt — do not paraphrase, summarize, or skip any of it. The file inlines the workflow contracts, the per-stage review-agent lenses you'll be evaluated against, and the action-specific guidance for this tick.",
+		].join("\n")
+	}
+	// Fallback: build the body inline. Hit when a caller bypasses the
+	// workflow handler's file-write (rare — primarily exists for
+	// compatibility tests that still invoke the prompt builder
+	// directly without the handler in front of it).
+	return renderElaborate(ctx)
 })

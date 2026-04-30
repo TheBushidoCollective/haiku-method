@@ -733,6 +733,20 @@ const emit: WorkflowHandler = (ctx) => {
 		}
 	}
 
+	// Feature coverage gate: every intent-root .feature file must be
+	// owned by at least one unit in the current stage. Owners count as
+	// any of:
+	//   - The unit body cites the feature filename (`features/foo.feature`
+	//     mentioned in the body, OR `closes:` cite list).
+	//   - A unit's `quality_gates:` command names a path that touches
+	//     the feature's relative path.
+	// Run BEFORE pre-review dispatch so we don't spin up reviewers
+	// against specs that already have orphan features — they'll flag
+	// the orphan as a finding and create noise that the coverage gate
+	// would have caught for free.
+	const featureCoverageError = validateFeatureCoverage(slug, currentStage)
+	if (featureCoverageError) return featureCoverageError
+
 	// Pre-execution adversarial review
 	{
 		const preReviewDispatched = stageState.pre_review_dispatched as boolean
@@ -801,19 +815,6 @@ const emit: WorkflowHandler = (ctx) => {
 			}
 		}
 	}
-
-	// Feature coverage gate: every intent-root .feature file must be
-	// owned by at least one unit in the current stage. Owners count as
-	// any of:
-	//   - The unit body cites the feature filename (`features/foo.feature`
-	//     mentioned in the body, OR `closes:` cite list).
-	//   - A unit's `quality_gates:` command names a path that touches
-	//     the feature's relative path.
-	// Refusing to advance forces the spec to acknowledge every feature
-	// before the build phase opens — orphan features were the stealth
-	// path to "shipped without coverage" in earlier intents.
-	const featureCoverageError = validateFeatureCoverage(slug, currentStage)
-	if (featureCoverageError) return featureCoverageError
 
 	// Spec gate: auto-advance or open gate_review
 	const intentReviewed = intent.intent_reviewed as boolean

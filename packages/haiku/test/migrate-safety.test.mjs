@@ -29,13 +29,17 @@ process.env.CLAUDE_PLUGIN_ROOT = join(_origCwdEarly, "..", "..", "plugin")
 
 const { runMigrate } = await import("../src/migrate.ts")
 
-const origCwd = process.cwd()
 const tmp = mkdtempSync(join(tmpdir(), "haiku-migrate-safety-test-"))
 
 let passed = 0
 let failed = 0
 
+// The test wrapper saves cwd + PATH and restores them in `finally` so that
+// any test failure (or stubGit accumulation) doesn't leak into the next
+// case. Tests can mutate freely without per-case cleanup.
 async function test(name, fn) {
+	const savedCwd = process.cwd()
+	const savedPath = process.env.PATH
 	try {
 		const result = fn()
 		if (result && typeof result.then === "function") await result
@@ -45,6 +49,9 @@ async function test(name, fn) {
 		failed++
 		console.log(`  ✗ ${name}: ${e.message}`)
 		if (e.stack) console.log(e.stack)
+	} finally {
+		process.chdir(savedCwd)
+		process.env.PATH = savedPath
 	}
 }
 
@@ -103,7 +110,6 @@ await test("bare invocation refuses (no slug, no --all)", async () => {
 	)
 	assert.ok(/foo/.test(err.message), "should list candidate slugs")
 	assert.ok(/bar/.test(err.message), "should list candidate slugs")
-	process.chdir(origCwd)
 })
 
 await test("unknown slug refuses with candidate list", async () => {
@@ -113,7 +119,6 @@ await test("unknown slug refuses with candidate list", async () => {
 		() => runMigrate(["does-not-exist"]),
 		/unknown intent slug/,
 	)
-	process.chdir(origCwd)
 })
 
 await test("merged sub-intent slug refuses and points at base", async () => {
@@ -124,12 +129,19 @@ await test("merged sub-intent slug refuses and points at base", async () => {
 		/merged sub-intent/,
 	)
 	assert.ok(/foo-dev → foo/.test(err.message), "should hint at base slug")
-	process.chdir(origCwd)
+})
+
+await test("--all + positional slug refuses (contradictory scopes)", async () => {
+	const proj = makeAiDlc("all-and-slug", ["foo", "bar"])
+	process.chdir(proj)
+	await expectThrows(
+		() => runMigrate(["foo", "--all"]),
+		/--all is incompatible with explicit slug/,
+	)
 })
 
 await test("default is dry-run — no .haiku/intents/ created", async () => {
 	const proj = makeAiDlc("default-dry", ["foo"])
-	stubGit(proj, "clean")
 	process.chdir(proj)
 	await runMigrate(["foo"])
 	assert.equal(
@@ -137,7 +149,17 @@ await test("default is dry-run — no .haiku/intents/ created", async () => {
 		false,
 		"dry-run must not write intent.md",
 	)
-	process.chdir(origCwd)
+})
+
+await test("--apply --dry-run together → dry-run wins, no write", async () => {
+	const proj = makeAiDlc("apply-and-dry", ["foo"])
+	process.chdir(proj)
+	await runMigrate(["foo", "--apply", "--dry-run"])
+	assert.equal(
+		existsSync(join(proj, ".haiku", "intents", "foo", "intent.md")),
+		false,
+		"--dry-run must override --apply",
+	)
 })
 
 await test("--apply writes when tree is clean", async () => {
@@ -150,7 +172,6 @@ await test("--apply writes when tree is clean", async () => {
 		true,
 		"--apply should write intent.md",
 	)
-	process.chdir(origCwd)
 })
 
 await test("--apply refuses when git tree is dirty", async () => {
@@ -166,7 +187,6 @@ await test("--apply refuses when git tree is dirty", async () => {
 		false,
 		"refusal must happen before any write",
 	)
-	process.chdir(origCwd)
 })
 
 await test("--apply --allow-dirty writes despite dirty tree", async () => {
@@ -179,12 +199,10 @@ await test("--apply --allow-dirty writes despite dirty tree", async () => {
 		true,
 		"--allow-dirty bypasses the precheck",
 	)
-	process.chdir(origCwd)
 })
 
 await test("--all without --apply does not write", async () => {
 	const proj = makeAiDlc("all-dry", ["foo", "bar"])
-	stubGit(proj, "clean")
 	process.chdir(proj)
 	await runMigrate(["--all"])
 	assert.equal(
@@ -195,7 +213,23 @@ await test("--all without --apply does not write", async () => {
 		existsSync(join(proj, ".haiku", "intents", "bar", "intent.md")),
 		false,
 	)
-	process.chdir(origCwd)
+})
+
+await test("--all --apply writes every primary intent on a clean tree", async () => {
+	const proj = makeAiDlc("all-apply", ["foo", "bar"])
+	stubGit(proj, "clean")
+	process.chdir(proj)
+	await runMigrate(["--all", "--apply"])
+	assert.equal(
+		existsSync(join(proj, ".haiku", "intents", "foo", "intent.md")),
+		true,
+		"--all --apply should write foo",
+	)
+	assert.equal(
+		existsSync(join(proj, ".haiku", "intents", "bar", "intent.md")),
+		true,
+		"--all --apply should write bar",
+	)
 })
 
 console.log(`\n  ${passed} passed, ${failed} failed\n`)

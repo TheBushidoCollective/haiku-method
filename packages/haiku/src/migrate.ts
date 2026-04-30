@@ -145,6 +145,15 @@ export async function runMigrate(args: string[]): Promise<void> {
 		)
 	}
 
+	// --all and explicit slugs are contradictory. Reject rather than silently
+	// pick one — the user's intent is ambiguous.
+	if (all && positionals.length > 0) {
+		throw new Error(
+			`--all is incompatible with explicit slug(s): ${positionals.join(", ")}\n\n` +
+				`Pick one: name slugs OR pass --all.`,
+		)
+	}
+
 	if (positionals.length > 0) {
 		const unknown = positionals.filter((s) => !entries.includes(s))
 		if (unknown.length > 0) {

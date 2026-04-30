@@ -13,6 +13,9 @@
     "name": "GigSmart",
     "url": "https://gigsmart.com"
   },
+  "bin": {
+    "haiku-method": "./bin/haiku"
+  },
   "keywords": [
     "haiku",
     "haiku-method",

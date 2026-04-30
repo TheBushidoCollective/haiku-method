@@ -328,20 +328,40 @@ Software development.
 			"Prompt body should carry the review-agent lens header for software/development",
 		)
 		// Development ships architecture / correctness / performance /
-		// security / test-quality (no `applies_to:` scoping). Header is
-		// title-cased from the filename.
-		const expected = ["Architecture", "Correctness", "Security"]
-		for (const lens of expected) {
+		// security / test-quality (no `applies_to:` scoping). All 5 agents
+		// should produce a `### <Name> lens` subheading.
+		const expectedLenses = [
+			"Architecture",
+			"Correctness",
+			"Performance",
+			"Security",
+			"Test Quality",
+		]
+		for (const lens of expectedLenses) {
 			assert.ok(
 				body.includes(`### ${lens} lens`),
-				`Expected '${lens} lens' subheading in software/development prompt body`,
+				`Expected '### ${lens} lens' subheading in software/development prompt body`,
 			)
 		}
-		// Per-agent body content surfaces verbatim.
-		assert.ok(
-			body.includes("module boundaries"),
-			"Architecture mandate body should be inlined",
-		)
+		// Every lens section must be non-empty: the text between a lens
+		// subheading and the next ### (or end of string) must contain
+		// non-whitespace content.
+		for (const lens of expectedLenses) {
+			const heading = `### ${lens} lens`
+			const start = body.indexOf(heading)
+			assert.ok(start !== -1, `'${heading}' should be present`)
+			const afterHeading = body.slice(start + heading.length)
+			// Find the next ### boundary (another subheading), or EOF.
+			const nextHeading = afterHeading.indexOf("\n###")
+			const section =
+				nextHeading === -1
+					? afterHeading
+					: afterHeading.slice(0, nextHeading)
+			assert.ok(
+				section.trim().length > 0,
+				`Section under '${heading}' should not be empty`,
+			)
+		}
 	})
 
 	await test("prior-stage artifacts are referenced by path, not inlined as content", () => {

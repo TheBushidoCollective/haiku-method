@@ -242,23 +242,26 @@ export async function runMigrate(args: string[]): Promise<void> {
 
 	// Refuse to write into a dirty git tree. Easy to undo a migration that
 	// landed in a clean tree (`git restore .`); much harder when migration
-	// output is interleaved with the user's in-progress work.
+	// output is interleaved with the user's in-progress work. The check is
+	// skipped silently if git isn't installed or this isn't a repo — the
+	// dirty-tree refusal lives outside the try/catch so it can't be confused
+	// with a git-runtime error.
 	if (!dryRun && !allowDirty) {
+		let porcelain: string | null = null
 		try {
-			const dirty = execSync("git status --porcelain", {
+			porcelain = execSync("git status --porcelain", {
 				encoding: "utf8",
 				cwd,
 				timeout: 5000,
 			}).trim()
-			if (dirty) {
-				throw new Error(
-					`refusing to apply with uncommitted changes in the working tree.\n\n` +
-						`Commit or stash first, or pass --allow-dirty.\n\n${dirty}`,
-				)
-			}
-		} catch (err) {
-			// Re-throw our own refusal; swallow git-not-installed / not-a-repo errors.
-			if (err instanceof Error && err.message.startsWith("refusing")) throw err
+		} catch {
+			// git missing or not a repo — skip the precheck.
+		}
+		if (porcelain) {
+			throw new Error(
+				`refusing to apply with uncommitted changes in the working tree.\n\n` +
+					`Commit or stash first, or pass --allow-dirty.\n\n${porcelain}`,
+			)
 		}
 	}
 

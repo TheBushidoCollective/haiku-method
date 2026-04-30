@@ -2746,6 +2746,223 @@ export function completeUnitIteration(
 	writeFileSync(unitFile, matter.stringify(body, data))
 }
 
+// ── Cited-helper validation ───────────────────────────────────────────────
+//
+// When a unit body cites a specific existing helper at a specific path,
+// verify the path exists AND the identifier shows up in that file. The
+// rejection catches the "agent hallucinated an existing utility"
+// failure mode at write time, before the fix-loop has to land a bolt
+// that breaks on import.
+//
+// We only reject when the citation is structured enough to be
+// verifiable. Vague mentions ("use existing helpers") fall through —
+// false positives create more friction than the gate's worth.
+
+interface HelperCitation {
+	full: string
+	identifier: string
+	path: string
+}
+
+const HELPER_CITATION_PATTERNS: RegExp[] = [
+	// "use the existing `<id>` in `<path>`" / "extend the `<id>` in `<path>`"
+	/\b(?:use|extend)\s+(?:the\s+)?existing\s+`([A-Za-z_][\w.$]*)`\s+(?:in|from)\s+`([^`]+)`/gi,
+	// "extend the `<id>` exported from `<path>`"
+	/\bextend\s+(?:the\s+)?`([A-Za-z_][\w.$]*)`\s+exported\s+from\s+`([^`]+)`/gi,
+	// "as defined in `<path>`" — no identifier, skipped (vague)
+	// Captured for completeness but the visit-loop ignores it (only
+	// path-only citations don't have an identifier to grep).
+]
+
+function extractHelperCitations(body: string): HelperCitation[] {
+	const out: HelperCitation[] = []
+	const seen = new Set<string>()
+	for (const re of HELPER_CITATION_PATTERNS) {
+		// Reset lastIndex since these are global regexes reused across calls.
+		re.lastIndex = 0
+		for (const m of body.matchAll(re)) {
+			const identifier = m[1]
+			const path = m[2]
+			if (!identifier || !path) continue
+			const key = `${identifier}@${path}`
+			if (seen.has(key)) continue
+			seen.add(key)
+			out.push({ full: m[0], identifier, path })
+		}
+	}
+	return out
+}
+
+/** Returns null when the body has no verifiable helper citations OR
+ *  every citation resolves correctly. Returns an error payload when
+ *  any citation names a path that doesn't exist OR an identifier
+ *  that's not present in that path. */
+function validateCitedHelpers(body: string): Record<string, unknown> | null {
+	const citations = extractHelperCitations(body)
+	if (citations.length === 0) return null
+
+	for (const c of citations) {
+		// Resolve relative to the repo root (process.cwd() for the
+		// MCP server, which runs in the worktree root).
+		const candidate = c.path.startsWith("/")
+			? c.path
+			: join(process.cwd(), c.path)
+		if (!existsSync(candidate)) {
+			return {
+				error: "cited_helper_not_found",
+				citation: c.full,
+				path: c.path,
+				identifier: c.identifier,
+				reason: "path_missing",
+				message: `Unit body cites \`${c.identifier}\` at \`${c.path}\` but that path does not exist. Either fix the citation to a real path, or remove the citation if the helper is being introduced by this unit (the elaborate phase tracks NEW symbols separately from cited ones).`,
+			}
+		}
+		try {
+			const content = readFileSync(candidate, "utf8")
+			// Identifier-grep: check for the identifier under common
+			// shapes — `export <kw> <id>`, `function <id>`, `<id>:`
+			// (record-style fields), `<id> =`, `<id>(` (call sites).
+			const idRe = new RegExp(
+				`(?:export[^\\n]*\\b${escapeRegex(c.identifier)}\\b|\\bfunction\\s+${escapeRegex(c.identifier)}\\b|\\b${escapeRegex(c.identifier)}\\s*[:=(])`,
+			)
+			if (!idRe.test(content)) {
+				return {
+					error: "cited_helper_not_found",
+					citation: c.full,
+					path: c.path,
+					identifier: c.identifier,
+					reason: "identifier_missing_in_path",
+					message: `Unit body cites \`${c.identifier}\` at \`${c.path}\` but \`${c.identifier}\` does not appear in that file (looked for export/function/record-field/assignment/call patterns). Either fix the citation, or if you intend to ADD this helper as part of this unit, remove the "existing" qualifier — the citation pattern is for already-shipped code.`,
+				}
+			}
+		} catch {
+			// Unreadable — treat as path missing.
+			return {
+				error: "cited_helper_not_found",
+				citation: c.full,
+				path: c.path,
+				identifier: c.identifier,
+				reason: "path_unreadable",
+				message: `Unit body cites \`${c.identifier}\` at \`${c.path}\` but that path is unreadable. Fix the citation or remove it.`,
+			}
+		}
+	}
+	return null
+}
+
+function escapeRegex(s: string): string {
+	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+// ── Banned-test-shape detection on quality_gates ──────────────────────────
+//
+// Detects gates that trivially pass (assert zero matches on a path
+// the unit's own output produces; grep for a literal the implementer
+// also writes). False positives are worse than false negatives — only
+// reject on unambiguous patterns.
+
+/** Returns null when the unit's quality_gates are well-shaped, or an
+ *  error payload when at least one gate is detected as trivially-
+ *  passing. */
+function validateUnitQualityGateShapes(
+	unitName: string,
+	fm: Record<string, unknown>,
+): Record<string, unknown> | null {
+	const gates = Array.isArray(fm.quality_gates)
+		? (fm.quality_gates as unknown[])
+		: []
+	if (gates.length === 0) return null
+
+	// Resolve the unit's own outputs (frontmatter `outputs:` array
+	// AND any inferred output from the unit name).
+	const outputs = new Set<string>()
+	if (Array.isArray(fm.outputs)) {
+		for (const o of fm.outputs as unknown[]) {
+			if (typeof o === "string") outputs.add(o)
+		}
+	}
+
+	for (const g of gates) {
+		if (typeof g !== "object" || g === null) continue
+		const gate = g as Record<string, unknown>
+		const gateName = (gate.name as string) || "<unnamed>"
+		const command = (gate.command as string) || ""
+		if (!command) continue
+
+		// Pattern 1: `! grep ... <path>` where <path> is one of the
+		// unit's own declared outputs. This asserts "zero matches in
+		// the file the implementer hasn't written yet" — trivially
+		// passes until the implementer writes the wrong substring.
+		// We detect this by looking for `grep` followed by a path
+		// that matches an output entry.
+		const grepMatch = command.match(/!\s*grep[^|]*\s+([\S]+)\s*$/)
+		if (grepMatch) {
+			const targetPath = grepMatch[1].replace(/['"`]/g, "")
+			for (const o of outputs) {
+				if (
+					targetPath === o ||
+					targetPath.endsWith(`/${o}`) ||
+					o.endsWith(targetPath)
+				) {
+					return {
+						error: "gate_trivially_passes",
+						gate: gateName,
+						unit: unitName,
+						pattern: "asserts_zero_matches_on_own_output",
+						command,
+						message: `Quality gate '${gateName}' on unit '${unitName}' asserts zero matches against \`${targetPath}\`, which is one of the unit's own declared outputs. The gate trivially passes before the unit produces any output — once the implementer writes the wrong substring, the gate first fails. This is a no-op test. Replace it with a positive assertion (\`grep -q "<expected pattern>" "${targetPath}"\`) or a behavior-driven test (run the code, verify the result).`,
+					}
+				}
+			}
+		}
+
+		// Pattern 2: `grep -q "<literal>" <path>` where <path> is one of
+		// the unit's outputs AND the literal is something the
+		// implementer would naturally write. Detected when both paths
+		// align — we don't try to predict which literals the
+		// implementer would write since that's a judgment call. Instead,
+		// flag when the gate greps a literal IN the same file the unit
+		// produces, since that's circular.
+		const positiveGrep = command.match(
+			/\bgrep\s+(?:-[a-zA-Z]+\s+)?["']([^"']+)["']\s+([\S]+)/,
+		)
+		if (positiveGrep) {
+			const literal = positiveGrep[1]
+			const targetPath = positiveGrep[2].replace(/['"`]/g, "")
+			for (const o of outputs) {
+				if (
+					targetPath === o ||
+					targetPath.endsWith(`/${o}`) ||
+					o.endsWith(targetPath)
+				) {
+					// Only flag when the literal looks like prose / a
+					// status token that the implementer could trivially
+					// write into their own output to satisfy the gate.
+					// Heuristic: 2+ words OR contains a verb-like
+					// participle ("complete", "done", "finished").
+					const prosey =
+						/\s/.test(literal) ||
+						/\b(complete|completed|done|finished|implemented|ready)\b/i.test(
+							literal,
+						)
+					if (prosey) {
+						return {
+							error: "gate_trivially_passes",
+							gate: gateName,
+							unit: unitName,
+							pattern: "literal_substring_in_self_authored_output",
+							command,
+							literal,
+							message: `Quality gate '${gateName}' on unit '${unitName}' greps for the literal "${literal}" in \`${targetPath}\`, which is one of the unit's own declared outputs. The implementer can satisfy the gate by writing the literal into their own output — the gate is circular. Replace it with a behavior-driven test (run the code, verify the actual result), not a substring assertion on the file the implementer also writes.`,
+						}
+					}
+				}
+			}
+		}
+	}
+	return null
+}
+
 // ── Unit frontmatter validation (architecture rule §1.1: workflow engine owns FM) ────
 //
 // Called from haiku_unit_write before persisting an agent-authored unit.
@@ -7784,6 +8001,28 @@ export function handleStateTool(
 					},
 					{ isError: true },
 				)
+			}
+
+			// Helper-grep proof: when the unit body cites an existing
+			// helper at a specific path (e.g. "use the existing
+			// `foo` in `path/to/file.ts`"), verify the path exists AND
+			// the identifier appears in that file. Catches "the agent
+			// hallucinated an existing utility" before the fix-loop has
+			// to run a bolt that fails on import.
+			const helperViolation = validateCitedHelpers(body)
+			if (helperViolation) {
+				return reply(helperViolation, { isError: true })
+			}
+
+			// Banned-test-shapes detection: scan quality_gates: commands
+			// for trivially-passing patterns (asserting zero matches on
+			// the unit's own un-yet-existent output, greps for literals
+			// the implementer also writes). False positives are worse
+			// than false negatives here — only reject on unambiguous
+			// patterns.
+			const gateViolation = validateUnitQualityGateShapes(unitName, fmInput)
+			if (gateViolation) {
+				return reply(gateViolation, { isError: true })
 			}
 
 			// All validators passed. Persist. Set workflow-driven fields to their

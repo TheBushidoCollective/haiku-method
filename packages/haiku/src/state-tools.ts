@@ -2935,14 +2935,15 @@ function validateUnitQualityGateShapes(
 					targetPath.endsWith(`/${o}`) ||
 					o.endsWith(targetPath)
 				) {
-					// Only flag when the literal looks like prose / a
-					// status token that the implementer could trivially
-					// write into their own output to satisfy the gate.
-					// Heuristic: 2+ words OR contains a verb-like
-					// participle ("complete", "done", "finished").
+					// Only flag when the literal contains a status-y
+					// verb-participle ("complete", "done", "finished")
+					// — the markers an implementer can trivially drop
+					// into their own output to satisfy the gate.
+					// Multi-word technical literals (`export default`,
+					// `function foo`, `import bar from`) are real
+					// shape signal, not prose, so they slip through.
 					const prosey =
-						/\s/.test(literal) ||
-						/\b(complete|completed|done|finished|implemented|ready)\b/i.test(
+						/\b(complete|completed|done|finished|implemented|ready|success|passed)\b/i.test(
 							literal,
 						)
 					if (prosey) {

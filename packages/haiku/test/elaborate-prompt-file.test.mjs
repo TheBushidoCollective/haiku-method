@@ -417,6 +417,78 @@ Software development.
 		)
 	})
 
+	await test("withPromptFile fallback: when file write fails, action has no prompt_file and is otherwise valid", async () => {
+		// Force writeActionPromptFile to throw by pre-creating the session's
+		// haiku-prompts dir as a regular file (not a directory). The atomic
+		// write inside promptDir() fails because it cannot mkdir into a file.
+		const sessionId = `haiku-elab-pf-fallback-test-${process.pid}`
+		const prevSessionId = process.env.HAIKU_SESSION_ID
+		process.env.HAIKU_SESSION_ID = sessionId
+
+		const haikuPromptsDir = join(tmpdir(), "haiku-prompts")
+		mkdirSync(haikuPromptsDir, { recursive: true })
+		const sessionSlot = join(haikuPromptsDir, sessionId)
+		// Occupy the session path with a plain file — mkdir will throw EEXIST.
+		writeFileSync(sessionSlot, "not-a-dir")
+
+		try {
+			const { projDir, intentDirPath, slug } = createProject(
+				"pf-fallback",
+				{ active_stage: "plan" },
+			)
+			createStageState(intentDirPath, "plan", { phase: "elaborate" })
+			process.chdir(projDir)
+			const result = runNext(slug)
+
+			// (a) No prompt_file — the write failed.
+			assert.strictEqual(result.action, "elaborate")
+			assert.ok(
+				!result.prompt_file,
+				`Expected no prompt_file on fallback, got: ${result.prompt_file}`,
+			)
+
+			// (b) The action is still a valid elaborate action — the handler
+			// returns the untouched action object so the registered prompt
+			// builder can render the full body inline in the tool response.
+			assert.ok(
+				typeof result.intent === "string" && result.intent === slug,
+				"Fallback action should carry the intent slug",
+			)
+			assert.ok(
+				typeof result.stage === "string",
+				"Fallback action should carry the stage",
+			)
+
+			// (c) The full inline body IS rendered in the tool response text —
+			// verify via handleOrchestratorTool since it goes through the prompt builder.
+			const toolResult = await handleOrchestratorTool("haiku_run_next", {
+				intent: slug,
+			})
+			const responseText = toolResult.content[0].text
+			// Inline rendering path: the registered prompt builder (elaborate.ts
+			// prompts) sees no prompt_file on the action and falls through to
+			// renderElaborate(), which embeds the full body in the response text.
+			assert.ok(
+				!responseText.includes("Read `") ||
+					responseText.includes("## Elaborate") ||
+					responseText.includes("Workflow Contracts"),
+				"Inline fallback response should include the full elaborate body",
+			)
+		} finally {
+			// Restore session env and clean up the blocking file.
+			if (prevSessionId === undefined) {
+				delete process.env.HAIKU_SESSION_ID
+			} else {
+				process.env.HAIKU_SESSION_ID = prevSessionId
+			}
+			try {
+				rmSync(sessionSlot, { force: true })
+			} catch {
+				/* best-effort */
+			}
+		}
+	})
+
 	console.log(`\n${passed} passed, ${failed} failed`)
 	process.chdir(origCwd)
 	rmSync(tmp, { recursive: true, force: true })

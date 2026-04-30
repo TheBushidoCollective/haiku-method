@@ -28,7 +28,8 @@ quality_gates:
     command: >-
       ! grep -nE '\bTBD\b|\bTODO\b'
       packages/haiku/src/tools/orchestrator/haiku_classify_drift.ts
-status: pending
+status: completed
+completed_at: '2026-04-30T22:05:53Z'
 ---
 # haiku_classify_drift MCP tool (assessment recorder)
 

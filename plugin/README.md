@@ -57,7 +57,7 @@ Studios are the lifecycle templates — pre-built sequences of stages, hats, and
 | Data Pipeline | Marketing | Documentation |
 | Migration | Customer Success | Project Management |
 | Incident Response | Product Strategy | Executive Strategy |
-| Compliance | Customer Success | Training |
+| Compliance | Dev Evangelism | Training |
 | Security Assessment | | |
 | Quality Assurance | | |
 | Hardware Dev | | |

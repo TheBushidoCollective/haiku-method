@@ -5359,6 +5359,36 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		},
 	},
 	{
+		name: "haiku_reconciliation_acknowledge",
+		description:
+			"Acknowledge upstream-artifact divergences detected by the pre-elaboration reconciliation gate. Records the decision in the stage's decision_log so the gate falls through on the next tick. Use this when the divergence is intentional (e.g. the upstream artifacts describe different surfaces that genuinely need different names). When the divergence is unintentional, edit the upstream artifacts to reconcile and re-run haiku_run_next instead — do NOT acknowledge to skip the work.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string" },
+				stage: {
+					type: "string",
+					description:
+						"Stage name. Defaults to the intent's active_stage when omitted.",
+				},
+				rationale: {
+					type: "string",
+					description:
+						"Rationale (≥10 chars) explaining why this divergence is intentional and acceptable.",
+				},
+			},
+			required: ["intent", "rationale"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
+		},
+	},
+	{
 		name: "haiku_decision_record",
 		description:
 			"Record an elaboration decision in the stage's decision_log, OR declare 'no architectural decisions in scope' for the stage. Used in collaborative-mode stages to track meaningful human-AI knowledge-unification moments instead of counting interaction turns. Each entry is an architectural choice the user picked between options, OR a choice the agent made and surfaced for veto-style approval. Padding questions don't count.",
@@ -7790,6 +7820,76 @@ export function handleStateTool(
 				message: isCreate
 					? `Created unit '${unitName}' in stage '${stageArg}' (status: pending).`
 					: `Rewrote unit '${unitName}' in stage '${stageArg}' (status preserved as pending).`,
+			})
+		}
+
+		case "haiku_reconciliation_acknowledge": {
+			const intentArg = args.intent as string
+			const requestedStage = args.stage as string | undefined
+			const stage = requestedStage || resolveActiveStage(intentArg)
+			const rationale = (args.rationale as string | undefined)?.trim()
+			if (!stage) {
+				return reply(
+					{
+						error: "no_active_stage",
+						message:
+							"No stage specified and no active stage found on the intent.",
+					},
+					{ isError: true },
+				)
+			}
+			if (!rationale || rationale.length < 10) {
+				return reply(
+					{
+						error: "rationale_required",
+						message:
+							"haiku_reconciliation_acknowledge requires a rationale of at least 10 characters explaining why the divergence is intentional. Acknowledging without explanation defeats the purpose of the reconciliation log.",
+					},
+					{ isError: true },
+				)
+			}
+			const stageDir = join(intentDir(intentArg), "stages", stage)
+			const stateFile = join(stageDir, "state.json")
+			if (!existsSync(stateFile)) {
+				return reply(
+					{
+						error: "stage_state_missing",
+						message: `Stage state file not found: ${stateFile}`,
+					},
+					{ isError: true },
+				)
+			}
+			const reconState = JSON.parse(readFileSync(stateFile, "utf8")) as Record<
+				string,
+				unknown
+			>
+			reconState.upstream_reconciliation_acknowledged = true
+			reconState.upstream_reconciliation_acknowledged_at = timestamp()
+			reconState.upstream_reconciliation_rationale = rationale
+			const reconLog = ((reconState.decision_log as unknown[]) || []) as Array<
+				Record<string, unknown>
+			>
+			reconLog.push({
+				decision: "Upstream reconciliation acknowledged",
+				options: ["reconcile upstream artifacts", "acknowledge divergence"],
+				choice: "acknowledge divergence",
+				source: "autonomous-acknowledged",
+				rationale,
+				kind: "upstream_reconciliation",
+				recorded_at: timestamp(),
+			})
+			reconState.decision_log = reconLog
+			writeJson(stateFile, reconState)
+			sealIntentState(intentArg)
+			emitTelemetry("haiku.reconciliation.acknowledged", {
+				intent: intentArg,
+				stage,
+			})
+			return reply({
+				ok: true,
+				intent: intentArg,
+				stage,
+				rationale,
 			})
 		}
 

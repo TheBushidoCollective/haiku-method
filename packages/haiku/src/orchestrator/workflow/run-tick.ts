@@ -13,13 +13,22 @@
 // `handlers/index.ts` maps state names to handlers. Adding a new
 // state name = adding the entry to the registry + the file.
 
+import { existsSync } from "node:fs"
+import { join } from "node:path"
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { verifyIntentState } from "../../state-integrity.js"
+import { getStageIterationCount, readJson } from "../../state-tools.js"
+import { writeActionPromptFile } from "../../subagent-prompt-file.js"
+import { resolveIntentStages } from "../studio.js"
 import { type DerivedState, deriveCurrentState } from "./derive-state.js"
 import { preTickFeedbackGate } from "./feedback-triage-gate.js"
 import { dispatchHandler, WORKFLOW_STATES } from "./handlers/index.js"
 import { preTickConsistency } from "./pre-tick.js"
 import type { StateName } from "./types.js"
+import {
+	checkUpstreamReconciliation,
+	type ReconciliationFinding,
+} from "./upstream-reconciliation.js"
 
 /** Re-export of the registry's key set + dispatch function so
  *  callers don't have to reach into handlers/index.js for them. */
@@ -141,6 +150,22 @@ export function runWorkflowTick(
 		}
 	}
 
+	// Pre-elaboration upstream reconciliation gate. Fires only on the
+	// FIRST elaboration of a stage that has at least one completed
+	// upstream stage — that's the moment cross-document contradictions
+	// in inherited artifacts will silently shape the elaborator's
+	// decomposition. Once findings are acknowledged via
+	// `haiku_reconciliation_acknowledge`, the stage's state.json
+	// records the choice so subsequent ticks fall through.
+	const reconAction = maybeUpstreamReconciliationGate(derived.context, root)
+	if (reconAction) {
+		return {
+			state: "upstream_reconciliation_required",
+			context: derived.context,
+			action: reconAction,
+		}
+	}
+
 	const action = dispatchHandler(derived.state, derived.context, root)
 
 	return {
@@ -148,4 +173,122 @@ export function runWorkflowTick(
 		context: derived.context,
 		action,
 	}
+}
+
+/** Pre-elaboration reconciliation gate. Returns an
+ *  `upstream_reconciliation_required` action when the corpus has
+ *  divergences AND the agent hasn't already acknowledged them, OR
+ *  null to fall through to the per-state handler chain. */
+function maybeUpstreamReconciliationGate(
+	context: DerivedState["context"],
+	root: string | undefined,
+): OrchestratorAction | null {
+	const { slug, studio, intent, currentStage, stageState, intentDirPath } =
+		context
+	if (!currentStage) return null
+	if ((stageState.phase as string) !== "elaborate") return null
+	// First elaboration only — re-runs of the elaborate phase don't
+	// re-trigger reconciliation. The signal: iterations array length
+	// is exactly 1 (the initial entry).
+	if (getStageIterationCount(stageState) !== 1) return null
+	// Skip if already acknowledged on this stage. The acknowledge tool
+	// stamps `upstream_reconciliation_acknowledged: true` here.
+	if (stageState.upstream_reconciliation_acknowledged === true) return null
+
+	const studioStages = resolveIntentStages(intent, studio)
+	const myIdx = studioStages.indexOf(currentStage)
+	if (myIdx <= 0) return null
+
+	// Walk prior stages and pick the ones with a completed marker.
+	const priorStages: string[] = []
+	for (let i = 0; i < myIdx; i++) {
+		const stage = studioStages[i]
+		const stateFile = root
+			? join(root, "intents", slug, "stages", stage, "state.json")
+			: join(intentDirPath, "stages", stage, "state.json")
+		if (!existsSync(stateFile)) continue
+		try {
+			const ss = readJson(stateFile) as Record<string, unknown>
+			if ((ss.status as string) === "completed") priorStages.push(stage)
+		} catch {
+			/* unreadable state.json — skip */
+		}
+	}
+	if (priorStages.length === 0) return null
+
+	const result = checkUpstreamReconciliation(slug, priorStages)
+	if (!result || result.findings.length === 0) return null
+
+	const body = renderReconciliationPrompt(slug, currentStage, result.findings)
+	let promptFile: string | null = null
+	try {
+		const { path } = writeActionPromptFile({
+			action: "upstream_reconciliation_required",
+			intent: slug,
+			stage: currentStage,
+			content: body,
+			tickHint: `recon-${Date.now()}`,
+		})
+		promptFile = path
+	} catch (err) {
+		console.error(
+			`[haiku] reconciliation prompt-file write failed for ${slug}/${currentStage}: ${err instanceof Error ? err.message : String(err)}. Falling back to inline message.`,
+		)
+	}
+
+	return {
+		action: "upstream_reconciliation_required",
+		intent: slug,
+		stage: currentStage,
+		findings: result.findings,
+		...(promptFile
+			? {
+					prompt_file: promptFile,
+					message: `Read \`${promptFile}\` and execute its instructions exactly. ${result.findings.length} upstream-artifact divergence(s) require reconciliation before this stage can elaborate.`,
+				}
+			: {
+					message: `Detected ${result.findings.length} upstream-artifact divergence(s) before first elaboration of stage '${currentStage}'. Reconcile the upstream artifacts (and re-run \`haiku_run_next\`), or call \`haiku_reconciliation_acknowledge\` to record the decision and proceed.`,
+				}),
+	}
+}
+
+/** Render a markdown prompt body for the reconciliation gate. */
+function renderReconciliationPrompt(
+	slug: string,
+	stage: string,
+	findings: readonly ReconciliationFinding[],
+): string {
+	const sections: string[] = []
+	sections.push(`## Upstream Reconciliation Required: ${stage}`)
+	sections.push(
+		[
+			`Before elaborating stage **${stage}**, the workflow engine detected **${findings.length} cross-document divergence(s)** in the upstream-artifact corpus. The elaborator inherits these contradictions silently — fix them now or acknowledge the choice on record.`,
+			"",
+			"Two paths:",
+			"",
+			"1. **Reconcile.** Edit the upstream artifacts to use one canonical name / status / field. Then re-run `haiku_run_next` — the gate re-checks and falls through if the corpus is consistent.",
+			'2. **Acknowledge.** If the divergence is intentional (e.g. the artifacts describe different surfaces that genuinely need different names), call `haiku_reconciliation_acknowledge { intent: "' +
+				slug +
+				'", stage: "' +
+				stage +
+				'", rationale: "<why this divergence is correct>" }`. The decision lands in the stage\'s `decision_log` for audit and the gate falls through on the next tick.',
+		].join("\n"),
+	)
+
+	for (const f of findings) {
+		const lines: string[] = []
+		lines.push(`### ${f.kind} divergence: ${f.concept}`)
+		lines.push("")
+		lines.push(f.message)
+		lines.push("")
+		lines.push("**Occurrences:**")
+		for (const o of f.occurrences.slice(0, 12)) {
+			lines.push(`- \`${o.file}:${o.line}\` — \`${o.name}\` — _${o.excerpt}_`)
+		}
+		if (f.occurrences.length > 12) {
+			lines.push(`- … ${f.occurrences.length - 12} more`)
+		}
+		sections.push(lines.join("\n"))
+	}
+	return sections.join("\n\n")
 }

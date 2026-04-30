@@ -288,8 +288,7 @@ These must ALWAYS be true regardless of studio, stage, or user action.
 **Trigger:** Various Claude Code lifecycle events.
 
 ### SessionStart
-- [ ] `inject-context`: auto-migrates `.ai-dlc/` intents, injects full H·AI·K·U context
-- [ ] `ensure-deps`: no-op (Node is the only dependency)
+No SessionStart hooks are registered. `inject-context` and `ensure-deps` were removed in `c0357289` — the orchestrator returns equivalent context on the first `haiku_run_next` call, and `.ai-dlc/` migration is now an explicit user action via `/haiku:migrate` (never automatic).
 
 ### PreToolUse
 - [ ] `redirect-plan-mode`: blocks EnterPlanMode, suggests `/haiku:start`

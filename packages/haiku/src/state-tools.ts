@@ -2916,11 +2916,18 @@ function validateUnitQualityGateShapes(
 		// unit's own declared outputs. This asserts "zero matches in
 		// the file the implementer hasn't written yet" — trivially
 		// passes until the implementer writes the wrong substring.
-		// We detect this by looking for `grep` followed by a path
-		// that matches an output entry.
-		const grepMatch = command.match(/!\s*grep[^|]*\s+([\S]+)\s*$/)
+		// We detect this by scanning the grep command's non-flag tokens
+		// right-to-left and picking the first one that doesn't start
+		// with `-`, so trailing flags like `--color=always` don't
+		// shadow the path argument.
+		const grepMatch = command.match(/!\s*grep([^|]*)$/)
 		if (grepMatch) {
-			const targetPath = grepMatch[1].replace(/['"`]/g, "")
+			// Pull all whitespace-separated tokens from the grep argument
+			// string, skip flags (tokens starting with `-`), and take
+			// the last remaining token as the target path.
+			const grepArgs = grepMatch[1].trim().split(/\s+/)
+			const pathToken = [...grepArgs].reverse().find((t) => !t.startsWith("-"))
+			const targetPath = pathToken ? pathToken.replace(/['"`]/g, "") : ""
 			for (const o of outputs) {
 				if (
 					targetPath === o ||

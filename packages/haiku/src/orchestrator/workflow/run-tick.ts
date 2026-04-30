@@ -216,7 +216,7 @@ function maybeUpstreamReconciliationGate(
 	}
 	if (priorStages.length === 0) return null
 
-	const result = checkUpstreamReconciliation(slug, priorStages)
+	const result = checkUpstreamReconciliation(slug, priorStages, root)
 	if (!result || result.findings.length === 0) return null
 
 	const body = renderReconciliationPrompt(slug, currentStage, result.findings)

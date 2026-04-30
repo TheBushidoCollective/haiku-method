@@ -52,13 +52,18 @@ export interface ReconciliationResult {
 /** Walk the upstream-artifact corpus for the given stage and return
  *  any cross-document contradictions. `priorStages` is the ordered
  *  list of stages that come before `currentStage` and have completed.
+ *  `rootDir` overrides the project root used for path resolution
+ *  (defaults to `process.cwd()` via `intentDir`).
  *  Returns null when no findings are detected. */
 export function checkUpstreamReconciliation(
 	intentSlug: string,
 	priorStages: readonly string[],
+	rootDir?: string,
 ): ReconciliationResult | null {
 	if (priorStages.length === 0) return null
-	const dir = intentDir(intentSlug)
+	const dir = rootDir
+		? join(rootDir, "intents", intentSlug)
+		: intentDir(intentSlug)
 	const corpus = collectCorpus(dir, priorStages)
 	if (corpus.length === 0) return null
 

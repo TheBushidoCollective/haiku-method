@@ -324,6 +324,45 @@ intent_locked → 423
 		)
 	})
 
+	await test("rootDir parameter resolves corpus when process.cwd() differs", () => {
+		const { projDir, intentDirPath, slug, stages } =
+			createProject("recon-root-param")
+		const planArtifacts = join(intentDirPath, "stages", stages[0], "artifacts")
+		mkdirSync(planArtifacts, { recursive: true })
+		writeFileSync(
+			join(planArtifacts, "API.md"),
+			`# API
+## Tool: haiku_feedback_write
+Writes feedback.
+`,
+		)
+		writeFileSync(
+			join(planArtifacts, "STORAGE.md"),
+			`# Storage
+## Tool: haiku_feedback_create
+Creates a feedback record.
+`,
+		)
+		setStageState(intentDirPath, stages[0], {
+			status: "completed",
+			phase: "complete",
+		})
+		// Deliberately stay in the original cwd — do NOT chdir into projDir.
+		// Pass root explicitly so the corpus is resolved without relying on
+		// process.cwd().
+		const haikuRoot = join(projDir, ".haiku")
+		const result = checkUpstreamReconciliation(slug, [stages[0]], haikuRoot)
+		assert.ok(
+			result,
+			"should detect divergence when rootDir is passed explicitly",
+		)
+		const toolFinding = result.findings.find((f) => f.kind === "tool_name")
+		assert.ok(
+			toolFinding,
+			"should find tool_name divergence via explicit rootDir",
+		)
+	})
+
 	console.log("\n=== pre-tick gate ===")
 
 	await test("emits upstream_reconciliation_required on first elaboration with priors", async () => {

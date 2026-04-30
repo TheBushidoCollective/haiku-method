@@ -207,6 +207,89 @@ Creates a feedback record.
 		)
 	})
 
+	await test("does NOT flag haiku_feedback_write vs haiku_feedback_read (different synonym classes)", () => {
+		const { projDir, intentDirPath, slug, stages } = createProject(
+			"recon-write-vs-read",
+		)
+		const planArtifacts = join(intentDirPath, "stages", stages[0], "artifacts")
+		mkdirSync(planArtifacts, { recursive: true })
+		writeFileSync(
+			join(planArtifacts, "WRITE.md"),
+			`# Write API
+
+## Tool: haiku_feedback_write
+Writes feedback body.
+`,
+		)
+		writeFileSync(
+			join(planArtifacts, "READ.md"),
+			`# Read API
+
+## Tool: haiku_feedback_read
+Reads feedback body.
+`,
+		)
+		setStageState(intentDirPath, stages[0], {
+			status: "completed",
+			phase: "complete",
+		})
+		process.chdir(projDir)
+		const result = checkUpstreamReconciliation(slug, [stages[0]])
+		// Write vs read are different synonym classes — should NOT flag.
+		const toolFindings = result
+			? result.findings.filter((f) => f.kind === "tool_name")
+			: []
+		assert.strictEqual(
+			toolFindings.length,
+			0,
+			"write vs read in different synonym classes should NOT be flagged",
+		)
+	})
+
+	await test("flags haiku_feedback_write vs haiku_feedback_create (same write-class)", () => {
+		const { projDir, intentDirPath, slug, stages } = createProject(
+			"recon-write-vs-create",
+		)
+		const planArtifacts = join(intentDirPath, "stages", stages[0], "artifacts")
+		mkdirSync(planArtifacts, { recursive: true })
+		writeFileSync(
+			join(planArtifacts, "API.md"),
+			`# API
+
+## Tool: haiku_feedback_write
+Writes feedback.
+`,
+		)
+		writeFileSync(
+			join(planArtifacts, "STORAGE.md"),
+			`# Storage
+
+## Tool: haiku_feedback_create
+Creates feedback record.
+`,
+		)
+		setStageState(intentDirPath, stages[0], {
+			status: "completed",
+			phase: "complete",
+		})
+		process.chdir(projDir)
+		const result = checkUpstreamReconciliation(slug, [stages[0]])
+		assert.ok(result, "should produce a result")
+		const toolFinding = result.findings.find((f) => f.kind === "tool_name")
+		assert.ok(
+			toolFinding,
+			"write vs create in same synonym class SHOULD be flagged",
+		)
+		assert.ok(
+			toolFinding.occurrences.some((o) => o.name === "haiku_feedback_write"),
+			"should include haiku_feedback_write",
+		)
+		assert.ok(
+			toolFinding.occurrences.some((o) => o.name === "haiku_feedback_create"),
+			"should include haiku_feedback_create",
+		)
+	})
+
 	await test("detects HTTP status divergence between two artifacts", () => {
 		const { projDir, intentDirPath, slug, stages } =
 			createProject("recon-http-status")

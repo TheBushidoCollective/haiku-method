@@ -158,29 +158,90 @@ function collectCorpus(
 // ── Detector 1: tool-name divergence ──────────────────────────────────────
 
 const TOOL_HEADING_RE =
-	/(?:^|\s)(?:tool|tool[- ]name|mcp[- ]tool|tool[- ]contract)[\s:]/i
+	/(?:^|\s)(?:tool[- ]name|mcp[- ]tool|tool[- ]contract)[\s:]|^\s*##\s+tool\b/i
 
 /** Identifier that looks like an MCP tool (haiku_<lowercase_underscore>). */
 const HAIKU_TOOL_RE = /\bhaiku_[a-z][a-z0-9_]*\b/g
 
-/** Cluster two haiku_* identifiers as "same conceptual tool" when:
- *  - they share at least one non-leading token (e.g. `haiku_feedback_write`
- *    and `haiku_feedback_create` both share `feedback`), AND
- *  - one or both appear in tool-contract context lines (Tool: header,
- *    "the haiku_X tool" prose, MCP contract sections).
+/** Synonym classes for the FINAL token in a haiku_* tool name.
  *
- * We're conservative here — the goal is to surface the obvious
- * "your storage doc says haiku_feedback_write but your API doc says
- * haiku_feedback_create" case, not every coincidence of shared tokens.
+ *  Two tools are only flagged as a "same concept, different name"
+ *  divergence when:
+ *    1. They share ALL tokens up to (but excluding) the final one —
+ *       i.e. the same prefix (e.g. `haiku_feedback`).
+ *    2. Their final tokens are in the SAME synonym class (both are
+ *       write-class verbs, both are read-class verbs, etc.).
+ *
+ *  This prevents `haiku_feedback_write` (write class) and
+ *  `haiku_feedback_read` (read class) from being flagged together
+ *  while still catching `haiku_feedback_write` vs
+ *  `haiku_feedback_create` (both write class).
+ *
+ *  Tools whose final token is not in any class may still cluster
+ *  with each other (their synonym class resolves to their own name,
+ *  which only matches identical tokens — no cross-class collision).
+ */
+const SYNONYM_CLASSES: ReadonlyArray<readonly string[]> = [
+	["write", "create", "submit", "add", "post", "put", "set", "upsert"],
+	["read", "get", "fetch", "load", "show", "view"],
+	["update", "patch", "edit", "modify"],
+	["delete", "remove", "destroy"],
+	["list", "index", "all", "search", "find", "query"],
+	["acknowledge", "confirm", "accept", "approve"],
+]
+
+/** Map from verb → synonym-class index (0-based). Built at load time. */
+const VERB_TO_CLASS = new Map<string, number>()
+for (let i = 0; i < SYNONYM_CLASSES.length; i++) {
+	for (const verb of SYNONYM_CLASSES[i]) {
+		VERB_TO_CLASS.set(verb, i)
+	}
+}
+
+/** Return true when two tool names share the same prefix (all tokens
+ *  except the last) AND their final tokens are in the same synonym
+ *  class — i.e. they are plausibly two names for the same operation. */
+function shouldCluster(a: string, b: string): boolean {
+	if (a === b) return false
+	const tokensA = a.split("_")
+	const tokensB = b.split("_")
+	// Must have at least two tokens beyond `haiku` (e.g. haiku_feedback_write)
+	// to be eligible for prefix-match clustering.
+	if (tokensA.length < 3 || tokensB.length < 3) return false
+	// Prefix must be identical.
+	if (tokensA.length !== tokensB.length) return false
+	const finalA = tokensA[tokensA.length - 1]
+	const finalB = tokensB[tokensB.length - 1]
+	if (finalA === finalB) return false // identical tools — not a divergence
+	const prefixA = tokensA.slice(0, -1).join("_")
+	const prefixB = tokensB.slice(0, -1).join("_")
+	if (prefixA !== prefixB) return false
+	// Final tokens must both map to the same synonym class.
+	const classA = VERB_TO_CLASS.get(finalA)
+	const classB = VERB_TO_CLASS.get(finalB)
+	// If either final token is not in any class, don't flag (too noisy).
+	if (classA === undefined || classB === undefined) return false
+	return classA === classB
+}
+
+/** Cluster two haiku_* identifiers as "same conceptual tool" when:
+ *  - they share ALL non-final tokens (the entire prefix), AND
+ *  - their final tokens are recognised synonym-class verbs in the
+ *    SAME class (write/create/submit cluster, read/get/list cluster,
+ *    update/patch cluster, delete/remove cluster).
+ *
+ * This correctly flags `haiku_feedback_write` vs `haiku_feedback_create`
+ * (both write-class) without incorrectly flagging `haiku_feedback_write`
+ * vs `haiku_feedback_read` (different classes).
  */
 function detectToolNameDivergence(
 	corpus: CorpusEntry[],
 ): ReconciliationFinding[] {
 	const findings: ReconciliationFinding[] = []
-	// occurrences keyed by conceptual cluster (sorted shared-token signature)
-	const clusters = new Map<
+	// Collect all tool occurrences in tool-context lines.
+	const allOccurrences = new Map<
 		string,
-		Map<string, Array<{ file: string; line: number; excerpt: string }>>
+		Array<{ file: string; line: number; excerpt: string }>
 	>()
 
 	for (const entry of corpus) {
@@ -188,28 +249,13 @@ function detectToolNameDivergence(
 			const line = entry.lines[i]
 			const inToolContext =
 				TOOL_HEADING_RE.test(line) ||
-				/\btool\b/i.test(line) ||
-				/\bmcp\b/i.test(line)
+				/\btool[- ]name\b|\bmcp[- ]tool\b/i.test(line)
 			if (!inToolContext) continue
 			const matches = line.match(HAIKU_TOOL_RE)
 			if (!matches) continue
 			for (const tool of matches) {
-				const tokens = tool
-					.split("_")
-					.slice(1)
-					.filter((t) => t.length >= 3)
-				if (tokens.length === 0) continue
-				// Cluster by the FIRST meaningful token after `haiku_` —
-				// e.g. `haiku_feedback_write` and `haiku_feedback_create`
-				// both cluster under `feedback`. This catches the
-				// "same conceptual tool, different verb" case the
-				// detector exists to surface.
-				const sig = tokens[0]
-				if (!sig) continue
-				const cluster = clusters.get(sig) ?? new Map()
-				if (!clusters.has(sig)) clusters.set(sig, cluster)
-				const occList = cluster.get(tool) ?? []
-				if (!cluster.has(tool)) cluster.set(tool, occList)
+				const occList = allOccurrences.get(tool) ?? []
+				if (!allOccurrences.has(tool)) allOccurrences.set(tool, occList)
 				occList.push({
 					file: entry.relPath,
 					line: i + 1,
@@ -219,34 +265,43 @@ function detectToolNameDivergence(
 		}
 	}
 
-	for (const [sig, cluster] of clusters) {
-		if (cluster.size < 2) continue
-		// Only surface when the variants appear in DIFFERENT files —
-		// same-file variation is usually intentional (e.g. listing all
-		// feedback tools side by side).
-		const allFiles = new Set<string>()
-		for (const occList of cluster.values()) {
-			for (const o of occList) allFiles.add(o.file)
-		}
-		if (allFiles.size < 2) continue
+	// For each pair of distinct tools, check if they should cluster.
+	// Emit one finding per matched pair (dedup by canonical pair key).
+	const reported = new Set<string>()
+	const toolNames = [...allOccurrences.keys()]
+	for (let i = 0; i < toolNames.length; i++) {
+		for (let j = i + 1; j < toolNames.length; j++) {
+			const a = toolNames[i]
+			const b = toolNames[j]
+			if (!shouldCluster(a, b)) continue
+			const pairKey = `${a}\0${b}`
+			if (reported.has(pairKey)) continue
+			reported.add(pairKey)
 
-		const occurrences: ReconciliationFinding["occurrences"] = []
-		for (const [name, occList] of cluster) {
-			for (const o of occList) {
-				occurrences.push({
-					name,
-					file: o.file,
-					line: o.line,
-					excerpt: o.excerpt,
-				})
-			}
+			const occA = allOccurrences.get(a) ?? []
+			const occB = allOccurrences.get(b) ?? []
+			// Require the two names to appear in DIFFERENT files —
+			// same-file variation is intentional (e.g. listing both verbs).
+			const filesA = new Set(occA.map((o) => o.file))
+			const filesB = new Set(occB.map((o) => o.file))
+			const allFiles = new Set([...filesA, ...filesB])
+			if (allFiles.size < 2) continue
+
+			const concept = a
+				.split("_")
+				.slice(0, -1)
+				.join("_")
+				.replace(/^haiku_/, "")
+			const occurrences: ReconciliationFinding["occurrences"] = []
+			for (const o of occA) occurrences.push({ name: a, ...o })
+			for (const o of occB) occurrences.push({ name: b, ...o })
+			findings.push({
+				kind: "tool_name",
+				concept,
+				occurrences,
+				message: `Tool-name divergence on concept "${concept}": ${a} and ${b} appear across ${allFiles.size} upstream artifact(s). Pick one canonical name, update the artifacts that disagree, and re-run the workflow tick — or acknowledge the divergence via haiku_reconciliation_acknowledge if the artifacts intentionally describe different tools.`,
+			})
 		}
-		findings.push({
-			kind: "tool_name",
-			concept: sig,
-			occurrences,
-			message: `Tool-name divergence on concept "${sig}": ${[...cluster.keys()].join(", ")} appear across ${allFiles.size} upstream artifact(s). Pick one canonical name, update the artifacts that disagree, and re-run the workflow tick — or acknowledge the divergence via haiku_reconciliation_acknowledge if the artifacts intentionally describe different tools.`,
-		})
 	}
 
 	return findings

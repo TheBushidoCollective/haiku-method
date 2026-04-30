@@ -2801,12 +2801,35 @@ function validateCitedHelpers(body: string): Record<string, unknown> | null {
 	const citations = extractHelperCitations(body)
 	if (citations.length === 0) return null
 
+	const projectRoot = process.cwd()
+	const projectRootWithSep = projectRoot.endsWith(sep)
+		? projectRoot
+		: `${projectRoot}${sep}`
+
 	for (const c of citations) {
-		// Resolve relative to the repo root (process.cwd() for the
-		// MCP server, which runs in the worktree root).
-		const candidate = c.path.startsWith("/")
+		// Resolve candidate to an absolute path, then clamp it inside
+		// the project root. Absolute paths from the agent body are
+		// resolved as-is; relative paths are joined from process.cwd().
+		// Either way, reject anything that escapes the project tree —
+		// an agent could otherwise cite /etc/ssl/private/key.pem and
+		// trigger the validator to read arbitrary filesystem paths.
+		const rawCandidate = c.path.startsWith("/")
 			? c.path
-			: join(process.cwd(), c.path)
+			: join(projectRoot, c.path)
+		const candidate = resolve(rawCandidate)
+		if (
+			!candidate.startsWith(projectRootWithSep) &&
+			candidate !== projectRoot
+		) {
+			return {
+				error: "cited_helper_not_found",
+				citation: c.full,
+				path: c.path,
+				identifier: c.identifier,
+				reason: "path_outside_project",
+				message: `Unit body cites \`${c.identifier}\` at \`${c.path}\` but the resolved path escapes the project root. Only paths within the project tree can be cited as existing helpers.`,
+			}
+		}
 		if (!existsSync(candidate)) {
 			return {
 				error: "cited_helper_not_found",

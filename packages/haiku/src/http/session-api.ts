@@ -12,7 +12,7 @@ import {
 	resolveIntentStages,
 	resolveStudioStages,
 } from "../orchestrator/studio.js"
-import { type ReviewSession, getSession } from "../sessions.js"
+import { getSession, type ReviewSession } from "../sessions.js"
 
 interface ApproveAction {
 	label: string
@@ -56,9 +56,7 @@ function computeApproveAction(session: ReviewSession): ApproveAction {
 		: null
 	const stage = current?.stage || session.stage || ""
 	const stageTitle = stage ? titleCase(stage) : ""
-	const nextStageTitle = session.next_stage
-		? titleCase(session.next_stage)
-		: ""
+	const nextStageTitle = session.next_stage ? titleCase(session.next_stage) : ""
 
 	// Intent-completion review (terminal review after every stage gate
 	// passed and the studio-level reviewers — if any — have approved).
@@ -78,7 +76,9 @@ function computeApproveAction(session: ReviewSession): ApproveAction {
 			}
 		}
 		return {
-			label: stageTitle ? `Open ${stageTitle} Pull Request` : "Open Pull Request",
+			label: stageTitle
+				? `Open ${stageTitle} Pull Request`
+				: "Open Pull Request",
 			kind: "open_pr",
 		}
 	}
@@ -95,9 +95,7 @@ function computeApproveAction(session: ReviewSession): ApproveAction {
 	// stage — approving begins building.
 	if (gateContext === "elaborate_to_execute") {
 		return {
-			label: stageTitle
-				? `Start ${stageTitle} Execution`
-				: "Start Execution",
+			label: stageTitle ? `Start ${stageTitle} Execution` : "Start Execution",
 			kind: "start_execution",
 		}
 	}
@@ -108,17 +106,19 @@ function computeApproveAction(session: ReviewSession): ApproveAction {
 	const intentFm =
 		(session.parsedIntent as { frontmatter?: Record<string, unknown> } | null)
 			?.frontmatter || {}
-	const studio = (current?.studio as string) || (intentFm.studio as string) || ""
+	const studio =
+		(current?.studio as string) || (intentFm.studio as string) || ""
 	const stages = studio
 		? resolveIntentStages(intentFm, studio).length > 0
 			? resolveIntentStages(intentFm, studio)
 			: resolveStudioStages(studio)
 		: []
 	const isLastStage =
-		!session.next_stage && stages.length > 0 && stages[stages.length - 1] === stage
+		!session.next_stage &&
+		stages.length > 0 &&
+		stages[stages.length - 1] === stage
 	if (isLastStage) {
-		const completionReviewEnabled =
-			intentFm.intent_completion_review !== false
+		const completionReviewEnabled = intentFm.intent_completion_review !== false
 		if (completionReviewEnabled) {
 			return {
 				label: "Submit Intent for Final Review",

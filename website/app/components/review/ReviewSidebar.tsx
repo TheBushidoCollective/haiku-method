@@ -207,9 +207,7 @@ export function ReviewSidebar({
 						style={{ color: accentColor }}
 					>
 						{sessionType === "review"
-							? session.review_type === "unit"
-								? "Unit Review"
-								: "Intent Review"
+							? "Intent Review"
 							: sessionType === "question"
 								? "Question Session"
 								: "Design Direction"}
@@ -299,6 +297,8 @@ export function ReviewSidebar({
 						totalSteps={steps.length - 1}
 						accentColor={accentColor}
 						submitting={submitting}
+						approveLabel={session.approve_action?.label ?? null}
+						approveKind={session.approve_action?.kind ?? null}
 						onSubmit={handleSubmit}
 					/>
 				) : (
@@ -344,6 +344,8 @@ function DecisionPanel({
 	totalSteps,
 	accentColor,
 	submitting,
+	approveLabel,
+	approveKind,
 	onSubmit,
 }: {
 	totalComments: number
@@ -351,9 +353,21 @@ function DecisionPanel({
 	totalSteps: number
 	accentColor: string
 	submitting: boolean
+	approveLabel: string | null
+	approveKind: string | null
 	onSubmit: (decision: "approved" | "changes_requested") => void
 }) {
 	const hasComments = totalComments > 0
+	const baseApprove = approveLabel ?? "Approve"
+	// Ad-hoc reviews already say "Done" — appending "Anyway" reads weird.
+	// For every other kind the "Anyway" suffix preserves the cognitive
+	// friction when the user is approving despite leaving comments.
+	const anywayApprove =
+		approveKind === "ad_hoc_done"
+			? baseApprove
+			: approveLabel
+				? `${approveLabel} Anyway`
+				: "Approve Anyway"
 
 	return (
 		<div>
@@ -387,7 +401,7 @@ function DecisionPanel({
 							className="w-full rounded-lg px-5 py-2 text-sm font-semibold opacity-60 hover:opacity-100 disabled:opacity-30"
 							style={{ backgroundColor: accentColor, color: "#042f2e" }}
 						>
-							Approve Anyway
+							{anywayApprove}
 						</button>
 					</>
 				) : (
@@ -399,7 +413,7 @@ function DecisionPanel({
 							className="w-full rounded-lg px-5 py-2 text-sm font-semibold disabled:opacity-50"
 							style={{ backgroundColor: accentColor, color: "#042f2e" }}
 						>
-							Approve
+							{baseApprove}
 						</button>
 						<button
 							type="button"

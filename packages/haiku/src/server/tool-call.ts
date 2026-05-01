@@ -369,7 +369,6 @@ export async function handleToolCall(
 		const session = createSession({
 			intent_dir: intentDirAbs,
 			intent_slug: slug,
-			review_type: "intent",
 			target: "",
 		})
 		session.ad_hoc = true
@@ -854,9 +853,14 @@ export async function handleToolCall(
 export function createReviewGateHandler() {
 	return async (
 		intentDirRel: string,
-		reviewType: string,
 		gateType?: string,
 		signal?: AbortSignal,
+		gateMeta?: {
+			gateContext?: string
+			stage?: string
+			nextStage?: string | null
+			nextPhase?: string | null
+		},
 	) => {
 		const intentDirAbs = resolve(process.cwd(), intentDirRel)
 		const intent = await parseIntent(intentDirAbs)
@@ -877,10 +881,15 @@ export function createReviewGateHandler() {
 		const session = createSession({
 			intent_dir: intentDirAbs,
 			intent_slug: intent.slug,
-			review_type: reviewType as "intent" | "unit",
 			gate_type: gateType,
 			target: "",
 		})
+		if (gateMeta?.gateContext) session.gate_context = gateMeta.gateContext
+		if (gateMeta?.stage) session.stage = gateMeta.stage
+		if (gateMeta?.nextStage !== undefined)
+			session.next_stage = gateMeta.nextStage
+		if (gateMeta?.nextPhase !== undefined)
+			session.next_phase = gateMeta.nextPhase
 		bindSessionCancellation(session.session_id, signal)
 
 		// Store parsed data on session for the SPA
@@ -928,7 +937,7 @@ export function createReviewGateHandler() {
 		let reviewUrl: string
 		if (useRemote) {
 			const tunnelUrl = await openTunnel(port)
-			reviewUrl = buildReviewUrl(session.session_id, tunnelUrl, reviewType)
+			reviewUrl = buildReviewUrl(session.session_id, tunnelUrl, "intent")
 		} else {
 			reviewUrl = `http://127.0.0.1:${port}/review/${session.session_id}`
 		}

@@ -8,7 +8,134 @@
 
 import type { FastifyReply } from "fastify"
 import { getCurrentState } from "../current-state.js"
-import { getSession } from "../sessions.js"
+import {
+	resolveIntentStages,
+	resolveStudioStages,
+} from "../orchestrator/studio.js"
+import { type ReviewSession, getSession } from "../sessions.js"
+
+interface ApproveAction {
+	label: string
+	kind:
+		| "ad_hoc_done"
+		| "open_pr"
+		| "submit_external"
+		| "start_intent"
+		| "start_execution"
+		| "complete_stage"
+		| "submit_intent_review"
+		| "complete_intent"
+		| "approve"
+}
+
+function titleCase(s: string): string {
+	return s
+		.split(/[-_]/)
+		.filter(Boolean)
+		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+		.join(" ")
+}
+
+/** Decide what the Approve button should say based on what approval will
+ *  actually trigger. Server-authoritative — the SPA renders the string and
+ *  doesn't reimplement workflow rules. */
+function computeApproveAction(session: ReviewSession): ApproveAction {
+	if (session.ad_hoc) {
+		return { label: "Done", kind: "ad_hoc_done" }
+	}
+
+	const gateContext = session.gate_context || "stage_gate"
+	const gateType = session.gate_type || "ask"
+	const hasExternal = gateType.split(",").some((p) => p.trim() === "external")
+	const isCompoundExternal = hasExternal && gateType.includes(",")
+
+	// Resolve the stage label — prefer fresh derivation from disk so a
+	// stale cached session can't display the wrong stage name.
+	const current = session.intent_slug
+		? getCurrentState(session.intent_slug)
+		: null
+	const stage = current?.stage || session.stage || ""
+	const stageTitle = stage ? titleCase(stage) : ""
+	const nextStageTitle = session.next_stage
+		? titleCase(session.next_stage)
+		: ""
+
+	// Intent-completion review (terminal review after every stage gate
+	// passed and the studio-level reviewers — if any — have approved).
+	if (gateContext === "intent_completion") {
+		return { label: "Mark Intent Done", kind: "complete_intent" }
+	}
+
+	// Discrete mode / external review — approval routes through a PR/MR
+	// rather than locally closing the gate.
+	if (hasExternal) {
+		if (isCompoundExternal) {
+			return {
+				label: stageTitle
+					? `Submit ${stageTitle} for Review`
+					: "Submit for Review",
+				kind: "submit_external",
+			}
+		}
+		return {
+			label: stageTitle ? `Open ${stageTitle} Pull Request` : "Open Pull Request",
+			kind: "open_pr",
+		}
+	}
+
+	// First-stage elaborate gate — approving kicks off the intent.
+	if (gateContext === "intent_review") {
+		return {
+			label: stageTitle ? `Start ${stageTitle}` : "Start Intent",
+			kind: "start_intent",
+		}
+	}
+
+	// Pre-execution gate (after elaborate, before execute) on a non-first
+	// stage — approving begins building.
+	if (gateContext === "elaborate_to_execute") {
+		return {
+			label: stageTitle
+				? `Start ${stageTitle} Execution`
+				: "Start Execution",
+			kind: "start_execution",
+		}
+	}
+
+	// Default stage gate (post-execution review). When this is the last
+	// stage in the studio's stage list, approval routes the intent toward
+	// final completion review (or completion outright if disabled).
+	const intentFm =
+		(session.parsedIntent as { frontmatter?: Record<string, unknown> } | null)
+			?.frontmatter || {}
+	const studio = (current?.studio as string) || (intentFm.studio as string) || ""
+	const stages = studio
+		? resolveIntentStages(intentFm, studio).length > 0
+			? resolveIntentStages(intentFm, studio)
+			: resolveStudioStages(studio)
+		: []
+	const isLastStage =
+		!session.next_stage && stages.length > 0 && stages[stages.length - 1] === stage
+	if (isLastStage) {
+		const completionReviewEnabled =
+			intentFm.intent_completion_review !== false
+		if (completionReviewEnabled) {
+			return {
+				label: "Submit Intent for Final Review",
+				kind: "submit_intent_review",
+			}
+		}
+		return { label: "Complete Intent", kind: "complete_intent" }
+	}
+
+	if (stageTitle) {
+		const label = nextStageTitle
+			? `Complete ${stageTitle} Stage → Start ${nextStageTitle}`
+			: `Complete ${stageTitle} Stage`
+		return { label, kind: "complete_stage" }
+	}
+	return { label: "Approve", kind: "approve" }
+}
 
 /** Send the JSON response for `GET /api/session/:sessionId`. Returns
  *  404 when the session is unknown. */
@@ -28,7 +155,6 @@ export function respondSessionApi(
 	}
 	if (session.session_type === "review") {
 		data.intent_slug = session.intent_slug
-		data.review_type = session.review_type
 		data.gate_type = session.gate_type || "ask"
 		data.target = session.target
 		data.decision = session.decision
@@ -64,6 +190,10 @@ export function respondSessionApi(
 		if (session.previousReview) data.previous_review = session.previousReview
 		if (session.ad_hoc) data.ad_hoc = true
 		if (session.stage) data.stage = session.stage
+		if (session.gate_context) data.gate_context = session.gate_context
+		if (session.next_stage !== undefined) data.next_stage = session.next_stage
+		if (session.next_phase !== undefined) data.next_phase = session.next_phase
+		data.approve_action = computeApproveAction(session)
 	}
 	if (session.session_type === "question") {
 		data.title = session.title

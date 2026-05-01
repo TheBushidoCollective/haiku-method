@@ -3,16 +3,11 @@
  * detail controlled by the URL. Each leaf route under
  * `stages/$stage/*` picks what to pass based on its own params; this
  * module centralises the navigate-on-change side of the binding.
- *
- * Falls through to `<ArtifactsPane>` for unit-scoped reviews (the
- * session carries a `review_type === "unit"` target) — same fallback
- * the pre-router `StageScopedContent` applied.
  */
 
 import { useNavigate } from "@tanstack/react-router"
 import { useCallback, useEffect } from "react"
 import { useFeedbackContext } from "../../../../../hooks/FeedbackContext"
-import { ArtifactsPane } from "../../../../../pages/review/ArtifactsPane"
 import type {
 	ReviewDetailKind,
 	ReviewTab,
@@ -32,7 +27,6 @@ export function StageContent({
 	const {
 		session,
 		sessionId,
-		wsRef,
 		highlightFeedbackId,
 		setHighlightFeedbackId,
 		pendingFlashAnchor,
@@ -41,7 +35,6 @@ export function StageContent({
 		setInlineComments,
 		pins,
 		setPins,
-		getAnnotations,
 	} = useReviewContext()
 	const navigate = useNavigate()
 
@@ -92,8 +85,6 @@ export function StageContent({
 		},
 		[navigate, sessionId, stage, tab],
 	)
-
-	const isUnitReview = session.review_type === "unit" && !!session.target
 
 	// `inlineComments` and `pins` are consumed by the sidebar composer
 	// via `getAnnotations()`; StageReview itself only needs the setters
@@ -274,19 +265,6 @@ export function StageContent({
 		setHighlightFeedbackId,
 		navigate,
 	])
-
-	if (isUnitReview) {
-		return (
-			<ArtifactsPane
-				session={session}
-				sessionId={sessionId}
-				getAnnotations={getAnnotations}
-				wsRef={wsRef}
-				onInlineCommentsChange={setInlineComments}
-				onPinsChange={setPins}
-			/>
-		)
-	}
 
 	return (
 		<StageReview

@@ -259,12 +259,22 @@ export function buildRunInstructions(
 let _openReviewAndWait:
 	| ((
 			intentDir: string,
-			reviewType: string,
 			gateType?: string,
 			/** Abort signal propagated from the MCP tool call so the review
 			 *  session can be torn down (and its WebSocket closed) if the
 			 *  user cancels the tool. */
 			signal?: AbortSignal,
+			/** Extra context the session payload uses to compute a
+			 *  consequence-aware Approve button label (e.g. "Complete
+			 *  Development Stage", "Open Pull Request", "Mark Intent Done").
+			 *  Optional — omitted callers fall back to a generic stage
+			 *  completion label. */
+			gateMeta?: {
+				gateContext?: string
+				stage?: string
+				nextStage?: string | null
+				nextPhase?: string | null
+			},
 	  ) => Promise<{ decision: string; feedback: string; annotations?: unknown }>)
 	| null = null
 

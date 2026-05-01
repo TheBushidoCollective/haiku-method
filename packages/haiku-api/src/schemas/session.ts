@@ -47,9 +47,6 @@ export const GateTypeSchema = z
 	.describe("Review-gate type declared in STAGE.md")
 export type GateType = z.infer<typeof GateTypeSchema>
 
-export const ReviewTypeSchema = z.enum(["intent", "unit"])
-export type ReviewType = z.infer<typeof ReviewTypeSchema>
-
 export const StageStateInfoSchema = z
 	.object({
 		stage: z.string(),
@@ -123,6 +120,29 @@ export const IntentCurrentStateSchema = z
 	)
 export type IntentCurrentState = z.infer<typeof IntentCurrentStateSchema>
 
+export const ApproveActionKindSchema = z.enum([
+	"ad_hoc_done",
+	"open_pr",
+	"submit_external",
+	"start_intent",
+	"start_execution",
+	"complete_stage",
+	"submit_intent_review",
+	"complete_intent",
+	"approve",
+])
+export type ApproveActionKind = z.infer<typeof ApproveActionKindSchema>
+
+export const ApproveActionSchema = z
+	.object({
+		label: z.string(),
+		kind: ApproveActionKindSchema,
+	})
+	.describe(
+		"Server-computed Approve button label + kind. The SPA renders `label` verbatim so the button reflects the next consequence (e.g. 'Complete Development Stage', 'Open Development Pull Request', 'Mark Intent Done').",
+	)
+export type ApproveAction = z.infer<typeof ApproveActionSchema>
+
 export const ReviewSessionPayloadSchema = z
 	.object({
 		session_id: z.string(),
@@ -130,7 +150,6 @@ export const ReviewSessionPayloadSchema = z
 		status: SessionStatusSchema,
 		intent_slug: z.string().optional(),
 		intent_dir: z.string().optional(),
-		review_type: ReviewTypeSchema.optional(),
 		gate_type: z.string().optional(),
 		target: z.string().optional(),
 		decision: z.string().optional(),
@@ -158,6 +177,18 @@ export const ReviewSessionPayloadSchema = z
 		 *  for deep-link routing and for the header breadcrumb when the
 		 *  intent has multiple stages. */
 		stage: z.string().optional(),
+		/** Where in the lifecycle this gate fires: stage_gate (default),
+		 *  intent_review (first-stage elaborate), elaborate_to_execute,
+		 *  intent_completion. Drives the Approve button label so the user
+		 *  sees the actual next action. */
+		gate_context: z.string().optional(),
+		/** Stage that begins after approval, when one exists; null/omit on
+		 *  the final stage gate. */
+		next_stage: z.string().nullable().optional(),
+		/** Phase that begins after approval (e.g. "execute" after
+		 *  elaborate→execute). */
+		next_phase: z.string().nullable().optional(),
+		approve_action: ApproveActionSchema.optional(),
 	})
 	.describe(
 		"Review session payload (GET /api/session/:id, session_type=review)",

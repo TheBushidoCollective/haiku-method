@@ -62,7 +62,7 @@ export function stripFrontmatter(md: string): string {
 /**
  * Module-local memoization cache for `markdownToSimpleHtml`.
  *
- * The call sites (IntentReview, UnitReview, KnowledgeTab, OutputArtifactsTab,
+ * The call sites (IntentReview, KnowledgeTab, OutputArtifactsTab,
  * UnitsTable) live inside JSX expressions that re-run on every parent
  * re-render — any sidebar state change (`setSidebarTab`, `setGeneralText`,
  * `setAllInlineComments`) re-renders the whole `ReviewPage` tree and would

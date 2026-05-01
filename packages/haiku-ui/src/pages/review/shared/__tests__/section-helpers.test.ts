@@ -60,8 +60,8 @@ describe("markdownToSimpleHtml sanitization", () => {
 /**
  * Memoization regression tests for `markdownToSimpleHtml` (FB-53).
  *
- * The six call sites (IntentReview, UnitReview, KnowledgeTab,
- * OutputArtifactsTab, UnitsTable) live inside JSX expressions that re-run on
+ * The four call sites (IntentReview, KnowledgeTab, OutputArtifactsTab,
+ * UnitsTable) live inside JSX expressions that re-run on
  * every parent re-render. Without a cache, the remark → html → DOMPurify
  * pipeline (5-15 ms on typical artifacts) runs on every sidebar state change.
  * The cache makes repeated calls O(1) hash-table lookups and returns the

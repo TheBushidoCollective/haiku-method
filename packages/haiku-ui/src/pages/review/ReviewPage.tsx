@@ -684,8 +684,7 @@ function StageScopedContent({
 	// All feedback for this intent+stage (fetched once per stage).
 	const { items: stageFeedback } = useFeedback(intentSlug, stageName)
 
-	const isUnitReview = session.review_type === "unit" && !!session.target
-	if (isUnitReview || !stageName) {
+	if (!stageName) {
 		return (
 			<ArtifactsPane
 				session={session}

@@ -293,10 +293,16 @@ export default defineTool({
 			try {
 				const reviewResult = await _openReviewAndWait(
 					intentDirPath,
-					"intent",
 					gateType,
 					// signal not threaded through MCP per-tool calls — fine,
 					// review UI handles its own cancel via WS close.
+					undefined,
+					{
+						gateContext,
+						stage,
+						nextStage,
+						nextPhase,
+					},
 				)
 
 				// Re-enforce stage branch after the await — the user may

@@ -4,7 +4,6 @@ import { DirectionPicker } from "./DirectionPicker"
 import type { SessionData } from "./hooks/useReviewSession"
 import { IntentReview } from "./IntentReview"
 import { QuestionForm } from "./QuestionForm"
-import { UnitReview } from "./UnitReview"
 
 interface Props {
 	session: SessionData
@@ -43,9 +42,6 @@ export function ReviewRouter({
 	onSubmitDirection,
 }: Props) {
 	if (session.session_type === "review") {
-		if (session.review_type === "unit") {
-			return <UnitReview session={session} baseUrl={baseUrl} />
-		}
 		return <IntentReview session={session} baseUrl={baseUrl} />
 	}
 

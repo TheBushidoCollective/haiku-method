@@ -82,8 +82,8 @@ export interface SessionData {
 	status: string
 	// Review fields
 	intent_slug?: string
-	review_type?: "intent" | "unit"
 	target?: string
+	ad_hoc?: boolean
 	intent?: Record<string, unknown>
 	units?: Array<Record<string, unknown>>
 	criteria?: Array<Record<string, unknown>>
@@ -91,6 +91,12 @@ export interface SessionData {
 	intent_mockups?: Array<Record<string, unknown>>
 	unit_mockups?: Record<string, unknown>
 	stage_states?: Record<string, unknown>
+	stage?: string
+	current_state?: { studio: string; stage: string; phase: string }
+	gate_context?: string
+	next_stage?: string | null
+	next_phase?: string | null
+	approve_action?: { label: string; kind: string }
 	knowledge_files?: Array<{ name: string; content: string }>
 	stage_artifacts?: Array<{ stage: string; name: string; content: string }>
 	output_artifacts?: Array<Record<string, unknown>>

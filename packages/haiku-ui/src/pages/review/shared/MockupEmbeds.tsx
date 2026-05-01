@@ -33,10 +33,7 @@ function resolveAssetUrl(url: string): string {
  * MockupEmbeds — renders a list of mockups either as inline images
  * (for image URLs) or as sandboxed iframes (for HTML/URL mockups).
  *
- * Used by both `IntentReview` (intent-level mockups) and `UnitReview`
- * (per-unit wireframes). Extracted from the legacy
- * `components/ReviewPage.tsx` monolith as part of the FB-22 split so
- * the leaf views stay under the 400 LOC module budget.
+ * Used by `IntentReview` for intent-level mockups.
  */
 export function MockupEmbeds({ mockups }: { mockups: MockupInfo[] }) {
 	return (

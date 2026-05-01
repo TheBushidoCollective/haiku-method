@@ -151,7 +151,6 @@ export interface ReviewSession {
 	session_id: string
 	intent_dir: string
 	intent_slug: string
-	review_type: "intent" | "unit"
 	target: string
 	status: "pending" | "approved" | "changes_requested" | "decided"
 	/** Ad-hoc sessions are opened on-demand via `haiku_review_open` (not a
@@ -170,6 +169,19 @@ export interface ReviewSession {
 	feedback: string
 	annotations?: ReviewAnnotations
 	gate_type?: string
+	/** Where in the lifecycle this gate fires. Drives the Approve button
+	 *  label so the user sees the actual consequence ("Complete Development
+	 *  Stage", "Start Inception", "Mark Intent Done"). Set when the
+	 *  orchestrator opens a review; absent for ad-hoc sessions. */
+	gate_context?: string
+	/** The stage that begins after approval, when one exists. Null/omit on
+	 *  the final stage gate so the label resolver can switch to intent-
+	 *  completion phrasing. */
+	next_stage?: string | null
+	/** The phase that begins after approval (e.g. "execute" after the
+	 *  elaborate→execute gate). Used to generate "Start Execution"-style
+	 *  labels for mid-stage gates. */
+	next_phase?: string | null
 	/** If this review follows a prior changes_requested decision for the same
 	 *  intent, a snapshot of the prior review's content is attached here so
 	 *  the SPA can render a delta and show the previous feedback. */

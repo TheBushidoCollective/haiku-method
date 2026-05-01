@@ -113,18 +113,22 @@ function computeApproveAction(
 	// the intent FM fresh from disk so we don't act on stale "completion
 	// review on/off" cached at session creation.
 	const intentFm = readIntentFrontmatterFresh(session.intent_slug)
-	const studio =
-		(current?.studio as string) || (intentFm.studio as string) || ""
-	let stages: string[] = []
-	if (studio) {
-		const intentStages = resolveIntentStages(intentFm, studio)
-		stages =
-			intentStages.length > 0 ? intentStages : resolveStudioStages(studio)
+	// Primary signal: the orchestrator sets next_stage explicitly to null
+	// when there's no next stage (gate.ts computes it from the studio's
+	// ordered stage list). Trust that signal directly. The studio-list
+	// lookup below is a fallback for sessions that were never tagged with
+	// next_stage (older sessions, or paths that bypass the gate handler).
+	let isLastStage = session.next_stage === null
+	if (!isLastStage && session.next_stage === undefined) {
+		const studio =
+			(current?.studio as string) || (intentFm.studio as string) || ""
+		if (studio) {
+			const intentStages = resolveIntentStages(intentFm, studio)
+			const stages =
+				intentStages.length > 0 ? intentStages : resolveStudioStages(studio)
+			isLastStage = stages.length > 0 && stages[stages.length - 1] === stage
+		}
 	}
-	const isLastStage =
-		!session.next_stage &&
-		stages.length > 0 &&
-		stages[stages.length - 1] === stage
 	if (isLastStage) {
 		const completionReviewEnabled = intentFm.intent_completion_review !== false
 		if (completionReviewEnabled) {

@@ -937,6 +937,10 @@ export function createReviewGateHandler() {
 		let reviewUrl: string
 		if (useRemote) {
 			const tunnelUrl = await openTunnel(port)
+			// `buildReviewUrl`'s third arg is the SPA route discriminator
+			// (intent/question/direction), not the now-deprecated unit-vs-
+			// intent review_type. The gate handler only ever opens intent-
+			// scope reviews, so this is hardcoded.
 			reviewUrl = buildReviewUrl(session.session_id, tunnelUrl, "intent")
 		} else {
 			reviewUrl = `http://127.0.0.1:${port}/review/${session.session_id}`

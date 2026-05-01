@@ -6,27 +6,17 @@
 // `current_state` field that calls getCurrentState(slug) to defeat the
 // stale-cache divergence the SPA's stage stepper used to suffer from.
 
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import type { FastifyReply } from "fastify"
+import type { ApproveAction, IntentCurrentState } from "haiku-api"
 import { getCurrentState } from "../current-state.js"
 import {
 	resolveIntentStages,
 	resolveStudioStages,
 } from "../orchestrator/studio.js"
 import { getSession, type ReviewSession } from "../sessions.js"
-
-interface ApproveAction {
-	label: string
-	kind:
-		| "ad_hoc_done"
-		| "open_pr"
-		| "submit_external"
-		| "start_intent"
-		| "start_execution"
-		| "complete_stage"
-		| "submit_intent_review"
-		| "complete_intent"
-		| "approve"
-}
+import { intentDir, parseFrontmatter } from "../state-tools.js"
 
 function titleCase(s: string): string {
 	return s
@@ -36,10 +26,33 @@ function titleCase(s: string): string {
 		.join(" ")
 }
 
+/** Read intent.md frontmatter fresh from disk. Mirrors getCurrentState's
+ *  philosophy — the cached `session.parsedIntent.frontmatter` was captured
+ *  at session creation, and fields like `intent_completion_review` could
+ *  in principle be edited mid-flow. Returns an empty object when the
+ *  file or slug is missing so callers can read fields with `||` fallbacks. */
+function readIntentFrontmatterFresh(
+	slug: string | undefined,
+): Record<string, unknown> {
+	if (!slug) return {}
+	const file = join(intentDir(slug), "intent.md")
+	if (!existsSync(file)) return {}
+	try {
+		return parseFrontmatter(readFileSync(file, "utf8")).data
+	} catch {
+		return {}
+	}
+}
+
 /** Decide what the Approve button should say based on what approval will
  *  actually trigger. Server-authoritative — the SPA renders the string and
- *  doesn't reimplement workflow rules. */
-function computeApproveAction(session: ReviewSession): ApproveAction {
+ *  doesn't reimplement workflow rules. `current` is passed from the caller
+ *  so we don't double-read stage state from disk on every API hit (the
+ *  surrounding `respondSessionApi` already resolves it for `current_state`). */
+function computeApproveAction(
+	session: ReviewSession,
+	current: IntentCurrentState | null,
+): ApproveAction {
 	if (session.ad_hoc) {
 		return { label: "Done", kind: "ad_hoc_done" }
 	}
@@ -49,14 +62,8 @@ function computeApproveAction(session: ReviewSession): ApproveAction {
 	const hasExternal = gateType.split(",").some((p) => p.trim() === "external")
 	const isCompoundExternal = hasExternal && gateType.includes(",")
 
-	// Resolve the stage label — prefer fresh derivation from disk so a
-	// stale cached session can't display the wrong stage name.
-	const current = session.intent_slug
-		? getCurrentState(session.intent_slug)
-		: null
 	const stage = current?.stage || session.stage || ""
 	const stageTitle = stage ? titleCase(stage) : ""
-	const nextStageTitle = session.next_stage ? titleCase(session.next_stage) : ""
 
 	// Intent-completion review (terminal review after every stage gate
 	// passed and the studio-level reviewers — if any — have approved).
@@ -102,17 +109,18 @@ function computeApproveAction(session: ReviewSession): ApproveAction {
 
 	// Default stage gate (post-execution review). When this is the last
 	// stage in the studio's stage list, approval routes the intent toward
-	// final completion review (or completion outright if disabled).
-	const intentFm =
-		(session.parsedIntent as { frontmatter?: Record<string, unknown> } | null)
-			?.frontmatter || {}
+	// final completion review (or completion outright if disabled). Read
+	// the intent FM fresh from disk so we don't act on stale "completion
+	// review on/off" cached at session creation.
+	const intentFm = readIntentFrontmatterFresh(session.intent_slug)
 	const studio =
 		(current?.studio as string) || (intentFm.studio as string) || ""
-	const stages = studio
-		? resolveIntentStages(intentFm, studio).length > 0
-			? resolveIntentStages(intentFm, studio)
-			: resolveStudioStages(studio)
-		: []
+	let stages: string[] = []
+	if (studio) {
+		const intentStages = resolveIntentStages(intentFm, studio)
+		stages =
+			intentStages.length > 0 ? intentStages : resolveStudioStages(studio)
+	}
 	const isLastStage =
 		!session.next_stage &&
 		stages.length > 0 &&
@@ -129,10 +137,13 @@ function computeApproveAction(session: ReviewSession): ApproveAction {
 	}
 
 	if (stageTitle) {
-		const label = nextStageTitle
-			? `Complete ${stageTitle} Stage → Start ${nextStageTitle}`
-			: `Complete ${stageTitle} Stage`
-		return { label, kind: "complete_stage" }
+		// Keep the label short — sidebars are narrow and the "Anyway"
+		// suffix appended client-side adds 7 more chars. The omitted
+		// "→ Start <next>" hint lives in the stage stepper anyway.
+		return {
+			label: `Complete ${stageTitle} Stage`,
+			kind: "complete_stage",
+		}
 	}
 	return { label: "Approve", kind: "approve" }
 }
@@ -180,10 +191,12 @@ export function respondSessionApi(
 		// engine's view of "which stage are we on?". The cached
 		// session.parsedIntent.frontmatter.active_stage was captured
 		// when the session was first built and goes stale as ticks land.
-		if (session.intent_slug) {
-			const current = getCurrentState(session.intent_slug)
-			if (current) data.current_state = current
-		}
+		// computeApproveAction reuses this same `current` so we don't
+		// double-read stage state from disk.
+		const current = session.intent_slug
+			? getCurrentState(session.intent_slug)
+			: null
+		if (current) data.current_state = current
 		if (session.knowledgeFiles) data.knowledge_files = session.knowledgeFiles
 		if (session.stageArtifacts) data.stage_artifacts = session.stageArtifacts
 		if (session.outputArtifacts) data.output_artifacts = session.outputArtifacts
@@ -193,7 +206,7 @@ export function respondSessionApi(
 		if (session.gate_context) data.gate_context = session.gate_context
 		if (session.next_stage !== undefined) data.next_stage = session.next_stage
 		if (session.next_phase !== undefined) data.next_phase = session.next_phase
-		data.approve_action = computeApproveAction(session)
+		data.approve_action = computeApproveAction(session, current)
 	}
 	if (session.session_type === "question") {
 		data.title = session.title

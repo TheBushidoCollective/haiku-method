@@ -24,7 +24,7 @@
  * matching artifact card.
  */
 
-import type { ReviewAnnotations } from "haiku-api"
+import type { ApproveAction, ReviewAnnotations } from "haiku-api"
 import { useCallback, useState } from "react"
 import {
 	Aside,
@@ -45,6 +45,11 @@ export interface FeedbackSidebarProps {
 	intentTitle?: string
 	gateBadges?: Array<{ label: string; classes: string }>
 	gateType?: string
+	/** Server-computed Approve button copy + kind. Reflects the actual
+	 *  consequence of clicking Approve (e.g. "Complete Development Stage",
+	 *  "Open Pull Request", "Mark Intent Done"). Falls back to the static
+	 *  "Approve" string when undefined. */
+	approveAction?: ApproveAction
 	getAnnotations?: () => ReviewAnnotations | undefined
 	onFeedbackItemClick?: (feedbackId: string) => void
 	onDecisionSuccess?: (decision: DecisionKind) => void
@@ -79,6 +84,7 @@ export function FeedbackSidebar({
 	intentTitle,
 	gateBadges,
 	gateType,
+	approveAction,
 	getAnnotations,
 	onFeedbackItemClick,
 	onDecisionSuccess,
@@ -407,7 +413,7 @@ export function FeedbackSidebar({
 							data-decision="approved"
 							className={`${touchTargetClass} ${focusRingClass} ${focusRingVariantClasses.approve} flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-md bg-teal-700 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-green-300 disabled:text-green-800 dark:disabled:bg-green-900/40 dark:disabled:text-green-200`}
 						>
-							{DECISION_LABELS.approved}
+							{approveAction?.label ?? DECISION_LABELS.approved}
 						</button>
 					)}
 					{mode === "approve" && adHoc && (

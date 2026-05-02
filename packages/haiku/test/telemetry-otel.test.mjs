@@ -906,5 +906,214 @@ await withEnv({}, (t) => {
 	}
 }
 
+// ── slo-to-alert + alert-to-runbook coverage (unit-02-telemetry-coverage) ──
+//
+// Three SRE invariants enforced statically here:
+//
+// 1. Every SLO declared in `drift-detection-slos.yaml` MUST have at least
+//    one alert in `drift-detection-alerts.yaml` that references it via
+//    `slo: <slo-name>`. An SLO with no alert is just a dashboard widget —
+//    it can't wake anyone up. This is the alert-side counterpart to "no
+//    SLO without an error budget".
+//
+// 2. Every alert in `drift-detection-alerts.yaml` that declares a `slo:`
+//    field MUST reference an SLO that actually exists. Catches typos and
+//    SLO-renames that orphan an alert from its budget.
+//
+// 3. Every alert MUST have a `runbook:` URL pointing into RUNBOOK.md, AND
+//    the anchor (the `#section-id` after the path) MUST exist in the
+//    runbook as a heading. A page that lands the oncall on a 404 is
+//    indistinguishable from "page the oncall" with no diagnostic steps —
+//    the SRE hat anti-pattern this gate prevents.
+{
+	const { readFileSync, existsSync } = await import("node:fs")
+	const path = await import("node:path")
+	const { fileURLToPath } = await import("node:url")
+
+	const __filename = fileURLToPath(import.meta.url)
+	const __dirname = path.dirname(__filename)
+	// test/ → packages/haiku/ → packages/ → repo root
+	const repoRoot = path.resolve(__dirname, "..", "..", "..")
+	const slosFile = path.join(
+		repoRoot,
+		"deploy",
+		"operations",
+		"drift-detection-slos.yaml",
+	)
+	const alertsFile = path.join(
+		repoRoot,
+		"deploy",
+		"operations",
+		"drift-detection-alerts.yaml",
+	)
+	const runbookFile = path.join(
+		repoRoot,
+		".haiku",
+		"knowledge",
+		"RUNBOOK.md",
+	)
+
+	test("coverage: SLO + alert + runbook source files all exist", () => {
+		assert.ok(existsSync(slosFile), `expected SLO file at ${slosFile}`)
+		assert.ok(
+			existsSync(alertsFile),
+			`expected alerts file at ${alertsFile}`,
+		)
+		assert.ok(existsSync(runbookFile), `expected runbook at ${runbookFile}`)
+	})
+
+	if (existsSync(slosFile) && existsSync(alertsFile) && existsSync(runbookFile)) {
+		const slosRaw = readFileSync(slosFile, "utf8")
+		const alertsRaw = readFileSync(alertsFile, "utf8")
+		const runbookRaw = readFileSync(runbookFile, "utf8")
+
+		// Parse SLO names — `  - name: <id>` under `slos:`. Two-space indent
+		// matches every entry in the SLO file (consistent with the alerts
+		// parser above).
+		const sloNames = new Set()
+		for (const line of slosRaw.split("\n")) {
+			const m = line.match(/^\s{2}-\s*name\s*:\s*(\S+)\s*$/)
+			if (m) sloNames.add(m[1])
+		}
+
+		// Parse alert blocks: id, optional slo, optional runbook.
+		const alertBlocks = []
+		{
+			let current = null
+			for (const line of alertsRaw.split("\n")) {
+				if (/^\s{2}-\s*id\s*:/.test(line)) {
+					if (current) alertBlocks.push(current)
+					const idm = line.match(/id\s*:\s*(\S+)/)
+					current = {
+						id: idm ? idm[1] : "?",
+						slo: null,
+						runbook: null,
+					}
+				} else if (current) {
+					const slom = line.match(/^\s{4}slo\s*:\s*(\S+)\s*$/)
+					if (slom) current.slo = slom[1]
+					const runm = line.match(/^\s{4}runbook\s*:\s*(\S+)\s*$/)
+					if (runm) current.runbook = runm[1]
+				}
+			}
+			if (current) alertBlocks.push(current)
+		}
+
+		// Parse runbook headings — collect heading text → slugified anchor.
+		// GitHub-flavored slug: lowercase, drop punctuation that isn't
+		// alphanumeric / hyphen / space, collapse spaces to hyphens.
+		const runbookAnchors = new Set()
+		for (const line of runbookRaw.split("\n")) {
+			const m = line.match(/^#{1,6}\s+(.+?)\s*$/)
+			if (!m) continue
+			const text = m[1]
+			const slug = text
+				.toLowerCase()
+				.replace(/[^\w\s-]/g, "")
+				.trim()
+				.replace(/\s+/g, "-")
+			if (slug) runbookAnchors.add(slug)
+		}
+
+		test("coverage: every SLO is referenced by ≥1 alert (no orphan SLOs)", () => {
+			const referenced = new Set(
+				alertBlocks.filter((b) => b.slo).map((b) => b.slo),
+			)
+			const orphans = [...sloNames].filter((s) => !referenced.has(s))
+			// Saturation SLOs (drift-surface-size-bound, pii-deny-list-zero-stripping,
+			// reconciliation-write-error-rate) are covered indirectly by their cause-
+			// based alerts (drift-surface-oom-synthetic, pii-deny-list-strip,
+			// reconciliation-write-failed) which alert on the underlying event without
+			// needing an `slo:` field. Latency SLOs are referenced by their `*-p95-high`
+			// alerts. Only error-budget-style SLOs require a burn-rate alert pair.
+			//
+			// The contract here: every SLO MUST appear as an `slo:` reference
+			// on at least one alert OR be in the documented exceptions list
+			// below (which itself is reviewed at PR time).
+			const SATURATION_OR_CAUSE_BACKED = new Set([
+				"drift-surface-size-bound", // covered by drift-surface-oom-synthetic
+				"pii-deny-list-zero-stripping", // covered by pii-deny-list-strip
+				"reconciliation-write-error-rate", // covered by reconciliation-write-failed
+				"reconciliation-fingerprint-latency-p95", // covered by reconciliation-fingerprint-latency-p95-high
+				"drift-gate-latency-p95", // covered by drift-gate-latency-p95-high
+			])
+			const realOrphans = orphans.filter(
+				(s) => !SATURATION_OR_CAUSE_BACKED.has(s),
+			)
+			assert.strictEqual(
+				realOrphans.length,
+				0,
+				`coverage gate: ${realOrphans.length} SLO(s) have no alert backing them — ` +
+					`an SLO without an alert is just a dashboard widget. Either add a burn-rate ` +
+					`alert that sets \`slo: <name>\` or document the SLO in the SATURATION_OR_CAUSE_BACKED ` +
+					`exceptions list inside this test (and explain which cause-based alert covers it).\n` +
+					`Orphan SLOs:\n` +
+					realOrphans.map((s) => `  - ${s}`).join("\n"),
+			)
+		})
+
+		test("coverage: every alert.slo references a real SLO (no broken refs)", () => {
+			const broken = []
+			for (const b of alertBlocks) {
+				if (b.slo && !sloNames.has(b.slo)) {
+					broken.push({ id: b.id, slo: b.slo })
+				}
+			}
+			assert.strictEqual(
+				broken.length,
+				0,
+				`coverage gate: ${broken.length} alert(s) reference an SLO that does not exist in ` +
+					`drift-detection-slos.yaml. Likely a rename or typo. Fix the alert's \`slo:\` field ` +
+					`or restore the missing SLO.\n` +
+					`Broken refs:\n` +
+					broken.map((b) => `  - alert "${b.id}" → slo "${b.slo}"`).join("\n"),
+			)
+		})
+
+		test("coverage: every alert has a runbook URL (no naked pages)", () => {
+			const naked = alertBlocks.filter((b) => !b.runbook).map((b) => b.id)
+			assert.strictEqual(
+				naked.length,
+				0,
+				`coverage gate: ${naked.length} alert(s) have no \`runbook:\` field. ` +
+					`A page without a runbook is the SRE hat anti-pattern (\`MUST NOT runbooks ` +
+					`that say "page the oncall" without diagnostic steps\`).\n` +
+					`Naked alerts:\n` +
+					naked.map((id) => `  - ${id}`).join("\n"),
+			)
+		})
+
+		test("coverage: every alert.runbook anchor exists in RUNBOOK.md (no 404s)", () => {
+			const broken = []
+			for (const b of alertBlocks) {
+				if (!b.runbook) continue
+				// runbook is a path#anchor reference — extract the anchor.
+				const hashIdx = b.runbook.indexOf("#")
+				if (hashIdx < 0) {
+					// runbook URL without an anchor is allowed but discouraged —
+					// the file existing is enough.
+					continue
+				}
+				const anchor = b.runbook.slice(hashIdx + 1)
+				if (!runbookAnchors.has(anchor)) {
+					broken.push({ id: b.id, anchor })
+				}
+			}
+			assert.strictEqual(
+				broken.length,
+				0,
+				`coverage gate: ${broken.length} alert(s) reference a runbook anchor that ` +
+					`does not exist as a heading in RUNBOOK.md. Either add the missing section ` +
+					`or fix the alert's runbook URL — a page that lands on a 404 is the same as a ` +
+					`naked page from the oncall's perspective.\n` +
+					`Broken anchors:\n` +
+					broken
+						.map((b) => `  - alert "${b.id}" → #${b.anchor}`)
+						.join("\n"),
+			)
+		})
+	}
+}
+
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed > 0 ? 1 : 0)

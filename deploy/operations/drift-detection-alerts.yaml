@@ -118,6 +118,35 @@ alerts:
       (slo_burn_rate{slo="drift-gate-availability", window="24h"} > 1)
     runbook: .haiku/knowledge/RUNBOOK.md#drift-gate-availability-burn
 
+  - id: baseline-write-budget-fast-burn
+    severity: page
+    title: Baseline-write error budget burning fast
+    slo: baseline-write-error-rate
+    cause: >
+      Multi-window multi-burn-rate trigger on `baseline-write-error-rate`:
+      1h burn × 14.4 AND 6h burn × 6 both exceed threshold. Indicates a
+      sustained run of write_failed events across one or more intents —
+      not a one-off filesystem hiccup.
+    fires_when: |
+      (slo_burn_rate{slo="baseline-write-error-rate", window="1h"} > 14.4)
+      AND
+      (slo_burn_rate{slo="baseline-write-error-rate", window="6h"} > 6)
+    runbook: .haiku/knowledge/RUNBOOK.md#baseline-write-budget-burn
+
+  - id: baseline-write-budget-slow-burn
+    severity: ticket
+    title: Baseline-write error budget eroding
+    slo: baseline-write-error-rate
+    cause: >
+      Multi-window slow-burn trigger on `baseline-write-error-rate`: 6h
+      burn × 6 AND 24h burn × 1 both exceed threshold. Steady drip of
+      write failures — investigate this week before the page fires.
+    fires_when: |
+      (slo_burn_rate{slo="baseline-write-error-rate", window="6h"} > 6)
+      AND
+      (slo_burn_rate{slo="baseline-write-error-rate", window="24h"} > 1)
+    runbook: .haiku/knowledge/RUNBOOK.md#baseline-write-budget-burn
+
   # ─────────────────────────────────────────────────────────────────
   # LATENCY (latency degradation is a cause, not a symptom — it points
   # at surface saturation or filesystem slowness)

@@ -57,6 +57,33 @@ This section covers failure modes for the out-of-band human file modification fe
 - `haiku.drift.surface.size` stable per intent (slow growth as new files are added is fine).
 - `haiku.reconciliation.fingerprint.matched` dominates `haiku.reconciliation.fingerprint.drifted` (drift is the exception, not the rule).
 
+## Triage Quick-Reference (oncall: read first)
+
+Use this table when an alert wakes you up. The "first action" column is the single first command to run before anything else — it answers "is this real?" or "what intent is bleeding?". Then jump to the linked section for full diagnosis + remediate steps.
+
+| Alert ID | Severity | Cause class | First action (run this first) | Section |
+|---|---|---|---|---|
+| `drift-baseline-corrupt` | page | per-intent FS corruption | Read `intent_slug` + `stage` from the alert label set; `cat .haiku/intents/<slug>/stages/<stage>/baseline.json \| jq .` | [drift-gate-baseline-corrupt](#drift-gate-baseline-corrupt) |
+| `drift-baseline-write-failed` | page | FS write fault (disk/permission/RO-FS) | `df -h .haiku && touch .haiku/.write-test && rm .haiku/.write-test` | [drift-gate-write-failed](#drift-gate-write-failed) |
+| `reconciliation-write-failed` | page | FS write fault (state.json) | Same FS triage as above; cross-check whether `drift-baseline-write-failed` also fires (FS-wide vs single-stage) | [reconciliation-write-failed](#reconciliation-write-failed) |
+| `pii-deny-list-strip` | page | privacy regression — body content reached telemetry | Identify the stripped key from the alert label `key`; `grep -rn "$KEY" packages/haiku/src/` to find emit site | [pii-deny-list-strip](#pii-deny-list-strip) |
+| `drift-availability-fast-burn` | page | sustained gate-tick failure budget burn | Group `haiku.drift.baseline.corrupt` + `.write_failed` by `intent_slug` to find top offender | [drift-gate-availability-burn](#drift-gate-availability-burn) |
+| `baseline-write-budget-fast-burn` | page | sustained baseline-write failure budget burn | Same FS triage as `drift-baseline-write-failed`; if FS healthy, look for permission-mode regression | [baseline-write-budget-burn](#baseline-write-budget-burn) |
+| `drift-availability-slow-burn` | ticket | budget eroding (investigate this week) | Pull 24h trend of `haiku.drift.baseline.corrupt` + `.write_failed` per intent | [drift-gate-availability-burn](#drift-gate-availability-burn) |
+| `baseline-write-budget-slow-burn` | ticket | baseline-write budget eroding | Same | [baseline-write-budget-burn](#baseline-write-budget-burn) |
+| `drift-gate-latency-p95-high` | ticket | surface scan slow OR FS slow | Group `haiku.drift.surface.size` by intent; correlate with `haiku.reconciliation.fingerprint.duration_ms` | [drift-gate-latency-high](#drift-gate-latency-high) |
+| `reconciliation-fingerprint-latency-p95-high` | ticket | corpus growth | Group `haiku.reconciliation.corpus.bytes` by intent | [reconciliation-latency-high](#reconciliation-latency-high) |
+| `drift-surface-oom-synthetic` | ticket | intent surface exceeded in-memory threshold | Read `intent_slug` + `stage`; check `du -sh .haiku/intents/<slug>/stages/<stage>/` | [drift-oom-synthetic](#drift-oom-synthetic) |
+| `kill-switch-engaged` | ticket | manual disable in effect | `env \| grep HAIKU_DRIFT` to confirm; check who set it via dotenv git log | [kill-switch-engaged](#kill-switch-engaged) |
+| `drift-markers-stale-burst` | info | churn pattern (no immediate action) | Group `haiku.drift.markers.stale_removed` by intent; usually a tool/formatter tic | [drift-markers-churn](#drift-markers-churn) |
+| `assessments-zero-completion` | info | dispatch/resolution loop telemetry gap | Find unresolved files: `find .haiku/intents/*/stages/*/drift-assessments -type f -newer /tmp/.6h-ago` | [assessments-stuck](#assessments-stuck) |
+
+**Rules of the road:**
+- **Page-severity alerts always name a cause, never a symptom.** If you wake up to a page, the alert title tells you the fault class — go straight to the "First action" column.
+- **Burn-rate pages mean budget is bleeding.** They will not clear on their own. Triage the underlying cause-based alert that's tipping the budget (the linked section calls it out).
+- **Tickets do not page anyone.** Triage during business hours; same-day for fast-burn tickets, end-of-week for slow-burn / saturation tickets.
+- **Info alerts are conversation starters.** They go to `#haiku-ops` and exist to prevent a future ticket from surprising you. Do not action them blindly.
+
 ## drift-gate-baseline-corrupt
 
 **Symptom:** Alert `drift-baseline-corrupt` fires. Event `haiku.drift.baseline.corrupt` shows non-zero count. One or more intents stop emitting `haiku.drift.gate.tick`.
@@ -216,6 +243,38 @@ $EDITOR packages/haiku/test/telemetry-otel.test.mjs
 **Escalation:** Fast-burn that doesn't clear within 30 min → consider engaging kill switch to stop the budget bleed while you investigate (`HAIKU_DRIFT_GATE_DISABLED=1`).
 
 **Rollback:** Re-enable the gate (`unset HAIKU_DRIFT_GATE_DISABLED`) once the underlying cause is fixed and `gate.tick` events resume cleanly for 1h.
+
+## baseline-write-budget-burn
+
+**Symptom:** Alert `baseline-write-budget-fast-burn` (page) or `baseline-write-budget-slow-burn` (ticket) fires. SLO `baseline-write-error-rate` budget is burning.
+
+**Cause:** Sustained ratio of `haiku.drift.baseline.write_failed` to `haiku.drift.gate.tick` exceeds the SLO objective (1% of ticks may fail in a 28d window). Same fault class as `drift-gate-write-failed` but observed in aggregate over a budget window.
+
+**Diagnose:**
+
+```bash
+# 1. Which intents are bleeding the budget?
+#    Group `haiku.drift.baseline.write_failed` by intent_slug + stage in your
+#    OTLP backend. Top offenders are the cause.
+
+# 2. Is the FS the cause, or per-intent corruption?
+#    Cross-correlate with `reconciliation-write-failed`:
+#    - both firing for same intent → per-intent corruption
+#    - both firing across many intents → FS-wide
+
+# 3. Confirm gate.tick rate is stable
+#    If gate.tick rate dropped, the ratio is misleading — the cause may be
+#    a stalled tick loop, not write failures.
+```
+
+**Remediate:**
+- Per-intent corruption (single intent dragging the budget): see [drift-gate-write-failed](#drift-gate-write-failed) for that intent.
+- FS-wide: see [drift-gate-write-failed](#drift-gate-write-failed) for the host-level FS recovery.
+- Permission-mode regression (recent change to ownership/umask): `chmod -R u+w .haiku/intents/<slug>/` on the affected intents and audit the regression source.
+
+**Escalation:** Fast-burn that doesn't clear within 30 min after recovery → engage kill switch (`HAIKU_DRIFT_GATE_DISABLED=1`) on the affected host to stop the budget bleed while you root-cause.
+
+**Rollback:** Re-enable the gate (`unset HAIKU_DRIFT_GATE_DISABLED`) once write_failed events have stopped for 1h.
 
 ## drift-gate-latency-high
 

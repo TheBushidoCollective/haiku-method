@@ -431,314 +431,153 @@ grep -n "removeMarker\|removeMarkersSync" packages/haiku/src/orchestrator/workfl
 ```
 
 The gate file should reference `removeMarkersSync` only. Any new call to async `removeMarker` from within `runDriftDetectionGate` regresses the race; treat as a code-review red flag.
-- **Website errors:** Sentry project `haiku-spa` (via @sentry/nextjs)
-- **MCP errors:** Sentry project `haiku-mcp`
-- **Tunnel health:** No dedicated monitoring — localtunnel is ephemeral per session
-- **Drift detection telemetry:** OTLP events `haiku.drift.*` and `haiku.reconciliation.*` — see SLOs in `deploy/operations/drift-detection-slos.yaml` and alert routing in `deploy/operations/drift-detection-alerts.yaml`.
 
 ---
 
-# Drift Detection — Operational Runbook
+## External observability
 
-This section covers failure modes for the out-of-band human file modification feature: drift detection (`drift-detection-gate.ts`), upstream reconciliation (`upstream-reconciliation.ts`), and the runtime PII gate (`telemetry.ts`). Each entry maps to an alert in `deploy/operations/drift-detection-alerts.yaml`.
+Drift-detection telemetry is one signal among several. The full operational picture for this intent's surfaces uses:
 
-**What "healthy" looks like (define before unhealthy):**
-- `haiku.drift.gate.tick` fires on every `haiku_run_next` tick.
-- `haiku.drift.gate.duration_ms` p95 < 500ms over 7d.
-- Zero `haiku.drift.baseline.corrupt`, zero `haiku.drift.baseline.write_failed`, zero `pii.deny.strip` events.
-- `haiku.drift.surface.size` stable per intent (slow growth as new files are added is fine).
-- `haiku.reconciliation.fingerprint.matched` dominates `haiku.reconciliation.fingerprint.drifted` (drift is the exception, not the rule).
+- **Drift detection telemetry:** OTLP events `haiku.drift.*` and `haiku.reconciliation.*`. SLOs live in `deploy/operations/drift-detection-slos.yaml`; alert routing in `deploy/operations/drift-detection-alerts.yaml`.
+- **Website errors:** Sentry project `haiku-spa` (via `@sentry/nextjs`).
+- **MCP errors:** Sentry project `haiku-mcp`.
+- **Tunnel health:** No dedicated monitoring — `localtunnel` is ephemeral per session and not part of the SLO surface.
 
-## drift-gate-baseline-corrupt
+---
 
-**Symptom:** Alert `drift-baseline-corrupt` fires. Event `haiku.drift.baseline.corrupt` shows non-zero count. One or more intents stop emitting `haiku.drift.gate.tick`.
+## Alert anchors (paged-from-`drift-detection-alerts.yaml`)
 
-**Cause:** `.haiku/intents/<slug>/stages/<stage>/baseline.json` failed JSON parse or schema validation.
+Every `runbook:` URL in `deploy/operations/drift-detection-alerts.yaml` resolves to one of the headings below. The frontmatter gate `runbook-anchors-resolve-from-alerts-yaml` fails the unit if an alert URL points at a missing anchor (operators page at 3am to a 404 — unacceptable).
 
-**Diagnose (specific commands):**
+Each anchor is a thin operator entry-point: alert ID, severity, fires-when, the canonical scenario above with the full diagnostic + remediation playbook. The duplication that existed pre-fix (two parallel runbooks with contradictory remediation paths for the same fault) is gone — alert anchors point to one canonical scenario per fault, and the `Remediate` line below is the alert-time-to-action distillation only.
 
-```bash
-# 1. Identify the affected intent + stage from event attributes
-#    (intent_slug, stage are in every emit per gateAttrs())
-INTENT="<slug-from-event>"
-STAGE="<stage-from-event>"
-BASELINE=".haiku/intents/${INTENT}/stages/${STAGE}/baseline.json"
+### drift-gate-baseline-corrupt
 
-# 2. Confirm the file is invalid
-cat "$BASELINE" | jq . || echo "JSON parse failed"
-ls -lh "$BASELINE"  # check size — zero-byte means write was interrupted
+- **Alert:** `drift-baseline-corrupt` (severity: page) — `sum by (intent_slug, stage) (rate(haiku.drift.baseline.corrupt[5m])) > 0`
+- **Cause:** `.haiku/intents/<slug>/stages/<stage>/baseline.json` failed JSON parse or schema validation.
+- **Canonical scenario:** [Scenario 3 — Baseline corruption](#scenario-3--baseline-corruption) (full diagnostic + remediation).
+- **Remediate (alert-time distillation):** Run `haiku_repair { intent: "<slug>" }`. If repair cannot recover the baseline, fall back to the manual establish-mode reset documented in scenario 3 (copy aside, delete, re-tick).
+- **Escalation:** If `haiku.drift.baseline.corrupt` fires for >3 distinct intents in 1h, suspect filesystem corruption — page storage on-call and engage the kill-switch (see [`kill-switch-engaged`](#kill-switch-engaged) below) to stop further ticks while diagnosing.
 
-# 3. Check disk + permissions
-df -h .haiku
-ls -la "$(dirname "$BASELINE")"
-```
+### drift-gate-write-failed
 
-**Remediate (specific commands):**
+- **Alert:** `drift-baseline-write-failed` (severity: page) — `sum by (intent_slug, stage) (rate(haiku.drift.baseline.write_failed[10m])) > 0`
+- **Cause:** Filesystem write to `baseline.json` failed — disk full, EACCES, EROFS, filesystem corruption, or quota exhaustion. The gate rethrows; pre-rethrow this looped silently.
+- **Canonical scenario:** [Scenario 4 — Baseline write failure (graceful degradation)](#scenario-4--baseline-write-failure-graceful-degradation) (full diagnostic + remediation).
+- **Remediate (alert-time distillation):** Fix the underlying I/O fault (disk space, permissions, mount), re-tick, and confirm `haiku.drift.baseline.write_failed` stops firing. If the failure persists, kill-switch (scenario 2) to break the loop while investigating.
+- **Escalation:** If write-failed spans >5 intents and persists after recovery, escalate to infra on-call.
 
-```bash
-# Path A: file is recoverable from git (preferred)
-git log -- "$BASELINE" | head
-git checkout HEAD -- "$BASELINE"
+### reconciliation-write-failed
 
-# Path B: file is unrecoverable — re-establish baseline on next tick
-mv "$BASELINE" "${BASELINE}.corrupt.$(date +%s)"
-# Next haiku_run_next will emit haiku.drift.baseline.established and
-# treat the current surface as the new baseline. Any drift between the
-# corrupt state and now is lost — this is acceptable; the alternative is
-# blocking the gate indefinitely.
-```
+- **Alert:** `reconciliation-write-failed` (severity: page) — `sum by (intent_slug, stage) (rate(haiku.reconciliation.fingerprint.write_failed[10m])) > 0`
+- **Cause:** Failure persisting `upstream_reconciliation_fingerprint` to `state.json`. Same fault class as `drift-baseline-write-failed`, different file.
+- **Canonical scenario:** Same as [Scenario 4](#scenario-4--baseline-write-failure-graceful-degradation), substituting `state.json` for `baseline.json` in the diagnostic checks. Once writable, the next tick re-establishes the fingerprint via `haiku.reconciliation.fingerprint.established`.
+- **Cross-correlation:** If this fires for the same intent as `drift-baseline-write-failed`, the root cause is FS-wide. Engage the kill-switch and escalate to infra on-call.
 
-**Escalation:** If `haiku.drift.baseline.corrupt` fires for >3 distinct intents in 1h, suspect filesystem corruption — page the storage oncall and stop further `haiku_run_next` ticks via the kill switch (see `kill-switch-engaged` below).
+### pii-deny-list-strip
 
-**Rollback:** N/A — re-establishing the baseline is forward-only. The previous corrupt baseline is preserved as `.corrupt.<ts>` for forensics.
+- **Alert:** `pii-deny-list-strip` (severity: page) — `sum(rate(pii.deny.strip[1h])) > 0`
+- **Cause:** A code path tried to emit a body-shaped attribute (`diff_unified`, `excerpt`, `*_body`, `content`, …) into telemetry. The runtime gate stripped it; the static CI gate (`pii-grep-gate-runs`) did not catch it. Every strip is a privacy regression.
+- **Diagnose:**
 
-## drift-gate-write-failed
+  ```bash
+  # 1. Find the emit site from the warned key + event name (stderr line)
+  KEY="<key-from-warning>"
+  EVENT="<event-name-from-warning>"
+  grep -rn "emitTelemetry(\"$EVENT\"" packages/haiku/src/
 
-**Symptom:** Alert `drift-baseline-write-failed` fires. Event `haiku.drift.baseline.write_failed` shows non-zero count. The gate now rethrows on write failure (post-2026-05-01 fix); pre-fix the failure was silently swallowed and stale baselines persisted forever.
+  # 2. Check whether the static-gate test should have caught this
+  grep -rn "$KEY" packages/haiku/test/telemetry-otel.test.mjs
 
-**Cause:** Filesystem write to `baseline.json` failed — disk full, EACCES, EROFS, filesystem corruption, or quota exhaustion.
+  # 3. Confirm runtime sanitization is functioning
+  node -e 'import("./packages/haiku/src/telemetry.ts").then(t => console.log([...t.__test.piiDenyKeys]))'
+  ```
 
-**Diagnose (specific commands):**
+- **Remediate:** Fix the emit site (replace body-shaped attribute with a hash, byte count, or path), then add the offending key to the static CI gate so it cannot reach runtime again:
 
-```bash
-# 1. Disk space + inodes
-df -h .haiku
-df -i .haiku
+  ```ts
+  // packages/haiku/src/<emit-site>.ts
+  - { diff_unified: diffText }
+  + { diff_bytes: String(Buffer.byteLength(diffText, "utf8")) }
+  ```
 
-# 2. Permission + ownership on the intent dir
-ls -la .haiku/intents/<slug>/stages/<stage>/
+  ```bash
+  $EDITOR packages/haiku/test/telemetry-otel.test.mjs   # add the key to the deny-list assertion
+  ```
 
-# 3. Read-only filesystem? (common after disk-full recovery)
-touch .haiku/.write-test && rm .haiku/.write-test && echo "writable" || echo "READ-ONLY"
+- **Escalation:** If multiple distinct keys strip in <1h, treat as a privacy incident — stop telemetry export (`HAIKU_TELEMETRY_DISABLE=1`), page security, and audit the OTLP backend's last 24h of events for the leaked keys.
+- **Rollback:** Telemetry events are append-only and may already be in the backend. If a leak is confirmed, contact the OTLP backend admin to purge events matching the offending keys; revert the regressing PR.
 
-# 4. SELinux / AppArmor denying writes?
-[ -f /var/log/audit/audit.log ] && grep "denied" /var/log/audit/audit.log | tail
-```
+### drift-gate-availability-burn
 
-**Remediate (specific commands):**
+- **Alerts:** `drift-availability-fast-burn` (severity: page; multi-window 1h × 14.4 AND 6h × 6) and `drift-availability-slow-burn` (severity: ticket; 6h × 6 AND 24h × 1). Both anchor here.
+- **Cause:** Sustained ratio of error emits (`baseline.corrupt + baseline.write_failed + clear_marker_failed`) to `gate.tick` exceeds the SLO objective (see [SLO 1](#slo-1--gate-availability)).
+- **Diagnose:** Identify the dragging intent — group `haiku.drift.baseline.corrupt` and `.write_failed` by `intent_slug` in the OTLP backend. The top offender hosts the issue. Distinguish single-intent flapping (one intent's `tick_iteration` cycling) from FS-wide (correlate with `haiku.reconciliation.fingerprint.write_failed`).
+- **Remediate:** Single intent flapping → work [`drift-gate-baseline-corrupt`](#drift-gate-baseline-corrupt) above. FS-wide → work [`drift-gate-write-failed`](#drift-gate-write-failed).
+- **Escalation:** Fast-burn that does not clear within 30 minutes → engage the kill-switch ([`kill-switch-engaged`](#kill-switch-engaged) below) to stop the budget bleed while diagnosing. Re-enable once `gate.tick` resumes cleanly for 1h.
 
-```bash
-# Disk full:
-du -sh .haiku/intents/*/stages/*/drift-assessments/ | sort -h | tail
-# Old assessments are safe to archive/remove if disk pressure is real.
+### drift-gate-latency-high
 
-# Permission:
-chmod -R u+w .haiku/intents/<slug>/
+- **Alert:** `drift-gate-latency-p95-high` (severity: ticket) — `histogram_quantile(0.95, rate(haiku.drift.gate.duration_ms[1h])) > 500`
+- **Cause:** Surface scan slowdown. Correlate with `haiku.drift.surface.size` to separate corpus growth from filesystem latency.
+- **Diagnose:** Group `haiku.drift.surface.size` by `intent_slug` over 7d. Compare against `haiku.reconciliation.fingerprint.duration_ms` — if both climbed together, the filesystem is the cause; if only the drift gate climbed, surface growth is. The top 5% of intents by surface size typically produce the bulk of the tail.
+- **Remediate:** Surface growth → most often a knowledge dir bloating with binary attachments; check `.haiku/intents/<slug>/knowledge/attachments/` and apply an archive policy. Filesystem slowdown → triage with `iostat` / `vmstat` and engage infra on-call.
+- **Cross-reference:** This is the page side of [SLO 2 — Gate latency](#slo-2--gate-latency); the diagnostic playbook for [Scenario 10 — Pending-marker store leak](#scenario-10--pending-marker-store-leak) is the first thing to rule out when latency degrades alongside marker-count growth.
+- **Rollback:** N/A — latency degradation is gradual; no atomic action to revert.
 
-# Read-only FS:
-mount -o remount,rw <mount-point>
-```
+### reconciliation-latency-high
 
-**Escalation:** If write_failed events span >5 intents and persist after recovery, escalate to infra oncall.
+- **Alert:** `reconciliation-fingerprint-latency-p95-high` (severity: ticket) — `histogram_quantile(0.95, rate(haiku.reconciliation.fingerprint.duration_ms[1h])) > 750`
+- **Cause:** Upstream corpus byte volume exceeded what content-hashing can do in 750ms p95. Correlate with `haiku.reconciliation.corpus.bytes`.
+- **Diagnose:** Group `haiku.reconciliation.corpus.bytes` by intent — the largest corpora drive the latency.
+- **Remediate:** Apply the same archive/cleanup pattern as [`drift-gate-latency-high`](#drift-gate-latency-high). Long-term: consider hashing only summary metadata (file count + mtime aggregate) for corpora >10MB; file as a follow-up, not an emergency.
+- **Cross-reference:** Sibling target of [SLO 2](#slo-2--gate-latency). False-positive triage for the reconciliation gate itself is [Scenario 11](#scenario-11--reconciliation-gate-fires-on-a-stage-with-stable-corpus).
+- **Rollback:** N/A.
 
-**Rollback:** N/A — gate writes are idempotent. Resume the gate by ensuring the FS is writable; next tick succeeds automatically.
-
-## reconciliation-write-failed
-
-**Symptom:** Alert `reconciliation-write-failed` fires. Event `haiku.reconciliation.fingerprint.write_failed` shows non-zero count.
-
-**Cause:** Failure persisting `upstream_reconciliation_fingerprint` to `state.json`. Same fault class as drift-baseline-write-failed.
-
-**Diagnose:** Same disk/permission/FS checks as drift-gate-write-failed, but the file is `.haiku/intents/<slug>/stages/<stage>/state.json`.
-
-**Remediate:** Same FS recovery steps. Once writable, the next tick re-establishes the fingerprint via `haiku.reconciliation.fingerprint.established`.
-
-**Escalation:** Cross-correlate with drift-baseline-write-failed — if both fire for the same intent, root cause is FS-wide; escalate to infra oncall, kill-switch the affected host.
-
-## pii-deny-list-strip
-
-**Symptom:** Alert `pii-deny-list-strip` fires. Stderr from MCP shows `[haiku/telemetry] PII deny-list stripped attribute "<key>" from event "<name>"`. Backend metric `pii.deny.strip` (scraped from stderr) is non-zero.
-
-**Cause:** A code path attempted to emit a body-shaped attribute (`diff_unified`, `excerpt`, `*_body`, `content`, etc.) into telemetry. Runtime gate caught it; static CI gate (`pii-grep-gate-runs`) did not.
-
-**Diagnose (specific commands):**
-
-```bash
-# 1. Find the emit site from the warned key + event name
-KEY="<key-from-warning>"
-EVENT="<event-name-from-warning>"
-grep -rn "emitTelemetry(\"$EVENT\"" packages/haiku/src/
-
-# 2. Check whether the static-gate test should have caught this
-grep -rn "$KEY" packages/haiku/test/telemetry-otel.test.mjs
-
-# 3. Confirm runtime sanitization is functioning
-node -e 'import("./packages/haiku/src/telemetry.ts").then(t => console.log([...t.__test.piiDenyKeys]))'
-```
-
-**Remediate (specific commands):**
-
-```bash
-# Fix the emit site: replace body-shaped attribute with a hash, byte
-# count, or path. Example diff:
-#   - { diff_unified: diffText }
-#   + { diff_bytes: String(Buffer.byteLength(diffText, "utf8")) }
-#
-# Then add the offending key to the static CI gate so it can never
-# reach runtime again:
-$EDITOR packages/haiku/test/telemetry-otel.test.mjs
-# (add to the PII deny-list assertion)
-```
-
-**Escalation:** If multiple distinct keys strip in <1h, treat as a privacy incident: stop telemetry export (`HAIKU_TELEMETRY_DISABLE=1`), page security, and audit the OTLP backend's last 24h of events for the leaked keys.
-
-**Rollback:** Telemetry events are append-only and may be in the backend already. If a leak is confirmed, contact the OTLP backend admin to purge events matching the offending keys; revert the regressing PR.
-
-## drift-gate-availability-burn
-
-**Symptom:** Alert `drift-availability-fast-burn` (page) or `drift-availability-slow-burn` (ticket) fires. SLO `drift-gate-availability` budget is burning.
-
-**Cause:** Sustained ratio of `baseline.corrupt + baseline.write_failed` to `gate.tick` is above the SLO objective.
-
-**Diagnose:**
-
-```bash
-# 1. Which intent(s) are dragging the budget?
-#    Group `haiku.drift.baseline.corrupt` and `.write_failed` by intent_slug
-#    in your OTLP backend. The top offender is the host of the issue.
-
-# 2. Is it a single intent flapping (look at distinct `tick_iteration`
-#    values) or is it FS-wide (correlate with reconciliation events)?
-```
-
-**Remediate:**
-- Single intent flapping: see `drift-gate-baseline-corrupt` runbook above.
-- FS-wide: see `drift-gate-write-failed` runbook above.
-
-**Escalation:** Fast-burn that doesn't clear within 30 min → consider engaging kill switch to stop the budget bleed while you investigate (`HAIKU_DRIFT_GATE_DISABLED=1`).
-
-**Rollback:** Re-enable the gate (`unset HAIKU_DRIFT_GATE_DISABLED`) once the underlying cause is fixed and `gate.tick` events resume cleanly for 1h.
-
-## drift-gate-latency-high
-
-**Symptom:** Alert `drift-gate-latency-p95-high` fires. p95 of `haiku.drift.gate.duration_ms` exceeds 500ms over 1h.
-
-**Cause:** Surface scan slowdown. Correlate with `haiku.drift.surface.size` to distinguish corpus growth from filesystem slowdown.
-
-**Diagnose:**
-
-```bash
-# 1. Surface size growth pattern — is it a few intents or all of them?
-#    Group `haiku.drift.surface.size` by intent_slug, plot trend over 7d.
-
-# 2. Filesystem-side slowdown? Compare against
-#    haiku.reconciliation.fingerprint.duration_ms — if both climbed
-#    together, FS is the cause; if only drift gate climbed, surface
-#    growth is the cause.
-
-# 3. Identify hot intents
-#    Sort intents by haiku.drift.surface.size descending; the top 5%
-#    likely produce the bulk of the latency.
-```
-
-**Remediate:**
-- Surface growth: most often a knowledge dir bloating with binary attachments. Check `.haiku/intents/<slug>/knowledge/attachments/` and consider archive policy.
-- FS slowdown: triage with `iostat` / `vmstat`; engage infra oncall.
-
-**Rollback:** N/A — latency degradation is gradual; no atomic action to revert.
-
-## reconciliation-latency-high
-
-**Symptom:** Alert `reconciliation-fingerprint-latency-p95-high` fires.
-
-**Cause:** Upstream corpus byte volume exceeded what content-hashing can do in 750ms p95. Correlate with `haiku.reconciliation.corpus.bytes`.
-
-**Diagnose:** Group `haiku.reconciliation.corpus.bytes` by intent. The largest corpora drive the latency.
-
-**Remediate:** Same archive/cleanup pattern as drift-gate-latency-high. Long-term: consider hashing only summary metadata (file count + mtime aggregate) instead of full content for corpora >10MB; track as a follow-up issue, not an emergency.
-
-**Rollback:** N/A.
-
-## drift-oom-synthetic
-
-**Symptom:** Alert `drift-surface-oom-synthetic` fires. Event `haiku.drift.baseline.oom_synthetic` shows non-zero count.
-
-**Cause:** Surface size for an intent exceeded the in-memory baseline threshold. Gate downgraded to one synthetic finding per stage. Detection still works; per-file fidelity is lost.
-
-**Diagnose:**
-
-```bash
-# 1. Which intent + stage tripped the threshold?
-#    `haiku.drift.baseline.oom_synthetic` carries intent_slug + stage.
-#
-# 2. What is the surface size for that intent/stage?
-#    `haiku.drift.surface.size` gives the count.
-```
-
-**Remediate:**
-- If the intent has accumulated cruft (old assessments, archived attachments), prune.
-- If the intent is genuinely large, the synthetic baseline is correct behavior — no action. The user will see one finding per stage instead of one per file; they can drill into git for details.
-
-**Escalation:** If >3 intents cross the threshold in a week, the in-memory threshold itself may need raising. File a follow-up issue; do not page.
-
-**Rollback:** N/A.
-
-## drift-markers-churn
-
-**Symptom:** Alert `drift-markers-stale-burst` fires (info-only).
-
-**Cause:** Humans are touching files and reverting, OR an upstream tool (formatter, linter, git rebase) is churning the surface.
-
-**Diagnose:**
-
-```bash
-# 1. Group `haiku.drift.markers.stale_removed` by intent + stage.
-# 2. Inspect git history of the affected files for a churn pattern.
-```
-
-**Remediate:** Usually no action — informational. If a specific tool is the culprit (e.g., a pre-commit hook re-writing files unnecessarily), tune the tool or add the file path to the surface ignore list (TBD — currently no per-path ignore).
-
-**Rollback:** N/A.
-
-## kill-switch-engaged
-
-**Symptom:** Alert `kill-switch-engaged` fires. Event `haiku.drift.gate.kill_switch_hit` shows non-zero count.
-
-**Cause:** `HAIKU_DRIFT_GATE_DISABLED=1` (or equivalent) is set in the MCP environment. Detection is OFF.
-
-**Diagnose:**
-
-```bash
-# 1. Confirm the kill switch is set
-env | grep HAIKU_DRIFT
-# 2. Check who set it and when
-#    `git log` on the dotenv / launcher script that exports it.
-```
-
-**Remediate:**
-
-```bash
-# When the underlying cause is resolved:
-unset HAIKU_DRIFT_GATE_DISABLED
-# Or remove the export from the launcher.
-# Restart MCP. Next tick should emit haiku.drift.gate.tick instead of
-# kill_switch_hit.
-```
-
-**Escalation:** If the kill switch has been on for >24h without a follow-up issue tracking the resolution, file an issue and tag the person who set it. Long-running kill switches mask other problems.
-
-**Rollback:** Re-engage the kill switch if a regression appears immediately after re-enabling.
-
-## assessments-stuck
-
-**Symptom:** Alert `assessments-zero-completion` fires (info, possible false-positive).
-
-**Cause:** Drift assessments dispatched (`haiku.drift.assessments.count` ticked up) but the agent didn't emit a corresponding resolution event. Possible loop, stuck agent, or missing resolution telemetry.
-
-**Diagnose:**
-
-```bash
-# 1. List unresolved assessments
-find .haiku/intents/*/stages/*/drift-assessments -type f -newer /tmp/.6h-ago
-
-# 2. Check the agent's recent run-tick output for a stuck loop
-tail -200 ~/.claude/logs/mcp.log | grep manual_change_assessment
-```
-
-**Remediate:** Agent intervention — instruct the agent to resolve the open assessment (`haiku_run_next` should pick it up). If the agent loops indefinitely, manually move the assessment file to `.resolved-manual/<ts>/` and document the case as a follow-up.
-
-**Note:** This alert depends on a `haiku.drift.assessments.resolved` event that does not yet exist. Marked as a telemetry coverage gap for a future unit.
-
-**Escalation:** If assessments accumulate across many intents (>20 unresolved over 24h), the dispatch-vs-resolution loop is likely broken — file an incident.
-
-**Rollback:** N/A.
+### drift-oom-synthetic
+
+- **Alert:** `drift-surface-oom-synthetic` (severity: ticket) — `sum by (intent_slug, stage) (rate(haiku.drift.baseline.oom_synthetic[1d])) > 0`
+- **Cause:** Surface size for an intent exceeded the in-memory baseline threshold. The gate downgraded to one synthetic finding per stage. Detection still works; per-file fidelity is lost.
+- **Diagnose:** Read `intent_slug` and `stage` off the emit. Cross-check `haiku.drift.surface.size` for the same intent/stage to see how far over the threshold it sits.
+- **Remediate:** If the intent has accumulated cruft (old assessments, archived attachments), prune. If the intent is genuinely large, the synthetic baseline is correct behavior — no action. The user will see one finding per stage instead of one per file; they can drill into git for details.
+- **Escalation:** If >3 intents cross the threshold in a single week, the in-memory threshold itself may need raising. File a follow-up issue; do not page.
+- **Rollback:** N/A.
+
+### drift-markers-churn
+
+- **Alert:** `drift-markers-stale-burst` (severity: info) — `sum by (intent_slug, stage) (rate(haiku.drift.markers.stale_removed[1d])) > 10`
+- **Cause:** Humans are touching files and reverting, OR an upstream tool (formatter, linter, git rebase) is churning the surface.
+- **Diagnose:** Group `haiku.drift.markers.stale_removed` by intent + stage; inspect the git history of the affected files for a churn pattern.
+- **Remediate:** Usually no action — informational. If a specific tool is the culprit (e.g., a pre-commit hook re-writing files unnecessarily), tune the tool. There is no per-path surface-ignore list; if one is needed, file feedback against the design stage rather than working around it locally.
+- **Cross-reference:** A high marker churn that comes with sustained `open_count` growth indicates [Scenario 10 — Pending-marker store leak](#scenario-10--pending-marker-store-leak), not just informational churn.
+- **Rollback:** N/A.
+
+### kill-switch-engaged
+
+- **Alert:** `kill-switch-engaged` (severity: ticket) — `sum by (intent_slug, stage) (rate(haiku.drift.gate.kill_switch_hit[1h])) > 0`
+- **Cause:** `drift_detection: false` is set in `.haiku/settings.yml`. Detection is OFF — this is intentional but should not stay on indefinitely.
+- **Canonical scenario:** [Scenario 2 — Kill-switch (per-stage drift detection disabled)](#scenario-2--kill-switch-per-stage-drift-detection-disabled) (full mechanism, scope clause, reconciliation companion).
+- **Diagnose:** Read `.haiku/settings.yml` and confirm `drift_detection: false` is present (`isDriftDetectionDisabled` in `drift-baseline.ts:723` is the only consumer). Check `git log .haiku/settings.yml` for who toggled it and when.
+- **Remediate:** Remove or set `drift_detection: true` in `.haiku/settings.yml`. The next `haiku_run_next` tick emits `haiku.drift.gate.tick` instead of `kill_switch_hit`. **Do not** add `HAIKU_DRIFT_GATE_DISABLED` env var or any other off-switch — there is exactly one kill mechanism (the settings flag); inventing alternates is what produced the duplicated runbook this fix removed.
+- **Escalation:** If the kill-switch has been on for >24h without a follow-up issue tracking resolution, file an issue and tag whoever set it. Long-running kill-switches mask other problems and burn the SLO 1 budget invisibly.
+- **Rollback:** Re-set `drift_detection: false` if a regression appears immediately after re-enabling.
+
+### assessments-stuck
+
+- **Alert:** `assessments-zero-completion` (severity: info, possible false-positive) — `assessments.count[6h] > 0 AND assessments.resolved[6h] == 0`
+- **Cause:** Drift assessments dispatched (`haiku.drift.assessments.count` ticked up) but the agent did not emit a corresponding resolution event. Possible loop, stuck agent, or missing resolution telemetry.
+- **Telemetry coverage gap (KNOWN):** This alert depends on a `haiku.drift.assessments.resolved` event that does not yet exist. The alert is informational and may produce false positives until the resolution emit is wired. Tracked as future telemetry coverage work; do NOT silence the alert — the false positives are themselves diagnostic.
+- **Canonical scenarios:** [Scenario 6 — Manual change assessment classification went wrong](#scenario-6--manual-change-assessment-classification-went-wrong) and [Scenario 9 — Drift assessments panel shows stale or empty findings](#scenario-9--drift-assessments-panel-shows-stale-or-empty-findings) cover the two upstream causes.
+- **Diagnose:**
+
+  ```bash
+  # 1. List recently-dispatched, possibly-unresolved assessments
+  find .haiku/intents/*/stages/*/drift-assessments -type f -newer /tmp/.6h-ago
+
+  # 2. Check the agent's recent run-tick output for a stuck classification loop
+  tail -200 ~/.claude/logs/mcp.log | grep manual_change_assessment
+  ```
+
+- **Remediate:** Agent intervention — instruct the agent to resolve the open assessment (`haiku_run_next` should pick it up). If the agent loops indefinitely, manually move the assessment file to `.resolved-manual/<ts>/` and document the case as a follow-up.
+- **Escalation:** If assessments accumulate across many intents (>20 unresolved over 24h), the dispatch-vs-resolution loop is likely broken — file an incident.
+- **Rollback:** N/A.

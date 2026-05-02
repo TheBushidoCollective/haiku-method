@@ -25,11 +25,16 @@ alerts:
       `.haiku/intents/<slug>/stages/<stage>/baseline.json` failed JSON parse
       or schema validation in the drift gate.
     fires_when: |
-      sum(rate(haiku.drift.baseline.corrupt[5m])) > 0
+      sum(rate(haiku.drift.baseline.corrupt[5m])) by (intent_slug, stage) > 0
+    annotations:
+      summary: 'Drift baseline corrupt on intent {{ $labels.intent_slug }} stage {{ $labels.stage }}'
     rationale: >
       A corrupt baseline halts drift detection for that intent until manual
       repair. Fires on the cause (corrupt file) not the symptom (stale
-      detection) because the symptom is invisible.
+      detection) because the symptom is invisible. Aggregated `by (intent_slug,
+      stage)` so the alert label set names the affected intent — collapsing
+      every intent into a single series would force a manual triage scan to
+      identify the victim.
     runbook: .haiku/knowledge/RUNBOOK.md#drift-gate-baseline-corrupt
 
   - id: drift-baseline-write-failed
@@ -40,11 +45,15 @@ alerts:
       EROFS, or filesystem corruption. The gate now refuses to silently
       swallow these.
     fires_when: |
-      sum(rate(haiku.drift.baseline.write_failed[10m])) > 0
+      sum(rate(haiku.drift.baseline.write_failed[10m])) by (intent_slug, stage) > 0
+    annotations:
+      summary: 'Drift baseline write failed on intent {{ $labels.intent_slug }} stage {{ $labels.stage }}'
     rationale: >
       Direct cause is filesystem fault. Symptom (gate runs but never
       persists baseline) would loop forever silently — pre-rethrow that
-      was the actual production behavior.
+      was the actual production behavior. Aggregated `by (intent_slug, stage)`
+      so the alert names the affected intent rather than collapsing every
+      failing baseline into a single time series.
     runbook: .haiku/knowledge/RUNBOOK.md#drift-gate-write-failed
 
   - id: reconciliation-write-failed
@@ -54,7 +63,13 @@ alerts:
       `state.json` write of `upstream_reconciliation_fingerprint` failed.
       Same fault class as drift-baseline-write-failed, different file.
     fires_when: |
-      sum(rate(haiku.reconciliation.fingerprint.write_failed[10m])) > 0
+      sum(rate(haiku.reconciliation.fingerprint.write_failed[10m])) by (intent_slug, stage) > 0
+    annotations:
+      summary: 'Reconciliation fingerprint write failed on intent {{ $labels.intent_slug }} stage {{ $labels.stage }}'
+    rationale: >
+      Aggregated `by (intent_slug, stage)` so the alert label set identifies
+      which intent's reconciliation is stuck, rather than collapsing all
+      failures into a single anonymous count.
     runbook: .haiku/knowledge/RUNBOOK.md#reconciliation-write-failed
 
   - id: pii-deny-list-strip
@@ -65,7 +80,9 @@ alerts:
       (diff_unified, excerpt, *_body, content, etc.) into telemetry.
       Runtime gate stripped it; static CI gate did not catch it.
     fires_when: |
-      sum(rate(pii.deny.strip[1h])) > 0
+      sum(rate(pii.deny.strip[1h])) by (key) > 0
+    annotations:
+      summary: 'Telemetry PII deny-list stripped attribute "{{ $labels.key }}"'
     rationale: >
       Privacy regression. Every strip is a bug — either the static CI
       gate has a hole or a new emit site bypassed it.
@@ -114,7 +131,9 @@ alerts:
       cause: surface size growth (correlate with
       `haiku.drift.surface.size`) or filesystem degradation.
     fires_when: |
-      histogram_quantile(0.95, rate(haiku.drift.gate.duration_ms[1h])) > 500
+      histogram_quantile(0.95, sum(rate(haiku.drift.gate.duration_ms[1h])) by (intent_slug, stage, le)) > 500
+    annotations:
+      summary: 'Drift gate p95 latency high on intent {{ $labels.intent_slug }} stage {{ $labels.stage }}'
     runbook: .haiku/knowledge/RUNBOOK.md#drift-gate-latency-high
 
   - id: reconciliation-fingerprint-latency-p95-high
@@ -126,7 +145,9 @@ alerts:
       750ms. Correlate with `haiku.reconciliation.corpus.bytes` to
       confirm corpus growth vs. filesystem slowdown.
     fires_when: |
-      histogram_quantile(0.95, rate(haiku.reconciliation.fingerprint.duration_ms[1h])) > 750
+      histogram_quantile(0.95, sum(rate(haiku.reconciliation.fingerprint.duration_ms[1h])) by (intent_slug, stage, le)) > 750
+    annotations:
+      summary: 'Reconciliation p95 latency high on intent {{ $labels.intent_slug }} stage {{ $labels.stage }}'
     runbook: .haiku/knowledge/RUNBOOK.md#reconciliation-latency-high
 
   # ─────────────────────────────────────────────────────────────────
@@ -140,7 +161,9 @@ alerts:
       downgraded to one synthetic finding per stage. Detection still
       works; per-file fidelity is lost.
     fires_when: |
-      sum(rate(haiku.drift.baseline.oom_synthetic[1d])) > 0
+      sum(rate(haiku.drift.baseline.oom_synthetic[1d])) by (intent_slug, stage) > 0
+    annotations:
+      summary: 'Drift OOM-synthetic baseline on intent {{ $labels.intent_slug }} stage {{ $labels.stage }}'
     runbook: .haiku/knowledge/RUNBOOK.md#drift-oom-synthetic
 
   - id: drift-markers-stale-burst
@@ -151,7 +174,9 @@ alerts:
       humans are touching files and reverting, or an upstream tool is
       churning the surface.
     fires_when: |
-      sum(rate(haiku.drift.markers.stale_removed[1d])) > 10
+      sum(rate(haiku.drift.markers.stale_removed[1d])) by (intent_slug, stage) > 10
+    annotations:
+      summary: 'Stale drift markers churning on intent {{ $labels.intent_slug }} stage {{ $labels.stage }}'
     runbook: .haiku/knowledge/RUNBOOK.md#drift-markers-churn
 
   - id: kill-switch-engaged
@@ -162,7 +187,9 @@ alerts:
       switch path. Detection is OFF — this is intentional but should
       not stay on indefinitely.
     fires_when: |
-      sum(rate(haiku.drift.gate.kill_switch_hit[1h])) > 0
+      sum(rate(haiku.drift.gate.kill_switch_hit[1h])) by (intent_slug, stage) > 0
+    annotations:
+      summary: 'Drift gate kill-switch engaged on intent {{ $labels.intent_slug }} stage {{ $labels.stage }}'
     runbook: .haiku/knowledge/RUNBOOK.md#kill-switch-engaged
 
   # ─────────────────────────────────────────────────────────────────
@@ -178,9 +205,11 @@ alerts:
     fires_when: |
       # Custom: ratio of assessments dispatched to assessments resolved.
       # Resolution is a separate event the orchestrator emits (TBD).
-      sum(rate(haiku.drift.assessments.count[6h])) > 0
+      sum(rate(haiku.drift.assessments.count[6h])) by (intent_slug, stage) > 0
       AND
-      sum(rate(haiku.drift.assessments.resolved[6h])) == 0
+      sum(rate(haiku.drift.assessments.resolved[6h])) by (intent_slug, stage) == 0
+    annotations:
+      summary: 'Drift assessments dispatched but never resolved on intent {{ $labels.intent_slug }} stage {{ $labels.stage }}'
     runbook: .haiku/knowledge/RUNBOOK.md#assessments-stuck
     notes: >
       Resolution event TBD — flagged as future telemetry coverage gap.

@@ -754,5 +754,157 @@ await withEnv({}, (t) => {
 	})
 }
 
+// ── alerts-surface-correlation-labels (unit-02-telemetry-coverage) ──────────
+//
+// Cross-artifact contract: every alert rule that aggregates the drift /
+// reconciliation telemetry stream MUST surface the {intent_slug, stage}
+// correlation triple to the operator — either by aggregating
+// `by (intent_slug, stage)` so the alert label set carries them, or by
+// referencing `{{ $labels.intent_slug }}` / `{{ $labels.stage }}` in an
+// annotation so the firing message names the affected intent.
+//
+// Without one of those, an alert that matches `sum(rate(haiku.drift.* |
+// haiku.reconciliation.*))` collapses every intent into one anonymous time
+// series. The gate emits, the operator pages — but they cannot tell which
+// intent corrupted, which stage's baseline failed, which reconciliation is
+// stuck. The PII gate runtime sanitiser keeps the labels OUT of bodies; this
+// gate keeps the labels IN of alert visibility.
+//
+// Implementation: walk `deploy/operations/drift-detection-alerts.yaml` line-
+// by-line. Any line literally matching the regex below is required to either
+// (a) carry `by (intent_slug` (or `by (...intent_slug...)`) on the same line,
+// OR (b) live inside an alert block whose `annotations:` map contains
+// `{{ $labels.intent_slug }}` or `{{ $labels.stage }}`.
+{
+	const { readFileSync, existsSync } = await import("node:fs")
+	const path = await import("node:path")
+	const { fileURLToPath } = await import("node:url")
+
+	const __filename = fileURLToPath(import.meta.url)
+	const __dirname = path.dirname(__filename)
+	// test/ → packages/haiku/ → packages/ → repo root
+	const repoRoot = path.resolve(__dirname, "..", "..", "..")
+	const alertsFile = path.join(
+		repoRoot,
+		"deploy",
+		"operations",
+		"drift-detection-alerts.yaml",
+	)
+
+	test("alerts-surface-correlation-labels: file exists at the expected path", () => {
+		assert.ok(
+			existsSync(alertsFile),
+			`expected alerts file at ${alertsFile} — the gate cannot enforce a missing artifact. ` +
+				`Either restore the file or update the gate's path.`,
+		)
+	})
+
+	if (existsSync(alertsFile)) {
+		const raw = readFileSync(alertsFile, "utf8")
+		const lines = raw.split("\n")
+
+		// MATCH targets: literally `sum(rate(haiku.drift.* | haiku.reconciliation.*))`
+		// per the unit-02 contract. Intentionally NOT a YAML parser — we want to
+		// match the raw textual form a reviewer reads, so a future yaml refactor
+		// that hides the metric name behind an alias is forced to update the
+		// gate too.
+		const TARGET_RE =
+			/sum\(\s*rate\(\s*haiku\.(?:drift|reconciliation)\.[A-Za-z0-9_.]+/
+
+		// Build a per-alert-block index of `annotations:` content so a match on
+		// line N can ask "does the block I'm in have an intent_slug-naming
+		// annotation?". An alert block starts at a line that begins with
+		// `  - id:` (two-space indent + dash + id) and ends just before the
+		// next such line (or EOF).
+		const blocks = []
+		let current = null
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i]
+			if (/^\s{2}-\s*id\s*:/.test(line)) {
+				if (current) blocks.push(current)
+				current = { startLine: i, endLine: i, lines: [line] }
+			} else if (current) {
+				current.endLine = i
+				current.lines.push(line)
+			}
+		}
+		if (current) blocks.push(current)
+
+		function blockForLine(lineIdx) {
+			for (const b of blocks) {
+				if (lineIdx >= b.startLine && lineIdx <= b.endLine) return b
+			}
+			return null
+		}
+
+		function blockSurfacesCorrelation(block) {
+			if (!block) return false
+			// Walk the block looking for an `annotations:` key, then any line
+			// inside that block (we don't bother nesting-strictly — annotation
+			// content runs until the next top-level key inside the block, but
+			// for the gate's purposes any `{{ $labels.intent_slug }}` / `.stage`
+			// appearance below `annotations:` counts).
+			const text = block.lines.join("\n")
+			if (!/annotations\s*:/.test(text)) return false
+			// $labels.intent_slug or $labels.stage in any annotation line.
+			return /\{\{\s*\$labels\.(?:intent_slug|stage)\s*\}\}/.test(text)
+		}
+
+		test("alerts-surface-correlation-labels: every drift/reconciliation aggregate surfaces correlation", () => {
+			const violations = []
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i]
+				if (!TARGET_RE.test(line)) continue
+				// Path A: aggregated `by (...intent_slug...)` on the same line.
+				const hasByClause =
+					/\bby\s*\(\s*[^)]*intent_slug[^)]*\)/.test(line)
+				if (hasByClause) continue
+				// Path B: alert block carries an annotation referencing labels.
+				const block = blockForLine(i)
+				if (blockSurfacesCorrelation(block)) continue
+				violations.push({
+					line: i + 1,
+					text: line.trim(),
+					blockId: block
+						? (block.lines[0].match(/id\s*:\s*(\S+)/) || [])[1] || "?"
+						: "?",
+				})
+			}
+			assert.strictEqual(
+				violations.length,
+				0,
+				`alerts-surface-correlation-labels gate: ${violations.length} alert line(s) ` +
+					`aggregate haiku.drift.* / haiku.reconciliation.* without surfacing the ` +
+					`correlation triple.\n` +
+					`Each violating line MUST either aggregate \`by (intent_slug, stage)\` ` +
+					`OR live in an alert block whose \`annotations:\` reference ` +
+					`{{ $labels.intent_slug }} / {{ $labels.stage }}.\n` +
+					`Violations:\n` +
+					violations
+						.map((v) => `  - alert "${v.blockId}" L${v.line}: ${v.text}`)
+						.join("\n"),
+			)
+		})
+
+		test("alerts-surface-correlation-labels: gate self-check — regex matches at least one line", () => {
+			// Sanity: if the alerts file is rewritten to drop every drift /
+			// reconciliation rule, the violations test above passes vacuously.
+			// This guards against that: the file MUST contain at least one
+			// matching line, otherwise the contract is being silently bypassed.
+			let matched = 0
+			for (const line of lines) {
+				if (TARGET_RE.test(line)) matched++
+			}
+			assert.ok(
+				matched > 0,
+				`alerts-surface-correlation-labels self-check: regex matched 0 lines. ` +
+					`Either the alerts file no longer references haiku.drift.* / ` +
+					`haiku.reconciliation.* metrics (in which case this gate is dead ` +
+					`code — remove it) or the regex is broken.`,
+			)
+		})
+	}
+}
+
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed > 0 ? 1 : 0)

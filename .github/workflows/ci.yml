@@ -50,6 +50,15 @@ jobs:
       - name: Build haiku-api
         run: npm run -w haiku-api build
 
+      # Migration-safety contract guard. Asserts the nine SCENARIO A–I
+      # markers in the drift-detection-gate and upstream-reconciliation
+      # tests remain present and labelled. Fails loud if a refactor
+      # silently strips the migration-safety contract from the suite.
+      # See scripts/check-migration-safety-markers.mjs header for the
+      # per-letter contract clauses.
+      - name: Check migration-safety SCENARIO markers
+        run: node scripts/check-migration-safety-markers.mjs
+
       - name: Run MCP test suite
         working-directory: packages/haiku
         run: node test/run-all.mjs

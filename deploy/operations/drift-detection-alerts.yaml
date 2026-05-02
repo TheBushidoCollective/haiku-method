@@ -130,18 +130,24 @@ alerts:
     runbook: .haiku/knowledge/RUNBOOK.md#reconciliation-latency-high
 
   # ─────────────────────────────────────────────────────────────────
-  # SATURATION TICKETS (capacity warnings — cause: corpus is growing)
+  # FIDELITY-LOSS TICKETS (per-file detail collapsed; detection still works)
   # ─────────────────────────────────────────────────────────────────
-  - id: drift-surface-oom-synthetic
+  - id: drift-findings-mass-synthesized
     severity: ticket
-    title: Drift gate fell back to OOM-synthetic baseline
+    title: Drift gate synthesized findings — > 50% of surface drifted in one tick
     cause: >
-      Surface size exceeded the in-memory baseline threshold; gate
-      downgraded to one synthetic finding per stage. Detection still
-      works; per-file fidelity is lost.
+      More than 50% of the tracked surface for an intent/stage drifted
+      in a single tick. The gate collapsed the per-file findings into
+      one synthetic stage-level event (see `drift-detection-gate.ts`
+      §9). This is NOT a surface-size or memory-cap event — it triggers
+      on drift volume relative to surface, regardless of absolute
+      surface size. Typical causes: bulk regeneration script, `git
+      rebase`, large refactor, or an upstream tool rewriting the
+      majority of tracked files. Per-file diff fidelity is lost for
+      this tick; detection itself still works.
     fires_when: |
-      sum by (intent_slug, stage) (rate(haiku.drift.baseline.oom_synthetic[1d])) > 0
-    runbook: .haiku/knowledge/RUNBOOK.md#drift-oom-synthetic
+      sum by (intent_slug, stage) (rate(haiku.drift.findings.mass_synthesized[1d])) > 0
+    runbook: .haiku/knowledge/RUNBOOK.md#drift-findings-mass-synthesized
 
   - id: drift-markers-stale-burst
     severity: info
@@ -158,9 +164,11 @@ alerts:
     severity: ticket
     title: Drift gate kill-switch engaged
     cause: >
-      `HAIKU_DRIFT_GATE_DISABLED=1` or equivalent triggered the kill
-      switch path. Detection is OFF — this is intentional but should
-      not stay on indefinitely.
+      `drift_detection: false` is set in `.haiku/settings.yml` (read by
+      `isDriftDetectionDisabled` in
+      `packages/haiku/src/orchestrator/workflow/drift-baseline.ts:723`).
+      Detection is OFF — this is intentional but should not stay on
+      indefinitely.
     fires_when: |
       sum by (intent_slug, stage) (rate(haiku.drift.gate.kill_switch_hit[1h])) > 0
     runbook: .haiku/knowledge/RUNBOOK.md#kill-switch-engaged
@@ -176,15 +184,23 @@ alerts:
       `stages/<s>/drift-assessments/` are not consumed. Suggests the
       agent is dispatching but not finishing — possible loop.
     fires_when: |
-      # Custom: ratio of assessments dispatched to assessments resolved.
-      # Resolution is a separate event the orchestrator emits (TBD).
+      # Compound: assessments dispatched (count) without a paired
+      # resolution event (resolved) over a 6h window. Both metrics share
+      # `intent_slug` + `stage` labels so series pair cleanly. The
+      # resolution event is emitted by haiku_classify_drift.ts at the
+      # same point AS-NN.json is written; an unresolved assessment
+      # therefore means the agent never finished classifying.
       sum by (intent_slug, stage) (rate(haiku.drift.assessments.count[6h])) > 0
       AND
       sum by (intent_slug, stage) (rate(haiku.drift.assessments.resolved[6h])) == 0
     runbook: .haiku/knowledge/RUNBOOK.md#assessments-stuck
     notes: >
-      Resolution event TBD — flagged as future telemetry coverage gap.
-      For now, alert is informational and may produce false positives.
+      `haiku.drift.assessments.resolved` is emitted by
+      packages/haiku/src/tools/orchestrator/haiku_classify_drift.ts at
+      the same site as `haiku.assessment.recorded`. A firing alert
+      indicates the agent dispatched an assessment but classification
+      never completed — true loop or stuck-agent signal, not a
+      telemetry gap.
 
 # ─────────────────────────────────────────────────────────────────────
 # Anti-patterns rejected during alert design (per SRE hat directive):

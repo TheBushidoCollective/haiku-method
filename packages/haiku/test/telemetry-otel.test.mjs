@@ -658,14 +658,21 @@ await withEnv({}, (t) => {
 				"error",
 				"site",
 			],
-			"haiku.drift.baseline.oom_synthetic": [
+			"haiku.drift.findings.mass_synthesized": [
 				"intent_slug",
 				"stage",
 				"tick_iteration",
 				"raw_findings_count",
 				"effective_surface_size",
+				"drift_ratio",
 			],
 			"haiku.drift.assessments.count": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"count",
+			],
+			"haiku.drift.assessments.resolved": [
 				"intent_slug",
 				"stage",
 				"tick_iteration",

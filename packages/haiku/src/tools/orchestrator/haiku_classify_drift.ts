@@ -735,6 +735,21 @@ export default defineTool({
 				pending_markers_created: String(pendingMarkersCreated),
 				mode: dispatch.mode,
 			})
+			// Pair-event for the `assessments-zero-completion` alert in
+			// deploy/operations/drift-detection-alerts.yaml. Labels match
+			// `haiku.drift.assessments.count` (intent_slug + stage) so the
+			// alert's compound expression
+			//   rate(haiku.drift.assessments.count[6h]) > 0
+			//   AND rate(haiku.drift.assessments.resolved[6h]) == 0
+			// pairs by series. Emitted once per Assessment record write — the
+			// dispatch-vs-resolution lifecycle terminates here regardless of
+			// per-finding outcome.
+			emitTelemetry("haiku.drift.assessments.resolved", {
+				intent_slug: slug,
+				stage: activeStage,
+				tick_iteration: String(dispatch.tick_counter),
+				count: String(resolvedClassifications.length),
+			})
 
 			// 9. Clear the active dispatch — replays now return tick_id_stale.
 			clearDriftDispatch(intentDir)

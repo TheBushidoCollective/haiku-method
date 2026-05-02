@@ -753,9 +753,13 @@ export function runDriftDetectionGate(
 		}
 	}
 
-	// 9. Out-of-sync heuristic (ARCHITECTURE.md §8.3):
-	//    When > 50% of the effective surface has drifted, emit a single
-	//    synthetic finding instead of the full list.
+	// 9. Mass-drift synthesis heuristic (ARCHITECTURE.md §8.3):
+	//    When > 50% of the effective surface has drifted in a single tick,
+	//    emit a single synthetic finding instead of the full list. This is
+	//    NOT a memory/size-cap downgrade — it triggers on drift volume
+	//    relative to surface, regardless of absolute surface size. Typical
+	//    causes: bulk regenerate, git rebase, refactor that touched the
+	//    majority of tracked files.
 	const effectiveSurfaceSize = Math.max(
 		surface.length,
 		baseline.entries.size,
@@ -776,10 +780,11 @@ export function runDriftDetectionGate(
 			context_unit: null,
 			is_baseline_oom: true,
 		}
-		emitTelemetry("haiku.drift.baseline.oom_synthetic", {
+		emitTelemetry("haiku.drift.findings.mass_synthesized", {
 			...gateAttrs(ctx),
 			raw_findings_count: String(findings.length),
 			effective_surface_size: String(effectiveSurfaceSize),
+			drift_ratio: String(findings.length / effectiveSurfaceSize),
 		})
 		emitTelemetry("haiku.drift.findings.count", {
 			...gateAttrs(ctx),
@@ -789,7 +794,7 @@ export function runDriftDetectionGate(
 		emitTelemetry("haiku.drift.gate.duration_ms", {
 			...gateAttrs(ctx),
 			duration_ms: elapsedMs(startedNs),
-			outcome: "oom_synthetic",
+			outcome: "mass_synthesized",
 		})
 		return {
 			findings: [syntheticFinding],

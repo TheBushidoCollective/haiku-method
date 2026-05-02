@@ -114,24 +114,31 @@ slos:
   # ─────────────────────────────────────────────────────────────────
   # SATURATION — capacity warnings before the gate breaks
   # ─────────────────────────────────────────────────────────────────
-  - name: drift-surface-size-bound
+  - name: drift-findings-per-file-fidelity
     description: >
-      `haiku.drift.surface.size` (tracked file count per stage) stays under
-      the OOM-synthetic synthesis threshold for 99% of ticks. Saturation
-      signal: above the threshold, the gate downgrades to a synthetic-OOM
-      baseline (one finding for the whole stage, no per-file diff).
+      99% of drift-gate ticks produce per-file findings rather than a
+      single mass-synthesized stage-level finding. The gate synthesizes
+      a stage-level finding when > 50% of the tracked surface drifts in
+      one tick (`drift-detection-gate.ts` §9); above that threshold,
+      per-file diff fidelity is lost for the tick. NOTE: the trigger is
+      drift volume relative to surface, NOT absolute surface size or
+      memory pressure — a small surface (e.g. 40 files) with 30 files
+      changed in one tick will synthesize the same as a large one.
     sli:
       good_events_query: |
-        count(haiku.drift.surface.size)
-          - count(haiku.drift.baseline.oom_synthetic)
-      total_events_query: count(haiku.drift.surface.size)
+        count(haiku.drift.gate.tick)
+          - count(haiku.drift.findings.mass_synthesized)
+      total_events_query: count(haiku.drift.gate.tick)
     objective: 99
     window: 28d
     rationale: >
       Defines what "healthy" looks like (per SRE hat directive: "define
-      healthy before unhealthy"). Healthy = full per-file drift detection.
-      OOM-synthetic mode is a degraded state; it works, but the agent's
-      classification fidelity drops because diffs collapse.
+      healthy before unhealthy"). Healthy = full per-file drift detection
+      on every tick. Mass-synthesis mode is a degraded state; it works,
+      but the agent's classification fidelity drops because diffs
+      collapse. Burning this SLO budget signals out-of-band bulk
+      operations (regen, rebase, refactor) — see runbook
+      `drift-findings-mass-synthesized`.
 
   - name: pii-deny-list-zero-stripping
     description: >

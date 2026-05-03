@@ -36,9 +36,12 @@ import {
 	createFixChainWorktree,
 	fixChainBranchName,
 	fixChainWorktreePath,
+	isBranchMerged,
 	mergeFixChainWorktree,
+	resolveMainlineRef,
 } from "../../../git-worktree.js"
 import { sealIntentState } from "../../../state-integrity.js"
+import { workflowIntentComplete } from "../side-effects.js"
 import {
 	gitCommitState,
 	incrementFeedbackBolt,
@@ -344,18 +347,36 @@ const emit: WorkflowHandler = (ctx) => {
 	// intent_complete, open delivery PR directly. The completion gate
 	// is the guard." Under autopilot the per-stage gates always
 	// auto-advance (see gate.ts mode block); the ONLY external review
-	// for an autopilot intent is this one — emit it directly so the
-	// agent opens the delivery PR from intent main to repo mainline.
+	// for an autopilot intent is this one. The merge of the intent
+	// main branch into the repo mainline IS the approval signal —
+	// every tick first checks for that merge and seals the intent if
+	// detected; otherwise emit external_review_requested so the agent
+	// opens the delivery PR (or re-prompts the user to merge it).
 	const intentMode = ((intent.mode as string) || "continuous").toLowerCase()
 	const autopilot = intentMode === "autopilot" || intent.autopilot === true
 	if (autopilot && isGitRepo()) {
+		const intentMainBranch = `haiku/${slug}/main`
+		const mainline = resolveMainlineRef()
+		if (isBranchMerged(intentMainBranch, mainline)) {
+			workflowIntentComplete(slug)
+			emitTelemetry("haiku.intent.autopilot_complete", {
+				intent: slug,
+				mainline,
+			})
+			return {
+				action: "intent_complete",
+				intent: slug,
+				studio,
+				message: `Intent '${slug}' is complete — branch 'haiku/${slug}/main' has merged into '${mainline}'.`,
+			}
+		}
 		return {
 			action: "external_review_requested",
 			intent: slug,
 			studio,
 			stage: null,
 			gate_context: "intent_completion",
-			message: `Intent '${slug}' passed all stages and studio-level review checks${(intent.completion_review_skipped as boolean) ? " (no studio-level reviewers configured)" : ""}. Open ONE merge request from branch 'haiku/${slug}/main' to the repo mainline for final delivery. Include the H·AI·K·U browse link in the description so reviewers can see the intent, units, and knowledge artifacts. Record the review URL via haiku_run_next { intent: "${slug}", external_review_url: "<url>" } so the workflow engine can track approval status. The merge into mainline is the approval signal — run /haiku:pickup again after the PR is merged.`,
+			message: `Intent '${slug}' passed all stages and studio-level review checks${(intent.completion_review_skipped as boolean) ? " (no studio-level reviewers configured)" : ""}. Open ONE merge request from branch '${intentMainBranch}' to the repo mainline ('${mainline}') for final delivery. Include the H·AI·K·U browse link in the description so reviewers can see the intent, units, and knowledge artifacts. Record the review URL via haiku_run_next { intent: "${slug}", external_review_url: "<url>" } so the workflow engine can track approval status. The merge into mainline is the approval signal — run /haiku:pickup again after the PR is merged.`,
 		}
 	}
 

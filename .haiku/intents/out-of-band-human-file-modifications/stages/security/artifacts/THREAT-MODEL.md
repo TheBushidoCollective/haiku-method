@@ -520,10 +520,9 @@ hand-rolled HMAC path, the audit MUST cover:
   the unit's gate passes.
 
 (Tracked separately: the actually-present third-party deps that §6
-should additionally cover — `@sentry/node`, `marked`, `@fastify/cors`,
-`@fastify/rate-limit` — are surfaced in their own findings on this
-artifact and will be folded into §6.1 – §6.3's enumeration in those
-fix loops.)
+should additionally cover — `@sentry/node`, `@fastify/cors`,
+`@fastify/rate-limit`, `marked` — are surfaced in their own findings on
+this artifact and folded into §6.5 – §6.7 below in those fix loops.)
 
 ### 6.5. `@sentry/node`
 
@@ -779,6 +778,107 @@ and was previously omitted from this enumeration; closing the gap now.
   trusted reverse proxy in front of tunnel mode — a future change
   that flips it on without auditing the trust boundary would
   re-open the IP-spoofing-via-header bypass.
+
+### 6.7. `marked`
+
+In-tree at `packages/haiku/package.json:35` (`"marked": "^17.0.5"`),
+consumed by `packages/haiku/src/markdown.ts:1` (`import { marked } from "marked"`)
+through the single chokepoint `markdownToHtml(md)` at
+`markdown.ts:7-14` (`marked.parse(md, { async: false })`). Re-exported
+by `packages/haiku/src/index.ts:11-13`. This is the server-side
+markdown→HTML renderer that sits downstream of the V-10 server-side
+feedback sanitizer (`packages/haiku/src/http/feedback-sanitize.ts`,
+shipped at commit `143a1ccbf`); the V-10 sanitizer-vs-renderer
+alignment is the load-bearing assumption that keeps the I-3 stored-XSS
+control closed. Closing this enumeration gap so a future change to
+`marked` configuration can be audited against the V-10 contract.
+
+- **Raw-HTML passthrough (renderer override)**: `marked` v17 supports
+  custom renderers via `marked.use({ renderer: { html(text) { return text } } })`
+  and per-call options. The current chokepoint at
+  `markdown.ts:7-14` calls `marked.parse(md, { async: false })` with
+  NO renderer override and NO custom extensions registered process-
+  wide (`grep -n 'marked\.use\|new Renderer' packages/haiku/src/` →
+  no results other than the single import + parse call). A future
+  contributor wiring a custom `html()` renderer that returns the raw
+  text would let any HTML token in the input bypass `marked`'s
+  default escaping and reach the browser unsanitized — directly
+  invalidating the V-10 fix because the V-10 sanitizer strips
+  `<script>`/`<iframe>`/`<embed>` etc. on the **disk-write path**, not
+  on the render path. A user-authored feedback body that re-introduced
+  raw HTML between the disk write (sanitized) and the render call
+  (unsanitized renderer override) would re-open I-3 stored XSS.
+  **Mitigation in place: NONE for the renderer-override surface.**
+  Recommended control: code-review checklist item — "any
+  `marked.use({ renderer: ... })` or per-call `renderer:` override on
+  `marked.parse` MUST re-run the V-10 XSS test fixtures
+  (`packages/haiku/test/unit-03-security.test.mjs` and
+  `packages/haiku/test/unit-03-red-team.test.mjs` — the same
+  inverted-PoC suite referenced by I-3 row in §7) before the
+  containing unit's gate passes". Pair with: pin a `marked` minor
+  version and watch GHSA advisories for any default-behavior change
+  in `marked.parse`'s built-in HTML escaping.
+- **`async: false` and bypass-by-`parseInline`**: the chokepoint
+  uses `marked.parse(md, { async: false })`. Two adjacent surfaces in
+  the `marked` API are NOT covered by the chokepoint:
+  (a) `marked.parseInline(md, { ... })` skips the block tokenizer and
+      may behave differently re. tag-in-text handling — a future call
+      site that imports `parseInline` directly bypasses the
+      chokepoint entirely.
+  (b) `async: true` (the v17 default for some entry points) returns a
+      Promise; refactoring to `async` without keeping `async: false`
+      hard-coded changes the return-type contract at `markdown.ts:9-11`
+      and the typecheck at `:10-12` (`if (typeof result !== "string")`)
+      becomes the only runtime guard against a misconfigured async
+      path silently returning `[object Promise]` to the consumer.
+  **Mitigation in place**: the existing typecheck at `markdown.ts:10-12`
+  catches case (b) at runtime, throwing rather than rendering a
+  `[object Promise]` literal. Case (a) is uncovered. Recommended
+  control: lint rule or grep gate in CI — `grep -rn 'parseInline\b' packages/haiku/src/`
+  MUST return zero hits unless paired with the same chokepoint guard
+  pattern (`async: false` + result-is-string check).
+- **URL-scheme handling in autolinks**: `marked`'s default tokenizer
+  recognizes autolinks (`<https://...>` and bare URLs). Historically
+  some `marked` major versions accepted `javascript:` URLs in
+  autolinks. **Verification**: the V-10 sanitizer at
+  `packages/haiku/src/http/feedback-sanitize.ts` strips `javascript:`,
+  `data:`, and `vbscript:` URL schemes from BOTH HTML attributes and
+  markdown link/image targets BEFORE the body reaches disk
+  (`feedback-sanitize.ts` URL-scheme allowlist runs on the input, not
+  on the rendered output). The sanitizer-runs-before-renderer
+  ordering is the load-bearing invariant — the renderer never sees
+  an unsafe URL scheme because the sanitizer already removed it from
+  the persisted body. A future code change that calls
+  `markdownToHtml(rawUserInput)` WITHOUT first running the V-10
+  sanitizer would re-introduce the scheme-injection surface.
+  **Mitigation in place**: V-10 disk-write sanitizer (commit
+  `143a1ccbf`); SPA rendering reads the sanitized body, then renders.
+  Recommended control: code-review checklist item — "any new
+  `markdownToHtml(...)` consumer MUST document the upstream sanitizer
+  in the call site comment, OR demonstrate that the input has no
+  user/agent-supplied origin".
+- **Major-version bump audit**: `marked`'s major versions have shipped
+  sanitizer-relevant breaking changes (the deprecated `sanitize`
+  option was removed; the `breaks` and `gfm` defaults shifted; the
+  renderer override surface was rewritten). The V-10 fix was authored
+  against `marked@^17.x`; a major-bump to v18+ would require
+  re-running the V-10 inverted-PoC suite in full. Recommended
+  control: pin minor version (already implied by `^17.0.5` allowing
+  17.x patch+minor only), and on every `marked` major bump add a
+  pre-merge gate that re-runs the V-10 XSS class-defense test suite
+  against the new version.
+- **Supply-chain footprint**: `marked` is a single zero-dependency
+  package — no transitive tree to audit (compare to `@opentelemetry/*`
+  in §6.3 and `@sentry/node` in §6.5, which both pull deep trees).
+  Mitigation: `npm audit` in CI; lockfile review on bumps; GHSA
+  monitoring on `marked` itself.
+- **Recommendation**: pin minor version of `marked` (`^17.0.5` is
+  the current pin); never call `markdownToHtml(...)` on raw
+  user/agent-supplied input without the upstream V-10 sanitizer in
+  the same code path; never register a `marked.use({ renderer: ... })`
+  override that returns raw HTML without re-running the V-10 XSS
+  fixture; treat `marked.parseInline` as a separate chokepoint
+  requiring the same `async: false` + result-is-string guard.
 
 ---
 

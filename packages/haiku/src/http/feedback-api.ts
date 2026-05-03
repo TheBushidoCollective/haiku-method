@@ -53,7 +53,7 @@ import { requireTunnelAuth, verifyFeedbackMutationAuth } from "./auth.js"
 // the on-disk artefact, the action-log entry, and any future audit-log
 // consumer all see the post-sanitization text — no XSS payload can be
 // reconstructed from the raw multipart body after this point.
-import { sanitizeFeedbackBody } from "./feedback-sanitize.js"
+import { sanitizeFeedbackBody } from "../state/sanitize-feedback.js"
 import { serveUnderRoot } from "./path-safety.js"
 import {
 	isValidSlug,

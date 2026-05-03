@@ -53,7 +53,7 @@ async function attack(name, fn) {
 console.log("\n=== V-04 RED-TEAM — symlink TOCTOU bypass attempts ===")
 
 const { safeMkdirAndRename, cleanupTempFile } = await import(
-	"../src/http/path-safety.ts"
+	"../src/state/safe-write.ts"
 )
 
 await attack(
@@ -373,7 +373,7 @@ await attack(
 
 console.log("\n=== V-10 RED-TEAM — sanitizer bypass attempts ===")
 
-const { sanitizeFeedbackBody } = await import("../src/http/feedback-sanitize.ts")
+const { sanitizeFeedbackBody } = await import("../src/state/sanitize-feedback.ts")
 
 await attack(
 	"V-10.RT1: nested tag obfuscation — <scr<script>ipt>",

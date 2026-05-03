@@ -44,7 +44,7 @@ async function test(name, fn) {
 console.log("\n=== V-04 — safeMkdirAndRename ===")
 
 const { safeMkdirAndRename, cleanupTempFile } = await import(
-	"../src/http/path-safety.ts"
+	"../src/state/safe-write.ts"
 )
 
 await test("V-04.1: planted symlink at parent dir is rejected", async () => {
@@ -242,7 +242,7 @@ await test("V-08.N3: re-mint replaces the old nonce", () => {
 
 console.log("\n=== V-10 — feedback body sanitization ===")
 
-const { sanitizeFeedbackBody } = await import("../src/http/feedback-sanitize.ts")
+const { sanitizeFeedbackBody } = await import("../src/state/sanitize-feedback.ts")
 
 await test("V-10.1: <script> blocks are stripped", () => {
 	const input = "Hello <script>alert(1)</script> world"

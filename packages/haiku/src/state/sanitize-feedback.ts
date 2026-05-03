@@ -1,4 +1,12 @@
-// http/feedback-sanitize.ts — V-10 server-side feedback body sanitizer.
+// state/sanitize-feedback.ts — V-10 server-side feedback body sanitizer.
+//
+// Lives under `state/` (not `http/`) because this is a pure-string
+// transformer with no Fastify / HTTP coupling — it is consumed by the
+// MCP tool surface (`state-tools.ts`'s `haiku_classify_drift` and
+// feedback-write paths) AND the SPA backend (`http/feedback-api.ts`
+// POST/PUT routes). Per the §4.3 dependency-direction rule (`http/`
+// is a downstream consumer; nothing else may import back into `http/`),
+// this primitive belongs here, not in `http/`.
 //
 // Strips dangerous HTML/markdown constructs from any feedback body that
 // flows from an external input (agent path via haiku_classify_drift,

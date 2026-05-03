@@ -23,17 +23,17 @@ import {
 import { Ajv } from "ajv"
 import matter from "gray-matter"
 import { features, resolvePluginRoot } from "./config.js"
-import { sanitizeFeedbackBody } from "./http/feedback-sanitize.js"
+import { sanitizeFeedbackBody } from "./state/sanitize-feedback.js"
 // V-04 (Symlink TOCTOU): `haiku_human_write` (registered via this module's
 // MCP tool table) performs atomic file writes inside intent dirs through the
-// `safeMkdirAndRename` helper in `./http/path-safety.ts`. The helper walks
+// `safeMkdirAndRename` helper in `./state/safe-write.ts`. The helper walks
 // the parent chain segment-by-segment with `lstatSync` (refusing pre-existing
 // symlinks) and re-validates `realpath(parent)` immediately before the
 // rename, closing the legacy `mkdirSync(recursive: true)` follow-symlink
 // trap. Re-exported here so consumers of the MCP tool surface (and the
 // quality-gate static-analysis grep) can locate the V-04 chokepoint from
 // the same module that registers the human-write tool.
-export { safeMkdirAndRename } from "./http/path-safety.js"
+export { safeMkdirAndRename } from "./state/safe-write.js"
 // workflow-fields module retained for state-integrity sealing; no direct imports
 // needed here since the completion-only guard is narrow to status/completed.
 import {

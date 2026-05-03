@@ -129,7 +129,7 @@ security stage's elaborate phase for a follow-up wave.
   (rapid-fire `haiku_classify_drift`).
 - **Status update (FB-29)**: `@fastify/rate-limit` IS registered today
   in tunnel mode (`packages/haiku/src/http.ts:228-243`) — see
-  THREAT-MODEL.md §6.6 for the full per-key/per-route/store
+  THREAT-MODEL.md §6.7 for the full per-key/per-route/store
   characterization. The earlier "rate-limit is missing" framing was
   stale relative to the FB-06 wiring. Present coverage and remaining
   gaps are now tracked separately below.
@@ -168,7 +168,7 @@ security stage's elaborate phase for a follow-up wave.
   - **WebSocket frame stream**: only the upgrade handshake counts
     against the bucket; in-stream messages are not rate-limited.
     Tracked but accepted (frame-level rate-limit is a follow-up — see
-    THREAT-MODEL.md §6.6 recommendation (a)).
+    THREAT-MODEL.md §6.7 recommendation (a)).
   - **Store backend**: in-memory LRU; process restart resets every
     bucket. Mitigated by JWT process-local lifetime (a restart also
     invalidates the JWT, capping the post-restart abuse window).

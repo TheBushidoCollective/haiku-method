@@ -516,7 +516,7 @@ hand-rolled HMAC path, the audit MUST cover:
 (Tracked separately: the actually-present third-party deps that §6
 should additionally cover — `@sentry/node`, `@fastify/cors`,
 `@fastify/rate-limit`, `marked` — are surfaced in their own findings on
-this artifact and folded into §6.5 – §6.7 below in those fix loops.)
+this artifact and folded into §6.5 – §6.8 below in those fix loops.)
 
 ### 6.5. `@sentry/node`
 
@@ -620,7 +620,7 @@ and was previously omitted from this enumeration; closing the gap now.
   `reportError(err, context, ...)` MUST justify every key in
   `context`.
 
-### 6.5. `@fastify/cors`
+### 6.6. `@fastify/cors`
 
 - **Registration site**: `packages/haiku/src/http.ts:14` (import),
   `packages/haiku/src/http.ts:192-218` (`instance.register(fastifyCors, …)`).
@@ -695,7 +695,7 @@ and was previously omitted from this enumeration; closing the gap now.
   helper used for CSRF Layer 3; if a future change unifies them,
   audit the CSRF call sites first.
 
-### 6.6. `@fastify/rate-limit`
+### 6.7. `@fastify/rate-limit`
 
 - **Registration site**: `packages/haiku/src/http.ts:15` (import),
   `packages/haiku/src/http.ts:228-243` (registration). Registered ONLY
@@ -773,7 +773,7 @@ and was previously omitted from this enumeration; closing the gap now.
   that flips it on without auditing the trust boundary would
   re-open the IP-spoofing-via-header bypass.
 
-### 6.7. `marked`
+### 6.8. `marked`
 
 In-tree at `packages/haiku/package.json:35` (`"marked": "^17.0.5"`),
 consumed by `packages/haiku/src/markdown.ts:1` (`import { marked } from "marked"`)

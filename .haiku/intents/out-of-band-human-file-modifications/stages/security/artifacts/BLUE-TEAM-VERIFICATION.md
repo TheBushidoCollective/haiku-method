@@ -167,11 +167,18 @@ recommendation in ASSESSMENTS.md.
 - **Rationale for not landing the runtime fix in unit-04**: the unit
   spec scope is "two synthesis artifacts" — the load-bearing decision
   was option (a) in FB-12's diagnosis, "documentation-only retraction
-  with rate-limit work tracked under R-3 / FB-08." Landing
-  `connectionTimeout` + a paired test belongs in the rate-limiting fix
-  unit, not in a synthesis-doc correction. (Hat-mandate boundary: this
-  hat documents existing controls and identifies gaps; landing new
-  HTTP-server config is implementation work owned by `unit-05-rate-limiting`.)
+  with the connection-timeout work tracked under R-3 slowloris-
+  escalation note / FB-08." (The `@fastify/rate-limit` registration is
+  ALREADY landed at `http.ts:228-243` per FB-29; what FB-08 still owns
+  is the connection-level slowloris fix — `connectionTimeout` /
+  `requestTimeout` on the Fastify factory — which is independent of
+  the request-rate limiter and must be set on the `Fastify({ ... })`
+  call itself, not in a `register()` plugin.) Landing `connectionTimeout`
+  + a paired test belongs in the slowloris-timeout fix unit, not in a
+  synthesis-doc correction. (Hat-mandate boundary: this hat documents
+  existing controls and identifies gaps; landing new HTTP-server config
+  is implementation work owned by the slowloris-timeout fix unit
+  identified in ASSESSMENTS.md §4 R-3 "Slowloris escalation note".)
 
 ### 4.3. Synthesis-prose drift (FB-11 / FB-12 class)
 
@@ -199,14 +206,19 @@ recommendation in ASSESSMENTS.md.
   cleanly.
 - **FB-12 (HIGH)** — addressed via Control 2 (corrected §6.1 + §3.5
   prose, escalated R-3 in ASSESSMENTS.md) + Control 3 (regression test).
-  Slowloris runtime fix deferred to `unit-05-rate-limiting` per the
-  fix-unit directive recorded in ASSESSMENTS.md §4 R-3.
+  Slowloris connection-timeout runtime fix (`connectionTimeout` /
+  `requestTimeout` on the Fastify factory — independent of the already-
+  landed `@fastify/rate-limit` registration) deferred to the slowloris-
+  timeout fix unit per the fix-unit directive recorded in ASSESSMENTS.md
+  §4 R-3 "Slowloris escalation note".
 
 ### Findings deferred (not blue-team scope this bolt)
 
 - The runtime `connectionTimeout` + `requestTimeout` config on
   `Fastify({ ... })` and its paired stalled-multipart regression test —
-  belongs in the rate-limiting fix unit per ASSESSMENTS.md §4 R-3.
+  belongs in the slowloris-timeout fix unit per ASSESSMENTS.md §4 R-3
+  "Slowloris escalation note" (independent of `@fastify/rate-limit`
+  which is already registered at `http.ts:228-243`).
 - Wiring an operator alert to `haiku.drift.gate.kill_switch_hit` —
   belongs in ASSESSMENTS.md §4 R-1 follow-up wave.
 

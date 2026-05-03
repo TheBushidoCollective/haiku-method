@@ -234,8 +234,8 @@ where applicable.
 |---|---|---|---|---|
 | D-1 | Misconfigured `HAIKU_UPLOAD_MAX_BYTES` accepts multi-GB payloads; fastify-multipart buffers + sync SHA in drift gate stalls workflow tick | `explicit-spa-upload.feature` | V-07 | Unit-01 `MAX_UPLOAD_BYTES_HARD_CAP = 50 MiB` (commit `3867608a6`). Effective cap clamps via `Math.min`; `haiku.upload.cap_clamped` telemetry on misconfig. |
 | D-2 | Unbounded `agent_rationale` written to `DA-NN.json`; assessments-list endpoint reads them all into RAM | `manual-change-assessment.feature` | V-09 | Unit-01 schema-validation rejects `>10 KB` rationale / `>1 KB` excerpt; list-endpoint truncates to 256 chars + `…` (commit `0f87ed407`). |
-| D-3 | `@fastify/multipart` decompression bomb / parser-confusion / slowloris on upload routes | `explicit-spa-upload.feature` | (dependency-class) | See §6.1 dependency enumeration. Partial mitigation: `MAX_UPLOAD_BYTES_HARD_CAP = 50 MiB` caps payload size; **no `connectionTimeout` / `requestTimeout` / `keepAliveTimeout` is configured today** (fastify default `connectionTimeout = 0`, no override in `http.ts:107-136`). Slowloris residual risk is **unmitigated** until rate-limiting + connection-timeout work lands (tracked under R-3 / FB-08, escalated from "deferred enhancement" to "tracked unfixed risk"). |
-| D-4 | `haiku_classify_drift` rapid-fire calls bloat assessment store and starve the drift gate | `manual-change-assessment.feature` | (rate-limit gap) | **Deferred** — per-session cap / per-IP rate-limit recorded as residual risk. |
+| D-3 | `@fastify/multipart` decompression bomb / parser-confusion / slowloris on upload routes | `explicit-spa-upload.feature` | (dependency-class) | See §6.1 dependency enumeration. Layered mitigation: (a) `MAX_UPLOAD_BYTES_HARD_CAP = 50 MiB` caps payload size; (b) `@fastify/rate-limit` IS registered in tunnel mode and bounds the request-rate flood vector — see §6.6 for full per-key/per-route/store characterization (default `max=60` per `60_000` ms, IP-keyed via `req.ip` with intentional `trustProxy=false` so the bucket is "per-tunnel" rather than per upstream client). The rate-limit closes the request-rate-flood subset of slowloris but does NOT close the slowloris-proper case where an attacker holds many connections open trickling bytes — `@fastify/rate-limit` decisions fire on request COMPLETION, not on socket-open. **What remains unmitigated: `connectionTimeout` / `requestTimeout` / `keepAliveTimeout` are NOT configured today** (fastify default `connectionTimeout = 0`, no override in `http.ts:107-136`); a slowloris attacker that holds N sockets open below the per-IP request-rate threshold is not closed by the limiter. Slowloris residual risk is **unmitigated until the connection-timeout work lands** (tracked under ASSESSMENTS.md R-3 slowloris-escalation note / FB-08; severity Medium-High → Medium today per the BLUE-TEAM-VERIFICATION FB-12 escalation). |
+| D-4 | `haiku_classify_drift` rapid-fire calls bloat assessment store and starve the drift gate | `manual-change-assessment.feature` | (rate-limit class) | **Partial mitigation in place**: `@fastify/rate-limit` (see §6.6) bounds aggregate request rate at `max=60` per `60_000` ms per `req.ip` bucket — every HTTP route in tunnel mode shares this budget, so rapid-fire `haiku_classify_drift` calls from a single source are capped before they can starve the drift gate. **What remains deferred**: per-token / per-session keying (the bucket aggregates all sessions sharing the same egress IP, so one session cannot be isolated from another's abuse) and per-route differentiation (the limiter does not give `haiku_classify_drift` a tighter cap than less abuse-prone routes). Tracked under ASSESSMENTS.md R-3 "Remaining gaps" / FB-08. |
 
 ### 3.6. Elevation of privilege — boundary crossings
 
@@ -289,8 +289,16 @@ threats, V-NN findings closed, V-NN findings deferred.
   bloat), D-4 (rapid-fire classify).
 - **Closed**: V-09 (rationale caps + list truncation, commit `0f87ed407`),
   V-10 (server-side feedback sanitizer, commit `143a1ccbf`).
-- **Deferred**: per-session rate-limit on `haiku_classify_drift` — see
-  ASSESSMENTS.md residual risk.
+- **Closed (with bound)**: per-IP rate-limit on `haiku_classify_drift`
+  via `@fastify/rate-limit` plugin-wide registration in tunnel mode
+  (`http.ts:228-243`) — bounds aggregate request rate. **Bound**: the
+  bucket is IP-keyed (default `req.ip`, intentional `trustProxy=false`
+  so localtunnel collapses to one "per-tunnel" bucket), not session-
+  keyed; one hostile session can consume the budget for every other
+  session sharing the egress IP. See §6.6 for full characterization.
+- **Deferred**: per-session keying on `haiku_classify_drift` (per-`sid`
+  bucket, separate from the IP cap) — see ASSESSMENTS.md R-3
+  "Remaining gaps".
 
 ### 4.4. `explicit-spa-upload.feature`
 
@@ -796,8 +804,8 @@ and was previously omitted from this enumeration; closing the gap now.
 | I-3 | Server-side feedback sanitizer | `143a1ccbf` | unit-03 quality gate |
 | D-1 | `MAX_UPLOAD_BYTES_HARD_CAP` clamp | `3867608a6` | unit-01 upload-routes hard-cap test |
 | D-2 | Rationale schema caps + list-endpoint truncation | `0f87ed407` | unit-01 state-tools-handlers test, assessments-routes test |
-| D-3 | (defense via D-1 size cap; rate-limit deferred) | — | partial — residual risk in ASSESSMENTS.md |
-| D-4 | (deferred — per-session rate-limit) | — | residual risk in ASSESSMENTS.md |
+| D-3 | Layered defense: `MAX_UPLOAD_BYTES_HARD_CAP` (D-1 size cap) + `@fastify/rate-limit` aggregate per-IP request-rate cap (§6.6); slowloris-proper subset (long-held connections under the rate threshold) NOT closed — `connectionTimeout` / `requestTimeout` still missing | `3867608a6`, `http.ts:228-243` (rate-limit registration) | partial — slowloris connection-timeout residual in ASSESSMENTS.md R-3 |
+| D-4 | `@fastify/rate-limit` per-IP aggregate cap (§6.6) bounds rapid-fire `haiku_classify_drift` from a single source; per-session/per-token keying still deferred | `http.ts:228-243` | partial — per-session keying residual in ASSESSMENTS.md R-3 |
 | E-1 | Three-layer CSRF (query-param ban + Origin + nonce) | `bed443315` | unit-03 quality gate, audit-mutating-routes script |
 | E-3 | Drift-detection gate is the compensating control | (existing — silent-filesystem-drop-detection.feature) | drift-gate tests in CI |
 | E-4 | `ATTRIBUTE_TO_USER_PATTERN` allowlist | `bfa4b7c91` | unit-01 bolt-3 red-team test |

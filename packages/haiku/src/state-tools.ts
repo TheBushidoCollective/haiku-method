@@ -4,8 +4,10 @@
 // The caller doesn't need to know file paths — just resource identifiers.
 
 import { execFileSync, execSync, spawn, spawnSync } from "node:child_process"
+import { randomBytes } from "node:crypto"
 import {
 	existsSync,
+	lstatSync,
 	mkdirSync,
 	readdirSync,
 	readFileSync,
@@ -2253,30 +2255,92 @@ export function readClaimedAuthorId(
 // Concurrency: this implementation is a best-effort single-process
 // counter. Two concurrent SPA uploads from the same MCP process see
 // distinct returned values because the read-increment-write happens on
-// the JS single thread before the next `await` boundary. Cross-process
-// races (an attacker spawning a second MCP) are not in scope; a real
-// fix for that lives in the audit-log hash-chaining follow-up.
+// the JS single thread before the next `await` boundary. The persisted
+// value is durable because the producer writes the file via
+// tempfile + atomic-rename BEFORE returning, so a follow-up call (in
+// the same process or a fresh one) reads the just-incremented value
+// rather than the prior. Cross-process races (an attacker spawning a
+// second MCP) are not in scope; a real fix for that lives in the
+// audit-log hash-chaining follow-up.
 
 /** Path to the intent-scope tick counter file. */
 function intentScopeTickPath(intentDirAbsPath: string): string {
 	return join(intentDirAbsPath, "intent-tick.json")
 }
 
-/** Atomically read, increment, and return the intent-scope tick
- *  counter. Creates the counter file at value 1 on first call. Returns
- *  the freshly-incremented value (so the first call returns 1, second
- *  returns 2, etc.) — never returns 0 to avoid colliding with the
- *  per-stage tick-counter sentinel.
+/** Thrown when `getIntentScopeTickCounter` cannot persist the
+ *  incremented value. Callers MUST fail their request rather than swallow
+ *  this — silently returning a non-persisted value would re-issue the same
+ *  counter on the next call and collide entry IDs in the V-05 producer
+ *  contract (see drift-detection-gate.ts consumer-side fix). */
+export class IntentScopeTickPersistError extends Error {
+	constructor(message: string) {
+		super(message)
+		this.name = "IntentScopeTickPersistError"
+	}
+}
+
+/** Atomically read, increment, and persist the intent-scope tick
+ *  counter, returning the freshly-incremented value (so the first call
+ *  returns 1, second returns 2, etc.) — never returns 0 to avoid
+ *  colliding with the per-stage tick-counter sentinel.
+ *
+ *  Atomicity (single-process): the increment is computed on the JS
+ *  single thread and persisted via tempfile + `renameSync` BEFORE the
+ *  function returns. POSIX `rename(2)` is a single syscall — a concurrent
+ *  reader either sees the prior value or the new value, never a partial
+ *  write. The tempfile lives in the same directory as the target so the
+ *  rename is same-filesystem (atomic).
+ *
+ *  V-04 (Symlink TOCTOU): does NOT use `mkdirSync(..., { recursive: true })`.
+ *  The intent dir is the workflow engine's substrate — its non-existence
+ *  here is a corruption signal, not something the producer should paper
+ *  over with a recursive create. We `lstatSync` the intent dir to refuse
+ *  symlinks, then assert it's a real directory; the tempfile + rename are
+ *  parented at the intent dir so we re-use the same filesystem object the
+ *  workflow engine validated on intent setup.
+ *
+ *  Failure mode: if the persistence step fails (disk full, permission
+ *  denied, parent dir missing or replaced by a symlink), throws
+ *  `IntentScopeTickPersistError`. Callers MUST surface a hard failure
+ *  rather than swallow — returning a non-persisted value would reissue
+ *  the same counter on the next call, breaking the V-05 collision-free
+ *  entry-id contract.
  *
  *  Synchronous for the same reason `getCurrentTickCounter` is
  *  synchronous: the upload-route handler calls it inline and the
  *  drift-gate consumer reads the resulting action-log entry on the
- *  next tick (also synchronously). Failures are swallowed and the
- *  function returns 0 — callers treat 0 as "no intent-scope tick
- *  available, fall back to per-stage tick" so the route still
- *  succeeds. */
+ *  next tick (also synchronously). */
 export function getIntentScopeTickCounter(intentDirAbsPath: string): number {
 	const tickFile = intentScopeTickPath(intentDirAbsPath)
+	const tickDir = dirname(tickFile)
+
+	// V-04 chokepoint: refuse to create the parent dir. If it doesn't
+	// exist or is a symlink, that's a corruption signal — not something
+	// the counter producer is allowed to silently work around.
+	try {
+		const st = lstatSync(tickDir)
+		if (st.isSymbolicLink()) {
+			throw new IntentScopeTickPersistError(
+				`intent dir '${tickDir}' is a symlink — refusing (V-04)`,
+			)
+		}
+		if (!st.isDirectory()) {
+			throw new IntentScopeTickPersistError(
+				`intent dir '${tickDir}' exists but is not a directory`,
+			)
+		}
+	} catch (err) {
+		if (err instanceof IntentScopeTickPersistError) throw err
+		throw new IntentScopeTickPersistError(
+			`cannot stat intent dir '${tickDir}': ${err instanceof Error ? err.message : String(err)}`,
+		)
+	}
+
+	// Read current. A read failure (corrupt JSON, transient I/O) resets to
+	// 0 so the next persist starts the counter at 1. The persist step's
+	// hard-throw guarantees that even a "reset to 0" path can't return a
+	// non-durable value to the caller.
 	let current = 0
 	try {
 		if (existsSync(tickFile)) {
@@ -2290,14 +2354,30 @@ export function getIntentScopeTickCounter(intentDirAbsPath: string): number {
 		current = 0
 	}
 	const next = current + 1
+
+	// Tempfile + atomic rename. Tempfile lives in the intent dir (same
+	// filesystem as the target) so `renameSync` is a single syscall and
+	// either lands fully or not at all. Random suffix avoids collisions
+	// across concurrent writers in the same process.
+	const tmpPath = join(
+		tickDir,
+		`.intent-tick-${process.pid}-${randomBytes(6).toString("hex")}.json.tmp`,
+	)
 	try {
-		mkdirSync(dirname(tickFile), { recursive: true })
-		writeFileSync(tickFile, JSON.stringify({ tick: next }, null, 2))
-	} catch {
-		// Best-effort persistence — return the increment even if the
-		// write failed so the caller still gets a deterministic value
-		// for THIS process's lifetime.
+		writeFileSync(tmpPath, JSON.stringify({ tick: next }, null, 2))
+		renameSync(tmpPath, tickFile)
+	} catch (err) {
+		// Best-effort cleanup of the tempfile if the rename never landed.
+		try {
+			unlinkSync(tmpPath)
+		} catch {
+			// already gone or never created — ignore
+		}
+		throw new IntentScopeTickPersistError(
+			`failed to persist intent-scope tick counter at '${tickFile}': ${err instanceof Error ? err.message : String(err)}`,
+		)
 	}
+
 	return next
 }
 

@@ -244,7 +244,7 @@ where applicable.
 | E-1 | CSRF: cross-origin POST from attacker-controlled origin succeeds because `?t=<jwt>` is in URL + multipart-form-data is CORS-safe | `explicit-spa-upload.feature` | V-08 | Unit-03 three-layer defense: (1) ban `?t=` on mutating verbs, (2) Origin allowlist (`HAIKU_ALLOWED_ORIGINS`), (3) per-session CSRF nonce as `X-Haiku-CSRF` header (commit `bed443315`). Audit script enumerates routes to ensure preHandler coverage. |
 | E-2 | Symlink-write via TOCTOU drops file outside intent dir into attacker-chosen path (e.g. `/etc/cron.d/`) | `agent-writes-on-behalf-of-human.feature` | V-04 | Same mitigation as T-1/T-2. Residual race accepted. |
 | E-3 | `guard-workflow-fields` PreToolUse hook bypassed via Bash (agent writes workflow-managed file directly with `cat > ...`); compensating control is the drift gate | (cross-cutting — see §5) | (hook-class) | Drift-detection-gate is the compensating control. Residual risk if drift gate is disabled. See §5 row. |
-| E-4 | `claimed_author_id` carrying HTML / shell-metacharacter payload poisons future SPA audit-log viewer (stored XSS sink) | `explicit-spa-upload.feature` + `agent-writes-on-behalf-of-human.feature` | V-03 R-04 | `ATTRIBUTE_TO_USER_PATTERN = /^[\w][\w\-.@ ]{0,127}$/` (commit `bfa4b7c91`). Wide enough for real human IDs, narrow enough to reject every HTML/JS sigil. |
+| E-4 | `claimed_author_id` carrying HTML / shell-metacharacter payload poisons future SPA audit-log viewer (stored XSS sink) | `explicit-spa-upload.feature` + `agent-writes-on-behalf-of-human.feature` | V-03 R-04 | **Partial — SPA-path only.** `ATTRIBUTE_TO_USER_PATTERN = /^[\w][\w\-.@ ]{0,127}$/` defined and enforced at the two SPA upload routes (`packages/haiku/src/http/upload-routes.ts:192` definition; `:514` stage-output check; `:848` knowledge check), commit `bfa4b7c91`. Pattern is wide enough for real human IDs, narrow enough to reject every HTML/JS sigil. **Gap (FB-17):** the MCP `haiku_human_write` tool path is the OTHER writer to `action-log.jsonl` and `write-audit.jsonl` (via `appendActionLogEntry` and `appendWriteAudit` at `packages/haiku/src/tools/orchestrator/haiku_human_write.ts:795-806, 820-838`) and performs ZERO validation on `claimed_author_id` — `grep -n 'isValidAttributeToUser\|ATTRIBUTE_TO_USER' packages/haiku/src/tools/orchestrator/haiku_human_write.ts` returns no matches. An agent (or anything calling the MCP tool) can pass `claimed_author_id: "<img src=x>"` and the value flows verbatim into both audit logs — the exact stored-XSS sink R-04 was filed to close. Closure is route-boundary placement, not chokepoint placement; defense-in-depth requires moving the validator into `appendActionLogEntry` / `appendWriteAudit` so EVERY writer goes through it. Tracked as residual R-7 and `stage_revisit` FB-17. |
 
 ---
 
@@ -274,12 +274,18 @@ threats, V-NN findings closed, V-NN findings deferred.
 - **Trust boundary**: agent → file system, with `haiku_human_write` as
   the chokepoint. Author attribution is the integrity hinge.
 - **Primary threats**: S-1 (forged claimed_author_id), T-1 (symlink
-  TOCTOU), R-3 (tick-counter non-determinism), E-2 (symlink escape).
+  TOCTOU), R-3 (tick-counter non-determinism), E-2 (symlink escape),
+  E-4 (audit-log XSS sink via unvalidated `claimed_author_id`).
 - **Closed**: V-03 (Option B rename, commit `399c2ee13`), V-04 (single-shot
   TOCTOU close, commit `573c91da1`), V-05 (intent-scope counter +
   drift-gate union, commit `399c2ee13`).
 - **Deferred**: V-03 fix #3 (audit-log hash chain) — see ASSESSMENTS.md
-  residual risk; V-04 fix #1 (full `O_NOFOLLOW`-everywhere) — same.
+  residual risk; V-04 fix #1 (full `O_NOFOLLOW`-everywhere) — same;
+  V-03 R-04 MCP-path coverage (the `attribute_to_user` allowlist is
+  wired into the SPA upload routes only — `haiku_human_write` writes
+  `claimed_author_id` straight into `action-log.jsonl` /
+  `write-audit.jsonl` without validation; same E-4 sink, second writer)
+  — see ASSESSMENTS.md §4 R-7 (FB-17).
 
 ### 4.3. `manual-change-assessment.feature`
 
@@ -800,7 +806,7 @@ and was previously omitted from this enumeration; closing the gap now.
 | D-4 | (deferred — per-session rate-limit) | — | residual risk in ASSESSMENTS.md |
 | E-1 | Three-layer CSRF (query-param ban + Origin + nonce) | `bed443315` | unit-03 quality gate, audit-mutating-routes script |
 | E-3 | Drift-detection gate is the compensating control | (existing — silent-filesystem-drop-detection.feature) | drift-gate tests in CI |
-| E-4 | `ATTRIBUTE_TO_USER_PATTERN` allowlist | `bfa4b7c91` | unit-01 bolt-3 red-team test |
+| E-4 | (partial — SPA-path only) `ATTRIBUTE_TO_USER_PATTERN` allowlist on the two upload routes; MCP `haiku_human_write` path writes `claimed_author_id` to the same audit logs without validation — see §3.6 row E-4 and ASSESSMENTS.md §4 R-7 (FB-17) | `bfa4b7c91` (SPA close); MCP-path gap unfixed | unit-01 bolt-3 red-team test (SPA path); MCP-path regression test missing — to be added in the chokepoint fix |
 
 ---
 

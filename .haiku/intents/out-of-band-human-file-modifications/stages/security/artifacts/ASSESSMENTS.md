@@ -56,7 +56,7 @@ Run-of-record timestamp for this assessment: **2026-05-03T09:00:39Z**.
 |---|---|---|---|---|---|---|
 | **V-01** | High | SVG/HTML knowledge upload renders inline as stored XSS via `serveFile` MIME map | `unit-01-upload-content-validation` | `grep -qE 'ALLOWED_MIMES\|allowedMimes\|MIME_ALLOWLIST' packages/haiku/src/http/upload-routes.ts` (gate `v01-v02-allowed-mimes-defined`) **plus** `grep -qE 'rejects.*\.html\|html.*rejected\|text/html.*415' packages/haiku/test/upload-routes.test.mjs` (gate `v01-v02-html-extension-rejected-test-named`) | commit `f83f45fe5`, run `2026-05-03T09:00:39Z`, exit_code=0 (both gates) — suite_at_commit=1199/0 (per fix commit `bfa4b7c91`) | Serve-side `Content-Disposition: attachment` for non-image/PDF + CSP `default-src 'none'; sandbox` not yet applied. Reviewer GET of an allow-listed file still relies on `serveFile` MIME inference. Deferred — see §4 row R-1 (serve-side hardening). |
 | **V-02** | High | Stage-output upload accepts arbitrary HTML; rendered inline via `/stage-artifacts/:sid/*` | `unit-01-upload-content-validation` | Same allowlist gates as V-01 (`v01-v02-allowed-mimes-defined`, `v01-v02-html-extension-rejected-test-named`) cover both routes (`ALLOWED_MIMES_STAGE_OUTPUT` + `ALLOWED_MIMES_KNOWLEDGE` defined per route in commit `3867608a6`) | commit `f83f45fe5`, run `2026-05-03T09:00:39Z`, exit_code=0; bolt-3 commit `bfa4b7c91` adds R-01..R-04 equivalent-class blocks (`.js`, `.mjs`, `.cjs`, `.css`, `.htc`, `.hta`, `.htaccess`) and removes `application/octet-stream` from both allowlists | HTML-mockup product use case still requires sandboxed sub-origin to render figma/HTML artifacts safely. Deferred — see §4 row R-5 (sandboxed sub-origin). |
-| **V-03** | Medium | `human_author_id`, `attribute_to_user`, `rationale`, `user_instruction_excerpt` self-reported by agent and copied to audit logs without binding | `unit-02-author-identity-binding` | `bash -c 'grep -qE "reqUser\|sessionUser\|claims\.sub\|resolveAuthorFromSession" packages/haiku/src/http/upload-routes.ts \|\| grep -qE "claimed_author_id" packages/haiku/src/state-tools.ts'` (gate `v03-spa-author-bound-from-session-or-renamed`) **plus** `v03-mcp-author-bound-from-os-user-or-renamed` and `v03-author-mismatch-rejected-test-named` | commit `fe91e1e64`, run `2026-05-03T09:00:39Z`, exit_code=0 (all three gates). Option B chosen: field renamed `human_author_id → claimed_author_id` consistently across SPA + MCP surfaces in commit `399c2ee13`. R-01 cross-session-sid bind closed in `4e5af2b76`. R-04 attribute_to_user allowlist closed in `bfa4b7c91`. | Audit-log hash-chain (`prev_hash` field on `write-audit.jsonl` / `action-log.jsonl`) not implemented. Tampered prior lines are not detectable. Status: **partially closed** (attribution renamed to `claimed_author_id`; integrity-on-the-log-itself defense deferred). See §4 row R-2 (audit-log hash-chain). |
+| **V-03** | Medium | `human_author_id`, `attribute_to_user`, `rationale`, `user_instruction_excerpt` self-reported by agent and copied to audit logs without binding | `unit-02-author-identity-binding` | `bash -c 'grep -qE "reqUser\|sessionUser\|claims\.sub\|resolveAuthorFromSession" packages/haiku/src/http/upload-routes.ts \|\| grep -qE "claimed_author_id" packages/haiku/src/state-tools.ts'` (gate `v03-spa-author-bound-from-session-or-renamed`) **plus** `v03-mcp-author-bound-from-os-user-or-renamed` and `v03-author-mismatch-rejected-test-named` | commit `fe91e1e64`, run `2026-05-03T09:00:39Z`, exit_code=0 (all three gates). Option B chosen: field renamed `human_author_id → claimed_author_id` consistently across SPA + MCP surfaces in commit `399c2ee13`. R-01 cross-session-sid bind closed in `4e5af2b76`. R-04 attribute_to_user allowlist **partial** — closed on the SPA upload routes only in `bfa4b7c91` (`isValidAttributeToUser` + `ATTRIBUTE_TO_USER_PATTERN` at `packages/haiku/src/http/upload-routes.ts:192,196,514,848`); MCP `haiku_human_write` path is NOT covered (FB-17). | Two open residuals: (1) Audit-log hash-chain (`prev_hash` field on `write-audit.jsonl` / `action-log.jsonl`) not implemented. Tampered prior lines are not detectable. See §4 row R-2 (audit-log hash-chain). (2) **R-04 MCP-path coverage gap (FB-17)** — the `attribute_to_user` allowlist closes the SPA writer for E-4 but not the MCP writer. `haiku_human_write` accepts `claimed_author_id` and passes it raw into `appendActionLogEntry` (`packages/haiku/src/tools/orchestrator/haiku_human_write.ts:795-806`) and `appendWriteAudit` (`:820-838`), so an HTML payload still lands in both audit logs via the MCP path with no additional attacker effort. The chokepoint fix is to move `isValidAttributeToUser` (or equivalent) into `appendWriteAudit` / `appendActionLogEntry` (or the `WriteAuditRecord` constructor) so every writer goes through it; the route-boundary check remains as an early-exit guard. See §4 row R-7 (MCP-path attribution allowlist). Status: **partially closed** — attribution renamed to `claimed_author_id`; SPA-side E-4 closed; integrity-on-the-log-itself defense and MCP-side E-4 closure both deferred. |
 | **V-04** | Medium | `haiku_human_write` symlink-escape check skipped when parent dir doesn't yet exist; `mkdirSync(recursive: true)` follows planted symlinks. SPA upload route has identical pattern. | `unit-03-symlink-toctou-and-csrf` | `grep -qE 'safeMkdirAndRename\|safeMkdirInIntent\|mkdirNoFollow' packages/haiku/src/http/path-safety.ts` (gate `v04-shared-safe-mkdir-helper`) **plus** `v04-helper-used-by-human-write-and-upload-routes` and `v04-symlink-escape-test-named` | commit `06cbb625c`, run `2026-05-03T09:00:39Z`, exit_code=0 (all three gates). `safeMkdirAndRename` helper landed in `573c91da1`; both call sites (`state-tools.ts` and `upload-routes.ts`) use the helper. Symlink-escape regression test lives in `packages/haiku/test/unit-03-security.test.mjs` (V-04.1 / V-04.2 — "planted symlink at parent / grandparent dir is rejected"). | Single-shot `realpathSync.startsWith(intentRoot)` re-check after `mkdirSync` is not race-free against an attacker who can keep flipping a symlink. Full `O_NOFOLLOW`-everywhere via `openat`/`renameat` deferred — see §4 row R-4. |
 | **V-05** | Medium | `getCurrentTickCounter(intentDir)` for `stage=null` SPA uploads picks a non-deterministic stage's iteration; entry_id collisions and drift-gate per-tick action-log misses | `unit-02-author-identity-binding` | `grep -qE 'getIntentScopeTickCounter\|globalTickCounter\|intentScopeTick' packages/haiku/src/state-tools.ts` (gate `v05-intent-scope-tick-counter`) **plus** `v05-drift-gate-unions-stage-and-intent-action-log` | commit `fe91e1e64`, run `2026-05-03T09:00:39Z`, exit_code=0 (both gates). Producer fix in `399c2ee13`: `getIntentScopeTickCounter(intentDir)` returns deterministic intent-scope counter persisted to `intent-tick.json`. Consumer fix same commit: `drift-detection-gate.ts` reads union of per-stage and intent-scope action-log entries. Tick scope discriminator stamped on both action-log and audit-log entries. | Two SPA uploads landing in the same wall-clock millisecond with `stage === null` from two MCP processes serving the same intent could still race the intent-tick counter. Out of scope: deployment topology forbids multi-process serving the same intent. |
 | **V-06** | Medium | `intent.md` archived/locked checks substring-matched against raw bytes — false-positives on body content, false-negatives on `status: 'locked'` | `unit-02-author-identity-binding` | `bash -c '! grep -qE "raw\.includes\(\"status:" packages/haiku/src/http/upload-routes.ts'` (gate `v06-frontmatter-parser-not-substring`) **plus** `v06-no-substring-status-checks-anywhere` and `v06-shared-locked-archived-helper` | commit `fe91e1e64`, run `2026-05-03T09:00:39Z`, exit_code=0 (all three gates). Shared `isIntentLocked` / `isIntentArchived` helpers in `state-tools.ts` parse via `gray-matter`. R-03 closed coverage gap on MCP path (`haiku_human_write` now imports `isIntentLocked` and rejects with `intent_locked`, commit `4e5af2b76`). | None significant — both SPA and MCP surfaces now route through the shared parser. A future code path that re-introduces a substring check would be caught by gate `v06-no-substring-status-checks-anywhere` (negative-grep enforces repo-wide elimination). |
@@ -73,7 +73,7 @@ Run-of-record timestamp for this assessment: **2026-05-03T09:00:39Z**.
 | addressing_unit | surface fixed | findings closed | gate_pass_evidence (commit SHA + suite_at_commit) |
 |---|---|---|---|
 | `unit-01-upload-content-validation` | SPA upload routes (knowledge + stage-output) — content-type + extension allowlist, hard byte cap, rationale schema caps + list truncation | V-01, V-02, V-07, V-09 | `f83f45fe5`; suite_at_commit=1199/0 (per bolt-3 fix commit `bfa4b7c91`); 7/7 gates passed at `2026-05-03T09:00:39Z` |
-| `unit-02-author-identity-binding` | Author identity (Option B claimed_author_id rename), intent-scope tick counter (producer + consumer), shared `gray-matter` status helpers | V-03 (partial — attribution closed, hash-chain deferred), V-05, V-06 | `fe91e1e64`; suite_at_commit=1187/1187 (per blue-team commit `4e5af2b76`); 7/7 gates passed at `2026-05-03T09:00:39Z` |
+| `unit-02-author-identity-binding` | Author identity (Option B claimed_author_id rename), intent-scope tick counter (producer + consumer), shared `gray-matter` status helpers | V-03 (partial — attribution renamed; hash-chain deferred (R-2); R-04 SPA-path closed but MCP-path open per FB-17 / R-7), V-05, V-06 | `fe91e1e64`; suite_at_commit=1187/1187 (per blue-team commit `4e5af2b76`); 7/7 gates passed at `2026-05-03T09:00:39Z` |
 | `unit-03-symlink-toctou-and-csrf` | `safeMkdirAndRename` helper, three-layer CSRF (`http/csrf.ts`), feedback body sanitizer (`http/feedback-sanitize.ts`), operator-only baseline-corrupt gate | V-04 (partial — single-shot close, full O_NOFOLLOW deferred), V-08 (partial — rate-limit deferred), V-10, V-11 | `06cbb625c`; suite_at_commit reported in fix commits as `OK` (V-04, V-08, V-10, V-11 commits); 11/11 gates passed at `2026-05-03T09:00:39Z` (after re-verification against the new `csrf.ts` and `feedback-sanitize.ts` files where the fix code actually lives) |
 | `unit-04-threat-model-and-assessments` (this unit) | THREAT-MODEL.md + ASSESSMENTS.md synthesis | (documentation — closes none directly) | (gates evaluated by workflow engine on advance) |
 
@@ -295,6 +295,65 @@ security stage's elaborate phase for a follow-up wave.
   the pre-tick triage gate routes the cursor to the security
   stage's elaborate phase exactly once for the whole serve+upload
   hardening pass).
+
+### R-7. MCP-path attribution allowlist (V-03 R-04 — chokepoint placement, second writer)
+
+- **Owning vuln(s)**: V-03 (R-04 sub-fix); threat row E-4
+  (audit-log XSS sink). **Triggering finding:** FB-17 (security
+  stage, `feedback/04-r-04-low-attribute-to-user-unvalidated-audit-log-poisoning.md`).
+- **Rationale for deferral**: The bolt-3 closure of R-04 wired
+  `isValidAttributeToUser` + `ATTRIBUTE_TO_USER_PATTERN` into the
+  two SPA upload routes (`packages/haiku/src/http/upload-routes.ts:514, :848`).
+  That closes the SPA writer for E-4. The MCP `haiku_human_write`
+  tool is the OTHER writer to the same audit logs and was not
+  retrofitted in the same commit — `grep -n 'isValidAttributeToUser\|ATTRIBUTE_TO_USER' packages/haiku/src/tools/orchestrator/haiku_human_write.ts`
+  returns no matches. The unvalidated `claimed_author_id` flows
+  raw into `appendActionLogEntry` at
+  `packages/haiku/src/tools/orchestrator/haiku_human_write.ts:795-806`
+  and `appendWriteAudit` at `:820-838`, landing in
+  `action-log.jsonl` and `write-audit.jsonl` exactly as the SPA
+  path used to before R-04. The proper fix is **chokepoint
+  placement, not duplicate route-boundary checks**: move the
+  validator into `appendWriteAudit` (`packages/haiku/src/orchestrator/workflow/write-audit.ts:175`)
+  and the equivalent point inside `appendActionLogEntry`, or into
+  the `WriteAuditRecord` constructor, so EVERY writer (current
+  and future) goes through the gate. The route-boundary checks at
+  `upload-routes.ts:514` and `:848` then become belt-and-
+  suspenders early-exit guards, not the load-bearing close.
+- **Severity if unfixed**: **Low today, Medium under the future
+  audit-log SPA viewer.** The exposure is identical to the pre-
+  R-04 SPA exposure: a hostile or buggy agent calls
+  `haiku_human_write` with `claimed_author_id: "<img src=x onerror=...>"`,
+  the value is appended verbatim, and any future SPA renderer of
+  the audit logs (currently no in-product viewer; planned for the
+  drift-assessment surface) eats the stored XSS. Today the audit
+  logs are only consumed by the drift-detection-gate machinery
+  (which treats them as data, not HTML) and the
+  `manual-change-assessment.feature` flow (which renders agent-
+  authored bodies via the `http/feedback-sanitize.ts` chokepoint —
+  but that sanitizer covers feedback bodies, not audit-log
+  attribution fields). The day a reviewer-facing audit-log viewer
+  ships without the chokepoint fix, every prior unvalidated entry
+  is a stored-XSS payload at rest.
+- **Recommended target iteration**: Next security wave. Should
+  ship before any audit-log reviewer surface. Implementation site
+  is `packages/haiku/src/orchestrator/workflow/write-audit.ts`
+  (`appendWriteAudit`) and the matching `appendActionLogEntry`
+  helper. Reuse the same pattern as V-06's R-03 closure (which
+  imported `isIntentLocked` into `haiku_human_write` at the MCP
+  side after the SPA close in commit `4e5af2b76`) — promote
+  `isValidAttributeToUser` + `ATTRIBUTE_TO_USER_PATTERN` from
+  `upload-routes.ts` into a shared module (e.g.
+  `packages/haiku/src/orchestrator/workflow/audit-attribution.ts`)
+  so both writers and both routes import the single definition.
+  Test surface: a regression test that calls `haiku_human_write`
+  with `claimed_author_id: "<img src=x onerror=alert(1)>"` and
+  asserts the call rejects with a structured error (e.g.
+  `claimed_author_id_invalid` mirroring the SPA's 400 + pattern
+  payload) and that no line is appended to either log.
+- **`stage_revisit` FB ID**: **FB-17** (`feedback/04-r-04-low-attribute-to-user-unvalidated-audit-log-poisoning.md`).
+  Routed via the next pre-tick triage gate to the security stage's
+  elaborate phase for the chokepoint fix.
 
 ---
 

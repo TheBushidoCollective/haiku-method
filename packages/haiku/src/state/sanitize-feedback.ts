@@ -1,4 +1,12 @@
-// http/feedback-sanitize.ts — V-10 server-side feedback body sanitizer.
+// state/sanitize-feedback.ts — V-10 server-side feedback body sanitizer.
+//
+// Lives under `state/` (not `http/`) because this is a pure-string
+// transformer with no Fastify / HTTP coupling — it is consumed by the
+// MCP tool surface (`state-tools.ts`'s `haiku_classify_drift` and
+// feedback-write paths) AND the SPA backend (`http/feedback-api.ts`
+// POST/PUT routes). Per the §4.3 dependency-direction rule (`http/`
+// is a downstream consumer; nothing else may import back into `http/`),
+// this primitive belongs here, not in `http/`.
 //
 // Strips dangerous HTML/markdown constructs from any feedback body that
 // flows from an external input (agent path via haiku_classify_drift,
@@ -36,17 +44,23 @@
 //   • Inline event-handler attributes: `on*=`, `formaction=`, `srcdoc=`,
 //     `xlink:href=` on any tag.
 //   • Dangerous URL schemes in `href=` and `src=`: `javascript:`,
-//     `data:text/html`, `vbscript:` — replaced with `#`.
-//   • Markdown autolinks of the form `[text](javascript:…)` —
-//     URL portion replaced with `#`.
+//     `vbscript:`, `data:text/html`, `data:text/javascript`,
+//     `data:application/javascript`, `data:application/ecmascript`,
+//     `data:image/svg+xml` — replaced with `#`.
+//   • Markdown autolinks of the form `[text](javascript:…)` and the
+//     same dangerous data: schemes — URL portion replaced with `#`.
 //
 // What is preserved (positive case):
 //
 //   • All standard markdown: headings, bold, italic, lists, code blocks,
 //     blockquotes, tables.
 //   • `[text](https://...)` and `[text](http://...)` and `[text](mailto:...)`.
-//   • Image references with `data:image/...` (base64 attachments) and
-//     intent-scope paths like `/api/feedback-attachment/...`.
+//   • Image references with `data:image/...` (base64 attachments) for
+//     raster MIME types (`png`, `jpeg`, `gif`, `webp`, etc.) and
+//     intent-scope paths like `/api/feedback-attachment/...`. SVG
+//     (`data:image/svg+xml`) is NOT preserved — SVG documents can carry
+//     executable `<script>` and event handlers and are treated as a
+//     dangerous scheme.
 //   • Plain text including angle brackets that aren't valid HTML
 //     (e.g. `<3` for love, `a < b` in math) — only recognized HTML-tag
 //     openings are touched.
@@ -60,7 +74,26 @@
 const DANGEROUS_BLOCK_TAGS = ["script", "iframe", "object", "style", "form"]
 const DANGEROUS_VOID_TAGS = ["embed"]
 
-const DANGEROUS_URL_SCHEMES = /^(?:javascript|vbscript|data:text\/html)/i
+// Dangerous URL schemes neutralised in href/src and markdown link/image
+// targets. Includes:
+//   • `javascript:` / `vbscript:` — direct script execution.
+//   • `data:text/html` — HTML-as-data execution surface.
+//   • `data:text/javascript`, `data:application/javascript`,
+//     `data:application/ecmascript` — script-as-data MIME types.
+//   • `data:image/svg+xml` — SVG documents can contain executable
+//     `<script>` and event handlers; even with `<img>`, certain renderers
+//     resurface this as XSS.
+const DANGEROUS_URL_SCHEMES =
+	/^(?:javascript|vbscript|data:text\/html|data:text\/javascript|data:application\/(?:java|ecma)script|data:image\/svg\+xml)/i
+
+// Bound for the fixed-point sanitisation loop. Production HTML sanitisers
+// (DOMPurify, sanitize-html) iterate until input is stable so nested-tag
+// reconstitution attacks (e.g. `<scr<script>ipt>` — see V-10.RT1, FB-32)
+// cannot survive a single pass. Five iterations is generous: each pass
+// strictly removes characters, so any attacker construct collapses well
+// before the cap. The cap exists only as a defence against a future
+// transformation accidentally introducing growth.
+const SANITIZE_FIXED_POINT_MAX_ITERATIONS = 5
 
 /** Strip `<tag>...</tag>` blocks AND any standalone opening or closing
  *  occurrences of the same tag name (broken-markup defence). Case-
@@ -140,21 +173,14 @@ function neutralizeMarkdownUrlSchemes(input: string): string {
 }
 
 /**
- * Sanitize a feedback body. Returns the safe-for-disk version. The
- * input string is never modified in place; the returned string is the
- * authoritative version to persist.
- *
- * Calling this is idempotent — sanitizing an already-sanitized string
- * is a no-op (the sanitizer only removes patterns; it never introduces
- * new ones).
- *
- * Empty / null / non-string inputs are coerced to "" (caller-side
- * validation should have caught these earlier; defensive default).
+ * Run the sanitiser pipeline once over `input`. Each transformation is
+ * a strict character-removing or scheme-neutralising rewrite; the result
+ * is always shorter or equal in length. Pulled out of
+ * `sanitizeFeedbackBody` so the fixed-point loop can re-apply the same
+ * pipeline until the input is stable.
  */
-export function sanitizeFeedbackBody(body: unknown): string {
-	if (typeof body !== "string") return ""
-
-	let out = body
+function sanitizePass(input: string): string {
+	let out = input
 
 	// 1. Strip dangerous block tags (and their content).
 	for (const tag of DANGEROUS_BLOCK_TAGS) {
@@ -177,4 +203,41 @@ export function sanitizeFeedbackBody(body: unknown): string {
 	out = neutralizeMarkdownUrlSchemes(out)
 
 	return out
+}
+
+/**
+ * Sanitize a feedback body. Returns the safe-for-disk version. The
+ * input string is never modified in place; the returned string is the
+ * authoritative version to persist.
+ *
+ * Calling this is idempotent — sanitizing an already-sanitized string
+ * is a no-op (the sanitizer only removes patterns; it never introduces
+ * new ones).
+ *
+ * Internally runs the sanitiser pipeline in a fixed-point loop bounded
+ * by `SANITIZE_FIXED_POINT_MAX_ITERATIONS`. This defends against
+ * nested-tag reconstitution bypasses (e.g. `<scr<script>ipt>` →
+ * `<script>` after one pass) by re-scanning the result until it is
+ * stable. Production HTML sanitisers (DOMPurify, sanitize-html) do the
+ * same; a single pass is structurally insufficient.
+ *
+ * Empty / null / non-string inputs are coerced to "" (caller-side
+ * validation should have caught these earlier; defensive default).
+ */
+export function sanitizeFeedbackBody(body: unknown): string {
+	if (typeof body !== "string") return ""
+
+	let out = body
+	for (let i = 0; i < SANITIZE_FIXED_POINT_MAX_ITERATIONS; i++) {
+		const next = sanitizePass(out)
+		if (next === out) return next
+		out = next
+	}
+	// Safety net: if a pathological input has not stabilised in
+	// SANITIZE_FIXED_POINT_MAX_ITERATIONS passes (each pass strictly
+	// removes characters, so this should be unreachable for any realistic
+	// input), run one more pass and return the result. The loop bound
+	// exists to prevent unbounded CPU on adversarial input rather than to
+	// guarantee output correctness.
+	return sanitizePass(out)
 }

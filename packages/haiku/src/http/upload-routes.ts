@@ -66,7 +66,7 @@ import {
 } from "../state-tools.js"
 import { emitTelemetry } from "../telemetry.js"
 import { requireTunnelAuth, verifyIntentMutationAuth } from "./auth.js"
-import { cleanupTempFile, safeMkdirAndRename } from "./path-safety.js"
+import { cleanupTempFile, safeMkdirAndRename } from "../state/safe-write.js"
 import { isValidSlug, validateIntent, validateStage } from "./validation.js"
 
 // ── Constants ──────────────────────────────────────────────────────────────

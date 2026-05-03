@@ -41,7 +41,7 @@ import {
 	isIntentArchived,
 	isIntentLocked,
 } from "../../state-tools.js"
-import { cleanupTempFile, safeMkdirAndRename } from "../../http/path-safety.js"
+import { cleanupTempFile, safeMkdirAndRename } from "../../state/safe-write.js"
 import { defineTool, validateSlugArgs } from "../define.js"
 import { text } from "./_text.js"
 

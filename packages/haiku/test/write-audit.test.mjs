@@ -24,8 +24,18 @@ import { join } from "node:path"
 
 const tmp = mkdtempSync(join(tmpdir(), "haiku-write-audit-test-"))
 
-const { appendWriteAudit, nextEntryId, truncateInstruction, writeAuditPath } =
-	await import("../src/orchestrator/workflow/write-audit.ts")
+const {
+	appendWriteAudit,
+	nextEntryId,
+	truncateInstruction,
+	writeAuditPath,
+	validateAndCapAuditRecord,
+	MAX_AUDIT_RATIONALE_BYTES,
+	MAX_AUDIT_AUTHOR_ID_BYTES,
+	MAX_AUDIT_DIRS_CREATED_COUNT,
+	MAX_AUDIT_DIR_PATH_BYTES,
+	MAX_AUDIT_PATH_BYTES,
+} = await import("../src/orchestrator/workflow/write-audit.ts")
 
 const {
 	appendActionLogEntry,
@@ -67,6 +77,8 @@ function makeRecord(overrides = {}) {
 		path: "knowledge/test.md",
 		sha: "a".repeat(64),
 		author_class: "human-via-mcp",
+		// V-03: both author keys present (canonical + legacy alias).
+		claimed_author_id: null,
 		human_author_id: null,
 		rationale: null,
 		user_instruction_excerpt: null,
@@ -224,15 +236,60 @@ await ok(
 			`append failed: ${result.ok === false ? result.reason : ""}`,
 		)
 
-		const entries = await readActionLogForTick(dir, 7)
-		assert.strictEqual(entries.length, 1)
-		assert.strictEqual(entries[0].entry_id, "HWM-7-01")
-		assert.strictEqual(entries[0].path, "k/rt.md")
-		assert.strictEqual(entries[0].tick_counter, 7)
+		const result7 = await readActionLogForTick(dir, 7)
+		assert.strictEqual(result7.entries.length, 1)
+		assert.strictEqual(result7.entries[0].entry_id, "HWM-7-01")
+		assert.strictEqual(result7.entries[0].path, "k/rt.md")
+		assert.strictEqual(result7.entries[0].tick_counter, 7)
+		// FB-28: clean log → no malformed lines.
+		assert.strictEqual(result7.malformedCount, 0)
+		assert.strictEqual(result7.malformedSamples.length, 0)
 
 		// Different tick — should return empty.
 		const other = await readActionLogForTick(dir, 99)
-		assert.strictEqual(other.length, 0)
+		assert.strictEqual(other.entries.length, 0)
+		assert.strictEqual(other.malformedCount, 0)
+	},
+)
+
+// ── Test 6b (FB-28): malformed lines are counted, not silently dropped ────
+
+await ok(
+	"FB-28: readActionLogForTick surfaces malformedCount instead of swallowing JSON-parse errors",
+	async () => {
+		const dir = mkdtempSync(join(tmp, "t6b-"))
+		const entry = makeEntry({
+			tick_counter: 11,
+			entry_id: "HWM-11-01",
+			path: "k/clean.md",
+		})
+		const r = await appendActionLogEntry(dir, 11, entry)
+		assert.ok(r.ok, "first append must succeed")
+
+		// Inject a malformed line directly to simulate tampering or
+		// concurrent-writer interleaving (the very thing FB-28 calls out).
+		const { appendFileSync } = await import("node:fs")
+		appendFileSync(
+			join(dir, "action-log.jsonl"),
+			"{not valid json — interleaved bytes from a concurrent writer}\n",
+		)
+
+		const result = await readActionLogForTick(dir, 11)
+		assert.strictEqual(
+			result.entries.length,
+			1,
+			"clean entries must still parse",
+		)
+		assert.strictEqual(
+			result.malformedCount,
+			1,
+			"malformed line MUST be counted, not silently dropped (FB-28)",
+		)
+		assert.strictEqual(
+			result.malformedSamples.length,
+			1,
+			"caller gets a sample so it can fail closed with diagnostics",
+		)
 	},
 )
 
@@ -318,6 +375,144 @@ await ok(
 		assert.ok(result !== undefined, "must return a result")
 		assert.strictEqual(result.ok, false, "expected ok: false")
 		assert.ok("reason" in result, "expected reason field")
+	},
+)
+
+// ── FB-28: per-field caps + record-size cap ──────────────────────────────
+
+ok("FB-28: validateAndCapAuditRecord truncates oversized rationale", () => {
+	const huge = "r".repeat(MAX_AUDIT_RATIONALE_BYTES + 5000)
+	const rec = makeRecord({ rationale: huge })
+	const result = validateAndCapAuditRecord(rec)
+	assert.strictEqual(result.ok, true)
+	assert.ok(
+		Buffer.byteLength(result.record.rationale, "utf-8") <=
+			MAX_AUDIT_RATIONALE_BYTES,
+		"rationale must be capped to MAX_AUDIT_RATIONALE_BYTES",
+	)
+	assert.ok(
+		result.record.rationale.endsWith("...[truncated]"),
+		"truncated rationale carries the marker",
+	)
+})
+
+ok(
+	"FB-28: validateAndCapAuditRecord truncates oversized claimed_author_id",
+	() => {
+		const huge = "c".repeat(MAX_AUDIT_AUTHOR_ID_BYTES + 500)
+		const rec = makeRecord({
+			claimed_author_id: huge,
+			human_author_id: huge,
+		})
+		const result = validateAndCapAuditRecord(rec)
+		assert.strictEqual(result.ok, true)
+		assert.ok(
+			Buffer.byteLength(result.record.claimed_author_id, "utf-8") <=
+				MAX_AUDIT_AUTHOR_ID_BYTES,
+		)
+		assert.ok(
+			Buffer.byteLength(result.record.human_author_id, "utf-8") <=
+				MAX_AUDIT_AUTHOR_ID_BYTES,
+		)
+	},
+)
+
+ok(
+	"FB-28: validateAndCapAuditRecord caps dirs_created length and per-element size",
+	() => {
+		const longDir = "d".repeat(MAX_AUDIT_DIR_PATH_BYTES + 100)
+		const dirs = Array.from(
+			{ length: MAX_AUDIT_DIRS_CREATED_COUNT + 50 },
+			(_, i) => `${longDir}-${i}`,
+		)
+		const rec = makeRecord({ dirs_created: dirs })
+		const result = validateAndCapAuditRecord(rec)
+		assert.strictEqual(result.ok, true)
+		assert.strictEqual(
+			result.record.dirs_created.length,
+			MAX_AUDIT_DIRS_CREATED_COUNT,
+			"array length capped to MAX_AUDIT_DIRS_CREATED_COUNT",
+		)
+		for (const d of result.record.dirs_created) {
+			assert.ok(
+				Buffer.byteLength(d, "utf-8") <= MAX_AUDIT_DIR_PATH_BYTES,
+				"each dir entry capped to MAX_AUDIT_DIR_PATH_BYTES",
+			)
+		}
+	},
+)
+
+ok("FB-28: validateAndCapAuditRecord caps oversized path", () => {
+	const longPath = "p".repeat(MAX_AUDIT_PATH_BYTES + 1000)
+	const rec = makeRecord({ path: longPath })
+	const result = validateAndCapAuditRecord(rec)
+	assert.strictEqual(result.ok, true)
+	assert.ok(
+		Buffer.byteLength(result.record.path, "utf-8") <= MAX_AUDIT_PATH_BYTES,
+	)
+})
+
+await ok(
+	"FB-28: appendWriteAudit caps unbounded rationale instead of relying on PIPE_BUF",
+	async () => {
+		const dir = mkdtempSync(join(tmp, "fb28-rationale-"))
+		const huge = "x".repeat(MAX_AUDIT_RATIONALE_BYTES * 4) // 16 KB rationale
+		const rec = makeRecord({ rationale: huge, path: "k/big-rationale.md" })
+		const result = await appendWriteAudit(dir, rec)
+		assert.strictEqual(result.ok, true, "huge rationale capped, append succeeds")
+		const raw = readFileSync(writeAuditPath(dir), "utf-8")
+		const lines = raw.split("\n").filter((l) => l.trim() !== "")
+		assert.strictEqual(lines.length, 1, "exactly one line written")
+		// The serialised line must be within the per-record cap. Atomicity
+		// no longer depends on this bound (the mutex serialises writers),
+		// but the bound exists to block disk-fill / OOM amplification.
+		assert.ok(
+			Buffer.byteLength(lines[0], "utf-8") <= 16 * 1024,
+			"serialised line ≤ MAX_AUDIT_RECORD_BYTES",
+		)
+		const parsed = JSON.parse(lines[0])
+		assert.ok(parsed.rationale.endsWith("...[truncated]"))
+	},
+)
+
+await ok(
+	"FB-28: 50 concurrent appends produce 50 distinct, individually-parseable lines",
+	async () => {
+		// Stress the mutex with more concurrency than the prior test (which
+		// did 2). The FB-28 atomicity model relies on the per-file mutex,
+		// not PIPE_BUF — so this MUST hold even with records that exceed
+		// the macOS PIPE_BUF=512 byte limit.
+		const dir = mkdtempSync(join(tmp, "fb28-concurrent-"))
+		const N = 50
+		// Each record carries a 1 KB rationale → serialised line > 1 KB,
+		// well above macOS PIPE_BUF (512). Pre-FB-28 this would interleave.
+		const rationale = "y".repeat(1024)
+		const promises = []
+		for (let i = 0; i < N; i++) {
+			const rec = makeRecord({
+				entry_id: `HWM-99-${String(i).padStart(2, "0")}`,
+				path: `k/concurrent-${i}.md`,
+				rationale,
+			})
+			promises.push(appendWriteAudit(dir, rec))
+		}
+		const results = await Promise.all(promises)
+		for (const r of results) {
+			assert.ok(r.ok, `append must succeed, got: ${JSON.stringify(r)}`)
+		}
+		const raw = readFileSync(writeAuditPath(dir), "utf-8")
+		const lines = raw.split("\n").filter((l) => l.trim() !== "")
+		assert.strictEqual(
+			lines.length,
+			N,
+			`expected ${N} lines, got ${lines.length}`,
+		)
+		const ids = new Set()
+		for (const line of lines) {
+			const parsed = JSON.parse(line) // throws if interleaved
+			ids.add(parsed.entry_id)
+		}
+		assert.strictEqual(ids.size, N, "all entry_ids distinct, no duplicates")
 	},
 )
 

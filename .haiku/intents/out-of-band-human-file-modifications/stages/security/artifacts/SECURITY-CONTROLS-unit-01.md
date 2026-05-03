@@ -56,7 +56,8 @@ matrix + §8 disposition table) to the control implemented here.
 | MIME spoof — `text/plain` (or `image/png`) claim with renderable extension in filename **(MED, V-01/V-02 variant)** | Extension blocklist applies to BOTH `filePart.filename` AND `target_filename`/`target_path` independently — extension wins over claimed MIME | `upload-routes.ts` `hasBlockedExtension(filePart.filename)` and `hasBlockedExtension(targetFilename)` / `hasBlockedExtension(targetPath)` checked separately, with extension-blocked rejected first regardless of MIME | `upload-routes.test.mjs`: `"stage-output: MIME spoof — text/plain claim with .html filename rejected (V-02 defence-in-depth)"`; `"stage-output: target_path with .html extension rejected even when uploaded filename is safe (V-02)"`; `"knowledge: MIME spoof rejected — text/plain claim with .html target_filename (V-01 defence-in-depth)"`; `red-team-unit-01-upload-bypass.test.mjs`: `"R-03 closed: text/markdown MIME + .js extension rejected on extension blocklist"` |
 | Operator misconfig of `HAIKU_UPLOAD_MAX_BYTES` (extra zero) **(MED, V-07)** | `MAX_UPLOAD_BYTES_HARD_CAP = 50 * 1024 * 1024`; `getUploadMaxBytes()` returns `Math.min(envValue, hardCap)`; `haiku.upload.cap_clamped` telemetry event when clamping fires | `upload-routes.ts` `MAX_UPLOAD_BYTES_HARD_CAP`, `getUploadMaxBytes()` (exported for unit-test assertion), `UPLOAD_MAX_BYTES_HARD_CAP` exported constant | `upload-routes.test.mjs`: `"HAIKU_UPLOAD_MAX_BYTES clamps to MAX_UPLOAD_BYTES_HARD_CAP (50 MiB) when env exceeds the hard cap (V-07: hard cap upload clamp)"` — direct unit-level assertion on `getUploadMaxBytes()` for both clamp and below-cap pass-through |
 | Drift-gate sync-SHA stall on multi-GB file **(MED, V-07 cascade)** | Bounded by the upload-side hard cap above — no additional control here | `upload-routes.ts` (control above) | Covered transitively by the V-07 test; deeper async-hash work is deferred |
-| Unbounded `agent_rationale` write **(LOW, V-09 fix #1)** | `MAX_RATIONALE_BYTES = 10 * 1024` schema cap; `validateRationaleCaps()` helper; `haiku_classify_drift` rejects with `agent_rationale_too_long` structured error before DA-NN.json write | `state-tools.ts` `MAX_RATIONALE_BYTES`, `validateRationaleCaps()`; `tools/orchestrator/haiku_classify_drift.ts` cap-violation branch | `state-tools-handlers.test.mjs`: `"validateRationaleCaps: agent_rationale > 10 KB returns agent_rationale_too_long structured error (V-09 agent_rationale reject)"`; `"validateRationaleCaps: passes when both fields are within caps"`; `"validateRationaleCaps: agent_rationale checked BEFORE per-finding excerpts (deterministic order)"` |
+| Unbounded `agent_rationale` write **(LOW, V-09 fix #1)** | `MAX_RATIONALE_BYTES = 10 * 1024` schema cap; `validateRationaleCaps()` helper; `haiku_classify_drift` rejects with `agent_rationale_too_long` structured error before DA-NN.json write. **Coverage bound (FB-26):** the validator is wired ONLY into `haiku_classify_drift`; the sibling write-surface `haiku_human_write` extracts `rationale` at `tools/orchestrator/haiku_human_write.ts:413` and writes it raw into `write-audit.jsonl` via `appendWriteAudit()` with no size validation. The gap is tracked under ASSESSMENTS.md R-7 and the row immediately below this one. | `state-tools.ts` `MAX_RATIONALE_BYTES`, `validateRationaleCaps()`; `tools/orchestrator/haiku_classify_drift.ts` cap-violation branch | `state-tools-handlers.test.mjs`: `"validateRationaleCaps: agent_rationale > 10 KB returns agent_rationale_too_long structured error (V-09 agent_rationale reject)"`; `"validateRationaleCaps: passes when both fields are within caps"`; `"validateRationaleCaps: agent_rationale checked BEFORE per-finding excerpts (deterministic order)"` |
+| Sibling-writer rationale-cap bypass on `haiku_human_write` **(MED, V-09 + V-03/R-2 adjacency, FB-26)** | **Open / deferred to next security wave (R-7).** `haiku_human_write` accepts an unbounded `rationale` arg (`tools/orchestrator/haiku_human_write.ts:413`), forwards it raw into the `WriteAuditRecord` (`:828`), and lets `appendWriteAudit()` (`:838`) write the line. There is no `validateRationaleCaps()` call on this path; `truncateInstruction()` at `write-audit.ts:117-120` targets `user_instruction_excerpt`, not `rationale`. **Compounding:** `appendWriteAudit` documents at `write-audit.ts:165-182` that POSIX `write()` ≤ PIPE_BUF (4 KiB) to `O_APPEND` is interleave-free; that bound is structurally invalidated when a record exceeds 4 KiB, so a single benign large-rationale write can corrupt concurrent writers' lines with no attacker required. The next-wave fix (preferred) moves the cap into `appendWriteAudit()` itself so every present and future writer inherits it; route-edge call to `validateRationaleCaps({ agent_rationale: rationale })` in `haiku_human_write.ts:413-415` is an acceptable alternative. See ASSESSMENTS.md R-7 for the full fix scope. | (open) `tools/orchestrator/haiku_human_write.ts:413`; `orchestrator/workflow/write-audit.ts` `appendWriteAudit()` | (open) regression test to add: `"haiku_human_write: rationale > 10 KB rejected with audit_record_too_long / agent_rationale_too_long structured error (V-09 sibling-writer chokepoint, FB-26)"` and `"appendWriteAudit: in-bounds record produces well-formed JSONL line (V-09 / V-03 R-2 atomicity guard)"` |
 | Unbounded per-finding `rationale_excerpt` write **(LOW, V-09 fix #1)** | `MAX_RATIONALE_EXCERPT_BYTES = 1024` schema cap; same validator returns `rationale_excerpt_too_long` with index/path | `state-tools.ts` `MAX_RATIONALE_EXCERPT_BYTES`; same `validateRationaleCaps()` | `state-tools-handlers.test.mjs`: `"validateRationaleCaps: rationale_excerpt over 1KB returns rationale_excerpt_too_long structured error (V-09: rationale over KB reject)"`; `"validateRationaleCaps: byte-counting is UTF-8, not UTF-16 (multi-byte char that fits in code units but not bytes is rejected)"` (defends against multi-byte char undercount) |
 | Unbounded list-endpoint read **(LOW, V-09 fix #2)** | `TRUNCATE_RATIONALE_PREVIEW_CHARS = 256`; list handler returns truncated copy with `…` marker; detail endpoint returns full text untouched | `assessments-routes.ts` `truncateRationaleForListView()`, applied in list handler `assessments.push(...)` loop | `assessments-routes.test.mjs`: `"list endpoint truncates agent_rationale to a list-view-safe preview (V-09)"`; `"list endpoint truncates per-classification rationale_excerpt (V-09)"`; `"list endpoint leaves short rationales untouched (no spurious truncation)"`; `"detail endpoint returns FULL agent_rationale + rationale_excerpt — no truncation (V-09)"` |
 | Author-id spoofing on `attribute_to_user` (V-03) | **Deferred — unit-02** | n/a (cross-reference) | n/a |
@@ -165,6 +166,21 @@ the helper or constant name so they survive light edits).
     Returns `errorResponse("agent_rationale_too_long", …, {bytes, cap,
     max_rationale_bytes})` or `errorResponse("rationale_excerpt_too_long",
     …, {index, path, bytes, cap, max_rationale_excerpt_bytes})`.
+
+**Coverage bound (FB-26 / R-7):** the `validateRationaleCaps()` call site
+above is the ONLY producer-side enforcement today. The sibling write-
+surface `packages/haiku/src/tools/orchestrator/haiku_human_write.ts`
+extracts an unbounded `rationale` field at `:413`, forwards it raw into
+the `WriteAuditRecord` at `:828`, and lets `appendWriteAudit()` at `:838`
+write the line into `write-audit.jsonl`. The chokepoint is at the wrong
+layer for the `haiku_human_write` writer; until the cap is moved into
+`appendWriteAudit()` itself (preferred — see ASSESSMENTS.md R-7 fix
+scope), or until `validateRationaleCaps({ agent_rationale: rationale })`
+is invoked at `haiku_human_write.ts:413-415`, V-09 remains open on the
+audit-log producer path AND the audit-log atomicity contract documented
+at `write-audit.ts:165-182` (PIPE_BUF = 4 KiB) is structurally
+invalidated by any record exceeding 4 KiB. Open finding tracked under
+ASSESSMENTS.md R-7; row appended to §2 "Threat coverage" table above.
 
 ### 3.4 V-09 fix #2 controls (list-endpoint truncation)
 
@@ -375,6 +391,54 @@ with named target hands-off:
    filed as **R-6** in ASSESSMENTS.md, target unit-04 next security
    wave, co-located with R-1 / R-2 serve-side hardening so a single
    wave closes both surfaces.
+
+5. **Rationale-cap chokepoint port to `haiku_human_write` (FB-26).**
+   The unit-01 V-09 fix landed `validateRationaleCaps()` at the
+   `haiku_classify_drift` schema edge (rejects `>10 KB` rationale /
+   `>1 KB` excerpt before `DA-NN.json` write). The same `rationale`
+   field is also written by `haiku_human_write` into
+   `write-audit.jsonl`, but the cap is NOT enforced on that path:
+   `tools/orchestrator/haiku_human_write.ts:413` extracts `rationale`
+   from `args` with no validation, `:828` forwards it raw into
+   `WriteAuditRecord`, `:838` calls `appendWriteAudit()`. **Two
+   compounding risk classes:**
+     - **DoS class (in-spirit V-09)**: a single `haiku_human_write`
+       call with a 50 KB / 5 MB rationale lands unbounded into
+       `write-audit.jsonl`, bloats audit-log consumers
+       (drift-gate parser, BLUE-TEAM-VERIFICATION
+       `git show <sha>:write-audit.jsonl`), and wastes RAM on the
+       assessments-list endpoint / drift-gate scan.
+     - **Atomicity-break class (in-spirit V-03 / R-2)**: the
+       `appendWriteAudit` doc-comment at
+       `packages/haiku/src/orchestrator/workflow/write-audit.ts:165-182`
+       documents that POSIX `write()` ≤ PIPE_BUF (4 KiB on most
+       platforms) to `O_APPEND` is interleave-free. A single 5 KiB
+       rationale produces a record that exceeds that bound;
+       concurrent writers (the SPA upload route + parallel
+       `haiku_human_write` calls + future audit producers) can
+       interleave bytes mid-line, producing corrupt JSONL. **No
+       attacker required** — a benign large rationale corrupts
+       *other* concurrent writers' lines that were about to be
+       perfectly fine. R-2 (audit-log hash-chain) at-rest defense
+       cannot compensate (a hash-chain over corrupt JSONL is still
+       corrupt).
+   **Disposition:** preferred fix moves the cap into
+   `appendWriteAudit()` itself (one-line size check on the
+   `JSON.stringify(record)` length, reject `>= 4 KiB` with structured
+   `audit_record_too_long`); every present and future writer
+   inherits it. Acceptable alternative: invoke
+   `validateRationaleCaps({ agent_rationale: rationale })` at
+   `haiku_human_write.ts:413-415`. Required regression test in
+   `packages/haiku/test/state-tools-handlers.test.mjs` (or new
+   `haiku-human-write.test.mjs`): call `haiku_human_write` with
+   a 50 KB rationale and assert structured-error rejection; second
+   test asserting an in-bounds 1 KB rationale round-trips through
+   `appendWriteAudit` to a well-formed JSONL line. **`stage_revisit`
+   FB ID:** **FB-26** is the triggering record; tracked under
+   ASSESSMENTS.md **R-7**, target unit-04 next security wave,
+   co-located with R-2 (audit-log hash-chain) so a single follow-up
+   wave delivers the full audit-log integrity story (producer-side
+   cap + at-rest hash-chain in one pass).
 
 Two narrower residuals worth recording:
 

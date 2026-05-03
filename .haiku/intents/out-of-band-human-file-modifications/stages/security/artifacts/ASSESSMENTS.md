@@ -62,7 +62,7 @@ Run-of-record timestamp for this assessment: **2026-05-03T09:00:39Z**.
 | **V-06** | Medium | `intent.md` archived/locked checks substring-matched against raw bytes — false-positives on body content, false-negatives on `status: 'locked'` | `unit-02-author-identity-binding` | `bash -c '! grep -qE "raw\.includes\(\"status:" packages/haiku/src/http/upload-routes.ts'` (gate `v06-frontmatter-parser-not-substring`) **plus** `v06-no-substring-status-checks-anywhere` and `v06-shared-locked-archived-helper` | commit `fe91e1e64`, run `2026-05-03T09:00:39Z`, exit_code=0 (all three gates). Shared `isIntentLocked` / `isIntentArchived` helpers in `state-tools.ts` parse via `gray-matter`. R-03 closed coverage gap on MCP path (`haiku_human_write` now imports `isIntentLocked` and rejects with `intent_locked`, commit `4e5af2b76`). | None significant — both SPA and MCP surfaces now route through the shared parser. A future code path that re-introduces a substring check would be caught by gate `v06-no-substring-status-checks-anywhere` (negative-grep enforces repo-wide elimination). |
 | **V-07** | Medium | `HAIKU_UPLOAD_MAX_BYTES` parsing has no upper bound; misconfigured value lets one upload exhaust disk + RAM + drift-gate sync SHA | `unit-01-upload-content-validation` | `grep -qE 'MAX_UPLOAD_BYTES_HARD_CAP\|Math\.min.*HAIKU_UPLOAD_MAX_BYTES\|uploadHardCap' packages/haiku/src/http/upload-routes.ts` (gate `v07-upload-max-bytes-hard-cap`) **plus** `v07-oversize-clamp-test-named` | commit `f83f45fe5`, run `2026-05-03T09:00:39Z`, exit_code=0 (both gates). `MAX_UPLOAD_BYTES_HARD_CAP = 50 MiB` constant; effective cap clamps via `Math.min`; `haiku.upload.cap_clamped` telemetry event on misconfiguration (commit `3867608a6`). | Drift-gate sync SHA on tracked files >50 MiB still blocks the workflow tick if anyone ever bumps the cap. Recommendation (not yet implemented): skip drift-gate hashing for tracked files larger than a configurable limit and emit `haiku.drift.skipped_large` telemetry — folded into the rate-limit / DoS hardening residual risk. |
 | **V-08** | Medium | No CSRF protection on POST routes; `?t=<jwt>` in URL + multipart-form-data is CORS-safe; cross-origin form post succeeds with leaked token | `unit-03-symlink-toctou-and-csrf` | `grep -qE 'query_param_token_disallowed\|disallowedOnMutating\|rejectQueryToken' packages/haiku/src/http/csrf.ts` (gate `v08-query-param-token-rejected-on-mutating-routes`, original gate pointed at `auth.ts`; the actual three-layer defense lives in the new `http/csrf.ts` module) **plus** `v08-origin-allowlist-check`, `v08-csrf-nonce-check`, `v08-mutating-route-audit-script`, `v08-csrf-test-named` | commit `06cbb625c`, run `2026-05-03T09:00:39Z`, exit_code=0 (all five gates verified against `http/csrf.ts`, `http/csrf.ts`, `http/csrf.ts`, `packages/haiku/scripts/audit-mutating-routes.mjs`, and `unit-03-security.test.mjs` respectively). Three-layer CSRF defense: Layer 1 (HARD) reject `?t=` on mutating verbs; Layer 2 `HAIKU_ALLOWED_ORIGINS` allowlist; Layer 3 (opt-in) per-session `X-Haiku-CSRF` nonce. Single Fastify global preHandler in `buildApp()` covers every route; `audit-mutating-routes.mjs` static check in CI enforces preHandler scope. | Per-IP rate-limit on mutating tunnel-mode routes still missing — Layer 4 of typical CSRF defense-in-depth. Deferred — see §4 row R-3 (rate limiting). |
-| **V-09** | Low | `agent_rationale` and `rationale_excerpt` persisted unbounded; assessments-list endpoint reads all into RAM | `unit-01-upload-content-validation` | `bash -c 'grep -qE "agent_rationale.*10\s*\*\s*1024\|10240\|MAX_RATIONALE_BYTES" packages/haiku/src/state-tools.ts && grep -qE "rationale_excerpt.*1024\|MAX_RATIONALE_EXCERPT_BYTES" packages/haiku/src/state-tools.ts'` (gate `v09-rationale-cap-10kb-and-excerpt-cap-1kb`) **plus** `v09-list-endpoint-truncates-rationale` and `v09-rationale-too-long-test-named` | commit `f83f45fe5`, run `2026-05-03T09:00:39Z`, exit_code=0 (all three gates). `MAX_RATIONALE_BYTES = 10 * 1024` and `MAX_RATIONALE_EXCERPT_BYTES = 1024` constants in `state-tools.ts`; `validateRationaleCaps()` helper. Schema-validation rejects oversize rationales BEFORE `DA-NN.json` write with structured `agent_rationale_too_long` / `rationale_excerpt_too_long` errors (commit `0f87ed407`). List endpoint truncates to 256 chars + `…`; detail endpoint untouched. | None significant — schema enforcement at write time + list truncation cap the storage and bandwidth blast radius. |
+| **V-09** | Low | `agent_rationale` and `rationale_excerpt` persisted unbounded; assessments-list endpoint reads all into RAM | `unit-01-upload-content-validation` | `bash -c 'grep -qE "agent_rationale.*10\s*\*\s*1024\|10240\|MAX_RATIONALE_BYTES" packages/haiku/src/state-tools.ts && grep -qE "rationale_excerpt.*1024\|MAX_RATIONALE_EXCERPT_BYTES" packages/haiku/src/state-tools.ts'` (gate `v09-rationale-cap-10kb-and-excerpt-cap-1kb`) **plus** `v09-list-endpoint-truncates-rationale` and `v09-rationale-too-long-test-named` | commit `f83f45fe5`, run `2026-05-03T09:00:39Z`, exit_code=0 (all three gates). `MAX_RATIONALE_BYTES = 10 * 1024` and `MAX_RATIONALE_EXCERPT_BYTES = 1024` constants in `state-tools.ts`; `validateRationaleCaps()` helper. Schema-validation rejects oversize rationales BEFORE `DA-NN.json` write with structured `agent_rationale_too_long` / `rationale_excerpt_too_long` errors (commit `0f87ed407`). List endpoint truncates to 256 chars + `…`; detail endpoint untouched. | **Partial closure (FB-26).** The `validateRationaleCaps()` chokepoint is wired ONLY into `haiku_classify_drift` (the assessment-write path). The sibling write-surface `haiku_human_write` extracts `rationale` at `tools/orchestrator/haiku_human_write.ts:413` with NO size validation and forwards it raw into the `WriteAuditRecord` at `:828`, then `appendWriteAudit()` at `:838`. This is the same root-cause-vs-symptom shape as FB-17 / FB-34: one writer hardened, sibling missed, integrity-relevant struct travels through both. Compounding effect: the audit-log atomicity claim at `packages/haiku/src/orchestrator/workflow/write-audit.ts:165-182` (POSIX `write()` ≤ PIPE_BUF = 4 KiB to `O_APPEND` is interleave-free) is **structurally false** the moment a record exceeds 4 KiB — a single benign 5 KiB rationale write lets concurrent writers (SPA upload route + future audit producers + parallel `haiku_human_write` calls) interleave bytes mid-line, producing corrupt JSONL that crashes downstream parsers (drift-gate, assessments-list endpoint, BLUE-TEAM-VERIFICATION's `git show <sha>:write-audit.jsonl` reads). Tracked under R-7. |
 | **V-10** | Low | `feedback_creates[].body` from agent flows into reviewer SPA without server-side sanitization | `unit-03-symlink-toctou-and-csrf` | `grep -qE 'sanitizeFeedbackBody\|stripDangerousMd\|sanitize.*body\|DOMPurify' packages/haiku/src/http/feedback-api.ts` (gate `v10-feedback-body-sanitized`, original gate pointed at `feedback-api.ts`; sanitizer lives in the new `http/feedback-sanitize.ts` module imported by `state-tools.ts` chokepoints) | commit `06cbb625c`, run `2026-05-03T09:00:39Z`, exit_code=0 (verified against `http/feedback-sanitize.ts`). Server-side sanitizer wired into the three external-input-to-disk chokepoints in `state-tools.ts`: `writeFeedbackFile` (agent feedback_creates path + SPA POST path), `appendFeedbackReply`, `haiku_feedback_write`. Strips `<script>`, `<iframe>`, `<object>`, dangerous attributes (`on*=`, `javascript:`). Commit `143a1ccbf`. | None significant — server-side sanitization closes the agent-as-attacker variant; SPA renderer is the second-line defense. |
 | **V-11** | Low | Drift-gate baseline-corrupt error returns clear-text path; agent's natural reaction is `haiku_repair`, which silently re-establishes baseline from attacker-chosen content | `unit-03-symlink-toctou-and-csrf` | `grep -qE 'baseline_corrupt_acknowledged\|requireOperatorAck\|reconstructPriorBaseline' packages/haiku/src/orchestrator/workflow/drift-baseline.ts` (gate `v11-baseline-corrupt-operator-ack-required`) **plus** `v11-no-silent-auto-establish-after-corrupt` (negative-grep on `drift-detection-gate.ts`) | commit `06cbb625c`, run `2026-05-03T09:00:39Z`, exit_code=0 (both gates). Operator-only baseline-reset path: `reconstructPriorBaseline(intentDir, stage)` rebuilds last-known-good from `baseline-content/` + `action-log.jsonl`. `/haiku:repair --confirm-baseline-reset --diff-shown` requires operator to confirm specific diff hash. The agent CANNOT set `baseline_corrupt_acknowledged` directly. Anchored signals on tamper-evident surfaces (commit `3c3ccf1a0`) close the FB-05 red-team RT1/RT2/RT6 bypass class. | Rate-limit / circuit-breaker (`>3 baseline corruptions in 10 ticks` → `haiku.security.baseline_thrash` telemetry + auto-recovery disable) is the third line of defense and is partial — telemetry recorded but auto-disable-recovery hook landed in unit-03 IMPLEMENTATION as scaffolded, full enforcement deferred to operator-runbook follow-up. |
 
@@ -72,7 +72,7 @@ Run-of-record timestamp for this assessment: **2026-05-03T09:00:39Z**.
 
 | addressing_unit | surface fixed | findings closed | gate_pass_evidence (commit SHA + suite_at_commit) |
 |---|---|---|---|
-| `unit-01-upload-content-validation` | SPA upload routes (knowledge + stage-output) — content-type + extension allowlist, hard byte cap, rationale schema caps + list truncation | V-01, V-02, V-07, V-09 | `f83f45fe5`; suite_at_commit=1199/0 (per bolt-3 fix commit `bfa4b7c91`); 7/7 gates passed at `2026-05-03T09:00:39Z` |
+| `unit-01-upload-content-validation` | SPA upload routes (knowledge + stage-output) — content-type + extension allowlist, hard byte cap, rationale schema caps + list truncation (drift-write path only — see V-09 partial-closure note + R-7) | V-01, V-02, V-07, V-09 (partial — chokepoint covers `haiku_classify_drift`; `haiku_human_write` rationale path uncovered, see R-7) | `f83f45fe5`; suite_at_commit=1199/0 (per bolt-3 fix commit `bfa4b7c91`); 7/7 gates passed at `2026-05-03T09:00:39Z` |
 | `unit-02-author-identity-binding` | Author identity (Option B claimed_author_id rename), intent-scope tick counter (producer + consumer), shared `gray-matter` status helpers | V-03 (partial — attribution closed, hash-chain deferred), V-05, V-06 | `fe91e1e64`; suite_at_commit=1187/1187 (per blue-team commit `4e5af2b76`); 7/7 gates passed at `2026-05-03T09:00:39Z` |
 | `unit-03-symlink-toctou-and-csrf` | `safeMkdirAndRename` helper, three-layer CSRF (`http/csrf.ts`), feedback body sanitizer (`http/feedback-sanitize.ts`), operator-only baseline-corrupt gate | V-04 (partial — single-shot close, full O_NOFOLLOW deferred), V-08 (partial — rate-limit deferred), V-10, V-11 | `06cbb625c`; suite_at_commit reported in fix commits as `OK` (V-04, V-08, V-10, V-11 commits); 11/11 gates passed at `2026-05-03T09:00:39Z` (after re-verification against the new `csrf.ts` and `feedback-sanitize.ts` files where the fix code actually lives) |
 | `unit-04-threat-model-and-assessments` (this unit) | THREAT-MODEL.md + ASSESSMENTS.md synthesis | (documentation — closes none directly) | (gates evaluated by workflow engine on advance) |
@@ -295,6 +295,110 @@ security stage's elaborate phase for a follow-up wave.
   the pre-tick triage gate routes the cursor to the security
   stage's elaborate phase exactly once for the whole serve+upload
   hardening pass).
+
+### R-7. Rationale-cap chokepoint port to `haiku_human_write` + audit-log atomicity restoration (V-09 fix #3, V-03 / R-2 integrity adjacency)
+
+- **Owning vuln(s)**: V-09 (rationale bloat — sibling-writer
+  bypass), V-03 / R-2 (audit-log integrity — atomicity assumption
+  invalidated when records exceed PIPE_BUF). **Triggering finding:**
+  FB-26 (security stage,
+  `feedback/26-haiku-human-write-rationale-field-has-no-size-cap-jsonl-atom.md`).
+- **Rationale for deferral**: The unit-01 V-09 fix landed
+  `validateRationaleCaps()` at the `haiku_classify_drift` schema
+  edge (rejects `>10 KB` rationale / `>1 KB` excerpt before
+  `DA-NN.json` write). The same `rationale` field is also written
+  by `haiku_human_write` into `write-audit.jsonl`, but the unit-02
+  / unit-03 fixes never ported the chokepoint discipline to that
+  sibling writer. The fix is small and well-bounded (one validator
+  call before `appendWriteAudit`, or — cleaner — move the cap
+  *into* `appendWriteAudit` so every present and future writer
+  inherits it). It is deferred to a follow-up wave only because
+  the touch site lives in `packages/haiku/src/tools/orchestrator/`
+  and changing live MCP-tool behavior mid-security-wave risks a
+  re-verification spiral against the in-flight unit-03 / unit-04
+  gate evidence. The honest framing is "open structural defect,
+  closed in next wave," not "no significant residual."
+- **Severity if unfixed**: **Medium**. Two compounding harms:
+  1. **DoS class** — a single `haiku_human_write` call with a
+     50 KB / 5 MB rationale lands unbounded into
+     `write-audit.jsonl` and through any downstream
+     audit-log consumer (drift-gate parser, assessments-list
+     endpoint that scans audit lines, BLUE-TEAM-VERIFICATION
+     `git show <sha>:write-audit.jsonl` reads). This is the V-09
+     attack class on the wrong-layer producer.
+  2. **Integrity class (worse)** — the
+     `appendWriteAudit` doc-comment at
+     `packages/haiku/src/orchestrator/workflow/write-audit.ts:165-182`
+     promises atomicity *only* up to PIPE_BUF (4 KiB on most
+     platforms). A single 5 KiB rationale produces a record that
+     exceeds that bound; concurrent writers (the SPA upload route
+     +  parallel `haiku_human_write` calls + future audit
+     producers under the same `O_APPEND` fd) can interleave bytes
+     mid-line, producing corrupt JSONL. **Crucially: no attacker
+     is required.** The audit log becomes corruptible by a single
+     benign large append, with the corruption affecting *other*
+     concurrent writers' lines that were about to be perfectly
+     fine. R-2 (audit-log hash-chain) is supposed to defend
+     audit-log integrity at-rest — at-write-time integrity is
+     undermined by this missing producer-side cap and R-2 cannot
+     compensate (a hash-chain over corrupt JSONL still parses to
+     corrupt JSONL). Today: Low probability of exercise (no known
+     hostile-rationale producer), but Medium when one lands.
+- **Recommended target iteration**: Next security wave (security
+  pass 2). Co-locate with R-2 (audit-log hash-chain) since both
+  touch `appendWriteAudit` / `write-audit.ts` — the chokepoint
+  port + the at-rest hash-chain land in the same file in a single
+  follow-up that produces a structurally sound audit-log
+  integrity story.
+- **Concrete fix scope** (for the unit-04 elaborator picking this
+  up):
+  1. **Preferred (chokepoint)**: move the cap into
+     `appendWriteAudit(intentDir, record)` itself. Compute
+     `JSON.stringify(record).length` (or `Buffer.byteLength(line, 'utf8')`)
+     and reject `>= MAX_AUDIT_RECORD_BYTES` (e.g. `4 * 1024`,
+     i.e. PIPE_BUF) with a structured `audit_record_too_long`
+     error before the `O_APPEND` write. This restores the
+     atomicity invariant the doc-comment promises. Every
+     present and future caller of `appendWriteAudit` inherits
+     the cap; sibling-writer bypass becomes structurally
+     impossible.
+  2. **Acceptable alternative (route-edge)**: call
+     `validateRationaleCaps({ agent_rationale: rationale })` in
+     `haiku_human_write.ts:413-415` (immediately after `rationale`
+     is extracted from `args`). On failure, return the existing
+     `agent_rationale_too_long` structured error before
+     `appendWriteAudit` is reached. This addresses the V-09
+     class but does NOT address the audit-record-size class
+     (a future writer that bypasses `validateRationaleCaps` would
+     re-introduce the atomicity break).
+  3. **Required regression test**: in
+     `packages/haiku/test/state-tools-handlers.test.mjs` (or
+     a new `haiku-human-write.test.mjs`), call
+     `haiku_human_write` with a 50 KB `rationale` and assert the
+     call rejects with the structured error from option 1 or 2
+     (`audit_record_too_long` or `agent_rationale_too_long`).
+     Add a second test asserting an in-bounds rationale (e.g.
+     1 KB) round-trips through `appendWriteAudit` and produces a
+     well-formed JSONL line.
+  4. **ASSESSMENTS.md V-09 row addendum**: when this lands,
+     remove the "(partial — chokepoint covers `haiku_classify_drift`;
+     `haiku_human_write` rationale path uncovered, see R-7)"
+     qualifier and update the `gate_pass_evidence` cell with
+     the new commit SHA + the `audit_record_too_long` /
+     `agent_rationale_too_long` regression-test name.
+     SECURITY-CONTROLS-unit-01.md §3.3 / §4.2 must also be
+     updated to enumerate the new chokepoint and the new test.
+  5. **THREAT-MODEL.md updates**: §3.5 row D-2 closure note to
+     enumerate both writers; §4.2
+     (`agent-writes-on-behalf-of-human.feature`) to add V-09 to
+     the "Closed" set with the chokepoint cite; §4.3 V-09 closure
+     to widen its scope from drift-write to all-rationale-writers.
+- **`stage_revisit` FB ID**: **FB-26** (this finding) is the
+  triggering record. It will be folded into the unit-04 next-wave
+  follow-up FB stream alongside R-2 (audit-log hash-chain), since
+  the two share the same `write-audit.ts` touch surface and a
+  single follow-up wave delivers the full audit-log integrity
+  story (producer-side cap + at-rest hash-chain in one pass).
 
 ---
 

@@ -233,7 +233,7 @@ where applicable.
 | # | Threat | Feature | V-NN | Notes |
 |---|---|---|---|---|
 | D-1 | Misconfigured `HAIKU_UPLOAD_MAX_BYTES` accepts multi-GB payloads; fastify-multipart buffers + sync SHA in drift gate stalls workflow tick | `explicit-spa-upload.feature` | V-07 | Unit-01 `MAX_UPLOAD_BYTES_HARD_CAP = 50 MiB` (commit `3867608a6`). Effective cap clamps via `Math.min`; `haiku.upload.cap_clamped` telemetry on misconfig. |
-| D-2 | Unbounded `agent_rationale` written to `DA-NN.json`; assessments-list endpoint reads them all into RAM | `manual-change-assessment.feature` | V-09 | Unit-01 schema-validation rejects `>10 KB` rationale / `>1 KB` excerpt; list-endpoint truncates to 256 chars + `…` (commit `0f87ed407`). |
+| D-2 | Unbounded `agent_rationale` written to `DA-NN.json`; assessments-list endpoint reads them all into RAM | `manual-change-assessment.feature` | V-09 | Unit-01 schema-validation rejects `>10 KB` rationale / `>1 KB` excerpt on the `haiku_classify_drift` write path; list-endpoint truncates to 256 chars + `…` (commit `0f87ed407`). **Bypass on sibling writer (FB-26):** `haiku_human_write` writes the same `rationale` field into `write-audit.jsonl` with NO size validation (`tools/orchestrator/haiku_human_write.ts:413, 828, 838`). The chokepoint is at the wrong layer for a hostile/buggy agent that produces an oversized rationale; the producer-side cap port + audit-record size cap is tracked under ASSESSMENTS.md R-7. **Compounding integrity defect:** the `appendWriteAudit` atomicity contract documented at `packages/haiku/src/orchestrator/workflow/write-audit.ts:165-182` (POSIX `write()` ≤ PIPE_BUF = 4 KiB to `O_APPEND` is interleave-free) is structurally false the moment a record exceeds 4 KiB — a single benign large-rationale append makes concurrent writers' lines vulnerable to mid-line interleaving with no attacker required. R-2 (audit-log hash-chain) cannot compensate for at-write-time corruption. |
 | D-3 | `@fastify/multipart` decompression bomb / parser-confusion / slowloris on upload routes | `explicit-spa-upload.feature` | (dependency-class) | See §6.1 dependency enumeration. Partial mitigation: `MAX_UPLOAD_BYTES_HARD_CAP = 50 MiB` caps payload size; **no `connectionTimeout` / `requestTimeout` / `keepAliveTimeout` is configured today** (fastify default `connectionTimeout = 0`, no override in `http.ts:107-136`). Slowloris residual risk is **unmitigated** until rate-limiting + connection-timeout work lands (tracked under R-3 / FB-08, escalated from "deferred enhancement" to "tracked unfixed risk"). |
 | D-4 | `haiku_classify_drift` rapid-fire calls bloat assessment store and starve the drift gate | `manual-change-assessment.feature` | (rate-limit gap) | **Deferred** — per-session cap / per-IP rate-limit recorded as residual risk. |
 
@@ -274,12 +274,21 @@ threats, V-NN findings closed, V-NN findings deferred.
 - **Trust boundary**: agent → file system, with `haiku_human_write` as
   the chokepoint. Author attribution is the integrity hinge.
 - **Primary threats**: S-1 (forged claimed_author_id), T-1 (symlink
-  TOCTOU), R-3 (tick-counter non-determinism), E-2 (symlink escape).
+  TOCTOU), R-3 (tick-counter non-determinism), E-2 (symlink escape),
+  D-2 (rationale bloat — sibling-writer surface, see §3.5 D-2 row).
 - **Closed**: V-03 (Option B rename, commit `399c2ee13`), V-04 (single-shot
   TOCTOU close, commit `573c91da1`), V-05 (intent-scope counter +
   drift-gate union, commit `399c2ee13`).
 - **Deferred**: V-03 fix #3 (audit-log hash chain) — see ASSESSMENTS.md
-  residual risk; V-04 fix #1 (full `O_NOFOLLOW`-everywhere) — same.
+  residual risk; V-04 fix #1 (full `O_NOFOLLOW`-everywhere) — same;
+  **V-09 rationale-cap chokepoint port (FB-26)** — `validateRationaleCaps()`
+  is wired into `haiku_classify_drift` only; `haiku_human_write` writes
+  the same `rationale` field into `write-audit.jsonl` with no size
+  validation. Audit-log atomicity (PIPE_BUF) is structurally compromised
+  the moment a record exceeds 4 KiB. See ASSESSMENTS.md R-7 — preferred
+  fix is moving the cap into `appendWriteAudit()` so every present and
+  future writer inherits it; co-located with R-2 (audit-log hash-chain)
+  in the next security wave.
 
 ### 4.3. `manual-change-assessment.feature`
 
@@ -287,10 +296,15 @@ threats, V-NN findings closed, V-NN findings deferred.
   bodies → reviewer SPA renderer.
 - **Primary threats**: I-3 (stored XSS via feedback body), D-2 (rationale
   bloat), D-4 (rapid-fire classify).
-- **Closed**: V-09 (rationale caps + list truncation, commit `0f87ed407`),
-  V-10 (server-side feedback sanitizer, commit `143a1ccbf`).
+- **Closed**: V-09 on the `haiku_classify_drift` write path (rationale
+  caps via `validateRationaleCaps()` + list truncation, commit
+  `0f87ed407`); V-10 (server-side feedback sanitizer, commit
+  `143a1ccbf`).
 - **Deferred**: per-session rate-limit on `haiku_classify_drift` — see
-  ASSESSMENTS.md residual risk.
+  ASSESSMENTS.md residual risk; **V-09 sibling-writer chokepoint port
+  (FB-26)** — `haiku_human_write` writes the same `rationale` field into
+  `write-audit.jsonl` with no size validation, also undermining the
+  PIPE_BUF audit-log atomicity contract. See ASSESSMENTS.md R-7.
 
 ### 4.4. `explicit-spa-upload.feature`
 
@@ -371,6 +385,13 @@ bloat) and V-10 (feedback body XSS) are the two findings on this entry
 point; both closed in unit-01 and unit-03 respectively. The tool is
 schema-bounded (input validation rejects oversize fields before any disk
 write), so a hostile agent's blast radius is capped at the schema edge.
+**Sibling write-surface caveat (FB-26):** the same `rationale` field
+also reaches disk via `haiku_human_write` → `appendWriteAudit()` →
+`write-audit.jsonl`, which is NOT schema-bounded for size today.
+That surface inherits V-09 as an open finding (chokepoint port tracked
+under ASSESSMENTS.md R-7); the schema-bound argument above applies
+only to `haiku_classify_drift` until the chokepoint is moved into
+`appendWriteAudit()` itself.
 
 **`haiku_baseline_init` as its own MCP-tool entry point**: sibling to
 `haiku_classify_drift` — the same drift subsystem exposes a second

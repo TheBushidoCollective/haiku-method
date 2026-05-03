@@ -158,7 +158,7 @@ await test("V-04.5: parent that escapes intentRoot is rejected", async () => {
 console.log("\n=== V-08 — CSRF defence-in-depth (Origin matcher) ===")
 
 const { isOriginAllowed, mintCsrfNonce, getCsrfNonce, _resetCsrfNoncesForTests } =
-	await import("../src/http/csrf.ts")
+	await import("../src/http/auth.ts")
 
 await test("V-08.O1: exact match", () => {
 	assert.strictEqual(

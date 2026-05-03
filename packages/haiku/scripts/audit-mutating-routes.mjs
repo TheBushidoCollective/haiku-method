@@ -4,7 +4,7 @@
  *
  * Enumerates every `app.post|put|patch|delete` (or `instance.…`,
  * `scope.…`, `fastify.…`) registration in the source tree and asserts
- * that the global CSRF preHandler from `http/csrf.ts` is in scope for
+ * that the global CSRF preHandler from `http/auth.ts` is in scope for
  * each one.
  *
  * The csrfPreHandler is registered as `instance.addHook("preHandler", ...)`
@@ -29,7 +29,7 @@
  *   1. Walks `packages/haiku/src/**\/*.ts` for `\.post|put|patch|delete\(`
  *      registration calls.
  *   2. For each match, verifies the file is `http.ts`, `http/*-routes.ts`,
- *      `http/feedback-api.ts`, `http/csrf.ts`, OR documents an explicit
+ *      `http/feedback-api.ts`, `http/auth.ts`, OR documents an explicit
  *      exemption (e.g. test fixtures).
  *   3. Walks `http/upload-routes.ts` to confirm the inner multipart scope
  *      is NOT wrapped by `fastify-plugin` (keep that callsite stable).
@@ -62,7 +62,7 @@ const srcRoot = resolve(here, "..", "src")
  *  (or on the multipart inner scope, which inherits root hooks). */
 const ALLOWED_REGISTRATION_FILES = new Set([
 	"http.ts",
-	"http/csrf.ts",
+	"http/auth.ts",
 	"http/feedback-api.ts",
 	"http/session-routes.ts",
 	"http/session-api.ts",
@@ -236,7 +236,7 @@ if (errors.length > 0) {
 		"or extend the allowlist after verifying the file's routes inherit the global",
 	)
 	console.error(
-		"preHandler from buildApp() in http.ts (csrfPreHandler in http/csrf.ts).",
+		"preHandler from buildApp() in http.ts (csrfPreHandler in http/auth.ts).",
 	)
 	process.exit(1)
 }

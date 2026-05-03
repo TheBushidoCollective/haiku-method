@@ -1840,7 +1840,7 @@ async function run() {
 	// SPA and external callers rely on — so the test name documents that
 	// upload routes are CSRF-protected and inherit the three-layer defence.
 	await test("V-08 CSRF — upload routes inherit the global preHandler (query-param-token reject + missing-Origin reject + X-Haiku-CSRF nonce); see unit-03-security.test.mjs for the layer-by-layer assertions", async () => {
-		const csrfMod = await import("../src/http/csrf.ts")
+		const csrfMod = await import("../src/http/auth.ts")
 		assert.strictEqual(
 			csrfMod.CSRF_QUERY_PARAM_TOKEN_DISALLOWED_REASON,
 			"query_param_token_disallowed_on_mutating_route",

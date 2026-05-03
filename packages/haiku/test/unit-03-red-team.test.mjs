@@ -273,7 +273,7 @@ await attack(
 
 console.log("\n=== V-08 RED-TEAM — CSRF bypass attempts ===")
 
-const { isOriginAllowed } = await import("../src/http/csrf.ts")
+const { isOriginAllowed } = await import("../src/http/auth.ts")
 
 await attack(
 	"V-08.RT1: Origin spoofing via 'null' literal",

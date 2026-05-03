@@ -637,8 +637,9 @@ and was previously omitted from this enumeration; closing the gap now.
   with two filters: empty entries dropped, the literal `"*"` dropped
   (so a wildcard-by-accident in `HAIKU_REVIEW_ALLOWED_ORIGINS` collapses
   to "no allowed origins" — fail-closed).
-  - The narrower `isOriginAllowed()` helper at
-    `packages/haiku/src/http/csrf.ts:100-126` (used by Layer 3 nonce
+  - The narrower `isOriginAllowed()` helper in
+    `packages/haiku/src/http/auth.ts` (post-FB-27 collapse; previously
+    `http/csrf.ts:100-126`) used by Layer 3 nonce
     enforcement, not by `@fastify/cors` directly) supports
     trailing-port wildcards (`http://localhost:*`) and subdomain
     wildcards (`https://*.example.com`) for the CSRF Origin check —

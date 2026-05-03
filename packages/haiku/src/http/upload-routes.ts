@@ -60,6 +60,7 @@ import {
 } from "../orchestrator/workflow/write-audit.js"
 import {
 	getIntentScopeTickCounter,
+	IntentScopeTickPersistError,
 	intentDir,
 	isIntentArchived,
 	isIntentLocked,
@@ -1005,10 +1006,39 @@ export async function registerUploadRoutes(
 				// `claimed_author_id` (canonical) and mirrored to the legacy
 				// `human_author_id` key.
 				const isIntentScope = stage === null
-				const knowledgeTickCounter = isIntentScope
-					? getIntentScopeTickCounter(iDir)
-					: // biome-ignore lint/style/noNonNullAssertion: branch guarded by isIntentScope
-						getCurrentTickCounter(iDir, stage as string)
+				let knowledgeTickCounter: number
+				try {
+					knowledgeTickCounter = isIntentScope
+						? getIntentScopeTickCounter(iDir)
+						: // biome-ignore lint/style/noNonNullAssertion: branch guarded by isIntentScope
+							getCurrentTickCounter(iDir, stage as string)
+				} catch (err) {
+					// FB-41: `getIntentScopeTickCounter` now throws
+					// `IntentScopeTickPersistError` instead of silently
+					// best-efforting. The atomic rename above already landed
+					// the upload at `destAbsPath`; if we let the throw
+					// propagate, the file stays on disk with no
+					// action-log/audit-log entry — the drift gate will then
+					// classify it as an out-of-band human modification (the
+					// exact failure class V-05 + this entire intent exist to
+					// prevent). Roll back the rename so the V-05 invariant
+					// holds: either everything (file + counter + entries)
+					// lands, or nothing does.
+					if (err instanceof IntentScopeTickPersistError) {
+						try {
+							unlinkSync(destAbsPath)
+						} catch {
+							// rollback best-effort; file may already be gone
+						}
+						reply.status(500).send({
+							error: "tick_persist_failed",
+							code: "tick_persist_failed",
+							message: err.message,
+						})
+						return
+					}
+					throw err
+				}
 				const tickScope = isIntentScope ? "intent" : "stage"
 				const entryId = nextEntryId(knowledgeTickCounter, 1)
 				const now = new Date().toISOString()

@@ -3629,7 +3629,7 @@ export const STAGE_STATE_SCHEMA = {
 	additionalProperties: true,
 }
 
-const validateStageSchema = ajv.compile(STAGE_STATE_SCHEMA)
+const _validateStageSchema = ajv.compile(STAGE_STATE_SCHEMA)
 
 export const STAGE_STATE_FIELDS = Object.keys(
 	STAGE_STATE_SCHEMA.properties,

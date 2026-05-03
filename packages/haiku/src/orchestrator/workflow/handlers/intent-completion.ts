@@ -41,7 +41,6 @@ import {
 	resolveMainlineRef,
 } from "../../../git-worktree.js"
 import { sealIntentState } from "../../../state-integrity.js"
-import { workflowIntentComplete } from "../side-effects.js"
 import {
 	gitCommitState,
 	incrementFeedbackBolt,
@@ -60,6 +59,7 @@ import {
 } from "../../../studio-reader.js"
 import { emitTelemetry } from "../../../telemetry.js"
 import { countOpenFeedbackForGateCheck } from "../feedback-triage-gate.js"
+import { workflowIntentComplete } from "../side-effects.js"
 import type { WorkflowHandler } from "./_types.js"
 
 const emit: WorkflowHandler = (ctx) => {

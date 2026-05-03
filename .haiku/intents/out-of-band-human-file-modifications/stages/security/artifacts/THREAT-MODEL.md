@@ -233,6 +233,7 @@ where applicable.
 | # | Threat | Feature | V-NN | Notes |
 |---|---|---|---|---|
 | D-1 | Misconfigured `HAIKU_UPLOAD_MAX_BYTES` accepts multi-GB payloads; fastify-multipart buffers + sync SHA in drift gate stalls workflow tick | `explicit-spa-upload.feature` | V-07 | Unit-01 `MAX_UPLOAD_BYTES_HARD_CAP = 50 MiB` (commit `3867608a6`). Effective cap clamps via `Math.min`; `haiku.upload.cap_clamped` telemetry on misconfig. |
+| D-1' | Compromised / misbehaving agent submits multi-GB `content` to `haiku_human_write` MCP tool — same downstream impact as D-1 (process buffers entire payload, file lands on disk, drift-gate sync SHA stalls the next workflow tick, write-audit.jsonl bloats); the SPA cap was one-sided so the MCP path was the obvious bypass | `agent-writes-on-behalf-of-human.feature` | V-07 (MCP path) | Unit-04 `MAX_CONTENT_BYTES_HARD_CAP = 50 MiB` in `haiku_human_write.ts` (FB-30). Pre-decode short-circuit on raw string length avoids allocating a multi-gigabyte Buffer; post-decode authoritative gate rejects with `content_too_large` before any disk write or audit append. Cap matches the SPA `MAX_UPLOAD_BYTES_HARD_CAP` so both write surfaces have symmetric resource bounds. |
 | D-2 | Unbounded `agent_rationale` written to `DA-NN.json`; assessments-list endpoint reads them all into RAM | `manual-change-assessment.feature` | V-09 | Unit-01 schema-validation rejects `>10 KB` rationale / `>1 KB` excerpt; list-endpoint truncates to 256 chars + `…` (commit `0f87ed407`). |
 | D-3 | `@fastify/multipart` decompression bomb / parser-confusion / slowloris on upload routes | `explicit-spa-upload.feature` | (dependency-class) | See §6.1 dependency enumeration. Partial mitigation: `MAX_UPLOAD_BYTES_HARD_CAP = 50 MiB` caps payload size; **no `connectionTimeout` / `requestTimeout` / `keepAliveTimeout` is configured today** (fastify default `connectionTimeout = 0`, no override in `http.ts:107-136`). Slowloris residual risk is **unmitigated** until rate-limiting + connection-timeout work lands (tracked under R-3 / FB-08, escalated from "deferred enhancement" to "tracked unfixed risk"). |
 | D-4 | `haiku_classify_drift` rapid-fire calls bloat assessment store and starve the drift gate | `manual-change-assessment.feature` | (rate-limit gap) | **Deferred** — per-session cap / per-IP rate-limit recorded as residual risk. |
@@ -274,10 +275,13 @@ threats, V-NN findings closed, V-NN findings deferred.
 - **Trust boundary**: agent → file system, with `haiku_human_write` as
   the chokepoint. Author attribution is the integrity hinge.
 - **Primary threats**: S-1 (forged claimed_author_id), T-1 (symlink
-  TOCTOU), R-3 (tick-counter non-determinism), E-2 (symlink escape).
+  TOCTOU), R-3 (tick-counter non-determinism), E-2 (symlink escape),
+  D-1' (oversize content stalls workflow tick).
 - **Closed**: V-03 (Option B rename, commit `399c2ee13`), V-04 (single-shot
   TOCTOU close, commit `573c91da1`), V-05 (intent-scope counter +
-  drift-gate union, commit `399c2ee13`).
+  drift-gate union, commit `399c2ee13`), V-07 MCP path (50 MiB
+  `MAX_CONTENT_BYTES_HARD_CAP` in `haiku_human_write.ts`, FB-30 — mirrors
+  the SPA cap so both write surfaces have symmetric resource bounds).
 - **Deferred**: V-03 fix #3 (audit-log hash chain) — see ASSESSMENTS.md
   residual risk; V-04 fix #1 (full `O_NOFOLLOW`-everywhere) — same.
 

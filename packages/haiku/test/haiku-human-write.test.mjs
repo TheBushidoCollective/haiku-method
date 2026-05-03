@@ -372,6 +372,105 @@ await test("Refusal: empty content → empty_content error", async () => {
 	assert.strictEqual(body.error, "empty_content")
 })
 
+// ── V-07 (MCP path) — content size hard cap ───────────────────────────────
+// FB-30 regression guards: haiku_human_write MUST mirror the SPA upload
+// hard cap (50 MiB). Without this, a misbehaving / compromised agent can
+// stall the workflow tick by feeding a multi-gigabyte payload through the
+// MCP path that the SPA cap was designed to block.
+
+await test("V-07 (MCP): exports HUMAN_WRITE_MAX_CONTENT_BYTES_HARD_CAP = 50 MiB", async () => {
+	const { HUMAN_WRITE_MAX_CONTENT_BYTES_HARD_CAP } = toolModule
+	assert.strictEqual(
+		HUMAN_WRITE_MAX_CONTENT_BYTES_HARD_CAP,
+		50 * 1024 * 1024,
+		"V-07 contract: MCP cap must mirror the SPA upload hard cap (50 MiB)",
+	)
+})
+
+await test("V-07 (MCP): rejects utf-8 content larger than the hard cap", async () => {
+	const { haikuRoot, intentDir } = makeFixture("test-content-too-large-utf8", {
+		stages: ["development"],
+	})
+
+	// 50 MiB + 1 byte of utf-8 ascii (each char = 1 byte). Allocate a
+	// large string fast via Buffer.alloc('A').toString().
+	const oversized = Buffer.alloc(50 * 1024 * 1024 + 1, 0x41).toString("utf8")
+
+	const result = await invoke(haikuRoot, "test-content-too-large-utf8", {
+		path: "knowledge/oversized.bin",
+		content: oversized,
+	})
+
+	const body = parseResult(result)
+	assert.strictEqual(body.ok, false, "oversized utf-8 content must be rejected")
+	assert.strictEqual(body.error, "content_too_large")
+	assert.strictEqual(body.max_bytes, 50 * 1024 * 1024)
+	// File must NOT have been written.
+	assert.strictEqual(
+		existsSync(join(intentDir, "knowledge/oversized.bin")),
+		false,
+		"oversized payload must not reach disk",
+	)
+})
+
+await test("V-07 (MCP): rejects base64 content whose decoded size exceeds the hard cap", async () => {
+	const { haikuRoot, intentDir } = makeFixture(
+		"test-content-too-large-base64",
+		{ stages: ["development"] },
+	)
+
+	// 50 MiB + 1 byte of raw bytes encoded as base64 → ~67 MiB string.
+	const oversizedBytes = Buffer.alloc(50 * 1024 * 1024 + 1, 0x41)
+	const oversizedBase64 = oversizedBytes.toString("base64")
+
+	const result = await invoke(haikuRoot, "test-content-too-large-base64", {
+		path: "knowledge/oversized.bin",
+		content: oversizedBase64,
+		content_encoding: "base64",
+	})
+
+	const body = parseResult(result)
+	assert.strictEqual(
+		body.ok,
+		false,
+		"oversized base64 content must be rejected",
+	)
+	assert.strictEqual(body.error, "content_too_large")
+	assert.strictEqual(body.max_bytes, 50 * 1024 * 1024)
+	// File must NOT have been written.
+	assert.strictEqual(
+		existsSync(join(intentDir, "knowledge/oversized.bin")),
+		false,
+		"oversized base64 payload must not reach disk",
+	)
+})
+
+await test("V-07 (MCP): accepts content exactly at the hard cap (50 MiB)", async () => {
+	const { haikuRoot, intentDir } = makeFixture("test-content-at-cap", {
+		stages: ["development"],
+	})
+
+	// Exactly 50 MiB of utf-8 content.
+	const atCap = Buffer.alloc(50 * 1024 * 1024, 0x41).toString("utf8")
+
+	const result = await invoke(haikuRoot, "test-content-at-cap", {
+		path: "knowledge/at-cap.bin",
+		content: atCap,
+	})
+
+	const body = parseResult(result)
+	assert.strictEqual(
+		body.ok,
+		true,
+		"content at the hard cap boundary must be accepted",
+	)
+	assert.strictEqual(
+		existsSync(join(intentDir, "knowledge/at-cap.bin")),
+		true,
+		"at-cap payload must reach disk",
+	)
+})
+
 // ── Test 9: Trust+Audit — interactive mode (no confirmation required) ──────
 
 await test("Trust+Audit interactive mode: write completes without confirmation prompt", async () => {

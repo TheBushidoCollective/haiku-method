@@ -45,6 +45,48 @@ import { cleanupTempFile, safeMkdirAndRename } from "../../http/path-safety.js"
 import { defineTool, validateSlugArgs } from "../define.js"
 import { text } from "./_text.js"
 
+// ── Constants ──────────────────────────────────────────────────────────────
+
+/**
+ * VULN-REPORT V-07 (MCP path): Content size hard cap.
+ *
+ * `haiku_human_write` accepts a `content` string (UTF-8 or base64) with no
+ * upstream size validation. A misbehaving / compromised agent (the V-03 /
+ * V-04 / V-08 threat actor) can submit a multi-gigabyte payload and:
+ *   1. Buffer the entire decoded payload in process memory (potential OOM
+ *      on a memory-constrained MCP host).
+ *   2. Write the file to disk (potential disk-fill on a small `.haiku/`
+ *      filesystem).
+ *   3. Stall the next workflow tick by forcing the drift gate to hash a
+ *      multi-gigabyte file synchronously — the exact harm V-07 was filed
+ *      to prevent on the SPA path.
+ *   4. Bloat `write-audit.jsonl` with an entry recording a multi-gigabyte
+ *      write.
+ *
+ * V-07 capped the SPA upload path at `MAX_UPLOAD_BYTES_HARD_CAP = 50 MiB`
+ * in `packages/haiku/src/http/upload-routes.ts`. The MCP-tool entry point
+ * shares the same downstream impact (drift-gate sync hash) and MUST share
+ * the same cap so the two surfaces have symmetric resource bounds.
+ *
+ * Hard-coded match for the SPA cap rather than re-exporting the SPA
+ * constant — the orchestrator/tools layer treats http/ as an opaque entry
+ * point (FB-23 architecture concern) and the V-07 contract is "both paths
+ * stop at 50 MiB", not "both paths share a JS symbol". Bumping one MUST
+ * bump the other; both call sites cite this comment.
+ */
+const MAX_CONTENT_BYTES_HARD_CAP = 50 * 1024 * 1024 // 50 MiB
+
+/** Exported for tests — the hard cap that no MCP `content` payload may
+ *  exceed. Mirrors `UPLOAD_MAX_BYTES_HARD_CAP` from upload-routes.ts. */
+export const HUMAN_WRITE_MAX_CONTENT_BYTES_HARD_CAP =
+	MAX_CONTENT_BYTES_HARD_CAP
+
+/** Worst-case base64 expansion factor: a base64 string of length L decodes
+ *  to roughly L * 0.75 bytes. Reject the request before allocating the
+ *  decoded `Buffer` when the input string is so long that no encoding
+ *  could fit under the cap. */
+const BASE64_EXPANSION_FACTOR = 0.75
+
 // ── Internal helpers ───────────────────────────────────────────────────────
 
 /** Detect whether human_write_require_rationale is set to true in
@@ -355,7 +397,7 @@ export default defineTool({
 			content: {
 				type: "string",
 				description:
-					"File content. UTF-8 string by default. Pass base64-encoded bytes and set content_encoding: 'base64' for binary files.",
+					"File content. UTF-8 string by default. Pass base64-encoded bytes and set content_encoding: 'base64' for binary files. Hard-capped at 50 MiB decoded (V-07 MCP path) — mirrors the SPA upload cap so both write surfaces have symmetric resource bounds; oversized content is rejected with `content_too_large` before the disk write.",
 			},
 			content_encoding: {
 				type: "string",
@@ -520,12 +562,80 @@ export default defineTool({
 			}
 		}
 
+		// ── V-07 (MCP path): pre-decode size short-circuit ────────────────────
+		// Reject before allocating a multi-gigabyte Buffer when the input
+		// string is so long that no encoding could fit under the cap.
+		// Worst-case decoded size:
+		//   - utf-8: ≤ string length bytes (each codepoint ≥ 1 byte)
+		//   - base64: ≈ string length * 0.75 bytes
+		// Use the larger ratio so we never reject a payload that would
+		// actually fit; the post-decode check below is the authoritative
+		// gate.
+		const minPossibleDecodedBytes =
+			contentEncoding === "base64"
+				? Math.ceil(content.length * BASE64_EXPANSION_FACTOR)
+				: content.length
+		if (minPossibleDecodedBytes > MAX_CONTENT_BYTES_HARD_CAP) {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: JSON.stringify(
+							{
+								ok: false,
+								error: "content_too_large",
+								message: `Content exceeds the ${MAX_CONTENT_BYTES_HARD_CAP}-byte hard cap (~${Math.floor(MAX_CONTENT_BYTES_HARD_CAP / (1024 * 1024))} MiB). Submitted string length implies a decoded size of at least ${minPossibleDecodedBytes} bytes. The cap mirrors the SPA-upload V-07 mitigation so both write surfaces (MCP tool + SPA upload) have symmetric resource bounds; without it, a single oversized write stalls the workflow tick via the drift gate's synchronous SHA-256 and risks OOM / disk-fill.`,
+								max_bytes: MAX_CONTENT_BYTES_HARD_CAP,
+								submitted_min_bytes: minPossibleDecodedBytes,
+							},
+							null,
+							2,
+						),
+					},
+				],
+				isError: true,
+			}
+		}
+
 		// ── Decode content ────────────────────────────────────────────────────
 		let contentBytes: Buffer
 		if (contentEncoding === "base64") {
 			contentBytes = Buffer.from(content, "base64")
 		} else {
 			contentBytes = Buffer.from(content, "utf8")
+		}
+
+		// ── V-07 (MCP path): post-decode size cap ─────────────────────────────
+		// Authoritative size gate. The pre-decode short-circuit above is a
+		// fast-fail to avoid allocating a multi-gigabyte Buffer; this check
+		// catches the exact decoded byte count (utf-8 strings can be smaller
+		// than string length when codepoints span multiple chars; base64 can
+		// be smaller depending on padding). Cap MUST match
+		// `MAX_UPLOAD_BYTES_HARD_CAP` in upload-routes.ts — both write
+		// surfaces stop at 50 MiB so the drift gate's synchronous SHA-256
+		// has a bounded work envelope on every tick. See the
+		// `MAX_CONTENT_BYTES_HARD_CAP` block comment above for full
+		// rationale (D-1' / V-07 MCP path).
+		if (contentBytes.length > MAX_CONTENT_BYTES_HARD_CAP) {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: JSON.stringify(
+							{
+								ok: false,
+								error: "content_too_large",
+								message: `Decoded content (${contentBytes.length} bytes) exceeds the ${MAX_CONTENT_BYTES_HARD_CAP}-byte hard cap (~${Math.floor(MAX_CONTENT_BYTES_HARD_CAP / (1024 * 1024))} MiB). The cap mirrors the SPA-upload V-07 mitigation so both write surfaces (MCP tool + SPA upload) have symmetric resource bounds; without it, a single oversized write stalls the workflow tick via the drift gate's synchronous SHA-256 and risks OOM / disk-fill.`,
+								max_bytes: MAX_CONTENT_BYTES_HARD_CAP,
+								submitted_bytes: contentBytes.length,
+							},
+							null,
+							2,
+						),
+					},
+				],
+				isError: true,
+			}
 		}
 
 		// ── Reject empty content ──────────────────────────────────────────────

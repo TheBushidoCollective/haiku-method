@@ -584,6 +584,102 @@ await attack(
 	},
 )
 
+await attack(
+	"V-10.RT14 (FB-32): nested-tag reconstitution — single-pass replace would leave live tag",
+	async () => {
+		// ATTACK (FB-32): a single-pass regex sanitiser strips the inner
+		// `<script src=x>` from `<scr<script src=x>ipt src=x>`, then
+		// concatenates the surrounding `<scr` + `ipt src=x>` into a brand-
+		// new live `<script src=x>` tag. The sanitiser must iterate until
+		// the input is stable (fixed point) to neutralise this class.
+		// Cover several block tags and the iframe/style equivalents.
+		const cases = [
+			"<scr<script src=x>ipt src=x>",
+			"<scri<script>pt>alert(1)</scri</script>pt>",
+			"<<script>script>alert(1)</script>",
+			"<i<iframe>frame src=evil>",
+			"<sty<style>le>body{display:none}</sty</style>le>",
+		]
+		for (const input of cases) {
+			const out = sanitizeFeedbackBody(input)
+			assert.ok(
+				!/<script\b/i.test(out),
+				`reconstituted <script> survived for input ${JSON.stringify(input)}: ${out}`,
+			)
+			assert.ok(
+				!/<iframe\b/i.test(out),
+				`reconstituted <iframe> survived for input ${JSON.stringify(input)}: ${out}`,
+			)
+			assert.ok(
+				!/<style\b/i.test(out),
+				`reconstituted <style> survived for input ${JSON.stringify(input)}: ${out}`,
+			)
+		}
+	},
+)
+
+await attack(
+	"V-10.RT15 (FB-32): data:image/svg+xml in href/src is neutralised — SVG can carry <script>",
+	async () => {
+		// ATTACK (FB-32): SVG documents can embed executable `<script>`
+		// elements and event handlers. Even via `<img src=...>`, certain
+		// renderings (e.g. <object>, <embed>, direct navigation) execute
+		// the SVG's scripts. `data:image/svg+xml` must be on the
+		// dangerous-scheme list.
+		const cases = [
+			'<a href="data:image/svg+xml;base64,PHN2Zw==">x</a>',
+			'<img src="data:image/svg+xml,<svg onload=alert(1)/>">',
+			"![x](data:image/svg+xml;base64,PHN2Zw==)",
+		]
+		for (const input of cases) {
+			const out = sanitizeFeedbackBody(input)
+			assert.ok(
+				!/data:image\/svg\+xml/i.test(out),
+				`data:image/svg+xml survived for input ${JSON.stringify(input)}: ${out}`,
+			)
+		}
+	},
+)
+
+await attack(
+	"V-10.RT16 (FB-32): data:application/(java|ecma)script + data:text/javascript neutralised",
+	async () => {
+		// ATTACK (FB-32): script-as-data MIME types execute when navigated
+		// to. The original allowlist only caught `data:text/html`; the
+		// JS-flavoured data: URLs slipped through.
+		const cases = [
+			'<a href="data:application/javascript,alert(1)">x</a>',
+			'<a href="data:application/ecmascript,alert(1)">x</a>',
+			'<a href="data:text/javascript,alert(1)">x</a>',
+			"[click](data:application/javascript,alert(1))",
+			"[click](data:text/javascript,alert(1))",
+		]
+		for (const input of cases) {
+			const out = sanitizeFeedbackBody(input)
+			assert.ok(
+				!/data:(?:application|text)\/(?:java|ecma)script/i.test(out),
+				`script-as-data scheme survived for input ${JSON.stringify(input)}: ${out}`,
+			)
+		}
+	},
+)
+
+await attack(
+	"V-10.RT17 (FB-32): safe data:image/png + intent-scope paths are preserved",
+	async () => {
+		// REGRESSION GUARD (FB-32): widening the dangerous-scheme list
+		// must NOT touch raster image data: URLs (legitimate base64
+		// attachments) or relative intent-scope paths.
+		const safeRaster =
+			'![ok](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9R6lYwIAAAAASUVORK5CYII=)'
+		assert.strictEqual(sanitizeFeedbackBody(safeRaster), safeRaster)
+		const safeJpeg = '![ok](data:image/jpeg;base64,/9j/4AAQ==)'
+		assert.strictEqual(sanitizeFeedbackBody(safeJpeg), safeJpeg)
+		const intentScope = "![x](/api/feedback-attachment/abc/def/123.png)"
+		assert.strictEqual(sanitizeFeedbackBody(intentScope), intentScope)
+	},
+)
+
 // ── V-11 RED-TEAM — baseline-corrupt operator-gate bypass attempts ──────────
 
 console.log("\n=== V-11 RED-TEAM — baseline-corrupt operator-gate bypass attempts ===")

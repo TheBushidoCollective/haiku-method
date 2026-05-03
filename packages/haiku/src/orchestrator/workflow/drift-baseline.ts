@@ -786,22 +786,57 @@ export interface ActionLogEntrySync {
  *  classification.
  *
  *  Returns an empty array when the file doesn't exist.
- *  Silently skips malformed lines. */
+ *
+ *  FB-28: malformed lines were previously silently skipped, masking
+ *  tampering / interleaved-writer corruption. The append path now
+ *  serialises writers via an in-process mutex (`write-audit.ts`) and
+ *  bounds the sync marker writer to ≤ 512 bytes (macOS PIPE_BUF), so
+ *  any malformed line on disk is by construction either tampering or a
+ *  pre-FB-28 file-format corruption. The malformed-line count is logged
+ *  to stderr for operator triage; callers that need to fail closed on
+ *  this signal should use `readActionLogSyncWithIntegrity` (below). */
 export function readActionLogSync(
 	intentDir: string,
 	tickCounter: number,
 ): ActionLogEntrySync[] {
+	return readActionLogSyncWithIntegrity(intentDir, tickCounter).entries
+}
+
+/** FB-28 fail-closed-friendly variant of `readActionLogSync`. Returns
+ *  the parsed entries AND the count of malformed lines (and a
+ *  byte-clipped sample of up to 5 of them for diagnostics). The
+ *  drift-detection gate calls the bare `readActionLogSync` for legacy
+ *  callsite simplicity, but security-sensitive callers SHOULD prefer
+ *  this variant so they can refuse to advance when `malformedCount > 0`
+ *  (a malformed line is a tampering signal, not "skip and continue"). */
+export interface ActionLogSyncReadResult {
+	entries: ActionLogEntrySync[]
+	malformedCount: number
+	malformedSamples: string[]
+}
+
+const MALFORMED_SAMPLE_CAP_SYNC = 5
+const MALFORMED_SAMPLE_BYTES_SYNC = 256
+
+export function readActionLogSyncWithIntegrity(
+	intentDir: string,
+	tickCounter: number,
+): ActionLogSyncReadResult {
 	const filePath = join(intentDir, "action-log.jsonl")
-	if (!existsSync(filePath)) return []
+	if (!existsSync(filePath)) {
+		return { entries: [], malformedCount: 0, malformedSamples: [] }
+	}
 
 	let raw: string
 	try {
 		raw = readFileSync(filePath, "utf-8")
 	} catch {
-		return []
+		return { entries: [], malformedCount: 0, malformedSamples: [] }
 	}
 
 	const results: ActionLogEntrySync[] = []
+	const malformedSamples: string[] = []
+	let malformedCount = 0
 	for (const line of raw.split("\n")) {
 		const trimmed = line.trim()
 		if (!trimmed) continue
@@ -816,10 +851,21 @@ export function readActionLogSync(
 				results.push(parsed)
 			}
 		} catch {
-			// Malformed line — skip.
+			malformedCount++
+			if (malformedSamples.length < MALFORMED_SAMPLE_CAP_SYNC) {
+				malformedSamples.push(trimmed.slice(0, MALFORMED_SAMPLE_BYTES_SYNC))
+			}
 		}
 	}
-	return results
+	if (malformedCount > 0) {
+		// FB-28: surface tampering/interleave signals to operator stderr.
+		// Callers that need to fail closed inspect the malformedCount field;
+		// the bare readActionLogSync API stays compatible.
+		console.error(
+			`[haiku.audit] malformed action-log lines detected at ${filePath}: count=${malformedCount}, first_sample=${JSON.stringify(malformedSamples[0])}`,
+		)
+	}
+	return { entries: results, malformedCount, malformedSamples }
 }
 
 /** Read EVERY intent-scope action-log entry synchronously, regardless of
@@ -839,21 +885,39 @@ export function readActionLogSync(
  *
  *  Path-only filter: callers iterate the result by file path; tick
  *  number is informational. Returns an empty array when the file
- *  doesn't exist. Silently skips malformed lines. */
+ *  doesn't exist.
+ *
+ *  FB-28: malformed lines are counted (not silently skipped) and
+ *  reported to operator stderr; security-sensitive callers should use
+ *  `readIntentScopeActionLogSyncWithIntegrity` to inspect the count
+ *  and fail closed when tampering / interleave corruption is detected. */
 export function readIntentScopeActionLogSync(
 	intentDir: string,
 ): ActionLogEntrySync[] {
+	return readIntentScopeActionLogSyncWithIntegrity(intentDir).entries
+}
+
+/** FB-28 integrity-aware variant. Same return shape as
+ *  `readActionLogSyncWithIntegrity` so the drift-detection gate can
+ *  union both with consistent error semantics. */
+export function readIntentScopeActionLogSyncWithIntegrity(
+	intentDir: string,
+): ActionLogSyncReadResult {
 	const filePath = join(intentDir, "action-log.jsonl")
-	if (!existsSync(filePath)) return []
+	if (!existsSync(filePath)) {
+		return { entries: [], malformedCount: 0, malformedSamples: [] }
+	}
 
 	let raw: string
 	try {
 		raw = readFileSync(filePath, "utf-8")
 	} catch {
-		return []
+		return { entries: [], malformedCount: 0, malformedSamples: [] }
 	}
 
 	const results: ActionLogEntrySync[] = []
+	const malformedSamples: string[] = []
+	let malformedCount = 0
 	for (const line of raw.split("\n")) {
 		const trimmed = line.trim()
 		if (!trimmed) continue
@@ -863,10 +927,18 @@ export function readIntentScopeActionLogSync(
 				results.push(parsed)
 			}
 		} catch {
-			// Malformed line — skip.
+			malformedCount++
+			if (malformedSamples.length < MALFORMED_SAMPLE_CAP_SYNC) {
+				malformedSamples.push(trimmed.slice(0, MALFORMED_SAMPLE_BYTES_SYNC))
+			}
 		}
 	}
-	return results
+	if (malformedCount > 0) {
+		console.error(
+			`[haiku.audit] malformed action-log lines detected at ${filePath} (intent-scope read): count=${malformedCount}, first_sample=${JSON.stringify(malformedSamples[0])}`,
+		)
+	}
+	return { entries: results, malformedCount, malformedSamples }
 }
 
 // ── V-11: baseline-corrupt operator-only acknowledgement gate ───────────────
@@ -1027,19 +1099,46 @@ function baselineCorruptionMarkerPath(stage: string): string {
 /** Synchronous append of a single line to the intent-scope action log.
  *  Used by the drift-detection gate (which is sync) to write the
  *  tamper-evident V-11 markers. Mirrors `appendActionLogEntry` from
- *  `action-log.ts` (which is async — node:fs/promises) but uses the
- *  sync `openSync`/`writeFileSync`-with-flag-`a` path so we don't have
- *  to thread `await` through every gate handler.
+ *  `action-log.ts` but uses sync syscalls so we don't have to thread
+ *  `await` through every gate handler.
+ *
+ *  FB-28 atomicity model: the prior comment claimed PIPE_BUF was ~4 KiB
+ *  on most platforms — false on macOS (PIPE_BUF=512). The new model is
+ *  to BOUND the marker record size and rely on POSIX O_APPEND atomicity
+ *  for that bounded size on every supported platform. macOS PIPE_BUF
+ *  (512) is the tightest bound; marker records here are typed envelopes
+ *  with no user-controlled string fields (path is a synthetic
+ *  `__baseline_marker__:{stage}` sentinel, sha is empty, identity fields
+ *  are always null), so they comfortably serialise to < 256 bytes. The
+ *  helper validates this invariant before writing — a record above the
+ *  bound is REJECTED rather than risking a torn-line append.
+ *
+ *  Cross-writer note: the async path in `write-audit.ts` /
+ *  `action-log.ts` uses an in-process mutex. This sync writer runs only
+ *  inside the drift-detection gate (a serialised tick), so the mutex
+ *  surface is the gate handler itself; the bounded-record + O_APPEND
+ *  combination keeps the on-disk bytes well-formed even when the gate
+ *  runs concurrently with an async appender on the same file.
  *
  *  Best-effort: returns true on success, false on any error. The
  *  drift-detection gate falls back to its existing on-disk-cache
  *  signals (state.json, baseline-thrash.json) when the append fails,
  *  so a transient I/O hiccup doesn't disarm the security gate. */
+const SYNC_MARKER_RECORD_MAX_BYTES = 512
 function appendActionLogEntrySync(
 	intentDir: string,
 	entry: import("./write-audit.js").ActionLogEntry,
 ): boolean {
 	const filePath = join(intentDir, "action-log.jsonl")
+	const line = `${JSON.stringify(entry)}\n`
+	const buf = Buffer.from(line, "utf-8")
+	// FB-28: refuse oversize marker records before write; the async path
+	// has its own (larger) cap via validateAndCapAuditRecord, but the sync
+	// path takes only typed marker envelopes so any oversize record here
+	// signals a programming error, not a user-input edge case.
+	if (buf.length > SYNC_MARKER_RECORD_MAX_BYTES) {
+		return false
+	}
 	try {
 		mkdirSync(dirname(filePath), { recursive: true })
 	} catch {
@@ -1047,11 +1146,10 @@ function appendActionLogEntrySync(
 	}
 	let fd: number | null = null
 	try {
-		// "a" + sync ⇒ POSIX O_APPEND; each write is atomic for payloads
-		// ≤ PIPE_BUF (~4 KiB). Our entries are well under that.
+		// "a" + sync ⇒ POSIX O_APPEND. With the size cap above, the write
+		// is atomic on every supported platform (Linux PIPE_BUF=4096,
+		// macOS PIPE_BUF=512 — our records are < 512 bytes by construction).
 		fd = openSync(filePath, "a")
-		const line = `${JSON.stringify(entry)}\n`
-		const buf = Buffer.from(line, "utf-8")
 		// Loop in case of short writes (rare on local fs but cheap to handle).
 		let offset = 0
 		while (offset < buf.length) {

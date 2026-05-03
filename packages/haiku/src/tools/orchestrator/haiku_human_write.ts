@@ -18,7 +18,7 @@
 //   - ACCEPTANCE-CRITERIA.md AC-AB1, AC-AB2, AC-TA1–AC-TA4, AC-ALIAS1/2
 
 import { createHash, randomBytes } from "node:crypto"
-import { existsSync, readFileSync, realpathSync } from "node:fs"
+import { existsSync, readFileSync, realpathSync, unlinkSync } from "node:fs"
 import { writeFile } from "node:fs/promises"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import matter from "gray-matter"
@@ -38,6 +38,7 @@ import {
 import {
 	findHaikuRoot,
 	getIntentScopeTickCounter,
+	IntentScopeTickPersistError,
 	isIntentArchived,
 	isIntentLocked,
 } from "../../state-tools.js"
@@ -775,9 +776,51 @@ export default defineTool({
 		// intent-scope) routes the entry into the right read.
 		const stageMatch = canonicalPath.match(/^stages\/([^/]+)\//)
 		const isIntentScope = stageMatch === null
-		const tickCounter = isIntentScope
-			? getIntentScopeTickCounter(intentDir)
-			: getCurrentTickCounter(intentDir, stageMatch[1])
+		let tickCounter: number
+		try {
+			tickCounter = isIntentScope
+				? getIntentScopeTickCounter(intentDir)
+				: getCurrentTickCounter(intentDir, stageMatch[1])
+		} catch (err) {
+			// FB-41: `getIntentScopeTickCounter` now throws
+			// `IntentScopeTickPersistError` instead of silently best-efforting.
+			// `safeMkdirAndRename` above already landed the file at `destAbs`;
+			// if we let the throw propagate the file stays on disk with no
+			// action-log/audit-log entry — the drift gate will then misclassify
+			// it as an out-of-band human modification (the exact failure mode
+			// V-05 + this entire intent exist to prevent). Roll back the rename
+			// so the V-05 invariant holds: either everything (file + counter +
+			// entries) lands, or nothing does. Surface the existing
+			// `disk_write_failed` envelope shape with `reason: "tick_persist_failed"`
+			// so the agent can distinguish this from a generic disk failure.
+			if (err instanceof IntentScopeTickPersistError) {
+				try {
+					unlinkSync(destAbs)
+				} catch {
+					// rollback best-effort; file may already be gone
+				}
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify(
+								{
+									ok: false,
+									error: "disk_write_failed",
+									path: canonicalPath,
+									reason: "tick_persist_failed",
+									message: `Failed to persist tick counter for '${canonicalPath}': ${err.message}`,
+								},
+								null,
+								2,
+							),
+						},
+					],
+					isError: true,
+				}
+			}
+			throw err
+		}
 		const tickScope: "intent" | "stage" = isIntentScope ? "intent" : "stage"
 		const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
 		const seqNumber = getNextAuditSequenceNumber(intentDir)

@@ -1020,8 +1020,7 @@ export async function registerUploadRoutes(
 				try {
 					knowledgeTickCounter = isIntentScope
 						? getIntentScopeTickCounter(iDir)
-						: // biome-ignore lint/style/noNonNullAssertion: branch guarded by isIntentScope
-							getCurrentTickCounter(iDir, stage as string)
+						: getCurrentTickCounter(iDir, stage as string)
 				} catch (err) {
 					// FB-41: `getIntentScopeTickCounter` now throws
 					// `IntentScopeTickPersistError` instead of silently

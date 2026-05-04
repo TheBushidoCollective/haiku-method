@@ -597,8 +597,6 @@ export function validateCumulativeInputCoverage(
 		unreferenced,
 		message: `Cannot advance past elaborate: ${unreferenced.length} prior-stage output(s) are not referenced by any unit's \`inputs:\` in stage '${stage}' AND have no entry in \`stages/${stage}/coverage-decisions.json\`. Continuity contract: downstream stages must cover upstream deliverables.\n\nFor each unreferenced file, EITHER:\n  (a) Call \`haiku_unit_set { intent: "${slug}", stage: "${stage}", unit: "<unit>", field: "inputs", value: [...existing, "<path>"] }\` to add it to a unit's inputs (the canonical path).\n  (b) Call \`haiku_coverage_acknowledge { intent_slug: "${slug}", stage: "${stage}", path: "<path>", decision: "out-of-scope", rationale: "<why this file is not relevant to this stage>" }\` to record an explicit dismissal.\n\nUnreferenced files:\n${unreferenced.map((u) => `- \`${u.path}\` (from stage '${u.from_stage}')`).join("\n")}\n\nAfter resolving each, call \`haiku_run_next { intent: "${slug}" }\` to re-run the validator.`,
 	}
-
-	return null
 }
 
 // ── Output liveness validation ─────────────────────────────────────────────

@@ -61,7 +61,7 @@ export const ACTORS: Record<string, ActorDef> = {
 	orchestrator: {
 		icon: "🧠",
 		name: "Orchestrator (MCP server)",
-		role: "The brain. An MCP server (`packages/haiku/src/server.ts`) that exposes 44 `haiku_*` tools. On every tick it reads workflow engine state from disk, validates preconditions, and returns the next action.",
+		role: "The brain. An MCP server (`packages/haiku/src/server.ts`) that exposes 45 `haiku_*` tools. On every tick it reads workflow engine state from disk, validates preconditions, and returns the next action.",
 		talks_to: [
 			"Agent (responds to tool calls)",
 			"Filesystem (reads + writes workflow engine state)",

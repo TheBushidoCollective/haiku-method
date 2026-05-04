@@ -368,13 +368,7 @@ setBuildContinueDispatchHandler(
 		const intentMd = readFileSync(join(iDir, "intent.md"), "utf8")
 		const { data: iFm } = parseFrontmatter(intentMd)
 		const studio = (iFm.studio as string) || ""
-		const worktreePath = join(
-			process.cwd(),
-			".haiku",
-			"worktrees",
-			slug,
-			unit,
-		)
+		const worktreePath = join(process.cwd(), ".haiku", "worktrees", slug, unit)
 		const action: OrchestratorAction = {
 			action: "continue_unit",
 			intent: slug,

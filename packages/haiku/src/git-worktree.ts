@@ -26,6 +26,7 @@ import {
 	writeFileSync as fsWriteFileSync,
 	mkdirSync,
 	mkdtempSync,
+	readFileSync,
 	rmSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -1543,6 +1544,65 @@ function withTempWorktree<T>(branch: string, fn: (path: string) => T): T {
 	}
 }
 
+/** Idempotently seed an intent dir's `.gitattributes` so engine-owned
+ *  append-only event streams (`action-log.jsonl`, `write-audit.jsonl`)
+ *  use git's `merge=union` strategy. These files are written from
+ *  every branch the engine touches; without `merge=union`, every
+ *  fix-chain merge conflicts on the JSONL append and an integrator
+ *  has to hand-resolve a file the engine fully owns — eventually
+ *  tripping the integrator cap and stranding the chain's real
+ *  content on a dead worktree.
+ *
+ *  Called from the merge functions (discovery, unit, fix-chain) so
+ *  intents created before this fix get auto-repaired on the next
+ *  tick. The intent-create path also seeds the file at intent
+ *  creation. Idempotent: writes only when the file is missing OR
+ *  doesn't already include the union directive (catches the
+ *  upgrade-an-old-intent case). */
+function ensureIntentGitAttributes(slug: string): void {
+	if (!isGitRepo()) return
+	try {
+		const intentDir = join(primaryRepoRoot(), ".haiku", "intents", slug)
+		if (!existsSync(intentDir)) return
+		const path = join(intentDir, ".gitattributes")
+		const wantedLines = [
+			"action-log.jsonl merge=union",
+			"write-audit.jsonl merge=union",
+		]
+		let existing = ""
+		try {
+			if (existsSync(path)) existing = readFileSync(path, "utf8")
+		} catch {
+			/* missing or unreadable — we'll create it */
+		}
+		if (wantedLines.every((l) => existing.includes(l))) return
+		const banner = [
+			"# Engine-owned append-only event streams. `merge=union` tells git",
+			"# to concatenate both sides on conflict — these files are pure",
+			"# event streams and never benefit from manual conflict resolution.",
+		]
+		const out = `${[...banner, ...wantedLines].join("\n")}\n`
+		fsWriteFileSync(path, out)
+		// Stage + commit on whatever branch is currently checked out so
+		// the attribute is in effect on every branch the engine writes
+		// to. Best-effort: if the commit fails (dirty tree, hooks, etc.)
+		// the attribute is still on disk and will be picked up by the
+		// next legit commit anyway.
+		const rel = `.haiku/intents/${slug}/.gitattributes`
+		tryRun(["git", "add", rel])
+		tryRun([
+			"git",
+			"commit",
+			"-m",
+			`haiku: seed .gitattributes (merge=union for engine event streams) for ${slug}`,
+			"--",
+			rel,
+		])
+	} catch {
+		/* never crash a merge over a best-effort attribute seed */
+	}
+}
+
 /** Find the path of an existing worktree currently checked out on
  *  `branch`, or null when no worktree owns the branch. Parses
  *  `git worktree list --porcelain`, matching the canonical
@@ -1584,11 +1644,10 @@ function findWorktreeForBranch(branch: string): string | null {
  *  a dirty tree would conflict with whatever the user is editing. */
 function isWorktreePathDirty(path: string): boolean {
 	try {
-		const out = execFileSync(
-			"git",
-			["-C", path, "status", "--porcelain"],
-			{ encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-		)
+		const out = execFileSync("git", ["-C", path, "status", "--porcelain"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		})
 		return out.trim().length > 0
 	} catch {
 		// Fail-closed: if we can't tell, treat as dirty to avoid stomping
@@ -1613,10 +1672,7 @@ function isWorktreePathDirty(path: string): boolean {
  *  merge there would clobber the user's WIP. The caller's catch
  *  block returns `{success: false, message}` so the agent surfaces
  *  the error and the user can commit/stash and retry. */
-function withWorktreeOnBranch<T>(
-	branch: string,
-	fn: (path: string) => T,
-): T {
+function withWorktreeOnBranch<T>(branch: string, fn: (path: string) => T): T {
 	const existing = findWorktreeForBranch(branch)
 	if (existing) {
 		if (isWorktreePathDirty(existing)) {
@@ -1649,6 +1705,9 @@ export function createUnitWorktree(
 			"createUnitWorktree requires `stage` — units always fork from the stage branch",
 		)
 	const stageBranch = ensureStageBranch(slug, stage)
+	// Seed `.gitattributes` BEFORE the fork — see notes in
+	// `createFixChainWorktree`.
+	ensureIntentGitAttributes(slug)
 	const unitBranch = `haiku/${slug}/${unit}`
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
 	const worktreePath = join(worktreeBase, unit)
@@ -1690,6 +1749,10 @@ export function mergeUnitWorktree(
 	const stageBranch = ensureStageBranch(slug, stage)
 	const unitBranch = `haiku/${slug}/${unit}`
 	const worktreePath = unitWorktreePath(slug, unit)
+
+	// Auto-repair legacy intents — see notes on the same call in
+	// `mergeFixChainWorktree`.
+	ensureIntentGitAttributes(slug)
 
 	if (!existsSync(worktreePath)) {
 		return { success: true, message: "no worktree" }
@@ -1891,6 +1954,9 @@ export function createDiscoveryWorktree(
 		throw new Error("createDiscoveryWorktree requires `stage` and `template`")
 
 	const baseBranch = ensureStageBranch(slug, stage)
+	// Seed `.gitattributes` BEFORE the fork — see notes in
+	// `createFixChainWorktree`.
+	ensureIntentGitAttributes(slug)
 	const discBranch = discoveryBranchName(slug, stage, template)
 	const worktreePath = discoveryWorktreePath(slug, stage, template)
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
@@ -1930,6 +1996,12 @@ export function mergeDiscoveryWorktree(
 	const baseBranch = ensureStageBranch(slug, stage)
 	const discBranch = discoveryBranchName(slug, stage, template)
 	const worktreePath = discoveryWorktreePath(slug, stage, template)
+
+	// Auto-repair legacy intents — see notes on the same call in
+	// `mergeFixChainWorktree`. Discovery worktrees write to the same
+	// engine event streams during their tick, so they hit the same
+	// merge=union need.
+	ensureIntentGitAttributes(slug)
 
 	if (!existsSync(worktreePath)) {
 		if (branchExists(discBranch)) tryRun(["git", "branch", "-D", discBranch])
@@ -2106,6 +2178,12 @@ export function createFixChainWorktree(
 
 	const baseBranch =
 		scope === "intent" ? `haiku/${slug}/main` : ensureStageBranch(slug, scope)
+	// Seed `.gitattributes` on the base branch BEFORE forking so the
+	// fork inherits the union-merge directive on engine event streams.
+	// Without this, a fork created before the attribute existed gets
+	// no merge=union when it later merges back, and any concurrent
+	// JSONL appends still trip the integrator cap.
+	ensureIntentGitAttributes(slug)
 	const fixBranch = fixChainBranchName(slug, scope, feedbackId)
 	const worktreePath = fixChainWorktreePath(slug, scope, feedbackId)
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
@@ -2163,6 +2241,12 @@ export function mergeFixChainWorktree(
 		scope === "intent" ? `haiku/${slug}/main` : ensureStageBranch(slug, scope)
 	const fixBranch = fixChainBranchName(slug, scope, feedbackId)
 	const worktreePath = fixChainWorktreePath(slug, scope, feedbackId)
+
+	// Auto-repair: legacy intents (created before the merge=union
+	// .gitattributes seed) get the file written + committed now, so
+	// the upcoming JSONL append merges union-resolve instead of
+	// stranding the chain.
+	ensureIntentGitAttributes(slug)
 
 	if (!existsSync(worktreePath)) {
 		// Nothing to merge — either never created, or previous tick cleaned

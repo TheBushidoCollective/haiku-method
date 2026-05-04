@@ -297,6 +297,83 @@ await test("completes merge after integrator resolves conflict markers", () => {
 	}
 })
 
+// Regression: integrator caps were tripping on action-log.jsonl /
+// write-audit.jsonl conflicts during fix-chain merges. Both files are
+// pure append-only event streams the engine writes from every branch
+// it touches; without `merge=union` in `.gitattributes`, every
+// fix-chain that ran a workflow tick produced a conflict the
+// integrator had to hand-resolve, eventually exhausting the
+// 3-attempt cap and stranding the chain's real content on a dead
+// worktree. The fix seeds `.gitattributes` (idempotently, on legacy
+// intents too) so the JSONL appends auto-resolve.
+await test(
+	"merges fix-chain when both sides appended to action-log.jsonl (regression: integrator cap stranding chains)",
+	() => {
+		const { tmp, slug, stage } = setupRepo()
+		try {
+			process.chdir(tmp)
+			git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+			git(tmp, "checkout", `haiku/${slug}/${stage}`)
+
+			// Seed the intent dir + a baseline action-log.jsonl on the
+			// stage branch.
+			const intentDir = join(tmp, ".haiku", "intents", slug)
+			mkdirSync(intentDir, { recursive: true })
+			writeFileSync(
+				join(intentDir, "action-log.jsonl"),
+				`{"event":"baseline","ts":"2026-05-04T00:00:00Z"}\n`,
+			)
+			git(tmp, "add", "-A")
+			git(tmp, "commit", "-m", "seed action-log")
+
+			// Start the fix-chain off the stage branch (engine seeds
+			// .gitattributes on first call to mergeFixChainWorktree).
+			const wt = createFixChainWorktree(slug, stage, "FB-LOG")
+			// Fix-chain appends an event.
+			writeFileSync(
+				join(wt, ".haiku", "intents", slug, "action-log.jsonl"),
+				`{"event":"baseline","ts":"2026-05-04T00:00:00Z"}\n{"event":"fix-chain-side","ts":"2026-05-04T01:00:00Z"}\n`,
+			)
+			git(wt, "add", "-A")
+			git(wt, "commit", "-m", "fix-chain side append")
+			// Stage branch appends a different event (e.g. an engine
+			// tick that ran while the fix-chain was working).
+			writeFileSync(
+				join(intentDir, "action-log.jsonl"),
+				`{"event":"baseline","ts":"2026-05-04T00:00:00Z"}\n{"event":"stage-side","ts":"2026-05-04T02:00:00Z"}\n`,
+			)
+			git(tmp, "add", "-A")
+			git(tmp, "commit", "-m", "stage side append")
+
+			// Pre-fix: this would have returned isConflict and
+			// dispatched the integrator. With `merge=union` seeded
+			// on .gitattributes, git auto-concatenates and the merge
+			// succeeds.
+			const res = mergeFixChainWorktree(slug, stage, "FB-LOG")
+			assert.ok(
+				res.success,
+				`expected union merge of action-log.jsonl to succeed; got: ${res.message}`,
+			)
+
+			// Both events are present in the merged file.
+			const merged = readFileSync(
+				join(intentDir, "action-log.jsonl"),
+				"utf-8",
+			)
+			assert.ok(
+				merged.includes("fix-chain-side"),
+				"fix-chain's appended event survived the union merge",
+			)
+			assert.ok(
+				merged.includes("stage-side"),
+				"stage's appended event survived the union merge",
+			)
+		} finally {
+			cleanupRepo(tmp)
+		}
+	},
+)
+
 await test("returns isConflict if integrator leaves files unresolved", () => {
 	const { tmp, slug, stage } = setupRepo()
 	try {

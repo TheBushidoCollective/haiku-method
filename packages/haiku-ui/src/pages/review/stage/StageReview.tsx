@@ -528,6 +528,7 @@ export function StageReview({
 			if (!a) return "unseen" as const
 			return seen.state("output", stageName, a.name, shaOf(a))
 		},
+		// biome-ignore lint/correctness/useExhaustiveDependencies: knowledgeVMs / outputVMs are derived arrays whose identity flips every render but only the contained name strings matter for the lookup; matches the existing convention used for walkthroughItems
 		[units, knowledgeVMs, outputVMs, seen, stageName],
 	)
 	// Find the next unseen item, scanning forward from walkIndex with

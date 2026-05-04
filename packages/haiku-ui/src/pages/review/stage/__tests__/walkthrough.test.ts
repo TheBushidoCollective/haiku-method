@@ -65,7 +65,10 @@ describe("composeWalkthroughItems", () => {
 	})
 
 	it("unknown gate context → falls through to the union", () => {
-		const items = composeWalkthroughItems("future_gate_we_dont_know_about", inputs)
+		const items = composeWalkthroughItems(
+			"future_gate_we_dont_know_about",
+			inputs,
+		)
 		expect(items.map((i) => i.tab)).toEqual([
 			"units",
 			"units",

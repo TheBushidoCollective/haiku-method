@@ -14,6 +14,7 @@
 // resolves outside the intent dir, the same guard `parseUnitOutputs`
 // uses.
 
+import type { Dirent } from "node:fs"
 import { readdir, readFile } from "node:fs/promises"
 import { basename, join, relative, resolve } from "node:path"
 import matter from "gray-matter"
@@ -43,7 +44,7 @@ export async function buildOutputDeclaredBy(
 
 	const out: Record<string, string[]> = {}
 
-	let stageEntries
+	let stageEntries: Dirent<string>[]
 	try {
 		stageEntries = await readdir(join(intentDir, "stages"), {
 			withFileTypes: true,

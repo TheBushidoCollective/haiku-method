@@ -89,10 +89,7 @@ export async function buildUnitOutputPreviews(
 		if (typeof declared !== "string") continue
 		const intentRel = intentRelativeOutputPath(declared, intentDir)
 		const absPath = resolve(intentDirAbs, intentRel)
-		if (
-			absPath !== intentDirAbs &&
-			!absPath.startsWith(intentDirAbsSlash)
-		) {
+		if (absPath !== intentDirAbs && !absPath.startsWith(intentDirAbsSlash)) {
 			continue
 		}
 		const safeRel = relative(intentDirAbs, absPath)

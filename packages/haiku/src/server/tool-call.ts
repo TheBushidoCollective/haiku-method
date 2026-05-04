@@ -32,8 +32,6 @@ import { handleOrchestratorTool } from "../orchestrator.js"
 import { buildOutputDeclaredBy } from "../output-declared-by.js"
 import { isSentryConfigured, reportFeedback } from "../sentry.js"
 import type { DesignArchetypeData, QuestionDef } from "../sessions.js"
-import { buildStageArtifactUrl } from "../stage-artifact-url.js"
-import { buildUnitOutputPreviews } from "../unit-output-preview.js"
 import {
 	clearHeartbeat,
 	createDesignDirectionSession,
@@ -45,6 +43,7 @@ import {
 	hasPresenceLost,
 	waitForSession,
 } from "../sessions.js"
+import { buildStageArtifactUrl } from "../stage-artifact-url.js"
 import {
 	findHaikuRoot,
 	handleStateTool,
@@ -61,6 +60,7 @@ import {
 	isRemoteReviewEnabled,
 	openTunnel,
 } from "../tunnel.js"
+import { buildUnitOutputPreviews } from "../unit-output-preview.js"
 
 const AskVisualQuestionInput = z.object({
 	questions: z

@@ -216,6 +216,31 @@ export default defineTool({
 
 		writeFileSync(join(iDir, "intent.md"), intentContent)
 
+		// Seed `.gitattributes` for engine-owned append-only event
+		// streams. Both `action-log.jsonl` and `write-audit.jsonl` are
+		// written from EVERY branch the engine touches (intent main,
+		// stage branches, fix-chain worktrees, discovery worktrees).
+		// Without `merge=union`, every fix-chain that ran a workflow
+		// tick conflicts with the base on the JSONL append, the
+		// integrator can't cleanly resolve the loss-prone "did you
+		// mean to drop the other side's events?" question, and the
+		// integrator cap eventually trips — leaving the chain's real
+		// content stranded on a dead worktree. `merge=union` is the
+		// textbook fix for append-only logs: git concatenates both
+		// sides' lines automatically, no integrator involvement
+		// needed.
+		writeFileSync(
+			join(iDir, ".gitattributes"),
+			[
+				"# Engine-owned append-only event streams. `merge=union` tells git",
+				"# to concatenate both sides on conflict — these files are pure",
+				"# event streams and never benefit from manual conflict resolution.",
+				"action-log.jsonl merge=union",
+				"write-audit.jsonl merge=union",
+				"",
+			].join("\n"),
+		)
+
 		// Also write conversation context to knowledge for
 		// discoverability.
 		if (context) {

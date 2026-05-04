@@ -210,9 +210,9 @@ export function IntentCompleteView({
 						Intent outputs ({outputArtifacts.length})
 					</p>
 					<p className="text-sm text-stone-600 dark:text-stone-300 mb-4 leading-snug">
-						Walk through the deliverables before approving the merge. Each
-						entry opens the file in a new tab; the "Declared by" badges link
-						back to the unit that owned each output.
+						Walk through the deliverables before approving the merge. Each entry
+						opens the file in a new tab; the "Declared by" badges link back to
+						the unit that owned each output.
 					</p>
 					<IntentCompleteOutputs
 						outputArtifacts={outputArtifacts}
@@ -315,8 +315,7 @@ function IntentCompleteOutputs({
 				return (
 					<div key={stage}>
 						<h3 className="text-sm font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-2">
-							{stage.charAt(0).toUpperCase() + stage.slice(1)} (
-							{items.length})
+							{stage.charAt(0).toUpperCase() + stage.slice(1)} ({items.length})
 						</h3>
 						<ul className="space-y-2 m-0 p-0 list-none">
 							{items.map((a) => {

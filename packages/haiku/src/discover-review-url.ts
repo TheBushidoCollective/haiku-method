@@ -33,16 +33,11 @@
 // remote isn't a recognised host.
 
 import { execFileSync } from "node:child_process"
+import type { DiscoveredReviewUrl } from "haiku-api"
 import { isGitRepo } from "./state/shared.js"
 
-export type DiscoverySource = "github-pr-ref" | "gitlab-mr-ref"
-
-export interface DiscoveredReviewUrl {
-	url: string
-	source: DiscoverySource
-	prNumber: number
-	matchedSha: string
-}
+export type DiscoverySource = DiscoveredReviewUrl["source"]
+export type { DiscoveredReviewUrl } from "haiku-api"
 
 function tryRun(args: string[]): string {
 	try {
@@ -165,15 +160,7 @@ function constructUrl(
 	return null
 }
 
-/** Discover the PR/MR URL for an intent's main branch using only git
- *  plumbing. Returns null when:
- *   - Not in a git repo.
- *   - The intent main branch doesn't exist.
- *   - The branch's head SHA matches no published PR/MR ref.
- *   - The origin URL is missing or unparseable.
- *   - The origin host isn't GitHub or GitLab (the URL shape is
- *     provider-specific; we don't guess). */
-export function discoverReviewUrl(slug: string): DiscoveredReviewUrl | null {
+function discoverReviewUrlUncached(slug: string): DiscoveredReviewUrl | null {
 	if (!isGitRepo()) return null
 	const branch = `haiku/${slug}/main`
 	// Resolve the branch's HEAD SHA. tryRun returns "" on missing branch.
@@ -194,4 +181,44 @@ export function discoverReviewUrl(slug: string): DiscoveredReviewUrl | null {
 		prNumber: match.prNumber,
 		matchedSha: sha,
 	}
+}
+
+// In-process per-slug TTL cache. The session API is polled every 5s and
+// `git ls-remote` is a real network call, so without a cache every poll
+// re-hits the remote. 30s is plenty: a PR URL doesn't change once
+// created, and discovery itself is best-effort/informational. Negative
+// results are cached too — a slug with no PR shouldn't re-probe the
+// network on every poll either.
+interface CacheEntry {
+	value: DiscoveredReviewUrl | null
+	expiresAt: number
+}
+const CACHE_TTL_MS = 30_000
+const cache = new Map<string, CacheEntry>()
+
+/** Discover the PR/MR URL for an intent's main branch using only git
+ *  plumbing. Returns null when:
+ *   - Not in a git repo.
+ *   - The intent main branch doesn't exist.
+ *   - The branch's head SHA matches no published PR/MR ref.
+ *   - The origin URL is missing or unparseable.
+ *   - The origin host isn't GitHub or GitLab (the URL shape is
+ *     provider-specific; we don't guess).
+ *
+ *  Result is cached per-slug for `CACHE_TTL_MS` to amortise the
+ *  network cost of `git ls-remote` across the SPA's 5s session poll. */
+export function discoverReviewUrl(slug: string): DiscoveredReviewUrl | null {
+	const now = Date.now()
+	const cached = cache.get(slug)
+	if (cached && cached.expiresAt > now) return cached.value
+	const value = discoverReviewUrlUncached(slug)
+	cache.set(slug, { value, expiresAt: now + CACHE_TTL_MS })
+	return value
+}
+
+/** Test/debug hook — drops every cached entry. Call after operations
+ *  that mutate the matched ref (e.g. creating a PR mid-session) when
+ *  you don't want to wait for the TTL to expire. */
+export function clearDiscoverReviewUrlCache(): void {
+	cache.clear()
 }

@@ -21,25 +21,16 @@
  *     the engine's view.
  */
 
+import type { DiscoveredReviewUrl } from "haiku-api"
 import type { IntentFrontmatter } from "../../parsed"
+
+export type { DiscoveredReviewUrl }
 
 export interface IntentCompleteViewStageState {
 	status?: string
 	phase?: string
 	completed_at?: string | null
 	[key: string]: unknown
-}
-
-/** Auto-detected delivery PR/MR — the engine populates this via
- *  `git ls-remote origin` over the PR/MR head ref namespaces (GitHub
- *  `refs/pull/<n>/head`, GitLab `refs/merge-requests/<n>/head`) when
- *  a published head ref matches the intent main branch's HEAD SHA.
- *  Pure git, no API calls. See packages/haiku/src/discover-review-url.ts. */
-export interface DiscoveredReviewUrl {
-	url: string
-	source: "github-pr-ref" | "gitlab-mr-ref"
-	prNumber: number
-	matchedSha: string
 }
 
 export interface IntentCompleteViewProps {

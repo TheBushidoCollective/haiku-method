@@ -658,8 +658,15 @@ await test(
 			rmSync(userWorktree, { recursive: true, force: true })
 			git(tmp, "worktree", "add", userWorktree, `haiku/${slug}/${stage}`)
 			try {
-				// Leave an uncommitted edit in the foreign worktree.
-				writeFileSync(join(userWorktree, "WIP.txt"), "user is mid-edit\n")
+				// Leave a tracked-but-uncommitted edit in the foreign
+				// worktree (commit a file first, then modify it). Tests
+				// the "tracked changes" branch of the dirty-state
+				// reporter — distinct from untracked-only state, which
+				// has different remediation guidance.
+				writeFileSync(join(userWorktree, "TRACKED.txt"), "v1\n")
+				git(userWorktree, "add", "-A")
+				git(userWorktree, "commit", "-m", "tracked file v1")
+				writeFileSync(join(userWorktree, "TRACKED.txt"), "v2 (user edit)\n")
 
 				const wt = createDiscoveryWorktree(slug, stage, "risks")
 				const artifactPath = join(
@@ -679,7 +686,78 @@ await test(
 				assert.ok(!res.success, "expected failure on dirty foreign worktree")
 				assert.ok(
 					/uncommitted changes/i.test(res.message),
-					`expected the message to surface uncommitted-changes hint; got: ${res.message}`,
+					`expected the message to surface tracked-changes hint; got: ${res.message}`,
+				)
+				assert.ok(
+					/commit or stash/i.test(res.message),
+					`expected actionable remediation hint; got: ${res.message}`,
+				)
+			} finally {
+				try {
+					git(tmp, "worktree", "remove", "--force", userWorktree)
+				} catch {
+					/* best-effort */
+				}
+				rmSync(userWorktree, { recursive: true, force: true })
+			}
+		} finally {
+			cleanupRepo(tmp)
+		}
+	},
+)
+
+// Companion: untracked-only state gets a different remediation hint
+// (`git stash` doesn't help untracked files). The reviewer flagged
+// the original "commit or stash" message as a footgun for users with
+// only untracked files in their checkout — make sure the message
+// names what the user actually needs to do.
+await test(
+	"surfaces untracked-files-specific remediation when foreign worktree only has untracked files",
+	() => {
+		const { tmp, slug, stage } = setupRepo()
+		try {
+			process.chdir(tmp)
+			git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+
+			const userWorktree = mkdtempSync(join(tmpdir(), "haiku-user-untracked-"))
+			rmSync(userWorktree, { recursive: true, force: true })
+			git(tmp, "worktree", "add", userWorktree, `haiku/${slug}/${stage}`)
+			try {
+				// New file the user hasn't staged or committed —
+				// purely untracked. `git stash` won't pick this up;
+				// the message must call that out.
+				writeFileSync(
+					join(userWorktree, "DOWNLOADED.bin"),
+					"new untracked file\n",
+				)
+
+				const wt = createDiscoveryWorktree(slug, stage, "untracked-test")
+				const artifactPath = join(
+					wt,
+					".haiku",
+					"intents",
+					slug,
+					"knowledge",
+					"UT.md",
+				)
+				mkdirSync(join(artifactPath, ".."), { recursive: true })
+				writeFileSync(artifactPath, "# ut\n")
+				git(wt, "add", "-A")
+				git(wt, "commit", "-m", "ut")
+
+				const res = mergeDiscoveryWorktree(slug, stage, "untracked-test")
+				assert.ok(!res.success, "expected failure on untracked-files state")
+				assert.ok(
+					/untracked files/i.test(res.message),
+					`expected message to name untracked files; got: ${res.message}`,
+				)
+				assert.ok(
+					/clean/i.test(res.message),
+					`expected message to mention git clean as remediation; got: ${res.message}`,
+				)
+				assert.ok(
+					!/^.*commit or stash them.*$/i.test(res.message),
+					`expected message NOT to suggest 'commit or stash them' on a purely-untracked worktree; got: ${res.message}`,
 				)
 			} finally {
 				try {

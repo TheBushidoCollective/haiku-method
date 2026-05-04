@@ -17,6 +17,7 @@ import { dirname, join, resolve } from "node:path"
 import { z } from "zod"
 import { ensureOnStageBranch } from "../git-worktree.js"
 import { closeSessionConnection, startHttpServer } from "../http.js"
+import type { ParsedUnit } from "../index.js"
 import {
 	buildDAG,
 	parseAllUnits,
@@ -61,6 +62,41 @@ import {
 	openTunnel,
 } from "../tunnel.js"
 import { buildUnitOutputPreviews } from "../unit-output-preview.js"
+
+/**
+ * Build the per-unit output preview map and the inverse
+ * `output_declared_by` map for a session payload. Both halves of the
+ * data exist for the same reason — the SPA's Units tab renders
+ * popovers for unit-declared outputs, and the Outputs tab renders the
+ * "Declared by" banner that points the other direction. Computed once
+ * here so the ad-hoc-review and gate-review session builders stay in
+ * sync without repeated copy-paste.
+ */
+async function buildSessionOutputMeta(
+	intentDirAbs: string,
+	sessionId: string,
+	units: ParsedUnit[],
+): Promise<{
+	unitOutputs: Record<string, unknown>
+	outputDeclaredBy: Record<string, string[]>
+}> {
+	const previews = await Promise.all(
+		units.map(async (u) => ({
+			slug: u.slug,
+			outputs: await buildUnitOutputPreviews(
+				intentDirAbs,
+				sessionId,
+				u.frontmatter.outputs,
+			),
+		})),
+	)
+	const unitOutputs: Record<string, unknown> = {}
+	for (const { slug: uSlug, outputs } of previews) {
+		if (outputs.length > 0) unitOutputs[uSlug] = outputs
+	}
+	const outputDeclaredBy = await buildOutputDeclaredBy(intentDirAbs)
+	return { unitOutputs, outputDeclaredBy }
+}
 
 const AskVisualQuestionInput = z.object({
 	questions: z
@@ -374,34 +410,22 @@ export async function handleToolCall(
 		session.ad_hoc = true
 		session.stage = activeStage || undefined
 
-		// Per-unit output previews — small, popover-ready entries the
-		// UnitsTable renders as click-out links + hover previews. Built
-		// here (after the session exists, so the URL helper has the
-		// session id) to avoid a per-row fetch round-trip in the SPA.
-		const unitOutputs = await Promise.all(
-			units.map(async (u) => ({
-				slug: u.slug,
-				outputs: await buildUnitOutputPreviews(
-					intentDirAbs,
-					session.session_id,
-					u.frontmatter.outputs,
-				),
-			})),
+		// Per-unit output previews + the inverse "declared by" map.
+		// Built after the session exists (the URL helper needs the
+		// session id) so the SPA gets popover-ready entries with no
+		// per-row fetch round-trip.
+		const { unitOutputs, outputDeclaredBy } = await buildSessionOutputMeta(
+			intentDirAbs,
+			session.session_id,
+			units,
 		)
-		const unitOutputsMap: Record<string, unknown> = {}
-		for (const { slug: uSlug, outputs } of unitOutputs) {
-			if (outputs.length > 0) unitOutputsMap[uSlug] = outputs
-		}
-		// Inverse map (output path → declaring unit slugs) for the
-		// "Declared by" banner above output content.
-		const outputDeclaredBy = await buildOutputDeclaredBy(intentDirAbs)
 
 		Object.assign(session, {
 			parsedIntent: intent,
 			parsedUnits: units,
 			parsedCriteria: criteria,
 			parsedMermaid: mermaid,
-			unitOutputs: unitOutputsMap,
+			unitOutputs,
 			outputDeclaredBy,
 		})
 
@@ -927,23 +951,13 @@ export function createReviewGateHandler() {
 			session.next_phase = gateMeta.nextPhase
 		bindSessionCancellation(session.session_id, signal)
 
-		// Per-unit output previews for the SPA's Units tab — see notes
-		// in the ad-hoc-review path above.
-		const unitOutputs = await Promise.all(
-			units.map(async (u) => ({
-				slug: u.slug,
-				outputs: await buildUnitOutputPreviews(
-					intentDirAbs,
-					session.session_id,
-					u.frontmatter.outputs,
-				),
-			})),
+		// Per-unit output previews + the inverse "declared by" map —
+		// see helper notes in buildSessionOutputMeta.
+		const { unitOutputs, outputDeclaredBy } = await buildSessionOutputMeta(
+			intentDirAbs,
+			session.session_id,
+			units,
 		)
-		const unitOutputsMap: Record<string, unknown> = {}
-		for (const { slug: uSlug, outputs } of unitOutputs) {
-			if (outputs.length > 0) unitOutputsMap[uSlug] = outputs
-		}
-		const outputDeclaredBy = await buildOutputDeclaredBy(intentDirAbs)
 
 		// Store parsed data on session for the SPA
 		Object.assign(session, {
@@ -951,7 +965,7 @@ export function createReviewGateHandler() {
 			parsedUnits: units,
 			parsedCriteria: criteria,
 			parsedMermaid: mermaid,
-			unitOutputs: unitOutputsMap,
+			unitOutputs,
 			outputDeclaredBy,
 		})
 

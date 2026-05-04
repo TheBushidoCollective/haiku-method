@@ -55,11 +55,19 @@ export interface UnitOutputPreview {
 	 *  `/stage-artifacts/:sessionId/*` route prefix; the SPA still adds
 	 *  the auth `?t=` query via `withAuthQuery`. */
 	url: string
-	/** Inline preview body for the hover popover. Set for markdown
-	 *  (rendered) and html (raw, truncated). Absent for image and
-	 *  file types — the SPA renders thumbnail / icon from `url` and
-	 *  metadata. */
-	previewHtml?: string
+	/** Inline preview body for the hover popover. Set for `markdown`
+	 *  (the raw markdown body, frontmatter stripped — caller renders
+	 *  via `markdownToSimpleHtml` / DOMPurify) and `html` (the raw
+	 *  HTML source, truncated — caller renders via a sandboxed
+	 *  iframe). Absent for `image` and `file` types — the SPA renders
+	 *  thumbnail / icon from `url` and metadata.
+	 *
+	 *  Named `previewBody` (not `previewBody`) because the contents are
+	 *  the source body, not pre-sanitized HTML. A future caller who
+	 *  injected this verbatim with `dangerouslySetInnerHTML` would
+	 *  silently XSS. The current call sites both go through a sanitizer
+	 *  / sandbox before rendering. */
+	previewBody?: string
 	/** Byte size on disk. Surfaced as a hint for binary previews. */
 	sizeBytes?: number
 	/** False when the declared path didn't resolve to a file on disk —
@@ -120,12 +128,12 @@ export async function buildUnitOutputPreviews(
 		}
 
 		if (ext === ".md") {
-			let previewHtml: string | undefined
+			let previewBody: string | undefined
 			if (exists) {
 				try {
 					const raw = await readFile(absPath, "utf-8")
 					const { content } = matter(raw)
-					previewHtml = truncate(content, MARKDOWN_PREVIEW_MAX_CHARS)
+					previewBody = truncate(content, MARKDOWN_PREVIEW_MAX_CHARS)
 				} catch {
 					// Unreadable — fall through to no preview body.
 				}
@@ -133,16 +141,16 @@ export async function buildUnitOutputPreviews(
 			out.push({
 				...base,
 				type: "markdown",
-				...(previewHtml !== undefined ? { previewHtml } : {}),
+				...(previewBody !== undefined ? { previewBody } : {}),
 			})
 			continue
 		}
 		if (HTML_EXTS.has(ext)) {
-			let previewHtml: string | undefined
+			let previewBody: string | undefined
 			if (exists) {
 				try {
 					const raw = await readFile(absPath, "utf-8")
-					previewHtml = truncate(raw, HTML_PREVIEW_MAX_CHARS)
+					previewBody = truncate(raw, HTML_PREVIEW_MAX_CHARS)
 				} catch {
 					// Unreadable — fall through to no preview body.
 				}
@@ -150,7 +158,7 @@ export async function buildUnitOutputPreviews(
 			out.push({
 				...base,
 				type: "html",
-				...(previewHtml !== undefined ? { previewHtml } : {}),
+				...(previewBody !== undefined ? { previewBody } : {}),
 			})
 			continue
 		}

@@ -706,20 +706,14 @@ export function StageReview({
 						onSubmitAnnotation={onSubmitAnnotation}
 						outputDeclaredBy={session.output_declared_by}
 						onDeclaringUnitClick={(unitSlug) => {
-							// Switch to the Units tab and let the row's
-							// data-unit-slug anchor scroll into view.
-							setActiveTab("units")
-							requestAnimationFrame(() => {
-								const el = document.querySelector(
-									`[data-unit-slug="${unitSlug}"]`,
-								)
-								if (el && "scrollIntoView" in el) {
-									;(el as HTMLElement).scrollIntoView({
-										behavior: "smooth",
-										block: "center",
-									})
-								}
-							})
+							// Open the unit's focused detail view. `openDetail`
+							// switches to the Units tab AND mounts
+							// `UnitDetailView` for this slug — same surface a
+							// reviewer would land on by clicking the unit row
+							// directly. Beats the previous DOM-querySelector
+							// scroll which left the row collapsed and required
+							// a second click.
+							openDetail("units", unitSlug)
 						}}
 					/>
 				) : (

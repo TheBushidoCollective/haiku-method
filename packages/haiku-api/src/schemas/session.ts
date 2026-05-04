@@ -92,15 +92,22 @@ export type OutputArtifact = z.infer<typeof OutputArtifactSchema>
 /** Per-unit output preview entry — one per path declared in the
  *  unit's `outputs:` frontmatter. The SPA's Units tab renders each
  *  entry as a click-out link with a hover popover that shows
- *  `previewHtml` (markdown/html) or a thumbnail keyed off `url`
- *  (image) or a name+size summary (file). `exists: false` flags a
- *  declared-but-missing output; the UI still surfaces it but warns. */
+ *  `previewBody` (markdown source via DOMPurify, or raw HTML via
+ *  sandboxed iframe) or a thumbnail keyed off `url` (image) or a
+ *  name+size summary (file). `exists: false` flags a
+ *  declared-but-missing output; the UI still surfaces it but warns.
+ *
+ *  `previewBody` is intentionally NOT named `previewHtml` — for
+ *  markdown entries it contains markdown source, not HTML, and
+ *  injecting it as HTML without sanitization would silently XSS. The
+ *  `markdown` / `html` discriminator on `type` tells the caller which
+ *  rendering pipeline to apply. */
 export const UnitOutputPreviewSchema = z.object({
 	path: z.string(),
 	name: z.string(),
 	type: z.enum(["markdown", "html", "image", "file"]),
 	url: z.string(),
-	previewHtml: z.string().optional(),
+	previewBody: z.string().optional(),
 	sizeBytes: z.number().int().nonnegative().optional(),
 	exists: z.boolean(),
 })

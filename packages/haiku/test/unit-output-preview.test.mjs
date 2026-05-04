@@ -71,9 +71,9 @@ await test("classifies markdown outputs and inlines preview body", async () => {
 	assert.strictEqual(out[0].path, "product/ACCEPTANCE-CRITERIA.md")
 	assert.strictEqual(out[0].name, "ACCEPTANCE-CRITERIA")
 	assert.strictEqual(out[0].exists, true)
-	assert.ok(out[0].previewHtml?.includes("Acceptance criteria"))
+	assert.ok(out[0].previewBody?.includes("Acceptance criteria"))
 	assert.ok(
-		!out[0].previewHtml?.includes("title: AC"),
+		!out[0].previewBody?.includes("title: AC"),
 		"frontmatter is stripped from preview body",
 	)
 })
@@ -85,7 +85,7 @@ await test("classifies html outputs and inlines preview body", async () => {
 	])
 	assert.strictEqual(out.length, 1)
 	assert.strictEqual(out[0].type, "html")
-	assert.ok(out[0].previewHtml?.includes("<h1>wireframe</h1>"))
+	assert.ok(out[0].previewBody?.includes("<h1>wireframe</h1>"))
 })
 
 await test("classifies image outputs without inlining preview body", async () => {
@@ -95,7 +95,7 @@ await test("classifies image outputs without inlining preview body", async () =>
 	])
 	assert.strictEqual(out.length, 1)
 	assert.strictEqual(out[0].type, "image")
-	assert.strictEqual(out[0].previewHtml, undefined)
+	assert.strictEqual(out[0].previewBody, undefined)
 })
 
 await test("unknown extensions classify as type:file", async () => {
@@ -105,7 +105,7 @@ await test("unknown extensions classify as type:file", async () => {
 	])
 	assert.strictEqual(out.length, 1)
 	assert.strictEqual(out[0].type, "file")
-	assert.strictEqual(out[0].previewHtml, undefined)
+	assert.strictEqual(out[0].previewBody, undefined)
 })
 
 await test("stamps a /stage-artifacts/{sessionId}/{path} URL on every entry", async () => {
@@ -145,7 +145,7 @@ await test("declared output that does not exist on disk surfaces with exists:fal
 	])
 	assert.strictEqual(out.length, 1)
 	assert.strictEqual(out[0].exists, false)
-	assert.strictEqual(out[0].previewHtml, undefined)
+	assert.strictEqual(out[0].previewBody, undefined)
 	assert.strictEqual(out[0].sizeBytes, undefined)
 })
 

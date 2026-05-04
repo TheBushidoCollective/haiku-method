@@ -358,20 +358,20 @@ function UnitOutputPopover({
 	if (!output.exists) return null
 
 	let body: React.ReactNode = null
-	if (output.type === "markdown" && output.previewHtml) {
+	if (output.type === "markdown" && output.previewBody) {
 		body = (
 			<div
 				className="prose prose-sm dark:prose-invert max-w-none"
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized via the shared markdownToSimpleHtml pipeline (DOMPurify default profile) — same contract as InlineComments/OutputArtifactsTab // audit-allow: DOMPurify-sanitized markdown render path
 				dangerouslySetInnerHTML={{
-					__html: markdownToSimpleHtml(output.previewHtml),
+					__html: markdownToSimpleHtml(output.previewBody),
 				}}
 			/>
 		)
-	} else if (output.type === "html" && output.previewHtml) {
+	} else if (output.type === "html" && output.previewBody) {
 		body = (
 			<iframe
-				srcDoc={output.previewHtml}
+				srcDoc={output.previewBody}
 				sandbox=""
 				className="w-full h-64 border border-stone-200 dark:border-stone-700 rounded bg-white"
 				title={`Preview of ${output.path}`}

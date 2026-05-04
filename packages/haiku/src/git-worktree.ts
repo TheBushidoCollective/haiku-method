@@ -1638,22 +1638,42 @@ function findWorktreeForBranch(branch: string): string | null {
 	return null
 }
 
-/** Returns true when the worktree at `path` has uncommitted changes
- *  (tracked or untracked). Used by `withWorktreeOnBranch` to refuse
- *  using a user-owned worktree as a merge target — landing a merge in
- *  a dirty tree would conflict with whatever the user is editing. */
-function isWorktreePathDirty(path: string): boolean {
+/** Inspect the worktree at `path` and report whether it has anything
+ *  blocking a safe merge. Returns null when clean; otherwise returns a
+ *  struct describing what's dirty so `withWorktreeOnBranch` can build
+ *  an actionable error message that names what the user needs to deal
+ *  with (uncommitted tracked changes vs. untracked files have
+ *  different remediation paths — `git stash` covers tracked, but
+ *  untracked needs `git clean` or `git add`).
+ *
+ *  Fails closed: when git can't be queried at all, returns "unknown"
+ *  so the caller refuses the merge rather than risk stomping on edits. */
+function inspectWorktreeDirtyState(path: string): {
+	tracked: boolean
+	untracked: boolean
+	unknown?: boolean
+} | null {
+	let raw: string
 	try {
-		const out = execFileSync("git", ["-C", path, "status", "--porcelain"], {
+		raw = execFileSync("git", ["-C", path, "status", "--porcelain"], {
 			encoding: "utf8",
 			stdio: ["ignore", "pipe", "pipe"],
 		})
-		return out.trim().length > 0
 	} catch {
-		// Fail-closed: if we can't tell, treat as dirty to avoid stomping
-		// on possibly-uncommitted edits.
-		return true
+		return { tracked: false, untracked: false, unknown: true }
 	}
+	if (raw.trim().length === 0) return null
+	let tracked = false
+	let untracked = false
+	for (const line of raw.split("\n")) {
+		if (!line) continue
+		// `git status --porcelain` rows start with a 2-char status:
+		// "??" = untracked, "!!" = ignored (we don't ask for these),
+		// any other combination = tracked change in index/worktree.
+		if (line.startsWith("??")) untracked = true
+		else tracked = true
+	}
+	return { tracked, untracked }
 }
 
 /** Run `fn` in a worktree on `branch`. Prefers an existing worktree
@@ -1675,9 +1695,31 @@ function isWorktreePathDirty(path: string): boolean {
 function withWorktreeOnBranch<T>(branch: string, fn: (path: string) => T): T {
 	const existing = findWorktreeForBranch(branch)
 	if (existing) {
-		if (isWorktreePathDirty(existing)) {
+		const dirty = inspectWorktreeDirtyState(existing)
+		if (dirty) {
+			// Build an actionable message that names exactly what's
+			// blocking — tracked changes need commit/stash, untracked
+			// files need add or clean. Naming both keeps the user from
+			// trying `git stash` and getting the surprise that it
+			// didn't help.
+			let kinds: string
+			let remediation: string
+			if (dirty.unknown) {
+				kinds = "an indeterminate state"
+				remediation = "inspect the worktree manually"
+			} else if (dirty.tracked && dirty.untracked) {
+				kinds = "uncommitted changes and untracked files"
+				remediation =
+					"commit or stash the tracked changes AND add or clean the untracked files"
+			} else if (dirty.tracked) {
+				kinds = "uncommitted changes"
+				remediation = "commit or stash them"
+			} else {
+				kinds = "untracked files"
+				remediation = "add them to a commit or `git clean` them"
+			}
 			throw new Error(
-				`branch '${branch}' is checked out at '${existing}' with uncommitted changes — commit or stash them so the workflow engine can merge into it`,
+				`branch '${branch}' is checked out at '${existing}' with ${kinds} — ${remediation} so the workflow engine can merge into it`,
 			)
 		}
 		return fn(existing)

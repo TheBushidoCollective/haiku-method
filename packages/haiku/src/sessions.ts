@@ -215,7 +215,7 @@ export interface ReviewSession {
 			name: string
 			type: string
 			url: string
-			previewHtml?: string
+			previewBody?: string
 			sizeBytes?: number
 			exists: boolean
 		}>

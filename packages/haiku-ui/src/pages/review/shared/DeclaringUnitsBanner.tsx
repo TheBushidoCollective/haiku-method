@@ -37,12 +37,10 @@ export function DeclaringUnitsBanner({
 	const units = declaredBy[intentRelativePath]
 	if (!units || units.length === 0) return null
 
-	const label = units.length === 1 ? "Declared by" : "Declared by"
-
 	return (
 		<div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs dark:border-violet-800 dark:bg-violet-900/30">
 			<span className="font-semibold uppercase tracking-wider text-violet-700 dark:text-violet-300">
-				{label}
+				Declared by
 			</span>
 			<ul className="flex flex-wrap items-center gap-1.5 m-0 p-0 list-none">
 				{units.map((unitSlug) => (

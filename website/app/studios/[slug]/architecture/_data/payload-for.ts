@@ -571,12 +571,12 @@ export function payloadFor(
 				{
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
-					what: "`action: output_liveness_review_required` — intent-completion gate found code outputs with NO referencers anywhere in the repo. Agent must wire each orphan or explicitly acknowledge it before studio-level review can proceed.",
+					what: "`action: output_liveness_review_required` — per-stage review handler OR intent-completion handler found code outputs with NO referencers anywhere in the repo. Agent must wire each orphan or explicitly acknowledge it before the gate (or studio-level review) can proceed.",
 				},
 				{
 					hook: "validateOutputLiveness()",
-					target: "intent-completion handler (before studio review dispatch)",
-					what: "For each `.ts`/`.tsx`/`.js`/`.jsx` output declared by any stage's units, runs `git grep -lw <stem>` in the repo root. Excludes test files and workflow-meta paths. Aggregates `haiku_coverage_acknowledge` acknowledgments from every stage's `coverage-decisions.json`. Orphan = zero git-grep hits and not acknowledged.",
+					target: "per-stage review handler (after quality gates pass, before workflowAdvancePhase to gate) AND intent-completion handler (before studio review dispatch)",
+					what: "For each `.ts`/`.tsx`/`.js`/`.jsx` output declared by any stage's units, runs `git grep -lw <stem>` in the repo root. Excludes test files and workflow-meta paths. Aggregates `haiku_coverage_acknowledge` acknowledgments from every stage's `coverage-decisions.json`. Orphan = zero git-grep hits and not acknowledged. Per-stage scope passes `[currentStage]`; intent-completion scope passes the full ordered stage list.",
 				},
 			],
 			action: "output_liveness_review_required",

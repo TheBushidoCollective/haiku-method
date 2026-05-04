@@ -3,7 +3,7 @@ title: Out-of-band human file modifications
 studio: software
 mode: autopilot
 autopilot: true
-status: active
+status: completed
 created_at: '2026-04-28'
 stages:
   - inception
@@ -19,7 +19,7 @@ phase: awaiting_completion_review
 completion_review_entered_at: '2026-05-03T21:48:46Z'
 completion_review_dispatched: true
 completion_review_skipped: false
-completed_at: ''
+completed_at: '2026-05-04T02:10:44Z'
 completion_review_dispatched_at: '2026-05-03T21:48:49Z'
 ---
 

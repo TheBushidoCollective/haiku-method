@@ -317,6 +317,12 @@ function ReviewLayoutLoaded({
 		intentStatus === "completed" ||
 		intentPhase === "awaiting_completion_review" ||
 		intentPhase === "intent_completion"
+	// When terminal, blank out the chrome's "selected stage" so the
+	// FeedbackSidebar renders an Intent header (not "Security current")
+	// and the stepper doesn't highlight the last stage as "viewing." The
+	// sidebar already falls back to "Intent" when stage is null.
+	const chromeSelectedStage = isIntentTerminal ? null : selectedStage
+	const chromeViewingStage = isIntentTerminal ? "" : (selectedStage ?? "")
 	const stageNamesOrdered = orderedStageNames
 	// Surface any external_review_url recorded in stage state — the
 	// agent records the delivery PR URL via
@@ -432,8 +438,10 @@ function ReviewLayoutLoaded({
 						{stageProgressData.length > 0 && (
 							<StageProgressStrip
 								stages={stageProgressData}
-								currentStage={activeStage ?? ""}
-								viewingStage={viewingIntent ? "" : (selectedStage ?? "")}
+								currentStage={isIntentTerminal ? "" : (activeStage ?? "")}
+								viewingStage={
+									viewingIntent || isIntentTerminal ? "" : chromeViewingStage
+								}
 								onStageClick={(name) =>
 									navigate({
 										to: "/review/$sessionId/stages/$stage",
@@ -450,8 +458,8 @@ function ReviewLayoutLoaded({
 					>
 						{!isMobile && (
 							<FeedbackSidebar
-								stage={selectedStage}
-								activeStage={activeStage}
+								stage={chromeSelectedStage}
+								activeStage={isIntentTerminal ? null : activeStage}
 								sessionId={sessionId}
 								intentSlug={intentSlug ?? undefined}
 								intentTitle={session.intent?.title}

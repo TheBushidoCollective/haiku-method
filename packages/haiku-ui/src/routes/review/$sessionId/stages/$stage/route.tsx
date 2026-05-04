@@ -6,7 +6,7 @@
  * the main pane.
  */
 
-import { createFileRoute, Outlet } from "@tanstack/react-router"
+import { createFileRoute, Navigate, Outlet } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
 import {
 	DriftBanner,
@@ -19,7 +19,25 @@ import { StageBanner } from "./-stage-banner"
 
 function StageLayout(): React.ReactElement {
 	const { stage } = Route.useParams()
-	const { session, activeStage } = useReviewContext()
+	const { session, sessionId, activeStage } = useReviewContext()
+	// Terminal-intent guard: when the intent is in
+	// `awaiting_completion_review` or `status: completed`, deep links
+	// to `/stages/<X>` would render with the stage banner highlighting
+	// the (now-done) stage and the chrome labeling it "current". The
+	// IntentCompleteView lives at /intent — redirect there so the
+	// chrome reflects "we're reviewing the intent, not a stage."
+	const intentFm = session.intent?.frontmatter
+	const intentStatus = (intentFm?.status as string | undefined) ?? ""
+	const intentPhase = (intentFm?.phase as string | undefined) ?? ""
+	const isIntentTerminal =
+		intentStatus === "completed" ||
+		intentPhase === "awaiting_completion_review" ||
+		intentPhase === "intent_completion"
+	if (isIntentTerminal) {
+		return (
+			<Navigate to="/review/$sessionId/intent" params={{ sessionId }} replace />
+		)
+	}
 	const stageStates = session.stage_states ?? {}
 	const stageStatus =
 		stage === activeStage

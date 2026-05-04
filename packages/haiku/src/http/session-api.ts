@@ -11,6 +11,7 @@ import { join } from "node:path"
 import type { FastifyReply } from "fastify"
 import type { ApproveAction, IntentCurrentState } from "haiku-api"
 import { getCurrentState } from "../current-state.js"
+import { discoverReviewUrl } from "../discover-review-url.js"
 import {
 	resolveIntentStages,
 	resolveStudioStages,
@@ -201,6 +202,18 @@ export function respondSessionApi(
 			? getCurrentState(session.intent_slug)
 			: null
 		if (current) data.current_state = current
+		// Best-effort PR/MR discovery via raw git plumbing
+		// (`git ls-remote origin 'refs/pull/*/head'` for GitHub,
+		// `refs/merge-requests/*/head` for GitLab). The engine never
+		// gates on this — `isBranchMerged` against intent main is the
+		// only gate signal — but the SPA surfaces the link
+		// informationally on terminal intents and the browse interface.
+		// Returns null when the branch is unpushed, no PR/MR exists,
+		// or the host isn't a recognised provider.
+		if (session.intent_slug) {
+			const discovered = discoverReviewUrl(session.intent_slug)
+			if (discovered) data.discovered_review_url = discovered
+		}
 		if (session.knowledgeFiles) data.knowledge_files = session.knowledgeFiles
 		if (session.stageArtifacts) data.stage_artifacts = session.stageArtifacts
 		if (session.outputArtifacts) data.output_artifacts = session.outputArtifacts

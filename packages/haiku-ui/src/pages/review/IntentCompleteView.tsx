@@ -30,13 +30,33 @@ export interface IntentCompleteViewStageState {
 	[key: string]: unknown
 }
 
+/** Auto-detected delivery PR/MR — the engine populates this via
+ *  `git ls-remote origin` over the PR/MR head ref namespaces (GitHub
+ *  `refs/pull/<n>/head`, GitLab `refs/merge-requests/<n>/head`) when
+ *  a published head ref matches the intent main branch's HEAD SHA.
+ *  Pure git, no API calls. See packages/haiku/src/discover-review-url.ts. */
+export interface DiscoveredReviewUrl {
+	url: string
+	source: "github-pr-ref" | "gitlab-mr-ref"
+	prNumber: number
+	matchedSha: string
+}
+
 export interface IntentCompleteViewProps {
 	intentSlug: string
 	intentTitle: string
 	intentFrontmatter: IntentFrontmatter
 	stageStates: Record<string, IntentCompleteViewStageState | undefined>
 	stageOrder: string[]
+	/** URL the agent recorded via
+	 *  `haiku_run_next { external_review_url }`. When present, takes
+	 *  precedence over the auto-detected URL. */
 	deliveryReviewUrl?: string | null
+	/** URL the engine discovered via raw git from a published PR/MR
+	 *  ref. Surfaced as a fallback when the agent never recorded an
+	 *  explicit URL — common when the user opens the PR via `gh pr
+	 *  create` or the GitHub UI directly. */
+	discoveredReviewUrl?: DiscoveredReviewUrl | null
 }
 
 function formatTimestamp(value: string | undefined | null): string {
@@ -57,7 +77,20 @@ export function IntentCompleteView({
 	stageStates,
 	stageOrder,
 	deliveryReviewUrl,
+	discoveredReviewUrl,
 }: IntentCompleteViewProps): React.ReactElement {
+	// Resolution: explicit (agent-recorded) wins; otherwise the
+	// raw-git discovered URL. Both are equally clickable but the
+	// auto-detected one carries a "(auto-detected)" tag so the
+	// reader knows it's heuristic — engine doesn't gate on it.
+	const resolvedUrl = deliveryReviewUrl ?? discoveredReviewUrl?.url ?? null
+	const isAutoDetected = !deliveryReviewUrl && !!discoveredReviewUrl
+	const sourceLabel =
+		discoveredReviewUrl?.source === "gitlab-mr-ref"
+			? "MR"
+			: discoveredReviewUrl?.source === "github-pr-ref"
+				? "PR"
+				: "PR/MR"
 	const completedAt = formatTimestamp(
 		(intentFrontmatter.completed_at as string | undefined) ?? null,
 	)
@@ -112,15 +145,26 @@ export function IntentCompleteView({
 				<p className="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500 mb-2">
 					Delivery review
 				</p>
-				{deliveryReviewUrl ? (
-					<a
-						href={deliveryReviewUrl}
-						target="_blank"
-						rel="noreferrer noopener"
-						className="text-sm font-medium text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 rounded break-all"
-					>
-						{deliveryReviewUrl}
-					</a>
+				{resolvedUrl ? (
+					<>
+						<a
+							href={resolvedUrl}
+							target="_blank"
+							rel="noreferrer noopener"
+							className="text-sm font-medium text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 rounded break-all"
+						>
+							{resolvedUrl}
+						</a>
+						{isAutoDetected && (
+							<p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+								Auto-detected from{" "}
+								<code className="font-mono">git ls-remote</code> — matched{" "}
+								{sourceLabel} #{discoveredReviewUrl?.prNumber} to the intent
+								main branch's HEAD. Informational only; the engine gates on the
+								merge into mainline, not on PR state.
+							</p>
+						)}
+					</>
 				) : (
 					<p className="text-sm text-stone-600 dark:text-stone-400 italic">
 						No delivery PR/MR URL recorded yet. Open the merge request and
@@ -128,7 +172,10 @@ export function IntentCompleteView({
 						<code className="font-mono not-italic">
 							haiku_run_next {`{ external_review_url }`}
 						</code>{" "}
-						so the workflow engine can track approval status.
+						so the workflow engine can track approval status. (The engine also
+						scans <code className="font-mono not-italic">git ls-remote</code>{" "}
+						for a matching PR/MR ref and will surface it here automatically once
+						the branch is pushed and a PR exists.)
 					</p>
 				)}
 			</section>

@@ -337,6 +337,16 @@ function ReviewLayoutLoaded({
 		const s = stageStates[name] as { external_review_url?: string } | undefined
 		if (s?.external_review_url) deliveryReviewUrl = s.external_review_url
 	}
+	// Auto-detected PR/MR URL — populated by the session API via raw
+	// git (`git ls-remote origin 'refs/pull/*/head'` etc). Used as a
+	// fallback when the agent never recorded an explicit URL. The
+	// engine never gates on this — it's informational only.
+	const discoveredReviewUrl =
+		(
+			session as {
+				discovered_review_url?: import("../../../pages/review/IntentCompleteView").DiscoveredReviewUrl
+			}
+		).discovered_review_url ?? null
 
 	const contextValue: ReviewRouteContextValue = useMemo(
 		() => ({
@@ -505,6 +515,7 @@ function ReviewLayoutLoaded({
 									stageStates={stageStates}
 									stageOrder={stageNamesOrdered}
 									deliveryReviewUrl={deliveryReviewUrl}
+									discoveredReviewUrl={discoveredReviewUrl}
 								/>
 							) : (
 								<Outlet />

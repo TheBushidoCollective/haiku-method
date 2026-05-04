@@ -479,6 +479,145 @@ await test("discovery cleanup discards worktree without merging", () => {
 	}
 })
 
+// Regression: a user (or sibling clone / sandbox) has the stage branch
+// checked out in their own worktree. The pre-fix engine called
+// `withTempWorktree(stageBranch, …)` which fails — `git worktree add`
+// refuses to attach a second worktree to a branch already in use —
+// so the discovery merge silently failed every tick and the elaborate
+// prompt re-fanned-out the same discovery subagents on each run_next.
+// The fix routes the merge through `withWorktreeOnBranch`, which
+// detects the existing checkout and lands the merge there.
+await test(
+	"merges discovery into stage branch when stage branch is held by a foreign worktree (regression: stuck elaboration)",
+	() => {
+		const { tmp, slug, stage } = setupRepo()
+		try {
+			process.chdir(tmp)
+			git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+
+			// Simulate the user's monorepo-3: a separate worktree of the
+			// same repo, parked on the stage branch. The MCP cwd (tmp)
+			// stays on `haiku/{slug}/main`.
+			const userWorktree = mkdtempSync(join(tmpdir(), "haiku-user-checkout-"))
+			rmSync(userWorktree, { recursive: true, force: true })
+			git(tmp, "worktree", "add", userWorktree, `haiku/${slug}/${stage}`)
+			try {
+				// Discovery subagent does its work in its own worktree.
+				const wt = createDiscoveryWorktree(slug, stage, "competitive")
+				const artifactPath = join(
+					wt,
+					".haiku",
+					"intents",
+					slug,
+					"knowledge",
+					"COMPETITIVE.md",
+				)
+				mkdirSync(join(artifactPath, ".."), { recursive: true })
+				writeFileSync(artifactPath, "# competitive landscape\n")
+				git(wt, "add", "-A")
+				git(wt, "commit", "-m", "competitive discovery")
+
+				// MCP cwd is on intent main (NOT the stage branch). The
+				// merge function falls through to its temp-worktree path,
+				// which now finds the user's existing worktree on the
+				// stage branch and uses it instead of throwing.
+				const res = mergeDiscoveryWorktree(slug, stage, "competitive")
+				assert.ok(
+					res.success,
+					`expected merge success when stage branch is held by foreign worktree; got: ${res.message}`,
+				)
+
+				// The merge landed on the stage branch — visible in the
+				// foreign worktree's tree.
+				const userArtifact = join(
+					userWorktree,
+					".haiku",
+					"intents",
+					slug,
+					"knowledge",
+					"COMPETITIVE.md",
+				)
+				assert.ok(
+					existsSync(userArtifact),
+					"discovery artifact should appear on the stage branch via the foreign worktree",
+				)
+
+				// Discovery worktree + branch reaped.
+				assert.ok(!existsSync(wt), "discovery worktree reaped")
+				assert.ok(
+					!branchExists(tmp, discoveryBranchName(slug, stage, "competitive")),
+					"discovery branch reaped",
+				)
+			} finally {
+				// Clean up the user's worktree before tearing down the
+				// repo so `git worktree remove` doesn't leave dangling
+				// metadata in the parent.
+				try {
+					git(tmp, "worktree", "remove", "--force", userWorktree)
+				} catch {
+					/* best-effort */
+				}
+				rmSync(userWorktree, { recursive: true, force: true })
+			}
+		} finally {
+			cleanupRepo(tmp)
+		}
+	},
+)
+
+// Companion: when the foreign worktree is dirty, the merge surfaces a
+// clear error instead of silently looping. Without this, a user with
+// uncommitted changes on the stage branch would see the elaborate
+// prompt re-fanning-out indefinitely with no diagnostic.
+await test(
+	"surfaces a structured error when the stage branch is held by a dirty foreign worktree",
+	() => {
+		const { tmp, slug, stage } = setupRepo()
+		try {
+			process.chdir(tmp)
+			git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+
+			const userWorktree = mkdtempSync(join(tmpdir(), "haiku-user-dirty-"))
+			rmSync(userWorktree, { recursive: true, force: true })
+			git(tmp, "worktree", "add", userWorktree, `haiku/${slug}/${stage}`)
+			try {
+				// Leave an uncommitted edit in the foreign worktree.
+				writeFileSync(join(userWorktree, "WIP.txt"), "user is mid-edit\n")
+
+				const wt = createDiscoveryWorktree(slug, stage, "risks")
+				const artifactPath = join(
+					wt,
+					".haiku",
+					"intents",
+					slug,
+					"knowledge",
+					"RISKS.md",
+				)
+				mkdirSync(join(artifactPath, ".."), { recursive: true })
+				writeFileSync(artifactPath, "# risks\n")
+				git(wt, "add", "-A")
+				git(wt, "commit", "-m", "risks discovery")
+
+				const res = mergeDiscoveryWorktree(slug, stage, "risks")
+				assert.ok(!res.success, "expected failure on dirty foreign worktree")
+				assert.ok(
+					/uncommitted changes/i.test(res.message),
+					`expected the message to surface uncommitted-changes hint; got: ${res.message}`,
+				)
+			} finally {
+				try {
+					git(tmp, "worktree", "remove", "--force", userWorktree)
+				} catch {
+					/* best-effort */
+				}
+				rmSync(userWorktree, { recursive: true, force: true })
+			}
+		} finally {
+			cleanupRepo(tmp)
+		}
+	},
+)
+
 // ── Path + name helpers ────────────────────────────────────────────────────
 
 console.log("\n=== path + branch name conventions ===")

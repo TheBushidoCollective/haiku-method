@@ -715,8 +715,10 @@ export function mergeStageBranchIntoMain(
 			mergeInPrimary()
 		} else {
 			// Primary on something else (foreign branch, mainline, etc.) —
-			// don't disturb it. Use a temp worktree.
-			withTempWorktree(mainBranch, (tmpPath) => {
+			// don't disturb it. Prefer an existing worktree on
+			// `mainBranch` (handles the "user has intent main checked out
+			// in their own worktree" case); fall back to a temp worktree.
+			withWorktreeOnBranch(mainBranch, (tmpPath) => {
 				run([
 					"git",
 					"-C",
@@ -1336,7 +1338,7 @@ export function writeOnIntentMain(
 				])
 			}
 		} else {
-			withTempWorktree(mainBranch, (tmpPath) => {
+			withWorktreeOnBranch(mainBranch, (tmpPath) => {
 				const fullPath = join(tmpPath, relPath)
 				const dir = fullPath.replace(/\/[^/]+$/, "")
 				mkdirSync(dir, { recursive: true })
@@ -1435,7 +1437,7 @@ export function checkoutFromBranchOnIntentMain(
 		if (current === mainBranch) {
 			runCheckout(primaryRepoRoot())
 		} else {
-			withTempWorktree(mainBranch, (tmpPath) => {
+			withWorktreeOnBranch(mainBranch, (tmpPath) => {
 				runCheckout(tmpPath)
 			})
 		}
@@ -1539,6 +1541,92 @@ function withTempWorktree<T>(branch: string, fn: (path: string) => T): T {
 			/* non-fatal */
 		}
 	}
+}
+
+/** Find the path of an existing worktree currently checked out on
+ *  `branch`, or null when no worktree owns the branch. Parses
+ *  `git worktree list --porcelain`, matching the canonical
+ *  `refs/heads/<branch>` shape git emits.
+ *
+ *  Used by `withWorktreeOnBranch` to avoid the "branch is already
+ *  checked out elsewhere" failure mode `git worktree add` hits when a
+ *  user (or a sibling clone / sandbox) is parked on the same branch
+ *  the engine wants to merge into. */
+function findWorktreeForBranch(branch: string): string | null {
+	if (!isGitRepo() || !branch) return null
+	let raw: string
+	try {
+		raw = execFileSync("git", ["worktree", "list", "--porcelain"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		})
+	} catch {
+		return null
+	}
+	const target = `refs/heads/${branch}`
+	let curPath: string | null = null
+	for (const line of raw.split("\n")) {
+		if (line.startsWith("worktree ")) {
+			curPath = line.slice("worktree ".length).trim()
+		} else if (line.startsWith("branch ") && curPath) {
+			const b = line.slice("branch ".length).trim()
+			if (b === target) return curPath
+		} else if (line === "") {
+			curPath = null
+		}
+	}
+	return null
+}
+
+/** Returns true when the worktree at `path` has uncommitted changes
+ *  (tracked or untracked). Used by `withWorktreeOnBranch` to refuse
+ *  using a user-owned worktree as a merge target — landing a merge in
+ *  a dirty tree would conflict with whatever the user is editing. */
+function isWorktreePathDirty(path: string): boolean {
+	try {
+		const out = execFileSync(
+			"git",
+			["-C", path, "status", "--porcelain"],
+			{ encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+		)
+		return out.trim().length > 0
+	} catch {
+		// Fail-closed: if we can't tell, treat as dirty to avoid stomping
+		// on possibly-uncommitted edits.
+		return true
+	}
+}
+
+/** Run `fn` in a worktree on `branch`. Prefers an existing worktree
+ *  already checked out at `branch` (e.g. the user's own checkout, or
+ *  a sibling sandbox); falls back to a transient temp worktree.
+ *
+ *  WHY: `git worktree add` refuses when `branch` is already checked
+ *  out at any worktree on the machine — `withTempWorktree(branch)`
+ *  throws in that case, leaving merges silently stuck (the discovery
+ *  / unit / fix-chain merge functions catch the throw and log to
+ *  stderr). Using the existing worktree lets the merge land in
+ *  whatever path already owns the branch, which is what `git` itself
+ *  would do.
+ *
+ *  Throws when an existing worktree on `branch` is dirty — landing a
+ *  merge there would clobber the user's WIP. The caller's catch
+ *  block returns `{success: false, message}` so the agent surfaces
+ *  the error and the user can commit/stash and retry. */
+function withWorktreeOnBranch<T>(
+	branch: string,
+	fn: (path: string) => T,
+): T {
+	const existing = findWorktreeForBranch(branch)
+	if (existing) {
+		if (isWorktreePathDirty(existing)) {
+			throw new Error(
+				`branch '${branch}' is checked out at '${existing}' with uncommitted changes — commit or stash them so the workflow engine can merge into it`,
+			)
+		}
+		return fn(existing)
+	}
+	return withTempWorktree(branch, fn)
 }
 
 /**
@@ -1734,7 +1822,7 @@ export function mergeUnitWorktree(
 		if (onStageBranch) {
 			mergeHere()
 		} else {
-			withTempWorktree(stageBranch, (tmpPath) => mergeHere(tmpPath))
+			withWorktreeOnBranch(stageBranch, (tmpPath) => mergeHere(tmpPath))
 		}
 
 		// Reap the unit worktree and local branch — its work is now on the
@@ -1950,7 +2038,7 @@ export function mergeDiscoveryWorktree(
 		if (onBaseBranch) {
 			mergeHere()
 		} else {
-			withTempWorktree(baseBranch, (tmpPath) => mergeHere(tmpPath))
+			withWorktreeOnBranch(baseBranch, (tmpPath) => mergeHere(tmpPath))
 		}
 
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
@@ -2199,7 +2287,7 @@ export function mergeFixChainWorktree(
 		if (onBaseBranch) {
 			mergeHere()
 		} else {
-			withTempWorktree(baseBranch, (tmpPath) => mergeHere(tmpPath))
+			withWorktreeOnBranch(baseBranch, (tmpPath) => mergeHere(tmpPath))
 		}
 
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])

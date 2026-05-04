@@ -511,6 +511,8 @@ function ReviewLayoutLoaded({
 									stageOrder={stageNamesOrdered}
 									deliveryReviewUrl={deliveryReviewUrl}
 									discoveredReviewUrl={discoveredReviewUrl}
+									outputArtifacts={session.output_artifacts}
+									outputDeclaredBy={session.output_declared_by}
 								/>
 							) : (
 								<Outlet />

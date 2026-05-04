@@ -4258,6 +4258,39 @@ export function setRunNextHandler(handler: typeof _runNext): void {
 	_runNext = handler
 }
 
+/**
+ * Callback for synthesizing a per-unit `continue_unit` dispatch when a
+ * unit advances mid-wave. The unit (not the hat) holds its wave slot,
+ * so when its current hat finishes the parent should fire the next hat
+ * for THIS unit immediately — without round-tripping through
+ * `haiku_run_next` (which would return a wave-wide `continue_units`
+ * covering siblings whose subagents are still in flight).
+ *
+ * The handler synthesizes the action, calls `buildRunInstructions`
+ * internally so the rendered prompt is written to a tmpfile and
+ * `prompt_file` is stamped onto the action, and returns the mutated
+ * action. `advance_hat` then writes that action into the result file
+ * the subagent points the parent at.
+ *
+ * Registered by orchestrator.ts at module load. Set to `null` if
+ * orchestrator hasn't loaded yet (defensive — caller falls back to a
+ * plaintext "advanced" message).
+ */
+let _buildContinueDispatch:
+	| ((
+			slug: string,
+			stage: string,
+			unit: string,
+			hat: string,
+			bolt: number,
+	  ) => { action: string; [key: string]: unknown })
+	| null = null
+export function setBuildContinueDispatchHandler(
+	handler: typeof _buildContinueDispatch,
+): void {
+	_buildContinueDispatch = handler
+}
+
 /** Resolve the active stage for an intent from its frontmatter */
 function resolveActiveStage(intent: string): string {
 	const root = findHaikuRoot()
@@ -8367,11 +8400,22 @@ export function handleStateTool(
 				args.intent as string,
 				args.state_file as string | undefined,
 			)
-			// Internally call runNext — returns continue_unit with next hat context for the parent
-			if (_runNext) {
-				const next = _runNext(args.intent as string)
+			// Wave-slot semantics: the unit holds the wave slot, not the
+			// hat. When advancing mid-unit, synthesize a per-unit
+			// `continue_unit` dispatch (with the prompt rendered and
+			// `prompt_file` stamped here, not via a parent
+			// `haiku_run_next` round-trip). The parent fires the next
+			// hat for THIS unit instantly — siblings stay in flight.
+			if (_buildContinueDispatch) {
+				const action = _buildContinueDispatch(
+					args.intent as string,
+					advStage,
+					args.unit as string,
+					nextHat,
+					(unitFm.bolt as number) || 1,
+				)
 				const payload = injectPushWarning(
-					{ ...next, _hat_advanced: nextHat },
+					{ ...action, _hat_advanced: nextHat },
 					advGit,
 				)
 				const resultPath = resultPathFor({
@@ -8381,10 +8425,13 @@ export function handleStateTool(
 				})
 				writeResultFile(resultPath, payload)
 				return text(
-					`Workflow Result written to: ${resultPath}\n\nYOUR FINAL MESSAGE TO THE PARENT MUST BE EXACTLY ONE LINE:\n\nWorkflow Result: ${resultPath}\n\nDo NOT add prose, summary, or description. The parent reads the file to drive the next workflow action.`,
+					`Workflow Result written to: ${resultPath}\n\nYOUR FINAL MESSAGE TO THE PARENT MUST BE EXACTLY ONE LINE:\n\nWorkflow Result: ${resultPath}\n\nDo NOT add prose, summary, or description. The parent reads the file to dispatch the next hat for this unit directly — no haiku_run_next call needed.`,
 				)
 			}
 
+			// Defensive fallback — orchestrator hasn't loaded yet (test
+			// shims, partial bootstrap). Surface a plaintext signal the
+			// parent can route through `haiku_run_next` the legacy way.
 			const hatScope = resolveStageScope(args.intent as string, advStage)
 			return text(
 				(hatScope

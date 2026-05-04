@@ -29,8 +29,11 @@ import {
 	toMermaidDefinition,
 } from "../index.js"
 import { handleOrchestratorTool } from "../orchestrator.js"
+import { buildOutputDeclaredBy } from "../output-declared-by.js"
 import { isSentryConfigured, reportFeedback } from "../sentry.js"
 import type { DesignArchetypeData, QuestionDef } from "../sessions.js"
+import { buildStageArtifactUrl } from "../stage-artifact-url.js"
+import { buildUnitOutputPreviews } from "../unit-output-preview.js"
 import {
 	clearHeartbeat,
 	createDesignDirectionSession,
@@ -371,20 +374,55 @@ export async function handleToolCall(
 		session.ad_hoc = true
 		session.stage = activeStage || undefined
 
+		// Per-unit output previews — small, popover-ready entries the
+		// UnitsTable renders as click-out links + hover previews. Built
+		// here (after the session exists, so the URL helper has the
+		// session id) to avoid a per-row fetch round-trip in the SPA.
+		const unitOutputs = await Promise.all(
+			units.map(async (u) => ({
+				slug: u.slug,
+				outputs: await buildUnitOutputPreviews(
+					intentDirAbs,
+					session.session_id,
+					u.frontmatter.outputs,
+				),
+			})),
+		)
+		const unitOutputsMap: Record<string, unknown> = {}
+		for (const { slug: uSlug, outputs } of unitOutputs) {
+			if (outputs.length > 0) unitOutputsMap[uSlug] = outputs
+		}
+		// Inverse map (output path → declaring unit slugs) for the
+		// "Declared by" banner above output content.
+		const outputDeclaredBy = await buildOutputDeclaredBy(intentDirAbs)
+
 		Object.assign(session, {
 			parsedIntent: intent,
 			parsedUnits: units,
 			parsedCriteria: criteria,
 			parsedMermaid: mermaid,
+			unitOutputs: unitOutputsMap,
+			outputDeclaredBy,
 		})
 
 		const stageStates = await parseStageStates(intentDirAbs)
 		const knowledgeFiles = await parseKnowledgeFiles(intentDirAbs)
 		const stageArtifacts = await parseStageArtifacts(intentDirAbs)
 		const outputArtifacts = await parseOutputArtifacts(intentDirAbs)
+		// Rewrite every relativePath (not just images) to a tunnel URL so
+		// click-out links work for HTML, file, and image types alike. The
+		// parser produces intent-dir-relative paths; the helper returns
+		// the full `/stage-artifacts/:sessionId/*` route path the SPA
+		// reaches via `withAuthQuery`. Preserve the original
+		// intent-relative path on `intentRelativePath` so the SPA can
+		// look the artifact up in `output_declared_by`.
 		for (const oa of outputArtifacts) {
-			if (oa.type === "image" && oa.relativePath) {
-				oa.relativePath = `/stage-artifacts/${session.session_id}/stages/${oa.relativePath}`
+			if (oa.relativePath) {
+				oa.intentRelativePath = oa.relativePath
+				oa.relativePath = buildStageArtifactUrl(
+					session.session_id,
+					oa.relativePath,
+				)
 			}
 		}
 		Object.assign(session, {
@@ -889,12 +927,32 @@ export function createReviewGateHandler() {
 			session.next_phase = gateMeta.nextPhase
 		bindSessionCancellation(session.session_id, signal)
 
+		// Per-unit output previews for the SPA's Units tab — see notes
+		// in the ad-hoc-review path above.
+		const unitOutputs = await Promise.all(
+			units.map(async (u) => ({
+				slug: u.slug,
+				outputs: await buildUnitOutputPreviews(
+					intentDirAbs,
+					session.session_id,
+					u.frontmatter.outputs,
+				),
+			})),
+		)
+		const unitOutputsMap: Record<string, unknown> = {}
+		for (const { slug: uSlug, outputs } of unitOutputs) {
+			if (outputs.length > 0) unitOutputsMap[uSlug] = outputs
+		}
+		const outputDeclaredBy = await buildOutputDeclaredBy(intentDirAbs)
+
 		// Store parsed data on session for the SPA
 		Object.assign(session, {
 			parsedIntent: intent,
 			parsedUnits: units,
 			parsedCriteria: criteria,
 			parsedMermaid: mermaid,
+			unitOutputs: unitOutputsMap,
+			outputDeclaredBy,
 		})
 
 		// Attach previous-review snapshot (from a prior changes_requested) so
@@ -910,10 +968,17 @@ export function createReviewGateHandler() {
 		const stageArtifacts = await parseStageArtifacts(intentDirAbs)
 		const outputArtifacts = await parseOutputArtifacts(intentDirAbs)
 
-		// Resolve image output artifact URLs now that we have a session ID
+		// Resolve every output artifact's URL now that we have a session
+		// ID — applies for image, html, and file types so click-out links
+		// work universally. Preserve the original intent-relative path
+		// on `intentRelativePath` for `output_declared_by` lookups.
 		for (const oa of outputArtifacts) {
-			if (oa.type === "image" && oa.relativePath) {
-				oa.relativePath = `/stage-artifacts/${session.session_id}/stages/${oa.relativePath}`
+			if (oa.relativePath) {
+				oa.intentRelativePath = oa.relativePath
+				oa.relativePath = buildStageArtifactUrl(
+					session.session_id,
+					oa.relativePath,
+				)
 			}
 		}
 

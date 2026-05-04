@@ -202,7 +202,28 @@ export interface ReviewSession {
 		type: string
 		content?: string
 		relativePath?: string
+		intentRelativePath?: string
 	}>
+	/** Per-unit output preview entries keyed by unit slug. The SPA's
+	 *  Units tab renders each entry as a click-out link with a hover
+	 *  popover preview. Built server-side at session creation so the
+	 *  SPA doesn't have to per-row-fetch each output's bytes. */
+	unitOutputs?: Record<
+		string,
+		Array<{
+			path: string
+			name: string
+			type: string
+			url: string
+			previewHtml?: string
+			sizeBytes?: number
+			exists: boolean
+		}>
+	>
+	/** Inverse map: keyed by intent-dir-relative output path, lists
+	 *  the unit slugs that declared it. The review UI surfaces this
+	 *  as a banner above output content. */
+	outputDeclaredBy?: Record<string, string[]>
 }
 
 export interface QuestionDef {

@@ -60,8 +60,13 @@ function computeApproveAction(
 
 	const gateContext = session.gate_context || "stage_gate"
 	const gateType = session.gate_type || "ask"
-	const hasExternal = gateType.split(",").some((p) => p.trim() === "external")
-	const isCompoundExternal = hasExternal && gateType.includes(",")
+	const gateParts = gateType.split(",").map((p) => p.trim())
+	const hasExternal = gateParts.some((p) => p === "external")
+	// Compound = `external` + at least one local-approve type (`ask`,
+	// `auto`). The compound case has TWO buttons in the SPA: the main
+	// approve closes locally (decision=approved), the secondary
+	// "External" button submits the PR (decision=external_review).
+	const isPureExternal = hasExternal && gateParts.length === 1
 
 	const stage = current?.stage || session.stage || ""
 	const stageTitle = stage ? titleCase(stage) : ""
@@ -72,17 +77,10 @@ function computeApproveAction(
 		return { label: "Mark Intent Done", kind: "complete_intent" }
 	}
 
-	// Discrete mode / external review — approval routes through a PR/MR
-	// rather than locally closing the gate.
-	if (hasExternal) {
-		if (isCompoundExternal) {
-			return {
-				label: stageTitle
-					? `Submit ${stageTitle} for Review`
-					: "Submit for Review",
-				kind: "submit_external",
-			}
-		}
+	// Pure external gate (non-compound) — there is no local approve
+	// path. The single approve button submits decision="external_review"
+	// which routes through `gh pr create` / `glab mr create`.
+	if (isPureExternal) {
 		return {
 			label: stageTitle
 				? `Open ${stageTitle} Pull Request`
@@ -90,6 +88,16 @@ function computeApproveAction(
 			kind: "open_pr",
 		}
 	}
+
+	// Compound external `[external, ask]` falls through to the same
+	// label-resolution as a pure `ask` gate. The main approve button
+	// submits decision="approved" — which advances/completes the stage
+	// LOCALLY (no PR). The secondary "External" button (rendered by
+	// the SPA when gate_type.includes("external")) is the PR-open
+	// path. Reusing the local labels matches what the main button
+	// actually does — the previous "Submit … for Review" wording was
+	// an external-path label slapped on the local button, which read
+	// as nonsense to a reviewer already inside the review pane.
 
 	// First-stage elaborate gate — approving kicks off the intent.
 	if (gateContext === "intent_review") {
@@ -217,6 +225,9 @@ export function respondSessionApi(
 		if (session.knowledgeFiles) data.knowledge_files = session.knowledgeFiles
 		if (session.stageArtifacts) data.stage_artifacts = session.stageArtifacts
 		if (session.outputArtifacts) data.output_artifacts = session.outputArtifacts
+		if (session.unitOutputs) data.unit_outputs = session.unitOutputs
+		if (session.outputDeclaredBy)
+			data.output_declared_by = session.outputDeclaredBy
 		if (session.previousReview) data.previous_review = session.previousReview
 		if (session.ad_hoc) data.ad_hoc = true
 		if (session.stage) data.stage = session.stage

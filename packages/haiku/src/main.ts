@@ -33,6 +33,26 @@ process.on("unhandledRejection", (reason) => {
 const [cmd, ...args] = process.argv.slice(2)
 
 if (cmd === "mcp") {
+	// Dev-mode SPA freshness check: when running from a checkout, if any
+	// haiku-ui source file is newer than the inlined `haiku-ui-html.ts`,
+	// run the bundle script before the server imports `HAIKU_UI_HTML`.
+	// Production-installed binaries don't ship the haiku-ui sources, so
+	// this short-circuits to a no-op. Disable with
+	// HAIKU_DEV_SPA_AUTO_REBUILD=0.
+	const spaRebuildReady = import("./dev-spa-rebuild.js")
+		.then((m) => {
+			m.maybeRebuildSpaForDev(import.meta.url)
+		})
+		.catch((err) => {
+			reportError(err instanceof Error ? err : new Error(String(err)), {
+				context: "dev-spa-rebuild",
+			})
+			console.error(
+				`haiku mcp: SPA dev-rebuild failed: ${err instanceof Error ? err.message : String(err)}`,
+			)
+			return flushSentry().finally(() => process.exit(1))
+		})
+
 	// Parse --harness <name> from args before loading the server module.
 	// Remaining args are forwarded in case future flags are added.
 	let harnessName = ""
@@ -58,7 +78,7 @@ if (cmd === "mcp") {
 		? import("./harness.js").then((m) => m.setHarness(harnessName))
 		: Promise.resolve()
 
-	harnessReady
+	Promise.all([spaRebuildReady, harnessReady])
 		.then(() => import("./server.js"))
 		.catch((err) => {
 			reportError(err, { context: "mcp-bootstrap" })

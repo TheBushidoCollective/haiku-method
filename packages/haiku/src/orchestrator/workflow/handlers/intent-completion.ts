@@ -29,6 +29,7 @@
 //   5. All findings resolved → final gate_review (intent_completion
 //      gate context)
 
+import { execSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
@@ -58,6 +59,8 @@ import {
 	readStudioReviewAgentPaths,
 } from "../../../studio-reader.js"
 import { emitTelemetry } from "../../../telemetry.js"
+import { resolveIntentStages } from "../../studio.js"
+import { validateOutputLiveness } from "../../validators.js"
 import { countOpenFeedbackForGateCheck } from "../feedback-triage-gate.js"
 import { workflowIntentComplete } from "../side-effects.js"
 import type { WorkflowHandler } from "./_types.js"
@@ -67,6 +70,33 @@ const emit: WorkflowHandler = (ctx) => {
 	const studio = ctx.studio
 	const intent = ctx.intent
 	const intentFile = join(intentDir(slug), "intent.md")
+
+	// Pre-completion liveness check: every code-output declared by any
+	// unit across every stage must be referenced by SOME OTHER file in
+	// the repo (or explicitly acknowledged in a stage's
+	// coverage-decisions.json). Catches the orphan-component class of
+	// failure (defined but never rendered). Runs before studio-level
+	// review dispatch so reviewers see the orphan list and any
+	// acknowledgments before signing off. Repo root resolves via git
+	// rev-parse; in non-git environments the function short-circuits to
+	// null because grep across an unindexed tree would be slow and
+	// unreliable.
+	if (isGitRepo()) {
+		try {
+			const repoRoot = execSync("git rev-parse --show-toplevel", {
+				encoding: "utf8",
+			}).trim()
+			const allStages = resolveIntentStages(intent, studio)
+			const livenessViolation = validateOutputLiveness(
+				intentDir(slug),
+				allStages,
+				repoRoot,
+			)
+			if (livenessViolation) return livenessViolation
+		} catch {
+			// best-effort — skip if git is unavailable
+		}
+	}
 
 	const allFeedback = readFeedbackFiles(slug, "")
 

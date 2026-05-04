@@ -44,6 +44,7 @@ import intent_complete from "./intent_complete.js"
 import intent_completion_fix from "./intent_completion_fix.js"
 import intent_completion_review from "./intent_completion_review.js"
 import manual_change_assessment from "./manual_change_assessment.js"
+import output_liveness_review_required from "./output_liveness_review_required.js"
 import outputs_missing from "./outputs_missing.js"
 import pre_review from "./pre_review.js"
 import pre_review_waiting from "./pre_review_waiting.js"
@@ -115,4 +116,5 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["unit_naming_invalid", unit_naming_invalid],
 	["unresolved_dependencies", unresolved_dependencies],
 	["coverage_review_required", coverage_review_required],
+	["output_liveness_review_required", output_liveness_review_required],
 ])

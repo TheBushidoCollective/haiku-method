@@ -76,6 +76,7 @@ export type StateName =
 	| "unresolved_dependencies"
 	| "unit_naming_invalid"
 	| "coverage_review_required"
+	| "output_liveness_review_required"
 	// drift-detection
 	| "manual_change_assessment"
 	// ops

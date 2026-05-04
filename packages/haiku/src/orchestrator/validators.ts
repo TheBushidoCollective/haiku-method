@@ -14,11 +14,16 @@
 //                                          by some current-stage unit's `inputs:`
 //                                          OR explicitly acknowledged via
 //                                          `haiku_coverage_acknowledge`
+//   - validateOutputLiveness             — every code-output declared by any
+//                                          unit across all stages is imported /
+//                                          referenced by SOME OTHER file in the
+//                                          repo (catches orphan components like
+//                                          a *.tsx defined but never rendered)
 //   - runQualityGates                    — execute the gate commands at unit completion
 //   - writeReviewFeedbackFiles           — persist review-UI feedback to feedback files
 //   - buildOutputRequirements            — render the output-requirements prompt block
 
-import { execSync } from "node:child_process"
+import { execFileSync, execSync } from "node:child_process"
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
 import matter from "gray-matter"
@@ -594,6 +599,162 @@ export function validateCumulativeInputCoverage(
 	}
 
 	return null
+}
+
+// ── Output liveness validation ─────────────────────────────────────────────
+
+const CODE_FILE_RE = /\.(ts|tsx|js|jsx|mjs|cjs)$/i
+const TEST_FILE_RE = /\.(test|spec)\.[a-z]+$|\/__tests__\/|\/test\//i
+
+function isCodeOutput(path: string): boolean {
+	if (!CODE_FILE_RE.test(path)) return false
+	if (TEST_FILE_RE.test(path)) return false
+	return true
+}
+
+/** Stem of a file path = basename without extension(s). For
+ *  `packages/haiku-ui/src/atoms/DriftBanner.tsx` → `DriftBanner`.
+ *  For files with multiple dots (e.g., `foo.module.css`), only the
+ *  outermost extension is stripped. The stem is used as a token for
+ *  "is this referenced anywhere" greps — works for both
+ *  `import { DriftBanner } from "./DriftBanner"` and JSX `<DriftBanner />`. */
+function pathStem(path: string): string {
+	const base = path.replace(/^.*\//, "")
+	const dot = base.lastIndexOf(".")
+	return dot > 0 ? base.slice(0, dot) : base
+}
+
+/** Find files (other than `selfPath`) that mention `stem` as a word
+ *  token. Uses `git grep` for speed and `.gitignore` awareness;
+ *  falls back to no-importers on error. The stem-as-token check
+ *  catches both `import { Stem } from "./Stem"` and JSX `<Stem />`
+ *  and identifier references in plain TS. False-positive risk is
+ *  low (stems are usually distinctive component / module names). */
+/** Exclude paths that mention an output's stem only because they are
+ *  the workflow-engine's own metadata / spec — not a real referencer.
+ *  Unit spec .md files contain the output path in their `outputs:`
+ *  frontmatter, which would false-positive as "this output is wired
+ *  in." Drift baselines, action logs, write-audit logs, and
+ *  coverage-decisions.json all similarly mention paths without
+ *  representing actual code-level references. */
+function isWorkflowMetaPath(path: string): boolean {
+	return path.startsWith(".haiku/")
+}
+
+function findReferencers(
+	repoRoot: string,
+	stem: string,
+	selfPath: string,
+): string[] {
+	if (stem === "" || stem.length < 2) return []
+	// `git grep -lw <stem>` matches `stem` as a complete word in any
+	// tracked file. -w is preferred over a manual `\b` regex because
+	// word-boundary regex semantics differ across git versions / regex
+	// engines (BRE vs ERE vs PCRE) — -w is portable. execFileSync over
+	// execSync to avoid shell quoting variability.
+	try {
+		const out = execFileSync("git", ["grep", "-lw", "--", stem], {
+			cwd: repoRoot,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		})
+		return out
+			.split("\n")
+			.map((l) => l.trim())
+			.filter((l) => l !== "" && l !== selfPath && !isWorkflowMetaPath(l))
+	} catch {
+		// git grep returns non-zero exit when there are no matches; treat as
+		// no-referencers.
+		return []
+	}
+}
+
+interface OutputLivenessOrphan {
+	path: string
+	from_stage: string
+	from_unit: string
+}
+
+/** Walk every unit's `outputs:` across all stages of the intent.
+ *  For each code-file output (not test, not non-code), check whether
+ *  ANY OTHER file in the repo references its basename stem as a token.
+ *  Files with no referencers are flagged as orphans — they shipped
+ *  but no caller / renderer / importer wired them in. Coverage
+ *  acknowledgments in any stage's `coverage-decisions.json` (with
+ *  `decision: "out-of-scope"`) suppress the flag for that path.
+ *
+ *  Why: catches the "defined but never rendered" failure mode that
+ *  the cumulative-input-coverage gate doesn't see. A unit can declare
+ *  `outputs: [DriftBanner.tsx]` and ship the file with passing tests,
+ *  but if no other component does `<DriftBanner />`, the user never
+ *  sees it. The validator runs at intent-completion (before the
+ *  studio-level review dispatch) so reviewers see the orphan list
+ *  and the agent's acknowledgments before signing off.
+ *
+ *  Returns null when every code output has at least one referencer
+ *  (or is acknowledged). Returns `output_liveness_review_required`
+ *  with the orphan list otherwise. */
+export function validateOutputLiveness(
+	intentDirPath: string,
+	stages: string[],
+	repoRoot: string,
+): OrchestratorAction | null {
+	if (stages.length === 0) return null
+
+	// Collect every code-file output across all stages.
+	const codeOutputs: OutputLivenessOrphan[] = []
+	const seen = new Set<string>()
+	for (const stage of stages) {
+		const unitsDir = join(intentDirPath, "stages", stage, "units")
+		if (!existsSync(unitsDir)) continue
+		for (const f of readdirSync(unitsDir)) {
+			if (!f.endsWith(".md")) continue
+			const fm = readFrontmatter(join(unitsDir, f))
+			const outputs = (fm.outputs as string[]) || []
+			for (const out of outputs) {
+				if (typeof out !== "string" || !isCodeOutput(out)) continue
+				if (seen.has(out)) continue
+				seen.add(out)
+				codeOutputs.push({
+					path: out,
+					from_stage: stage,
+					from_unit: f.replace(/\.md$/, ""),
+				})
+			}
+		}
+	}
+
+	if (codeOutputs.length === 0) return null
+
+	// Aggregate acknowledged paths from EVERY stage's coverage-decisions.json
+	// (an orphan ack might live in any stage's file — typically the stage
+	// that produced the output, but a downstream stage can also justify
+	// "I'm intentionally leaving X unwired").
+	const acknowledged = new Set<string>()
+	for (const stage of stages) {
+		const stageAcks = readCoverageDecisions(
+			join(intentDirPath, "stages", stage),
+		)
+		for (const path of stageAcks) acknowledged.add(path)
+	}
+
+	const orphans: OutputLivenessOrphan[] = []
+	for (const out of codeOutputs) {
+		if (acknowledged.has(out.path)) continue
+		const stem = pathStem(out.path)
+		const referencers = findReferencers(repoRoot, stem, out.path)
+		if (referencers.length === 0) orphans.push(out)
+	}
+
+	if (orphans.length === 0) return null
+
+	const slug = intentDirPath.split("/intents/")[1] || ""
+	return {
+		action: "output_liveness_review_required",
+		intent: slug,
+		orphans,
+		message: `Cannot advance to intent-completion review: ${orphans.length} code-output(s) shipped by units across this intent's stages have NO referencers anywhere in the repo. The continuity contract requires every code deliverable to be imported, rendered, or otherwise wired in by some other file. Files defined but never rendered are invisible to the user — the methodology promise breaks.\n\nFor each orphan, EITHER:\n  (a) Author a unit (or extend an existing unit) that integrates the output — typically importing the component into a parent screen, registering a route, or calling the function from a reachable code path. The integration code's diff lands as a new commit on the intent main branch.\n  (b) Call \`haiku_coverage_acknowledge { intent_slug: "${slug}", stage: "<stage-that-produced-it>", path: "<orphan-path>", decision: "out-of-scope", rationale: "<why this is intentionally unwired — e.g., 'reserved for stage-N future use'>" }\` to record an explicit acknowledgment.\n\nOrphan outputs:\n${orphans.map((o) => `- \`${o.path}\` (declared by ${o.from_unit} in stage '${o.from_stage}')`).join("\n")}\n\nAfter resolving each, call \`haiku_run_next { intent: "${slug}" }\` to re-run the validator.`,
+	}
 }
 
 // ── Quality gate runner ───────────────────────────────────────────────────

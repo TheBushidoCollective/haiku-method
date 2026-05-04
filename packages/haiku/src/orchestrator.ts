@@ -81,6 +81,7 @@ export {
 	runQualityGates,
 	validateCumulativeInputCoverage,
 	validateDiscoveryArtifacts,
+	validateOutputLiveness,
 	validateStageOutputs,
 	validateUnitInputs,
 	validateUnitNaming,

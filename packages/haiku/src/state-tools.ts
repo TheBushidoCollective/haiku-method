@@ -5872,7 +5872,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 							description: { type: "string" },
 							category: { type: "string" },
 							stages: { type: "array", items: { type: "string" } },
-							source: { type: "string", description: "project | plugin" },
+							source: { type: "string", enum: ["project", "plugin"] },
 						},
 						required: ["name", "slug"],
 					},

@@ -181,8 +181,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 				properties: {
 					session_id: {
 						type: "string",
-						description:
-							"Session ID returned by ask_user_visual_question.",
+						description: "Session ID returned by ask_user_visual_question.",
 					},
 					url: {
 						type: "string",
@@ -207,8 +206,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 				properties: {
 					session_id: {
 						type: "string",
-						description:
-							"Session ID returned by pick_design_direction.",
+						description: "Session ID returned by pick_design_direction.",
 					},
 					intent_slug: {
 						type: "string",

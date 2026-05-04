@@ -155,7 +155,7 @@ export default defineTool({
 		}
 
 		const reviewUrl = (args.review_url as string | undefined) || undefined
-		const autoOpen = args.auto_open === false ? false : true
+		const autoOpen = args.auto_open !== false
 
 		if (stFile) {
 			logSessionEvent(stFile, {

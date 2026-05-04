@@ -576,7 +576,7 @@ export async function handleToolCall(
 				isError: true,
 			}
 		}
-		const autoOpen = a.auto_open === false ? false : true
+		const autoOpen = a.auto_open !== false
 		const url = (a.url as string) || ""
 		const existing = getSession(sessionId)
 		if (!existing || existing.session_type !== "question") {
@@ -791,7 +791,7 @@ export async function handleToolCall(
 				isError: true,
 			}
 		}
-		const autoOpen = a.auto_open === false ? false : true
+		const autoOpen = a.auto_open !== false
 		const url = (a.url as string) || ""
 		const existing = getSession(sessionId)
 		if (!existing || existing.session_type !== "design_direction") {

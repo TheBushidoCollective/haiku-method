@@ -280,7 +280,11 @@ let _prepareGateReview:
 			intentDir: string,
 			gateType: string | undefined,
 			gateMeta: GateMetaForCallback | undefined,
-	  ) => Promise<{ session_id: string; review_url: string; use_remote: boolean }>)
+	  ) => Promise<{
+			session_id: string
+			review_url: string
+			use_remote: boolean
+	  }>)
 	| null = null
 
 let _awaitGateReviewSession:

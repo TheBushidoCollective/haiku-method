@@ -488,6 +488,14 @@ const emit: WorkflowHandler = (ctx) => {
 		})
 		// Fall through to re-evaluate the gate under the current mode.
 	}
+	// LEGACY: per-stage external review with gate_outcome=blocked.
+	// Pre-2026-05-03 intents written by the old gate-fire path land
+	// here. The path is unchanged: poll merge / external state, flip
+	// blocked→advanced on approval, return awaiting_external_review on
+	// pending, route to changes-requested on rejection. New intents
+	// take the advanced+merge-gate path below — this block is a
+	// backward-compat shim until existing in-flight intents have all
+	// migrated through their next gate.
 	if (stageStatus === "completed" && gateOutcomeInGate === "blocked") {
 		let extApproved = false
 		let externalState: ExternalReviewState = { status: "unknown" }
@@ -535,6 +543,66 @@ const emit: WorkflowHandler = (ctx) => {
 				message: `Stage '${currentStage}' is awaiting external review at: ${externalUrl}. Neither branch merge detection nor CLI-based check detected approval yet. Run /haiku:pickup after the review is approved.`,
 			}
 		}
+	}
+
+	// NEW: per-stage external review with gate_outcome=advanced.
+	// Per the user model, the per-stage external gate writes the truly
+	// final state (status=completed, gate_outcome=advanced) to
+	// state.json at gate-fire time (run_next.ts:436 in the SPA
+	// `external_review` decision branch). The PR carries that state to
+	// intent main on merge — no post-merge cleanup commit. Here, the
+	// only signal we need is "did the stage branch land in intent
+	// main?" — checked via raw git (isBranchMerged), no PR/SHA/URL
+	// tracking. Until merge, we emit awaiting_external_review
+	// (informational; active_stage stays here). Once merged, we emit
+	// advance_stage / intent_complete directly.
+	if (
+		stageStatus === "completed" &&
+		gateOutcomeInGate === "advanced" &&
+		isGitRepo()
+	) {
+		const stageBranch = `haiku/${slug}/${currentStage}`
+		const mainline = `haiku/${slug}/main`
+		if (!isBranchMerged(stageBranch, mainline)) {
+			emitTelemetry("haiku.gate.awaiting_merge", {
+				intent: slug,
+				stage: currentStage,
+			})
+			return {
+				action: "awaiting_external_review",
+				intent: slug,
+				stage: currentStage,
+				external_review_url: "",
+				message: `Stage '${currentStage}' is complete on its branch ('${stageBranch}'). Merge it into '${mainline}' to advance to the next stage. Run /haiku:pickup again after the merge.`,
+			}
+		}
+		// Merged — emit advance_stage / intent_complete directly.
+		emitTelemetry("haiku.gate.merged_advance", {
+			intent: slug,
+			stage: currentStage,
+		})
+		const stageIdxLocal = studioStages.indexOf(currentStage)
+		const nextStageLocal =
+			stageIdxLocal < studioStages.length - 1
+				? studioStages[stageIdxLocal + 1]
+				: null
+		if (nextStageLocal) {
+			workflowAdvanceStage(slug, currentStage, nextStageLocal)
+			return {
+				action: "advance_stage",
+				intent: slug,
+				studio,
+				stage: currentStage,
+				next_stage: nextStageLocal,
+				gate_outcome: "advanced",
+				message: `Stage '${currentStage}' merged into '${mainline}' — advancing to '${nextStageLocal}'. Call haiku_run_next { intent: "${slug}" } immediately.`,
+			}
+		}
+		return completeOrReviewIntent(
+			slug,
+			studio,
+			`Stage '${currentStage}' merged into '${mainline}' — all stages complete for intent '${slug}'.`,
+		)
 	}
 
 	const rawReviewType = resolveStageReview(studio, currentStage)

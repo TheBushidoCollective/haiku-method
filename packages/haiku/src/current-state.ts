@@ -8,10 +8,17 @@
 // Resolution rule (matches preTickConsistency#syncActiveStageFromStateJson):
 //   - Walk the studio-declared stage list in order
 //   - First stage whose state.json is NOT done is the current stage
-//   - "Done" means status === "completed" AND gate_outcome !== "blocked"
-//     (a stage with gate_outcome=blocked is awaiting external review;
-//     completion lives in the merge, so the stage is still active per
-//     the project's external-gate contract)
+//   - "Done" means:
+//       status === "completed" AND
+//       gate_outcome !== "blocked" (legacy shape; pre-merge gate state
+//         under the old per-stage external flow) AND
+//       (no git OR the stage branch is merged into intent main)
+//     The merge requirement is the user's "raw git+fs" contract: a
+//     stage is fully done only when its branch has landed in intent
+//     main. Pre-merge, a completed+advanced stage stays current so
+//     active_stage doesn't auto-bump and the next stage doesn't start
+//     from a base that's missing the prior stage's work. The merge IS
+//     the user's "yes, this stage is approved" signal.
 //   - If every stage is done, the last stage is current (intent
 //     awaiting completion review or fully complete)
 //
@@ -22,10 +29,12 @@
 
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { branchExists, isBranchMerged } from "./git-worktree.js"
 import {
 	resolveIntentStages,
 	resolveStudioStages,
 } from "./orchestrator/studio.js"
+import { isGitRepo } from "./state/shared.js"
 import { intentDir, parseFrontmatter, readJson } from "./state-tools.js"
 import type { IntentCurrentState, IntentPhase, StageState } from "./types.js"
 
@@ -94,11 +103,32 @@ export function getCurrentState(
 	}
 
 	let current = fallbackStages[fallbackStages.length - 1]
+	const gitAvailable = isGitRepo()
+	const intentMainBranch = `haiku/${slug}/main`
+	const intentMainExists = gitAvailable && branchExists(intentMainBranch)
 	for (const stage of fallbackStages) {
 		const st = readStageState(slug, stage, root)
 		const status = (st.status as string) || "pending"
 		const gateOutcome = (st.gate_outcome as string) || ""
-		const isDone = status === "completed" && gateOutcome !== "blocked"
+		const stateLooksDone = status === "completed" && gateOutcome !== "blocked"
+		// Merge gate: in git mode (with both stage branch and intent
+		// main present), a completed+advanced stage stays "current"
+		// until its branch has landed in intent main. The merge is the
+		// user's approval signal — pre-merge, the next stage shouldn't
+		// start from a base that's missing this stage's work.
+		//
+		// Fall back to state.json's verdict when:
+		//   - we're not in a git repo (filesystem-only intents), or
+		//   - intent main branch doesn't exist yet (early-lifecycle
+		//     intents before branching, test fixtures with fake slugs),
+		//   - the stage branch doesn't exist (similarly applies).
+		// In all those cases there's no merge concept to gate on.
+		const stageBranch = `haiku/${slug}/${stage}`
+		const canCheckMerge =
+			intentMainExists && gitAvailable && branchExists(stageBranch)
+		const isDone =
+			stateLooksDone &&
+			(!canCheckMerge || isBranchMerged(stageBranch, intentMainBranch))
 		if (!isDone) {
 			current = stage
 			break

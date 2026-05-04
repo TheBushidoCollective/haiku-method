@@ -1359,6 +1359,100 @@ export function writeOnIntentMain(
 	}
 }
 
+/** Surgically copy files matching a path prefix from a source branch
+ *  onto intent main, then commit. Used by the revisit flow to carry
+ *  feedback files forward from stage branches without merging the
+ *  rest of those branches' (possibly unreviewed) work.
+ *
+ *  Behavior:
+ *   - No-op when not in a git repo, or when the source branch / intent
+ *     main branch don't exist, or when the source branch has no files
+ *     matching the prefix.
+ *   - In-place when current branch is intent main; temp-worktree
+ *     otherwise (mirrors writeOnIntentMain's strategy).
+ *   - Uses `git checkout <sourceBranch> -- <pathPrefix>` to materialise
+ *     the files, then `git add` + `git commit` only the matched paths
+ *     so other dirty state is left untouched.
+ *
+ *  Returns { ok, message } describing what happened (paths copied,
+ *  no-op reason, or error). */
+export function checkoutFromBranchOnIntentMain(
+	slug: string,
+	sourceBranch: string,
+	pathPrefix: string,
+	commitMessage: string,
+): { ok: boolean; message: string; paths_copied: string[] } {
+	const empty = { paths_copied: [] as string[] }
+	if (!isGitRepo()) return { ok: true, message: "no git", ...empty }
+	const mainBranch = `haiku/${slug}/main`
+	if (!branchExists(mainBranch))
+		return { ok: false, message: `${mainBranch} does not exist`, ...empty }
+	if (!branchExists(sourceBranch))
+		return {
+			ok: true,
+			message: `source branch ${sourceBranch} does not exist — skipping`,
+			...empty,
+		}
+	const matched = tryRun([
+		"git",
+		"ls-tree",
+		"-r",
+		"--name-only",
+		sourceBranch,
+		"--",
+		pathPrefix,
+	])
+		.split("\n")
+		.map((l) => l.trim())
+		.filter(Boolean)
+	if (matched.length === 0)
+		return {
+			ok: true,
+			message: `no files under ${pathPrefix} on ${sourceBranch} — skipping`,
+			...empty,
+		}
+
+	const runCheckout = (cwd: string) => {
+		run(["git", "-C", cwd, "checkout", sourceBranch, "--", pathPrefix])
+		run(["git", "-C", cwd, "add", "--", pathPrefix])
+		const status = tryRun([
+			"git",
+			"-C",
+			cwd,
+			"diff",
+			"--cached",
+			"--name-only",
+			"--",
+			pathPrefix,
+		])
+		if (status.trim()) {
+			run(["git", "-C", cwd, "commit", "-m", commitMessage, "--", pathPrefix])
+		}
+	}
+
+	try {
+		const current = getCurrentBranch()
+		if (current === mainBranch) {
+			runCheckout(primaryRepoRoot())
+		} else {
+			withTempWorktree(mainBranch, (tmpPath) => {
+				runCheckout(tmpPath)
+			})
+		}
+		return {
+			ok: true,
+			message: `copied ${matched.length} file(s) from ${sourceBranch} (${pathPrefix})`,
+			paths_copied: matched,
+		}
+	} catch (err) {
+		return {
+			ok: false,
+			message: err instanceof Error ? err.message : String(err),
+			...empty,
+		}
+	}
+}
+
 /** Scan all `haiku/<slug>/*` branches (except main and unit-*) and delete
  *  any that are already merged into `haiku/<slug>/main`. Also deletes the
  *  matching remote branch if it exists. Called before entering a stage and

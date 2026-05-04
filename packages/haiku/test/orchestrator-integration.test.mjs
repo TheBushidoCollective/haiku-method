@@ -78,6 +78,8 @@ function setGateReviewMock(decisionResult) {
 			session_id: "test-gate-session",
 			review_url: "http://test.local/review/test-gate-session",
 			use_remote: false,
+			reused: false,
+			browser_attached: false,
 		}),
 		await: async () => decisionResult,
 	})

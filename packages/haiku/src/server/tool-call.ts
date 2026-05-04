@@ -37,9 +37,12 @@ import {
 	createQuestionSession,
 	createSession,
 	deleteSession,
+	findLiveReviewSessionForIntent,
 	getPreviousReviewSnapshot,
 	getSession,
 	hasPresenceLost,
+	isBrowserAttached,
+	updateSession,
 	waitForSession,
 } from "../sessions.js"
 import {
@@ -966,6 +969,14 @@ export type GateReviewPrepared = {
 	session_id: string
 	review_url: string
 	use_remote: boolean
+	/** True when an existing live SPA tab was reused for this gate
+	 *  instead of minting a new session. The agent's gate_review prompt
+	 *  uses this to skip the "post URL to user" instruction — they're
+	 *  already on it. */
+	reused: boolean
+	/** True when the SPA's heartbeat is fresh enough that we believe
+	 *  the user is actively watching the tab. Implies reused=true. */
+	browser_attached: boolean
 }
 
 export type GateReviewDecision = {
@@ -993,16 +1004,33 @@ export async function prepareGateReviewSession(
 	)
 	const criteria = criteriaSection ? parseCriteria(criteriaSection.content) : []
 
-	const session = createSession({
+	// Reuse: if a live SPA tab is already open on this intent (presence
+	// not lost), reuse it across gate cycles. Same session_id, same URL.
+	// We refresh the parsed data + gate_meta so the SPA renders the
+	// current stage, then return. The browser stays put, no new tab.
+	const reusable = findLiveReviewSessionForIntent(intent.slug)
+	const session = reusable ?? createSession({
 		intent_dir: intentDirAbs,
 		intent_slug: intent.slug,
 		gate_type: gateType,
 		target: "",
 	})
+
+	// gate_meta refreshes on every prepare, whether reuse or new. The
+	// SPA's Approve button label is computed from these fields, so they
+	// must reflect the CURRENT gate, not whatever the previous gate
+	// cycle set them to.
+	if (gateType !== undefined) session.gate_type = gateType
 	if (gateMeta?.gateContext) session.gate_context = gateMeta.gateContext
 	if (gateMeta?.stage) session.stage = gateMeta.stage
 	if (gateMeta?.nextStage !== undefined) session.next_stage = gateMeta.nextStage
 	if (gateMeta?.nextPhase !== undefined) session.next_phase = gateMeta.nextPhase
+	// Clear any stale pending_decision from the previous gate cycle —
+	// the user shouldn't have a queued "approved" from the design stage
+	// auto-consumed by the development stage's gate.
+	if (reusable && session.pending_decision) {
+		session.pending_decision = null
+	}
 
 	Object.assign(session, {
 		parsedIntent: intent,
@@ -1040,10 +1068,15 @@ export async function prepareGateReviewSession(
 		? buildReviewUrl(session.session_id, await openTunnel(port), "intent")
 		: `http://127.0.0.1:${port}/review/${session.session_id}`
 
+	const reused = reusable !== undefined
+	const browser_attached = reused && isBrowserAttached(session.session_id)
+
 	return {
 		session_id: session.session_id,
 		review_url: reviewUrl,
 		use_remote: useRemote,
+		reused,
+		browser_attached,
 	}
 }
 
@@ -1068,10 +1101,46 @@ export async function awaitGateReviewSession(
 			`Gate review session ${sessionId} not found or wrong type — call haiku_run_next to recreate.`,
 		)
 	}
-	const useRemote = isRemoteReviewEnabled()
 
-	bindSessionCancellation(sessionId, signal)
+	// Deliberately NOT calling bindSessionCancellation here — gate-review
+	// sessions outlive the tool call, so an abort on the await tool
+	// (user Ctrl-C, MCP client reconnect, timeout retry) must not kill
+	// the SPA's WebSocket. The waitForSession call below already
+	// propagates `signal` to unwind the await promptly; the SPA stays
+	// connected and the next agent tick can call haiku_await_gate
+	// again.
 	if (autoOpen && reviewUrl) launchBrowserBestEffort(reviewUrl, "Review gate")
+
+	// Drain queued decision on entry. The SPA may have submitted while
+	// no await was open (e.g., user reviewed and clicked before the
+	// agent ticked back to gate_review). pending_decision is the
+	// canonical signal — populated by handleWebSocketMessage on every
+	// `decide` frame, regardless of await state.
+	if (existing.pending_decision) {
+		const queued = existing.pending_decision
+		updateSession(sessionId, {
+			pending_decision: null,
+			last_await_started_at: new Date().toISOString(),
+			last_await_ended_at: new Date().toISOString(),
+			await_count: (existing.await_count ?? 0) + 1,
+		})
+		return {
+			decision: queued.decision,
+			feedback: queued.feedback,
+			annotations: queued.annotations,
+		}
+	}
+
+	// Mark this await as active. The SPA reads await_active to decide
+	// whether the Approve button is enabled — it's only meaningful to
+	// approve while a tool call is actually waiting on a decision.
+	const startedAt = new Date().toISOString()
+	const priorCount = existing.await_count ?? 0
+	updateSession(sessionId, {
+		await_active: true,
+		await_count: priorCount + 1,
+		last_await_started_at: startedAt,
+	})
 
 	try {
 		while (true) {
@@ -1087,12 +1156,14 @@ export async function awaitGateReviewSession(
 			if (
 				updated &&
 				updated.session_type === "review" &&
-				updated.status === "decided"
+				updated.pending_decision
 			) {
+				const queued = updated.pending_decision
+				updateSession(sessionId, { pending_decision: null })
 				return {
-					decision: updated.decision ?? "",
-					feedback: updated.feedback ?? "",
-					annotations: updated.annotations,
+					decision: queued.decision,
+					feedback: queued.feedback,
+					annotations: queued.annotations,
 				}
 			}
 
@@ -1107,12 +1178,14 @@ export async function awaitGateReviewSession(
 
 		throw new Error("Review timeout after 30 minutes")
 	} finally {
-		closeSessionConnection(sessionId, "tool call complete")
-		clearHeartbeat(sessionId)
-		if (useRemote) {
-			clearE2EKey(sessionId)
-			closeTunnel()
-		}
-		deleteSession(sessionId)
+		// Session, WS, and tunnel persist across awaits — the SPA tab
+		// stays open for the duration of the agent session, watching
+		// state come and go. Only the await-active flag and timing
+		// fields are reset here; cleanup of the session itself happens
+		// on TTL eviction, presence-loss sweep, or explicit shutdown.
+		updateSession(sessionId, {
+			await_active: false,
+			last_await_ended_at: new Date().toISOString(),
+		})
 	}
 }

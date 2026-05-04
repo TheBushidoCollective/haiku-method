@@ -182,11 +182,21 @@ export function handleWebSocketMessage(sessionId: string, raw: string): void {
 			msg.decision === "approved" ? "approved" : "changes_requested"
 		const feedback = msg.feedback ?? ""
 		const annotations = msg.annotations as ReviewAnnotations | undefined
+		// Queue the decision on the session. If a haiku_await_gate call
+		// is currently blocked (await_active=true), notifySessionUpdate
+		// wakes it and the await consumes pending_decision on its next
+		// loop iteration. If no await is open (await_active=false), the
+		// decision sits queued — the next haiku_await_gate call drains
+		// it on entry before subscribing to a fresh wait. Last-write-
+		// wins: a second submit overwrites the first, which is what the
+		// reviewer means by "actually I want to change my answer."
 		updateSession(sessionId, {
-			status: "decided" as never,
-			decision,
-			feedback,
-			annotations,
+			pending_decision: {
+				decision,
+				feedback,
+				annotations,
+				submitted_at: new Date().toISOString(),
+			},
 		})
 		sendToWebSocket(sessionId, {
 			type: "ack",

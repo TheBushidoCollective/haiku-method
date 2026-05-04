@@ -223,6 +223,17 @@ export function respondSessionApi(
 		if (session.gate_context) data.gate_context = session.gate_context
 		if (session.next_stage !== undefined) data.next_stage = session.next_stage
 		if (session.next_phase !== undefined) data.next_phase = session.next_phase
+		// Live-session fields. The SPA gates the Approve button on
+		// await_active and pending_decision: when no await is currently
+		// blocking AND nothing is queued, Approve is disabled and the
+		// SPA shows "leave feedback to force a decision next tick".
+		data.await_active = session.await_active === true
+		data.await_count = session.await_count ?? 0
+		if (session.pending_decision) data.pending_decision = session.pending_decision
+		if (session.last_await_started_at)
+			data.last_await_started_at = session.last_await_started_at
+		if (session.last_await_ended_at)
+			data.last_await_ended_at = session.last_await_ended_at
 		data.approve_action = computeApproveAction(session, current)
 	}
 	if (session.session_type === "question") {

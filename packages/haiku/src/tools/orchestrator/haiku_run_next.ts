@@ -317,6 +317,17 @@ export default defineTool({
 
 				syncSessionMetadata(slug, args.state_file as string | undefined)
 
+				// Browser-attached path: the user already has the SPA tab
+				// open from a prior gate this session, so the agent can
+				// skip "post URL to user" and just call haiku_await_gate.
+				// New-session path: post the URL, then await.
+				const tellUser = prepared.browser_attached
+					? `Stage '${stage}' is ready for review. The page you're on (${prepared.review_url}) just refreshed to this gate.`
+					: `Stage '${stage}' is ready for review. Open ${prepared.review_url} to approve or request changes.`
+				const message = prepared.browser_attached
+					? `Stage '${stage}' is ready for review. The user is already watching the SPA at ${prepared.review_url} (browser_attached=true), so do NOT re-post the URL — just call haiku_await_gate { intent: "${slug}" } to block on their decision.`
+					: `Stage '${stage}' is ready for review at: ${prepared.review_url}\n\nNext: post the URL to the user (so they can open it on any device — headless host, remote control, mobile, web), then call haiku_await_gate { intent: "${slug}" } to block on their decision. Pass auto_open: false on the await call when the MCP host should NOT also try to launch a local browser.`
+
 				const gateAction: Record<string, unknown> = {
 					action: "gate_review",
 					intent: slug,
@@ -328,8 +339,10 @@ export default defineTool({
 					gate_context: gateContext,
 					review_url: prepared.review_url,
 					session_id: prepared.session_id,
-					message: `Stage '${stage}' is ready for review at: ${prepared.review_url}\n\nNext: post the URL to the user (so they can open it on any device — headless host, remote control, mobile, web), then call haiku_await_gate { intent: "${slug}" } to block on their decision. Pass auto_open: false on the await call when the MCP host should NOT also try to launch a local browser.`,
-					tell_user: `Stage '${stage}' is ready for review. Open ${prepared.review_url} to approve or request changes.`,
+					reused: prepared.reused,
+					browser_attached: prepared.browser_attached,
+					message,
+					tell_user: tellUser,
 					next_step: `Calling haiku_await_gate to wait for your decision.`,
 				}
 				return text(withInstructions(gateAction))

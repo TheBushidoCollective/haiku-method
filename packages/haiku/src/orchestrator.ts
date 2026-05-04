@@ -284,6 +284,8 @@ let _prepareGateReview:
 			session_id: string
 			review_url: string
 			use_remote: boolean
+			reused: boolean
+			browser_attached: boolean
 	  }>)
 	| null = null
 

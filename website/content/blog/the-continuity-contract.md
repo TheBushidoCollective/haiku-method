@@ -1,7 +1,7 @@
 ---
 title: "The Continuity Contract"
 description: "H·AI·K·U promised that downstream stages execute what upstream stages designed. The promise was a vibe. Three new engine gates make it a contract."
-date: 2026-05-04
+date: "2026-05-04T15:19:44Z"
 ---
 
 We ran intent `out-of-band-human-file-modifications` end-to-end last week. Six stages, thirty-something units, an adversarial review with five critics, a clean intent-completion review. PR [#265](https://github.com/gigsmart/haiku-method/pull/265) opened, CI went green, every gate signed off.

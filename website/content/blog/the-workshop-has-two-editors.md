@@ -1,7 +1,7 @@
 ---
 title: "The Workshop Has Two Editors"
 description: "H·AI·K·U used to assume the agent owned every file in the intent dir. Drift detection, audit logs, and a human-write MCP tool make the workshop honest."
-date: 2026-05-04
+date: "2026-05-04T15:19:45Z"
 ---
 
 A designer drops fourteen PNGs from Figma into `stages/design/artifacts/`. A PM hand-edits the success criteria on `unit-03-billing-policy.md` and types into chat: "I tightened the criteria, take it from here." An operator runs `vim` on `knowledge/runbook.md` to fix a typo before standup.

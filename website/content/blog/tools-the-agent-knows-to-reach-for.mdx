@@ -56,7 +56,7 @@ The unit author identified these skills as potentially useful for this unit. Inv
 
 Every hat sees the same list. The planner might use `/research`, the builder might use `/test`, the verifier might use `/security-review` — they all start from the same advisory annotation, and each picks when to invoke based on its own scope. None of them re-decide *whether the skill applies to this unit*. That call was committed at elaboration. They only decide *whether to invoke it at this hat's slice of work*. Descriptions re-resolve at dispatch time, so a skill the user uninstalled between elaboration and execution degrades to the slug alone — the slug is the record of intent, the description is convenience text.
 
-A unit without `applicable_skills` skips the block entirely. No empty header, no scan cost — `listInstalledSkills()` is gated behind `if (unitApplicableSkills.length > 0)` in `start_unit.ts:107`. The elaborator is told, in `elaborate.ts:131`, to be selective: *only annotate when there is clear relevance — don't bloat every unit*. Most units don't get annotation, and the prompt for those units stays exactly the same as before.
+A unit without `applicable_skills` skips the block entirely. No empty header, no scan cost — `listInstalledSkills()` is gated behind `if (unitApplicableSkills.length > 0)` in `start_unit.ts:335`. The elaborator is told, in `elaborate.ts:130`, to be selective: *only annotate when there is clear relevance — don't bloat every unit*. Most units don't get annotation, and the prompt for those units stays exactly the same as before.
 
 ## The block is advisory, not permission
 

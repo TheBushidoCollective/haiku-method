@@ -140,6 +140,44 @@ try {
 		)
 	})
 
+	test("project-local skill shadows plugin-root skill with same slug", () => {
+		// `archive` is a real plugin-bundled skill. Drop a project-local
+		// override with the same slug and verify the project version wins.
+		const projectArchiveDir = join(skillsDir, "archive")
+		mkdirSync(projectArchiveDir, { recursive: true })
+		writeFileSync(
+			join(projectArchiveDir, "SKILL.md"),
+			`---
+name: archive
+description: Project-local archive override
+---
+
+Project override.
+`,
+		)
+		try {
+			const skills = listInstalledSkills()
+			const archiveEntries = skills.filter((s) => s.slug === "archive")
+			assert.strictEqual(
+				archiveEntries.length,
+				1,
+				"Expected exactly one 'archive' entry after de-dup",
+			)
+			assert.strictEqual(
+				archiveEntries[0].source,
+				"project",
+				`Expected project-local 'archive' to win over plugin-bundled, got source=${archiveEntries[0].source}`,
+			)
+			assert.strictEqual(
+				archiveEntries[0].description,
+				"Project-local archive override",
+				"Expected project-local description to win",
+			)
+		} finally {
+			rmSync(projectArchiveDir, { recursive: true, force: true })
+		}
+	})
+
 	test("returns empty array gracefully when no skills dir exists", () => {
 		const emptyDir = join(tmp, "empty-project")
 		mkdirSync(emptyDir, { recursive: true })
@@ -516,6 +554,78 @@ Verify the elaborate prompt advertises installed skills.
 			assert.ok(
 				body.includes("Write tests for code using TDD principles"),
 				"Expected /test description to appear in elaborate prompt body",
+			)
+		},
+	)
+
+	await testAsync(
+		"revisit elaborate (iteration > 1) also includes skill registry section",
+		async () => {
+			// Revisit-elaborate runs to draft units that close pending feedback.
+			// Those units are exactly the ones that benefit from skill annotation,
+			// so the skill registry must appear in the revisit branch too.
+			const { buildElaboratePromptBody } = await import(
+				"../src/orchestrator/prompts/elaborate.ts"
+			)
+			createInlineStudio(projDir, "skill-revisit-studio", "plan")
+			const slug = "skill-revisit-intent"
+			const intentDir = join(projDir, ".haiku", "intents", slug)
+			mkdirSync(join(intentDir, "stages", "plan", "units"), {
+				recursive: true,
+			})
+			writeFileSync(
+				join(intentDir, "intent.md"),
+				`---
+title: Skill Revisit Elaborate Test
+studio: skill-revisit-studio
+mode: continuous
+active_stage: plan
+status: active
+intent_reviewed: true
+started_at: 2026-01-01T00:00:00Z
+completed_at: null
+---
+
+Verify the revisit-elaborate prompt advertises installed skills.
+`,
+			)
+
+			process.chdir(projDir)
+			const body = buildElaboratePromptBody({
+				slug,
+				studio: "skill-revisit-studio",
+				action: {
+					action: "elaborate",
+					intent: slug,
+					studio: "skill-revisit-studio",
+					stage: "plan",
+					elaboration: "autonomous",
+					iteration: 2,
+					pending_feedback: [
+						{
+							feedback_id: "FB-01",
+							title: "Add coverage for edge case",
+							origin: "adversarial-review",
+							author: "reviewer",
+							status: "open",
+							file: ".haiku/intents/skill-revisit-intent/stages/plan/feedback/FB-01.md",
+						},
+					],
+				},
+				dir: intentDir,
+			})
+
+			assert.ok(
+				body.includes("## Revisit Elaborate"),
+				`Expected revisit-elaborate header. Body excerpt: ${body.slice(0, 300)}...`,
+			)
+			assert.ok(
+				body.includes("## Available Skills"),
+				`Expected '## Available Skills' header in revisit elaborate body. Body excerpt: ${body.slice(0, 800)}...`,
+			)
+			assert.ok(
+				body.includes("/test"),
+				"Expected /test skill to be listed in revisit elaborate body",
 			)
 		},
 	)

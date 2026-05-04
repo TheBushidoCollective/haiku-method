@@ -268,6 +268,8 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 		}
 		const lenses = buildReviewAgentLensSection(studio, stage, dir)
 		if (lenses) sections.push(lenses)
+		const revisitSkillSection = buildSkillRegistrySection()
+		if (revisitSkillSection) sections.push(revisitSkillSection)
 		sections.push(
 			`### Responsibilities\n\n- Read every \`pending_feedback[].file\` in full before drafting — the title is only a handle.\n- Draft one or more new units whose \`closes:\` frontmatter references the feedback items they resolve.\n- Every pending feedback item MUST be referenced by at least one new unit's \`closes:\` (orphans block advancement).\n- Ask the user clarifying questions (\`AskUserQuestion\` with options[]) when trade-offs are unclear; iterate across turns.\n- When the user approves the drafted units, call \`haiku_run_next\` to advance.\n\nInputs (read directly — do not inline summaries, open the actual files):\n- every \`pending_feedback[].file\` listed above\n- \`stage_metadata\` (STAGE.md body + review agents)\n- \`completed_units\` (read-only reference)\n- \`intent.md\` for overall goals`,
 		)

@@ -5207,15 +5207,16 @@ export interface InstalledSkill {
 
 /**
  * Enumerate all Claude Code skills (slash commands) visible to the current
- * session. Three search locations, in priority order:
+ * session. Three search locations, in priority order (project > global > plugin):
  *
- *   1. Plugin-root skills  — `{CLAUDE_PLUGIN_ROOT}/skills/{slug}/SKILL.md`
- *   2. Project-local skills — `{cwd}/.claude/skills/{slug}/SKILL.md`
- *   3. Global user plugins  — `~/.claude/plugins/<plugin>/skills/{slug}/SKILL.md`
+ *   1. Project-local skills — `{cwd}/.claude/skills/{slug}/SKILL.md`
+ *   2. Global user plugins  — `~/.claude/plugins/<plugin>/skills/{slug}/SKILL.md`
+ *   3. Plugin-root skills   — `{CLAUDE_PLUGIN_ROOT}/skills/{slug}/SKILL.md`
  *
- * De-duplicated by slug (first occurrence wins, so plugin-root skills shadow
- * global ones with the same name). Returns an empty array when no skills
- * directory is found; never throws.
+ * De-duplicated by slug (first occurrence wins). More-specific contexts
+ * shadow less-specific ones: a project-local skill overrides a global skill
+ * with the same slug, which in turn overrides a plugin-bundled skill.
+ * Returns an empty array when no skills directory is found; never throws.
  */
 export function listInstalledSkills(): InstalledSkill[] {
 	const skills: InstalledSkill[] = []
@@ -5251,14 +5252,10 @@ export function listInstalledSkills(): InstalledSkill[] {
 		}
 	}
 
-	// 1. Plugin-root skills (haiku plugin's bundled skills)
-	const pluginRoot = resolvePluginRoot()
-	if (pluginRoot) readSkillDir(join(pluginRoot, "skills"), "plugin")
-
-	// 2. Project-local skills (.claude/skills/ in cwd)
+	// 1. Project-local skills (.claude/skills/ in cwd) — most specific, wins.
 	readSkillDir(join(process.cwd(), ".claude", "skills"), "project")
 
-	// 3. Global user skills (~/.claude/plugins/*/skills/)
+	// 2. Global user skills (~/.claude/plugins/*/skills/).
 	try {
 		const globalPluginsDir = join(homedir(), ".claude", "plugins")
 		if (existsSync(globalPluginsDir)) {
@@ -5272,6 +5269,10 @@ export function listInstalledSkills(): InstalledSkill[] {
 	} catch {
 		/* non-fatal */
 	}
+
+	// 3. Plugin-root skills (haiku plugin's bundled skills) — fallback.
+	const pluginRoot = resolvePluginRoot()
+	if (pluginRoot) readSkillDir(join(pluginRoot, "skills"), "plugin")
 
 	return skills
 }
@@ -5842,7 +5843,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 							description: { type: "string" },
 							source: {
 								type: "string",
-								description: "plugin | project | global",
+								enum: ["plugin", "project", "global"],
 							},
 						},
 						required: ["slug", "name", "description", "source"],

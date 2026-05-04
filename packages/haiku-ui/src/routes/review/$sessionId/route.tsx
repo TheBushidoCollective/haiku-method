@@ -46,6 +46,7 @@ import { FeedbackSheet } from "../../../organisms/FeedbackSheet"
 import type { InlineCommentEntry } from "../../../organisms/InlineComments"
 import { FeedbackPanelBody } from "../../../pages/review/FeedbackPanelBody"
 import { FeedbackSidebar } from "../../../pages/review/FeedbackSidebar"
+import { IntentCompleteView } from "../../../pages/review/IntentCompleteView"
 import type { ReviewPageSessionData } from "../../../pages/review/shared/session-data"
 import { useFeedbackSidebarController } from "../../../pages/review/useFeedbackSidebarController"
 import { useIsMobile } from "../../../pages/review/useIsMobile"
@@ -304,6 +305,33 @@ function ReviewLayoutLoaded({
 		}
 	})
 
+	// Intent-terminal detection: when intent is in
+	// `awaiting_completion_review` or `status: completed`, the per-stage
+	// review pane has nothing meaningful to render (every stage is done;
+	// no "current" stage). Render IntentCompleteView instead. The merge
+	// into mainline is the only remaining action.
+	const intentFm = session.intent?.frontmatter
+	const intentStatus = (intentFm?.status as string | undefined) ?? ""
+	const intentPhase = (intentFm?.phase as string | undefined) ?? ""
+	const isIntentTerminal =
+		intentStatus === "completed" ||
+		intentPhase === "awaiting_completion_review" ||
+		intentPhase === "intent_completion"
+	const stageNamesOrdered = orderedStageNames
+	// Surface any external_review_url recorded in stage state — the
+	// agent records the delivery PR URL via
+	// `haiku_run_next { external_review_url }` on the
+	// `external_review_requested` action. Under autopilot intent
+	// completion the URL lands on the last stage's state. Pick the
+	// most-recently-set URL across stages (later stages win when
+	// multiple are set) so the screen always shows the delivery PR
+	// rather than an earlier per-stage PR.
+	let deliveryReviewUrl: string | null = null
+	for (const name of orderedStageNames) {
+		const s = stageStates[name] as { external_review_url?: string } | undefined
+		if (s?.external_review_url) deliveryReviewUrl = s.external_review_url
+	}
+
 	const contextValue: ReviewRouteContextValue = useMemo(
 		() => ({
 			session: session,
@@ -459,6 +487,17 @@ function ReviewLayoutLoaded({
 										}
 									/>
 								</div>
+							) : isIntentTerminal && intentSlug ? (
+								<IntentCompleteView
+									intentSlug={intentSlug}
+									intentTitle={session.intent?.title ?? intentSlug}
+									intentFrontmatter={
+										session.intent?.frontmatter ?? { status: "" }
+									}
+									stageStates={stageStates}
+									stageOrder={stageNamesOrdered}
+									deliveryReviewUrl={deliveryReviewUrl}
+								/>
 							) : (
 								<Outlet />
 							)}

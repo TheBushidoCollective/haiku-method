@@ -229,7 +229,8 @@ export function respondSessionApi(
 		// SPA shows "leave feedback to force a decision next tick".
 		data.await_active = session.await_active === true
 		data.await_count = session.await_count ?? 0
-		if (session.pending_decision) data.pending_decision = session.pending_decision
+		if (session.pending_decision)
+			data.pending_decision = session.pending_decision
 		if (session.last_await_started_at)
 			data.last_await_started_at = session.last_await_started_at
 		if (session.last_await_ended_at)

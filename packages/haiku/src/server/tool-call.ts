@@ -28,6 +28,7 @@ import {
 	parseStageStates,
 	toMermaidDefinition,
 } from "../index.js"
+import { broadcastIntent } from "../intent-broadcaster.js"
 import { handleOrchestratorTool } from "../orchestrator.js"
 import { isSentryConfigured, reportFeedback } from "../sentry.js"
 import type { DesignArchetypeData, QuestionDef } from "../sessions.js"
@@ -1009,12 +1010,14 @@ export async function prepareGateReviewSession(
 	// We refresh the parsed data + gate_meta so the SPA renders the
 	// current stage, then return. The browser stays put, no new tab.
 	const reusable = findLiveReviewSessionForIntent(intent.slug)
-	const session = reusable ?? createSession({
-		intent_dir: intentDirAbs,
-		intent_slug: intent.slug,
-		gate_type: gateType,
-		target: "",
-	})
+	const session =
+		reusable ??
+		createSession({
+			intent_dir: intentDirAbs,
+			intent_slug: intent.slug,
+			gate_type: gateType,
+			target: "",
+		})
 
 	// gate_meta refreshes on every prepare, whether reuse or new. The
 	// SPA's Approve button label is computed from these fields, so they
@@ -1071,6 +1074,20 @@ export async function prepareGateReviewSession(
 	const reused = reusable !== undefined
 	const browser_attached = reused && isBrowserAttached(session.session_id)
 
+	// Broadcast: any SPA tab already on this intent's channel will get
+	// the new gate context (stage, gate_context, review_url). This is
+	// what makes the live-session UX work — when the workflow ticks
+	// from execute → review → gate, the tab refreshes into the gate
+	// view without polling.
+	broadcastIntent(intent.slug, {
+		type: "gate_prepared",
+		session_id: session.session_id,
+		stage: gateMeta?.stage ?? session.stage ?? "",
+		gate_context: gateMeta?.gateContext ?? session.gate_context ?? "stage_gate",
+		review_url: reviewUrl,
+		browser_attached,
+	})
+
 	return {
 		session_id: session.session_id,
 		review_url: reviewUrl,
@@ -1124,6 +1141,11 @@ export async function awaitGateReviewSession(
 			last_await_ended_at: new Date().toISOString(),
 			await_count: (existing.await_count ?? 0) + 1,
 		})
+		broadcastIntent(existing.intent_slug, {
+			type: "pending_decision_changed",
+			session_id: sessionId,
+			queued: false,
+		})
 		return {
 			decision: queued.decision,
 			feedback: queued.feedback,
@@ -1140,6 +1162,11 @@ export async function awaitGateReviewSession(
 		await_active: true,
 		await_count: priorCount + 1,
 		last_await_started_at: startedAt,
+	})
+	broadcastIntent(existing.intent_slug, {
+		type: "await_state_changed",
+		session_id: sessionId,
+		await_active: true,
 	})
 
 	try {
@@ -1186,6 +1213,11 @@ export async function awaitGateReviewSession(
 		updateSession(sessionId, {
 			await_active: false,
 			last_await_ended_at: new Date().toISOString(),
+		})
+		broadcastIntent(existing.intent_slug, {
+			type: "await_state_changed",
+			session_id: sessionId,
+			await_active: false,
 		})
 	}
 }

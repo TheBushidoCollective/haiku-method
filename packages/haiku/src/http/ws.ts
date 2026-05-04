@@ -10,6 +10,7 @@
 import { appendFileSync } from "node:fs"
 import { WsClientMessageSchema, type WsServerMessage } from "haiku-api"
 import type { WebSocket as WsWebSocket } from "ws"
+import { broadcastIntent } from "../intent-broadcaster.js"
 import {
 	getSession,
 	type QuestionAnnotations,
@@ -198,6 +199,17 @@ export function handleWebSocketMessage(sessionId: string, raw: string): void {
 				submitted_at: new Date().toISOString(),
 			},
 		})
+		// Broadcast: any other SPA tab on this intent (or this same
+		// tab — the broadcaster is fan-out, not exclude-self) gets the
+		// queued-decision signal so the UI can show "decision queued,
+		// waiting for engine to pick it up" in the empty state.
+		if (session.intent_slug) {
+			broadcastIntent(session.intent_slug, {
+				type: "pending_decision_changed",
+				session_id: sessionId,
+				queued: true,
+			})
+		}
 		sendToWebSocket(sessionId, {
 			type: "ack",
 			ok: true,

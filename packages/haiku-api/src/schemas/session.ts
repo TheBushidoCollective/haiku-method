@@ -207,6 +207,30 @@ export const ReviewSessionPayloadSchema = z
 		 *  elaborate→execute). */
 		next_phase: z.string().nullable().optional(),
 		approve_action: ApproveActionSchema.optional(),
+		/** True while a haiku_await_gate tool call is currently blocked
+		 *  on this session. The SPA gates the Approve button on this:
+		 *  when false (no engine waiting), Approve is disabled and the
+		 *  composer shows "leave feedback to force a decision next
+		 *  tick." When true, Approve fires the decision through to the
+		 *  blocked await as today. */
+		await_active: z.boolean().optional(),
+		/** Cumulative number of awaits that have run on this session.
+		 *  Useful for the SPA to detect "engine ticked back, new await
+		 *  round started." */
+		await_count: z.number().int().nonnegative().optional(),
+		/** A decision the SPA submitted while no await was open. The
+		 *  next haiku_await_gate call drains it on entry. The SPA
+		 *  shows "decision queued, waiting for engine" when this is
+		 *  set. */
+		pending_decision: z
+			.object({
+				decision: z.string(),
+				feedback: z.string(),
+				submitted_at: z.string(),
+			})
+			.optional(),
+		last_await_started_at: z.string().optional(),
+		last_await_ended_at: z.string().optional(),
 	})
 	.describe(
 		"Review session payload (GET /api/session/:id, session_type=review)",

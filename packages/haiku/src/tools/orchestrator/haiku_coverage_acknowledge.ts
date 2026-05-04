@@ -21,7 +21,7 @@
 // advance the workflow. The agent calls `haiku_run_next` after acknowledging
 // to re-run the validator.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { findHaikuRoot } from "../../state-tools.js"
 import { defineTool, validateSlugArgs } from "../define.js"
@@ -67,7 +67,9 @@ function writeDecisions(
 ): void {
 	const path = coverageDecisionsPath(slug, stage)
 	mkdirSync(dirname(path), { recursive: true })
-	writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`)
+	const tmp = `${path}.tmp`
+	writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`)
+	renameSync(tmp, path)
 }
 
 function errorResponse(code: string, message: string) {

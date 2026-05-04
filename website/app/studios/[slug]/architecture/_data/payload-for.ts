@@ -17,6 +17,8 @@ export type TransitionKey =
 	| "gate-to-next-stage"
 	| "feedback-dispatch"
 	| "manual-change-assessment"
+	| "coverage-review-required"
+	| "output-liveness-review-required"
 
 export interface TransitionOpts {
 	from?: string
@@ -519,6 +521,94 @@ export function payloadFor(
 			],
 			instructions:
 				"**Pre-tick drift-detection gate (unit-05, 2026-04-30).** Runs after feedback-triage and before per-state dispatch on every `haiku_run_next` tick. The gate positions in the chain: tamper-detection → feedback-triage → **drift-detection** → per-state dispatch. When findings are emitted, `manual_change_assessment` short-circuits the normal handler and the agent classifies all findings atomically via `haiku_classify_drift`. Terminal outcomes update the baseline immediately; non-terminal outcomes write a pending-assessment marker that suppresses re-detection until the downstream action (FB closed/rejected or revisit completed) clears the marker and updates the baseline.",
+		},
+		"coverage-review-required": {
+			injection: [
+				{
+					hook: "MCP tool result",
+					target: "agent's `tool_use_result`",
+					what: "`action: coverage_review_required` — pre-elaborate continuity gate found prior-stage outputs not referenced by any current-stage unit's `inputs:`. Agent must resolve each file before elaboration can advance.",
+				},
+				{
+					hook: "validateCumulativeInputCoverage()",
+					target: "pre-elaborate handler",
+					what: "Walks every prior stage's `units/*.md` declared outputs + files under `artifacts/`, `outputs/`, `knowledge/`, `discovery/`. Excludes paths already in `stages/{stage}/coverage-decisions.json`. Emits one blocking action listing all unreferenced files.",
+				},
+			],
+			action: "coverage_review_required",
+			summary:
+				"coverage gap — agent adds file to unit inputs or acknowledges as out-of-scope before elaborate can advance",
+			payload: {
+				action: "coverage_review_required",
+				intent: "{slug}",
+				stage: stageLower,
+				unreferenced: [
+					{
+						path: "stages/{prior-stage}/artifacts/example.md",
+						from_stage: "{prior-stage}",
+					},
+				],
+				message:
+					"Cannot advance past elaborate: N prior-stage output(s) are not referenced by any unit's `inputs:` in stage '{stage}' AND have no entry in `coverage-decisions.json`...",
+			},
+			validations: [
+				"At least one prior stage has outputs",
+				"Current stage is in `elaborate` phase",
+				"`coverage-decisions.json` does not already acknowledge every unreferenced path",
+			],
+			writes: [
+				{
+					path: `.haiku/intents/{slug}/stages/${stageLower}/coverage-decisions.json`,
+					change:
+						"written by `haiku_coverage_acknowledge` — per-path `out-of-scope` or `covered-by-unit` decision with rationale",
+				},
+			],
+			instructions:
+				"Agent walks the `unreferenced` list. For each file: either (a) call `haiku_unit_set { field: \"inputs\", value: [...] }` to add it to a unit's inputs (canonical path); or (b) call `haiku_coverage_acknowledge { path, decision: \"out-of-scope\", rationale }` to record an explicit dismissal. After resolving all, call `haiku_run_next` to re-run the validator. If files remain unresolved, the validator re-emits `coverage_review_required` with the remaining list.",
+		},
+		"output-liveness-review-required": {
+			injection: [
+				{
+					hook: "MCP tool result",
+					target: "agent's `tool_use_result`",
+					what: "`action: output_liveness_review_required` — intent-completion gate found code outputs with NO referencers anywhere in the repo. Agent must wire each orphan or explicitly acknowledge it before studio-level review can proceed.",
+				},
+				{
+					hook: "validateOutputLiveness()",
+					target: "intent-completion handler (before studio review dispatch)",
+					what: "For each `.ts`/`.tsx`/`.js`/`.jsx` output declared by any stage's units, runs `git grep -lw <stem>` in the repo root. Excludes test files and workflow-meta paths. Aggregates `haiku_coverage_acknowledge` acknowledgments from every stage's `coverage-decisions.json`. Orphan = zero git-grep hits and not acknowledged.",
+				},
+			],
+			action: "output_liveness_review_required",
+			summary:
+				"orphan code output — agent wires the component or acknowledges before studio review proceeds",
+			payload: {
+				action: "output_liveness_review_required",
+				intent: "{slug}",
+				orphans: [
+					{
+						path: "packages/app/src/components/Example.tsx",
+						from_stage: "{stage}",
+						from_unit: "unit-NN-{slug}",
+					},
+				],
+				message:
+					"Cannot advance to intent-completion review: N code-output(s) shipped by units have NO referencers anywhere in the repo...",
+			},
+			validations: [
+				"At least one unit across any stage declares a `.ts`/`.tsx`/`.js`/`.jsx` output",
+				"Git repo is available (`isGitRepo()` guard passes)",
+				"No acknowledgment in any stage's `coverage-decisions.json` for the orphan path",
+			],
+			writes: [
+				{
+					path: ".haiku/intents/{slug}/stages/{stage}/coverage-decisions.json",
+					change:
+						"written by `haiku_coverage_acknowledge { stage: \"<producing-stage>\", path, decision: \"out-of-scope\" }` — checked across ALL stages' decision files",
+				},
+			],
+			instructions:
+				"Agent walks the `orphans` list. For each file: either (a) author or extend a unit that imports/renders the output in a reachable code path and commits the integration; or (b) call `haiku_coverage_acknowledge { stage: \"<producing-stage>\", path, decision: \"out-of-scope\", rationale }`. After resolving all, call `haiku_run_next` — the validator re-runs. Gate is best-effort: if `isGitRepo()` is false or git is unavailable, the gate is skipped.",
 		},
 		"feedback-dispatch": {
 			injection: [

@@ -3629,8 +3629,6 @@ export const STAGE_STATE_SCHEMA = {
 	additionalProperties: true,
 }
 
-const _validateStageSchema = ajv.compile(STAGE_STATE_SCHEMA)
-
 export const STAGE_STATE_FIELDS = Object.keys(
 	STAGE_STATE_SCHEMA.properties,
 ) as ReadonlyArray<string>

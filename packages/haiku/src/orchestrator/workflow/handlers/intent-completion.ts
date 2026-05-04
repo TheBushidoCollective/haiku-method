@@ -340,26 +340,16 @@ const emit: WorkflowHandler = (ctx) => {
 		}
 	}
 
-	// Autopilot honors the final intent-completion gate as a single
-	// delivery PR (no SPA pane). User memory `feedback_open_pr_post_intent_gate`:
-	// "After intent_complete, open delivery PR directly. The
-	// completion gate is the guard." The user's flow expectation: the
-	// ONLY action they take post-completion is merging the PR.
-	//
-	// So we mark the intent complete *now* (status: completed,
+	// Autopilot marks the intent complete now (status: completed,
 	// completed_at timestamp, finalize stage branches into intent main,
-	// commit, seal). The completed state lands on the intent main
-	// branch. The agent then opens the delivery PR with the completed
-	// state included; the merge into mainline is the only remaining
-	// action — no further /haiku:pickup tick required to seal.
+	// commit, seal). The completed state lands on the intent main branch.
+	// The agent then opens the delivery PR; the merge is the only
+	// remaining action — no further /haiku:pickup tick required to seal.
 	const intentMode = ((intent.mode as string) || "continuous").toLowerCase()
 	const autopilot = intentMode === "autopilot" || intent.autopilot === true
 	if (autopilot && isGitRepo()) {
-		const completionAlreadyMarked = (intent.status as string) === "completed"
-		if (!completionAlreadyMarked) {
-			workflowIntentComplete(slug)
-			emitTelemetry("haiku.intent.autopilot_complete", { intent: slug })
-		}
+		workflowIntentComplete(slug)
+		emitTelemetry("haiku.intent.autopilot_complete", { intent: slug })
 		const intentMainBranch = `haiku/${slug}/main`
 		const mainline = resolveMainlineRef()
 		// If the branch is already merged, the intent is fully done —

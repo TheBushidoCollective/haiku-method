@@ -22,8 +22,9 @@
 //           through feedback_dispatch first or require fix_hats on
 //           stages that emit agent FBs.
 //   3. External review reconciliation (only when stage already
-//      completed+blocked): branch-merge or CLI signal → advance,
-//      changes_requested → delegate, otherwise → awaiting_external_review.
+//      completed+blocked or completed+advanced): branch-merge or CLI
+//      signal → advance, changes_requested → delegate, otherwise →
+//      awaiting_external_review.
 //   4. Auto gate → advance_stage (with workflowAdvanceStage) or
 //      completeOrReviewIntent.
 //   5. Non-auto gate → gate_review (with workflowGateAsk).

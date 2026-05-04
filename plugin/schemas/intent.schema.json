@@ -9,8 +9,7 @@
 		"title",
 		"mode",
 		"skip_stages",
-		"intent_completion_review",
-		"composite"
+		"intent_completion_review"
 	],
 	"x-engine-only": [
 		"studio",
@@ -20,6 +19,7 @@
 		"status",
 		"active_stage",
 		"stages",
+		"composite",
 		"intent_reviewed",
 		"phase",
 		"completion_review_dispatched",

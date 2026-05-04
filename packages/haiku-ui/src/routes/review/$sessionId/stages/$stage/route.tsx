@@ -8,6 +8,10 @@
 
 import { createFileRoute, Outlet } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
+import {
+	DriftBanner,
+	type DriftEntry,
+} from "../../../../../molecules/DriftBanner"
 import { RereviewBanner } from "../../../../../pages/review/shared/RereviewBanner"
 import { useReviewContext } from "../../-context"
 import { gateBadgeCopy, resolveGateModes } from "../../-review-helpers"
@@ -57,6 +61,12 @@ function StageLayout(): React.ReactElement {
 					gateBadges={gateBadges}
 				/>
 			</div>
+			{/* Drift banner — between StageBanner and RereviewBanner per
+			    SPA-UI-SPECS §3. Component returns null on empty drift, so
+			    the integration is safe even before the WS bridge that
+			    pushes drift entries lands. Wiring `drift` to the
+			    manual_change_assessment finding feed is the next iteration. */}
+			<DriftBanner drift={[] as DriftEntry[]} />
 			<div className="px-6 lg:px-10 pb-6">
 				{session.previous_review && (
 					<RereviewBanner snapshot={session.previous_review} />

@@ -379,13 +379,17 @@ export function FeedbackSidebar({
 			{/* Knowledge upload panel — collapsible <details> below the
 			    feedback list, above the composer. Per SPA-UI-SPECS §1.1.
 			    Hidden when the session has no intent context (ad-hoc reviews
-			    pre-bind sometimes). */}
+			    pre-bind sometimes). `defaultOpen={false}` keeps the panel
+			    collapsed at first paint so its drop-zone autofocus doesn't
+			    steal Tab order from the SkipLink (the FB-30 regression
+			    guard test asserts the first Tab lands on the skip-link). */}
 			{intentSlug && (
 				<div className="shrink-0 border-t border-stone-200 dark:border-stone-700">
 					<KnowledgeUploadPanel
 						intentSlug={intentSlug}
 						currentStage={stage ?? activeStage ?? ""}
 						onUpload={handleKnowledgeUpload}
+						defaultOpen={false}
 					/>
 				</div>
 			)}

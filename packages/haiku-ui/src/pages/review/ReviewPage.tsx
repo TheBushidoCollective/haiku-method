@@ -32,12 +32,9 @@ import { FeedbackSheet } from "../../organisms/FeedbackSheet"
 import type { InlineCommentEntry } from "../../organisms/InlineComments"
 import type { ReviewAnnotations } from "../../types"
 import { ArtifactsPane } from "./ArtifactsPane"
-import {
-	type AssessmentEntry,
-	DriftAssessmentsView,
-} from "./DriftAssessmentsView"
 import { FeedbackPanelBody } from "./FeedbackPanelBody"
 import { FeedbackSidebar } from "./FeedbackSidebar"
+import { IntentDriftAssessmentsSection } from "./IntentDriftAssessmentsSection"
 import { RereviewBanner } from "./shared/RereviewBanner"
 import type { ReviewPageSessionData } from "./shared/session-data"
 import type { ReviewDetailKind, ReviewTab } from "./shared/stage-tabs"
@@ -889,48 +886,5 @@ function IntentOverviewPane({
 				)}
 			</div>
 		</>
-	)
-}
-
-/** Mounted inside `IntentOverviewPane`. Fetches assessment records via
- *  the read-only assessments-routes API and forwards them to
- *  `DriftAssessmentsView`. The view renders its own empty state when
- *  the list is empty, so transient and steady-state are both handled
- *  inside the child. Failures show a small error block above the
- *  view; the child still renders so users see the empty state and can
- *  retry by re-opening the intent overview. */
-function IntentDriftAssessmentsSection({
-	intentSlug,
-}: {
-	intentSlug: string
-}): React.ReactElement {
-	const [assessments, setAssessments] = useState<AssessmentEntry[]>([])
-	const [error, setError] = useState<string | null>(null)
-	useEffect(() => {
-		let cancelled = false
-		const url = `/api/intents/${encodeURIComponent(intentSlug)}/assessments`
-		fetch(url, { credentials: "include" })
-			.then(async (res) => {
-				if (!res.ok) throw new Error(`HTTP ${res.status}`)
-				const body = (await res.json()) as { assessments?: AssessmentEntry[] }
-				if (!cancelled) setAssessments(body.assessments ?? [])
-			})
-			.catch((err) => {
-				if (!cancelled)
-					setError(err instanceof Error ? err.message : String(err))
-			})
-		return () => {
-			cancelled = true
-		}
-	}, [intentSlug])
-	return (
-		<div>
-			{error && (
-				<div className="mb-2 px-4 py-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-xs text-amber-800 dark:text-amber-300">
-					Failed to load drift assessments: {error}. Empty state shown below.
-				</div>
-			)}
-			<DriftAssessmentsView intentSlug={intentSlug} assessments={assessments} />
-		</div>
 	)
 }

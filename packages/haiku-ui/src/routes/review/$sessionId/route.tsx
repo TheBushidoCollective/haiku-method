@@ -425,6 +425,7 @@ function ReviewLayoutLoaded({
 								stage={selectedStage}
 								activeStage={activeStage}
 								sessionId={sessionId}
+								intentSlug={intentSlug ?? undefined}
 								intentTitle={session.intent?.title}
 								gateBadges={gateBadges}
 								gateType={session.gate_type}

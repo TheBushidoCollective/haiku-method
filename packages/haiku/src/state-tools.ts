@@ -5,6 +5,7 @@
 
 import { execFileSync, execSync, spawn, spawnSync } from "node:child_process"
 import {
+	type Dirent,
 	existsSync,
 	mkdirSync,
 	readdirSync,
@@ -5210,7 +5211,7 @@ export interface InstalledSkill {
  *
  *   1. Plugin-root skills  — `{CLAUDE_PLUGIN_ROOT}/skills/{slug}/SKILL.md`
  *   2. Project-local skills — `{cwd}/.claude/skills/{slug}/SKILL.md`
- *   3. Global user plugins  — `~/.claude/plugins/*/skills/{slug}/SKILL.md`
+ *   3. Global user plugins  — `~/.claude/plugins/<plugin>/skills/{slug}/SKILL.md`
  *
  * De-duplicated by slug (first occurrence wins, so plugin-root skills shadow
  * global ones with the same name). Returns an empty array when no skills
@@ -5220,12 +5221,9 @@ export function listInstalledSkills(): InstalledSkill[] {
 	const skills: InstalledSkill[] = []
 	const seen = new Set<string>()
 
-	function readSkillDir(
-		dir: string,
-		source: InstalledSkill["source"],
-	): void {
+	function readSkillDir(dir: string, source: InstalledSkill["source"]): void {
 		if (!existsSync(dir)) return
-		let entries: ReturnType<typeof readdirSync>
+		let entries: Dirent[]
 		try {
 			entries = readdirSync(dir, { withFileTypes: true })
 		} catch {
@@ -5268,10 +5266,7 @@ export function listInstalledSkills(): InstalledSkill[] {
 				withFileTypes: true,
 			})) {
 				if (!entry.isDirectory()) continue
-				readSkillDir(
-					join(globalPluginsDir, entry.name, "skills"),
-					"global",
-				)
+				readSkillDir(join(globalPluginsDir, entry.name, "skills"), "global")
 			}
 		}
 	} catch {

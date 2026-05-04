@@ -4,6 +4,7 @@
 
 import assert from "node:assert"
 import {
+	chmodSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -18,10 +19,9 @@ import { join } from "node:path"
 const origCwd = process.cwd()
 process.env.CLAUDE_PLUGIN_ROOT = join(origCwd, "..", "..", "plugin")
 
-import {
-	handleStateTool,
-	listInstalledSkills,
-} from "../src/state-tools.ts"
+const { handleStateTool, listInstalledSkills } = await import(
+	"../src/state-tools.ts"
+)
 
 // ── Setup ──────────────────────────────────────────────────────────────────
 
@@ -59,7 +59,6 @@ Run this skill to refactor code.
 const fakeBin = join(tmp, "fake-bin")
 mkdirSync(fakeBin, { recursive: true })
 writeFileSync(join(fakeBin, "git"), "#!/bin/sh\nexit 0\n")
-import { chmodSync } from "node:fs"
 chmodSync(join(fakeBin, "git"), 0o755)
 process.env.PATH = `${fakeBin}:${process.env.PATH}`
 
@@ -134,7 +133,11 @@ try {
 	test("de-duplicates by slug (first occurrence wins)", () => {
 		const skills = listInstalledSkills()
 		const testSkills = skills.filter((s) => s.slug === "test")
-		assert.strictEqual(testSkills.length, 1, "Expected exactly one 'test' entry")
+		assert.strictEqual(
+			testSkills.length,
+			1,
+			"Expected exactly one 'test' entry",
+		)
 	})
 
 	test("returns empty array gracefully when no skills dir exists", () => {
@@ -155,10 +158,7 @@ try {
 		const result = handleStateTool("haiku_skill_list", {})
 		assert.ok(!result.isError, `Tool returned error: ${getTextResult(result)}`)
 		const parsed = JSON.parse(getTextResult(result))
-		assert.ok(
-			Array.isArray(parsed.skills),
-			"Expected skills to be an array",
-		)
+		assert.ok(Array.isArray(parsed.skills), "Expected skills to be an array")
 	})
 
 	test("haiku_skill_list includes project-local skills with correct shape", () => {
@@ -185,18 +185,21 @@ try {
 		assert.ok(def.outputSchema, "haiku_skill_list must have an outputSchema")
 	})
 
-	await testAsync("applicable_skills is in UNIT_FRONTMATTER_SCHEMA", async () => {
-		const { UNIT_FRONTMATTER_SCHEMA, AGENT_AUTHORABLE_UNIT_FIELDS } =
-			await import("../src/state-tools.ts")
-		assert.ok(
-			"applicable_skills" in UNIT_FRONTMATTER_SCHEMA.properties,
-			"applicable_skills must be in UNIT_FRONTMATTER_SCHEMA.properties",
-		)
-		assert.ok(
-			AGENT_AUTHORABLE_UNIT_FIELDS.includes("applicable_skills"),
-			"applicable_skills must be in AGENT_AUTHORABLE_UNIT_FIELDS",
-		)
-	})
+	await testAsync(
+		"applicable_skills is in UNIT_FRONTMATTER_SCHEMA",
+		async () => {
+			const { UNIT_FRONTMATTER_SCHEMA, AGENT_AUTHORABLE_UNIT_FIELDS } =
+				await import("../src/state-tools.ts")
+			assert.ok(
+				"applicable_skills" in UNIT_FRONTMATTER_SCHEMA.properties,
+				"applicable_skills must be in UNIT_FRONTMATTER_SCHEMA.properties",
+			)
+			assert.ok(
+				AGENT_AUTHORABLE_UNIT_FIELDS.includes("applicable_skills"),
+				"applicable_skills must be in AGENT_AUTHORABLE_UNIT_FIELDS",
+			)
+		},
+	)
 
 	console.log("\n=== applicable_skills in hat prompt ===")
 
@@ -208,12 +211,7 @@ try {
 			const stage = "inception"
 			const slug = "skill-test-intent"
 
-			const intentDir = join(
-				projDir,
-				".haiku",
-				"intents",
-				slug,
-			)
+			const intentDir = join(projDir, ".haiku", "intents", slug)
 			const stageDir = join(intentDir, "stages", stage)
 			const unitsDir = join(stageDir, "units")
 			mkdirSync(unitsDir, { recursive: true })
@@ -415,6 +413,110 @@ A unit without skill annotations.
 					"Expected no 'Skills available' section when unit has no applicable_skills",
 				)
 			}
+		},
+	)
+
+	console.log("\n=== elaborate prompt skill registry ===")
+
+	/**
+	 * Create a minimal in-project studio (under .haiku/studios) with the
+	 * given stage so we can drive the elaborate prompt builder against a
+	 * config that has no discovery fan-out — discovery would short-circuit
+	 * the prompt before the skill registry section is appended.
+	 */
+	function createInlineStudio(rootDir, studioName, stageName) {
+		const studioDir = join(rootDir, ".haiku", "studios", studioName)
+		const stageDir = join(studioDir, "stages", stageName)
+		mkdirSync(stageDir, { recursive: true })
+		writeFileSync(
+			join(studioDir, "STUDIO.md"),
+			`---
+name: ${studioName}
+description: Inline test studio
+stages: [${stageName}]
+---
+
+Inline studio.
+`,
+		)
+		writeFileSync(
+			join(stageDir, "STAGE.md"),
+			`---
+name: ${stageName}
+description: ${stageName} stage
+hats: [worker]
+review: auto
+elaboration: autonomous
+---
+
+${stageName} stage.
+`,
+		)
+	}
+
+	await testAsync(
+		"elaborate prompt body includes skill registry section when skills are installed",
+		async () => {
+			const { buildElaboratePromptBody } = await import(
+				"../src/orchestrator/prompts/elaborate.ts"
+			)
+			createInlineStudio(projDir, "skill-test-studio", "plan")
+			const slug = "skill-elab-intent"
+			const intentDir = join(projDir, ".haiku", "intents", slug)
+			mkdirSync(join(intentDir, "stages", "plan", "units"), {
+				recursive: true,
+			})
+			writeFileSync(
+				join(intentDir, "intent.md"),
+				`---
+title: Skill Elaborate Test
+studio: skill-test-studio
+mode: continuous
+active_stage: plan
+status: active
+intent_reviewed: true
+started_at: 2026-01-01T00:00:00Z
+completed_at: null
+---
+
+Verify the elaborate prompt advertises installed skills.
+`,
+			)
+
+			process.chdir(projDir)
+			const body = buildElaboratePromptBody({
+				slug,
+				studio: "skill-test-studio",
+				action: {
+					action: "elaborate",
+					intent: slug,
+					studio: "skill-test-studio",
+					stage: "plan",
+					elaboration: "autonomous",
+				},
+				dir: intentDir,
+			})
+
+			assert.ok(
+				body.includes("## Available Skills"),
+				`Expected '## Available Skills' header in elaborate prompt body. Body excerpt: ${body.slice(0, 500)}...`,
+			)
+			assert.ok(
+				body.includes("`applicable_skills:`"),
+				"Expected applicable_skills annotation guidance in elaborate prompt body",
+			)
+			assert.ok(
+				body.includes("/test"),
+				"Expected /test skill to be listed in elaborate prompt body",
+			)
+			assert.ok(
+				body.includes("/refactor"),
+				"Expected /refactor skill to be listed in elaborate prompt body",
+			)
+			assert.ok(
+				body.includes("Write tests for code using TDD principles"),
+				"Expected /test description to appear in elaborate prompt body",
+			)
 		},
 	)
 

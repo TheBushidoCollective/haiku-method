@@ -23,6 +23,7 @@ import { Header as HeaderLandmark, Main } from "../../a11y"
 import { ThemeToggle } from "../../atoms/ThemeToggle"
 import { FeedbackProvider } from "../../hooks/FeedbackContext"
 import { useFeedback } from "../../hooks/useFeedback"
+import { DriftBanner, type DriftEntry } from "../../molecules/DriftBanner"
 import { StageProgressStrip } from "../../molecules/StageProgressStrip"
 import { SubmitSuccess } from "../../molecules/SubmitSuccess"
 import type { AnnotationPin } from "../../organisms/AnnotationCanvas"
@@ -31,6 +32,10 @@ import { FeedbackSheet } from "../../organisms/FeedbackSheet"
 import type { InlineCommentEntry } from "../../organisms/InlineComments"
 import type { ReviewAnnotations } from "../../types"
 import { ArtifactsPane } from "./ArtifactsPane"
+import {
+	type AssessmentEntry,
+	DriftAssessmentsView,
+} from "./DriftAssessmentsView"
 import { FeedbackPanelBody } from "./FeedbackPanelBody"
 import { FeedbackSidebar } from "./FeedbackSidebar"
 import { RereviewBanner } from "./shared/RereviewBanner"
@@ -474,6 +479,7 @@ export function ReviewPage({
 							stage={selectedStage ?? activeStage}
 							activeStage={activeStage}
 							sessionId={sessionId}
+							intentSlug={intentSlug ?? undefined}
 							intentTitle={session.intent?.title}
 							gateBadges={gateBadges}
 							gateType={session.gate_type}
@@ -527,6 +533,17 @@ export function ReviewPage({
 									stagePhase={stageStates[selectedStage ?? ""]?.phase ?? null}
 									gateBadges={gateBadges}
 								/>
+
+								{/* Drift banner — sticky strip between StageBanner and
+								    RereviewBanner per SPA-UI-SPECS §3. Renders nothing
+								    when `drift` is empty (DriftBanner returns null
+								    internally), so the integration is safe even before
+								    the WS plumbing that pushes drift entries lands. The
+								    drift entries themselves come from the existing
+								    `manual_change_assessment` action's findings via
+								    the WS bridge — wiring `drift` to that feed is the
+								    next iteration's work. */}
+								<DriftBanner drift={[] as DriftEntry[]} />
 
 								<div className="px-6 lg:px-10 pb-6">
 									{session.previous_review && (
@@ -859,7 +876,61 @@ function IntentOverviewPane({
 						</p>
 					)}
 				</div>
+
+				{/* Drift assessments — intent-scope drift history (per
+				    SPA-UI-SPECS §4). Renders after the intent-definition
+				    block. Hooks the existing
+				    `GET /api/intents/:intent/assessments` endpoint
+				    (assessments-routes.ts) on mount; the view's empty state
+				    is rendered until the fetch resolves or when no drift
+				    has been classified yet. */}
+				{intent?.slug && (
+					<IntentDriftAssessmentsSection intentSlug={intent.slug} />
+				)}
 			</div>
 		</>
+	)
+}
+
+/** Mounted inside `IntentOverviewPane`. Fetches assessment records via
+ *  the read-only assessments-routes API and forwards them to
+ *  `DriftAssessmentsView`. The view renders its own empty state when
+ *  the list is empty, so transient and steady-state are both handled
+ *  inside the child. Failures show a small error block above the
+ *  view; the child still renders so users see the empty state and can
+ *  retry by re-opening the intent overview. */
+function IntentDriftAssessmentsSection({
+	intentSlug,
+}: {
+	intentSlug: string
+}): React.ReactElement {
+	const [assessments, setAssessments] = useState<AssessmentEntry[]>([])
+	const [error, setError] = useState<string | null>(null)
+	useEffect(() => {
+		let cancelled = false
+		const url = `/api/intents/${encodeURIComponent(intentSlug)}/assessments`
+		fetch(url, { credentials: "include" })
+			.then(async (res) => {
+				if (!res.ok) throw new Error(`HTTP ${res.status}`)
+				const body = (await res.json()) as { assessments?: AssessmentEntry[] }
+				if (!cancelled) setAssessments(body.assessments ?? [])
+			})
+			.catch((err) => {
+				if (!cancelled)
+					setError(err instanceof Error ? err.message : String(err))
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [intentSlug])
+	return (
+		<div>
+			{error && (
+				<div className="mb-2 px-4 py-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 text-xs text-amber-800 dark:text-amber-300">
+					Failed to load drift assessments: {error}. Empty state shown below.
+				</div>
+			)}
+			<DriftAssessmentsView intentSlug={intentSlug} assessments={assessments} />
+		</div>
 	)
 }

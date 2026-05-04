@@ -79,6 +79,7 @@ export {
 export {
 	buildOutputRequirements,
 	runQualityGates,
+	validateCumulativeInputCoverage,
 	validateDiscoveryArtifacts,
 	validateStageOutputs,
 	validateUnitInputs,

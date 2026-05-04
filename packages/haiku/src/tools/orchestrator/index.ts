@@ -12,6 +12,7 @@
 import type { ToolDef } from "../types.js"
 import haiku_baseline_init from "./haiku_baseline_init.js"
 import haiku_classify_drift from "./haiku_classify_drift.js"
+import haiku_coverage_acknowledge from "./haiku_coverage_acknowledge.js"
 import haiku_human_write from "./haiku_human_write.js"
 import haiku_intent_archive from "./haiku_intent_archive.js"
 import haiku_intent_create from "./haiku_intent_create.js"
@@ -25,6 +26,7 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 		[
 			haiku_baseline_init,
 			haiku_classify_drift,
+			haiku_coverage_acknowledge,
 			haiku_human_write,
 			haiku_intent_archive,
 			haiku_intent_create,

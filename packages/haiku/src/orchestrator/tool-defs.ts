@@ -171,6 +171,26 @@ export const orchestratorToolDefs = [
 		},
 	},
 	{
+		name: "haiku_coverage_acknowledge",
+		description:
+			"Record a per-file decision for an upstream output that the current stage's units do not reference. Used to resolve a `coverage_review_required` action emitted by the pre-tick cumulative-input-coverage validator. Decisions persist to `stages/<stage>/coverage-decisions.json`. The decision MUST be either `out-of-scope` (with rationale explaining why this file is not relevant to the current stage's deliverables) or `covered-by-unit` (with the `unit` slug whose `inputs:` field already includes — or will include — the path; redundant for paths added via `haiku_unit_set` but useful when the agent wants to record reasoning). This tool does NOT advance the workflow; call `haiku_run_next` after acknowledging to re-run the validator.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent_slug: { type: "string" },
+				stage: { type: "string" },
+				path: { type: "string" },
+				decision: {
+					type: "string",
+					enum: ["out-of-scope", "covered-by-unit"],
+				},
+				rationale: { type: "string" },
+				unit: { type: "string" },
+			},
+			required: ["intent_slug", "stage", "path", "decision", "rationale"],
+		},
+	},
+	{
 		name: "haiku_classify_drift",
 		description:
 			"Record classification outcomes for a `manual_change_assessment` action. The agent submits one Classification per dispatched finding; the tool atomically writes the Assessment record, creates any inline feedback items, updates baselines for terminal outcomes (ignore, inline-fix), writes pending-assessment markers for non-terminal outcomes (surface-as-feedback, trigger-revisit), and dispatches haiku_revisit for trigger-revisit. Rejects stale tick_ids, illegal outcomes (per change_kind matrix), missing rationales on non-ignore outcomes, and revisit targets at or downstream of the active stage.",

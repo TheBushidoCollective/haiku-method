@@ -176,8 +176,8 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 
 	console.log("\n=== orchestratorToolDefs ===")
 
-	test("has 9 orchestration tools", () => {
-		assert.strictEqual(orchestratorToolDefs.length, 9)
+	test("has 10 orchestration tools", () => {
+		assert.strictEqual(orchestratorToolDefs.length, 10)
 	})
 
 	test("every registered handler has a tool-defs entry", async () => {

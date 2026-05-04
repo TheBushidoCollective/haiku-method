@@ -49,6 +49,12 @@ function tryRun(args: string[]): string {
 		return execFileSync(args[0], args.slice(1), {
 			encoding: "utf8",
 			stdio: ["ignore", "pipe", "ignore"],
+			// `git ls-remote` is a network call against the origin remote.
+			// Without a timeout, an unreachable remote hangs execFileSync —
+			// which is synchronous and blocks the entire Node event loop.
+			// Session API polls every 5s, so a hung ls-remote stalls every
+			// poll. 5s is generous: a reachable remote answers in ~100ms.
+			timeout: 5000,
 		}).trim()
 	} catch {
 		return ""
@@ -99,22 +105,33 @@ function parseOriginUrl(rawUrl: string): OriginInfo | null {
 }
 
 /** Try to find a published PR/MR ref whose head SHA matches the
- *  branch's HEAD SHA. Each provider exposes a slightly different ref
- *  pattern:
+ *  branch's HEAD SHA. Each provider exposes a different ref pattern:
  *    - GitHub: `refs/pull/<num>/head`
  *    - GitLab: `refs/merge-requests/<num>/head`
- *  We always probe both and return the first match — operator-side
- *  config can mirror either pattern, so being permissive is cheaper
- *  than being clever. */
-function matchPrRefForSha(sha: string): {
+ *  When the origin host is recognised we probe only the matching
+ *  pattern — saves one network round-trip per call. For "other" hosts
+ *  (self-hosted that mirror either convention) we probe both. */
+function matchPrRefForSha(
+	sha: string,
+	origin: OriginInfo,
+): {
 	source: DiscoverySource
 	prNumber: number
 } | null {
 	if (!sha) return null
-	for (const [pattern, source] of [
-		["refs/pull/*/head", "github-pr-ref" as DiscoverySource],
-		["refs/merge-requests/*/head", "gitlab-mr-ref" as DiscoverySource],
+	for (const [pattern, source, requiredHost] of [
+		[
+			"refs/pull/*/head",
+			"github-pr-ref" as DiscoverySource,
+			"github.com" as const,
+		],
+		[
+			"refs/merge-requests/*/head",
+			"gitlab-mr-ref" as DiscoverySource,
+			"gitlab.com" as const,
+		],
 	] as const) {
+		if (origin.host !== "other" && origin.host !== requiredHost) continue
 		const out = tryRun(["git", "ls-remote", "origin", pattern])
 		if (!out) continue
 		for (const line of out.split("\n")) {
@@ -167,7 +184,7 @@ export function discoverReviewUrl(slug: string): DiscoveredReviewUrl | null {
 	const originRaw = tryRun(["git", "remote", "get-url", "origin"])
 	const origin = parseOriginUrl(originRaw)
 	if (!origin) return null
-	const match = matchPrRefForSha(sha)
+	const match = matchPrRefForSha(sha, origin)
 	if (!match) return null
 	const url = constructUrl(origin, match.source, match.prNumber)
 	if (!url) return null

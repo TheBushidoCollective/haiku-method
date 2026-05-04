@@ -176,8 +176,19 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 
 	console.log("\n=== orchestratorToolDefs ===")
 
-	test("has 6 orchestration tools", () => {
-		assert.strictEqual(orchestratorToolDefs.length, 6)
+	test("has 7 orchestration tools", () => {
+		assert.strictEqual(orchestratorToolDefs.length, 7)
+	})
+
+	test("haiku_await_gate tool defined for two-step gate review", () => {
+		const tool = orchestratorToolDefs.find(
+			(t) => t.name === "haiku_await_gate",
+		)
+		assert.ok(tool, "haiku_await_gate not registered")
+		assert.ok(
+			tool.inputSchema.required?.includes("intent"),
+			"haiku_await_gate.intent must be required",
+		)
 	})
 
 	test("haiku_run_next tool defined with intent optional (auto-resolved)", () => {

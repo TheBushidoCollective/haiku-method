@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Gate-review approval now travels through chat: when a stage gate is hit, the orchestrator prepares the review session and surfaces the URL in the `gate_review` action so the agent can post it to the user; a new `haiku_await_gate` tool then opens the URL best-effort and blocks on the user's decision. Same pattern applies to `ask_user_visual_question` (paired with new `haiku_await_visual_answer`) and `pick_design_direction` (paired with new `haiku_await_design_direction`). This unblocks remote control, headless / SSH hosts, mobile chat clients, and any environment where the MCP host can't auto-launch the user's browser. Pass `auto_open: false` on the await tools when the user is reviewing on a different device.
+
 ## [3.4.1] - 2026-05-03
 
 This release contains only internal test coverage improvements with no user-facing changes to report.

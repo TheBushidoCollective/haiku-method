@@ -33,7 +33,45 @@ export const orchestratorToolDefs = [
 			},
 		},
 	},
-	// haiku_gate_approve removed — gates are handled by the workflow engine (review UI + elicitation fallback)
+	{
+		name: "haiku_await_gate",
+		description:
+			"Block on a pending gate-review session for an intent until the user " +
+			"approves, requests changes, or the wait times out (30 min). Pair with " +
+			"`haiku_run_next`: when run_next returns a `gate_review` action, post " +
+			"the included `review_url` to the user (essential for headless / SSH / " +
+			"web-client / mobile / remote-control setups where the MCP host can't " +
+			"auto-open the user's browser), then call this tool to wait for their " +
+			"decision. Opens the review URL in the default browser best-effort by " +
+			"default; pass `auto_open: false` to skip the browser launch. Returns " +
+			"the resulting orchestrator action (advance_stage / changes_requested / " +
+			"external_review_requested / etc.).",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: {
+					type: "string",
+					description: "Intent slug (required).",
+				},
+				session_id: {
+					type: "string",
+					description:
+						"Override the session ID to await. Defaults to the gate_review_session_id persisted on the stage's state.json by haiku_run_next.",
+				},
+				auto_open: {
+					type: "boolean",
+					description:
+						"Try to open the review URL in the default browser when waiting begins (default true). Set to false for remote control / headless host scenarios where the user will follow the URL on a different device.",
+				},
+				review_url: {
+					type: "string",
+					description:
+						"Review URL to open if auto_open is true. Optional — primarily used to confirm the URL the agent is communicating to the user.",
+				},
+			},
+			required: ["intent"],
+		},
+	},
 	{
 		name: "haiku_intent_create",
 		description:

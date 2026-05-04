@@ -10,6 +10,7 @@
 // tools. As more tools migrate, the chain shrinks toward zero.
 
 import type { ToolDef } from "../types.js"
+import haiku_await_gate from "./haiku_await_gate.js"
 import haiku_intent_archive from "./haiku_intent_archive.js"
 import haiku_intent_create from "./haiku_intent_create.js"
 import haiku_intent_reset from "./haiku_intent_reset.js"
@@ -20,6 +21,7 @@ import haiku_select_studio from "./haiku_select_studio.js"
 export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 	(
 		[
+			haiku_await_gate,
 			haiku_intent_archive,
 			haiku_intent_create,
 			haiku_intent_reset,

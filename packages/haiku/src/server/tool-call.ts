@@ -239,9 +239,12 @@ export async function handleToolCall(
 ) {
 	const { name, arguments: args } = request.params
 
-	// Orchestration tools (async — gate_ask blocks until user reviews)
+	// Orchestration tools. haiku_await_gate is the only one that
+	// blocks for an extended period (waits on the gate-review session
+	// for up to 30 minutes); the others return promptly.
 	if (
 		name === "haiku_run_next" ||
+		name === "haiku_await_gate" ||
 		name === "haiku_intent_create" ||
 		name === "haiku_select_studio" ||
 		name === "haiku_intent_reset" ||
@@ -521,15 +524,11 @@ export async function handleToolCall(
 			imagePaths,
 			imageBaseDirs,
 		})
-		bindSessionCancellation(session.session_id, signal)
 
 		// Build image URLs for the template (served via /question-image/:sessionId/:index)
 		const imageUrls = imagePaths.map(
 			(_, i) => `/question-image/${session.session_id}/${i}`,
 		)
-
-		// (Legacy server-rendered question HTML removed — see review
-		// session above. /question/:sessionId serves HAIKU_UI_HTML.)
 		void imageUrls
 
 		// Start HTTP server (idempotent)
@@ -542,12 +541,66 @@ export async function handleToolCall(
 			questionUrl = `http://127.0.0.1:${port}/question/${session.session_id}`
 		}
 
-		launchBrowserBestEffort(questionUrl, "Question session")
+		// Non-blocking — return URL + session_id; agent posts the URL
+		// to the user, then calls haiku_await_visual_answer to block
+		// on the response. Same motivation as the gate-review split:
+		// remote control / headless / SSH / mobile-chat hosts can't
+		// auto-launch browsers, so the URL must travel through chat.
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: JSON.stringify(
+						{
+							status: "session_ready",
+							session_id: session.session_id,
+							url: questionUrl,
+							next_tool: "haiku_await_visual_answer",
+							message: `Question session created. Tell the user the URL above (post it in chat — essential for headless / remote-control / mobile setups), then call haiku_await_visual_answer { session_id: "${session.session_id}" } to block on their answer. The await tool also tries to open the URL in the default browser; pass auto_open: false to skip.`,
+						},
+						null,
+						2,
+					),
+				},
+			],
+		}
+	}
 
-		// Block until the user submits their answers (event-based, no polling)
-		const MAX_WAIT_Q = 30 * 60 * 1000 // 30 minutes
+	if (name === "haiku_await_visual_answer") {
+		const a = (args ?? {}) as Record<string, unknown>
+		const sessionId = (a.session_id as string) || ""
+		if (!sessionId) {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: "Error: session_id is required. Use the session_id returned by ask_user_visual_question.",
+					},
+				],
+				isError: true,
+			}
+		}
+		const autoOpen = a.auto_open === false ? false : true
+		const url = (a.url as string) || ""
+		const existing = getSession(sessionId)
+		if (!existing || existing.session_type !== "question") {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: `Question session ${sessionId} not found or wrong type — call ask_user_visual_question to create a new one.`,
+					},
+				],
+				isError: true,
+			}
+		}
+
+		bindSessionCancellation(sessionId, signal)
+		if (autoOpen && url) launchBrowserBestEffort(url, "Question session")
+
+		const MAX_WAIT_Q = 30 * 60 * 1000
 		try {
-			await waitForSession(session.session_id, MAX_WAIT_Q, signal)
+			await waitForSession(sessionId, MAX_WAIT_Q, signal)
 		} catch {
 			return {
 				content: [
@@ -556,9 +609,10 @@ export async function handleToolCall(
 						text: JSON.stringify(
 							{
 								status: "timeout",
-								url: questionUrl,
-								session_id: session.session_id,
-								message: "User did not respond within 30 minutes",
+								url,
+								session_id: sessionId,
+								message:
+									"User did not respond within 30 minutes. Call haiku_await_visual_answer again to keep waiting, or ask_user_visual_question to start a new session.",
 							},
 							null,
 							2,
@@ -568,32 +622,22 @@ export async function handleToolCall(
 			}
 		}
 
-		// Session was updated — read the latest state
-		const updatedQuestionSession = getSession(session.session_id)
+		const updatedQuestionSession = getSession(sessionId)
 		if (
 			updatedQuestionSession &&
 			updatedQuestionSession.session_type === "question" &&
 			updatedQuestionSession.status === "answered" &&
 			updatedQuestionSession.answers
 		) {
-			// Build the structured-summary block (without screenshots —
-			// data URLs would balloon the JSON). Screenshots become
-			// dedicated MCP image content blocks below so Claude sees
-			// the actual surface, not an opaque data URL.
 			const annotationsForJson: Record<string, unknown> = {}
 			const ann = updatedQuestionSession.annotations
-			if (ann?.comments?.length) {
-				annotationsForJson.comments = ann.comments
-			}
-			if (ann?.pins?.length) {
-				annotationsForJson.pins = ann.pins
-			}
-			if (ann?.screenshots?.length) {
+			if (ann?.comments?.length) annotationsForJson.comments = ann.comments
+			if (ann?.pins?.length) annotationsForJson.pins = ann.pins
+			if (ann?.screenshots?.length)
 				annotationsForJson.screenshot_count = ann.screenshots.length
-			}
 			const questionResult: Record<string, unknown> = {
 				status: "answered",
-				url: questionUrl,
+				url,
 				answers: updatedQuestionSession.answers,
 			}
 			if (updatedQuestionSession.feedback) {
@@ -653,9 +697,10 @@ export async function handleToolCall(
 					text: JSON.stringify(
 						{
 							status: "timeout",
-							url: questionUrl,
-							session_id: session.session_id,
-							message: "User did not respond within 30 minutes",
+							url,
+							session_id: sessionId,
+							message:
+								"User did not respond within 30 minutes. Call haiku_await_visual_answer again to keep waiting.",
 						},
 						null,
 						2,
@@ -694,25 +739,11 @@ export async function handleToolCall(
 			}
 		}
 
-		// Create design direction session
 		const session = createDesignDirectionSession({
 			intent_slug: input.intent_slug,
 			archetypes,
 		})
-		// NOTE: deliberately not propagating `signal` into the session.
-		// The HTTP submit route persists the selection (+ screenshots) to
-		// disk before waking us, so even if the MCP client times out the
-		// request and discards our response, the next haiku_run_next will
-		// emit a `design_direction_complete` action that surfaces the
-		// selection from durable state. Forwarding the abort here only
-		// short-circuits the wait without producing a usable response.
-		// The unused `signal` parameter is intentional — see comment above.
-		bindSessionCancellation(session.session_id, undefined)
 
-		// (Legacy server-rendered design-direction HTML removed —
-		// /direction/:sessionId serves HAIKU_UI_HTML.)
-
-		// Start HTTP server (idempotent)
 		const port = await startHttpServer()
 		let directionUrl: string
 		if (isRemoteReviewEnabled()) {
@@ -722,12 +753,77 @@ export async function handleToolCall(
 			directionUrl = `http://127.0.0.1:${port}/direction/${session.session_id}`
 		}
 
-		launchBrowserBestEffort(directionUrl, "Direction session")
+		// Non-blocking — return URL + session_id; agent posts the URL
+		// to the user, then calls haiku_await_design_direction to
+		// block on the response. Same motivation as the gate-review
+		// and visual-question splits: the URL travels through chat
+		// regardless of whether the MCP host can launch a browser.
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: JSON.stringify(
+						{
+							status: "session_ready",
+							session_id: session.session_id,
+							intent_slug: input.intent_slug,
+							url: directionUrl,
+							archetype_count: archetypes.length,
+							next_tool: "haiku_await_design_direction",
+							message: `Design-direction session created. Tell the user the URL above (post it in chat — essential for headless / remote / mobile setups), then call haiku_await_design_direction { session_id: "${session.session_id}", intent_slug: "${input.intent_slug}" } to block on their selection. Pass auto_open: false on the await call when the user will open the URL on a different device.`,
+						},
+						null,
+						2,
+					),
+				},
+			],
+		}
+	}
 
-		// Block until the user submits their selection (event-based, no polling)
-		const MAX_WAIT_DD = 30 * 60 * 1000 // 30 minutes
+	if (name === "haiku_await_design_direction") {
+		const a = (args ?? {}) as Record<string, unknown>
+		const sessionId = (a.session_id as string) || ""
+		const intentSlug = (a.intent_slug as string) || ""
+		if (!sessionId) {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: "Error: session_id is required. Use the session_id returned by pick_design_direction.",
+					},
+				],
+				isError: true,
+			}
+		}
+		const autoOpen = a.auto_open === false ? false : true
+		const url = (a.url as string) || ""
+		const existing = getSession(sessionId)
+		if (!existing || existing.session_type !== "design_direction") {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: `Design-direction session ${sessionId} not found or wrong type — call pick_design_direction to create a new one.`,
+					},
+				],
+				isError: true,
+			}
+		}
+
+		// NOTE: deliberately not propagating `signal` into the session.
+		// The HTTP submit route persists the selection (+ screenshots) to
+		// disk before waking us, so even if the MCP client times out the
+		// request and discards our response, the next haiku_run_next will
+		// emit a `design_direction_complete` action that surfaces the
+		// selection from durable state. Forwarding the abort here only
+		// short-circuits the wait without producing a usable response.
+		bindSessionCancellation(sessionId, undefined)
+
+		if (autoOpen && url) launchBrowserBestEffort(url, "Direction session")
+
+		const MAX_WAIT_DD = 30 * 60 * 1000
 		try {
-			await waitForSession(session.session_id, MAX_WAIT_DD)
+			await waitForSession(sessionId, MAX_WAIT_DD)
 		} catch {
 			return {
 				content: [
@@ -736,10 +832,10 @@ export async function handleToolCall(
 						text: JSON.stringify(
 							{
 								status: "timeout",
-								url: directionUrl,
-								session_id: session.session_id,
+								url,
+								session_id: sessionId,
 								message:
-									"User did not respond within 30 minutes. Re-prompt or call haiku_run_next to continue.",
+									"User did not respond within 30 minutes. Call haiku_await_design_direction again to keep waiting, or haiku_run_next to advance from durable state if a selection landed.",
 							},
 							null,
 							2,
@@ -749,13 +845,12 @@ export async function handleToolCall(
 			}
 		}
 
-		// Session was updated — read the latest state.
 		// All durable persistence (state.json + PNG sidecars) happened on
 		// the HTTP submit route in `session-routes.ts`; this handler just
 		// returns a short ack so the agent knows to advance. The next
 		// `haiku_run_next` emits `design_direction_complete` with the
 		// archetype, comments, and screenshot paths read from disk.
-		const updatedDirectionSession = getSession(session.session_id)
+		const updatedDirectionSession = getSession(sessionId)
 		if (
 			updatedDirectionSession &&
 			updatedDirectionSession.session_type === "design_direction" &&
@@ -769,7 +864,7 @@ export async function handleToolCall(
 					sel.keep.length > 0
 						? `The user wants more variants. They'd like to keep: **${sel.keep.join("**, **")}**.`
 						: `The user wants more variants. None of the current archetypes are keepers.`,
-					`Generate ${input.archetypes ? Math.max(0, input.archetypes.length - sel.keep.length) : "fresh"} replacement archetype(s) for the dropped slot(s) and call \`pick_design_direction\` again with the merged set.`,
+					`Generate replacement archetype(s) for the dropped slot(s) and call \`pick_design_direction\` again with the merged set.`,
 				]
 				if (sel.comments) {
 					parts.push(`\nSteering notes from the user: ${sel.comments}`)
@@ -785,25 +880,27 @@ export async function handleToolCall(
 			// non-fatal — branch state is reconciled by `haiku_run_next`'s
 			// own enforcement on the next tick — but we surface them so a
 			// debug-mode log shows when reconciliation will be needed.
-			try {
-				const intentRaw = await readFile(
-					join(findHaikuRoot(), "intents", input.intent_slug, "intent.md"),
-					"utf-8",
-				)
-				const activeStage =
-					(parseFrontmatter(intentRaw).data.active_stage as string) || ""
-				if (activeStage) {
-					const guard = ensureOnStageBranch(input.intent_slug, activeStage)
-					if (!guard.ok) {
-						console.warn(
-							`[pick_design_direction] stage-branch enforcement failed: ${guard.message}`,
-						)
+			if (intentSlug) {
+				try {
+					const intentRaw = await readFile(
+						join(findHaikuRoot(), "intents", intentSlug, "intent.md"),
+						"utf-8",
+					)
+					const activeStage =
+						(parseFrontmatter(intentRaw).data.active_stage as string) || ""
+					if (activeStage) {
+						const guard = ensureOnStageBranch(intentSlug, activeStage)
+						if (!guard.ok) {
+							console.warn(
+								`[haiku_await_design_direction] stage-branch enforcement failed: ${guard.message}`,
+							)
+						}
 					}
+				} catch (err) {
+					console.warn(
+						`[haiku_await_design_direction] post-wait branch reconciliation skipped: ${err instanceof Error ? err.message : String(err)}`,
+					)
 				}
-			} catch (err) {
-				console.warn(
-					`[pick_design_direction] post-wait branch reconciliation skipped: ${err instanceof Error ? err.message : String(err)}`,
-				)
 			}
 
 			const ackParts: string[] = [
@@ -845,188 +942,183 @@ export async function handleToolCall(
 }
 
 /**
- * Build the open-review handler the orchestrator wires up via
- * `setOpenReviewHandler`. This is the gate_ask path: open a review
- * pane, block until the user decides, return the decision back to
- * the workflow engine.
+ * Two-step gate review protocol — replaces the previous
+ * `createReviewGateHandler` callback that wrapped session-create +
+ * blocking-wait in a single MCP tool call.
+ *
+ * Step 1 — `prepareGateReviewSession` (non-blocking): create the
+ *   review session, build the URL, return both. Called by
+ *   `haiku_run_next` when the workflow engine reports `gate_review`,
+ *   so the orchestrator can surface the URL to the agent → user.
+ *   Essential for headless / SSH / web-client setups, and for remote
+ *   control where the MCP host can't auto-open the user's browser.
+ *
+ * Step 2 — `awaitGateReviewSession` (blocking): take a session ID,
+ *   open the browser best-effort, block on `waitForSession`, return
+ *   the user's raw decision. Called by `haiku_await_gate`. Cleanup
+ *   (WS close, tunnel close, session delete) lives in the finally so
+ *   it always runs.
  */
-export function createReviewGateHandler() {
-	return async (
-		intentDirRel: string,
-		gateType?: string,
-		signal?: AbortSignal,
-		gateMeta?: {
-			gateContext?: string
-			stage?: string
-			nextStage?: string | null
-			nextPhase?: string | null
-		},
-	) => {
-		const intentDirAbs = resolve(process.cwd(), intentDirRel)
-		const intent = await parseIntent(intentDirAbs)
-		if (!intent) throw new Error("Could not parse intent")
+export type GateMeta = {
+	gateContext?: string
+	stage?: string
+	nextStage?: string | null
+	nextPhase?: string | null
+}
 
-		const units = await parseAllUnits(intentDirAbs)
-		const dag = buildDAG(units)
-		const mermaid = toMermaidDefinition(dag, units)
-		const criteriaSection = intent.sections.find(
-			(s) =>
-				s.heading?.toLowerCase().includes("completion criteria") ||
-				s.heading?.toLowerCase().includes("success criteria"),
+export type GateReviewPrepared = {
+	session_id: string
+	review_url: string
+	use_remote: boolean
+}
+
+export type GateReviewDecision = {
+	decision: string
+	feedback: string
+	annotations?: unknown
+}
+
+export async function prepareGateReviewSession(
+	intentDirRel: string,
+	gateType: string | undefined,
+	gateMeta: GateMeta | undefined,
+): Promise<GateReviewPrepared> {
+	const intentDirAbs = resolve(process.cwd(), intentDirRel)
+	const intent = await parseIntent(intentDirAbs)
+	if (!intent) throw new Error("Could not parse intent")
+
+	const units = await parseAllUnits(intentDirAbs)
+	const dag = buildDAG(units)
+	const mermaid = toMermaidDefinition(dag, units)
+	const criteriaSection = intent.sections.find(
+		(s) =>
+			s.heading?.toLowerCase().includes("completion criteria") ||
+			s.heading?.toLowerCase().includes("success criteria"),
+	)
+	const criteria = criteriaSection
+		? parseCriteria(criteriaSection.content)
+		: []
+
+	const session = createSession({
+		intent_dir: intentDirAbs,
+		intent_slug: intent.slug,
+		gate_type: gateType,
+		target: "",
+	})
+	if (gateMeta?.gateContext) session.gate_context = gateMeta.gateContext
+	if (gateMeta?.stage) session.stage = gateMeta.stage
+	if (gateMeta?.nextStage !== undefined) session.next_stage = gateMeta.nextStage
+	if (gateMeta?.nextPhase !== undefined) session.next_phase = gateMeta.nextPhase
+
+	Object.assign(session, {
+		parsedIntent: intent,
+		parsedUnits: units,
+		parsedCriteria: criteria,
+		parsedMermaid: mermaid,
+	})
+
+	const prevSnapshot = getPreviousReviewSnapshot(intentDirAbs)
+	if (prevSnapshot) session.previousReview = prevSnapshot
+
+	const stageStates = await parseStageStates(intentDirAbs)
+	const knowledgeFiles = await parseKnowledgeFiles(intentDirAbs)
+	const stageArtifacts = await parseStageArtifacts(intentDirAbs)
+	const outputArtifacts = await parseOutputArtifacts(intentDirAbs)
+
+	for (const oa of outputArtifacts) {
+		if (oa.type === "image" && oa.relativePath) {
+			oa.relativePath = `/stage-artifacts/${session.session_id}/stages/${oa.relativePath}`
+		}
+	}
+
+	Object.assign(session, {
+		stageStates,
+		knowledgeFiles,
+		stageArtifacts,
+		outputArtifacts,
+	})
+
+	void mermaid
+
+	const port = await startHttpServer()
+	const useRemote = isRemoteReviewEnabled()
+	const reviewUrl = useRemote
+		? buildReviewUrl(session.session_id, await openTunnel(port), "intent")
+		: `http://127.0.0.1:${port}/review/${session.session_id}`
+
+	return {
+		session_id: session.session_id,
+		review_url: reviewUrl,
+		use_remote: useRemote,
+	}
+}
+
+export async function awaitGateReviewSession(
+	sessionId: string,
+	opts: {
+		autoOpen?: boolean
+		signal?: AbortSignal
+		reviewUrl?: string
+		timeoutMs?: number
+	} = {},
+): Promise<GateReviewDecision> {
+	const {
+		autoOpen = true,
+		signal,
+		reviewUrl,
+		timeoutMs = 30 * 60 * 1000,
+	} = opts
+	const existing = getSession(sessionId)
+	if (!existing || existing.session_type !== "review") {
+		throw new Error(
+			`Gate review session ${sessionId} not found or wrong type — call haiku_run_next to recreate.`,
 		)
-		const criteria = criteriaSection
-			? parseCriteria(criteriaSection.content)
-			: []
+	}
+	const useRemote = isRemoteReviewEnabled()
 
-		const session = createSession({
-			intent_dir: intentDirAbs,
-			intent_slug: intent.slug,
-			gate_type: gateType,
-			target: "",
-		})
-		if (gateMeta?.gateContext) session.gate_context = gateMeta.gateContext
-		if (gateMeta?.stage) session.stage = gateMeta.stage
-		if (gateMeta?.nextStage !== undefined)
-			session.next_stage = gateMeta.nextStage
-		if (gateMeta?.nextPhase !== undefined)
-			session.next_phase = gateMeta.nextPhase
-		bindSessionCancellation(session.session_id, signal)
+	bindSessionCancellation(sessionId, signal)
+	if (autoOpen && reviewUrl) launchBrowserBestEffort(reviewUrl, "Review gate")
 
-		// Store parsed data on session for the SPA
-		Object.assign(session, {
-			parsedIntent: intent,
-			parsedUnits: units,
-			parsedCriteria: criteria,
-			parsedMermaid: mermaid,
-		})
+	try {
+		while (true) {
+			let timedOut = false
+			try {
+				await waitForSession(sessionId, timeoutMs, signal)
+			} catch (err) {
+				if (signal?.aborted) throw err
+				timedOut = true
+			}
 
-		// Attach previous-review snapshot (from a prior changes_requested) so
-		// the SPA can render a delta on the re-review.
-		const prevSnapshot = getPreviousReviewSnapshot(intentDirAbs)
-		if (prevSnapshot) {
-			session.previousReview = prevSnapshot
-		}
+			const updated = getSession(sessionId)
+			if (
+				updated &&
+				updated.session_type === "review" &&
+				updated.status === "decided"
+			) {
+				return {
+					decision: updated.decision ?? "",
+					feedback: updated.feedback ?? "",
+					annotations: updated.annotations,
+				}
+			}
 
-		// Parse stage states + knowledge
-		const stageStates = await parseStageStates(intentDirAbs)
-		const knowledgeFiles = await parseKnowledgeFiles(intentDirAbs)
-		const stageArtifacts = await parseStageArtifacts(intentDirAbs)
-		const outputArtifacts = await parseOutputArtifacts(intentDirAbs)
+			if (timedOut) break
 
-		// Resolve image output artifact URLs now that we have a session ID
-		for (const oa of outputArtifacts) {
-			if (oa.type === "image" && oa.relativePath) {
-				oa.relativePath = `/stage-artifacts/${session.session_id}/stages/${oa.relativePath}`
+			if (hasPresenceLost(sessionId)) {
+				console.error(
+					`[haiku] Review session ${sessionId} lost presence — continuing to wait (no reopen)`,
+				)
 			}
 		}
 
-		Object.assign(session, {
-			stageStates,
-			knowledgeFiles,
-			stageArtifacts,
-			outputArtifacts,
-		})
-
-		// (Legacy server-rendered review HTML removed — see notes
-		// above. /review/:sessionId serves HAIKU_UI_HTML.)
-		void mermaid
-
-		const port = await startHttpServer()
-		const useRemote = isRemoteReviewEnabled()
-
-		let reviewUrl: string
+		throw new Error("Review timeout after 30 minutes")
+	} finally {
+		closeSessionConnection(sessionId, "tool call complete")
+		clearHeartbeat(sessionId)
 		if (useRemote) {
-			const tunnelUrl = await openTunnel(port)
-			// `buildReviewUrl`'s third arg is the SPA route discriminator
-			// (intent/question/direction), not the now-deprecated unit-vs-
-			// intent review_type. The gate handler only ever opens intent-
-			// scope reviews, so this is hardcoded.
-			reviewUrl = buildReviewUrl(session.session_id, tunnelUrl, "intent")
-		} else {
-			reviewUrl = `http://127.0.0.1:${port}/review/${session.session_id}`
+			clearE2EKey(sessionId)
+			closeTunnel()
 		}
-
-		launchBrowserBestEffort(reviewUrl, "Review gate")
-
-		// Close + evict the session as soon as this tool call exits,
-		// whether the user decided, we timed out, the agent cancelled,
-		// or the call threw. Anchored in try/finally so the WS tear-down
-		// is impossible to skip — otherwise stale sessions linger in the
-		// map and zombie tabs keep thinking they're live.
-		try {
-			// Single 30-minute wait. NO browser re-opens.
-			//
-			// The previous retry loop spawned a fresh browser tab on every
-			// presence-lost wakeup AND on every attempt timeout. Modern
-			// browsers throttle setInterval in backgrounded tabs, so a
-			// user who had the review tab open but switched windows would
-			// hit spurious presence-lost events and see brand-new tabs
-			// pop up, overwriting their in-progress comments on the
-			// original (still-alive) tab.
-			//
-			// Recovery path: on timeout, throw — the caller in
-			// orchestrator.ts classifies review timeouts as agent-fixable
-			// and returns GATE BLOCKED. The agent's next haiku_run_next
-			// tick re-enters the review phase and creates a fresh session.
-			// No orphaned tabs.
-			while (true) {
-				let timedOut = false
-				try {
-					await waitForSession(session.session_id, 30 * 60 * 1000, signal)
-				} catch (err) {
-					// Abort propagates here too — distinguish by checking the
-					// signal. If aborted, break out of the whole retry loop so
-					// the finally block can clean up promptly.
-					if (signal?.aborted) {
-						throw err
-					}
-					timedOut = true
-				}
-
-				const updated = getSession(session.session_id)
-				if (
-					updated &&
-					updated.session_type === "review" &&
-					updated.status === "decided"
-				) {
-					return {
-						decision: updated.decision,
-						feedback: updated.feedback,
-						annotations: updated.annotations,
-					}
-				}
-
-				// Timeout check MUST come before presence-lost: once
-				// presenceLost contains the session ID it stays there
-				// across iterations, so checking presence-lost first
-				// would swallow every subsequent timeout.
-				if (timedOut) break
-
-				if (hasPresenceLost(session.session_id)) {
-					// Log but keep waiting. The tab may just be
-					// backgrounded and heartbeat-throttled; if genuinely
-					// closed, the timeout above will eventually fire.
-					console.error(
-						`[haiku] Review session ${session.session_id} lost presence — continuing to wait (no reopen)`,
-					)
-				}
-
-				// Presence-lost or spurious wakeup — loop again.
-			}
-
-			throw new Error("Review timeout after 30 minutes")
-		} finally {
-			// Drop the WebSocket first so any still-connected SPA tab
-			// transitions to the session-ended overlay, then remove the
-			// session from the registry so subsequent reloads 404 and
-			// render the overlay from their own fetch path.
-			closeSessionConnection(session.session_id, "tool call complete")
-			clearHeartbeat(session.session_id)
-			if (useRemote) {
-				clearE2EKey(session.session_id)
-				closeTunnel()
-			}
-			deleteSession(session.session_id)
-		}
+		deleteSession(sessionId)
 	}
 }

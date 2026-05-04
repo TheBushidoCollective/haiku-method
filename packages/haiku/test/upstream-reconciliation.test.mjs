@@ -448,9 +448,15 @@ Creates a feedback record.
 
 	console.log("\n=== pre-tick gate ===")
 
-	await test("emits upstream_reconciliation_required on first elaboration with priors", async () => {
+	// SCENARIO D: migration-safety — the first elaboration of a stage with
+	// ≥1 completed prior MUST silently establish the corpus fingerprint
+	// (no fire) and stamp `state.json.upstream_reconciliation_fingerprint`.
+	// A null fingerprint is a migration sentinel: it means "we have not
+	// fingerprinted this corpus yet" and MUST onboard silently rather than
+	// firing on stale priors that the operator never agreed to flag.
+	await test("first elaboration with priors silently establishes fingerprint (no fire) and stamps state.json", async () => {
 		const { projDir, intentDirPath, slug, stages } = createProject(
-			"recon-gate-fires",
+			"recon-gate-establish",
 			{ active_stage: "build" },
 		)
 		// Plant a divergence in plan artifacts.
@@ -470,12 +476,77 @@ intent_locked → 423
 intent_locked → 409
 `,
 		)
-		// plan stage completed, build is active in elaborate phase, iter 1.
+		// plan stage completed, build is active in elaborate phase, iter 1, no prior fingerprint.
 		setStageState(intentDirPath, stages[0], {
 			status: "completed",
 			phase: "complete",
 		})
 		setStageState(intentDirPath, stages[1], { phase: "elaborate" })
+		process.chdir(projDir)
+		const result = runNext(slug)
+		assert.notStrictEqual(
+			result.action,
+			"upstream_reconciliation_required",
+			"first tick with null fingerprint must silently establish, not fire",
+		)
+		const buildStateRaw = readFileSync(
+			join(intentDirPath, "stages", stages[1], "state.json"),
+			"utf8",
+		)
+		const buildState = JSON.parse(buildStateRaw)
+		assert.strictEqual(
+			typeof buildState.upstream_reconciliation_fingerprint,
+			"string",
+			"fingerprint should be stamped onto stage state.json after first tick",
+		)
+		assert.match(
+			buildState.upstream_reconciliation_fingerprint,
+			/^[0-9a-f]{64}$/,
+			"fingerprint should be a SHA256 hex digest",
+		)
+	})
+
+	// SCENARIO F: migration-safety — once a fingerprint has been stamped
+	// (i.e. the migration has run), a subsequent first-elaborate where the
+	// CURRENT corpus differs from the stored fingerprint MUST fire
+	// `upstream_reconciliation_required`. This is the round-trip proof that
+	// silent establish (D) plus drift detection compose correctly: silent
+	// establish is not "ignore me forever", it is a one-time migration
+	// step, after which corpus drift relative to the stored fingerprint
+	// is the firing condition.
+	await test("emits upstream_reconciliation_required when stored fingerprint differs from current corpus", async () => {
+		const { projDir, intentDirPath, slug, stages } = createProject(
+			"recon-gate-fires-on-drift",
+			{ active_stage: "build" },
+		)
+		const planArtifacts = join(intentDirPath, "stages", stages[0], "artifacts")
+		mkdirSync(planArtifacts, { recursive: true })
+		writeFileSync(
+			join(planArtifacts, "API.md"),
+			`# API
+## Tool: haiku_feedback_write
+intent_locked → 423
+`,
+		)
+		writeFileSync(
+			join(planArtifacts, "STORAGE.md"),
+			`# Storage
+## Tool: haiku_feedback_create
+intent_locked → 409
+`,
+		)
+		setStageState(intentDirPath, stages[0], {
+			status: "completed",
+			phase: "complete",
+		})
+		// Pre-stamp a STALE fingerprint that does not match the current corpus,
+		// simulating a subsequent first-elaborate where corpus has drifted
+		// since the fingerprint was last established or acknowledged.
+		setStageState(intentDirPath, stages[1], {
+			phase: "elaborate",
+			upstream_reconciliation_fingerprint:
+				"0000000000000000000000000000000000000000000000000000000000000000",
+		})
 		process.chdir(projDir)
 		const result = runNext(slug)
 		assert.strictEqual(result.action, "upstream_reconciliation_required")
@@ -492,6 +563,72 @@ intent_locked → 409
 		assert.ok(
 			body.includes("Upstream Reconciliation Required"),
 			"prompt body should contain reconciliation header",
+		)
+	})
+
+	// SCENARIO E: migration-safety — when the stored fingerprint matches
+	// the current corpus, the gate MUST fall through even when the
+	// detector functions WOULD find divergence. The fingerprint is the
+	// migration acknowledgment; a matching fingerprint means "the operator
+	// (or the silent establish) has already accepted this corpus shape",
+	// so the gate stays quiet. This is the steady-state path that prevents
+	// re-firing on every tick post-migration.
+	await test("does not fire when stored fingerprint matches current corpus (clean steady state)", async () => {
+		const { projDir, intentDirPath, slug, stages } = createProject(
+			"recon-gate-fingerprint-match",
+			{ active_stage: "build" },
+		)
+		const planArtifacts = join(intentDirPath, "stages", stages[0], "artifacts")
+		mkdirSync(planArtifacts, { recursive: true })
+		writeFileSync(
+			join(planArtifacts, "API.md"),
+			`# API
+## Tool: haiku_feedback_write
+intent_locked → 423
+`,
+		)
+		writeFileSync(
+			join(planArtifacts, "STORAGE.md"),
+			`# Storage
+## Tool: haiku_feedback_create
+intent_locked → 409
+`,
+		)
+		setStageState(intentDirPath, stages[0], {
+			status: "completed",
+			phase: "complete",
+		})
+		setStageState(intentDirPath, stages[1], { phase: "elaborate" })
+		process.chdir(projDir)
+		// First tick: silently establishes the fingerprint.
+		const r1 = runNext(slug)
+		assert.notStrictEqual(r1.action, "upstream_reconciliation_required")
+		// Reset stage state to iteration 1 so the gate's first-elaborate guard
+		// remains satisfied for a re-run with the established fingerprint.
+		const buildStateFile = join(
+			intentDirPath,
+			"stages",
+			stages[1],
+			"state.json",
+		)
+		const buildStateAfterFirst = JSON.parse(
+			readFileSync(buildStateFile, "utf8"),
+		)
+		const establishedFp =
+			buildStateAfterFirst.upstream_reconciliation_fingerprint
+		assert.strictEqual(typeof establishedFp, "string")
+		// Re-stamp same fingerprint, leave iter at 1.
+		setStageState(intentDirPath, stages[1], {
+			phase: "elaborate",
+			upstream_reconciliation_fingerprint: establishedFp,
+		})
+		// Second tick: fingerprint matches → gate must skip even though
+		// detectors WOULD find divergence. This is the steady-state path.
+		const r2 = runNext(slug)
+		assert.notStrictEqual(
+			r2.action,
+			"upstream_reconciliation_required",
+			"matching fingerprint must short-circuit the gate",
 		)
 	})
 
@@ -562,6 +699,12 @@ intent_locked → 409
 		)
 	})
 
+	// SCENARIO G: migration-safety — `haiku_reconciliation_acknowledge`
+	// records the operator's decision in `state.json.decision_log` and
+	// re-stamps the fingerprint so the next tick falls through. This is
+	// the manual rollback path: when the gate fires on real corpus drift,
+	// the operator can acknowledge with a rationale and the gate accepts
+	// the new corpus shape as the new baseline going forward.
 	await test("haiku_reconciliation_acknowledge records decision and unblocks next tick", async () => {
 		const { projDir, intentDirPath, slug, stages } = createProject(
 			"recon-ack",
@@ -585,7 +728,15 @@ intent_locked → 409
 			status: "completed",
 			phase: "complete",
 		})
-		setStageState(intentDirPath, stages[1], { phase: "elaborate" })
+		// Pre-stamp a stale fingerprint so the gate detects drift and fires
+		// on the first tick (instead of silently establishing). Mirrors the
+		// real-world case where the corpus drifts after the fingerprint was
+		// last established or acknowledged.
+		setStageState(intentDirPath, stages[1], {
+			phase: "elaborate",
+			upstream_reconciliation_fingerprint:
+				"0000000000000000000000000000000000000000000000000000000000000000",
+		})
 		process.chdir(projDir)
 
 		// First tick: gate fires.

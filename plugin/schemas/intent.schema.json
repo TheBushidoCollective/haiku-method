@@ -1,0 +1,147 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://haiku.dev/schemas/intent.schema.json",
+	"title": "H·AI·K·U Intent Frontmatter",
+	"description": "Schema for the YAML frontmatter on .haiku/intents/<slug>/intent.md. Distinguishes user-writable fields (settable via haiku_intent_set) from engine-managed fields (mutated only by the workflow engine).",
+	"type": "object",
+	"additionalProperties": false,
+	"x-writable-by-user": [
+		"title",
+		"mode",
+		"skip_stages",
+		"intent_completion_review"
+	],
+	"x-engine-only": [
+		"studio",
+		"created_at",
+		"started_at",
+		"completed_at",
+		"status",
+		"active_stage",
+		"stages",
+		"composite",
+		"intent_reviewed",
+		"phase",
+		"completion_review_dispatched",
+		"completion_review_skipped",
+		"completion_review_entered_at",
+		"completion_review_dispatched_at",
+		"archived",
+		"archived_at",
+		"follows",
+		"autopilot"
+	],
+	"properties": {
+		"title": {
+			"type": "string",
+			"minLength": 1,
+			"description": "Human-readable intent title"
+		},
+		"studio": {
+			"type": "string",
+			"description": "Studio (lifecycle template) name. Immutable after creation."
+		},
+		"mode": {
+			"type": "string",
+			"enum": ["continuous", "discrete", "autopilot", "discrete-hybrid"],
+			"description": "Execution mode."
+		},
+		"autopilot": {
+			"type": "boolean",
+			"description": "Legacy autopilot flag. Use `mode: autopilot` instead. Engine-managed during migration."
+		},
+		"status": {
+			"type": "string",
+			"enum": ["active", "completed", "archived"],
+			"description": "Lifecycle status. Engine-managed."
+		},
+		"active_stage": {
+			"type": "string",
+			"description": "Currently active stage. Engine-managed (state.json is the source of truth)."
+		},
+		"stages": {
+			"type": "array",
+			"items": { "type": "string" },
+			"description": "Stage list (allow-list for /haiku:quick scope). Set on creation."
+		},
+		"skip_stages": {
+			"type": "array",
+			"items": { "type": "string" },
+			"description": "Stages to skip in this intent."
+		},
+		"intent_reviewed": {
+			"type": "boolean",
+			"description": "Whether the elaborated intent passed initial review. Engine-managed."
+		},
+		"intent_completion_review": {
+			"type": "boolean",
+			"description": "Whether to run studio-level completion review at the end of the final stage. Defaults to true."
+		},
+		"phase": {
+			"type": "string",
+			"enum": ["", "active", "awaiting_completion_review", "intent_completion"],
+			"description": "Intent-level phase. Engine-managed."
+		},
+		"completion_review_dispatched": {
+			"type": "boolean",
+			"description": "Whether studio-level review agents have been dispatched. Engine-managed."
+		},
+		"completion_review_skipped": {
+			"type": "boolean",
+			"description": "True when no studio-level review agents are configured. Engine-managed."
+		},
+		"completion_review_entered_at": {
+			"type": ["string", "null"],
+			"description": "ISO-8601 timestamp the intent entered completion review. Engine-managed."
+		},
+		"completion_review_dispatched_at": {
+			"type": ["string", "null"],
+			"description": "ISO-8601 timestamp review agents were dispatched. Engine-managed."
+		},
+		"started_at": {
+			"type": ["string", "null"],
+			"description": "ISO-8601 timestamp work began. Engine-managed."
+		},
+		"completed_at": {
+			"type": ["string", "null"],
+			"description": "ISO-8601 timestamp the intent sealed. Engine-managed."
+		},
+		"created_at": {
+			"type": "string",
+			"description": "ISO-8601 timestamp the intent was created. Immutable."
+		},
+		"archived": {
+			"type": "boolean",
+			"description": "Whether the intent is archived. Toggle via haiku_intent_archive / haiku_intent_unarchive."
+		},
+		"archived_at": {
+			"type": ["string", "null"],
+			"description": "ISO-8601 timestamp the intent was archived. Engine-managed."
+		},
+		"follows": {
+			"type": "string",
+			"description": "Slug of the parent intent this one follows from. Set on creation."
+		},
+		"composite": {
+			"description": "Composite-intent topology. Either an array of {studio, stages} entries (creation-time spec) or true (already-elaborated marker).",
+			"oneOf": [
+				{ "type": "boolean" },
+				{
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"studio": { "type": "string" },
+							"stages": {
+								"type": "array",
+								"items": { "type": "string" }
+							}
+						},
+						"required": ["studio"],
+						"additionalProperties": true
+					}
+				}
+			]
+		}
+	}
+}

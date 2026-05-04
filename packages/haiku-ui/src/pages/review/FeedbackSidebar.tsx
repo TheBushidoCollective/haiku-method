@@ -36,12 +36,21 @@ import {
 import { useApiClient } from "../../api/context"
 import { RevisitModal } from "../../organisms/RevisitModal"
 import { FeedbackPanelBody } from "./FeedbackPanelBody"
+import {
+	KnowledgeUploadPanel,
+	type KnowledgeUploadResult,
+} from "./KnowledgeUploadPanel"
 import { useFeedbackSidebarController } from "./useFeedbackSidebarController"
 
 export interface FeedbackSidebarProps {
 	stage: string | null
 	activeStage?: string | null
 	sessionId: string
+	/** Intent slug — required for the embedded KnowledgeUploadPanel's
+	 *  `POST /api/intents/:intent/uploads/knowledge` calls. When omitted,
+	 *  the upload panel is hidden (e.g., session not yet bound to an
+	 *  intent). */
+	intentSlug?: string | null
 	intentTitle?: string
 	gateBadges?: Array<{ label: string; classes: string }>
 	gateType?: string
@@ -81,6 +90,7 @@ export function FeedbackSidebar({
 	stage,
 	activeStage,
 	sessionId,
+	intentSlug,
 	intentTitle,
 	gateBadges,
 	gateType,
@@ -122,6 +132,61 @@ export function FeedbackSidebar({
 
 	const pendingCount = items.filter((i) => i.status === "pending").length
 	const hasPending = pendingCount > 0
+
+	// Upload handler — POSTs each file to
+	// `/api/intents/:intent/uploads/knowledge` (registered in
+	// http/upload-routes.ts). Returns the canonical KnowledgeUploadResult
+	// shape so the panel can render success/failure toasts and progress
+	// bars without further translation. Empty / failure cases return
+	// structurally-valid results so the panel never throws on a half-done
+	// upload — partial successes show in `uploaded`, partial failures in
+	// `failed`.
+	const handleKnowledgeUpload = useCallback(
+		async (
+			files: File[],
+			destination: string,
+		): Promise<KnowledgeUploadResult> => {
+			if (!intentSlug) {
+				return {
+					ok: false,
+					uploaded: [],
+					failed: files.map((f) => ({
+						file: f,
+						error: "Intent context unavailable — refresh and retry.",
+					})),
+				}
+			}
+			const uploaded: File[] = []
+			const failed: KnowledgeUploadResult["failed"] = []
+			for (const file of files) {
+				const form = new FormData()
+				form.append("file", file)
+				form.append("destination", destination)
+				try {
+					const res = await fetch(
+						`/api/intents/${encodeURIComponent(intentSlug)}/uploads/knowledge`,
+						{ method: "POST", body: form, credentials: "include" },
+					)
+					if (!res.ok) {
+						const detail = await res.text().catch(() => "")
+						failed.push({
+							file,
+							error: `Upload failed (HTTP ${res.status}): ${detail || "no response body"}`,
+						})
+						continue
+					}
+					uploaded.push(file)
+				} catch (err) {
+					failed.push({
+						file,
+						error: err instanceof Error ? err.message : String(err),
+					})
+				}
+			}
+			return { ok: failed.length === 0, uploaded, failed }
+		},
+		[intentSlug],
+	)
 	const hasTyped = composerText.trim().length > 0
 	const showExternal = isExternalGate(gateType)
 	const isCurrent = !!stage && stage === activeStage
@@ -310,6 +375,24 @@ export function FeedbackSidebar({
 					creating={creating}
 				/>
 			</div>
+
+			{/* Knowledge upload panel — collapsible <details> below the
+			    feedback list, above the composer. Per SPA-UI-SPECS §1.1.
+			    Hidden when the session has no intent context (ad-hoc reviews
+			    pre-bind sometimes). `defaultOpen={false}` keeps the panel
+			    collapsed at first paint so its drop-zone autofocus doesn't
+			    steal Tab order from the SkipLink (the FB-30 regression
+			    guard test asserts the first Tab lands on the skip-link). */}
+			{intentSlug && (
+				<div className="shrink-0 border-t border-stone-200 dark:border-stone-700">
+					<KnowledgeUploadPanel
+						intentSlug={intentSlug}
+						currentStage={stage ?? activeStage ?? ""}
+						onUpload={handleKnowledgeUpload}
+						defaultOpen={false}
+					/>
+				</div>
+			)}
 
 			{/* Composer + decision actions — pinned bottom */}
 			<div

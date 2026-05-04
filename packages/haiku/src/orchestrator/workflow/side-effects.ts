@@ -32,6 +32,7 @@ import {
 	createIntentBranch,
 	createStageBranch,
 	deleteStageBranch,
+	ensureOnIntentMain,
 	ensureOnStageBranch,
 	finalizeIntentBranches,
 	isBranchMerged,
@@ -57,6 +58,7 @@ import {
 	writeJson,
 } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
+import { clearMarkersForRevisitSync } from "./baseline-clear-marker.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
 	if (!existsSync(filePath)) return {}
@@ -212,6 +214,30 @@ export function workflowCompleteStage(
 	})
 	gitCommitState(`haiku: complete stage ${stage}`)
 	sealIntentState(slug)
+
+	// Drift-detection lifecycle hook (unit-09): when a stage completes
+	// with `advanced` outcome, walk drift-markers.json for any open
+	// trigger-revisit marker linked to this stage and clear each. Per
+	// AC-TR2 / DATA-CONTRACTS.md §3.6, "revisit complete" means the
+	// targeted stage re-passes its gate; that is exactly the path
+	// reaching here when `gateOutcome === "advanced"`. Best-effort:
+	// failures inside the clear path do not roll back the stage advance
+	// (the marker store is a suppression optimisation per ARCHITECTURE.md
+	// §8.4).
+	if (gateOutcome === "advanced") {
+		try {
+			clearMarkersForRevisitSync(intentDir(slug), stage, {
+				intentSlug: slug,
+			})
+		} catch (err) {
+			emitTelemetry("haiku.drift.clear_marker_failed", {
+				intent: slug,
+				revisit_target_stage: stage,
+				trigger: "revisit-complete",
+				error: String((err as Error)?.message ?? err),
+			})
+		}
+	}
 }
 
 /** Atomic complete + enter-next. Avoids leaving dirty state on the
@@ -310,11 +336,95 @@ function workflowFinalizeStageIntoIntentMain(
 	ensureOnStageBranch(slug, undefined)
 }
 
+/** Guard: walk every stage declared in `resolveIntentStages(intent, studio)`
+ *  and verify each has a `state.json` with `status: completed`. Returns the
+ *  names of any stages that are missing or not yet completed.
+ *
+ *  Called from `completeOrReviewIntent` (pre-review-entry and pre-immediate-
+ *  complete paths) and from the human-approval path in `haiku_run_next.ts`
+ *  (before `workflowIntentComplete`). If the engine arrives at the completion
+ *  gate while upstream stages are still pending — e.g., the user manually
+ *  reopened a completed intent or an unusual topology left gaps — this catches
+ *  it before sealing and routes back to the incomplete stage.
+ *
+ *  Composite intents (studio === "composite") deliberately resolve to an empty
+ *  stages list here — there is no `plugin/studios/composite/STUDIO.md` because
+ *  composite topology is per-intent (`intent.composite`). The composite handler
+ *  performs its own completion check (`allComplete`) over `compositeState`
+ *  before calling `completeOrReviewIntent`, so the no-op is safe and intentional
+ *  rather than a missing guard. */
+export function findIncompleteStages(
+	slug: string,
+	studio: string,
+	root?: string,
+): string[] {
+	const iDir = root ? join(root, "intents", slug) : intentDir(slug)
+	const intentFile = join(iDir, "intent.md")
+	const intent = existsSync(intentFile) ? readFrontmatter(intentFile) : {}
+	const stages = resolveIntentStages(intent, studio)
+	const incomplete: string[] = []
+	for (const stage of stages) {
+		const statePath = root
+			? join(iDir, "stages", stage, "state.json")
+			: stageStatePath(slug, stage)
+		if (!existsSync(statePath)) {
+			incomplete.push(stage)
+			continue
+		}
+		const state = readJson(statePath)
+		if ((state.status as string) !== "completed") {
+			incomplete.push(stage)
+		}
+	}
+	return incomplete
+}
+
+/** Roll back an intent that's stuck in completion-review phase with
+ *  incomplete stages still on disk. Called from `completeOrReviewIntent`
+ *  (when the guard fails on a fresh approach) and from `pre-tick`
+ *  (when a stale completion-review marker is detected before any handler
+ *  runs). Idempotent — calling it on a healthy intent is a no-op.
+ *
+ *  Resets every workflow-tracked completion field plus `status` and
+ *  `active_stage`, then re-seals the integrity checksum. The first
+ *  incomplete stage becomes the new `active_stage` so the next tick
+ *  routes through `start_stage` instead of looping back into
+ *  `awaiting_completion_review`. */
+export function rewindFromCompletionReview(
+	slug: string,
+	firstIncomplete: string,
+	root?: string,
+): void {
+	const iDir = root ? join(root, "intents", slug) : intentDir(slug)
+	const intentFile = join(iDir, "intent.md")
+	if (!existsSync(intentFile)) return
+	setFrontmatterField(intentFile, "status", "active")
+	setFrontmatterField(intentFile, "active_stage", firstIncomplete)
+	setFrontmatterField(intentFile, "phase", "")
+	setFrontmatterField(intentFile, "completed_at", "")
+	setFrontmatterField(intentFile, "completion_review_entered_at", "")
+	setFrontmatterField(intentFile, "completion_review_dispatched", false)
+	setFrontmatterField(intentFile, "completion_review_skipped", false)
+	setFrontmatterField(intentFile, "completion_review_dispatched_at", "")
+	// sealIntentState always reads from findHaikuRoot() — no-op under
+	// test fixtures rooted in tmpdir. That's fine; the integrity seal
+	// only matters for hookless harnesses in production deployments.
+	sealIntentState(slug)
+}
+
 /** Shared completion path used by every gate-pass site that used to
  *  call workflowIntentComplete + return intent_complete directly.
  *  Returns the correct action for the current opt-in/opt-out state:
- *    - skip_intent_completion_review = true → fire intent_complete
+ *    - intent_completion_review = false → fire intent_complete
  *    - otherwise → enter completion-review phase, open a gate_review
+ *
+ *  Pre-seals guard: verifies that every stage declared in
+ *  `resolveIntentStages(intent, studio)` has a completed `state.json`.
+ *  If any stage is missing or non-completed, returns an error action
+ *  pointing at the first incomplete stage instead of sealing the intent.
+ *  Also rewinds the completion-review marker fields so the next tick
+ *  routes through `start_stage` for the first incomplete stage instead
+ *  of looping back into `awaiting_completion_review`.
  *
  *  This decouples stage-gate approval from intent completion. Stages
  *  approving (auto or otherwise) must NEVER by themselves mark an
@@ -325,6 +435,31 @@ export function completeOrReviewIntent(
 	studio: string,
 	sourceMessage: string,
 ): OrchestratorAction {
+	// Pre-seal guard: all declared stages must be completed before
+	// we enter the completion review or seal the intent. A gap means
+	// the engine arrived at the completion gate while upstream stages
+	// are still pending — most likely a manually reopened completed
+	// intent or a topology inconsistency. Refuse to seal; route back
+	// to the first incomplete stage so the user sees what's missing.
+	const incompleteStages = findIncompleteStages(slug, studio)
+	if (incompleteStages.length > 0) {
+		rewindFromCompletionReview(slug, incompleteStages[0])
+		emitTelemetry("haiku.intent.completion_guard_failed", {
+			intent: slug,
+			studio,
+			incomplete_stages: incompleteStages.join(","),
+		})
+		return {
+			action: "error",
+			intent: slug,
+			message:
+				`Cannot complete intent '${slug}': ${incompleteStages.length} stage(s) are not yet completed: ` +
+				`[${incompleteStages.join(", ")}]. ` +
+				`Reset active_stage to '${incompleteStages[0]}' and cleared completion-review markers. ` +
+				`Call \`haiku_run_next { intent: "${slug}" }\` to resume.`,
+		}
+	}
+
 	const intentFile = join(intentDir(slug), "intent.md")
 	const intent = existsSync(intentFile) ? readFrontmatter(intentFile) : {}
 	// Opt-OUT default: studio-level intent-completion review is on.
@@ -384,4 +519,10 @@ export function workflowIntentComplete(slug: string): void {
 	}
 	cleanupIntentWorktrees(slug)
 	sealIntentState(slug)
+	// Belt-and-suspenders: finalizeIntentBranches above does the
+	// intent-main checkout, but if a stage-merge step short-circuited
+	// or a caller hits this path with main already merged, re-assert
+	// the working tree position so the agent always lands on the
+	// intent's hub branch on intent_complete.
+	ensureOnIntentMain(slug)
 }

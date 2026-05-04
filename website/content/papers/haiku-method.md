@@ -369,6 +369,23 @@ Each hat in the sequence produces structured output that flows to the next. The 
 
 Bolts are the mechanism by which work converges on quality. Bolt 1 is the initial attempt. Bolt 2 incorporates review findings. Each subsequent bolt narrows the gap between current state and completion criteria. There is no hard limit on bolt count, but the escalation pattern ensures convergence or human intervention.
 
+### Pre-Tick Drift Detection
+
+Work-in-progress surfaces are not always modified exclusively through the agent. A product owner may drop a revised requirements document into the stage's knowledge directory. A designer may replace a mockup file between bolts. Without explicit acknowledgment, the agent's next tick would silently assume those files are unchanged — producing an assessment based on stale inputs.
+
+The **pre-tick drift-detection gate** closes this gap. Before each agent tick, the framework computes SHA-256 digests of every file in the stage's tracked surface (stage outputs, knowledge artifacts, discovery documents) and compares them against a stored baseline. Any divergence produces a `manual_change_assessment` action dispatched to the agent before any other work proceeds.
+
+When an assessment is dispatched, the agent classifies each finding with one of four outcomes:
+
+- **ignore** — the change is cosmetic or expected; baseline is updated silently.
+- **inline-fix** — the agent absorbs the change immediately (e.g. incorporating PO edits into the current plan).
+- **surface-as-feedback** — the change warrants a structured feedback item and a fix loop.
+- **trigger-revisit** — the change is significant enough to require revisiting an earlier stage.
+
+The baseline is a JSON file per stage (`stages/{stage}/baseline.json`) recording each tracked file's SHA-256, size, and authorship class. Authorship is inferred from the action log: files written via `haiku_human_write` carry `human-via-mcp`; unmarked changes carry `human-implicit`. The companion tool `haiku_human_write` lets the agent write files on behalf of a human with full authorship attribution — the preferred path when the agent is acting on explicit human instructions. Direct file drops (via the SPA upload panel or out-of-band edits) are picked up on the next tick rather than immediately.
+
+The gate can be disabled project-wide by setting `drift_detection: false` in `.haiku/settings.yml`. This is a kill-switch — the gate becomes a complete no-op, and no baseline I/O is performed. Disabling is appropriate for projects where all surface changes are always agent-initiated.
+
 ---
 
 ## 6. Persistence

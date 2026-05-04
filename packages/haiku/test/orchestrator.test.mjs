@@ -176,18 +176,46 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 
 	console.log("\n=== orchestratorToolDefs ===")
 
-	test("has 7 orchestration tools", () => {
-		assert.strictEqual(orchestratorToolDefs.length, 7)
+	test("has 12 orchestration tools", () => {
+		assert.strictEqual(orchestratorToolDefs.length, 12)
 	})
 
 	test("haiku_await_gate tool defined for two-step gate review", () => {
-		const tool = orchestratorToolDefs.find(
-			(t) => t.name === "haiku_await_gate",
-		)
+		const tool = orchestratorToolDefs.find((t) => t.name === "haiku_await_gate")
 		assert.ok(tool, "haiku_await_gate not registered")
 		assert.ok(
 			tool.inputSchema.required?.includes("intent"),
 			"haiku_await_gate.intent must be required",
+		)
+	})
+
+	test("every registered handler has a tool-defs entry", async () => {
+		const { orchestratorToolHandlers } = await import(
+			"../src/tools/orchestrator/index.ts"
+		)
+		const surfaceNames = new Set(orchestratorToolDefs.map((d) => d.name))
+		const missing = []
+		for (const handlerName of orchestratorToolHandlers.keys()) {
+			if (!surfaceNames.has(handlerName)) missing.push(handlerName)
+		}
+		assert.deepStrictEqual(
+			missing,
+			[],
+			`handlers without a tool-defs entry: ${missing.join(", ")} — agents won't see these tools. Add an entry to packages/haiku/src/orchestrator/tool-defs.ts.`,
+		)
+	})
+
+	test("every tool-defs entry has a registered handler", async () => {
+		const { orchestratorToolHandlers } = await import(
+			"../src/tools/orchestrator/index.ts"
+		)
+		const orphaned = orchestratorToolDefs
+			.map((d) => d.name)
+			.filter((n) => !orchestratorToolHandlers.has(n))
+		assert.deepStrictEqual(
+			orphaned,
+			[],
+			`tool-defs entries without a registered handler: ${orphaned.join(", ")} — calls will fail with 'Unknown tool'.`,
 		)
 	})
 

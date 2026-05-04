@@ -1,0 +1,106 @@
+{
+  "stage": "inception",
+  "status": "completed",
+  "phase": "gate",
+  "started_at": "2026-04-28T13:53:17Z",
+  "completed_at": "2026-04-28T14:42:22Z",
+  "gate_entered_at": null,
+  "gate_outcome": "advanced",
+  "visits": 1,
+  "iterations": [
+    {
+      "index": 1,
+      "started_at": "2026-04-28T13:53:18Z",
+      "completed_at": "2026-04-28T14:42:22Z",
+      "trigger": "initial",
+      "result": "advanced"
+    }
+  ],
+  "elaboration_turns": 7,
+  "decision_log": [
+    {
+      "decision": "Detection mode",
+      "options": [
+        "explicit only (UI/MCP-tool calls)",
+        "implicit only (SHA-baseline pre-tick gate)",
+        "both — must catch silent filesystem drops too"
+      ],
+      "choice": "both — must catch silent filesystem drops too",
+      "source": "user",
+      "rationale": "Users will drop files into directories without telling the agent; the system must detect drift even when no announcement is made.",
+      "recorded_at": "2026-04-28T14:01:53Z"
+    },
+    {
+      "decision": "Edit-surface boundary for workflow-managed files",
+      "options": [
+        "leave PreToolUse hook intact and carve a separate human-writable zone (uploads, replaceable outputs)",
+        "relax the hook so humans can also overwrite units/feedback/intent.md/state.json directly"
+      ],
+      "choice": "leave PreToolUse hook intact and carve a separate human-writable zone (uploads, replaceable outputs)",
+      "source": "user",
+      "rationale": "SPA / review-app / direct-filesystem edits are out-of-band human actions, not agent writes — hooks remain the agent boundary, not a human boundary. State-machine-managed files stay MCP-only at the agent level.",
+      "recorded_at": "2026-04-28T14:02:01Z"
+    },
+    {
+      "decision": "Reaction mechanism on detected drift",
+      "options": [
+        "new workflow action manual_change_assessment with four agent-classified outcomes",
+        "piggyback on the feedback-triage gate by synthesizing FBs from the differ"
+      ],
+      "choice": "new workflow action manual_change_assessment with four agent-classified outcomes",
+      "source": "user",
+      "rationale": "Provenance matters — piggybacking on FB-triage loses the \"this came from outside the system\" signal. Distinct action lets the agent route to ignore / inline-fix / surface-as-FB / trigger-revisit explicitly.",
+      "recorded_at": "2026-04-28T14:02:08Z"
+    },
+    {
+      "decision": "Concurrency model",
+      "options": [
+        "lock the workflow during human edits",
+        "eventual consistency — next haiku_run_next tick observes drift and reacts"
+      ],
+      "choice": "eventual consistency — next haiku_run_next tick observes drift and reacts",
+      "source": "user",
+      "rationale": "Locking introduces coordination cost the framework doesn't currently have. Eventual consistency is acceptable; mid-bolt concurrency may produce partial-state work but the next tick reconciles.",
+      "recorded_at": "2026-04-28T14:02:15Z"
+    },
+    {
+      "decision": "Scope of change-types covered in v1",
+      "options": [
+        "just stage-output replacement and knowledge upload (1 + 3)",
+        "all three: output replacement, PO 1-line edit + AI extension, knowledge upload"
+      ],
+      "choice": "all three: output replacement, PO 1-line edit + AI extension, knowledge upload",
+      "source": "user",
+      "rationale": "All three motivating workflows are real; the agent's classification step is the unifier so a single mechanism (`manual_change_assessment`) covers them via different outcomes.",
+      "recorded_at": "2026-04-28T14:02:21Z"
+    },
+    {
+      "decision": "Sync surface scope",
+      "options": [
+        "plugin-only",
+        "plugin + paper",
+        "plugin + paper + website (full three-component sync)"
+      ],
+      "choice": "plugin + paper + website (full three-component sync)",
+      "source": "user",
+      "rationale": "Out-of-band human writes are a real lifecycle concept, not a plugin implementation detail — it deserves a paper section, plugin implementation, and user-facing docs.",
+      "recorded_at": "2026-04-28T14:02:26Z"
+    },
+    {
+      "decision": "UX surface composition",
+      "options": [
+        "browse SPA upload only",
+        "manual filesystem only",
+        "SPA + filesystem + agent-writes-on-user-instruction (out-of-band MCP write)"
+      ],
+      "choice": "SPA + filesystem + agent-writes-on-user-instruction (out-of-band MCP write)",
+      "source": "user",
+      "rationale": "All three entry points reduce to the same on-disk drift the implicit baseline gate observes; the next run_next tick reconciles regardless of how the file got there.",
+      "recorded_at": "2026-04-28T14:02:33Z"
+    }
+  ],
+  "pre_review_dispatched": true,
+  "pre_review_dispatched_at": "2026-04-28T14:03:58Z",
+  "pre_review_reviewers_acknowledged": true,
+  "pre_review_reviewers_acknowledged_at": "2026-04-28T14:09:29Z"
+}

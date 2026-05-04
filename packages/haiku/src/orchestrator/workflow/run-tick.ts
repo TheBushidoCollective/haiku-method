@@ -13,20 +13,29 @@
 // `handlers/index.ts` maps state names to handlers. Adding a new
 // state name = adding the entry to the registry + the file.
 
-import { existsSync } from "node:fs"
-import { join } from "node:path"
+import { existsSync, readdirSync } from "node:fs"
+import { dirname, join } from "node:path"
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { verifyIntentState } from "../../state-integrity.js"
-import { getStageIterationCount, readJson } from "../../state-tools.js"
+import {
+	getStageIterationCount,
+	readJson,
+	writeJson,
+} from "../../state-tools.js"
 import { writeActionPromptFile } from "../../subagent-prompt-file.js"
+import { emitTelemetry } from "../../telemetry.js"
 import { resolveIntentStages } from "../studio.js"
 import { type DerivedState, deriveCurrentState } from "./derive-state.js"
+import { runDriftDetectionGate } from "./drift-detection-gate.js"
+import { buildDriftDispatch, writeDriftDispatch } from "./drift-dispatch.js"
 import { preTickFeedbackGate } from "./feedback-triage-gate.js"
 import { dispatchHandler, WORKFLOW_STATES } from "./handlers/index.js"
+import { buildManualChangeAssessmentAction } from "./handlers/manual-change-assessment.js"
 import { preTickConsistency } from "./pre-tick.js"
 import type { StateName } from "./types.js"
 import {
 	checkUpstreamReconciliation,
+	computeCorpusFingerprintInstrumented,
 	type ReconciliationFinding,
 } from "./upstream-reconciliation.js"
 
@@ -132,7 +141,11 @@ export function runWorkflowTick(
 					? "feedback_dispatch"
 					: triageAction.action === "revisited"
 						? "revisited"
-						: "error"
+						: triageAction.action === "review_fix"
+							? "review_fix"
+							: triageAction.action === "escalate"
+								? "escalate"
+								: "error"
 		if (triageState === "error") {
 			return {
 				state: "error",
@@ -147,6 +160,92 @@ export function runWorkflowTick(
 			state: triageState,
 			context: derived.context,
 			action: triageAction,
+		}
+	}
+
+	// Pre-tick drift-detection gate (AC-G13 / ARCHITECTURE.md §2.1).
+	// Position in chain: tamper-detection → feedback-triage → drift-detection → dispatch.
+	// Only fires when a stage is active (currentStage non-empty) — no surface to
+	// enumerate pre-stage or post-final.
+	if (derived.context.currentStage) {
+		// haikuRoot = dirname(dirname(intentDirPath)) — intentDirPath is
+		// <haikuRoot>/intents/<slug>, so two dirname() calls walk up to .haiku.
+		const haikuRoot = dirname(dirname(derived.context.intentDirPath))
+		const tickCounter =
+			typeof derived.context.stageState.iteration === "number"
+				? (derived.context.stageState.iteration as number)
+				: 0
+
+		const driftResult = runDriftDetectionGate({
+			intentDir: derived.context.intentDirPath,
+			intentSlug: slug,
+			activeStage: derived.context.currentStage,
+			haikuRoot,
+			tickCounter,
+		})
+
+		if (driftResult.error === "baseline_corrupt") {
+			return {
+				state: "error",
+				context: derived.context,
+				action: {
+					action: "error",
+					message:
+						driftResult.errorMessage ??
+						`Baseline file for stage '${derived.context.currentStage}' is corrupt. Run haiku_repair to re-establish the baseline.`,
+				},
+			}
+		}
+
+		if (driftResult.action === "manual_change_assessment") {
+			const intentMode =
+				typeof derived.context.intent.mode === "string"
+					? (derived.context.intent.mode as string)
+					: "continuous"
+			const action = buildManualChangeAssessmentAction(
+				{
+					intentSlug: slug,
+					stage: derived.context.currentStage,
+					tickCounter,
+					mode: intentMode,
+				},
+				driftResult.findings,
+			)
+			// Saturation: count of pre-existing drift assessments for this
+			// stage. Surfaces assessments-dir growth (per-finding files
+			// accumulate forever), which the runbook needs for the "stale
+			// assessments backlog" alarm.
+			emitTelemetry("haiku.drift.assessments.count", {
+				intent_slug: slug,
+				stage: derived.context.currentStage,
+				tick_iteration: String(tickCounter),
+				count: String(
+					countAssessmentFiles(
+						derived.context.intentDirPath,
+						derived.context.currentStage,
+					),
+				),
+			})
+			// Persist the active dispatch so haiku_classify_drift can validate
+			// tick_id, hydrate findings into the assessment record, and apply
+			// the per-finding legal_outcomes filter without trusting agent
+			// input for any of those values.
+			writeDriftDispatch(
+				derived.context.intentDirPath,
+				buildDriftDispatch({
+					tickId: action.tick_id,
+					stage: action.stage,
+					tickCounter,
+					mode: action.mode,
+					findings: action.findings,
+					legalOutcomes: action.legal_outcomes,
+				}),
+			)
+			return {
+				state: "manual_change_assessment",
+				context: derived.context,
+				action,
+			}
 		}
 	}
 
@@ -191,9 +290,24 @@ function maybeUpstreamReconciliationGate(
 	// re-trigger reconciliation. The signal: iterations array length
 	// is exactly 1 (the initial entry).
 	if (getStageIterationCount(stageState) !== 1) return null
+	const tickIteration =
+		typeof stageState.iteration === "number"
+			? (stageState.iteration as number)
+			: 0
+	const reconAttrs: Record<string, string> = {
+		intent_slug: slug,
+		stage: currentStage,
+		tick_iteration: String(tickIteration),
+	}
 	// Skip if already acknowledged on this stage. The acknowledge tool
 	// stamps `upstream_reconciliation_acknowledged: true` here.
-	if (stageState.upstream_reconciliation_acknowledged === true) return null
+	if (stageState.upstream_reconciliation_acknowledged === true) {
+		emitTelemetry("haiku.reconciliation.fingerprint.skipped", {
+			...reconAttrs,
+			reason: "acknowledged",
+		})
+		return null
+	}
 
 	const studioStages = resolveIntentStages(intent, studio)
 	const myIdx = studioStages.indexOf(currentStage)
@@ -216,8 +330,96 @@ function maybeUpstreamReconciliationGate(
 	}
 	if (priorStages.length === 0) return null
 
+	// Fingerprint short-circuit. Compare a SHA256 of the upstream corpus
+	// against the value last stamped on this stage's state.json.
+	//
+	//   - stored is null/undefined → silently establish: stamp the current
+	//     fingerprint and skip the detector pass entirely. This is the
+	//     migration / first-run path: existing intents that predate the
+	//     reconciliation gate (or this stage's first elaborate) will not
+	//     be flooded with findings about pre-existing upstream drift.
+	//   - stored equals current → corpus unchanged since last successful
+	//     scan or acknowledgment, skip the detector pass.
+	//   - stored differs → fall through to detectors below; if they emit
+	//     findings, fire the gate. If they emit none, stamp the new
+	//     fingerprint silently.
+	const fpResult = computeCorpusFingerprintInstrumented(slug, priorStages, root)
+	const currentFingerprint = fpResult.fingerprint
+	emitTelemetry("haiku.reconciliation.fingerprint.duration_ms", {
+		...reconAttrs,
+		duration_ms: String(fpResult.durationMs),
+	})
+	emitTelemetry("haiku.reconciliation.corpus.bytes", {
+		...reconAttrs,
+		bytes: String(fpResult.corpusBytes),
+	})
+
+	const stageStateFile = root
+		? join(root, "intents", slug, "stages", currentStage, "state.json")
+		: join(intentDirPath, "stages", currentStage, "state.json")
+	const storedFingerprint =
+		typeof stageState.upstream_reconciliation_fingerprint === "string"
+			? stageState.upstream_reconciliation_fingerprint
+			: null
+
+	const stampFingerprint = (fp: string | null): void => {
+		if (fp === null) return
+		// Mutate the in-memory stageState first so downstream handlers
+		// (e.g. the elaborate handler, which writes stageState back to
+		// state.json) carry the fingerprint forward instead of dropping
+		// it on a subsequent serialization. The on-disk write is a
+		// belt-and-suspenders second step in case the tick short-circuits
+		// before any other writer flushes state.json.
+		stageState.upstream_reconciliation_fingerprint = fp
+		try {
+			const ss = readJson(stageStateFile) as Record<string, unknown>
+			ss.upstream_reconciliation_fingerprint = fp
+			writeJson(stageStateFile, ss)
+		} catch (err) {
+			// Errors signal — emit BEFORE rethrow so the failure is observable
+			// even when the rethrow gets swallowed at a higher layer. The
+			// rethrow promotes a previously-silent failure (which would let
+			// the tick pretend the gate was acknowledged on the next pass)
+			// into a hard error the runbook can alarm on.
+			emitTelemetry("haiku.reconciliation.fingerprint.write_failed", {
+				...reconAttrs,
+				error: err instanceof Error ? err.message : String(err),
+			})
+			throw err
+		}
+	}
+
+	if (storedFingerprint === null) {
+		// Silent first-time establish — no detectors run.
+		emitTelemetry("haiku.reconciliation.fingerprint.established", {
+			...reconAttrs,
+		})
+		stampFingerprint(currentFingerprint)
+		return null
+	}
+	if (currentFingerprint !== null && storedFingerprint === currentFingerprint) {
+		// Steady-state happy path — corpus unchanged since last clean scan.
+		emitTelemetry("haiku.reconciliation.fingerprint.matched", {
+			...reconAttrs,
+		})
+		return null
+	}
+
+	// Fingerprint differs → run the detectors.
+	emitTelemetry("haiku.reconciliation.fingerprint.drifted", {
+		...reconAttrs,
+	})
 	const result = checkUpstreamReconciliation(slug, priorStages, root)
-	if (!result || result.findings.length === 0) return null
+	if (!result || result.findings.length === 0) {
+		// Corpus changed but is now consistent — silently update the
+		// fingerprint so future ticks see the new clean state.
+		stampFingerprint(currentFingerprint)
+		return null
+	}
+	emitTelemetry("haiku.reconciliation.findings.emitted", {
+		...reconAttrs,
+		count: String(result.findings.length),
+	})
 
 	const body = renderReconciliationPrompt(slug, currentStage, result.findings)
 	let promptFile: string | null = null
@@ -291,4 +493,17 @@ function renderReconciliationPrompt(
 		sections.push(lines.join("\n"))
 	}
 	return sections.join("\n\n")
+}
+
+/** Count `.json` files under `<intentDir>/stages/<stage>/drift-assessments/`.
+ *  Returns 0 when the directory doesn't exist (no assessments yet) or any
+ *  read error occurs — telemetry is best-effort by contract, never blocking. */
+function countAssessmentFiles(intentDir: string, stage: string): number {
+	const dir = join(intentDir, "stages", stage, "drift-assessments")
+	if (!existsSync(dir)) return 0
+	try {
+		return readdirSync(dir).filter((f) => f.endsWith(".json")).length
+	} catch {
+		return 0
+	}
 }

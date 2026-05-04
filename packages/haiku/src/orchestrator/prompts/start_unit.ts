@@ -25,7 +25,11 @@ import {
 	buildOutputRequirements,
 	resolveStudioFilePath,
 } from "../../orchestrator.js"
-import { parseFrontmatter, readFeedbackFiles } from "../../state-tools.js"
+import {
+	listInstalledSkills,
+	parseFrontmatter,
+	readFeedbackFiles,
+} from "../../state-tools.js"
 import {
 	readHatDefs,
 	readStageDef,
@@ -78,6 +82,7 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 	// New writes can't produce that shape anymore.
 	let unitInputs: string[] = []
 	let unitModel: string | undefined
+	let unitApplicableSkills: string[] = []
 	if (existsSync(unitFile)) {
 		const { data } = parseFrontmatter(readFileSync(unitFile, "utf8"))
 		const rawInputs = data.inputs ?? data.refs
@@ -99,6 +104,11 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 			}
 		}
 		unitModel = (data.model as string) || undefined
+		if (Array.isArray(data.applicable_skills)) {
+			unitApplicableSkills = (data.applicable_skills as unknown[]).filter(
+				(s): s is string => typeof s === "string",
+			)
+		}
 	}
 
 	const hatDefs = readHatDefs(studio, stage)
@@ -316,6 +326,28 @@ If a command times out, do NOT retry blindly — diagnose why (hanging test, net
 	}
 	if (outputReqs) {
 		prompt.push("", outputReqs)
+	}
+
+	// Applicable skills — annotated by the elaborator on the unit spec.
+	// Resolve descriptions from the installed registry so the subagent
+	// gets the slug AND a human-readable description without having to
+	// call haiku_skill_list itself.
+	if (unitApplicableSkills.length > 0) {
+		const installedIndex = new Map(
+			listInstalledSkills().map((s) => [s.slug, s]),
+		)
+		const skillLines = unitApplicableSkills.map((slug) => {
+			const skill = installedIndex.get(slug)
+			const desc = skill?.description ? ` — ${skill.description}` : ""
+			return `- \`/${slug}\`${desc}`
+		})
+		prompt.push(
+			"",
+			"## Skills available",
+			"The unit author identified these skills as potentially useful for this unit. Invoke them via the standard skill mechanism when appropriate.",
+			"",
+			...skillLines,
+		)
 	}
 
 	prompt.push("", "## Instructions", "")

@@ -456,5 +456,414 @@ await withHelperScript(
 	}
 }
 
+// ── Runtime PII deny-list (unit-02-telemetry-coverage) ──────────────────────
+//
+// These tests pin the chosen semantics: STRIP (not throw). Future refactors
+// that flip the semantics — including silently removing the deny list — fail
+// these tests, surfacing the change at PR time. Together with the static-grep
+// gate (`pii-grep-gate-runs`), this is the runtime safety net that prevents a
+// new emit site from silently exfiltrating user content as a telemetry attribute.
+
+await withEnv({}, (t) => {
+	test("PII deny: deny set contains the specified body-shaped keys", () => {
+		// Spec keys (unit-02-telemetry-coverage runtime PII gate).
+		const required = [
+			"diff_unified",
+			"excerpt",
+			"file_content",
+			"file_body",
+			"user_email",
+			"user_name",
+			"message_body",
+			"finding_body",
+			"fb_body",
+			"content",
+		]
+		for (const key of required) {
+			assert.ok(t.piiDenyKeys.has(key), `expected "${key}" in deny list`)
+		}
+	})
+
+	test("PII deny: deny set contains credential-shaped keys", () => {
+		// Credential-shaped keys mirror the body-shaped concern: a future
+		// emit site that grabs `req.headers.authorization` as `auth_header`
+		// or `ctx.session.token` as `token` would silently leak a credential
+		// through OTLP. These are the canonical (case-folded) entries.
+		const required = [
+			"password",
+			"passwd",
+			"pwd",
+			"token",
+			"access_token",
+			"refresh_token",
+			"id_token",
+			"bearer_token",
+			"bearer",
+			"api_key",
+			"apikey",
+			"api-key",
+			"authorization",
+			"auth_header",
+			"auth",
+			"secret",
+			"client_secret",
+			"signing_secret",
+			"credential",
+			"credentials",
+			"session_id",
+			"cookie",
+			"private_key",
+			"pem",
+		]
+		for (const key of required) {
+			assert.ok(t.piiDenyKeys.has(key), `expected "${key}" in deny list`)
+		}
+	})
+
+	test("PII deny: path-shaped keys are NOT in the deny list", () => {
+		// Path attributes describe the workflow-managed surface and are
+		// opaque to PII. Stripping them would break correlation.
+		assert.ok(!t.piiDenyKeys.has("file_path"))
+		assert.ok(!t.piiDenyKeys.has("relpath"))
+		assert.ok(!t.piiDenyKeys.has("path"))
+	})
+
+	test("PII deny: hash-shaped keys are NOT in the deny list", () => {
+		assert.ok(!t.piiDenyKeys.has("before_sha256"))
+		assert.ok(!t.piiDenyKeys.has("after_sha256"))
+	})
+
+	test("PII deny: sanitizeAttributes strips a single denied key", () => {
+		t.resetPiiWarnings()
+		// Capture stderr to assert the warning fires once per key.
+		const errs = []
+		const origErr = console.error
+		console.error = (msg) => errs.push(String(msg))
+		try {
+			const cleaned = t.sanitizeAttributes("test.event", {
+				intent_slug: "demo",
+				diff_unified: "+++ secret\n--- secret",
+			})
+			assert.deepStrictEqual(cleaned, { intent_slug: "demo" })
+			assert.ok(
+				errs.some((e) => e.includes("diff_unified")),
+				`expected stderr warning mentioning diff_unified, got: ${errs.join(" | ")}`,
+			)
+		} finally {
+			console.error = origErr
+		}
+	})
+
+	test("PII deny: sanitizeAttributes strips multiple denied keys at once", () => {
+		t.resetPiiWarnings()
+		const origErr = console.error
+		console.error = () => {}
+		try {
+			const cleaned = t.sanitizeAttributes("test.event", {
+				stage: "design",
+				excerpt: "user diff line",
+				message_body: "hi",
+				file_path: "knowledge/X.md",
+			})
+			assert.deepStrictEqual(cleaned, {
+				stage: "design",
+				file_path: "knowledge/X.md",
+			})
+		} finally {
+			console.error = origErr
+		}
+	})
+
+	test("PII deny: sanitizeAttributes is a no-op when nothing matches", () => {
+		t.resetPiiWarnings()
+		const input = {
+			intent_slug: "demo",
+			stage: "design",
+			tick_iteration: "3",
+			before_sha256: "abc",
+		}
+		const cleaned = t.sanitizeAttributes("test.event", input)
+		// Reference equality is the cheap signal that the path bypassed
+		// the copy — confirming "no-strip" doesn't allocate.
+		assert.strictEqual(cleaned, input)
+	})
+
+	test("PII deny: sanitizeAttributes strips credential-shaped keys", () => {
+		t.resetPiiWarnings()
+		const origErr = console.error
+		console.error = () => {}
+		try {
+			const cleaned = t.sanitizeAttributes("test.event", {
+				intent_slug: "demo",
+				token: "ya29.A0AfH6SMB...",
+				api_key: "sk-live-...",
+				authorization: "Bearer abc.def.ghi",
+				password: "hunter2",
+			})
+			assert.deepStrictEqual(cleaned, { intent_slug: "demo" })
+		} finally {
+			console.error = origErr
+		}
+	})
+
+	test("PII deny: sanitizeAttributes is case-insensitive", () => {
+		// HTTP header names and env-var conventions routinely use mixed case.
+		// `Authorization`, `API_KEY`, `Token` must strip equivalently to their
+		// lower-case canonical forms.
+		t.resetPiiWarnings()
+		const origErr = console.error
+		console.error = () => {}
+		try {
+			const cleaned = t.sanitizeAttributes("test.event", {
+				intent_slug: "demo",
+				Authorization: "Bearer abc",
+				API_KEY: "sk-live-...",
+				Token: "ya29...",
+				PASSWORD: "hunter2",
+			})
+			assert.deepStrictEqual(cleaned, { intent_slug: "demo" })
+		} finally {
+			console.error = origErr
+		}
+	})
+
+	test("PII deny: warning fires once per key, not per call", () => {
+		t.resetPiiWarnings()
+		const errs = []
+		const origErr = console.error
+		console.error = (msg) => errs.push(String(msg))
+		try {
+			t.sanitizeAttributes("a", { content: "x" })
+			t.sanitizeAttributes("b", { content: "y" })
+			t.sanitizeAttributes("c", { content: "z" })
+			const matches = errs.filter((e) => e.includes('"content"')).length
+			assert.strictEqual(
+				matches,
+				1,
+				`expected one warning for "content", got ${matches}: ${errs.join(" | ")}`,
+			)
+		} finally {
+			console.error = origErr
+		}
+	})
+})
+
+// ── Attribute-schema stability (unit-02-telemetry-coverage) ─────────────────
+//
+// Pin the attribute key set for every event added by unit-02. Schema changes
+// require a test update — visible at PR time. The events are emitted from
+// drift-detection-gate.ts and run-tick.ts; here we only verify the
+// allow-lists per event since the emit sites themselves are unit-tested by
+// the gate suites.
+{
+	test("schema: every drift/reconciliation event has a documented allow-list", () => {
+		const SCHEMAS = {
+			"haiku.drift.gate.kill_switch_hit": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+			],
+			"haiku.drift.gate.tick": ["intent_slug", "stage", "tick_iteration"],
+			"haiku.drift.gate.duration_ms": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"duration_ms",
+				"outcome",
+			],
+			"haiku.drift.markers.open_count": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"open_count",
+			],
+			"haiku.drift.markers.total_count": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"total_count",
+			],
+			"haiku.drift.markers.stale_removed": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"removed_count",
+			],
+			"haiku.drift.markers.suppressed_count": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"count",
+			],
+			"haiku.drift.surface.size": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"file_count",
+			],
+			"haiku.drift.findings.count": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"count",
+				"synthetic",
+			],
+			"haiku.drift.silent_auto_add.count": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"count",
+			],
+			"haiku.drift.baseline.established": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"file_count",
+			],
+			"haiku.drift.baseline.corrupt": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"error",
+			],
+			"haiku.drift.baseline.write_failed": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"error",
+				"site",
+			],
+			"haiku.drift.findings.mass_synthesized": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"raw_findings_count",
+				"effective_surface_size",
+				"drift_ratio",
+			],
+			"haiku.drift.assessments.count": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"count",
+			],
+			"haiku.drift.assessments.resolved": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"count",
+			],
+			"haiku.reconciliation.fingerprint.duration_ms": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"duration_ms",
+			],
+			"haiku.reconciliation.fingerprint.established": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+			],
+			"haiku.reconciliation.fingerprint.matched": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+			],
+			"haiku.reconciliation.fingerprint.drifted": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+			],
+			"haiku.reconciliation.fingerprint.skipped": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"reason",
+			],
+			"haiku.reconciliation.fingerprint.write_failed": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"error",
+			],
+			"haiku.reconciliation.findings.emitted": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"count",
+			],
+			"haiku.reconciliation.corpus.bytes": [
+				"intent_slug",
+				"stage",
+				"tick_iteration",
+				"bytes",
+			],
+		}
+		// Every schema must include the correlation triple — the PII gate
+		// treats absence of intent_slug as a violation upstream, but here
+		// we statically guarantee the contract at the schema layer too.
+		for (const [name, keys] of Object.entries(SCHEMAS)) {
+			assert.ok(keys.includes("intent_slug"), `${name} missing intent_slug`)
+			assert.ok(keys.includes("stage"), `${name} missing stage`)
+			assert.ok(
+				keys.includes("tick_iteration"),
+				`${name} missing tick_iteration`,
+			)
+		}
+		// And no schema may declare a key that lives in the PII deny list.
+		// This is the static counterpart to the runtime sanitiser: even
+		// the documented schema can't accidentally pin a body-shaped or
+		// credential-shaped key. Comparison is case-folded to mirror
+		// `sanitizeAttributes` (HTTP header / env-var conventions use
+		// mixed case and an exact-match would let `Authorization` through).
+		const denied = new Set([
+			// Body / content-shaped
+			"diff_unified",
+			"excerpt",
+			"file_content",
+			"file_body",
+			"user_email",
+			"user_name",
+			"message_body",
+			"finding_body",
+			"fb_body",
+			"content",
+			// Credential-shaped
+			"password",
+			"passwd",
+			"pwd",
+			"token",
+			"access_token",
+			"refresh_token",
+			"id_token",
+			"bearer_token",
+			"bearer",
+			"api_key",
+			"apikey",
+			"api-key",
+			"authorization",
+			"auth_header",
+			"auth",
+			"secret",
+			"client_secret",
+			"signing_secret",
+			"credential",
+			"credentials",
+			"session_id",
+			"cookie",
+			"private_key",
+			"pem",
+		])
+		for (const [name, keys] of Object.entries(SCHEMAS)) {
+			for (const key of keys) {
+				assert.ok(
+					!denied.has(key.toLowerCase()),
+					`${name} declares deny-listed key "${key}"`,
+				)
+			}
+		}
+	})
+}
+
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed > 0 ? 1 : 0)

@@ -24,6 +24,7 @@ import { MarkdownViewer } from "@haiku/shared"
 import DOMPurify from "dompurify"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Card, SectionHeading } from "../../../atoms/Card"
+import { OutputCardMenu } from "../../../molecules/OutputCardMenu"
 import { type TabDef, Tabs } from "../../../molecules/Tabs"
 import { UnitMetaPanel } from "../../../molecules/UnitMetaPanel"
 import { ArtifactAnnotator } from "../../../organisms/ArtifactAnnotator"
@@ -31,6 +32,10 @@ import {
 	type InlineCommentEntry,
 	InlineComments,
 } from "../../../organisms/InlineComments"
+import {
+	ReplaceOutputDialog,
+	type ReplaceOutputSubmit,
+} from "../../../organisms/ReplaceOutputDialog"
 import type { ParsedUnit } from "../../../parsed"
 import type { FeedbackItemData } from "../../../types"
 import {
@@ -104,6 +109,24 @@ export interface StageReviewProps {
 		comment: string,
 		screenshotDataUrl: string,
 	) => Promise<void>
+	/** Output-replacement dispatcher — when wired, every output card in
+	 *  the Outputs tab grows the per-card `⋯` menu with "Replace this
+	 *  output…" (DESIGN-BRIEF Screen 2 / unit-12). The host owns the
+	 *  multipart POST to `/api/intents/{intentSlug}/uploads/stage-output`;
+	 *  the dialog passes the staged file + optional note up. Returning a
+	 *  resolved promise closes the dialog. */
+	onReplaceOutput?: (
+		artifactName: string,
+		payload: ReplaceOutputSubmit,
+	) => Promise<void>
+	/** Output names that drifted since last classification (post-replace
+	 *  pre-classification window). Drives the amber stripe + chip on the
+	 *  card. Driven by the `drift_detected` WS frame. */
+	driftPendingOutputs?: Set<string>
+	/** Output names that were replaced by a peer browser while the dialog
+	 *  is open — surfaces the concurrency banner per DESIGN-BRIEF Screen 2
+	 *  §"Concurrent change". Driven by the `output_replaced` WS frame. */
+	concurrentReplacedOutputs?: Set<string>
 }
 
 const TYPE_BADGE: Record<string, string> = {
@@ -271,7 +294,14 @@ export function StageReview({
 	flashAnchor,
 	onFlashCommentConsumed,
 	onSubmitAnnotation,
+	onReplaceOutput,
+	driftPendingOutputs,
+	concurrentReplacedOutputs,
 }: StageReviewProps): React.ReactElement {
+	// Replace-output dialog state. Lives at the StageReview level so the
+	// dialog persists across detail/list mode toggles inside the Outputs
+	// tab. Setting `name` opens the dialog; null closes it.
+	const [replaceTarget, setReplaceTarget] = useState<string | null>(null)
 	// Controlled-or-uncontrolled tab: when the parent owns the tab (for
 	// URL sync), `tab`/`onTabChange` drive it. When unused, fall back to
 	// local state so tests + standalone uses still work.
@@ -648,18 +678,48 @@ export function StageReview({
 						onHighlightConsumed={onHighlightConsumed}
 						feedback={feedback}
 						onOpenDetail={(name) => openDetail("outputs", name)}
+						onReplaceOutput={
+							onReplaceOutput ? (name) => setReplaceTarget(name) : undefined
+						}
+						driftPendingByName={driftPendingOutputs}
 					/>
 				),
 		},
 	]
 
+	const replaceArtifact =
+		replaceTarget != null
+			? outputVMs.find((a) => a.name === replaceTarget)
+			: null
+
 	return (
-		<Tabs
-			groupId={`stage-${stageName}`}
-			tabs={tabs}
-			activeId={activeTab}
-			onActiveChange={setActiveTab}
-		/>
+		<>
+			<Tabs
+				groupId={`stage-${stageName}`}
+				tabs={tabs}
+				activeId={activeTab}
+				onActiveChange={setActiveTab}
+			/>
+			{replaceArtifact && onReplaceOutput ? (
+				<ReplaceOutputDialog
+					open={replaceTarget !== null}
+					output={{
+						name: replaceArtifact.name,
+						mime: replaceArtifact.mime,
+						size: replaceArtifact.body?.length ?? 0,
+						content: replaceArtifact.body,
+					}}
+					onSubmit={async (payload) => {
+						await onReplaceOutput(replaceArtifact.name, payload)
+						setReplaceTarget(null)
+					}}
+					onClose={() => setReplaceTarget(null)}
+					concurrentReplaced={
+						concurrentReplacedOutputs?.has(replaceArtifact.name) ?? false
+					}
+				/>
+			) : null}
+		</>
 	)
 }
 
@@ -1557,6 +1617,8 @@ function ArtifactsTab({
 	onHighlightConsumed,
 	feedback,
 	onOpenDetail,
+	onReplaceOutput,
+	driftPendingByName,
 }: {
 	kind: ArtifactKind & ("knowledge" | "output")
 	artifacts: ArtifactViewModel[]
@@ -1567,6 +1629,10 @@ function ArtifactsTab({
 	onHighlightConsumed?: () => void
 	feedback: FeedbackItemData[]
 	onOpenDetail: (name: string) => void
+	/** Output-only — opens the ReplaceOutputDialog for this artifact. */
+	onReplaceOutput?: (artifactName: string) => void
+	/** Output-only — names of outputs in the post-upload pre-classification window. */
+	driftPendingByName?: Set<string>
 }) {
 	useEffect(() => {
 		if (!highlightRequestId) return
@@ -1615,6 +1681,12 @@ function ArtifactsTab({
 						feedback={feedbackByName.get(a.name) ?? []}
 						state={seen.state(kind, stageId, a.name, shaOf(a))}
 						onOpen={() => onOpenDetail(a.name)}
+						onReplaceOutput={
+							kind === "output" && onReplaceOutput
+								? () => onReplaceOutput(a.name)
+								: undefined
+						}
+						driftPending={kind === "output" && driftPendingByName?.has(a.name)}
 					/>
 				))}
 			</div>
@@ -1628,12 +1700,20 @@ function ArtifactCard({
 	feedback,
 	state,
 	onOpen,
+	onReplaceOutput,
+	driftPending,
 }: {
 	kind: "knowledge" | "output"
 	artifact: ArtifactViewModel
 	feedback: FeedbackItemData[]
 	state: SeenState
 	onOpen: () => void
+	/** Output-only — when supplied, the card renders the per-card OutputCardMenu
+	 *  affordance and surfaces the "Replace this output" action. */
+	onReplaceOutput?: () => void
+	/** Output-only — when true the card paints the manual-change-pending
+	 *  amber stripe + footer chip per DESIGN-BRIEF Screen 2 happy-path. */
+	driftPending?: boolean
 }) {
 	const iconCls = kind === "knowledge" ? "text-sky-500" : "text-violet-500"
 	const icon = kind === "knowledge" ? "\u{1F9E0}" : "\u{1F4E6}"
@@ -1641,75 +1721,108 @@ function ArtifactCard({
 		KIND_BADGE[artifact.kind.toLowerCase()] ??
 		"bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300 border-stone-200 dark:border-stone-700"
 	const isVisualPreview = artifact.mime === "html" || artifact.mime === "svg"
+	const showMenu = kind === "output" && !!onReplaceOutput
+	const driftClass = driftPending ? " border-l-4 border-l-amber-400" : ""
 
 	return (
-		<button
-			type="button"
+		<div
 			data-artifact-card={artifact.name}
-			onClick={onOpen}
-			className={`w-full text-left bg-white dark:bg-stone-900 rounded-lg border-2 ${seenBorderClass(state)} overflow-hidden transition-colors hover:border-teal-400 dark:hover:border-teal-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900`}
+			data-drift-pending={driftPending || undefined}
+			className={`group relative w-full text-left bg-white dark:bg-stone-900 rounded-lg border-2 ${seenBorderClass(state)}${driftClass} overflow-hidden transition-colors hover:border-teal-400 dark:hover:border-teal-500 focus-within:ring-2 focus-within:ring-teal-500 focus-within:ring-offset-2 dark:focus-within:ring-offset-stone-900`}
 		>
-			<div className="flex items-start gap-3 px-4 py-3">
-				{isVisualPreview ? (
-					<ArtifactThumbnail artifact={artifact} />
-				) : (
-					<span
-						className={`shrink-0 ${iconCls} text-lg leading-none mt-0.5`}
-						aria-hidden="true"
-					>
-						{icon}
-					</span>
-				)}
-				<div className="flex-1 min-w-0">
-					<div className="flex items-center gap-2 flex-wrap">
-						<span className="text-sm font-semibold text-stone-900 dark:text-stone-100 font-mono truncate">
-							{artifact.name}
-						</span>
-						<StateBadge state={state} />
+			<button
+				type="button"
+				onClick={onOpen}
+				aria-label={`Open ${artifact.name}`}
+				data-testid={`artifact-card-open-${artifact.name}`}
+				className="block w-full text-left focus-visible:outline-none"
+			>
+				<div className="flex items-start gap-3 px-4 py-3">
+					{isVisualPreview ? (
+						<ArtifactThumbnail artifact={artifact} />
+					) : (
 						<span
-							className={`shrink-0 px-1.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wider border ${kindCls}`}
+							className={`shrink-0 ${iconCls} text-lg leading-none mt-0.5`}
+							aria-hidden="true"
 						>
-							{artifact.kind}
+							{icon}
 						</span>
+					)}
+					<div className="flex-1 min-w-0">
+						<div className="flex items-center gap-2 flex-wrap">
+							<span className="text-sm font-semibold text-stone-900 dark:text-stone-100 font-mono truncate">
+								{artifact.name}
+							</span>
+							<StateBadge state={state} />
+							<span
+								className={`shrink-0 px-1.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wider border ${kindCls}`}
+							>
+								{artifact.kind}
+							</span>
+						</div>
+						{artifact.summary && (
+							<p className="text-xs text-stone-600 dark:text-stone-300 leading-snug mt-1 line-clamp-1 break-words">
+								{artifact.summary}
+							</p>
+						)}
 					</div>
-					{artifact.summary && (
-						<p className="text-xs text-stone-600 dark:text-stone-300 leading-snug mt-1 line-clamp-1 break-words">
-							{artifact.summary}
-						</p>
-					)}
-				</div>
-				<div className="shrink-0 flex items-center gap-2 mt-0.5">
-					{feedback.length > 0 && (
-						<span className="inline-flex items-center gap-0.5">
-							{feedback.slice(0, 3).map((f, i) => (
-								<span
-									key={f.feedback_id}
-									title={f.title}
-									className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${feedbackBadgeColor(f.status)}`}
-								>
-									{i + 1}
-								</span>
-							))}
-						</span>
-					)}
-					<svg
-						className="w-4 h-4 text-stone-500"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						viewBox="0 0 24 24"
-						aria-hidden="true"
+					<div
+						className={`shrink-0 flex items-center gap-2 mt-0.5${showMenu ? " pr-9" : ""}`}
 					>
-						<title>open</title>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							d="M9 5l7 7-7 7"
-						/>
-					</svg>
+						{feedback.length > 0 && (
+							<span className="inline-flex items-center gap-0.5">
+								{feedback.slice(0, 3).map((f, i) => (
+									<span
+										key={f.feedback_id}
+										title={f.title}
+										className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${feedbackBadgeColor(f.status)}`}
+									>
+										{i + 1}
+									</span>
+								))}
+							</span>
+						)}
+						<svg
+							className="w-4 h-4 text-stone-500"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth="2"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
+						>
+							<title>open</title>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								d="M9 5l7 7-7 7"
+							/>
+						</svg>
+					</div>
 				</div>
-			</div>
-		</button>
+			</button>
+			{showMenu ? (
+				<div
+					className="absolute right-3 top-3 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 md:[&:has([aria-expanded='true'])]:opacity-100 transition-opacity"
+					data-testid={`artifact-card-menu-slot-${artifact.name}`}
+				>
+					<OutputCardMenu
+						artifactName={artifact.name}
+						onReplace={onReplaceOutput ?? (() => {})}
+					/>
+				</div>
+			) : null}
+			{driftPending ? (
+				<div
+					data-testid={`artifact-card-drift-chip-${artifact.name}`}
+					className="border-t border-amber-200 bg-amber-50 px-4 py-1.5 text-xs font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+				>
+					<span aria-hidden="true" className="mr-1">
+						⚠
+					</span>
+					manual change pending
+				</div>
+			) : null}
+		</div>
 	)
 }
 

@@ -29,6 +29,7 @@
 // either reconcile the upstream artifacts (and re-tick) or
 // acknowledge the divergence via `haiku_reconciliation_acknowledge`.
 
+import { createHash } from "node:crypto"
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { intentDir } from "../../state-tools.js"
@@ -74,6 +75,68 @@ export function checkUpstreamReconciliation(
 
 	if (findings.length === 0) return null
 	return { findings }
+}
+
+/** Compute a stable SHA256 fingerprint of the upstream corpus. The
+ *  fingerprint is over (sorted relPath, file content sha) pairs so
+ *  byte-identical content in the same paths yields the same hex digest.
+ *  Returns null when the corpus is empty (no prior stages or unreadable).
+ *
+ *  Used by the pre-elaboration reconciliation gate to skip detector
+ *  passes when the corpus hasn't changed since the last successful
+ *  scan or acknowledgment. */
+export function computeCorpusFingerprint(
+	intentSlug: string,
+	priorStages: readonly string[],
+	rootDir?: string,
+): string | null {
+	return computeCorpusFingerprintInstrumented(intentSlug, priorStages, rootDir)
+		.fingerprint
+}
+
+/** Telemetry-friendly variant of `computeCorpusFingerprint` that ALSO
+ *  returns saturation + latency metadata: total bytes hashed and the
+ *  wall-clock time spent enumerating + hashing the corpus.
+ *
+ *  Kept as a sibling export so existing callers don't have to thread the
+ *  metadata through hot paths that don't need it. The pre-elaboration
+ *  reconciliation gate in `run-tick.ts` calls this variant so it can emit
+ *  `haiku.reconciliation.fingerprint.duration_ms` and
+ *  `haiku.reconciliation.corpus.bytes`. */
+export function computeCorpusFingerprintInstrumented(
+	intentSlug: string,
+	priorStages: readonly string[],
+	rootDir?: string,
+): { fingerprint: string | null; durationMs: number; corpusBytes: number } {
+	const startedNs = process.hrtime.bigint()
+	if (priorStages.length === 0) {
+		return { fingerprint: null, durationMs: 0, corpusBytes: 0 }
+	}
+	const dir = rootDir
+		? join(rootDir, "intents", intentSlug)
+		: intentDir(intentSlug)
+	const corpus = collectCorpus(dir, priorStages)
+	if (corpus.length === 0) {
+		const elapsed = Number(process.hrtime.bigint() - startedNs) / 1_000_000
+		return { fingerprint: null, durationMs: elapsed, corpusBytes: 0 }
+	}
+
+	// Sort by relPath for stable ordering across runs.
+	const sorted = [...corpus].sort((a, b) => a.relPath.localeCompare(b.relPath))
+	const hasher = createHash("sha256")
+	let bytes = 0
+	for (const entry of sorted) {
+		const content = entry.lines.join("\n")
+		bytes += Buffer.byteLength(content, "utf8")
+		const fileSha = createHash("sha256").update(content).digest("hex")
+		hasher.update(`${entry.relPath}\0${fileSha}\n`)
+	}
+	const elapsed = Number(process.hrtime.bigint() - startedNs) / 1_000_000
+	return {
+		fingerprint: hasher.digest("hex"),
+		durationMs: elapsed,
+		corpusBytes: bytes,
+	}
 }
 
 /** A single text source ingested for reconciliation analysis. */

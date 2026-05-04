@@ -36,6 +36,7 @@ export interface UnitFrontmatter {
 	bolt: number
 	hat: string
 	model?: string
+	applicable_skills?: string[]
 	started_at?: string
 	completed_at?: string | null
 	// Injected by parseAllUnits when unit is in stages/{stage}/units/

@@ -352,19 +352,24 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			const reasons = parsed.data.reasons ?? []
 			if (reasons.length === 0) {
 				// Path 2: caller didn't author any new findings. Only meaningful
-				// if there is already an open stage_revisit FB the pre-tick gate
-				// can route off. Otherwise the click is a no-op — the user's
+				// if there is at least one open FB the pre-tick gate can route
+				// off — untriaged → `feedback_triage`, triaged on earlier stage
+				// → `revisited`, triaged on current stage → `feedback_dispatch`.
+				// Resolution doesn't matter; the gate routes regardless of
+				// whether it's `stage_revisit`, `inline_fix`, `question`, or
+				// `null`. Otherwise the click is a no-op — the user's
 				// "Request Changes" intent would silently disappear.
 				//
-				// `isFeedbackOpen` is the same predicate the pre-tick triage gate
-				// uses (closed_by + status !== closed/addressed/rejected). They
-				// MUST stay in sync — a divergence here means the HTTP handler
-				// reports "you have an open revisit" while the gate finds none,
-				// recreating the silent-no-op bug this 409 was added to prevent.
-				const hasOpenRevisit = readFeedbackFiles(slug, targetStage).some(
-					(fb) => fb.resolution === "stage_revisit" && isFeedbackOpen(fb),
+				// `isFeedbackOpen` is the same predicate the pre-tick triage
+				// gate uses (closed_by + status !== closed/addressed/rejected).
+				// They MUST stay in sync — a divergence here means the HTTP
+				// handler reports "you have an open FB" while the gate finds
+				// none, recreating the silent-no-op bug this 409 was added to
+				// prevent.
+				const hasOpenFeedback = readFeedbackFiles(slug, targetStage).some(
+					isFeedbackOpen,
 				)
-				if (!hasOpenRevisit) {
+				if (!hasOpenFeedback) {
 					logFeedbackAction({
 						reqId: req.id,
 						action: "revisit",
@@ -375,7 +380,7 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 					})
 					reply.status(409).send({
 						error: "nothing_to_revisit",
-						detail: `no reasons provided and no open stage_revisit feedback at ${targetStage}`,
+						detail: `no reasons provided and no open feedback at ${targetStage}`,
 					})
 					return
 				}

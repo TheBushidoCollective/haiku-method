@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Upload Panel — Wireframe</title>
+  <style>
+    /* === DESIGN TOKENS (semantic aliases from DESIGN-TOKENS.md) === */
+    :root {
+      /* Upload affordance tokens (§1.3.4) */
+      --color-upload-affordance-fg: oklch(62% 0.14 185);         /* teal-500 family — UI-component scope (border, icon); WCAG 1.4.11 3:1 threshold */
+      --color-upload-affordance-label-fg: oklch(48% 0.16 185);   /* teal-700 family — TEXT scope (label); WCAG 1.4.3 4.5:1 threshold; ~5.2:1 against white */
+      --color-upload-affordance-bg-resting: transparent;
+      --color-upload-affordance-bg-hover: color-mix(in oklch, oklch(62% 0.14 185), transparent 92%);
+      --color-upload-affordance-bg-dragover: color-mix(in oklch, oklch(62% 0.14 185), transparent 85%);
+      --color-upload-affordance-chip-bg: oklch(45% 0.14 185);    /* teal-700 family — solid fill behind 10px white chip text, ≥4.5:1 contrast */
+
+      /* Feedback pending for errors (reuse existing) */
+      --color-feedback-pending-fg: oklch(50% 0.19 10);           /* rose-700 family */
+      --color-feedback-pending-bg: oklch(97% 0.04 10);           /* rose-50 family */
+
+      /* Accent (teal-600 family) */
+      --accent-review: oklch(55% 0.15 185);
+
+      /* Neutral surface */
+      --surface-bg: oklch(100% 0 0);
+      --surface-border: oklch(88% 0.01 0);
+      --surface-text: oklch(25% 0.02 0);
+      --surface-muted: oklch(55% 0.01 0);
+      --surface-hover: oklch(96% 0.01 0);
+
+      /* Focus ring */
+      --focus-ring-color: oklch(62% 0.14 185);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-upload-affordance-fg: oklch(72% 0.12 185);
+        --color-upload-affordance-label-fg: oklch(82% 0.11 185); /* teal-300 family — TEXT scope on dark surface; ~5.4:1 against --surface-bg */
+        --color-upload-affordance-bg-resting: transparent;
+        --color-upload-affordance-bg-hover: color-mix(in oklch, oklch(72% 0.12 185), transparent 92%);
+        --color-upload-affordance-bg-dragover: color-mix(in oklch, oklch(72% 0.12 185), transparent 85%);
+        --color-upload-affordance-chip-bg: oklch(38% 0.13 185);  /* teal-800 family in dark mode — keeps ≥4.5:1 against white chip text */
+        --surface-bg: oklch(18% 0.01 0);
+        --surface-border: oklch(28% 0.01 0);
+        --surface-text: oklch(90% 0.01 0);
+        --surface-muted: oklch(60% 0.01 0);
+        --surface-hover: oklch(24% 0.01 0);
+      }
+    }
+
+    /* === BASE === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--surface-text);
+      background: oklch(95% 0.01 0);
+      padding: 24px;
+    }
+
+    /* === TOUCH TARGET UTILITY (mirrors index.css lines 94-112) === */
+    .touch-target {
+      position: relative;
+    }
+    .touch-target--hit-area::after {
+      content: '';
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+    }
+
+    /* === REDUCED MOTION === */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* === LAYOUT === */
+    .viewport-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--surface-muted);
+      margin-bottom: 8px;
+      margin-top: 32px;
+    }
+    .viewport-label:first-child { margin-top: 0; }
+
+    .demo-row {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
+    }
+
+    .state-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--surface-muted);
+      margin-bottom: 6px;
+    }
+
+    /* === SIDEBAR SHELL === */
+    .sidebar {
+      width: 20rem;
+      background: var(--surface-bg);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--surface-border);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--surface-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .sidebar-feedback-list {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--surface-border);
+      color: var(--surface-muted);
+      font-size: 12px;
+      font-style: italic;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+    }
+
+    /* === KNOWLEDGE UPLOAD PANEL === */
+    .ku-panel {
+      margin: 8px 12px;
+      border: 1px solid var(--surface-border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .ku-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      height: 32px;
+      background: var(--surface-bg);
+      cursor: pointer;
+      user-select: none;
+    }
+    .ku-header:hover { background: var(--surface-hover); }
+    .ku-header:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: -2px;
+    }
+
+    .ku-header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .ku-caret { font-size: 10px; transition: transform 150ms; }
+    .ku-panel[open] .ku-caret { transform: rotate(0deg); }
+
+    .ku-count-chip {
+      background: var(--color-upload-affordance-chip-bg);
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 9999px;
+      padding: 0 6px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .ku-info-icon {
+      color: var(--surface-muted);
+      font-size: 14px;
+      cursor: help;
+    }
+
+    /* === DROP ZONE === */
+    .ku-body { padding: 10px; border-top: 1px solid var(--surface-border); }
+
+    .drop-zone {
+      min-height: 120px;
+      border: 2px dashed var(--color-upload-affordance-fg);
+      border-radius: 8px;
+      background: var(--color-upload-affordance-bg-resting);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      gap: 8px;
+      cursor: pointer;
+      transition: background-color 150ms, border-color 150ms;
+      /* ARIA: role=button applied in HTML */
+    }
+    .drop-zone:hover {
+      background: var(--color-upload-affordance-bg-hover);
+    }
+    .drop-zone:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+      background: var(--color-upload-affordance-bg-hover);
+    }
+    .drop-zone--dragover {
+      border-style: solid;
+      background: var(--color-upload-affordance-bg-dragover);
+    }
+    .drop-zone--error {
+      border-color: var(--color-feedback-pending-fg);
+    }
+    .drop-zone--disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .drop-zone-icon {
+      color: var(--color-upload-affordance-fg);
+      font-size: 24px;
+    }
+    .drop-zone-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-upload-affordance-label-fg);
+    }
+    .drop-zone-hint {
+      font-size: 11px;
+      color: var(--surface-muted);
+    }
+
+    /* === STAGED FILES === */
+    .staged-list {
+      list-style: none;
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .staged-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 8px;
+      height: 36px;
+      border-radius: 4px;
+      transition: background-color 150ms;
+    }
+    .staged-row:hover { background: var(--surface-hover); }
+    .staged-row--error {
+      border-left: 3px solid var(--color-feedback-pending-fg);
+      padding-left: 5px;
+    }
+    .staged-row--loading { opacity: 0.7; }
+
+    .staged-icon { color: var(--surface-muted); font-size: 14px; }
+    .staged-name {
+      flex: 1;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .staged-size { font-size: 11px; color: var(--surface-muted); font-variant-numeric: tabular-nums; }
+    .staged-remove {
+      /* touch-target--hit-area pattern */
+      position: relative;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--surface-muted);
+      cursor: pointer;
+      border-radius: 4px;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      transition: background-color 150ms, color 150ms;
+    }
+    .staged-remove::after {
+      /* expanded hit area to 44×44 on mobile */
+      content: '';
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+    }
+    .staged-remove:hover {
+      background: var(--surface-hover);
+      color: var(--color-feedback-pending-fg);
+    }
+    .staged-remove:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+
+    /* === DESTINATION + ACTIONS === */
+    .ku-destination {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+    .ku-select {
+      flex: 1;
+      height: 36px;
+      border: 1px solid var(--surface-border);
+      border-radius: 6px;
+      background: var(--surface-bg);
+      color: var(--surface-text);
+      font-size: 13px;
+      padding: 0 8px;
+    }
+    .ku-select:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+
+    .ku-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .btn-primary {
+      background: var(--accent-review);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 32px;
+      transition: background-color 150ms;
+    }
+    .btn-primary:hover { filter: brightness(0.9); }
+    .btn-primary:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+    .btn-primary:disabled, .btn-primary[aria-disabled="true"] {
+      background: oklch(80% 0.01 0);
+      cursor: not-allowed;
+      color: oklch(55% 0.01 0);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--surface-text);
+      border: 1px solid var(--surface-border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      min-height: 32px;
+      transition: background-color 150ms;
+    }
+    .btn-secondary:hover { background: var(--surface-hover); }
+    .btn-secondary:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+
+    /* === LIVE REGION (ARIA) === */
+    .live-region {
+      font-size: 11px;
+      color: var(--surface-muted);
+      padding: 4px 0;
+      min-height: 18px;
+    }
+    .live-region--error { color: var(--color-feedback-pending-fg); }
+
+    /* === PROGRESS BAR === */
+    .progress-bar {
+      height: 4px;
+      background: oklch(90% 0.01 0);
+      border-radius: 9999px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--accent-review);
+      border-radius: 9999px;
+      transition: width 200ms ease;
+    }
+
+    /* === TABLET TOUCH-TARGET ENFORCEMENT (≤768px) === */
+    /* Spec §4.2: every pointer-activated control at ≤768px applies the 44px touch-target floor. */
+    @media (max-width: 768px) {
+      .btn-primary, .btn-secondary { min-height: 44px; }
+    }
+
+    /* === MOBILE LAYOUT === */
+    @media (max-width: 375px) {
+      .sidebar { width: 100%; }
+      .drop-zone { display: none; }
+      .drop-zone-mobile-btn {
+        display: flex !important;
+        width: 100%;
+        height: 48px;
+        background: var(--color-upload-affordance-bg-hover);
+        border: 2px dashed var(--color-upload-affordance-fg);
+        border-radius: 8px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--color-upload-affordance-label-fg);
+        cursor: pointer;
+        /* touch-target: 48px height already satisfies 44px min */
+      }
+      .drop-zone-mobile-btn:focus-visible {
+        outline: 3px solid var(--focus-ring-color);
+        outline-offset: 2px;
+      }
+      .ku-actions { flex-direction: column; }
+      .btn-primary, .btn-secondary { width: 100%; justify-content: center; }
+    }
+
+    .drop-zone-mobile-btn { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- =================== DESKTOP 1280px =================== -->
+  <p class="viewport-label">Desktop — 1280px</p>
+
+  <div class="demo-row">
+
+    <!-- State: Default (empty) -->
+    <div>
+      <p class="state-label">Default — empty (zero files staged)</p>
+      <div class="sidebar">
+        <div class="sidebar-header">FeedbackSidebar</div>
+        <div class="sidebar-feedback-list">⋯ Feedback list items ⋯</div>
+
+        <!-- Knowledge Upload Panel — default empty state -->
+        <details class="ku-panel" open>
+          <summary class="ku-header" aria-expanded="true">
+            <span class="ku-header-left">
+              <span class="ku-caret">▾</span>
+              <span>Upload knowledge</span>
+            </span>
+            <span class="ku-info-icon" title="Files are uploaded to the intent's knowledge/ directory and become readable to the next workflow tick." aria-label="info">ⓘ</span>
+          </summary>
+          <div class="ku-body">
+            <!-- Drop zone: role=button, aria-label per spec -->
+            <div
+              class="drop-zone"
+              role="button"
+              tabindex="0"
+              aria-label="Upload knowledge file"
+            >
+              <span class="drop-zone-icon" aria-hidden="true">☁</span>
+              <span class="drop-zone-label">drop files or click to browse</span>
+              <span class="drop-zone-hint">.md  .pdf  .png  .jpg  .svg  .txt · max 10 MB each</span>
+            </div>
+            <!-- Mobile button (hidden at desktop) -->
+            <button class="drop-zone-mobile-btn" aria-label="Upload knowledge file">
+              <span aria-hidden="true">+</span> Add files
+            </button>
+            <!-- Live region for screen-reader announcements -->
+            <div role="status" aria-live="polite" class="live-region" id="ku-live-empty"></div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- State: Dragover -->
+    <div>
+      <p class="state-label">Dragover state</p>
+      <div class="sidebar">
+        <div class="sidebar-header">FeedbackSidebar</div>
+        <div class="sidebar-feedback-list">⋯ Feedback list items ⋯</div>
+        <details class="ku-panel" open>
+          <summary class="ku-header" aria-expanded="true">
+            <span class="ku-header-left">
+              <span class="ku-caret">▾</span>
+              <span>Upload knowledge</span>
+            </span>
+            <span class="ku-info-icon" aria-label="info">ⓘ</span>
+          </summary>
+          <div class="ku-body">
+            <div
+              class="drop-zone drop-zone--dragover"
+              role="button"
+              tabindex="0"
+              aria-label="Upload knowledge file"
+            >
+              <span class="drop-zone-icon" aria-hidden="true">☁</span>
+              <span class="drop-zone-label">Drop to stage</span>
+              <span class="drop-zone-hint">.md  .pdf  .png  .jpg  .svg  .txt · max 10 MB each</span>
+            </div>
+            <div role="status" aria-live="polite" class="live-region" id="ku-live-dragover"></div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- State: Files staged (focus demo) -->
+    <div>
+      <p class="state-label">Staged files — with focus indicator visible</p>
+      <div class="sidebar">
+        <div class="sidebar-header">FeedbackSidebar</div>
+        <div class="sidebar-feedback-list">⋯ Feedback list items ⋯</div>
+        <details class="ku-panel" open>
+          <summary class="ku-header" aria-expanded="true">
+            <span class="ku-header-left">
+              <span class="ku-caret">▾</span>
+              <span>Upload knowledge</span>
+            </span>
+            <span class="ku-count-chip" aria-label="3 files staged">3</span>
+            <span class="ku-info-icon" aria-label="info">ⓘ</span>
+          </summary>
+          <div class="ku-body">
+            <!-- Drop zone with focus-visible state demonstrated -->
+            <div
+              class="drop-zone"
+              role="button"
+              tabindex="0"
+              aria-label="Upload knowledge file"
+              style="outline: 3px solid var(--focus-ring-color); outline-offset: 2px;"
+            >
+              <span class="drop-zone-icon" aria-hidden="true">☁</span>
+              <span class="drop-zone-label">drop files or click to browse</span>
+              <span class="drop-zone-hint">.md  .pdf  .png  .jpg  .svg  .txt · max 10 MB each</span>
+            </div>
+            <!-- Staged files list -->
+            <ul class="staged-list" role="list" aria-label="Staged files">
+              <li class="staged-row" role="listitem">
+                <span class="staged-icon" aria-hidden="true">📄</span>
+                <span class="staged-name">brand-guide.pdf</span>
+                <span class="staged-size">2.4 MB</span>
+                <button class="staged-remove touch-target touch-target--hit-area" aria-label="Remove brand-guide.pdf from upload">×</button>
+              </li>
+              <li class="staged-row" role="listitem">
+                <span class="staged-icon" aria-hidden="true">🖼</span>
+                <span class="staged-name">hero-mock.png</span>
+                <span class="staged-size">480 KB</span>
+                <button class="staged-remove touch-target touch-target--hit-area" aria-label="Remove hero-mock.png from upload">×</button>
+              </li>
+              <li class="staged-row" role="listitem">
+                <span class="staged-icon" aria-hidden="true">📝</span>
+                <span class="staged-name">interview.md</span>
+                <span class="staged-size">12 KB</span>
+                <button class="staged-remove touch-target touch-target--hit-area" aria-label="Remove interview.md from upload">×</button>
+              </li>
+            </ul>
+
+            <div class="ku-destination">
+              <label for="dest-default" style="font-size:12px;color:var(--surface-muted);">Destination:</label>
+              <select class="ku-select" id="dest-default" aria-label="Upload destination">
+                <option value="intent">Intent knowledge</option>
+                <option value="design">Stage: design</option>
+                <option value="inception">Stage: inception</option>
+              </select>
+            </div>
+
+            <div class="ku-actions">
+              <button class="btn-secondary">Cancel</button>
+              <button class="btn-primary">Upload 3 files</button>
+            </div>
+
+            <div role="status" aria-live="polite" class="live-region" id="ku-live-staged">3 files staged</div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- State: Uploading (progress) -->
+    <div>
+      <p class="state-label">Uploading state</p>
+      <div class="sidebar">
+        <div class="sidebar-header">FeedbackSidebar</div>
+        <div class="sidebar-feedback-list">⋯ Feedback list items ⋯</div>
+        <details class="ku-panel" open>
+          <summary class="ku-header" aria-expanded="true">
+            <span class="ku-header-left">
+              <span class="ku-caret">▾</span>
+              <span>Upload knowledge</span>
+            </span>
+            <span class="ku-count-chip" aria-label="3 files staged">3</span>
+            <span class="ku-info-icon" aria-label="info">ⓘ</span>
+          </summary>
+          <div class="ku-body">
+            <!-- Drop zone: aria-busy during upload -->
+            <div
+              class="drop-zone drop-zone--disabled"
+              role="button"
+              tabindex="0"
+              aria-label="Upload knowledge file"
+              aria-busy="true"
+            >
+              <span class="drop-zone-icon" aria-hidden="true">☁</span>
+              <span class="drop-zone-label">Uploading…</span>
+            </div>
+            <!-- Progress bar -->
+            <div class="progress-bar" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" aria-label="Upload progress">
+              <div class="progress-fill" style="width: 60%;"></div>
+            </div>
+            <ul class="staged-list" role="list">
+              <li class="staged-row staged-row--loading" role="listitem">
+                <span class="staged-icon" aria-hidden="true">⏳</span>
+                <span class="staged-name">brand-guide.pdf</span>
+                <span class="staged-size" style="color:var(--accent-review)">Uploading…</span>
+              </li>
+              <li class="staged-row" role="listitem" style="opacity:0.5;">
+                <span class="staged-icon" aria-hidden="true">🖼</span>
+                <span class="staged-name">hero-mock.png</span>
+                <span class="staged-size">480 KB</span>
+              </li>
+              <li class="staged-row" role="listitem" style="opacity:0.5;">
+                <span class="staged-icon" aria-hidden="true">📝</span>
+                <span class="staged-name">interview.md</span>
+                <span class="staged-size">12 KB</span>
+              </li>
+            </ul>
+            <div class="ku-actions">
+              <button class="btn-secondary" disabled>Cancel</button>
+              <button class="btn-primary" aria-busy="true" aria-disabled="true">Uploading…</button>
+            </div>
+            <!-- aria-live announces progress to screen readers -->
+            <div role="status" aria-live="polite" class="live-region" id="ku-live-uploading">Uploading brand-guide.pdf</div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- State: Error -->
+    <div>
+      <p class="state-label">Error state (upload failed)</p>
+      <div class="sidebar">
+        <div class="sidebar-header">FeedbackSidebar</div>
+        <div class="sidebar-feedback-list">⋯ Feedback list items ⋯</div>
+        <details class="ku-panel" open>
+          <summary class="ku-header" aria-expanded="true">
+            <span class="ku-header-left">
+              <span class="ku-caret">▾</span>
+              <span>Upload knowledge</span>
+            </span>
+            <span class="ku-count-chip" aria-label="2 files staged">2</span>
+            <span class="ku-info-icon" aria-label="info">ⓘ</span>
+          </summary>
+          <div class="ku-body">
+            <div class="drop-zone drop-zone--error" role="button" tabindex="0" aria-label="Upload knowledge file">
+              <span class="drop-zone-icon" aria-hidden="true" style="color: var(--color-feedback-pending-fg);">⚠</span>
+              <span class="drop-zone-label" style="color:var(--color-feedback-pending-fg);">Upload failed — try again</span>
+              <span class="drop-zone-hint">drop files or click to browse</span>
+            </div>
+            <ul class="staged-list" role="list">
+              <li class="staged-row staged-row--error" role="listitem">
+                <span class="staged-icon" aria-hidden="true" style="color:var(--color-feedback-pending-fg);">✗</span>
+                <span class="staged-name">brand-guide.pdf</span>
+                <span class="staged-size" style="color:var(--color-feedback-pending-fg);">Failed</span>
+                <button class="staged-remove" aria-label="Remove brand-guide.pdf from upload" style="color:var(--color-feedback-pending-fg);">↺</button>
+              </li>
+            </ul>
+            <div class="ku-actions">
+              <button class="btn-secondary">Cancel</button>
+              <button class="btn-primary">Retry 1 file</button>
+            </div>
+            <!-- Error announced to screen readers -->
+            <div role="status" aria-live="polite" class="live-region live-region--error" id="ku-live-error">
+              Upload failed for brand-guide.pdf: network error. Retry below.
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- State: Uploaded success -->
+    <div>
+      <p class="state-label">Uploaded — success</p>
+      <div class="sidebar">
+        <div class="sidebar-header">FeedbackSidebar</div>
+        <div class="sidebar-feedback-list">⋯ Feedback list items ⋯</div>
+        <details class="ku-panel">
+          <!-- Collapsed after successful upload -->
+          <summary class="ku-header" aria-expanded="false">
+            <span class="ku-header-left">
+              <span class="ku-caret">▸</span>
+              <span>Upload knowledge</span>
+            </span>
+            <span class="ku-info-icon" aria-label="info">ⓘ</span>
+          </summary>
+        </details>
+        <div style="padding: 6px 12px; font-size: 12px; color: var(--color-drift-acknowledged-fg); display:flex; align-items:center; gap:6px;">
+          <span aria-hidden="true">✓</span>
+          <span>Uploaded 3 files to intent knowledge</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end demo-row desktop -->
+
+  <!-- =================== TABLET 768px =================== -->
+  <p class="viewport-label">Tablet — 768px (sidebar visible; drag-drop enabled)</p>
+  <div class="demo-row">
+    <div style="max-width: 768px; width: 100%;">
+      <div class="sidebar" style="width: 100%; max-width: 320px;">
+        <div class="sidebar-header">FeedbackSidebar (tablet)</div>
+        <div class="sidebar-feedback-list">⋯ Feedback list ⋯</div>
+        <details class="ku-panel" open>
+          <summary class="ku-header" aria-expanded="true">
+            <span class="ku-header-left">
+              <span class="ku-caret">▾</span>
+              <span>Upload knowledge</span>
+            </span>
+            <span class="ku-count-chip" aria-label="1 file staged">1</span>
+            <span class="ku-info-icon" aria-label="info">ⓘ</span>
+          </summary>
+          <div class="ku-body">
+            <div class="drop-zone" role="button" tabindex="0" aria-label="Upload knowledge file" style="min-height: 128px;">
+              <span class="drop-zone-icon" aria-hidden="true">☁</span>
+              <span class="drop-zone-label">drop files or click to browse</span>
+              <span class="drop-zone-hint">.md  .pdf  .png  .jpg  .svg  .txt · max 10 MB each</span>
+            </div>
+            <ul class="staged-list" role="list">
+              <li class="staged-row" role="listitem">
+                <span class="staged-icon" aria-hidden="true">📄</span>
+                <span class="staged-name">research-notes.md</span>
+                <span class="staged-size">8 KB</span>
+                <button class="staged-remove touch-target touch-target--hit-area" aria-label="Remove research-notes.md from upload">×</button>
+              </li>
+            </ul>
+            <div class="ku-destination">
+              <label for="dest-tablet" style="font-size:12px;color:var(--surface-muted);">Destination:</label>
+              <select class="ku-select" id="dest-tablet" aria-label="Upload destination">
+                <option>Intent knowledge</option>
+              </select>
+            </div>
+            <div class="ku-actions">
+              <button class="btn-secondary touch-target">Cancel</button>
+              <button class="btn-primary touch-target">Upload 1 file</button>
+            </div>
+            <div role="status" aria-live="polite" class="live-region" id="ku-live-tablet">1 file staged</div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== MOBILE 375px =================== -->
+  <p class="viewport-label">Mobile — 375px (FeedbackSheet sub-panel; tap-to-browse only)</p>
+  <div class="demo-row">
+    <div style="width: 375px; max-width: 100%;">
+      <div class="sidebar" style="width: 100%; border-radius: 12px 12px 0 0;">
+        <div class="sidebar-header">FeedbackSheet (mobile)</div>
+        <div class="sidebar-feedback-list">⋯ Feedback list ⋯</div>
+        <details class="ku-panel" open>
+          <summary class="ku-header" aria-expanded="true" style="height: 44px; min-height:44px;">
+            <span class="ku-header-left">
+              <span class="ku-caret">▾</span>
+              <span>Upload knowledge</span>
+            </span>
+            <span class="ku-count-chip" aria-label="2 files staged">2</span>
+            <span class="ku-info-icon" aria-label="info">ⓘ</span>
+          </summary>
+          <div class="ku-body">
+            <!-- Mobile: single button opens native file picker (no drag-drop) -->
+            <button
+              class="drop-zone-mobile-btn"
+              aria-label="Upload knowledge file"
+              style="display:flex;"
+            >
+              <span aria-hidden="true">+</span> Add files
+            </button>
+            <!-- Staged summary then expandable list -->
+            <div style="font-size:12px;color:var(--surface-muted);padding: 6px 0;">2 files staged · <button style="background:none;border:none;cursor:pointer;color:var(--accent-review);font-size:12px;padding:0;">view</button></div>
+            <!-- Destination (full width on mobile) -->
+            <select class="ku-select" aria-label="Upload destination" style="width:100%;margin-top:6px;height:44px;">
+              <option>Intent knowledge</option>
+            </select>
+            <!-- Full-width stacked buttons on mobile -->
+            <div class="ku-actions" style="flex-direction:column;margin-top:10px;">
+              <button class="btn-primary" style="width:100%;height:44px;">Upload 2 files</button>
+              <button class="btn-secondary" style="width:100%;height:44px;margin-top:6px;">Cancel</button>
+            </div>
+            <div role="status" aria-live="polite" class="live-region" id="ku-live-mobile">2 files staged</div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPEC NOTES -->
+  <div style="margin-top: 40px; padding: 16px; background: var(--surface-bg); border: 1px solid var(--surface-border); border-radius: 8px; font-size: 12px; color: var(--surface-muted); max-width: 960px;">
+    <strong style="color: var(--surface-text);">Spec notes for this wireframe:</strong>
+    <ul style="margin-top: 8px; padding-left: 16px; display:flex; flex-direction:column; gap:4px;">
+      <li>All colors use <code>var(--color-upload-affordance-*)</code> and <code>var(--color-feedback-pending-*)</code> tokens — no raw hex, no raw Tailwind palette classes.</li>
+      <li>Drop zone carries <code>role="button"</code> and <code>aria-label="Upload knowledge file"</code> exactly as specified.</li>
+      <li>Uploading state sets <code>aria-busy="true"</code> on the button; adjacent <code>aria-live="polite"</code> region announces "Uploading {filename}".</li>
+      <li>Uploaded state announces "Uploaded {filename}" via the same live region.</li>
+      <li>Error state announces error text via the live region.</li>
+      <li>Empty state shows visible text "drop files or click to browse" — not a placeholder image.</li>
+      <li>Mobile: drop zone collapses to a single <code>&lt;button&gt;</code> that opens native file picker; no drag-drop on touch. All controls ≥44px.</li>
+      <li>Touch targets: <code>.touch-target--hit-area</code> applied to × remove buttons (sub-44px visual).</li>
+      <li>Reduced-motion: drag-over scale animation suppressed; progress bar remains.</li>
+      <li><strong>Direction A passive-observer constraint: zero classification-trigger controls on this surface (per SPA-UI-SPECS.md §0).</strong></li>
+    </ul>
+  </div>
+
+</body>
+</html>

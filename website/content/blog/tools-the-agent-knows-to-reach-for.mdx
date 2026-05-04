@@ -1,0 +1,73 @@
+---
+title: "Tools the Agent Knows to Reach For"
+description: An agent can have twenty useful slash commands installed and use none of them. Skill alignment plumbs that registry into the elaborate phase so units carry the picks forward.
+date: "2026-05-04T18:15:51Z"
+author: Jason Waldrip
+category: Architecture
+tags:
+  - skills
+  - elaboration
+  - units
+  - hats
+  - workflow
+---
+
+Picture a developer who installs a `/test` skill, a `/refactor` skill, and a `/security-review` skill, then opens an intent. The elaborator drafts twenty units. The hats run. The work ships. None of those skills get touched once. The agent had every tool sitting on the shelf and never knew the shelf existed.
+
+That's the gap PR [#298](https://github.com/gigsmart/haiku-method/pull/298) closes. Until last week, hat subagents inside a H·AI·K·U unit were tool-blind to skills the user had installed. The harness exposed them, the agent could in theory invoke them, but nothing in the workflow ever told a subagent *for this unit, reach for these*. So nothing did.
+
+## The shelf nobody could see
+
+Claude Code skills are slash commands — `/test`, `/refactor`, project-specific ones tucked into `.claude/skills/`, plugin-bundled ones, global ones in `~/.claude/plugins/*/skills/`. They are first-class user customization. Teams ship them to encode house style: how tests should be written, how PRs should be reviewed, how a security pass actually runs in this org.
+
+A H·AI·K·U run leans hard on subagents. Every hat in every unit is a fresh subagent with a tightly scoped prompt. The parent gives it a role, a scope, the inputs it's allowed to read, and the rule about how to relay results. Until this PR, it gave the subagent zero awareness of what skills were installed in the user's environment.
+
+So the user's `/test` skill — the canonical way *this team* writes tests, with all the conventions baked in — sat unused while the builder hat wrote tests inline using whatever testing pattern the model defaulted to. A custom skill that never got the airtime its author expected.
+
+## Where the decision actually belongs
+
+H·AI·K·U already has a phase for unification. The elaborator is the hat that takes a stage's inputs and decomposes them into units at `.haiku/intents/{slug}/stages/{stage}/units/unit-NN-*.md`. It picks scope, dependencies, models, quality gates — every per-unit decision the rest of the workflow inherits. That's the place that sees the whole stage at once, and asking *which skills would meaningfully accelerate this unit* fits the work it's already doing.
+
+The unit frontmatter is already where every other inheritance-shaped decision lives — `model:`, `depends_on:`, `inputs:`, `outputs:`, `quality_gates:`. One more field is one more field. That field is `applicable_skills:`, defined in `UNIT_FRONTMATTER_SCHEMA` at `packages/haiku/src/state-tools.ts:3101`. Slugs only — no descriptions, no metadata, just `applicable_skills: [test, refactor]` in YAML. The schema flows into `AGENT_AUTHORABLE_UNIT_FIELDS` automatically; nothing else had to be wired.
+
+## Selection vs. inventory
+
+The elaborator needs to *see* every installed skill to pick. The unit needs to *remember* only the picks. Those are two different lifetimes, and the design has to honor that.
+
+Inventory is environmental. It changes when the user installs a plugin, edits `.claude/skills/`, or pulls down a new project. Persisting an inventory snapshot into the unit file would be wrong — six weeks from now somebody picks up the intent on a fresh checkout and the snapshot is stale fiction.
+
+Selection is editorial. The elaborator decided this unit benefits from `/test`. That decision is durable. It's a piece of the spec. It survives handoffs, gets reviewed alongside the rest of the unit, and rides the stage branch into the PR.
+
+So `listInstalledSkills()` (`packages/haiku/src/state-tools.ts:5221`) reads fresh from disk every call. It walks three locations in priority order — project `.claude/skills/`, then global `~/.claude/plugins/*/skills/`, then plugin-bundled `{plugin_root}/skills/` — and de-duplicates by slug, more-specific wins. A project's custom `test` skill shadows the plugin's bundled one. The elaborate prompt gets the rendered list at injection time via `buildSkillRegistrySection` (`packages/haiku/src/orchestrator/prompts/elaborate.ts:122`). The unit gets the slugs.
+
+This is the same pattern H·AI·K·U uses for everything dynamic. The model registry lives in the harness. The hat definitions live on disk. The studio templates live in the plugin. Selections — *this unit gets Opus*, *this unit closes FB-03*, *this unit reaches for `/test`* — live in unit frontmatter where the work itself lives.
+
+## Inheritance without re-deciding
+
+Once the unit ships with `applicable_skills: [test, refactor]`, every hat dispatched on that unit inherits the list. The injection lives in `start_unit.ts:331-351`, and the rendered block looks like this:
+
+```
+## Skills available
+The unit author identified these skills as potentially useful for this unit. Invoke them via the standard skill mechanism when appropriate.
+
+- `/test` — Write tests for code using TDD principles
+- `/refactor` — Restructure code to improve quality without changing behavior
+```
+
+Every hat sees the same list. The planner might use `/research`, the builder might use `/test`, the verifier might use `/security-review` — they all start from the same advisory annotation, and each picks when to invoke based on its own scope. None of them re-decide *whether the skill applies to this unit*. That call was committed at elaboration. They only decide *whether to invoke it at this hat's slice of work*. Descriptions re-resolve at dispatch time, so a skill the user uninstalled between elaboration and execution degrades to the slug alone — the slug is the record of intent, the description is convenience text.
+
+A unit without `applicable_skills` skips the block entirely. No empty header, no scan cost — `listInstalledSkills()` is gated behind `if (unitApplicableSkills.length > 0)` in `start_unit.ts:335`. The elaborator is told, in `elaborate.ts:130`, to be selective: *only annotate when there is clear relevance — don't bloat every unit*. Most units don't get annotation, and the prompt for those units stays exactly the same as before.
+
+## The block is advisory, not permission
+
+The skill block doesn't grant access. Every skill is already callable by the agent at the harness layer — H·AI·K·U doesn't gate skill invocation, the harness does. What changes is awareness, not access. Without the annotation, a hat that already knew `/test` existed could call it. With the annotation, a hat that didn't know `/test` existed now does. The awareness gap was the gap that was real, and it's the only one this PR closes.
+
+That distinction matters because skills are uneven. Some are heavy slash commands that take over the conversation for several turns. Some are thin helpers that run in a single call. The hat has to judge fit per-task, and the judgment can't live in the block. The workflow shouldn't bake skill-execution semantics into itself anyway — skills are user surface, the user shapes them, the harness runs them, and the workflow stays out of that loop except to point at it.
+
+## The footprint
+
+The coverage is `packages/haiku/test/skill-list.test.mjs` — thirteen cases covering project-over-global-over-plugin shadowing, malformed SKILL.md handling, missing-directory tolerance, the per-hat injection in `start_unit`, the elaborator skill-registry section in both fresh and revisit paths, and the description fallback when a slug exists but the description is gone. Initial implementation in commit `c405694e3`. Review fixes in `5a217bd36` (parser fix, elaborator coverage) and `f02567693` (priority order, revisit-elaborate path, output schema enum). Boy-scout cleanup of `haiku_studio_list.source` to enum in `1b6b48a31`, because the same shape was useful in two places once.
+
+Beyond that, the surface is small. The MCP tool `haiku_skill_list` (`state-tools.ts:5824`) returns the registry on demand. The frontmatter field is one new key. The hat prompt picks up a new section when the unit declares one. The user's skill library used to be a separate world from the workflow — two systems with no channel between them. Now the channel runs through the phase that already does this kind of work, and the decision sits on the unit alongside model selection and depends_on and quality gates. Skills just hadn't been plumbed yet.
+
+If you've got a `/test` skill and a `/security-review` skill and a `/refactor` skill installed, the next intent you elaborate will see them. The units that benefit will say so in their frontmatter. The hats that run on those units will know. Nothing about that should require the user to think about it — and after this PR, they don't.

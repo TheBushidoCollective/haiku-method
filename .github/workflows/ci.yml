@@ -50,7 +50,16 @@ jobs:
       - name: Build haiku-api
         run: npm run -w haiku-api build
 
-      - name: Run MCP test suite
-        working-directory: packages/haiku
-        run: node test/run-all.mjs
+      # Drift-test coverage gate. The four named drift / reconciliation
+      # test files (drift-detection-gate, upstream-reconciliation,
+      # drift-baseline, drift-markers) lock in the silent-establish and
+      # fingerprint short-circuit contracts. A future test-glob refactor
+      # or rename could silently drop coverage; this check fails loud if
+      # any of the four files disappear or stop being discovered by
+      # run-all.mjs. See scripts/check-ci-covers-drift-tests.mjs.
+      - name: Verify drift-test coverage
+        run: node scripts/check-ci-covers-drift-tests.mjs
+
+      - name: Run MCP test suite (packages/haiku npm test)
+        run: npm test --workspace packages/haiku
 

@@ -17,11 +17,15 @@ import fastifyWebsocket from "@fastify/websocket"
 import Fastify, { type FastifyInstance } from "fastify"
 import { DEFAULT_BODY_MAX_BYTES } from "haiku-api"
 import { review } from "./config.js"
+import { registerAssessmentsRoutes } from "./http/assessments-routes.js"
+import { registerBaselineContentRoutes } from "./http/baseline-content-routes.js"
+import { registerCsrfRoutes } from "./http/csrf.js"
 import { registerDefaultRoutes } from "./http/default-routes.js"
 import { e2eOnSend, extractSessionIdFromPath } from "./http/e2e.js"
 import { registerFeedbackRoutes } from "./http/feedback-api.js"
 import { registerFileServeRoutes } from "./http/file-serve.js"
 import { registerSessionRoutes } from "./http/session-routes.js"
+import { registerUploadRoutes } from "./http/upload-routes.js"
 import {
 	closeSessionConnection,
 	MAX_WS_SESSIONS,
@@ -198,6 +202,11 @@ async function buildApp(): Promise<FastifyInstance> {
 				"Authorization",
 				"Content-Type",
 				"bypass-tunnel-reminder",
+				// V-08 Layer 3 CSRF nonce header. Listed in CORS allowedHeaders
+				// so the browser's preflight succeeds for legitimate same-app
+				// requests; cross-origin attackers still can't satisfy
+				// preflight without server CORS approval, which is the design.
+				"X-Haiku-CSRF",
 			],
 			exposedHeaders: ["X-E2E-Encrypted", "X-Original-Content-Type"],
 			// Preflight from a DISALLOWED origin still gets 204 with NO
@@ -259,6 +268,27 @@ async function buildApp(): Promise<FastifyInstance> {
 		}
 	})
 
+	// ── Health, SPA shell, 404 catch-all, error envelope ──────────────
+	// IMPORTANT: registerDefaultRoutes calls instance.setErrorHandler().
+	// In Fastify 5.x, the error handler is captured into route contexts
+	// at the point each route's after() callback fires. Async plugins
+	// (like the @fastify/multipart scope in registerUploadRoutes) can
+	// shift when those after() callbacks fire relative to setErrorHandler.
+	// Registering the error handler FIRST guarantees all subsequent route
+	// contexts inherit the correct custom error handler, regardless of
+	// whether async plugin wrappers affect callback ordering.
+	registerDefaultRoutes(instance, isReady)
+
+	// ── V-08 CSRF defence-in-depth (global preHandler + nonce-mint route) ─
+	// Registered BEFORE the route registrations below so the global
+	// preHandler is in scope for every route Fastify learns about. In
+	// tunnel mode this enforces:
+	//   Layer 1 — Reject `?t=<jwt>` on POST/PUT/PATCH/DELETE.
+	//   Layer 2 — Origin allowlist (HAIKU_ALLOWED_ORIGINS env).
+	//   Layer 3 — Per-session CSRF nonce (X-Haiku-CSRF header), opt-in.
+	// Local mode is exempt entirely (loopback gates auth on its own).
+	registerCsrfRoutes(instance)
+
 	// ── Session-scoped routes (SPA shells, mutations, session API,
 	//      revisit, asset serves) ───────────────────────────────────────
 	registerSessionRoutes(instance)
@@ -267,8 +297,12 @@ async function buildApp(): Promise<FastifyInstance> {
 	// ── Feedback CRUD + reply + intent-scope + attachments ────────────
 	registerFeedbackRoutes(instance)
 
-	// ── Health, SPA shell, 404 catch-all, error envelope ──────────────
-	registerDefaultRoutes(instance, isReady)
+	// ── SPA upload endpoints (stage-output + knowledge) ───────────────
+	await registerUploadRoutes(instance)
+
+	// ── Drift-assessment read endpoints ───────────────────────────────
+	registerAssessmentsRoutes(instance)
+	registerBaselineContentRoutes(instance)
 
 	// ── WebSocket upgrade ──────────────────────────────────────────────
 	registerWsUpgrade(instance)

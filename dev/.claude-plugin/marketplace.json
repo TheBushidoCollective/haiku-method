@@ -1,0 +1,17 @@
+{
+  "name": "haiku-dev",
+  "owner": {
+    "name": "GigSmart",
+    "url": "https://gigsmart.com"
+  },
+  "metadata": {
+    "description": "H·AI·K·U (DEV)"
+  },
+  "plugins": [
+    {
+      "name": "haiku",
+      "description": "H·AI·K·U (DEV)",
+      "source": "./plugin"
+    }
+  ]
+}

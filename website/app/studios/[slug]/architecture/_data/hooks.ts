@@ -26,7 +26,7 @@ export const HOOKS: HookDef[] = [
 	{
 		group: "guardrails",
 		name: "guard-workflow-fields",
-		desc: "Blocks direct edits to workflow-managed frontmatter (status, phase, gate_outcome, bolt). Only the orchestrator may write these.",
+		desc: "Blocks direct Read/Write/Edit/MultiEdit on workflow-managed paths: `units/*.md`, `feedback/*.md`, `intent.md`, `stages/*/state.json`, and `.haiku/settings.yml`. The redirect message names the corresponding MCP tool (`haiku_unit_*`, `haiku_feedback_*`, `haiku_intent_set` / `haiku_intent_get`, `haiku_settings_set` / `haiku_settings_get`). Only the orchestrator may write these directly.",
 		fires: ["unit", "phase[elaborate]"],
 		file: "packages/haiku/src/hooks/guard-workflow-fields.ts",
 	},

@@ -1,0 +1,53 @@
+{
+  "stage": "development",
+  "status": "completed",
+  "phase": "gate",
+  "started_at": "2026-04-30T00:19:24Z",
+  "completed_at": "2026-04-30T22:34:43Z",
+  "gate_entered_at": null,
+  "gate_outcome": "advanced",
+  "visits": 1,
+  "iterations": [
+    {
+      "index": 1,
+      "started_at": "2026-04-30T00:19:25Z",
+      "completed_at": "2026-04-30T22:34:43Z",
+      "trigger": "initial",
+      "result": "advanced"
+    }
+  ],
+  "elaboration_turns": 6,
+  "decision_log": [
+    {
+      "decision": "Drift-detected banner control surface (passive vs interactive)",
+      "options": [
+        "Passive observer — read-only banner, no controls; reviewer just sees the system state (matches design-stage ARCHITECTURE.md §1 and SPA-UI-SPECS.md §0)",
+        "Interactive — include the 'Run now' button per DESIGN-BRIEF Screen 3 so the reviewer can manually trigger the next tick"
+      ],
+      "choice": "Passive observer — read-only banner, no controls; reviewer just sees the system state (matches design-stage ARCHITECTURE.md §1 and SPA-UI-SPECS.md §0)",
+      "source": "autonomous-acknowledged",
+      "rationale": "DESIGN-BRIEF Screen 3 specifies a 'Run now' button on the drift-detected banner, but design-stage ARCHITECTURE.md §1 (banner is a passive system-state indicator) and SPA-UI-SPECS.md §0 (passive-observer constraint) both forbid controls on this surface. When two design artifacts conflict, ARCHITECTURE.md wins on behavior because the SPA-UI-SPECS.md is derivative of the architecture and explicitly calls out the passive-observer constraint. Unit-13 omits the button. The DESIGN-BRIEF should be reconciled in a follow-up; flagging here so the user can veto if they actually want the interactive variant.",
+      "recorded_at": "2026-04-30T01:00:18Z"
+    },
+    {
+      "decision": "Upstream reconciliation acknowledged",
+      "options": [
+        "reconcile upstream artifacts",
+        "acknowledge divergence"
+      ],
+      "choice": "acknowledge divergence",
+      "source": "autonomous-acknowledged",
+      "rationale": "All four findings are intentional, not real divergences:\n\n1. The \"stone → 300/400/500\" HTTP-status finding is a false positive. \"stone\" is the Tailwind CSS neutral-color palette name, and 300/400/500/600/700 are Tailwind shade modifiers (e.g. `stone-300`, `stone-700`), not HTTP status codes. SPA-UI-SPECS.md and DESIGN-TOKENS.md use them consistently as Tailwind classes; the detector's HTTP-status heuristic pattern-matched the digit suffix incorrectly.\n\n2-4. The three field-name pairings (`acknowledged_by` ↔ `author_class` ↔ `author_type`) are three distinct fields on three different entity types, all of which the design intentionally retains:\n   - `acknowledged_by` lives on the **Baseline** state record (DATA-CONTRACTS.md §2.1) with the 3-value enum `\"agent\" | \"human\" | \"baseline-init\"` — it records *who acknowledged the baseline*, including the bootstrap case.\n   - `author_class` lives on **action-log entries** and **drift events** (ARCHITECTURE.md, MCP-TOOL-CONTRACT.md §6.2) with the 3-value enum `\"agent\" | \"human-via-mcp\" | \"human-implicit\"` — a deliberate refinement that distinguishes sanctioned-tool human writes from implicit filesystem drops at the event layer. The terminal-classification flow lossily collapses both human variants to `\"human\"` when it writes back to `Baseline.acknowledged_by`.\n   - `author_type` is the pre-existing **feedback** field whose vocabulary the data contract anchors against (DATA-CONTRACTS.md §1, line 29) — it is not introduced by this intent and is referenced solely so the new attribution vocabulary mirrors the existing one.\n\nThe three fields live on three separate persistent shapes (Baseline / action-log entry / Feedback), carry different enums, and serve different purposes (state acknowledgment vs. event attribution vs. feedback authorship). Unifying their names would erase the via-mcp/implicit distinction at the event layer or conflate baseline-acknowledgment state with write-event attribution. This layered design is captured explicitly in DATA-CONTRACTS.md §1 (canonical names), §2.1 (Baseline shape), ARCHITECTURE.md §3 (drift-detection flow), and MCP-TOOL-CONTRACT.md §6.2 (action-log entry shape).",
+      "kind": "upstream_reconciliation",
+      "recorded_at": "2026-04-30T12:39:02Z"
+    }
+  ],
+  "pre_review_dispatched": true,
+  "pre_review_dispatched_at": "2026-04-30T01:00:21Z",
+  "upstream_reconciliation_acknowledged": true,
+  "upstream_reconciliation_acknowledged_at": "2026-04-30T12:39:02Z",
+  "upstream_reconciliation_rationale": "All four findings are intentional, not real divergences:\n\n1. The \"stone → 300/400/500\" HTTP-status finding is a false positive. \"stone\" is the Tailwind CSS neutral-color palette name, and 300/400/500/600/700 are Tailwind shade modifiers (e.g. `stone-300`, `stone-700`), not HTTP status codes. SPA-UI-SPECS.md and DESIGN-TOKENS.md use them consistently as Tailwind classes; the detector's HTTP-status heuristic pattern-matched the digit suffix incorrectly.\n\n2-4. The three field-name pairings (`acknowledged_by` ↔ `author_class` ↔ `author_type`) are three distinct fields on three different entity types, all of which the design intentionally retains:\n   - `acknowledged_by` lives on the **Baseline** state record (DATA-CONTRACTS.md §2.1) with the 3-value enum `\"agent\" | \"human\" | \"baseline-init\"` — it records *who acknowledged the baseline*, including the bootstrap case.\n   - `author_class` lives on **action-log entries** and **drift events** (ARCHITECTURE.md, MCP-TOOL-CONTRACT.md §6.2) with the 3-value enum `\"agent\" | \"human-via-mcp\" | \"human-implicit\"` — a deliberate refinement that distinguishes sanctioned-tool human writes from implicit filesystem drops at the event layer. The terminal-classification flow lossily collapses both human variants to `\"human\"` when it writes back to `Baseline.acknowledged_by`.\n   - `author_type` is the pre-existing **feedback** field whose vocabulary the data contract anchors against (DATA-CONTRACTS.md §1, line 29) — it is not introduced by this intent and is referenced solely so the new attribution vocabulary mirrors the existing one.\n\nThe three fields live on three separate persistent shapes (Baseline / action-log entry / Feedback), carry different enums, and serve different purposes (state acknowledgment vs. event attribution vs. feedback authorship). Unifying their names would erase the via-mcp/implicit distinction at the event layer or conflate baseline-acknowledgment state with write-event attribution. This layered design is captured explicitly in DATA-CONTRACTS.md §1 (canonical names), §2.1 (Baseline shape), ARCHITECTURE.md §3 (drift-detection flow), and MCP-TOOL-CONTRACT.md §6.2 (action-log entry shape).",
+  "pre_review_reviewers_acknowledged": true,
+  "pre_review_reviewers_acknowledged_at": "2026-04-30T12:39:06Z",
+  "external_review_url": "https://github.com/gigsmart/haiku-method/pull/265"
+}

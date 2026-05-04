@@ -143,6 +143,23 @@ export const ApproveActionSchema = z
 	)
 export type ApproveAction = z.infer<typeof ApproveActionSchema>
 
+/** Auto-detected delivery PR/MR — populated by `discoverReviewUrl()`
+ *  in packages/haiku/src/discover-review-url.ts via raw git plumbing
+ *  (`git ls-remote origin 'refs/pull/<n>/head'` for GitHub or
+ *  `'refs/merge-requests/<n>/head'` for GitLab) when a published head
+ *  ref matches the intent main branch's HEAD SHA. Surfaced
+ *  informationally on terminal-intent screens; the engine never gates
+ *  on this — `isBranchMerged` against intent main is the only signal. */
+export const DiscoveredReviewUrlSchema = z
+	.object({
+		url: z.string(),
+		source: z.enum(["github-pr-ref", "gitlab-mr-ref"]),
+		prNumber: z.number().int().positive(),
+		matchedSha: z.string(),
+	})
+	.describe("PR/MR auto-discovered via raw git from a published head ref")
+export type DiscoveredReviewUrl = z.infer<typeof DiscoveredReviewUrlSchema>
+
 export const ReviewSessionPayloadSchema = z
 	.object({
 		session_id: z.string(),
@@ -167,6 +184,7 @@ export const ReviewSessionPayloadSchema = z
 		stage_artifacts: z.array(StageArtifactSchema).optional(),
 		output_artifacts: z.array(OutputArtifactSchema).optional(),
 		previous_review: PreviousReviewSnapshotSchema.optional(),
+		discovered_review_url: DiscoveredReviewUrlSchema.nullable().optional(),
 		/** Ad-hoc sessions are opened on demand via `haiku_review_open`
 		 *  (not a gate). The UI hides Approve and shows an "Ad-hoc
 		 *  review" badge instead of the session short-id. Feedback left

@@ -8,6 +8,7 @@
 
 import { MarkdownViewer } from "@haiku/shared"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { IntentDriftAssessmentsSection } from "../../../pages/review/IntentDriftAssessmentsSection"
 import { useReviewContext } from "./-context"
 
 function IntentOverviewRoute(): React.ReactElement {
@@ -168,6 +169,13 @@ function IntentOverviewRoute(): React.ReactElement {
 						</p>
 					)}
 				</div>
+
+				{/* Drift-assessments history — fetches `/api/intents/:intent/assessments`
+				    on mount; renders the empty state until results arrive. Per
+				    SPA-UI-SPECS §4. */}
+				{intent?.slug && (
+					<IntentDriftAssessmentsSection intentSlug={intent.slug} />
+				)}
 			</div>
 		</>
 	)

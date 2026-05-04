@@ -73,8 +73,8 @@ export function resolvePluginRoot(): string {
 	}
 
 	// 2. Self-resolve from binary location
-	// The esbuild bundle runs as plugin/bin/haiku. In the bundled binary,
-	// process.argv[1] is the absolute path to the binary.
+	// The esbuild bundle runs as plugin/bin/haiku.mjs. In the bundled
+	// binary, process.argv[1] is the absolute path to the bundle file.
 	const fromArgv = tryResolveFromPath(process.argv[1])
 	if (fromArgv) {
 		_pluginRoot = fromArgv
@@ -110,9 +110,9 @@ export function resolvePluginRoot(): string {
 /** Walk up from a binary or module path until we find a directory that
  *  looks like the plugin root (has `studios/` or `.claude-plugin/plugin.json`).
  *  Returns null when no candidate validates. Walks up to 6 levels so the
- *  same helper handles both the bundled binary (`plugin/bin/haiku`, 2 levels
- *  up) and the source layout during dev (`packages/haiku/src/config.ts`,
- *  more levels up). */
+ *  same helper handles both the bundled binary (`plugin/bin/haiku.mjs`,
+ *  2 levels up) and the source layout during dev
+ *  (`packages/haiku/src/config.ts`, more levels up). */
 function tryResolveFromPath(start: string | undefined): string | null {
 	if (!start) return null
 	let current = dirname(start)
@@ -185,17 +185,6 @@ export function stripWildcardAllowedOrigins(): number {
 		review.allowedOrigins.push(...cleaned)
 	}
 	return stripped
-}
-
-/** Auto-update configuration. */
-export const autoUpdate = {
-	/** Kill-switch: set HAIKU_AUTO_UPDATE=0 to disable. */
-	enabled: flag("HAIKU_AUTO_UPDATE", true),
-	/** How often to poll GitHub releases (ms). Default 30 min. */
-	intervalMs: Number(str("HAIKU_UPDATE_INTERVAL_MS", "1800000")) || 1_800_000,
-	/** Delay before the first check (ms). Default 60 s. */
-	initialDelayMs:
-		Number(str("HAIKU_UPDATE_INITIAL_DELAY_MS", "60000")) || 60_000,
 }
 
 /**

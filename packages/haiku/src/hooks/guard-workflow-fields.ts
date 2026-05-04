@@ -31,7 +31,15 @@ function out(s: string): void {
 }
 
 interface WorkflowPathClassification {
-	kind: "unit" | "feedback" | "intent" | "stage_state" | null
+	kind:
+		| "unit"
+		| "feedback"
+		| "intent"
+		| "stage_state"
+		| "settings"
+		| "baseline_ack"
+		| "baseline_thrash"
+		| null
 	intent?: string
 	stage?: string
 	name?: string // unit name or feedback id (without .md)
@@ -69,6 +77,27 @@ function classifyPath(absPath: string): WorkflowPathClassification {
 	}
 	if (/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/state\.json$/.test(absPath)) {
 		return { kind: "stage_state" }
+	}
+	// V-11: operator-only baseline-corrupt acknowledgement marker. Only
+	// /haiku:repair --confirm-baseline-reset (operator-driven) may
+	// place this; the agent has no path. Block both reads and writes
+	// — a reader could leak the diff hash to an attacker chain.
+	if (/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/\.baseline-ack$/.test(absPath)) {
+		return { kind: "baseline_ack" }
+	}
+	// V-11: baseline-corruption thrash counter. Workflow-engine-managed.
+	if (
+		/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/baseline-thrash\.json$/.test(
+			absPath,
+		)
+	) {
+		return { kind: "baseline_thrash" }
+	}
+	// `.haiku/settings.yml` (project root config) — and anchor on the
+	// trailing segment to avoid false positives on `.haiku/intents/<x>/settings.yml`
+	// or unrelated paths that happen to contain "settings.yml".
+	if (/(?:^|\/)\.haiku\/settings\.yml$/.test(absPath)) {
+		return { kind: "settings" }
 	}
 	return { kind: null }
 }
@@ -138,6 +167,37 @@ function redirectMessage(
 			`is workflow engine-internal — every legitimate write happens via haiku_run_next or a ` +
 			`dedicated MCP tool. Hand-editing breaks the integrity checksum and the ` +
 			`forward-only lifecycle invariants.`
+		)
+	}
+	if (cls.kind === "baseline_ack") {
+		return (
+			`BLOCKED: Cannot ${op} .baseline-ack via generic ${toolName}. This is the V-11 ` +
+			`operator-only baseline-corrupt acknowledgement marker. Only ` +
+			`/haiku:repair --confirm-baseline-reset --diff-shown --confirm-diff-hash <sha> ` +
+			`(operator-driven) may write it; the agent has no path here. Reads are also ` +
+			`blocked because the diff hash leaking to an attacker chain would let them ` +
+			`forge a valid-looking ack.`
+		)
+	}
+	if (cls.kind === "baseline_thrash") {
+		return (
+			`BLOCKED: Cannot ${op} baseline-thrash.json via generic ${toolName}. This is the ` +
+			`V-11 baseline-corruption circuit-breaker counter — workflow-engine-managed. ` +
+			`Letting the agent reset it would let an attacker zero out the thrash detector ` +
+			`right before each corruption attempt.`
+		)
+	}
+	if (cls.kind === "settings") {
+		const tool =
+			op === "read"
+				? `haiku_settings_get { field: "..." }`
+				: `haiku_settings_set { field: "...", value: ... }`
+		return (
+			`BLOCKED: Cannot ${op} .haiku/settings.yml via generic ${toolName}. Settings ` +
+			`are schema-managed against plugin/schemas/settings.schema.json — use the MCP tool instead:\n` +
+			`  ${tool}\n` +
+			`Generic file access skips schema validation and can drop settings into a shape ` +
+			`the engine refuses to load.`
 		)
 	}
 	return ""

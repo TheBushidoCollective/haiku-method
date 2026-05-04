@@ -50,6 +50,7 @@ import {
 	listVisibleIntents,
 	parseFrontmatter,
 } from "../state-tools.js"
+import { orchestratorToolHandlers } from "../tools/orchestrator/index.js"
 import {
 	buildReviewUrl,
 	clearE2EKey,
@@ -239,18 +240,13 @@ export async function handleToolCall(
 ) {
 	const { name, arguments: args } = request.params
 
-	// Orchestration tools. haiku_await_gate is the only one that
+	// Orchestration tools. The set is sourced from the registry
+	// (`orchestratorToolHandlers`) so any new tool added under
+	// tools/orchestrator/ auto-routes here without a second
+	// registration. `haiku_await_gate` is the only tool here that
 	// blocks for an extended period (waits on the gate-review session
 	// for up to 30 minutes); the others return promptly.
-	if (
-		name === "haiku_run_next" ||
-		name === "haiku_await_gate" ||
-		name === "haiku_intent_create" ||
-		name === "haiku_select_studio" ||
-		name === "haiku_intent_reset" ||
-		name === "haiku_intent_archive" ||
-		name === "haiku_intent_unarchive"
-	) {
+	if (orchestratorToolHandlers.has(name)) {
 		return handleOrchestratorTool(
 			name,
 			(args ?? {}) as Record<string, unknown>,
@@ -995,9 +991,7 @@ export async function prepareGateReviewSession(
 			s.heading?.toLowerCase().includes("completion criteria") ||
 			s.heading?.toLowerCase().includes("success criteria"),
 	)
-	const criteria = criteriaSection
-		? parseCriteria(criteriaSection.content)
-		: []
+	const criteria = criteriaSection ? parseCriteria(criteriaSection.content) : []
 
 	const session = createSession({
 		intent_dir: intentDirAbs,

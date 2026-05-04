@@ -11,10 +11,15 @@
 
 import type { ToolDef } from "../types.js"
 import haiku_await_gate from "./haiku_await_gate.js"
+import haiku_baseline_init from "./haiku_baseline_init.js"
+import haiku_classify_drift from "./haiku_classify_drift.js"
+import haiku_coverage_acknowledge from "./haiku_coverage_acknowledge.js"
+import haiku_human_write from "./haiku_human_write.js"
 import haiku_intent_archive from "./haiku_intent_archive.js"
 import haiku_intent_create from "./haiku_intent_create.js"
 import haiku_intent_reset from "./haiku_intent_reset.js"
 import haiku_intent_unarchive from "./haiku_intent_unarchive.js"
+import haiku_record_agent_write from "./haiku_record_agent_write.js"
 import haiku_run_next from "./haiku_run_next.js"
 import haiku_select_studio from "./haiku_select_studio.js"
 
@@ -22,10 +27,15 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 	(
 		[
 			haiku_await_gate,
+			haiku_baseline_init,
+			haiku_classify_drift,
+			haiku_coverage_acknowledge,
+			haiku_human_write,
 			haiku_intent_archive,
 			haiku_intent_create,
 			haiku_intent_reset,
 			haiku_intent_unarchive,
+			haiku_record_agent_write,
 			haiku_run_next,
 			haiku_select_studio,
 		] satisfies ToolDef[]

@@ -45,6 +45,7 @@ import {
 	resolveStageMetadata,
 	resolveStageReview,
 	summarizeFeedback,
+	validateCumulativeInputCoverage,
 	validateDiscoveryArtifacts,
 	validateUnitInputs,
 	validateUnitNaming,
@@ -672,6 +673,24 @@ const emit: WorkflowHandler = (ctx) => {
 
 	const inputsViolation = validateUnitInputs(iDir, currentStage)
 	if (inputsViolation) return inputsViolation
+
+	// Cumulative input coverage — every prior-stage output MUST be
+	// referenced by some current-stage unit's `inputs:` OR explicitly
+	// acknowledged via `haiku_coverage_acknowledge`. Catches the
+	// silent-skip class of failure (e.g., dev stage drops design's SPA
+	// spec, ships components no one renders). Fires after the per-unit
+	// inputs-empty check and before adversarial-spec-review dispatch so
+	// reviewers see fully-coverage-resolved units.
+	const studioStagesForCoverage = resolveIntentStages(intent, studio)
+	const currentIdx = studioStagesForCoverage.indexOf(currentStage)
+	const priorStagesForCoverage =
+		currentIdx > 0 ? studioStagesForCoverage.slice(0, currentIdx) : []
+	const coverageViolation = validateCumulativeInputCoverage(
+		iDir,
+		currentStage,
+		priorStagesForCoverage,
+	)
+	if (coverageViolation) return coverageViolation
 
 	// Design direction selection enforcement
 	const designDirectionSelected =

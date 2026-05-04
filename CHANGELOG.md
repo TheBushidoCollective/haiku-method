@@ -10,6 +10,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Gate-review approval now travels through chat: when a stage gate is hit, the orchestrator prepares the review session and surfaces the URL in the `gate_review` action so the agent can post it to the user; a new `haiku_await_gate` tool then opens the URL best-effort and blocks on the user's decision. Same pattern applies to `ask_user_visual_question` (paired with new `haiku_await_visual_answer`) and `pick_design_direction` (paired with new `haiku_await_design_direction`). This unblocks remote control, headless / SSH hosts, mobile chat clients, and any environment where the MCP host can't auto-launch the user's browser. Pass `auto_open: false` on the await tools when the user is reviewing on a different device.
 
+## [3.7.0] - 2026-05-04
+
+### Added
+- Elaborator now surfaces available skills during elaboration, and units inherit skill availability on a per-hat basis for role-specific tool access.
+
+## [3.6.1] - 2026-05-04
+
+### Changed
+- Plugin binary is now bundled with the distribution, reducing installation time and improving reliability across network conditions.
+- Marketplace references now use relative paths for better offline support.
+
+## [3.6.0] - 2026-05-04
+
+### Added
+- Drift detection now shows image diffs side-by-side with text changes, letting you review visual artifact modifications during code review.
+- Agents can record file modifications with attribution using `haiku_record_agent_write`, creating audit trails for generated content.
+
+## [3.5.0] - 2026-05-04
+
+### Added
+- Drift detection alerts you when outputs change unexpectedly, with assessment interface to classify and approve changes
+- Knowledge upload during review lets you inject new files or context without restarting the intent
+- One-click output replacement for invalidated results in the review view
+- Coverage gap acknowledgment to mark sections intentionally out-of-scope
+
 ## [3.4.1] - 2026-05-03
 
 This release contains only internal test coverage improvements with no user-facing changes to report.

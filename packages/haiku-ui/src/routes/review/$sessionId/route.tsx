@@ -46,6 +46,7 @@ import { FeedbackSheet } from "../../../organisms/FeedbackSheet"
 import type { InlineCommentEntry } from "../../../organisms/InlineComments"
 import { FeedbackPanelBody } from "../../../pages/review/FeedbackPanelBody"
 import { FeedbackSidebar } from "../../../pages/review/FeedbackSidebar"
+import { IntentCompleteView } from "../../../pages/review/IntentCompleteView"
 import type { ReviewPageSessionData } from "../../../pages/review/shared/session-data"
 import { useFeedbackSidebarController } from "../../../pages/review/useFeedbackSidebarController"
 import { useIsMobile } from "../../../pages/review/useIsMobile"
@@ -304,6 +305,44 @@ function ReviewLayoutLoaded({
 		}
 	})
 
+	// Intent-terminal detection: when intent is in
+	// `awaiting_completion_review` or `status: completed`, the per-stage
+	// review pane has nothing meaningful to render (every stage is done;
+	// no "current" stage). Render IntentCompleteView instead. The merge
+	// into mainline is the only remaining action.
+	const intentFm = session.intent?.frontmatter
+	const intentStatus = (intentFm?.status as string | undefined) ?? ""
+	const intentPhase = (intentFm?.phase as string | undefined) ?? ""
+	const isIntentTerminal =
+		intentStatus === "completed" ||
+		intentPhase === "awaiting_completion_review" ||
+		intentPhase === "intent_completion"
+	// When terminal, blank out the chrome's "selected stage" so the
+	// FeedbackSidebar renders an Intent header (not "Security current")
+	// and the stepper doesn't highlight the last stage as "viewing." The
+	// sidebar already falls back to "Intent" when stage is null.
+	const chromeSelectedStage = isIntentTerminal ? null : selectedStage
+	const chromeViewingStage = isIntentTerminal ? "" : (selectedStage ?? "")
+	const stageNamesOrdered = orderedStageNames
+	// Surface any external_review_url recorded in stage state — the
+	// agent records the delivery PR URL via
+	// `haiku_run_next { external_review_url }` on the
+	// `external_review_requested` action. Under autopilot intent
+	// completion the URL lands on the last stage's state. Pick the
+	// most-recently-set URL across stages (later stages win when
+	// multiple are set) so the screen always shows the delivery PR
+	// rather than an earlier per-stage PR.
+	let deliveryReviewUrl: string | null = null
+	for (const name of orderedStageNames) {
+		const s = stageStates[name] as { external_review_url?: string } | undefined
+		if (s?.external_review_url) deliveryReviewUrl = s.external_review_url
+	}
+	// Auto-detected PR/MR URL — populated by the session API via raw
+	// git (`git ls-remote origin 'refs/pull/<n>/head'` etc). Used as a
+	// fallback when the agent never recorded an explicit URL. The
+	// engine never gates on this — it's informational only.
+	const discoveredReviewUrl = session.discovered_review_url ?? null
+
 	const contextValue: ReviewRouteContextValue = useMemo(
 		() => ({
 			session: session,
@@ -404,8 +443,10 @@ function ReviewLayoutLoaded({
 						{stageProgressData.length > 0 && (
 							<StageProgressStrip
 								stages={stageProgressData}
-								currentStage={activeStage ?? ""}
-								viewingStage={viewingIntent ? "" : (selectedStage ?? "")}
+								currentStage={isIntentTerminal ? "" : (activeStage ?? "")}
+								viewingStage={
+									viewingIntent || isIntentTerminal ? "" : chromeViewingStage
+								}
 								onStageClick={(name) =>
 									navigate({
 										to: "/review/$sessionId/stages/$stage",
@@ -422,9 +463,10 @@ function ReviewLayoutLoaded({
 					>
 						{!isMobile && (
 							<FeedbackSidebar
-								stage={selectedStage}
-								activeStage={activeStage}
+								stage={chromeSelectedStage}
+								activeStage={isIntentTerminal ? null : activeStage}
 								sessionId={sessionId}
+								intentSlug={intentSlug ?? undefined}
 								intentTitle={session.intent?.title}
 								gateBadges={gateBadges}
 								gateType={session.gate_type}
@@ -458,6 +500,18 @@ function ReviewLayoutLoaded({
 										}
 									/>
 								</div>
+							) : isIntentTerminal && intentSlug ? (
+								<IntentCompleteView
+									intentSlug={intentSlug}
+									intentTitle={session.intent?.title ?? intentSlug}
+									intentFrontmatter={
+										session.intent?.frontmatter ?? { status: "" }
+									}
+									stageStates={stageStates}
+									stageOrder={stageNamesOrdered}
+									deliveryReviewUrl={deliveryReviewUrl}
+									discoveredReviewUrl={discoveredReviewUrl}
+								/>
 							) : (
 								<Outlet />
 							)}

@@ -1,90 +1,14 @@
 #!/usr/bin/env bash
-# Pin the primary worktree to the default branch.
+# No-op. The primary worktree is no longer pinned to the default branch.
 #
-# When a checkout in the primary tries to land on a non-default branch,
-# the hook:
-#   1. bounces the primary back to the default branch
-#   2. creates a linked worktree for the target branch (if one doesn't
-#      already exist), under .claude/worktrees/<sanitized-branch>
+# Branch protection now lives in pre-commit (which blocks commits on the
+# default branch regardless of worktree). Checkouts are unrestricted, so
+# the primary worktree can sit on any feature branch — useful when the
+# MCP runtime or another tool needs the primary's working tree to match
+# a specific branch's state (e.g. drift baseline + dev/plugin symlink
+# living on a feature branch).
 #
-# Linked worktrees are unaffected. There is no bypass — that's the point.
+# Kept as a present-but-empty hook file so future logic can be slotted
+# in without re-arguing the existence of the file.
 
-set -e
-
-branch_flag="$3"
-
-# Only branch checkouts. File-level checkouts pass flag 0.
-[ "$branch_flag" = "1" ] || exit 0
-
-# Skip linked worktrees — only enforce in the primary.
-git_dir=$(git rev-parse --git-dir)
-common_dir=$(git rev-parse --git-common-dir)
-abs_git_dir=$(cd "$git_dir" && pwd)
-abs_common_dir=$(cd "$common_dir" && pwd)
-[ "$abs_git_dir" = "$abs_common_dir" ] || exit 0
-
-# Resolve default branch from origin/HEAD; fall back to main.
-default_branch=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)
-default_branch=${default_branch:-main}
-
-# Detached HEAD returns empty.
-target_branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
-
-[ "$target_branch" = "$default_branch" ] && exit 0
-
-# Step 1 — bounce primary back to default. This also releases the target
-# branch so we can claim it for a linked worktree.
-git checkout --quiet "$default_branch"
-
-primary_root=$(git rev-parse --show-toplevel)
-
-# Detached-HEAD case: no branch to worktree.
-if [ -z "$target_branch" ]; then
-  cat >&2 <<EOF
-
-✋ primary worktree pinned to '$default_branch' — bounced back from (detached HEAD).
-   detached-HEAD checkouts can't be auto-worktreed. To pick up that commit:
-       git worktree add -b <branch> $primary_root/.claude/worktrees/<dir> <sha>
-EOF
-  exit 0
-fi
-
-# Step 2 — find existing worktree for the target branch, or create one.
-target_ref="refs/heads/$target_branch"
-existing=$(git worktree list --porcelain | awk -v b="$target_ref" '
-  /^worktree / { wt=substr($0, 10); next }
-  /^branch / { if ($2 == b) print wt; next }
-')
-
-if [ -n "$existing" ]; then
-  cat >&2 <<EOF
-
-✋ primary worktree pinned to '$default_branch' — bounced back from '$target_branch'.
-   worktree already exists for that branch:
-       cd "$existing"
-EOF
-  exit 0
-fi
-
-# Sanitize branch name into a directory name.
-worktree_name=$(printf '%s' "$target_branch" | tr '/' '-')
-worktree_dir="$primary_root/.claude/worktrees/$worktree_name"
-
-mkdir -p "$primary_root/.claude/worktrees"
-
-worktree_err=$(git worktree add --quiet "$worktree_dir" "$target_branch" 2>&1) && {
-  cat >&2 <<EOF
-
-✋ primary worktree pinned to '$default_branch' — bounced back from '$target_branch'.
-   created linked worktree:
-       cd "$worktree_dir"
-EOF
-} || {
-  cat >&2 <<EOF
-
-✋ primary worktree pinned to '$default_branch' — bounced back from '$target_branch'.
-   tried to auto-create worktree at: $worktree_dir
-   (failed — ${worktree_err:-path may already exist or branch is held by another worktree};
-    run \`git worktree list\` to inspect)
-EOF
-}
+exit 0

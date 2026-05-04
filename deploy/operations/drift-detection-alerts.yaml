@@ -1,0 +1,244 @@
+# Alerts — Drift detection + upstream reconciliation
+#
+# Backend-portable alert spec. Each alert names a CAUSE (per SRE hat
+# directive: "MUST NOT alert on symptoms instead of causes") and links
+# to a runbook entry. Burn-rate alerts use the multi-window
+# multi-burn-rate pattern from the Google SRE Workbook so the same SLO
+# generates a fast page (1h/6h burn) and a slow ticket (6h/24h burn).
+#
+# Routing:
+#   severity=page  → PagerDuty (oncall) — fast burn, hard outage
+#   severity=ticket → JIRA / GitHub Issues — slow burn, capacity warning
+#   severity=info  → Slack #haiku-ops — saturation trend, no action yet
+#
+# Every alert MUST have a `runbook` URL. An alert without a runbook is
+# alert fatigue waiting to happen.
+
+alerts:
+  # ─────────────────────────────────────────────────────────────────
+  # PAGE-WORTHY (cause: gate is broken, every active intent at risk)
+  # ─────────────────────────────────────────────────────────────────
+  - id: drift-baseline-corrupt
+    severity: page
+    title: Drift gate baseline file is corrupt
+    cause: >
+      `.haiku/intents/<slug>/stages/<stage>/baseline.json` failed JSON parse
+      or schema validation in the drift gate.
+    fires_when: |
+      sum by (intent_slug, stage) (rate(haiku.drift.baseline.corrupt[5m])) > 0
+    rationale: >
+      A corrupt baseline halts drift detection for that intent until manual
+      repair. Fires on the cause (corrupt file) not the symptom (stale
+      detection) because the symptom is invisible.
+    runbook: .haiku/knowledge/RUNBOOK.md#drift-gate-baseline-corrupt
+
+  - id: drift-baseline-write-failed
+    severity: page
+    title: Drift gate cannot write baseline
+    cause: >
+      `writeBaselineSync` rethrew a filesystem error — disk full, EACCES,
+      EROFS, or filesystem corruption. The gate now refuses to silently
+      swallow these.
+    fires_when: |
+      sum by (intent_slug, stage) (rate(haiku.drift.baseline.write_failed[10m])) > 0
+    rationale: >
+      Direct cause is filesystem fault. Symptom (gate runs but never
+      persists baseline) would loop forever silently — pre-rethrow that
+      was the actual production behavior.
+    runbook: .haiku/knowledge/RUNBOOK.md#drift-gate-write-failed
+
+  - id: reconciliation-write-failed
+    severity: page
+    title: Upstream reconciliation cannot persist fingerprint
+    cause: >
+      `state.json` write of `upstream_reconciliation_fingerprint` failed.
+      Same fault class as drift-baseline-write-failed, different file.
+    fires_when: |
+      sum by (intent_slug, stage) (rate(haiku.reconciliation.fingerprint.write_failed[10m])) > 0
+    runbook: .haiku/knowledge/RUNBOOK.md#reconciliation-write-failed
+
+  - id: pii-deny-list-strip
+    severity: page
+    title: Telemetry PII deny-list stripped an attribute
+    cause: >
+      A code path attempted to emit a body-shaped attribute
+      (diff_unified, excerpt, *_body, content, etc.) into telemetry.
+      Runtime gate stripped it; static CI gate did not catch it.
+    fires_when: |
+      sum(rate(pii.deny.strip[1h])) > 0
+    rationale: >
+      Privacy regression. Every strip is a bug — either the static CI
+      gate has a hole or a new emit site bypassed it.
+    runbook: .haiku/knowledge/RUNBOOK.md#pii-deny-list-strip
+
+  # ─────────────────────────────────────────────────────────────────
+  # BURN-RATE PAGES (multi-window per SRE Workbook)
+  # ─────────────────────────────────────────────────────────────────
+  - id: drift-availability-fast-burn
+    severity: page
+    title: Drift gate availability burning fast
+    slo: drift-gate-availability
+    cause: >
+      Multi-window multi-burn-rate trigger: 1h burn × 14.4 AND 6h burn × 6
+      both exceed the threshold. Indicates an active outage of the gate.
+    fires_when: |
+      (slo_burn_rate{slo="drift-gate-availability", window="1h"} > 14.4)
+      AND
+      (slo_burn_rate{slo="drift-gate-availability", window="6h"} > 6)
+    runbook: .haiku/knowledge/RUNBOOK.md#drift-gate-availability-burn
+
+  - id: drift-availability-slow-burn
+    severity: ticket
+    title: Drift gate availability budget eroding
+    slo: drift-gate-availability
+    cause: >
+      Multi-window slow-burn trigger: 6h burn × 6 AND 24h burn × 1 both
+      exceed threshold. Indicates a steady leak — investigate within the
+      week.
+    fires_when: |
+      (slo_burn_rate{slo="drift-gate-availability", window="6h"} > 6)
+      AND
+      (slo_burn_rate{slo="drift-gate-availability", window="24h"} > 1)
+    runbook: .haiku/knowledge/RUNBOOK.md#drift-gate-availability-burn
+
+  # ─────────────────────────────────────────────────────────────────
+  # LATENCY (latency degradation is a cause, not a symptom — it points
+  # at surface saturation or filesystem slowness)
+  # ─────────────────────────────────────────────────────────────────
+  - id: drift-gate-latency-p95-high
+    severity: ticket
+    title: Drift gate p95 latency exceeds SLO — intent {{ $labels.intent_slug }} / stage {{ $labels.stage }}
+    slo: drift-gate-latency-p95
+    cause: >
+      p95 of `haiku.drift.gate.duration_ms` over 1h > 500ms for a given
+      `(intent_slug, stage)` series. Likely root cause: surface size
+      growth (correlate with `haiku.drift.surface.size` filtered to the
+      same labels) or filesystem degradation. Per the unit-02
+      cross-artifact contract, this alert MUST aggregate
+      `by (intent_slug, stage)` so the page identifies which intent is
+      slow without requiring the operator to re-aggregate manually.
+    fires_when: |
+      histogram_quantile(0.95, sum by (intent_slug, stage, le) (rate(haiku.drift.gate.duration_ms_bucket[1h]))) > 500
+    annotations:
+      summary: >
+        Drift gate p95 latency > 500ms on intent={{ $labels.intent_slug }}
+        stage={{ $labels.stage }}. Operator must check this intent's
+        surface size before re-aggregating.
+    runbook: .haiku/knowledge/RUNBOOK.md#drift-gate-latency-high
+
+  - id: reconciliation-fingerprint-latency-p95-high
+    severity: ticket
+    title: Reconciliation fingerprint p95 latency exceeds SLO — intent {{ $labels.intent_slug }} / stage {{ $labels.stage }}
+    slo: reconciliation-fingerprint-latency-p95
+    cause: >
+      p95 of `haiku.reconciliation.fingerprint.duration_ms` over 1h >
+      750ms for a given `(intent_slug, stage)` series. Correlate with
+      `haiku.reconciliation.corpus.bytes` filtered to the same labels
+      to confirm corpus growth vs. filesystem slowdown. Per the unit-02
+      cross-artifact contract, this alert MUST aggregate
+      `by (intent_slug, stage)` so the page identifies which intent is
+      slow without requiring the operator to re-aggregate manually.
+    fires_when: |
+      histogram_quantile(0.95, sum by (intent_slug, stage, le) (rate(haiku.reconciliation.fingerprint.duration_ms_bucket[1h]))) > 750
+    annotations:
+      summary: >
+        Reconciliation fingerprint p95 latency > 750ms on
+        intent={{ $labels.intent_slug }} stage={{ $labels.stage }}.
+        Operator must check this intent's corpus size before
+        re-aggregating.
+    runbook: .haiku/knowledge/RUNBOOK.md#reconciliation-latency-high
+
+  # ─────────────────────────────────────────────────────────────────
+  # FIDELITY-LOSS TICKETS (per-file detail collapsed; detection still works)
+  # ─────────────────────────────────────────────────────────────────
+  - id: drift-findings-mass-synthesized
+    severity: ticket
+    title: Drift gate synthesized findings — > 50% of surface drifted in one tick
+    cause: >
+      More than 50% of the tracked surface for an intent/stage drifted
+      in a single tick. The gate collapsed the per-file findings into
+      one synthetic stage-level event (see `drift-detection-gate.ts`
+      §9). This is NOT a surface-size or memory-cap event — it triggers
+      on drift volume relative to surface, regardless of absolute
+      surface size. Typical causes: bulk regeneration script, `git
+      rebase`, large refactor, or an upstream tool rewriting the
+      majority of tracked files. Per-file diff fidelity is lost for
+      this tick; detection itself still works.
+    fires_when: |
+      sum by (intent_slug, stage) (rate(haiku.drift.findings.mass_synthesized[1d])) > 0
+    runbook: .haiku/knowledge/RUNBOOK.md#drift-findings-mass-synthesized
+
+  - id: drift-markers-stale-burst
+    severity: info
+    title: Stale drift markers being removed in volume
+    cause: >
+      `haiku.drift.markers.stale_removed` count over 1d > 10. Suggests
+      humans are touching files and reverting, or an upstream tool is
+      churning the surface.
+    fires_when: |
+      sum by (intent_slug, stage) (rate(haiku.drift.markers.stale_removed[1d])) > 10
+    runbook: .haiku/knowledge/RUNBOOK.md#drift-markers-churn
+
+  - id: kill-switch-engaged
+    severity: ticket
+    title: Drift gate kill-switch engaged
+    cause: >
+      `drift_detection: false` is set in `.haiku/settings.yml` (read by
+      `isDriftDetectionDisabled` in
+      `packages/haiku/src/orchestrator/workflow/drift-baseline.ts:723`).
+      Detection is OFF — this is intentional but should not stay on
+      indefinitely.
+    fires_when: |
+      sum by (intent_slug, stage) (rate(haiku.drift.gate.kill_switch_hit[1h])) > 0
+    runbook: .haiku/knowledge/RUNBOOK.md#kill-switch-engaged
+
+  # ─────────────────────────────────────────────────────────────────
+  # ASSESSMENTS DISPATCH (not an error — a usage signal)
+  # ─────────────────────────────────────────────────────────────────
+  - id: assessments-zero-completion
+    severity: info
+    title: Drift assessments fired but never completed
+    cause: >
+      `haiku.drift.assessments.count` ticks up but assessment files in
+      `stages/<s>/drift-assessments/` are not consumed. Suggests the
+      agent is dispatching but not finishing — possible loop.
+    fires_when: |
+      # Compound: assessments dispatched (count) without a paired
+      # resolution event (resolved) over a 6h window. Both metrics share
+      # `intent_slug` + `stage` labels so series pair cleanly. The
+      # resolution event is emitted by haiku_classify_drift.ts at the
+      # same point AS-NN.json is written; an unresolved assessment
+      # therefore means the agent never finished classifying.
+      sum by (intent_slug, stage) (rate(haiku.drift.assessments.count[6h])) > 0
+      AND
+      sum by (intent_slug, stage) (rate(haiku.drift.assessments.resolved[6h])) == 0
+    runbook: .haiku/knowledge/RUNBOOK.md#assessments-stuck
+    notes: >
+      `haiku.drift.assessments.resolved` is emitted by
+      packages/haiku/src/tools/orchestrator/haiku_classify_drift.ts at
+      the same site as `haiku.assessment.recorded`. A firing alert
+      indicates the agent dispatched an assessment but classification
+      never completed — true loop or stuck-agent signal, not a
+      telemetry gap.
+
+# ─────────────────────────────────────────────────────────────────────
+# Anti-patterns rejected during alert design (per SRE hat directive):
+#
+# REJECTED: Alert on individual `haiku.drift.findings.count > 0`.
+#   Reason: findings are the GOOD path — drift was detected and the agent
+#   will assess. Alerting on individual findings is symptom-alerting,
+#   guaranteed alert fatigue. The gate is doing its job.
+#
+# REJECTED: Page on every `haiku.drift.markers.suppressed_count > 0`.
+#   Reason: suppression is intentional (kill-switch markers, stage-replay
+#   suppression). Volume churn is captured by drift-markers-stale-burst at
+#   info severity instead.
+#
+# REJECTED: Page on `haiku.drift.gate.duration_ms` outliers.
+#   Reason: a single slow tick is noise. p95 over 1h is the right
+#   aggregation — captures sustained degradation, ignores transients.
+#
+# REJECTED: Generic "page the oncall" runbook entry.
+#   Reason: every alert names the runbook section with diagnostic +
+#   remediation steps. No alert routes to a vague human handoff.
+# ─────────────────────────────────────────────────────────────────────

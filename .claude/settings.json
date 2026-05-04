@@ -1,20 +1,20 @@
 {
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "CLAUDE_PLUGIN_ROOT": "plugin",
-    "HAIKU_AUTO_UPDATE": "0"
+    "CLAUDE_PLUGIN_ROOT": "plugin"
   },
   "enabledPlugins": {
-    "haiku@haiku": true,
     "core@han": true,
-    "bushido@han": true
+    "bushido@han": true,
+    "haiku@haiku-dev": true
   },
   "extraKnownMarketplaces": {
-    "haiku": {
+    "haiku-dev": {
       "source": {
         "source": "directory",
-        "path": "."
-      }
+        "path": "./dev"
+      },
+      "autoUpdate": true
     },
     "han": {
       "source": {

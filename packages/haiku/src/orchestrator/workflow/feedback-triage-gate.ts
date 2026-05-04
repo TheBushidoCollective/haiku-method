@@ -44,7 +44,12 @@
 // confirmation — don't dead-lock the workflow.
 
 import type { OrchestratorAction } from "../../orchestrator.js"
-import { type FeedbackItem, readFeedbackFiles } from "../../state-tools.js"
+import {
+	type FeedbackItem,
+	gitCommitState,
+	readFeedbackFiles,
+} from "../../state-tools.js"
+import { emitTelemetry } from "../../telemetry.js"
 import {
 	buildFeedbackDispatchAction,
 	classifyPendingForRevisit,
@@ -52,6 +57,7 @@ import {
 } from "../revisit.js"
 import { resolveIntentStages } from "../studio.js"
 import type { DerivedContext } from "./derive-state.js"
+import { dispatchFixChains } from "./fix-chain-dispatch.js"
 
 /** A feedback item that's still open + the stage it lives on. */
 interface OpenFeedbackOnStage {
@@ -270,6 +276,47 @@ export function preTickFeedbackGate(
 			classification.inlineFixes.length > 0 ||
 			classification.stageRevisits.length > 0
 		) {
+			// Inline-fix items get the same `review_fix` dispatch the gate
+			// handler uses in gate phase. Without this, non-gate-phase
+			// inline fixes would land in `buildFeedbackDispatchAction`'s
+			// text-only instruction — telling the agent to "run ONE bolt of
+			// fix_hats" but producing no per-FB prompt files, no worktree,
+			// no bolt increment. The agent would have no runnable artifact
+			// to spawn, and the workflow would loop on `feedback_dispatch`
+			// forever. Triage / question / stage_revisit items still flow
+			// through the text-only dispatch action — those need agent
+			// judgment, not fix-hat work.
+			if (
+				classification.inlineFixes.length > 0 &&
+				classification.needsTriage.length === 0 &&
+				classification.questions.length === 0 &&
+				classification.stageRevisits.length === 0
+			) {
+				const dispatch = dispatchFixChains({
+					slug,
+					studio: context.studio,
+					stage: currentStage,
+					pendingItems: classification.inlineFixes,
+				})
+				if (dispatch) {
+					if (dispatch.action === "review_fix") {
+						gitCommitState(
+							`haiku: review_fix dispatch ${
+								(dispatch as { items?: unknown[] }).items?.length ?? 0
+							} finding(s) in ${currentStage} (pre-tick gate)`,
+						)
+						emitTelemetry("haiku.pretick.review_fix", {
+							intent: slug,
+							stage: currentStage,
+							count: String(classification.inlineFixes.length),
+						})
+					}
+					return dispatch
+				}
+				// Fix_hats not configured — fall through to the legacy
+				// text-only feedback_dispatch so the agent gets at least
+				// the diagnostic message instead of silent skip.
+			}
 			return buildFeedbackDispatchAction(slug, currentStage, {
 				needsTriage: classification.needsTriage,
 				questions: classification.questions,

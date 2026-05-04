@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Drift-Detected Indicator — Wireframe</title>
+  <style>
+    /* === DESIGN TOKENS (semantic aliases from DESIGN-TOKENS.md §1.3.2) === */
+    :root {
+      /* Drift-detected tokens (canonical — NOT deprecated --color-drift-bg/fg/stripe) */
+      --color-drift-detected-fg: oklch(52% 0.18 80);     /* amber-700 family */
+      --color-drift-detected-bg: oklch(97% 0.04 80);     /* amber-50 family */
+
+      /* Neutral surface */
+      --surface-bg: oklch(100% 0 0);
+      --surface-border: oklch(88% 0.01 0);
+      --surface-text: oklch(25% 0.02 0);
+      --surface-muted: oklch(55% 0.01 0);
+      --surface-hover: oklch(96% 0.01 0);
+      --surface-header: oklch(98% 0.005 0);
+
+      /* Focus ring */
+      --focus-ring-color: oklch(52% 0.18 80);   /* amber-based for drift surface */
+
+      /* Stage banner accent */
+      --stage-accent: oklch(55% 0.15 185);     /* teal-600 family */
+
+      /* KIND_BADGE palette (canonical — mirrors KIND_BADGE in StageReview.tsx
+         per DESIGN-BRIEF.md Screen 3 line 357). Stage = violet-50/700,
+         intent = sky-50/700. Implementer SHOULD prefer Tailwind utilities
+         `bg-violet-50 text-violet-700` / `bg-sky-50 text-sky-700` per
+         DESIGN-TOKENS §1.4; these tokens exist so the wireframe renders
+         the canonical hue without raw oklch on semantic surfaces. */
+      --color-kind-stage-bg: oklch(96.9% 0.016 293.756);     /* violet-50 */
+      --color-kind-stage-fg: oklch(49.1% 0.27 292.581);      /* violet-700 */
+      --color-kind-intent-bg: oklch(97.7% 0.013 236.62);     /* sky-50 */
+      --color-kind-intent-fg: oklch(50% 0.134 242.749);      /* sky-700 */
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-drift-detected-fg: oklch(78% 0.12 80);
+        --color-drift-detected-bg: oklch(24% 0.06 80 / 0.4);
+        --surface-bg: oklch(18% 0.01 0);
+        --surface-border: oklch(28% 0.01 0);
+        --surface-text: oklch(90% 0.01 0);
+        --surface-muted: oklch(60% 0.01 0);
+        --surface-hover: oklch(24% 0.01 0);
+        --surface-header: oklch(20% 0.01 0);
+
+        /* Dark-mode KIND_BADGE — mirrors `dark:bg-{hue}-900/20 dark:text-{hue}-400`
+           from StageReview.tsx KIND_BADGE entries. */
+        --color-kind-stage-bg: oklch(28.1% 0.141 291.089 / 0.2);  /* violet-900/20 */
+        --color-kind-stage-fg: oklch(70.6% 0.213 293.541);        /* violet-400 */
+        --color-kind-intent-bg: oklch(29.3% 0.066 243.157 / 0.2); /* sky-900/20 */
+        --color-kind-intent-fg: oklch(74.6% 0.16 232.661);        /* sky-400 */
+      }
+    }
+
+    /* === BASE === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--surface-text);
+      background: oklch(95% 0.01 0);
+      padding: 24px;
+    }
+
+    /* === TOUCH TARGET === */
+    .touch-target { position: relative; }
+    .touch-target::after {
+      content: '';
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+    }
+
+    /* === REDUCED MOTION (mirroring index.css global guard) === */
+    /*
+      The drift indicator's enter/exit animation MUST respect prefers-reduced-motion.
+      In implementation:
+        - Tailwind transition-* utilities are automatically clamped by the global guard
+        - Any custom @keyframes must include:
+            @media (prefers-reduced-motion: reduce) { animation: none; }
+      This wireframe demonstrates the static states; the animation guard is documented here.
+    */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* === LABELS === */
+    .viewport-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--surface-muted);
+      margin-bottom: 8px;
+      margin-top: 32px;
+    }
+    .viewport-label:first-child { margin-top: 0; }
+    .state-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--surface-muted);
+      margin-bottom: 6px;
+    }
+    .demo-row {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
+      align-items: flex-start;
+    }
+
+    /* === PAGE SHELL (ReviewPage simulation) === */
+    .review-page {
+      background: var(--surface-bg);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      overflow: hidden;
+      width: 680px;
+      flex-shrink: 0;
+    }
+
+    /* Stage banner (existing, unchanged) */
+    .stage-banner {
+      position: sticky;
+      top: 0;
+      background: var(--surface-header);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 10;
+      font-size: 13px;
+    }
+    .stage-pill {
+      background: oklch(95% 0.02 185);
+      color: oklch(40% 0.12 185);
+      padding: 3px 10px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .stage-phase { color: var(--surface-muted); font-size: 12px; }
+    .stage-status {
+      background: oklch(97% 0.03 185);
+      color: oklch(45% 0.12 185);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid oklch(88% 0.06 185);
+    }
+
+    /* ===== DRIFT-DETECTED INDICATOR ===== */
+    /*
+      Per SPA-UI-SPECS.md §3:
+      - role="status" and aria-live="polite" on the container
+      - Non-color icon (Clock/FileEdit) alongside the text
+      - Direction A passive-observer: zero classification-trigger controls on this surface
+      - When the strip disappears, an empty aria-live region remains in DOM (visibility:hidden)
+    */
+    .drift-strip {
+      /* Sticky just below StageBanner; same horizontal gutter */
+      background: var(--color-drift-detected-bg);
+      border: 1px solid oklch(90% 0.08 80);      /* subtle amber border */
+      border-left: 4px solid var(--color-drift-detected-fg);
+      border-radius: 6px;
+      margin: 8px 24px 0;
+      padding: 10px 12px;
+      font-size: 13px;
+      transition: background-color 150ms;
+    }
+
+    .drift-strip-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .drift-icon {
+      /* Non-color icon — required by spec (not just color) */
+      color: var(--color-drift-detected-fg);
+      font-size: 16px;
+      flex-shrink: 0;
+      /* aria-hidden="true" in implementation; text conveys the same info */
+    }
+
+    .drift-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-drift-detected-fg);
+      flex: 1;
+    }
+
+    .drift-body {
+      font-size: 12px;
+      color: var(--color-drift-detected-fg);
+      margin-top: 2px;
+      /* No opacity reduction — full-opacity --color-drift-detected-fg on
+         --color-drift-detected-bg is the verified 5.2:1 ratio per
+         SPA-UI-SPECS.md §4.4. Hierarchy vs .drift-title comes from
+         font-size (12px vs 13px) and font-weight (400 vs 600). */
+    }
+
+    /* Disclosure toggle — purely informational; no classification-trigger controls */
+    .drift-disclosure {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--color-drift-detected-fg);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4px 6px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background-color 150ms;
+      /* touch-target: ensure 44×44 minimum */
+      position: relative;
+    }
+    .drift-disclosure::after {
+      content: '';
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+    }
+    .drift-disclosure:hover {
+      background: color-mix(in oklch, var(--color-drift-detected-fg), transparent 90%);
+      text-decoration: underline;
+    }
+    .drift-disclosure:focus-visible {
+      outline: 3px solid var(--color-drift-detected-fg);
+      outline-offset: 2px;
+    }
+
+    /* Expanded entry list */
+    .drift-entry-list {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid oklch(90% 0.08 80);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .drift-entry-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      transition: background-color 150ms;
+      /* Informational only — no interactive actions on the rows */
+    }
+    .drift-entry-row:hover {
+      background: color-mix(in oklch, var(--color-drift-detected-fg), transparent 92%);
+    }
+
+    .drift-entry-stage-chip {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 9999px;
+      /* KIND_BADGE — stage scope (DESIGN-BRIEF Screen 3 line 357: violet-50/700).
+         Implementer: render as `bg-violet-50 text-violet-700` per DESIGN-TOKENS §1.4. */
+      background: var(--color-kind-stage-bg);
+      color: var(--color-kind-stage-fg);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .drift-entry-stage-chip--intent {
+      /* KIND_BADGE — intent scope (DESIGN-BRIEF Screen 3 line 357: sky-50/700).
+         Implementer: render as `bg-sky-50 text-sky-700` per DESIGN-TOKENS §1.4. */
+      background: var(--color-kind-intent-bg);
+      color: var(--color-kind-intent-fg);
+    }
+
+    .drift-entry-path {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 11px;
+      color: var(--color-drift-detected-fg);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .drift-entry-event {
+      font-size: 10px;
+      color: var(--color-drift-detected-fg);
+      /* No opacity reduction — at 10px this is small text; the 4.5:1
+         minimum applies. Full-opacity token pair is 5.2:1 per §4.4. */
+      white-space: nowrap;
+    }
+
+    .drift-entry-age {
+      font-size: 10px;
+      color: var(--color-drift-detected-fg);
+      /* No opacity reduction — see .drift-entry-event note above. */
+      white-space: nowrap;
+    }
+
+    /* Empty live region — stays in DOM as visibility:hidden after strip disappears */
+    .drift-live-empty {
+      visibility: hidden;
+      height: 0;
+      overflow: hidden;
+    }
+
+    /* Rererview banner (existing placeholder) */
+    .rereview-banner {
+      margin: 6px 24px 0;
+      padding: 8px 12px;
+      background: oklch(97% 0.01 0);
+      border: 1px dashed var(--surface-border);
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--surface-muted);
+      font-style: italic;
+    }
+
+    /* Page content area */
+    .page-content {
+      padding: 16px 24px;
+      min-height: 120px;
+      color: var(--surface-muted);
+      font-size: 12px;
+      font-style: italic;
+    }
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--surface-border);
+      padding: 0 24px;
+      margin-bottom: 8px;
+    }
+    .tab {
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--surface-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .tab--active {
+      color: var(--stage-accent);
+      border-bottom-color: var(--stage-accent);
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =================== DESKTOP 1280px =================== -->
+  <p class="viewport-label">Desktop — 1280px · Drift strip (collapsed)</p>
+
+  <div class="demo-row">
+    <div>
+      <p class="state-label">Drift present — collapsed (default)</p>
+      <div class="review-page">
+        <!-- StageBanner (existing, sticky top) -->
+        <div class="stage-banner">
+          <span class="stage-pill">design</span>
+          <span class="stage-phase">Phase ●●●○ 3/4</span>
+          <span class="stage-status">In Review</span>
+        </div>
+
+        <!--
+          DRIFT-DETECTED INDICATOR
+          ARIA: role="status" + aria-live="polite" — announced on appearance (not interrupting)
+          Non-color icon (Clock) alongside text — required
+          Direction A passive-observer: no classification-trigger controls present
+        -->
+        <div
+          class="drift-strip"
+          role="status"
+          aria-live="polite"
+          aria-label="Drift detected notification"
+        >
+          <div class="drift-strip-header">
+            <span class="drift-icon" aria-hidden="true">🕐</span>
+            <div>
+              <div class="drift-title">3 file(s) changed since the last agent write</div>
+              <div class="drift-body">Assessment runs on the next tick.</div>
+            </div>
+            <!-- Disclosure toggle — only focusable control on the strip -->
+            <button
+              class="drift-disclosure"
+              aria-expanded="false"
+              aria-controls="drift-entry-list-1"
+            >
+              ▾ See 3 files
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty live region remains in DOM after strip disappears (visibility:hidden) -->
+        <div
+          class="drift-live-empty"
+          role="status"
+          aria-live="polite"
+          id="drift-live-gone-1"
+        ></div>
+
+        <!-- RereviewBanner (existing, unchanged) -->
+        <div class="rereview-banner">RereviewBanner (existing — unchanged)</div>
+
+        <!-- Page content -->
+        <div class="tab-bar">
+          <span class="tab tab--active">Outputs</span>
+          <span class="tab">Units</span>
+          <span class="tab">Knowledge</span>
+        </div>
+        <div class="page-content">⋯ Stage output cards, artifact previews ⋯</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== EXPANDED STATE =================== -->
+  <p class="viewport-label">Desktop — Drift strip expanded (entry list visible)</p>
+
+  <div class="demo-row">
+    <div>
+      <p class="state-label">Drift present — expanded</p>
+      <div class="review-page">
+        <div class="stage-banner">
+          <span class="stage-pill">design</span>
+          <span class="stage-phase">Phase ●●●○ 3/4</span>
+          <span class="stage-status">In Review</span>
+        </div>
+
+        <div
+          class="drift-strip"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="drift-strip-header">
+            <!-- Non-color icon: clock = "something changed, system is aware" -->
+            <span class="drift-icon" aria-hidden="true">🕐</span>
+            <div>
+              <div class="drift-title">3 file(s) changed since the last agent write</div>
+              <div class="drift-body">Assessment runs on the next tick.</div>
+            </div>
+            <button
+              class="drift-disclosure"
+              aria-expanded="true"
+              aria-controls="drift-entry-list-2"
+              style="outline: 3px solid var(--color-drift-detected-fg); outline-offset:2px;"
+            >
+              ▴ Hide files
+            </button>
+          </div>
+
+          <!-- Expanded entry list — informational rows only, no actions -->
+          <div class="drift-entry-list" id="drift-entry-list-2" aria-label="Changed files">
+            <div class="drift-entry-row">
+              <span class="drift-entry-stage-chip">design</span>
+              <span class="drift-entry-path">stages/design/outputs/hero.html</span>
+              <span class="drift-entry-event">modified</span>
+              <span class="drift-entry-age">4m ago</span>
+            </div>
+            <div class="drift-entry-row">
+              <span class="drift-entry-stage-chip drift-entry-stage-chip--intent">intent</span>
+              <span class="drift-entry-path">knowledge/brand-guide.pdf</span>
+              <span class="drift-entry-event">added</span>
+              <span class="drift-entry-age">12m ago</span>
+            </div>
+            <div class="drift-entry-row">
+              <span class="drift-entry-stage-chip">inception</span>
+              <span class="drift-entry-path">stages/inception/notes.md</span>
+              <span class="drift-entry-event">modified</span>
+              <span class="drift-entry-age">18m ago</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty live region in DOM after strip disappears -->
+        <div class="drift-live-empty" role="status" aria-live="polite" id="drift-live-gone-2"></div>
+
+        <div class="rereview-banner">RereviewBanner (existing — unchanged)</div>
+
+        <div class="tab-bar">
+          <span class="tab tab--active">Outputs</span>
+          <span class="tab">Units</span>
+          <span class="tab">Knowledge</span>
+        </div>
+        <div class="page-content">⋯ Stage output cards ⋯</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== NO DRIFT (ABSENT STATE) =================== -->
+  <p class="viewport-label">Desktop — No drift (strip does NOT render)</p>
+
+  <div class="demo-row">
+    <div>
+      <p class="state-label">No drift — strip absent; empty live region remains</p>
+      <div class="review-page">
+        <div class="stage-banner">
+          <span class="stage-pill">design</span>
+          <span class="stage-phase">Phase ●●●○ 3/4</span>
+          <span class="stage-status">In Review</span>
+        </div>
+
+        <!-- Strip is not rendered — component returns null -->
+        <!-- Empty live region stays in DOM to avoid abrupt focus loss -->
+        <div
+          class="drift-live-empty"
+          role="status"
+          aria-live="polite"
+          id="drift-live-gone-3"
+          style="margin: 0 24px;"
+        ></div>
+
+        <div class="rereview-banner">RereviewBanner (existing — unchanged)</div>
+
+        <div class="tab-bar">
+          <span class="tab tab--active">Outputs</span>
+          <span class="tab">Units</span>
+          <span class="tab">Knowledge</span>
+        </div>
+        <div class="page-content">
+          No drift present — page content renders normally without the strip.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== FOCUS STATE DEMO =================== -->
+  <p class="viewport-label">Desktop — Focus state on disclosure toggle (WCAG 2.4.7)</p>
+
+  <div class="demo-row">
+    <div>
+      <p class="state-label">Focus-visible on disclosure toggle</p>
+      <div class="review-page" style="width:480px;">
+        <div class="stage-banner">
+          <span class="stage-pill">design</span>
+          <span class="stage-phase">Phase ●●●○ 3/4</span>
+        </div>
+        <div class="drift-strip" role="status" aria-live="polite">
+          <div class="drift-strip-header">
+            <span class="drift-icon" aria-hidden="true">🕐</span>
+            <div>
+              <div class="drift-title">1 file changed since the last agent write</div>
+              <div class="drift-body">Assessment runs on the next tick.</div>
+            </div>
+            <!-- Focus-visible state demonstrated -->
+            <button
+              class="drift-disclosure"
+              aria-expanded="false"
+              style="outline: 3px solid var(--color-drift-detected-fg); outline-offset: 2px; background: color-mix(in oklch, var(--color-drift-detected-fg), transparent 90%);"
+            >
+              ▾ See 1 file
+            </button>
+          </div>
+        </div>
+        <div class="drift-live-empty" role="status" aria-live="polite"></div>
+        <div class="page-content">⋯ content ⋯</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== TABLET 768px =================== -->
+  <p class="viewport-label">Tablet — 768px</p>
+
+  <div class="demo-row">
+    <div>
+      <p class="state-label">Tablet — single-line header, expanded entries 2-line</p>
+      <div class="review-page" style="width:540px;">
+        <div class="stage-banner" style="padding: 8px 16px;">
+          <span class="stage-pill">design</span>
+          <span class="stage-phase">3/4</span>
+          <span class="stage-status">In Review</span>
+        </div>
+        <div class="drift-strip" role="status" aria-live="polite" style="margin: 8px 16px 0;">
+          <div class="drift-strip-header">
+            <span class="drift-icon" aria-hidden="true">🕐</span>
+            <div>
+              <div class="drift-title">2 file(s) changed since the last agent write</div>
+              <div class="drift-body">Assessment runs on the next tick.</div>
+            </div>
+            <button class="drift-disclosure" aria-expanded="true" aria-controls="drift-entry-list-tablet">▴ Hide files</button>
+          </div>
+          <div class="drift-entry-list" id="drift-entry-list-tablet" aria-label="Changed files">
+            <!-- Tablet: path + event on line 1; timestamp right-aligned on line 2 -->
+            <div class="drift-entry-row" style="flex-direction:column; align-items:flex-start; gap:2px;">
+              <div style="display:flex; align-items:center; gap:6px; width:100%;">
+                <span class="drift-entry-stage-chip">design</span>
+                <span class="drift-entry-path">stages/design/outputs/hero.html</span>
+                <span class="drift-entry-event">modified</span>
+              </div>
+              <div style="padding-left:52px; font-size:10px; color:var(--color-drift-detected-fg);">4m ago</div>
+            </div>
+            <div class="drift-entry-row" style="flex-direction:column; align-items:flex-start; gap:2px;">
+              <div style="display:flex; align-items:center; gap:6px; width:100%;">
+                <span class="drift-entry-stage-chip drift-entry-stage-chip--intent">intent</span>
+                <span class="drift-entry-path">knowledge/brand-guide.pdf</span>
+                <span class="drift-entry-event">added</span>
+              </div>
+              <div style="padding-left:52px; font-size:10px; color:var(--color-drift-detected-fg);">12m ago</div>
+            </div>
+          </div>
+        </div>
+        <div class="drift-live-empty" role="status" aria-live="polite"></div>
+        <div class="page-content" style="padding: 12px 16px;">⋯ content ⋯</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== MOBILE 375px =================== -->
+  <p class="viewport-label">Mobile — 375px</p>
+
+  <div class="demo-row">
+    <div>
+      <p class="state-label">Mobile — wrap to 2 lines; disclosure below summary; entry rows 3-line</p>
+      <div class="review-page" style="width:375px;">
+        <div class="stage-banner" style="padding: 6px 12px; flex-wrap:wrap; gap:6px;">
+          <span class="stage-pill">design</span>
+          <span class="stage-phase" style="font-size:11px;">3/4</span>
+          <span class="stage-status">In Review</span>
+        </div>
+
+        <!-- Mobile: summary may wrap; disclosure toggle below text, left-aligned -->
+        <div
+          class="drift-strip"
+          role="status"
+          aria-live="polite"
+          style="margin: 6px 12px 0; padding: 10px;"
+        >
+          <div style="display:flex; align-items:flex-start; gap:8px;">
+            <span class="drift-icon" aria-hidden="true">🕐</span>
+            <div style="flex:1;">
+              <div class="drift-title" style="font-size:12px; line-height:1.4;">2 file(s) changed since the last agent write</div>
+              <div class="drift-body" style="font-size:11px;">Assessment runs on the next tick.</div>
+              <!-- On mobile: disclosure below summary, left-aligned, 44px min-height -->
+              <button
+                class="drift-disclosure"
+                aria-expanded="true"
+                aria-controls="drift-entry-list-mobile"
+                style="margin-top:6px; font-size:11px; min-height:44px; min-width:44px;"
+              >
+                ▴ Hide files
+              </button>
+            </div>
+          </div>
+
+          <!-- Mobile entry rows: path stacked below chip (3-line layout) -->
+          <div class="drift-entry-list" id="drift-entry-list-mobile" aria-label="Changed files" style="margin-top:8px;">
+            <div class="drift-entry-row" style="flex-direction:column; align-items:flex-start; gap:1px; padding:6px 4px;">
+              <span class="drift-entry-stage-chip">design</span>
+              <span
+                class="drift-entry-path"
+                style="padding-left:8px; font-size:11px; white-space:normal; word-break:break-all;"
+              >stages/design/outputs/hero.html</span>
+              <div style="padding-left:8px; display:flex; gap:8px; font-size:10px; color:var(--color-drift-detected-fg);">
+                <span>modified</span>
+                <span>4m ago</span>
+              </div>
+            </div>
+            <div class="drift-entry-row" style="flex-direction:column; align-items:flex-start; gap:1px; padding:6px 4px;">
+              <span class="drift-entry-stage-chip drift-entry-stage-chip--intent">intent</span>
+              <span
+                class="drift-entry-path"
+                style="padding-left:8px; font-size:11px; white-space:normal; word-break:break-all;"
+              >knowledge/brand-guide.pdf</span>
+              <div style="padding-left:8px; display:flex; gap:8px; font-size:10px; color:var(--color-drift-detected-fg);">
+                <span>added</span>
+                <span>12m ago</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="drift-live-empty" role="status" aria-live="polite"></div>
+        <div class="page-content" style="padding: 10px 12px; font-size:12px;">⋯ content ⋯</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPEC NOTES -->
+  <div style="margin-top: 40px; padding: 16px; background: var(--surface-bg); border: 1px solid var(--surface-border); border-radius: 8px; font-size: 12px; color: var(--surface-muted); max-width: 960px;">
+    <strong style="color: var(--surface-text);">Spec notes for this wireframe:</strong>
+    <ul style="margin-top: 8px; padding-left: 16px; display:flex; flex-direction:column; gap:4px;">
+      <li>All colors use <code>var(--color-drift-detected-fg)</code> and <code>var(--color-drift-detected-bg)</code> — canonical tokens per DESIGN-TOKENS.md §1.3.2. NOT deprecated <code>--color-drift-bg/fg/stripe</code>.</li>
+      <li>Container: <code>role="status"</code> and <code>aria-live="polite"</code> — announced on appearance without interrupting current focus.</li>
+      <li>Non-color icon (clock 🕐) alongside text — strip is distinguishable by shape and text, not color alone.</li>
+      <li>When strip disappears, empty <code>aria-live="polite"</code> region remains in DOM as <code>visibility:hidden</code> to prevent abrupt focus loss.</li>
+      <li>Strip is placed in DOM BEFORE the tab content — keyboard users encounter the alert before drilling into stage content.</li>
+      <li>Entry rows are informational only (non-interactive <code>&lt;div&gt;</code> elements with no focusable children).</li>
+      <li>Disclosure toggle has 44×44 minimum touch target via <code>::after</code> pseudo-element.</li>
+      <li>Reduced-motion: enter/exit animation respects <code>prefers-reduced-motion: reduce</code> (global guard in <code>index.css</code>); custom keyframes must add explicit override.</li>
+      <li><strong>Direction A passive-observer constraint: zero classification-trigger controls on this surface (per SPA-UI-SPECS.md §0).</strong></li>
+      <li>No raw hex values. No raw Tailwind palette classes in semantic surfaces.</li>
+    </ul>
+  </div>
+
+</body>
+</html>

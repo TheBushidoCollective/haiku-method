@@ -26,6 +26,7 @@ import { ensureOnStageBranch } from "../../git-worktree.js"
 import {
 	buildGuardResponse,
 	completeOrReviewIntent,
+	findIncompleteStages,
 	getAwaitGateReviewSession,
 	getElicitInput,
 	isStagePreExecute,
@@ -109,9 +110,7 @@ export default defineTool({
 		const slug = (args.intent as string) || ""
 		if (!slug) {
 			return {
-				content: [
-					{ type: "text" as const, text: "intent is required" },
-				],
+				content: [{ type: "text" as const, text: "intent is required" }],
 				isError: true,
 			}
 		}
@@ -218,6 +217,24 @@ export default defineTool({
 					const studioForCompletion =
 						(readFrontmatter(join(intentDir(slug), "intent.md"))
 							.studio as string) || ""
+					// Guard: all declared stages must be completed before sealing.
+					// Belt-and-suspenders against state drift between gate-review
+					// preparation and approval (the user can take up to 30 minutes
+					// to decide; pre-tick's check at prepare-time isn't enough).
+					const incompleteStages = findIncompleteStages(
+						slug,
+						studioForCompletion,
+					)
+					if (incompleteStages.length > 0) {
+						return text(
+							withInstructions({
+								action: "error",
+								intent: slug,
+								message: `Cannot complete intent '${slug}': the following stages have not completed: [${incompleteStages.join(", ")}]. Run those stages to completion before approving intent_completion.`,
+								incomplete_stages: incompleteStages,
+							}),
+						)
+					}
 					workflowIntentComplete(slug)
 					syncSessionMetadata(slug, stFile)
 					const gateResult = {
@@ -230,11 +247,7 @@ export default defineTool({
 					return text(withInstructions(gateResult))
 				}
 				if (gateContext === "intent_review") {
-					const intentFilePath = join(
-						process.cwd(),
-						intentDirPath,
-						"intent.md",
-					)
+					const intentFilePath = join(process.cwd(), intentDirPath, "intent.md")
 					setFrontmatterField(intentFilePath, "intent_reviewed", true)
 					if (nextPhase) workflowAdvancePhase(slug, stage, nextPhase)
 					gitCommitState(`haiku: intent ${slug} approved by user`)
@@ -434,10 +447,7 @@ export default defineTool({
 			// session is gone (MCP server restart, prior await consumed it).
 			// Surface the actionable hint and let the agent re-enter
 			// haiku_run_next, which will recreate the session.
-			if (
-				errorMsg.includes("not found") ||
-				errorMsg.includes("wrong type")
-			) {
+			if (errorMsg.includes("not found") || errorMsg.includes("wrong type")) {
 				return {
 					content: [
 						{

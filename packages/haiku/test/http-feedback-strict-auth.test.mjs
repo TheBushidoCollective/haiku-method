@@ -185,14 +185,24 @@ async function run() {
 		target: "review",
 	})
 	const jwtToken = mintJWT(session.session_id)
-	const authz = { Authorization: `Bearer ${jwtToken}` }
+	// V-08 (unit-03): mutating routes in tunnel mode require an
+	// allow-listed Origin header (Layer 2 of the CSRF defence). The
+	// default allow-list is `http://localhost:*`, so a localhost Origin
+	// matches and the request reaches the auth gate. Tests below send
+	// this Origin so they exercise auth, not CSRF — see csrf.test.mjs
+	// for the bare CSRF assertions.
+	const csrfOrigin = `http://localhost:${port}`
+	const authz = {
+		Authorization: `Bearer ${jwtToken}`,
+		Origin: csrfOrigin,
+	}
 
-	await test("POST with no auth at all returns 401 (tunnel gate: missing_token)", async () => {
+	await test("POST with no auth at all but with Origin returns 401 (CSRF passes → tunnel gate: missing_token)", async () => {
 		const res = await fetch(
 			`${baseUrl}/api/feedback/${intentSlug}/${stageName}`,
 			{
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
+				headers: { "Content-Type": "application/json", Origin: csrfOrigin },
 				body: JSON.stringify({ title: "unauth", body: "x" }),
 			},
 		)
@@ -202,7 +212,7 @@ async function run() {
 		assert.strictEqual(data.reason, "missing_token")
 	})
 
-	await test("POST with valid JWT proceeds (201) — JWT is the only auth required", async () => {
+	await test("POST with valid JWT proceeds (201) — JWT + Origin is the auth surface", async () => {
 		const res = await fetch(
 			`${baseUrl}/api/feedback/${intentSlug}/${stageName}`,
 			{
@@ -277,6 +287,8 @@ async function run() {
 		const otherJwt = mintJWT(otherSession.session_id)
 
 		// Use otherIntent's JWT against OUR intent's feedback endpoint.
+		// Origin must be sent so V-08 Layer 2 passes; the assertion below
+		// is about the JWT-claim mismatch, not CSRF.
 		const res = await fetch(
 			`${baseUrl}/api/feedback/${intentSlug}/${stageName}`,
 			{
@@ -284,6 +296,7 @@ async function run() {
 				headers: {
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${otherJwt}`,
+					Origin: csrfOrigin,
 				},
 				body: JSON.stringify({ title: "cross-intent", body: "x" }),
 			},
@@ -308,6 +321,7 @@ async function run() {
 				headers: {
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${bogusJwt}`,
+					Origin: csrfOrigin,
 				},
 				body: JSON.stringify({ title: "bogus", body: "x" }),
 			},

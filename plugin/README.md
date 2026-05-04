@@ -98,6 +98,20 @@ Each stage's gate decides whether work advances:
 
 Mix them per stage. Compound gates like `[external, ask]` let you choose at runtime.
 
+## Kill-switch — disabling drift detection
+
+H·AI·K·U ships a per-stage drift-detection gate that catches out-of-band edits to tracked files between ticks. If it ever misfires (false positives during a noisy refactor, an integration that legitimately rewrites tracked surfaces, load shedding under heavy churn), turn it off in `.haiku/settings.yml`:
+
+```yaml
+drift_detection: false
+```
+
+That single key disables the drift-detection gate for the project. Reconciliation, baseline establishment, and every other gate continue to run normally — only drift-finding emission is silenced. Flip it back to `true` (or remove the key entirely) once the noisy condition clears.
+
+**Verifying the kill-switch is live.** After flipping the flag, call `haiku_baseline_init` against any intent — the response will include a `drift_disabled_warning` key when the kill-switch is active. The flag uses the literal lowercase boolean `false`; `"false"` (string) and `False` (Python-cased) are silently ignored. If `drift_disabled_warning` is absent on the next call, the YAML key is malformed.
+
+For incident playbooks — including how to verify the kill-switch is live, how to roll back a corrupt baseline, and how to clear stuck reconciliation findings — see `.haiku/knowledge/RUNBOOK.md` inside any intent that uses drift detection.
+
 ## Links
 
 - **Method paper** — [haikumethod.ai/papers/haiku-method](https://haikumethod.ai/papers/haiku-method)

@@ -79,7 +79,9 @@ export {
 export {
 	buildOutputRequirements,
 	runQualityGates,
+	validateCumulativeInputCoverage,
 	validateDiscoveryArtifacts,
+	validateOutputLiveness,
 	validateStageOutputs,
 	validateUnitInputs,
 	validateUnitNaming,
@@ -87,6 +89,7 @@ export {
 } from "./orchestrator/validators.js"
 export {
 	completeOrReviewIntent,
+	findIncompleteStages,
 	workflowAdvancePhase,
 	workflowAdvanceStage,
 	workflowCompleteStage,

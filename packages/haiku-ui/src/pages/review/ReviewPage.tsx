@@ -23,6 +23,7 @@ import { Header as HeaderLandmark, Main } from "../../a11y"
 import { ThemeToggle } from "../../atoms/ThemeToggle"
 import { FeedbackProvider } from "../../hooks/FeedbackContext"
 import { useFeedback } from "../../hooks/useFeedback"
+import { DriftBanner, type DriftEntry } from "../../molecules/DriftBanner"
 import { StageProgressStrip } from "../../molecules/StageProgressStrip"
 import { SubmitSuccess } from "../../molecules/SubmitSuccess"
 import type { AnnotationPin } from "../../organisms/AnnotationCanvas"
@@ -33,6 +34,7 @@ import type { ReviewAnnotations } from "../../types"
 import { ArtifactsPane } from "./ArtifactsPane"
 import { FeedbackPanelBody } from "./FeedbackPanelBody"
 import { FeedbackSidebar } from "./FeedbackSidebar"
+import { IntentDriftAssessmentsSection } from "./IntentDriftAssessmentsSection"
 import { RereviewBanner } from "./shared/RereviewBanner"
 import type { ReviewPageSessionData } from "./shared/session-data"
 import type { ReviewDetailKind, ReviewTab } from "./shared/stage-tabs"
@@ -474,6 +476,7 @@ export function ReviewPage({
 							stage={selectedStage ?? activeStage}
 							activeStage={activeStage}
 							sessionId={sessionId}
+							intentSlug={intentSlug ?? undefined}
 							intentTitle={session.intent?.title}
 							gateBadges={gateBadges}
 							gateType={session.gate_type}
@@ -527,6 +530,17 @@ export function ReviewPage({
 									stagePhase={stageStates[selectedStage ?? ""]?.phase ?? null}
 									gateBadges={gateBadges}
 								/>
+
+								{/* Drift banner — sticky strip between StageBanner and
+								    RereviewBanner per SPA-UI-SPECS §3. Renders nothing
+								    when `drift` is empty (DriftBanner returns null
+								    internally), so the integration is safe even before
+								    the WS plumbing that pushes drift entries lands. The
+								    drift entries themselves come from the existing
+								    `manual_change_assessment` action's findings via
+								    the WS bridge — wiring `drift` to that feed is the
+								    next iteration's work. */}
+								<DriftBanner drift={[] as DriftEntry[]} />
 
 								<div className="px-6 lg:px-10 pb-6">
 									{session.previous_review && (
@@ -859,6 +873,17 @@ function IntentOverviewPane({
 						</p>
 					)}
 				</div>
+
+				{/* Drift assessments — intent-scope drift history (per
+				    SPA-UI-SPECS §4). Renders after the intent-definition
+				    block. Hooks the existing
+				    `GET /api/intents/:intent/assessments` endpoint
+				    (assessments-routes.ts) on mount; the view's empty state
+				    is rendered until the fetch resolves or when no drift
+				    has been classified yet. */}
+				{intent?.slug && (
+					<IntentDriftAssessmentsSection intentSlug={intent.slug} />
+				)}
 			</div>
 		</>
 	)

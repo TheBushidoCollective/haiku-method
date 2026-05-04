@@ -189,7 +189,7 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 	// Artifact hover-pair: when hovering over an artifact chip, highlight all
 	// matching artifacts (including in the knowledge pool sidebar).
 	const matchArtifact = useCallback(
-		(key: string | null, query: string | null) => {
+		(_key: string | null, query: string | null) => {
 			if (!query) {
 				setMatchedArtifact(null)
 				return

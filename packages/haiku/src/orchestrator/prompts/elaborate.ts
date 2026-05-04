@@ -32,7 +32,7 @@ import {
 	resolveIntentStages,
 	resolveStudioFilePath,
 } from "../../orchestrator.js"
-import { parseFrontmatter } from "../../state-tools.js"
+import { listInstalledSkills, parseFrontmatter } from "../../state-tools.js"
 import {
 	filterReviewAgentsByScope,
 	readPhaseOverride,
@@ -113,6 +113,28 @@ function buildReviewAgentLensSection(
 		lines.push(`### ${heading} lens`, "", body, "")
 	}
 	return lines.join("\n").trimEnd()
+}
+
+/** Build the "## Available Skills" injection block for the elaboration
+ *  prompt. Lists every installed skill with slug + description so the
+ *  elaborator can annotate units with `applicable_skills:` frontmatter.
+ *  Returns null when no skills are installed. */
+function buildSkillRegistrySection(): string | null {
+	const skills = listInstalledSkills()
+	if (skills.length === 0) return null
+	const lines: string[] = [
+		"## Available Skills (annotate units with `applicable_skills:`)",
+		"",
+		"The following Claude Code skills (slash commands) are installed in this environment. For each unit you author, evaluate which skills meaningfully accelerate the work and pin them to the unit's frontmatter as `applicable_skills: [<slug>, ...]`. Hat subagents receive the skill list automatically so they know which commands to reach for.",
+		"",
+		"Only annotate when there is clear relevance — don't bloat every unit. A unit that writes tests should annotate `test`; a unit that refactors structure should annotate `refactor`; a purely documentary unit typically needs none.",
+		"",
+	]
+	for (const skill of skills) {
+		const desc = skill.description ? ` — ${skill.description}` : ""
+		lines.push(`- \`/${skill.slug}\`${desc}`)
+	}
+	return lines.join("\n")
 }
 
 // Exported so the workflow handler (`handlers/elaborate.ts`) can write the
@@ -246,6 +268,8 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 		}
 		const lenses = buildReviewAgentLensSection(studio, stage, dir)
 		if (lenses) sections.push(lenses)
+		const revisitSkillSection = buildSkillRegistrySection()
+		if (revisitSkillSection) sections.push(revisitSkillSection)
 		sections.push(
 			`### Responsibilities\n\n- Read every \`pending_feedback[].file\` in full before drafting — the title is only a handle.\n- Draft one or more new units whose \`closes:\` frontmatter references the feedback items they resolve.\n- Every pending feedback item MUST be referenced by at least one new unit's \`closes:\` (orphans block advancement).\n- Ask the user clarifying questions (\`AskUserQuestion\` with options[]) when trade-offs are unclear; iterate across turns.\n- When the user approves the drafted units, call \`haiku_run_next\` to advance.\n\nInputs (read directly — do not inline summaries, open the actual files):\n- every \`pending_feedback[].file\` listed above\n- \`stage_metadata\` (STAGE.md body + review agents)\n- \`completed_units\` (read-only reference)\n- \`intent.md\` for overall goals`,
 		)
@@ -571,6 +595,11 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			"**Do NOT** dump three full design docs as units and ask the reviewer to pick later. The choice is upstream of decomposition; commit to one approach, then decompose it.",
 		].join("\n"),
 	)
+
+	// Skill registry — inject before unit decomposition so the elaborator
+	// can annotate units with `applicable_skills:` as it writes them.
+	const skillSection = buildSkillRegistrySection()
+	if (skillSection) sections.push(skillSection)
 
 	sections.push(
 		`## Scope\n\nAll units MUST be within this stage's domain. Work belonging to other stages goes in the discovery document, not in units.\n\n## Mechanics\n\n${

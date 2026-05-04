@@ -21,6 +21,7 @@ import commit_wip from "./commit_wip.js"
 import complete from "./complete.js"
 import composite_run_stage from "./composite_run_stage.js"
 import continue_units from "./continue_units.js"
+import coverage_review_required from "./coverage_review_required.js"
 import dag_cycle_detected from "./dag_cycle_detected.js"
 import design_direction_complete from "./design_direction_complete.js"
 import design_direction_required from "./design_direction_required.js"
@@ -42,6 +43,8 @@ import intent_approved from "./intent_approved.js"
 import intent_complete from "./intent_complete.js"
 import intent_completion_fix from "./intent_completion_fix.js"
 import intent_completion_review from "./intent_completion_review.js"
+import manual_change_assessment from "./manual_change_assessment.js"
+import output_liveness_review_required from "./output_liveness_review_required.js"
 import outputs_missing from "./outputs_missing.js"
 import pre_review from "./pre_review.js"
 import pre_review_waiting from "./pre_review_waiting.js"
@@ -93,6 +96,7 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["intent_complete", intent_complete],
 	["intent_completion_fix", intent_completion_fix],
 	["intent_completion_review", intent_completion_review],
+	["manual_change_assessment", manual_change_assessment],
 	["outputs_missing", outputs_missing],
 	["pre_review", pre_review],
 	["pre_review_waiting", pre_review_waiting],
@@ -111,4 +115,6 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["unit_inputs_missing", unit_inputs_missing],
 	["unit_naming_invalid", unit_naming_invalid],
 	["unresolved_dependencies", unresolved_dependencies],
+	["coverage_review_required", coverage_review_required],
+	["output_liveness_review_required", output_liveness_review_required],
 ])

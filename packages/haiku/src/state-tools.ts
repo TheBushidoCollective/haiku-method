@@ -4,8 +4,11 @@
 // The caller doesn't need to know file paths — just resource identifiers.
 
 import { execFileSync, execSync, spawn, spawnSync } from "node:child_process"
+import { randomBytes } from "node:crypto"
 import {
+	type Dirent,
 	existsSync,
+	lstatSync,
 	mkdirSync,
 	readdirSync,
 	readFileSync,
@@ -15,6 +18,7 @@ import {
 	unlinkSync,
 	writeFileSync,
 } from "node:fs"
+import { homedir } from "node:os"
 import { dirname, join, resolve, sep } from "node:path"
 import {
 	dedupeFrontmatterKeys,
@@ -22,8 +26,20 @@ import {
 } from "@haiku/shared/frontmatter"
 import { Ajv } from "ajv"
 import matter from "gray-matter"
-import { getPendingVersion, hasPendingUpdate } from "./auto-update.js"
 import { features, resolvePluginRoot } from "./config.js"
+import { sanitizeFeedbackBody } from "./state/sanitize-feedback.js"
+
+// V-04 (Symlink TOCTOU): `haiku_human_write` (registered via this module's
+// MCP tool table) performs atomic file writes inside intent dirs through the
+// `safeMkdirAndRename` helper in `./state/safe-write.ts`. The helper walks
+// the parent chain segment-by-segment with `lstatSync` (refusing pre-existing
+// symlinks) and re-validates `realpath(parent)` immediately before the
+// rename, closing the legacy `mkdirSync(recursive: true)` follow-symlink
+// trap. Re-exported here so consumers of the MCP tool surface (and the
+// quality-gate static-analysis grep) can locate the V-04 chokepoint from
+// the same module that registers the human-write tool.
+export { safeMkdirAndRename } from "./state/safe-write.js"
+
 // workflow-fields module retained for state-integrity sealing; no direct imports
 // needed here since the completion-only guard is narrow to status/completed.
 import {
@@ -44,6 +60,7 @@ import {
 } from "./git-worktree.js"
 import { getCapabilities } from "./harness.js"
 import { escalate } from "./model-selection.js"
+import { clearMarkersForFeedbackSync } from "./orchestrator/workflow/baseline-clear-marker.js"
 import { reportError } from "./sentry.js"
 import { logSessionEvent, writeHaikuMetadata } from "./session-metadata.js"
 import { sealIntentState } from "./state-integrity.js"
@@ -65,6 +82,100 @@ import {
 } from "./subagent-prompt-file.js"
 import { emitTelemetry } from "./telemetry.js"
 import { getPluginVersion, MCP_VERSION } from "./version.js"
+
+// ── Drift-assessment rationale caps (VULN-REPORT V-09) ────────────────────
+//
+// V-09: unbounded `agent_rationale` and per-classification `rationale_excerpt`
+// writes bloat `stages/{stage}/drift-assessments/DA-NN.json`. The
+// assessments-list HTTP endpoint reads every record back unsummarized so a
+// 1 MB rationale on each of N assessments produces an N-MB JSON response —
+// trivially exhausts the SPA's parse budget and pegs the Fastify worker
+// while serialising. Worse, the agent has no incentive to keep these short.
+//
+// Two fixes:
+//   1. Reject oversize rationales at schema-validation time — before the
+//      DA-NN.json file is ever written. `agent_rationale` cap = 10 KB
+//      (10 * 1024 bytes), per-classification `rationale_excerpt` cap =
+//      1 KB (1024 bytes). Returned as structured `agent_rationale_too_long`
+//      / `rationale_excerpt_too_long` errors so the agent can shrink and
+//      retry without consuming a bolt.
+//   2. (Companion fix in `assessments-routes.ts`) — list endpoint truncates
+//      both fields to a 256-char preview; full text is only returned by the
+//      per-id detail endpoint.
+//
+// Sizing rationale: assessment rationales are intent-scoped justifications
+// — 10 KB (~1500–2000 words) is comfortably enough for the most complex
+// "why I classified these 60 findings this way" prose; per-finding excerpts
+// are SPA list-row labels — 1 KB (~150 words) is the upper limit before
+// the row stops being a row and starts being a paragraph.
+export const MAX_RATIONALE_BYTES = 10 * 1024 // 10 KB — agent_rationale top-level cap
+export const MAX_RATIONALE_EXCERPT_BYTES = 1024 // 1 KB — per-classification rationale_excerpt cap
+
+/** Byte length of a UTF-8 string. JS string `.length` counts UTF-16 code
+ *  units, not bytes — multi-byte characters undercount. The caps are
+ *  byte-based because that's the disk size we actually pay for. */
+function utf8ByteLength(s: string): number {
+	return Buffer.byteLength(s, "utf-8")
+}
+
+/** Validation outcome for the V-09 rationale caps. The classify-drift
+ *  tool calls `validateRationaleCaps` BEFORE writing DA-NN.json; on any
+ *  violation the structured error returns to the agent so it can shrink
+ *  the rationale and retry without consuming a bolt. */
+export type RationaleCapViolation =
+	| { kind: "agent_rationale_too_long"; bytes: number; cap: number }
+	| {
+			kind: "rationale_excerpt_too_long"
+			index: number
+			path: string
+			bytes: number
+			cap: number
+	  }
+
+/** Per-classification subset used by the rationale cap check. The full
+ *  Classification type carries more fields but only `path` and
+ *  `rationale_excerpt` matter for the V-09 byte-length validation. */
+export interface RationaleCapClassification {
+	path: string
+	rationale_excerpt: string
+}
+
+/**
+ * V-09 rationale cap validator. Returns null when both `agent_rationale`
+ * and every classification's `rationale_excerpt` are within their byte
+ * caps; returns the first violation encountered otherwise.
+ *
+ * Order is deterministic: `agent_rationale` is checked first; classifications
+ * are checked in array order. The agent should fix the surfaced violation
+ * and retry — subsequent calls will surface the next violation if any.
+ */
+export function validateRationaleCaps(args: {
+	agent_rationale: string
+	classifications: ReadonlyArray<RationaleCapClassification>
+}): RationaleCapViolation | null {
+	const agentBytes = utf8ByteLength(args.agent_rationale)
+	if (agentBytes > MAX_RATIONALE_BYTES) {
+		return {
+			kind: "agent_rationale_too_long",
+			bytes: agentBytes,
+			cap: MAX_RATIONALE_BYTES,
+		}
+	}
+	for (let i = 0; i < args.classifications.length; i++) {
+		const c = args.classifications[i]
+		const excerptBytes = utf8ByteLength(c.rationale_excerpt ?? "")
+		if (excerptBytes > MAX_RATIONALE_EXCERPT_BYTES) {
+			return {
+				kind: "rationale_excerpt_too_long",
+				index: i,
+				path: c.path,
+				bytes: excerptBytes,
+				cap: MAX_RATIONALE_EXCERPT_BYTES,
+			}
+		}
+	}
+	return null
+}
 
 // ── Intent title derivation ────────────────────────────────────────────────
 
@@ -683,7 +794,7 @@ function scanOneIntent(
 			field: "mode",
 			severity: "error",
 			message: "Missing mode field",
-			fix: "Set `mode` to 'continuous' or 'discrete'",
+			fix: "Set `mode` to 'continuous', 'discrete', or 'autopilot'",
 		})
 	}
 
@@ -2031,6 +2142,249 @@ export function intentDir(slug: string): string {
 	return join(findHaikuRoot(), "intents", slug)
 }
 
+// ── Intent-status helpers (V-06: shared parser, no substring checks) ───────
+//
+// `isIntentLocked(intentDir)` and `isIntentArchived(intentDir)` are the
+// canonical shared helpers used by every code path that asks "is this
+// intent locked?" or "is this intent archived?". They parse the
+// `intent.md` frontmatter via `gray-matter` so YAML quoting / whitespace
+// variants (`status: 'locked'`, `status:    locked`, `status: "archived"`,
+// etc.) all classify correctly, and so body text containing the literal
+// substring `status: locked` (e.g. an operator runbook excerpt) does NOT
+// trip a false positive.
+//
+// `intentDirAbsPath` is the absolute path returned by `intentDir(slug)`
+// (or unitIntentDir, etc.). Both helpers swallow filesystem and parse
+// errors and return `false` on any failure — caller treats unknown state
+// as "not locked / not archived" so missing files don't block writes.
+//
+// Locked check inspects `status === "locked"`. Archived check inspects
+// EITHER `status === "archived"` (legacy/terminal path) OR
+// `archived === true` (new boolean field used by haiku_intent_archive /
+// haiku_intent_unarchive). Both forms have to classify as archived for
+// upload-route + MCP-tool gates to agree on intent state.
+
+/** Return true when the intent at `intentDirAbsPath` has frontmatter
+ *  `status: locked` (any YAML quoting). False on parse error or missing
+ *  file — callers treat unknown state as "not locked". */
+export function isIntentLocked(intentDirAbsPath: string): boolean {
+	try {
+		const intentFile = join(intentDirAbsPath, "intent.md")
+		if (!existsSync(intentFile)) return false
+		const raw = readFileSync(intentFile, "utf-8")
+		const { data } = matter(raw)
+		return (data as Record<string, unknown>).status === "locked"
+	} catch {
+		return false
+	}
+}
+
+/** Return true when the intent at `intentDirAbsPath` is archived via
+ *  EITHER `status: archived` (legacy) OR `archived: true` (boolean
+ *  field). False on parse error or missing file. */
+export function isIntentArchived(intentDirAbsPath: string): boolean {
+	try {
+		const intentFile = join(intentDirAbsPath, "intent.md")
+		if (!existsSync(intentFile)) return false
+		const raw = readFileSync(intentFile, "utf-8")
+		const { data } = matter(raw)
+		const fm = data as Record<string, unknown>
+		return fm.status === "archived" || fm.archived === true
+	} catch {
+		return false
+	}
+}
+
+// ── Author-identity attribution (V-03: claim, not authority) ───────────────
+//
+// `claimed_author_id` is the canonical attribution field on
+// `write-audit.jsonl` and `action-log.jsonl` entries written by both
+// `haiku_human_write` (MCP) and the SPA upload routes (HTTP). It is
+// SELF-REPORTED — the agent or the SPA submitter says who they are, the
+// server records it as a CLAIM, no cross-check is performed. The legacy
+// field name `human_author_id` was misleading because consumers (and
+// reviewers reading audit logs) treated it as an authoritative identity
+// when it has always been agent-supplied. The rename matches VULN-REPORT
+// V-03 fix #2.
+//
+// Forward-only audit semantics: existing on-disk lines retain their
+// legacy `human_author_id` key unchanged (audit logs are append-only).
+// Readers MUST honour `claimed_author_id ?? human_author_id` so legacy
+// records continue to surface attribution. Writers MUST stamp the new
+// `claimed_author_id` field on every new line.
+//
+// Server-side identity binding (Option A) is explicitly OUT OF SCOPE
+// here and tracked as a follow-up: the SPA session table has no
+// reviewer-email field today, and capturing one requires a session-
+// bootstrap UI flow + ReviewSession schema extension. Until that lands,
+// renaming the field is the integrity-honest path: consumers see "this
+// is what the caller claimed" rather than "this is who wrote the file".
+
+/** Read the attribution claim from an audit-log or action-log record,
+ *  honouring the rename precedence: `claimed_author_id ?? human_author_id`.
+ *  Returns null when neither field is present or both are null. */
+export function readClaimedAuthorId(
+	record: Record<string, unknown>,
+): string | null {
+	const claimed = record.claimed_author_id
+	if (typeof claimed === "string" && claimed.length > 0) return claimed
+	const legacy = record.human_author_id
+	if (typeof legacy === "string" && legacy.length > 0) return legacy
+	return null
+}
+
+// ── Intent-scope tick counter (V-05: deterministic SPA-upload tick) ────────
+//
+// `getIntentScopeTickCounter(intentDirAbsPath)` returns a deterministic
+// monotonically-increasing counter scoped to the intent (NOT to any
+// individual stage). Used by the SPA upload route when `stage === null`
+// (intent-scope `knowledge/` uploads) so two consecutive uploads in the
+// same wall-clock millisecond can't pick non-deterministic tick values
+// from `readdirSync` order across stage state.json files.
+//
+// Storage: a single integer in `.haiku/intents/{slug}/intent-tick.json`
+// alongside intent.md. Each call atomically increments and returns the
+// new value. The counter is independent from per-stage `state.json
+// .iteration` counters — the drift gate's consumer-side fix unions
+// per-stage and intent-scope action-log entries when classifying tracked
+// files, so the two counters never need to share a key space.
+//
+// The drift gate's per-tick action-log lookup
+// (`drift-detection-gate.ts`) reads BOTH the firing stage's tick AND
+// every intent-scope tick observed for the file via the
+// `intentScopeActionLog` union. That's why the producer-side counter
+// being deterministic is necessary but not sufficient — the consumer
+// fix lives in `drift-detection-gate.ts`.
+//
+// Concurrency: this implementation is a best-effort single-process
+// counter. Two concurrent SPA uploads from the same MCP process see
+// distinct returned values because the read-increment-write happens on
+// the JS single thread before the next `await` boundary. The persisted
+// value is durable because the producer writes the file via
+// tempfile + atomic-rename BEFORE returning, so a follow-up call (in
+// the same process or a fresh one) reads the just-incremented value
+// rather than the prior. Cross-process races (an attacker spawning a
+// second MCP) are not in scope; a real fix for that lives in the
+// audit-log hash-chaining follow-up.
+
+/** Path to the intent-scope tick counter file. */
+function intentScopeTickPath(intentDirAbsPath: string): string {
+	return join(intentDirAbsPath, "intent-tick.json")
+}
+
+/** Thrown when `getIntentScopeTickCounter` cannot persist the
+ *  incremented value. Callers MUST fail their request rather than swallow
+ *  this — silently returning a non-persisted value would re-issue the same
+ *  counter on the next call and collide entry IDs in the V-05 producer
+ *  contract (see drift-detection-gate.ts consumer-side fix). */
+export class IntentScopeTickPersistError extends Error {
+	constructor(message: string) {
+		super(message)
+		this.name = "IntentScopeTickPersistError"
+	}
+}
+
+/** Atomically read, increment, and persist the intent-scope tick
+ *  counter, returning the freshly-incremented value (so the first call
+ *  returns 1, second returns 2, etc.) — never returns 0 to avoid
+ *  colliding with the per-stage tick-counter sentinel.
+ *
+ *  Atomicity (single-process): the increment is computed on the JS
+ *  single thread and persisted via tempfile + `renameSync` BEFORE the
+ *  function returns. POSIX `rename(2)` is a single syscall — a concurrent
+ *  reader either sees the prior value or the new value, never a partial
+ *  write. The tempfile lives in the same directory as the target so the
+ *  rename is same-filesystem (atomic).
+ *
+ *  V-04 (Symlink TOCTOU): does NOT use `mkdirSync(..., { recursive: true })`.
+ *  The intent dir is the workflow engine's substrate — its non-existence
+ *  here is a corruption signal, not something the producer should paper
+ *  over with a recursive create. We `lstatSync` the intent dir to refuse
+ *  symlinks, then assert it's a real directory; the tempfile + rename are
+ *  parented at the intent dir so we re-use the same filesystem object the
+ *  workflow engine validated on intent setup.
+ *
+ *  Failure mode: if the persistence step fails (disk full, permission
+ *  denied, parent dir missing or replaced by a symlink), throws
+ *  `IntentScopeTickPersistError`. Callers MUST surface a hard failure
+ *  rather than swallow — returning a non-persisted value would reissue
+ *  the same counter on the next call, breaking the V-05 collision-free
+ *  entry-id contract.
+ *
+ *  Synchronous for the same reason `getCurrentTickCounter` is
+ *  synchronous: the upload-route handler calls it inline and the
+ *  drift-gate consumer reads the resulting action-log entry on the
+ *  next tick (also synchronously). */
+export function getIntentScopeTickCounter(intentDirAbsPath: string): number {
+	const tickFile = intentScopeTickPath(intentDirAbsPath)
+	const tickDir = dirname(tickFile)
+
+	// V-04 chokepoint: refuse to create the parent dir. If it doesn't
+	// exist or is a symlink, that's a corruption signal — not something
+	// the counter producer is allowed to silently work around.
+	try {
+		const st = lstatSync(tickDir)
+		if (st.isSymbolicLink()) {
+			throw new IntentScopeTickPersistError(
+				`intent dir '${tickDir}' is a symlink — refusing (V-04)`,
+			)
+		}
+		if (!st.isDirectory()) {
+			throw new IntentScopeTickPersistError(
+				`intent dir '${tickDir}' exists but is not a directory`,
+			)
+		}
+	} catch (err) {
+		if (err instanceof IntentScopeTickPersistError) throw err
+		throw new IntentScopeTickPersistError(
+			`cannot stat intent dir '${tickDir}': ${err instanceof Error ? err.message : String(err)}`,
+		)
+	}
+
+	// Read current. A read failure (corrupt JSON, transient I/O) resets to
+	// 0 so the next persist starts the counter at 1. The persist step's
+	// hard-throw guarantees that even a "reset to 0" path can't return a
+	// non-durable value to the caller.
+	let current = 0
+	try {
+		if (existsSync(tickFile)) {
+			const raw = readFileSync(tickFile, "utf-8")
+			const parsed = JSON.parse(raw) as { tick?: unknown }
+			if (typeof parsed.tick === "number" && parsed.tick >= 0) {
+				current = parsed.tick
+			}
+		}
+	} catch {
+		current = 0
+	}
+	const next = current + 1
+
+	// Tempfile + atomic rename. Tempfile lives in the intent dir (same
+	// filesystem as the target) so `renameSync` is a single syscall and
+	// either lands fully or not at all. Random suffix avoids collisions
+	// across concurrent writers in the same process.
+	const tmpPath = join(
+		tickDir,
+		`.intent-tick-${process.pid}-${randomBytes(6).toString("hex")}.json.tmp`,
+	)
+	try {
+		writeFileSync(tmpPath, JSON.stringify({ tick: next }, null, 2))
+		renameSync(tmpPath, tickFile)
+	} catch (err) {
+		// Best-effort cleanup of the tempfile if the rename never landed.
+		try {
+			unlinkSync(tmpPath)
+		} catch {
+			// already gone or never created — ignore
+		}
+		throw new IntentScopeTickPersistError(
+			`failed to persist intent-scope tick counter at '${tickFile}': ${err instanceof Error ? err.message : String(err)}`,
+		)
+	}
+
+	return next
+}
+
 /**
  * Return the unit's worktree intent dir if the worktree exists on disk,
  * else the main intent dir. Used to validate unit-produced artifacts BEFORE
@@ -3096,6 +3450,12 @@ export const UNIT_FRONTMATTER_SCHEMA = {
 			description:
 				"On revisit iterations, list of FB IDs this unit addresses (e.g. `[FB-01, FB-03]`). Every pending FB must be claimed by some unit's `closes:` to allow advancement.",
 		},
+		applicable_skills: {
+			type: "array",
+			items: { type: "string" },
+			description:
+				"Skill slugs (slash-command names without the leading `/`) identified as relevant for this unit during elaboration. The elaborator populates this from the installed skill registry. Hat subagent prompts surface these automatically so subagents know which skills to reach for.",
+		},
 	},
 	// workflow-driven fields. Agents MUST NOT set these — the workflow engine owns
 	// transitions via haiku_unit_advance_hat / haiku_unit_reject_hat /
@@ -3174,6 +3534,178 @@ export const CREATE_TIME_FB_FIELDS = [
 	"attachment",
 	"inline_anchor",
 ] as const
+
+// ── Intent frontmatter — SCHEMA IS THE SSOT ───────────────────────────────
+//
+// Mirrors plugin/schemas/intent.schema.json. AJV-validated when an agent
+// calls haiku_intent_set; the `propertyNames.not.enum` list rejects
+// engine-only fields the workflow engine owns (status, active_stage,
+// phase, completion_review_*, completed_at, etc).
+//
+// This is parallel to UNIT_FRONTMATTER_SCHEMA — same SSOT pattern.
+
+export const INTENT_FRONTMATTER_SCHEMA = {
+	type: "object",
+	properties: {
+		title: { type: "string", minLength: 1 },
+		mode: {
+			type: "string",
+			enum: ["continuous", "discrete", "autopilot", "discrete-hybrid"],
+		},
+		skip_stages: { type: "array", items: { type: "string" } },
+		intent_completion_review: { type: "boolean" },
+		// `studio` is set on creation by haiku_select_studio and is
+		// immutable thereafter — accepted by AJV (so tests building
+		// fixtures don't fail) but rejected by the haiku_intent_set
+		// handler with a dedicated `intent_field_immutable` code.
+		studio: { type: "string" },
+	},
+	propertyNames: {
+		not: {
+			enum: [
+				// Engine-managed lifecycle fields
+				"status",
+				"active_stage",
+				"phase",
+				"started_at",
+				"completed_at",
+				"created_at",
+				// Completion-review state machine
+				"completion_review_dispatched",
+				"completion_review_skipped",
+				"completion_review_entered_at",
+				"completion_review_dispatched_at",
+				// Engine-derived collections
+				"stages",
+				"composite",
+				"intent_reviewed",
+				// Archive lifecycle (toggle via haiku_intent_archive / _unarchive)
+				"archived",
+				"archived_at",
+				// Parent-link (creation-time only)
+				"follows",
+				// Legacy alias for mode
+				"autopilot",
+			],
+		},
+	},
+	additionalProperties: true,
+}
+
+const validateIntentSchema = ajv.compile(INTENT_FRONTMATTER_SCHEMA)
+
+export const AGENT_AUTHORABLE_INTENT_FIELDS = Object.keys(
+	INTENT_FRONTMATTER_SCHEMA.properties,
+) as ReadonlyArray<string>
+
+export const FSM_DRIVEN_INTENT_FIELDS = INTENT_FRONTMATTER_SCHEMA.propertyNames
+	.not.enum as ReadonlyArray<string>
+
+const INTENT_IMMUTABLE_FIELDS: ReadonlyArray<string> = ["studio"]
+
+// ── Stage state.json — SCHEMA IS THE SSOT ─────────────────────────────────
+//
+// Mirrors plugin/schemas/stage.schema.json. Stage state is entirely
+// engine-managed — there are no agent-authorable fields. The schema
+// exists so haiku_stage_set can reject every call with a clear
+// `stage_field_engine_only` code instead of silently accepting writes
+// that bypass workflow lifecycle invariants. The handler validates
+// structure before writing so future engine-internal callers (or
+// careful manual recovery flows) get type-safety.
+
+export const STAGE_STATE_SCHEMA = {
+	type: "object",
+	properties: {
+		stage: { type: "string" },
+		status: {
+			type: "string",
+			enum: ["pending", "active", "completed", "blocked"],
+		},
+		phase: {
+			type: "string",
+			enum: ["", "elaborate", "execute", "review", "gate"],
+		},
+		started_at: { type: ["string", "null"] },
+		completed_at: { type: ["string", "null"] },
+		gate_entered_at: { type: ["string", "null"] },
+		gate_outcome: { type: ["string", "null"] },
+		visits: { type: "integer", minimum: 0 },
+		iterations: { type: "array" },
+		elaboration_turns: { type: "integer", minimum: 0 },
+		decision_log: { type: "array" },
+	},
+	additionalProperties: true,
+}
+
+export const STAGE_STATE_FIELDS = Object.keys(
+	STAGE_STATE_SCHEMA.properties,
+) as ReadonlyArray<string>
+
+// ── Settings.yml — schema loaded from plugin/schemas/settings.schema.json ─
+//
+// settings.schema.json uses `$ref: "providers/<name>.schema.json"` to
+// pull in per-provider config shapes. AJV's compiler resolves refs by
+// $id, so all referenced schemas have to be added BEFORE compile.
+// `validateSettingsCandidate` lazy-loads everything in plugin/schemas/
+// (settings + providers + state) on first call and reuses the compiled
+// validator on subsequent calls.
+
+import { readdirSync as _readdirSyncForSchema } from "node:fs"
+
+let _validateSettingsCandidate: ((data: unknown) => boolean) | null = null
+let _validateSettingsErrors: (() => unknown[]) | null = null
+function validateSettingsCandidate(data: unknown): boolean {
+	if (!_validateSettingsCandidate) {
+		// Build a fresh AJV instance keyed on the provider $refs the
+		// settings schema declares. Reusing the package-global `ajv`
+		// would pollute that instance with provider schemas every
+		// other validator already compiles fine without.
+		const settingsAjv = new Ajv({
+			allErrors: true,
+			strict: false,
+			// Refs resolve relative to the file location, not the $id —
+			// the settings.schema.json $id is a public URL but the refs
+			// are filesystem-relative. addSchema with key=filename lets
+			// AJV match them.
+		})
+		const pluginRoot = resolvePluginRoot()
+		const providersDir = join(pluginRoot, "schemas", "providers")
+		// Settings schema $id is `https://haiku.dev/schemas/haiku-settings.schema.json`,
+		// and refs are `providers/<name>.schema.json` (relative). AJV
+		// resolves them against the parent $id, producing
+		// `https://haiku.dev/schemas/providers/<name>.schema.json`.
+		// Provider schemas declare a different $id
+		// (`https://haikumethod.ai/...`), so we have to register them
+		// under the URI the resolver will look up. Drop the inner $id
+		// so AJV doesn't refuse the registration as a duplicate.
+		if (existsSync(providersDir)) {
+			const SETTINGS_BASE = "https://haiku.dev/schemas/"
+			for (const f of _readdirSyncForSchema(providersDir)) {
+				if (!f.endsWith(".schema.json")) continue
+				try {
+					const sub = JSON.parse(
+						readFileSync(join(providersDir, f), "utf8"),
+					) as Record<string, unknown>
+					sub.$id = `${SETTINGS_BASE}providers/${f}`
+					settingsAjv.addSchema(sub)
+				} catch {
+					/* skip malformed schemas — non-fatal */
+				}
+			}
+		}
+		const settingsPath = join(pluginRoot, "schemas", "settings.schema.json")
+		const settingsSchema: Record<string, unknown> = existsSync(settingsPath)
+			? JSON.parse(readFileSync(settingsPath, "utf8"))
+			: { type: "object", additionalProperties: true }
+		const validator = settingsAjv.compile(settingsSchema)
+		_validateSettingsCandidate = validator as unknown as (d: unknown) => boolean
+		_validateSettingsErrors = () => validator.errors as unknown[]
+	}
+	return _validateSettingsCandidate(data)
+}
+function settingsValidationErrors(): unknown[] {
+	return _validateSettingsErrors ? _validateSettingsErrors() : []
+}
 
 // ── Output schema fragments (reused across tool defs) ─────────────────────
 //
@@ -4414,13 +4946,22 @@ export function writeFeedbackFile(
 		}
 	}
 
+	// V-10 server-side sanitization. Every external-input body field flows
+	// through this single chokepoint before it hits disk. Strips dangerous
+	// HTML tags (<script>, <iframe>, <object>, <style>, <form>, <embed>),
+	// inline event handlers (on*=), dangerous attributes (formaction,
+	// srcdoc), and dangerous URL schemes (javascript:, vbscript:,
+	// data:text/html) from both HTML attributes and markdown link/image
+	// syntax. Markdown safe constructs are preserved.
+	const sanitizedBody = sanitizeFeedbackBody(opts.body)
+
 	// Link the attachment via the server route so MarkdownViewer's
 	// default <img> renders correctly in the review UI. Storing a
 	// root-relative URL (rather than `./…`) avoids depending on the
 	// current page's path — all review pages share the same origin.
 	const bodyWithAttachment = attachmentBasename
-		? `${opts.body.trim()}\n\n![annotation](/api/feedback-attachment/${encodeURIComponent(slug)}/${encodeURIComponent(stage)}/${encodeURIComponent(attachmentBasename)})\n`
-		: opts.body
+		? `${sanitizedBody.trim()}\n\n![annotation](/api/feedback-attachment/${encodeURIComponent(slug)}/${encodeURIComponent(stage)}/${encodeURIComponent(attachmentBasename)})\n`
+		: sanitizedBody
 
 	const allowedResolutions = new Set([
 		"question",
@@ -5066,7 +5607,10 @@ export function appendFeedbackReply(
 				: `Error: feedback '${feedbackId}' not found (intent-scope)`,
 		}
 	}
-	const trimmed = reply.body.trim()
+	// V-10 server-side sanitization on reply bodies — same chokepoint
+	// rationale as writeFeedbackFile above.
+	const sanitized = sanitizeFeedbackBody(reply.body)
+	const trimmed = sanitized.trim()
 	if (trimmed.length === 0) {
 		return { ok: false, error: "Error: reply body cannot be empty" }
 	}
@@ -5186,6 +5730,87 @@ export function deleteFeedbackFile(
 	}
 
 	return { ok: true }
+}
+
+// ── Skill discovery ───────────────────────────────────────────────────────
+
+export interface InstalledSkill {
+	slug: string
+	name: string
+	description: string
+	source: "plugin" | "project" | "global"
+}
+
+/**
+ * Enumerate all Claude Code skills (slash commands) visible to the current
+ * session. Three search locations, in priority order (project > global > plugin):
+ *
+ *   1. Project-local skills — `{cwd}/.claude/skills/{slug}/SKILL.md`
+ *   2. Global user plugins  — `~/.claude/plugins/<plugin>/skills/{slug}/SKILL.md`
+ *   3. Plugin-root skills   — `{CLAUDE_PLUGIN_ROOT}/skills/{slug}/SKILL.md`
+ *
+ * De-duplicated by slug (first occurrence wins). More-specific contexts
+ * shadow less-specific ones: a project-local skill overrides a global skill
+ * with the same slug, which in turn overrides a plugin-bundled skill.
+ * Returns an empty array when no skills directory is found; never throws.
+ */
+export function listInstalledSkills(): InstalledSkill[] {
+	const skills: InstalledSkill[] = []
+	const seen = new Set<string>()
+
+	function readSkillDir(dir: string, source: InstalledSkill["source"]): void {
+		if (!existsSync(dir)) return
+		let entries: Dirent[]
+		try {
+			entries = readdirSync(dir, { withFileTypes: true })
+		} catch {
+			return
+		}
+		for (const entry of entries) {
+			if (!entry.isDirectory()) continue
+			const slug = entry.name
+			if (seen.has(slug)) continue
+			const skillFile = join(dir, slug, "SKILL.md")
+			if (!existsSync(skillFile)) continue
+			seen.add(slug)
+			try {
+				const raw = readFileSync(skillFile, "utf8")
+				const { data } = parseFrontmatter(raw)
+				skills.push({
+					slug,
+					name: (data.name as string) || slug,
+					description: (data.description as string) || "",
+					source,
+				})
+			} catch {
+				/* skip malformed skill files */
+			}
+		}
+	}
+
+	// 1. Project-local skills (.claude/skills/ in cwd) — most specific, wins.
+	readSkillDir(join(process.cwd(), ".claude", "skills"), "project")
+
+	// 2. Global user skills (~/.claude/plugins/*/skills/).
+	try {
+		const globalPluginsDir = join(homedir(), ".claude", "plugins")
+		if (existsSync(globalPluginsDir)) {
+			for (const entry of readdirSync(globalPluginsDir, {
+				withFileTypes: true,
+			})) {
+				if (!entry.isDirectory()) continue
+				readSkillDir(join(globalPluginsDir, entry.name, "skills"), "global")
+			}
+		}
+	} catch {
+		/* non-fatal */
+	}
+
+	// 3. Plugin-root skills (haiku plugin's bundled skills) — fallback.
+	const pluginRoot = resolvePluginRoot()
+	if (pluginRoot) readSkillDir(join(pluginRoot, "skills"), "plugin")
+
+	return skills
 }
 
 // ── Tool definitions ───────────────────────────────────────────────────────
@@ -5730,6 +6355,40 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 			required: ["found", "name", "content"],
 		},
 	},
+	// Skill tools
+	{
+		name: "haiku_skill_list",
+		description:
+			"List all Claude Code skills (slash commands) installed in the user's environment — plugin root, project-local (.claude/skills/), and global (~/.claude/plugins/*/skills/). " +
+			"The elaborator calls this to annotate units with `applicable_skills:` frontmatter; hat subagent prompts surface those skills automatically.",
+		inputSchema: { type: "object" as const, properties: {} },
+		outputSchema: {
+			type: "object",
+			properties: {
+				skills: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: {
+							slug: {
+								type: "string",
+								description:
+									"Skill slug — the identifier used in `applicable_skills:` frontmatter (no leading `/`).",
+							},
+							name: { type: "string" },
+							description: { type: "string" },
+							source: {
+								type: "string",
+								enum: ["plugin", "project", "global"],
+							},
+						},
+						required: ["slug", "name", "description", "source"],
+					},
+				},
+			},
+			required: ["skills"],
+		},
+	},
 	// Studio tools
 	{
 		name: "haiku_studio_list",
@@ -5749,7 +6408,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 							description: { type: "string" },
 							category: { type: "string" },
 							stages: { type: "array", items: { type: "string" } },
-							source: { type: "string", description: "project | plugin" },
+							source: { type: "string", enum: ["project", "plugin"] },
 						},
 						required: ["name", "slug"],
 					},
@@ -5833,6 +6492,98 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 				value: { description: "Field value — null when missing." },
 			},
 			required: ["found", "field"],
+		},
+	},
+	{
+		name: "haiku_settings_set",
+		description:
+			"Set a top-level field in .haiku/settings.yml. Validated against plugin/schemas/settings.schema.json. Pass `null` to delete a field. Use this instead of editing the file directly — Edit/Write/MultiEdit on .haiku/settings.yml is denied by the workflow-fields hook.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				field: {
+					type: "string",
+					description:
+						"Top-level field name (e.g. 'studio', 'mockup_format', 'visual_review'). Nested paths are not supported — pass the whole top-level object to replace it.",
+				},
+				value: {
+					type: ["string", "array", "number", "boolean", "null", "object"],
+					description:
+						"New value. Must validate against the field's declared shape in settings.schema.json. Pass null to delete the field.",
+				},
+			},
+			required: ["field", "value"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				field: { type: "string" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
+		},
+	},
+	{
+		name: "haiku_intent_set",
+		description: `Set a frontmatter field on an intent's intent.md. Validated against INTENT_FRONTMATTER_SCHEMA. Agent-authorable fields: ${AGENT_AUTHORABLE_INTENT_FIELDS.join(", ")} (note 'studio' is immutable post-creation). Engine-only fields (${FSM_DRIVEN_INTENT_FIELDS.join(", ")}) are rejected — those are mutated by the workflow engine itself. Use this instead of editing intent.md directly — Edit/Write/MultiEdit on intent.md is denied by the workflow-fields hook.`,
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string" },
+				field: {
+					type: "string",
+					description: `Frontmatter field name. Allowed: ${AGENT_AUTHORABLE_INTENT_FIELDS.filter((f) => !INTENT_IMMUTABLE_FIELDS.includes(f)).join(", ")}.`,
+				},
+				value: {
+					type: ["string", "array", "number", "boolean", "null", "object"],
+					description:
+						"New value. Must match the field's declared type in INTENT_FRONTMATTER_SCHEMA. Mismatches return `intent_field_type_mismatch`.",
+				},
+			},
+			required: ["intent", "field", "value"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				intent: { type: "string" },
+				field: { type: "string" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
+		},
+	},
+	{
+		name: "haiku_stage_set",
+		description:
+			"Set a field on a stage's state.json. Engine-internal — every field in STAGE_STATE_SCHEMA is workflow-managed (status, phase, started_at, completed_at, gate_entered_at, gate_outcome, visits, iterations, etc). Agent calls are rejected with `stage_field_engine_only`. Reserved for future engine-internal routing and operator break-glass paths.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string" },
+				stage: { type: "string" },
+				field: {
+					type: "string",
+					description: `Stage state field. Every field is engine-managed; agent calls are rejected. Schema fields: ${STAGE_STATE_FIELDS.join(", ")}.`,
+				},
+				value: {
+					type: ["string", "array", "number", "boolean", "null", "object"],
+					description: "New value. Must match the field's declared type.",
+				},
+			},
+			required: ["intent", "stage", "field", "value"],
+		},
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				intent: { type: "string" },
+				stage: { type: "string" },
+				field: { type: "string" },
+				message: { type: "string" },
+				error: { type: "string" },
+			},
 		},
 	},
 	// Aggregate / report tools
@@ -7335,6 +8086,25 @@ export function handleStateTool(
 							{ status: "closed", closed_by: args.unit as string },
 							"agent",
 						)
+						// Drift-detection lifecycle hook (unit-09): the
+						// feedback-assessor's terminal close is also a
+						// terminal-status transition for any drift-marker
+						// linked to this feedback id. Best-effort.
+						try {
+							clearMarkersForFeedbackSync(
+								intentDir(args.intent as string),
+								fbId,
+								"closed",
+								{ intentSlug: args.intent as string },
+							)
+						} catch (err) {
+							emitTelemetry("haiku.drift.clear_marker_failed", {
+								intent: args.intent as string,
+								feedback_id: fbId,
+								terminal_status: "closed",
+								error: String((err as Error)?.message ?? err),
+							})
+						}
 					}
 				}
 
@@ -7378,15 +8148,59 @@ export function handleStateTool(
 						intentSlug,
 						args.unit as string,
 					)
+					// Try to extract structured conflict paths the engine
+					// surfaced. The error message contains the literal prefix
+					// `merge_conflict: real conflicts on agent-authored
+					// content require resolution: <comma-separated paths>`
+					// when mergeUnitWorktree classified the failure as a real
+					// conflict (not dirty-tree, not other git error).
+					const conflictMatch = mergeResult.message.match(
+						/^merge_conflict: real conflicts on agent-authored content require resolution: (.+)$/m,
+					)
+					const conflictPaths = conflictMatch
+						? conflictMatch[1]
+								.split(",")
+								.map((p) => p.trim())
+								.filter(Boolean)
+						: []
+
+					if (conflictPaths.length > 0) {
+						// True content conflicts — agent must resolve.
+						// Queue them on the stage's pending-merges file so
+						// haiku_run_next surfaces them in priority order if
+						// multiple unit merges fail in the same wave.
+						return reply(
+							{
+								action: "resolve_merge_conflicts",
+								status: "completed_pending_merge_resolution",
+								intent: args.intent,
+								unit: args.unit,
+								stage: advStage,
+								unit_branch: `haiku/${intentSlug}/${args.unit}`,
+								stage_branch: parentBranchName,
+								conflict_paths: conflictPaths,
+								worktree: worktreePath,
+								message: `Unit ${args.unit} completed its hat sequence, but merging into ${parentBranchName} produced real content conflicts on ${conflictPaths.length} file(s): ${conflictPaths.join(", ")}. The merge is left in-progress — resolve each conflicted file (the workflow engine cannot — they contain agent-authored content), \`git add\` the resolved files, \`git commit\` to complete the merge, then call \`haiku_run_next { intent: "${intentSlug}" }\`. If multiple units in this wave have pending merges, the engine will queue them and surface the next one after this is resolved.`,
+							},
+							{ isError: true },
+						)
+					}
+
+					// Other failure mode (dirty parent worktree, git
+					// machinery error, etc.). Engine cannot auto-recover;
+					// surface to agent with the actual git output.
 					return reply(
 						{
-							action: "merge_conflict",
+							action: "merge_failed",
 							status: "completed_merge_failed",
 							intent: args.intent,
 							unit: args.unit,
+							stage: advStage,
+							unit_branch: `haiku/${intentSlug}/${args.unit}`,
+							stage_branch: parentBranchName,
 							worktree: worktreePath,
 							error: mergeResult.message,
-							message: `Unit completed but merge to parent branch failed: ${mergeResult.message}. RESOLVE: cd to the parent branch (\`git checkout ${parentBranchName}\`), merge manually (\`git merge haiku/${intentSlug}/${args.unit} --no-edit\`), resolve any conflicts, then commit and push. If you cannot resolve, ask the user for help.`,
+							message: `Unit ${args.unit} completed its hat sequence, but the workflow engine could not merge into ${parentBranchName}. Git output: ${mergeResult.message}. Most common cause: the stage branch's primary worktree has uncommitted engine writes from concurrent dispatch. Inspect with \`git status\` on ${parentBranchName}; commit any engine-owned dirty files (state.json, units/*.md, baseline.json), then call \`haiku_run_next { intent: "${intentSlug}" }\` so the engine retries the merge.`,
 						},
 						{ isError: true },
 					)
@@ -8323,6 +9137,11 @@ export function handleStateTool(
 			})
 		}
 
+		// ── Skills ──
+		case "haiku_skill_list": {
+			return reply({ skills: listInstalledSkills() })
+		}
+
 		// ── Studio ──
 		case "haiku_studio_list": {
 			// Unified discovery — listStudios covers both plugin and project studios,
@@ -8401,6 +9220,165 @@ export function handleStateTool(
 			})
 		}
 
+		case "haiku_settings_set": {
+			const field = args.field as string
+			const value = args.value as unknown
+			const errOut = (error: string, message: string) =>
+				reply({ error, field, message }, { isError: true })
+			if (!field || typeof field !== "string") {
+				return errOut("settings_field_required", "`field` is required")
+			}
+			let settingsPath = ""
+			try {
+				settingsPath = join(findHaikuRoot(), "settings.yml")
+			} catch (err) {
+				return errOut(
+					"haiku_root_not_found",
+					`No .haiku/ directory found: ${(err as Error).message}`,
+				)
+			}
+			const settings: Record<string, unknown> = existsSync(settingsPath)
+				? parseYaml(readFileSync(settingsPath, "utf8"))
+				: {}
+			// Validate the post-write shape against settings.schema.json.
+			// Build the candidate object, run AJV, refuse the write on
+			// failure. AJV reports the first error; we surface it
+			// verbatim so the caller can correct.
+			const candidate = { ...settings }
+			if (value === null || value === undefined) {
+				delete candidate[field]
+			} else {
+				candidate[field] = value
+			}
+			if (!validateSettingsCandidate(candidate)) {
+				const first = (
+					settingsValidationErrors() as Array<{
+						instancePath?: string
+						message?: string
+					}>
+				)[0]
+				return errOut(
+					"settings_field_validation_failed",
+					`Field '${field}' fails settings.schema.json validation: ${first?.instancePath || "(root)"} ${first?.message || "invalid"}.`,
+				)
+			}
+			// Write — gray-matter's bundled js-yaml engine handles
+			// stringification consistently with how the file is read.
+			const yamlEngine = (
+				matter as unknown as {
+					engines: { yaml: { stringify: (v: unknown) => string } }
+				}
+			).engines.yaml
+			const yamlOut = yamlEngine.stringify(candidate)
+			writeFileSync(settingsPath, yamlOut)
+			return reply({
+				ok: true,
+				field,
+				message:
+					value === null || value === undefined
+						? `Deleted '${field}' from .haiku/settings.yml`
+						: `Set '${field}' in .haiku/settings.yml`,
+			})
+		}
+
+		case "haiku_intent_set": {
+			const slug = args.intent as string
+			const field = args.field as string
+			const value = args.value as unknown
+			const errOut = (error: string, message: string) =>
+				reply({ error, intent: slug, field, message }, { isError: true })
+			if (!slug) return errOut("intent_required", "`intent` is required")
+			if (!field || typeof field !== "string")
+				return errOut("intent_field_required", "`field` is required")
+
+			// Reject FSM-driven fields up front with a stable code.
+			if ((FSM_DRIVEN_INTENT_FIELDS as readonly string[]).includes(field)) {
+				return errOut(
+					"intent_field_engine_only",
+					`Field '${field}' is workflow engine-managed — agents cannot set it. Engine-only fields: ${FSM_DRIVEN_INTENT_FIELDS.join(", ")}.`,
+				)
+			}
+			// Reject immutable fields with a dedicated code so callers
+			// can distinguish "this field exists but you can't change
+			// it" from "this field doesn't exist".
+			if (INTENT_IMMUTABLE_FIELDS.includes(field)) {
+				return errOut(
+					"intent_field_immutable",
+					`Field '${field}' is immutable after creation.`,
+				)
+			}
+			// Reject unknown fields.
+			if (
+				!(AGENT_AUTHORABLE_INTENT_FIELDS as readonly string[]).includes(field)
+			) {
+				return errOut(
+					"intent_field_unknown",
+					`Field '${field}' is not in INTENT_FRONTMATTER_SCHEMA. Allowed: ${AGENT_AUTHORABLE_INTENT_FIELDS.filter((f) => !INTENT_IMMUTABLE_FIELDS.includes(f)).join(", ")}.`,
+				)
+			}
+
+			let intentFile = ""
+			try {
+				intentFile = join(intentDir(slug), "intent.md")
+			} catch (err) {
+				return errOut(
+					"haiku_root_not_found",
+					`Could not resolve intent dir: ${(err as Error).message}`,
+				)
+			}
+			if (!existsSync(intentFile)) {
+				return errOut(
+					"intent_not_found",
+					`Intent '${slug}' not found at ${intentFile}.`,
+				)
+			}
+
+			// Validate the candidate field+value against the schema.
+			// AJV is run against `{[field]: value}` so a single-field
+			// validation echoes the exact AJV error path.
+			const candidate: Record<string, unknown> = {
+				[field]: value,
+			}
+			if (!validateIntentSchema(candidate)) {
+				const first = validateIntentSchema.errors?.[0]
+				return errOut(
+					"intent_field_type_mismatch",
+					`Field '${field}' fails INTENT_FRONTMATTER_SCHEMA validation: ${first?.instancePath || "(root)"} ${first?.message || "invalid"}.`,
+				)
+			}
+
+			setFrontmatterField(intentFile, field, value)
+			gitCommitState(`haiku: intent ${slug} set ${field} via haiku_intent_set`)
+			return reply({
+				ok: true,
+				intent: slug,
+				field,
+				message: `Set intent.${field} on '${slug}'.`,
+			})
+		}
+
+		case "haiku_stage_set": {
+			const slug = args.intent as string
+			const stage = args.stage as string
+			const field = args.field as string
+			void args.value
+			const errOut = (error: string, message: string) =>
+				reply({ error, intent: slug, stage, field, message }, { isError: true })
+			if (!slug) return errOut("intent_required", "`intent` is required")
+			if (!stage) return errOut("stage_required", "`stage` is required")
+			if (!field || typeof field !== "string")
+				return errOut("stage_field_required", "`field` is required")
+
+			// Every field on stage state.json is engine-managed. Agents
+			// reach this case only when something has gone wrong (typo,
+			// stale instructions). Reject with a clear code so the
+			// caller routes through the proper workflow tool.
+			return errOut(
+				"stage_field_engine_only",
+				`Stage state.json is workflow engine-managed — agents cannot set fields directly. Stage fields are mutated by haiku_run_next ticks (start, advance phase, complete) and lifecycle tools (haiku_unit_advance_hat, haiku_feedback_advance_hat). To force a stage transition manually, use /haiku:repair or /haiku:revisit. Field '${field}' on stage '${stage}' of intent '${slug}' was not written.`,
+			)
+		}
+
 		// ── Dashboard ──
 		case "haiku_dashboard": {
 			const empty = "No intents found. Use /haiku:start to create one."
@@ -8423,9 +9401,9 @@ export function handleStateTool(
 				out += `- Active Stage: ${data.active_stage || "none"}\n`
 				out += `- Mode: ${data.mode || "interactive"}\n`
 
-				const isDiscrete =
-					(data.mode as string) === "discrete" ||
-					(data.mode as string) === "hybrid"
+				// `discrete-hybrid` is a virtual/derived state — never stored on
+				// intent.md. The only stored discrete mode is `"discrete"`.
+				const isDiscrete = (data.mode as string) === "discrete"
 
 				const stagesPath = join(intentsDir, slug, "stages")
 				if (existsSync(stagesPath)) {
@@ -9328,6 +10306,36 @@ export function handleStateTool(
 				}
 			}
 
+			// Drift-detection lifecycle hook (unit-09): if this update
+			// transitions the FB into a terminal state (closed or rejected),
+			// walk drift-markers.json for any open marker linked to this
+			// feedback id and clear each. Per AC-G5 / AC-SF3 and
+			// DATA-CONTRACTS.md §4.4, `addressed` is a mid-state and does
+			// NOT clear the marker. Best-effort: failures are logged via
+			// telemetry but do not roll back the feedback update — the
+			// marker store is a suppression optimisation, not an integrity
+			// guarantee (ARCHITECTURE.md §8.4).
+			if (
+				updateFields.status === "closed" ||
+				updateFields.status === "rejected"
+			) {
+				try {
+					clearMarkersForFeedbackSync(
+						intentDir(intent),
+						feedbackId,
+						updateFields.status,
+						{ intentSlug: intent },
+					)
+				} catch (err) {
+					emitTelemetry("haiku.drift.clear_marker_failed", {
+						intent,
+						feedback_id: feedbackId,
+						terminal_status: updateFields.status,
+						error: String((err as Error)?.message ?? err),
+					})
+				}
+			}
+
 			const updateGitResult = gitCommitState(
 				stage
 					? `feedback: update ${feedbackId} in ${stage}`
@@ -9610,6 +10618,22 @@ export function handleStateTool(
 				matter.stringify(`\n${rejectBody}\n`, rejectData),
 			)
 
+			// Drift-detection lifecycle hook (unit-09): rejection is a
+			// terminal state — clear any open drift-marker linked to this
+			// feedback id and update the baseline. Best-effort.
+			try {
+				clearMarkersForFeedbackSync(intentDir(intent), feedbackId, "rejected", {
+					intentSlug: intent,
+				})
+			} catch (err) {
+				emitTelemetry("haiku.drift.clear_marker_failed", {
+					intent,
+					feedback_id: feedbackId,
+					terminal_status: "rejected",
+					error: String((err as Error)?.message ?? err),
+				})
+			}
+
 			const rejectGitResult = gitCommitState(
 				stage
 					? `feedback: reject ${feedbackId} in ${stage}`
@@ -9837,7 +10861,13 @@ export function handleStateTool(
 			const intentArg = args.intent as string
 			const stageArg = (args.stage as string) || ""
 			const fbId = args.feedback_id as string
-			const newBody = (args.body as string) ?? ""
+			const rawBody = (args.body as string) ?? ""
+
+			// V-10 server-side sanitization. The fixer-hat path lands here
+			// when an agent edits an FB body during the fix loop; sanitize
+			// at the same chokepoint as writeFeedbackFile / appendFeedbackReply
+			// so a hostile agent cannot plant XSS in the persisted FB.
+			const newBody = sanitizeFeedbackBody(rawBody)
 
 			if (!intentArg || !fbId) {
 				return reply(
@@ -10076,6 +11106,27 @@ export function handleStateTool(
 			if (closedBy) newFm.closed_by = closedBy
 			writeFileSync(advPath, matter.stringify(`${advBody.trimEnd()}\n`, newFm))
 			sealIntentState(intentArg)
+
+			// Drift-detection lifecycle hook (unit-09): when the fix-loop
+			// terminal hat auto-closes the FB, walk drift-markers.json for
+			// any open marker linked to this feedback id and clear each.
+			// Best-effort: failures are surfaced via telemetry but do not
+			// block the advance.
+			if (isLast) {
+				try {
+					clearMarkersForFeedbackSync(intentDir(intentArg), fbId, "closed", {
+						intentSlug: intentArg,
+					})
+				} catch (err) {
+					emitTelemetry("haiku.drift.clear_marker_failed", {
+						intent: intentArg,
+						feedback_id: fbId,
+						terminal_status: "closed",
+						error: String((err as Error)?.message ?? err),
+					})
+				}
+			}
+
 			emitTelemetry(
 				isLast ? "haiku.feedback.closed" : "haiku.feedback.hat_advanced",
 				{
@@ -10297,11 +11348,6 @@ export function handleStateTool(
 				mcp_version: MCP_VERSION,
 				plugin_version: getPluginVersion(),
 			}
-			const pending = getPendingVersion()
-			if (pending) info.pending_update = pending
-			if (hasPendingUpdate())
-				info.update_note =
-					"A new version has been downloaded and will activate on the next tool call."
 			return reply(info)
 		}
 

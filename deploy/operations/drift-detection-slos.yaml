@@ -1,0 +1,166 @@
+# SLOs — Drift detection + upstream reconciliation
+#
+# These SLOs cover the out-of-band human file modification telemetry surface
+# emitted by `packages/haiku/src/orchestrator/workflow/drift-detection-gate.ts`
+# and `upstream-reconciliation.ts`. Every SLO has an explicit error budget
+# (you can't burn what you can't measure). All targets are intentionally
+# conservative — the drift gate is on the hot path of every workflow tick,
+# and a misbehaving gate stalls every active intent in the org.
+#
+# Service: haiku-mcp
+# Owner:   H·AI·K·U Operations
+# Window:  rolling 28-day windows except where noted (latency uses 7d)
+#
+# Format: SRE Workbook style (see https://sre.google/workbook/implementing-slos/)
+# This file is the source of truth. Backend translation lives in
+# `drift-detection-alerts.yaml` (Sentry / Prometheus rules) below.
+
+slos:
+  # ─────────────────────────────────────────────────────────────────
+  # AVAILABILITY — does the gate run cleanly when invoked?
+  # ─────────────────────────────────────────────────────────────────
+  - name: drift-gate-availability
+    description: >
+      Drift gate ticks complete without a baseline-corrupt or write-failed
+      error. Healthy = `haiku.drift.gate.tick` count == clean-completion
+      count (no `haiku.drift.baseline.corrupt` or
+      `haiku.drift.baseline.write_failed` between tick start and the next
+      tick).
+    sli:
+      good_events_query: |
+        count(haiku.drift.gate.tick)
+          - count(haiku.drift.baseline.corrupt)
+          - count(haiku.drift.baseline.write_failed)
+      total_events_query: count(haiku.drift.gate.tick)
+    objective: 99.5  # percent
+    error_budget_minutes: 201.6  # 0.5% of 28 days = 201.6 min
+    window: 28d
+    rationale: >
+      A corrupt or write-failed baseline blocks drift detection until manual
+      repair. 99.5% allows ~3.4 hours of broken gate per month before the
+      budget burns. Below this, every active intent on this host is at risk
+      of silently regenerating over human edits — the exact failure this
+      feature exists to prevent.
+
+  # ─────────────────────────────────────────────────────────────────
+  # LATENCY — is the gate fast enough to stay off the critical path?
+  # ─────────────────────────────────────────────────────────────────
+  - name: drift-gate-latency-p95
+    description: >
+      `haiku.drift.gate.duration_ms` p95 stays under 500ms. The gate fires
+      on every workflow tick across every active intent; if it slows down,
+      every tick slows down.
+    sli:
+      good_events_query: |
+        count(haiku.drift.gate.duration_ms < 500)
+      total_events_query: count(haiku.drift.gate.duration_ms)
+    objective: 95
+    window: 7d
+    rationale: >
+      Workflow ticks are user-perceptible. 500ms p95 keeps the gate
+      negligible relative to subagent dispatch (~seconds). If p95 climbs
+      above 500ms, the surface scan (file count × stat) is the likely
+      cause — saturation signal `haiku.drift.surface.size` confirms.
+
+  - name: reconciliation-fingerprint-latency-p95
+    description: >
+      `haiku.reconciliation.fingerprint.duration_ms` p95 stays under 750ms.
+      Fingerprint is content-hash over upstream corpus; it grows with
+      knowledge artifact volume.
+    sli:
+      good_events_query: |
+        count(haiku.reconciliation.fingerprint.duration_ms < 750)
+      total_events_query: count(haiku.reconciliation.fingerprint.duration_ms)
+    objective: 95
+    window: 7d
+    rationale: >
+      Fingerprint reads + hashes upstream corpus on every tick. 750ms p95
+      tolerates large knowledge corpora (50+ files) before signalling
+      saturation via `haiku.reconciliation.corpus.bytes`.
+
+  # ─────────────────────────────────────────────────────────────────
+  # ERROR RATE — alert on causes, not symptoms (per SRE hat directive)
+  # ─────────────────────────────────────────────────────────────────
+  - name: baseline-write-error-rate
+    description: >
+      `haiku.drift.baseline.write_failed` rate stays under 1% of ticks.
+      Cause-based alert: write failures mean disk-full, permission, or
+      filesystem corruption — the gate cannot self-recover.
+    sli:
+      good_events_query: |
+        count(haiku.drift.gate.tick)
+          - count(haiku.drift.baseline.write_failed)
+      total_events_query: count(haiku.drift.gate.tick)
+    objective: 99
+    window: 28d
+    rationale: >
+      Cause: persistent storage subsystem fault. Symptom (the agent acting
+      on stale baselines) is invisible; only the cause is observable. This
+      SLO names the cause directly.
+
+  - name: reconciliation-write-error-rate
+    description: >
+      `haiku.reconciliation.fingerprint.write_failed` rate stays under 1%.
+      Same root cause class as baseline-write-error-rate but on a different
+      file (state.json fingerprint vs. baseline.json).
+    sli:
+      good_events_query: |
+        count(haiku.reconciliation.fingerprint.duration_ms)
+          - count(haiku.reconciliation.fingerprint.write_failed)
+      total_events_query: count(haiku.reconciliation.fingerprint.duration_ms)
+    objective: 99
+    window: 28d
+
+  # ─────────────────────────────────────────────────────────────────
+  # SATURATION — capacity warnings before the gate breaks
+  # ─────────────────────────────────────────────────────────────────
+  - name: drift-findings-per-file-fidelity
+    description: >
+      99% of drift-gate ticks produce per-file findings rather than a
+      single mass-synthesized stage-level finding. The gate synthesizes
+      a stage-level finding when > 50% of the tracked surface drifts in
+      one tick (`drift-detection-gate.ts` §9); above that threshold,
+      per-file diff fidelity is lost for the tick. NOTE: the trigger is
+      drift volume relative to surface, NOT absolute surface size or
+      memory pressure — a small surface (e.g. 40 files) with 30 files
+      changed in one tick will synthesize the same as a large one.
+    sli:
+      good_events_query: |
+        count(haiku.drift.gate.tick)
+          - count(haiku.drift.findings.mass_synthesized)
+      total_events_query: count(haiku.drift.gate.tick)
+    objective: 99
+    window: 28d
+    rationale: >
+      Defines what "healthy" looks like (per SRE hat directive: "define
+      healthy before unhealthy"). Healthy = full per-file drift detection
+      on every tick. Mass-synthesis mode is a degraded state; it works,
+      but the agent's classification fidelity drops because diffs
+      collapse. Burning this SLO budget signals out-of-band bulk
+      operations (regen, rebase, refactor) — see runbook
+      `drift-findings-mass-synthesized`.
+
+  - name: pii-deny-list-zero-stripping
+    description: >
+      Zero PII deny-list strips per 28d window. Every strip indicates a
+      code path that is attempting to put body-shaped content into a
+      telemetry attribute — a programming error, not a runtime condition.
+    sli:
+      good_events_query: |
+        # Stderr warning count from runtime PII gate (PII_DENY_KEYS hits)
+        # surfaced via log scraper to a metric named pii.deny.strip.
+        count(pii.deny.strip == 0)
+      total_events_query: count(haiku.drift.gate.tick)
+    objective: 100
+    window: 28d
+    rationale: >
+      A PII strip is a regression caught at the runtime safety net. The
+      static-grep CI gate (`pii-grep-gate-runs`) is the first line; this
+      SLO catches anything that slipped through. Zero-tolerance because
+      a leak past both gates would be a privacy incident.
+
+# ─────────────────────────────────────────────────────────────────────
+# Burn-rate alerts derived from these SLOs are defined separately in
+# `drift-detection-alerts.yaml`. Multi-window multi-burn-rate per the
+# Google SRE Workbook (1h/6h fast burn + 6h/24h slow burn).
+# ─────────────────────────────────────────────────────────────────────

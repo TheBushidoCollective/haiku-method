@@ -346,7 +346,7 @@ async function walkArtifactsDir(dir: string): Promise<string[]> {
 	const out: string[] = []
 	let entries: Dirent<string>[]
 	try {
-		entries = await readdir(dir, { withFileTypes: true })
+		entries = await readdir(dir, { withFileTypes: true, encoding: "utf8" })
 	} catch {
 		return out
 	}
@@ -455,6 +455,7 @@ async function parseUnitOutputs(
 	try {
 		stageEntries = await readdir(join(intentDir, "stages"), {
 			withFileTypes: true,
+			encoding: "utf8",
 		})
 	} catch {
 		return out
@@ -465,7 +466,9 @@ async function parseUnitOutputs(
 		const unitsDir = join(intentDir, "stages", stageName, "units")
 		let unitFiles: string[]
 		try {
-			unitFiles = (await readdir(unitsDir, { withFileTypes: true }))
+			unitFiles = (
+				await readdir(unitsDir, { withFileTypes: true, encoding: "utf8" })
+			)
 				.filter((e) => e.isFile() && UNIT_FILENAME_RE.test(e.name))
 				.map((e) => e.name)
 				.sort()
@@ -551,7 +554,7 @@ async function walkStageDirRecursive(
 	const out: Array<{ absPath: string; relFromStage: string }> = []
 	let entries: Dirent<string>[]
 	try {
-		entries = await readdir(stageDir, { withFileTypes: true })
+		entries = await readdir(stageDir, { withFileTypes: true, encoding: "utf8" })
 	} catch {
 		return out
 	}

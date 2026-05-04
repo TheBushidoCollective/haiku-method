@@ -1,0 +1,98 @@
+{
+  "knowledge/ARCHITECTURE.md": {
+    "path": "knowledge/ARCHITECTURE.md",
+    "sha256": "54e510528cba5e85848d277531c20643e9e9383c00a8f2c1a4034cc46305141d",
+    "bytes": 55622,
+    "mtime_ns": 1777672634909000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-01T22:01:48.994Z",
+    "acknowledged_via": "baseline-init",
+    "stage": null,
+    "tracking_class": "knowledge"
+  },
+  "knowledge/CONVERSATION-CONTEXT.md": {
+    "path": "knowledge/CONVERSATION-CONTEXT.md",
+    "sha256": "b1ce1fc5b737fd3be303cd2b46bf24952dbfe8a7d56bb350644922faa2656b60",
+    "bytes": 719,
+    "mtime_ns": 1777672634909000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-01T22:01:48.994Z",
+    "acknowledged_via": "baseline-init",
+    "stage": null,
+    "tracking_class": "knowledge"
+  },
+  "knowledge/COVERAGE-MAPPING.md": {
+    "path": "knowledge/COVERAGE-MAPPING.md",
+    "sha256": "898fb9f387479bc7ca62651f363a9a11e393e3ecd64a61aa32e48d10afd00afc",
+    "bytes": 55954,
+    "mtime_ns": 1777672634909000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-01T22:01:48.994Z",
+    "acknowledged_via": "baseline-init",
+    "stage": null,
+    "tracking_class": "knowledge"
+  },
+  "knowledge/DATA-CONTRACTS.md": {
+    "path": "knowledge/DATA-CONTRACTS.md",
+    "sha256": "9eaa213a5d4f8919615e37735ba1910e8633f9928f7f05318a317026fb747f91",
+    "bytes": 35461,
+    "mtime_ns": 1777672634909000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-01T22:01:48.994Z",
+    "acknowledged_via": "baseline-init",
+    "stage": null,
+    "tracking_class": "knowledge"
+  },
+  "knowledge/DESIGN-DECISIONS.md": {
+    "path": "knowledge/DESIGN-DECISIONS.md",
+    "sha256": "16eafd076396db1d9062db820cdcae0958044b52e9f4c1c1b80d4927e408446c",
+    "bytes": 23237,
+    "mtime_ns": 1777672634909000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-01T22:01:48.994Z",
+    "acknowledged_via": "baseline-init",
+    "stage": null,
+    "tracking_class": "knowledge"
+  },
+  "knowledge/DESIGN-TOKENS.md": {
+    "path": "knowledge/DESIGN-TOKENS.md",
+    "sha256": "eec7d969fd22477f16dffa5b5eeaa16d9cbc665aeca746f27a301f400ecd1a70",
+    "bytes": 29982,
+    "mtime_ns": 1777672634910000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-01T22:01:48.994Z",
+    "acknowledged_via": "baseline-init",
+    "stage": null,
+    "tracking_class": "knowledge"
+  },
+  "knowledge/DISCOVERY.md": {
+    "path": "knowledge/DISCOVERY.md",
+    "sha256": "8fb7667493b084901044cb9de1263107aed2bed1c241ec70a5deecf76bdf2425",
+    "bytes": 27752,
+    "mtime_ns": 1777672634910000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-01T22:01:48.994Z",
+    "acknowledged_via": "baseline-init",
+    "stage": null,
+    "tracking_class": "knowledge"
+  },
+  "knowledge/IMPLEMENTATION-MAP.md": {
+    "path": "knowledge/IMPLEMENTATION-MAP.md",
+    "sha256": "877cce49ea048727e8aecd38f08fdec82586cd7a904b24f8e34d58020433ff75",
+    "bytes": 26885,
+    "mtime_ns": 1777672634910000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-01T22:01:48.994Z",
+    "acknowledged_via": "baseline-init",
+    "stage": null,
+    "tracking_class": "knowledge"
+  }
+}

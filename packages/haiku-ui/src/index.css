@@ -67,6 +67,126 @@
 
 	/* Dark-mode sheet surface — matches Tailwind stone-900. */
 	--color-sheet-surface-dark: oklch(21.47% 0.006 56.04); /* stone-900 */
+
+	/* ─── Upload-affordance accent (DESIGN-TOKENS §1.3.4 — out-of-band-human-file-modifications) ───
+	   Aliases the existing teal "review accent" so a future accent swap
+	   propagates to upload UI in lockstep with the rest of the
+	   review-action surface. The label fg is split out because text and
+	   UI-component graphics have different WCAG thresholds (4.5:1 vs 3:1)
+	   — a single token cannot satisfy both at the same hue saturation.
+
+	   Light + dark pairs are encoded inline via `light-dark()` so a single
+	   custom-property name yields the correct value under either theme
+	   when consumed via Tailwind utilities (`text-[var(--…)]`,
+	   `border-[var(--…)]`, etc.). Tailwind's `dark:` variant is also wired
+	   on consumer markup as a belt-and-suspenders fallback for browsers
+	   that don't yet support `light-dark()`. */
+	--color-upload-affordance-fg: light-dark(
+		oklch(62% 0.14 185) /* teal-500 light */,
+		oklch(72% 0.12 185) /* teal-400 dark */
+	);
+	--color-upload-affordance-label-fg: light-dark(
+		oklch(48% 0.16 185) /* teal-700 light */,
+		oklch(82% 0.11 185) /* teal-200 dark */
+	);
+	--color-upload-affordance-bg-resting: transparent;
+	--color-upload-affordance-bg-hover: color-mix(
+		in oklch,
+		var(--color-upload-affordance-fg),
+		transparent 92%
+	);
+	--color-upload-affordance-bg-dragover: color-mix(
+		in oklch,
+		var(--color-upload-affordance-fg),
+		transparent 85%
+	);
+
+	/* ─── Out-of-band-human-write origin (DESIGN-TOKENS §1.3.1 — out-of-band-human-file-modifications) ───
+	   Fifth origin alongside the existing four (agent / user / external /
+	   adversarial). Anchored to the violet hue family so it sits between the
+	   existing origin-external (violet-292) and origin-user (sky-232) and is
+	   visually distinguishable from both. Shipped as light + dark pair via
+	   `light-dark()` so consumers can interpolate via Tailwind arbitrary
+	   values (`bg-[var(--color-origin-human-bg)]`). Tailwind's `dark:` variant
+	   is also wired on consumer markup as a fallback for browsers that don't
+	   yet support `light-dark()`. */
+	--color-origin-human-fg: light-dark(
+		oklch(45% 0.16 295) /* violet-600 light */,
+		oklch(78% 0.12 295) /* violet-300 dark */
+	);
+	--color-origin-human-bg: light-dark(
+		oklch(95% 0.025 295) /* violet-50/100 light */,
+		oklch(28% 0.06 295) /* violet-900/40 dark */
+	);
+
+	/* ─── Drift-state lifecycle (DESIGN-TOKENS §1.3.2 — out-of-band-human-file-modifications) ───
+	   Four-state lifecycle for the manual-change-assessment outcome:
+	     detected → acknowledged | surfaced | revisit
+	   The non-detected hues mirror the existing feedback-status palette
+	   intentionally so the drift event renders with visual continuity
+	   alongside the feedback it produces. */
+	--color-drift-detected-fg: light-dark(
+		oklch(
+			47.38% 0.114 60.94
+		) /* amber-700 light — matches feedback-pending fg */,
+		oklch(82.82% 0.189 84.43) /* amber-300/400 dark */
+	);
+	--color-drift-detected-bg: light-dark(
+		oklch(
+			96.43% 0.048 95.62
+		) /* amber-50/100 light — matches feedback-pending bg */,
+		oklch(33% 0.08 75 / 0.4) /* amber-900 at 40% dark */
+	);
+	--color-drift-acknowledged-fg: light-dark(
+		oklch(
+			41.06% 0.112 141.66
+		) /* green-700 light — matches feedback-closed fg */,
+		oklch(78% 0.16 142) /* green-300 dark */
+	);
+	--color-drift-acknowledged-bg: light-dark(
+		oklch(
+			96.2% 0.048 146.63
+		) /* green-50/100 light — matches feedback-closed bg */,
+		oklch(33% 0.08 142 / 0.4) /* green-900 at 40% dark */
+	);
+	--color-drift-surfaced-fg: light-dark(
+		oklch(
+			33.46% 0.158 259.21
+		) /* blue-700 light — matches feedback-addressed fg */,
+		oklch(78% 0.13 255) /* blue-300 dark */
+	);
+	--color-drift-surfaced-bg: light-dark(
+		oklch(
+			93.2% 0.032 255.59
+		) /* blue-50/100 light — matches feedback-addressed bg */,
+		oklch(33% 0.1 259 / 0.4) /* blue-900 at 40% dark */
+	);
+	--color-drift-revisit-fg: light-dark(
+		oklch(46% 0.18 16) /* rose-700 light */,
+		oklch(78% 0.14 16) /* rose-300 dark */
+	);
+	--color-drift-revisit-bg: light-dark(
+		oklch(95% 0.03 16) /* rose-50/100 light */,
+		oklch(33% 0.1 16 / 0.4) /* rose-900 at 40% dark */
+	);
+
+	/* ─── Baseline-state indicator (DESIGN-TOKENS §1.3.3 — out-of-band-human-file-modifications) ───
+	   Subtle file-row indicator in the stage output area. Stone-on-stone
+	   for the clean state keeps the common case quiet; amber for drift
+	   pending matches `--color-drift-detected-fg`; muted stone for stale
+	   baselines signals "tracked but not yet evaluated" without alarm. */
+	--color-baseline-clean-fg: light-dark(
+		oklch(70% 0.005 90) /* stone-400 light */,
+		oklch(50% 0.005 90) /* stone-500 dark */
+	);
+	--color-baseline-drift-fg: light-dark(
+		oklch(78% 0.16 75) /* amber-500 light */,
+		oklch(82.82% 0.189 84.43) /* amber-400 dark */
+	);
+	--color-baseline-stale-fg: light-dark(
+		oklch(82% 0.005 90) /* stone-300 light */,
+		oklch(40% 0.005 90) /* stone-600 dark */
+	);
 }
 
 /* Canonical container tokens (DESIGN-TOKENS §2.5 + unit-04 spec §Scope).
@@ -395,6 +515,33 @@ dialog.feedback-sheet[open]::backdrop {
 }
 @media (prefers-reduced-motion: reduce) {
 	.feedback-fab-pulse {
+		animation: none;
+	}
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Drift-detected one-shot pulse (DESIGN-TOKENS §6.3 / §6.4 —
+   out-of-band-human-file-modifications). Structurally identical to
+   feedback-fab-pulse but tinted with the drift-detected amber hue so the
+   pulse on a row that just got flagged is visually distinct from the
+   feedback-FAB pulse. Runs once on mount; reduced-motion override drops
+   the animation per the canonical guard above.
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes drift-detected-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0
+			color-mix(in oklch, var(--color-drift-detected-fg), transparent 60%);
+	}
+	50% {
+		box-shadow: 0 0 0 8px transparent;
+	}
+}
+.drift-detected-pulse {
+	animation: drift-detected-pulse 1.2s ease-out 1;
+}
+@media (prefers-reduced-motion: reduce) {
+	.drift-detected-pulse {
 		animation: none;
 	}
 }

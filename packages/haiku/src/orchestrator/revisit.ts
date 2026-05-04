@@ -20,6 +20,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import {
+	checkoutFromBranchOnIntentMain,
 	cleanupIntentWorktrees,
 	prepareRevisitBranch,
 	writeOnIntentMain,
@@ -453,46 +454,63 @@ function revisitEarlierStage(
 	fromStage: string,
 	targetStage: string,
 ): OrchestratorAction {
-	// Only the target stage is reset. Intermediate stages between
-	// target and fromStage keep their completed status — when the
-	// agent finishes the revisited stage and calls haiku_run_next,
-	// the workflow engine's consistency check sees them as completed
-	// and fast-forwards through to the next incomplete stage. This
-	// is intentional: revisit fixes one stage without forcing a full
-	// replay of everything that came after.
+	// Per the user "raw git+fs" model: a revisit is a state-bookkeeping
+	// operation that lands on intent main directly. The originating
+	// stage branches are NOT touched (their WIP may still be valid;
+	// the revisit's elaborate phase will read those files when the
+	// stage cycle re-enters its branch via the normal lifecycle).
+	//
+	// Sequence:
+	//   1. Commit any pending state on the current branch
+	//   2. Wipe the per-unit worktrees (their work is no longer in
+	//      scope until elaborate re-evaluates)
+	//   3. Carry FB files forward by surgical checkout from each
+	//      stage branch in [target..from] onto intent main — only
+	//      stages/<stage>/feedback/ paths, no other work files
+	//   4. Reset state.json on intent main for [target..end] — target
+	//      becomes active+elaborate; downstream stages become stale
+	//   5. Set intent.md.active_stage = target (still on intent main
+	//      via markDownstreamStagesStale's writeOnIntentMain helper
+	//      family — the local intent.md write below acts as a cache
+	//      consistent with state.json on intent main)
+	//   6. uncompleteIntent + reseal
 
 	gitCommitState(`haiku: revisit from ${fromStage}`)
 	cleanupIntentWorktrees(slug)
-	const prepared = prepareRevisitBranch(slug, fromStage, targetStage)
-	if (!prepared.success) {
-		return {
-			action: "error",
-			message: `Failed to prepare stage branch '${targetStage}' for revisit from '${fromStage}': ${prepared.message}. Resolve conflicts on the target branch manually, then retry.`,
+
+	// FB carry — surgical checkout per intermediate stage branch.
+	// Only stages/<stage>/feedback/ paths land on intent main, so
+	// unreviewed work on those branches stays out.
+	const intent = readFrontmatter(intentFile)
+	const studio = (intent.studio as string) || ""
+	const stages = resolveIntentStages(intent, studio)
+	const targetIdx = stages.indexOf(targetStage)
+	const fromIdx = stages.indexOf(fromStage)
+	if (targetIdx >= 0 && fromIdx >= 0) {
+		for (let i = targetIdx; i <= fromIdx; i++) {
+			const stage = stages[i]
+			const stageBranch = `haiku/${slug}/${stage}`
+			const result = checkoutFromBranchOnIntentMain(
+				slug,
+				stageBranch,
+				`.haiku/intents/${slug}/stages/${stage}/feedback`,
+				`haiku: carry feedback from ${stage} on revisit to ${targetStage}`,
+			)
+			emitTelemetry("haiku.revisit.fb_carry", {
+				intent: slug,
+				stage,
+				ok: String(result.ok),
+				paths: String(result.paths_copied.length),
+			})
 		}
 	}
 
-	const targetPath = stageStatePath(slug, targetStage)
-	const data: Record<string, unknown> = {
-		stage: targetStage,
-		status: "active",
-		phase: "elaborate",
-		started_at: timestamp(),
-		completed_at: null,
-		gate_entered_at: null,
-		gate_outcome: null,
-	}
-	writeJson(targetPath, data)
-
-	// Units are NOT reset. Revisit increases scope — the elaborate
-	// phase decides whether to author new units, revise existing
-	// specs, or leave completed work alone. Wiping unit FM would
-	// throw away signal the agent needs to decide.
-
 	resetFixLoopBolts(slug, targetStage)
 
-	// Reset the state.json of every downstream stage (target's
-	// successors). markDownstreamStagesStale only touches state.json
-	// — units in those stages stay put.
+	// Reset state.json on intent main for target + every downstream
+	// stage. markDownstreamStagesStale uses writeOnIntentMain so the
+	// reset lands on the canonical branch even if the agent is
+	// currently checked out elsewhere.
 	markDownstreamStagesStale(slug, iDir, targetStage, intentFile)
 
 	uncompleteIntent(slug, intentFile)
@@ -511,6 +529,8 @@ function revisitEarlierStage(
 		intent: slug,
 		target_stage: targetStage,
 		reset_phase: "elaborate",
-		message: `Revisiting stage '${targetStage}' — state.json reset to elaborate; existing units preserved. Downstream stages' state.json reset; their units preserved too.`,
+		message: `Revisiting stage '${targetStage}' — state.json reset on intent main (target=elaborate, downstream=stale); FB files carried forward from intermediate stages via surgical checkout; existing units and unreviewed WIP on the originating stage branches preserved (elaborate decides what to redo when each stage re-enters its branch).`,
 	}
 }
+
+// ── Drift-detection lifecycle hook (unit-09) ───────────────────────────────

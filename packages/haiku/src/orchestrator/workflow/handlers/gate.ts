@@ -22,8 +22,9 @@
 //           through feedback_dispatch first or require fix_hats on
 //           stages that emit agent FBs.
 //   3. External review reconciliation (only when stage already
-//      completed+blocked): branch-merge or CLI signal → advance,
-//      changes_requested → delegate, otherwise → awaiting_external_review.
+//      completed+blocked or completed+advanced): branch-merge or CLI
+//      signal → advance, changes_requested → delegate, otherwise →
+//      awaiting_external_review.
 //   4. Auto gate → advance_stage (with workflowAdvanceStage) or
 //      completeOrReviewIntent.
 //   5. Non-auto gate → gate_review (with workflowGateAsk).
@@ -458,6 +459,44 @@ const emit: WorkflowHandler = (ctx) => {
 
 	// ── External review reconciliation ─────────────────────────────────
 	const gateOutcomeInGate = (stageState.gate_outcome as string) || ""
+	// Self-heal: if the saved blocked state contradicts the intent's
+	// current mode (e.g., the intent is autopilot now, where per-stage
+	// external gates are never opened), the saved `blocked` is stale —
+	// clear it so the gate re-evaluates fresh below. This catches the
+	// case where the engine emitted a per-stage external gate under an
+	// older interpretation of autopilot, the agent opened (and possibly
+	// closed) a per-stage PR, and the user wants the workflow to resume
+	// under the corrected semantics without manual state surgery.
+	const intentModeForReconcile = (
+		(intent.mode as string) || "continuous"
+	).toLowerCase()
+	const autopilotForReconcile =
+		intentModeForReconcile === "autopilot" || intent.autopilot === true
+	if (
+		autopilotForReconcile &&
+		stageStatus === "completed" &&
+		gateOutcomeInGate === "blocked"
+	) {
+		const statePath = stageStatePath(slug, currentStage)
+		const stateData = readJson(statePath)
+		stateData.gate_outcome = ""
+		stateData.status = "active"
+		stateData.external_review_url = ""
+		writeJson(statePath, stateData)
+		emitTelemetry("haiku.gate.autopilot_blocked_self_heal", {
+			intent: slug,
+			stage: currentStage,
+		})
+		// Fall through to re-evaluate the gate under the current mode.
+	}
+	// LEGACY: per-stage external review with gate_outcome=blocked.
+	// Pre-2026-05-03 intents written by the old gate-fire path land
+	// here. The path is unchanged: poll merge / external state, flip
+	// blocked→advanced on approval, return awaiting_external_review on
+	// pending, route to changes-requested on rejection. New intents
+	// take the advanced+merge-gate path below — this block is a
+	// backward-compat shim until existing in-flight intents have all
+	// migrated through their next gate.
 	if (stageStatus === "completed" && gateOutcomeInGate === "blocked") {
 		let extApproved = false
 		let externalState: ExternalReviewState = { status: "unknown" }
@@ -507,16 +546,95 @@ const emit: WorkflowHandler = (ctx) => {
 		}
 	}
 
+	// NEW: per-stage external review with gate_outcome=advanced.
+	// Per the user model, the per-stage external gate writes the truly
+	// final state (status=completed, gate_outcome=advanced) to
+	// state.json at gate-fire time (run_next.ts:436 in the SPA
+	// `external_review` decision branch). The PR carries that state to
+	// intent main on merge — no post-merge cleanup commit. Here, the
+	// only signal we need is "did the stage branch land in intent
+	// main?" — checked via raw git (isBranchMerged), no PR/SHA/URL
+	// tracking. Until merge, we emit awaiting_external_review
+	// (informational; active_stage stays here). Once merged, we emit
+	// advance_stage / intent_complete directly.
+	if (
+		stageStatus === "completed" &&
+		gateOutcomeInGate === "advanced" &&
+		isGitRepo()
+	) {
+		const stageBranch = `haiku/${slug}/${currentStage}`
+		const mainline = `haiku/${slug}/main`
+		if (!isBranchMerged(stageBranch, mainline)) {
+			emitTelemetry("haiku.gate.awaiting_merge", {
+				intent: slug,
+				stage: currentStage,
+			})
+			return {
+				action: "awaiting_external_review",
+				intent: slug,
+				stage: currentStage,
+				external_review_url: "",
+				message: `Stage '${currentStage}' is complete on its branch ('${stageBranch}'). Merge it into '${mainline}' to advance to the next stage. Run /haiku:pickup again after the merge.`,
+			}
+		}
+		// Merged — emit advance_stage / intent_complete directly.
+		emitTelemetry("haiku.gate.merged_advance", {
+			intent: slug,
+			stage: currentStage,
+		})
+		const stageIdxLocal = studioStages.indexOf(currentStage)
+		const nextStageLocal =
+			stageIdxLocal < studioStages.length - 1
+				? studioStages[stageIdxLocal + 1]
+				: null
+		if (nextStageLocal) {
+			workflowAdvanceStage(slug, currentStage, nextStageLocal)
+			return {
+				action: "advance_stage",
+				intent: slug,
+				studio,
+				stage: currentStage,
+				next_stage: nextStageLocal,
+				gate_outcome: "advanced",
+				message: `Stage '${currentStage}' merged into '${mainline}' — advancing to '${nextStageLocal}'. Call haiku_run_next { intent: "${slug}" } immediately.`,
+			}
+		}
+		return completeOrReviewIntent(
+			slug,
+			studio,
+			`Stage '${currentStage}' merged into '${mainline}' — all stages complete for intent '${slug}'.`,
+		)
+	}
+
 	const rawReviewType = resolveStageReview(studio, currentStage)
-	const autopilot = intent.autopilot === true
 	const intentMode = (intent.mode as string) || "continuous"
-	// Note: `hybrid` mode intentionally does NOT inherit discrete's
-	// external-review coercion. `state-tools.ts:7836` (dashboard branch
-	// listing) treats hybrid as discrete-shaped for branch topology, but
-	// the gate handler treats them differently because hybrid is "discrete
-	// where it matters, continuous elsewhere" — per-stage PRs aren't a
-	// universal requirement. If hybrid ever needs gate enforcement, add
-	// it here explicitly rather than redefining `isDiscrete`.
+	// Mode taxonomy: discrete | discrete-hybrid | continuous | autopilot.
+	// The canonical home for autopilot is `intent.mode === "autopilot"`.
+	//
+	// Backward-compat (per a61e6f69e): older intent.md files carry a
+	// separate `autopilot: true` boolean alongside `mode: continuous`
+	// (or no mode at all). Honor the legacy boolean as a fallback so
+	// existing intents keep running in autopilot semantics until they're
+	// migrated. Without this fallback, a long-lived intent with the
+	// boolean+continuous shape pops local-review gates (the ask-promotion
+	// path silently turns off) even though the user authored the intent
+	// expecting autopilot. See test/autopilot-mode.test.mjs's
+	// "mode:continuous + autopilot:true boolean DOES auto-advance"
+	// regression case.
+	//
+	// In autopilot mode the gate handler promotes `ask` gates to `auto`,
+	// letting the workflow advance without human intervention. External
+	// gates and `await` gates still block — they require real external
+	// signals.
+	//
+	// `discrete-hybrid` is a DERIVED/VIRTUAL state (not stored). It
+	// represents continuous mode where some stages need discrete-shaped
+	// treatment (e.g., stages with external gates declared). It is NOT
+	// a settable mode value. If the engine ever needs to compute
+	// discrete-hybrid behavior, it should derive it from
+	// `intentMode === "continuous" && <some per-stage condition>` rather
+	// than reading a stored field.
+	const autopilot = intentMode === "autopilot" || intent.autopilot === true
 	const isDiscrete = intentMode === "discrete"
 
 	// Discrete-mode contract: every stage gate MUST open an external
@@ -545,8 +663,21 @@ const emit: WorkflowHandler = (ctx) => {
 		coercedReviewType =
 			rawReviewType === "auto" ? "external" : `${rawReviewType},external`
 	}
-	const reviewType =
-		autopilot && coercedReviewType === "ask" ? "auto" : coercedReviewType
+	// Mode contract for per-stage gates:
+	//   - discrete    → ALWAYS external (handled above by isDiscrete coercion)
+	//   - continuous  → follows STAGE.md `review:` verbatim (no override)
+	//   - autopilot   → ALWAYS auto (no human review, no per-stage PR)
+	// The intent-completion gate is a separate code path; it owns the
+	// single delivery PR for autopilot intents (see user memory
+	// `feedback_open_pr_post_intent_gate`). `await` gates remain reserved
+	// for "wait on a real external event" — they are not review types and
+	// cannot be promoted to auto without breaking the wait semantics, so
+	// they are left untouched.
+	let reviewType = coercedReviewType
+	if (autopilot) {
+		const segments = coercedReviewType.split(",").map((t) => t.trim())
+		reviewType = segments.includes("await") ? "await" : "auto"
+	}
 	const stageIdx = studioStages.indexOf(currentStage)
 	const nextStage =
 		stageIdx < studioStages.length - 1 ? studioStages[stageIdx + 1] : null

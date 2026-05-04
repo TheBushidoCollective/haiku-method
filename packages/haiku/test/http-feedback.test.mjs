@@ -730,6 +730,59 @@ async function run() {
 		assert.strictEqual(res.status, 404)
 	})
 
+	await test("POST /api/revisit/:id returns 409 nothing_to_revisit when target stage has no open feedback", async () => {
+		const { createSession } = await import("../src/sessions.ts")
+		const revSession = createSession({
+			intent_slug: intentSlug,
+			intent_dir: intentDirPath,
+			review_type: "intent",
+			target: "review",
+		})
+		// `security` stage starts with zero feedback — empty `reasons[]` +
+		// no open FBs is the silent-no-op guard.
+		const res = await fetch(`${baseUrl}/api/revisit/${revSession.session_id}`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ stage: "security" }),
+		})
+		assert.strictEqual(res.status, 409)
+		const data = await res.json()
+		assert.strictEqual(data.error, "nothing_to_revisit")
+	})
+
+	await test("POST /api/revisit/:id succeeds with empty reasons when an open FB exists with non-stage_revisit resolution", async () => {
+		// Regression guard for #294: the HTTP handler used to filter
+		// `resolution === "stage_revisit"` here, which rejected legitimate
+		// revisit clicks where the open FB was tagged `inline_fix`,
+		// `question`, or null (untriaged). Pre-tick gate routes any open
+		// FB regardless of resolution; the handler must agree.
+		writeFeedbackFile(intentSlug, "security", {
+			title: "inline-fix-tagged finding",
+			body: "Pre-tick gate dispatches this even though resolution !== stage_revisit.",
+			origin: "user-visual",
+			author: "user",
+			resolution: "inline_fix",
+		})
+		const { createSession } = await import("../src/sessions.ts")
+		const revSession = createSession({
+			intent_slug: intentSlug,
+			intent_dir: intentDirPath,
+			review_type: "intent",
+			target: "review",
+		})
+		const res = await fetch(`${baseUrl}/api/revisit/${revSession.session_id}`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ stage: "security" }),
+		})
+		assert.strictEqual(res.status, 200)
+		const data = await res.json()
+		assert.strictEqual(data.ok, true)
+		assert.strictEqual(data.action, "revisit_pending")
+		assert.strictEqual(data.stage, "security")
+		assert.deepStrictEqual(data.feedback_created, [])
+	})
+
 	// ── Cleanup ───────────────────────────────────────────────────────────────
 
 	console.log(`\n${passed} passed, ${failed} failed\n`)

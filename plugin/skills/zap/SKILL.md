@@ -18,12 +18,25 @@ Run a single task directly through a stage's hat loop. No intent file, no unit d
 
 ## Process
 
+### 0. Preflight — clean working tree
+
+Run `git status --porcelain`. If the working tree has uncommitted changes (staged or unstaged), stop and ask the user via `AskUserQuestion`:
+- options: `["Commit/stash my changes first, then re-run zap", "Proceed anyway (zap may sweep my unrelated changes into its commit)"]`
+
+If the user picks the first option: acknowledge and stop. Don't try to commit/stash for them.
+If the user picks the second option: continue, but record the pre-existing dirty paths so the builder can be told to leave them alone.
+
+If the tree is clean, continue.
+
 ### 1. Resolve studio and stage
 
-**If studio is provided:** validate it exists via `haiku_studio_stage_get`. If not found, call `haiku_studio_list` and surface the available options via `AskUserQuestion`.
+**If studio is provided:**
+1. Call `haiku_studio_list` to get the available studios.
+2. If the provided studio is not in the list, surface the issue with `AskUserQuestion` and let the user pick from the real list.
+3. Then call `haiku_studio_stage_get { studio, stage }` to validate the stage. If `found: false`, the stage (not the studio) is the problem — surface the studio's actual `stages:` list and let the user pick.
 
 **If studio is NOT provided:**
-1. Call `haiku_studio_list` to see what's available.
+1. Call `haiku_studio_list`.
 2. Check project context (language files, existing `.haiku/settings.yml`) to infer the best fit.
 3. Default to `software` if it exists and no other signal is stronger.
 
@@ -54,6 +67,13 @@ Execute each hat in the `hats:` list as a **sequential** subagent. Each hat rece
 
 For each hat, spawn a subagent (Task tool) with the prompt below. Wait for it to return before spawning the next one.
 
+The hat's role is determined by its position in the list:
+- **First hat** → planner role
+- **Last hat** → verifier role (must return PASS/FAIL)
+- **Any middle hats** → builder/doer role
+
+Hat names that contain `verif`, `review`, `check`, or `assess` always get verifier role regardless of position. Hat names that contain `plan` or `design` always get planner role regardless of position. The hat's own mandate file (`hats/<hat>.md`) is the primary source of behavioral instruction; the per-hat instructions below are zap-specific framing on top of that mandate.
+
 ---
 
 #### Hat subagent prompt
@@ -71,25 +91,34 @@ This is a zap run — no workflow engine, no unit files, no haiku_* tool calls. 
 
 <hat.md body — paste verbatim>
 
+Note: this mandate was written for the workflow-engine context. Where it references units, feedback files, or haiku_* tools, translate that as: work directly on the repo, return your output as plain text to the parent. Do NOT call any haiku_* tools.
+
 ## Task
 
 <user's task description>
 
-<if this is not the first hat:>
+<if retry: prepend a "## Prior failure context" block here with the verifier's FAIL reason>
+
+<if not the first hat:>
 ## Input from prior hat (<PRIOR_HAT>)
 
 <prior hat's returned output — paste verbatim>
 
+<if user opted to proceed with a dirty tree:>
+## Pre-existing uncommitted changes (do NOT modify)
+
+<list of files from git status --porcelain at preflight>
+
 ## Instructions
 
-<hat-specific instructions — see below>
+<role-specific instructions — see below>
 ```
 
 ---
 
-#### Per-hat instructions
+#### Per-role instructions
 
-**Planner hat (first hat, plan role):**
+**Planner role (first hat, or any hat with `plan`/`design` in the name):**
 ```
 1. Read the task and stage scope above.
 2. Produce a concise implementation plan:
@@ -99,47 +128,63 @@ This is a zap run — no workflow engine, no unit files, no haiku_* tool calls. 
 3. Return your plan as plain text. Do NOT implement — planning only.
 ```
 
-**Builder / doer hat (do role):**
+**Builder/doer role (middle hats, default for hats not matching planner or verifier name patterns):**
 ```
-1. Read the plan from the prior hat.
-2. Implement the task according to the plan.
-3. If the project has quality gates (tests, lint, typecheck), run them and fix failures.
-4. Commit your changes: `git add -A && git commit -m "<brief description>"`.
-5. Return a summary: what you changed, which files, and quality gate results.
+1. Read the prior hat's output above and the hat mandate.
+2. Apply your hat's role to the task. If your mandate is "build/implement," write the code. If your mandate is "critique/refine prior output," critique it and emit a revised plan or revised work as appropriate.
+3. If you wrote or modified files, run any project quality gates (tests, lint, typecheck) and fix failures.
+4. Do NOT commit. Leave changes uncommitted in the working tree — the parent skill commits once at the end after the verifier passes.
+5. Return a summary:
+   - Files you created/modified (exact paths)
+   - Quality gate results (commands run, pass/fail)
+   - One-paragraph description of what changed and why
 ```
 
-**Verifier / reviewer hat (final hat, verify role):**
+**Verifier role (last hat, or any hat with `verif`/`review`/`check`/`assess` in the name):**
 ```
-1. Read the task description and the builder's output summary.
-2. Verify the work meets the task's success criteria:
+1. Read the task description and the prior hat outputs (especially the builder's summary).
+2. Inspect the actual uncommitted changes with `git diff` to confirm they match the summary.
+3. Verify the work meets the task's success criteria:
    - Does the change address exactly what was asked?
    - Is the code internally consistent and free of obvious regressions?
    - Are there edge cases the builder missed that the stage scope would flag?
-3. Your final message MUST be exactly one of:
+4. Your final message MUST start with exactly one of these tokens (followed by a single em dash and a one-line reason):
    - `PASS — <one-sentence summary of what was verified>`
-   - `FAIL: <specific reason the task is not complete or correct>`
-4. Do NOT run quality gates — that was the builder's job. Focus on correctness and fit.
-5. Do NOT call any haiku_* tools.
+   - `FAIL — <specific reason the task is not complete or correct>`
+5. Do NOT run quality gates — that was the builder's job. Focus on correctness and fit.
+6. Do NOT commit, amend, or otherwise mutate the git tree.
+7. Do NOT call any haiku_* tools.
 ```
 
 ---
 
 ### 5. Handle the verifier verdict
 
-After the verifier hat returns:
+After the verifier hat returns, parse its first line for the `PASS` or `FAIL` token (anchored to the start of the first line, followed by ` — `).
 
-**If `PASS`:** report success to the user. Briefly describe what was done (files changed, tests run). Done.
+**If `PASS`:**
+1. Stage exactly the files the builder reported in its summary: `git add <file1> <file2> ...`. Do NOT use `git add -A` or `git add .` — that would sweep in any pre-existing dirty paths the user opted in around.
+2. Commit with a brief message derived from the task description and builder summary: `git commit -m "<message>"`.
+3. Report success to the user: files committed, commands run, verifier's PASS line.
 
-**If `FAIL`:** surface the failure reason to the user. Ask via `AskUserQuestion`:
-- options: `["Retry the full hat loop with this failure as context", "Abandon — I'll fix it manually"]`
+**If `FAIL`:**
+1. Surface the failure reason to the user.
+2. If retries already attempted is **less than 2**, ask via `AskUserQuestion`:
+   - options: `["Retry the hat loop with this failure as context", "Abandon — I'll fix it manually"]`
+3. If retries already attempted is **2 or more** (i.e. this would be the third), do NOT offer retry. Tell the user: "Two retries already used — zap isn't converging. Discard the uncommitted changes (`git restore .`) and either fix manually or use `/haiku:start` for a structured run." Stop.
 
-If the user picks retry: re-run from step 4 with the failure reason prepended to the task description as `## Prior failure context: <reason>`.
+If the user picks retry:
+- Increment the retry counter.
+- Do NOT touch the working tree — the builder's prior uncommitted changes carry forward as the new starting state.
+- Re-run from step 4, prepending `## Prior failure context: <verifier's FAIL reason>` to the task description.
 
-If the user picks abandon: acknowledge and stop.
+If the user picks abandon: acknowledge, leave the uncommitted changes in place (the user said they'd fix manually), and stop.
 
 ## Guardrails
 
 - **Scope check:** if the task description spans multiple stages (e.g. "redesign the auth flow AND implement the backend AND write the tests"), recommend `/haiku:quick` or `/haiku:start` and explain why. Don't blindly zap a multi-stage task through a single stage's hat loop.
-- **Stage validation:** if `haiku_studio_stage_get` returns `found: false`, explain the issue and list valid studios/stages via `haiku_studio_list`.
+- **Stage validation:** if `haiku_studio_stage_get` returns `found: false` after a valid studio, the stage is the problem — surface the studio's `stages:` list, not a generic "studio/stage not found."
 - **Stateless:** no `.haiku/` files are written. If the user needs formal traceability, suggest `/haiku:quick`.
-- **Hat count:** most stages have 3 hats. If a stage has more (adversarial loops, etc.), run all of them in sequence — the hat order in `hats:` is the authority.
+- **Hat count:** most stages have 3 hats. If a stage has more (adversarial loops, etc.), run all of them in sequence — the hat order in `hats:` is the authority. Role assignment uses the name-pattern rules in step 4.
+- **Retry cap:** at most 2 retries (3 total attempts). Past that, the skill stops and tells the user to bail out to `/haiku:start` or fix manually.
+- **Commit safety:** only the parent skill commits, only after verifier PASS, only the exact files the builder reported. The builder, planner, and verifier never commit.

@@ -1,6 +1,6 @@
 ---
 title: 'Missed criterion: unit-01 artifact has no Competitive differentiation section'
-status: fixing
+status: closed
 origin: adversarial-review
 author: spec-conformance
 author_type: agent
@@ -8,13 +8,22 @@ created_at: '2026-05-05T23:10:10Z'
 iteration: 1
 visit: 1
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-01:bolt-1'
 bolt: 1
 triaged_at: '2026-05-05T23:10:10Z'
 resolution: null
 replies: []
+hat: feedback-assessor
+iterations:
+  - bolt: 1
+    hat: researcher
+    completed_at: '2026-05-05T23:12:35Z'
+    result: advanced
+  - bolt: 1
+    hat: feedback-assessor
+    completed_at: '2026-05-05T23:13:37Z'
+    result: closed
 ---
-
 ## Spec criterion violated
 
 unit-01-success-criteria-and-acceptance-shape's completion criteria explicitly require:

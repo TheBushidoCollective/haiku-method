@@ -2,7 +2,7 @@
 title: >-
   Cross-unit drift: iteration-cap counting semantics declared in unit-01/06,
   still open in unit-05
-status: fixing
+status: closed
 origin: adversarial-review
 author: spec-conformance
 author_type: agent
@@ -10,13 +10,22 @@ created_at: '2026-05-05T23:10:29Z'
 iteration: 1
 visit: 1
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-02:bolt-1'
 bolt: 1
 triaged_at: '2026-05-05T23:10:29Z'
 resolution: null
 replies: []
+hat: feedback-assessor
+iterations:
+  - bolt: 1
+    hat: researcher
+    completed_at: '2026-05-05T23:12:12Z'
+    result: advanced
+  - bolt: 1
+    hat: feedback-assessor
+    completed_at: '2026-05-05T23:13:10Z'
+    result: closed
 ---
-
 ## Spec criterion violated
 
 The "Bounded loops — caps and escape hatches" criterion in unit-01 requires the artifact to "describe the user-observable behavior when the limit is reached" and to flag the cap value as an open question for product/design. unit-06's job is to consolidate open questions across artifacts and assign each a proposed default or escalation flag — coherently, not contradictorily.

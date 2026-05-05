@@ -1,7 +1,7 @@
 {
   "stage": "inception",
   "status": "active",
-  "phase": "gate",
+  "phase": "review",
   "started_at": "2026-05-05T22:06:26Z",
   "completed_at": null,
   "gate_entered_at": null,

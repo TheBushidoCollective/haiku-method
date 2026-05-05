@@ -1,0 +1,14 @@
+{
+  "knowledge/CONVERSATION-CONTEXT.md": {
+    "path": "knowledge/CONVERSATION-CONTEXT.md",
+    "sha256": "e6ecf9b6b6bbe3f3a053718ad6a74ce8459f2cbf22484090ac2780de47504ca2",
+    "bytes": 1333,
+    "mtime_ns": 1778018669032000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-05T22:06:30.743Z",
+    "acknowledged_via": "baseline-init",
+    "stage": null,
+    "tracking_class": "knowledge"
+  }
+}

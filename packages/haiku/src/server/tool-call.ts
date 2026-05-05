@@ -1212,28 +1212,7 @@ export async function prepareGateReviewSession(
 	}
 }
 
-/**
- * Decide whether `awaitGateReviewSession` should pop a local browser
- * for the given session.
- *
- * Three guards (all must pass):
- *
- * 1. `autoOpen` — caller's hard "do not open" override. Defaults to
- *    true; the agent passes false on hosts where the local-browser
- *    launch is known to fail (headless container, sandboxed runner).
- * 2. `reviewUrl` — there's nothing to launch without a URL.
- * 3. `!isBrowserAttached(sessionId)` — the live-websocket check. If
- *    a SPA tab is heartbeating within the freshness window we
- *    already have a live websocket on this session, and `open <url>`
- *    would just pop a duplicate tab. The agent used to be told to
- *    pass `auto_open: false` in this case, but agents miss the
- *    detection; making this server-authoritative removes the
- *    footgun.
- *
- * Exported for direct unit testing — the spawn-based browser launch
- * itself is hard to assert against without intercepting child
- * processes, so we test the decision explicitly.
- */
+// Exported for unit testing — the spawn-based browser launch is hard to assert against directly.
 export function shouldLaunchReviewBrowser(
 	autoOpen: boolean,
 	reviewUrl: string | undefined,

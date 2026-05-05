@@ -55,7 +55,7 @@ export const HAIKU_AWAIT_GATE_INPUT_SCHEMA = Type.Object(
 		review_url: Type.Optional(
 			Type.String({
 				description:
-					"Review URL to open. Optional. Pass the review_url from the gate_review action — if omitted, no browser will be launched (the `!reviewUrl` guard in shouldLaunchReviewBrowser short-circuits) but the await will still complete when the user submits a decision via the SPA.",
+					"Review URL to open. Optional. Pass the review_url from the gate_review action — if omitted, no browser will be launched but the await will still complete when the user submits a decision via the SPA.",
 			}),
 		),
 		state_file: Type.Optional(

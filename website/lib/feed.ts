@@ -73,7 +73,11 @@ export function getChangelogFeedItems(): FeedItem[] {
 		return {
 			title: `v${entry.version}`,
 			url: `${SITE_URL}/changelog/#${entry.version}`,
-			date: entry.date,
+			// Use the version-bump commit timestamp so multiple releases
+			// on the same day produce distinct pubDates that RSS readers
+			// can use as the delta signal. The plain calendar `entry.date`
+			// alone collapsed every same-day release to midnight UTC.
+			date: entry.timestamp,
 			description,
 			category: "changelog" as const,
 		}

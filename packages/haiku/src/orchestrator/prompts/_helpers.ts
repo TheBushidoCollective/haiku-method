@@ -282,9 +282,7 @@ export function resolveStudioMandateModel(opts: {
 		if (stageDefault) return stageDefault
 	}
 	const studioData = readStudio(studio)
-	return sanitizeModel(
-		studioData?.data?.default_model as string | undefined,
-	)
+	return sanitizeModel(studioData?.data?.default_model as string | undefined)
 }
 
 /** Build the per-subagent context block injected into unit/hat

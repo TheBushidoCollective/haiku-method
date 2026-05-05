@@ -3429,6 +3429,11 @@ import {
 	FSM_DRIVEN_UNIT_FIELDS,
 	HAIKU_FEEDBACK_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA,
+	HAIKU_INTENT_GET_INPUT_SCHEMA,
+	HAIKU_INTENT_LIST_INPUT_SCHEMA,
+	HAIKU_INTENT_SET_INPUT_SCHEMA,
+	HAIKU_STAGE_GET_INPUT_SCHEMA,
+	HAIKU_STAGE_SET_INPUT_SCHEMA,
 	HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA,
 	HAIKU_UNIT_DELETE_INPUT_SCHEMA,
 	HAIKU_UNIT_INCREMENT_BOLT_INPUT_SCHEMA,
@@ -3438,12 +3443,15 @@ import {
 	HAIKU_UNIT_SET_INPUT_SCHEMA,
 	HAIKU_UNIT_START_INPUT_SCHEMA,
 	HAIKU_UNIT_WRITE_INPUT_SCHEMA,
-	INTENT_FRONTMATTER_SCHEMA,
 	INTENT_IMMUTABLE_FIELDS,
-	STAGE_STATE_FIELDS,
 	UNIT_FRONTMATTER_SCHEMA,
 	validateHaikuFeedbackInputSchema,
 	validateHaikuFeedbackUpdateInputSchema,
+	validateHaikuIntentGetInputSchema,
+	validateHaikuIntentListInputSchema,
+	validateHaikuIntentSetInputSchema,
+	validateHaikuStageGetInputSchema,
+	validateHaikuStageSetInputSchema,
 	validateHaikuUnitAdvanceHatInputSchema,
 	validateHaikuUnitDeleteInputSchema,
 	validateHaikuUnitIncrementBoltInputSchema,
@@ -5649,11 +5657,7 @@ export const stateToolDefs: StateToolDef[] = [
 	{
 		name: "haiku_intent_get",
 		description: "Read a field from an intent's frontmatter",
-		inputSchema: {
-			type: "object" as const,
-			properties: { slug: { type: "string" }, field: { type: "string" } },
-			required: ["slug", "field"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_INTENT_GET_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -5676,16 +5680,7 @@ export const stateToolDefs: StateToolDef[] = [
 	{
 		name: "haiku_intent_list",
 		description: "List all intents in the workspace",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				include_archived: {
-					type: "boolean",
-					description:
-						"When true, include archived intents in the result and add an 'archived' field to each response object. Defaults to false.",
-				},
-			},
-		},
+		inputSchema: jsonSchemaOf(HAIKU_INTENT_LIST_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -5711,15 +5706,7 @@ export const stateToolDefs: StateToolDef[] = [
 	{
 		name: "haiku_stage_get",
 		description: "Read a field from a stage's state",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				stage: { type: "string" },
-				field: { type: "string" },
-			},
-			required: ["intent", "stage", "field"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_STAGE_GET_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6251,22 +6238,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 	{
 		name: "haiku_intent_set",
 		description: `Set a frontmatter field on an intent's intent.md. Validated against INTENT_FRONTMATTER_SCHEMA. Agent-authorable fields: ${AGENT_AUTHORABLE_INTENT_FIELDS.join(", ")} (note 'studio' is immutable post-creation). Engine-only fields (${FSM_DRIVEN_INTENT_FIELDS.join(", ")}) are rejected — those are mutated by the workflow engine itself. Use this instead of editing intent.md directly — Edit/Write/MultiEdit on intent.md is denied by the workflow-fields hook.`,
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				field: {
-					type: "string",
-					description: `Frontmatter field name. Allowed: ${AGENT_AUTHORABLE_INTENT_FIELDS.filter((f) => !INTENT_IMMUTABLE_FIELDS.includes(f)).join(", ")}.`,
-				},
-				value: {
-					type: ["string", "array", "number", "boolean", "null", "object"],
-					description:
-						"New value. Must match the field's declared type in INTENT_FRONTMATTER_SCHEMA. Mismatches return `intent_field_type_mismatch`.",
-				},
-			},
-			required: ["intent", "field", "value"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_INTENT_SET_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6282,22 +6254,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_stage_set",
 		description:
 			"Set a field on a stage's state.json. Engine-internal — every field in STAGE_STATE_SCHEMA is workflow-managed (status, phase, started_at, completed_at, gate_entered_at, gate_outcome, visits, iterations, etc). Agent calls are rejected with `stage_field_engine_only`. Reserved for future engine-internal routing and operator break-glass paths.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				stage: { type: "string" },
-				field: {
-					type: "string",
-					description: `Stage state field. Every field is engine-managed; agent calls are rejected. Schema fields: ${STAGE_STATE_FIELDS.join(", ")}.`,
-				},
-				value: {
-					type: ["string", "array", "number", "boolean", "null", "object"],
-					description: "New value. Must match the field's declared type.",
-				},
-			},
-			required: ["intent", "stage", "field", "value"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_STAGE_SET_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6948,6 +6905,12 @@ export function handleStateTool(
 	switch (name) {
 		// ── Intent ──
 		case "haiku_intent_get": {
+			const intentGetInputErr = validateToolInput(
+				args,
+				validateHaikuIntentGetInputSchema,
+				"haiku_intent_get",
+			)
+			if (intentGetInputErr) return intentGetInputErr
 			const file = join(intentDir(args.slug as string), "intent.md")
 			if (!existsSync(file)) {
 				return reply({ found: false, field: args.field as string, value: null })
@@ -6961,6 +6924,12 @@ export function handleStateTool(
 			})
 		}
 		case "haiku_intent_list": {
+			const intentListInputErr = validateToolInput(
+				args,
+				validateHaikuIntentListInputSchema,
+				"haiku_intent_list",
+			)
+			if (intentListInputErr) return intentListInputErr
 			const root = findHaikuRoot()
 			const intentsDir = join(root, "intents")
 			if (!existsSync(intentsDir)) return text("[]")
@@ -6994,6 +6963,12 @@ export function handleStateTool(
 
 		// ── Stage ──
 		case "haiku_stage_get": {
+			const stageGetInputErr = validateToolInput(
+				args,
+				validateHaikuStageGetInputSchema,
+				"haiku_stage_get",
+			)
+			if (stageGetInputErr) return stageGetInputErr
 			const path = stageStatePath(args.intent as string, args.stage as string)
 			const data = readJson(path)
 			const val = data[args.field as string]
@@ -9026,14 +9001,17 @@ export function handleStateTool(
 		}
 
 		case "haiku_intent_set": {
+			const intentSetInputErr = validateToolInput(
+				args,
+				validateHaikuIntentSetInputSchema,
+				"haiku_intent_set",
+			)
+			if (intentSetInputErr) return intentSetInputErr
 			const slug = args.intent as string
 			const field = args.field as string
 			const value = args.value as unknown
 			const errOut = (error: string, message: string) =>
 				reply({ error, intent: slug, field, message }, { isError: true })
-			if (!slug) return errOut("intent_required", "`intent` is required")
-			if (!field || typeof field !== "string")
-				return errOut("intent_field_required", "`field` is required")
 
 			// Reject FSM-driven fields up front with a stable code.
 			if ((FSM_DRIVEN_INTENT_FIELDS as readonly string[]).includes(field)) {
@@ -9102,14 +9080,18 @@ export function handleStateTool(
 		}
 
 		case "haiku_stage_set": {
+			const stageSetInputErr = validateToolInput(
+				args,
+				validateHaikuStageSetInputSchema,
+				"haiku_stage_set",
+			)
+			if (stageSetInputErr) return stageSetInputErr
 			const slug = args.intent as string
 			const stage = args.stage as string
 			const field = args.field as string
 			void args.value
 			const errOut = (error: string, message: string) =>
 				reply({ error, intent: slug, stage, field, message }, { isError: true })
-			if (!slug) return errOut("intent_required", "`intent` is required")
-			if (!stage) return errOut("stage_required", "`stage` is required")
 			if (!field || typeof field !== "string")
 				return errOut("stage_field_required", "`field` is required")
 

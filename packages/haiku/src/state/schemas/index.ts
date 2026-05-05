@@ -44,6 +44,29 @@ export {
 	validateHaikuFeedbackUpdateInputSchema,
 } from "./feedback.js"
 export type {
+	HaikuIntentGetInput,
+	HaikuIntentListInput,
+	HaikuIntentSetInput,
+} from "./inputs/intents.js"
+export {
+	HAIKU_INTENT_GET_INPUT_SCHEMA,
+	HAIKU_INTENT_LIST_INPUT_SCHEMA,
+	HAIKU_INTENT_SET_INPUT_SCHEMA,
+	validateHaikuIntentGetInputSchema,
+	validateHaikuIntentListInputSchema,
+	validateHaikuIntentSetInputSchema,
+} from "./inputs/intents.js"
+export type {
+	HaikuStageGetInput,
+	HaikuStageSetInput,
+} from "./inputs/stages.js"
+export {
+	HAIKU_STAGE_GET_INPUT_SCHEMA,
+	HAIKU_STAGE_SET_INPUT_SCHEMA,
+	validateHaikuStageGetInputSchema,
+	validateHaikuStageSetInputSchema,
+} from "./inputs/stages.js"
+export type {
 	HaikuUnitAdvanceHatInput,
 	HaikuUnitDeleteInput,
 	HaikuUnitIncrementBoltInput,

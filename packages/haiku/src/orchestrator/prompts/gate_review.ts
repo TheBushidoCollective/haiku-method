@@ -47,7 +47,7 @@ The user is already watching the SPA on this intent (\`browser_attached: true\` 
 
 ### Required Next Step (same turn — do not stop here)
 
-**Call \`haiku_await_gate { intent: "${slug}", auto_open: false }\` right now.** Do not end your turn, do not summarize, do not ask the user anything — just make the tool call. The tool blocks until the user submits the review and then returns the next orchestrator action (advance_stage, changes_requested, external_review_requested, etc.) along with the instructions to follow next. \`auto_open: false\` keeps the MCP host from popping a duplicate browser tab.${sessionLine}`
+**Call \`haiku_await_gate { intent: "${slug}" }\` right now.** Do not end your turn, do not summarize, do not ask the user anything — just make the tool call. The tool blocks until the user submits the review and then returns the next orchestrator action (advance_stage, changes_requested, external_review_requested, etc.) along with the instructions to follow next. The tool checks the live websocket state itself and will NOT launch a duplicate browser tab — you do not need to pass \`auto_open: false\`.${sessionLine}`
 	}
 
 	return `## Gate: Awaiting Approval
@@ -63,7 +63,7 @@ ${subject}
 Do BOTH of the following in the same turn. Posting the URL alone is not enough — if you stop here, the user clicks Approve and nothing happens because no tool call is waiting for their decision.
 
 1. **Post the review URL above in chat** so the user can open it on whichever device they want (the MCP host's browser may not be reachable: remote sessions, headless hosts, SSH-only, mobile clients, etc.).
-2. **Immediately call \`haiku_await_gate { intent: "${slug}" }\`** in the SAME turn. This blocks until the user submits the review (Approve / Request Changes / External Review). Pass \`auto_open: false\` only if you do NOT want the MCP host to also try to launch a local browser; the default behavior is to launch best-effort.
+2. **Immediately call \`haiku_await_gate { intent: "${slug}" }\`** in the SAME turn. This blocks until the user submits the review (Approve / Request Changes / External Review). The tool decides whether to launch a local browser based on whether a SPA tab is already attached — you do not need to pass \`auto_open\`. (Set \`auto_open: false\` only on hosts where launching a local browser is known to fail, e.g. headless containers.)
 
 When the user decides, the await tool returns the next orchestrator action along with the instructions to follow next.${sessionLine}`
 })

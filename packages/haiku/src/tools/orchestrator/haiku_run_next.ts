@@ -377,8 +377,8 @@ export default defineTool({
 					? `${subject}. The page you're on (${prepared.review_url}) just refreshed to this gate.`
 					: `${subject}. Open ${prepared.review_url} to approve or request changes.`
 				const message = prepared.browser_attached
-					? `${subject}. The user is already watching the SPA at ${prepared.review_url} (browser_attached=true), so do NOT re-post the URL. IMPORTANT: Call haiku_await_gate { intent: "${slug}", auto_open: false } in the SAME turn — do NOT end your turn here. The tool blocks on the user's decision.`
-					: `${subject} at: ${prepared.review_url}\n\nIMPORTANT: In the SAME turn, do BOTH of these — do NOT stop after posting the URL: (1) post the URL above to the user (so they can open it on any device — headless host, remote control, mobile, web), and (2) call haiku_await_gate { intent: "${slug}" } to block on their decision. If you stop after step 1, the user clicks Approve and nothing happens because no tool call is waiting. Pass auto_open: false on the await call only when the MCP host should NOT also try to launch a local browser.`
+					? `${subject}. The user is already watching the SPA at ${prepared.review_url} (browser_attached=true), so do NOT re-post the URL. IMPORTANT: Call haiku_await_gate { intent: "${slug}" } in the SAME turn — do NOT end your turn here. The tool blocks on the user's decision and checks the live websocket itself, so it will not launch a duplicate browser tab.`
+					: `${subject} at: ${prepared.review_url}\n\nIMPORTANT: In the SAME turn, do BOTH of these — do NOT stop after posting the URL: (1) post the URL above to the user (so they can open it on any device — headless host, remote control, mobile, web), and (2) call haiku_await_gate { intent: "${slug}" } to block on their decision. If you stop after step 1, the user clicks Approve and nothing happens because no tool call is waiting. The tool decides whether to launch a local browser based on whether a SPA tab is already attached — you do not need to pass auto_open.`
 
 				const gateAction: Record<string, unknown> = {
 					action: "gate_review",

@@ -77,11 +77,14 @@ export default defineTool({
 	name: "haiku_await_gate",
 	description:
 		"Block on a pending gate-review session for an intent until the user " +
-		"approves, requests changes, or the wait times out. Opens the review URL " +
-		"in the default browser best-effort (set `auto_open: false` to skip — " +
-		"useful for remote control, headless containers, or when the user is " +
-		"reviewing on a different device). Returns the resulting orchestrator " +
-		"action (advance_stage / changes_requested / external_review_requested / etc.).\n\n" +
+		"approves, requests changes, or the wait times out. Launches the review " +
+		"URL in the default browser best-effort, BUT only when no SPA tab is " +
+		"already attached for this session (live-websocket check is authoritative " +
+		"— passing `auto_open: true` will never create a duplicate tab). Set " +
+		"`auto_open: false` only when the local-browser launch is known to fail " +
+		"(headless containers, sandboxed runners). Returns the resulting " +
+		"orchestrator action (advance_stage / changes_requested / " +
+		"external_review_requested / etc.).\n\n" +
 		"Call this AFTER haiku_run_next returns a `gate_review` action — that " +
 		"action carries the review_url and session_id, and the recommended flow is " +
 		"(1) post the URL to the user in chat, (2) call this tool. The tool reads " +

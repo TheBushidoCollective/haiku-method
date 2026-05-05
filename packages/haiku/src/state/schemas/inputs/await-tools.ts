@@ -48,13 +48,14 @@ export const HAIKU_AWAIT_GATE_INPUT_SCHEMA = Type.Object(
 		auto_open: Type.Optional(
 			Type.Boolean({
 				description:
-					"Try to open the review URL in the default browser when waiting begins. Defaults to true. Set to false when the user will follow the URL themselves (remote control, headless host, mobile).",
+					"Hard override on the local browser launch. Defaults to true. " +
+					"When true, the tool launches the review URL in the default browser only if NO SPA tab is already attached for this session — the live-websocket check is authoritative, so passing true never causes a duplicate tab. Set to false on hosts where the local-browser launch is known to fail (headless containers, sandboxed runners) — the tool will still complete the await, the user just has to follow the URL themselves.",
 			}),
 		),
 		review_url: Type.Optional(
 			Type.String({
 				description:
-					"Review URL to open if auto_open is true. Optional — primarily logged.",
+					"Review URL to open. Optional — primarily logged. The tool reads the URL from the gate-review session if not provided.",
 			}),
 		),
 		state_file: Type.Optional(

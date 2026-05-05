@@ -181,6 +181,46 @@ test("haiku_await_gate uses withAnnouncement on every decision return", () => {
 	}
 })
 
+test("haiku_await_gate primary final-stage path wraps completeOrReviewIntent in withAnnouncement", () => {
+	// Regression for the final-stage primary path bug: the elicitation
+	// fallback wrapped its completeOrReviewIntent message but the
+	// primary path did not, so when the user approved the final stage
+	// via the SPA gate UI the resulting intent_complete /
+	// advance_phase action had no announce token and the agent
+	// silently consumed it. Anchor on the
+	// `workflowCompleteStage(slug, stage, "advanced")` call (the
+	// final-stage marker) and assert the next ~400 chars contain
+	// `withAnnouncement` — covering both the call to
+	// completeOrReviewIntent and any future refactor that splits this
+	// into a helper.
+	const src = read("tools/orchestrator/haiku_await_gate.ts")
+	// The final-stage primary path is the FIRST workflowCompleteStage
+	// call in the file (the elicitation fallback's call comes much
+	// later, separated by the changes_requested + external_review
+	// branches).
+	const finalStageIdx = src.indexOf(
+		'workflowCompleteStage(slug, stage, "advanced")',
+	)
+	assert.ok(
+		finalStageIdx > 0,
+		"must have a workflowCompleteStage call for the primary final-stage path",
+	)
+	// Look in the ~600 chars immediately after — the wrapping call to
+	// completeOrReviewIntent is right there. 600 is enough to span the
+	// `const approvedStudio = ...` resolution + the multi-line
+	// withAnnouncement call without bleeding into the
+	// external_review branch below.
+	const slice = src.slice(finalStageIdx, finalStageIdx + 600)
+	assert.ok(
+		slice.includes("withAnnouncement"),
+		"primary final-stage path must wrap completeOrReviewIntent's source message in withAnnouncement",
+	)
+	assert.ok(
+		slice.includes("completeOrReviewIntent"),
+		"primary final-stage path must call completeOrReviewIntent (sanity)",
+	)
+})
+
 test("ask_user_visual_question's await uses withAnnouncement on the answered path", () => {
 	const src = read("server/tool-call.ts")
 	assert.ok(
@@ -200,6 +240,10 @@ test("ask_user_visual_question's await uses withAnnouncement on the answered pat
 test("pick_design_direction's await uses withAnnouncement on select + regenerate paths", () => {
 	const src = read("server/tool-call.ts")
 	// Both branches (regenerate and select) must use the helper.
+	// Anchor on structural code tokens (variable names + the literal
+	// archetype announcement string), not on source comments —
+	// comments can be deleted/reworded without breaking behavior, and
+	// a stale anchor silently turns into a vacuous pass.
 	const regenIdx = src.indexOf('sel.mode === "regenerate"')
 	assert.ok(regenIdx > 0, "must have a regenerate branch")
 	const regenSlice = src.slice(regenIdx, regenIdx + 2500)
@@ -207,13 +251,15 @@ test("pick_design_direction's await uses withAnnouncement on select + regenerate
 		regenSlice.includes("withAnnouncement"),
 		"regenerate branch must use withAnnouncement",
 	)
-	// Select path: the archetype-selection announcement.
-	const selectIdx = src.indexOf("Select path — selection persisted")
+	// Select path: anchor on the archetype-selection announcement
+	// string itself — that text is the user-facing announcement and is
+	// part of the contract this PR introduces.
+	const selectIdx = src.indexOf("The user selected the **${sel.archetype}**")
 	assert.ok(
 		selectIdx > 0,
-		"must have a select branch with the persistence comment",
+		"must have a select branch with the archetype announcement",
 	)
-	const selectSlice = src.slice(selectIdx, selectIdx + 3500)
+	const selectSlice = src.slice(selectIdx, selectIdx + 1000)
 	assert.ok(
 		selectSlice.includes("withAnnouncement"),
 		"select branch must use withAnnouncement",

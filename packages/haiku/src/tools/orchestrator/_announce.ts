@@ -21,11 +21,10 @@
 
 const PREFIX = "**ANNOUNCE TO USER (post in chat now):**"
 
-/**
- * Prefix `nextStep` with an explicit "tell the user X" directive
- * keyed off `announcement`. The prefix is identical across surfaces
- * so agents and tests can match on a stable token.
- */
+// Returns a message that leads with the stable ANNOUNCE directive +
+// `announcement`, then `nextStep`. Agents and tests match on the
+// token; the structural split lets callers keep user-facing prose
+// and next-action instructions separate at the call site.
 export function withAnnouncement(
 	announcement: string,
 	nextStep: string,

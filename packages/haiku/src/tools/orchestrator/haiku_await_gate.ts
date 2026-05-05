@@ -355,7 +355,10 @@ export default defineTool({
 				const gateResult = completeOrReviewIntent(
 					slug,
 					approvedStudio,
-					`Stage '${stage}' approved — final stage complete.`,
+					withAnnouncement(
+						`The user approved the final stage "${stage}" — intent complete.`,
+						"Report the completion summary to the user.",
+					),
 				)
 				return text(withInstructions(gateResult))
 			}

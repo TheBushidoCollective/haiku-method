@@ -75,7 +75,11 @@ import {
 	stageStatePath,
 	writeJson,
 } from "../../../state-tools.js"
-import { readHatDefs, readSpecGateAgentPaths, studioSearchPaths } from "../../../studio-reader.js"
+import {
+	readHatDefs,
+	readSpecGateAgentPaths,
+	studioSearchPaths,
+} from "../../../studio-reader.js"
 import { emitTelemetry } from "../../../telemetry.js"
 import { countOpenFeedbackForGateCheck } from "../feedback-triage-gate.js"
 import type { WorkflowHandler } from "./_types.js"
@@ -468,12 +472,18 @@ const emit: WorkflowHandler = (ctx) => {
 		const specAgents = readSpecGateAgentPaths(studio, currentStage)
 		const specDispatched = stageState.spec_review_dispatched === true
 		const qualityDispatched = stageState.quality_review_dispatched === true
-		if (Object.keys(specAgents).length > 0 && specDispatched && !qualityDispatched) {
+		if (
+			Object.keys(specAgents).length > 0 &&
+			specDispatched &&
+			!qualityDispatched
+		) {
 			const statePath = stageStatePath(slug, currentStage)
 			const stateData = readJson(statePath)
 			stateData.phase = "review"
 			writeJson(statePath, stateData)
-			gitCommitState(`haiku: spec gate passed — reset to review for quality review in ${currentStage}`)
+			gitCommitState(
+				`haiku: spec gate passed — reset to review for quality review in ${currentStage}`,
+			)
 			return {
 				action: "advance_phase",
 				intent: slug,

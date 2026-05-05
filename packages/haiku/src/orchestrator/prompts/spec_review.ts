@@ -27,7 +27,7 @@ import {
 	emitSubagentDispatchBlock,
 	inlineFile,
 	readInterpretation,
-	resolveReviewAgentModel,
+	resolveStudioMandateModel,
 } from "./_helpers.js"
 import { definePromptBuilder } from "./define.js"
 import { WORKFLOW_CONTRACTS_REVIEW_BLOCK } from "./WORKFLOW_CONTRACTS_REVIEW_BLOCK.js"
@@ -96,7 +96,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 				`${step++}. Return only a summary count of how many spec findings you logged.`,
 			)
 			const prompt = reviewLines.join("\n")
-			const reviewAgentModel = resolveReviewAgentModel({
+			const reviewAgentModel = resolveStudioMandateModel({
 				mandatePath,
 				studio,
 				stage,
@@ -124,7 +124,10 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 			"",
 			`Spawn spec-gate subagents using the \`prompt_file\` attribute — pass \`"Read <prompt_file> and execute its instructions exactly."\` as the spawn prompt. They persist findings directly via haiku_feedback.${bgLine}`,
 			"",
-			batchDispatchDirective(Object.keys(agentPaths).length, "spec-gate agents"),
+			batchDispatchDirective(
+				Object.keys(agentPaths).length,
+				"spec-gate agents",
+			),
 			"",
 			`After all spec-gate agents complete, call \`haiku_run_next { intent: "${slug}" }\`. If they filed findings, the fix loop will run before quality review fires. If they filed no findings, quality review will proceed automatically on the next tick.`,
 		].join("\n"),

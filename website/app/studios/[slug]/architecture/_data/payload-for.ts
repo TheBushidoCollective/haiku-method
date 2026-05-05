@@ -12,6 +12,8 @@ export type TransitionKey =
 	| "hat-to-hat"
 	| "wave-to-wave"
 	| "execute-to-review"
+	| "review-spec-to-agents"
+	| "gate-spec-reset-to-review"
 	| "review-quality-to-agents"
 	| "review-to-gate"
 	| "gate-to-next-stage"
@@ -356,6 +358,109 @@ export function payloadFor(
 			],
 			instructions:
 				'`haiku_run_next` flips `phase` to `review` and **runs the quality gates as part of the same call** — tests, lint, typecheck. On failure, the next call returns `fix_quality_gates` with the failure list and stays in `review`. On success, the next call returns `action: "review"` to dispatch the parallel review agents.',
+		},
+		"review-spec-to-agents": {
+			injection: [
+				{
+					hook: "MCP tool result",
+					target: "agent's `tool_use_result`",
+					what: "spec-gate agent fan-out — only review agents with `spec_gate: true` frontmatter dispatch in this phase. Quality reviewers wait until the spec gate is clear.",
+				},
+				{
+					hook: "readSpecGateAgentPaths()",
+					target: "agent prompt",
+					what: "filtered subset of `review-agents/*.md` whose frontmatter declares `spec_gate: true` — the hard-gate roster",
+				},
+			],
+			action: "spec_review",
+			summary:
+				"dispatch spec-gate review agents (Phase 1) — verify the stage delivered exactly what the intent spec scoped, before quality review fires",
+			payload: {
+				action: "spec_review",
+				stage: stageLower,
+				agents: "spec_gate:true subset of review-agents/",
+			},
+			validations: [
+				"`stage_state.spec_review_dispatched !== true` (first time only)",
+				"At least one review-agent has `spec_gate: true` frontmatter (otherwise this phase is skipped — backwards compatible)",
+			],
+			writes: [
+				{
+					path: `.haiku/intents/{slug}/stages/${stageLower}/state.json`,
+					change:
+						'`spec_review_dispatched: true`, then `phase: "gate"` (so the fix loop can handle any spec findings before quality review fires)',
+				},
+			],
+			instructions:
+				"A perfect implementation of the wrong thing is still wrong — spec-gate agents check **cross-unit spec delivery** (acceptance criteria coverage, scope creep, cross-unit drift). They run **alone, first**. Findings flow through the normal `review_fix` loop. Once spec is clear, gate.ts resets the phase back to `review` so quality reviewers fire next.",
+		},
+		"gate-spec-reset-to-review": {
+			injection: [
+				{
+					hook: "MCP tool result",
+					target: "agent's `tool_use_result`",
+					what: "advance_phase reset — gate handler detected spec_review_dispatched=true and quality_review_dispatched still unset, so it flips phase back to `review` for the quality dispatch",
+				},
+			],
+			action: "advance_phase",
+			summary:
+				"spec gate cleared — reset to review phase so the quality review layer (Phase 2) can dispatch on the next tick",
+			payload: {
+				action: "advance_phase",
+				stage: stageLower,
+				to_phase: "review",
+			},
+			validations: [
+				"`spec_review_dispatched === true`",
+				"`quality_review_dispatched !== true`",
+				"Stage has spec-gate agents declared (otherwise this branch never fires)",
+				"All spec findings closed (open spec FBs would have been routed through `review_fix` first)",
+			],
+			writes: [
+				{
+					path: `.haiku/intents/{slug}/stages/${stageLower}/state.json`,
+					change: '`phase: "review"` (reset)',
+				},
+			],
+			instructions:
+				"This is the bridge between Phase 1 (spec gate) and Phase 2 (quality review). The next `haiku_run_next` tick lands back in the review handler, which now sees `spec_review_dispatched=true` and falls through to the quality review path — dispatching all non-spec-gate agents in parallel.",
+		},
+		"review-quality-to-agents": {
+			injection: [
+				{
+					hook: "MCP tool result",
+					target: "agent's `tool_use_result`",
+					what: "quality review fan-out — every non-spec-gate review agent dispatches in parallel as subagents",
+				},
+				{
+					hook: "readQualityAgentPaths()",
+					target: "agent prompt",
+					what: "subset of `review-agents/*.md` whose frontmatter does NOT declare `spec_gate: true` — the post-spec quality roster",
+				},
+			],
+			action: "review",
+			summary:
+				"dispatch quality review agents (Phase 2) — runs after spec gate clears, in parallel against built artifacts",
+			payload: {
+				action: "review",
+				stage: stageLower,
+				agents: "non-spec_gate review-agents/",
+			},
+			validations: [
+				"Spec gate clear (no spec-gate agents declared, or `spec_review_dispatched === true` with all spec findings closed)",
+				"`quality_review_dispatched !== true` (first time only — gate handler then sets this flag during reset)",
+				"Quality gates passed (tests/lint/typecheck — see `execute-to-review`)",
+				"Per-stage output liveness clear (orphan check; acknowledgments via `coverage-decisions.json`)",
+			],
+			writes: [
+				{
+					path: `.haiku/intents/{slug}/stages/${stageLower}/state.json`,
+					change:
+						'`quality_review_dispatched: true` (when spec-gate agents exist), then `phase: "gate"`',
+				},
+			],
+			instructions:
+				"Quality reviewers focus on code quality (architecture, performance, security, test coverage) — explicitly NOT spec conformance, which the spec-gate already handled. Each agent files findings via `haiku_feedback`; findings flow through the normal fix-hat loop.",
 		},
 		"review-to-gate": {
 			injection: [

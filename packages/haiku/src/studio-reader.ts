@@ -165,6 +165,30 @@ export function readSpecGateAgentPaths(
 }
 
 /**
+ * Return quality review agent NAME → FILE PATH mapping — the inverse of
+ * `readSpecGateAgentPaths`. Excludes any agent with `spec_gate: true` so
+ * that spec-gate agents (which run first as a hard gate) do not also fire
+ * during the parallel quality-review layer.
+ */
+export function readQualityAgentPaths(
+	studio: string,
+	stage: string,
+): Record<string, string> {
+	const allPaths = readReviewAgentPaths(studio, stage)
+	const quality: Record<string, string> = {}
+	for (const [name, agentPath] of Object.entries(allPaths)) {
+		try {
+			const raw = readFileSync(agentPath, "utf8")
+			const { data } = parseFrontmatter(raw)
+			if (data.spec_gate !== true) quality[name] = agentPath
+		} catch {
+			/* unreadable file — exclude */
+		}
+	}
+	return quality
+}
+
+/**
  * Studio-level review agents live at `plugin/studios/{studio}/review-agents/*.md`
  * (NOT per-stage). They run once at intent completion, after the final
  * stage gate passes but before `intent_complete`. Their scope is the whole

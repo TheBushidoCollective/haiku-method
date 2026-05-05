@@ -57,7 +57,10 @@ function writeMandate(studio, stage, agent, model) {
 	mkdirSync(dir, { recursive: true })
 	const fm = model ? `model: ${model}\n` : ""
 	const path = join(dir, `${agent}.md`)
-	writeFileSync(path, `---\n${fm}interpretation: lens\n---\n**Mandate:** test\n`)
+	writeFileSync(
+		path,
+		`---\n${fm}interpretation: lens\n---\n**Mandate:** test\n`,
+	)
 	return path
 }
 
@@ -68,7 +71,12 @@ writeStage("alpha", "build", undefined) // no stage default
 writeStage("alpha", "review", "opus") // stage overrides studio
 const mandateOpus = writeMandate("alpha", "build", "lens", "opus")
 const mandateBare = writeMandate("alpha", "build", "bare", undefined)
-const mandateGarbage = writeMandate("alpha", "build", "garbage", "definitely-not-a-tier")
+const mandateGarbage = writeMandate(
+	"alpha",
+	"build",
+	"garbage",
+	"definitely-not-a-tier",
+)
 
 try {
 	// Import after fixture is in place. Module-level singletons

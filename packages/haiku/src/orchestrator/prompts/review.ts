@@ -9,7 +9,7 @@ import { getCapabilities } from "../../harness.js"
 import { findHaikuRoot, isGitRepo } from "../../state-tools.js"
 import {
 	filterReviewAgentsByScope,
-	readReviewAgentPaths,
+	readQualityAgentPaths,
 	readStageDef,
 } from "../../studio-reader.js"
 import {
@@ -30,7 +30,9 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	sections.push(WORKFLOW_CONTRACTS_REVIEW_BLOCK)
 
 	// Collect agent name → mandate FILE PATH.
-	let agentPaths: Record<string, string> = readReviewAgentPaths(studio, stage)
+	// Quality agents only — spec-gate agents (`spec_gate: true`) run earlier
+	// as a hard gate via the `spec_review` action and must not double-fire here.
+	let agentPaths: Record<string, string> = readQualityAgentPaths(studio, stage)
 
 	// Cross-stage includes (review-agents-include on STAGE.md).
 	{
@@ -45,7 +47,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 			}>
 			for (const inc of includes) {
 				if (!(inc.stage && Array.isArray(inc.agents))) continue
-				const crossPaths = readReviewAgentPaths(studio, inc.stage)
+				const crossPaths = readQualityAgentPaths(studio, inc.stage)
 				for (const agentName of inc.agents) {
 					if (crossPaths[agentName] && !agentPaths[agentName]) {
 						agentPaths[`${agentName} (from ${inc.stage})`] =

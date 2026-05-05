@@ -357,12 +357,21 @@ export default defineTool({
 				// open from a prior gate this session, so the agent can
 				// skip "post URL to user" and just call haiku_await_gate.
 				// New-session path: post the URL, then await.
+				//
+				// Subject phrasing depends on gate scope: pre-stage
+				// `intent_review` has stage=null/"" (no stage exists yet),
+				// so saying "Stage '' is ready for review" is wrong and
+				// confuses the agent.
+				const isIntentReview = gateContext === "intent_review" || !stage
+				const subject = isIntentReview
+					? `Intent '${slug}' is ready for your review before any stage starts`
+					: `Stage '${stage}' is ready for review`
 				const tellUser = prepared.browser_attached
-					? `Stage '${stage}' is ready for review. The page you're on (${prepared.review_url}) just refreshed to this gate.`
-					: `Stage '${stage}' is ready for review. Open ${prepared.review_url} to approve or request changes.`
+					? `${subject}. The page you're on (${prepared.review_url}) just refreshed to this gate.`
+					: `${subject}. Open ${prepared.review_url} to approve or request changes.`
 				const message = prepared.browser_attached
-					? `Stage '${stage}' is ready for review. The user is already watching the SPA at ${prepared.review_url} (browser_attached=true), so do NOT re-post the URL — just call haiku_await_gate { intent: "${slug}" } to block on their decision.`
-					: `Stage '${stage}' is ready for review at: ${prepared.review_url}\n\nNext: post the URL to the user (so they can open it on any device — headless host, remote control, mobile, web), then call haiku_await_gate { intent: "${slug}" } to block on their decision. Pass auto_open: false on the await call when the MCP host should NOT also try to launch a local browser.`
+					? `${subject}. The user is already watching the SPA at ${prepared.review_url} (browser_attached=true), so do NOT re-post the URL. IMPORTANT: Call haiku_await_gate { intent: "${slug}", auto_open: false } in the SAME turn — do NOT end your turn here. The tool blocks on the user's decision.`
+					: `${subject} at: ${prepared.review_url}\n\nIMPORTANT: In the SAME turn, do BOTH of these — do NOT stop after posting the URL: (1) post the URL above to the user (so they can open it on any device — headless host, remote control, mobile, web), and (2) call haiku_await_gate { intent: "${slug}" } to block on their decision. If you stop after step 1, the user clicks Approve and nothing happens because no tool call is waiting. Pass auto_open: false on the await call only when the MCP host should NOT also try to launch a local browser.`
 
 				const gateAction: Record<string, unknown> = {
 					action: "gate_review",
@@ -379,7 +388,7 @@ export default defineTool({
 					browser_attached: prepared.browser_attached,
 					message,
 					tell_user: tellUser,
-					next_step: `Calling haiku_await_gate to wait for your decision.`,
+					next_step: `Call haiku_await_gate { intent: "${slug}" } now (same turn) to block on the user's decision.`,
 				}
 				return text(withInstructions(gateAction))
 			} catch (err) {

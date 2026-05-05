@@ -241,6 +241,38 @@ export default defineTool({
 			].join("\n"),
 		)
 
+		// Stage + commit `.gitattributes` ON THE INTENT MAIN BRANCH
+		// before any stage / unit / fix-chain / discovery worktree
+		// can fork from it. The bulk `gitCommitState` call below
+		// would normally pick this up, but it swallows errors (e.g.
+		// pre-commit hook failure) silently — so attempt an explicit
+		// commit here first. Failure is non-fatal: the next commit
+		// will retry, and `ensureIntentGitAttributes` is the
+		// belt-and-braces auto-repair on legacy intents anyway.
+		if (isGitRepo()) {
+			try {
+				const rel = `.haiku/intents/${slug}/.gitattributes`
+				execFileSync("git", ["add", "--", rel], { stdio: "pipe" })
+				execFileSync(
+					"git",
+					[
+						"commit",
+						"-m",
+						`haiku: seed .gitattributes (merge=union for event streams) for ${slug}`,
+						"--",
+						rel,
+					],
+					{ stdio: "pipe" },
+				)
+			} catch {
+				// Pre-commit hook, dirty index, etc. — non-fatal. The
+				// `gitCommitState` below will pick it up if the user's
+				// hook tolerates the bulk add; otherwise the auto-repair
+				// in `ensureIntentGitAttributes` fires on the next
+				// worktree-creation tick.
+			}
+		}
+
 		// Also write conversation context to knowledge for
 		// discoverability.
 		if (context) {

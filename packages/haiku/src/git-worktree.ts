@@ -603,48 +603,39 @@ export function mergeStageBranchForward(
 		}
 	}
 
-	// Checkout may fail with dirty tree — auto-commit on current branch and retry.
-	try {
-		run(["git", "checkout", toBranch])
-	} catch (checkoutErr) {
-		const raw =
-			checkoutErr instanceof Error ? checkoutErr.message : String(checkoutErr)
-		const looksLikeDirtyTree =
-			raw.includes("would be overwritten by checkout") ||
-			raw.includes("Please commit your changes or stash them")
-		if (looksLikeDirtyTree && current) {
-			const committed = autoCommitDirtyTree(current)
-			if (!committed.ok) {
-				return {
-					success: false,
-					message: `dirty tree blocks checkout of ${toBranch} from ${current} and auto-commit failed: ${committed.message}`,
-				}
-			}
-			try {
-				run(["git", "checkout", toBranch])
-			} catch (retryErr) {
-				return {
-					success: false,
-					message: `auto-committed WIP on ${current} but checkout of ${toBranch} still failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`,
-				}
-			}
-		} else {
-			return { success: false, message: raw }
-		}
-	}
-
-	try {
+	const mergeFn = (cwd?: string): void => {
 		run([
 			"git",
+			...(cwd ? ["-C", cwd] : []),
 			"merge",
 			fromBranch,
 			"--no-edit",
 			"-m",
 			`haiku: merge forward ${fromStage} → ${toStage}`,
 		])
+	}
+
+	// Three primary-checkout positions, mirroring `mergeStageBranchIntoMain`:
+	//
+	//   - Primary already on toBranch → merge in-place.
+	//   - Primary on something else → reuse the worktree that owns
+	//     toBranch if one exists (e.g. the user has it checked out), or
+	//     fall back to a transient temp worktree. Don't checkout
+	//     directly — `git worktree add` would refuse if toBranch is
+	//     held elsewhere, and a direct checkout of toBranch into the
+	//     primary mutates the user's working tree on a branch they
+	//     didn't ask to switch to.
+	try {
+		if (current === toBranch) {
+			mergeFn()
+		} else {
+			withWorktreeOnBranch(toBranch, (tmpPath) => mergeFn(tmpPath))
+		}
 		return { success: true, message: `merged ${fromBranch} → ${toBranch}` }
 	} catch (err) {
-		// Abort any in-progress merge to leave the repo clean
+		// Best-effort merge abort in whichever worktree the merge ran.
+		// `--abort` is a no-op when no merge is in progress; safe to
+		// blanket-issue.
 		tryRun(["git", "merge", "--abort"])
 		return {
 			success: false,
@@ -871,6 +862,12 @@ export function ensureStageBranch(slug: string, stage: string): string {
 	if (branchExists(stageBranch)) return stageBranch
 	// Intent main must exist first; a healthy workflow engine always creates it before any stage.
 	if (!branchExists(mainBranch)) createIntentBranch(slug)
+	// Seed `.gitattributes` on intent main BEFORE the fork so the new
+	// stage branch inherits the merge=union directive. Otherwise the
+	// stage branch starts without it, every fix-chain / discovery
+	// fork inherits the gap, and the integrator hits the same JSONL
+	// conflicts that motivated the attribute in the first place.
+	ensureIntentGitAttributes(slug)
 	tryRun(["git", "branch", stageBranch, mainBranch])
 	return stageBranch
 }
@@ -944,6 +941,22 @@ export function ensureOnStageBranch(
 			branchExists(mainlineBranch) &&
 			current !== mainlineBranch
 		) {
+			// Refuse if mainline is held by a foreign worktree —
+			// `git checkout mainline` would fail with the cryptic
+			// "branch already checked out at <path>" error. Surface a
+			// clear, actionable message instead so the agent can ask
+			// the user to move their checkout (or so the operator
+			// running interactively sees the problem).
+			const mainlineHolder = findWorktreeForBranch(mainlineBranch)
+			if (mainlineHolder && mainlineHolder !== process.cwd()) {
+				return {
+					ok: false,
+					branch: current,
+					message: `target branch '${targetBranch}' not yet created, and the fallback (repo mainline '${mainlineBranch}') is checked out at another worktree '${mainlineHolder}'. Move that checkout to a different branch or remove the worktree (\`git worktree remove --force ${mainlineHolder}\`), then retry.`,
+					switched: false,
+					target_branch: mainlineBranch,
+				}
+			}
 			try {
 				run(["git", "checkout", mainlineBranch])
 				return {
@@ -1564,43 +1577,112 @@ function ensureIntentGitAttributes(slug: string): void {
 	try {
 		const intentDir = join(primaryRepoRoot(), ".haiku", "intents", slug)
 		if (!existsSync(intentDir)) return
-		const path = join(intentDir, ".gitattributes")
 		const wantedLines = [
 			"action-log.jsonl merge=union",
 			"write-audit.jsonl merge=union",
 		]
-		let existing = ""
-		try {
-			if (existsSync(path)) existing = readFileSync(path, "utf8")
-		} catch {
-			/* missing or unreadable — we'll create it */
-		}
-		if (wantedLines.every((l) => existing.includes(l))) return
 		const banner = [
 			"# Engine-owned append-only event streams. `merge=union` tells git",
 			"# to concatenate both sides on conflict — these files are pure",
 			"# event streams and never benefit from manual conflict resolution.",
 		]
-		const out = `${[...banner, ...wantedLines].join("\n")}\n`
-		fsWriteFileSync(path, out)
-		// Stage + commit on whatever branch is currently checked out so
-		// the attribute is in effect on every branch the engine writes
-		// to. Best-effort: if the commit fails (dirty tree, hooks, etc.)
-		// the attribute is still on disk and will be picked up by the
-		// next legit commit anyway.
+		const desiredContent = `${[...banner, ...wantedLines].join("\n")}\n`
+
+		const intentMain = `haiku/${slug}/main`
 		const rel = `.haiku/intents/${slug}/.gitattributes`
-		tryRun(["git", "add", rel])
-		tryRun([
-			"git",
-			"commit",
-			"-m",
-			`haiku: seed .gitattributes (merge=union for engine event streams) for ${slug}`,
-			"--",
-			rel,
-		])
+
+		// Stamp the attribute on intent main specifically — that's the
+		// parent of every stage / unit / fix-chain / discovery branch,
+		// so every fork inherits it. Stamping on whatever's currently
+		// checked out (e.g. a stage branch) leaves intent main without
+		// the attribute, so the next NEW stage forked off main starts
+		// without it and the integrator gets the same conflicts.
+		const stamp = (cwd?: string): void => {
+			const cwdArgs = cwd ? ["-C", cwd] : []
+			const absPath = cwd ? join(cwd, rel) : join(primaryRepoRoot(), rel)
+			let existing = ""
+			try {
+				if (existsSync(absPath)) existing = readFileSync(absPath, "utf8")
+			} catch {
+				/* missing or unreadable — fall through and overwrite */
+			}
+			if (wantedLines.every((l) => existing.includes(l))) return
+			fsWriteFileSync(absPath, desiredContent)
+			tryRun(["git", ...cwdArgs, "add", "--", rel])
+			tryRun([
+				"git",
+				...cwdArgs,
+				"commit",
+				"-m",
+				`haiku: seed .gitattributes (merge=union for engine event streams) for ${slug}`,
+				"--",
+				rel,
+			])
+		}
+
+		if (!branchExists(intentMain)) return // pre-init; intent-create path handles it
+		// Stamp 1/2: intent main. Future forks (stage branches /
+		// fix-chains / discovery / units) inherit from here, so this
+		// is the load-bearing stamp. Use a worktree on intent main
+		// (the user's, if they have one; else transient) so we don't
+		// disturb the engine's current checkout.
+		const current = getCurrentBranch()
+		if (current === intentMain) {
+			stamp()
+		} else {
+			try {
+				withWorktreeOnBranch(intentMain, (tmpPath) => stamp(tmpPath))
+			} catch {
+				/* Foreign worktree dirty etc. — fall through to the
+				 *  current-branch stamp; intent main will get the
+				 *  attribute on the next merge through. */
+			}
+		}
+		// Stamp 2/2: the currently checked-out branch (if not intent
+		// main itself, already done above). Why both: a legacy intent
+		// already has stage / fix-chain branches FORKED off intent
+		// main without the attribute. Stamping on intent main alone
+		// fixes future forks but leaves the existing branches blind.
+		// The current branch is the one about to merge (caller is
+		// about to execute a merge into a base branch), so stamping
+		// here is what un-strands the in-flight chain.
+		if (current && current !== intentMain) {
+			stamp()
+		}
 	} catch {
 		/* never crash a merge over a best-effort attribute seed */
 	}
+}
+
+/** Force-delete a branch and warn (to stderr) when the delete is
+ *  silently skipped because the branch is held by another worktree.
+ *  Returns true when the branch is gone (deleted now or already
+ *  absent), false when something held it back.
+ *
+ *  Use this instead of bare `tryRun(["git", "branch", "-D", b])` at
+ *  cleanup sites that own the branch lifecycle (post-merge reap of
+ *  fix-chain / discovery / unit branches). The bare tryRun pattern
+ *  swallows the "branch is checked out at <path>" error silently;
+ *  the branch leaks and a future re-creation collides with the
+ *  zombie. The warning surfaces the leak in MCP stderr so operators
+ *  can investigate. */
+function deleteBranchWithWarning(branch: string, context: string): boolean {
+	if (!isGitRepo()) return true
+	if (!branchExists(branch)) return true
+	const ok = tryRun(["git", "branch", "-D", branch]) !== ""
+	if (ok) return true
+	// Diagnose so the stderr line is actionable.
+	const holder = findWorktreeForBranch(branch)
+	if (holder) {
+		console.error(
+			`[haiku] could not delete branch '${branch}' (${context}) — held by worktree '${holder}'. The branch will leak; remove the worktree (\`git worktree remove --force ${holder}\`) and rerun cleanup, or delete the branch manually.`,
+		)
+	} else {
+		console.error(
+			`[haiku] could not delete branch '${branch}' (${context}). The branch will leak; investigate via \`git branch -D ${branch}\`.`,
+		)
+	}
+	return false
 }
 
 /** Find the path of an existing worktree currently checked out on
@@ -1937,7 +2019,7 @@ export function mergeUnitWorktree(
 		// desired, should happen at stage-complete (after fan-in) or be
 		// driven by the review provider.
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
-		tryRun(["git", "branch", "-D", unitBranch])
+		deleteBranchWithWarning(unitBranch, `unit-merge cleanup for ${unit}`)
 
 		return {
 			success: true,
@@ -2046,7 +2128,10 @@ export function mergeDiscoveryWorktree(
 	ensureIntentGitAttributes(slug)
 
 	if (!existsSync(worktreePath)) {
-		if (branchExists(discBranch)) tryRun(["git", "branch", "-D", discBranch])
+		deleteBranchWithWarning(
+			discBranch,
+			`discovery cleanup (no worktree) for ${slug}/${stage}/${template}`,
+		)
 		return { success: true, message: "no worktree" }
 	}
 
@@ -2156,7 +2241,10 @@ export function mergeDiscoveryWorktree(
 		}
 
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
-		tryRun(["git", "branch", "-D", discBranch])
+		deleteBranchWithWarning(
+			discBranch,
+			`discovery merge cleanup for ${slug}/${stage}/${template}`,
+		)
 
 		return {
 			success: true,
@@ -2182,9 +2270,10 @@ export function cleanupDiscoveryWorktree(
 	if (existsSync(worktreePath)) {
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
 	}
-	if (branchExists(discBranch)) {
-		tryRun(["git", "branch", "-D", discBranch])
-	}
+	deleteBranchWithWarning(
+		discBranch,
+		`discovery cleanup for ${slug}/${stage}/${template}`,
+	)
 	return { success: true, message: `cleaned up ${discBranch}` }
 }
 
@@ -2294,7 +2383,10 @@ export function mergeFixChainWorktree(
 		// Nothing to merge — either never created, or previous tick cleaned
 		// up. Also defensively delete the branch if it's still around with
 		// no worktree backing it.
-		if (branchExists(fixBranch)) tryRun(["git", "branch", "-D", fixBranch])
+		deleteBranchWithWarning(
+			fixBranch,
+			`fix-chain cleanup (no worktree) for ${slug}/${scope}/${feedbackId}`,
+		)
 		return { success: true, message: "no worktree" }
 	}
 
@@ -2417,7 +2509,10 @@ export function mergeFixChainWorktree(
 		}
 
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
-		tryRun(["git", "branch", "-D", fixBranch])
+		deleteBranchWithWarning(
+			fixBranch,
+			`fix-chain merge cleanup for ${slug}/${scope}/${feedbackId}`,
+		)
 
 		return {
 			success: true,
@@ -2451,9 +2546,10 @@ export function cleanupFixChainWorktree(
 	if (existsSync(worktreePath)) {
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
 	}
-	if (branchExists(fixBranch)) {
-		tryRun(["git", "branch", "-D", fixBranch])
-	}
+	deleteBranchWithWarning(
+		fixBranch,
+		`fix-chain cleanup for ${slug}/${scope}/${feedbackId}`,
+	)
 	return {
 		success: true,
 		message: `cleaned up ${fixBranch}`,

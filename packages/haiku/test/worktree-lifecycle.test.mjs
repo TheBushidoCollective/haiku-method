@@ -29,6 +29,7 @@ import {
 	fixChainWorktreePath,
 	mergeDiscoveryWorktree,
 	mergeFixChainWorktree,
+	mergeStageBranchForward,
 } from "../src/git-worktree.ts"
 import {
 	_resetIsGitRepoForTests,
@@ -924,6 +925,66 @@ await test("leaves correctly-placed worktrees alone", () => {
 		cleanupRepo(tmp)
 	}
 })
+
+// ── mergeStageBranchForward foreign-checkout regression ──────────────────
+//
+// Audit follow-up to PR #304: `mergeStageBranchForward` previously did
+// `git checkout toBranch` on the primary, then `git merge fromBranch`.
+// If the user had `toBranch` checked out at another worktree, the
+// direct checkout failed and the forward-merge was lost. Same family
+// as the discovery / fix-chain merge bugs the previous commits fixed.
+// Routed through `withWorktreeOnBranch`; this test confirms the merge
+// lands when toBranch is held by a foreign worktree.
+
+console.log("\n=== mergeStageBranchForward (audit follow-up) ===")
+
+await test(
+	"merges from→to stage branch when toBranch is held by a foreign worktree",
+	() => {
+		const { tmp, slug } = setupRepo({ stage: "design" })
+		try {
+			process.chdir(tmp)
+			git(tmp, "branch", `haiku/${slug}/design`, `haiku/${slug}/main`)
+			git(tmp, "branch", `haiku/${slug}/development`, `haiku/${slug}/main`)
+
+			// Land a commit on `design` (the from-branch).
+			git(tmp, "checkout", `haiku/${slug}/design`)
+			writeFileSync(join(tmp, "fix-from-design.md"), "design fix\n")
+			git(tmp, "add", "-A")
+			git(tmp, "commit", "-m", "design fix")
+
+			// Park `development` (the to-branch) at a foreign worktree to
+			// simulate the user inspecting it. Forward-merge should still
+			// land (engine reuses that worktree for the merge).
+			git(tmp, "checkout", `haiku/${slug}/main`)
+			const userWt = mkdtempSync(join(tmpdir(), "haiku-fwd-foreign-"))
+			rmSync(userWt, { recursive: true, force: true })
+			git(tmp, "worktree", "add", userWt, `haiku/${slug}/development`)
+			try {
+				const res = mergeStageBranchForward(slug, "design", "development")
+				assert.ok(
+					res.success,
+					`expected forward merge to succeed when toBranch is held by foreign worktree; got: ${res.message}`,
+				)
+				// Commit landed on `development` — visible via the foreign
+				// worktree's tree.
+				assert.ok(
+					existsSync(join(userWt, "fix-from-design.md")),
+					"merged commit should appear on the development branch via the foreign worktree",
+				)
+			} finally {
+				try {
+					git(tmp, "worktree", "remove", "--force", userWt)
+				} catch {
+					/* best-effort */
+				}
+				rmSync(userWt, { recursive: true, force: true })
+			}
+		} finally {
+			cleanupRepo(tmp)
+		}
+	},
+)
 
 // ── Summary ────────────────────────────────────────────────────────────────
 

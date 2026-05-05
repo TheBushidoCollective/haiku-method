@@ -1,120 +1,126 @@
 # Privacy and Data Handling Principles
 
+_Inception artifact for intent: autonomous-report-to-fix_
+
+---
+
 ## Privacy policy delta
 
-### Existing claim being changed
+**Existing claim being changed:**
 
-`website/content/pages/privacy.md` — section "The plugin runs locally", lines 11–14 (as of effective date April 8, 2026):
+`website/content/pages/privacy.md`, paragraph "The plugin runs locally" (lines 11–14):
 
 > The H·AI·K·U plugin runs entirely inside your Claude Code environment. It reads and writes files on your local filesystem — intents, units, iteration state, configuration. **None of that data is sent to GigSmart servers.** We don't have a backend. We don't collect telemetry by default. Your code and project content stay on your machine.
 
-The claim "None of that data is sent to GigSmart servers" and "We don't have a backend" become false the moment `/haiku:report`'s new flow ships: a session bundle (scrubbed JSONL and synthesized description) is POST-ed to a GigSmart-operated Cloud Run service. This is a material change, not a minor clarification.
+This claim is presently unconditional. The report-to-fix loop breaks the condition the moment a user runs `/haiku:report`: a session bundle — assembled from JSONL files under `~/.claude/projects/<encoded-cwd>/` — leaves the user's machine and is POSTed to a GigSmart-operated Cloud Run service. The existing statement is therefore materially false after the feature ships.
 
-### Replacement language at the principle level
+**Replacement language (principle level — not final copy):**
 
-The updated section must:
-1. Acknowledge that the default behavior remains local-only — the plugin does not transmit data during normal workflow execution.
-2. Introduce `/haiku:report` as an explicit, user-initiated opt-in action that transmits data.
-3. Name what leaves the machine: a scrubbed session bundle (conversation JSONL with sensitive patterns removed) and a synthesized problem description — not raw source code or project intent files.
-4. Name who receives it: a GigSmart-operated service (Cloud Run) used to diagnose and fix the reported issue.
-5. State that the user's consent is collected before transmission, not after.
+The policy must be updated before the feature ships to reflect that:
 
-The new section must not use the phrase "None of that data is sent to GigSmart servers" in its former unqualified form; it must draw a clear line between passive plugin operation (still local-only) and the active report action (user-initiated, with disclosure).
+1. The plugin ordinarily processes all data locally and sends nothing to GigSmart servers by default.
+2. The `/haiku:report` flow is an explicit, user-initiated exception: the user knowingly submits a session bundle to a GigSmart-operated backend for the purpose of creating a GitHub issue and an autonomous fix PR.
+3. The bundle is scrubbed client-side before transmission; the post-scrub content is described in the consent step.
+4. The backend retains the bundle only as long as the fix loop is active; deletion policy is disclosed at the point of consent.
 
-### Gating relationship
+The updated policy section must distinguish between the ambient (no-transmission) baseline and the user-invoked exception. Language like "unless you run `/haiku:report`, in which case..." is the structural model; the exact copy is a design-stage deliverable.
 
-The privacy policy update is a launch gate for the `/haiku:report` loop. The scrubber must pass its own completeness review, the consent UX must be implemented, and the updated policy must be live at `haikumethod.ai/privacy` before the feature is enabled in any production build. Shipping without this update would expose GigSmart to a misrepresentation claim — the existing policy is explicit, not vague.
+**Gating relationship:** The policy update is a launch blocker. The `/haiku:report` skill change MUST NOT merge to main until the updated `website/content/pages/privacy.md` is live. CI should enforce this: if the feature flag or route is present and the policy page still contains the unconditional "None of that data is sent" claim, the build fails.
 
 ---
 
 ## Consent UX principles
 
-### Timing: consent before data leaves the machine
+**Timing — before or after data leaves the machine:**
 
-Consent must be collected **before** the session bundle is POST-ed. The scrubber runs client-side; the user must have the opportunity to see the disclosure and decline before the scrubbed bundle leaves their machine. A "notify after" model is incompatible with the privacy contract for two reasons: (a) it cannot be meaningfully revoked once the POST completes, and (b) it provides no path for the user to exercise the "review what was sent" right described in Retention and Disclosure below.
+Consent must be obtained before any data is transmitted. This is not a regulatory nicety; it is the only model that preserves trust. A "notify after" design treats the user's decision as something the product can make for them. The session bundle contains what the user said to the model, what the model said back, and all tool calls and outputs — its contents are personal and potentially sensitive even after scrubbing. The user must understand what is being sent and choose to send it.
 
-The practical implementation is: `/haiku:report` presents the disclosure and asks for explicit confirmation (or captures the GitHub OAuth grant as the confirmation signal) before calling the Cloud Run endpoint.
+Operationally: the `/haiku:report` skill must display a summary of what will be transmitted, confirm the scrubbing rules that will be applied, and require an explicit user confirmation before the POST happens. The skill's current conversational loop (ask, synthesize, confirm, submit) already has a confirmation step; the transmission description must be part of that confirmation, not a post-submit notice.
 
-### What the user sees about what is being sent
+**What the user sees about what is being sent:**
 
-The disclosure must name three things:
-1. **The artifact type**: a scrubbed session transcript (JSONL conversation log), not raw source code, not intent files, not the full filesystem.
-2. **What was stripped**: the categories of patterns the scrubber removed (credentials, paths, email addresses — at the class level, not the pattern level).
-3. **Where it goes**: a GigSmart-operated service that will use it to open a GitHub issue and attempt an automated fix.
+At minimum, the consent presentation must describe:
 
-The disclosure does not need to reproduce the full scrubbed bundle for the user to read before submission (that would create friction without proportionate privacy benefit). It needs to be accurate and specific enough that the user can make an informed decision. "We're sending your conversation log" is not sufficient; "We're sending your scrubbed session transcript — credentials, home paths, and email addresses have been removed — to open a bug report on gigsmart/haiku-method" is.
+- That a session bundle will be sent to GigSmart's Cloud Run service.
+- What the bundle contains in plain terms (conversation turns, tool calls, tool outputs from the current session and any linked subagent sessions).
+- Which data classes the scrubber will strip before transmission (the enumerated classes in the Scrubbing Principles section below).
+- A note that the scrubber covers known patterns; custom secrets the user has stored in environment variables cannot be detected by the scrubber.
 
-### Behavioral default on incomplete flows
+Whether the user sees an inline preview of the bundle before sending (a "preview before send" UX) is an open question for design (see Open Questions). The principle is: the user can make an informed decision without having to trust the scrubber blindly.
 
-If the user closes the tab or dismisses the report midway — after `/haiku:report` was invoked but before the POST completes — the default is **no transmission**. The bundle is not queued for deferred send. The report is abandoned. If a partial POST already occurred (e.g., the connection dropped mid-upload), the service discards incomplete payloads rather than processing them.
+**Behavioral default if the user closes mid-flow:**
 
-### Tradeoff axis: friction vs informed consent
+If the user abandons the consent step — closes the tab, cancels, or does not respond — the default MUST be no transmission. Nothing is sent. The partial flow leaves no residual state on the backend (there is nothing to clean up because nothing was sent). A partially collected session bundle stored transiently in the plugin memory is discarded when the tool exits.
 
-The friction–consent axis here sits firmly on the consent side. The session transcript contains the full conversation including tool calls, agent subagent chains, and their outputs. Even after scrubbing, this is sensitive material — it reveals the user's workflow, the structure of their project, and the nature of the bug they encountered. The cost of one confirmation step is low; the cost of a user discovering their workflow was transmitted without their explicit understanding is high. The consent step should be designed to be fast (one prompt, one affirmation) but not skippable.
+**Tradeoff axis: friction vs. informed consent**
+
+The consent step adds friction to a flow whose value proposition is fire-and-forget simplicity. This tension is real and must be designed explicitly rather than resolved by hiding it. The principle here is that the consent step must be light enough not to undermine the fire-and-forget promise, but substantial enough that the user is not surprised by what happened. A one-screen summary with a single confirm action is the target shape; a multi-page terms scroll is not.
 
 ---
 
 ## Scrubbing principles
 
-The scrubber operates on the JSONL session bundle client-side, before any data leaves the user's machine. It must be **conservative on uncertainty**: when a pattern might be a credential or sensitive value, strip it. When a path might be a home path, strip it. The risk of a false positive (stripping a benign value) is cosmetic — the diagnostic context is slightly reduced. The risk of a false negative (passing through a credential) is a user trust failure.
+The scrubber runs client-side, inside the plugin, before the bundle POST. Its mandate is conservative: strip anything that matches a known-sensitive pattern, even when it is uncertain whether the matched content is actually sensitive. The cost of a false positive (stripping something harmless) is a slightly degraded diagnostic signal. The cost of a false negative (passing through a credential or personal identifier) is a user trust breach.
 
-The scrubber strips the following data classes at minimum:
+The existing `sanitizeAttributes` function in `packages/haiku/src/telemetry.ts` and the `PII_DENY_KEYS` set (lines 344–381) establish the attribute-key scrubbing precedent for OTEL events. The JSONL bundle scrubber operates on free-text content rather than structured key-value pairs, so the techniques differ — but the conservative-on-uncertainty principle carries directly.
 
-- **API tokens / bearer credentials**: Any string matching the structural pattern of a bearer token, API key, or service credential (length thresholds, character class distributions consistent with random key generation, or prefix signals like `sk-`, `ghp_`, `gho_`, `Bearer `, `token:`, `api_key=`). This class covers Claude API keys, GitHub PATs, OpenAI keys, and arbitrary service tokens the user may have in their environment. Detection signal: prefix-pattern rules combined with entropy heuristics for unrecognized credential-shaped strings.
+The scrubber MUST strip the following data classes from tool call inputs, tool call outputs, model message content, and any file content embedded in the session JSONL:
 
-- **Environment variable values**: Any key=value pair where the key appears in a known sensitive-variable namespace (`ANTHROPIC_API_KEY`, `GITHUB_TOKEN`, `OPENAI_API_KEY`, `AWS_SECRET_ACCESS_KEY`, `DATABASE_URL`, `SECRET_*`, `*_TOKEN`, `*_KEY`, `*_SECRET`, `*_PASSWORD`). The value is stripped even when the key is not in the JSONL directly — tool output that echoes env vars must be caught by value-shape detection, not only by key presence. Detection signal: key-pattern matching on known namespaces plus value-shape detection for credential-class patterns.
+- **API tokens and bearer credentials** — Strings matching the structural shape of known credential formats: bearer tokens, OAuth access tokens, refresh tokens, API keys from well-known providers (e.g., `sk-...`, `ghp_...`, `glpat-...`, `AKIA...`). Detection signal: token-prefix pattern matching combined with entropy scoring for unlabeled high-entropy strings. The scrubber must also strip values that appear immediately after label patterns like `Bearer `, `Authorization: `, `token:`, `api-key:`, or `apikey:` (case-insensitive, in both JSON strings and plain text).
 
-- **Absolute home paths (`/Users/<name>/...` and `/home/<name>/...`)**: Any filesystem path that begins with `/Users/` or `/home/` and includes a username segment. These paths are present throughout Claude Code session JSONLs — tool call inputs (`file_path` arguments), tool outputs (error messages), and assistant text all reference absolute paths. The path may reveal the username and the directory structure of the user's machine. Detection signal: prefix matching on `/Users/` and `/home/` followed by a non-empty path segment. The replacement is a normalized placeholder (e.g., `~`-prefixed relative form or a fixed sentinel). Paths beginning with `/tmp/` or the project's own working directory (resolved at report time) are treated differently — see Conservative-on-uncertainty below.
+- **Environment variable values** — Values of environment variables that appear in tool output. The signal is the `KEY=VALUE` pattern (shell assignment form) or JSON-serialized env maps. Environment variable _names_ need not be stripped — it is the values that carry the secret. Shell output from `env`, `printenv`, or `export` commands is a common vector.
 
-- **IP addresses**: IPv4 addresses in dotted-decimal form (`N.N.N.N`) and IPv6 addresses in standard notation. These appear in error messages from network tool calls, server logs echoed in tool output, and debug traces. Detection signal: decimal-dotted quad pattern for IPv4; colon-hex groups for IPv6. Loopback addresses (`127.0.0.1`, `::1`, `localhost`) are retained as they carry no identifying information, but private-range addresses (RFC 1918) and public addresses are stripped.
+- **Absolute home-directory paths** — Strings matching `/Users/<name>/...` (macOS) and `/home/<name>/...` (Linux). These paths are personally identifying — they encode the OS username — and may appear in stack traces, file read/write tool calls, and model-generated content. The scrubber replaces the user-specific prefix with a normalized placeholder (e.g., `~` or `[HOME]`). The principle is normalization, not deletion, so the diagnostic signal (relative path after the home) is preserved.
 
-- **Email addresses**: Any string matching standard email address form (`local-part@domain.tld`). Email addresses appear in git commit metadata, error messages, tool outputs referencing user configuration, and synthesized descriptions. Detection signal: regex matching on the RFC 5321-compatible shape. The user's email provided during the report flow is handled separately (it is explicit attribution data, not scraped from the bundle).
+- **IP addresses** — IPv4 dotted-quad addresses and IPv6 full and abbreviated forms. These appear in server logs, error messages, and network diagnostic tool outputs embedded in the session. Private-range addresses (RFC 1918: `10.x.x.x`, `172.16-31.x.x`, `192.168.x.x`) are particularly sensitive because they can reveal internal network topology. The scrubber replaces detected IPs with a placeholder (`[IP]`).
+
+- **Email addresses** — RFC 5321 email addresses (`user@domain.tld`). These appear in error messages, model-generated content, git commit metadata embedded in diffs, and environment variables. Email addresses are directly personally identifying. The scrubber replaces them with a placeholder (`[EMAIL]`).
+
+- **Passwords and connection strings** — Values following label patterns like `password=`, `passwd:`, `pwd=`, `DB_PASSWORD=`, and connection strings in DSN format (`postgres://user:password@host/db`, `mysql://...`, `mongodb://...`). The password component in the authority section of a URI is the primary target; the host and database name need not be stripped (they describe topology, not a credential).
+
+- **Private keys and certificates** — PEM-encoded content: blocks beginning with `-----BEGIN PRIVATE KEY-----`, `-----BEGIN RSA PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----`, `-----BEGIN CERTIFICATE-----`, etc. These appear in tool output when the user has run commands that print key material to stdout.
+
+- **Slack, Stripe, and other service tokens** — Tokens from well-known SaaS platforms beyond GitHub (e.g., `xoxb-...` for Slack bot tokens, `sk_live_...` for Stripe secret keys, `SG.` prefixes for SendGrid). Detection signal: service-specific prefix patterns.
 
 ### Conservative-on-uncertainty
 
-The trust-risk dimension from DISCOVERY.md (Risks, lines 91–97) establishes the principle directly: "A scrubber that misses a credential ships it to GCP. This is a user trust risk, not just a policy risk." The scrubber must strip on ambiguous matches rather than passing them through for three reasons:
+When the scrubber cannot determine whether a matched string is sensitive, it strips it. This is not the most diagnostic-friendly posture — stripped content degrades the signal available to the fix agent — but it is the only posture that honors the trust-risk dimension identified in DISCOVERY.md (Risks, lines 91–93): "A scrubber that misses a credential ships it to GCP. This is a user trust risk, not just a policy risk."
 
-1. **False negatives are unrecoverable.** Once a credential leaves the user's machine in cleartext, it cannot be un-sent. A false positive (stripping a non-credential) reduces diagnostic context at worst — the fix agent may produce a lower-quality diagnosis. That is recoverable (the user can file another report). A false negative is not.
+The reasoning is asymmetric consequences: a false negative exposes a user's credential to a third-party service they may not have intended to authorize; a false positive removes a string that was probably harmless from a diagnostic bundle. The diagnostic degradation from false positives is recoverable (the fix agent can ask a follow-up question or work with reduced context); a leaked credential is not.
 
-2. **Custom secrets are invisible to pattern matching.** The scrubber can enumerate known structural patterns (token prefixes, email shape, home path prefixes). It cannot know that `my-internal-api-key-value-123abc` is a secret when it appears in a tool output. Entropy-based heuristics lower the false-negative rate but do not eliminate it. The "strip on uncertainty" rule is the safety net for what pattern matching cannot reach.
-
-3. **The diagnostic artifact remains useful after conservative stripping.** The fix agent needs the structure of the conversation — the sequence of tool calls, the error messages, the model responses — not the literal credential values. A session where `ANTHROPIC_API_KEY=sk-ant-...` has been replaced with `ANTHROPIC_API_KEY=[REDACTED]` is diagnostically equivalent to the original for the purposes of identifying a workflow-engine bug.
+This principle also governs the priority ordering when multiple rules overlap a span of text: the most aggressive applicable rule wins. If a string is simultaneously shaped like a path and like a high-entropy token, the credential rule takes precedence.
 
 ---
 
 ## Retention and disclosure
 
-### Retention duration
+**How long the Cloud Run service retains the bundle:**
 
-The Cloud Run service must not retain the session bundle beyond the active fix lifecycle for the associated `fix_id`. Once the issue is closed (bot-merged PR, or fix loop exhausted), the bundle is eligible for deletion. The retention principle: store only as long as the diagnostic artifact is needed for active work, and no longer.
+The retention policy is a design-stage decision (see Open Questions for the proposed default range), but the principles are:
 
-The specific retention duration (number of days after fix closure before deletion, the mechanism that triggers deletion) is an open question deferred to the design stage — it depends on the state store choice and the deletion-trigger implementation. The principle constraint is that retention must be bounded and communicated to the user at consent time.
+1. The bundle must not be retained indefinitely. It is diagnostic material, not a product asset. A fixed retention window after which the bundle is automatically deleted satisfies the user's reasonable expectation that their session content is not permanently archived.
+2. The retention window must be disclosed at the point of consent, not buried in the privacy policy.
+3. The fix loop's durable state store (tracking PR number, iteration count, CI results) does not require the original bundle after the agent has processed it once. The state store can retain derived state (fix metadata) while the raw bundle is deleted on a shorter schedule.
 
-### Who can access it
+**Who can access the bundle:**
 
-Access to a submitted bundle is restricted to:
-- The Cloud Run service's own service account (for the fix-agent invocations)
-- GigSmart engineering staff with Secret Manager + storage access (for incident investigation)
-- No third parties
+- The Cloud Run service account, scoped to reading bundles for active fix IDs. No human read access to raw bundles as a default; access requires an explicit audit-logged break-glass procedure.
+- The Anthropic SDK call made by the fix agent on Cloud Run. The bundle is transmitted to the Anthropic API as part of the prompt context; this transmission falls under Anthropic's API data handling policy. This fact must be disclosed to the user at the point of consent: sending a session bundle for autonomous fixing means it is also sent to the model provider.
 
-The bundle is not shared with Anthropic beyond the API call the fix agent makes (which is subject to Anthropic's standard API data handling policy, not GigSmart's). The Sentry coexistence question (DISCOVERY.md, Strategic Considerations, lines 67–68) — whether the existing Sentry event still fires alongside the Cloud Run POST — must be resolved in the design stage; if Sentry continues to receive events, that is a second external surface and must be disclosed in the consent UX.
+**What the user is told they can request:**
 
-### What the user can request
-
-Users must be able to request:
-- **Deletion of their submitted bundle** — identified by `fix_id`, which the user receives when `/haiku:report` completes. The deletion mechanism (API endpoint, email to oss@gigsmart.com, or self-service on the report status page) is an open question for the design stage.
-- **A copy of what was submitted** — the scrubbed bundle as it was received by the Cloud Run service. The user should be able to verify what was actually sent, not just what the client claimed to have stripped.
-
-Both rights must be named in the updated privacy policy and in the consent disclosure presented by `/haiku:report`.
+- **Deletion** — The user can request deletion of their bundle and associated fix-loop state at any time by submitting a deletion request to the fix-id endpoint or to `oss@gigsmart.com`. The backend must honor this within a defined SLA (design stage picks the number; the principle is "promptly").
+- **Copy** — The user can request a copy of the bundle that was submitted under their fix ID. This is the standard data portability expectation; the backend must be able to reconstruct or return the stored bundle before it is deleted.
+- **Audit trail** — The user should be able to see what was transmitted: which fix ID, when, and under which scrubbing version. This audit log is the minimum disclosure that backs the consent claim.
 
 ---
 
 ## Open Questions
 
-These are not decisions deferred indefinitely — they are proposed defaults requiring product and design confirmation before the design stage begins.
+These questions have proposed defaults. The design stage should resolve them with explicit decisions; the proposed defaults are the principle-level anchors.
 
-**Pre-send preview UX** — Proposed default: no full bundle preview before send, but a plain-language summary of what categories were scrubbed (e.g., "We removed 3 credential patterns and 14 home path references"). A full preview would require the user to read potentially thousands of lines of JSONL before confirming, which defeats the fire-and-forget UX contract. The summary approach preserves informed consent without blocking the flow. Open: is a "show me what was scrubbed" optional expansion sufficient, or does the user need the ability to inspect and edit the bundle before send?
+**Pre-send preview UX** — Should the user see the scrubbed bundle before it is transmitted? _Proposed default: no full preview, but a structural summary (session turn count, tool call count, scrubbed class counts) is shown in the confirmation step._ Full preview risks overwhelming the user with JSONL noise; a structural summary gives enough information to make an informed choice without derailing the fire-and-forget UX contract. Design should evaluate whether a "show me what's being sent" expandable is worth the implementation cost.
 
-**Retention duration** — Proposed default: 90 days from fix closure (PR merged or fix loop exhausted), then automated deletion. This gives GigSmart engineering enough time to reference the bundle for post-fix analysis without indefinite retention. Open: should the retention clock start from submission or from fix closure? Should users be able to shorten their own retention window?
+**Retention duration** — How long should the Cloud Run service retain the raw bundle? _Proposed default: 30 days from submission, auto-deleted._ This is long enough for the fix loop to complete (most fix loops will close in minutes to hours; an open issue lingering for 30 days is likely abandoned) and short enough that users are not surprised by months-long retention. The derived fix-loop state (PR number, iteration log) can be retained longer under a separate, lower-sensitivity schedule.
 
-**Deletion-request mechanism** — Proposed default: email to oss@gigsmart.com with the `fix_id` in the subject. This is low-tech but immediately implementable without additional service surface. Open: should the report status page (`haikumethod.ai/report/:id`) include a self-service deletion button backed by an authenticated API endpoint? If so, authentication (the same GitHub OAuth flow) must be wired for that action.
+**Deletion-request mechanism** — How does the user request deletion of their bundle? _Proposed default: a deletion link embedded in the `/report/:id` status page, plus the `oss@gigsmart.com` email fallback._ The self-service deletion link is the primary path; the email fallback ensures users without an active browser session can still invoke their right to deletion. The design stage should specify the authentication model for the deletion link (is it authenticated by the fix ID alone, or does it require the GitHub OAuth token used at submission?).

@@ -12,7 +12,7 @@ stages:
   - operations
   - security
 intent_reviewed: true
-active_stage: inception
+active_stage: design
 ---
 
 # Autonomous report-to-fix loop

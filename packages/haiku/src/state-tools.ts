@@ -3378,13 +3378,14 @@ function validateUnitQualityGateShapes(
 // interpretation. Each rule has a specific failure mode that maps to a
 // concrete error message for the caller.
 
-// ── Unit frontmatter — SCHEMA IS THE SSOT ─────────────────────────────────
+// ── Schemas + field-name constants ────────────────────────────────────────
 //
-// `UNIT_FRONTMATTER_SCHEMA` below is plain JSONSchema and is the single
-// source of truth for what an agent can submit via haiku_unit_write.
-// AJV validates input against it — no custom field-by-field code for
-// the static rules. The compiled validator at `validateUnitSchema`
-// runs on every haiku_unit_write call.
+// JSONSchema definitions (the SSOT for unit / intent / stage_state /
+// feedback frontmatter shapes) and their derived
+// `AGENT_AUTHORABLE_*_FIELDS` / `FSM_DRIVEN_*_FIELDS` constants live
+// in `./state/schemas/` — one file per schema, plus a barrel. They
+// were extracted from this file as the first step of breaking up the
+// god file — pure data, zero behavior, no fs/git deps.
 //
 // What JSONSchema covers (enforced by AJV):
 //   - allow-list of properties + per-field types
@@ -3401,267 +3402,38 @@ function validateUnitQualityGateShapes(
 //   - body placeholder strings (needs body inspection)
 //   - ghost-FB closes references (needs FB list)
 
-export const UNIT_FRONTMATTER_SCHEMA = {
-	type: "object",
-	properties: {
-		title: {
-			type: "string",
-			minLength: 1,
-			description:
-				"Unit title — non-empty string. Defaults to first H1 in the body, or to the unit name.",
-		},
-		depends_on: {
-			type: "array",
-			items: { type: "string" },
-			description:
-				"Names of sibling units in the SAME stage that must complete before this one. Each entry must resolve to an actual sibling. No self-reference. No cycles. (Cross-sibling and cycle checks are runtime — they need the full stage DAG, not expressible in this schema.)",
-		},
-		inputs: {
-			type: "array",
-			items: {
-				type: "string",
-				// Path-shape check: must be a non-empty string with no
-				// embedded whitespace, must contain a `/` (any path) or `.`
-				// (file extension), and must NOT contain `:` or `,` or
-				// sentence-style punctuation. Catches freeform-text entries
-				// like "ACCEPTANCE-CRITERIA: must define edge cases" that
-				// aren't really paths.
-				pattern: "^[^\\s:,]+(?:/[^\\s:,]+)*$",
-			},
-			description:
-				"Cross-stage inputs this unit reads — paths to artifacts produced by prior stages. Each entry MUST be a file/dir path (no whitespace, no colons or commas, no prose).",
-		},
-		outputs: {
-			type: "array",
-			items: {
-				type: "string",
-				// Same path-shape check as inputs. The advance gate verifies
-				// each output path actually exists as a file at unit
-				// completion (see runInlineQualityGates / outputs-empty
-				// check), so freeform sentences would slip past the
-				// non-empty check before this pattern-validation gate
-				// rejected them.
-				pattern: "^[^\\s:,]+(?:/[^\\s:,]+)*$",
-			},
-			description:
-				"Artifacts this unit produces. Each entry MUST be a real file path (no whitespace, no colons or commas, no prose) — the gate verifies the path exists on disk at unit completion. Use `inputs:` if you mean to declare what the unit READS; use the body's `## Completion Criteria` section if you mean to declare prose-style success conditions.",
-		},
-		quality_gates: {
-			type: "array",
-			items: {
-				type: "object",
-				properties: {
-					name: { type: "string" },
-					command: { type: "string" },
-					dir: { type: "string" },
-				},
-				required: ["name", "command"],
-			},
-			description:
-				"Build-class only: list of `{name, command, dir?}` executable gate objects. Run at advance_hat time; non-zero exit blocks. Prose strings are silently skipped — they give no enforcement.",
-		},
-		model: {
-			type: "string",
-			enum: ["haiku", "sonnet", "opus"],
-			description:
-				"Subagent tier for this unit's hats. `haiku` = mechanical, `sonnet` = standard (default), `opus` = deep reasoning. Cascade: unit > hat > stage > studio.",
-		},
-		closes: {
-			type: "array",
-			items: { type: "string" },
-			description:
-				"On revisit iterations, list of FB IDs this unit addresses (e.g. `[FB-01, FB-03]`). Every pending FB must be claimed by some unit's `closes:` to allow advancement.",
-		},
-		applicable_skills: {
-			type: "array",
-			items: { type: "string" },
-			description:
-				"Skill slugs (slash-command names without the leading `/`) identified as relevant for this unit during elaboration. The elaborator populates this from the installed skill registry. Hat subagent prompts surface these automatically so subagents know which skills to reach for.",
-		},
-	},
-	// workflow-driven fields. Agents MUST NOT set these — the workflow engine owns
-	// transitions via haiku_unit_advance_hat / haiku_unit_reject_hat /
-	// haiku_unit_increment_bolt (which call setFrontmatterField directly,
-	// bypassing the agent-facing tools). AJV's propertyNames check rejects
-	// any of these at validate time; strict MCP clients reject at parse
-	// time before the call goes out. `hat_started_at` and
-	// `scope_reject_attempts` are workflow-internal counters touched only
-	// by advance_hat / reject_hat — listed here so haiku_unit_write and
-	// haiku_unit_set both refuse to set them.
-	propertyNames: {
-		not: {
-			enum: [
-				"status",
-				"hat",
-				"bolt",
-				"iterations",
-				"started_at",
-				"completed_at",
-				"hat_started_at",
-				"scope_reject_attempts",
-			],
-		},
-	},
-	// Stage-specific fields are allowed (per-stage `phases/ELABORATION.md`
-	// documents them). Schema can't enumerate stage-specific fields
-	// without reading every stage def.
-	additionalProperties: true,
-}
+export {
+	AGENT_AUTHORABLE_INTENT_FIELDS,
+	AGENT_AUTHORABLE_UNIT_FIELDS,
+	CREATE_TIME_FB_FIELDS,
+	ERROR_OUTPUT_SCHEMA,
+	FSM_DRIVEN_FB_FIELDS,
+	FSM_DRIVEN_INTENT_FIELDS,
+	FSM_DRIVEN_UNIT_FIELDS,
+	INTENT_FRONTMATTER_SCHEMA,
+	OK_OUTPUT_SCHEMA,
+	STAGE_STATE_FIELDS,
+	STAGE_STATE_SCHEMA,
+	UNIT_FRONTMATTER_SCHEMA,
+	validateIntentFrontmatterSchema as validateIntentSchema,
+	validateUnitFrontmatterSchema as validateUnitSchema,
+} from "./state/schemas/index.js"
 
-// AJV-compiled validator — instantiated once at module load. Runs on every
-// haiku_unit_write call. Returns boolean + populates `validateUnitSchema.errors`.
-const ajv = new Ajv({ allErrors: true, strict: false })
-const validateUnitSchema = ajv.compile(UNIT_FRONTMATTER_SCHEMA)
-
-// Field-name lists used by tool descriptions and dispatch contracts.
-// These read DIRECTLY from the schema — JSONSchema is the SSOT, these
-// are just convenience accessors so callers don't repeat the path.
-export const AGENT_AUTHORABLE_UNIT_FIELDS = Object.keys(
-	UNIT_FRONTMATTER_SCHEMA.properties,
-) as ReadonlyArray<string>
-
-export const FSM_DRIVEN_UNIT_FIELDS = UNIT_FRONTMATTER_SCHEMA.propertyNames.not
-	.enum as ReadonlyArray<string>
-
-// ── Feedback frontmatter — reference (no input schema) ────────────────────
-//
-// haiku_feedback_write is body-only — there is no input schema for FB
-// frontmatter to be the SSOT for. These constants are pure documentation,
-// consumed only by the fix-loop dispatch contract so fix-mode hats know
-// what FM fields they'll see when reading FB context. If a future tool
-// needs to accept FB FM input, it should bring its own schema and these
-// constants would derive from it (matching the unit pattern above).
-
-export const FSM_DRIVEN_FB_FIELDS = [
-	"status",
-	"hat",
-	"bolt",
-	"iterations",
-	"closed_by",
-	"integrator_attempts",
-	"replies",
-	"triaged_at",
-] as const
-
-export const CREATE_TIME_FB_FIELDS = [
-	"title",
-	"origin",
-	"author",
-	"author_type",
-	"created_at",
-	"iteration",
-	"visit",
-	"source_ref",
-	"resolution",
-	"attachment",
-	"inline_anchor",
-] as const
-
-// ── Intent frontmatter — SCHEMA IS THE SSOT ───────────────────────────────
-//
-// Mirrors plugin/schemas/intent.schema.json. AJV-validated when an agent
-// calls haiku_intent_set; the `propertyNames.not.enum` list rejects
-// engine-only fields the workflow engine owns (status, active_stage,
-// phase, completion_review_*, completed_at, etc).
-//
-// This is parallel to UNIT_FRONTMATTER_SCHEMA — same SSOT pattern.
-
-export const INTENT_FRONTMATTER_SCHEMA = {
-	type: "object",
-	properties: {
-		title: { type: "string", minLength: 1 },
-		mode: {
-			type: "string",
-			enum: ["continuous", "discrete", "autopilot", "discrete-hybrid"],
-		},
-		skip_stages: { type: "array", items: { type: "string" } },
-		intent_completion_review: { type: "boolean" },
-		// `studio` is set on creation by haiku_select_studio and is
-		// immutable thereafter — accepted by AJV (so tests building
-		// fixtures don't fail) but rejected by the haiku_intent_set
-		// handler with a dedicated `intent_field_immutable` code.
-		studio: { type: "string" },
-	},
-	propertyNames: {
-		not: {
-			enum: [
-				// Engine-managed lifecycle fields
-				"status",
-				"active_stage",
-				"phase",
-				"started_at",
-				"completed_at",
-				"created_at",
-				// Completion-review state machine
-				"completion_review_dispatched",
-				"completion_review_skipped",
-				"completion_review_entered_at",
-				"completion_review_dispatched_at",
-				// Engine-derived collections
-				"stages",
-				"composite",
-				"intent_reviewed",
-				// Archive lifecycle (toggle via haiku_intent_archive / _unarchive)
-				"archived",
-				"archived_at",
-				// Parent-link (creation-time only)
-				"follows",
-				// Legacy alias for mode
-				"autopilot",
-			],
-		},
-	},
-	additionalProperties: true,
-}
-
-const validateIntentSchema = ajv.compile(INTENT_FRONTMATTER_SCHEMA)
-
-export const AGENT_AUTHORABLE_INTENT_FIELDS = Object.keys(
-	INTENT_FRONTMATTER_SCHEMA.properties,
-) as ReadonlyArray<string>
-
-export const FSM_DRIVEN_INTENT_FIELDS = INTENT_FRONTMATTER_SCHEMA.propertyNames
-	.not.enum as ReadonlyArray<string>
-
-const INTENT_IMMUTABLE_FIELDS: ReadonlyArray<string> = ["studio"]
-
-// ── Stage state.json — SCHEMA IS THE SSOT ─────────────────────────────────
-//
-// Mirrors plugin/schemas/stage.schema.json. Stage state is entirely
-// engine-managed — there are no agent-authorable fields. The schema
-// exists so haiku_stage_set can reject every call with a clear
-// `stage_field_engine_only` code instead of silently accepting writes
-// that bypass workflow lifecycle invariants. The handler validates
-// structure before writing so future engine-internal callers (or
-// careful manual recovery flows) get type-safety.
-
-export const STAGE_STATE_SCHEMA = {
-	type: "object",
-	properties: {
-		stage: { type: "string" },
-		status: {
-			type: "string",
-			enum: ["pending", "active", "completed", "blocked"],
-		},
-		phase: {
-			type: "string",
-			enum: ["", "elaborate", "execute", "review", "gate"],
-		},
-		started_at: { type: ["string", "null"] },
-		completed_at: { type: ["string", "null"] },
-		gate_entered_at: { type: ["string", "null"] },
-		gate_outcome: { type: ["string", "null"] },
-		visits: { type: "integer", minimum: 0 },
-		iterations: { type: "array" },
-		elaboration_turns: { type: "integer", minimum: 0 },
-		decision_log: { type: "array" },
-	},
-	additionalProperties: true,
-}
-
-export const STAGE_STATE_FIELDS = Object.keys(
-	STAGE_STATE_SCHEMA.properties,
-) as ReadonlyArray<string>
+import { stateAjv as stateAjvForErrorText } from "./state/schemas/_ajv.js"
+import {
+	AGENT_AUTHORABLE_INTENT_FIELDS,
+	AGENT_AUTHORABLE_UNIT_FIELDS,
+	CREATE_TIME_FB_FIELDS,
+	FSM_DRIVEN_FB_FIELDS,
+	FSM_DRIVEN_INTENT_FIELDS,
+	FSM_DRIVEN_UNIT_FIELDS,
+	INTENT_FRONTMATTER_SCHEMA,
+	INTENT_IMMUTABLE_FIELDS,
+	STAGE_STATE_FIELDS,
+	UNIT_FRONTMATTER_SCHEMA,
+	validateIntentFrontmatterSchema as validateIntentSchema,
+	validateUnitFrontmatterSchema as validateUnitSchema,
+} from "./state/schemas/index.js"
 
 // ── Settings.yml — schema loaded from plugin/schemas/settings.schema.json ─
 //
@@ -3727,44 +3499,6 @@ function validateSettingsCandidate(data: unknown): boolean {
 }
 function settingsValidationErrors(): unknown[] {
 	return _validateSettingsErrors ? _validateSettingsErrors() : []
-}
-
-// ── Output schema fragments (reused across tool defs) ─────────────────────
-//
-// Per MCP spec 2025-06-18 §Tool Result, when a tool declares an
-// outputSchema, the server MUST emit `structuredContent` matching it.
-// Tools below either compose these fragments or define their own shape.
-// The `reply()` helper inside handleStateTool wraps a payload as both
-// stringified text content (backwards compat) and structuredContent.
-
-// Standard error envelope. Returned (with isError: true) when a handler
-// rejects the call for a structured reason. The `error` field is a
-// stable named code (e.g. `frontmatter_validation_failed`,
-// `feedback_not_found`, `lifecycle_violation`); `message` is human-
-// readable remediation guidance.
-export const ERROR_OUTPUT_SCHEMA = {
-	type: "object",
-	properties: {
-		error: { type: "string", description: "Stable named error code." },
-		message: {
-			type: "string",
-			description: "Human-readable remediation guidance.",
-		},
-	},
-	required: ["error", "message"],
-	additionalProperties: true,
-}
-
-// Standard ok envelope for confirmation-style writes. Tools that mutate
-// state and return only a confirmation message use this.
-export const OK_OUTPUT_SCHEMA = {
-	type: "object",
-	properties: {
-		ok: { type: "boolean", const: true },
-		message: { type: "string" },
-	},
-	required: ["ok", "message"],
-	additionalProperties: true,
 }
 
 /**
@@ -7520,7 +7254,11 @@ export function handleStateTool(
 								error: "field_value_invalid",
 								field,
 								errors: fieldErrors,
-								message: `Field '${field}' value failed schema validation: ${ajv.errorsText(fieldErrors)}.`,
+								// AJV's `errorsText` is a pure formatter — reuse the
+								// shared `stateAjv` instance from
+								// ./state/schemas/_ajv.ts rather than keep a
+								// module-local Ajv alive only for error formatting.
+								message: `Field '${field}' value failed schema validation: ${stateAjvForErrorText.errorsText(fieldErrors)}.`,
 							},
 							{ isError: true },
 						)

@@ -20,9 +20,9 @@ export const WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK = [
 	"",
 	"#### Red flags (STOP and re-read this contract if you catch yourself thinking)",
 	"",
-	'- "I\'ll just rewrite the file — that\'s faster than tracing the finding" — read the finding body and the flagged artifact first; fix the specific gap. Bolts spent rewriting unrelated code don\'t close the open feedback and risk introducing new findings.',
+	"- \"I'll just rewrite the file — that's faster than tracing the finding\" — read the finding body and the flagged artifact first; fix the specific gap. Bolts spent rewriting unrelated code don't close the open feedback and risk introducing new findings.",
 	'- "The finding is wrong, I\'ll close it via advance" — invalid findings get `haiku_feedback_reject` with a concrete reason. Advancing on a wrong finding silently accepts it and pollutes the closure record.',
-	'- "I see another issue while I\'m here, I\'ll fix it too" — log it as a new feedback item; do NOT bundle the fix into this loop. Each finding is its own scope; bundled fixes serialize what should run in parallel and conflate closure signals.',
+	"- \"I see another issue while I'm here, I'll fix it too\" — log it as a new feedback item; do NOT bundle the fix into this loop. Each finding is its own scope; bundled fixes serialize what should run in parallel and conflate closure signals.",
 	'- "The artifact already looks fixed, I\'ll just close" — re-read both the finding body and the artifact and verify the gap is actually addressed, not just plausibly addressed. The terminal hat catches this; getting there earlier saves a bolt.',
 	'- "Later is the load-bearing word" — "I\'ll add the test later", "I\'ll come back for the edge case", "the bolt cap will catch it" — the next bolt costs the same as this one. Do the work in this hat.',
 ].join("\n")

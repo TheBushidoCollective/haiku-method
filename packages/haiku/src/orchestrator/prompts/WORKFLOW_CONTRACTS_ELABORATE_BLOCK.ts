@@ -109,7 +109,7 @@ export const WORKFLOW_CONTRACTS_ELABORATE_BLOCK = [
 	"**2. Reframe vague directives as testable success criteria.** When a request arrives with words like *better, faster, cleaner, professional, comprehensive, thorough*, translate them to measurable outcomes BEFORE writing `quality_gates:`. The reframed prose becomes `## Completion criteria` in the unit body; the executable check becomes the frontmatter gate.",
 	"",
 	"```",
-	"REQUEST: \"Make the dashboard faster\"",
+	'REQUEST: "Make the dashboard faster"',
 	"→ REFRAMED:",
 	"  - LCP < 2.5s on 4G connection (verify: lighthouse mobile run exits 0 with score ≥ target)",
 	"  - Initial data load < 500ms p95 (verify: parsed server log shows p95 below threshold)",

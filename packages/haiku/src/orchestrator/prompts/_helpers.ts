@@ -28,7 +28,7 @@ import { existsSync, readFileSync } from "node:fs"
 import matter from "gray-matter"
 import { features } from "../../config.js"
 import { getCapabilities } from "../../harness.js"
-import { type ModelTier, resolveModel } from "../../model-selection.js"
+import { type ModelTier, sanitizeModel } from "../../model-selection.js"
 import {
 	MAX_CONCURRENT_SUBAGENTS,
 	parseFrontmatter,
@@ -266,16 +266,25 @@ export function resolveStudioMandateModel(opts: {
 }): ModelTier | undefined {
 	if (!features.modelSelection) return undefined
 	const { mandatePath, studio, stage } = opts
-	const mandateModel = mandatePath ? readModelFromPath(mandatePath) : undefined
-	const stageDef = stage ? readStageDef(studio, stage) : null
+	// Cascade evaluated lazily so a mandate-level hit doesn't pay for
+	// stage / studio file I/O. We don't go through `resolveModel` here
+	// because that helper takes eager values; the cascade order
+	// (mandate → stage → studio) is short enough to inline.
+	if (mandatePath) {
+		const mandateModel = readModelFromPath(mandatePath)
+		if (mandateModel) return mandateModel
+	}
+	if (stage) {
+		const stageDef = readStageDef(studio, stage)
+		const stageDefault = sanitizeModel(
+			stageDef?.data?.default_model as string | undefined,
+		)
+		if (stageDefault) return stageDefault
+	}
 	const studioData = readStudio(studio)
-	const { model } = resolveModel({
-		unit: undefined,
-		hat: mandateModel,
-		stage: stageDef?.data?.default_model as string | undefined,
-		studio: studioData?.data?.default_model as string | undefined,
-	})
-	return model
+	return sanitizeModel(
+		studioData?.data?.default_model as string | undefined,
+	)
 }
 
 /** Build the per-subagent context block injected into unit/hat

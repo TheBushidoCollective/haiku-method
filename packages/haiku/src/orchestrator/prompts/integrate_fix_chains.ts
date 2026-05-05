@@ -29,6 +29,9 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	const integrateMaxAttempts =
 		(action.max_attempts as number) || MAX_INTEGRATOR_ATTEMPTS
 	const integrateItems = (action.items as IntegrateItem[]) || []
+	// All items in a wave share the same stage (or no stage, in the
+	// intent-completion case), so resolve once and reuse — don't push
+	// this into the per-item loop.
 	const integratorModel = resolveStudioMandateModel({
 		studio,
 		stage: integrateStage ?? undefined,

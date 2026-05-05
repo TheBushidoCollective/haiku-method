@@ -29,7 +29,9 @@ async function test(name, fn) {
 function setupIntent() {
 	const intentDir = mkdtempSync(join(tmp, "intent-"))
 	mkdirSync(join(intentDir, "product"), { recursive: true })
-	mkdirSync(join(intentDir, "stages", "design", "artifacts"), { recursive: true })
+	mkdirSync(join(intentDir, "stages", "design", "artifacts"), {
+		recursive: true,
+	})
 	writeFileSync(
 		join(intentDir, "product", "ACCEPTANCE-CRITERIA.md"),
 		"---\ntitle: AC\n---\n# Acceptance criteria\n\nA bunch of words go here that describe what success looks like.",

@@ -308,73 +308,67 @@ await test("completes merge after integrator resolves conflict markers", () => {
 // 3-attempt cap and stranding the chain's real content on a dead
 // worktree. The fix seeds `.gitattributes` (idempotently, on legacy
 // intents too) so the JSONL appends auto-resolve.
-await test(
-	"merges fix-chain when both sides appended to action-log.jsonl (regression: integrator cap stranding chains)",
-	() => {
-		const { tmp, slug, stage } = setupRepo()
-		try {
-			process.chdir(tmp)
-			git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
-			git(tmp, "checkout", `haiku/${slug}/${stage}`)
+await test("merges fix-chain when both sides appended to action-log.jsonl (regression: integrator cap stranding chains)", () => {
+	const { tmp, slug, stage } = setupRepo()
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+		git(tmp, "checkout", `haiku/${slug}/${stage}`)
 
-			// Seed the intent dir + a baseline action-log.jsonl on the
-			// stage branch.
-			const intentDir = join(tmp, ".haiku", "intents", slug)
-			mkdirSync(intentDir, { recursive: true })
-			writeFileSync(
-				join(intentDir, "action-log.jsonl"),
-				`{"event":"baseline","ts":"2026-05-04T00:00:00Z"}\n`,
-			)
-			git(tmp, "add", "-A")
-			git(tmp, "commit", "-m", "seed action-log")
+		// Seed the intent dir + a baseline action-log.jsonl on the
+		// stage branch.
+		const intentDir = join(tmp, ".haiku", "intents", slug)
+		mkdirSync(intentDir, { recursive: true })
+		writeFileSync(
+			join(intentDir, "action-log.jsonl"),
+			`{"event":"baseline","ts":"2026-05-04T00:00:00Z"}\n`,
+		)
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-m", "seed action-log")
 
-			// Start the fix-chain off the stage branch (engine seeds
-			// .gitattributes on first call to mergeFixChainWorktree).
-			const wt = createFixChainWorktree(slug, stage, "FB-LOG")
-			// Fix-chain appends an event.
-			writeFileSync(
-				join(wt, ".haiku", "intents", slug, "action-log.jsonl"),
-				`{"event":"baseline","ts":"2026-05-04T00:00:00Z"}\n{"event":"fix-chain-side","ts":"2026-05-04T01:00:00Z"}\n`,
-			)
-			git(wt, "add", "-A")
-			git(wt, "commit", "-m", "fix-chain side append")
-			// Stage branch appends a different event (e.g. an engine
-			// tick that ran while the fix-chain was working).
-			writeFileSync(
-				join(intentDir, "action-log.jsonl"),
-				`{"event":"baseline","ts":"2026-05-04T00:00:00Z"}\n{"event":"stage-side","ts":"2026-05-04T02:00:00Z"}\n`,
-			)
-			git(tmp, "add", "-A")
-			git(tmp, "commit", "-m", "stage side append")
+		// Start the fix-chain off the stage branch (engine seeds
+		// .gitattributes on first call to mergeFixChainWorktree).
+		const wt = createFixChainWorktree(slug, stage, "FB-LOG")
+		// Fix-chain appends an event.
+		writeFileSync(
+			join(wt, ".haiku", "intents", slug, "action-log.jsonl"),
+			`{"event":"baseline","ts":"2026-05-04T00:00:00Z"}\n{"event":"fix-chain-side","ts":"2026-05-04T01:00:00Z"}\n`,
+		)
+		git(wt, "add", "-A")
+		git(wt, "commit", "-m", "fix-chain side append")
+		// Stage branch appends a different event (e.g. an engine
+		// tick that ran while the fix-chain was working).
+		writeFileSync(
+			join(intentDir, "action-log.jsonl"),
+			`{"event":"baseline","ts":"2026-05-04T00:00:00Z"}\n{"event":"stage-side","ts":"2026-05-04T02:00:00Z"}\n`,
+		)
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-m", "stage side append")
 
-			// Pre-fix: this would have returned isConflict and
-			// dispatched the integrator. With `merge=union` seeded
-			// on .gitattributes, git auto-concatenates and the merge
-			// succeeds.
-			const res = mergeFixChainWorktree(slug, stage, "FB-LOG")
-			assert.ok(
-				res.success,
-				`expected union merge of action-log.jsonl to succeed; got: ${res.message}`,
-			)
+		// Pre-fix: this would have returned isConflict and
+		// dispatched the integrator. With `merge=union` seeded
+		// on .gitattributes, git auto-concatenates and the merge
+		// succeeds.
+		const res = mergeFixChainWorktree(slug, stage, "FB-LOG")
+		assert.ok(
+			res.success,
+			`expected union merge of action-log.jsonl to succeed; got: ${res.message}`,
+		)
 
-			// Both events are present in the merged file.
-			const merged = readFileSync(
-				join(intentDir, "action-log.jsonl"),
-				"utf-8",
-			)
-			assert.ok(
-				merged.includes("fix-chain-side"),
-				"fix-chain's appended event survived the union merge",
-			)
-			assert.ok(
-				merged.includes("stage-side"),
-				"stage's appended event survived the union merge",
-			)
-		} finally {
-			cleanupRepo(tmp)
-		}
-	},
-)
+		// Both events are present in the merged file.
+		const merged = readFileSync(join(intentDir, "action-log.jsonl"), "utf-8")
+		assert.ok(
+			merged.includes("fix-chain-side"),
+			"fix-chain's appended event survived the union merge",
+		)
+		assert.ok(
+			merged.includes("stage-side"),
+			"stage's appended event survived the union merge",
+		)
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
 
 await test("returns isConflict if integrator leaves files unresolved", () => {
 	const { tmp, slug, stage } = setupRepo()
@@ -566,214 +560,205 @@ await test("discovery cleanup discards worktree without merging", () => {
 // prompt re-fanned-out the same discovery subagents on each run_next.
 // The fix routes the merge through `withWorktreeOnBranch`, which
 // detects the existing checkout and lands the merge there.
-await test(
-	"merges discovery into stage branch when stage branch is held by a foreign worktree (regression: stuck elaboration)",
-	() => {
-		const { tmp, slug, stage } = setupRepo()
+await test("merges discovery into stage branch when stage branch is held by a foreign worktree (regression: stuck elaboration)", () => {
+	const { tmp, slug, stage } = setupRepo()
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+
+		// Simulate the user's monorepo-3: a separate worktree of the
+		// same repo, parked on the stage branch. The MCP cwd (tmp)
+		// stays on `haiku/{slug}/main`.
+		const userWorktree = mkdtempSync(join(tmpdir(), "haiku-user-checkout-"))
+		rmSync(userWorktree, { recursive: true, force: true })
+		git(tmp, "worktree", "add", userWorktree, `haiku/${slug}/${stage}`)
 		try {
-			process.chdir(tmp)
-			git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+			// Discovery subagent does its work in its own worktree.
+			const wt = createDiscoveryWorktree(slug, stage, "competitive")
+			const artifactPath = join(
+				wt,
+				".haiku",
+				"intents",
+				slug,
+				"knowledge",
+				"COMPETITIVE.md",
+			)
+			mkdirSync(join(artifactPath, ".."), { recursive: true })
+			writeFileSync(artifactPath, "# competitive landscape\n")
+			git(wt, "add", "-A")
+			git(wt, "commit", "-m", "competitive discovery")
 
-			// Simulate the user's monorepo-3: a separate worktree of the
-			// same repo, parked on the stage branch. The MCP cwd (tmp)
-			// stays on `haiku/{slug}/main`.
-			const userWorktree = mkdtempSync(join(tmpdir(), "haiku-user-checkout-"))
-			rmSync(userWorktree, { recursive: true, force: true })
-			git(tmp, "worktree", "add", userWorktree, `haiku/${slug}/${stage}`)
-			try {
-				// Discovery subagent does its work in its own worktree.
-				const wt = createDiscoveryWorktree(slug, stage, "competitive")
-				const artifactPath = join(
-					wt,
-					".haiku",
-					"intents",
-					slug,
-					"knowledge",
-					"COMPETITIVE.md",
-				)
-				mkdirSync(join(artifactPath, ".."), { recursive: true })
-				writeFileSync(artifactPath, "# competitive landscape\n")
-				git(wt, "add", "-A")
-				git(wt, "commit", "-m", "competitive discovery")
+			// MCP cwd is on intent main (NOT the stage branch). The
+			// merge function falls through to its temp-worktree path,
+			// which now finds the user's existing worktree on the
+			// stage branch and uses it instead of throwing.
+			const res = mergeDiscoveryWorktree(slug, stage, "competitive")
+			assert.ok(
+				res.success,
+				`expected merge success when stage branch is held by foreign worktree; got: ${res.message}`,
+			)
 
-				// MCP cwd is on intent main (NOT the stage branch). The
-				// merge function falls through to its temp-worktree path,
-				// which now finds the user's existing worktree on the
-				// stage branch and uses it instead of throwing.
-				const res = mergeDiscoveryWorktree(slug, stage, "competitive")
-				assert.ok(
-					res.success,
-					`expected merge success when stage branch is held by foreign worktree; got: ${res.message}`,
-				)
+			// The merge landed on the stage branch — visible in the
+			// foreign worktree's tree.
+			const userArtifact = join(
+				userWorktree,
+				".haiku",
+				"intents",
+				slug,
+				"knowledge",
+				"COMPETITIVE.md",
+			)
+			assert.ok(
+				existsSync(userArtifact),
+				"discovery artifact should appear on the stage branch via the foreign worktree",
+			)
 
-				// The merge landed on the stage branch — visible in the
-				// foreign worktree's tree.
-				const userArtifact = join(
-					userWorktree,
-					".haiku",
-					"intents",
-					slug,
-					"knowledge",
-					"COMPETITIVE.md",
-				)
-				assert.ok(
-					existsSync(userArtifact),
-					"discovery artifact should appear on the stage branch via the foreign worktree",
-				)
-
-				// Discovery worktree + branch reaped.
-				assert.ok(!existsSync(wt), "discovery worktree reaped")
-				assert.ok(
-					!branchExists(tmp, discoveryBranchName(slug, stage, "competitive")),
-					"discovery branch reaped",
-				)
-			} finally {
-				// Clean up the user's worktree before tearing down the
-				// repo so `git worktree remove` doesn't leave dangling
-				// metadata in the parent.
-				try {
-					git(tmp, "worktree", "remove", "--force", userWorktree)
-				} catch {
-					/* best-effort */
-				}
-				rmSync(userWorktree, { recursive: true, force: true })
-			}
+			// Discovery worktree + branch reaped.
+			assert.ok(!existsSync(wt), "discovery worktree reaped")
+			assert.ok(
+				!branchExists(tmp, discoveryBranchName(slug, stage, "competitive")),
+				"discovery branch reaped",
+			)
 		} finally {
-			cleanupRepo(tmp)
+			// Clean up the user's worktree before tearing down the
+			// repo so `git worktree remove` doesn't leave dangling
+			// metadata in the parent.
+			try {
+				git(tmp, "worktree", "remove", "--force", userWorktree)
+			} catch {
+				/* best-effort */
+			}
+			rmSync(userWorktree, { recursive: true, force: true })
 		}
-	},
-)
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
 
 // Companion: when the foreign worktree is dirty, the merge surfaces a
 // clear error instead of silently looping. Without this, a user with
 // uncommitted changes on the stage branch would see the elaborate
 // prompt re-fanning-out indefinitely with no diagnostic.
-await test(
-	"surfaces a structured error when the stage branch is held by a dirty foreign worktree",
-	() => {
-		const { tmp, slug, stage } = setupRepo()
+await test("surfaces a structured error when the stage branch is held by a dirty foreign worktree", () => {
+	const { tmp, slug, stage } = setupRepo()
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+
+		const userWorktree = mkdtempSync(join(tmpdir(), "haiku-user-dirty-"))
+		rmSync(userWorktree, { recursive: true, force: true })
+		git(tmp, "worktree", "add", userWorktree, `haiku/${slug}/${stage}`)
 		try {
-			process.chdir(tmp)
-			git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+			// Leave a tracked-but-uncommitted edit in the foreign
+			// worktree (commit a file first, then modify it). Tests
+			// the "tracked changes" branch of the dirty-state
+			// reporter — distinct from untracked-only state, which
+			// has different remediation guidance.
+			writeFileSync(join(userWorktree, "TRACKED.txt"), "v1\n")
+			git(userWorktree, "add", "-A")
+			git(userWorktree, "commit", "-m", "tracked file v1")
+			writeFileSync(join(userWorktree, "TRACKED.txt"), "v2 (user edit)\n")
 
-			const userWorktree = mkdtempSync(join(tmpdir(), "haiku-user-dirty-"))
-			rmSync(userWorktree, { recursive: true, force: true })
-			git(tmp, "worktree", "add", userWorktree, `haiku/${slug}/${stage}`)
-			try {
-				// Leave a tracked-but-uncommitted edit in the foreign
-				// worktree (commit a file first, then modify it). Tests
-				// the "tracked changes" branch of the dirty-state
-				// reporter — distinct from untracked-only state, which
-				// has different remediation guidance.
-				writeFileSync(join(userWorktree, "TRACKED.txt"), "v1\n")
-				git(userWorktree, "add", "-A")
-				git(userWorktree, "commit", "-m", "tracked file v1")
-				writeFileSync(join(userWorktree, "TRACKED.txt"), "v2 (user edit)\n")
+			const wt = createDiscoveryWorktree(slug, stage, "risks")
+			const artifactPath = join(
+				wt,
+				".haiku",
+				"intents",
+				slug,
+				"knowledge",
+				"RISKS.md",
+			)
+			mkdirSync(join(artifactPath, ".."), { recursive: true })
+			writeFileSync(artifactPath, "# risks\n")
+			git(wt, "add", "-A")
+			git(wt, "commit", "-m", "risks discovery")
 
-				const wt = createDiscoveryWorktree(slug, stage, "risks")
-				const artifactPath = join(
-					wt,
-					".haiku",
-					"intents",
-					slug,
-					"knowledge",
-					"RISKS.md",
-				)
-				mkdirSync(join(artifactPath, ".."), { recursive: true })
-				writeFileSync(artifactPath, "# risks\n")
-				git(wt, "add", "-A")
-				git(wt, "commit", "-m", "risks discovery")
-
-				const res = mergeDiscoveryWorktree(slug, stage, "risks")
-				assert.ok(!res.success, "expected failure on dirty foreign worktree")
-				assert.ok(
-					/uncommitted changes/i.test(res.message),
-					`expected the message to surface tracked-changes hint; got: ${res.message}`,
-				)
-				assert.ok(
-					/commit or stash/i.test(res.message),
-					`expected actionable remediation hint; got: ${res.message}`,
-				)
-			} finally {
-				try {
-					git(tmp, "worktree", "remove", "--force", userWorktree)
-				} catch {
-					/* best-effort */
-				}
-				rmSync(userWorktree, { recursive: true, force: true })
-			}
+			const res = mergeDiscoveryWorktree(slug, stage, "risks")
+			assert.ok(!res.success, "expected failure on dirty foreign worktree")
+			assert.ok(
+				/uncommitted changes/i.test(res.message),
+				`expected the message to surface tracked-changes hint; got: ${res.message}`,
+			)
+			assert.ok(
+				/commit or stash/i.test(res.message),
+				`expected actionable remediation hint; got: ${res.message}`,
+			)
 		} finally {
-			cleanupRepo(tmp)
+			try {
+				git(tmp, "worktree", "remove", "--force", userWorktree)
+			} catch {
+				/* best-effort */
+			}
+			rmSync(userWorktree, { recursive: true, force: true })
 		}
-	},
-)
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
 
 // Companion: untracked-only state gets a different remediation hint
 // (`git stash` doesn't help untracked files). The reviewer flagged
 // the original "commit or stash" message as a footgun for users with
 // only untracked files in their checkout — make sure the message
 // names what the user actually needs to do.
-await test(
-	"surfaces untracked-files-specific remediation when foreign worktree only has untracked files",
-	() => {
-		const { tmp, slug, stage } = setupRepo()
+await test("surfaces untracked-files-specific remediation when foreign worktree only has untracked files", () => {
+	const { tmp, slug, stage } = setupRepo()
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+
+		const userWorktree = mkdtempSync(join(tmpdir(), "haiku-user-untracked-"))
+		rmSync(userWorktree, { recursive: true, force: true })
+		git(tmp, "worktree", "add", userWorktree, `haiku/${slug}/${stage}`)
 		try {
-			process.chdir(tmp)
-			git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+			// New file the user hasn't staged or committed —
+			// purely untracked. `git stash` won't pick this up;
+			// the message must call that out.
+			writeFileSync(
+				join(userWorktree, "DOWNLOADED.bin"),
+				"new untracked file\n",
+			)
 
-			const userWorktree = mkdtempSync(join(tmpdir(), "haiku-user-untracked-"))
-			rmSync(userWorktree, { recursive: true, force: true })
-			git(tmp, "worktree", "add", userWorktree, `haiku/${slug}/${stage}`)
-			try {
-				// New file the user hasn't staged or committed —
-				// purely untracked. `git stash` won't pick this up;
-				// the message must call that out.
-				writeFileSync(
-					join(userWorktree, "DOWNLOADED.bin"),
-					"new untracked file\n",
-				)
+			const wt = createDiscoveryWorktree(slug, stage, "untracked-test")
+			const artifactPath = join(
+				wt,
+				".haiku",
+				"intents",
+				slug,
+				"knowledge",
+				"UT.md",
+			)
+			mkdirSync(join(artifactPath, ".."), { recursive: true })
+			writeFileSync(artifactPath, "# ut\n")
+			git(wt, "add", "-A")
+			git(wt, "commit", "-m", "ut")
 
-				const wt = createDiscoveryWorktree(slug, stage, "untracked-test")
-				const artifactPath = join(
-					wt,
-					".haiku",
-					"intents",
-					slug,
-					"knowledge",
-					"UT.md",
-				)
-				mkdirSync(join(artifactPath, ".."), { recursive: true })
-				writeFileSync(artifactPath, "# ut\n")
-				git(wt, "add", "-A")
-				git(wt, "commit", "-m", "ut")
-
-				const res = mergeDiscoveryWorktree(slug, stage, "untracked-test")
-				assert.ok(!res.success, "expected failure on untracked-files state")
-				assert.ok(
-					/untracked files/i.test(res.message),
-					`expected message to name untracked files; got: ${res.message}`,
-				)
-				assert.ok(
-					/clean/i.test(res.message),
-					`expected message to mention git clean as remediation; got: ${res.message}`,
-				)
-				assert.ok(
-					!/^.*commit or stash them.*$/i.test(res.message),
-					`expected message NOT to suggest 'commit or stash them' on a purely-untracked worktree; got: ${res.message}`,
-				)
-			} finally {
-				try {
-					git(tmp, "worktree", "remove", "--force", userWorktree)
-				} catch {
-					/* best-effort */
-				}
-				rmSync(userWorktree, { recursive: true, force: true })
-			}
+			const res = mergeDiscoveryWorktree(slug, stage, "untracked-test")
+			assert.ok(!res.success, "expected failure on untracked-files state")
+			assert.ok(
+				/untracked files/i.test(res.message),
+				`expected message to name untracked files; got: ${res.message}`,
+			)
+			assert.ok(
+				/clean/i.test(res.message),
+				`expected message to mention git clean as remediation; got: ${res.message}`,
+			)
+			assert.ok(
+				!/^.*commit or stash them.*$/i.test(res.message),
+				`expected message NOT to suggest 'commit or stash them' on a purely-untracked worktree; got: ${res.message}`,
+			)
 		} finally {
-			cleanupRepo(tmp)
+			try {
+				git(tmp, "worktree", "remove", "--force", userWorktree)
+			} catch {
+				/* best-effort */
+			}
+			rmSync(userWorktree, { recursive: true, force: true })
 		}
-	},
-)
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
 
 // ── Path + name helpers ────────────────────────────────────────────────────
 
@@ -939,53 +924,50 @@ await test("leaves correctly-placed worktrees alone", () => {
 
 console.log("\n=== mergeStageBranchForward (audit follow-up) ===")
 
-await test(
-	"merges from→to stage branch when toBranch is held by a foreign worktree",
-	() => {
-		const { tmp, slug } = setupRepo({ stage: "design" })
+await test("merges from→to stage branch when toBranch is held by a foreign worktree", () => {
+	const { tmp, slug } = setupRepo({ stage: "design" })
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/design`, `haiku/${slug}/main`)
+		git(tmp, "branch", `haiku/${slug}/development`, `haiku/${slug}/main`)
+
+		// Land a commit on `design` (the from-branch).
+		git(tmp, "checkout", `haiku/${slug}/design`)
+		writeFileSync(join(tmp, "fix-from-design.md"), "design fix\n")
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-m", "design fix")
+
+		// Park `development` (the to-branch) at a foreign worktree to
+		// simulate the user inspecting it. Forward-merge should still
+		// land (engine reuses that worktree for the merge).
+		git(tmp, "checkout", `haiku/${slug}/main`)
+		const userWt = mkdtempSync(join(tmpdir(), "haiku-fwd-foreign-"))
+		rmSync(userWt, { recursive: true, force: true })
+		git(tmp, "worktree", "add", userWt, `haiku/${slug}/development`)
 		try {
-			process.chdir(tmp)
-			git(tmp, "branch", `haiku/${slug}/design`, `haiku/${slug}/main`)
-			git(tmp, "branch", `haiku/${slug}/development`, `haiku/${slug}/main`)
-
-			// Land a commit on `design` (the from-branch).
-			git(tmp, "checkout", `haiku/${slug}/design`)
-			writeFileSync(join(tmp, "fix-from-design.md"), "design fix\n")
-			git(tmp, "add", "-A")
-			git(tmp, "commit", "-m", "design fix")
-
-			// Park `development` (the to-branch) at a foreign worktree to
-			// simulate the user inspecting it. Forward-merge should still
-			// land (engine reuses that worktree for the merge).
-			git(tmp, "checkout", `haiku/${slug}/main`)
-			const userWt = mkdtempSync(join(tmpdir(), "haiku-fwd-foreign-"))
-			rmSync(userWt, { recursive: true, force: true })
-			git(tmp, "worktree", "add", userWt, `haiku/${slug}/development`)
-			try {
-				const res = mergeStageBranchForward(slug, "design", "development")
-				assert.ok(
-					res.success,
-					`expected forward merge to succeed when toBranch is held by foreign worktree; got: ${res.message}`,
-				)
-				// Commit landed on `development` — visible via the foreign
-				// worktree's tree.
-				assert.ok(
-					existsSync(join(userWt, "fix-from-design.md")),
-					"merged commit should appear on the development branch via the foreign worktree",
-				)
-			} finally {
-				try {
-					git(tmp, "worktree", "remove", "--force", userWt)
-				} catch {
-					/* best-effort */
-				}
-				rmSync(userWt, { recursive: true, force: true })
-			}
+			const res = mergeStageBranchForward(slug, "design", "development")
+			assert.ok(
+				res.success,
+				`expected forward merge to succeed when toBranch is held by foreign worktree; got: ${res.message}`,
+			)
+			// Commit landed on `development` — visible via the foreign
+			// worktree's tree.
+			assert.ok(
+				existsSync(join(userWt, "fix-from-design.md")),
+				"merged commit should appear on the development branch via the foreign worktree",
+			)
 		} finally {
-			cleanupRepo(tmp)
+			try {
+				git(tmp, "worktree", "remove", "--force", userWt)
+			} catch {
+				/* best-effort */
+			}
+			rmSync(userWt, { recursive: true, force: true })
 		}
-	},
-)
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
 
 // ── consolidateStageBranches conflict pattern ───────────────────────────
 //
@@ -1002,7 +984,7 @@ await test(
 console.log("\n=== consolidateStageBranches (audit follow-up) ===")
 
 await test("creates main from stages when no conflict", () => {
-	const { tmp, slug, stage } = setupRepo({ stage: "design" })
+	const { tmp, slug } = setupRepo({ stage: "design" })
 	try {
 		process.chdir(tmp)
 		// Two stage branches, no main yet — the orphan-discrete state.
@@ -1017,7 +999,10 @@ await test("creates main from stages when no conflict", () => {
 		git(tmp, "branch", "-D", `haiku/${slug}/main`)
 
 		const res = consolidateStageBranches(slug, ["design", "development"])
-		assert.ok(res.success, `expected consolidate to succeed; got: ${res.message}`)
+		assert.ok(
+			res.success,
+			`expected consolidate to succeed; got: ${res.message}`,
+		)
 		assert.strictEqual(res.branch, `haiku/${slug}/main`)
 		assert.ok(branchExists(tmp, `haiku/${slug}/main`), "main branch created")
 	} finally {
@@ -1025,53 +1010,56 @@ await test("creates main from stages when no conflict", () => {
 	}
 })
 
-await test(
-	"returns isConflict + conflictFiles when consolidation hits a merge conflict",
-	() => {
-		const { tmp, slug, stage } = setupRepo({ stage: "design" })
-		try {
-			process.chdir(tmp)
-			// Setup: main and a stage branch that diverged on the same
-			// file. Consolidate (= merge stage into main) must hit a
-			// conflict and report it via the new structured shape.
-			git(tmp, "checkout", `haiku/${slug}/main`)
-			writeFileSync(join(tmp, "shared.md"), "main side\n")
-			git(tmp, "add", "-A")
-			git(tmp, "commit", "-m", "main side")
+await test("returns isConflict + conflictFiles when consolidation hits a merge conflict", () => {
+	const { tmp, slug } = setupRepo({ stage: "design" })
+	try {
+		process.chdir(tmp)
+		// Setup: main and a stage branch that diverged on the same
+		// file. Consolidate (= merge stage into main) must hit a
+		// conflict and report it via the new structured shape.
+		git(tmp, "checkout", `haiku/${slug}/main`)
+		writeFileSync(join(tmp, "shared.md"), "main side\n")
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-m", "main side")
 
-			git(tmp, "checkout", "-b", `haiku/${slug}/development`, `haiku/${slug}/main~1`)
-			writeFileSync(join(tmp, "shared.md"), "development side\n")
-			git(tmp, "add", "-A")
-			git(tmp, "commit", "-m", "development side")
+		git(
+			tmp,
+			"checkout",
+			"-b",
+			`haiku/${slug}/development`,
+			`haiku/${slug}/main~1`,
+		)
+		writeFileSync(join(tmp, "shared.md"), "development side\n")
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-m", "development side")
 
-			const res = consolidateStageBranches(slug, ["design", "development"])
-			assert.ok(!res.success, "expected conflict to surface as failure")
-			assert.strictEqual(
-				res.isConflict,
-				true,
-				`expected isConflict=true; got: ${JSON.stringify(res)}`,
-			)
-			assert.ok(
-				res.conflictFiles && res.conflictFiles.length > 0,
-				`expected conflictFiles list; got: ${JSON.stringify(res)}`,
-			)
-			assert.ok(
-				res.conflictFiles?.includes("shared.md"),
-				`expected shared.md in conflict list; got: ${JSON.stringify(res.conflictFiles)}`,
-			)
-			assert.ok(
-				/shared\.md/.test(res.message),
-				`expected message to name the conflict file; got: ${res.message}`,
-			)
-			assert.ok(
-				/Resolve the conflicts/i.test(res.message),
-				`expected actionable remediation hint; got: ${res.message}`,
-			)
-		} finally {
-			cleanupRepo(tmp)
-		}
-	},
-)
+		const res = consolidateStageBranches(slug, ["design", "development"])
+		assert.ok(!res.success, "expected conflict to surface as failure")
+		assert.strictEqual(
+			res.isConflict,
+			true,
+			`expected isConflict=true; got: ${JSON.stringify(res)}`,
+		)
+		assert.ok(
+			res.conflictFiles && res.conflictFiles.length > 0,
+			`expected conflictFiles list; got: ${JSON.stringify(res)}`,
+		)
+		assert.ok(
+			res.conflictFiles?.includes("shared.md"),
+			`expected shared.md in conflict list; got: ${JSON.stringify(res.conflictFiles)}`,
+		)
+		assert.ok(
+			/shared\.md/.test(res.message),
+			`expected message to name the conflict file; got: ${res.message}`,
+		)
+		assert.ok(
+			/Resolve the conflicts/i.test(res.message),
+			`expected actionable remediation hint; got: ${res.message}`,
+		)
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
 
 // ── Summary ────────────────────────────────────────────────────────────────
 

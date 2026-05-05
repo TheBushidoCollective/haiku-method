@@ -1,7 +1,7 @@
 {
   "stage": "inception",
   "status": "active",
-  "phase": "execute",
+  "phase": "gate",
   "started_at": "2026-05-05T22:06:26Z",
   "completed_at": null,
   "gate_entered_at": null,
@@ -23,5 +23,6 @@
   "pre_review_dispatched": true,
   "pre_review_dispatched_at": "2026-05-05T22:19:24Z",
   "pre_review_reviewers_acknowledged": true,
-  "pre_review_reviewers_acknowledged_at": "2026-05-05T22:27:06Z"
+  "pre_review_reviewers_acknowledged_at": "2026-05-05T22:27:06Z",
+  "spec_review_dispatched": true
 }

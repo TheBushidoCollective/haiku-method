@@ -47,6 +47,18 @@
     "stage": "inception",
     "tracking_class": "stage-output"
   },
+  "stages/inception/artifacts/open-questions-with-defaults.md": {
+    "path": "stages/inception/artifacts/open-questions-with-defaults.md",
+    "sha256": "150f49930a06122b2eb7cffbe332ef67896183450bba02a3d1811e9071272730",
+    "bytes": 20577,
+    "mtime_ns": 1778022447007000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-05T23:07:41.944Z",
+    "acknowledged_via": "baseline-init",
+    "stage": "inception",
+    "tracking_class": "stage-output"
+  },
   "stages/inception/artifacts/privacy-and-data-handling-principles.md": {
     "path": "stages/inception/artifacts/privacy-and-data-handling-principles.md",
     "sha256": "2804f258407b8487d79d57271b257ed1c22e1c1892395d615ca9dd48b0521e38",

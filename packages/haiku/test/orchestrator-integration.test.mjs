@@ -533,7 +533,13 @@ try {
 				},
 			},
 		})
-		createStageState(intentDirPath, "build", { phase: "review" })
+		createStageState(intentDirPath, "build", {
+			phase: "review",
+			// Bypass the engine spec_review gate (Phase 1) so this test exercises
+			// the quality-review path it's targeting. The two-phase review flow
+			// is covered separately.
+			spec_review_dispatched: true,
+		})
 		createUnit(intentDirPath, "build", "unit-01-impl", { status: "completed" })
 
 		process.chdir(projDir)
@@ -561,7 +567,10 @@ try {
 				},
 			},
 		})
-		createStageState(intentDirPath, "build", { phase: "review" })
+		createStageState(intentDirPath, "build", {
+			phase: "review",
+			spec_review_dispatched: true,
+		})
 		createUnit(intentDirPath, "build", "unit-01-impl", { status: "completed" })
 
 		process.chdir(projDir)
@@ -640,7 +649,10 @@ interpretation: lens
 Check tokens, spacing, naming.
 `,
 		)
-		createStageState(intentDirPath, "build", { phase: "review" })
+		createStageState(intentDirPath, "build", {
+			phase: "review",
+			spec_review_dispatched: true,
+		})
 		createUnit(intentDirPath, "build", "unit-01-impl", { status: "completed" })
 
 		process.chdir(projDir)
@@ -692,7 +704,10 @@ interpretation: strict
 PCI-DSS literal checklist.
 `,
 		)
-		createStageState(intentDirPath, "build", { phase: "review" })
+		createStageState(intentDirPath, "build", {
+			phase: "review",
+			spec_review_dispatched: true,
+		})
 		createUnit(intentDirPath, "build", "unit-01-impl", { status: "completed" })
 
 		process.chdir(projDir)
@@ -728,7 +743,10 @@ PCI-DSS literal checklist.
 				},
 			},
 		})
-		createStageState(intentDirPath, "build", { phase: "review" })
+		createStageState(intentDirPath, "build", {
+			phase: "review",
+			spec_review_dispatched: true,
+		})
 		createUnit(intentDirPath, "build", "unit-01-impl", { status: "completed" })
 
 		process.chdir(projDir)
@@ -740,6 +758,94 @@ PCI-DSS literal checklist.
 		assert.ok(
 			!responseText.includes("Mandate interpretation:"),
 			"No interpretation block should be emitted when the field is unset (preserves backward compat)",
+		)
+	})
+
+	// =========================================================================
+	// Group 7c: Engine spec_review phase (universal, runs before quality review)
+	// =========================================================================
+
+	await test("review phase emits spec_review action first when spec_review_dispatched is unset", async () => {
+		const { projDir, intentDirPath, slug } = createProject(
+			"g7c-spec-review-first",
+			{
+				active_stage: "build",
+				stageConfig: {
+					build: {
+						review: "auto",
+						hats: ["coder"],
+						reviewAgents: {
+							"security-review": "Quality reviewer.",
+						},
+					},
+				},
+			},
+		)
+		createStageState(intentDirPath, "build", { phase: "review" })
+		createUnit(intentDirPath, "build", "unit-01-impl", { status: "completed" })
+
+		process.chdir(projDir)
+		const result = await handleOrchestratorTool("haiku_run_next", {
+			intent: slug,
+		})
+		const responseText = expandPromptFiles(result.content[0].text)
+
+		// Engine spec gate fires first, before any studio review-agent.
+		assert.ok(
+			responseText.includes("Spec-Conformance Gate"),
+			"First review-phase tick should dispatch the engine spec_review subagent",
+		)
+		assert.ok(
+			responseText.includes("spec-conformance"),
+			"Spec-conformance subagent name should appear in the dispatch block",
+		)
+		// The studio quality reviewer is NOT in this prompt — it fires next tick.
+		assert.ok(
+			!responseText.includes("security-review"),
+			"Quality review agents should NOT fire in the spec_review phase",
+		)
+	})
+
+	await test("review phase advances to quality review after spec_review_dispatched is set", async () => {
+		const { projDir, intentDirPath, slug } = createProject(
+			"g7c-spec-then-quality",
+			{
+				active_stage: "build",
+				stageConfig: {
+					build: {
+						review: "auto",
+						hats: ["coder"],
+						reviewAgents: {
+							"security-review": "Quality reviewer.",
+						},
+					},
+				},
+			},
+		)
+		createStageState(intentDirPath, "build", {
+			phase: "review",
+			spec_review_dispatched: true,
+		})
+		createUnit(intentDirPath, "build", "unit-01-impl", { status: "completed" })
+
+		process.chdir(projDir)
+		const result = await handleOrchestratorTool("haiku_run_next", {
+			intent: slug,
+		})
+		const responseText = expandPromptFiles(result.content[0].text)
+
+		// Quality review fires now that the spec gate is marked dispatched.
+		assert.ok(
+			responseText.includes("Adversarial Review"),
+			"Second review-phase tick should dispatch the studio quality reviewers",
+		)
+		assert.ok(
+			responseText.includes("security-review"),
+			"Studio quality reviewer should appear in the dispatch block",
+		)
+		assert.ok(
+			!responseText.includes("Spec-Conformance Gate"),
+			"Spec-conformance should NOT re-fire after spec_review_dispatched is set",
 		)
 	})
 

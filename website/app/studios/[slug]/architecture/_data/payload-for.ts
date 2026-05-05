@@ -364,25 +364,19 @@ export function payloadFor(
 				{
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
-					what: "spec-gate agent fan-out — only review agents with `spec_gate: true` frontmatter dispatch in this phase. Quality reviewers wait until the spec gate is clear.",
-				},
-				{
-					hook: "readSpecGateAgentPaths()",
-					target: "agent prompt",
-					what: "filtered subset of `review-agents/*.md` whose frontmatter declares `spec_gate: true` — the hard-gate roster",
+					what: "engine spec-conformance subagent dispatch — universal hard gate that always fires on every stage, before quality review. The prompt is engine-owned (no per-studio mandate file, no opt-out).",
 				},
 			],
 			action: "spec_review",
 			summary:
-				"dispatch spec-gate review agents (Phase 1) — verify the stage delivered exactly what the intent spec scoped, before quality review fires",
+				"dispatch the engine spec-conformance subagent (Phase 1) — verify the stage delivered exactly what the intent spec scoped, before quality review fires",
 			payload: {
 				action: "spec_review",
 				stage: stageLower,
-				agents: "spec_gate:true subset of review-agents/",
+				agent: "spec-conformance (engine built-in, single subagent)",
 			},
 			validations: [
-				"`stage_state.spec_review_dispatched !== true` (first time only)",
-				"At least one review-agent has `spec_gate: true` frontmatter (otherwise this phase is skipped — backwards compatible)",
+				"`stage_state.spec_review_dispatched !== true` (first time only — fires once per stage)",
 			],
 			writes: [
 				{
@@ -392,7 +386,7 @@ export function payloadFor(
 				},
 			],
 			instructions:
-				"A perfect implementation of the wrong thing is still wrong — spec-gate agents check **cross-unit spec delivery** (acceptance criteria coverage, scope creep, cross-unit drift). They run **alone, first**. Findings flow through the normal `review_fix` loop. Once spec is clear, gate.ts resets the phase back to `review` so quality reviewers fire next.",
+				"A perfect implementation of the wrong thing is still wrong — the engine's spec-conformance subagent checks **cross-unit spec delivery** (acceptance criteria coverage, scope creep, cross-unit drift). It runs **alone, first**. Findings flow through the normal `review_fix` loop. Once spec is clear, gate.ts resets the phase back to `review` so quality reviewers fire next.",
 		},
 		"gate-spec-reset-to-review": {
 			injection: [
@@ -413,7 +407,6 @@ export function payloadFor(
 			validations: [
 				"`spec_review_dispatched === true`",
 				"`quality_review_dispatched !== true`",
-				"Stage has spec-gate agents declared (otherwise this branch never fires)",
 				"All spec findings closed (open spec FBs would have been routed through `review_fix` first)",
 			],
 			writes: [
@@ -423,19 +416,19 @@ export function payloadFor(
 				},
 			],
 			instructions:
-				"This is the bridge between Phase 1 (spec gate) and Phase 2 (quality review). The next `haiku_run_next` tick lands back in the review handler, which now sees `spec_review_dispatched=true` and falls through to the quality review path — dispatching all non-spec-gate agents in parallel.",
+				"This is the bridge between Phase 1 (engine spec gate) and Phase 2 (studio quality review). The next `haiku_run_next` tick lands back in the review handler, which now sees `spec_review_dispatched=true` and falls through to the quality review path — dispatching every studio-declared review agent in parallel.",
 		},
 		"review-quality-to-agents": {
 			injection: [
 				{
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
-					what: "quality review fan-out — every non-spec-gate review agent dispatches in parallel as subagents",
+					what: "quality review fan-out — every studio-declared review agent dispatches in parallel as subagents",
 				},
 				{
-					hook: "readQualityAgentPaths()",
+					hook: "readReviewAgentPaths()",
 					target: "agent prompt",
-					what: "subset of `review-agents/*.md` whose frontmatter does NOT declare `spec_gate: true` — the post-spec quality roster",
+					what: "every `review-agents/*.md` declared by the studio for this stage — the quality roster",
 				},
 			],
 			action: "review",
@@ -444,23 +437,22 @@ export function payloadFor(
 			payload: {
 				action: "review",
 				stage: stageLower,
-				agents: "non-spec_gate review-agents/",
+				agents: "all studio-declared review-agents/",
 			},
 			validations: [
-				"Spec gate clear (no spec-gate agents declared, or `spec_review_dispatched === true` with all spec findings closed)",
-				"`quality_review_dispatched !== true` (first time only — gate handler then sets this flag during reset)",
+				"Spec gate clear: `spec_review_dispatched === true` with all spec findings closed",
+				"`quality_review_dispatched !== true` (first time only — set during this dispatch)",
 				"Quality gates passed (tests/lint/typecheck — see `execute-to-review`)",
 				"Per-stage output liveness clear (orphan check; acknowledgments via `coverage-decisions.json`)",
 			],
 			writes: [
 				{
 					path: `.haiku/intents/{slug}/stages/${stageLower}/state.json`,
-					change:
-						'`quality_review_dispatched: true` (when spec-gate agents exist), then `phase: "gate"`',
+					change: '`quality_review_dispatched: true`, then `phase: "gate"`',
 				},
 			],
 			instructions:
-				"Quality reviewers focus on code quality (architecture, performance, security, test coverage) — explicitly NOT spec conformance, which the spec-gate already handled. Each agent files findings via `haiku_feedback`; findings flow through the normal fix-hat loop.",
+				"Quality reviewers focus on code quality (architecture, performance, security, test coverage) — explicitly NOT spec conformance, which the engine spec_review phase already handled. Each agent files findings via `haiku_feedback`; findings flow through the normal fix-hat loop.",
 		},
 		"review-to-gate": {
 			injection: [

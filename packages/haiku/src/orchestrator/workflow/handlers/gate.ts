@@ -75,11 +75,7 @@ import {
 	stageStatePath,
 	writeJson,
 } from "../../../state-tools.js"
-import {
-	readHatDefs,
-	readSpecGateAgentPaths,
-	studioSearchPaths,
-} from "../../../studio-reader.js"
+import { readHatDefs, studioSearchPaths } from "../../../studio-reader.js"
 import { emitTelemetry } from "../../../telemetry.js"
 import { countOpenFeedbackForGateCheck } from "../feedback-triage-gate.js"
 import type { WorkflowHandler } from "./_types.js"
@@ -464,19 +460,14 @@ const emit: WorkflowHandler = (ctx) => {
 	}
 
 	// ── Spec-gate: reset to review phase for quality review ────────────
-	// When spec-gate agents ran (spec_review_dispatched=true) but quality
-	// review hasn't fired yet (quality_review_dispatched unset/false),
-	// reset the stage phase to "review" so the review handler can dispatch
-	// quality agents on the next tick.
+	// When the engine spec_review subagent ran (spec_review_dispatched=true)
+	// but quality review hasn't fired yet (quality_review_dispatched
+	// unset/false), reset the stage phase to "review" so the review handler
+	// can dispatch quality agents on the next tick.
 	{
-		const specAgents = readSpecGateAgentPaths(studio, currentStage)
 		const specDispatched = stageState.spec_review_dispatched === true
 		const qualityDispatched = stageState.quality_review_dispatched === true
-		if (
-			Object.keys(specAgents).length > 0 &&
-			specDispatched &&
-			!qualityDispatched
-		) {
+		if (specDispatched && !qualityDispatched) {
 			const statePath = stageStatePath(slug, currentStage)
 			const stateData = readJson(statePath)
 			stateData.phase = "review"

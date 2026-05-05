@@ -1,21 +1,20 @@
 // orchestrator/workflow/handlers/review.ts — Emit for the `review` state.
 //
-// Owns the two-phase review sequence:
+// Owns the two-phase review sequence (universal — fires on every stage):
 //
-//   Phase 1 — Spec gate (when spec-gate agents exist):
-//     If spec_review_dispatched is not set → emit `spec_review` action with
-//     only `spec_gate: true` agents. Advances to gate phase so the fix loop
-//     can handle any spec findings before quality review fires.
+//   Phase 1 — Spec gate (engine phase, unconditional):
+//     If spec_review_dispatched is not yet set → emit `spec_review` action.
+//     The dispatched subagent uses the engine's built-in spec-conformance
+//     prompt (no per-studio mandate file, no opt-out). Advances to gate
+//     so the fix loop can handle any spec findings before quality review
+//     fires. Every intent has a spec; every stage produces something the
+//     intent scoped — so every stage benefits.
 //
 //   Phase 2 — Quality review:
-//     After spec gate clears (spec_review_dispatched is set and no open spec
-//     findings), run the full quality review layer (all non-spec-gate agents).
-//     gate.ts resets to the review phase when spec is done but
-//     quality_review_dispatched is still unset.
-//
-//   Legacy (no spec-gate agents):
-//     Straight to quality review — backwards compatible with stages that
-//     don't declare any spec-gate agents.
+//     After the spec gate clears (spec_review_dispatched is set and no
+//     open spec findings), run the full quality review layer (all studio-
+//     declared review agents). gate.ts resets to the review phase when
+//     spec is done but quality_review_dispatched is still unset.
 //
 // Sub-cases handled once in quality-review mode:
 //   1. Output validation (defense-in-depth) → outputs_missing
@@ -48,7 +47,6 @@ import {
 	stageStatePath,
 	writeJson,
 } from "../../../state-tools.js"
-import { readSpecGateAgentPaths } from "../../../studio-reader.js"
 import type { WorkflowHandler } from "./_types.js"
 
 const emit: WorkflowHandler = (ctx) => {
@@ -60,14 +58,13 @@ const emit: WorkflowHandler = (ctx) => {
 	if (!currentStage) return null
 	if (ctx.currentPhase !== "review") return null
 
-	const specAgentPaths = readSpecGateAgentPaths(studio, currentStage)
-	const hasSpecAgents = Object.keys(specAgentPaths).length > 0
 	const specReviewDispatched = ctx.stageState.spec_review_dispatched === true
 	const qualityReviewDispatched =
 		ctx.stageState.quality_review_dispatched === true
 
-	// Phase 1: dispatch spec-gate agents first (when they exist and haven't run yet).
-	if (hasSpecAgents && !specReviewDispatched) {
+	// Phase 1: dispatch the engine spec_review subagent first (always, on
+	// every stage, until it has been dispatched once for this stage).
+	if (!specReviewDispatched) {
 		const statePath = stageStatePath(slug, currentStage)
 		const stateData = readJson(statePath)
 		stateData.spec_review_dispatched = true
@@ -128,7 +125,7 @@ const emit: WorkflowHandler = (ctx) => {
 
 	// Mark quality review dispatched so the gate handler knows not to reset
 	// to review phase again after quality findings are resolved.
-	if (hasSpecAgents && !qualityReviewDispatched) {
+	if (!qualityReviewDispatched) {
 		const statePath = stageStatePath(slug, currentStage)
 		const stateData = readJson(statePath)
 		stateData.quality_review_dispatched = true

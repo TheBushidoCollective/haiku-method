@@ -59,6 +59,18 @@
     "stage": "inception",
     "tracking_class": "stage-output"
   },
+  "stages/inception/artifacts/risk-inventory.md": {
+    "path": "stages/inception/artifacts/risk-inventory.md",
+    "sha256": "94203c94438b9cf4adc964f4a2190063c6a99d9d7bc65d61864d80fd6df32264",
+    "bytes": 16783,
+    "mtime_ns": 1778021497811000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-05T22:51:48.155Z",
+    "acknowledged_via": "baseline-init",
+    "stage": "inception",
+    "tracking_class": "stage-output"
+  },
   "stages/inception/artifacts/success-criteria-and-acceptance-shape.md": {
     "path": "stages/inception/artifacts/success-criteria-and-acceptance-shape.md",
     "sha256": "a4a181ec72ca9d4b9ca3a4a1b424641f28d9b2133c7a5c6e3440bfd183fed417",

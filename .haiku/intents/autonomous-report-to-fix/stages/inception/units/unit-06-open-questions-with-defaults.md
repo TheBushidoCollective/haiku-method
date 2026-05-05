@@ -34,7 +34,7 @@ quality_gates:
       escalation\*\*:'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/open-questions-with-defaults.md)"
       ]
-status: pending
+status: active
 inputs:
   - intent.md
   - knowledge/DISCOVERY.md
@@ -43,6 +43,15 @@ inputs:
   - stages/inception/artifacts/capability-and-system-context.md
   - stages/inception/artifacts/affected-surfaces-and-user-flow.md
   - stages/inception/artifacts/risk-inventory.md
+bolt: 1
+hat: researcher
+started_at: '2026-05-05T22:52:19Z'
+hat_started_at: '2026-05-05T22:52:19Z'
+iterations:
+  - hat: researcher
+    started_at: '2026-05-05T22:52:19Z'
+    completed_at: null
+    result: null
 ---
 # Open Questions with Proposed Defaults
 

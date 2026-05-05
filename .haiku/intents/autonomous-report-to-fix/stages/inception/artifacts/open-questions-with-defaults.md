@@ -1,120 +1,145 @@
+---
+intent: autonomous-report-to-fix
+unit: unit-06-open-questions-with-defaults
+stage: inception
+created: 2026-05-05
+---
+
 # Open Questions with Proposed Defaults
 
-_Inception artifact for intent: autonomous-report-to-fix_
+This artifact collects every open question surfaced across the inception artifacts — DISCOVERY.md, success-criteria-and-acceptance-shape.md (unit-01), capability-and-system-context.md (unit-02), privacy-and-data-handling-principles.md (unit-04), affected-surfaces-and-user-flow.md (unit-03), and risk-inventory.md (unit-05) — and assigns each one of two outcomes: a **proposed default** downstream stages may adopt unless the user vetoes, or a **(needs human escalation)** flag with the reason why the agent cannot reasonably resolve it.
 
-This artifact collects every open question surfaced across the inception artifacts and assigns each one of two outcomes: a proposed default that downstream stages can adopt unless the user vetoes, or a `(needs human escalation)` flag with a reason explaining why the agent cannot reasonably resolve it. Every ambiguity is named once here, with a path forward, so downstream stages don't make these calls quietly and inconsistently.
+Downstream stages consume this artifact as a single, authoritative starting point. Resolution happens in the product stage (proposed defaults approved or overridden) or the design stage (questions that require a concrete technical choice before they can be answered). No question is resolved here. The `## Resolved-by-default` section is not a decision record — it is a set of bets downstream stages inherit unless they hear otherwise.
 
 ---
 
 ## Resolved-by-default
 
-### Q: What is the per-fix-id iteration cap?
+### Q: What is the per-fix-id iteration cap before the bot stops and converts the PR to draft?
 
-The system needs a hard ceiling on how many webhook-triggered agent invocations it will make for a single `fix_id` before converting the PR to a draft and posting a "bot stopped" comment. Without this, a PR that accumulates many CI failures or review comments can exhaust Anthropic API quota indefinitely.
+Each webhook-triggered agent invocation that pushes at least one commit counts as one attempt. When that count reaches the cap, the bot posts a "gave up" comment on the PR, converts it to draft status, and stops consuming webhook events for that `fix_id`.
 
-- **Proposed default**: 5 fix attempts per `fix_id`, where one "attempt" is counted as one webhook-triggered agent invocation that pushes at least one commit.
-- **Rationale**: Five attempts is enough for the common class of deterministic bugs (missing import, wrong variable reference, type error) while capping the token cost of pathological cases. The count unit (successful commits, not total invocations) means the cap does not fire on invocations that discover the bug is already fixed or that the CI failure is flaky — only on invocations that actually produce code changes. The cap must be enforced in the durable state store, not in the Cloud Run instance, so cold-start restarts don't reset it.
-- **Source**: DISCOVERY.md § Risks → unbounded fix-loop cost (lines 94–95); `success-criteria-and-acceptance-shape.md` § Bounded Loops
-
----
-
-### Q: What is the POST bundle size cap, and how does truncation work?
-
-The JSONL bundle assembled from the user's session files can be several megabytes for multi-stage intents. The POST to Cloud Run has a practical payload limit, and a hard rejection is worse UX than graceful truncation.
-
-- **Proposed default**: 5 MB compressed (gzip) as the client-side threshold. If the bundle exceeds this, the plugin truncates to the N most-recent top-level session messages (preserving the full `parent_uuid` subagent chain for those messages), surfaces a one-sentence notice to the user ("Session was large; sent the last N messages"), and proceeds. If even the truncated bundle exceeds 5 MB compressed, the submission fails with a user-visible error and a link to file a manual GitHub issue.
-- **Rationale**: Cloud Run Cloud Functions v2 supports up to 32 MB uncompressed request bodies; 5 MB compressed is conservative enough to give the fix agent substantial context while keeping cold-start I/O overhead manageable. Truncating from the tail of the session (most-recent messages) preserves the failure context, which is typically in the last few turns. The notice to the user maintains transparency without blocking the fire-and-forget flow.
-- **Source**: DISCOVERY.md § Open Questions (line 85); `success-criteria-and-acceptance-shape.md` § Bounded Loops; `capability-and-system-context.md` § Open Questions (JSONL bundle size under `output: "export"` constraints)
+- **Proposed default**: 5 fix attempts per `fix_id`.
+- **Rationale**: Five attempts covers the common class of CI-detectable bugs (type errors, test regressions, import resolution failures) without burning unbounded Anthropic API token budget. A single-attempt cap is too aggressive for multi-stage fix sequences; a double-digit cap exposes the system to runaway cost for pathological bugs. The success criteria (unit-01) treat 5 as the right balance point between coverage and cost.
+- **Source**: `stages/inception/artifacts/success-criteria-and-acceptance-shape.md` (unit-01), "Bounded Loops — Maximum bot iterations" section; DISCOVERY.md § Risks → "Unbounded fix-loop cost" (line 94).
 
 ---
 
-### Q: Does the Sentry event still fire alongside the Cloud Run POST?
+### Q: What is the POST bundle size threshold, and what happens when the bundle exceeds it?
 
-The current `haiku_report` MCP tool posts to Sentry when `SENTRY_DSN` is configured. The new flow adds a Cloud Run POST. Both touch external surfaces; the relationship between them needs to be defined.
+The session JSONL for a multi-stage intent can be several megabytes. The plugin must decide whether to compress and POST the full bundle, truncate it to a recent window before POSTing, or block submission and surface an error.
 
-- **Proposed default**: Sentry fires as a fallback only — if the Cloud Run POST fails or returns a non-2xx response, the tool falls back to the existing Sentry `captureFeedback` call. Under a successful Cloud Run POST, Sentry is not invoked. This avoids the user's problem description going to two external surfaces under normal operation while preserving the error path.
-- **Rationale**: Under the privacy principles (unit-04), each external surface that receives user data requires disclosure at the consent step. If Sentry fires in parallel by default, the consent screen must disclose two transmission targets, which complicates the UX and the privacy policy. Fallback-only is the simplest model that preserves the existing error signal without expanding the normal-path disclosure surface.
-- **Source**: `success-criteria-and-acceptance-shape.md` § Open Questions; `capability-and-system-context.md` § Adjacent Systems → Sentry; DISCOVERY.md § Strategic Considerations → Sentry coexistence (lines 68–69)
-
----
-
-### Q: Does the `/report/<fix_id>` page need its own subdomain?
-
-The Cloud Run report-agent service needs an addressable endpoint for the `auth_url` returned to the user and for GitHub webhook delivery. Whether this is a subdomain (`report.haikumethod.ai`) or a path on the existing domain (`haikumethod.ai/report/<fix_id>`) affects infrastructure complexity and the static-export constraint on the website.
-
-- **Proposed default**: The status page lives at `haikumethod.ai/report/<fix_id>` as a client-rendered SPA — no subdomain required. The Cloud Run service endpoint is separate and internal (a `run.app` URL or a path on `auth.haikumethod.ai`); it is not the user-facing `report/<fix_id>` address. The SPA reads the `fix_id` from `window.location` at runtime, following the same pattern as the `/browse` page.
-- **Rationale**: A new subdomain requires a new managed TLS certificate, a new Terraform module, and DNS propagation delay. The path-prefix approach reuses the existing `haikumethod.ai` certificate and CDN configuration. The static-export constraint on the website (`website/next.config.ts`, `output: "export"`) is already handled by the `/browse` SPA pattern — `/report/<fix_id>` is the same shape.
-- **Source**: DISCOVERY.md § Open Questions (line 87); `affected-surfaces-and-user-flow.md` § `haikumethod.ai/report/<fix_id>` (static-export constraint); `success-criteria-and-acceptance-shape.md` § Open Questions
+- **Proposed default**: Client-side compressed size cap of 5 MB. If the bundle exceeds 5 MB compressed, the plugin truncates to the N most-recent messages in the JSONL (preserving the latest tool calls and model turns where the failure is most likely to appear) and notifies the user: "Session was large; sent the last N messages." If even the truncated bundle exceeds 5 MB compressed, submission fails with a user-visible error and a link to file a manual GitHub issue.
+- **Rationale**: 5 MB compressed gives generous headroom for typical single-intent sessions while staying well within Cloud Functions v2's 32 MB request limit. Truncation-from-the-start (oldest messages dropped first) preserves the diagnostic window closest to the failure. Silent truncation with a user notice preserves the fire-and-forget UX; a hard block is reserved for the edge case where even truncation is insufficient.
+- **Source**: `stages/inception/artifacts/success-criteria-and-acceptance-shape.md` (unit-01), "Bounded Loops — JSONL bundle too large" section; DISCOVERY.md § Open Questions (line 84); `stages/inception/artifacts/risk-inventory.md` (unit-05), "Risk: Large Bundle Exceeding Request Limits".
 
 ---
 
-### Q: What is the scrubbing-uncertainty UX: warn-and-proceed or pause-and-confirm?
+### Q: Should the Sentry event still fire alongside the Cloud Run POST, or does the new flow replace it entirely?
 
-When the client-side scrubber detects patterns it cannot confidently classify, it has two options: strip them and proceed with a notice (Option A), or halt and ask the user to review before sending (Option B).
+The existing `haiku_report` tool POSTs a `captureFeedback` event to Sentry (when `SENTRY_DSN` is configured). The new loop adds a Cloud Run POST for the same user action. Both are external submissions; each touches a different surface with different data classes (Sentry receives prose; Cloud Run receives the scrubbed JSONL bundle).
 
-- **Proposed default**: Option B (pause-and-confirm) for V1. The scrubber strips known-pattern items automatically, but surfaces any unclassified high-entropy strings to the user with a "review before sending" step. The user can approve the stripped version, remove additional items, or abort the submission.
-- **Rationale**: The privacy principles (unit-04, Consent UX Principles) state that consent must be obtained before data leaves the machine and that the user must be able to make an informed decision without trusting the scrubber blindly. Option A (warn-and-proceed) assumes the scrubber is correct; Option B gives the user the last word on novel patterns the scrubber cannot classify. The fire-and-forget UX promise is preserved for the common case — most sessions will have no unclassified items, so the pause step never triggers. The pause-and-confirm path fires only when the scrubber genuinely cannot classify something.
-- **Source**: DISCOVERY.md § Open Questions (line 82); `success-criteria-and-acceptance-shape.md` § Bounded Loops → behavior on bundle scrubbing uncertainty; `privacy-and-data-handling-principles.md` § Consent UX Principles
-
----
-
-### Q: What happens when the GitHub bot token is rate-limited during issue creation?
-
-If the GitHub API rate-limits the bot token at the moment the Cloud Run service tries to open the initial issue, the POST response to the plugin will either hang or fail. The plugin needs a defined behavior for this edge case.
-
-- **Proposed default**: The Cloud Run service returns a `202 Accepted` with `{fix_id, auth_url, status: "queued"}` when it cannot immediately create the GitHub issue due to rate limiting. The service enqueues the issue-creation work (via Cloud Tasks or an internal retry loop with exponential backoff up to 60 seconds). The plugin surfaces "Your report is filed. The GitHub issue will open shortly." to the user — the fire-and-forget contract is preserved. The `report/<fix_id>` page reflects `received` state until the issue opens.
-- **Rationale**: A synchronous failure ("Could not open issue — try again") breaks the fire-and-forget UX contract and makes the user responsible for retrying. Returning immediately with a `fix_id` and an `auth_url` preserves the contract; the issue opening is an async side effect that the user can observe on the status page. The plugin does not need to know whether the issue opened synchronously or asynchronously — it only needs the `fix_id` to construct the `auth_url`.
-- **Source**: `success-criteria-and-acceptance-shape.md` § Open Questions (GitHub rate-limit row)
+- **Proposed default**: Sentry fires as a fallback only — if the Cloud Run POST fails (network error, 5xx, timeout), the plugin falls back to the existing Sentry path and notifies the user that the autonomous fix loop is unavailable but their feedback was still recorded. If Cloud Run succeeds, Sentry does not fire. This avoids dual-submission of user data to two external services for the same event.
+- **Rationale**: Two simultaneous external submissions for one user action creates a privacy surface the consent step must describe in full. Restricting Sentry to fallback-only keeps the primary path simple (one submission, one consent statement) while preserving the existing error-reporting safety net for infrastructure failures. The design stage must confirm that the privacy policy update covers both surfaces in the fallback case.
+- **Source**: DISCOVERY.md § Strategic Considerations → "Sentry coexistence" (line 68); `stages/inception/artifacts/capability-and-system-context.md` (unit-02), "Adjacent systems — Sentry" section; `stages/inception/artifacts/success-criteria-and-acceptance-shape.md` (unit-01), Open Questions table row "Does the Sentry event still fire".
 
 ---
 
-### Q: How should webhook event redelivery be handled to prevent duplicate fix attempts?
+### Q: Does the `report/:id` status page need its own subdomain, or does it live at a path under `haikumethod.ai`?
 
-GitHub redelivers webhook payloads if the initial delivery times out or receives a non-2xx response. A redelivered event processed without deduplication would trigger a second fix attempt counted against the same cap budget.
+The website uses `output: "export"` in production (`website/next.config.ts`), which means no server-rendered dynamic routes. The page that accepts the OAuth callback and shows fix-loop status must be a client-rendered SPA regardless of where it lives.
 
-- **Proposed default**: The Cloud Run service stores the GitHub webhook delivery ID (available in the `X-GitHub-Delivery` header) in the durable state store alongside the fix-loop state. Before processing any webhook event, the handler checks whether the delivery ID is already present. If it is, the handler returns HTTP 200 immediately without dispatching a new agent invocation. If not, the handler records the delivery ID and proceeds. This is the standard idempotency pattern for webhook receivers.
-- **Rationale**: Deduplication is cheaper than the alternative — a duplicate fix attempt consumes cap budget, Anthropic API tokens, and potentially pushes a redundant commit to the PR. Storing the delivery ID in the state store (Firestore or GCS) adds one read per webhook event, which is well within the latency budget if the state store is Firestore (median read ~10ms). GCS object reads have higher and more variable latency; if GCS is the state store, the design stage should evaluate whether the deduplication read is on the critical path for the webhook acknowledgment window.
-- **Source**: `risk-inventory.md` § Open Questions → Webhook Delivery Deduplication
+- **Proposed default**: No separate subdomain. The page lives at `haikumethod.ai/report/<fix_id>` as a client-rendered SPA under the existing Next.js export. The `fix_id` is read from `window.location` at runtime, following the same pattern as the `/browse` page and the `CallbackClient` in `website/app/auth/[provider]/callback/CallbackClient.tsx`. The trailing-slash and 404-fallback configuration in `website/next.config.ts` is updated by the design stage to handle the `[id]` segment without `generateStaticParams`.
+- **Rationale**: A separate subdomain (e.g., `report.haikumethod.ai`) adds a new DNS entry, a new load balancer rule, and a separate TLS certificate to the Terraform surface — none of which are justified for a single-page SPA that can be statically served from the same export. The `/browse` page demonstrates the pattern is viable under the export constraint. Simpler deployment reduces blast radius.
+- **Source**: DISCOVERY.md § Open Questions (line 87); `stages/inception/artifacts/affected-surfaces-and-user-flow.md` (unit-03), "`haikumethod.ai/report/<fix_id>` — Static-export constraint" section; `stages/inception/artifacts/success-criteria-and-acceptance-shape.md` (unit-01), Open Questions table row "Does the `report/:id` page need its own subdomain".
+
+---
+
+### Q: Should the pre-send consent step include a full preview of the scrubbed JSONL bundle, or a structural summary only?
+
+The consent step must give the user enough information to make an informed decision about transmission, but a full JSONL dump would overwhelm the terminal UI and undermine the fire-and-forget UX contract.
+
+- **Proposed default**: Structural summary only. The consent step displays: session turn count, tool call count, subagent chain depth, and a count of each scrubbed data class (e.g., "3 credential-shaped strings removed, 1 home path normalized"). No raw JSONL preview is shown by default. A "show me what's being sent" option (an expandable in the web status page, not the plugin terminal) is out of scope for V1.
+- **Rationale**: A structural summary gives the user a calibration signal (how much was stripped, how complex the session was) without requiring them to read raw JSONL. The fire-and-forget promise is preserved because the consent step remains a single-screen interaction. The privacy principles (unit-04) explicitly flag that "full preview risks overwhelming the user with JSONL noise" while calling a structural summary sufficient for informed consent.
+- **Source**: `stages/inception/artifacts/privacy-and-data-handling-principles.md` (unit-04), "Open Questions — Pre-send preview UX" section; `stages/inception/artifacts/risk-inventory.md` (unit-05), "Open Questions — Scrubbing Coverage Completeness".
+
+---
+
+### Q: How long should the Cloud Run service retain the raw session bundle after submission?
+
+The bundle is diagnostic material — it is needed during the fix loop but not afterward. Indefinite retention is inconsistent with the privacy principles; too-short retention risks the fix agent losing context if a webhook arrives after the bundle has been deleted.
+
+- **Proposed default**: 30 days from submission, auto-deleted. The derived fix-loop state (PR number, iteration count, CI results, bot comments) can be retained on a separate, longer schedule (90 days) since it contains no user-originated raw session content. Deletion requests from the user are honored within 7 days via the `report/:id` status page deletion link or the `oss@gigsmart.com` email fallback.
+- **Rationale**: Most fix loops close within minutes to hours; 30 days covers the long tail of issues that require human pickup after the iteration cap is hit. The 30-day window aligns with common industry practice for diagnostic artifact retention (e.g., Sentry's default event retention). The privacy principles (unit-04) name 30 days as the proposed default explicitly and provide the rationale for separating raw-bundle retention from derived-state retention.
+- **Source**: `stages/inception/artifacts/privacy-and-data-handling-principles.md` (unit-04), "Open Questions — Retention duration" section; `stages/inception/artifacts/privacy-and-data-handling-principles.md` (unit-04), "Retention and disclosure — Deletion-request mechanism" section.
+
+---
+
+### Q: Should the auth proxy be extended to handle the report OAuth flow, or should a second auth proxy instance be deployed?
+
+The existing auth proxy at `auth.haikumethod.ai` handles GitHub and GitLab OAuth code-exchange for `/browse`. The report flow needs OAuth for user attribution using a different scope (`issues:write` vs `repo`). Sharing vs. splitting the infrastructure is a cost-versus-blast-radius tradeoff.
+
+- **Proposed default**: Extend the existing auth proxy with a new `/github/report-token` endpoint that handles the narrower `issues:write` scope. No new service deployment, no new Cloud Function resource, no new Terraform module — just a new route in `deploy/auth-proxy/src/index.ts` with its own OAuth client credentials stored in Secret Manager under a distinct secret name.
+- **Rationale**: A separate deployment doubles the operational surface (two Cloud Functions to monitor, two IAM bindings to maintain, two sets of secrets to rotate) without providing meaningful isolation — both services share the same GCP project and the same `haikumethod.ai` domain. The blast radius argument (a compromised report OAuth client affects only the report flow) is real but modest given that the `issues:write` scope is far narrower than the existing `repo` scope the `/browse` OAuth uses. If the security analysis in the design stage finds the shared surface unacceptable, splitting is the fallback.
+- **Source**: `stages/inception/artifacts/capability-and-system-context.md` (unit-02), "Adjacent systems — Auth proxy" section; DISCOVERY.md § Capability Needs (line 73).
+
+---
+
+### Q: What is the webhook acknowledgment strategy to prevent GitHub delivery failures under Cloud Run cold-start latency?
+
+GitHub expects webhook acknowledgment within 10 seconds. Cloud Run cold starts add 2–6 seconds of latency before application code runs. If the webhook handler attempts substantive work (Anthropic SDK call) synchronously, the total latency may exceed 10 seconds.
+
+- **Proposed default**: Immediate 200 acknowledgment followed by async work handoff. The webhook handler acknowledges with HTTP 200 immediately upon signature verification, then enqueues the fix-loop work via Cloud Tasks (or equivalent async dispatch) for deferred execution. The handler itself does no agent work. This ensures the 10-second deadline is met regardless of what the agent does downstream.
+- **Rationale**: The risk inventory (unit-05) rates cold-start webhook timeout as high severity with a clear detection signal (delivery marked "failed" in GitHub logs). The async-handoff mitigation is well-established and the Google Cloud Tasks client library is compatible with the Node.js Functions Framework already in use. The codebase currently has no Cloud Tasks precedent (noted in unit-02), so this is a new infrastructure dependency — but a narrowly scoped one. The design stage must confirm whether Cloud Tasks or an alternative async dispatch (e.g., Pub/Sub) is the right choice.
+- **Source**: `stages/inception/artifacts/risk-inventory.md` (unit-05), "Risk: Cold-Start Webhook Timeout"; `stages/inception/artifacts/capability-and-system-context.md` (unit-02), "Open questions — Webhook acknowledgment under cold start".
 
 ---
 
 ## Needs human decision
 
-### Q: Is the privacy policy update a launch blocker, and who owns the updated copy?
+### Q: Should the consent UX pause for explicit user confirmation before POST (Option B), or scrub-and-notify after (Option A)?
 
-The current `website/content/pages/privacy.md` unconditionally states "None of that data is sent to GigSmart servers." This claim is materially false the moment the report-to-fix loop ships. The privacy principles (unit-04) state the policy update is a launch blocker and that the `/haiku:report` skill change MUST NOT merge to main until the updated policy is live. The agent can draft the replacement language, but the legal and regulatory determination of whether the proposed language is sufficient — and the decision to ship under it — cannot be made by the agent.
+The scrubbing UX question is the central privacy-versus-friction tradeoff in the feature. Option A (scrub aggressively, then send, then show a notice) preserves the fire-and-forget UX but places the user in the position of learning about the transmission after it happened. Option B (surface unclassifiable patterns, let the user approve or abort before POST) maximizes user control but breaks the fire-and-forget promise at the moment of highest intent.
 
-- **Needs human escalation**: This is a legal/policy decision. The agent can produce draft policy language (see unit-04, Privacy Policy Delta, Replacement Language section for the principle-level draft), but a human owner (product lead, legal counsel, or both) must review and approve the final copy. The agent cannot assess regulatory exposure, determine the applicable disclosure standard, or authorize the privacy policy change on behalf of GigSmart.
-- **Decision deadline**: Product stage — the product stage must either confirm the policy update is in progress (with an owner and a timeline) or flag it as a blocker before any further downstream stages begin work. If the policy update is not confirmed in the product stage, the design and development stages should not begin work on the submission endpoint.
-- **Source**: `privacy-and-data-handling-principles.md` § Privacy Policy Delta → Gating Relationship; DISCOVERY.md § Strategic Considerations → Privacy policy gap (lines 60–63); `risk-inventory.md` § Risk: Privacy Policy Compliance Gap
+The agent can reason about this (and the success criteria lean toward Option B for V1 given the "consent UX is load-bearing" framing in the privacy principles), but this is ultimately a product and legal position. The answer affects the privacy policy language, the skills conversational flow, and whether the CI gate on the unconditional "None of that data is sent" claim is sufficient or needs to be paired with a UX-review gate as well. A call in the wrong direction — especially for a first ship — creates regulatory exposure.
 
----
-
-### Q: Should the user see an inline preview of the scrubbed bundle before transmission?
-
-The consent step (unit-04, Consent UX Principles) describes a one-screen summary with a single confirm action as the target shape. The open question is whether "one screen" includes a "show me what's being sent" expandable with the full scrubbed JSONL, a structural summary only (session turn count, tool call count, scrubbed class counts), or no preview at all. The agent cannot determine the right trade-off without knowing the product team's position on the friction-vs-informed-consent axis.
-
-- **Needs human escalation**: This is a product UX decision that sits at the intersection of trust, friction, and the fire-and-forget UX contract. The privacy principles (unit-04) acknowledge the tension explicitly ("a one-screen summary with a single confirm action is the target shape; a multi-page terms scroll is not"), but the exact form of the summary — structural counts only vs. expandable inline preview — is a design-stage product call. Implementation cost differs substantially: a structural summary (turn count, tool call count, scrubbed class counts) is a few lines; an expandable JSONL preview requires a streaming or paginated viewer. The human decision determines whether the implementation is a label or a document viewer.
-- **Decision deadline**: Product stage — the product stage defines the consent UX shape. The design stage cannot spec the consent step without knowing whether an expandable preview is in scope. This decision must land in the product stage before the design stage begins work on the plugin-side consent flow.
-- **Source**: `privacy-and-data-handling-principles.md` § Consent UX Principles → Tradeoff axis; `privacy-and-data-handling-principles.md` § Open Questions → Pre-send preview UX; `success-criteria-and-acceptance-shape.md` § Bounded Loops → behavior on bundle scrubbing uncertainty
+- **Needs human escalation**: This is a product and legal decision, not an engineering one. The agent proposes Option B as the V1 default (pause-and-confirm), but the user or legal counsel must explicitly sign off before the design stage commits the consent UX to one path.
+- **Decision deadline**: Product stage — this decision shapes the skill's conversational flow, the privacy policy update language, and the consent-step UI in the web status page. The design stage cannot finalize the report-agent POST flow without it.
+- **Source**: `stages/inception/artifacts/success-criteria-and-acceptance-shape.md` (unit-01), "Bounded Loops — scrubbing uncertainty" section, Options A and B; `stages/inception/artifacts/privacy-and-data-handling-principles.md` (unit-04), "Consent UX principles — Timing — before or after data leaves the machine"; DISCOVERY.md § Open Questions (line 82).
 
 ---
 
-### Q: Is the existing auth proxy extended for the report OAuth scope, or is a separate auth proxy deployed?
+### Q: Is there a regulatory or legal review required before the privacy policy is updated and the feature ships?
 
-The `/haiku:report` OAuth flow needs a `report/token` endpoint that exchanges an authorization code for a GitHub token scoped to `issues:write` (narrower than the existing `/browse` OAuth scope, which uses `repo`). The integration question is whether this endpoint is added to the existing `deploy/auth-proxy/` service or deployed as a new Cloud Function instance. The agent cannot make this call because it depends on the organization's risk tolerance for shared-vs-separate blast radius.
+The current privacy policy is a public, unconditional commitment: "None of that data is sent to GigSmart servers." Changing this claim — even with a carefully worded exception and a robust consent UX — is a material policy revision. Whether this revision requires legal review before publication depends on GigSmart's legal posture, the jurisdictions in which H·AI·K·U users operate (GDPR if any EU users; CCPA if California users are covered), and whether the existing policy language was reviewed by counsel.
 
-- **Needs human escalation**: This is an infrastructure architecture decision with security implications. Sharing the existing auth proxy (simpler, less infra) means a compromise of the report OAuth client also exposes the browse OAuth client credentials. A separate deployment increases infra surface but limits blast radius. The trade-off is security posture vs. operational complexity, which is a human call that belongs to the security or infrastructure owner.
-- **Decision deadline**: Design stage — the design stage must choose one of the two paths before specifying the Cloud Run infrastructure. The Terraform module and the Cloud Function source both differ depending on the choice; the design stage cannot produce an infrastructure spec without it.
-- **Source**: `capability-and-system-context.md` § Adjacent Systems → Auth proxy; DISCOVERY.md § Capability Needs (lines 71–79); `risk-inventory.md` § Risk: Bot Credential Scope Creep
+The agent cannot determine the legal review requirement from the codebase or discovery context alone. Shipping the feature without legal sign-off on the policy change risks exposure that no technical scrubber or consent UI can remediate.
+
+- **Needs human escalation**: Legal/policy decision. The agent cannot determine whether a formal legal review is required, who owns the GigSmart privacy policy, or whether the current policy was attorney-reviewed. This question must be resolved by the appropriate stakeholder before the privacy policy update is drafted.
+- **Decision deadline**: Before the product stage finalizes the privacy policy update language. The CI gate (blocking merge if the unconditional claim is still present in `website/content/pages/privacy.md`) cannot be implemented until the replacement language is approved and the gate's pass condition is defined.
+- **Source**: `stages/inception/artifacts/privacy-and-data-handling-principles.md` (unit-04), "Privacy policy delta — Gating relationship"; `stages/inception/artifacts/risk-inventory.md` (unit-05), "Risk: Privacy Policy Compliance Gap"; DISCOVERY.md § Strategic Considerations → "Privacy policy gap" (line 62).
+
+---
+
+### Q: What prominence and copy should the attribution mismatch disclosure use at the OAuth grant prompt?
+
+Users who grant GitHub OAuth for attribution expect that the issue will appear in their personal activity feed. It will not — the issue is bot-authored. The success criteria (unit-01) flag this as "must be disclosed to users before OAuth grant prompt; product stage owns the copy," but the content, placement, and prominence of that disclosure are not specified. Under-disclosure risks a class of support tickets and a trust erosion; over-disclosure (prominent warnings at OAuth prompt time) may suppress OAuth adoption and reduce attribution quality.
+
+The agent can identify the gap but cannot make the product call on how prominently to surface it or what the exact copy should say. The language must be calibrated to the user population, the product's tone, and GigSmart's assessment of the support and trust risk.
+
+- **Needs human escalation**: Product decision. The agent cannot determine the right prominence, placement, or exact copy for the attribution mismatch disclosure without product direction on tone and risk tolerance.
+- **Decision deadline**: Product stage — this copy is part of the OAuth grant prompt on the `report/:id` status page. The design stage cannot finalize the web page layout without knowing the size and placement of this disclosure.
+- **Source**: `stages/inception/artifacts/success-criteria-and-acceptance-shape.md` (unit-01), Open Questions table row "Does the issue appear in the user's GitHub 'created issues' list"; `stages/inception/artifacts/risk-inventory.md` (unit-05), "Risk: OAuth Attribution Mismatch".
 
 ---
 
 ## Citations
 
-- DISCOVERY.md § Open Questions (lines 81–88) — primary source for the question inventory; all seven questions named there are addressed above (three directly, four folded into expanded questions that cover the same ground more precisely)
-- `success-criteria-and-acceptance-shape.md` § Open Questions and § Bounded Loops — source for the iteration cap, bundle size cap, scrubbing UX options, Sentry coexistence default, and subdomain question
-- `privacy-and-data-handling-principles.md` § Consent UX Principles, § Scrubbing Principles, § Privacy Policy Delta, § Open Questions — source for the pre-send preview question, the pause-and-confirm scrubbing default, and the privacy policy escalation
-- `capability-and-system-context.md` § Open Questions and § Adjacent Systems — source for the cold-start question (folded into webhook deduplication), the JSONL size constraint, and the auth-proxy split question
-- `affected-surfaces-and-user-flow.md` § `haikumethod.ai/report/<fix_id>` — confirms the static-export constraint and the client-rendered SPA pattern that informs the subdomain default
-- `risk-inventory.md` § Open Questions — source for the webhook deduplication question, the iteration cap counting unit ambiguity (addressed under the cap default), and the state-store cold-start latency interaction
+- DISCOVERY.md § Open Questions (lines 81–88) — primary question list; all seven questions from this section are represented above, plus additional questions surfaced by other artifacts.
+- DISCOVERY.md § Risks (lines 91–97) — source for iteration cap, bundle size, cold-start, and scrubber false-negative questions.
+- DISCOVERY.md § Strategic Considerations (lines 62–68) — source for privacy policy gap, Sentry coexistence, and OAuth trust boundary questions.
+- `stages/inception/artifacts/success-criteria-and-acceptance-shape.md` (unit-01) — source for iteration cap default (5 attempts), bundle size threshold (5 MB), scrubbing UX options A/B, Sentry fallback, subdomain default, and attribution mismatch disclosure requirement.
+- `stages/inception/artifacts/capability-and-system-context.md` (unit-02) — source for auth proxy extension vs. split question and webhook cold-start acknowledgment strategy.
+- `stages/inception/artifacts/privacy-and-data-handling-principles.md` (unit-04) — source for consent UX timing principle (before transmission), pre-send preview UX default (structural summary), retention duration default (30 days), and deletion mechanism (status-page link + email fallback).
+- `stages/inception/artifacts/affected-surfaces-and-user-flow.md` (unit-03) — source for the static-export constraint on the `report/:id` page and the `CallbackClient` precedent pattern.
+- `stages/inception/artifacts/risk-inventory.md` (unit-05) — source for severity ratings on scrubber false negatives (critical), privacy compliance gap (critical), cold-start webhook timeout (high), and bot credential scope creep (high); also source for open questions on iteration cap counting semantics and scrubbing coverage completeness.

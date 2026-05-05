@@ -1,6 +1,6 @@
 ---
 title: 'Missed criterion: unit-01 artifact has no Competitive differentiation section'
-status: pending
+status: fixing
 origin: adversarial-review
 author: spec-conformance
 author_type: agent
@@ -9,7 +9,7 @@ iteration: 1
 visit: 1
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 triaged_at: '2026-05-05T23:10:10Z'
 resolution: null
 replies: []

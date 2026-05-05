@@ -2,7 +2,7 @@
 title: >-
   Cross-unit drift: iteration-cap counting semantics declared in unit-01/06,
   still open in unit-05
-status: pending
+status: fixing
 origin: adversarial-review
 author: spec-conformance
 author_type: agent
@@ -11,7 +11,7 @@ iteration: 1
 visit: 1
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 triaged_at: '2026-05-05T23:10:29Z'
 resolution: null
 replies: []

@@ -349,14 +349,30 @@ export function FeedbackSidebar({
 							{isCurrent ? "current" : "viewing"}
 						</span>
 					)}
-					{gateBadges?.map((b) => (
+					{/* Gate badges describe the workflow gate that's currently
+					    open (e.g. "Approve specs", "External review"). They're
+					    meaningless on an ad-hoc review pane — there's no gate
+					    to advance — and surfacing them makes ad-hoc panes
+					    visually indistinguishable from gate reviews. Skip
+					    them when adHoc, and render an "Ad-hoc" pill instead
+					    so the state is explicit. */}
+					{adHoc ? (
 						<span
-							key={b.label}
-							className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${b.classes}`}
+							className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800"
+							title="Ad-hoc review — not a gate. Feedback routes through the normal fix-loop on the next run_next."
 						>
-							{b.label}
+							Ad-hoc
 						</span>
-					))}
+					) : (
+						gateBadges?.map((b) => (
+							<span
+								key={b.label}
+								className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${b.classes}`}
+							>
+								{b.label}
+							</span>
+						))
+					)}
 					{intentTitle && (
 						<span className="text-xs text-stone-500 truncate">
 							{intentTitle}

@@ -21,11 +21,22 @@
 // callers (and tests) that still import from "./orchestrator.js",
 // plus the MCP tool handler dispatch.
 
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { actionPromptBuilders } from "./orchestrator/prompts/index.js"
+import {
+	resolveStageMetadata,
+	resolveUnitHatsInStudio,
+} from "./orchestrator/studio.js"
 import { orchestratorToolDefs } from "./orchestrator/tool-defs.js"
 import { dispatchOrchestratorAction } from "./orchestrator/workflow/run-tick.js"
 import type { ReviewAnnotations } from "./sessions.js"
-import { validateSlugArgs } from "./state-tools.js"
+import {
+	intentDir,
+	parseFrontmatter,
+	setBuildContinueDispatchHandler,
+	validateSlugArgs,
+} from "./state-tools.js"
 import { writeActionPromptFile } from "./subagent-prompt-file.js"
 import { orchestratorToolHandlers } from "./tools/orchestrator/index.js"
 
@@ -377,3 +388,40 @@ export async function handleOrchestratorTool(
 
 	return text(`Unknown orchestrator tool: ${name}`)
 }
+
+// ── Per-unit dispatch hook ────────────────────────────────────────────────
+//
+// Wired at module load. `haiku_unit_advance_hat` calls back into here
+// when a unit transitions to its next hat mid-wave: we synthesize a
+// per-unit `continue_unit` action, render the prompt internally via
+// `buildRunInstructions` (which writes the prompt-file and stamps
+// `prompt_file` onto the action), and return the action. The advance
+// handler then writes that action to a result file the parent reads
+// to dispatch the next hat directly — no `haiku_run_next` round-trip
+// needed for hat-to-hat transitions within the same unit.
+setBuildContinueDispatchHandler(
+	(slug, stage, unit, hat, bolt): OrchestratorAction => {
+		const iDir = intentDir(slug)
+		const intentMd = readFileSync(join(iDir, "intent.md"), "utf8")
+		const { data: iFm } = parseFrontmatter(intentMd)
+		const studio = (iFm.studio as string) || ""
+		const worktreePath = join(process.cwd(), ".haiku", "worktrees", slug, unit)
+		const action: OrchestratorAction = {
+			action: "continue_unit",
+			intent: slug,
+			stage,
+			unit,
+			hat,
+			bolt,
+			hats: resolveUnitHatsInStudio(studio, stage, slug, unit),
+			worktree: existsSync(worktreePath) ? worktreePath : null,
+			stage_metadata: resolveStageMetadata(studio, stage),
+			message: `Continue unit '${unit}' on hat '${hat}' — single-unit dispatch (the unit holds its wave slot through its full hat sequence; siblings stay in flight).`,
+		}
+		// Mutates `action` to add `prompt_file` (and rewrites `message`
+		// to the file pointer). We discard the rendered body string —
+		// the parent dispatches against `prompt_file` directly.
+		buildRunInstructions(slug, studio, action, iDir)
+		return action
+	},
+)

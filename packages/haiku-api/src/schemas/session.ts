@@ -78,9 +78,40 @@ export const OutputArtifactSchema = z.object({
 	name: z.string(),
 	type: z.enum(["markdown", "html", "image", "file"]),
 	content: z.string().optional(),
+	/** URL the SPA fetches via the `/stage-artifacts/:sessionId/*`
+	 *  route — already includes the route prefix and session id. */
 	relativePath: z.string().optional(),
+	/** Original intent-dir-relative path (e.g. `stages/design/artifacts/foo.md`,
+	 *  `product/ACCEPTANCE-CRITERIA.md`). Used to look the artifact up in
+	 *  `output_declared_by` so the SPA can render a "Declared by"
+	 *  banner pointing at the unit(s) that own each deliverable. */
+	intentRelativePath: z.string().optional(),
 })
 export type OutputArtifact = z.infer<typeof OutputArtifactSchema>
+
+/** Per-unit output preview entry — one per path declared in the
+ *  unit's `outputs:` frontmatter. The SPA's Units tab renders each
+ *  entry as a click-out link with a hover popover that shows
+ *  `previewBody` (markdown source via DOMPurify, or raw HTML via
+ *  sandboxed iframe) or a thumbnail keyed off `url` (image) or a
+ *  name+size summary (file). `exists: false` flags a
+ *  declared-but-missing output; the UI still surfaces it but warns.
+ *
+ *  `previewBody` is intentionally NOT named `previewHtml` — for
+ *  markdown entries it contains markdown source, not HTML, and
+ *  injecting it as HTML without sanitization would silently XSS. The
+ *  `markdown` / `html` discriminator on `type` tells the caller which
+ *  rendering pipeline to apply. */
+export const UnitOutputPreviewSchema = z.object({
+	path: z.string(),
+	name: z.string(),
+	type: z.enum(["markdown", "html", "image", "file"]),
+	url: z.string(),
+	previewBody: z.string().optional(),
+	sizeBytes: z.number().int().nonnegative().optional(),
+	exists: z.boolean(),
+})
+export type UnitOutputPreview = z.infer<typeof UnitOutputPreviewSchema>
 
 export const PreviousReviewSnapshotSchema = z
 	.object({
@@ -183,6 +214,16 @@ export const ReviewSessionPayloadSchema = z
 		knowledge_files: z.array(KnowledgeFileSchema).optional(),
 		stage_artifacts: z.array(StageArtifactSchema).optional(),
 		output_artifacts: z.array(OutputArtifactSchema).optional(),
+		/** Per-unit output preview entries keyed by unit slug. Built
+		 *  server-side at session creation so the SPA doesn't have to
+		 *  per-row-fetch each output's bytes. */
+		unit_outputs: z.record(z.array(UnitOutputPreviewSchema)).optional(),
+		/** Inverse of `unit_outputs`: keyed by intent-dir-relative
+		 *  output path, lists the unit slugs that declared the path in
+		 *  their `outputs:` frontmatter. The review UI surfaces this
+		 *  as a banner above output content so reviewers can jump back
+		 *  to the unit that owns each deliverable. */
+		output_declared_by: z.record(z.array(z.string())).optional(),
 		previous_review: PreviousReviewSnapshotSchema.optional(),
 		discovered_review_url: DiscoveredReviewUrlSchema.nullable().optional(),
 		/** Ad-hoc sessions are opened on demand via `haiku_review_open`

@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gate-review approval now travels through chat: when a stage gate is hit, the orchestrator prepares the review session and surfaces the URL in the `gate_review` action so the agent can post it to the user; a new `haiku_await_gate` tool then opens the URL best-effort and blocks on the user's decision. Same pattern applies to `ask_user_visual_question` (paired with new `haiku_await_visual_answer`) and `pick_design_direction` (paired with new `haiku_await_design_direction`). This unblocks remote control, headless / SSH hosts, mobile chat clients, and any environment where the MCP host can't auto-launch the user's browser. Pass `auto_open: false` on the await tools when the user is reviewing on a different device.
 - Review SPA tabs now stay live for the duration of the agent session instead of closing every time a tool call ends. One tab per intent — gates open and close inside the same page, units run, feedback flows, and the dashboard updates as the workflow ticks. Approve only lights up while an MCP call is actually waiting on a decision; otherwise the composer nudges you to leave feedback that the engine will pick up on the next tick. Decisions submitted before the engine asks (or after the await timed out) get queued and consumed on the next call instead of dropping on the floor. Each agent session that drives the same intent reuses the existing tab where possible — no tab spam.
 
+## [3.8.0] - 2026-05-05
+
+### Added
+- Walkthrough-oriented review with step-by-step guidance for reviewing stages and intents.
+- Per-unit output artifacts tab displays which units produced each output.
+- Declaring units banner shows output authorship at a glance.
+
+### Changed
+- Output artifacts now tracked to their declaring units for complete traceability across the workflow.
+- Git worktree handling improved for robust concurrent branch operations.
+- Tool input validation uses strict schemas to detect configuration errors earlier.
+
 ## [3.7.0] - 2026-05-04
 
 ### Added

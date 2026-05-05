@@ -53,7 +53,13 @@ import {
 	waitForSession,
 } from "../sessions.js"
 import { buildStageArtifactUrl } from "../stage-artifact-url.js"
-import { validateHaikuReviewOpenInputSchema } from "../state/schemas/index.js"
+import {
+	type HaikuAwaitDesignDirectionInput,
+	type HaikuAwaitVisualAnswerInput,
+	validateHaikuAwaitDesignDirectionInputSchema,
+	validateHaikuAwaitVisualAnswerInputSchema,
+	validateHaikuReviewOpenInputSchema,
+} from "../state/schemas/index.js"
 import { validateToolInput } from "../state/schemas/inputs/_validate.js"
 import {
 	findHaikuRoot,
@@ -650,20 +656,16 @@ export async function handleToolCall(
 
 	if (name === "haiku_await_visual_answer") {
 		const a = (args ?? {}) as Record<string, unknown>
-		const sessionId = (a.session_id as string) || ""
-		if (!sessionId) {
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: "Error: session_id is required. Use the session_id returned by ask_user_visual_question.",
-					},
-				],
-				isError: true,
-			}
-		}
-		const autoOpen = a.auto_open !== false
-		const url = (a.url as string) || ""
+		const visualInputErr = validateToolInput(
+			a,
+			validateHaikuAwaitVisualAnswerInputSchema,
+			"haiku_await_visual_answer",
+		)
+		if (visualInputErr) return visualInputErr
+		const validated = a as HaikuAwaitVisualAnswerInput
+		const sessionId = validated.session_id
+		const autoOpen = validated.auto_open !== false
+		const url = validated.url ?? ""
 		const existing = getSession(sessionId)
 		if (!existing || existing.session_type !== "question") {
 			return {
@@ -866,20 +868,16 @@ export async function handleToolCall(
 
 	if (name === "haiku_await_design_direction") {
 		const a = (args ?? {}) as Record<string, unknown>
-		const sessionId = (a.session_id as string) || ""
-		if (!sessionId) {
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: "Error: session_id is required. Use the session_id returned by pick_design_direction.",
-					},
-				],
-				isError: true,
-			}
-		}
-		const autoOpen = a.auto_open !== false
-		const url = (a.url as string) || ""
+		const directionInputErr = validateToolInput(
+			a,
+			validateHaikuAwaitDesignDirectionInputSchema,
+			"haiku_await_design_direction",
+		)
+		if (directionInputErr) return directionInputErr
+		const validated = a as HaikuAwaitDesignDirectionInput
+		const sessionId = validated.session_id
+		const autoOpen = validated.auto_open !== false
+		const url = validated.url ?? ""
 		const existing = getSession(sessionId)
 		if (!existing || existing.session_type !== "design_direction") {
 			return {
@@ -898,7 +896,7 @@ export async function handleToolCall(
 		// the agent doesn't need to echo it. Reading from the session
 		// avoids the silent-skip footgun where omitting the arg leaves
 		// intentSlug = "" and ensureOnStageBranch becomes a no-op.
-		const intentSlug = (a.intent_slug as string) || existing.intent_slug || ""
+		const intentSlug = validated.intent_slug ?? existing.intent_slug ?? ""
 
 		// NOTE: deliberately not propagating `signal` into the session.
 		// The HTTP submit route persists the selection (+ screenshots) to

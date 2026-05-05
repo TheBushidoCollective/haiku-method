@@ -17,6 +17,9 @@
 // Deriving here would close the import cycle and TDZ-trip the registry's
 // const exports. The contract test is the safe alternative.
 
+import { HAIKU_AWAIT_GATE_INPUT_SCHEMA } from "../state/schemas/index.js"
+import { jsonSchemaOf } from "../state/schemas/inputs/_validate.js"
+
 export const orchestratorToolDefs = [
 	{
 		name: "haiku_run_next",
@@ -58,31 +61,7 @@ export const orchestratorToolDefs = [
 			"default; pass `auto_open: false` to skip the browser launch. Returns " +
 			"the resulting orchestrator action (advance_stage / changes_requested / " +
 			"external_review_requested / etc.).",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: {
-					type: "string",
-					description: "Intent slug (required).",
-				},
-				session_id: {
-					type: "string",
-					description:
-						"Override the session ID to await. Defaults to the gate_review_session_id persisted on the stage's state.json by haiku_run_next.",
-				},
-				auto_open: {
-					type: "boolean",
-					description:
-						"Try to open the review URL in the default browser when waiting begins (default true). Set to false for remote control / headless host scenarios where the user will follow the URL on a different device.",
-				},
-				review_url: {
-					type: "string",
-					description:
-						"Review URL to open if auto_open is true. Optional — primarily used to confirm the URL the agent is communicating to the user.",
-				},
-			},
-			required: ["intent"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_AWAIT_GATE_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_intent_create",

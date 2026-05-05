@@ -40,6 +40,15 @@ import {
 } from "../../orchestrator.js"
 import { reportError } from "../../sentry.js"
 import { logSessionEvent } from "../../session-metadata.js"
+import {
+	HAIKU_AWAIT_GATE_INPUT_SCHEMA,
+	type HaikuAwaitGateInput,
+	validateHaikuAwaitGateInputSchema,
+} from "../../state/schemas/index.js"
+import {
+	jsonSchemaOf,
+	validateToolInput,
+} from "../../state/schemas/inputs/_validate.js"
 import { sealIntentState } from "../../state-integrity.js"
 import {
 	gitCommitState,
@@ -77,44 +86,21 @@ export default defineTool({
 		"(1) post the URL to the user in chat, (2) call this tool. The tool reads " +
 		"the persisted session_id from stage state by default; pass `session_id` " +
 		"explicitly to override.",
-	inputSchema: {
-		type: "object" as const,
-		properties: {
-			intent: {
-				type: "string",
-				description: "Intent slug. Required.",
-			},
-			session_id: {
-				type: "string",
-				description:
-					"Override the session ID to await. Defaults to the gate_review_session_id persisted on the stage's state.json by haiku_run_next.",
-			},
-			auto_open: {
-				type: "boolean",
-				description:
-					"Try to open the review URL in the default browser when waiting begins. Defaults to true. Set to false when the user will follow the URL themselves (remote control, headless host, mobile).",
-			},
-			review_url: {
-				type: "string",
-				description:
-					"Review URL to open if auto_open is true. Optional — primarily logged.",
-			},
-			state_file: {
-				type: "string",
-				description: "Internal — session state file path for telemetry.",
-			},
-		},
-		required: ["intent"],
-	},
+	inputSchema: jsonSchemaOf(HAIKU_AWAIT_GATE_INPUT_SCHEMA),
 	async handle(args, signal) {
-		const slug = (args.intent as string) || ""
-		if (!slug) {
-			return {
-				content: [{ type: "text" as const, text: "intent is required" }],
-				isError: true,
-			}
-		}
-		const stFile = (args.state_file as string | undefined) || undefined
+		// AJV gate first — every MCP tool input gets a real schema check
+		// per .claude/rules/schema-definitions.md. The validator emits a
+		// stable named error (`haiku_await_gate_input_invalid`) on miss
+		// so agents and tests can match on the code, not prose.
+		const inputErr = validateToolInput(
+			args,
+			validateHaikuAwaitGateInputSchema,
+			"haiku_await_gate",
+		)
+		if (inputErr) return inputErr
+		const validated = args as HaikuAwaitGateInput
+		const slug = validated.intent
+		const stFile = validated.state_file
 
 		const intentMd = join(intentDir(slug), "intent.md")
 		const intentMeta = readFrontmatter(intentMd)
@@ -130,7 +116,7 @@ export default defineTool({
 		const stageState = readJson(ssPath)
 		const persistedSid =
 			(stageState.gate_review_session_id as string | undefined) || ""
-		const sessionId = (args.session_id as string | undefined) || persistedSid
+		const sessionId = validated.session_id || persistedSid
 		if (!sessionId) {
 			return text(
 				`No pending gate-review session for intent '${slug}' (stage '${activeStage}'). Call haiku_run_next to (re)open the gate.`,
@@ -154,8 +140,8 @@ export default defineTool({
 			)
 		}
 
-		const reviewUrl = (args.review_url as string | undefined) || undefined
-		const autoOpen = args.auto_open !== false
+		const reviewUrl = validated.review_url
+		const autoOpen = validated.auto_open !== false
 
 		if (stFile) {
 			logSessionEvent(stFile, {

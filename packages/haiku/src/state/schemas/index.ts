@@ -46,6 +46,19 @@ export {
 	validateHaikuFeedbackUpdateInputSchema,
 } from "./feedback.js"
 export type {
+	HaikuAwaitDesignDirectionInput,
+	HaikuAwaitGateInput,
+	HaikuAwaitVisualAnswerInput,
+} from "./inputs/await-tools.js"
+export {
+	HAIKU_AWAIT_DESIGN_DIRECTION_INPUT_SCHEMA,
+	HAIKU_AWAIT_GATE_INPUT_SCHEMA,
+	HAIKU_AWAIT_VISUAL_ANSWER_INPUT_SCHEMA,
+	validateHaikuAwaitDesignDirectionInputSchema,
+	validateHaikuAwaitGateInputSchema,
+	validateHaikuAwaitVisualAnswerInputSchema,
+} from "./inputs/await-tools.js"
+export type {
 	HaikuFeedbackAdvanceHatInput,
 	HaikuFeedbackDeleteInput,
 	HaikuFeedbackListInput,

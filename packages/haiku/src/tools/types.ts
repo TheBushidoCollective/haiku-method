@@ -5,11 +5,12 @@
 // the per-tool default exports into `allTools[]` for MCP registration
 // and `toolByName` for dispatch from `handleTool()`.
 
-export interface ToolInputSchema {
-	readonly type: "object"
-	readonly properties?: Readonly<Record<string, unknown>>
-	readonly required?: readonly string[]
-}
+/** JSONSchema-shaped input descriptor. Wide enough to accept the
+ *  output of `jsonSchemaOf(typeboxSchema)` (which is the canonical
+ *  source per `.claude/rules/schema-definitions.md`) while still
+ *  matching object-shaped raw declarations for the legacy tools
+ *  that haven't migrated. */
+export type ToolInputSchema = Record<string, unknown>
 
 /** Standard MCP tool response: text content blocks plus optional error flag. */
 export interface ToolResult {

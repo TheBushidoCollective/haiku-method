@@ -185,6 +185,43 @@ test("intent_review (stage = null) — does NOT render 'Stage null'", () => {
 	)
 })
 
+test("intent_review with stage='' (empty-string coercion path)", () => {
+	// The handler emits stage=null but the run_next pipeline uses
+	// `(action.stage as string | null) ?? ""` to normalize. Cover the
+	// empty-string path explicitly so a future refactor that flips the
+	// normalization order doesn't silently regress the announcement.
+	const body = gateReviewPrompt({
+		...baseCtx,
+		action: {
+			action: "gate_review",
+			intent: "demo-intent",
+			stage: "",
+			next_stage: null,
+			next_phase: "execute",
+			gate_type: "ask",
+			// Note: gate_context omitted on purpose — relies on the
+			// `stage === ""` fallback, NOT the explicit context check.
+			review_url: "https://example.test/review/sess-empty",
+			session_id: "sess-empty",
+			browser_attached: false,
+			reused: false,
+		},
+	})
+	assert.ok(body, "builder must return a body")
+	assert.ok(
+		!body.includes('Stage ""'),
+		"stage='' must not render literal 'Stage \"\"'",
+	)
+	assert.ok(
+		/Intent\s+["']?demo-intent["']?\s+is\s+ready/i.test(body),
+		"stage='' fallback should still announce the intent, not a stage",
+	)
+	assert.ok(
+		body.includes("haiku_await_gate"),
+		"stage='' fallback must still call haiku_await_gate",
+	)
+})
+
 test("intent_review with browser_attached — keeps same-turn imperative", () => {
 	const body = gateReviewPrompt({
 		...baseCtx,

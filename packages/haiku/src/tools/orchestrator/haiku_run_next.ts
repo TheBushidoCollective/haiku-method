@@ -360,12 +360,19 @@ export default defineTool({
 				//
 				// Subject phrasing depends on gate scope: pre-stage
 				// `intent_review` has stage=null/"" (no stage exists yet),
-				// so saying "Stage '' is ready for review" is wrong and
+				// so saying "Stage "" is ready for review" is wrong and
 				// confuses the agent.
+				//
+				// NOTE: the same-turn imperative below intentionally
+				// mirrors the body of `prompts/gate_review.ts`. The
+				// announcement strings here render BEFORE the prompt
+				// body in the assembled response, so updating only one
+				// of the two surfaces leaves the agent reading
+				// inconsistent guidance. Update both files together.
 				const isIntentReview = gateContext === "intent_review" || !stage
 				const subject = isIntentReview
-					? `Intent '${slug}' is ready for your review before any stage starts`
-					: `Stage '${stage}' is ready for review`
+					? `Intent "${slug}" is ready for your review before any stage starts`
+					: `Stage "${stage}" is ready for review`
 				const tellUser = prepared.browser_attached
 					? `${subject}. The page you're on (${prepared.review_url}) just refreshed to this gate.`
 					: `${subject}. Open ${prepared.review_url} to approve or request changes.`

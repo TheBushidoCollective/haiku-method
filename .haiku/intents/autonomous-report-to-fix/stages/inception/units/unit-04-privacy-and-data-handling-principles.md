@@ -25,12 +25,13 @@ quality_gates:
       [ "$(grep -cE '^- \*\*'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/privacy-and-data-handling-principles.md)"
       -ge 5 ]
-status: pending
+status: completed
 inputs:
   - intent.md
   - knowledge/DISCOVERY.md
   - website/content/pages/privacy.md
   - packages/haiku/src/telemetry.ts
+completed_at: '2026-05-05T22:36:21Z'
 ---
 # Privacy and Data Handling Principles
 

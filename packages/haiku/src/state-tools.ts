@@ -3427,13 +3427,18 @@ import {
 	FSM_DRIVEN_FB_FIELDS,
 	FSM_DRIVEN_INTENT_FIELDS,
 	FSM_DRIVEN_UNIT_FIELDS,
+	HAIKU_FEEDBACK_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA,
 	INTENT_FRONTMATTER_SCHEMA,
 	INTENT_IMMUTABLE_FIELDS,
 	STAGE_STATE_FIELDS,
 	UNIT_FRONTMATTER_SCHEMA,
+	validateHaikuFeedbackInputSchema,
+	validateHaikuFeedbackUpdateInputSchema,
 	validateIntentFrontmatterSchema as validateIntentSchema,
 	validateUnitFrontmatterSchema as validateUnitSchema,
 } from "./state/schemas/index.js"
+import { validateToolInput } from "./state/schemas/inputs/_validate.js"
 
 // ── Settings.yml — schema loaded from plugin/schemas/settings.schema.json ─
 //
@@ -6534,45 +6539,11 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_feedback",
 		description:
 			'Create a feedback item for an intent. Writes a markdown file with frontmatter tracking status, origin, and author. Omit `stage` to log an intent-scope finding (used by the studio-level pre-intent-completion review layer). To request a stage rewind from the agent side (planner blocked, upstream gap, etc.), pass `stage: "<earlier-stage>"` and `resolution: "stage_revisit"` — the next `haiku_run_next` will route through the pre-tick gate and emit a `revisited` action. Revisit is a property of run_next mechanics, not a separate verb.',
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description:
-						"Stage name. Omit (or pass empty) to log an intent-scope finding from the studio-level review layer.",
-				},
-				title: {
-					type: "string",
-					description: "Short title for the feedback item (max 120 chars)",
-				},
-				body: {
-					type: "string",
-					description: "Markdown body describing the finding",
-				},
-				origin: {
-					type: "string",
-					description:
-						"Source: adversarial-review | studio-review | external-pr | external-mr | user-visual | user-chat | user-question | user-revisit | agent (default: agent)",
-				},
-				source_ref: {
-					type: "string",
-					description:
-						"Optional reference — PR URL, review agent name, annotation ID",
-				},
-				author: {
-					type: "string",
-					description: "Who created it (default: agent)",
-				},
-				resolution: {
-					type: "string",
-					description:
-						"Optional routing hint set at creation time. One of: `question` (reply, no code delta), `inline_fix` (one fix_hats bolt against this finding), `stage_revisit` (the next pre-tick gate reroutes the cursor to this stage's elaborate phase). Agent-authored stage_revisit FBs are how the agent expresses 'I need to go back' — write the FB at the target stage, set resolution=stage_revisit, call haiku_run_next.",
-				},
-			},
-			required: ["intent", "title", "body"],
-		},
+		// SCHEMA IS THE SSOT — defined in state/schemas/feedback.ts
+		// (HAIKU_FEEDBACK_INPUT_SCHEMA). The handler runs the same
+		// schema through AJV at entry so the MCP-runtime check and the
+		// engine's stable error codes can never drift.
+		inputSchema: HAIKU_FEEDBACK_INPUT_SCHEMA,
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6594,36 +6565,13 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_feedback_update",
 		description:
 			"Update mutable fields on an existing feedback item. Agents cannot close human-authored feedback. Omit `stage` for intent-scope feedback.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description: "Stage name. Omit for intent-scope feedback.",
-				},
-				feedback_id: {
-					type: "string",
-					description: "FB-NN identifier or numeric prefix",
-				},
-				status: {
-					type: "string",
-					description:
-						"New status: pending | fixing | addressed | answered | closed | rejected",
-				},
-				closed_by: {
-					type: "string",
-					description:
-						"Identifier of who/what closed the feedback. For stage feedback: the unit slug whose work the feedback-assessor validated. For fix-loop closures: `fix-loop:<FB-ID>:bolt-<N>`. For intent-scope closures: `intent-fix:<FB-ID>:bolt-<N>`.",
-				},
-				resolution: {
-					type: "string",
-					description:
-						"Routing hint for the feedback resolver. One of: `question` (reply, no code delta), `inline_fix` (one fix_hats bolt against this finding), `stage_revisit` (re-loop the whole stage). Pass `null` / empty to clear. For cross-stage routing, call `haiku_feedback_move` to relocate the FB instead.",
-				},
-			},
-			required: ["intent", "feedback_id"],
-		},
+		// SCHEMA IS THE SSOT — defined in state/schemas/feedback.ts
+		// (HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA). Strict
+		// `additionalProperties: false` rejects any FSM-driven field
+		// (hat, bolt, iterations, integrator_attempts, replies,
+		// triaged_at) at the gate — agents may only touch the
+		// mutable fields the schema lists.
+		inputSchema: HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA,
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -9901,9 +9849,21 @@ export function handleStateTool(
 
 		// ── Feedback ──
 		case "haiku_feedback": {
+			// SCHEMA IS THE SSOT — HAIKU_FEEDBACK_INPUT_SCHEMA enforces
+			// every static contract this handler used to check by hand:
+			// intent / title / body presence, title.length ≤ 120, origin
+			// enum, resolution enum, additionalProperties: false. The
+			// validator returns a structured `haiku_feedback_input_invalid`
+			// reply with field-level error details on failure — same
+			// shape every other AJV-gated tool uses.
+			const validation = validateToolInput(
+				args,
+				validateHaikuFeedbackInputSchema,
+				"haiku_feedback",
+			)
+			if (validation) return validation
+
 			const intent = args.intent as string
-			// `stage` is now optional — omit to log an intent-scope finding
-			// (used by the studio-level pre-intent-completion review layer).
 			const stage = (args.stage as string) || ""
 			const title = args.title as string
 			const body = args.body as string
@@ -9912,52 +9872,8 @@ export function handleStateTool(
 			const author = (args.author as string) || undefined
 			const resolution = (args.resolution as string) || undefined
 
-			// Validate resolution at creation time so agent-set values fail
-			// loudly instead of being silently coerced to null inside
-			// writeFeedbackFile.
-			if (
-				resolution !== undefined &&
-				!["question", "inline_fix", "stage_revisit"].includes(resolution)
-			) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error: resolution must be one of: question | inline_fix | stage_revisit (got: ${JSON.stringify(resolution)})`,
-						},
-					],
-					isError: true,
-				}
-			}
-
-			// Validation
-			if (!intent)
-				return {
-					content: [{ type: "text", text: "Error: intent is required" }],
-					isError: true,
-				}
-			if (!title)
-				return {
-					content: [{ type: "text", text: "Error: title is required" }],
-					isError: true,
-				}
-			if (!body)
-				return {
-					content: [{ type: "text", text: "Error: body is required" }],
-					isError: true,
-				}
-			if (title.length > 120)
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Error: title must be 120 characters or fewer",
-						},
-					],
-					isError: true,
-				}
-
-			// Validate intent exists
+			// Intent-existence check is dynamic (filesystem state), not
+			// expressible in the input schema — keep it here.
 			const intentFile = join(intentDir(intent), "intent.md")
 			if (!existsSync(intentFile))
 				return {
@@ -9966,19 +9882,6 @@ export function handleStateTool(
 					],
 					isError: true,
 				}
-
-			// Validate origin enum
-			if (origin && !(FEEDBACK_ORIGINS as readonly string[]).includes(origin)) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error: origin must be one of: ${FEEDBACK_ORIGINS.join(", ")}`,
-						},
-					],
-					isError: true,
-				}
-			}
 
 			// Branch enforcement — stage feedback lands on the stage branch;
 			// intent-scope feedback (stage omitted) lands on intent-main.
@@ -10034,22 +9937,25 @@ export function handleStateTool(
 		}
 
 		case "haiku_feedback_update": {
+			// SCHEMA IS THE SSOT — HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA
+			// enforces intent / feedback_id presence, status enum,
+			// resolution enum, FB-NN id pattern, and
+			// `additionalProperties: false` (rejects FSM-driven fields
+			// like hat / bolt / iterations / integrator_attempts /
+			// replies / triaged_at — those flow through dedicated
+			// tools, never haiku_feedback_update).
+			const updateValidation = validateToolInput(
+				args,
+				validateHaikuFeedbackUpdateInputSchema,
+				"haiku_feedback_update",
+			)
+			if (updateValidation) return updateValidation
+
 			const intent = args.intent as string
 			// `stage` is optional for intent-scope feedback (stage omitted on
 			// create → stage omitted on update/delete/reject).
 			const stage = (args.stage as string) || ""
 			const feedbackId = args.feedback_id as string
-
-			if (!intent)
-				return {
-					content: [{ type: "text", text: "Error: intent is required" }],
-					isError: true,
-				}
-			if (!feedbackId)
-				return {
-					content: [{ type: "text", text: "Error: feedback_id is required" }],
-					isError: true,
-				}
 
 			const updateFields: {
 				status?: string

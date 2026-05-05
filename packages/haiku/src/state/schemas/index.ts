@@ -10,8 +10,39 @@
 // together obscured ownership and made the file a magnet for
 // schema-adjacent helpers (validators, error-translators) that
 // belong with their schema, not in a generic blob.
+//
+// ── Schema-runtime boundary ───────────────────────────────────────
+//
+// **TypeBox + AJV** is the rule for the MCP tool surface (this
+// directory + every state-tool inputSchema). Each schema is a
+// TypeBox builder expression that yields BOTH a JSONSchema-shaped
+// object the MCP runtime + AJV consume AND a TypeScript type via
+// `Static<typeof Schema>`. Single source of truth — the runtime
+// check and the TS type can never drift.
+//
+// **Zod** is the rule for the SPA wire contract (`packages/haiku-api/`).
+// Different consumer (the React SPA), different needs (TS type
+// inference is the win there too, but the SPA never needs the
+// JSONSchema shape).
+//
+// If you are adding a new schema, ask: is it for an MCP tool input
+// /output, a feedback / unit / intent frontmatter, or any state
+// shape the agent touches? → TypeBox here. Is it for the SPA's
+// wire payload (session.ts in haiku-api)? → Zod there. Don't
+// introduce a third runtime.
 
-export { CREATE_TIME_FB_FIELDS, FSM_DRIVEN_FB_FIELDS } from "./feedback.js"
+export type {
+	HaikuFeedbackInput,
+	HaikuFeedbackUpdateInput,
+} from "./feedback.js"
+export {
+	CREATE_TIME_FB_FIELDS,
+	FSM_DRIVEN_FB_FIELDS,
+	HAIKU_FEEDBACK_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA,
+	validateHaikuFeedbackInputSchema,
+	validateHaikuFeedbackUpdateInputSchema,
+} from "./feedback.js"
 export {
 	AGENT_AUTHORABLE_INTENT_FIELDS,
 	FSM_DRIVEN_INTENT_FIELDS,

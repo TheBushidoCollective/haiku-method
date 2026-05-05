@@ -569,7 +569,15 @@ try {
 			body: "Test",
 		})
 		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("intent is required"))
+		// SCHEMA IS THE SSOT — empty `intent` violates `minLength: 1`,
+		// surfaces via the AJV gate as `haiku_feedback_input_invalid`
+		// with the failing field-path in `errors[]`.
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_input_invalid")
+		assert.ok(
+			parsed.errors.some((e) => e.path === "/intent"),
+			`expected /intent in errors; got ${JSON.stringify(parsed.errors)}`,
+		)
 	})
 
 	test("MCP tool accepts missing stage (intent-scope feedback)", () => {
@@ -600,7 +608,12 @@ try {
 			body: "Test",
 		})
 		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("title is required"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_input_invalid")
+		assert.ok(
+			parsed.errors.some((e) => e.path === "/title"),
+			`expected /title in errors; got ${JSON.stringify(parsed.errors)}`,
+		)
 	})
 
 	test("MCP tool rejects missing body", () => {
@@ -611,7 +624,12 @@ try {
 			body: "",
 		})
 		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("body is required"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_input_invalid")
+		assert.ok(
+			parsed.errors.some((e) => e.path === "/body"),
+			`expected /body in errors; got ${JSON.stringify(parsed.errors)}`,
+		)
 	})
 
 	test("MCP tool rejects title over 120 chars", () => {
@@ -622,7 +640,14 @@ try {
 			body: "Test",
 		})
 		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("120 characters"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_input_invalid")
+		assert.ok(
+			parsed.errors.some(
+				(e) => e.path === "/title" && /maxLength/i.test(e.keyword),
+			),
+			`expected /title maxLength violation; got ${JSON.stringify(parsed.errors)}`,
+		)
 	})
 
 	test("MCP tool rejects nonexistent intent", () => {
@@ -647,7 +672,14 @@ try {
 			origin: "invalid-origin",
 		})
 		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("origin must be one of"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_input_invalid")
+		assert.ok(
+			parsed.errors.some(
+				(e) => e.path === "/origin" && e.keyword === "enum",
+			),
+			`expected /origin enum violation; got ${JSON.stringify(parsed.errors)}`,
+		)
 	})
 
 	test("MCP tool rejects nonexistent stage", () => {
@@ -732,7 +764,12 @@ try {
 			status: "addressed",
 		})
 		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("feedback_id is required"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_update_input_invalid")
+		assert.ok(
+			parsed.errors.some((e) => e.path === "/feedback_id"),
+			`expected /feedback_id in errors; got ${JSON.stringify(parsed.errors)}`,
+		)
 	})
 
 	test("MCP update rejects no updatable fields", () => {
@@ -753,7 +790,14 @@ try {
 			status: "bogus",
 		})
 		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("status must be one of"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_update_input_invalid")
+		assert.ok(
+			parsed.errors.some(
+				(e) => e.path === "/status" && e.keyword === "enum",
+			),
+			`expected /status enum violation; got ${JSON.stringify(parsed.errors)}`,
+		)
 	})
 
 	test("MCP update rejects nonexistent feedback", () => {

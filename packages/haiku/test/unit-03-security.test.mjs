@@ -642,6 +642,28 @@ await test("V-11.B5 (blue-team): wasBaselinePreviouslyEstablished — false when
 	assert.strictEqual(wasBaselinePreviouslyEstablished(dir, "security"), false)
 })
 
+await test("V-11.B6 (blue-team): wasBaselinePreviouslyEstablished — intent-level sidecar from a SIBLING stage's establish must NOT trip the previously-established check", async () => {
+	const dir = makeIntentDir()
+	const { createHash } = await import("node:crypto")
+	// Simulate the real-world scenario: a prior stage (e.g. inception)
+	// established its baseline and wrote intent-scope content to the
+	// shared `intentDir/baseline-content/` directory. The queried stage
+	// (e.g. design) has its own per-stage path with NO sidecar, NO
+	// state.json stamp, and NO action-log marker — it is legitimately
+	// at first-tick.
+	const buf = Buffer.from("intent-scope knowledge artifact body")
+	const sha = createHash("sha256").update(buf).digest("hex")
+	mkdirSync(join(dir, "baseline-content"), { recursive: true })
+	writeFileSync(join(dir, "baseline-content", sha), buf)
+	// Pre-fix bug: the intent-level sidecar walk inside
+	// `hasValidatedBaselineSidecar` returned true here, flipping
+	// `wasBaselinePreviouslyEstablished("design")` to true and forcing
+	// the drift gate to demand `/haiku:repair --confirm-baseline-reset`
+	// on every fresh stage transition. Post-fix: the function only
+	// looks at per-stage sidecars, so the cross-stage signal is silent.
+	assert.strictEqual(wasBaselinePreviouslyEstablished(dir, "design"), false)
+})
+
 console.log(`\n${passed} passed, ${failed} failed\n`)
 
 // Cleanup

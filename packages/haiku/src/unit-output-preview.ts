@@ -62,7 +62,7 @@ export interface UnitOutputPreview {
 	 *  iframe). Absent for `image` and `file` types — the SPA renders
 	 *  thumbnail / icon from `url` and metadata.
 	 *
-	 *  Named `previewBody` (not `previewBody`) because the contents are
+	 *  Named `previewBody` (not `previewHtml`) because the contents are
 	 *  the source body, not pre-sanitized HTML. A future caller who
 	 *  injected this verbatim with `dangerouslySetInnerHTML` would
 	 *  silently XSS. The current call sites both go through a sanitizer

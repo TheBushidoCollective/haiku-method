@@ -69,6 +69,7 @@ import {
 	listVisibleIntents,
 	parseFrontmatter,
 } from "../state-tools.js"
+import { withAnnouncement } from "../tools/orchestrator/_announce.js"
 import { orchestratorToolHandlers } from "../tools/orchestrator/index.js"
 import {
 	buildReviewUrl,
@@ -725,6 +726,10 @@ export async function handleToolCall(
 				status: "answered",
 				url,
 				answers: updatedQuestionSession.answers,
+				message: withAnnouncement(
+					"The user answered your visual question — see the `answers` field below.",
+					"Acknowledge their answer in chat and continue with whatever the answer enables.",
+				),
 			}
 			if (updatedQuestionSession.feedback) {
 				questionResult.feedback = updatedQuestionSession.feedback
@@ -953,19 +958,21 @@ export async function handleToolCall(
 				// user wants to keep = the replacement count.
 				const totalArchetypes = updatedDirectionSession.archetypes?.length ?? 0
 				const dropped = Math.max(totalArchetypes - sel.keep.length, 0)
-				const parts: string[] = [
+				const announcement =
 					sel.keep.length > 0
-						? `The user wants more variants. They'd like to keep: **${sel.keep.join("**, **")}**.`
-						: `The user wants more variants. None of the current archetypes are keepers.`,
+						? `The user wants more variants. They'd like to keep: **${sel.keep.join("**, **")}**.${sel.comments ? ` Steering notes: ${sel.comments}` : ""}`
+						: `The user wants more variants. None of the current archetypes are keepers.${sel.comments ? ` Steering notes: ${sel.comments}` : ""}`
+				const nextStep =
 					dropped > 0
 						? `Generate ${dropped} replacement archetype${dropped === 1 ? "" : "s"} for the dropped slot${dropped === 1 ? "" : "s"} and call \`pick_design_direction\` again with the merged set.`
-						: `Generate replacement archetype(s) for the dropped slot(s) and call \`pick_design_direction\` again with the merged set.`,
-				]
-				if (sel.comments) {
-					parts.push(`\nSteering notes from the user: ${sel.comments}`)
-				}
+						: `Generate replacement archetype(s) for the dropped slot(s) and call \`pick_design_direction\` again with the merged set.`
 				return {
-					content: [{ type: "text" as const, text: parts.join("\n") }],
+					content: [
+						{
+							type: "text" as const,
+							text: withAnnouncement(announcement, nextStep),
+						},
+					],
 				}
 			}
 
@@ -998,25 +1005,30 @@ export async function handleToolCall(
 				}
 			}
 
-			const ackParts: string[] = [
+			const announceParts: string[] = [
 				`The user selected the **${sel.archetype}** direction.`,
 			]
 			if (sel.comments) {
-				ackParts.push(`\nComments: ${sel.comments}`)
+				announceParts.push(`Comments: ${sel.comments}`)
 			}
 			if (sel.annotations?.pins?.length) {
-				ackParts.push(`\nPin annotations (${sel.annotations.pins.length}):`)
+				announceParts.push(`Pin annotations (${sel.annotations.pins.length}):`)
 				for (const pin of sel.annotations.pins) {
-					ackParts.push(
+					announceParts.push(
 						`  - [${pin.x.toFixed(1)}%, ${pin.y.toFixed(1)}%]: ${pin.text || "(no text)"}`,
 					)
 				}
 			}
-			ackParts.push(
-				`\nCall \`haiku_run_next\` to continue — the workflow will surface any screenshot annotations the user attached.`,
-			)
 			return {
-				content: [{ type: "text" as const, text: ackParts.join("\n") }],
+				content: [
+					{
+						type: "text" as const,
+						text: withAnnouncement(
+							announceParts.join("\n"),
+							"Call `haiku_run_next` to continue — the workflow will surface any screenshot annotations the user attached.",
+						),
+					},
+				],
 			}
 		}
 

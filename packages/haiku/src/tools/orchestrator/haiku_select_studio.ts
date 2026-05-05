@@ -13,7 +13,7 @@
 // re-enforces the branch guard — the user may have flipped branches
 // while the picker was open.
 
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { ensureOnStageBranch } from "../../git-worktree.js"
 import { getElicitInput, resolveStudioStages } from "../../orchestrator.js"
@@ -29,21 +29,14 @@ import {
 import {
 	findHaikuRoot,
 	gitCommitState,
-	parseFrontmatter,
 	readJson,
 	setFrontmatterField,
 } from "../../state-tools.js"
 import { listStudios, resolveStudio } from "../../studio-reader.js"
 import { emitTelemetry } from "../../telemetry.js"
 import { defineTool } from "../define.js"
+import { withAnnouncement } from "./_announce.js"
 import { text } from "./_text.js"
-
-function readFrontmatter(filePath: string): Record<string, unknown> {
-	if (!existsSync(filePath)) return {}
-	const raw = readFileSync(filePath, "utf8")
-	const { data } = parseFrontmatter(raw)
-	return data
-}
 
 export default defineTool({
 	name: "haiku_select_studio",
@@ -207,7 +200,10 @@ export default defineTool({
 							return text(
 								JSON.stringify({
 									action: "cancelled",
-									message: "Studio selection cancelled by user",
+									message: withAnnouncement(
+										"The user cancelled studio selection.",
+										"Ask the user how they'd like to proceed — retry the picker, switch intents, or abandon this intent.",
+									),
 								}),
 							)
 						}
@@ -220,7 +216,10 @@ export default defineTool({
 					return text(
 						JSON.stringify({
 							action: "cancelled",
-							message: "Studio selection cancelled by user",
+							message: withAnnouncement(
+								"The user cancelled studio selection.",
+								"Ask the user how they'd like to proceed — retry the picker, switch intents, or abandon this intent.",
+							),
 						}),
 					)
 				}
@@ -313,7 +312,10 @@ export default defineTool({
 					intent: slug,
 					studio: selectedStudio,
 					all_studio_stages: allStudioStages,
-					message: `Studio '${selectedStudio}' selected for intent '${slug}'. Call haiku_run_next { intent: "${slug}" } — the workflow engine will elicit mode next.`,
+					message: withAnnouncement(
+						`The user selected the **${selectedStudio}** studio for "${slug}".`,
+						`Call haiku_run_next { intent: "${slug}" } — the workflow engine will elicit mode next.`,
+					),
 				},
 				null,
 				2,

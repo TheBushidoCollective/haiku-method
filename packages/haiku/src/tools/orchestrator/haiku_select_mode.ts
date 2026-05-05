@@ -53,6 +53,7 @@ import {
 } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
 import { defineTool } from "../define.js"
+import { withAnnouncement } from "./_announce.js"
 import { text } from "./_text.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
@@ -228,7 +229,10 @@ export default defineTool({
 							return text(
 								JSON.stringify({
 									action: "cancelled",
-									message: "Mode selection cancelled by user",
+									message: withAnnouncement(
+										"The user cancelled mode selection.",
+										"Ask the user how they'd like to proceed — retry the picker, switch intents, or abandon this intent.",
+									),
 								}),
 							)
 						}
@@ -239,7 +243,10 @@ export default defineTool({
 					return text(
 						JSON.stringify({
 							action: "cancelled",
-							message: "Mode selection cancelled by user",
+							message: withAnnouncement(
+								"The user cancelled mode selection.",
+								"Ask the user how they'd like to proceed — retry the picker, switch intents, or abandon this intent.",
+							),
 						}),
 					)
 				}
@@ -331,8 +338,14 @@ export default defineTool({
 					previous_mode: currentMode || null,
 					message:
 						chosenMode === "quick"
-							? `Mode 'quick' selected for intent '${slug}'. Call haiku_run_next { intent: "${slug}" } — the workflow engine will elicit which single stage next.`
-							: `Mode '${chosenMode}' selected for intent '${slug}'. Call haiku_run_next { intent: "${slug}" } to continue.`,
+							? withAnnouncement(
+									`The user picked **quick** mode for "${slug}".`,
+									`Call haiku_run_next { intent: "${slug}" } — the workflow engine will elicit which single stage next.`,
+								)
+							: withAnnouncement(
+									`The user picked **${chosenMode}** mode for "${slug}"${currentMode && currentMode !== chosenMode ? ` (was ${currentMode})` : ""}.`,
+									`Call haiku_run_next { intent: "${slug}" } to continue.`,
+								),
 				},
 				null,
 				2,

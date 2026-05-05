@@ -31,6 +31,7 @@ import {
 } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
 import { defineTool } from "../define.js"
+import { withAnnouncement } from "./_announce.js"
 import { text } from "./_text.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
@@ -154,7 +155,10 @@ export default defineTool({
 					return text(
 						JSON.stringify({
 							action: "cancelled",
-							message: "Stage selection cancelled by user",
+							message: withAnnouncement(
+								"The user cancelled stage selection.",
+								"Ask the user how they'd like to proceed — retry the picker, switch intents, or abandon this intent.",
+							),
 						}),
 					)
 				}
@@ -227,7 +231,10 @@ export default defineTool({
 					intent: slug,
 					stage: chosenStage,
 					stages: [chosenStage],
-					message: `Stage '${chosenStage}' selected for quick intent '${slug}'. Call haiku_run_next { intent: "${slug}" } to continue.`,
+					message: withAnnouncement(
+						`The user picked the **${chosenStage}** stage for quick intent "${slug}".`,
+						`Call haiku_run_next { intent: "${slug}" } to continue.`,
+					),
 				},
 				null,
 				2,

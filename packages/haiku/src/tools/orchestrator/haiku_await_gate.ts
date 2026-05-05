@@ -63,6 +63,7 @@ import {
 	writeJson,
 } from "../../state-tools.js"
 import { defineTool } from "../define.js"
+import { withAnnouncement } from "./_announce.js"
 import { text } from "./_text.js"
 import { withInstructions as renderInstructions } from "./_with_instructions.js"
 
@@ -271,8 +272,10 @@ export default defineTool({
 						action: "intent_complete",
 						intent: slug,
 						studio: studioForCompletion,
-						message:
-							"Final review approved — intent complete. Report the completion summary to the user.",
+						message: withAnnouncement(
+							`The user approved final review for "${slug}" — intent complete.`,
+							"Report the completion summary to the user.",
+						),
 					}
 					return text(withInstructions(gateResult))
 				}
@@ -301,8 +304,14 @@ export default defineTool({
 						from_phase: "intent_review",
 						to_phase: nextPhase || "execute",
 						message: stage
-							? `Intent approved — advancing to ${nextPhase || "execute"}. IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user — the transition was already approved.`
-							: `Intent approved — beginning stage 0. IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user — the transition was already approved.`,
+							? withAnnouncement(
+									`The user approved intent "${slug}" — advancing to ${nextPhase || "execute"}.`,
+									`IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user a follow-up — the transition was already approved.`,
+								)
+							: withAnnouncement(
+									`The user approved intent "${slug}" — beginning stage 0.`,
+									`IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user a follow-up — the transition was already approved.`,
+								),
 					}
 					return text(withInstructions(gateResult))
 				}
@@ -315,7 +324,10 @@ export default defineTool({
 						stage,
 						from_phase: "elaborate",
 						to_phase: nextPhase,
-						message: `Specs approved — advancing to ${nextPhase}. IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user — the transition was already approved.`,
+						message: withAnnouncement(
+							`The user approved the specs for stage "${stage}" — advancing to ${nextPhase}.`,
+							`IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user a follow-up — the transition was already approved.`,
+						),
 					}
 					return text(withInstructions(gateResult))
 				}
@@ -328,7 +340,10 @@ export default defineTool({
 						stage,
 						next_stage: nextStage,
 						gate_outcome: "advanced",
-						message: `Approved — advancing to '${nextStage}'. IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user, do NOT summarize, do NOT say "want me to continue?" — the gate was already approved. Just call the tool.`,
+						message: withAnnouncement(
+							`The user approved stage "${stage}" — advancing to "${nextStage}".`,
+							`IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT summarize, do NOT say "want me to continue?" — the gate was already approved. Just call the tool.`,
+						),
 					}
 					return text(withInstructions(gateResult))
 				}
@@ -366,8 +381,14 @@ export default defineTool({
 					stage,
 					feedback: reviewResult.feedback,
 					message: isGitRepo()
-						? `External review requested. Open ONE merge request from branch 'haiku/${slug}/${stage}' to 'haiku/${slug}/main'. Do NOT open separate MRs for individual units — all unit work is already merged into the stage branch. Include the H·AI·K·U browse link in the description so reviewers can see the intent, units, and knowledge artifacts. Record the review URL via haiku_run_next { intent, external_review_url }. Run /haiku:pickup again after the PR is merged.`
-						: `External review requested. Submit the work for review through your project's review process. Record the review URL via haiku_run_next { intent, external_review_url }. Run /haiku:pickup again after the PR is merged.`,
+						? withAnnouncement(
+								`The user routed stage "${stage}" to external review.`,
+								`Open ONE merge request from branch 'haiku/${slug}/${stage}' to 'haiku/${slug}/main'. Do NOT open separate MRs for individual units — all unit work is already merged into the stage branch. Include the H·AI·K·U browse link in the description so reviewers can see the intent, units, and knowledge artifacts. Record the review URL via haiku_run_next { intent, external_review_url }. Run /haiku:pickup again after the PR is merged.`,
+							)
+						: withAnnouncement(
+								`The user routed stage "${stage}" to external review.`,
+								`Submit the work for review through your project's review process. Record the review URL via haiku_run_next { intent, external_review_url }. Run /haiku:pickup again after the PR is merged.`,
+							),
 				}
 				return text(withInstructions(gateResult))
 			}
@@ -426,7 +447,10 @@ export default defineTool({
 					feedback: reviewResult.feedback,
 					annotations: reviewResult.annotations,
 					feedback_ids: feedbackIds,
-					message: `Changes requested on intent: ${reviewResult.feedback || "(see annotations)"}.${feedbackSummary} Revise the intent description, then call haiku_run_next { intent: "${slug}" } again.`,
+					message: withAnnouncement(
+						`The user requested changes on intent "${slug}": ${reviewResult.feedback || "(see annotations)"}.`,
+						`${feedbackSummary ? `${feedbackSummary.trim()} ` : ""}Revise the intent description, then call haiku_run_next { intent: "${slug}" } again.`,
+					),
 				}
 				return text(withInstructions(gateResult))
 			}
@@ -454,7 +478,10 @@ export default defineTool({
 					feedback: reviewResult.feedback,
 					annotations: reviewResult.annotations,
 					feedback_ids: feedbackIds,
-					message: `Changes requested on intent completion: ${reviewResult.feedback || "(see annotations)"}.${feedbackSummary} The intent is no longer in final review. Invoke the /haiku:revisit slash command (or log stage_revisit feedback at the target stage directly via \`haiku_feedback\` with \`resolution: "stage_revisit"\`) to re-open the relevant stage, then address the feedback and call \`haiku_run_next\` to drive back to final review.`,
+					message: withAnnouncement(
+						`The user requested changes at intent-completion review on "${slug}": ${reviewResult.feedback || "(see annotations)"}.`,
+						`${feedbackSummary ? `${feedbackSummary.trim()} ` : ""}The intent is no longer in final review. Invoke the /haiku:revisit slash command (or log stage_revisit feedback at the target stage directly via \`haiku_feedback\` with \`resolution: "stage_revisit"\`) to re-open the relevant stage, then address the feedback and call \`haiku_run_next\` to drive back to final review.`,
+					),
 				}
 				return text(withInstructions(gateResult))
 			}
@@ -472,7 +499,10 @@ export default defineTool({
 					annotations: reviewResult.annotations,
 					unstarted_units: unstartedUnits,
 					units_dir: `.haiku/intents/${slug}/stages/${stage}/units/`,
-					message: `Changes requested on unit specs:\n\n${reviewResult.feedback || "(see annotations)"}\n\nNothing has been built yet — NO feedback files were created. Resolve by EDITING the unstarted unit.md files in \`.haiku/intents/${slug}/stages/${stage}/units/\` directly (or adding new unit files if the scope needs expansion). Do NOT draft a full new wave of units to "close feedback" — that's a post-execute flow. When the edits are done, call \`haiku_run_next { intent: "${slug}" }\` again to re-open the review gate.`,
+					message: withAnnouncement(
+						`The user requested changes on stage "${stage}" unit specs: ${reviewResult.feedback || "(see annotations)"}.`,
+						`Nothing has been built yet — NO feedback files were created. Resolve by EDITING the unstarted unit.md files in \`.haiku/intents/${slug}/stages/${stage}/units/\` directly (or adding new unit files if the scope needs expansion). Do NOT draft a full new wave of units to "close feedback" — that's a post-execute flow. When the edits are done, call \`haiku_run_next { intent: "${slug}" }\` again to re-open the review gate.`,
+					),
 				}
 				return text(withInstructions(gateResult))
 			}
@@ -485,7 +515,10 @@ export default defineTool({
 				feedback: reviewResult.feedback,
 				annotations: reviewResult.annotations,
 				feedback_ids: feedbackIds,
-				message: `Changes requested: ${reviewResult.feedback || "(see annotations)"}.${feedbackSummary} Address the feedback, then call haiku_run_next { intent: "${slug}" } again.`,
+				message: withAnnouncement(
+					`The user requested changes on stage "${stage}": ${reviewResult.feedback || "(see annotations)"}.`,
+					`${feedbackSummary ? `${feedbackSummary.trim()} ` : ""}Address the feedback, then call haiku_run_next { intent: "${slug}" } again.`,
+				),
 			}
 			return text(withInstructions(gateResult))
 		} catch (err) {
@@ -645,8 +678,14 @@ export default defineTool({
 										from_phase: "intent_review",
 										to_phase: nextPhase || "execute",
 										message: stage
-											? `Intent approved — advancing to ${nextPhase || "execute"}. Call haiku_run_next immediately.`
-											: `Intent approved — beginning stage 0. Call haiku_run_next immediately.`,
+											? withAnnouncement(
+													`The user approved intent "${slug}" (via elicitation fallback) — advancing to ${nextPhase || "execute"}.`,
+													"Call haiku_run_next immediately.",
+												)
+											: withAnnouncement(
+													`The user approved intent "${slug}" (via elicitation fallback) — beginning stage 0.`,
+													"Call haiku_run_next immediately.",
+												),
 									}),
 								)
 							}
@@ -660,8 +699,10 @@ export default defineTool({
 										stage,
 										from_phase: "elaborate",
 										to_phase: nextPhase,
-										message:
-											"Specs approved via elicitation — advancing to execute",
+										message: withAnnouncement(
+											`The user approved the specs for stage "${stage}" (via elicitation fallback) — advancing to ${nextPhase}.`,
+											"Call haiku_run_next immediately.",
+										),
 									}),
 								)
 							}
@@ -675,7 +716,10 @@ export default defineTool({
 										stage,
 										next_stage: nextStage,
 										gate_outcome: "advanced",
-										message: "Approved via elicitation",
+										message: withAnnouncement(
+											`The user approved stage "${stage}" (via elicitation fallback) — advancing to "${nextStage}".`,
+											"Call haiku_run_next immediately.",
+										),
 									}),
 								)
 							}
@@ -689,7 +733,10 @@ export default defineTool({
 									completeOrReviewIntent(
 										slug,
 										elicitStudio,
-										"Final stage approved via elicitation.",
+										withAnnouncement(
+											`The user approved the final stage "${stage}" (via elicitation fallback) — intent complete.`,
+											"Report the completion summary to the user.",
+										),
 									),
 								),
 							)
@@ -697,8 +744,14 @@ export default defineTool({
 						syncSessionMetadata(slug, stFile)
 						const changeMsg =
 							gateContext === "intent_review"
-								? `Changes requested on intent: ${feedback}. Revise the intent description, then call haiku_run_next { intent: "${slug}" } again.`
-								: `Changes requested: ${feedback}. Call haiku_run_next { intent: "${slug}" } again after fixing.`
+								? withAnnouncement(
+										`The user requested changes on intent "${slug}" (via elicitation fallback): ${feedback}.`,
+										`Revise the intent description, then call haiku_run_next { intent: "${slug}" } again.`,
+									)
+								: withAnnouncement(
+										`The user requested changes on stage "${stage}" (via elicitation fallback): ${feedback}.`,
+										`Call haiku_run_next { intent: "${slug}" } again after fixing.`,
+									)
 						return text(
 							withInstructions({
 								action: "changes_requested",
@@ -715,8 +768,10 @@ export default defineTool({
 							action: "gate_blocked",
 							intent: slug,
 							stage,
-							message:
-								"Gate review cancelled. Call haiku_run_next again to retry.",
+							message: withAnnouncement(
+								`The user cancelled gate review${stage ? ` for stage "${stage}"` : ""}.`,
+								"Call haiku_run_next again to retry, or ask the user how they'd like to proceed.",
+							),
 						}),
 					)
 				} catch {

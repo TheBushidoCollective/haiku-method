@@ -1,38 +1,72 @@
 #!/usr/bin/env bash
-# H·AI·K·U MCP server entry — auto-detects dev checkout vs production install.
+# H·AI·K·U MCP server entry.
 #
-# Behavior:
-#   - In a dev checkout (packages/haiku/src/main.ts present): exec the source
-#     via bun (preferred) or npx tsx, so edits hot-reload on next MCP restart
-#     without rebuilding.
-#   - In a production install (npm tarball or github clone of just the plugin):
-#     exec the bundled JS sibling at plugin/bin/haiku.mjs via node.
+# Production (marketplace install under ~/.claude/plugins/marketplaces/...):
+#   exec the bundled, self-contained `bin/haiku.mjs` under plain `node`.
+#   The bundle has every runtime dep (including @sentry/node) tree-rolled
+#   in via esbuild — it does NOT depend on the consumer's node_modules.
+#   Built by CI, committed to git, shipped to users.
 #
-# This file is ALWAYS the bin entry. It is never overwritten by the build —
-# the build emits plugin/bin/haiku.mjs as a separate artifact, which is
-# committed to git so github-sourced installs work without a build step.
+# Dev (everywhere else):
+#   exec source `packages/haiku/src/main.ts` via `bun` (preferred) or
+#   `npx tsx`, so edits hot-reload on the next MCP restart without
+#   rebuilding. Devs never run the bundle locally.
+#
+# The marketplace path is the discriminator because marketplace installs
+# are full git clones — `packages/haiku/src/main.ts` exists there too —
+# so `[ -f source ]` alone misroutes production into the dev branch and
+# crashes on missing project-local @sentry/node when `npx tsx` resolves
+# against the consumer's node_modules.
+#
+# HAIKU_PROD=1 forces bundle mode anywhere (CI smoke tests, debugging
+# bundle behavior in a dev checkout). HAIKU_DEV=1 forces source mode
+# (custom plugin install paths that should still hot-reload).
 set -euo pipefail
 HERE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-SOURCE_ENTRY="$HERE/../../packages/haiku/src/main.ts"
 BUNDLE="$HERE/haiku.mjs"
+SOURCE_ENTRY="$HERE/../../packages/haiku/src/main.ts"
 
-if [ -f "$SOURCE_ENTRY" ]; then
+# Detect production install location.
+IS_PROD=""
+case "$HERE" in
+  */.claude/plugins/marketplaces/*|*/.claude/plugins/*|*/.claude/mcpb/*)
+    IS_PROD=1
+    ;;
+esac
+[ "${HAIKU_PROD:-}" = "1" ] && IS_PROD=1
+[ "${HAIKU_DEV:-}" = "1" ] && IS_PROD=""
+
+# Dev path: source via bun/tsx.
+if [ -z "$IS_PROD" ] && [ -f "$SOURCE_ENTRY" ]; then
   if command -v bun >/dev/null 2>&1; then
     exec bun "$SOURCE_ENTRY" "$@"
   fi
   if command -v npx >/dev/null 2>&1; then
     exec npx tsx "$SOURCE_ENTRY" "$@"
   fi
-  echo "haiku: dev checkout detected at $SOURCE_ENTRY but neither 'bun' nor 'npx' is on PATH." >&2
-  echo "Install bun (https://bun.sh) or node (which provides npx)." >&2
+  echo "haiku: dev checkout at $SOURCE_ENTRY but neither 'bun' nor 'npx' is on PATH." >&2
+  echo "Install bun (https://bun.sh) or node, or set HAIKU_PROD=1 to use the bundle." >&2
   exit 1
 fi
 
+# Production path: bundle under node.
 if [ -f "$BUNDLE" ]; then
   exec node "$BUNDLE" "$@"
 fi
 
-echo "haiku: cannot locate source ($SOURCE_ENTRY) or bundle ($BUNDLE)." >&2
-echo "If you installed via npm or cloned from github, the bundle should sit next to this script." >&2
-echo "If you are developing in a checkout, run from the repo root and confirm packages/haiku exists." >&2
+# Last-resort fallback for an unbuilt dev checkout that ended up flagged
+# as production (e.g. someone symlinked it into ~/.claude/plugins/).
+if [ -f "$SOURCE_ENTRY" ]; then
+  echo "haiku: bundle missing at $BUNDLE — falling back to source. Run 'npm run build -w @haiku/haiku' or unset HAIKU_PROD." >&2
+  if command -v bun >/dev/null 2>&1; then
+    exec bun "$SOURCE_ENTRY" "$@"
+  fi
+  if command -v npx >/dev/null 2>&1; then
+    exec npx tsx "$SOURCE_ENTRY" "$@"
+  fi
+  echo "haiku: bundle missing and neither 'bun' nor 'npx' is available for source fallback." >&2
+  exit 1
+fi
+
+echo "haiku: cannot locate bundle ($BUNDLE) or source ($SOURCE_ENTRY)." >&2
 exit 1

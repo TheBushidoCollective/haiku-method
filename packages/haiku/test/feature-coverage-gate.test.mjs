@@ -15,7 +15,6 @@
 import assert from "node:assert"
 import {
 	chmodSync,
-	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	rmSync,

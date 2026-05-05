@@ -1,0 +1,48 @@
+{
+  "stage": "design",
+  "status": "completed",
+  "phase": "gate",
+  "started_at": "2026-04-28T14:42:29Z",
+  "completed_at": "2026-04-28T23:50:56Z",
+  "gate_entered_at": "2026-04-28T23:45:33Z",
+  "gate_outcome": "advanced",
+  "visits": 2,
+  "iterations": [
+    {
+      "index": 1,
+      "started_at": "2026-04-28T14:42:30Z",
+      "completed_at": "2026-04-28T21:31:33Z",
+      "trigger": "initial",
+      "result": "user-revisit"
+    },
+    {
+      "index": 2,
+      "started_at": "2026-04-28T21:31:33Z",
+      "completed_at": "2026-04-28T23:50:56Z",
+      "trigger": "user-revisit",
+      "result": "advanced",
+      "reason": "User revisit with 1 feedback item(s)",
+      "feedback_signature": "sig:3247a96c"
+    }
+  ],
+  "elaboration_turns": 10,
+  "decision_log": [
+    {
+      "decision": "Design direction: discrete + autonomous classification",
+      "options": [
+        "A. Inline & Discrete (minimal additions in existing surfaces, autonomous classification — no user-trigger buttons)",
+        "B. Drift Hub (dedicated tab + activity rail + 'Run assessment' button)",
+        "C. Diff-Forward / Conversational (inline diff cards with Accept/Surface/Ignore buttons)"
+      ],
+      "choice": "A. Inline & Discrete (minimal additions in existing surfaces, autonomous classification — no user-trigger buttons)",
+      "source": "user",
+      "rationale": "User wants the system to auto-resolve drift on the next tick (agent classifies, agent acts) — drift detection and classification are NOT user actions. UI surfaces are passive observers that show what was detected and what the agent decided, not control surfaces with Assess/Accept/Surface/Ignore buttons. Implies: no \"Run now ↻\" button on the drift banner; no Accept/Surface/Ignore on inline diff cards; the four classification outcomes are agent-decided, not user-selected.",
+      "recorded_at": "2026-04-28T15:13:03Z"
+    }
+  ],
+  "pre_review_dispatched": true,
+  "pre_review_dispatched_at": "2026-04-28T21:34:58Z",
+  "pre_review_reviewers_acknowledged": true,
+  "pre_review_reviewers_acknowledged_at": "2026-04-28T21:38:46Z",
+  "pre_review_skipped_no_agents": false
+}

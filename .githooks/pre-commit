@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
-# Block commits in the primary worktree. All work must happen in a linked
-# worktree (`git worktree add ...`). No bypass.
+# Block commits on the default branch. Branch work — including commits —
+# must land on a non-default branch. No bypass.
 
 set -e
 
-# Skip linked worktrees — only enforce in the primary.
-git_dir=$(git rev-parse --git-dir)
-common_dir=$(git rev-parse --git-common-dir)
-abs_git_dir=$(cd "$git_dir" && pwd)
-abs_common_dir=$(cd "$common_dir" && pwd)
-[ "$abs_git_dir" = "$abs_common_dir" ] || exit 0
+# Resolve default branch from origin/HEAD; fall back to main.
+default_branch=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@' || true)
+default_branch=${default_branch:-main}
+
+# Detached HEAD returns empty — allow it; nothing to protect.
+current_branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+[ -z "$current_branch" ] && exit 0
+
+[ "$current_branch" = "$default_branch" ] || exit 0
 
 cat >&2 <<EOF
 
-✋ blocked: commits are not allowed in the primary worktree
+✋ blocked: commits are not allowed on '$default_branch'
 
-   primary is pinned to the default branch (post-checkout hook); branch
-   work — including commits — must happen in a linked worktree:
+   the default branch is protected — switch to a feature branch:
 
-       git worktree add .claude/worktrees/<dir> <branch>          # existing branch
-       git worktree add -b <branch> .claude/worktrees/<dir>       # new branch off HEAD
+       git switch -c <branch>                      # new branch off HEAD
+       git worktree add -b <branch> ../<dir>       # new branch in linked worktree
 
 EOF
 

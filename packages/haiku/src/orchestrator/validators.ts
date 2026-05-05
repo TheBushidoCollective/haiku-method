@@ -6,16 +6,25 @@
 // agent), or null when the check passes.
 //
 // Concerns covered:
-//   - validateStageOutputs        — required outputs exist post-execute
-//   - validateDiscoveryArtifacts  — discovery artifacts exist post-elaborate
-//   - validateUnitNaming          — unit-NN-slug.md naming convention
-//   - validateUnitInputs          — every unit declares `inputs:`
-//   - runQualityGates             — execute the gate commands at unit completion
-//   - writeReviewFeedbackFiles    — persist review-UI feedback to feedback files
-//   - buildOutputRequirements     — render the output-requirements prompt block
+//   - validateStageOutputs               — required outputs exist post-execute
+//   - validateDiscoveryArtifacts         — discovery artifacts exist post-elaborate
+//   - validateUnitNaming                 — unit-NN-slug.md naming convention
+//   - validateUnitInputs                 — every unit declares `inputs:`
+//   - validateCumulativeInputCoverage    — every prior-stage output is referenced
+//                                          by some current-stage unit's `inputs:`
+//                                          OR explicitly acknowledged via
+//                                          `haiku_coverage_acknowledge`
+//   - validateOutputLiveness             — every code-output declared by any
+//                                          unit across all stages is imported /
+//                                          referenced by SOME OTHER file in the
+//                                          repo (catches orphan components like
+//                                          a *.tsx defined but never rendered)
+//   - runQualityGates                    — execute the gate commands at unit completion
+//   - writeReviewFeedbackFiles           — persist review-UI feedback to feedback files
+//   - buildOutputRequirements            — render the output-requirements prompt block
 
-import { execSync } from "node:child_process"
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { execFileSync, execSync } from "node:child_process"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
 import matter from "gray-matter"
 import { resolvePluginRoot } from "../config.js"
@@ -414,6 +423,336 @@ export function validateUnitInputs(
 	}
 
 	return null
+}
+
+// ── Cumulative input coverage validation ───────────────────────────────────
+
+/** Output dirs whose contents count as a stage's deliverables. The `units/`
+ *  directory is excluded because each unit's `outputs:` field is enumerated
+ *  separately (and units' own .md files are spec, not deliverable). The
+ *  `feedback/` and `state.json` are workflow-engine-internal, not deliverables.
+ *  `coverage-decisions.json` is engine-managed and excluded from the cover-it
+ *  walk (its presence is the agent's response, not an upstream output). */
+const STAGE_OUTPUT_DIRS = [
+	"artifacts",
+	"outputs",
+	"knowledge",
+	"discovery",
+] as const
+
+interface CoverageDecisionEntry {
+	path: string
+	decision: "out-of-scope" | "covered-by-unit"
+	rationale: string
+	unit?: string
+	acknowledged_at: string
+}
+
+function readCoverageDecisions(stageDir: string): Set<string> {
+	const path = join(stageDir, "coverage-decisions.json")
+	if (!existsSync(path)) return new Set()
+	try {
+		const parsed = JSON.parse(readFileSync(path, "utf8")) as {
+			decisions?: CoverageDecisionEntry[]
+		}
+		const acknowledged = new Set<string>()
+		for (const entry of parsed.decisions ?? []) {
+			if (entry?.path) acknowledged.add(entry.path)
+		}
+		return acknowledged
+	} catch {
+		return new Set()
+	}
+}
+
+function walkStageOutputFiles(stageDir: string, stageRel: string): string[] {
+	const collected: string[] = []
+	for (const sub of STAGE_OUTPUT_DIRS) {
+		const dir = join(stageDir, sub)
+		if (!existsSync(dir)) continue
+		// Recursive walk — capture every file (md, tsx, json, etc.).
+		const stack: string[] = [""]
+		while (stack.length > 0) {
+			const rel = stack.pop() as string
+			const abs = join(dir, rel)
+			let entries: string[]
+			try {
+				entries = readdirSync(abs)
+			} catch {
+				continue
+			}
+			for (const name of entries) {
+				const childRel = rel ? `${rel}/${name}` : name
+				const childAbs = join(abs, name)
+				try {
+					const stat = statSync(childAbs)
+					if (stat.isDirectory()) {
+						stack.push(childRel)
+					} else if (stat.isFile()) {
+						collected.push(`${stageRel}/${sub}/${childRel}`)
+					}
+				} catch {
+					// Skip unreadable entries.
+				}
+			}
+		}
+	}
+	return collected
+}
+
+function collectUnitOutputs(unitsDir: string): string[] {
+	if (!existsSync(unitsDir)) return []
+	const collected: string[] = []
+	for (const f of readdirSync(unitsDir)) {
+		if (!f.endsWith(".md")) continue
+		const fm = readFrontmatter(join(unitsDir, f))
+		const outputs = (fm.outputs as string[]) || []
+		for (const o of outputs) {
+			if (typeof o === "string" && o.trim() !== "") collected.push(o.trim())
+		}
+	}
+	return collected
+}
+
+function collectUnitInputs(unitsDir: string): Set<string> {
+	const set = new Set<string>()
+	if (!existsSync(unitsDir)) return set
+	for (const f of readdirSync(unitsDir)) {
+		if (!f.endsWith(".md")) continue
+		const fm = readFrontmatter(join(unitsDir, f))
+		const inputs = (fm.inputs as string[]) || (fm.refs as string[]) || []
+		for (const i of inputs) {
+			if (typeof i === "string" && i.trim() !== "") set.add(i.trim())
+		}
+	}
+	return set
+}
+
+/** Validate that every output of every prior stage is referenced by at least
+ *  one current-stage unit's `inputs:` OR explicitly acknowledged in
+ *  `stages/<current>/coverage-decisions.json`.
+ *
+ *  Why: H·AI·K·U's continuity contract — downstream stages MUST cover
+ *  upstream deliverables. Without this check, the elaborate-phase agent can
+ *  silently ignore upstream artifacts (e.g., dev stage skips design's SPA
+ *  spec, ships components no one renders), and no engine gate notices.
+ *
+ *  When: pre-tick, in the elaborate handler after `validateUnitInputs` and
+ *  before adversarial-spec-review dispatch. The agent has two response
+ *  paths per unreferenced file:
+ *    (a) call `haiku_unit_set { unit, field: "inputs", value: [...] }` to
+ *        add it to a unit's inputs (canonical path), OR
+ *    (b) call `haiku_coverage_acknowledge { path, decision: "out-of-scope",
+ *        rationale }` to record an explicit dismissal (escape hatch).
+ *
+ *  Walks: every prior stage's `units/*.md` outputs + every file under
+ *  `STAGE_OUTPUT_DIRS` (`artifacts/`, `outputs/`, `knowledge/`,
+ *  `discovery/`). Excludes `feedback/`, `state.json`, and
+ *  `coverage-decisions.json` (engine-internal).
+ *
+ *  Returns null when every prior output is covered. Returns a
+ *  `coverage_review_required` action listing the unreferenced files
+ *  otherwise. */
+export function validateCumulativeInputCoverage(
+	intentDirPath: string,
+	stage: string,
+	priorStages: string[],
+): OrchestratorAction | null {
+	if (priorStages.length === 0) return null
+
+	const currentUnitsDir = join(intentDirPath, "stages", stage, "units")
+	const currentInputs = collectUnitInputs(currentUnitsDir)
+	const acknowledged = readCoverageDecisions(
+		join(intentDirPath, "stages", stage),
+	)
+
+	const unreferenced: { path: string; from_stage: string }[] = []
+	const seen = new Set<string>()
+	for (const prior of priorStages) {
+		const priorStageDir = join(intentDirPath, "stages", prior)
+		if (!existsSync(priorStageDir)) continue
+		const stageRel = `stages/${prior}`
+
+		// (a) outputs declared in prior units' frontmatter
+		const declaredOutputs = collectUnitOutputs(join(priorStageDir, "units"))
+		// (b) files actually present under STAGE_OUTPUT_DIRS
+		const filesystemOutputs = walkStageOutputFiles(priorStageDir, stageRel)
+
+		for (const path of [...declaredOutputs, ...filesystemOutputs]) {
+			if (seen.has(path)) continue
+			seen.add(path)
+			if (currentInputs.has(path)) continue
+			if (acknowledged.has(path)) continue
+			unreferenced.push({ path, from_stage: prior })
+		}
+	}
+
+	if (unreferenced.length === 0) return null
+
+	const slug = intentDirPath.split("/intents/")[1] || ""
+	return {
+		action: "coverage_review_required",
+		intent: slug,
+		stage,
+		unreferenced,
+		message: `Cannot advance past elaborate: ${unreferenced.length} prior-stage output(s) are not referenced by any unit's \`inputs:\` in stage '${stage}' AND have no entry in \`stages/${stage}/coverage-decisions.json\`. Continuity contract: downstream stages must cover upstream deliverables.\n\nFor each unreferenced file, EITHER:\n  (a) Call \`haiku_unit_set { intent: "${slug}", stage: "${stage}", unit: "<unit>", field: "inputs", value: [...existing, "<path>"] }\` to add it to a unit's inputs (the canonical path).\n  (b) Call \`haiku_coverage_acknowledge { intent_slug: "${slug}", stage: "${stage}", path: "<path>", decision: "out-of-scope", rationale: "<why this file is not relevant to this stage>" }\` to record an explicit dismissal.\n\nUnreferenced files:\n${unreferenced.map((u) => `- \`${u.path}\` (from stage '${u.from_stage}')`).join("\n")}\n\nAfter resolving each, call \`haiku_run_next { intent: "${slug}" }\` to re-run the validator.`,
+	}
+}
+
+// ── Output liveness validation ─────────────────────────────────────────────
+
+const CODE_FILE_RE = /\.(ts|tsx|js|jsx|mjs|cjs)$/i
+const TEST_FILE_RE = /\.(test|spec)\.[a-z]+$|\/__tests__\/|\/test\//i
+
+function isCodeOutput(path: string): boolean {
+	if (!CODE_FILE_RE.test(path)) return false
+	if (TEST_FILE_RE.test(path)) return false
+	return true
+}
+
+/** Stem of a file path = basename without extension(s). For
+ *  `packages/haiku-ui/src/atoms/DriftBanner.tsx` → `DriftBanner`.
+ *  For files with multiple dots (e.g., `foo.module.css`), only the
+ *  outermost extension is stripped. The stem is used as a token for
+ *  "is this referenced anywhere" greps — works for both
+ *  `import { DriftBanner } from "./DriftBanner"` and JSX `<DriftBanner />`. */
+function pathStem(path: string): string {
+	const base = path.replace(/^.*\//, "")
+	const dot = base.lastIndexOf(".")
+	return dot > 0 ? base.slice(0, dot) : base
+}
+
+/** Find files (other than `selfPath`) that mention `stem` as a word
+ *  token. Uses `git grep` for speed and `.gitignore` awareness;
+ *  falls back to no-importers on error. The stem-as-token check
+ *  catches both `import { Stem } from "./Stem"` and JSX `<Stem />`
+ *  and identifier references in plain TS. False-positive risk is
+ *  low (stems are usually distinctive component / module names). */
+/** Exclude paths that mention an output's stem only because they are
+ *  the workflow-engine's own metadata / spec — not a real referencer.
+ *  Unit spec .md files contain the output path in their `outputs:`
+ *  frontmatter, which would false-positive as "this output is wired
+ *  in." Drift baselines, action logs, write-audit logs, and
+ *  coverage-decisions.json all similarly mention paths without
+ *  representing actual code-level references. */
+function isWorkflowMetaPath(path: string): boolean {
+	return path.startsWith(".haiku/")
+}
+
+function findReferencers(
+	repoRoot: string,
+	stem: string,
+	selfPath: string,
+): string[] {
+	if (stem === "" || stem.length < 2) return []
+	// `git grep -lw <stem>` matches `stem` as a complete word in any
+	// tracked file. -w is preferred over a manual `\b` regex because
+	// word-boundary regex semantics differ across git versions / regex
+	// engines (BRE vs ERE vs PCRE) — -w is portable. execFileSync over
+	// execSync to avoid shell quoting variability.
+	try {
+		const out = execFileSync("git", ["grep", "-lw", "--", stem], {
+			cwd: repoRoot,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		})
+		return out
+			.split("\n")
+			.map((l) => l.trim())
+			.filter((l) => l !== "" && l !== selfPath && !isWorkflowMetaPath(l))
+	} catch {
+		// git grep returns non-zero exit when there are no matches; treat as
+		// no-referencers.
+		return []
+	}
+}
+
+interface OutputLivenessOrphan {
+	path: string
+	from_stage: string
+	from_unit: string
+}
+
+/** Walk every unit's `outputs:` across all stages of the intent.
+ *  For each code-file output (not test, not non-code), check whether
+ *  ANY OTHER file in the repo references its basename stem as a token.
+ *  Files with no referencers are flagged as orphans — they shipped
+ *  but no caller / renderer / importer wired them in. Coverage
+ *  acknowledgments in any stage's `coverage-decisions.json` (with
+ *  `decision: "out-of-scope"`) suppress the flag for that path.
+ *
+ *  Why: catches the "defined but never rendered" failure mode that
+ *  the cumulative-input-coverage gate doesn't see. A unit can declare
+ *  `outputs: [DriftBanner.tsx]` and ship the file with passing tests,
+ *  but if no other component does `<DriftBanner />`, the user never
+ *  sees it. The validator runs at intent-completion (before the
+ *  studio-level review dispatch) so reviewers see the orphan list
+ *  and the agent's acknowledgments before signing off.
+ *
+ *  Returns null when every code output has at least one referencer
+ *  (or is acknowledged). Returns `output_liveness_review_required`
+ *  with the orphan list otherwise. */
+export function validateOutputLiveness(
+	intentDirPath: string,
+	stages: string[],
+	repoRoot: string,
+): OrchestratorAction | null {
+	if (stages.length === 0) return null
+
+	// Collect every code-file output across all stages.
+	const codeOutputs: OutputLivenessOrphan[] = []
+	const seen = new Set<string>()
+	for (const stage of stages) {
+		const unitsDir = join(intentDirPath, "stages", stage, "units")
+		if (!existsSync(unitsDir)) continue
+		for (const f of readdirSync(unitsDir)) {
+			if (!f.endsWith(".md")) continue
+			const fm = readFrontmatter(join(unitsDir, f))
+			const outputs = (fm.outputs as string[]) || []
+			for (const out of outputs) {
+				if (typeof out !== "string" || !isCodeOutput(out)) continue
+				if (seen.has(out)) continue
+				seen.add(out)
+				codeOutputs.push({
+					path: out,
+					from_stage: stage,
+					from_unit: f.replace(/\.md$/, ""),
+				})
+			}
+		}
+	}
+
+	if (codeOutputs.length === 0) return null
+
+	// Aggregate acknowledged paths from EVERY stage's coverage-decisions.json
+	// (an orphan ack might live in any stage's file — typically the stage
+	// that produced the output, but a downstream stage can also justify
+	// "I'm intentionally leaving X unwired").
+	const acknowledged = new Set<string>()
+	for (const stage of stages) {
+		const stageAcks = readCoverageDecisions(
+			join(intentDirPath, "stages", stage),
+		)
+		for (const path of stageAcks) acknowledged.add(path)
+	}
+
+	const orphans: OutputLivenessOrphan[] = []
+	for (const out of codeOutputs) {
+		if (acknowledged.has(out.path)) continue
+		const stem = pathStem(out.path)
+		const referencers = findReferencers(repoRoot, stem, out.path)
+		if (referencers.length === 0) orphans.push(out)
+	}
+
+	if (orphans.length === 0) return null
+
+	const slug = intentDirPath.split("/intents/")[1] || ""
+	return {
+		action: "output_liveness_review_required",
+		intent: slug,
+		orphans,
+		message: `Cannot advance to intent-completion review: ${orphans.length} code-output(s) shipped by units across this intent's stages have NO referencers anywhere in the repo. The continuity contract requires every code deliverable to be imported, rendered, or otherwise wired in by some other file. Files defined but never rendered are invisible to the user — the methodology promise breaks.\n\nFor each orphan, EITHER:\n  (a) Author a unit (or extend an existing unit) that integrates the output — typically importing the component into a parent screen, registering a route, or calling the function from a reachable code path. The integration code's diff lands as a new commit on the intent main branch.\n  (b) Call \`haiku_coverage_acknowledge { intent_slug: "${slug}", stage: "<stage-that-produced-it>", path: "<orphan-path>", decision: "out-of-scope", rationale: "<why this is intentionally unwired — e.g., 'reserved for stage-N future use'>" }\` to record an explicit acknowledgment.\n\nOrphan outputs:\n${orphans.map((o) => `- \`${o.path}\` (declared by ${o.from_unit} in stage '${o.from_stage}')`).join("\n")}\n\nAfter resolving each, call \`haiku_run_next { intent: "${slug}" }\` to re-run the validator.`,
+	}
 }
 
 // ── Quality gate runner ───────────────────────────────────────────────────

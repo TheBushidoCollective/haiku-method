@@ -45,6 +45,7 @@ import {
 	resolveStageMetadata,
 	resolveStageReview,
 	summarizeFeedback,
+	validateCumulativeInputCoverage,
 	validateDiscoveryArtifacts,
 	validateUnitInputs,
 	validateUnitNaming,
@@ -331,6 +332,19 @@ const emit: WorkflowHandler = (ctx) => {
 			title: string
 			attempts: number
 		}> = []
+		// Non-conflict merge failures (e.g. branch already checked out
+		// at a foreign worktree with uncommitted changes) — collected and
+		// surfaced as a structured error rather than logged-and-swallowed.
+		// Without this, the elaborate prompt fans out fresh discovery
+		// subagents on every tick because outputPath stays absent on disk
+		// — looks like an infinite loop to the user. The agent now sees
+		// the underlying git error and can act on it.
+		const failedDiscoveryMerges: Array<{
+			template: string
+			worktree: string
+			branch: string
+			message: string
+		}> = []
 		for (const template of discoveryTemplates) {
 			const wtPath = discoveryWorktreePath(slug, currentStage, template)
 			if (!existsSync(wtPath)) continue
@@ -345,8 +359,14 @@ const emit: WorkflowHandler = (ctx) => {
 			}
 			if (!res.isConflict) {
 				console.error(
-					`[haiku] discovery merge failed for ${template}: ${res.message}. Leaving worktree; next tick will retry.`,
+					`[haiku] discovery merge failed for ${template}: ${res.message}. Leaving worktree; next tick will retry after operator action.`,
 				)
+				failedDiscoveryMerges.push({
+					template,
+					worktree: wtPath,
+					branch: discoveryBranchName(slug, currentStage, template),
+					message: res.message,
+				})
 				continue
 			}
 			const attemptKey = `discovery_${template}_integrator_attempts`
@@ -377,6 +397,21 @@ const emit: WorkflowHandler = (ctx) => {
 					conflict_files: res.conflictFiles || [],
 					attempt: nextAttempt,
 				})
+			}
+		}
+
+		if (failedDiscoveryMerges.length > 0) {
+			const lines = failedDiscoveryMerges.map(
+				(f) =>
+					`- **${f.template}** — ${f.message}\n  worktree: \`${f.worktree}\`\n  branch: \`${f.branch}\``,
+			)
+			return {
+				action: "error",
+				intent: slug,
+				stage: currentStage,
+				reason: "discovery_merge_failed",
+				failed_merges: failedDiscoveryMerges,
+				message: `Discovery merge failed for ${failedDiscoveryMerges.length} artifact(s) in stage '${currentStage}'. The most common cause is the stage branch \`haiku/${slug}/${currentStage}\` being checked out at another worktree with uncommitted changes — commit/stash there, then retry. If the listed worktree's content was already merged manually, run \`git worktree remove --force <worktree>\` and retry.\n\n${lines.join("\n")}`,
 			}
 		}
 
@@ -672,6 +707,24 @@ const emit: WorkflowHandler = (ctx) => {
 
 	const inputsViolation = validateUnitInputs(iDir, currentStage)
 	if (inputsViolation) return inputsViolation
+
+	// Cumulative input coverage — every prior-stage output MUST be
+	// referenced by some current-stage unit's `inputs:` OR explicitly
+	// acknowledged via `haiku_coverage_acknowledge`. Catches the
+	// silent-skip class of failure (e.g., dev stage drops design's SPA
+	// spec, ships components no one renders). Fires after the per-unit
+	// inputs-empty check and before adversarial-spec-review dispatch so
+	// reviewers see fully-coverage-resolved units.
+	const studioStagesForCoverage = resolveIntentStages(intent, studio)
+	const currentIdx = studioStagesForCoverage.indexOf(currentStage)
+	const priorStagesForCoverage =
+		currentIdx > 0 ? studioStagesForCoverage.slice(0, currentIdx) : []
+	const coverageViolation = validateCumulativeInputCoverage(
+		iDir,
+		currentStage,
+		priorStagesForCoverage,
+	)
+	if (coverageViolation) return coverageViolation
 
 	// Design direction selection enforcement
 	const designDirectionSelected =

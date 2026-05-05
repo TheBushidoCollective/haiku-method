@@ -26,6 +26,7 @@ import {
 	writeFileSync as fsWriteFileSync,
 	mkdirSync,
 	mkdtempSync,
+	readFileSync,
 	rmSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
@@ -482,6 +483,28 @@ export function isOnIntentBranch(slug: string): boolean {
 	return getCurrentBranch() === `haiku/${slug}/main`
 }
 
+/**
+ * Ensure the working tree is on `haiku/<slug>/main`. Defensive helper
+ * for terminal intent paths (intent_complete, already-completed) where
+ * any prior subagent or merge resolution may have left HEAD on a stage
+ * branch. No-op when already on intent main, when not a git repo, or
+ * when intent main does not exist.
+ *
+ * Returns true on success (or no-op), false when the checkout failed.
+ */
+export function ensureOnIntentMain(slug: string): boolean {
+	if (!isGitRepo()) return true
+	const branch = `haiku/${slug}/main`
+	if (!branchExists(branch)) return true
+	if (getCurrentBranch() === branch) return true
+	try {
+		run(["git", "checkout", branch])
+		return true
+	} catch {
+		return false
+	}
+}
+
 /** Check if we're on a stage branch for the intent (discrete mode) */
 export function isOnStageBranch(slug: string, stage: string): boolean {
 	return getCurrentBranch() === `haiku/${slug}/${stage}`
@@ -564,7 +587,12 @@ export function mergeStageBranchForward(
 	slug: string,
 	fromStage: string,
 	toStage: string,
-): { success: boolean; message: string } {
+): {
+	success: boolean
+	message: string
+	isConflict?: boolean
+	conflictFiles?: string[]
+} {
 	if (!isGitRepo()) return { success: true, message: "no git" }
 	const fromBranch = `haiku/${slug}/${fromStage}`
 	const toBranch = `haiku/${slug}/${toStage}`
@@ -580,48 +608,71 @@ export function mergeStageBranchForward(
 		}
 	}
 
-	// Checkout may fail with dirty tree — auto-commit on current branch and retry.
-	try {
-		run(["git", "checkout", toBranch])
-	} catch (checkoutErr) {
-		const raw =
-			checkoutErr instanceof Error ? checkoutErr.message : String(checkoutErr)
-		const looksLikeDirtyTree =
-			raw.includes("would be overwritten by checkout") ||
-			raw.includes("Please commit your changes or stash them")
-		if (looksLikeDirtyTree && current) {
-			const committed = autoCommitDirtyTree(current)
-			if (!committed.ok) {
-				return {
-					success: false,
-					message: `dirty tree blocks checkout of ${toBranch} from ${current} and auto-commit failed: ${committed.message}`,
-				}
+	// Standard engine-merge contract: run the merge, classify any
+	// failure as conflict-vs-other, return structured `isConflict` /
+	// `conflictFiles` so callers can dispatch a resolver subagent or
+	// surface a precise error.
+	const mergeFn = (cwd?: string): { conflictFiles: string[] } => {
+		const cwdArgs = cwd ? ["-C", cwd] : []
+		try {
+			run([
+				"git",
+				...cwdArgs,
+				"merge",
+				fromBranch,
+				"--no-edit",
+				"-m",
+				`haiku: merge forward ${fromStage} → ${toStage}`,
+			])
+			return { conflictFiles: [] }
+		} catch (mergeErr) {
+			const conflicts = tryRun([
+				"git",
+				...cwdArgs,
+				"diff",
+				"--name-only",
+				"--diff-filter=U",
+			])
+				.split("\n")
+				.filter(Boolean)
+			if (conflicts.length === 0) {
+				tryRun(["git", ...cwdArgs, "merge", "--abort"])
+				throw mergeErr
 			}
-			try {
-				run(["git", "checkout", toBranch])
-			} catch (retryErr) {
-				return {
-					success: false,
-					message: `auto-committed WIP on ${current} but checkout of ${toBranch} still failed: ${retryErr instanceof Error ? retryErr.message : String(retryErr)}`,
-				}
-			}
-		} else {
-			return { success: false, message: raw }
+			return { conflictFiles: conflicts }
 		}
 	}
 
+	// Three primary-checkout positions, mirroring `mergeStageBranchIntoMain`:
+	//
+	//   - Primary already on toBranch → merge in-place.
+	//   - Primary on something else → reuse the worktree that owns
+	//     toBranch if one exists (e.g. the user has it checked out), or
+	//     fall back to a transient temp worktree. Don't checkout
+	//     directly — `git worktree add` would refuse if toBranch is
+	//     held elsewhere, and a direct checkout of toBranch into the
+	//     primary mutates the user's working tree on a branch they
+	//     didn't ask to switch to.
 	try {
-		run([
-			"git",
-			"merge",
-			fromBranch,
-			"--no-edit",
-			"-m",
-			`haiku: merge forward ${fromStage} → ${toStage}`,
-		])
+		const outcome =
+			current === toBranch
+				? mergeFn()
+				: withWorktreeOnBranch(toBranch, (tmpPath) => mergeFn(tmpPath))
+
+		if (outcome.conflictFiles.length > 0) {
+			return {
+				success: false,
+				isConflict: true,
+				conflictFiles: outcome.conflictFiles,
+				message: `Merge ${fromBranch} → ${toBranch} left ${outcome.conflictFiles.length} conflicted file(s): ${outcome.conflictFiles.join(", ")}. Resolve the conflicts on '${toBranch}' (edit files, \`git add\`, \`git commit\`), then retry the forward merge.`,
+			}
+		}
 		return { success: true, message: `merged ${fromBranch} → ${toBranch}` }
 	} catch (err) {
-		// Abort any in-progress merge to leave the repo clean
+		// `mergeFn` aborts on non-conflict failures; this is a
+		// last-ditch defensive cleanup for throws from other layers
+		// (e.g. `withWorktreeOnBranch` failing because of a dirty
+		// foreign checkout).
 		tryRun(["git", "merge", "--abort"])
 		return {
 			success: false,
@@ -632,34 +683,120 @@ export function mergeStageBranchForward(
 
 /**
  * Merge a completed stage branch back into the intent hub branch
- * (`haiku/{slug}/main`) using a temporary worktree — the MCP's checkout is
- * never touched. Called when a stage is approved and the next stage is
- * about to start (or at intent completion for the final stage).
+ * (`haiku/{slug}/main`). Called when a stage is approved and the next stage
+ * is about to start (or at intent completion for the final stage).
+ *
+ * Worktree strategy (handles all three primary-checkout positions):
+ *
+ *   - Primary already on intent-main → merge in-place. A temp-worktree
+ *     attempt would fail with "branch already used by worktree."
+ *   - Primary on the completing stage branch → switch primary to intent-main
+ *     first (auto-committing engine-owned dirty files if needed), then merge
+ *     in-place. This is the steady-state workflow position when stage work
+ *     just finished, and is the post-stage transition the user sees.
+ *   - Primary anywhere else → use a temp worktree on intent-main so the
+ *     primary's checkout is undisturbed.
+ *
+ * Without this branch matrix, the function trips git's "already used by
+ * worktree" guard whenever the primary is on intent-main, leaving the stage
+ * stuck mid-completion.
  */
 export function mergeStageBranchIntoMain(
 	slug: string,
 	stage: string,
-): { success: boolean; message: string } {
+): {
+	success: boolean
+	message: string
+	isConflict?: boolean
+	conflictFiles?: string[]
+} {
 	if (!isGitRepo()) return { success: true, message: "no git" }
 	const stageBranch = `haiku/${slug}/${stage}`
 	const mainBranch = `haiku/${slug}/main`
+	const mergeMessage = `haiku: merge stage ${stage} into main`
 
 	try {
 		run(["git", "rev-parse", "--verify", stageBranch])
 		run(["git", "rev-parse", "--verify", mainBranch])
 
-		withTempWorktree(mainBranch, (tmpPath) => {
-			run([
-				"git",
-				"-C",
-				tmpPath,
-				"merge",
-				stageBranch,
-				"--no-edit",
-				"-m",
-				`haiku: merge stage ${stage} into main`,
-			])
-		})
+		const current = getCurrentBranch()
+
+		// Run the merge and surface conflicts as structured data —
+		// matches the contract used by every other engine merge site
+		// so callers can dispatch a resolver subagent or surface a
+		// precise error message uniformly.
+		const mergeInTree = (cwd?: string): { conflictFiles: string[] } => {
+			const cwdArgs = cwd ? ["-C", cwd] : []
+			try {
+				run([
+					"git",
+					...cwdArgs,
+					"merge",
+					stageBranch,
+					"--no-edit",
+					"-m",
+					mergeMessage,
+				])
+				return { conflictFiles: [] }
+			} catch (mergeErr) {
+				const conflicts = tryRun([
+					"git",
+					...cwdArgs,
+					"diff",
+					"--name-only",
+					"--diff-filter=U",
+				])
+					.split("\n")
+					.filter(Boolean)
+				if (conflicts.length === 0) {
+					tryRun(["git", ...cwdArgs, "merge", "--abort"])
+					throw mergeErr
+				}
+				return { conflictFiles: conflicts }
+			}
+		}
+
+		let mergeOutcome: { conflictFiles: string[] }
+		if (current === mainBranch) {
+			// Primary already on the target. Merge here.
+			mergeOutcome = mergeInTree()
+		} else if (current === stageBranch) {
+			// Primary on the stage branch — the steady-state position for
+			// in-progress stage work. Switch primary to intent-main, then merge.
+			// Auto-commit any engine-owned dirty files first so the checkout
+			// doesn't refuse with "would be overwritten."
+			autoCommitDirtyTree(stageBranch)
+			try {
+				run(["git", "checkout", mainBranch])
+			} catch (checkoutErr) {
+				const raw =
+					checkoutErr instanceof Error
+						? checkoutErr.message
+						: String(checkoutErr)
+				return {
+					success: false,
+					message: `cannot switch primary worktree from '${stageBranch}' to '${mainBranch}' for stage merge: ${raw}`,
+				}
+			}
+			mergeOutcome = mergeInTree()
+		} else {
+			// Primary on something else (foreign branch, mainline, etc.) —
+			// don't disturb it. Prefer an existing worktree on
+			// `mainBranch` (handles the "user has intent main checked out
+			// in their own worktree" case); fall back to a temp worktree.
+			mergeOutcome = withWorktreeOnBranch(mainBranch, (tmpPath) =>
+				mergeInTree(tmpPath),
+			)
+		}
+
+		if (mergeOutcome.conflictFiles.length > 0) {
+			return {
+				success: false,
+				isConflict: true,
+				conflictFiles: mergeOutcome.conflictFiles,
+				message: `Merge ${stageBranch} → ${mainBranch} left ${mergeOutcome.conflictFiles.length} conflicted file(s): ${mergeOutcome.conflictFiles.join(", ")}. Resolve the conflicts on '${mainBranch}' (edit files, \`git add\`, \`git commit\`), then retry the stage completion.`,
+			}
+		}
 
 		return {
 			success: true,
@@ -674,14 +811,28 @@ export function mergeStageBranchIntoMain(
 }
 
 /**
- * Consolidate discrete stage branches into haiku/{slug}/main for hybrid mode.
+ * Consolidate discrete stage branches into haiku/{slug}/main.
+ * Used for orphan discrete intents that have per-stage branches but no main.
  * Creates the main branch from the last stage branch.
- * Returns the main branch name.
+ *
+ * Returns the main branch name plus a structured result. On merge
+ * conflict, returns `{success: false, isConflict: true, conflictFiles}`
+ * so callers can dispatch a resolver subagent or surface a precise
+ * error — matches the contract used by `mergeFixChainWorktree` and
+ * `mergeDiscoveryWorktree`. Routes the merge through
+ * `withWorktreeOnBranch` so a foreign checkout of mainBranch doesn't
+ * silently fail.
  */
 export function consolidateStageBranches(
 	slug: string,
 	stages: string[],
-): { branch: string; success: boolean; message: string } {
+): {
+	branch: string
+	success: boolean
+	message: string
+	isConflict?: boolean
+	conflictFiles?: string[]
+} {
 	const mainBranch = `haiku/${slug}/main`
 	if (!isGitRepo())
 		return { branch: mainBranch, success: true, message: "no git" }
@@ -692,31 +843,79 @@ export function consolidateStageBranches(
 		const lastStageBranch = `haiku/${slug}/${stages[stages.length - 1]}`
 		run(["git", "rev-parse", "--verify", lastStageBranch])
 
-		// If main already exists, check it out and merge the latest stage into it
-		if (branchExists(mainBranch)) {
-			checkoutOrCreate(mainBranch)
-			run([
-				"git",
-				"merge",
-				lastStageBranch,
-				"--no-edit",
-				"-m",
-				"haiku: consolidate discrete stages into main",
-			])
+		// Path 1: main doesn't exist yet — create it from the last
+		// stage branch. Pure ref creation, can't conflict.
+		if (!branchExists(mainBranch)) {
 			return {
-				branch: mainBranch,
+				branch: checkoutOrCreate(mainBranch, lastStageBranch),
 				success: true,
-				message: `merged ${lastStageBranch} into ${mainBranch}`,
+				message: `created ${mainBranch} from ${lastStageBranch}`,
 			}
 		}
-		// Otherwise create main from the last stage branch
+
+		// Path 2: main exists — merge the latest stage into it.
+		// Use a worktree on mainBranch (the user's, if they have one;
+		// else a transient temp worktree) so a foreign checkout of
+		// mainBranch doesn't break the merge. After the merge, run
+		// the standard conflict-detection sweep so callers get the
+		// same shape they'd get from any other engine merge.
+		const mergeFn = (cwd: string): { conflictFiles: string[] } => {
+			try {
+				run([
+					"git",
+					"-C",
+					cwd,
+					"merge",
+					lastStageBranch,
+					"--no-edit",
+					"-m",
+					"haiku: consolidate discrete stages into main",
+				])
+				return { conflictFiles: [] }
+			} catch (mergeErr) {
+				const conflicts = tryRun([
+					"git",
+					"-C",
+					cwd,
+					"diff",
+					"--name-only",
+					"--diff-filter=U",
+				])
+					.split("\n")
+					.filter(Boolean)
+				if (conflicts.length === 0) {
+					tryRun(["git", "-C", cwd, "merge", "--abort"])
+					throw mergeErr
+				}
+				return { conflictFiles: conflicts }
+			}
+		}
+
+		const current = getCurrentBranch()
+		const result =
+			current === mainBranch
+				? mergeFn(primaryRepoRoot())
+				: withWorktreeOnBranch(mainBranch, (tmpPath) => mergeFn(tmpPath))
+
+		if (result.conflictFiles.length > 0) {
+			return {
+				branch: mainBranch,
+				success: false,
+				isConflict: true,
+				conflictFiles: result.conflictFiles,
+				message: `merge conflict in ${result.conflictFiles.length} file(s) while consolidating ${lastStageBranch} into ${mainBranch}: ${result.conflictFiles.join(", ")}. Resolve the conflicts on '${mainBranch}' (edit files, \`git add\`, \`git commit\`), then retry.`,
+			}
+		}
 		return {
-			branch: checkoutOrCreate(mainBranch, lastStageBranch),
+			branch: mainBranch,
 			success: true,
-			message: `created ${mainBranch} from ${lastStageBranch}`,
+			message: `merged ${lastStageBranch} into ${mainBranch}`,
 		}
 	} catch (err) {
-		// Abort any in-progress merge to leave the repo clean
+		// Defensive abort — `mergeFn` already aborts on non-conflict
+		// failures, but a throw from a different layer (e.g.
+		// `withWorktreeOnBranch` failing because of a dirty foreign
+		// checkout) could leave a half-finished merge somewhere.
 		tryRun(["git", "merge", "--abort"])
 		return {
 			branch: mainBranch,
@@ -798,6 +997,12 @@ export function ensureStageBranch(slug: string, stage: string): string {
 	if (branchExists(stageBranch)) return stageBranch
 	// Intent main must exist first; a healthy workflow engine always creates it before any stage.
 	if (!branchExists(mainBranch)) createIntentBranch(slug)
+	// Seed `.gitattributes` on intent main BEFORE the fork so the new
+	// stage branch inherits the merge=union directive. Otherwise the
+	// stage branch starts without it, every fix-chain / discovery
+	// fork inherits the gap, and the integrator hits the same JSONL
+	// conflicts that motivated the attribute in the first place.
+	ensureIntentGitAttributes(slug)
 	tryRun(["git", "branch", stageBranch, mainBranch])
 	return stageBranch
 }
@@ -871,6 +1076,22 @@ export function ensureOnStageBranch(
 			branchExists(mainlineBranch) &&
 			current !== mainlineBranch
 		) {
+			// Refuse if mainline is held by a foreign worktree —
+			// `git checkout mainline` would fail with the cryptic
+			// "branch already checked out at <path>" error. Surface a
+			// clear, actionable message instead so the agent can ask
+			// the user to move their checkout (or so the operator
+			// running interactively sees the problem).
+			const mainlineHolder = findWorktreeForBranch(mainlineBranch)
+			if (mainlineHolder && mainlineHolder !== process.cwd()) {
+				return {
+					ok: false,
+					branch: current,
+					message: `target branch '${targetBranch}' not yet created, and the fallback (repo mainline '${mainlineBranch}') is checked out at another worktree '${mainlineHolder}'. Move that checkout to a different branch or remove the worktree (\`git worktree remove --force ${mainlineHolder}\`), then retry.`,
+					switched: false,
+					target_branch: mainlineBranch,
+				}
+			}
 			try {
 				run(["git", "checkout", mainlineBranch])
 				return {
@@ -1224,29 +1445,161 @@ export function writeOnIntentMain(
 		return { ok: false, message: `${mainBranch} does not exist` }
 
 	try {
-		withTempWorktree(mainBranch, (tmpPath) => {
-			const fullPath = join(tmpPath, relPath)
+		// Worktree strategy mirrors mergeStageBranchIntoMain:
+		//   - Primary already on intent-main → write in-place. A temp-worktree
+		//     attempt would fail with "branch already used by worktree."
+		//     Use a path-restricted commit (`git commit -- <relPath>`) so only
+		//     the targeted file is committed, leaving any other dirty state
+		//     on the primary worktree untouched.
+		//   - Primary anywhere else → use a temp worktree (current behavior)
+		//     so the primary's checkout is undisturbed.
+		const current = getCurrentBranch()
+		if (current === mainBranch) {
+			const primaryRoot = primaryRepoRoot()
+			const fullPath = join(primaryRoot, relPath)
 			const dir = fullPath.replace(/\/[^/]+$/, "")
 			mkdirSync(dir, { recursive: true })
-			// Cannot use writeFileSync from node:fs here directly in this
-			// file's current imports — but existsSync/mkdirSync from node:fs
-			// are already imported. Add writeFileSync via require workaround
-			// would be ugly. The file already imports from node:fs at top, so
-			// import writeFileSync there.
 			fsWriteFileSync(fullPath, content)
-			// Stage + commit. --allow-empty handles the no-op write case
-			// gracefully; we'd rather have a no-op commit than bail.
-			run(["git", "-C", tmpPath, "add", relPath])
-			const status = tryRun(["git", "-C", tmpPath, "status", "--porcelain"])
-			if (status.trim()) {
-				run(["git", "-C", tmpPath, "commit", "-m", commitMessage])
+			// Stage just this file (in case there's other unrelated dirty state).
+			run(["git", "-C", primaryRoot, "add", relPath])
+			// Path-restricted commit: only this file's diff is committed,
+			// even if the index has other staged changes from concurrent work.
+			const diff = tryRun([
+				"git",
+				"-C",
+				primaryRoot,
+				"diff",
+				"--cached",
+				"--name-only",
+				"--",
+				relPath,
+			])
+			if (diff.trim()) {
+				run([
+					"git",
+					"-C",
+					primaryRoot,
+					"commit",
+					"-m",
+					commitMessage,
+					"--",
+					relPath,
+				])
 			}
-		})
+		} else {
+			withWorktreeOnBranch(mainBranch, (tmpPath) => {
+				const fullPath = join(tmpPath, relPath)
+				const dir = fullPath.replace(/\/[^/]+$/, "")
+				mkdirSync(dir, { recursive: true })
+				fsWriteFileSync(fullPath, content)
+				// Stage + commit. --allow-empty handles the no-op write case
+				// gracefully; we'd rather have a no-op commit than bail.
+				run(["git", "-C", tmpPath, "add", relPath])
+				const status = tryRun(["git", "-C", tmpPath, "status", "--porcelain"])
+				if (status.trim()) {
+					run(["git", "-C", tmpPath, "commit", "-m", commitMessage])
+				}
+			})
+		}
 		return { ok: true, message: `wrote ${relPath} on ${mainBranch}` }
 	} catch (err) {
 		return {
 			ok: false,
 			message: err instanceof Error ? err.message : String(err),
+		}
+	}
+}
+
+/** Surgically copy files matching a path prefix from a source branch
+ *  onto intent main, then commit. Used by the revisit flow to carry
+ *  feedback files forward from stage branches without merging the
+ *  rest of those branches' (possibly unreviewed) work.
+ *
+ *  Behavior:
+ *   - No-op when not in a git repo, or when the source branch / intent
+ *     main branch don't exist, or when the source branch has no files
+ *     matching the prefix.
+ *   - In-place when current branch is intent main; temp-worktree
+ *     otherwise (mirrors writeOnIntentMain's strategy).
+ *   - Uses `git checkout <sourceBranch> -- <pathPrefix>` to materialise
+ *     the files, then `git add` + `git commit` only the matched paths
+ *     so other dirty state is left untouched.
+ *
+ *  Returns { ok, message } describing what happened (paths copied,
+ *  no-op reason, or error). */
+export function checkoutFromBranchOnIntentMain(
+	slug: string,
+	sourceBranch: string,
+	pathPrefix: string,
+	commitMessage: string,
+): { ok: boolean; message: string; paths_copied: string[] } {
+	const empty = { paths_copied: [] as string[] }
+	if (!isGitRepo()) return { ok: true, message: "no git", ...empty }
+	const mainBranch = `haiku/${slug}/main`
+	if (!branchExists(mainBranch))
+		return { ok: false, message: `${mainBranch} does not exist`, ...empty }
+	if (!branchExists(sourceBranch))
+		return {
+			ok: true,
+			message: `source branch ${sourceBranch} does not exist — skipping`,
+			...empty,
+		}
+	const matched = tryRun([
+		"git",
+		"ls-tree",
+		"-r",
+		"--name-only",
+		sourceBranch,
+		"--",
+		pathPrefix,
+	])
+		.split("\n")
+		.map((l) => l.trim())
+		.filter(Boolean)
+	if (matched.length === 0)
+		return {
+			ok: true,
+			message: `no files under ${pathPrefix} on ${sourceBranch} — skipping`,
+			...empty,
+		}
+
+	const runCheckout = (cwd: string) => {
+		run(["git", "-C", cwd, "checkout", sourceBranch, "--", pathPrefix])
+		run(["git", "-C", cwd, "add", "--", pathPrefix])
+		const status = tryRun([
+			"git",
+			"-C",
+			cwd,
+			"diff",
+			"--cached",
+			"--name-only",
+			"--",
+			pathPrefix,
+		])
+		if (status.trim()) {
+			run(["git", "-C", cwd, "commit", "-m", commitMessage, "--", pathPrefix])
+		}
+	}
+
+	try {
+		const current = getCurrentBranch()
+		if (current === mainBranch) {
+			runCheckout(primaryRepoRoot())
+		} else {
+			withWorktreeOnBranch(mainBranch, (tmpPath) => {
+				runCheckout(tmpPath)
+			})
+		}
+		return {
+			ok: true,
+			message: `copied ${matched.length} file(s) from ${sourceBranch} (${pathPrefix})`,
+			paths_copied: matched,
+		}
+	} catch (err) {
+		return {
+			ok: false,
+			message: err instanceof Error ? err.message : String(err),
+			...empty,
 		}
 	}
 }
@@ -1339,6 +1692,258 @@ function withTempWorktree<T>(branch: string, fn: (path: string) => T): T {
 	}
 }
 
+/** Idempotently seed an intent dir's `.gitattributes` so engine-owned
+ *  append-only event streams (`action-log.jsonl`, `write-audit.jsonl`)
+ *  use git's `merge=union` strategy. These files are written from
+ *  every branch the engine touches; without `merge=union`, every
+ *  fix-chain merge conflicts on the JSONL append and an integrator
+ *  has to hand-resolve a file the engine fully owns — eventually
+ *  tripping the integrator cap and stranding the chain's real
+ *  content on a dead worktree.
+ *
+ *  Called from the merge functions (discovery, unit, fix-chain) so
+ *  intents created before this fix get auto-repaired on the next
+ *  tick. The intent-create path also seeds the file at intent
+ *  creation. Idempotent: writes only when the file is missing OR
+ *  doesn't already include the union directive (catches the
+ *  upgrade-an-old-intent case). */
+function ensureIntentGitAttributes(slug: string): void {
+	if (!isGitRepo()) return
+	try {
+		const intentDir = join(primaryRepoRoot(), ".haiku", "intents", slug)
+		if (!existsSync(intentDir)) return
+		const wantedLines = [
+			"action-log.jsonl merge=union",
+			"write-audit.jsonl merge=union",
+		]
+		const banner = [
+			"# Engine-owned append-only event streams. `merge=union` tells git",
+			"# to concatenate both sides on conflict — these files are pure",
+			"# event streams and never benefit from manual conflict resolution.",
+		]
+		const desiredContent = `${[...banner, ...wantedLines].join("\n")}\n`
+
+		const intentMain = `haiku/${slug}/main`
+		const rel = `.haiku/intents/${slug}/.gitattributes`
+
+		// Stamp the attribute on intent main specifically — that's the
+		// parent of every stage / unit / fix-chain / discovery branch,
+		// so every fork inherits it. Stamping on whatever's currently
+		// checked out (e.g. a stage branch) leaves intent main without
+		// the attribute, so the next NEW stage forked off main starts
+		// without it and the integrator gets the same conflicts.
+		const stamp = (cwd?: string): void => {
+			const cwdArgs = cwd ? ["-C", cwd] : []
+			const absPath = cwd ? join(cwd, rel) : join(primaryRepoRoot(), rel)
+			let existing = ""
+			try {
+				if (existsSync(absPath)) existing = readFileSync(absPath, "utf8")
+			} catch {
+				/* missing or unreadable — fall through and overwrite */
+			}
+			if (wantedLines.every((l) => existing.includes(l))) return
+			fsWriteFileSync(absPath, desiredContent)
+			tryRun(["git", ...cwdArgs, "add", "--", rel])
+			tryRun([
+				"git",
+				...cwdArgs,
+				"commit",
+				"-m",
+				`haiku: seed .gitattributes (merge=union for engine event streams) for ${slug}`,
+				"--",
+				rel,
+			])
+		}
+
+		if (!branchExists(intentMain)) return // pre-init; intent-create path handles it
+		// Stamp 1/2: intent main. Future forks (stage branches /
+		// fix-chains / discovery / units) inherit from here, so this
+		// is the load-bearing stamp. Use a worktree on intent main
+		// (the user's, if they have one; else transient) so we don't
+		// disturb the engine's current checkout.
+		const current = getCurrentBranch()
+		if (current === intentMain) {
+			stamp()
+		} else {
+			try {
+				withWorktreeOnBranch(intentMain, (tmpPath) => stamp(tmpPath))
+			} catch {
+				/* Foreign worktree dirty etc. — fall through to the
+				 *  current-branch stamp; intent main will get the
+				 *  attribute on the next merge through. */
+			}
+		}
+		// Stamp 2/2: the currently checked-out branch (if not intent
+		// main itself, already done above). Why both: a legacy intent
+		// already has stage / fix-chain branches FORKED off intent
+		// main without the attribute. Stamping on intent main alone
+		// fixes future forks but leaves the existing branches blind.
+		// The current branch is the one about to merge (caller is
+		// about to execute a merge into a base branch), so stamping
+		// here is what un-strands the in-flight chain.
+		if (current && current !== intentMain) {
+			stamp()
+		}
+	} catch {
+		/* never crash a merge over a best-effort attribute seed */
+	}
+}
+
+/** Force-delete a branch and warn (to stderr) when the delete is
+ *  silently skipped because the branch is held by another worktree.
+ *  Returns true when the branch is gone (deleted now or already
+ *  absent), false when something held it back.
+ *
+ *  Use this instead of bare `tryRun(["git", "branch", "-D", b])` at
+ *  cleanup sites that own the branch lifecycle (post-merge reap of
+ *  fix-chain / discovery / unit branches). The bare tryRun pattern
+ *  swallows the "branch is checked out at <path>" error silently;
+ *  the branch leaks and a future re-creation collides with the
+ *  zombie. The warning surfaces the leak in MCP stderr so operators
+ *  can investigate. */
+function deleteBranchWithWarning(branch: string, context: string): boolean {
+	if (!isGitRepo()) return true
+	if (!branchExists(branch)) return true
+	const ok = tryRun(["git", "branch", "-D", branch]) !== ""
+	if (ok) return true
+	// Diagnose so the stderr line is actionable.
+	const holder = findWorktreeForBranch(branch)
+	if (holder) {
+		console.error(
+			`[haiku] could not delete branch '${branch}' (${context}) — held by worktree '${holder}'. The branch will leak; remove the worktree (\`git worktree remove --force ${holder}\`) and rerun cleanup, or delete the branch manually.`,
+		)
+	} else {
+		console.error(
+			`[haiku] could not delete branch '${branch}' (${context}). The branch will leak; investigate via \`git branch -D ${branch}\`.`,
+		)
+	}
+	return false
+}
+
+/** Find the path of an existing worktree currently checked out on
+ *  `branch`, or null when no worktree owns the branch. Parses
+ *  `git worktree list --porcelain`, matching the canonical
+ *  `refs/heads/<branch>` shape git emits.
+ *
+ *  Used by `withWorktreeOnBranch` to avoid the "branch is already
+ *  checked out elsewhere" failure mode `git worktree add` hits when a
+ *  user (or a sibling clone / sandbox) is parked on the same branch
+ *  the engine wants to merge into. */
+function findWorktreeForBranch(branch: string): string | null {
+	if (!isGitRepo() || !branch) return null
+	let raw: string
+	try {
+		raw = execFileSync("git", ["worktree", "list", "--porcelain"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		})
+	} catch {
+		return null
+	}
+	const target = `refs/heads/${branch}`
+	let curPath: string | null = null
+	for (const line of raw.split("\n")) {
+		if (line.startsWith("worktree ")) {
+			curPath = line.slice("worktree ".length).trim()
+		} else if (line.startsWith("branch ") && curPath) {
+			const b = line.slice("branch ".length).trim()
+			if (b === target) return curPath
+		} else if (line === "") {
+			curPath = null
+		}
+	}
+	return null
+}
+
+/** Inspect the worktree at `path` and report whether it has anything
+ *  blocking a safe merge. Returns null when clean; otherwise returns a
+ *  struct describing what's dirty so `withWorktreeOnBranch` can build
+ *  an actionable error message that names what the user needs to deal
+ *  with (uncommitted tracked changes vs. untracked files have
+ *  different remediation paths — `git stash` covers tracked, but
+ *  untracked needs `git clean` or `git add`).
+ *
+ *  Fails closed: when git can't be queried at all, returns "unknown"
+ *  so the caller refuses the merge rather than risk stomping on edits. */
+function inspectWorktreeDirtyState(path: string): {
+	tracked: boolean
+	untracked: boolean
+	unknown?: boolean
+} | null {
+	let raw: string
+	try {
+		raw = execFileSync("git", ["-C", path, "status", "--porcelain"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		})
+	} catch {
+		return { tracked: false, untracked: false, unknown: true }
+	}
+	if (raw.trim().length === 0) return null
+	let tracked = false
+	let untracked = false
+	for (const line of raw.split("\n")) {
+		if (!line) continue
+		// `git status --porcelain` rows start with a 2-char status:
+		// "??" = untracked, "!!" = ignored (we don't ask for these),
+		// any other combination = tracked change in index/worktree.
+		if (line.startsWith("??")) untracked = true
+		else tracked = true
+	}
+	return { tracked, untracked }
+}
+
+/** Run `fn` in a worktree on `branch`. Prefers an existing worktree
+ *  already checked out at `branch` (e.g. the user's own checkout, or
+ *  a sibling sandbox); falls back to a transient temp worktree.
+ *
+ *  WHY: `git worktree add` refuses when `branch` is already checked
+ *  out at any worktree on the machine — `withTempWorktree(branch)`
+ *  throws in that case, leaving merges silently stuck (the discovery
+ *  / unit / fix-chain merge functions catch the throw and log to
+ *  stderr). Using the existing worktree lets the merge land in
+ *  whatever path already owns the branch, which is what `git` itself
+ *  would do.
+ *
+ *  Throws when an existing worktree on `branch` is dirty — landing a
+ *  merge there would clobber the user's WIP. The caller's catch
+ *  block returns `{success: false, message}` so the agent surfaces
+ *  the error and the user can commit/stash and retry. */
+function withWorktreeOnBranch<T>(branch: string, fn: (path: string) => T): T {
+	const existing = findWorktreeForBranch(branch)
+	if (existing) {
+		const dirty = inspectWorktreeDirtyState(existing)
+		if (dirty) {
+			// Build an actionable message that names exactly what's
+			// blocking — tracked changes need commit/stash, untracked
+			// files need add or clean. Naming both keeps the user from
+			// trying `git stash` and getting the surprise that it
+			// didn't help.
+			let kinds: string
+			let remediation: string
+			if (dirty.unknown) {
+				kinds = "an indeterminate state"
+				remediation = "inspect the worktree manually"
+			} else if (dirty.tracked && dirty.untracked) {
+				kinds = "uncommitted changes and untracked files"
+				remediation =
+					"commit or stash the tracked changes AND add or clean the untracked files"
+			} else if (dirty.tracked) {
+				kinds = "uncommitted changes"
+				remediation = "commit or stash them"
+			} else {
+				kinds = "untracked files"
+				remediation = "add them to a commit or `git clean` them"
+			}
+			throw new Error(
+				`branch '${branch}' is checked out at '${existing}' with ${kinds} — ${remediation} so the workflow engine can merge into it`,
+			)
+		}
+		return fn(existing)
+	}
+	return withTempWorktree(branch, fn)
+}
+
 /**
  * Create a worktree for a unit, forked from the STAGE branch (always).
  * Ensures the stage branch exists before forking — if missing, creates it
@@ -1359,6 +1964,9 @@ export function createUnitWorktree(
 			"createUnitWorktree requires `stage` — units always fork from the stage branch",
 		)
 	const stageBranch = ensureStageBranch(slug, stage)
+	// Seed `.gitattributes` BEFORE the fork — see notes in
+	// `createFixChainWorktree`.
+	ensureIntentGitAttributes(slug)
 	const unitBranch = `haiku/${slug}/${unit}`
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
 	const worktreePath = join(worktreeBase, unit)
@@ -1401,6 +2009,10 @@ export function mergeUnitWorktree(
 	const unitBranch = `haiku/${slug}/${unit}`
 	const worktreePath = unitWorktreePath(slug, unit)
 
+	// Auto-repair legacy intents — see notes on the same call in
+	// `mergeFixChainWorktree`.
+	ensureIntentGitAttributes(slug)
+
 	if (!existsSync(worktreePath)) {
 		return { success: true, message: "no worktree" }
 	}
@@ -1423,59 +2035,116 @@ export function mergeUnitWorktree(
 		// "branch already used by worktree"). Otherwise use a temp worktree
 		// so we don't disturb whatever branch the user happens to be on.
 		//
-		// Conflict handling: the unit .md file under stages/<stage>/units/
-		// routinely conflicts because the workflow engine writes iteration/hat state to
-		// it from the stage-branch side while the unit branch carries a
-		// frozen-at-fork copy. For those files only, take the stage side
-		// (the live workflow engine state) — the unit worktree has no business mutating
-		// its own state file. Non-unit-md conflicts still surface as real
-		// conflicts the agent must resolve.
+		// State-overwrite handling (engine-owned files always take stage side):
+		// the unit branch carries frozen-at-fork copies of stage state files
+		// — `stages/<stage>/units/<unit>.md`, `stages/<stage>/state.json`,
+		// `stages/<stage>/baseline.json`. When git merges and there's no
+		// conflict marker (because, say, the unit branch never touched them
+		// after fork), git silently takes one side or the other based on
+		// 3-way merge math, and we've seen the unit-branch's stale state.json
+		// overwrite the stage's advanced state.json — regressing phase from
+		// `review` back to `elaborate`. To prevent that, we use
+		// `git merge --no-commit --no-ff` to stage the merge without committing,
+		// then force-checkout the engine-owned files to "ours" (the stage
+		// side, which is the authoritative live workflow engine state), then
+		// commit. This makes state regression impossible regardless of
+		// whether git would have flagged a conflict.
+		//
+		// True conflicts on agent-authored content (e.g. an artifact file
+		// edited differently on both sides) still surface as unresolved
+		// `--diff-filter=U` paths, and the merge fails loudly so the caller
+		// can return a structured `merge_conflict` action listing them.
 		const onStageBranch = getCurrentBranch() === stageBranch
+		const engineOwnedRelPaths = [
+			`.haiku/intents/${slug}/stages/${stage}/units/${unit}.md`,
+			`.haiku/intents/${slug}/stages/${stage}/state.json`,
+			`.haiku/intents/${slug}/stages/${stage}/baseline.json`,
+		]
 		const mergeHere = (cwd?: string) => {
+			const gitC = (cwd ? ["-C", cwd] : []) as string[]
 			const mergeArgs = [
 				"git",
-				...(cwd ? ["-C", cwd] : []),
+				...gitC,
 				"merge",
 				unitBranch,
-				"--no-edit",
-				"-m",
-				`haiku: merge ${unit} into ${stage}`,
+				"--no-commit",
+				"--no-ff",
 			]
+			let mergeErr: unknown = null
 			try {
 				run(mergeArgs)
 			} catch (err) {
-				const unitMdRel = `.haiku/intents/${slug}/stages/${stage}/units/${unit}.md`
-				const conflicts = tryRun([
-					"git",
-					...(cwd ? ["-C", cwd] : []),
-					"diff",
-					"--name-only",
-					"--diff-filter=U",
-				])
-					.split("\n")
-					.filter(Boolean)
-				// Only auto-resolve the unit-md conflict. Any other conflict
-				// is real — abort and surface.
-				const nonUnitMd = conflicts.filter((p) => p !== unitMdRel)
-				if (conflicts.length > 0 && nonUnitMd.length === 0) {
-					run([
-						"git",
-						...(cwd ? ["-C", cwd] : []),
-						"checkout",
-						"--ours",
-						unitMdRel,
-					])
-					run(["git", ...(cwd ? ["-C", cwd] : []), "add", unitMdRel])
-					run(["git", ...(cwd ? ["-C", cwd] : []), "commit", "--no-edit"])
-				} else {
-					throw err
-				}
+				mergeErr = err
 			}
+
+			// Always force engine-owned files back to stage ("ours") side
+			// before committing — independent of whether they appear in the
+			// conflict list. This closes the silent-overwrite path that bit
+			// us when the unit branch's frozen state.json overwrote the
+			// stage's advanced state.json on a conflict-free merge.
+			for (const relPath of engineOwnedRelPaths) {
+				// `checkout --ours` is a no-op when the path doesn't exist
+				// in the merge result; tryRun swallows that.
+				tryRun(["git", ...gitC, "checkout", "--ours", "--", relPath])
+				tryRun(["git", ...gitC, "add", "--", relPath])
+			}
+
+			// If git refused the merge before applying it (e.g. dirty
+			// working tree on the parent), `git status` will report no
+			// in-progress merge — re-throw the original error so the
+			// caller can classify it.
+			const inProgress = tryRun([
+				"git",
+				...gitC,
+				"rev-parse",
+				"--quiet",
+				"--verify",
+				"MERGE_HEAD",
+			])
+			if (!inProgress) {
+				if (mergeErr) throw mergeErr
+				// No in-progress merge AND no error — already up-to-date.
+				return
+			}
+
+			// After auto-resolving engine-owned paths, look for remaining
+			// real conflicts. Any unmerged path that isn't engine-owned is
+			// agent-authored content the workflow engine cannot resolve;
+			// surface it as a real conflict.
+			const conflicts = tryRun([
+				"git",
+				...gitC,
+				"diff",
+				"--name-only",
+				"--diff-filter=U",
+			])
+				.split("\n")
+				.filter(Boolean)
+			const realConflicts = conflicts.filter(
+				(p) => !engineOwnedRelPaths.includes(p),
+			)
+			if (realConflicts.length > 0) {
+				const e = new Error(
+					`merge_conflict: real conflicts on agent-authored content require resolution: ${realConflicts.join(", ")}`,
+				)
+				;(e as unknown as { conflictPaths: string[] }).conflictPaths =
+					realConflicts
+				throw e
+			}
+
+			run([
+				"git",
+				...gitC,
+				"commit",
+				"--no-edit",
+				"-m",
+				`haiku: merge ${unit} into ${stage}`,
+			])
 		}
 		if (onStageBranch) {
 			mergeHere()
 		} else {
-			withTempWorktree(stageBranch, (tmpPath) => mergeHere(tmpPath))
+			withWorktreeOnBranch(stageBranch, (tmpPath) => mergeHere(tmpPath))
 		}
 
 		// Reap the unit worktree and local branch — its work is now on the
@@ -1485,7 +2154,7 @@ export function mergeUnitWorktree(
 		// desired, should happen at stage-complete (after fan-in) or be
 		// driven by the review provider.
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
-		tryRun(["git", "branch", "-D", unitBranch])
+		deleteBranchWithWarning(unitBranch, `unit-merge cleanup for ${unit}`)
 
 		return {
 			success: true,
@@ -1544,6 +2213,9 @@ export function createDiscoveryWorktree(
 		throw new Error("createDiscoveryWorktree requires `stage` and `template`")
 
 	const baseBranch = ensureStageBranch(slug, stage)
+	// Seed `.gitattributes` BEFORE the fork — see notes in
+	// `createFixChainWorktree`.
+	ensureIntentGitAttributes(slug)
 	const discBranch = discoveryBranchName(slug, stage, template)
 	const worktreePath = discoveryWorktreePath(slug, stage, template)
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
@@ -1584,8 +2256,17 @@ export function mergeDiscoveryWorktree(
 	const discBranch = discoveryBranchName(slug, stage, template)
 	const worktreePath = discoveryWorktreePath(slug, stage, template)
 
+	// Auto-repair legacy intents — see notes on the same call in
+	// `mergeFixChainWorktree`. Discovery worktrees write to the same
+	// engine event streams during their tick, so they hit the same
+	// merge=union need.
+	ensureIntentGitAttributes(slug)
+
 	if (!existsSync(worktreePath)) {
-		if (branchExists(discBranch)) tryRun(["git", "branch", "-D", discBranch])
+		deleteBranchWithWarning(
+			discBranch,
+			`discovery cleanup (no worktree) for ${slug}/${stage}/${template}`,
+		)
 		return { success: true, message: "no worktree" }
 	}
 
@@ -1689,13 +2370,47 @@ export function mergeDiscoveryWorktree(
 			])
 		}
 		if (onBaseBranch) {
+			// Discovery branches commit engine-owned state inside
+			// `.haiku/intents/{slug}/` (action-log.jsonl, baseline.json).
+			// If the base worktree has those same files untracked or modified,
+			// `git merge` aborts with "untracked working tree files would be
+			// overwritten" — a non-conflict error the caller silently swallows,
+			// re-emitting the same fan-out instructions every tick. Snapshot
+			// any pending engine state first so the merge has a clean tree.
+			const intentDir = `.haiku/intents/${slug}`
+			tryRun(["git", "add", "--", intentDir])
+			const staged = tryRun([
+				"git",
+				"diff",
+				"--cached",
+				"--name-only",
+				"--",
+				intentDir,
+			])
+			if (staged) {
+				// Use `run()` (not `tryRun()`) so a commit failure (pre-commit
+				// hook rejection, index lock, etc.) surfaces the real error via
+				// the outer try/catch rather than silently falling through to
+				// `mergeHere()` with staged-but-uncommitted files (which would
+				// produce a confusing "you have uncommitted changes" merge
+				// error instead of the actual commit failure cause).
+				run([
+					"git",
+					"commit",
+					"-m",
+					`haiku: snapshot engine state before merging discovery ${template} into ${stage}`,
+				])
+			}
 			mergeHere()
 		} else {
-			withTempWorktree(baseBranch, (tmpPath) => mergeHere(tmpPath))
+			withWorktreeOnBranch(baseBranch, (tmpPath) => mergeHere(tmpPath))
 		}
 
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
-		tryRun(["git", "branch", "-D", discBranch])
+		deleteBranchWithWarning(
+			discBranch,
+			`discovery merge cleanup for ${slug}/${stage}/${template}`,
+		)
 
 		return {
 			success: true,
@@ -1721,9 +2436,10 @@ export function cleanupDiscoveryWorktree(
 	if (existsSync(worktreePath)) {
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
 	}
-	if (branchExists(discBranch)) {
-		tryRun(["git", "branch", "-D", discBranch])
-	}
+	deleteBranchWithWarning(
+		discBranch,
+		`discovery cleanup for ${slug}/${stage}/${template}`,
+	)
 	return { success: true, message: `cleaned up ${discBranch}` }
 }
 
@@ -1759,6 +2475,12 @@ export function createFixChainWorktree(
 
 	const baseBranch =
 		scope === "intent" ? `haiku/${slug}/main` : ensureStageBranch(slug, scope)
+	// Seed `.gitattributes` on the base branch BEFORE forking so the
+	// fork inherits the union-merge directive on engine event streams.
+	// Without this, a fork created before the attribute existed gets
+	// no merge=union when it later merges back, and any concurrent
+	// JSONL appends still trip the integrator cap.
+	ensureIntentGitAttributes(slug)
 	const fixBranch = fixChainBranchName(slug, scope, feedbackId)
 	const worktreePath = fixChainWorktreePath(slug, scope, feedbackId)
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
@@ -1817,11 +2539,20 @@ export function mergeFixChainWorktree(
 	const fixBranch = fixChainBranchName(slug, scope, feedbackId)
 	const worktreePath = fixChainWorktreePath(slug, scope, feedbackId)
 
+	// Auto-repair: legacy intents (created before the merge=union
+	// .gitattributes seed) get the file written + committed now, so
+	// the upcoming JSONL append merges union-resolve instead of
+	// stranding the chain.
+	ensureIntentGitAttributes(slug)
+
 	if (!existsSync(worktreePath)) {
 		// Nothing to merge — either never created, or previous tick cleaned
 		// up. Also defensively delete the branch if it's still around with
 		// no worktree backing it.
-		if (branchExists(fixBranch)) tryRun(["git", "branch", "-D", fixBranch])
+		deleteBranchWithWarning(
+			fixBranch,
+			`fix-chain cleanup (no worktree) for ${slug}/${scope}/${feedbackId}`,
+		)
 		return { success: true, message: "no worktree" }
 	}
 
@@ -1940,11 +2671,14 @@ export function mergeFixChainWorktree(
 		if (onBaseBranch) {
 			mergeHere()
 		} else {
-			withTempWorktree(baseBranch, (tmpPath) => mergeHere(tmpPath))
+			withWorktreeOnBranch(baseBranch, (tmpPath) => mergeHere(tmpPath))
 		}
 
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
-		tryRun(["git", "branch", "-D", fixBranch])
+		deleteBranchWithWarning(
+			fixBranch,
+			`fix-chain merge cleanup for ${slug}/${scope}/${feedbackId}`,
+		)
 
 		return {
 			success: true,
@@ -1978,9 +2712,10 @@ export function cleanupFixChainWorktree(
 	if (existsSync(worktreePath)) {
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
 	}
-	if (branchExists(fixBranch)) {
-		tryRun(["git", "branch", "-D", fixBranch])
-	}
+	deleteBranchWithWarning(
+		fixBranch,
+		`fix-chain cleanup for ${slug}/${scope}/${feedbackId}`,
+	)
 	return {
 		success: true,
 		message: `cleaned up ${fixBranch}`,
@@ -2138,7 +2873,12 @@ export function prepareRevisitBranch(
 	slug: string,
 	fromStage: string,
 	targetStage: string,
-): { success: boolean; message: string } {
+): {
+	success: boolean
+	message: string
+	isConflict?: boolean
+	conflictFiles?: string[]
+} {
 	if (!isGitRepo()) return { success: true, message: "no git" }
 	if (targetStage === "main")
 		return { success: false, message: "cannot revisit 'main'" }
@@ -2209,12 +2949,17 @@ export function prepareRevisitBranch(
 				])
 			} catch (mergeErr) {
 				const conflicts = listConflicts()
+				if (conflicts.length > 0) {
+					return {
+						success: false,
+						isConflict: true,
+						conflictFiles: conflicts,
+						message: `Merge main → ${targetStage} left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on branch '${targetBranch}' (edit files, \`git add\`, \`git commit\`), then retry the revisit — the workflow engine will detect main is already merged and continue with the ${fromStage} merge.`,
+					}
+				}
 				return {
 					success: false,
-					message:
-						conflicts.length > 0
-							? `Merge main → ${targetStage} left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on branch '${targetBranch}' (edit files, \`git add\`, \`git commit\`), then retry the revisit — the workflow engine will detect main is already merged and continue with the ${fromStage} merge.`
-							: `Merge main → ${targetStage} failed: ${mergeErr instanceof Error ? mergeErr.message : String(mergeErr)}`,
+					message: `Merge main → ${targetStage} failed: ${mergeErr instanceof Error ? mergeErr.message : String(mergeErr)}`,
 				}
 			}
 		}
@@ -2244,12 +2989,17 @@ export function prepareRevisitBranch(
 					])
 				} catch (mergeErr) {
 					const conflicts = listConflicts()
+					if (conflicts.length > 0) {
+						return {
+							success: false,
+							isConflict: true,
+							conflictFiles: conflicts,
+							message: `Merge ${fromStage} → ${targetStage} left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on branch '${targetBranch}' (edit files, \`git add\`, \`git commit\`), then retry the revisit. Main has already been merged cleanly and won't be remerged.`,
+						}
+					}
 					return {
 						success: false,
-						message:
-							conflicts.length > 0
-								? `Merge ${fromStage} → ${targetStage} left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on branch '${targetBranch}' (edit files, \`git add\`, \`git commit\`), then retry the revisit. Main has already been merged cleanly and won't be remerged.`
-								: `Merge ${fromStage} → ${targetStage} failed: ${mergeErr instanceof Error ? mergeErr.message : String(mergeErr)}`,
+						message: `Merge ${fromStage} → ${targetStage} failed: ${mergeErr instanceof Error ? mergeErr.message : String(mergeErr)}`,
 					}
 				}
 			}

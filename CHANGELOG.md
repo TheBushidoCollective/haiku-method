@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.0] - 2026-05-05
+
+### Added
+- Discovery templates now support model configuration, allowing you to specify which Claude version generates research artifacts and analysis for each stage.
+- Studio integrators and cross-studio decisions now support model configuration for unified governance across multiple studios.
+
+### Changed
+- Model selection now applies consistently across research, review, and decision phases throughout the workflow.
+
+## [3.10.0] - 2026-05-05
+
+### Added
+- Authoring discipline instructions during the elaborate phase that clarify unit composition and feedback quality standards.
+- Fix-loop red flag guidance that identifies common quality issues in the feedback triage workflow.
+
+## [3.9.0] - 2026-05-05
+
+### Added
+- Gate reviews now work in headless and remote environments with prepare/await phases, allowing review completion without a local browser UI.
+- Real-time feedback streaming via WebSocket during gate reviews for visibility in remote and CLI-only setups.
+
+## [3.8.0] - 2026-05-05
+
+### Added
+- Walkthrough-oriented review with step-by-step guidance for reviewing stages and intents.
+- Per-unit output artifacts tab displays which units produced each output.
+- Declaring units banner shows output authorship at a glance.
+
+### Changed
+- Output artifacts now tracked to their declaring units for complete traceability across the workflow.
+- Git worktree handling improved for robust concurrent branch operations.
+- Tool input validation uses strict schemas to detect configuration errors earlier.
+
+## [3.7.0] - 2026-05-04
+
+### Added
+- Elaborator now surfaces available skills during elaboration, and units inherit skill availability on a per-hat basis for role-specific tool access.
+
+## [3.6.1] - 2026-05-04
+
+### Changed
+- Plugin binary is now bundled with the distribution, reducing installation time and improving reliability across network conditions.
+- Marketplace references now use relative paths for better offline support.
+
+## [3.6.0] - 2026-05-04
+
+### Added
+- Drift detection now shows image diffs side-by-side with text changes, letting you review visual artifact modifications during code review.
+- Agents can record file modifications with attribution using `haiku_record_agent_write`, creating audit trails for generated content.
+
+## [3.5.0] - 2026-05-04
+
+### Added
+- Drift detection alerts you when outputs change unexpectedly, with assessment interface to classify and approve changes
+- Knowledge upload during review lets you inject new files or context without restarting the intent
+- One-click output replacement for invalidated results in the review view
+- Coverage gap acknowledgment to mark sections intentionally out-of-scope
+
+## [3.4.1] - 2026-05-03
+
+This release contains only internal test coverage improvements with no user-facing changes to report.
+
 ## [3.4.0] - 2026-05-01
 
 ### Changed

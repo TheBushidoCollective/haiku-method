@@ -33,6 +33,14 @@ import {
 	FeedbackUpdateRequestSchema,
 	type FeedbackUpdateResponse,
 } from "haiku-api"
+// V-10 (feedback-body XSS defence): every body that flows through this
+// router is sanitized server-side via `sanitizeFeedbackBody` before it
+// reaches `writeFeedbackFile` / `appendFeedbackReply` (which also call the
+// sanitizer for defence-in-depth). Stripping at the route boundary means
+// the on-disk artefact, the action-log entry, and any future audit-log
+// consumer all see the post-sanitization text — no XSS payload can be
+// reconstructed from the raw multipart body after this point.
+import { sanitizeFeedbackBody } from "../state/sanitize-feedback.js"
 import {
 	appendFeedbackReply,
 	deleteFeedbackFile,
@@ -257,9 +265,14 @@ export function registerFeedbackRoutes(instance: FastifyInstance): void {
 			)
 			if (!parsed.ok) return
 			const inlineAnchorWire = parsed.data.inline_anchor
+			// V-10: sanitize body at the route boundary so the on-disk
+			// artefact and any audit consumers see post-strip text.
+			// `writeFeedbackFile` ALSO calls the sanitizer (defence in
+			// depth) — re-sanitizing identical text is idempotent.
+			const sanitizedCreateBody = sanitizeFeedbackBody(parsed.data.body)
 			const result = writeFeedbackFile(intent, stage, {
 				title: parsed.data.title,
-				body: parsed.data.body,
+				body: sanitizedCreateBody,
 				origin: parsed.data.origin,
 				author: "user",
 				source_ref: parsed.data.source_ref ?? null,
@@ -517,6 +530,8 @@ export function registerFeedbackRoutes(instance: FastifyInstance): void {
 				FeedbackReplyCreateRequestSchema,
 			)
 			if (!parsed.ok) return
+			// V-10: sanitize reply body at the route boundary too.
+			const sanitizedReplyBody = sanitizeFeedbackBody(parsed.data.body)
 			const result = appendFeedbackReply(
 				intent,
 				stage,
@@ -528,7 +543,7 @@ export function registerFeedbackRoutes(instance: FastifyInstance): void {
 					// specific agent/user by name.
 					author: "user",
 					author_type: "human",
-					body: parsed.data.body,
+					body: sanitizedReplyBody,
 				},
 				{ close_as_answered: parsed.data.close_as_answered === true },
 			)

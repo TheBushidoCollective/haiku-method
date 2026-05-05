@@ -251,19 +251,29 @@ async function run() {
 		assert.ok(res.status < 500, `got ${res.status}`)
 	})
 
-	await test("POST /review/:sid/decide without token returns 401", async () => {
+	// V-08 (unit-03 csrf) — mutating routes in tunnel mode now run
+	// through the global CSRF preHandler BEFORE the auth gate fires.
+	// Any POST/PUT/PATCH/DELETE without a same-origin `Origin` header
+	// is rejected at Layer 2 with 403 forbidden / origin_missing.
+	// Tests below send a localhost Origin so they reach the auth gate
+	// (where the missing-token case becomes the assertable 401). For
+	// the bare cross-origin case see csrf.test.mjs.
+	const localhostOrigin = `http://localhost:${port}`
+	const csrfPassHeaders = { Origin: localhostOrigin }
+
+	await test("POST /review/:sid/decide without token returns 401 (Origin sent → CSRF passes)", async () => {
 		const res = await fetch(`${baseUrl}/review/${session.session_id}/decide`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: { "Content-Type": "application/json", ...csrfPassHeaders },
 			body: JSON.stringify({ decision: "approved", feedback: "" }),
 		})
 		assert.strictEqual(res.status, 401)
 	})
 
-	await test("POST /api/revisit/:sid without token returns 401", async () => {
+	await test("POST /api/revisit/:sid without token returns 401 (Origin sent → CSRF passes)", async () => {
 		const res = await fetch(`${baseUrl}/api/revisit/${session.session_id}`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: { "Content-Type": "application/json", ...csrfPassHeaders },
 			body: JSON.stringify({ reason: "x" }),
 		})
 		assert.strictEqual(res.status, 401)
@@ -283,7 +293,23 @@ async function run() {
 		assert.strictEqual(res.status, 401)
 	})
 
-	await test("POST /api/feedback/:intent/:stage without token returns 401 (tunnel gate fires before FB-20)", async () => {
+	await test("POST /api/feedback/:intent/:stage without token returns 401 (Origin sent → CSRF passes)", async () => {
+		const res = await fetch(
+			`${baseUrl}/api/feedback/${intentSlug}/${stageName}`,
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json", ...csrfPassHeaders },
+				body: JSON.stringify({ title: "x", body: "x" }),
+			},
+		)
+		assert.strictEqual(res.status, 401)
+	})
+
+	// V-08 Layer 2 — bare missing-Origin POST returns 403 BEFORE auth
+	// gate fires. This is the load-bearing assertion for the unit-03
+	// CSRF defence: a cross-origin attacker who can omit Origin can't
+	// reach the auth check.
+	await test("POST /api/feedback without Origin returns 403 origin_missing (V-08 Layer 2)", async () => {
 		const res = await fetch(
 			`${baseUrl}/api/feedback/${intentSlug}/${stageName}`,
 			{
@@ -292,7 +318,9 @@ async function run() {
 				body: JSON.stringify({ title: "x", body: "x" }),
 			},
 		)
-		assert.strictEqual(res.status, 401)
+		assert.strictEqual(res.status, 403)
+		const body = await res.json()
+		assert.strictEqual(body.reason, "origin_missing")
 	})
 
 	console.log("\n=== Query-token asset routes ===")

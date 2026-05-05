@@ -7,14 +7,9 @@ import {
 	ListPromptsRequestSchema,
 	ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js"
-import {
-	execNewBinary,
-	hasPendingUpdate,
-	startUpdateChecker,
-	stopUpdateChecker,
-} from "./auto-update.js"
 import { stripWildcardAllowedOrigins } from "./config.js"
 import { stopHttpServer } from "./http.js"
+import { checkPluginIntegrity } from "./plugin-self-repair.js"
 import { flush as flushSentry, reportError } from "./sentry.js"
 
 const server = new Server(
@@ -32,13 +27,22 @@ import { getCapabilities, isClaudeCode } from "./harness.js"
 import {
 	orchestratorToolDefs,
 	setElicitInputHandler,
-	setOpenReviewHandler,
+	setGateReviewHandlers,
 } from "./orchestrator.js"
 // Prompts: for Claude Code, skills are native; for other harnesses, we bridge
 // skills → MCP prompts so they surface as invocable actions.
 import { completeArgument, getPrompt, listPrompts } from "./prompts/index.js"
 import { registerSkillPrompts } from "./prompts/skill-bridge.js"
-import { createReviewGateHandler, handleToolCall } from "./server/tool-call.js"
+import {
+	awaitGateReviewSession,
+	handleToolCall,
+	prepareGateReviewSession,
+} from "./server/tool-call.js"
+import {
+	HAIKU_AWAIT_DESIGN_DIRECTION_INPUT_SCHEMA,
+	HAIKU_AWAIT_VISUAL_ANSWER_INPUT_SCHEMA,
+} from "./state/schemas/index.js"
+import { jsonSchemaOf } from "./state/schemas/inputs/_validate.js"
 import { stateToolDefs } from "./state-tools.js"
 
 // Bridge skills to MCP prompts for harnesses that lack native skill support.
@@ -174,6 +178,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 			},
 		},
 		{
+			name: "haiku_await_visual_answer",
+			description:
+				"Block on a pending visual-question session until the user submits answers (or the wait times out at 30 min). Pair with `ask_user_visual_question`: when that tool returns a `session_ready` payload with a URL, post the URL to the user (essential for headless / SSH / web-client / mobile / remote-control setups), then call this tool to wait. Pass `auto_open: false` to skip the browser launch when the user will follow the URL on a different device.",
+			inputSchema: jsonSchemaOf(HAIKU_AWAIT_VISUAL_ANSWER_INPUT_SCHEMA),
+		},
+		{
+			name: "haiku_await_design_direction",
+			description:
+				"Block on a pending design-direction session until the user submits a selection (or the wait times out at 30 min). Pair with `pick_design_direction`: when that tool returns a `session_ready` payload, post the URL to the user, then call this tool to wait. Pass `auto_open: false` for remote/headless setups where the user follows the URL on a different device.",
+			inputSchema: jsonSchemaOf(HAIKU_AWAIT_DESIGN_DIRECTION_INPUT_SCHEMA),
+		},
+		{
 			name: "haiku_report",
 			description:
 				"Submit a bug report or feedback to the H·AI·K·U team via Sentry. " +
@@ -211,7 +227,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 	if (!isClaudeCode()) {
 		const browserTools = new Set([
 			"ask_user_visual_question",
+			"haiku_await_visual_answer",
 			"pick_design_direction",
+			"haiku_await_design_direction",
 		])
 		filteredTools = filteredTools.filter((t) => !browserTools.has(t.name))
 	}
@@ -227,8 +245,27 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 	return { tools: filteredTools }
 })
 
-// Call tools — wrapped to trigger hot-swap after response when an update is staged
+// Call tools
 server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+	// Integrity check: did the plugin dir disappear under us? Throttled
+	// to once per few seconds; reports + attempts self-repair on
+	// detection. See plugin-self-repair.ts.
+	const args = (request.params?.arguments ?? {}) as Record<string, unknown>
+	const sessionCtxForCheck = args._session_context as
+		| Record<string, string>
+		| undefined
+	const integrity = checkPluginIntegrity(sessionCtxForCheck)
+	if (!integrity.ok) {
+		const detail = integrity.result
+			? `${integrity.result.method}${integrity.result.reason ? `:${integrity.result.reason}` : ""}${integrity.result.error ? ` — ${integrity.result.error}` : ""}`
+			: "no-result"
+		const msg = `Haiku plugin dir was wiped from under the running MCP server and self-repair failed (${detail}). Run \`/plugin install haiku@haiku\` (or \`/plugin update haiku\`) to restore it manually.`
+		return {
+			content: [{ type: "text" as const, text: msg }],
+			isError: true,
+		}
+	}
+
 	let result: Awaited<ReturnType<typeof handleToolCall>>
 	try {
 		result = await handleToolCall(request, extra?.signal)
@@ -295,28 +332,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
 		throw err
 	}
 
-	// After the response is written, check if we should yield to a new binary.
-	// setImmediate ensures the MCP SDK flushes the response first.
-	if (hasPendingUpdate()) {
-		setImmediate(() => {
-			console.error(
-				"[haiku] Pending update detected — hot-swapping after response",
-			)
-			stopUpdateChecker()
-			server
-				.close()
-				.then(() => execNewBinary())
-				.catch((err) => console.error("[haiku] Hot-swap failed:", err))
-		})
-	}
-
 	return result
 })
 
-// Wire up the review handler for the orchestrator's gate_ask flow.
-// This lets haiku_run_next open a review and block until the user decides,
-// without the agent needing to call open_review separately.
-setOpenReviewHandler(createReviewGateHandler())
+// Wire up the two-step gate-review handlers. `haiku_run_next` calls the
+// `prepare` half synchronously when the workflow engine reports
+// `gate_review` — that creates the session + URL but does not block, so
+// the URL can be returned in the action and posted to the user.
+// `haiku_await_gate` calls the `await` half to block on the user's
+// decision (with best-effort browser launch).
+setGateReviewHandlers({
+	prepare: prepareGateReviewSession,
+	await: awaitGateReviewSession,
+})
 
 // Wire up elicitation fallback for when the review UI fails
 setElicitInputHandler(async (params) => {
@@ -337,23 +365,19 @@ async function main() {
 		? ""
 		: ` (harness: ${getCapabilities().displayName})`
 	console.error(`H·AI·K·U Review MCP server running on stdio${harnessInfo}`)
-
-	// Start background auto-update checker after the server is live
-	startUpdateChecker()
 }
 
 // Graceful shutdown
 //
 // Order matters here:
-//   1. Stop the background update checker so it can't start new work.
-//   2. Close the MCP stdio `Server` so we stop accepting new MCP calls.
-//   3. Close the Fastify HTTP+WebSocket server so in-flight feedback/
+//   1. Close the MCP stdio `Server` so we stop accepting new MCP calls.
+//   2. Close the Fastify HTTP+WebSocket server so in-flight feedback/
 //      revisit/review requests get to finish and WS clients see a
 //      clean `1001 Going Away` (via `stopHttpServer` → per-session
 //      `closeSessionConnection`) instead of a TCP RST. Fastify's
 //      `close()` drains pending requests before releasing the socket.
-//   4. Flush Sentry so any errors surfaced during (2)/(3) get reported.
-//   5. `process.exit(0)`.
+//   3. Flush Sentry so any errors surfaced during (1)/(2) get reported.
+//   4. `process.exit(0)`.
 //
 // We guard against a hung shutdown with a hard timeout — if any phase
 // stalls for more than SHUTDOWN_TIMEOUT_MS we fall back to a forced
@@ -372,7 +396,6 @@ async function gracefulShutdown(signal: string): Promise<void> {
 	}, SHUTDOWN_TIMEOUT_MS)
 	hardExit.unref()
 	try {
-		stopUpdateChecker()
 		await server.close()
 		await stopHttpServer()
 		await flushSentry()

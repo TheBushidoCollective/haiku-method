@@ -52,6 +52,7 @@ packages/haiku/src/haiku-ui-html.ts
 .terraform/
 *.tfstate
 *.tfstate.backup
+*.local.*
 terraform.tfvars
 .terraform.lock.hcl
 
@@ -60,5 +61,6 @@ terraform.tfvars
 .claude/worktrees
 .ai-dlc/quick/
 .haiku/worktrees/
+.haiku/**/baseline-content/
 bun.lock
-plugin/bin/haiku.map
+plugin/bin/haiku.mjs.map

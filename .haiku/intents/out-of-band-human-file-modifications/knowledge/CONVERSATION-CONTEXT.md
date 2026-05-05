@@ -1,0 +1,3 @@
+# Conversation Context
+
+User invoked /haiku:autopilot from a parked worktree with no active intent matching the branch. Provided three motivating examples: designer replaces a layout, PO does a small edit + asks AI to extend, user uploads knowledge to inception. Confirmed scope decisions in a Q&A: detection is both explicit and implicit (must catch silent filesystem drops); SPA/review-app edits bypass hooks because they're out-of-band human actions; all three change types in scope; new workflow action (not FB-triage piggyback); software studio with full paper+plugin+website sync; UX = SPA upload UI + manual filesystem + Claude-writes-knowledge-out-of-band; concurrency = next run_next tick observes and reacts.

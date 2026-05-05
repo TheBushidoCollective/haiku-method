@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stage Output Replacement Affordance — Wireframe</title>
+  <style>
+    /* === DESIGN TOKENS (semantic aliases from DESIGN-TOKENS.md §1.3) === */
+    :root {
+      /* Drift-state tokens (§1.3.2) — canonical four-state taxonomy */
+      --color-drift-detected-fg: oklch(52% 0.18 80);      /* amber-700 family */
+      --color-drift-detected-bg: oklch(97% 0.04 80);      /* amber-50 family */
+      --color-drift-acknowledged-fg: oklch(51% 0.15 145); /* green-700 family */
+      --color-drift-acknowledged-bg: oklch(97% 0.04 145); /* green-50 family */
+      --color-drift-surfaced-fg: oklch(50% 0.18 240);     /* blue-700 family */
+      --color-drift-surfaced-bg: oklch(97% 0.03 240);     /* blue-50 family */
+      --color-drift-revisit-fg: oklch(50% 0.19 10);       /* rose-700 family */
+      --color-drift-revisit-bg: oklch(97% 0.04 10);       /* rose-50 family */
+
+      /* Upload affordance tokens (§1.3.4) */
+      --color-upload-affordance-fg: oklch(62% 0.14 185);                                                /* teal-500 family — UI-component scope (border, icon); WCAG 1.4.11 3:1 threshold */
+      --color-upload-affordance-label-fg: oklch(48% 0.16 185);                                          /* teal-700 family — TEXT scope (label); WCAG 1.4.3 4.5:1 threshold; ~5.2:1 against white */
+      --color-upload-affordance-bg-resting: transparent;
+      --color-upload-affordance-bg-hover: color-mix(in oklch, oklch(62% 0.14 185), transparent 92%);
+      --color-upload-affordance-bg-dragover: color-mix(in oklch, oklch(62% 0.14 185), transparent 85%);
+
+      /* Feedback pending for errors and mime-mismatch */
+      --color-feedback-pending-fg: oklch(50% 0.19 10);
+      --color-feedback-pending-bg: oklch(97% 0.04 10);
+
+      /* Accent */
+      --accent-review: oklch(55% 0.15 185);
+
+      /* Scrim */
+      --color-scrim: oklch(0% 0 0 / 0.45);
+
+      /* Neutral surface */
+      --surface-bg: oklch(100% 0 0);
+      --surface-border: oklch(88% 0.01 0);
+      --surface-text: oklch(25% 0.02 0);
+      --surface-muted: oklch(55% 0.01 0);
+      --surface-hover: oklch(96% 0.01 0);
+
+      /* Focus ring */
+      --focus-ring-color: oklch(62% 0.14 185);
+
+      /* KIND_BADGE palette (canonical — mirrors KIND_BADGE in StageReview.tsx
+         per DESIGN-BRIEF.md Screen 3 line 357 and §line 365: "Reuse KIND_BADGE
+         palette from StageReview.tsx"). The kind-chip in this wireframe shows
+         a unit/artifact kind ("wireframe"), which maps to violet-50/700 per
+         the KIND_BADGE map. Implementer SHOULD render as Tailwind utilities
+         `bg-violet-50 text-violet-700` per DESIGN-TOKENS §1.4 (existing
+         palette utilities are the consumption layer). */
+      --color-kind-stage-bg: oklch(96.9% 0.016 293.756);     /* violet-50 */
+      --color-kind-stage-fg: oklch(49.1% 0.27 292.581);      /* violet-700 */
+      --color-kind-intent-bg: oklch(97.7% 0.013 236.62);     /* sky-50 */
+      --color-kind-intent-fg: oklch(50% 0.134 242.749);      /* sky-700 */
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-drift-detected-fg: oklch(78% 0.12 80);
+        --color-drift-detected-bg: oklch(24% 0.06 80 / 0.4);
+        --color-drift-acknowledged-fg: oklch(78% 0.10 145);
+        --color-drift-acknowledged-bg: oklch(24% 0.06 145 / 0.4);
+        --color-drift-surfaced-fg: oklch(78% 0.12 240);
+        --color-drift-surfaced-bg: oklch(24% 0.06 240 / 0.4);
+        --color-drift-revisit-fg: oklch(78% 0.12 10);
+        --color-drift-revisit-bg: oklch(24% 0.06 10 / 0.4);
+        --color-upload-affordance-fg: oklch(72% 0.12 185);
+        --color-upload-affordance-label-fg: oklch(82% 0.11 185);                                          /* teal-300 family — TEXT scope on dark surface; ~5.4:1 against --surface-bg */
+        --color-upload-affordance-bg-hover: color-mix(in oklch, oklch(72% 0.12 185), transparent 92%);
+        --color-upload-affordance-bg-dragover: color-mix(in oklch, oklch(72% 0.12 185), transparent 85%);
+        --surface-bg: oklch(18% 0.01 0);
+        --surface-border: oklch(28% 0.01 0);
+        --surface-text: oklch(90% 0.01 0);
+        --surface-muted: oklch(60% 0.01 0);
+        --surface-hover: oklch(24% 0.01 0);
+
+        /* Dark-mode KIND_BADGE — mirrors `dark:bg-{hue}-900/20 dark:text-{hue}-400`
+           from StageReview.tsx KIND_BADGE entries. */
+        --color-kind-stage-bg: oklch(28.1% 0.141 291.089 / 0.2);  /* violet-900/20 */
+        --color-kind-stage-fg: oklch(70.6% 0.213 293.541);        /* violet-400 */
+        --color-kind-intent-bg: oklch(29.3% 0.066 243.157 / 0.2); /* sky-900/20 */
+        --color-kind-intent-fg: oklch(74.6% 0.16 232.661);        /* sky-400 */
+      }
+    }
+
+    /* === BASE === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--surface-text);
+      background: oklch(95% 0.01 0);
+      padding: 24px;
+    }
+
+    /* === TOUCH TARGET === */
+    .touch-target { position: relative; }
+    .touch-target--hit-area::after {
+      content: '';
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+    }
+
+    /* === REDUCED MOTION === */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* === LABELS === */
+    .viewport-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--surface-muted);
+      margin-bottom: 8px;
+      margin-top: 32px;
+    }
+    .viewport-label:first-child { margin-top: 0; }
+    .state-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--surface-muted);
+      margin-bottom: 6px;
+    }
+    .demo-row {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
+      align-items: flex-start;
+    }
+
+    /* === ARTIFACT CARD === */
+    .artifact-card {
+      background: var(--surface-bg);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      overflow: hidden;
+      width: 280px;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    /* Drift state left-border accent — width:4px per card.
+       Uses -fg tokens per SPA-UI-SPECS.md §2.2/§2.3: the -bg variants are near-surface
+       and would fail WCAG 1.4.11 (3:1 non-text contrast) for the 4px stripe. */
+    .artifact-card--drift-detected {
+      border-left: 4px solid var(--color-drift-detected-fg);
+    }
+    .artifact-card--drift-acknowledged {
+      border-left: 4px solid var(--color-drift-acknowledged-fg);
+    }
+    .artifact-card--drift-surfaced {
+      border-left: 4px solid var(--color-drift-surfaced-fg);
+    }
+    .artifact-card--drift-revisit {
+      border-left: 4px solid var(--color-drift-revisit-fg);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--surface-border);
+      position: relative;
+    }
+    .card-header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+    }
+    .kind-chip {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 9999px;
+      /* KIND_BADGE — wireframe/artifact kind (DESIGN-BRIEF Screen 3 line 365:
+         "Reuse KIND_BADGE palette from StageReview.tsx" → violet-50/700).
+         Implementer: render as `bg-violet-50 text-violet-700` per DESIGN-TOKENS §1.4. */
+      background: var(--color-kind-stage-bg);
+      color: var(--color-kind-stage-fg);
+      white-space: nowrap;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ⋯ menu button */
+    .ellipsis-btn {
+      /* touch-target: visual is 28×28, hit area expanded to 44×44 via ::after */
+      position: relative;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--surface-muted);
+      font-size: 18px;
+      letter-spacing: 1px;
+      flex-shrink: 0;
+      transition: background-color 150ms, color 150ms;
+    }
+    .ellipsis-btn::after {
+      content: '';
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+    }
+    .ellipsis-btn:hover {
+      background: var(--surface-hover);
+      color: var(--surface-text);
+    }
+    .ellipsis-btn:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+    /* On desktop: hover-reveal (opacity-0, show on group hover) */
+    .card-group { position: relative; }
+    .ellipsis-btn--hover-reveal {
+      opacity: 0;
+      transition: opacity 150ms, background-color 150ms;
+    }
+    .card-group:hover .ellipsis-btn--hover-reveal,
+    .card-group:focus-within .ellipsis-btn--hover-reveal {
+      opacity: 1;
+    }
+    /* On mobile: always visible (set inline) */
+
+    .card-body {
+      height: 80px;
+      background: oklch(97% 0.01 0);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--surface-muted);
+      font-style: italic;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-top: 1px solid var(--surface-border);
+      font-size: 11px;
+      color: var(--surface-muted);
+    }
+
+    /* Drift-state badge (NON-COLOR signal — required by WCAG 1.4.1) */
+    .drift-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 9999px;
+    }
+    .drift-badge--detected {
+      background: var(--color-drift-detected-bg);
+      color: var(--color-drift-detected-fg);
+    }
+    .drift-badge--acknowledged {
+      background: var(--color-drift-acknowledged-bg);
+      color: var(--color-drift-acknowledged-fg);
+    }
+    .drift-badge--surfaced {
+      background: var(--color-drift-surfaced-bg);
+      color: var(--color-drift-surfaced-fg);
+    }
+    .drift-badge--revisit {
+      background: var(--color-drift-revisit-bg);
+      color: var(--color-drift-revisit-fg);
+    }
+
+    /* === POPOVER MENU === */
+    .popover-wrapper {
+      position: relative;
+      display: inline-flex;
+    }
+    .popover-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      width: 200px;
+      background: var(--surface-bg);
+      border: 1px solid var(--surface-border);
+      border-radius: 6px;
+      box-shadow: 0 4px 16px oklch(0% 0 0 / 0.12);
+      z-index: 30;
+      padding: 4px;
+    }
+    .popover-item {
+      display: flex;
+      align-items: center;
+      height: 36px;
+      padding: 0 8px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      width: 100%;
+      text-align: left;
+      color: var(--surface-text);
+      transition: background-color 150ms;
+    }
+    .popover-item:hover { background: var(--surface-hover); }
+    .popover-item:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: -2px;
+    }
+    .popover-divider { border: none; border-top: 1px solid var(--surface-border); margin: 4px 0; }
+    .popover-item--highlight { color: var(--accent-review); font-weight: 500; }
+
+    /* === REPLACE MODAL === */
+    .modal-scrim {
+      position: fixed;
+      inset: 0;
+      background: var(--color-scrim);
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-dialog {
+      background: var(--surface-bg);
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      width: 100%;
+      max-width: 600px;
+      box-shadow: 0 8px 40px oklch(0% 0 0 / 0.24);
+      overflow: hidden;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--surface-border);
+    }
+    .modal-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .modal-close {
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--surface-muted);
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: background-color 150ms;
+    }
+    .modal-close:hover { background: var(--surface-hover); }
+    .modal-close:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+    .modal-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+    /* Current artifact row */
+    .current-artifact {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      background: var(--surface-hover);
+    }
+    .current-thumb {
+      width: 56px;
+      height: 56px;
+      background: oklch(92% 0.01 0);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .current-meta { display: flex; flex-direction: column; gap: 2px; }
+    .current-name { font-size: 13px; font-weight: 500; }
+    .current-detail { font-size: 11px; color: var(--surface-muted); }
+
+    /* Drop zone inside modal */
+    .modal-drop-zone {
+      min-height: 100px;
+      border: 2px dashed var(--color-upload-affordance-fg);
+      border-radius: 8px;
+      background: var(--color-upload-affordance-bg-resting);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      gap: 8px;
+      cursor: pointer;
+      transition: background-color 150ms, border-color 150ms;
+    }
+    .modal-drop-zone:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+    .modal-drop-zone:hover { background: var(--color-upload-affordance-bg-hover); }
+    .modal-drop-zone--mime-error {
+      border-color: var(--color-feedback-pending-fg);
+    }
+    .dz-icon { color: var(--color-upload-affordance-fg); font-size: 22px; }
+    .dz-label { font-size: 13px; font-weight: 500; color: var(--color-upload-affordance-label-fg); }
+    .dz-hint { font-size: 11px; color: var(--surface-muted); }
+
+    /* Mime mismatch warning */
+    .mime-warning {
+      font-size: 12px;
+      color: var(--color-feedback-pending-fg);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      padding: 8px;
+      background: var(--color-feedback-pending-bg);
+      border-radius: 6px;
+      border: 1px solid var(--color-feedback-pending-fg);
+    }
+
+    /* Mime override action button — sibling of .mime-warning, NOT nested inside the live region.
+       Live region carries status text only (ARIA 1.2: no interactive elements inside role="alert"
+       /aria-live="assertive"). Action button lives as a separate, keyboard-reachable control. */
+    .mime-override-btn {
+      align-self: flex-start;
+      margin-top: 4px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--accent-review);
+      font-size: 12px;
+      padding: 0;
+      text-decoration: underline;
+      /* touch-target: visual is text-sized, hit area expanded to 44×44 via .touch-target--hit-area::after */
+    }
+    .mime-override-btn:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+
+    /* Note textarea */
+    .note-label { font-size: 12px; color: var(--surface-muted); margin-bottom: 4px; }
+    .note-textarea {
+      width: 100%;
+      min-height: 80px;
+      border: 1px solid var(--surface-border);
+      border-radius: 6px;
+      padding: 8px;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 12px;
+      color: var(--surface-text);
+      background: var(--surface-bg);
+      resize: vertical;
+    }
+    .note-textarea:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+
+    /* Informational notice (NOT a button / NOT a confirmation) */
+    .info-notice {
+      font-size: 11px;
+      color: var(--surface-muted);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      line-height: 1.4;
+    }
+    .info-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+
+    /* Modal actions */
+    .modal-actions {
+      padding: 12px 16px;
+      border-top: 1px solid var(--surface-border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .btn-primary {
+      background: var(--accent-review);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 36px;
+      transition: filter 150ms;
+    }
+    .btn-primary:hover { filter: brightness(0.9); }
+    .btn-primary:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+    .btn-primary:disabled {
+      background: oklch(80% 0.01 0);
+      cursor: not-allowed;
+      color: oklch(55% 0.01 0);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--surface-text);
+      border: 1px solid var(--surface-border);
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      min-height: 36px;
+      transition: background-color 150ms;
+    }
+    .btn-secondary:hover { background: var(--surface-hover); }
+    .btn-secondary:focus-visible {
+      outline: 3px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+
+    /* Static modal demo (not actually a dialog overlay) */
+    .modal-demo {
+      border: 2px dashed oklch(80% 0.01 0);
+      border-radius: 12px;
+      padding: 16px;
+      background: oklch(96% 0.005 0);
+      position: relative;
+    }
+    .modal-demo-label {
+      position: absolute;
+      top: -10px;
+      left: 16px;
+      background: oklch(96% 0.005 0);
+      padding: 0 6px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--surface-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =================== DESKTOP 1280px =================== -->
+  <p class="viewport-label">Desktop — 1280px · Artifact card drift states</p>
+
+  <div class="demo-row">
+
+    <!-- Default card (no drift) -->
+    <div>
+      <p class="state-label">Default — no drift</p>
+      <div class="artifact-card card-group">
+        <div class="card-header">
+          <div class="card-header-left">
+            <span class="kind-chip">wireframe</span>
+            <span class="card-title">hero-mockup.html</span>
+          </div>
+          <div class="popover-wrapper">
+            <!-- ⋯ button: hover-reveal on desktop, aria-label per spec -->
+            <button
+              class="ellipsis-btn ellipsis-btn--hover-reveal touch-target"
+              aria-label="Output actions for hero-mockup.html"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >⋯</button>
+          </div>
+        </div>
+        <div class="card-body">[ artifact preview ]</div>
+        <div class="card-footer">
+          <span>modified 2h ago</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card with ⋯ menu open -->
+    <div>
+      <p class="state-label">⋯ menu open — focus on "Replace"</p>
+      <div class="artifact-card card-group">
+        <div class="card-header">
+          <div class="card-header-left">
+            <span class="kind-chip">wireframe</span>
+            <span class="card-title">hero-mockup.html</span>
+          </div>
+          <div class="popover-wrapper">
+            <button
+              class="ellipsis-btn"
+              aria-label="Output actions for hero-mockup.html"
+              aria-haspopup="menu"
+              aria-expanded="true"
+              style="background: var(--surface-hover); color: var(--surface-text); outline: 3px solid var(--focus-ring-color); outline-offset:2px;"
+            >⋯</button>
+            <!-- Popover: role=menu, items=menuitem per spec -->
+            <div class="popover-menu" role="menu" aria-label="Output actions for hero-mockup.html">
+              <button class="popover-item" role="menuitem">Open in new tab</button>
+              <button class="popover-item" role="menuitem">Copy permalink</button>
+              <hr class="popover-divider">
+              <button
+                class="popover-item popover-item--highlight"
+                role="menuitem"
+                style="background: var(--surface-hover); outline: 3px solid var(--focus-ring-color); outline-offset:-2px;"
+              >Replace this output…</button>
+              <button class="popover-item" role="menuitem">Download original</button>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">[ artifact preview ]</div>
+        <div class="card-footer"><span>modified 2h ago</span></div>
+      </div>
+    </div>
+
+    <!-- drift-detected state -->
+    <div>
+      <p class="state-label">drift-detected</p>
+      <div class="artifact-card artifact-card--drift-detected card-group">
+        <div class="card-header">
+          <div class="card-header-left">
+            <span class="kind-chip">wireframe</span>
+            <span class="card-title">hero-mockup.html</span>
+          </div>
+          <button class="ellipsis-btn ellipsis-btn--hover-reveal touch-target" aria-label="Output actions for hero-mockup.html" aria-haspopup="menu" aria-expanded="false">⋯</button>
+        </div>
+        <div class="card-body">[ artifact preview ]</div>
+        <div class="card-footer">
+          <!-- Non-color signal: icon + text label (WCAG 1.4.1 required) -->
+          <span class="drift-badge drift-badge--detected">
+            <span aria-hidden="true">⚠</span>
+            Drift detected
+          </span>
+          <span>modified 4m ago</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- drift-acknowledged state -->
+    <div>
+      <p class="state-label">drift-acknowledged</p>
+      <div class="artifact-card artifact-card--drift-acknowledged card-group">
+        <div class="card-header">
+          <div class="card-header-left">
+            <span class="kind-chip">wireframe</span>
+            <span class="card-title">hero-mockup.html</span>
+          </div>
+          <button class="ellipsis-btn ellipsis-btn--hover-reveal touch-target" aria-label="Output actions for hero-mockup.html" aria-haspopup="menu" aria-expanded="false">⋯</button>
+        </div>
+        <div class="card-body">[ artifact preview ]</div>
+        <div class="card-footer">
+          <!-- Non-color signal: CheckCircle icon + text label -->
+          <span class="drift-badge drift-badge--acknowledged">
+            <span aria-hidden="true">✓</span>
+            Acknowledged
+          </span>
+          <span>modified 20m ago</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- drift-surfaced state -->
+    <div>
+      <p class="state-label">drift-surfaced</p>
+      <div class="artifact-card artifact-card--drift-surfaced card-group">
+        <div class="card-header">
+          <div class="card-header-left">
+            <span class="kind-chip">wireframe</span>
+            <span class="card-title">landing-page.html</span>
+          </div>
+          <button class="ellipsis-btn ellipsis-btn--hover-reveal touch-target" aria-label="Output actions for landing-page.html" aria-haspopup="menu" aria-expanded="false">⋯</button>
+        </div>
+        <div class="card-body">[ artifact preview ]</div>
+        <div class="card-footer">
+          <!-- Non-color signal: MessageSquare icon + text label -->
+          <span class="drift-badge drift-badge--surfaced">
+            <span aria-hidden="true">🗨</span>
+            Surfaced as feedback
+          </span>
+          <span>modified 1h ago</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- drift-revisit state -->
+    <div>
+      <p class="state-label">drift-revisit</p>
+      <div class="artifact-card artifact-card--drift-revisit card-group">
+        <div class="card-header">
+          <div class="card-header-left">
+            <span class="kind-chip">wireframe</span>
+            <span class="card-title">specs.md</span>
+          </div>
+          <button class="ellipsis-btn ellipsis-btn--hover-reveal touch-target" aria-label="Output actions for specs.md" aria-haspopup="menu" aria-expanded="false">⋯</button>
+        </div>
+        <div class="card-body">[ artifact preview ]</div>
+        <div class="card-footer">
+          <!-- Non-color signal: RefreshCw icon + text label -->
+          <span class="drift-badge drift-badge--revisit">
+            <span aria-hidden="true">↺</span>
+            Revisit triggered
+          </span>
+          <span>modified 3h ago</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end card states row -->
+
+  <!-- =================== REPLACE MODAL =================== -->
+  <p class="viewport-label">Desktop — Replace modal (1280px · default state)</p>
+
+  <div class="modal-demo">
+    <span class="modal-demo-label">Replace dialog (native &lt;dialog&gt; in implementation)</span>
+    <div
+      class="modal-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="replace-dialog-title"
+      aria-describedby="replace-dialog-body"
+    >
+      <div class="modal-header">
+        <span id="replace-dialog-title" class="modal-title">Replace output: hero-mockup.html</span>
+        <button class="modal-close" aria-label="Close dialog">×</button>
+      </div>
+      <div class="modal-body" id="replace-dialog-body">
+        <!-- Current artifact -->
+        <div>
+          <p class="note-label">Current:</p>
+          <div class="current-artifact">
+            <div class="current-thumb" aria-hidden="true">📄</div>
+            <div class="current-meta">
+              <span class="current-name">hero-mockup.html</span>
+              <span class="current-detail">text/html · 14 KB · v3</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Drop zone -->
+        <div>
+          <p class="note-label">Replacement:</p>
+          <div
+            class="modal-drop-zone"
+            role="button"
+            tabindex="0"
+            aria-label="Drop replacement file for hero-mockup.html"
+          >
+            <span class="dz-icon" aria-hidden="true">☁</span>
+            <span class="dz-label">drop a file matching text/html</span>
+            <span class="dz-hint">Must match: text/html · size ≤ 10 MB</span>
+          </div>
+        </div>
+
+        <!-- Note textarea -->
+        <div>
+          <p class="note-label">Optional note (will be saved as agent-readable rationale):</p>
+          <textarea
+            class="note-textarea"
+            placeholder="Optional — what changed and why? The agent will read this."
+            aria-label="Note for the agent"
+          ></textarea>
+        </div>
+
+        <!-- Informational notice — NOT a button, NOT accept/reject control -->
+        <div class="info-notice">
+          <span class="info-icon" aria-hidden="true">ℹ</span>
+          <span>The next workflow tick will see this change and classify its impact. No action needed from you.</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary">Cancel</button>
+        <button class="btn-primary" disabled aria-disabled="true">Replace</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Replace modal: mime mismatch state -->
+  <p class="viewport-label" style="margin-top:32px;">Replace modal — mime mismatch state</p>
+  <div class="modal-demo">
+    <span class="modal-demo-label">Mime mismatch (assertive aria-live)</span>
+    <div
+      class="modal-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="replace-dialog-title-mime"
+      aria-describedby="replace-dialog-body-mime"
+      style="max-width:500px;"
+    >
+      <div class="modal-header">
+        <span id="replace-dialog-title-mime" class="modal-title">Replace output: hero-mockup.html</span>
+        <button class="modal-close" aria-label="Close dialog">×</button>
+      </div>
+      <div class="modal-body" id="replace-dialog-body-mime">
+        <div class="current-artifact">
+          <div class="current-thumb" aria-hidden="true">📄</div>
+          <div class="current-meta">
+            <span class="current-name">hero-mockup.html</span>
+            <span class="current-detail">text/html · 14 KB · v3</span>
+          </div>
+        </div>
+
+        <!-- Drop zone: file already staged; mime mismatch active -->
+        <div
+          class="modal-drop-zone modal-drop-zone--mime-error"
+          role="button"
+          tabindex="0"
+          aria-label="Drop replacement file for hero-mockup.html"
+        >
+          <span class="dz-icon" aria-hidden="true" style="color:var(--color-feedback-pending-fg);">⚠</span>
+          <span class="dz-label" style="color:var(--color-feedback-pending-fg);">hero-v4.png staged</span>
+          <span class="dz-hint">+140 KB vs original</span>
+        </div>
+
+        <!-- Mime mismatch warning: aria-live="assertive" (blocking).
+             Live region carries status text only — interactive controls live OUTSIDE
+             (ARIA 1.2: do not nest interactive elements inside role="alert"/aria-live regions). -->
+        <div
+          class="mime-warning"
+          role="alert"
+          aria-live="assertive"
+        >
+          <span aria-hidden="true">⚠</span>
+          <span>Type mismatch: original is <strong>text/html</strong>, dropped <strong>image/png</strong>.
+            Pick a matching file, or use the override action below.</span>
+        </div>
+
+        <!-- Override action: sibling of the live region, not nested inside it.
+             Hit area expanded to 44×44 via .touch-target--hit-area; focus ring via .mime-override-btn:focus-visible. -->
+        <button
+          type="button"
+          class="mime-override-btn touch-target touch-target--hit-area"
+          aria-label="Override mime type and accept image/png as replacement for text/html"
+          aria-haspopup="menu"
+          aria-expanded="false"
+        >
+          override type ▾
+        </button>
+
+        <div class="info-notice">
+          <span class="info-icon" aria-hidden="true">ℹ</span>
+          <span>The next workflow tick will see this change and classify its impact.</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary">Cancel</button>
+        <button class="btn-primary" disabled aria-disabled="true" title="Resolve mime mismatch to enable Replace">Replace</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== MOBILE 375px =================== -->
+  <p class="viewport-label">Mobile — 375px · Card (⋯ always visible) + Replace sheet</p>
+  <div class="demo-row">
+
+    <!-- Mobile card: drift-detected, ⋯ always visible -->
+    <div style="width:280px;">
+      <p class="state-label">Mobile card — drift-detected (⋯ always visible)</p>
+      <div class="artifact-card artifact-card--drift-detected" style="width:100%;">
+        <div class="card-header">
+          <div class="card-header-left">
+            <span class="kind-chip">wireframe</span>
+            <span class="card-title">hero-mockup.html</span>
+          </div>
+          <!-- On mobile: always visible (no hover-reveal) -->
+          <button
+            class="ellipsis-btn touch-target"
+            style="opacity:1;"
+            aria-label="Output actions for hero-mockup.html"
+            aria-haspopup="menu"
+            aria-expanded="false"
+          >⋯</button>
+        </div>
+        <div class="card-body">[ artifact preview ]</div>
+        <div class="card-footer">
+          <span class="drift-badge drift-badge--detected">
+            <span aria-hidden="true">⚠</span>
+            Drift detected
+          </span>
+          <span>4m ago</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Replace sheet (bottom sheet pattern) -->
+    <div style="width:320px;">
+      <p class="state-label">Mobile replace sheet (fullscreen bottom sheet)</p>
+      <div style="background:var(--surface-bg);border:1px solid var(--surface-border);border-radius:12px 12px 0 0;overflow:hidden;">
+        <!-- Sheet header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--surface-border);">
+          <span style="font-size:14px;font-weight:600;">Replace output</span>
+          <button class="modal-close" aria-label="Close dialog" style="min-width:44px;min-height:44px;">×</button>
+        </div>
+        <div style="padding:12px;display:flex;flex-direction:column;gap:12px;">
+          <!-- Current artifact stacked (mobile: vertical) -->
+          <div class="current-artifact" style="flex-direction:column;align-items:flex-start;gap:8px;">
+            <span class="note-label">Current:</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <div class="current-thumb" aria-hidden="true" style="width:44px;height:44px;font-size:16px;">📄</div>
+              <div class="current-meta">
+                <span class="current-name">hero-mockup.html</span>
+                <span class="current-detail">text/html · 14 KB · v3</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Drop zone (full-width on mobile) -->
+          <div
+            class="modal-drop-zone"
+            role="button"
+            tabindex="0"
+            aria-label="Drop replacement file for hero-mockup.html"
+            style="min-height:80px;"
+          >
+            <span class="dz-icon" aria-hidden="true">☁</span>
+            <span class="dz-label">drop a file matching text/html</span>
+          </div>
+
+          <!-- Note textarea: taller on mobile -->
+          <textarea
+            class="note-textarea"
+            style="min-height:100px;"
+            placeholder="Optional — what changed and why?"
+            aria-label="Note for the agent"
+          ></textarea>
+
+          <div class="info-notice">
+            <span class="info-icon" aria-hidden="true">ℹ</span>
+            <span>The next workflow tick will classify this change automatically.</span>
+          </div>
+        </div>
+        <!-- Sticky bottom bar on mobile -->
+        <div style="padding:12px;border-top:1px solid var(--surface-border);display:flex;gap:8px;">
+          <button class="btn-secondary" style="flex:1;min-height:44px;">Cancel</button>
+          <button class="btn-primary" style="flex:1;min-height:44px;" disabled>Replace</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end mobile row -->
+
+  <!-- SPEC NOTES -->
+  <div style="margin-top: 40px; padding: 16px; background: var(--surface-bg); border: 1px solid var(--surface-border); border-radius: 8px; font-size: 12px; color: var(--surface-muted); max-width: 960px;">
+    <strong style="color: var(--surface-text);">Spec notes for this wireframe:</strong>
+    <ul style="margin-top: 8px; padding-left: 16px; display:flex; flex-direction:column; gap:4px;">
+      <li>All drift-state borders use <code>var(--color-drift-{state}-fg)</code> — canonical four-state tokens. NOT deprecated <code>--color-drift-bg/fg/stripe</code>.</li>
+      <li>Every drift state has a non-color badge (icon + text label) — required by WCAG 1.4.1.</li>
+      <li><code>⋯</code> button carries <code>aria-label="Output actions for {artifact-name}"</code> (interpolated per card — canonical per SPA-UI-SPECS §0 conflict resolution #4).</li>
+      <li>On mobile, <code>⋯</code> is always visible (no hover-reveal); on desktop it's hover/focus-revealed.</li>
+      <li><code>⋯</code> button has expanded 44×44 hit area via <code>.touch-target--hit-area</code>.</li>
+      <li>Mime mismatch warning uses <code>aria-live="assertive"</code> (blocking validation).</li>
+      <li>Replace modal: native <code>&lt;dialog&gt;</code>; focus opens on drop zone; Esc closes and returns focus to <code>⋯</code> trigger.</li>
+      <li>The informational notice ("next tick will classify") is NOT a checkbox, NOT a button — passive text only.</li>
+      <li><strong>Direction A passive-observer constraint: zero classification-trigger controls on any card state or modal (per SPA-UI-SPECS.md §0).</strong></li>
+      <li>No raw hex values. No raw Tailwind palette classes in semantic surfaces.</li>
+    </ul>
+  </div>
+
+</body>
+</html>

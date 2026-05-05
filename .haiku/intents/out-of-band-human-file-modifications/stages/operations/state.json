@@ -1,0 +1,25 @@
+{
+  "stage": "operations",
+  "status": "completed",
+  "phase": "gate",
+  "started_at": "2026-05-01T22:05:50Z",
+  "completed_at": "2026-05-02T06:05:38Z",
+  "gate_entered_at": null,
+  "gate_outcome": "advanced",
+  "visits": 1,
+  "iterations": [
+    {
+      "index": 1,
+      "started_at": "2026-05-01T22:05:51Z",
+      "completed_at": "2026-05-02T06:05:38Z",
+      "trigger": "initial",
+      "result": "advanced"
+    }
+  ],
+  "upstream_reconciliation_fingerprint": "2f67ecb044af22b0007c8b8797cf4b3d8dcc3a47d500fd619a3e02754a9d2de6",
+  "elaboration_turns": 7,
+  "pre_review_dispatched": true,
+  "pre_review_dispatched_at": "2026-05-02T04:53:47Z",
+  "pre_review_reviewers_acknowledged": true,
+  "pre_review_reviewers_acknowledged_at": "2026-05-02T04:56:51Z"
+}

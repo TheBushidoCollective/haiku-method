@@ -57,6 +57,16 @@
 						"timeout": 5
 					}
 				]
+			},
+			{
+				"matcher": "Write|Edit|MultiEdit",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "\"${CLAUDE_PLUGIN_ROOT}/bin/haiku\" hook stamp-agent-write",
+						"timeout": 5
+					}
+				]
 			}
 		],
 		"Stop": [
@@ -65,7 +75,7 @@
 					{
 						"type": "command",
 						"command": "\"${CLAUDE_PLUGIN_ROOT}/bin/haiku\" hook enforce-iteration",
-						"async": true
+						"timeout": 5
 					}
 				]
 			}

@@ -409,6 +409,15 @@ test("preTickConsistency repairs intent.md active_stage when stale (current stag
 			},
 		},
 	)
+	// Isolation guards mirror the canary above (Round 23 carry): the
+	// repaired stage currently routes to elaborate, so the git-touching
+	// path is latent — but if a future change routes the repaired stage
+	// through start_stage / gate / merge handlers, those would land
+	// branch state in the parent repo without these guards. Pin haiku
+	// root to the tmpdir + short-circuit isGitRepo so the invariant is
+	// structural, not coincidental.
+	setHaikuRootForTests(haikuRoot)
+	setIsGitRepoForTests(false)
 	try {
 		const result = runWorkflowTick("stale-active-stage", haikuRoot)
 		// Pre-tick rewrites intent.md active_stage from product → development.
@@ -431,6 +440,8 @@ test("preTickConsistency repairs intent.md active_stage when stale (current stag
 			"intent shouldn't be complete — development is still active",
 		)
 	} finally {
+		setHaikuRootForTests(null)
+		setIsGitRepoForTests(null)
 		cleanup()
 	}
 })

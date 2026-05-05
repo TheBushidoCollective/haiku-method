@@ -29,6 +29,7 @@
 //   5. All findings resolved → final gate_review (intent_completion
 //      gate context)
 
+import { execSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
@@ -36,7 +37,9 @@ import {
 	createFixChainWorktree,
 	fixChainBranchName,
 	fixChainWorktreePath,
+	isBranchMerged,
 	mergeFixChainWorktree,
+	resolveMainlineRef,
 } from "../../../git-worktree.js"
 import { sealIntentState } from "../../../state-integrity.js"
 import {
@@ -56,7 +59,10 @@ import {
 	readStudioReviewAgentPaths,
 } from "../../../studio-reader.js"
 import { emitTelemetry } from "../../../telemetry.js"
+import { resolveIntentStages } from "../../studio.js"
+import { validateOutputLiveness } from "../../validators.js"
 import { countOpenFeedbackForGateCheck } from "../feedback-triage-gate.js"
+import { workflowIntentComplete } from "../side-effects.js"
 import type { WorkflowHandler } from "./_types.js"
 
 const emit: WorkflowHandler = (ctx) => {
@@ -64,6 +70,33 @@ const emit: WorkflowHandler = (ctx) => {
 	const studio = ctx.studio
 	const intent = ctx.intent
 	const intentFile = join(intentDir(slug), "intent.md")
+
+	// Pre-completion liveness check: every code-output declared by any
+	// unit across every stage must be referenced by SOME OTHER file in
+	// the repo (or explicitly acknowledged in a stage's
+	// coverage-decisions.json). Catches the orphan-component class of
+	// failure (defined but never rendered). Runs before studio-level
+	// review dispatch so reviewers see the orphan list and any
+	// acknowledgments before signing off. Repo root resolves via git
+	// rev-parse; in non-git environments the function short-circuits to
+	// null because grep across an unindexed tree would be slow and
+	// unreliable.
+	if (isGitRepo()) {
+		try {
+			const repoRoot = execSync("git rev-parse --show-toplevel", {
+				encoding: "utf8",
+			}).trim()
+			const allStages = resolveIntentStages(intent, studio)
+			const livenessViolation = validateOutputLiveness(
+				intentDir(slug),
+				allStages,
+				repoRoot,
+			)
+			if (livenessViolation) return livenessViolation
+		} catch {
+			// best-effort — skip if git is unavailable
+		}
+	}
 
 	const allFeedback = readFeedbackFiles(slug, "")
 
@@ -334,6 +367,40 @@ const emit: WorkflowHandler = (ctx) => {
 			action: "error",
 			intent: slug,
 			message: `Refusing to emit gate_review for intent '${slug}' completion: ${openIntentFb} open intent-scope feedback item(s). The intent-completion fix loop should have dispatched these — file a bug citing handlers/intent-completion.ts. Workaround: close / reject the open items via the review UI first.`,
+		}
+	}
+
+	// Autopilot marks the intent complete now (status: completed,
+	// completed_at timestamp, finalize stage branches into intent main,
+	// commit, seal). The completed state lands on the intent main branch.
+	// The agent then opens the delivery PR; the merge is the only
+	// remaining action — no further /haiku:pickup tick required to seal.
+	const intentMode = ((intent.mode as string) || "continuous").toLowerCase()
+	const autopilot = intentMode === "autopilot" || intent.autopilot === true
+	if (autopilot && isGitRepo()) {
+		workflowIntentComplete(slug)
+		emitTelemetry("haiku.intent.autopilot_complete", { intent: slug })
+		const intentMainBranch = `haiku/${slug}/main`
+		const mainline = resolveMainlineRef()
+		// If the branch is already merged, the intent is fully done —
+		// return intent_complete (no PR to open). Otherwise return
+		// external_review_requested so the agent opens the delivery PR.
+		// Either way, the on-disk completion state is already in place.
+		if (isBranchMerged(intentMainBranch, mainline)) {
+			return {
+				action: "intent_complete",
+				intent: slug,
+				studio,
+				message: `Intent '${slug}' is complete — branch '${intentMainBranch}' has merged into '${mainline}'.`,
+			}
+		}
+		return {
+			action: "external_review_requested",
+			intent: slug,
+			studio,
+			stage: null,
+			gate_context: "intent_completion",
+			message: `Intent '${slug}' is marked complete. Open ONE merge request from branch '${intentMainBranch}' to the repo mainline ('${mainline}') for final delivery. Include the H·AI·K·U browse link in the description so reviewers can see the intent, units, and knowledge artifacts. The merge IS the only remaining action — once merged, the completed intent lands on mainline. No further haiku_run_next call required.`,
 		}
 	}
 

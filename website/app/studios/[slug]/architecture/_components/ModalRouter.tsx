@@ -140,7 +140,7 @@ export function ModalRouter({
 							))}
 						</ul>
 					</div>
-					{d.writes && d.writes.length ? (
+					{d.writes?.length ? (
 						<div className="modal-section">
 							<h3>state writes (workflow engine persists to disk)</h3>
 							<ul className="writes-list">
@@ -156,7 +156,7 @@ export function ModalRouter({
 							</ul>
 						</div>
 					) : null}
-					{d.injection && d.injection.length ? (
+					{d.injection?.length ? (
 						<div className="modal-section">
 							<h3>how the result reaches the agent</h3>
 							<ul className="writes-list">

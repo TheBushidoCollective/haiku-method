@@ -25,6 +25,7 @@ import {
 	SESSION_ANSWER_MAX_BYTES,
 } from "haiku-api"
 import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
+import { broadcastIntent } from "../intent-broadcaster.js"
 import { isOpen as isFeedbackOpen } from "../orchestrator/workflow/feedback-triage-gate.js"
 import {
 	getSession,
@@ -111,12 +112,28 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			parsed.data.decision === "approved" ? "approved" : "changes_requested"
 		const feedback = parsed.data.feedback ?? ""
 		const annotations = parsed.data.annotations as ReviewAnnotations | undefined
+		// Live-session model: queue the decision into pending_decision
+		// rather than terminally setting status="decided". This is what
+		// awaitGateReviewSession drains on entry / on each wake. Mirrors
+		// the WS `decide` handler in http/ws.ts so HTTP and WebSocket
+		// clients converge on the same consumer path. Without this, the
+		// SPA's submit (which goes through HTTP via client.submitDecision)
+		// would never reach a blocked await and would time out at 30 min.
 		updateSession(req.params.sessionId, {
-			status: "decided",
-			decision,
-			feedback,
-			annotations,
+			pending_decision: {
+				decision,
+				feedback,
+				annotations,
+				submitted_at: new Date().toISOString(),
+			},
 		})
+		if (session.intent_slug) {
+			broadcastIntent(session.intent_slug, {
+				type: "pending_decision_changed",
+				session_id: req.params.sessionId,
+				queued: true,
+			})
+		}
 		const payload: ReviewDecisionResponse = { ok: true, decision, feedback }
 		reply.send(payload)
 	})
@@ -352,19 +369,24 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			const reasons = parsed.data.reasons ?? []
 			if (reasons.length === 0) {
 				// Path 2: caller didn't author any new findings. Only meaningful
-				// if there is already an open stage_revisit FB the pre-tick gate
-				// can route off. Otherwise the click is a no-op — the user's
+				// if there is at least one open FB the pre-tick gate can route
+				// off — untriaged → `feedback_triage`, triaged on earlier stage
+				// → `revisited`, triaged on current stage → `feedback_dispatch`.
+				// Resolution doesn't matter; the gate routes regardless of
+				// whether it's `stage_revisit`, `inline_fix`, `question`, or
+				// `null`. Otherwise the click is a no-op — the user's
 				// "Request Changes" intent would silently disappear.
 				//
-				// `isFeedbackOpen` is the same predicate the pre-tick triage gate
-				// uses (closed_by + status !== closed/addressed/rejected). They
-				// MUST stay in sync — a divergence here means the HTTP handler
-				// reports "you have an open revisit" while the gate finds none,
-				// recreating the silent-no-op bug this 409 was added to prevent.
-				const hasOpenRevisit = readFeedbackFiles(slug, targetStage).some(
-					(fb) => fb.resolution === "stage_revisit" && isFeedbackOpen(fb),
+				// `isFeedbackOpen` is the same predicate the pre-tick triage
+				// gate uses (closed_by + status !== closed/addressed/rejected).
+				// They MUST stay in sync — a divergence here means the HTTP
+				// handler reports "you have an open FB" while the gate finds
+				// none, recreating the silent-no-op bug this 409 was added to
+				// prevent.
+				const hasOpenFeedback = readFeedbackFiles(slug, targetStage).some(
+					isFeedbackOpen,
 				)
-				if (!hasOpenRevisit) {
+				if (!hasOpenFeedback) {
 					logFeedbackAction({
 						reqId: req.id,
 						action: "revisit",
@@ -375,7 +397,7 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 					})
 					reply.status(409).send({
 						error: "nothing_to_revisit",
-						detail: `no reasons provided and no open stage_revisit feedback at ${targetStage}`,
+						detail: `no reasons provided and no open feedback at ${targetStage}`,
 					})
 					return
 				}
@@ -425,22 +447,36 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 					: `No new feedback items provided. The next \`haiku_run_next\` tick's pre-tick gate will route the rewind based on existing pending feedback at \`${targetStage}\` (if any).`
 
 			// Wake the gate_review waiter parked inside the agent's
-			// haiku_run_next call. Without this, the agent stays parked for
-			// the full timeout and the reviewer's click looks like a no-op.
-			// On wake, the agent's run_next call falls through to the pre-tick
-			// gate which sees the new stage_revisit FBs (or pre-existing
-			// pending FBs) and emits the correct sideline action — same
-			// routing path as agent-authored stage_revisit FBs.
+			// haiku_await_gate call. Without this, the agent stays parked
+			// for the full timeout and the reviewer's click looks like a
+			// no-op. On wake, awaitGateReviewSession drains
+			// pending_decision and short-circuits to the revisit dispatch
+			// (haiku_await_gate.ts checks annotations.revisit_action).
+			//
+			// Live-session model: the canonical decision channel is
+			// pending_decision, NOT status="decided". The HTTP /decide
+			// endpoint was migrated; this revisit endpoint must match or
+			// awaitGateReviewSession's loop wakes, finds pending_decision
+			// null, and re-blocks for the full 30-min timeout.
 			updateSession(req.params.sessionId, {
-				status: "decided",
-				decision: "changes_requested",
-				feedback: "",
-				annotations: {
-					revisit_action: "revisit_pending",
-					revisit_stage: targetStage,
-					revisit_message: message,
-				} as unknown as Parameters<typeof updateSession>[1]["annotations"],
+				pending_decision: {
+					decision: "changes_requested",
+					feedback: "",
+					annotations: {
+						revisit_action: "revisit_pending",
+						revisit_stage: targetStage,
+						revisit_message: message,
+					},
+					submitted_at: new Date().toISOString(),
+				},
 			})
+			if (session.intent_slug) {
+				broadcastIntent(session.intent_slug, {
+					type: "pending_decision_changed",
+					session_id: req.params.sessionId,
+					queued: true,
+				})
+			}
 
 			const response: RevisitResponse = {
 				ok: true,

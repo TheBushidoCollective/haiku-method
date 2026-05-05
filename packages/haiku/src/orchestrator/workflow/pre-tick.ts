@@ -25,6 +25,11 @@ import {
 import { join } from "node:path"
 import matter from "gray-matter"
 import { getCurrentState } from "../../current-state.js"
+import {
+	branchExists,
+	isBranchMerged,
+	mergeUnitWorktree,
+} from "../../git-worktree.js"
 import type { OrchestratorAction } from "../../orchestrator.js"
 import { resolveIntentStages, resolveStudioStages } from "../../orchestrator.js"
 import {
@@ -37,6 +42,10 @@ import {
 	writeJson,
 } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
+import {
+	findIncompleteStages,
+	rewindFromCompletionReview,
+} from "./side-effects.js"
 
 function readFm(filePath: string): Record<string, unknown> {
 	const { data } = parseFrontmatter(readFileSync(filePath, "utf8"))
@@ -64,7 +73,7 @@ export function preTickConsistency(
 	const intentFile = join(iDir, "intent.md")
 	if (!existsSync(intentFile)) return null
 
-	const intent = readFm(intentFile)
+	let intent = readFm(intentFile)
 	const studio = (intent.studio as string) || ""
 	if (!studio) return null
 	if (intent.composite) return null
@@ -75,9 +84,118 @@ export function preTickConsistency(
 	const allStudioStages = resolveStudioStages(studio)
 	if (allStudioStages.length === 0) return null
 
+	// Stale completion-review recovery: an earlier tick (or pre-guard
+	// build) may have set `phase: awaiting_completion_review` while
+	// real stages were still incomplete. Without this rewind, every
+	// subsequent tick routes to the intent-completion handler and the
+	// `findIncompleteStages` guard fires the same error in a loop —
+	// the engine never gets a chance to actually run the missing
+	// stages. Detect that shape and reset before derive-state runs.
+	const stalePhases = ["awaiting_completion_review", "intent_completion"]
+	if (stalePhases.includes((intent.phase as string) || "")) {
+		const incomplete = findIncompleteStages(slug, studio, root)
+		if (incomplete.length > 0) {
+			rewindFromCompletionReview(slug, incomplete[0], root)
+			// gitCommitState walks up from cwd to find the git repo and
+			// commits there. Under test fixtures (root passed as a
+			// tmpdir override) the resolved repo is the parent project
+			// — running a commit there would scoop up whatever's dirty
+			// in the real working tree. Skip the commit when the caller
+			// passed an explicit root; the rewind is still observable
+			// on disk via the frontmatter changes.
+			if (!root) {
+				gitCommitState(
+					`haiku: rewind ${slug} from completion-review — ${incomplete.length} stage(s) still pending`,
+				)
+			}
+			emitTelemetry("haiku.workflow.completion_review_rewound", {
+				intent: slug,
+				incomplete_stages: incomplete.join(","),
+			})
+			// Re-read intent.md so the rest of pre-tick sees the
+			// post-rewind frontmatter (active_stage moved to the first
+			// incomplete stage, phase + completion_review_* cleared).
+			intent = readFm(intentFile)
+		}
+	}
+
 	const activeStage = (intent.active_stage as string) || ""
 	const currentStage = activeStage || studioStages[0]
 	const activeIdx = studioStages.indexOf(currentStage)
+
+	// Orphan-completed-unit merge-retry pass.
+	//
+	// When advance_hat completes a unit's last hat, it tries to merge the
+	// unit branch into the stage branch via mergeUnitWorktree. When the
+	// stage worktree is dirty (typical: the engine just wrote feedback
+	// files, unit FM updates, or stage state.json from a prior tick),
+	// the merge returns merge_failed. The agent commits the dirty files
+	// per the structured error and re-ticks — but nothing in the engine
+	// re-attempts the merge. The unit's status is `completed` in its FM,
+	// so the execute handler treats the unit as done; the stage outputs
+	// validation then fails because the deliverables only exist on the
+	// orphaned unit branch. The workflow loops on `outputs_missing`.
+	//
+	// This pass walks the active stage's units, identifies those whose
+	// status is `completed` AND whose branch is not yet merged into the
+	// stage branch, and re-runs mergeUnitWorktree. Each re-attempt picks
+	// up the now-clean stage worktree and lands the merge.
+	//
+	// Runs early so subsequent pre-tick repairs and the per-state
+	// dispatch see the post-merge stage tip. Best-effort: any merge that
+	// still fails (real conflict, missing branch, etc.) leaves the unit
+	// orphaned and downstream `outputs_missing` will surface it; the
+	// agent then has the structured error path to act on.
+	if (currentStage) {
+		const unitsDirRetry = join(iDir, "stages", currentStage, "units")
+		if (existsSync(unitsDirRetry)) {
+			const stageBranch = `haiku/${slug}/${currentStage}`
+			const unitFiles = readdirSync(unitsDirRetry).filter((f) =>
+				f.endsWith(".md"),
+			)
+			for (const f of unitFiles) {
+				const unitName = f.replace(/\.md$/, "")
+				const unitFm = readFm(join(unitsDirRetry, f))
+				if ((unitFm.status as string) !== "completed") continue
+				const unitBranch = `haiku/${slug}/${unitName}`
+				if (!branchExists(unitBranch)) continue
+				if (!branchExists(stageBranch)) continue
+				if (isBranchMerged(unitBranch, stageBranch)) continue
+
+				// Branch exists, status is completed, but the merge into
+				// stage hasn't happened. Re-attempt.
+				const result = mergeUnitWorktree(slug, unitName, currentStage)
+				emitTelemetry("haiku.workflow.orphan_unit_merge_retry", {
+					intent: slug,
+					stage: currentStage,
+					unit: unitName,
+					ok: String(result.success),
+					message: result.message,
+				})
+				// On failure: surface the merge result to the agent
+				// instead of silently continuing. Continuing would let
+				// the next handler advance phase past an unmerged unit
+				// or — worse — leave a half-merged state with conflict
+				// markers in the working tree that the next tick reads
+				// as if it were normal content. Surfacing here matches
+				// the structured error path the merge_failed /
+				// resolve_merge_conflicts shapes already define.
+				if (!result.success) {
+					const isConflict = /merge_conflict:/i.test(result.message)
+					return {
+						action: isConflict ? "resolve_merge_conflicts" : "merge_failed",
+						intent: slug,
+						stage: currentStage,
+						unit: unitName,
+						unit_branch: unitBranch,
+						stage_branch: stageBranch,
+						error: result.message,
+						message: `Pre-tick orphan-merge retry on '${unitName}' could not land into '${stageBranch}': ${result.message}. Resolve the merge in the stage worktree (commit dirty engine-owned files first if the failure cited "would be overwritten"; resolve any conflict markers and \`git add\`/\`git commit\` if the failure cited content conflicts), then call haiku_run_next so the engine retries.`,
+					}
+				}
+			}
+		}
+	}
 
 	// Pre-walk: sync intent.md.active_stage from state.json reality.
 	// state.json is the single source of truth for stage position

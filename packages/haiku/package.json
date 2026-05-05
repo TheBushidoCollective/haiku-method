@@ -4,10 +4,10 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
-		"prebuild": "node scripts/bundle-haiku-ui.mjs && npx tsx scripts/export-workflow-diagrams.mjs",
 		"build": "node scripts/build-mcp.mjs",
+		"build:spa": "node scripts/bundle-haiku-ui.mjs",
 		"export:workflow-diagrams": "npx tsx scripts/export-workflow-diagrams.mjs",
-		"postbuild": "if [ -n \"$SENTRY_AUTH_TOKEN\" ]; then sentry-cli sourcemaps upload --url ${SENTRY_URL:-https://sentry.ops.gigsmart.com} --org ${SENTRY_ORG:-gigsmart} --project haiku-mcp --release haiku-mcp@$(node -e \"process.stdout.write(require('../../plugin/.claude-plugin/plugin.json').version)\") ../../plugin/bin/haiku.map && sentry-cli sourcemaps upload --url ${SENTRY_URL:-https://sentry.ops.gigsmart.com} --org ${SENTRY_ORG:-gigsmart} --project haiku-spa --release haiku-spa@$(node -e \"process.stdout.write(require('../../plugin/.claude-plugin/plugin.json').version)\") review-app/dist/assets/; fi; rm -f ../../plugin/bin/haiku.map",
+		"postbuild": "if [ -n \"$SENTRY_AUTH_TOKEN\" ]; then sentry-cli sourcemaps upload --url ${SENTRY_URL:-https://sentry.ops.gigsmart.com} --org ${SENTRY_ORG:-gigsmart} --project haiku-mcp --release haiku-mcp@$(node -e \"process.stdout.write(require('../../plugin/.claude-plugin/plugin.json').version)\") ../../plugin/bin/haiku.mjs.map && sentry-cli sourcemaps upload --url ${SENTRY_URL:-https://sentry.ops.gigsmart.com} --org ${SENTRY_ORG:-gigsmart} --project haiku-spa --release haiku-spa@$(node -e \"process.stdout.write(require('../../plugin/.claude-plugin/plugin.json').version)\") review-app/dist/assets/; fi; rm -f ../../plugin/bin/haiku.mjs.map",
 		"typecheck": "tsc --noEmit",
 		"test": "node test/run-all.mjs",
 		"test:parse": "node test/state-tools.test.mjs",
@@ -16,16 +16,19 @@
 		"test:prompts-registered": "npx tsx test/prompts-registered.test.mjs",
 		"test:state-handlers": "npx tsx test/state-tools-handlers.test.mjs",
 		"test:orchestrator": "npx tsx test/orchestrator.test.mjs",
-		"test:server": "npx tsx test/server-tools.test.mjs"
+		"test:server": "npx tsx test/server-tools.test.mjs",
+		"test:skill-list": "npx tsx test/skill-list.test.mjs"
 	},
 	"dependencies": {
 		"@anthropic-ai/claude-agent-sdk": "^0.1.0",
 		"@fastify/cors": "^11.1.0",
+		"@fastify/multipart": "^10.0.0",
 		"@fastify/rate-limit": "^10.2.2",
 		"@fastify/websocket": "^11.0.2",
 		"@haiku/shared": "file:../shared",
 		"@modelcontextprotocol/sdk": "^1.28.0",
 		"@sentry/node": "^10.47.0",
+		"@sinclair/typebox": "^0.34.49",
 		"ajv": "^8.18.0",
 		"fastify": "^5.2.1",
 		"gray-matter": "^4.0.3",

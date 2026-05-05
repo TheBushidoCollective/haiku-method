@@ -216,6 +216,42 @@ try {
 		assert.ok(r.stderr.includes("state.json"))
 	})
 
+	await test("Write on .haiku/settings.yml is blocked + names haiku_settings_set", async () => {
+		const r = await runGuard({
+			tool_name: "Write",
+			tool_input: {
+				file_path: ".haiku/settings.yml",
+				content: "studio: software\n",
+			},
+		})
+		assert.ok(r.blocked, "settings.yml writes must be blocked")
+		assert.ok(
+			r.stderr.includes("haiku_settings_set"),
+			"redirect names the haiku_settings_set tool",
+		)
+	})
+
+	await test("Read on .haiku/settings.yml is blocked + names haiku_settings_get", async () => {
+		const r = await runGuard({
+			tool_name: "Read",
+			tool_input: { file_path: ".haiku/settings.yml" },
+		})
+		assert.ok(r.blocked, "settings.yml reads route through haiku_settings_get")
+		assert.ok(r.stderr.includes("haiku_settings_get"))
+	})
+
+	await test("Edit on .haiku/settings.yml is blocked", async () => {
+		const r = await runGuard({
+			tool_name: "Edit",
+			tool_input: {
+				file_path: ".haiku/settings.yml",
+				old_string: "studio: ideation",
+				new_string: "studio: software",
+			},
+		})
+		assert.ok(r.blocked)
+	})
+
 	console.log("\n=== guard-workflow-fields: pass-through paths ===")
 
 	await test("Edit on non-haiku file passes through", async () => {

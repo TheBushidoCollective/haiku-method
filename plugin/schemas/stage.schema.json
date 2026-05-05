@@ -1,0 +1,95 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://haiku.dev/schemas/stage.schema.json",
+	"title": "H·AI·K·U Stage State",
+	"description": "Schema for .haiku/intents/<slug>/stages/<stage>/state.json. Every field is engine-managed — there are no user-writable fields. The schema exists so haiku_stage_set can validate engine-internal mutations and reject malformed transitions or unknown fields.",
+	"type": "object",
+	"additionalProperties": true,
+	"x-writable-by-user": [],
+	"x-engine-only": [
+		"stage",
+		"status",
+		"phase",
+		"started_at",
+		"completed_at",
+		"gate_entered_at",
+		"gate_outcome",
+		"visits",
+		"iterations",
+		"elaboration_turns",
+		"decision_log",
+		"pre_review_dispatched",
+		"pre_review_dispatched_at",
+		"pre_review_reviewers_acknowledged",
+		"pre_review_reviewers_acknowledged_at",
+		"upstream_reconciliation_acknowledged",
+		"upstream_reconciliation_acknowledged_at",
+		"upstream_reconciliation_rationale"
+	],
+	"properties": {
+		"stage": {
+			"type": "string",
+			"description": "Stage name (matches the parent directory)."
+		},
+		"status": {
+			"type": "string",
+			"enum": ["pending", "active", "completed", "blocked"],
+			"description": "Stage status."
+		},
+		"phase": {
+			"type": "string",
+			"enum": ["", "elaborate", "execute", "review", "gate"],
+			"description": "Current phase within the stage."
+		},
+		"started_at": {
+			"type": ["string", "null"],
+			"description": "ISO-8601 timestamp the stage entered status=active."
+		},
+		"completed_at": {
+			"type": ["string", "null"],
+			"description": "ISO-8601 timestamp the stage entered status=completed."
+		},
+		"gate_entered_at": {
+			"type": ["string", "null"],
+			"description": "ISO-8601 timestamp the gate phase opened. Null when the stage auto-advanced through gate without entering it."
+		},
+		"gate_outcome": {
+			"type": ["string", "null"],
+			"enum": [null, "advanced", "blocked", "rejected"],
+			"description": "Gate outcome."
+		},
+		"visits": {
+			"type": "integer",
+			"minimum": 0,
+			"description": "Number of times the stage has been entered (initial + revisits)."
+		},
+		"iterations": {
+			"type": "array",
+			"description": "Per-bolt history entries.",
+			"items": {
+				"type": "object",
+				"additionalProperties": true
+			}
+		},
+		"elaboration_turns": {
+			"type": "integer",
+			"minimum": 0,
+			"description": "Conversation turns spent in elaborate phase across all visits."
+		},
+		"decision_log": {
+			"type": "array",
+			"description": "Decisions recorded during elaboration.",
+			"items": {
+				"type": "object",
+				"additionalProperties": true
+			}
+		},
+		"pre_review_dispatched": { "type": "boolean" },
+		"pre_review_dispatched_at": { "type": ["string", "null"] },
+		"pre_review_reviewers_acknowledged": { "type": "boolean" },
+		"pre_review_reviewers_acknowledged_at": { "type": ["string", "null"] },
+		"upstream_reconciliation_acknowledged": { "type": "boolean" },
+		"upstream_reconciliation_acknowledged_at": { "type": ["string", "null"] },
+		"upstream_reconciliation_rationale": { "type": "string" }
+	}
+}

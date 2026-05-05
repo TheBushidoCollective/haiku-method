@@ -1,3 +1,10 @@
+/**
+ * biome-ignore-all lint/style/noDescendingSpecificity: this file was ported
+ * verbatim from a standalone HTML page (the architecture-map prototype) with
+ * deliberately hand-tuned selector ordering. Mechanical reordering to satisfy
+ * descending-specificity risks visual regressions across ~35 selectors. The
+ * cascade is intentional; selectors target distinct DOM contexts.
+ */
 /* Defang Tailwind's `prose` typography plugin inside the architecture map.
      The plugin styles `prose code` with a dark background and adds backtick
      ::before / ::after pseudo-elements — neither of which we want. The map
@@ -7,13 +14,13 @@
 .haiku-arch-map .modal .prose code,
 .haiku-arch-map .modal-section code,
 .haiku-arch-map .md-content code {
-	background: #f4f1ea !important;
-	color: #1f2937 !important;
-	border: 1px solid #e0dccd !important;
-	padding: 1px 5px !important;
-	border-radius: 4px !important;
-	font-weight: normal !important;
-	font-family: ui-monospace, "SF Mono", monospace !important;
+	background: #f4f1ea;
+	color: #1f2937;
+	border: 1px solid #e0dccd;
+	padding: 1px 5px;
+	border-radius: 4px;
+	font-weight: normal;
+	font-family: ui-monospace, "SF Mono", monospace;
 }
 .haiku-arch-map .prose code::before,
 .haiku-arch-map .prose code::after,
@@ -23,7 +30,7 @@
 .haiku-arch-map .modal-section code::after,
 .haiku-arch-map .md-content code::before,
 .haiku-arch-map .md-content code::after {
-	content: none !important;
+	content: none;
 }
 
 :root {
@@ -1628,15 +1635,15 @@ h1 {
 	left: 50%;
 	transform: translate(-50%, -50%);
 	z-index: 3;
-	background: #fff !important;
-	color: #1f2937 !important;
+	background: #fff;
+	color: #1f2937;
 	border: 1.5px solid var(--gate-border);
 	padding: 3px 12px;
 	box-shadow: 0 0 0 3px #fff; /* punch through the dashed border */
 }
 .gate-wrap .gate-pill:hover {
-	background: #fff !important;
-	color: #1f2937 !important;
+	background: #fff;
+	color: #1f2937;
 }
 .gate-wrap .gate-reject-arc {
 	position: absolute;

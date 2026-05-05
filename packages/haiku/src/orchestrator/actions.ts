@@ -8,10 +8,21 @@
 //                                failures (commit_wip etc.)
 //   - maybeEscalate            — stage-iteration / loop guards → escalate action
 //   - buildElaboratorInstruction — instruction text for the elaborate action
+//   - manual_change_assessment shape, builder, and guard (re-exported
+//     from `workflow/handlers/manual-change-assessment.ts` so the
+//     discriminated-union surface lives in one place for callers)
 
 import type { OrchestratorAction } from "../orchestrator.js"
 import { MAX_STAGE_ITERATIONS } from "../state-tools.js"
 import { emitTelemetry } from "../telemetry.js"
+
+export {
+	buildManualChangeAssessmentAction,
+	isManualChangeAssessment,
+	type ManualChangeAssessmentAction,
+	type ManualChangeAssessmentCtx,
+	type Outcome as ManualChangeAssessmentOutcome,
+} from "./workflow/handlers/manual-change-assessment.js"
 
 /** Compact feedback summary for orchestrator action responses.
  *  Returns id/title/origin/author/status + file path — NO body.

@@ -24,6 +24,7 @@ import error from "./error.js"
 import execute from "./execute.js"
 import gate from "./gate.js"
 import intentCompletion from "./intent-completion.js"
+import manualChangeAssessment from "./manual-change-assessment.js"
 import review from "./review.js"
 import selectStudio from "./select-studio.js"
 import startStage from "./start-stage.js"
@@ -43,6 +44,7 @@ const REGISTRY: Partial<Record<StateName, WorkflowHandler>> = {
 	intent_completion_review: intentCompletion,
 	intent_completion_fix: intentCompletion,
 	composite_run_stage: composite,
+	manual_change_assessment: manualChangeAssessment,
 }
 
 /** State names that have a registered handler. Derived from the

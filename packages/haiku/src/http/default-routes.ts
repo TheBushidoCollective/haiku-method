@@ -128,11 +128,13 @@ export function registerDefaultRoutes(
 		// Fastify's built-in JSON parser throws a SyntaxError (wrapped
 		// with statusCode 400) when the request body is malformed
 		// JSON. Depending on version it may surface with code
-		// FST_ERR_CTP_INVALID_JSON, or as a plain SyntaxError. Treat
-		// all those as `validation_failed` with an `invalid_json`
-		// issue so the SPA's fetch error path has stable shape.
+		// FST_ERR_CTP_INVALID_JSON, FST_ERR_CTP_INVALID_JSON_BODY
+		// (Fastify 5.x), or as a plain SyntaxError. Treat all those as
+		// `validation_failed` with an `invalid_json` issue so the SPA's
+		// fetch error path has stable shape.
 		const looksLikeJsonParseError =
 			errCode === "FST_ERR_CTP_INVALID_JSON" ||
+			errCode === "FST_ERR_CTP_INVALID_JSON_BODY" ||
 			err instanceof SyntaxError ||
 			(status === 400 && /JSON|json|Unexpected token/i.test(errMessage))
 

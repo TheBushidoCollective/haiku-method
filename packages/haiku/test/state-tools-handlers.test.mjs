@@ -2013,10 +2013,13 @@ Closed body content.
 	})
 
 	test("haiku_feedback_read returns feedback_not_found for missing FB", () => {
+		// Numeric ID to satisfy the FB-NN AJV pattern; the file just
+		// doesn't exist on disk, so the handler responds with the
+		// `feedback_not_found` semantic code (not the input-gate code).
 		const result = handleStateTool("haiku_feedback_read", {
 			intent: intentSlug,
 			stage: "inception",
-			feedback_id: "FB-NONEXISTENT",
+			feedback_id: "FB-9999",
 		})
 		const parsed = JSON.parse(getTextResult(result))
 		assert.strictEqual(parsed.error, "feedback_not_found")

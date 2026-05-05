@@ -675,9 +675,7 @@ try {
 		const parsed = JSON.parse(getTextResult(result))
 		assert.strictEqual(parsed.error, "haiku_feedback_input_invalid")
 		assert.ok(
-			parsed.errors.some(
-				(e) => e.path === "/origin" && e.keyword === "enum",
-			),
+			parsed.errors.some((e) => e.path === "/origin" && e.keyword === "enum"),
 			`expected /origin enum violation; got ${JSON.stringify(parsed.errors)}`,
 		)
 	})
@@ -793,9 +791,7 @@ try {
 		const parsed = JSON.parse(getTextResult(result))
 		assert.strictEqual(parsed.error, "haiku_feedback_update_input_invalid")
 		assert.ok(
-			parsed.errors.some(
-				(e) => e.path === "/status" && e.keyword === "enum",
-			),
+			parsed.errors.some((e) => e.path === "/status" && e.keyword === "enum"),
 			`expected /status enum violation; got ${JSON.stringify(parsed.errors)}`,
 		)
 	})
@@ -917,7 +913,12 @@ try {
 			feedback_id: "",
 		})
 		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("feedback_id is required"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_delete_input_invalid")
+		assert.ok(
+			parsed.errors.some((e) => e.path === "/feedback_id"),
+			"Expected an error on /feedback_id",
+		)
 	})
 
 	// ── haiku_feedback_reject MCP tool ──────────────────────────────────────
@@ -999,7 +1000,12 @@ try {
 			reason: "",
 		})
 		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("reason is required"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_reject_input_invalid")
+		assert.ok(
+			parsed.errors.some((e) => e.path === "/reason"),
+			"Expected an error on /reason",
+		)
 	})
 
 	test("MCP reject fails for nonexistent feedback", () => {
@@ -1113,7 +1119,12 @@ try {
 			status: "bogus",
 		})
 		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("status must be one of"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_list_input_invalid")
+		assert.ok(
+			parsed.errors.some((e) => e.path === "/status" && e.keyword === "enum"),
+			"Expected an enum error on /status",
+		)
 	})
 
 	test("MCP list rejects missing intent", () => {
@@ -1121,7 +1132,12 @@ try {
 			intent: "",
 		})
 		assert.ok(result.isError)
-		assert.ok(getTextResult(result).includes("intent is required"))
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "haiku_feedback_list_input_invalid")
+		assert.ok(
+			parsed.errors.some((e) => e.path === "/intent"),
+			"Expected an error on /intent",
+		)
 	})
 
 	// ── Cleanup ───────────────────────────────────────────────────────────────

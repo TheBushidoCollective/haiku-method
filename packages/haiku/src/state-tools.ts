@@ -3427,8 +3427,16 @@ import {
 	FSM_DRIVEN_FB_FIELDS,
 	FSM_DRIVEN_INTENT_FIELDS,
 	FSM_DRIVEN_UNIT_FIELDS,
+	HAIKU_FEEDBACK_ADVANCE_HAT_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_DELETE_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_LIST_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_MOVE_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_READ_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_REJECT_HAT_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_REJECT_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_WRITE_INPUT_SCHEMA,
 	HAIKU_INTENT_GET_INPUT_SCHEMA,
 	HAIKU_INTENT_LIST_INPUT_SCHEMA,
 	HAIKU_INTENT_SET_INPUT_SCHEMA,
@@ -3445,8 +3453,16 @@ import {
 	HAIKU_UNIT_WRITE_INPUT_SCHEMA,
 	INTENT_IMMUTABLE_FIELDS,
 	UNIT_FRONTMATTER_SCHEMA,
+	validateHaikuFeedbackAdvanceHatInputSchema,
+	validateHaikuFeedbackDeleteInputSchema,
 	validateHaikuFeedbackInputSchema,
+	validateHaikuFeedbackListInputSchema,
+	validateHaikuFeedbackMoveInputSchema,
+	validateHaikuFeedbackReadInputSchema,
+	validateHaikuFeedbackRejectHatInputSchema,
+	validateHaikuFeedbackRejectInputSchema,
 	validateHaikuFeedbackUpdateInputSchema,
+	validateHaikuFeedbackWriteInputSchema,
 	validateHaikuIntentGetInputSchema,
 	validateHaikuIntentListInputSchema,
 	validateHaikuIntentSetInputSchema,
@@ -6473,21 +6489,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_feedback_delete",
 		description:
 			"Delete a feedback file. Cannot delete pending items. Agents cannot delete human-authored items. Omit `stage` for intent-scope feedback.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description: "Stage name. Omit for intent-scope feedback.",
-				},
-				feedback_id: {
-					type: "string",
-					description: "FB-NN identifier or numeric prefix",
-				},
-			},
-			required: ["intent", "feedback_id"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_DELETE_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6501,27 +6503,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_feedback_move",
 		description:
 			'Triage placement for a feedback item. Pass `to_stage` equal to the source `stage` to confirm the FB belongs where it lives (sets `triaged_at` only). Pass a different `to_stage` to relocate it — the file moves to the target stage\'s feedback dir, gets renumbered to the next free FB-NN there, and `triaged_at` is set. Use "" for intent-scope (either source or target). Closed and rejected FBs are immutable; rejected with an error.',
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description:
-						'Current stage where the FB lives. Use "" for intent-scope feedback.',
-				},
-				feedback_id: {
-					type: "string",
-					description: "FB-NN identifier or numeric prefix",
-				},
-				to_stage: {
-					type: "string",
-					description:
-						'Target stage. Same as `stage` to confirm placement (no file move). Different to relocate. Use "" for intent-scope.',
-				},
-			},
-			required: ["intent", "feedback_id", "to_stage"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_MOVE_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6546,25 +6528,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_feedback_reject",
 		description:
 			"Reject an agent-authored feedback item with a reason. Sets status to rejected and appends rejection reason to body. Omit `stage` for intent-scope feedback.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description: "Stage name. Omit for intent-scope feedback.",
-				},
-				feedback_id: {
-					type: "string",
-					description: "FB-NN identifier or numeric prefix",
-				},
-				reason: {
-					type: "string",
-					description: "Explanation for why this feedback is being rejected",
-				},
-			},
-			required: ["intent", "feedback_id", "reason"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_REJECT_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6578,22 +6542,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_feedback_list",
 		description:
 			"List feedback items with optional filtering. Omit stage to list across all stages.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description: "Stage name (optional — omit to list all stages)",
-				},
-				status: {
-					type: "string",
-					description:
-						"Filter by status: pending | addressed | closed | rejected",
-				},
-			},
-			required: ["intent"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_LIST_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6609,21 +6558,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_feedback_read",
 		description:
 			"Read a feedback file's body content (and title). Returns ONLY the body and title — frontmatter is workflow engine-internal and not exposed to agents per the architecture's FM-is-workflow engine-only rule. Use this when a fixer hat needs to read its own FB diagnosis or when a reviewer needs to read prior findings on the same artifact. Returns { title, body } as JSON. Omit `stage` to read an intent-scope FB.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description: "Stage name (optional — omit for intent-scope FBs)",
-				},
-				feedback_id: {
-					type: "string",
-					description: "Feedback ID, e.g. FB-01",
-				},
-			},
-			required: ["intent", "feedback_id"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_READ_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6642,26 +6577,7 @@ Frontmatter is workflow engine-controlled and cannot be set through this tool. F
   • Set at creation, immutable thereafter: ${CREATE_TIME_FB_FIELDS.join(", ")}
 
 Use haiku_feedback_update for status transitions and haiku_feedback_reject for rejections.`,
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description: "Stage name (optional — omit for intent-scope FBs)",
-				},
-				feedback_id: {
-					type: "string",
-					description: "Feedback ID, e.g. FB-01",
-				},
-				body: {
-					type: "string",
-					description:
-						"Full markdown body to write. Replaces the prior body entirely.",
-				},
-			},
-			required: ["intent", "feedback_id", "body"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_WRITE_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6679,21 +6595,7 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 		name: "haiku_feedback_advance_hat",
 		description:
 			"Advance an FB to the next hat in the stage's `fix_hats:` sequence. Per the architecture's FB-as-unit model: each fixer hat operates on the FB body (via haiku_feedback_write) and then calls this tool to progress. When called on the last hat in the fix_hats sequence, the workflow engine auto-completes the FB (status → closed, closed_by recorded, iteration appended). Mirrors haiku_unit_advance_hat for FBs.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description: "Stage name (optional — omit for intent-scope FBs)",
-				},
-				feedback_id: {
-					type: "string",
-					description: "Feedback ID, e.g. FB-01",
-				},
-			},
-			required: ["intent", "feedback_id"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_ADVANCE_HAT_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6713,26 +6615,7 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 		name: "haiku_feedback_reject_hat",
 		description:
 			"Reject the current fix-hat's work on an FB — moves back to the previous hat and increments the FB's bolt counter. Pass `reason` so the FB's iteration history records why the hat was rejected. Mirrors haiku_unit_reject_hat for FBs.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description: "Stage name (optional — omit for intent-scope FBs)",
-				},
-				feedback_id: {
-					type: "string",
-					description: "Feedback ID, e.g. FB-01",
-				},
-				reason: {
-					type: "string",
-					description:
-						"Short explanation of why the current hat's work was rejected (recorded in the FB iteration history).",
-				},
-			},
-			required: ["intent", "feedback_id"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_REJECT_HAT_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -10041,6 +9924,12 @@ export function handleStateTool(
 		}
 
 		case "haiku_feedback_delete": {
+			const fbDeleteInputErr = validateToolInput(
+				args,
+				validateHaikuFeedbackDeleteInputSchema,
+				"haiku_feedback_delete",
+			)
+			if (fbDeleteInputErr) return fbDeleteInputErr
 			const intent = args.intent as string
 			const stage = (args.stage as string) || ""
 			const feedbackId = args.feedback_id as string
@@ -10093,6 +9982,12 @@ export function handleStateTool(
 		}
 
 		case "haiku_feedback_move": {
+			const fbMoveInputErr = validateToolInput(
+				args,
+				validateHaikuFeedbackMoveInputSchema,
+				"haiku_feedback_move",
+			)
+			if (fbMoveInputErr) return fbMoveInputErr
 			const intent = args.intent as string
 			const stage = (args.stage as string) || ""
 			const feedbackId = args.feedback_id as string
@@ -10214,6 +10109,12 @@ export function handleStateTool(
 		}
 
 		case "haiku_feedback_reject": {
+			const fbRejectInputErr = validateToolInput(
+				args,
+				validateHaikuFeedbackRejectInputSchema,
+				"haiku_feedback_reject",
+			)
+			if (fbRejectInputErr) return fbRejectInputErr
 			const intent = args.intent as string
 			const stage = (args.stage as string) || ""
 			const feedbackId = args.feedback_id as string
@@ -10333,6 +10234,12 @@ export function handleStateTool(
 		}
 
 		case "haiku_feedback_list": {
+			const fbListInputErr = validateToolInput(
+				args,
+				validateHaikuFeedbackListInputSchema,
+				"haiku_feedback_list",
+			)
+			if (fbListInputErr) return fbListInputErr
 			const intent = args.intent as string
 			const stageFilt = (args.stage as string) || undefined
 			const statusFilt = (args.status as string) || undefined
@@ -10462,6 +10369,12 @@ export function handleStateTool(
 
 		// ── Feedback body-only read (architecture rule §1.1: no FM exposed) ──
 		case "haiku_feedback_read": {
+			const fbReadInputErr = validateToolInput(
+				args,
+				validateHaikuFeedbackReadInputSchema,
+				"haiku_feedback_read",
+			)
+			if (fbReadInputErr) return fbReadInputErr
 			const intentArg = args.intent as string
 			const stageArg = (args.stage as string) || ""
 			const fbId = args.feedback_id as string
@@ -10542,6 +10455,12 @@ export function handleStateTool(
 
 		// ── Feedback body write (architecture FB-as-unit, lifecycle-bound) ──
 		case "haiku_feedback_write": {
+			const fbWriteInputErr = validateToolInput(
+				args,
+				validateHaikuFeedbackWriteInputSchema,
+				"haiku_feedback_write",
+			)
+			if (fbWriteInputErr) return fbWriteInputErr
 			const intentArg = args.intent as string
 			const stageArg = (args.stage as string) || ""
 			const fbId = args.feedback_id as string
@@ -10641,6 +10560,12 @@ export function handleStateTool(
 		// and then calls advance to progress through the stage's fix_hats:
 		// sequence. When the last hat advances, the workflow engine auto-closes the FB.
 		case "haiku_feedback_advance_hat": {
+			const fbAdvanceHatInputErr = validateToolInput(
+				args,
+				validateHaikuFeedbackAdvanceHatInputSchema,
+				"haiku_feedback_advance_hat",
+			)
+			if (fbAdvanceHatInputErr) return fbAdvanceHatInputErr
 			const intentArg = args.intent as string
 			const stageArg = (args.stage as string) || ""
 			const fbId = args.feedback_id as string
@@ -10872,6 +10797,12 @@ export function handleStateTool(
 		}
 
 		case "haiku_feedback_reject_hat": {
+			const fbRejectHatInputErr = validateToolInput(
+				args,
+				validateHaikuFeedbackRejectHatInputSchema,
+				"haiku_feedback_reject_hat",
+			)
+			if (fbRejectHatInputErr) return fbRejectHatInputErr
 			const intentArg = args.intent as string
 			const stageArg = (args.stage as string) || ""
 			const fbId = args.feedback_id as string

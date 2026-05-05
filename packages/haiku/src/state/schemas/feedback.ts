@@ -52,7 +52,7 @@ const FEEDBACK_ORIGINS = [
 	"agent",
 ] as const
 
-const FEEDBACK_STATUSES = [
+export const FEEDBACK_STATUSES = [
 	"pending",
 	"fixing",
 	"addressed",
@@ -69,7 +69,7 @@ const FEEDBACK_RESOLUTIONS = [
 
 // FB-NN identifier shape — `FB-` followed by one or more digits, OR
 // just digits (the handler accepts either).
-const FB_ID_PATTERN = "^(?:FB-)?\\d+$"
+export const FB_ID_PATTERN = "^(?:FB-)?\\d+$"
 
 // ── HAIKU_FEEDBACK_INPUT_SCHEMA ──────────────────────────────────────
 //

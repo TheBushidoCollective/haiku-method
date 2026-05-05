@@ -37,12 +37,42 @@ export type {
 } from "./feedback.js"
 export {
 	CREATE_TIME_FB_FIELDS,
+	FB_ID_PATTERN,
+	FEEDBACK_STATUSES,
 	FSM_DRIVEN_FB_FIELDS,
 	HAIKU_FEEDBACK_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA,
 	validateHaikuFeedbackInputSchema,
 	validateHaikuFeedbackUpdateInputSchema,
 } from "./feedback.js"
+export type {
+	HaikuFeedbackAdvanceHatInput,
+	HaikuFeedbackDeleteInput,
+	HaikuFeedbackListInput,
+	HaikuFeedbackMoveInput,
+	HaikuFeedbackReadInput,
+	HaikuFeedbackRejectHatInput,
+	HaikuFeedbackRejectInput,
+	HaikuFeedbackWriteInput,
+} from "./inputs/feedback-variants.js"
+export {
+	HAIKU_FEEDBACK_ADVANCE_HAT_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_DELETE_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_LIST_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_MOVE_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_READ_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_REJECT_HAT_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_REJECT_INPUT_SCHEMA,
+	HAIKU_FEEDBACK_WRITE_INPUT_SCHEMA,
+	validateHaikuFeedbackAdvanceHatInputSchema,
+	validateHaikuFeedbackDeleteInputSchema,
+	validateHaikuFeedbackListInputSchema,
+	validateHaikuFeedbackMoveInputSchema,
+	validateHaikuFeedbackReadInputSchema,
+	validateHaikuFeedbackRejectHatInputSchema,
+	validateHaikuFeedbackRejectInputSchema,
+	validateHaikuFeedbackWriteInputSchema,
+} from "./inputs/feedback-variants.js"
 export type {
 	HaikuIntentGetInput,
 	HaikuIntentListInput,

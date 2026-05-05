@@ -9,6 +9,7 @@ inputs:
 outputs:
   - >-
     .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/success-criteria-and-acceptance-shape.md
+  - stages/inception/artifacts/success-criteria-and-acceptance-shape.md
 quality_gates:
   - name: artifact-exists
     command: >-
@@ -49,12 +50,16 @@ quality_gates:
       ($1>=4)?0:1}'
 status: active
 bolt: 1
-hat: researcher
+hat: distiller
 started_at: '2026-05-05T22:29:27Z'
-hat_started_at: '2026-05-05T22:29:27Z'
+hat_started_at: '2026-05-05T22:33:15Z'
 iterations:
   - hat: researcher
     started_at: '2026-05-05T22:29:27Z'
+    completed_at: '2026-05-05T22:33:15Z'
+    result: advance
+  - hat: distiller
+    started_at: '2026-05-05T22:33:15Z'
     completed_at: null
     result: null
 ---

@@ -1486,15 +1486,30 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 								>
 									<div className="ng-head">
 										<span className="ng-caption" style={{ color: "#92400e" }}>
-											↳ inside this call · opens <code>intent_review</code> gate
-											(blocking)
+											↳ pre-stage elicitation chain (engine-managed) → opens{" "}
+											<code>intent_review</code> gate (blocking)
 										</span>
 										<span className="ig-type" style={{ color: "#92400e" }}>
 											ask
 										</span>
 										<span className="ig-ctx">first-tick gate</span>
 									</div>
-									<div className="ng-branch-row">
+									<div
+										style={{
+											marginTop: 6,
+											display: "flex",
+											flexWrap: "wrap",
+											gap: 4,
+											fontSize: 10,
+											color: "#92400e",
+										}}
+									>
+										<code>select_studio</code>{" "}→{" "}
+										<code>select_mode</code>{" "}→{" "}
+										<code>(quick? select_stage)</code>{" "}→{" "}
+										<code>intent_review</code>
+									</div>
+									<div className="ng-branch-row" style={{ marginTop: 6 }}>
 										<span className="ng-branch reject-branch">
 											↑ request changes → loop creation
 										</span>
@@ -1510,10 +1525,14 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 											lineHeight: 1.45,
 										}}
 									>
-										The user's click <strong>is</strong> the outcome of the{" "}
-										<code>haiku_run_next</code> call. On approve: state.json
-										created, <code>phase: elaborate</code> set on the first
-										stage.
+										Each elicitation step calls a discrete MCP tool (
+										<code>haiku_select_studio</code>,{" "}
+										<code>haiku_select_mode</code>,{" "}
+										<code>haiku_select_stage</code>) so the user picks studio
+										+ mode + (for quick) stage. Mode and stages are
+										engine-managed — the agent never writes them via{" "}
+										<code>haiku_intent_create</code> or{" "}
+										<code>haiku_intent_set</code>.
 									</div>
 								</div>
 							</>

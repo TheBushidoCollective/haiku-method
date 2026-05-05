@@ -284,6 +284,10 @@ When all pre-advance checks pass, the tick emits one mainline action describing 
 
 | Action | Meaning | What the agent does |
 |---|---|---|
+| `select_studio` | Studio not yet chosen on the intent | Call `haiku_select_studio` (elicits a studio from the user) |
+| `select_mode` | Studio chosen, mode not yet chosen | Call `haiku_select_mode` (elicits a mode: continuous, discrete, autopilot, quick). Mode is engine-managed — agents never set it directly. |
+| `select_stage` | Mode is `quick` and the single stage isn't picked yet | Call `haiku_select_stage` (elicits exactly one stage from the studio's stage list) |
+| `gate_review` (intent_review) | Pre-stage approval of the minimal intent — fires after studio + mode + (if quick) stage are set, before stage 0 begins | Surface the review URL to the user; call `haiku_await_gate` |
 | `start_stage` | First entry to a new stage | Acknowledge, retick |
 | `elaborate` | Stage is in elaborate phase | Collaborate with the user, draft units, record decisions |
 | `pre_review` | Pre-execute review of unit specs | Spawn review-agent subagents |
@@ -300,6 +304,8 @@ When all pre-advance checks pass, the tick emits one mainline action describing 
 | `intent_complete` | Terminal — intent done | Stop |
 | `escalate` | Terminal — needs human intervention | Stop and surface to user |
 | `error` | Terminal — engine cannot proceed | Stop and surface to user |
+
+The pre-stage chain — `select_studio → select_mode → (quick? → select_stage) → intent_review (gate_review)` — is the only place orientation choices are made. The agent **never** writes `mode` or `stages` directly; both fields are FSM-driven (rejected by `haiku_intent_set` with `intent_field_engine_only`). `haiku_intent_create` does not accept `mode` or `stages` either — every orientation choice flows through real elicitation.
 
 The agent **never branches on action type for workflow-routing decisions**. They just follow the instruction the action's prompt builder rendered.
 

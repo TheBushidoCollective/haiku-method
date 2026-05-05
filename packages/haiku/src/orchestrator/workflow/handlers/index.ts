@@ -24,6 +24,7 @@ import error from "./error.js"
 import execute from "./execute.js"
 import gate from "./gate.js"
 import intentCompletion from "./intent-completion.js"
+import intentReview from "./intent-review.js"
 import manualChangeAssessment from "./manual-change-assessment.js"
 import review from "./review.js"
 import selectStudio from "./select-studio.js"
@@ -35,6 +36,7 @@ import startStage from "./start-stage.js"
 const REGISTRY: Partial<Record<StateName, WorkflowHandler>> = {
 	complete,
 	select_studio: selectStudio,
+	intent_review: intentReview,
 	error,
 	start_stage: startStage,
 	elaborate,

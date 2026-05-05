@@ -51,6 +51,7 @@ import {
 } from "../../state/schemas/inputs/_validate.js"
 import { sealIntentState } from "../../state-integrity.js"
 import {
+	deleteFrontmatterFields,
 	gitCommitState,
 	intentDir,
 	isGitRepo,
@@ -106,30 +107,60 @@ export default defineTool({
 		const intentMeta = readFrontmatter(intentMd)
 		const intentStudio = (intentMeta.studio as string) || ""
 		const activeStage = (intentMeta.active_stage as string) || ""
-		if (!activeStage) {
+		const intentPhase = (intentMeta.phase as string) || ""
+
+		// Gate-pointer source: stage state.json for stage-scope gates,
+		// intent.md frontmatter for intent-scope gates (intent_review
+		// pre-stage, intent_completion post-final). Pre-stage
+		// intent_review has no active_stage yet — pointers live on
+		// intent.md only.
+		const isIntentScopeGate =
+			!activeStage ||
+			intentPhase === "intent_review" ||
+			intentPhase === "awaiting_completion_review" ||
+			intentPhase === "intent_completion"
+
+		const ssPath = activeStage ? stageStatePath(slug, activeStage) : ""
+		const stageState: Record<string, unknown> = ssPath ? readJson(ssPath) : {}
+
+		const stagePersistedSid =
+			(stageState.gate_review_session_id as string | undefined) || ""
+		const intentPersistedSid =
+			(intentMeta.gate_review_session_id as string | undefined) || ""
+		const persistedSid = isIntentScopeGate
+			? intentPersistedSid || stagePersistedSid
+			: stagePersistedSid
+
+		if (!persistedSid && !validated.session_id && !activeStage) {
 			return text(
-				`No active stage on intent '${slug}' — nothing to await. Call haiku_run_next first.`,
+				`No active stage on intent '${slug}' and no pending intent-scope gate — nothing to await. Call haiku_run_next first.`,
 			)
 		}
-
-		const ssPath = stageStatePath(slug, activeStage)
-		const stageState = readJson(ssPath)
-		const persistedSid =
-			(stageState.gate_review_session_id as string | undefined) || ""
 		const sessionId = validated.session_id || persistedSid
 		if (!sessionId) {
+			const where = activeStage ? `stage '${activeStage}'` : `intent scope`
 			return text(
-				`No pending gate-review session for intent '${slug}' (stage '${activeStage}'). Call haiku_run_next to (re)open the gate.`,
+				`No pending gate-review session for intent '${slug}' (${where}). Call haiku_run_next to (re)open the gate.`,
 			)
 		}
 
 		const stage = activeStage
-		const nextStage =
-			(stageState.gate_review_next_stage as string | null | undefined) ?? null
-		const nextPhase =
-			(stageState.gate_review_next_phase as string | null | undefined) ?? null
-		const gateContext =
-			(stageState.gate_review_context as string | undefined) || "stage_gate"
+		const nextStage = isIntentScopeGate
+			? ((intentMeta.gate_review_next_stage as string | null | undefined) ??
+				null)
+			: ((stageState.gate_review_next_stage as string | null | undefined) ??
+				null)
+		const nextPhase = isIntentScopeGate
+			? ((intentMeta.gate_review_next_phase as string | null | undefined) ??
+				null)
+			: ((stageState.gate_review_next_phase as string | null | undefined) ??
+				null)
+		const gateContext = isIntentScopeGate
+			? ((intentMeta.gate_review_context as string | undefined) ||
+				(stageState.gate_review_context as string | undefined) ||
+				"stage_gate")
+			: ((stageState.gate_review_context as string | undefined) ||
+				"stage_gate")
 		const intentDirPath = `.haiku/intents/${slug}`
 
 		const _awaitGateReviewSession = getAwaitGateReviewSession()
@@ -159,14 +190,27 @@ export default defineTool({
 		// Clear the persisted session pointers as soon as the await tool
 		// owns the wait — even if the wait throws, we don't want stale
 		// state to suggest an open session that's no longer in memory.
+		// Stage-scope pointers live on stage state.json; intent-scope
+		// pointers live on intent.md frontmatter.
 		try {
-			const ss = readJson(ssPath)
-			delete ss.gate_review_session_id
-			delete ss.gate_review_url
-			delete ss.gate_review_context
-			delete ss.gate_review_next_stage
-			delete ss.gate_review_next_phase
-			writeJson(ssPath, ss)
+			if (ssPath) {
+				const ss = readJson(ssPath)
+				delete ss.gate_review_session_id
+				delete ss.gate_review_url
+				delete ss.gate_review_context
+				delete ss.gate_review_next_stage
+				delete ss.gate_review_next_phase
+				writeJson(ssPath, ss)
+			}
+			if (isIntentScopeGate) {
+				deleteFrontmatterFields(intentMd, [
+					"gate_review_session_id",
+					"gate_review_url",
+					"gate_review_context",
+					"gate_review_next_stage",
+					"gate_review_next_phase",
+				])
+			}
 		} catch {
 			/* non-fatal */
 		}
@@ -236,16 +280,30 @@ export default defineTool({
 				if (gateContext === "intent_review") {
 					const intentFilePath = join(process.cwd(), intentDirPath, "intent.md")
 					setFrontmatterField(intentFilePath, "intent_reviewed", true)
-					if (nextPhase) workflowAdvancePhase(slug, stage, nextPhase)
+					// Pre-stage intent_review (current shape): no active stage,
+					// the engine sets phase: "intent_review" on intent.md when
+					// it opens the gate. Approval clears that phase so the
+					// next tick falls through to start_stage.
+					// Legacy mid-stage intent_review (the elaborate→execute
+					// gate on stage 0): an active stage exists, so the phase
+					// advance still drives the stage forward.
+					if (stage && nextPhase) {
+						workflowAdvancePhase(slug, stage, nextPhase)
+					} else {
+						deleteFrontmatterFields(intentFilePath, ["phase"])
+						sealIntentState(slug)
+					}
 					gitCommitState(`haiku: intent ${slug} approved by user`)
 					syncSessionMetadata(slug, stFile)
 					const gateResult = {
 						action: "intent_approved",
 						intent: slug,
-						stage,
-						from_phase: "elaborate",
-						to_phase: nextPhase,
-						message: `Intent approved — advancing to ${nextPhase || "execute"}. IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user — the transition was already approved.`,
+						stage: stage || null,
+						from_phase: "intent_review",
+						to_phase: nextPhase || "execute",
+						message: stage
+							? `Intent approved — advancing to ${nextPhase || "execute"}. IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user — the transition was already approved.`
+							: `Intent approved — beginning stage 0. IMPORTANT: Call haiku_run_next { intent: "${slug}" } immediately. Do NOT ask the user — the transition was already approved.`,
 					}
 					return text(withInstructions(gateResult))
 				}
@@ -340,15 +398,21 @@ export default defineTool({
 			}
 
 			const intentDirPathAbs = join(process.cwd(), intentDirPath)
+			// Pre-stage intent_review (no active stage) is by definition
+			// pre-execute — there's no stage artifact to attach feedback to.
+			// Mid-stage gates fall back to per-stage detection.
 			const preExecute =
-				gateContext === "elaborate_to_execute" ||
-				gateContext === "intent_review"
-					? isStagePreExecute(intentDirPathAbs, stage)
-					: false
+				gateContext === "intent_review" && !stage
+					? true
+					: gateContext === "elaborate_to_execute" ||
+							gateContext === "intent_review"
+						? isStagePreExecute(intentDirPathAbs, stage)
+						: false
 
-			const feedbackIds = preExecute
-				? []
-				: writeReviewFeedbackFiles(slug, stage, reviewResult)
+			const feedbackIds =
+				preExecute || !stage
+					? []
+					: writeReviewFeedbackFiles(slug, stage, reviewResult)
 			const feedbackSummary =
 				feedbackIds.length > 0
 					? ` Created ${feedbackIds.length} feedback file(s): ${feedbackIds.join(", ")}.`

@@ -351,10 +351,12 @@ test("side-effecting handler against isolated fixture does not pollute parent re
 
 	const { haikuRoot, cleanup } = fixture("isolation-canary", {
 		studio: "software",
-		// active_stage empty → derive-state returns start_stage with
+		// active_stage empty + intent_reviewed:true → derive-state skips
+		// the pre-stage intent_review gate and returns start_stage with
 		// currentStage = first software stage. The handler runs through
 		// to workflowStartStage, which does git ops. With
 		// setIsGitRepoForTests(false), those ops short-circuit.
+		intent_reviewed: true,
 	})
 	setHaikuRootForTests(haikuRoot)
 	setIsGitRepoForTests(false)

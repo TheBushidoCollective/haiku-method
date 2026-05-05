@@ -60,7 +60,6 @@ import {
 	parseFrontmatter,
 	readFeedbackFiles,
 	readJson,
-	setFrontmatterField,
 	timestamp,
 	writeJson,
 } from "../../../state-tools.js"
@@ -249,7 +248,6 @@ const emit: WorkflowHandler = (ctx) => {
 	const intent = ctx.intent
 	const currentStage = ctx.currentStage
 	const iDir = ctx.intentDirPath
-	const intentFile = join(iDir, "intent.md")
 
 	if (!currentStage) return null
 
@@ -869,35 +867,33 @@ const emit: WorkflowHandler = (ctx) => {
 		}
 	}
 
-	// Spec gate: auto-advance or open gate_review
-	const intentReviewed = intent.intent_reviewed as boolean
-	const isIntentReview = currentStage === studioStages[0] && !intentReviewed
+	// Spec gate: auto-advance or open the elaborate→execute review.
+	// Pre-stage intent review (the user-facing approval of the intent
+	// itself) now fires from handlers/intent-review.ts BEFORE any stage
+	// starts, not at the end of stage 0's elaborate phase. By the time
+	// we reach this gate, intent_reviewed has already been stamped (or
+	// would be ignored — the gate context here is always
+	// elaborate_to_execute).
 	const stageReviewType = resolveStageReview(studio, currentStage)
 	const intentMode = (intent.mode as string) || "continuous"
 	const specGateAsks =
 		intentMode === "discrete" ? true : stageReviewType !== "auto"
 
 	if (!specGateAsks) {
-		if (isIntentReview) {
-			setFrontmatterField(intentFile, "intent_reviewed", true)
-			gitCommitState(`haiku: intent ${slug} auto-approved`)
-		}
 		workflowAdvancePhase(slug, currentStage, "execute")
 		emitTelemetry("haiku.gate.auto_advanced", {
 			intent: slug,
 			stage: currentStage,
-			gate_context: isIntentReview ? "intent_review" : "elaborate_to_execute",
+			gate_context: "elaborate_to_execute",
 		})
 		return {
-			action: isIntentReview ? "intent_approved" : "advance_phase",
+			action: "advance_phase",
 			intent: slug,
 			studio,
 			stage: currentStage,
 			from_phase: "elaborate",
 			to_phase: "execute",
-			message: isIntentReview
-				? `Auto-gate: intent approved — advancing to execution. Call haiku_run_next { intent: "${slug}" } immediately.`
-				: `Auto-gate: specs validated — advancing to execution. Call haiku_run_next { intent: "${slug}" } immediately.`,
+			message: `Auto-gate: specs validated — advancing to execution. Call haiku_run_next { intent: "${slug}" } immediately.`,
 		}
 	}
 
@@ -926,10 +922,8 @@ const emit: WorkflowHandler = (ctx) => {
 		stage: currentStage,
 		next_phase: "execute",
 		gate_type: "ask",
-		gate_context: isIntentReview ? "intent_review" : "elaborate_to_execute",
-		message: isIntentReview
-			? `Intent '${slug}' specs ready for review — presenting for your approval`
-			: "Specs validated — opening review before execution",
+		gate_context: "elaborate_to_execute",
+		message: "Specs validated — opening review before execution",
 	}
 }
 

@@ -665,33 +665,32 @@ Second intent body.
 	})
 
 	// ── runNext: intent review gate ──────────────────────────────────────────
+	//
+	// Intent review now fires BEFORE any stage starts (via the
+	// pre-stage `intent_review` workflow state), not at the end of
+	// stage 0's elaborate phase. The elaborate→execute gate always
+	// uses `elaborate_to_execute` as its gate_context regardless of
+	// intent_reviewed.
 
 	console.log("\n=== runNext: intent review gate ===")
 
-	test("elaborate-to-execute gate auto-advances for unreviewed intent with auto review", () => {
-		const { projDir, slug, intentDirPath } = createProject(
-			"intent-review-elab",
-			{
-				intent_reviewed: false,
-				active_stage: "plan",
-				stageConfig: { plan: { elaboration: "directed" } },
-			},
-		)
-		createStageState(intentDirPath, "plan", {
-			phase: "elaborate",
-			elaboration_turns: 5,
+	test("pre-stage intent_review opens review UI when studio set and not yet reviewed", () => {
+		const { projDir, slug } = createProject("pre-stage-review", {
+			active_stage: "",
+			intent_reviewed: false,
+			stageConfig: { plan: { elaboration: "directed" } },
 		})
-		createUnit(intentDirPath, "plan", "unit-01-first")
 		process.chdir(projDir)
 		const result = runNext(slug)
-		// review: auto → auto-advance, intent_review case returns intent_approved
-		assert.strictEqual(result.action, "intent_approved")
-		assert.strictEqual(result.to_phase, "execute")
+		assert.strictEqual(result.action, "gate_review")
+		assert.strictEqual(result.gate_context, "intent_review")
+		assert.strictEqual(result.gate_type, "ask")
+		assert.strictEqual(result.stage, null)
 	})
 
-	test("elaborate-to-execute gate auto-advances for reviewed intent with auto review", () => {
+	test("elaborate-to-execute gate auto-advances on stage 0 with auto review", () => {
 		const { projDir, slug, intentDirPath } = createProject(
-			"intent-reviewed-elab",
+			"intent-review-elab",
 			{
 				intent_reviewed: true,
 				active_stage: "plan",
@@ -705,34 +704,11 @@ Second intent body.
 		createUnit(intentDirPath, "plan", "unit-01-first")
 		process.chdir(projDir)
 		const result = runNext(slug)
-		// review: auto → auto-advance, already-reviewed returns advance_phase
 		assert.strictEqual(result.action, "advance_phase")
 		assert.strictEqual(result.to_phase, "execute")
 	})
 
-	test("elaborate-to-execute gate opens review UI for ask-review stages (intent_review)", () => {
-		const { projDir, slug, intentDirPath } = createProject(
-			"intent-review-ask",
-			{
-				intent_reviewed: false,
-				active_stage: "plan",
-				stageConfig: { plan: { elaboration: "directed", review: "ask" } },
-			},
-		)
-		createStageState(intentDirPath, "plan", {
-			phase: "elaborate",
-			elaboration_turns: 5,
-		})
-		createUnit(intentDirPath, "plan", "unit-01-first")
-		process.chdir(projDir)
-		const result = runNext(slug)
-		assert.strictEqual(result.action, "gate_review")
-		assert.strictEqual(result.gate_context, "intent_review")
-		assert.strictEqual(result.gate_type, "ask")
-		assert.strictEqual(result.next_phase, "execute")
-	})
-
-	test("elaborate-to-execute gate opens review UI for ask-review stages (normal)", () => {
+	test("elaborate-to-execute gate opens review UI for ask-review stage 0", () => {
 		const { projDir, slug, intentDirPath } = createProject(
 			"intent-reviewed-ask",
 			{
@@ -1123,6 +1099,7 @@ studio: empty-studio
 mode: continuous
 active_stage: ""
 status: active
+intent_reviewed: true
 ---
 `,
 		)

@@ -27,6 +27,13 @@ const FSM_DRIVEN_INTENT_FIELDS_LIST = [
 	"stages",
 	"composite",
 	"intent_reviewed",
+	// Intent-scope gate session pointers (intent_review, intent_completion).
+	// Stage-scope gates persist these on the stage's state.json instead.
+	"gate_review_session_id",
+	"gate_review_url",
+	"gate_review_context",
+	"gate_review_next_stage",
+	"gate_review_next_phase",
 	// Archive lifecycle (toggle via haiku_intent_archive / _unarchive)
 	"archived",
 	"archived_at",

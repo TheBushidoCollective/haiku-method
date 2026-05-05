@@ -3880,6 +3880,29 @@ export function setFrontmatterField(
 	)
 }
 
+/** Remove one or more frontmatter fields from a markdown file. Unlike
+ *  setFrontmatterField (which writes a value), this drops the key
+ *  entirely so downstream readers don't see a stale empty/null. No-op
+ *  for fields that aren't present. */
+export function deleteFrontmatterFields(
+	filePath: string,
+	fields: ReadonlyArray<string>,
+): void {
+	if (!existsSync(filePath)) return
+	const raw = readFileSync(filePath, "utf8")
+	const parsed = matter(raw)
+	const updated: Record<string, unknown> = { ...parsed.data }
+	let mutated = false
+	for (const f of fields) {
+		if (f in updated) {
+			delete updated[f]
+			mutated = true
+		}
+	}
+	if (!mutated) return
+	writeFileSync(filePath, matter.stringify(parsed.content, normalizeDates(updated)))
+}
+
 /** Write a unit frontmatter field to BOTH the parent worktree's copy AND
  *  the unit's dedicated worktree (if one exists). The dual write is what
  *  keeps the workflow engine's reads (parent) in sync with the merge commits produced

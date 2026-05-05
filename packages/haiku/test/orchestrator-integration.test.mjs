@@ -467,20 +467,17 @@ try {
 		setGateReviewMock(null)
 	})
 
-	await test("changes_requested on intent_review pre-execute context surfaces inline feedback without persisting files", async () => {
-		// Pre-execute contexts (intent_review + elaborate_to_execute with no
-		// completed units) deliberately do NOT persist feedback files — the
-		// reviewer's comments go inline in the returned action and the
-		// agent edits the unit specs or intent.md directly. Persisting
-		// pre-execute findings would accumulate artifacts the fix-loop
-		// model can't address (no artifact exists yet).
-		const { projDir, intentDirPath, slug } = createProject("g6-intent-review", {
-			active_stage: "plan",
+	await test("changes_requested on pre-stage intent_review surfaces inline feedback without persisting files", async () => {
+		// Pre-stage intent_review fires BEFORE any stage starts (no
+		// active_stage on intent.md, intent_reviewed: false). There's no
+		// stage artifact yet, so changes_requested deliberately does NOT
+		// persist feedback files — the reviewer's comments go inline in
+		// the returned action and the agent edits intent.md directly.
+		const { projDir, slug } = createProject("g6-intent-review", {
+			active_stage: "",
 			intent_reviewed: false,
 			stageConfig: { plan: { review: "ask" } },
 		})
-		createStageState(intentDirPath, "plan", { phase: "elaborate" })
-		createUnit(intentDirPath, "plan", "unit-01-test", { status: "pending" })
 
 		process.chdir(projDir)
 
@@ -501,7 +498,7 @@ try {
 		const parsed = JSON.parse(jsonMatch[0].replace(/\n\n---$/, ""))
 
 		assert.strictEqual(parsed.action, "changes_requested")
-		// Pre-execute: no persistent files — feedback lives inline in the action.
+		// Pre-stage: no persistent files — feedback lives inline in the action.
 		assert.strictEqual(parsed.feedback_ids.length, 0)
 		assert.strictEqual(parsed.feedback, "Intent needs more scope")
 		assert.ok(

@@ -119,8 +119,20 @@ test("no studio → select_studio", () => {
 	assert.strictEqual(result.context.studio, "")
 })
 
-test("studio set, no active_stage → start_stage", () => {
+test("studio set, no active_stage, not yet reviewed → intent_review", () => {
 	const { haikuRoot, cleanup } = fixture("test", { studio: "software" })
+	const result = deriveCurrentState("test", haikuRoot)
+	cleanup()
+	assert.strictEqual(result.state, "intent_review")
+	assert.strictEqual(result.context.studio, "software")
+	assert.strictEqual(result.context.currentStage, "")
+})
+
+test("studio set, no active_stage, intent_reviewed=true → start_stage", () => {
+	const { haikuRoot, cleanup } = fixture("test", {
+		studio: "software",
+		intent_reviewed: true,
+	})
 	const result = deriveCurrentState("test", haikuRoot)
 	cleanup()
 	assert.strictEqual(result.state, "start_stage")
@@ -128,14 +140,14 @@ test("studio set, no active_stage → start_stage", () => {
 	assert.strictEqual(result.context.currentStage, "")
 })
 
-test("intent.phase=intent_review → gate_review", () => {
+test("intent.phase=intent_review → intent_review", () => {
 	const { haikuRoot, cleanup } = fixture("test", {
 		studio: "software",
 		phase: "intent_review",
 	})
 	const result = deriveCurrentState("test", haikuRoot)
 	cleanup()
-	assert.strictEqual(result.state, "gate_review")
+	assert.strictEqual(result.state, "intent_review")
 })
 
 test("intent.phase=intent_completion (not dispatched) → intent_completion_review", () => {

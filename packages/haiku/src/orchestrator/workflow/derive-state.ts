@@ -124,15 +124,29 @@ export function deriveCurrentState(
 		}
 	}
 
-	// Intent-level phases (intent_review and intent_completion) are
-	// driven by intent.phase, not stage state. They short-circuit
-	// stage processing.
-	if (phase === "intent_review") {
+	// Pre-stage intent review. Studio is selected, no stage has
+	// started yet (no active_stage, no phase), and the user has
+	// not approved the intent yet (intent_reviewed !== true). Pop a
+	// review screen for the minimal intent before the workflow
+	// enters stage 0. Approved via haiku_await_gate, which stamps
+	// intent_reviewed: true so this branch falls through on the
+	// next tick.
+	const intentReviewed = intent.intent_reviewed === true
+	const activeStageEarly = (intent.active_stage as string) || ""
+	if (
+		!intentReviewed &&
+		!activeStageEarly &&
+		(!phase || phase === "intent_review")
+	) {
 		return {
-			state: "gate_review",
+			state: "intent_review",
 			context: baseContext("", "", {}),
 		}
 	}
+
+	// Intent-level phases (intent_completion) are driven by
+	// intent.phase, not stage state. They short-circuit stage
+	// processing.
 	// Production writes `awaiting_completion_review` via workflowEnterIntentCompletionReview;
 	// `intent_completion` is reserved for callers that want the same routing under
 	// the more descriptive name. Both surface to the same workflow handler.

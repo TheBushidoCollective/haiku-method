@@ -64,6 +64,7 @@ import {
 	listVisibleIntents,
 	parseFrontmatter,
 	readJson,
+	setFrontmatterField,
 	stageStatePath,
 	syncSessionMetadata,
 	validateBranch,
@@ -269,7 +270,7 @@ export default defineTool({
 		// create the session, surface the URL to the agent, and ask
 		// the agent to post the URL → call haiku_await_gate.
 		if (result.action === "gate_review") {
-			const stage = result.stage as string
+			const stage = (result.stage as string | null) ?? ""
 			const nextStage = result.next_stage as string | null
 			const nextPhase = result.next_phase as string | null
 			const gateContext = (result.gate_context as string) || "stage_gate"
@@ -298,19 +299,50 @@ export default defineTool({
 					nextPhase,
 				})
 
-				// Persist session pointers on stage state so haiku_await_gate
-				// can recover them without an explicit session_id arg. Also
-				// gives the architecture map / tooling a stable place to
-				// observe the open session.
+				// Persist session pointers so haiku_await_gate can recover
+				// them without an explicit session_id arg. Stage-scope
+				// gates land on stage state.json; intent-scope gates
+				// (intent_review pre-stage, intent_completion post-final)
+				// have no stage to write to, so they land on intent.md
+				// frontmatter as engine-managed fields.
 				try {
-					const ssPath = stageStatePath(slug, stage)
-					const ssData = readJson(ssPath)
-					ssData.gate_review_session_id = prepared.session_id
-					ssData.gate_review_url = prepared.review_url
-					ssData.gate_review_context = gateContext
-					ssData.gate_review_next_stage = nextStage
-					ssData.gate_review_next_phase = nextPhase
-					writeJson(ssPath, ssData)
+					if (stage) {
+						const ssPath = stageStatePath(slug, stage)
+						const ssData = readJson(ssPath)
+						ssData.gate_review_session_id = prepared.session_id
+						ssData.gate_review_url = prepared.review_url
+						ssData.gate_review_context = gateContext
+						ssData.gate_review_next_stage = nextStage
+						ssData.gate_review_next_phase = nextPhase
+						writeJson(ssPath, ssData)
+					} else {
+						const intentMdPath = join(intentDir(slug), "intent.md")
+						setFrontmatterField(
+							intentMdPath,
+							"gate_review_session_id",
+							prepared.session_id,
+						)
+						setFrontmatterField(
+							intentMdPath,
+							"gate_review_url",
+							prepared.review_url,
+						)
+						setFrontmatterField(intentMdPath, "gate_review_context", gateContext)
+						if (nextStage !== undefined && nextStage !== null) {
+							setFrontmatterField(
+								intentMdPath,
+								"gate_review_next_stage",
+								nextStage,
+							)
+						}
+						if (nextPhase !== undefined && nextPhase !== null) {
+							setFrontmatterField(
+								intentMdPath,
+								"gate_review_next_phase",
+								nextPhase,
+							)
+						}
+					}
 				} catch {
 					/* non-fatal — agent can still pass session_id explicitly */
 				}

@@ -21,6 +21,7 @@ import { join } from "node:path"
 import {
 	cleanupDiscoveryWorktree,
 	cleanupFixChainWorktree,
+	consolidateStageBranches,
 	createDiscoveryWorktree,
 	createFixChainWorktree,
 	discoveryBranchName,
@@ -980,6 +981,92 @@ await test(
 				}
 				rmSync(userWt, { recursive: true, force: true })
 			}
+		} finally {
+			cleanupRepo(tmp)
+		}
+	},
+)
+
+// ── consolidateStageBranches conflict pattern ───────────────────────────
+//
+// `consolidateStageBranches` is the orphan-discrete-intent recovery
+// merge — used by /haiku:repair on intents that have stage branches
+// but no haiku/{slug}/main. Originally it caught merge errors and
+// returned a generic `{success: false, message}`. Audit follow-up
+// upgraded it to the standard pattern: detect conflicts via
+// `git diff --name-only --diff-filter=U` and return
+// `{success: false, isConflict: true, conflictFiles}` so callers can
+// surface the file list to the operator (or dispatch a resolver).
+// These tests lock the new contract in.
+
+console.log("\n=== consolidateStageBranches (audit follow-up) ===")
+
+await test("creates main from stages when no conflict", () => {
+	const { tmp, slug, stage } = setupRepo({ stage: "design" })
+	try {
+		process.chdir(tmp)
+		// Two stage branches, no main yet — the orphan-discrete state.
+		git(tmp, "checkout", `haiku/${slug}/main`)
+		git(tmp, "checkout", "-b", `haiku/${slug}/development`)
+		writeFileSync(join(tmp, "dev-output.md"), "from development\n")
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-m", "dev work")
+		// Delete the auto-created main branch so we exercise the
+		// "main doesn't exist yet" code path.
+		git(tmp, "checkout", `haiku/${slug}/development`)
+		git(tmp, "branch", "-D", `haiku/${slug}/main`)
+
+		const res = consolidateStageBranches(slug, ["design", "development"])
+		assert.ok(res.success, `expected consolidate to succeed; got: ${res.message}`)
+		assert.strictEqual(res.branch, `haiku/${slug}/main`)
+		assert.ok(branchExists(tmp, `haiku/${slug}/main`), "main branch created")
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
+await test(
+	"returns isConflict + conflictFiles when consolidation hits a merge conflict",
+	() => {
+		const { tmp, slug, stage } = setupRepo({ stage: "design" })
+		try {
+			process.chdir(tmp)
+			// Setup: main and a stage branch that diverged on the same
+			// file. Consolidate (= merge stage into main) must hit a
+			// conflict and report it via the new structured shape.
+			git(tmp, "checkout", `haiku/${slug}/main`)
+			writeFileSync(join(tmp, "shared.md"), "main side\n")
+			git(tmp, "add", "-A")
+			git(tmp, "commit", "-m", "main side")
+
+			git(tmp, "checkout", "-b", `haiku/${slug}/development`, `haiku/${slug}/main~1`)
+			writeFileSync(join(tmp, "shared.md"), "development side\n")
+			git(tmp, "add", "-A")
+			git(tmp, "commit", "-m", "development side")
+
+			const res = consolidateStageBranches(slug, ["design", "development"])
+			assert.ok(!res.success, "expected conflict to surface as failure")
+			assert.strictEqual(
+				res.isConflict,
+				true,
+				`expected isConflict=true; got: ${JSON.stringify(res)}`,
+			)
+			assert.ok(
+				res.conflictFiles && res.conflictFiles.length > 0,
+				`expected conflictFiles list; got: ${JSON.stringify(res)}`,
+			)
+			assert.ok(
+				res.conflictFiles?.includes("shared.md"),
+				`expected shared.md in conflict list; got: ${JSON.stringify(res.conflictFiles)}`,
+			)
+			assert.ok(
+				/shared\.md/.test(res.message),
+				`expected message to name the conflict file; got: ${res.message}`,
+			)
+			assert.ok(
+				/Resolve the conflicts/i.test(res.message),
+				`expected actionable remediation hint; got: ${res.message}`,
+			)
 		} finally {
 			cleanupRepo(tmp)
 		}

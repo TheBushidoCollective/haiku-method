@@ -1594,9 +1594,31 @@ function repairAllBranches(autoApply: boolean): {
 					} catch {
 						// push failed — still continue with local repair
 					}
+				} else {
+					// Structured failure (conflict or other) — record into
+					// the repair report so the operator sees it instead of
+					// the consolidation silently no-op'ing. Conflict path
+					// includes the file list; other failures show the raw
+					// git error.
+					const detail = result.isConflict
+						? `Merge conflict consolidating into haiku/${slug}/main on ${result.conflictFiles?.length ?? 0} file(s): ${(result.conflictFiles ?? []).join(", ")}. Resolve on haiku/${slug}/main, commit, then re-run /haiku:repair.`
+						: `Failed to consolidate stage branches into haiku/${slug}/main: ${result.message}`
+					summaries.push({
+						slug,
+						branch: `haiku/${slug}/main`,
+						scanned: 0,
+						applied: [],
+						remaining: [],
+						committed: false,
+						pushed: false,
+						merged: false,
+						pushError: detail,
+					})
 				}
 			} catch (err) {
-				// Consolidation failed — record so it appears in the repair report
+				// Consolidation threw (rare — `consolidateStageBranches`
+				// returns structured results, but a layer above could
+				// throw). Record so it appears in the repair report.
 				summaries.push({
 					slug,
 					branch: `haiku/${slug}/main`,

@@ -587,7 +587,12 @@ export function mergeStageBranchForward(
 	slug: string,
 	fromStage: string,
 	toStage: string,
-): { success: boolean; message: string } {
+): {
+	success: boolean
+	message: string
+	isConflict?: boolean
+	conflictFiles?: string[]
+} {
 	if (!isGitRepo()) return { success: true, message: "no git" }
 	const fromBranch = `haiku/${slug}/${fromStage}`
 	const toBranch = `haiku/${slug}/${toStage}`
@@ -603,16 +608,39 @@ export function mergeStageBranchForward(
 		}
 	}
 
-	const mergeFn = (cwd?: string): void => {
-		run([
-			"git",
-			...(cwd ? ["-C", cwd] : []),
-			"merge",
-			fromBranch,
-			"--no-edit",
-			"-m",
-			`haiku: merge forward ${fromStage} → ${toStage}`,
-		])
+	// Standard engine-merge contract: run the merge, classify any
+	// failure as conflict-vs-other, return structured `isConflict` /
+	// `conflictFiles` so callers can dispatch a resolver subagent or
+	// surface a precise error.
+	const mergeFn = (cwd?: string): { conflictFiles: string[] } => {
+		const cwdArgs = cwd ? ["-C", cwd] : []
+		try {
+			run([
+				"git",
+				...cwdArgs,
+				"merge",
+				fromBranch,
+				"--no-edit",
+				"-m",
+				`haiku: merge forward ${fromStage} → ${toStage}`,
+			])
+			return { conflictFiles: [] }
+		} catch (mergeErr) {
+			const conflicts = tryRun([
+				"git",
+				...cwdArgs,
+				"diff",
+				"--name-only",
+				"--diff-filter=U",
+			])
+				.split("\n")
+				.filter(Boolean)
+			if (conflicts.length === 0) {
+				tryRun(["git", ...cwdArgs, "merge", "--abort"])
+				throw mergeErr
+			}
+			return { conflictFiles: conflicts }
+		}
 	}
 
 	// Three primary-checkout positions, mirroring `mergeStageBranchIntoMain`:
@@ -626,16 +654,25 @@ export function mergeStageBranchForward(
 	//     primary mutates the user's working tree on a branch they
 	//     didn't ask to switch to.
 	try {
-		if (current === toBranch) {
-			mergeFn()
-		} else {
-			withWorktreeOnBranch(toBranch, (tmpPath) => mergeFn(tmpPath))
+		const outcome =
+			current === toBranch
+				? mergeFn()
+				: withWorktreeOnBranch(toBranch, (tmpPath) => mergeFn(tmpPath))
+
+		if (outcome.conflictFiles.length > 0) {
+			return {
+				success: false,
+				isConflict: true,
+				conflictFiles: outcome.conflictFiles,
+				message: `Merge ${fromBranch} → ${toBranch} left ${outcome.conflictFiles.length} conflicted file(s): ${outcome.conflictFiles.join(", ")}. Resolve the conflicts on '${toBranch}' (edit files, \`git add\`, \`git commit\`), then retry the forward merge.`,
+			}
 		}
 		return { success: true, message: `merged ${fromBranch} → ${toBranch}` }
 	} catch (err) {
-		// Best-effort merge abort in whichever worktree the merge ran.
-		// `--abort` is a no-op when no merge is in progress; safe to
-		// blanket-issue.
+		// `mergeFn` aborts on non-conflict failures; this is a
+		// last-ditch defensive cleanup for throws from other layers
+		// (e.g. `withWorktreeOnBranch` failing because of a dirty
+		// foreign checkout).
 		tryRun(["git", "merge", "--abort"])
 		return {
 			success: false,
@@ -667,7 +704,12 @@ export function mergeStageBranchForward(
 export function mergeStageBranchIntoMain(
 	slug: string,
 	stage: string,
-): { success: boolean; message: string } {
+): {
+	success: boolean
+	message: string
+	isConflict?: boolean
+	conflictFiles?: string[]
+} {
 	if (!isGitRepo()) return { success: true, message: "no git" }
 	const stageBranch = `haiku/${slug}/${stage}`
 	const mainBranch = `haiku/${slug}/main`
@@ -679,13 +721,45 @@ export function mergeStageBranchIntoMain(
 
 		const current = getCurrentBranch()
 
-		const mergeInPrimary = (): void => {
-			run(["git", "merge", stageBranch, "--no-edit", "-m", mergeMessage])
+		// Run the merge and surface conflicts as structured data —
+		// matches the contract used by every other engine merge site
+		// so callers can dispatch a resolver subagent or surface a
+		// precise error message uniformly.
+		const mergeInTree = (cwd?: string): { conflictFiles: string[] } => {
+			const cwdArgs = cwd ? ["-C", cwd] : []
+			try {
+				run([
+					"git",
+					...cwdArgs,
+					"merge",
+					stageBranch,
+					"--no-edit",
+					"-m",
+					mergeMessage,
+				])
+				return { conflictFiles: [] }
+			} catch (mergeErr) {
+				const conflicts = tryRun([
+					"git",
+					...cwdArgs,
+					"diff",
+					"--name-only",
+					"--diff-filter=U",
+				])
+					.split("\n")
+					.filter(Boolean)
+				if (conflicts.length === 0) {
+					tryRun(["git", ...cwdArgs, "merge", "--abort"])
+					throw mergeErr
+				}
+				return { conflictFiles: conflicts }
+			}
 		}
 
+		let mergeOutcome: { conflictFiles: string[] }
 		if (current === mainBranch) {
 			// Primary already on the target. Merge here.
-			mergeInPrimary()
+			mergeOutcome = mergeInTree()
 		} else if (current === stageBranch) {
 			// Primary on the stage branch — the steady-state position for
 			// in-progress stage work. Switch primary to intent-main, then merge.
@@ -704,24 +778,24 @@ export function mergeStageBranchIntoMain(
 					message: `cannot switch primary worktree from '${stageBranch}' to '${mainBranch}' for stage merge: ${raw}`,
 				}
 			}
-			mergeInPrimary()
+			mergeOutcome = mergeInTree()
 		} else {
 			// Primary on something else (foreign branch, mainline, etc.) —
 			// don't disturb it. Prefer an existing worktree on
 			// `mainBranch` (handles the "user has intent main checked out
 			// in their own worktree" case); fall back to a temp worktree.
-			withWorktreeOnBranch(mainBranch, (tmpPath) => {
-				run([
-					"git",
-					"-C",
-					tmpPath,
-					"merge",
-					stageBranch,
-					"--no-edit",
-					"-m",
-					mergeMessage,
-				])
-			})
+			mergeOutcome = withWorktreeOnBranch(mainBranch, (tmpPath) =>
+				mergeInTree(tmpPath),
+			)
+		}
+
+		if (mergeOutcome.conflictFiles.length > 0) {
+			return {
+				success: false,
+				isConflict: true,
+				conflictFiles: mergeOutcome.conflictFiles,
+				message: `Merge ${stageBranch} → ${mainBranch} left ${mergeOutcome.conflictFiles.length} conflicted file(s): ${mergeOutcome.conflictFiles.join(", ")}. Resolve the conflicts on '${mainBranch}' (edit files, \`git add\`, \`git commit\`), then retry the stage completion.`,
+			}
 		}
 
 		return {
@@ -740,12 +814,25 @@ export function mergeStageBranchIntoMain(
  * Consolidate discrete stage branches into haiku/{slug}/main.
  * Used for orphan discrete intents that have per-stage branches but no main.
  * Creates the main branch from the last stage branch.
- * Returns the main branch name.
+ *
+ * Returns the main branch name plus a structured result. On merge
+ * conflict, returns `{success: false, isConflict: true, conflictFiles}`
+ * so callers can dispatch a resolver subagent or surface a precise
+ * error — matches the contract used by `mergeFixChainWorktree` and
+ * `mergeDiscoveryWorktree`. Routes the merge through
+ * `withWorktreeOnBranch` so a foreign checkout of mainBranch doesn't
+ * silently fail.
  */
 export function consolidateStageBranches(
 	slug: string,
 	stages: string[],
-): { branch: string; success: boolean; message: string } {
+): {
+	branch: string
+	success: boolean
+	message: string
+	isConflict?: boolean
+	conflictFiles?: string[]
+} {
 	const mainBranch = `haiku/${slug}/main`
 	if (!isGitRepo())
 		return { branch: mainBranch, success: true, message: "no git" }
@@ -756,31 +843,79 @@ export function consolidateStageBranches(
 		const lastStageBranch = `haiku/${slug}/${stages[stages.length - 1]}`
 		run(["git", "rev-parse", "--verify", lastStageBranch])
 
-		// If main already exists, check it out and merge the latest stage into it
-		if (branchExists(mainBranch)) {
-			checkoutOrCreate(mainBranch)
-			run([
-				"git",
-				"merge",
-				lastStageBranch,
-				"--no-edit",
-				"-m",
-				"haiku: consolidate discrete stages into main",
-			])
+		// Path 1: main doesn't exist yet — create it from the last
+		// stage branch. Pure ref creation, can't conflict.
+		if (!branchExists(mainBranch)) {
 			return {
-				branch: mainBranch,
+				branch: checkoutOrCreate(mainBranch, lastStageBranch),
 				success: true,
-				message: `merged ${lastStageBranch} into ${mainBranch}`,
+				message: `created ${mainBranch} from ${lastStageBranch}`,
 			}
 		}
-		// Otherwise create main from the last stage branch
+
+		// Path 2: main exists — merge the latest stage into it.
+		// Use a worktree on mainBranch (the user's, if they have one;
+		// else a transient temp worktree) so a foreign checkout of
+		// mainBranch doesn't break the merge. After the merge, run
+		// the standard conflict-detection sweep so callers get the
+		// same shape they'd get from any other engine merge.
+		const mergeFn = (cwd: string): { conflictFiles: string[] } => {
+			try {
+				run([
+					"git",
+					"-C",
+					cwd,
+					"merge",
+					lastStageBranch,
+					"--no-edit",
+					"-m",
+					"haiku: consolidate discrete stages into main",
+				])
+				return { conflictFiles: [] }
+			} catch (mergeErr) {
+				const conflicts = tryRun([
+					"git",
+					"-C",
+					cwd,
+					"diff",
+					"--name-only",
+					"--diff-filter=U",
+				])
+					.split("\n")
+					.filter(Boolean)
+				if (conflicts.length === 0) {
+					tryRun(["git", "-C", cwd, "merge", "--abort"])
+					throw mergeErr
+				}
+				return { conflictFiles: conflicts }
+			}
+		}
+
+		const current = getCurrentBranch()
+		const result =
+			current === mainBranch
+				? mergeFn(primaryRepoRoot())
+				: withWorktreeOnBranch(mainBranch, (tmpPath) => mergeFn(tmpPath))
+
+		if (result.conflictFiles.length > 0) {
+			return {
+				branch: mainBranch,
+				success: false,
+				isConflict: true,
+				conflictFiles: result.conflictFiles,
+				message: `merge conflict in ${result.conflictFiles.length} file(s) while consolidating ${lastStageBranch} into ${mainBranch}: ${result.conflictFiles.join(", ")}. Resolve the conflicts on '${mainBranch}' (edit files, \`git add\`, \`git commit\`), then retry.`,
+			}
+		}
 		return {
-			branch: checkoutOrCreate(mainBranch, lastStageBranch),
+			branch: mainBranch,
 			success: true,
-			message: `created ${mainBranch} from ${lastStageBranch}`,
+			message: `merged ${lastStageBranch} into ${mainBranch}`,
 		}
 	} catch (err) {
-		// Abort any in-progress merge to leave the repo clean
+		// Defensive abort — `mergeFn` already aborts on non-conflict
+		// failures, but a throw from a different layer (e.g.
+		// `withWorktreeOnBranch` failing because of a dirty foreign
+		// checkout) could leave a half-finished merge somewhere.
 		tryRun(["git", "merge", "--abort"])
 		return {
 			branch: mainBranch,
@@ -2707,7 +2842,12 @@ export function prepareRevisitBranch(
 	slug: string,
 	fromStage: string,
 	targetStage: string,
-): { success: boolean; message: string } {
+): {
+	success: boolean
+	message: string
+	isConflict?: boolean
+	conflictFiles?: string[]
+} {
 	if (!isGitRepo()) return { success: true, message: "no git" }
 	if (targetStage === "main")
 		return { success: false, message: "cannot revisit 'main'" }
@@ -2778,12 +2918,17 @@ export function prepareRevisitBranch(
 				])
 			} catch (mergeErr) {
 				const conflicts = listConflicts()
+				if (conflicts.length > 0) {
+					return {
+						success: false,
+						isConflict: true,
+						conflictFiles: conflicts,
+						message: `Merge main → ${targetStage} left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on branch '${targetBranch}' (edit files, \`git add\`, \`git commit\`), then retry the revisit — the workflow engine will detect main is already merged and continue with the ${fromStage} merge.`,
+					}
+				}
 				return {
 					success: false,
-					message:
-						conflicts.length > 0
-							? `Merge main → ${targetStage} left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on branch '${targetBranch}' (edit files, \`git add\`, \`git commit\`), then retry the revisit — the workflow engine will detect main is already merged and continue with the ${fromStage} merge.`
-							: `Merge main → ${targetStage} failed: ${mergeErr instanceof Error ? mergeErr.message : String(mergeErr)}`,
+					message: `Merge main → ${targetStage} failed: ${mergeErr instanceof Error ? mergeErr.message : String(mergeErr)}`,
 				}
 			}
 		}
@@ -2813,12 +2958,17 @@ export function prepareRevisitBranch(
 					])
 				} catch (mergeErr) {
 					const conflicts = listConflicts()
+					if (conflicts.length > 0) {
+						return {
+							success: false,
+							isConflict: true,
+							conflictFiles: conflicts,
+							message: `Merge ${fromStage} → ${targetStage} left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on branch '${targetBranch}' (edit files, \`git add\`, \`git commit\`), then retry the revisit. Main has already been merged cleanly and won't be remerged.`,
+						}
+					}
 					return {
 						success: false,
-						message:
-							conflicts.length > 0
-								? `Merge ${fromStage} → ${targetStage} left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on branch '${targetBranch}' (edit files, \`git add\`, \`git commit\`), then retry the revisit. Main has already been merged cleanly and won't be remerged.`
-								: `Merge ${fromStage} → ${targetStage} failed: ${mergeErr instanceof Error ? mergeErr.message : String(mergeErr)}`,
+						message: `Merge ${fromStage} → ${targetStage} failed: ${mergeErr instanceof Error ? mergeErr.message : String(mergeErr)}`,
 					}
 				}
 			}

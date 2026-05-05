@@ -76,16 +76,20 @@ function makeQuestionSession() {
 	})
 }
 
-function callAwait(sessionId) {
-	// Direct dispatch — same path the MCP server uses. No signal so
-	// the cancellation machinery (which used to be the bug) doesn't
-	// fire.
-	return handleToolCall({
-		params: {
-			name: "haiku_await_visual_answer",
-			arguments: { session_id: sessionId },
+function callAwait(sessionId, signal) {
+	// Direct dispatch — same path the MCP server uses. Optionally
+	// passes a real AbortSignal so tests can exercise the
+	// cancellation behavior end-to-end (the previous bug was that
+	// bindSessionCancellation tore down the session on any abort).
+	return handleToolCall(
+		{
+			params: {
+				name: "haiku_await_visual_answer",
+				arguments: { session_id: sessionId },
+			},
 		},
-	})
+		signal,
+	)
 }
 
 console.log("\n=== haiku_await_visual_answer wake-up correctness ===")
@@ -174,45 +178,60 @@ await test("spurious wake: re-waits if notified without status=answered", async 
 	}
 })
 
-await test("survives across multiple await calls (no cancellation tear-down)", async () => {
-	// Scenario: the agent calls await, the MCP host times the call out
-	// before the user submits, the agent retries. Pre-fix, the first
-	// await's bindSessionCancellation would have killed the session on
-	// signal abort, and the second await would get "session not
-	// found". Post-fix, no cancellation happens, the session lives.
+await test("session survives signal abort (cancellation does not tear down)", async () => {
+	// Pre-fix, bindSessionCancellation killed the SPA's WebSocket on
+	// any abort (Ctrl-C, MCP host timeout, retry), so the next await
+	// got "session not found". This test passes a REAL AbortSignal,
+	// aborts mid-wait, and confirms (a) the abort propagates to the
+	// caller, (b) the session itself survives, (c) a fresh await on
+	// the same session still resolves once an answer arrives.
 	const s = makeQuestionSession()
 	try {
-		// Start an await, then immediately drop the promise (simulating
-		// the MCP host abandoning the call).
-		const orphan = callAwait(s.session_id)
-		// Don't await `orphan` — let it dangle. The test's afterEach
-		// (deleteSession) will tear down the session at the end.
-		void orphan
+		const controller = new AbortController()
+		const cancelled = callAwait(s.session_id, controller.signal)
+		// Mark the promise as expected-to-throw so an unhandled
+		// rejection doesn't blow up the test runner.
+		const cancelledHandle = cancelled.catch((e) => ({ aborted: true, err: e }))
 
-		// Confirm the session is still there a tick later.
+		// Give the await a tick to register its waitForSession listener.
 		await delay(50)
+		controller.abort()
+
+		// The aborted call should reject (signal abort propagates) —
+		// pre-fix it would have returned a "timeout" response or torn
+		// down the session.
+		const outcome = await cancelledHandle
+		assert.ok(
+			outcome && typeof outcome === "object" && "aborted" in outcome,
+			`aborted await should reject, got: ${JSON.stringify(outcome).slice(0, 200)}`,
+		)
+
+		// Session must still exist after abort.
 		const live = getSession(s.session_id)
-		assert.ok(live, "session must survive an orphaned await call")
+		assert.ok(live, "session must survive a signal-aborted await")
 		assert.strictEqual(
 			live.session_type,
 			"question",
 			"session type must still be 'question'",
 		)
+		assert.strictEqual(
+			live.status,
+			"pending",
+			"session must still be in pending status — abort must not flip it to answered/timeout",
+		)
 
-		// Now actually answer it — the orphan should resolve too.
+		// A fresh await on the same session still works — drain logic
+		// catches the answer that lands after the first await aborted.
 		updateQuestionSession(s.session_id, {
 			status: "answered",
 			answers: [{ question: "Pick one", answer: "A" }],
 		})
-
-		// The orphaned await should now resolve. We wait on it just to
-		// confirm the wake-up plumbing still fires.
-		const result = await orphan
-		assert.ok(result.content?.length > 0, "orphaned await should resolve")
+		const result = await callAwait(s.session_id)
+		assert.ok(result.content?.length > 0, "follow-up await should resolve")
 		const body = result.content[0].text
 		assert.ok(
 			body.includes('"status": "answered"'),
-			"orphaned await should still see the eventual answer",
+			"follow-up await should see the answer that landed after the first one was aborted",
 		)
 	} finally {
 		deleteSession(s.session_id)

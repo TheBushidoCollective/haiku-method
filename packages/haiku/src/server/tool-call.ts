@@ -788,12 +788,20 @@ export async function handleToolCall(
 		// while(true) pattern.
 		const MAX_WAIT_Q = 30 * 60 * 1000
 		const deadline = Date.now() + MAX_WAIT_Q
+		const timeoutMessage =
+			"User did not respond within 30 minutes. Call haiku_await_visual_answer again to keep waiting, or ask_user_visual_question to start a new session."
 		while (true) {
 			const remaining = deadline - Date.now()
 			if (remaining <= 0) break
 			try {
 				await waitForSession(sessionId, remaining, signal)
-			} catch {
+			} catch (err) {
+				// Distinguish MCP cancellation from a real wait timeout.
+				// Re-throw on signal abort so the host gets the abort it
+				// initiated; only return a "timeout" response for actual
+				// deadline exhaustion. Mirrors awaitGateReviewSession's
+				// `if (signal?.aborted) throw err` pattern.
+				if (signal?.aborted) throw err
 				return {
 					content: [
 						{
@@ -803,8 +811,7 @@ export async function handleToolCall(
 									status: "timeout",
 									session_id: sessionId,
 									...(url ? { url } : {}),
-									message:
-										"User did not respond within 30 minutes. Call haiku_await_visual_answer again to keep waiting, or ask_user_visual_question to start a new session.",
+									message: timeoutMessage,
 								},
 								null,
 								2,
@@ -829,8 +836,7 @@ export async function handleToolCall(
 							status: "timeout",
 							session_id: sessionId,
 							...(url ? { url } : {}),
-							message:
-								"User did not respond within 30 minutes. Call haiku_await_visual_answer again to keep waiting.",
+							message: timeoutMessage,
 						},
 						null,
 						2,

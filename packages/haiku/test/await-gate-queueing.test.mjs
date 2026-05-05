@@ -11,6 +11,7 @@
 
 import assert from "node:assert"
 
+import { startHttpServer, stopHttpServer } from "../src/http.ts"
 import { awaitGateReviewSession } from "../src/server/tool-call.ts"
 import {
 	createSession,
@@ -136,6 +137,37 @@ await test("last-write-wins on multiple submits", async () => {
 	deleteSession(session.session_id)
 })
 
+await test("await unwinds promptly when MCP signal aborts", async () => {
+	const session = makeSession()
+	const controller = new AbortController()
+	const start = Date.now()
+	const promise = awaitGateReviewSession(session.session_id, {
+		autoOpen: false,
+		timeoutMs: 30 * 60 * 1000,
+		signal: controller.signal,
+	})
+	await new Promise((r) => setTimeout(r, 50))
+	controller.abort("test cancel")
+
+	let threw = false
+	try {
+		await promise
+	} catch (err) {
+		threw = true
+		assert.match(err.message, /abort/i, "expected abort error message")
+	}
+	const elapsed = Date.now() - start
+	assert.ok(threw, "await should reject on signal abort")
+	assert.ok(
+		elapsed < 5_000,
+		`abort should unwind in well under 5s, got ${elapsed}ms`,
+	)
+	const after = getSession(session.session_id)
+	assert.ok(after, "session must outlive an aborted await")
+	assert.strictEqual(after.await_active, false, "await_active should reset")
+	deleteSession(session.session_id)
+})
+
 await test("session survives await timeout, can be re-awaited", async () => {
 	const session = makeSession()
 	let threw = false
@@ -184,6 +216,53 @@ await test("session survives await timeout, can be re-awaited", async () => {
 		final.await_count,
 		2,
 		"await_count should increment on re-await",
+	)
+	deleteSession(session.session_id)
+})
+
+console.log("\n=== HTTP /review/:id/decide → pending_decision pipeline ===")
+
+await test("HTTP submit queues pending_decision and unblocks await", async () => {
+	const port = await startHttpServer()
+	const session = makeSession()
+	const promise = awaitGateReviewSession(session.session_id, {
+		autoOpen: false,
+		timeoutMs: 5_000,
+	})
+	// Wait for the await to mark itself active before submitting.
+	await new Promise((r) => setTimeout(r, 50))
+
+	const res = await fetch(
+		`http://127.0.0.1:${port}/review/${session.session_id}/decide`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				decision: "approved",
+				feedback: "looks good",
+			}),
+		},
+	)
+	assert.strictEqual(res.status, 200, "HTTP decide should return 200")
+	const body = await res.json()
+	assert.strictEqual(body.ok, true)
+	assert.strictEqual(body.decision, "approved")
+
+	// awaitGateReviewSession needs notifySessionUpdate to wake on the
+	// queued decision. updateSession (called by the route) fires
+	// notifySessionUpdate internally, so the wait below should resolve
+	// quickly. If this hangs to the timeoutMs, the HTTP path is not
+	// queueing into pending_decision (i.e., the regression the bot
+	// flagged is back).
+	const result = await promise
+	assert.strictEqual(result.decision, "approved")
+	assert.strictEqual(result.feedback, "looks good")
+
+	const after = getSession(session.session_id)
+	assert.ok(after, "session must outlive HTTP submit")
+	assert.ok(
+		!after.pending_decision,
+		"pending_decision should be cleared after consume",
 	)
 	deleteSession(session.session_id)
 })
@@ -239,4 +318,8 @@ await test("returns undefined for an intent with no sessions", () => {
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)
+// startHttpServer registered a Fastify instance that keeps the event
+// loop alive — explicitly stop so the test process exits without
+// needing a SIGTERM.
+await stopHttpServer().catch(() => {})
 if (failed > 0) process.exit(1)

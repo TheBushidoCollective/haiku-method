@@ -20,9 +20,12 @@ export interface ToolResult {
 }
 
 /** Handler signature: receives the raw arg bag (post path-traversal
- *  validation) and returns a ToolResult, sync or async. */
+ *  validation) plus the optional MCP abort signal so long-running
+ *  tools (e.g. `haiku_await_gate`) can unwind promptly when the
+ *  client cancels. Returns a ToolResult, sync or async. */
 export type ToolHandler = (
 	args: Record<string, unknown>,
+	signal?: AbortSignal,
 ) => ToolResult | Promise<ToolResult>
 
 export interface ToolDef {

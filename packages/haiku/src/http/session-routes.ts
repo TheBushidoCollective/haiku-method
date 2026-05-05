@@ -25,6 +25,7 @@ import {
 	SESSION_ANSWER_MAX_BYTES,
 } from "haiku-api"
 import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
+import { broadcastIntent } from "../intent-broadcaster.js"
 import { isOpen as isFeedbackOpen } from "../orchestrator/workflow/feedback-triage-gate.js"
 import {
 	getSession,
@@ -111,12 +112,28 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			parsed.data.decision === "approved" ? "approved" : "changes_requested"
 		const feedback = parsed.data.feedback ?? ""
 		const annotations = parsed.data.annotations as ReviewAnnotations | undefined
+		// Live-session model: queue the decision into pending_decision
+		// rather than terminally setting status="decided". This is what
+		// awaitGateReviewSession drains on entry / on each wake. Mirrors
+		// the WS `decide` handler in http/ws.ts so HTTP and WebSocket
+		// clients converge on the same consumer path. Without this, the
+		// SPA's submit (which goes through HTTP via client.submitDecision)
+		// would never reach a blocked await and would time out at 30 min.
 		updateSession(req.params.sessionId, {
-			status: "decided",
-			decision,
-			feedback,
-			annotations,
+			pending_decision: {
+				decision,
+				feedback,
+				annotations,
+				submitted_at: new Date().toISOString(),
+			},
 		})
+		if (session.intent_slug) {
+			broadcastIntent(session.intent_slug, {
+				type: "pending_decision_changed",
+				session_id: req.params.sessionId,
+				queued: true,
+			})
+		}
 		const payload: ReviewDecisionResponse = { ok: true, decision, feedback }
 		reply.send(payload)
 	})

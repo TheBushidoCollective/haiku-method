@@ -106,7 +106,7 @@ export default defineTool({
 		},
 		required: ["intent"],
 	},
-	async handle(args) {
+	async handle(args, signal) {
 		const slug = (args.intent as string) || ""
 		if (!slug) {
 			return {
@@ -190,6 +190,7 @@ export default defineTool({
 				autoOpen,
 				reviewUrl,
 				timeoutMs: 30 * 60 * 1000,
+				signal,
 			})
 
 			const postReviewGuard = ensureOnStageBranch(slug, stage)
@@ -302,7 +303,19 @@ export default defineTool({
 			}
 
 			if (reviewResult.decision === "external_review") {
-				workflowCompleteStage(slug, stage, "blocked")
+				// Mark the stage truly complete on its branch BEFORE the
+				// PR opens (status=completed, gate_outcome=advanced,
+				// completed_at). The PR then carries the final per-stage
+				// state to intent main on merge — no post-merge cleanup
+				// commit is needed. The gate handler's reconciliation
+				// block (gate.ts) only advances active_stage once the
+				// branch is merged into intent main; the merge IS the
+				// user's only remaining action for this stage. Using
+				// "blocked" here would close the iteration as "rejected"
+				// (per workflowCompleteStage's branching in
+				// side-effects.ts) and skip drift-marker clearing —
+				// both wrong for a successful external-review handoff.
+				workflowCompleteStage(slug, stage, "advanced")
 				syncSessionMetadata(slug, stFile)
 				const gateResult = {
 					action: "external_review_requested",
@@ -310,8 +323,8 @@ export default defineTool({
 					stage,
 					feedback: reviewResult.feedback,
 					message: isGitRepo()
-						? `External review requested. Open ONE merge request from branch 'haiku/${slug}/${stage}' to 'haiku/${slug}/main'. Do NOT open separate MRs for individual units — all unit work is already merged into the stage branch. Include the H·AI·K·U browse link in the description so reviewers can see the intent, units, and knowledge artifacts. Record the review URL via haiku_run_next { intent, external_review_url }. Run /haiku:pickup again after approval.`
-						: `External review requested. Submit the work for review through your project's review process. Record the review URL via haiku_run_next { intent, external_review_url }. Run /haiku:pickup again after approval.`,
+						? `External review requested. Open ONE merge request from branch 'haiku/${slug}/${stage}' to 'haiku/${slug}/main'. Do NOT open separate MRs for individual units — all unit work is already merged into the stage branch. Include the H·AI·K·U browse link in the description so reviewers can see the intent, units, and knowledge artifacts. Record the review URL via haiku_run_next { intent, external_review_url }. Run /haiku:pickup again after the PR is merged.`
+						: `External review requested. Submit the work for review through your project's review process. Record the review URL via haiku_run_next { intent, external_review_url }. Run /haiku:pickup again after the PR is merged.`,
 				}
 				return text(withInstructions(gateResult))
 			}
@@ -650,7 +663,7 @@ export default defineTool({
 				content: [
 					{
 						type: "text" as const,
-						text: `GATE BLOCKED: Review UI and elicitation both failed. Error: ${errorMsg}. Logged to .haiku/logs/gate-review-error.log. Call haiku_run_next to retry.`,
+						text: `GATE BLOCKED: Review UI and elicitation both failed. Error: ${errorMsg}. Logged to .haiku/logs/gate-review-error.log. Call haiku_run_next { intent: "${slug}" } to recreate the review session and retry.`,
 					},
 				],
 				isError: true,

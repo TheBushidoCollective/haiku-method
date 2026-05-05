@@ -345,7 +345,7 @@ export function getAwaitGateReviewSession(): typeof _awaitGateReviewSession {
 export async function handleOrchestratorTool(
 	name: string,
 	args: Record<string, unknown>,
-	_signal?: AbortSignal,
+	signal?: AbortSignal,
 ): Promise<{
 	content: Array<{ type: "text"; text: string }>
 	isError?: boolean
@@ -360,10 +360,13 @@ export async function handleOrchestratorTool(
 	// Per-tool handlers in tools/orchestrator/* take priority over the
 	// legacy if-chain. Migrated tools live in their own file with
 	// defineTool(); the chain below handles the rest until they all
-	// migrate.
+	// migrate. The MCP abort signal is forwarded so long-running tools
+	// (haiku_await_gate, future blocking tools) can unwind on client
+	// cancel — without it, a Ctrl-C on the agent leaves the await
+	// running for the full 30-minute timeout.
 	const perToolHandler = orchestratorToolHandlers.get(name)
 	if (perToolHandler) {
-		const result = perToolHandler.handle(args)
+		const result = perToolHandler.handle(args, signal)
 		return result instanceof Promise ? await result : result
 	}
 

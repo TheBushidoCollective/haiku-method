@@ -546,6 +546,14 @@ export async function handleToolCall(
 		// on the response. Same motivation as the gate-review split:
 		// remote control / headless / SSH / mobile-chat hosts can't
 		// auto-launch browsers, so the URL must travel through chat.
+		//
+		// Note: bindSessionCancellation is NOT called here. With the
+		// non-blocking prepare, the create call returns immediately —
+		// there's nothing to cancel. The await tool
+		// (haiku_await_visual_answer) wires cancellation when it
+		// blocks. If the agent never invokes the await, the session
+		// has no MCP-level cancel hook but it still expires via the
+		// session TTL / presence-loss sweep.
 		return {
 			content: [
 				{
@@ -609,8 +617,10 @@ export async function handleToolCall(
 						text: JSON.stringify(
 							{
 								status: "timeout",
-								url,
 								session_id: sessionId,
+								// Only include url when the agent passed one — empty
+								// strings on optional fields are confusing in tooling.
+								...(url ? { url } : {}),
 								message:
 									"User did not respond within 30 minutes. Call haiku_await_visual_answer again to keep waiting, or ask_user_visual_question to start a new session.",
 							},
@@ -697,8 +707,8 @@ export async function handleToolCall(
 					text: JSON.stringify(
 						{
 							status: "timeout",
-							url,
 							session_id: sessionId,
+							...(url ? { url } : {}),
 							message:
 								"User did not respond within 30 minutes. Call haiku_await_visual_answer again to keep waiting.",
 						},
@@ -860,11 +870,18 @@ export async function handleToolCall(
 			const sel = updatedDirectionSession.selection
 
 			if (sel.mode === "regenerate") {
+				// Slot count helps the agent know how many archetypes to
+				// produce. Total archetypes presented minus the ones the
+				// user wants to keep = the replacement count.
+				const totalArchetypes = updatedDirectionSession.archetypes?.length ?? 0
+				const dropped = Math.max(totalArchetypes - sel.keep.length, 0)
 				const parts: string[] = [
 					sel.keep.length > 0
 						? `The user wants more variants. They'd like to keep: **${sel.keep.join("**, **")}**.`
 						: `The user wants more variants. None of the current archetypes are keepers.`,
-					`Generate replacement archetype(s) for the dropped slot(s) and call \`pick_design_direction\` again with the merged set.`,
+					dropped > 0
+						? `Generate ${dropped} replacement archetype${dropped === 1 ? "" : "s"} for the dropped slot${dropped === 1 ? "" : "s"} and call \`pick_design_direction\` again with the merged set.`
+						: `Generate replacement archetype(s) for the dropped slot(s) and call \`pick_design_direction\` again with the merged set.`,
 				]
 				if (sel.comments) {
 					parts.push(`\nSteering notes from the user: ${sel.comments}`)

@@ -17,11 +17,12 @@ Downstream stages consume this artifact as a single, authoritative starting poin
 
 ### Q: What is the per-fix-id iteration cap before the bot stops and converts the PR to draft?
 
-Each webhook-triggered agent invocation that pushes at least one commit counts as one attempt. When that count reaches the cap, the bot posts a "gave up" comment on the PR, converts it to draft status, and stops consuming webhook events for that `fix_id`.
+When the attempt count reaches the cap, the bot posts a "gave up" comment on the PR, converts it to draft status, and stops consuming webhook events for that `fix_id`. The user-observable behavior at the cap is fixed by inception; the counting semantics (what qualifies as an "attempt") are not.
 
 - **Proposed default**: 5 fix attempts per `fix_id`.
 - **Rationale**: Five attempts covers the common class of CI-detectable bugs (type errors, test regressions, import resolution failures) without burning unbounded Anthropic API token budget. A single-attempt cap is too aggressive for multi-stage fix sequences; a double-digit cap exposes the system to runaway cost for pathological bugs. The success criteria (unit-01) treat 5 as the right balance point between coverage and cost.
-- **Source**: `stages/inception/artifacts/success-criteria-and-acceptance-shape.md` (unit-01), "Bounded Loops — Maximum bot iterations" section; DISCOVERY.md § Risks → "Unbounded fix-loop cost" (line 94).
+- **Caveat — counting unit deferred to design**: What constitutes an "attempt" (any webhook-triggered invocation, only invocations that push a commit, only invocations that produce a passing CI run, etc.) is a design-stage decision. Inception does not pre-bind it. The cap value (5) and the counting unit interact: a stricter counting unit (only commit-producing invocations) effectively raises the spend ceiling because non-commit invocations still burn token cost without consuming cap budget. See unit-05 (`risk-inventory.md`) Open Questions → "Iteration Cap Counting Unit Ambiguity"; the high-severity rating on "Unbounded Fix-Loop Cost" may need revisitation once design picks the counting rule.
+- **Source**: `stages/inception/artifacts/success-criteria-and-acceptance-shape.md` (unit-01), "Bounded Loops — Maximum bot iterations" section; `stages/inception/artifacts/risk-inventory.md` (unit-05), Open Questions → "Iteration Cap Counting Unit Ambiguity"; DISCOVERY.md § Risks → "Unbounded fix-loop cost" (line 94).
 
 ---
 

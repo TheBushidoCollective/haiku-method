@@ -52,13 +52,13 @@ Failure end states are also user-observable:
 
 **Maximum bot iterations per fix-id before escalation**
 
-Proposed default: **5 fix attempts** per `fix_id`. Each "attempt" is one webhook-triggered agent invocation that pushes at least one commit. After 5 attempts without all CI checks passing:
+Proposed default: **5 fix attempts** per `fix_id`. After 5 attempts without all CI checks passing:
 
 - The bot posts a comment on the PR: "I've made N fix attempts and CI is still failing on [list of failing checks]. I'm stopping here so a human can take over."
 - The PR is converted from regular to draft status.
 - No further webhook invocations are made for this `fix_id` unless a human manually re-triggers (e.g., by posting a `@haiku retry` comment — a future capability, not V1 scope).
 
-The cap protects against unbounded Anthropic SDK token consumption. 5 is a proposed default; the actual value is a design decision. *(Source: DISCOVERY.md § Risks → unbounded fix-loop cost)*
+The cap protects against unbounded Anthropic SDK token consumption. Both the cap value (5) and the counting unit (what qualifies as an "attempt" — e.g., any webhook-triggered invocation, only invocations that push a commit, only invocations that produce a passing CI run) are design-stage decisions; inception flags both as open questions. See unit-05 (`risk-inventory.md`) Open Questions → "Iteration Cap Counting Unit Ambiguity" for the severity-revisitation note. *(Source: DISCOVERY.md § Risks → unbounded fix-loop cost)*
 
 **Behavior on irrecoverable fix failure (PR stays open as draft)**
 

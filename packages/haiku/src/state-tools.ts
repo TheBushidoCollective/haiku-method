@@ -2414,7 +2414,16 @@ export function getIntentScopeTickCounter(intentDirAbsPath: string): number {
  * runs against the parent's (still stale) copy and false-reports missing.
  */
 export function unitIntentDir(slug: string, unit: string): string {
-	const workTreePath = join(findHaikuRoot(), "worktrees", slug, unit)
+	// Unit worktrees live under the primary repo's `.haiku/worktrees/`,
+	// not the local view from a Claude Code worktree. See
+	// `getUnitWorktreeChanges` for the same convention.
+	const workTreePath = join(
+		primaryRepoRoot(),
+		".haiku",
+		"worktrees",
+		slug,
+		unit,
+	)
 	const workTreeIntentDir = join(workTreePath, ".haiku", "intents", slug)
 	if (existsSync(workTreeIntentDir)) return workTreeIntentDir
 	return intentDir(slug)
@@ -2432,7 +2441,8 @@ export function unitOutputExists(
 	// Intent-relative: main intent dir or the unit worktree's intent dir.
 	const mainResolved = resolve(intentDir(slug), outputPath)
 	if (existsSync(mainResolved)) return true
-	const wtRoot = join(findHaikuRoot(), "worktrees", slug, unit)
+	// Unit worktrees live under the primary repo (see unitIntentDir).
+	const wtRoot = join(primaryRepoRoot(), ".haiku", "worktrees", slug, unit)
 	const wtIntentDir = join(wtRoot, ".haiku", "intents", slug)
 	if (existsSync(wtIntentDir)) {
 		const wtResolved = resolve(wtIntentDir, outputPath)
@@ -3885,9 +3895,15 @@ export function setUnitFrontmatterField(
 ): void {
 	const parentPath = unitPath(slug, stage, unit)
 	if (existsSync(parentPath)) setFrontmatterField(parentPath, field, value)
-	// findHaikuRoot() returns the `.haiku` directory itself; worktrees live
-	// under `<haikuRoot>/worktrees/{slug}/{unit}`.
-	const worktreeBase = join(findHaikuRoot(), "worktrees", slug, unit)
+	// Unit worktrees live under the primary repo's `.haiku/worktrees/`
+	// (see unitIntentDir / getUnitWorktreeChanges for the same convention).
+	const worktreeBase = join(
+		primaryRepoRoot(),
+		".haiku",
+		"worktrees",
+		slug,
+		unit,
+	)
 	if (!existsSync(worktreeBase)) return
 	const worktreeUnitPath = join(
 		worktreeBase,

@@ -26,10 +26,11 @@ HERE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 BUNDLE="$HERE/haiku.mjs"
 SOURCE_ENTRY="$HERE/../../packages/haiku/src/main.ts"
 
-# Detect production install location.
+# Detect production install location. `*/.claude/plugins/*` covers the
+# marketplaces dir too — `*` in bash `case` patterns matches `/`.
 IS_PROD=""
 case "$HERE" in
-  */.claude/plugins/marketplaces/*|*/.claude/plugins/*|*/.claude/mcpb/*)
+  */.claude/plugins/*|*/.claude/mcpb/*)
     IS_PROD=1
     ;;
 esac

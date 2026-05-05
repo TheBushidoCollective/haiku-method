@@ -10,5 +10,17 @@
     "acknowledged_via": "baseline-init",
     "stage": null,
     "tracking_class": "knowledge"
+  },
+  "knowledge/DISCOVERY.md": {
+    "path": "knowledge/DISCOVERY.md",
+    "sha256": "5e201deec682585f224d4e8f6255eba062a5d20c6195992178e6e6a4129a3aff",
+    "bytes": 16203,
+    "mtime_ns": 1778019383326000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-05T22:18:51.706Z",
+    "acknowledged_via": "baseline-init",
+    "stage": null,
+    "tracking_class": "knowledge"
   }
 }

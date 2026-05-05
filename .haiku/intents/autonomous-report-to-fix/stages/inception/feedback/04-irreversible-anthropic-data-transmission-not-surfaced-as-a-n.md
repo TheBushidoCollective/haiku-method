@@ -2,7 +2,7 @@
 title: >-
   Irreversible Anthropic data transmission not surfaced as a named strategic
   risk
-status: fixing
+status: closed
 origin: adversarial-review
 author: feasibility
 author_type: agent
@@ -10,13 +10,22 @@ created_at: '2026-05-05T23:16:43Z'
 iteration: 1
 visit: 1
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-04:bolt-1'
 bolt: 1
 triaged_at: '2026-05-05T23:16:43Z'
 resolution: null
 replies: []
+hat: feedback-assessor
+iterations:
+  - bolt: 1
+    hat: researcher
+    completed_at: '2026-05-05T23:19:28Z'
+    result: advanced
+  - bolt: 1
+    hat: feedback-assessor
+    completed_at: '2026-05-05T23:20:17Z'
+    result: closed
 ---
-
 **Mandate area:** Highest-impact strategic risks must be surfaced — specifically including irreversibility.
 
 **Finding:** The inception artifacts identify the Anthropic API as a single-vendor dependency risk (`risk-inventory.md`, "Risk: Anthropic API Single-Vendor Dependency") and briefly acknowledge that the scrubbed bundle is transmitted to Anthropic in the privacy artifact (`privacy-and-data-handling-principles.md`, "Retention and disclosure — Who can access the bundle"):

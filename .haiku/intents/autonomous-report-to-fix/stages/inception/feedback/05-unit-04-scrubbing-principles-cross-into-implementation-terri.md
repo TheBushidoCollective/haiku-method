@@ -2,7 +2,7 @@
 title: >-
   Unit-04 scrubbing principles cross into implementation territory with specific
   vendor token prefixes
-status: fixing
+status: closed
 origin: adversarial-review
 author: completeness
 author_type: agent
@@ -10,13 +10,22 @@ created_at: '2026-05-05T23:16:51Z'
 iteration: 1
 visit: 1
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-05:bolt-1'
 bolt: 1
 triaged_at: '2026-05-05T23:16:51Z'
 resolution: null
 replies: []
+hat: feedback-assessor
+iterations:
+  - bolt: 1
+    hat: researcher
+    completed_at: '2026-05-05T23:19:22Z'
+    result: advanced
+  - bolt: 1
+    hat: feedback-assessor
+    completed_at: '2026-05-05T23:20:13Z'
+    result: closed
 ---
-
 ## Mandate check
 
 The completeness mandate requires rejecting any unit body that specifies implementation details — and the corollary is that inception units must describe the *problem space* at the principle level, not bind downstream stages to specific implementation shapes.

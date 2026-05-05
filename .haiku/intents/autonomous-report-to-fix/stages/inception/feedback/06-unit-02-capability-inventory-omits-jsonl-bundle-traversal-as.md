@@ -2,7 +2,7 @@
 title: >-
   Unit-02 capability inventory omits JSONL bundle traversal as a named
   load-bearing capability
-status: fixing
+status: closed
 origin: adversarial-review
 author: completeness
 author_type: agent
@@ -10,13 +10,22 @@ created_at: '2026-05-05T23:17:22Z'
 iteration: 1
 visit: 1
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-06:bolt-1'
 bolt: 1
 triaged_at: '2026-05-05T23:17:22Z'
 resolution: null
 replies: []
+hat: feedback-assessor
+iterations:
+  - bolt: 1
+    hat: researcher
+    completed_at: '2026-05-05T23:19:07Z'
+    result: advanced
+  - bolt: 1
+    hat: feedback-assessor
+    completed_at: '2026-05-05T23:20:15Z'
+    result: closed
 ---
-
 ## Mandate check
 
 The completeness mandate requires: "The agent MUST verify that high-level capability needs are named." It also requires that unit topics together cover the intent's scope with no obvious gaps in the problem space.

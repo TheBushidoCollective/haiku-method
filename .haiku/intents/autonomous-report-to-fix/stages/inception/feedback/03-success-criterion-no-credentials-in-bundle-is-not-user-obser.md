@@ -1,6 +1,6 @@
 ---
 title: Success criterion "no credentials in bundle" is not user-observable
-status: fixing
+status: closed
 origin: adversarial-review
 author: feasibility
 author_type: agent
@@ -8,13 +8,22 @@ created_at: '2026-05-05T23:16:20Z'
 iteration: 1
 visit: 1
 source_ref: null
-closed_by: null
+closed_by: 'fix-loop:FB-03:bolt-1'
 bolt: 1
 triaged_at: '2026-05-05T23:16:20Z'
 resolution: null
 replies: []
+hat: feedback-assessor
+iterations:
+  - bolt: 1
+    hat: researcher
+    completed_at: '2026-05-05T23:19:28Z'
+    result: advanced
+  - bolt: 1
+    hat: feedback-assessor
+    completed_at: '2026-05-05T23:20:45Z'
+    result: closed
 ---
-
 **Mandate area:** Success criteria must be measurable in user-observable terms.
 
 **Finding:** The success criterion stated in `stages/inception/artifacts/success-criteria-and-acceptance-shape.md` reads:

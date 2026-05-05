@@ -50,9 +50,9 @@ quality_gates:
       ($1>=4)?0:1}'
 status: active
 bolt: 1
-hat: distiller
+hat: verifier
 started_at: '2026-05-05T22:29:27Z'
-hat_started_at: '2026-05-05T22:33:15Z'
+hat_started_at: '2026-05-05T22:36:02Z'
 iterations:
   - hat: researcher
     started_at: '2026-05-05T22:29:27Z'
@@ -60,6 +60,10 @@ iterations:
     result: advance
   - hat: distiller
     started_at: '2026-05-05T22:33:15Z'
+    completed_at: '2026-05-05T22:36:02Z'
+    result: advance
+  - hat: verifier
+    started_at: '2026-05-05T22:36:02Z'
     completed_at: null
     result: null
 ---

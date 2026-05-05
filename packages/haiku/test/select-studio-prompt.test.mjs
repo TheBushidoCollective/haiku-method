@@ -146,6 +146,36 @@ test("prompt provides a fallback path when narrowing isn't possible", () => {
 	)
 })
 
+test("prompt does NOT direct the agent to Read intent.md (blocked by workflow-fields hook)", () => {
+	// The guard-workflow-fields PreToolUse hook blocks generic
+	// Read/Write/Edit on intent.md and emits "BLOCKED: Cannot read
+	// intent.md via generic Read…". If the prompt instructs the
+	// agent to Read intent.md, the agent hits the block, gets
+	// redirected, and wastes a round-trip. The fix is to tell the
+	// agent the description is already in context (it just authored
+	// the intent moments ago in the same turn that triggered this
+	// elicitation).
+	const body = selectStudioPrompt({
+		...baseCtx,
+		action: {
+			action: "select_studio",
+			intent: "demo-intent",
+			available_studios: studios,
+		},
+	})
+	assert.ok(
+		!/Read\s+(the\s+)?(intent\s+description\s+)?in\s+`?\.haiku\/intents/i.test(
+			body,
+		),
+		"prompt must not tell the agent to Read .haiku/intents/<slug>/intent.md (workflow-fields hook blocks it)",
+	)
+	// Positive: the prompt should anchor the agent on its in-context recall.
+	assert.ok(
+		/recall|in\s+(your\s+)?context|already\s+have/i.test(body),
+		"prompt must anchor the agent on the in-context description",
+	)
+})
+
 test("prompt handles missing available_studios gracefully", () => {
 	// Defensive: if the handler ever returns the action without
 	// available_studios (registry-missing edge case), the prompt

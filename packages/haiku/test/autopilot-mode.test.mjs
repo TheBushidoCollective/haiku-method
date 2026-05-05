@@ -85,10 +85,7 @@ test("mode enum contains 'autopilot'", () => {
 })
 
 test("mode enum contains 'quick' (single-stage continuous-style mode)", () => {
-	assert.ok(
-		modeEnum.includes("quick"),
-		`enum is: ${JSON.stringify(modeEnum)}`,
-	)
+	assert.ok(modeEnum.includes("quick"), `enum is: ${JSON.stringify(modeEnum)}`)
 })
 
 test("mode enum does NOT contain 'hybrid' (virtual state, not a stored mode)", () => {

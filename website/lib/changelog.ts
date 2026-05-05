@@ -130,8 +130,7 @@ export function getChangelog(): ChangelogEntry[] {
 		}
 
 		const versionTimestamps = getVersionTimestamps()
-		const timestamp =
-			versionTimestamps.get(version) ?? `${date}T00:00:00Z`
+		const timestamp = versionTimestamps.get(version) ?? `${date}T00:00:00Z`
 		entries.push({ version, date, timestamp, sections })
 	}
 

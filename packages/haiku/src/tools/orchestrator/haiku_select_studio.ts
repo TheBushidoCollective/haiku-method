@@ -18,6 +18,15 @@ import { join } from "node:path"
 import { ensureOnStageBranch } from "../../git-worktree.js"
 import { getElicitInput, resolveStudioStages } from "../../orchestrator.js"
 import {
+	HAIKU_SELECT_STUDIO_INPUT_SCHEMA,
+	type HaikuSelectStudioInput,
+	validateHaikuSelectStudioInputSchema,
+} from "../../state/schemas/index.js"
+import {
+	jsonSchemaOf,
+	validateToolInput,
+} from "../../state/schemas/inputs/_validate.js"
+import {
 	findHaikuRoot,
 	gitCommitState,
 	parseFrontmatter,
@@ -40,16 +49,16 @@ export default defineTool({
 	name: "haiku_select_studio",
 	description:
 		"Select a studio for an intent. Pass the intent slug and optionally a list of studio names to limit the selection. If only one option is provided, auto-selects it. If elicitation is available, prompts the user; otherwise returns the studio list for conversational selection. Refuses if the intent has already entered a stage.",
-	inputSchema: {
-		type: "object" as const,
-		properties: {
-			intent: { type: "string" },
-			options: { type: "array", items: { type: "string" } },
-		},
-		required: ["intent"],
-	},
+	inputSchema: jsonSchemaOf(HAIKU_SELECT_STUDIO_INPUT_SCHEMA),
 	async handle(args) {
-		const slug = args.intent as string
+		const inputErr = validateToolInput(
+			args,
+			validateHaikuSelectStudioInputSchema,
+			"haiku_select_studio",
+		)
+		if (inputErr) return inputErr
+		const validated = args as HaikuSelectStudioInput
+		const slug = validated.intent
 		const root = findHaikuRoot()
 		const iDir = join(root, "intents", slug)
 		const intentFile = join(iDir, "intent.md")
@@ -97,7 +106,7 @@ export default defineTool({
 			}
 		}
 
-		const options = (args.options as string[] | undefined) || []
+		const options = validated.options ?? []
 		// selectedStudio stores the directory name (stable on-disk
 		// identifier) — UI displays the canonical `name`, but everything
 		// downstream reads by `dir`.

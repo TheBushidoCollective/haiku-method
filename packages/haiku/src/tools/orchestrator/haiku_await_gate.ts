@@ -156,11 +156,10 @@ export default defineTool({
 			: ((stageState.gate_review_next_phase as string | null | undefined) ??
 				null)
 		const gateContext = isIntentScopeGate
-			? ((intentMeta.gate_review_context as string | undefined) ||
+			? (intentMeta.gate_review_context as string | undefined) ||
 				(stageState.gate_review_context as string | undefined) ||
-				"stage_gate")
-			: ((stageState.gate_review_context as string | undefined) ||
-				"stage_gate")
+				"stage_gate"
+			: (stageState.gate_review_context as string | undefined) || "stage_gate"
 		const intentDirPath = `.haiku/intents/${slug}`
 
 		const _awaitGateReviewSession = getAwaitGateReviewSession()

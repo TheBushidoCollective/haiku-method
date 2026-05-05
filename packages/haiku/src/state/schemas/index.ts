@@ -155,6 +155,19 @@ export {
 	validateHaikuStudioStageGetInputSchema,
 } from "./inputs/long-tail.js"
 export type {
+	HaikuSelectModeInput,
+	HaikuSelectStageInput,
+	HaikuSelectStudioInput,
+} from "./inputs/selection-tools.js"
+export {
+	HAIKU_SELECT_MODE_INPUT_SCHEMA,
+	HAIKU_SELECT_STAGE_INPUT_SCHEMA,
+	HAIKU_SELECT_STUDIO_INPUT_SCHEMA,
+	validateHaikuSelectModeInputSchema,
+	validateHaikuSelectStageInputSchema,
+	validateHaikuSelectStudioInputSchema,
+} from "./inputs/selection-tools.js"
+export type {
 	HaikuStageGetInput,
 	HaikuStageSetInput,
 } from "./inputs/stages.js"

@@ -17,7 +17,12 @@
 // Deriving here would close the import cycle and TDZ-trip the registry's
 // const exports. The contract test is the safe alternative.
 
-import { HAIKU_AWAIT_GATE_INPUT_SCHEMA } from "../state/schemas/index.js"
+import {
+	HAIKU_AWAIT_GATE_INPUT_SCHEMA,
+	HAIKU_SELECT_MODE_INPUT_SCHEMA,
+	HAIKU_SELECT_STAGE_INPUT_SCHEMA,
+	HAIKU_SELECT_STUDIO_INPUT_SCHEMA,
+} from "../state/schemas/index.js"
 import { jsonSchemaOf } from "../state/schemas/inputs/_validate.js"
 
 export const orchestratorToolDefs = [
@@ -99,55 +104,19 @@ export const orchestratorToolDefs = [
 		name: "haiku_select_studio",
 		description:
 			"Select or change the studio for an intent. Uses elicitation to present studio options. Cannot be used after the intent has entered any stage.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				options: {
-					type: "array",
-					items: { type: "string" },
-					description:
-						"Studio names to present. Empty or omitted = all studios. Single item = auto-select.",
-				},
-			},
-			required: ["intent"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_SELECT_STUDIO_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_select_mode",
 		description:
 			"Select an execution mode for an intent. Uses elicitation to present mode options. Engine-managed — agents never write `mode` directly; this tool is the only way to set or change it. Side effects: writes `mode` to intent.md; for non-quick modes also writes `stages` (the studio's full stage list). For quick mode, leaves `stages` empty so the workflow routes to select_stage next. Refuses transitions into or out of `quick` once the intent has started a stage.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				options: {
-					type: "array",
-					items: { type: "string" },
-					description:
-						"Mode names to present. Empty or omitted = all modes valid for the intent's current state. Single item = auto-select.",
-				},
-			},
-			required: ["intent"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_SELECT_MODE_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_select_stage",
 		description:
 			"Select the single stage for a quick-mode intent. Uses elicitation to present the studio's stage list. Refuses if the intent's mode is not `quick` or if a stage is already set.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				options: {
-					type: "array",
-					items: { type: "string" },
-					description:
-						"Stage name to auto-select (zero or one element — quick mode is single-stage).",
-				},
-			},
-			required: ["intent"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_SELECT_STAGE_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_intent_reset",

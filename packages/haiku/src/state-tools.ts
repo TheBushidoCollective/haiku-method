@@ -3900,7 +3900,10 @@ export function deleteFrontmatterFields(
 		}
 	}
 	if (!mutated) return
-	writeFileSync(filePath, matter.stringify(parsed.content, normalizeDates(updated)))
+	writeFileSync(
+		filePath,
+		matter.stringify(parsed.content, normalizeDates(updated)),
+	)
 }
 
 /** Write a unit frontmatter field to BOTH the parent worktree's copy AND

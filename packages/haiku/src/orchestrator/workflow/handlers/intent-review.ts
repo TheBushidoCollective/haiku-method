@@ -18,11 +18,8 @@
 //     final stage's gate passes (see handlers/intent-completion.ts)
 
 import { join } from "node:path"
-import {
-	gitCommitState,
-	setFrontmatterField,
-} from "../../../state-tools.js"
 import { sealIntentState } from "../../../state-integrity.js"
+import { gitCommitState, setFrontmatterField } from "../../../state-tools.js"
 import { emitTelemetry } from "../../../telemetry.js"
 import type { WorkflowHandler } from "./_types.js"
 

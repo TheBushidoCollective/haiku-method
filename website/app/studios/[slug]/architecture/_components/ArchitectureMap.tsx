@@ -1504,9 +1504,8 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 											color: "#92400e",
 										}}
 									>
-										<code>select_studio</code>{" "}→{" "}
-										<code>select_mode</code>{" "}→{" "}
-										<code>(quick? select_stage)</code>{" "}→{" "}
+										<code>select_studio</code> → <code>select_mode</code> →{" "}
+										<code>(quick? select_stage)</code> →{" "}
 										<code>intent_review</code>
 									</div>
 									<div className="ng-branch-row" style={{ marginTop: 6 }}>
@@ -1528,9 +1527,9 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 										Each elicitation step calls a discrete MCP tool (
 										<code>haiku_select_studio</code>,{" "}
 										<code>haiku_select_mode</code>,{" "}
-										<code>haiku_select_stage</code>) so the user picks studio
-										+ mode + (for quick) stage. Mode and stages are
-										engine-managed — the agent never writes them via{" "}
+										<code>haiku_select_stage</code>) so the user picks studio +
+										mode + (for quick) stage. Mode and stages are engine-managed
+										— the agent never writes them via{" "}
 										<code>haiku_intent_create</code> or{" "}
 										<code>haiku_intent_set</code>.
 									</div>

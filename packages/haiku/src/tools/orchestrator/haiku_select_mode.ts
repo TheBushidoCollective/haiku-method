@@ -35,13 +35,22 @@ import { join } from "node:path"
 import { ensureOnStageBranch } from "../../git-worktree.js"
 import { getElicitInput, resolveStudioStages } from "../../orchestrator.js"
 import {
+	HAIKU_SELECT_MODE_INPUT_SCHEMA,
+	type HaikuSelectModeInput,
+	validateHaikuSelectModeInputSchema,
+} from "../../state/schemas/index.js"
+import {
+	jsonSchemaOf,
+	validateToolInput,
+} from "../../state/schemas/inputs/_validate.js"
+import { INTENT_MODES } from "../../state/schemas/intent.js"
+import {
 	deleteFrontmatterFields,
 	findHaikuRoot,
 	gitCommitState,
 	parseFrontmatter,
 	setFrontmatterField,
 } from "../../state-tools.js"
-import { INTENT_MODES } from "../../state/schemas/intent.js"
 import { emitTelemetry } from "../../telemetry.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
@@ -59,7 +68,7 @@ const MODE_DESCRIPTIONS: Record<string, string> = {
 	discrete:
 		"Every stage opens an external PR/MR. The merge IS the approval signal — the workflow waits at each gate until merged.",
 	autopilot:
-		"Fully autonomous. Per-stage gates auto-approve; only the final intent-completion gate requires human review (single delivery PR).",
+		"Per-stage gates auto-approve. The pre-stage intent_review gate (one-time, before any stage starts) and the final intent-completion gate (single delivery PR) both still require human review — autopilot trades per-stage friction for a single delivery PR, not zero human gates.",
 	"discrete-hybrid":
 		"Continuous within most stages, but specific stages declared with external review still pop a per-stage PR.",
 	quick:
@@ -70,17 +79,16 @@ export default defineTool({
 	name: "haiku_select_mode",
 	description:
 		"Select an execution mode for an intent. Pass the intent slug and optionally a list of mode names to limit the selection. If only one option is provided, auto-selects it. If elicitation is available, prompts the user; otherwise returns the mode list for conversational selection. Side effects: writes `mode` to intent.md; for non-quick modes also writes `stages` (the studio's full stage list). For quick mode, leaves `stages` empty so the workflow routes to select_stage next. Refuses transitions into or out of `quick` once the intent has started a stage.",
-	inputSchema: {
-		type: "object" as const,
-		properties: {
-			intent: { type: "string" },
-			options: { type: "array", items: { type: "string" } },
-		},
-		required: ["intent"],
-		additionalProperties: false,
-	},
+	inputSchema: jsonSchemaOf(HAIKU_SELECT_MODE_INPUT_SCHEMA),
 	async handle(args) {
-		const slug = args.intent as string
+		const inputErr = validateToolInput(
+			args,
+			validateHaikuSelectModeInputSchema,
+			"haiku_select_mode",
+		)
+		if (inputErr) return inputErr
+		const validated = args as HaikuSelectModeInput
+		const slug = validated.intent
 		const root = findHaikuRoot()
 		const iDir = join(root, "intents", slug)
 		const intentFile = join(iDir, "intent.md")
@@ -140,7 +148,7 @@ export default defineTool({
 			)
 		}
 
-		const optionsRaw = (args.options as string[] | undefined) || []
+		const optionsRaw = validated.options ?? []
 		const options = optionsRaw.map((o) => o.toLowerCase())
 
 		// Validate any explicit options against the filtered availability.

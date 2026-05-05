@@ -327,7 +327,11 @@ export default defineTool({
 							"gate_review_url",
 							prepared.review_url,
 						)
-						setFrontmatterField(intentMdPath, "gate_review_context", gateContext)
+						setFrontmatterField(
+							intentMdPath,
+							"gate_review_context",
+							gateContext,
+						)
 						if (nextStage !== undefined && nextStage !== null) {
 							setFrontmatterField(
 								intentMdPath,

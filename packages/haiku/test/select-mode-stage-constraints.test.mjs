@@ -41,10 +41,9 @@ writeFileSync(join(tmp, "fake-bin", "git"), "#!/bin/sh\nexit 0\n")
 chmodSync(join(tmp, "fake-bin", "git"), 0o755)
 process.env.PATH = `${join(tmp, "fake-bin")}:${process.env.PATH}`
 
-const {
-	handleOrchestratorTool,
-	setElicitInputHandler,
-} = await import("../src/orchestrator.ts")
+const { handleOrchestratorTool, setElicitInputHandler } = await import(
+	"../src/orchestrator.ts"
+)
 const { parseFrontmatter } = await import("../src/state-tools.ts")
 
 let passed = 0
@@ -121,81 +120,75 @@ async function callOrch(name, args) {
 try {
 	console.log("=== haiku_select_mode constraints ===")
 
-	await test(
-		"refuses to enter `quick` once intent has started a stage",
-		async () => {
-			const { projDir, studio } = makeProject("no-enter-quick")
-			process.chdir(projDir)
-			// Intent already in continuous mode AND already past stage 0.
-			writeIntent(projDir, "no-enter-quick", {
-				title: "Already started",
-				studio,
-				mode: "continuous",
-				stages: ["plan", "build", "ship"],
-				active_stage: "plan",
-				status: "active",
-				intent_reviewed: true,
-			})
-			const r = await callOrch("haiku_select_mode", {
-				intent: "no-enter-quick",
-				options: ["quick"],
-			})
-			// The tool must refuse — not silently accept the change.
-			// Specifically: invalid_mode_options because quick is filtered
-			// out of `modesAvailable` once the intent has started.
-			assert.strictEqual(
-				r.json.error,
-				"invalid_mode_options",
-				`expected invalid_mode_options, got: ${JSON.stringify(r.json)}`,
-			)
-			// And intent.md mode must NOT have been updated.
-			const fm = parseFrontmatter(
-				readFileSync(
-					join(projDir, ".haiku", "intents", "no-enter-quick", "intent.md"),
-					"utf8",
-				),
-			).data
-			assert.strictEqual(fm.mode, "continuous")
-		},
-	)
+	await test("refuses to enter `quick` once intent has started a stage", async () => {
+		const { projDir, studio } = makeProject("no-enter-quick")
+		process.chdir(projDir)
+		// Intent already in continuous mode AND already past stage 0.
+		writeIntent(projDir, "no-enter-quick", {
+			title: "Already started",
+			studio,
+			mode: "continuous",
+			stages: ["plan", "build", "ship"],
+			active_stage: "plan",
+			status: "active",
+			intent_reviewed: true,
+		})
+		const r = await callOrch("haiku_select_mode", {
+			intent: "no-enter-quick",
+			options: ["quick"],
+		})
+		// The tool must refuse — not silently accept the change.
+		// Specifically: invalid_mode_options because quick is filtered
+		// out of `modesAvailable` once the intent has started.
+		assert.strictEqual(
+			r.json.error,
+			"invalid_mode_options",
+			`expected invalid_mode_options, got: ${JSON.stringify(r.json)}`,
+		)
+		// And intent.md mode must NOT have been updated.
+		const fm = parseFrontmatter(
+			readFileSync(
+				join(projDir, ".haiku", "intents", "no-enter-quick", "intent.md"),
+				"utf8",
+			),
+		).data
+		assert.strictEqual(fm.mode, "continuous")
+	})
 
-	await test(
-		"refuses to leave `quick` once intent has started a stage (no modes reachable)",
-		async () => {
-			const { projDir, studio } = makeProject("no-leave-quick")
-			process.chdir(projDir)
-			writeIntent(projDir, "no-leave-quick", {
-				title: "Quick already started",
-				studio,
-				mode: "quick",
-				stages: ["build"],
-				active_stage: "build",
-				status: "active",
-				intent_reviewed: true,
-			})
-			const r = await callOrch("haiku_select_mode", {
-				intent: "no-leave-quick",
-				options: ["continuous"],
-			})
-			// Stronger refusal than `invalid_mode_options`: when an intent
-			// is already in quick AND has started, ALL alternative modes
-			// are filtered out (each would amputate or grow stages mid-
-			// flight). The tool fails fast with `no_modes_available`
-			// rather than per-option validation.
-			assert.strictEqual(
-				r.json.error,
-				"no_modes_available",
-				`expected no_modes_available, got: ${JSON.stringify(r.json)}`,
-			)
-			const fm = parseFrontmatter(
-				readFileSync(
-					join(projDir, ".haiku", "intents", "no-leave-quick", "intent.md"),
-					"utf8",
-				),
-			).data
-			assert.strictEqual(fm.mode, "quick")
-		},
-	)
+	await test("refuses to leave `quick` once intent has started a stage (no modes reachable)", async () => {
+		const { projDir, studio } = makeProject("no-leave-quick")
+		process.chdir(projDir)
+		writeIntent(projDir, "no-leave-quick", {
+			title: "Quick already started",
+			studio,
+			mode: "quick",
+			stages: ["build"],
+			active_stage: "build",
+			status: "active",
+			intent_reviewed: true,
+		})
+		const r = await callOrch("haiku_select_mode", {
+			intent: "no-leave-quick",
+			options: ["continuous"],
+		})
+		// Stronger refusal than `invalid_mode_options`: when an intent
+		// is already in quick AND has started, ALL alternative modes
+		// are filtered out (each would amputate or grow stages mid-
+		// flight). The tool fails fast with `no_modes_available`
+		// rather than per-option validation.
+		assert.strictEqual(
+			r.json.error,
+			"no_modes_available",
+			`expected no_modes_available, got: ${JSON.stringify(r.json)}`,
+		)
+		const fm = parseFrontmatter(
+			readFileSync(
+				join(projDir, ".haiku", "intents", "no-leave-quick", "intent.md"),
+				"utf8",
+			),
+		).data
+		assert.strictEqual(fm.mode, "quick")
+	})
 
 	await test("rejects unknown mode option string", async () => {
 		const { projDir, studio } = makeProject("bad-mode")

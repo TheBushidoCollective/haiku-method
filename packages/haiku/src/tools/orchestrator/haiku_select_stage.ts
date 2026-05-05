@@ -15,6 +15,15 @@ import { join } from "node:path"
 import { ensureOnStageBranch } from "../../git-worktree.js"
 import { getElicitInput, resolveStudioStages } from "../../orchestrator.js"
 import {
+	HAIKU_SELECT_STAGE_INPUT_SCHEMA,
+	type HaikuSelectStageInput,
+	validateHaikuSelectStageInputSchema,
+} from "../../state/schemas/index.js"
+import {
+	jsonSchemaOf,
+	validateToolInput,
+} from "../../state/schemas/inputs/_validate.js"
+import {
 	findHaikuRoot,
 	gitCommitState,
 	parseFrontmatter,
@@ -35,17 +44,16 @@ export default defineTool({
 	name: "haiku_select_stage",
 	description:
 		"Select the single stage for a quick-mode intent. Pass the intent slug and optionally a list with one stage name to auto-select. If elicitation is available, prompts the user; otherwise returns the stage list for conversational selection. Refuses if the intent's mode is not 'quick' or if a stage is already set.",
-	inputSchema: {
-		type: "object" as const,
-		properties: {
-			intent: { type: "string" },
-			options: { type: "array", items: { type: "string" } },
-		},
-		required: ["intent"],
-		additionalProperties: false,
-	},
+	inputSchema: jsonSchemaOf(HAIKU_SELECT_STAGE_INPUT_SCHEMA),
 	async handle(args) {
-		const slug = args.intent as string
+		const inputErr = validateToolInput(
+			args,
+			validateHaikuSelectStageInputSchema,
+			"haiku_select_stage",
+		)
+		if (inputErr) return inputErr
+		const validated = args as HaikuSelectStageInput
+		const slug = validated.intent
 		const root = findHaikuRoot()
 		const iDir = join(root, "intents", slug)
 		const intentFile = join(iDir, "intent.md")
@@ -101,7 +109,7 @@ export default defineTool({
 			}
 		}
 
-		const optionsRaw = (args.options as string[] | undefined) || []
+		const optionsRaw = validated.options ?? []
 		// Map any case variants to the canonical stage names.
 		const options = optionsRaw
 			.map((o) => studioStages.find((s) => s.toLowerCase() === o.toLowerCase()))
@@ -141,8 +149,7 @@ export default defineTool({
 					},
 				})
 				if (result.action === "accept" && result.content) {
-					chosenStage =
-						(result.content as Record<string, string>).stage || ""
+					chosenStage = (result.content as Record<string, string>).stage || ""
 				} else {
 					return text(
 						JSON.stringify({

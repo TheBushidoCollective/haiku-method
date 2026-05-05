@@ -1659,8 +1659,15 @@ body
 			choice: "a",
 			source: "made-up-source",
 		})
+		// `source` is constrained at the AJV gate — invalid values now
+		// surface as the stable input-invalid code with `/source` enum
+		// keyword, not the handler's older `invalid_source` semantic.
 		const parsed = JSON.parse(getTextResult(result))
-		assert.strictEqual(parsed.error, "invalid_source")
+		assert.strictEqual(parsed.error, "haiku_decision_record_input_invalid")
+		assert.ok(
+			parsed.errors.some((e) => e.path === "/source" && e.keyword === "enum"),
+			"Expected enum violation on /source",
+		)
 	})
 
 	test("rejects decision missing required fields", () => {

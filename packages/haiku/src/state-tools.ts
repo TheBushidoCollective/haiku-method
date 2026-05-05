@@ -3427,6 +3427,10 @@ import {
 	FSM_DRIVEN_FB_FIELDS,
 	FSM_DRIVEN_INTENT_FIELDS,
 	FSM_DRIVEN_UNIT_FIELDS,
+	HAIKU_BACKLOG_INPUT_SCHEMA,
+	HAIKU_CAPACITY_INPUT_SCHEMA,
+	HAIKU_DECISION_RECORD_INPUT_SCHEMA,
+	HAIKU_EMPTY_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_ADVANCE_HAT_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_DELETE_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_INPUT_SCHEMA,
@@ -3440,8 +3444,21 @@ import {
 	HAIKU_INTENT_GET_INPUT_SCHEMA,
 	HAIKU_INTENT_LIST_INPUT_SCHEMA,
 	HAIKU_INTENT_SET_INPUT_SCHEMA,
+	HAIKU_KNOWLEDGE_LIST_INPUT_SCHEMA,
+	HAIKU_KNOWLEDGE_READ_INPUT_SCHEMA,
+	HAIKU_RECONCILIATION_ACKNOWLEDGE_INPUT_SCHEMA,
+	HAIKU_REFLECT_INPUT_SCHEMA,
+	HAIKU_RELEASE_NOTES_INPUT_SCHEMA,
+	HAIKU_REPAIR_INPUT_SCHEMA,
+	HAIKU_REVIEW_INPUT_SCHEMA,
+	HAIKU_REVIEW_OPEN_INPUT_SCHEMA,
+	HAIKU_SEED_INPUT_SCHEMA,
+	HAIKU_SETTINGS_GET_INPUT_SCHEMA,
+	HAIKU_SETTINGS_SET_INPUT_SCHEMA,
 	HAIKU_STAGE_GET_INPUT_SCHEMA,
 	HAIKU_STAGE_SET_INPUT_SCHEMA,
+	HAIKU_STUDIO_GET_INPUT_SCHEMA,
+	HAIKU_STUDIO_STAGE_GET_INPUT_SCHEMA,
 	HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA,
 	HAIKU_UNIT_DELETE_INPUT_SCHEMA,
 	HAIKU_UNIT_INCREMENT_BOLT_INPUT_SCHEMA,
@@ -3453,6 +3470,10 @@ import {
 	HAIKU_UNIT_WRITE_INPUT_SCHEMA,
 	INTENT_IMMUTABLE_FIELDS,
 	UNIT_FRONTMATTER_SCHEMA,
+	validateHaikuBacklogInputSchema,
+	validateHaikuCapacityInputSchema,
+	validateHaikuDecisionRecordInputSchema,
+	validateHaikuEmptyInputSchema,
 	validateHaikuFeedbackAdvanceHatInputSchema,
 	validateHaikuFeedbackDeleteInputSchema,
 	validateHaikuFeedbackInputSchema,
@@ -3466,8 +3487,20 @@ import {
 	validateHaikuIntentGetInputSchema,
 	validateHaikuIntentListInputSchema,
 	validateHaikuIntentSetInputSchema,
+	validateHaikuKnowledgeListInputSchema,
+	validateHaikuKnowledgeReadInputSchema,
+	validateHaikuReconciliationAcknowledgeInputSchema,
+	validateHaikuReflectInputSchema,
+	validateHaikuReleaseNotesInputSchema,
+	validateHaikuRepairInputSchema,
+	validateHaikuReviewInputSchema,
+	validateHaikuSeedInputSchema,
+	validateHaikuSettingsGetInputSchema,
+	validateHaikuSettingsSetInputSchema,
 	validateHaikuStageGetInputSchema,
 	validateHaikuStageSetInputSchema,
+	validateHaikuStudioGetInputSchema,
+	validateHaikuStudioStageGetInputSchema,
 	validateHaikuUnitAdvanceHatInputSchema,
 	validateHaikuUnitDeleteInputSchema,
 	validateHaikuUnitIncrementBoltInputSchema,
@@ -5962,23 +5995,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_reconciliation_acknowledge",
 		description:
 			"Acknowledge upstream-artifact divergences detected by the pre-elaboration reconciliation gate. Records the decision in the stage's decision_log so the gate falls through on the next tick. Use this when the divergence is intentional (e.g. the upstream artifacts describe different surfaces that genuinely need different names). When the divergence is unintentional, edit the upstream artifacts to reconcile and re-run haiku_run_next instead — do NOT acknowledge to skip the work.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				stage: {
-					type: "string",
-					description:
-						"Stage name. Defaults to the intent's active_stage when omitted.",
-				},
-				rationale: {
-					type: "string",
-					description:
-						"Rationale (≥10 chars) explaining why this divergence is intentional and acceptable.",
-				},
-			},
-			required: ["intent", "rationale"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_RECONCILIATION_ACKNOWLEDGE_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -5994,50 +6011,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_decision_record",
 		description:
 			"Record an elaboration decision in the stage's decision_log, OR declare 'no architectural decisions in scope' for the stage. Used in collaborative-mode stages to track meaningful human-AI knowledge-unification moments instead of counting interaction turns. Each entry is an architectural choice the user picked between options, OR a choice the agent made and surfaced for veto-style approval. Padding questions don't count.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				stage: {
-					type: "string",
-					description:
-						"Stage name. Defaults to the intent's active_stage when omitted.",
-				},
-				no_decisions: {
-					type: "boolean",
-					description:
-						"When true, declare that no architectural decisions are in scope for this stage. `rationale` (≥10 chars) is required. The agent should use this honestly when the work is purely conventional with no real choices to make.",
-				},
-				decision: {
-					type: "string",
-					description:
-						"Short title of the decision being recorded (required unless no_decisions=true). Example: 'Authentication strategy'.",
-				},
-				options: {
-					type: "array",
-					items: { type: "string" },
-					description:
-						"≥2 concrete alternatives considered (required unless no_decisions=true). A 'decision' with only one option isn't a decision — it's just doing the work.",
-				},
-				choice: {
-					type: "string",
-					description:
-						"The chosen option (required unless no_decisions=true). Should match one of the entries in `options`.",
-				},
-				source: {
-					type: "string",
-					enum: ["user", "autonomous-acknowledged"],
-					description:
-						"Who made the call. 'user' = the user picked between options the agent presented. 'autonomous-acknowledged' = the agent chose and surfaced the choice for veto-style approval (the user reviewed and didn't push back).",
-				},
-				rationale: {
-					type: "string",
-					description:
-						"Optional for decisions (recommended for future-reader provenance); required when no_decisions=true.",
-				},
-			},
-			required: ["intent"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_DECISION_RECORD_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6051,11 +6025,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 	{
 		name: "haiku_knowledge_list",
 		description: "List knowledge artifacts for an intent",
-		inputSchema: {
-			type: "object" as const,
-			properties: { intent: { type: "string" } },
-			required: ["intent"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_KNOWLEDGE_LIST_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6067,11 +6037,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 	{
 		name: "haiku_knowledge_read",
 		description: "Read a knowledge artifact",
-		inputSchema: {
-			type: "object" as const,
-			properties: { intent: { type: "string" }, name: { type: "string" } },
-			required: ["intent", "name"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_KNOWLEDGE_READ_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6088,7 +6054,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		description:
 			"List all Claude Code skills (slash commands) installed in the user's environment — plugin root, project-local (.claude/skills/), and global (~/.claude/plugins/*/skills/). " +
 			"The elaborator calls this to annotate units with `applicable_skills:` frontmatter; hat subagent prompts surface those skills automatically.",
-		inputSchema: { type: "object" as const, properties: {} },
+		inputSchema: jsonSchemaOf(HAIKU_EMPTY_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6121,7 +6087,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_studio_list",
 		description:
 			"List all available studios with their description, stages, and category. Project-level studios (.haiku/studios/) override built-in ones on name collision.",
-		inputSchema: { type: "object" as const, properties: {} },
+		inputSchema: jsonSchemaOf(HAIKU_EMPTY_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6148,11 +6114,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_studio_get",
 		description:
 			"Read a studio's STUDIO.md — returns frontmatter fields and body text. Resolves project-level override first, then built-in.",
-		inputSchema: {
-			type: "object" as const,
-			properties: { studio: { type: "string" } },
-			required: ["studio"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_STUDIO_GET_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6177,11 +6139,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_studio_stage_get",
 		description:
 			"Read a stage's STAGE.md from a studio — returns frontmatter fields (hats, review, requires, produces) and body text. Resolves project-level override first, then built-in.",
-		inputSchema: {
-			type: "object" as const,
-			properties: { studio: { type: "string" }, stage: { type: "string" } },
-			required: ["studio", "stage"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_STUDIO_STAGE_GET_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6200,17 +6158,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_settings_get",
 		description:
 			"Read a field from .haiku/settings.yml (e.g. studio, stack.compute, providers, workspace, default_announcements, review_agents, operations_runtime). Returns empty string if not set.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				field: {
-					type: "string",
-					description:
-						"Dot-separated path (e.g. 'studio', 'stack.compute', 'review_agents')",
-				},
-			},
-			required: ["field"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_SETTINGS_GET_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6225,22 +6173,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_settings_set",
 		description:
 			"Set a top-level field in .haiku/settings.yml. Validated against plugin/schemas/settings.schema.json. Pass `null` to delete a field. Use this instead of editing the file directly — Edit/Write/MultiEdit on .haiku/settings.yml is denied by the workflow-fields hook.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				field: {
-					type: "string",
-					description:
-						"Top-level field name (e.g. 'studio', 'mockup_format', 'visual_review'). Nested paths are not supported — pass the whole top-level object to replace it.",
-				},
-				value: {
-					type: ["string", "array", "number", "boolean", "null", "object"],
-					description:
-						"New value. Must validate against the field's declared shape in settings.schema.json. Pass null to delete the field.",
-				},
-			},
-			required: ["field", "value"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_SETTINGS_SET_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6288,7 +6221,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_dashboard",
 		description:
 			"Returns a formatted dashboard of all intents showing status, studio, active stage, mode, and per-stage status tables.",
-		inputSchema: { type: "object" as const, properties: {} },
+		inputSchema: jsonSchemaOf(HAIKU_EMPTY_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6304,15 +6237,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_capacity",
 		description:
 			"Returns a capacity report grouped by studio — completed/active counts and median bolt counts per stage.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				studio: {
-					type: "string",
-					description: "Optional: filter to a specific studio",
-				},
-			},
-		},
+		inputSchema: jsonSchemaOf(HAIKU_CAPACITY_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6332,11 +6257,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_reflect",
 		description:
 			"Returns detailed reflection data for an intent — per-stage summaries, unit completion counts, bolt counts, and analysis instructions.",
-		inputSchema: {
-			type: "object" as const,
-			properties: { intent: { type: "string" } },
-			required: ["intent"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_REFLECT_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: { message: { type: "string" } },
@@ -6346,15 +6267,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_review",
 		description:
 			"Runs a git diff against main/upstream and returns formatted pre-delivery code review instructions with diff, stats, review guidelines, and review-agent config.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: {
-					type: "string",
-					description: "Optional: intent slug for context",
-				},
-			},
-		},
+		inputSchema: jsonSchemaOf(HAIKU_REVIEW_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: { message: { type: "string" } },
@@ -6364,21 +6277,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_review_open",
 		description:
 			'Open an ad-hoc review pane in the browser for the active intent and BLOCK until the reviewer clicks Done or Request Changes (or the pane times out at 30min). The UI swaps Approve for Done/Close, shows an "Ad-hoc review" badge, and never mutates workflow engine state on its own. Return value is a concrete next-step instruction: on Done the tool returns "no changes requested"; on Request Changes it returns a nudge to call haiku_run_next so the durable feedback routes through the normal fix-loop / revisit path.',
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: {
-					type: "string",
-					description:
-						"Optional intent slug. Defaults to the sole active intent (errors if ambiguous).",
-				},
-				stage: {
-					type: "string",
-					description:
-						"Optional stage name to land the reviewer on. Defaults to the intent's active_stage.",
-				},
-			},
-		},
+		inputSchema: jsonSchemaOf(HAIKU_REVIEW_OPEN_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: { message: { type: "string" } },
@@ -6388,21 +6287,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_backlog",
 		description:
 			"Manage the backlog: list items, add new items, review items interactively, or promote items to intents.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				action: {
-					type: "string",
-					enum: ["list", "add", "review", "promote"],
-					description: "Defaults to `list`.",
-				},
-				description: {
-					type: "string",
-					description:
-						"Description for the new backlog item (used with action=add).",
-				},
-			},
-		},
+		inputSchema: jsonSchemaOf(HAIKU_BACKLOG_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6422,16 +6307,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		name: "haiku_seed",
 		description:
 			"Manage seeds (future ideas): list by status, plant a new seed, or check planted seeds for trigger conditions.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				action: {
-					type: "string",
-					enum: ["list", "plant", "check"],
-					description: "Defaults to `list`.",
-				},
-			},
-		},
+		inputSchema: jsonSchemaOf(HAIKU_SEED_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: { message: { type: "string" } },
@@ -6634,15 +6510,7 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 		name: "haiku_release_notes",
 		description:
 			"Extract release notes from CHANGELOG.md — a specific version or the 5 most recent entries.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				version: {
-					type: "string",
-					description: "Optional: specific version to extract (e.g. '1.2.0')",
-				},
-			},
-		},
+		inputSchema: jsonSchemaOf(HAIKU_RELEASE_NOTES_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6660,25 +6528,7 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 		name: "haiku_repair",
 		description:
 			"Scan intents for metadata issues and auto-apply safe fixes. In a git repo, scans all intent branches sequentially, auto-applies safe fixes, syncs changes, and opens PRs/MRs for already-merged branches. In filesystem mode, scans intents in the current working directory. Also relocates any worktrees misplaced by older H·AI·K·U versions (which rooted `.haiku/worktrees/` at cwd instead of the primary repo) — clean worktrees are moved via `git worktree move`; dirty ones are reported for manual resolution. Pass `intent` to repair a single intent only. Pass `skip_branches: true` to force cwd-only mode in a git repo. Pass `apply: false` to scan without applying fixes.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: {
-					type: "string",
-					description:
-						"Specific intent slug to scan in the current working directory (skips multi-branch mode)",
-				},
-				apply: {
-					type: "boolean",
-					description: "Auto-apply safe mechanical fixes (default: true)",
-				},
-				skip_branches: {
-					type: "boolean",
-					description:
-						"Force cwd-only mode even when in a git repo (default: false)",
-				},
-			},
-		},
+		inputSchema: jsonSchemaOf(HAIKU_REPAIR_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6696,7 +6546,7 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 		description:
 			"Return the running MCP binary version and plugin version. " +
 			"MCP version is baked into the binary at build time; plugin version is read from plugin.json at runtime.",
-		inputSchema: { type: "object" as const, properties: {} },
+		inputSchema: jsonSchemaOf(HAIKU_EMPTY_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -8512,6 +8362,12 @@ export function handleStateTool(
 		}
 
 		case "haiku_reconciliation_acknowledge": {
+			const reconAckInputErr = validateToolInput(
+				args,
+				validateHaikuReconciliationAcknowledgeInputSchema,
+				"haiku_reconciliation_acknowledge",
+			)
+			if (reconAckInputErr) return reconAckInputErr
 			const intentArg = args.intent as string
 			const requestedStage = args.stage as string | undefined
 			const stage = requestedStage || resolveActiveStage(intentArg)
@@ -8579,6 +8435,12 @@ export function handleStateTool(
 		}
 
 		case "haiku_decision_record": {
+			const decisionRecordInputErr = validateToolInput(
+				args,
+				validateHaikuDecisionRecordInputSchema,
+				"haiku_decision_record",
+			)
+			if (decisionRecordInputErr) return decisionRecordInputErr
 			const intentArg = args.intent as string
 			const requestedStage = args.stage as string | undefined
 			const stage = requestedStage || resolveActiveStage(intentArg)
@@ -8718,12 +8580,24 @@ export function handleStateTool(
 
 		// ── Knowledge ──
 		case "haiku_knowledge_list": {
+			const knowledgeListInputErr = validateToolInput(
+				args,
+				validateHaikuKnowledgeListInputSchema,
+				"haiku_knowledge_list",
+			)
+			if (knowledgeListInputErr) return knowledgeListInputErr
 			const dir = join(intentDir(args.intent as string), "knowledge")
 			if (!existsSync(dir)) return reply({ files: [] })
 			const files = readdirSync(dir).filter((f) => f.endsWith(".md"))
 			return reply({ files })
 		}
 		case "haiku_knowledge_read": {
+			const knowledgeReadInputErr = validateToolInput(
+				args,
+				validateHaikuKnowledgeReadInputSchema,
+				"haiku_knowledge_read",
+			)
+			if (knowledgeReadInputErr) return knowledgeReadInputErr
 			const path = join(
 				intentDir(args.intent as string),
 				"knowledge",
@@ -8741,11 +8615,23 @@ export function handleStateTool(
 
 		// ── Skills ──
 		case "haiku_skill_list": {
+			const skillListInputErr = validateToolInput(
+				args,
+				validateHaikuEmptyInputSchema,
+				"haiku_skill_list",
+			)
+			if (skillListInputErr) return skillListInputErr
 			return reply({ skills: listInstalledSkills() })
 		}
 
 		// ── Studio ──
 		case "haiku_studio_list": {
+			const studioListInputErr = validateToolInput(
+				args,
+				validateHaikuEmptyInputSchema,
+				"haiku_studio_list",
+			)
+			if (studioListInputErr) return studioListInputErr
 			// Unified discovery — listStudios covers both plugin and project studios,
 			// honors name/slug/aliases from frontmatter, and exposes help links.
 			const studios = listStudios().map((s) => ({
@@ -8764,6 +8650,12 @@ export function handleStateTool(
 			return reply({ studios })
 		}
 		case "haiku_studio_get": {
+			const studioGetInputErr = validateToolInput(
+				args,
+				validateHaikuStudioGetInputSchema,
+				"haiku_studio_get",
+			)
+			if (studioGetInputErr) return studioGetInputErr
 			const studio = resolveStudio(args.studio as string)
 			if (!studio) return reply({ found: false })
 			return reply({
@@ -8783,6 +8675,12 @@ export function handleStateTool(
 			})
 		}
 		case "haiku_studio_stage_get": {
+			const studioStageGetInputErr = validateToolInput(
+				args,
+				validateHaikuStudioStageGetInputSchema,
+				"haiku_studio_stage_get",
+			)
+			if (studioStageGetInputErr) return studioStageGetInputErr
 			const studio = resolveStudio(args.studio as string)
 			if (!studio) return reply({ found: false })
 			const sgName = args.stage as string
@@ -8802,6 +8700,12 @@ export function handleStateTool(
 
 		// ── Settings ──
 		case "haiku_settings_get": {
+			const settingsGetInputErr = validateToolInput(
+				args,
+				validateHaikuSettingsGetInputSchema,
+				"haiku_settings_get",
+			)
+			if (settingsGetInputErr) return settingsGetInputErr
 			const field = args.field as string
 			let settingsPath = ""
 			try {
@@ -8823,13 +8727,16 @@ export function handleStateTool(
 		}
 
 		case "haiku_settings_set": {
+			const settingsSetInputErr = validateToolInput(
+				args,
+				validateHaikuSettingsSetInputSchema,
+				"haiku_settings_set",
+			)
+			if (settingsSetInputErr) return settingsSetInputErr
 			const field = args.field as string
 			const value = args.value as unknown
 			const errOut = (error: string, message: string) =>
 				reply({ error, field, message }, { isError: true })
-			if (!field || typeof field !== "string") {
-				return errOut("settings_field_required", "`field` is required")
-			}
 			let settingsPath = ""
 			try {
 				settingsPath = join(findHaikuRoot(), "settings.yml")
@@ -8990,6 +8897,12 @@ export function handleStateTool(
 
 		// ── Dashboard ──
 		case "haiku_dashboard": {
+			const dashboardInputErr = validateToolInput(
+				args,
+				validateHaikuEmptyInputSchema,
+				"haiku_dashboard",
+			)
+			if (dashboardInputErr) return dashboardInputErr
 			const empty = "No intents found. Use /haiku:start to create one."
 			let root: string
 			try {
@@ -9100,6 +9013,12 @@ export function handleStateTool(
 
 		// ── Capacity ──
 		case "haiku_capacity": {
+			const capacityInputErr = validateToolInput(
+				args,
+				validateHaikuCapacityInputSchema,
+				"haiku_capacity",
+			)
+			if (capacityInputErr) return capacityInputErr
 			const filterStudio = (args.studio as string) || ""
 			const studioField = filterStudio || null
 			let root: string
@@ -9192,6 +9111,12 @@ export function handleStateTool(
 
 		// ── Reflect ──
 		case "haiku_reflect": {
+			const reflectInputErr = validateToolInput(
+				args,
+				validateHaikuReflectInputSchema,
+				"haiku_reflect",
+			)
+			if (reflectInputErr) return reflectInputErr
 			const intentSlug = args.intent as string
 			let root: string
 			try {
@@ -9297,6 +9222,12 @@ export function handleStateTool(
 
 		// ── Review ──
 		case "haiku_review": {
+			const reviewInputErr = validateToolInput(
+				args,
+				validateHaikuReviewInputSchema,
+				"haiku_review",
+			)
+			if (reviewInputErr) return reviewInputErr
 			// Determine diff base — prefer the tracked upstream, fall back to the
 			// detected mainline (origin/HEAD-aware), then to a last-resort "main".
 			let base = getMainlineBranch()
@@ -9389,6 +9320,12 @@ export function handleStateTool(
 
 		// ── Backlog ──
 		case "haiku_backlog": {
+			const backlogInputErr = validateToolInput(
+				args,
+				validateHaikuBacklogInputSchema,
+				"haiku_backlog",
+			)
+			if (backlogInputErr) return backlogInputErr
 			const action = (args.action as string) || "list"
 			const md = (markdown: string) => reply({ markdown, action })
 			let root: string
@@ -9462,6 +9399,12 @@ export function handleStateTool(
 
 		// ── Seed ──
 		case "haiku_seed": {
+			const seedInputErr = validateToolInput(
+				args,
+				validateHaikuSeedInputSchema,
+				"haiku_seed",
+			)
+			if (seedInputErr) return seedInputErr
 			const action = (args.action as string) || "list"
 			let root: string
 			try {
@@ -9545,6 +9488,12 @@ export function handleStateTool(
 
 		// ── Release Notes ──
 		case "haiku_release_notes": {
+			const releaseNotesInputErr = validateToolInput(
+				args,
+				validateHaikuReleaseNotesInputSchema,
+				"haiku_release_notes",
+			)
+			if (releaseNotesInputErr) return releaseNotesInputErr
 			const version = (args.version as string) || ""
 			const versionField = version || null
 			const md = (markdown: string) =>
@@ -9615,6 +9564,12 @@ export function handleStateTool(
 		}
 
 		case "haiku_repair": {
+			const repairInputErr = validateToolInput(
+				args,
+				validateHaikuRepairInputSchema,
+				"haiku_repair",
+			)
+			if (repairInputErr) return repairInputErr
 			// ── Repair: scan intents for metadata issues ──
 			//
 			// Default behavior in a git repo: scan ALL intent branches sequentially
@@ -10959,6 +10914,12 @@ export function handleStateTool(
 		}
 
 		case "haiku_version_info": {
+			const versionInfoInputErr = validateToolInput(
+				args,
+				validateHaikuEmptyInputSchema,
+				"haiku_version_info",
+			)
+			if (versionInfoInputErr) return versionInfoInputErr
 			const info: Record<string, string> = {
 				mcp_version: MCP_VERSION,
 				plugin_version: getPluginVersion(),

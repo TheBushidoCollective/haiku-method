@@ -45,6 +45,8 @@ import {
 	waitForSession,
 } from "../sessions.js"
 import { buildStageArtifactUrl } from "../stage-artifact-url.js"
+import { validateHaikuReviewOpenInputSchema } from "../state/schemas/index.js"
+import { validateToolInput } from "../state/schemas/inputs/_validate.js"
 import {
 	findHaikuRoot,
 	handleStateTool,
@@ -334,6 +336,12 @@ export async function handleToolCall(
 	// picks it up via run_next's fix-loop/revisit path.
 	if (name === "haiku_review_open") {
 		const a = (args ?? {}) as Record<string, unknown>
+		const reviewOpenInputErr = validateToolInput(
+			a,
+			validateHaikuReviewOpenInputSchema,
+			"haiku_review_open",
+		)
+		if (reviewOpenInputErr) return reviewOpenInputErr
 		let slug = (a.intent as string) || ""
 		if (!slug) {
 			const branchMatch = intentFromCurrentBranch()

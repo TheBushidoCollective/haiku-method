@@ -71,6 +71,16 @@ This artifact enumerates what the report-to-fix loop must be able to do — at t
 
 ---
 
+### JSONL session bundle traversal
+
+**Rationale.** The plugin must locate and assemble the complete session context — all JSONL files reachable from the current session ID via the `parent_uuid` chain — before scrubbing and POST. The traversal starts from the current session's JSONL under `~/.claude/projects/<encoded-cwd>/`, walks each entry's `parent_uuid` link to identify every linked subagent JSONL, and assembles the result into the session bundle. An incomplete traversal degrades the diagnostic signal available to the fix agent — the loop's output quality is bounded by the completeness of this assembly step.
+
+**Trust boundary introduced.** User machine only. The traversal reads files from the local filesystem (`~/.claude/projects/<encoded-cwd>/`); no external service is involved. This is the only capability that runs entirely within the user's trust domain before the bundle crosses to Cloud Run. A traversal bug is a correctness/completeness issue, not a privacy or credential issue — the data never leaves the machine until the scrubber has run.
+
+**Precedent.** `packages/haiku/src/session-id.ts` (session ID generation and encoding helpers; relevant for locating the correct project directory under `~/.claude/projects/<encoded-cwd>/`, as noted in DISCOVERY § Existing Code Structure). The encoding logic that maps the current working directory to its project subdirectory is established; the traversal step that walks the `parent_uuid` chain across JSONL files is a new capability built on top of that lookup.
+
+---
+
 ### Client-side secret scrubber
 
 **Rationale.** The JSONL bundle leaving the user's machine must not contain tokens, API keys, environment variable values, or absolute home paths (e.g., `/Users/jwaldrip/...`). Scrubbing must happen in the plugin process, before POST, so the Cloud Run service never receives raw secrets. The scrubber must be conservative — strip on uncertainty — because a scrubbing false negative ships a credential to GCP.

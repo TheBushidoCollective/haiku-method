@@ -329,10 +329,12 @@ export default defineTool({
 				return text(withInstructions(gateResult))
 			}
 
-			// Revisit-dispatch short-circuit (POST /api/revisit).
-			const revisitAnnotations = reviewResult.annotations as
-				| { revisit_action?: string; revisit_message?: string }
-				| undefined
+			// Revisit-dispatch short-circuit (POST /api/revisit). The
+			// HTTP endpoint queues a pending_decision with revisit_*
+			// annotations on ReviewAnnotations; we read them straight
+			// off the typed return now that ReviewAnnotations carries
+			// these optional fields (sessions.ts).
+			const revisitAnnotations = reviewResult.annotations
 			const revisitAction =
 				typeof revisitAnnotations?.revisit_action === "string"
 					? revisitAnnotations.revisit_action

@@ -31,7 +31,11 @@ import {
 import { broadcastIntent } from "../intent-broadcaster.js"
 import { handleOrchestratorTool } from "../orchestrator.js"
 import { isSentryConfigured, reportFeedback } from "../sentry.js"
-import type { DesignArchetypeData, QuestionDef } from "../sessions.js"
+import type {
+	DesignArchetypeData,
+	QuestionDef,
+	ReviewAnnotations,
+} from "../sessions.js"
 import {
 	clearHeartbeat,
 	createDesignDirectionSession,
@@ -1006,7 +1010,7 @@ export type GateReviewPrepared = {
 export type GateReviewDecision = {
 	decision: string
 	feedback: string
-	annotations?: unknown
+	annotations?: ReviewAnnotations
 }
 
 export async function prepareGateReviewSession(

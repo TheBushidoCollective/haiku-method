@@ -466,7 +466,7 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 						revisit_action: "revisit_pending",
 						revisit_stage: targetStage,
 						revisit_message: message,
-					} as unknown as Parameters<typeof updateSession>[1]["annotations"],
+					},
 					submitted_at: new Date().toISOString(),
 				},
 			})

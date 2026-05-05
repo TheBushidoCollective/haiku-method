@@ -136,6 +136,15 @@ export interface ReviewAnnotations {
 	screenshot?: string // base64 PNG of annotated canvas
 	pins?: Array<{ x: number; y: number; text: string }>
 	comments?: Array<{ selectedText: string; comment: string; paragraph: number }>
+	// Revisit channel: set by the HTTP revisit endpoint
+	// (POST /api/revisit/:sessionId) when waking awaitGateReviewSession
+	// via pending_decision. haiku_await_gate's revisit-dispatch short-
+	// circuit reads these to route the rewind. Distinct from the
+	// reviewer-annotation fields above — populated only on the revisit
+	// path, never via the WS `decide` frame.
+	revisit_action?: string
+	revisit_stage?: string
+	revisit_message?: string
 }
 
 /** Snapshot of a decided review for delta comparison on the next re-review. */

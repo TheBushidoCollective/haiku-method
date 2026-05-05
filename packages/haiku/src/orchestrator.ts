@@ -24,6 +24,7 @@
 import { actionPromptBuilders } from "./orchestrator/prompts/index.js"
 import { orchestratorToolDefs } from "./orchestrator/tool-defs.js"
 import { dispatchOrchestratorAction } from "./orchestrator/workflow/run-tick.js"
+import type { ReviewAnnotations } from "./sessions.js"
 import { validateSlugArgs } from "./state-tools.js"
 import { writeActionPromptFile } from "./subagent-prompt-file.js"
 import { orchestratorToolHandlers } from "./tools/orchestrator/index.js"
@@ -298,7 +299,11 @@ let _awaitGateReviewSession:
 				reviewUrl?: string
 				timeoutMs?: number
 			},
-	  ) => Promise<{ decision: string; feedback: string; annotations?: unknown }>)
+	  ) => Promise<{
+			decision: string
+			feedback: string
+			annotations?: ReviewAnnotations
+	  }>)
 	| null = null
 
 /**

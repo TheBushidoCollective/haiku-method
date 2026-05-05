@@ -47,7 +47,16 @@ quality_gates:
       = "$(grep -cE '^- \*\*Mitigation owner\*\*:'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/risk-inventory.md)"
       ]
-status: pending
+status: active
+bolt: 1
+hat: researcher
+started_at: '2026-05-05T22:43:26Z'
+hat_started_at: '2026-05-05T22:43:26Z'
+iterations:
+  - hat: researcher
+    started_at: '2026-05-05T22:43:26Z'
+    completed_at: null
+    result: null
 ---
 # Risk Inventory with Severity and Detection Signal
 

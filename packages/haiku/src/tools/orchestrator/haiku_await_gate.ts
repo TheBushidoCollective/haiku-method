@@ -620,7 +620,20 @@ export default defineTool({
 									"intent.md",
 								)
 								setFrontmatterField(intentFilePath, "intent_reviewed", true)
-								if (nextPhase) workflowAdvancePhase(slug, stage, nextPhase)
+								// Mirror of the main approval path: pre-stage gate
+								// has no active stage to advance, so stamp
+								// intent_reviewed and clear the phase. Calling
+								// workflowAdvancePhase(slug, "", "execute") here
+								// would resolve to .haiku/intents/{slug}/stages//state.json
+								// (ENOENT, swallowed by the outer catch into a
+								// generic GATE BLOCKED) and leave phase: intent_review
+								// stranded on intent.md.
+								if (stage && nextPhase) {
+									workflowAdvancePhase(slug, stage, nextPhase)
+								} else {
+									deleteFrontmatterFields(intentFilePath, ["phase"])
+									sealIntentState(slug)
+								}
 								gitCommitState(
 									`haiku: intent ${slug} approved by user (elicitation)`,
 								)
@@ -629,10 +642,12 @@ export default defineTool({
 									withInstructions({
 										action: "intent_approved",
 										intent: slug,
-										stage,
-										from_phase: "elaborate",
-										to_phase: nextPhase,
-										message: `Intent approved — advancing to ${nextPhase || "execute"}. Call haiku_run_next immediately.`,
+										stage: stage || null,
+										from_phase: "intent_review",
+										to_phase: nextPhase || "execute",
+										message: stage
+											? `Intent approved — advancing to ${nextPhase || "execute"}. Call haiku_run_next immediately.`
+											: `Intent approved — beginning stage 0. Call haiku_run_next immediately.`,
 									}),
 								)
 							}

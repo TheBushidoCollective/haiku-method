@@ -528,6 +528,110 @@ try {
 		setElicitInputHandler(null)
 	})
 
+	console.log("\n=== E2E: elicitation fallback for intent_review approval ===")
+
+	await test(
+		"pre-stage intent_review approval via elicitation fallback (review UI down) clears phase + stamps intent_reviewed without crashing",
+		async () => {
+			// Regression for the bug the PR reviewer flagged 6 times:
+			// haiku_await_gate's elicitation fallback path (when the
+			// review UI fails) called `workflowAdvancePhase(slug, "",
+			// "execute")` against a pre-stage intent_review, which
+			// resolved stage state.json at `stages//state.json` and
+			// silently failed via the outer catch — leaving
+			// `phase: intent_review` stranded on intent.md.
+			const { projDir, studio } = makeProject("elicit-fallback")
+			process.chdir(projDir)
+
+			// Prepare succeeds (so pointers persist on intent.md), then
+			// the await callback throws — that's the trigger for the
+			// elicitation fallback path. Mirror of how the real review
+			// UI fails: session created, but the wait loop dies.
+			setGateReviewHandlers({
+				prepare: async () => ({
+					session_id: "elicit-fallback-session",
+					review_url: "http://test.local/review/elicit-fallback",
+					use_remote: false,
+					reused: false,
+					browser_attached: false,
+				}),
+				await: async () => {
+					throw new Error("review UI await failed in test")
+				},
+			})
+			// Two distinct elicit answers needed: mode (continuous) and
+			// gate decision (approve). Route by field name.
+			setElicitInputHandler(async ({ requestedSchema }) => {
+				const fields = Object.keys(requestedSchema?.properties || {})
+				const f = fields[0]
+				if (f === "studio") return { action: "accept", content: { studio } }
+				if (f === "mode")
+					return { action: "accept", content: { mode: "continuous" } }
+				if (f === "decision")
+					return { action: "accept", content: { decision: "approve" } }
+				return { action: "decline" }
+			})
+
+			await call("haiku_intent_create", {
+				title: "Elicitation fallback approval",
+				description:
+					"Review UI fails; approval flows through MCP elicit. Pre-stage gate must not crash on stage=''.",
+				slug: "elicit-fallback-intent",
+			})
+			const intentDirAbs = join(
+				projDir,
+				".haiku",
+				"intents",
+				"elicit-fallback-intent",
+			)
+
+			await call("haiku_run_next", { intent: "elicit-fallback-intent" })
+			await call("haiku_select_studio", { intent: "elicit-fallback-intent" })
+			await call("haiku_run_next", { intent: "elicit-fallback-intent" })
+			await call("haiku_select_mode", { intent: "elicit-fallback-intent" })
+
+			// Drive run_next to open the intent_review gate. With
+			// prepareGateReview throwing, this returns an error from
+			// run_next — but the engine has stamped phase: intent_review
+			// on intent.md before that throw.
+			await call("haiku_run_next", { intent: "elicit-fallback-intent" })
+			// Now call await_gate. The await callback won't run because
+			// prepare failed; haiku_await_gate's catch path falls to
+			// _elicitInput, which our handler answers with
+			// decision: "approve".
+			const approval = await call("haiku_await_gate", {
+				intent: "elicit-fallback-intent",
+			})
+			// Pre-fix expected: GATE BLOCKED (the workflowAdvancePhase
+			// call resolves stages//state.json and the outer catch
+			// surfaces a generic blocked error). Post-fix expected:
+			// intent_approved with stage: null.
+			assert.strictEqual(
+				approval.json.action,
+				"intent_approved",
+				`elicitation fallback must produce intent_approved, got: ${JSON.stringify(approval.json)}`,
+			)
+			// And the stranded `phase: intent_review` field on intent.md
+			// must be cleared so the next derive-state tick falls
+			// through to start_stage instead of looping back into
+			// intent_review.
+			const fmAfter = readIntentFm(intentDirAbs)
+			assert.strictEqual(
+				fmAfter.intent_reviewed,
+				true,
+				"intent_reviewed must be stamped",
+			)
+			assert.notStrictEqual(
+				fmAfter.phase,
+				"intent_review",
+				`phase must be cleared after pre-stage approval, got: ${fmAfter.phase}`,
+			)
+
+			setElicitInputHandler(null)
+			setGateReviewHandlers({ prepare: null, await: null })
+		},
+	)
+
 	console.log("\n=== E2E: mode field is engine-only ===")
 
 	await test("haiku_intent_set rejects writes to `mode` with intent_field_engine_only", async () => {

@@ -270,6 +270,19 @@ A stage declares five things:
 
 5. **Output definitions** — the artifacts the stage produces, each with a declared scope that determines how long they persist and who can access them.
 
+### Pre-Stage Selection Chain
+
+Before any stage runs, the framework drives a four-step elicitation chain that captures the orientation choices the agent must not be allowed to dictate:
+
+1. **Studio selection** — the human picks which studio's lifecycle the intent will follow. The framework presents available studios via a structured picker.
+2. **Mode selection** — the human picks the execution mode (continuous, discrete, autopilot, or quick). Mode is engine-managed: the agent never writes `mode` directly to intent metadata, and any attempt to do so is rejected.
+3. **Stage selection (quick mode only)** — for `quick` mode, the human picks the single stage the intent will run. Other modes inherit the studio's full stage list automatically.
+4. **Intent review gate** — once studio + mode + (for quick) stage are set, the framework opens an `ask`-type review gate showing the minimal intent for human approval before any stage begins. Approval clears the gate and lets the workflow enter stage 0; requesting changes returns the intent to the elicitation chain.
+
+This chain is structurally load-bearing. The failure mode it prevents: an agent inferring "the user said discrete inception" and dictating both `mode: discrete` + `stages: [inception]` on intent creation, which collapses the workflow into a single amputated stage with no recovery path. By making the orientation choices flow through engine elicitation, the framework guarantees the human picked them — not the agent.
+
+Mode transitions mid-flight (continuous ↔ discrete ↔ autopilot) are allowed through a dedicated mode-change command; transitions into or out of `quick` are forbidden once a stage has started, because `quick` is single-stage by definition and either direction would amputate or grow the workflow.
+
 ### The Stage Loop
 
 Each stage executes through a fixed six-step loop:

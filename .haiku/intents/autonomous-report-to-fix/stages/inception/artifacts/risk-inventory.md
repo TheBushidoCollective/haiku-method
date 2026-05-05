@@ -12,7 +12,7 @@ Converted from the prose risk discussion in DISCOVERY.md and cross-referenced ag
 
 - **Severity**: critical
 - **Detection signal**: A post-scrub bundle contains a string matching a known credential prefix (e.g., `ghp_`, `sk-`, `xoxb-`) or a high-entropy unlabeled string that pattern-analysis flags after transmission arrives at the Cloud Run service.
-- **Mitigation owner**: development
+- **Mitigation owner**: security
 
 A credential that the client-side scrubber fails to strip is transmitted to the GigSmart Cloud Run service and potentially forwarded to the Anthropic API as part of the fix-agent prompt context. Once transmitted, the credential is outside the user's control — it cannot be recalled by clearing local state. The failure mode is not theoretical: regex-based scrubbers operating on free-text JSONL cannot enumerate every custom secret format users may have stored in their environment. The conservative-on-uncertainty posture defined in the privacy principles (unit-04, Scrubbing Principles) is the primary design response, but it does not eliminate the residual false-negative window for novel credential formats. This is the highest-severity risk in the inventory because it is the failure mode with the least recovery surface: a missed credential is a user trust breach with no purely technical remediation.
 
@@ -101,6 +101,8 @@ The following risks carry uncertain severity ratings or currently unknown detect
 **State Store Choice and Cold-Start Latency Interaction** — The state store unavailability risk and the cold-start webhook timeout risk are partially coupled: the state store read happens during the cold-started handler, adding to the total response latency. If the state store is Firestore with standard read latency (~10ms median, but spiky under contention), it may not push the total over 10 seconds. If GCS object storage is used, read latency is higher and more variable. The combined latency budget for cold start + state read + 200 acknowledgment is not characterized until the design stage selects the state store.
 
 **Webhook Delivery Deduplication** — GitHub may redeliver webhook events if the initial delivery times out or returns a non-2xx response. If the fix agent processes a redelivered event without recognizing it as a duplicate, it may run a second fix attempt against the same CI state and consume two cap slots for one logical event. The detection signal for deduplication failures is not yet defined. Design stage should specify whether webhook event IDs are stored in the state store for idempotency.
+
+**Anthropic API Dependency — Rate-Limit vs. Outage Distinction** — A rate-limited account and an unavailable API are both classified under the single-vendor dependency risk, but they have different detection signals and different mitigations. Rate limits are self-correcting over time (retry with backoff); a full outage is not. The operations stage should determine whether these warrant separate entries in the operational runbook even if they share a single risk register entry here.
 
 ---
 

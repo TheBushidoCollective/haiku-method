@@ -5,6 +5,7 @@ depends_on: []
 outputs:
   - >-
     .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/privacy-and-data-handling-principles.md
+  - stages/inception/artifacts/privacy-and-data-handling-principles.md
 quality_gates:
   - name: artifact-exists
     command: >-
@@ -33,12 +34,16 @@ inputs:
   - website/content/pages/privacy.md
   - packages/haiku/src/telemetry.ts
 bolt: 1
-hat: researcher
+hat: distiller
 started_at: '2026-05-05T22:29:42Z'
-hat_started_at: '2026-05-05T22:29:42Z'
+hat_started_at: '2026-05-05T22:32:44Z'
 iterations:
   - hat: researcher
     started_at: '2026-05-05T22:29:42Z'
+    completed_at: '2026-05-05T22:32:44Z'
+    result: advance
+  - hat: distiller
+    started_at: '2026-05-05T22:32:44Z'
     completed_at: null
     result: null
 ---

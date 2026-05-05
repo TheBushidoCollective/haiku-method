@@ -85,6 +85,7 @@ Your progress is preserved — the AI picks up where it left off.
 | `/haiku:gate-review` | Pre-delivery code review — catches issues before external CI/bots |
 | `/haiku:pickup [slug]` | Resume an existing intent after a break |
 | `/haiku:quick` | Quick mode for small tasks — skip full pipeline |
+| `/haiku:zap` | Zero-ceremony hat loop — typo/one-liner work, no intent or workflow scaffolding |
 | `/haiku:reset` | Abandon current work and start fresh |
 | `/haiku:autopilot` | Full autonomous workflow — create, run, review, deliver |
 

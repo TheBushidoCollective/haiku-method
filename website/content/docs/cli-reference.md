@@ -44,6 +44,16 @@ Quick mode for small tasks — skip full pipeline. Streamlined single-stage work
 
 **Arguments:** `stage` (optional) — stage name. `description` (required) — task description.
 
+### `/haiku:zap`
+
+Zero-ceremony hat loop. No intent file, no unit decomposition, no workflow tick — runs the chosen stage's `hats:` sequence directly against the working tree as a chain of subagents (planner → builder → verifier). Parent skill commits once after the verifier returns `PASS — <summary>` with a confirmed Files list. Capped at 2 retries.
+
+Use for: typos, one-line config tweaks, small bug fixes — work where the cost of a mistake is "edit and re-run." Use `/haiku:quick` or `/haiku:start` for anything that crosses stages or needs traceability.
+
+**Arguments:** `studio` (optional, defaults to `software`) — studio slug. `stage` (optional, defaults to the studio's primary execution stage, e.g. `development` for `software`) — stage within the studio. `description` (required) — task description.
+
+**Preflight:** zap refuses to start on a dirty working tree without explicit consent — it will list the dirty paths and ask whether to abort or proceed (and instruct the builder to leave those paths alone).
+
 ## Intent Management
 
 ### `/haiku:refine`

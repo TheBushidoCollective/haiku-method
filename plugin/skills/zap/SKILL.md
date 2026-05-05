@@ -143,14 +143,29 @@ Note: this mandate was written for the workflow-engine context. Where it referen
 **Verifier role (last hat, or any hat with `verif`/`review`/`check`/`assess` in the name):**
 ```
 1. Read the task description and the prior hat outputs (especially the builder's summary).
-2. Inspect the actual uncommitted changes with `git diff` to confirm they match the summary.
+2. Inspect the actual uncommitted changes with `git status --porcelain` and `git diff` to confirm they match the summary.
 3. Verify the work meets the task's success criteria:
    - Does the change address exactly what was asked?
    - Is the code internally consistent and free of obvious regressions?
    - Are there edge cases the builder missed that the stage scope would flag?
-4. Your final message MUST start with exactly one of these tokens (followed by a single em dash and a one-line reason):
-   - `PASS — <one-sentence summary of what was verified>`
-   - `FAIL — <specific reason the task is not complete or correct>`
+4. Your final message MUST be structured exactly as one of these two formats:
+
+   On success (single line, then a Files block):
+   ```
+   PASS — <one-sentence summary of what was verified>
+   Files:
+   <path1>
+   <path2>
+   ...
+   ```
+
+   On failure (single line, no files block):
+   ```
+   FAIL — <specific reason the task is not complete or correct>
+   ```
+
+   The Files block on PASS lists the exact paths the parent should stage. Include only paths you confirmed via `git diff` are part of the task's intended change. Exclude any pre-existing dirty paths that were called out in the prompt.
+
 5. Do NOT run quality gates — that was the builder's job. Focus on correctness and fit.
 6. Do NOT commit, amend, or otherwise mutate the git tree.
 7. Do NOT call any haiku_* tools.
@@ -160,18 +175,18 @@ Note: this mandate was written for the workflow-engine context. Where it referen
 
 ### 5. Handle the verifier verdict
 
-After the verifier hat returns, parse its first line for the `PASS` or `FAIL` token (anchored to the start of the first line, followed by ` — `).
+Parse the verifier's first line for the `PASS` or `FAIL` token (anchored to the start of the first line, followed by ` — `). Initialize a retry counter at 0 before the first hat-loop run.
 
 **If `PASS`:**
-1. Stage exactly the files the builder reported in its summary: `git add <file1> <file2> ...`. Do NOT use `git add -A` or `git add .` — that would sweep in any pre-existing dirty paths the user opted in around.
-2. Commit with a brief message derived from the task description and builder summary: `git commit -m "<message>"`.
+1. Read the `Files:` block from the verifier's output. Stage exactly those paths: `git add <path1> <path2> ...`. Do NOT use `git add -A` or `git add .` — that would sweep in any pre-existing dirty paths the user opted into.
+2. Commit with a brief message derived from the task description and verifier summary: `git commit -m "<message>"`.
 3. Report success to the user: files committed, commands run, verifier's PASS line.
 
 **If `FAIL`:**
 1. Surface the failure reason to the user.
-2. If retries already attempted is **less than 2**, ask via `AskUserQuestion`:
+2. If the retry counter is **less than 2**, ask via `AskUserQuestion`:
    - options: `["Retry the hat loop with this failure as context", "Abandon — I'll fix it manually"]`
-3. If retries already attempted is **2 or more** (i.e. this would be the third), do NOT offer retry. Tell the user: "Two retries already used — zap isn't converging. Discard the uncommitted changes (`git restore .`) and either fix manually or use `/haiku:start` for a structured run." Stop.
+3. If the retry counter is **2 or more**, do NOT offer retry. Tell the user: "Two retries already used — zap isn't converging. Discard the uncommitted changes (`git restore .`) and either fix manually or use `/haiku:start` for a structured run." Stop.
 
 If the user picks retry:
 - Increment the retry counter.
@@ -179,6 +194,8 @@ If the user picks retry:
 - Re-run from step 4, prepending `## Prior failure context: <verifier's FAIL reason>` to the task description.
 
 If the user picks abandon: acknowledge, leave the uncommitted changes in place (the user said they'd fix manually), and stop.
+
+**If a hat subagent errors out** (returns no output, throws, or crashes): treat it as a `FAIL` with reason `"<HAT> subagent errored: <error message>"` and route through the failure path above. Do not silently retry.
 
 ## Guardrails
 

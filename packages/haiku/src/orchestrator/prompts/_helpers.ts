@@ -15,8 +15,11 @@
 //   - inlineFile — strip frontmatter and emit a fenced inline block.
 //   - emitSubagentDispatchBlock — write the prompt to a tmpfile and
 //     emit the parent's `<subagent>` dispatch block.
-//   - resolveReviewAgentModel — cascade hat → stage → studio for the
-//     review/fix-hat model tier.
+//   - resolveStudioMandateModel — cascade mandate → stage → studio for any
+//     studio-author-time dispatch (review-agent, discovery template,
+//     studio fix-hat, integrator). The mandate file is optional — when
+//     omitted the cascade starts at the stage's `default_model:` (when
+//     a stage is provided) or the studio's `default_model:`.
 //   - buildInlineSubagentContext — hookless-harness inline context.
 //   - batchDispatchDirective — concurrency-cap discipline (slot pool
 //     vs batch-serial depending on harness capabilities).
@@ -242,22 +245,28 @@ export function emitSubagentDispatchBlock(opts: {
 	})
 }
 
-/** Resolve the model tier for a review-agent or studio-level fix-hat
- *  dispatch. Cascade: mandate file's own `model:` → stage
- *  `default_model:` (when stage is provided — skip for studio-level
- *  review agents) → studio `default_model:`. Returns undefined when
- *  the feature is disabled or nothing is declared, in which case the
- *  subagent inherits the parent model. Without a studio default this
- *  silently escalates every review pass to Opus — hence studios ship
- *  with `default_model: sonnet` so the floor is sonnet. */
-export function resolveReviewAgentModel(opts: {
-	mandatePath: string
+/** Resolve the model tier for any studio-author-time dispatch
+ *  (review-agent, discovery template, studio fix-hat, integrator).
+ *  Cascade: mandate file's own `model:` → stage `default_model:`
+ *  (when a stage is provided) → studio `default_model:`. Returns
+ *  undefined when the feature is disabled or nothing is declared,
+ *  in which case the subagent inherits the parent model. Studios
+ *  ship with `default_model: sonnet` so the floor is sonnet whenever
+ *  the cascade runs.
+ *
+ *  `mandatePath` is optional — integrators have no per-mandate file,
+ *  so they enter the cascade at the stage default. Reviewer/discovery
+ *  callers always pass a path; if the file is missing
+ *  `readModelFromPath` returns undefined and the cascade still
+ *  proceeds. */
+export function resolveStudioMandateModel(opts: {
+	mandatePath?: string
 	studio: string
 	stage?: string
 }): ModelTier | undefined {
 	if (!features.modelSelection) return undefined
 	const { mandatePath, studio, stage } = opts
-	const mandateModel = readModelFromPath(mandatePath)
+	const mandateModel = mandatePath ? readModelFromPath(mandatePath) : undefined
 	const stageDef = stage ? readStageDef(studio, stage) : null
 	const studioData = readStudio(studio)
 	const { model } = resolveModel({

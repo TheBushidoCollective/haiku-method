@@ -23,11 +23,12 @@ quality_gates:
       [ "$(grep -cE '^- '
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/success-criteria-and-acceptance-shape.md)"
       -ge 6 ]
-status: pending
+status: completed
 inputs:
   - intent.md
   - knowledge/DISCOVERY.md
   - plugin/skills/report/SKILL.md
+completed_at: '2026-05-05T22:37:09Z'
 ---
 # Success Criteria and Acceptance Shape
 

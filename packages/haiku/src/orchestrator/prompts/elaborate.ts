@@ -429,7 +429,17 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 				// under `knowledge/` so older studios still work.
 				const tplRaw = readFileSync(templatePath, "utf8")
 				const { data: tplFM } = parseFrontmatter(tplRaw)
-				const loc = (tplFM as { location?: unknown }).location
+				const locRaw = (tplFM as { location?: unknown }).location
+				// Substitute `{intent-slug}` like validators.ts does. Without
+				// this, outputPath is a literal path with `{intent-slug}` in
+				// it, never matches an on-disk artifact, and the
+				// "Discovery Fan-Out (REQUIRED)" section is re-emitted on
+				// every elaborate tick — the workflow appears stuck on
+				// discovery even after the artifact is written and merged.
+				const loc =
+					typeof locRaw === "string"
+						? locRaw.replace(/\{intent-slug\}/g, slug)
+						: locRaw
 				let outputPath: string | null = null
 				if (typeof loc === "string" && loc.length > 0) {
 					if (loc.startsWith(".haiku/")) {

@@ -415,6 +415,111 @@ Software development.
 		)
 	})
 
+	await test("discovery fan-out section is suppressed once {intent-slug}-templated artifact exists on disk", async () => {
+		// Regression for the workflow-stuck-on-discovery loop: discovery
+		// templates use `location: .haiku/intents/{intent-slug}/knowledge/...`
+		// with a literal `{intent-slug}` placeholder. The prompt builder
+		// must substitute the slug before checking existsSync — otherwise
+		// the on-disk artifact never matches the literal-{intent-slug}
+		// path, the existence filter never excludes the artifact, and
+		// every elaborate tick re-emits "Discovery Fan-Out (REQUIRED)"
+		// even though the artifact is fully written and merged.
+		const { buildElaboratePromptBody } = await import(
+			"../src/orchestrator/prompts/elaborate.ts"
+		)
+		const projDir = join(tmp, "discovery-suppress")
+		const haikuRoot = join(projDir, ".haiku")
+		const slug = "stuck-on-discovery"
+		const intentDirPath = join(haikuRoot, "intents", slug)
+		const studio = "discovery-template-studio"
+		mkdirSync(join(intentDirPath, "stages", "plan", "units"), {
+			recursive: true,
+		})
+		writeFileSync(
+			join(intentDirPath, "intent.md"),
+			`---
+title: Stuck on discovery
+studio: ${studio}
+mode: continuous
+active_stage: plan
+status: active
+intent_reviewed: true
+started_at: 2026-04-29T00:00:00Z
+completed_at: null
+---
+
+Body.
+`,
+		)
+		const studioDir = join(haikuRoot, "studios", studio)
+		mkdirSync(join(studioDir, "stages", "plan", "discovery"), {
+			recursive: true,
+		})
+		writeFileSync(
+			join(studioDir, "STUDIO.md"),
+			`---
+name: ${studio}
+description: Discovery template substitution test studio
+stages: [plan]
+---
+
+Test studio with a discovery template that uses {intent-slug}.
+`,
+		)
+		writeFileSync(
+			join(studioDir, "stages", "plan", "STAGE.md"),
+			`---
+name: plan
+description: plan stage
+hats: [worker]
+review: auto
+elaboration: collaborative
+---
+
+plan stage.
+`,
+		)
+		writeFileSync(
+			join(studioDir, "stages", "plan", "discovery", "DISCOVERY.md"),
+			`---
+name: discovery
+location: .haiku/intents/{intent-slug}/knowledge/DISCOVERY.md
+scope: intent
+required: true
+---
+
+Template body.
+`,
+		)
+		// Pre-write the resolved artifact at the slug-substituted location.
+		// If the prompt builder substitutes correctly, existsSync sees the
+		// artifact and the fan-out section is suppressed. If it doesn't
+		// substitute (the bug), it checks `.haiku/intents/{intent-slug}/...`
+		// literally, never matches, and re-emits the fan-out section.
+		mkdirSync(join(intentDirPath, "knowledge"), { recursive: true })
+		writeFileSync(
+			join(intentDirPath, "knowledge", "DISCOVERY.md"),
+			`# Discovery: stuck-on-discovery\n\nFully populated.\n`,
+		)
+		process.chdir(projDir)
+		const body = buildElaboratePromptBody({
+			slug,
+			studio,
+			action: {
+				action: "elaborate",
+				intent: slug,
+				studio,
+				stage: "plan",
+				elaboration: "collaborative",
+			},
+			dir: intentDirPath,
+		})
+		assert.ok(
+			!body.includes("## Discovery Fan-Out (REQUIRED)"),
+			"Discovery Fan-Out section must be suppressed once the artifact at the substituted location exists. The literal-{intent-slug} regression would keep re-emitting this section forever.",
+		)
+	})
+
 	await test("withPromptFile fallback: when file write fails, action has no prompt_file and is otherwise valid", async () => {
 		// Force writeActionPromptFile to throw by pre-creating the session's
 		// haiku-prompts dir as a regular file (not a directory). The atomic

@@ -22,5 +22,53 @@
     "acknowledged_via": "baseline-init",
     "stage": null,
     "tracking_class": "knowledge"
+  },
+  "stages/inception/artifacts/affected-surfaces-and-user-flow.md": {
+    "path": "stages/inception/artifacts/affected-surfaces-and-user-flow.md",
+    "sha256": "20de82309705cc78de57377a4588163b8abe37abe6bb757f1ec1f2b0341b6ab3",
+    "bytes": 10923,
+    "mtime_ns": 1778020530151000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-05T22:41:35.963Z",
+    "acknowledged_via": "baseline-init",
+    "stage": "inception",
+    "tracking_class": "stage-output"
+  },
+  "stages/inception/artifacts/capability-and-system-context.md": {
+    "path": "stages/inception/artifacts/capability-and-system-context.md",
+    "sha256": "d3157c8864fc7b9b350c6bbb988fede24cad7b425a12933dcc1e878dd4697499",
+    "bytes": 14662,
+    "mtime_ns": 1778020875205000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-05T22:41:35.963Z",
+    "acknowledged_via": "baseline-init",
+    "stage": "inception",
+    "tracking_class": "stage-output"
+  },
+  "stages/inception/artifacts/privacy-and-data-handling-principles.md": {
+    "path": "stages/inception/artifacts/privacy-and-data-handling-principles.md",
+    "sha256": "2804f258407b8487d79d57271b257ed1c22e1c1892395d615ca9dd48b0521e38",
+    "bytes": 14387,
+    "mtime_ns": 1778020611606000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-05T22:41:35.963Z",
+    "acknowledged_via": "baseline-init",
+    "stage": "inception",
+    "tracking_class": "stage-output"
+  },
+  "stages/inception/artifacts/success-criteria-and-acceptance-shape.md": {
+    "path": "stages/inception/artifacts/success-criteria-and-acceptance-shape.md",
+    "sha256": "a4a181ec72ca9d4b9ca3a4a1b424641f28d9b2133c7a5c6e3440bfd183fed417",
+    "bytes": 10505,
+    "mtime_ns": 1778020640919000000,
+    "is_binary": false,
+    "author_class": "agent",
+    "acknowledged_at": "2026-05-05T22:41:35.963Z",
+    "acknowledged_via": "baseline-init",
+    "stage": "inception",
+    "tracking_class": "stage-output"
   }
 }

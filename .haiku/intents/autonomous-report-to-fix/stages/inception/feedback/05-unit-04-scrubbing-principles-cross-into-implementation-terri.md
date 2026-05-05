@@ -2,7 +2,7 @@
 title: >-
   Unit-04 scrubbing principles cross into implementation territory with specific
   vendor token prefixes
-status: pending
+status: fixing
 origin: adversarial-review
 author: completeness
 author_type: agent
@@ -11,7 +11,7 @@ iteration: 1
 visit: 1
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 triaged_at: '2026-05-05T23:16:51Z'
 resolution: null
 replies: []

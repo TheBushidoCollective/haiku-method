@@ -567,8 +567,18 @@ export async function handleToolCall(
 		}
 	}
 
-	// State management tools
-	if (name.startsWith("haiku_")) {
+	// State management tools — catch-all for haiku_* names. MUST come
+	// AFTER any inline handlers below that match `haiku_*` (e.g.
+	// haiku_await_visual_answer, haiku_await_design_direction), or
+	// those handlers become unreachable: the state-tool router doesn't
+	// know about them and returns "Unknown tool". This was a real bug
+	// — the await tools were unreachable and silently routed here
+	// before being moved BELOW their inline handlers.
+	if (
+		name.startsWith("haiku_") &&
+		name !== "haiku_await_visual_answer" &&
+		name !== "haiku_await_design_direction"
+	) {
 		return handleStateTool(name, (args ?? {}) as Record<string, unknown>)
 	}
 
@@ -680,44 +690,32 @@ export async function handleToolCall(
 			}
 		}
 
-		bindSessionCancellation(sessionId, signal)
+		// Deliberately NOT calling bindSessionCancellation here — the
+		// previous implementation killed the SPA's WebSocket on every
+		// abort (Ctrl-C, MCP host timeout, retry), which guaranteed
+		// "session not found" on the next haiku_await_visual_answer
+		// call. The waitForSession loop below already propagates
+		// `signal` to unwind the await promptly; the session itself
+		// outlives the tool call so the next agent tick can pick it
+		// back up. Same fix shape as awaitGateReviewSession.
 		if (autoOpen && url) launchBrowserBestEffort(url, "Question session")
 
-		const MAX_WAIT_Q = 30 * 60 * 1000
-		try {
-			await waitForSession(sessionId, MAX_WAIT_Q, signal)
-		} catch {
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: JSON.stringify(
-							{
-								status: "timeout",
-								session_id: sessionId,
-								// Only include url when the agent passed one — empty
-								// strings on optional fields are confusing in tooling.
-								...(url ? { url } : {}),
-								message:
-									"User did not respond within 30 minutes. Call haiku_await_visual_answer again to keep waiting, or ask_user_visual_question to start a new session.",
-							},
-							null,
-							2,
-						),
-					},
-				],
-			}
-		}
+		type ContentBlock =
+			| { type: "text"; text: string }
+			| { type: "image"; data: string; mimeType: string }
 
-		const updatedQuestionSession = getSession(sessionId)
-		if (
-			updatedQuestionSession &&
-			updatedQuestionSession.session_type === "question" &&
-			updatedQuestionSession.status === "answered" &&
-			updatedQuestionSession.answers
-		) {
+		const buildAnsweredResponse = (): { content: ContentBlock[] } | null => {
+			const updated = getSession(sessionId)
+			if (
+				!updated ||
+				updated.session_type !== "question" ||
+				updated.status !== "answered" ||
+				!updated.answers
+			) {
+				return null
+			}
 			const annotationsForJson: Record<string, unknown> = {}
-			const ann = updatedQuestionSession.annotations
+			const ann = updated.annotations
 			if (ann?.comments?.length) annotationsForJson.comments = ann.comments
 			if (ann?.pins?.length) annotationsForJson.pins = ann.pins
 			if (ann?.screenshots?.length)
@@ -725,29 +723,24 @@ export async function handleToolCall(
 			const questionResult: Record<string, unknown> = {
 				status: "answered",
 				url,
-				answers: updatedQuestionSession.answers,
+				answers: updated.answers,
 				message: withAnnouncement(
 					"The user answered your visual question — see the `answers` field below.",
 					"Acknowledge their answer in chat and continue with whatever the answer enables.",
 				),
 			}
-			if (updatedQuestionSession.feedback) {
-				questionResult.feedback = updatedQuestionSession.feedback
+			if (updated.feedback) {
+				questionResult.feedback = updated.feedback
 			}
 			if (Object.keys(annotationsForJson).length > 0) {
 				questionResult.annotations = annotationsForJson
 			}
-
-			type ContentBlock =
-				| { type: "text"; text: string }
-				| { type: "image"; data: string; mimeType: string }
 			const content: ContentBlock[] = [
 				{
 					type: "text" as const,
 					text: JSON.stringify(questionResult, null, 2),
 				},
 			]
-
 			const screenshots = ann?.screenshots ?? []
 			if (screenshots.length > 0) {
 				content.push({
@@ -777,10 +770,56 @@ export async function handleToolCall(
 					}
 				}
 			}
-
 			return { content }
 		}
 
+		// Drain on entry: if the user already answered before this await
+		// opened (race between SPA submit and the agent's tool call),
+		// return the answer immediately instead of blocking 30 minutes
+		// for an event that will never fire.
+		const drained = buildAnsweredResponse()
+		if (drained) return drained
+
+		// Loop on spurious wake: notifySessionUpdate may fire for a
+		// status transition other than "answered" (e.g., a future
+		// non-terminal state, or the same wake fanning out). Re-wait
+		// against the same overall deadline rather than falsely
+		// reporting timeout. Mirrors awaitGateReviewSession's
+		// while(true) pattern.
+		const MAX_WAIT_Q = 30 * 60 * 1000
+		const deadline = Date.now() + MAX_WAIT_Q
+		while (true) {
+			const remaining = deadline - Date.now()
+			if (remaining <= 0) break
+			try {
+				await waitForSession(sessionId, remaining, signal)
+			} catch {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify(
+								{
+									status: "timeout",
+									session_id: sessionId,
+									...(url ? { url } : {}),
+									message:
+										"User did not respond within 30 minutes. Call haiku_await_visual_answer again to keep waiting, or ask_user_visual_question to start a new session.",
+								},
+								null,
+								2,
+							),
+						},
+					],
+				}
+			}
+			const ready = buildAnsweredResponse()
+			if (ready) return ready
+			// Spurious wake — fall through and re-wait against the
+			// remaining deadline.
+		}
+
+		// Deadline elapsed without an answer.
 		return {
 			content: [
 				{

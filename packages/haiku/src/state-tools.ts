@@ -6806,7 +6806,15 @@ export function handleStateTool(
 			if (existsSync(path)) {
 				const { data: currentFm } = parseFrontmatter(readFileSync(path, "utf8"))
 				const currentStatus = (currentFm.status as string) || "pending"
-				if (currentStatus === "active" || currentStatus === "completed") {
+				// `outputs` is exempt from the lifecycle gate: advance_hat's own
+				// autoPopulateOutputs writes it during the active phase, so the
+				// agent must be able to do the same when auto-detect fails (e.g.
+				// unit worktree not reachable from the stage worktree CWD).
+				const isLifecycleMutable = field === "outputs"
+				if (
+					!isLifecycleMutable &&
+					(currentStatus === "active" || currentStatus === "completed")
+				) {
 					return reply(
 						{
 							error: "lifecycle_violation",

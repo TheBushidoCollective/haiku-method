@@ -3438,7 +3438,10 @@ import {
 	validateIntentFrontmatterSchema as validateIntentSchema,
 	validateUnitFrontmatterSchema as validateUnitSchema,
 } from "./state/schemas/index.js"
-import { validateToolInput } from "./state/schemas/inputs/_validate.js"
+import {
+	jsonSchemaOf,
+	validateToolInput,
+} from "./state/schemas/inputs/_validate.js"
 
 // ── Settings.yml — schema loaded from plugin/schemas/settings.schema.json ─
 //
@@ -5609,7 +5612,21 @@ export function listInstalledSkills(): InstalledSkill[] {
 
 // ── Tool definitions ───────────────────────────────────────────────────────
 
-export const stateToolDefs = [
+/** Public shape of a state-tool definition entry. Declared explicitly
+ *  so the `stateToolDefs` array's exported type doesn't leak
+ *  TypeBox-branded internal types (Kind / OptionalKind / etc.) from
+ *  the schemas referenced via `inputSchema:`. The MCP SDK accepts a
+ *  plain `Record<string, unknown>` for the schema slots, so widening
+ *  via `jsonSchemaOf()` at each call site keeps the runtime correct
+ *  while this annotation keeps the type clean. */
+export interface StateToolDef {
+	name: string
+	description: string
+	inputSchema: Record<string, unknown>
+	outputSchema?: Record<string, unknown>
+}
+
+export const stateToolDefs: StateToolDef[] = [
 	// Intent tools
 	{
 		name: "haiku_intent_get",
@@ -6543,7 +6560,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		// (HAIKU_FEEDBACK_INPUT_SCHEMA). The handler runs the same
 		// schema through AJV at entry so the MCP-runtime check and the
 		// engine's stable error codes can never drift.
-		inputSchema: HAIKU_FEEDBACK_INPUT_SCHEMA,
+		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -6571,7 +6588,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		// (hat, bolt, iterations, integrator_attempts, replies,
 		// triaged_at) at the gate — agents may only touch the
 		// mutable fields the schema lists.
-		inputSchema: HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA,
+		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {

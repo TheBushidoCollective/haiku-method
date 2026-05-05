@@ -43,6 +43,7 @@ export {
 	validateHaikuFeedbackInputSchema,
 	validateHaikuFeedbackUpdateInputSchema,
 } from "./feedback.js"
+export type { IntentFrontmatter } from "./intent.js"
 export {
 	AGENT_AUTHORABLE_INTENT_FIELDS,
 	FSM_DRIVEN_INTENT_FIELDS,
@@ -50,8 +51,11 @@ export {
 	INTENT_IMMUTABLE_FIELDS,
 	validateIntentFrontmatterSchema,
 } from "./intent.js"
+export type { ErrorOutput, OkOutput } from "./output-envelope.js"
 export { ERROR_OUTPUT_SCHEMA, OK_OUTPUT_SCHEMA } from "./output-envelope.js"
+export type { StageState } from "./stage-state.js"
 export { STAGE_STATE_FIELDS, STAGE_STATE_SCHEMA } from "./stage-state.js"
+export type { UnitFrontmatter } from "./unit.js"
 export {
 	AGENT_AUTHORABLE_UNIT_FIELDS,
 	FSM_DRIVEN_UNIT_FIELDS,

@@ -28,6 +28,28 @@
 import type { ValidateFunction } from "ajv"
 import { stateAjv } from "../_ajv.js"
 
+/**
+ * Widen a TypeBox-branded schema (TObject / TString / etc.) to the
+ * plain JSONSchema-shaped record the MCP SDK's `inputSchema` slot
+ * expects. TypeBox schemas carry internal brand symbols (Kind /
+ * OptionalKind / etc.) that aren't exported from the package, so
+ * leaving the type un-widened triggers TS4023 on `stateToolDefs`.
+ *
+ * Use this at every `inputSchema:` site that consumes a TypeBox
+ * builder result:
+ *
+ *   {
+ *     name: "haiku_feedback",
+ *     inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_INPUT_SCHEMA),
+ *     ...
+ *   }
+ *
+ * Pure type-level — at runtime this is the identity function.
+ */
+export function jsonSchemaOf(schema: unknown): Record<string, unknown> {
+	return schema as Record<string, unknown>
+}
+
 /** Result shape returned by `handleStateTool`'s `reply()` helper.
  *  Duplicated here as a structural type so this module doesn't have
  *  to import from state-tools.ts (which imports from here — would

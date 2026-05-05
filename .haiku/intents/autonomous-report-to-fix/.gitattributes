@@ -1,0 +1,5 @@
+# Engine-owned append-only event streams. `merge=union` tells git
+# to concatenate both sides on conflict — these files are pure
+# event streams and never benefit from manual conflict resolution.
+action-log.jsonl merge=union
+write-audit.jsonl merge=union

@@ -793,7 +793,6 @@ export async function handleToolCall(
 	if (name === "haiku_await_design_direction") {
 		const a = (args ?? {}) as Record<string, unknown>
 		const sessionId = (a.session_id as string) || ""
-		const intentSlug = (a.intent_slug as string) || ""
 		if (!sessionId) {
 			return {
 				content: [
@@ -819,6 +818,13 @@ export async function handleToolCall(
 				isError: true,
 			}
 		}
+		// Resolve intent_slug from the session record itself, falling
+		// back to the (optional) tool arg. The session was created by
+		// pick_design_direction with intent_slug already attached, so
+		// the agent doesn't need to echo it. Reading from the session
+		// avoids the silent-skip footgun where omitting the arg leaves
+		// intentSlug = "" and ensureOnStageBranch becomes a no-op.
+		const intentSlug = (a.intent_slug as string) || existing.intent_slug || ""
 
 		// NOTE: deliberately not propagating `signal` into the session.
 		// The HTTP submit route persists the selection (+ screenshots) to

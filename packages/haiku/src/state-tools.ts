@@ -3429,12 +3429,30 @@ import {
 	FSM_DRIVEN_UNIT_FIELDS,
 	HAIKU_FEEDBACK_INPUT_SCHEMA,
 	HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA,
+	HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA,
+	HAIKU_UNIT_DELETE_INPUT_SCHEMA,
+	HAIKU_UNIT_INCREMENT_BOLT_INPUT_SCHEMA,
+	HAIKU_UNIT_LIST_INPUT_SCHEMA,
+	HAIKU_UNIT_READ_INPUT_SCHEMA,
+	HAIKU_UNIT_REJECT_HAT_INPUT_SCHEMA,
+	HAIKU_UNIT_SET_INPUT_SCHEMA,
+	HAIKU_UNIT_START_INPUT_SCHEMA,
+	HAIKU_UNIT_WRITE_INPUT_SCHEMA,
 	INTENT_FRONTMATTER_SCHEMA,
 	INTENT_IMMUTABLE_FIELDS,
 	STAGE_STATE_FIELDS,
 	UNIT_FRONTMATTER_SCHEMA,
 	validateHaikuFeedbackInputSchema,
 	validateHaikuFeedbackUpdateInputSchema,
+	validateHaikuUnitAdvanceHatInputSchema,
+	validateHaikuUnitDeleteInputSchema,
+	validateHaikuUnitIncrementBoltInputSchema,
+	validateHaikuUnitListInputSchema,
+	validateHaikuUnitReadInputSchema,
+	validateHaikuUnitRejectHatInputSchema,
+	validateHaikuUnitSetInputSchema,
+	validateHaikuUnitStartInputSchema,
+	validateHaikuUnitWriteInputSchema,
 	validateIntentFrontmatterSchema as validateIntentSchema,
 	validateUnitFrontmatterSchema as validateUnitSchema,
 } from "./state/schemas/index.js"
@@ -5722,40 +5740,8 @@ export const stateToolDefs: StateToolDef[] = [
 	// state-integrity, etc.) but agents can no longer reach it through MCP.
 	{
 		name: "haiku_unit_set",
-		description: `Set a field in a unit's frontmatter. \`value\` MUST match the field's declared type in the unit FM schema — array for \`inputs:\` / \`outputs:\` / \`depends_on:\` / \`closes:\` / \`quality_gates:\`, string for \`title:\` / \`model:\`. The handler validates per-field at runtime and rejects mismatches with \`field_type_mismatch\` so type drift never lands in YAML. Field-type contract (from UNIT_FRONTMATTER_SCHEMA): ${Object.entries(
-			UNIT_FRONTMATTER_SCHEMA.properties as Record<
-				string,
-				{ type?: string | string[] }
-			>,
-		)
-			.map(([k, v]) => {
-				const t = Array.isArray(v.type) ? v.type.join("|") : v.type
-				return `\`${k}\` → ${t}`
-			})
-			.join(", ")}.`,
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				stage: { type: "string" },
-				unit: { type: "string" },
-				field: {
-					type: "string",
-					description: `Frontmatter field name. Agent-authorable fields: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}. FSM-driven fields (${FSM_DRIVEN_UNIT_FIELDS.join(", ")}) are workflow engine-owned and rejected here.`,
-				},
-				value: {
-					// Multi-type so the MCP advertises every shape the tool can
-					// accept; the handler validates per-field against the unit
-					// FM schema and rejects mismatches. An agent setting an
-					// array field MUST pass an array — JSON-stringified arrays
-					// are no longer silently parsed.
-					type: ["string", "array", "number", "boolean", "null", "object"],
-					description:
-						"The field's new value. MUST match the field's declared type in UNIT_FRONTMATTER_SCHEMA — pass an array for array-typed fields, a string for string-typed, etc. Mismatches return `field_type_mismatch` with the expected type so the agent can correct the call. Native types only; stringified JSON is rejected.",
-				},
-			},
-			required: ["intent", "stage", "unit", "field", "value"],
-		},
+		description: `Set a field in a unit's frontmatter. \`value\` MUST match the field's declared type in the unit FM schema — array for \`inputs:\` / \`outputs:\` / \`depends_on:\` / \`closes:\` / \`quality_gates:\`, string for \`title:\` / \`model:\`. The handler validates per-field at runtime and rejects mismatches with \`field_type_mismatch\` so type drift never lands in YAML. Agent-authorable fields: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}. FSM-driven (rejected): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}.`,
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_SET_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -5774,11 +5760,7 @@ export const stateToolDefs: StateToolDef[] = [
 	{
 		name: "haiku_unit_list",
 		description: "List all units in a stage with their status",
-		inputSchema: {
-			type: "object" as const,
-			properties: { intent: { type: "string" }, stage: { type: "string" } },
-			required: ["intent", "stage"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_LIST_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -5807,11 +5789,7 @@ export const stateToolDefs: StateToolDef[] = [
 		name: "haiku_unit_start",
 		description:
 			"Mark a unit as started. The system resolves the stage and first hat internally.",
-		inputSchema: {
-			type: "object" as const,
-			properties: { intent: { type: "string" }, unit: { type: "string" } },
-			required: ["intent", "unit"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_START_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -5828,11 +5806,7 @@ export const stateToolDefs: StateToolDef[] = [
 		name: "haiku_unit_advance_hat",
 		description:
 			"Advance a unit to the next hat in the sequence. When called on the last hat, auto-completes the unit and progresses the workflow engine. The system resolves the current hat, next hat, and stage internally.",
-		inputSchema: {
-			type: "object" as const,
-			properties: { intent: { type: "string" }, unit: { type: "string" } },
-			required: ["intent", "unit"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -5866,19 +5840,7 @@ export const stateToolDefs: StateToolDef[] = [
 		name: "haiku_unit_reject_hat",
 		description:
 			"Reject the current hat's work — moves back to the previous hat and increments bolt. Pass `reason` so the unit's iteration history records why the hat was rejected (what failed, which criterion wasn't met).",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				unit: { type: "string" },
-				reason: {
-					type: "string",
-					description:
-						"Short explanation of why the current hat's output was rejected (e.g. 'touch targets <44px on mobile', 'missing dark-mode tokens'). Recorded in the unit's iterations history.",
-				},
-			},
-			required: ["intent", "unit"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_REJECT_HAT_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -5897,15 +5859,7 @@ export const stateToolDefs: StateToolDef[] = [
 	{
 		name: "haiku_unit_increment_bolt",
 		description: "Increment a unit's bolt counter (new iteration cycle)",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				stage: { type: "string" },
-				unit: { type: "string" },
-			},
-			required: ["intent", "stage", "unit"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_INCREMENT_BOLT_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -5919,15 +5873,7 @@ export const stateToolDefs: StateToolDef[] = [
 		name: "haiku_unit_read",
 		description:
 			"Read a unit's body content (and title). Returns ONLY the body and title — frontmatter is workflow engine-internal and not exposed to agents per the architecture's FM-is-workflow engine-only rule. Use this when a hat needs to read another unit's substance (sibling references, prior-stage knowledge artifacts) without interpreting FM. Returns { title, body } as JSON.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				stage: { type: "string" },
-				unit: { type: "string" },
-			},
-			required: ["intent", "stage", "unit"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_READ_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -5949,15 +5895,7 @@ export const stateToolDefs: StateToolDef[] = [
 		name: "haiku_unit_delete",
 		description:
 			"Delete a unit. ONLY permitted when the unit's status is `pending`. Active and completed units are immutable per the forward-only lifecycle rule — once a unit has informed downstream work, deleting it would silently invalidate that work. Returns an error naming the rule when called against a non-pending unit.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				stage: { type: "string" },
-				unit: { type: "string" },
-			},
-			required: ["intent", "stage", "unit"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_DELETE_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -5976,32 +5914,7 @@ export const stateToolDefs: StateToolDef[] = [
 Allowed FM fields (agent-authorable): ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")} — plus any stage-specific fields the per-stage \`phases/ELABORATION.md\` documents.
 
 Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidden\`): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}.`,
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string" },
-				stage: { type: "string" },
-				unit: {
-					type: "string",
-					description:
-						"Unit name without `.md` extension, e.g. `unit-01-foo`. Convention: `unit-NN-slug` with zero-padded NN.",
-				},
-				body: {
-					type: "string",
-					description:
-						"Full markdown body of the unit. Must be substantive (no placeholders like TBD, TODO, '...').",
-				},
-				// Schema is the SSOT (defined in UNIT_FRONTMATTER_SCHEMA).
-				// AJV validates input against it on every call; this
-				// inputSchema reference is what strict MCP clients use to
-				// reject malformed calls before they go out.
-				frontmatter: {
-					...UNIT_FRONTMATTER_SCHEMA,
-					description: `Optional frontmatter. Allowed: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}, plus stage-specific. Forbidden (workflow-driven, validator returns \`fsm_field_forbidden\`): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}.`,
-				},
-			},
-			required: ["intent", "stage", "unit", "body"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_WRITE_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
 			properties: {
@@ -7110,6 +7023,17 @@ export function handleStateTool(
 			)
 		}
 		case "haiku_unit_set": {
+			// SCHEMA IS THE SSOT — HAIKU_UNIT_SET_INPUT_SCHEMA enforces
+			// intent / stage / unit / field presence and rejects any
+			// arg the schema didn't declare. Field-level type validation
+			// against UNIT_FRONTMATTER_SCHEMA (gates 1–3 below) runs
+			// after this top-level pass.
+			const unitSetValidation = validateToolInput(
+				args,
+				validateHaikuUnitSetInputSchema,
+				"haiku_unit_set",
+			)
+			if (unitSetValidation) return unitSetValidation
 			// Gate order (each layer rejects with a distinct error code):
 			//   1. fsm_field_forbidden — field is workflow-driven; agents
 			//      MUST NOT set it. Mirrors the AJV propertyNames check on
@@ -7234,6 +7158,12 @@ export function handleStateTool(
 			return text("ok")
 		}
 		case "haiku_unit_list": {
+			const unitListInputErr = validateToolInput(
+				args,
+				validateHaikuUnitListInputSchema,
+				"haiku_unit_list",
+			)
+			if (unitListInputErr) return unitListInputErr
 			// Align branch before reading — unit files live on the stage branch.
 			// On intent-main, existsSync would return false and the caller would
 			// see an empty list even when units exist on the stage branch.
@@ -7261,6 +7191,12 @@ export function handleStateTool(
 			return reply({ units })
 		}
 		case "haiku_unit_start": {
+			const unitStartInputErr = validateToolInput(
+				args,
+				validateHaikuUnitStartInputSchema,
+				"haiku_unit_start",
+			)
+			if (unitStartInputErr) return unitStartInputErr
 			// Resolve stage and first hat internally
 			const stage = resolveActiveStage(args.intent as string)
 			if (!stage)
@@ -7370,6 +7306,12 @@ export function handleStateTool(
 			return text((scope ? `ok\n\n${scope}` : "ok") + pushWarning(gitResult))
 		}
 		case "haiku_unit_advance_hat": {
+			const advInputErr = validateToolInput(
+				args,
+				validateHaikuUnitAdvanceHatInputSchema,
+				"haiku_unit_advance_hat",
+			)
+			if (advInputErr) return advInputErr
 			// Align branch BEFORE findUnitFile — the unit spec lives on the stage
 			// branch, so lookups from intent-main spuriously report unit_not_found.
 			// Use active_stage as the best-guess stage to align; findUnitFile below
@@ -8165,6 +8107,12 @@ export function handleStateTool(
 			)
 		}
 		case "haiku_unit_reject_hat": {
+			const rejectInputErr = validateToolInput(
+				args,
+				validateHaikuUnitRejectHatInputSchema,
+				"haiku_unit_reject_hat",
+			)
+			if (rejectInputErr) return rejectInputErr
 			// Align branch BEFORE findUnitFile — see haiku_unit_advance_hat for
 			// the rationale. Without this, a unit file that lives only on the
 			// stage branch spuriously returns unit_not_found when checkout is
@@ -8383,6 +8331,12 @@ export function handleStateTool(
 			}
 		}
 		case "haiku_unit_increment_bolt": {
+			const boltInputErr = validateToolInput(
+				args,
+				validateHaikuUnitIncrementBoltInputSchema,
+				"haiku_unit_increment_bolt",
+			)
+			if (boltInputErr) return boltInputErr
 			const boltBranchErr = enforceStageBranch(
 				args.intent as string,
 				args.stage as string,
@@ -8423,6 +8377,12 @@ export function handleStateTool(
 
 		// ── Unit body-only read (architecture rule §1.1: no FM exposed) ──
 		case "haiku_unit_read": {
+			const readInputErr = validateToolInput(
+				args,
+				validateHaikuUnitReadInputSchema,
+				"haiku_unit_read",
+			)
+			if (readInputErr) return readInputErr
 			const readBranchErr = enforceStageBranch(
 				args.intent as string,
 				args.stage as string,
@@ -8459,6 +8419,12 @@ export function handleStateTool(
 
 		// ── Unit delete (architecture rule §1.3: pending only) ──
 		case "haiku_unit_delete": {
+			const delInputErr = validateToolInput(
+				args,
+				validateHaikuUnitDeleteInputSchema,
+				"haiku_unit_delete",
+			)
+			if (delInputErr) return delInputErr
 			const delBranchErr = enforceStageBranch(
 				args.intent as string,
 				args.stage as string,
@@ -8513,6 +8479,12 @@ export function handleStateTool(
 		// only way agents can put a unit on disk. FM is validated; lifecycle
 		// is enforced; workflow-driven fields are stripped (the workflow engine owns them).
 		case "haiku_unit_write": {
+			const writeInputErr = validateToolInput(
+				args,
+				validateHaikuUnitWriteInputSchema,
+				"haiku_unit_write",
+			)
+			if (writeInputErr) return writeInputErr
 			const writeBranchErr = enforceStageBranch(
 				args.intent as string,
 				args.stage as string,

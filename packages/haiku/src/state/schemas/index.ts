@@ -43,6 +43,37 @@ export {
 	validateHaikuFeedbackInputSchema,
 	validateHaikuFeedbackUpdateInputSchema,
 } from "./feedback.js"
+export type {
+	HaikuUnitAdvanceHatInput,
+	HaikuUnitDeleteInput,
+	HaikuUnitIncrementBoltInput,
+	HaikuUnitListInput,
+	HaikuUnitReadInput,
+	HaikuUnitRejectHatInput,
+	HaikuUnitSetInput,
+	HaikuUnitStartInput,
+	HaikuUnitWriteInput,
+} from "./inputs/units.js"
+export {
+	HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA,
+	HAIKU_UNIT_DELETE_INPUT_SCHEMA,
+	HAIKU_UNIT_INCREMENT_BOLT_INPUT_SCHEMA,
+	HAIKU_UNIT_LIST_INPUT_SCHEMA,
+	HAIKU_UNIT_READ_INPUT_SCHEMA,
+	HAIKU_UNIT_REJECT_HAT_INPUT_SCHEMA,
+	HAIKU_UNIT_SET_INPUT_SCHEMA,
+	HAIKU_UNIT_START_INPUT_SCHEMA,
+	HAIKU_UNIT_WRITE_INPUT_SCHEMA,
+	validateHaikuUnitAdvanceHatInputSchema,
+	validateHaikuUnitDeleteInputSchema,
+	validateHaikuUnitIncrementBoltInputSchema,
+	validateHaikuUnitListInputSchema,
+	validateHaikuUnitReadInputSchema,
+	validateHaikuUnitRejectHatInputSchema,
+	validateHaikuUnitSetInputSchema,
+	validateHaikuUnitStartInputSchema,
+	validateHaikuUnitWriteInputSchema,
+} from "./inputs/units.js"
 export type { IntentFrontmatter } from "./intent.js"
 export {
 	AGENT_AUTHORABLE_INTENT_FIELDS,

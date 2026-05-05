@@ -2,7 +2,7 @@
 title: >-
   Irreversible Anthropic data transmission not surfaced as a named strategic
   risk
-status: pending
+status: fixing
 origin: adversarial-review
 author: feasibility
 author_type: agent
@@ -11,7 +11,7 @@ iteration: 1
 visit: 1
 source_ref: null
 closed_by: null
-bolt: 0
+bolt: 1
 triaged_at: '2026-05-05T23:16:43Z'
 resolution: null
 replies: []

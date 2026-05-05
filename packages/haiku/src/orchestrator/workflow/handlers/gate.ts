@@ -785,12 +785,14 @@ const emit: WorkflowHandler = (ctx) => {
 	}
 
 	workflowGateAsk(slug, currentStage)
+	// Discrete: merge IS the approval signal; the mergedIn branch computes next_stage post-merge, so pre-announcing it here would put "advancing to X" in a submission-time prompt.
+	const gateNextStage = isDiscrete ? null : nextStage
 	return {
 		action: "gate_review",
 		intent: slug,
 		studio,
 		stage: currentStage,
-		next_stage: nextStage,
+		next_stage: gateNextStage,
 		gate_type: effectiveGateType,
 		message: `Stage '${currentStage}' complete — opening review`,
 	}

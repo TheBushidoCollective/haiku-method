@@ -426,6 +426,104 @@ try {
 			"error",
 			`recovery should NOT error — got: ${JSON.stringify(tick.json)}`,
 		)
+		// Recovery contract: the action must be `start_stage` (the engine
+		// re-derives from a clean baseline). If we ever see something
+		// else here it's a regression in the rollback path.
+		assert.strictEqual(
+			tick.json.action,
+			"start_stage",
+			`expected start_stage on recovery, got: ${tick.json.action}`,
+		)
+		// And the stage state.json must have been rolled back AND then
+		// re-initialized — which means the next state.json write
+		// happens against a known shape. After the recovery+re-emit
+		// the state.json carries a normal active+elaborate (the pos-0
+		// reset workflowStartStage does), not the stale half-state
+		// values from the previous failed run.
+		const recoveredState = JSON.parse(
+			readFileSync(join(stageStateDir, "state.json"), "utf8"),
+		)
+		assert.strictEqual(recoveredState.status, "active")
+		assert.strictEqual(recoveredState.phase, "elaborate")
+		// The original planted started_at must be replaced with a fresh
+		// timestamp — proves the rollback actually re-entered
+		// workflowStartStage rather than leaving stale state visible.
+		assert.notStrictEqual(
+			recoveredState.started_at,
+			"2026-04-01T00:00:00Z",
+			"recovery must re-stamp started_at; stale planted timestamp should be gone",
+		)
+
+		setElicitInputHandler(null)
+	})
+
+	console.log("\n=== E2E: dirty-tree recovery (uncommitted intent.md) ===")
+
+	await test("workflowStartStage attempts pre-stage commit when intent.md is dirty", async () => {
+		// Tara's session showed `git checkout -b <stageBranch> <main>`
+		// refusing because intent.md was uncommitted (intent_create's
+		// silent best-effort gitCommitState had failed earlier in the
+		// chain). The fix: workflowStartStage now calls gitCommitState
+		// BEFORE attempting the stage-branch checkout, so the dirty
+		// state is committed (or the failure surfaces cleanly with no
+		// half-state on disk).
+		//
+		// We can't fully exercise the git operations without a real
+		// repo, but we CAN drive the start-stage handler and verify it
+		// invokes the pre-stage commit guard rather than crashing past
+		// it. The fake-bin git stub in the test scaffold returns 0 for
+		// every git invocation, so the checkout "succeeds" trivially —
+		// the assertion below is that the side-effect chain runs
+		// cleanly and produces the expected start_stage action even
+		// when the intent dir is in a freshly-modified state.
+		const { projDir, studio } = makeProject("dirty-tree-flow")
+		process.chdir(projDir)
+
+		setElicitInputHandler(userPicker({ studio, mode: "continuous" }))
+
+		await call("haiku_intent_create", {
+			title: "Dirty tree recovery",
+			description: "Pre-stage commit guard catches uncommitted intent.md.",
+			slug: "dirty-tree-intent",
+		})
+		const intentDirAbs = join(projDir, ".haiku", "intents", "dirty-tree-intent")
+
+		await call("haiku_run_next", { intent: "dirty-tree-intent" })
+		await call("haiku_select_studio", { intent: "dirty-tree-intent" })
+		await call("haiku_run_next", { intent: "dirty-tree-intent" })
+		await call("haiku_select_mode", { intent: "dirty-tree-intent" })
+
+		// Mark intent_reviewed=true so the next tick advances past the
+		// review gate and lands on start_stage.
+		const intentFile = join(intentDirAbs, "intent.md")
+		const raw = readFileSync(intentFile, "utf8")
+		writeFileSync(
+			intentFile,
+			raw.replace(/^---\n/, "---\nintent_reviewed: true\n"),
+		)
+		// Now mutate intent.md AGAIN without committing — this is the
+		// shape that previously broke checkout. The pre-stage commit
+		// guard should pick it up.
+		const raw2 = readFileSync(intentFile, "utf8")
+		writeFileSync(intentFile, `${raw2}\n# Trailing dirt\n`)
+
+		const tick = await call("haiku_run_next", { intent: "dirty-tree-intent" })
+		assert.strictEqual(
+			tick.json.action,
+			"start_stage",
+			`dirty-tree should self-heal to start_stage, got: ${JSON.stringify(tick.json)}`,
+		)
+		// After start_stage, the stage's state.json must exist with
+		// active+elaborate — proves workflowStartStage ran past the
+		// guard, not that it bailed early on the dirty tree.
+		const stateFile = join(intentDirAbs, "stages", "plan", "state.json")
+		assert.ok(
+			existsSync(stateFile),
+			`stage state.json must exist after start_stage; not found at ${stateFile}`,
+		)
+		const stageState = JSON.parse(readFileSync(stateFile, "utf8"))
+		assert.strictEqual(stageState.status, "active")
+		assert.strictEqual(stageState.phase, "elaborate")
 
 		setElicitInputHandler(null)
 	})

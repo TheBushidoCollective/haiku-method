@@ -23,6 +23,10 @@ import {
 	validateHaikuFeedbackInputSchema,
 	validateHaikuFeedbackUpdateInputSchema,
 } from "../src/state/schemas/index.js"
+import {
+	FEEDBACK_ORIGINS as STATE_TOOLS_FEEDBACK_ORIGINS,
+	FEEDBACK_STATUSES as STATE_TOOLS_FEEDBACK_STATUSES,
+} from "../src/state-tools.js"
 
 let passed = 0
 let failed = 0
@@ -49,19 +53,17 @@ test("schema declares additionalProperties: false (strict typespec)", () => {
 })
 
 test("schema requires intent + title + body", () => {
-	assert.deepStrictEqual(
-		HAIKU_FEEDBACK_INPUT_SCHEMA.required,
-		["intent", "title", "body"],
-	)
+	assert.deepStrictEqual(HAIKU_FEEDBACK_INPUT_SCHEMA.required, [
+		"intent",
+		"title",
+		"body",
+	])
 })
 
 test("schema constrains origin via enum (no free-form values)", () => {
 	const origin = HAIKU_FEEDBACK_INPUT_SCHEMA.properties.origin
 	assert.ok(origin?.enum, "origin must declare an enum")
-	assert.ok(
-		origin.enum.includes("agent"),
-		"agent must be a valid origin",
-	)
+	assert.ok(origin.enum.includes("agent"), "agent must be a valid origin")
 	assert.ok(
 		!origin.enum.includes("freeform-junk"),
 		"unknown origin values must NOT be in the enum",
@@ -147,10 +149,10 @@ test("update schema is strict (additionalProperties: false)", () => {
 })
 
 test("update schema requires intent + feedback_id", () => {
-	assert.deepStrictEqual(
-		HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA.required,
-		["intent", "feedback_id"],
-	)
+	assert.deepStrictEqual(HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA.required, [
+		"intent",
+		"feedback_id",
+	])
 })
 
 test("update schema enforces FB-NN id pattern", () => {
@@ -206,6 +208,38 @@ test("update schema constrains status via FEEDBACK_STATUSES enum", () => {
 			feedback_id: "FB-01",
 			status: "bogus",
 		}),
+	)
+})
+
+console.log("\n=== Drift guards: schema enums match state-tools constants ===")
+
+// `state-tools.ts` re-declares FEEDBACK_ORIGINS / FEEDBACK_STATUSES
+// alongside the helper code that consumes them (writeFeedbackFile,
+// updateFeedbackFile, etc). The schema in `state/schemas/feedback.ts`
+// re-declares the same values for the AJV `enum` constraint.
+//
+// These two sources MUST stay in sync — if we add a new origin
+// (e.g. `external-slack`) to one and forget the other, agents either
+// hit a schema rejection on a value the helpers accept, or the helpers
+// don't recognize a value the schema lets through. The comment in
+// `feedback.ts:39-41` promises this drift check exists; these tests
+// make good on the promise.
+
+test("HAIKU_FEEDBACK_INPUT_SCHEMA.origin.enum matches FEEDBACK_ORIGINS in state-tools.ts", () => {
+	const enumValues = HAIKU_FEEDBACK_INPUT_SCHEMA.properties.origin.enum
+	assert.deepStrictEqual(
+		[...enumValues].sort(),
+		[...STATE_TOOLS_FEEDBACK_ORIGINS].sort(),
+		"FEEDBACK_ORIGINS in state-tools.ts and the schema's origin enum drifted — keep them in sync",
+	)
+})
+
+test("HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA.status.enum matches FEEDBACK_STATUSES in state-tools.ts", () => {
+	const enumValues = HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA.properties.status.enum
+	assert.deepStrictEqual(
+		[...enumValues].sort(),
+		[...STATE_TOOLS_FEEDBACK_STATUSES].sort(),
+		"FEEDBACK_STATUSES in state-tools.ts and the schema's status enum drifted — keep them in sync",
 	)
 })
 

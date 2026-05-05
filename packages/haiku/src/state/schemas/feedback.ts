@@ -175,8 +175,11 @@ export const HAIKU_FEEDBACK_UPDATE_INPUT_SCHEMA = Type.Object(
 					"Slug of the unit / hat / agent that closed the finding. Set by the engine on assessor pass; agents may set it manually only on rare manual-close paths.",
 			}),
 		),
-		source_ref: Type.Optional(Type.String()),
-		author: Type.Optional(Type.String()),
+		// `source_ref` and `author` were previously declared here but the
+		// handler never read them — only `status`, `closed_by`, and
+		// `resolution` flow into updateFeedbackFile. Listing them in the
+		// schema let agents pass values that got silently dropped.
+		// Removed: schema must match the handler's actual mutation surface.
 		state_file: Type.Optional(Type.String()),
 	},
 	{ additionalProperties: false },

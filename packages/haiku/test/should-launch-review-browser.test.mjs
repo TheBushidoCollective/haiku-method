@@ -59,12 +59,17 @@ test("autoOpen=false → never launch (hard override)", () => {
 			false,
 			"autoOpen=false must override everything",
 		)
-		// Even with a fresh heartbeat, autoOpen=false wins.
+		// Even with a fresh heartbeat (a browser IS attached now),
+		// autoOpen=false still wins. Belt-and-suspenders against a
+		// future refactor that flips the guard order so the
+		// browser-attached check fires before the autoOpen short-circuit
+		// — autoOpen=false is the caller's hard override and must win
+		// regardless of websocket state.
 		recordHeartbeat(s.session_id)
 		assert.strictEqual(
 			shouldLaunchReviewBrowser(false, "https://example.test", s.session_id),
 			false,
-			"autoOpen=false must override even when no browser is attached",
+			"autoOpen=false must override even when a browser IS attached",
 		)
 	} finally {
 		deleteSession(s.session_id)

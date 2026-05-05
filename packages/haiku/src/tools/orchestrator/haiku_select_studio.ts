@@ -280,35 +280,16 @@ export default defineTool({
 			}
 		}
 
-		// Update intent.md with selected studio — only set stages if not
-		// already overridden.
-		const intentFmCheck = readFrontmatter(intentFile)
-		const existingStages = intentFmCheck.stages as string[] | undefined
+		// Update intent.md with selected studio. `stages` is no longer
+		// touched here — it's owned by haiku_select_mode (full studio
+		// list for non-quick modes) or haiku_select_stage (single-stage
+		// allow-list for quick mode). Setting `stages` from studio
+		// selection skipped the mode elicitation, which is exactly the
+		// orientation Tara fell into ("inception only in discrete" →
+		// engine never asked for mode, agent dictated discrete itself).
 		const allStudioStages = resolveStudioStages(selectedStudio)
 
-		if (existingStages && existingStages.length > 0) {
-			const invalid = existingStages.filter((s) => !allStudioStages.includes(s))
-			if (invalid.length > 0) {
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `Invalid stages for studio '${selectedStudio}': ${invalid.join(", ")}. Available stages: ${allStudioStages.join(", ")}`,
-						},
-					],
-					isError: true,
-				}
-			}
-		}
-
-		const activeStages =
-			existingStages && existingStages.length > 0
-				? existingStages // stages were set at creation time (e.g. quick mode)
-				: allStudioStages
 		setFrontmatterField(intentFile, "studio", selectedStudio)
-		if (!existingStages || existingStages.length === 0) {
-			setFrontmatterField(intentFile, "stages", activeStages)
-		}
 
 		gitCommitState(`haiku: select studio ${selectedStudio} for intent ${slug}`)
 		emitTelemetry("haiku.studio.selected", {
@@ -322,9 +303,8 @@ export default defineTool({
 					action: "studio_selected",
 					intent: slug,
 					studio: selectedStudio,
-					stages: activeStages,
 					all_studio_stages: allStudioStages,
-					message: `Studio '${selectedStudio}' selected for intent '${slug}'. Call haiku_run_next { intent: "${slug}" } to begin.`,
+					message: `Studio '${selectedStudio}' selected for intent '${slug}'. Call haiku_run_next { intent: "${slug}" } — the workflow engine will elicit mode next.`,
 				},
 				null,
 				2,

@@ -103,6 +103,22 @@ export function workflowStartStage(slug: string, stage: string): void {
 	createIntentBranch(slug)
 	cleanupOrphanedStageBranches(slug)
 
+	// Self-heal: commit any uncommitted intent files BEFORE we attempt
+	// the stage-branch checkout below. This catches the dirty-tree
+	// refusal pattern (Tara hit it on 2026-05-05) where intent_create
+	// or select_studio's silent best-effort gitCommitState failed,
+	// leaving intent.md / knowledge/CONVERSATION-CONTEXT.md uncommitted.
+	// `git checkout -b <stageBranch> <main>` then refuses with "Your
+	// local changes to the following files would be overwritten by
+	// checkout."
+	//
+	// We try once to commit pending intent state. If the commit
+	// itself fails (pre-commit hook error, etc.), we fall through —
+	// the checkout downstream will surface the real error to the
+	// agent rather than silently writing stage state.json on top of
+	// an unstable foundation.
+	gitCommitState(`haiku: pre-stage cleanup for ${slug}/${stage}`)
+
 	const prevStage = findPreviousStage(slug, stage)
 	const prevStageBranch = prevStage ? `haiku/${slug}/${prevStage}` : ""
 	if (

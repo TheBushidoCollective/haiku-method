@@ -124,15 +124,41 @@ export function deriveCurrentState(
 		}
 	}
 
-	// Pre-stage intent review. Studio is selected, no stage has
-	// started yet (no active_stage, no phase), and the user has
-	// not approved the intent yet (intent_reviewed !== true). Pop a
-	// review screen for the minimal intent before the workflow
-	// enters stage 0. Approved via haiku_await_gate, which stamps
-	// intent_reviewed: true so this branch falls through on the
-	// next tick.
-	const intentReviewed = intent.intent_reviewed === true
+	// Pre-mode: studio selected, mode not yet elicited. The mode
+	// elicitation happens AFTER studio selection so the option list
+	// is studio-aware (e.g. some studios may not support `quick`).
+	const modeRaw = (intent.mode as string) || ""
+	const mode = modeRaw.toLowerCase()
 	const activeStageEarly = (intent.active_stage as string) || ""
+	if (!mode && !activeStageEarly) {
+		return {
+			state: "select_mode",
+			context: baseContext("", "", {}),
+		}
+	}
+
+	// Pre-stage stage selection: only fires for `quick` mode, which
+	// is single-stage. The agent elicits exactly one stage from the
+	// studio's stage list. Other modes get `stages` set to the studio's
+	// full list at mode-selection time, so they fall through.
+	const stagesField = (intent.stages as unknown[]) || []
+	const stagesArray = Array.isArray(stagesField)
+		? (stagesField as string[])
+		: []
+	if (mode === "quick" && stagesArray.length === 0 && !activeStageEarly) {
+		return {
+			state: "select_stage",
+			context: baseContext("", "", {}),
+		}
+	}
+
+	// Pre-stage intent review. Studio + mode + stages are all set, no
+	// stage has started yet (no active_stage), and the user has not
+	// approved the intent yet (intent_reviewed !== true). Pop a review
+	// screen for the minimal intent before the workflow enters stage 0.
+	// Approved via haiku_await_gate, which stamps intent_reviewed: true
+	// so this branch falls through on the next tick.
+	const intentReviewed = intent.intent_reviewed === true
 	if (
 		!intentReviewed &&
 		!activeStageEarly &&

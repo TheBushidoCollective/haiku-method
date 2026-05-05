@@ -262,7 +262,35 @@ const emit: WorkflowHandler = (ctx, rootArg) => {
 	const phase = (stageState.phase as string) || ""
 	const stageStatus = (stageState.status as string) || "pending"
 
-	if (phase && stageStatus !== "pending") {
+	// Half-state recovery: stage state.json says phase=elaborate / status=active
+	// but intent.md has no active_stage. This is the signature of a prior
+	// `workflowStartStage` that crashed mid-flight — for example, the dirty-
+	// tree git checkout refusal Tara hit on 2026-05-05. The previous engine
+	// behavior here was to return null, surfacing as the cryptic
+	// "runWorkflowTick produced no action for state: start_stage" cascade
+	// that forced an `intent_reset`.
+	//
+	// We recover by rolling the stage state back to pending so the next
+	// tick re-enters this handler clean and `workflowStartStage` runs
+	// from a known-good baseline. No ceremony, no manual git surgery, no
+	// reset.
+	if (phase && stageStatus !== "pending" && !activeStage) {
+		stageState.phase = ""
+		stageState.status = "pending"
+		stageState.started_at = null
+		stageState.completed_at = null
+		stageState.gate_entered_at = null
+		stageState.gate_outcome = null
+		writeJson(stageStateFile, stageState)
+		gitCommitState(
+			`haiku: self-heal half-state on '${currentStage}' for ${slug} (rollback to pending)`,
+		)
+		emitTelemetry("haiku.workflow.half_state_recovered", {
+			intent: slug,
+			stage: currentStage,
+		})
+		// Fall through into the normal start_stage emission below.
+	} else if (phase && stageStatus !== "pending") {
 		// Mid-phase — runNext owns this path until per-phase ports
 		// land.
 		return null

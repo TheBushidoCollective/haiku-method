@@ -18,12 +18,18 @@ const FSM_DRIVEN_INTENT_FIELDS_LIST = [
 	"started_at",
 	"completed_at",
 	"created_at",
+	// Mode is engine-managed: set via haiku_select_mode (with elicitation),
+	// never via haiku_intent_create or haiku_intent_set. /haiku:change-mode
+	// drives mid-flight changes through the same tool.
+	"mode",
 	// Completion-review state machine
 	"completion_review_dispatched",
 	"completion_review_skipped",
 	"completion_review_entered_at",
 	"completion_review_dispatched_at",
-	// Engine-derived collections
+	// Engine-derived collections. `stages` is set by haiku_select_mode for
+	// non-quick modes (full studio list) or haiku_select_stage for quick
+	// (single-element allow-list). Never agent-set.
 	"stages",
 	"composite",
 	"intent_reviewed",
@@ -43,14 +49,27 @@ const FSM_DRIVEN_INTENT_FIELDS_LIST = [
 	"autopilot",
 ] as const
 
+export const INTENT_MODES = [
+	"continuous",
+	"discrete",
+	"autopilot",
+	"discrete-hybrid",
+	// `quick` operates like continuous but is single-stage (the agent
+	// elicits which stage). Promotes the prior /haiku:quick skill into
+	// a real mode value so validation + transitions are uniform.
+	"quick",
+] as const
+
+export type IntentMode = (typeof INTENT_MODES)[number]
+
 export const INTENT_FRONTMATTER_SCHEMA = Type.Object(
 	{
 		title: Type.Optional(Type.String({ minLength: 1 })),
-		mode: Type.Optional(
-			Type.String({
-				enum: ["continuous", "discrete", "autopilot", "discrete-hybrid"],
-			}),
-		),
+		// `mode` is now engine-managed (in FSM_DRIVEN list) but stays
+		// accepted by the AJV schema so test fixtures and on-disk reads
+		// still validate. Direct agent writes are rejected by the
+		// haiku_intent_set handler with `intent_field_engine_only`.
+		mode: Type.Optional(Type.String({ enum: [...INTENT_MODES] })),
 		skip_stages: Type.Optional(Type.Array(Type.String())),
 		intent_completion_review: Type.Optional(Type.Boolean()),
 		// `studio` is set on creation by haiku_select_studio and is

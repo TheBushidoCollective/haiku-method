@@ -247,7 +247,11 @@ test("rejects unknown field", () => {
 	rmSync(root, { recursive: true, force: true })
 })
 
-test("rejects type mismatch on mode", () => {
+test("rejects engine-only set on mode (mode is FSM-driven)", () => {
+	// Mode is engine-managed — set via haiku_select_mode only. The
+	// intent_set rejection fires BEFORE any type-mismatch check
+	// because the field is gated behind `intent_field_engine_only`
+	// upstream of validation.
 	const { root, haiku } = projectRoot()
 	makeIntent(haiku, "x")
 	withCwd(root, () => {
@@ -255,6 +259,23 @@ test("rejects type mismatch on mode", () => {
 			intent: "x",
 			field: "mode",
 			value: "warp-speed",
+		})
+		assert.strictEqual(r.isError, true)
+		assert.strictEqual(r.parsed.error, "intent_field_engine_only")
+	})
+	rmSync(root, { recursive: true, force: true })
+})
+
+test("rejects type mismatch on intent_completion_review", () => {
+	// A non-engine-only field still goes through the type-mismatch
+	// check. Picking a stable, unmanaged boolean field for coverage.
+	const { root, haiku } = projectRoot()
+	makeIntent(haiku, "x")
+	withCwd(root, () => {
+		const r = call("haiku_intent_set", {
+			intent: "x",
+			field: "intent_completion_review",
+			value: "not-a-boolean",
 		})
 		assert.strictEqual(r.isError, true)
 		assert.strictEqual(r.parsed.error, "intent_field_type_mismatch")

@@ -43,14 +43,25 @@ function test(name, fn) {
 }
 
 // ── Part A: mode enum ─────────────────────────────────────────────────────────
+//
+// Mode is no longer a property of haiku_intent_create — it's set
+// exclusively via haiku_select_mode (engine-managed elicitation). The
+// canonical enum lives in `state/schemas/intent.ts` as INTENT_MODES.
 
-console.log("=== mode enum (tool-defs.ts) ===")
+console.log("=== mode enum (INTENT_MODES) ===")
 
 const createDef = orchestratorToolDefs.find(
 	(d) => d.name === "haiku_intent_create",
 )
 assert.ok(createDef, "haiku_intent_create tool must be defined")
-const modeEnum = createDef.inputSchema.properties.mode.enum
+assert.ok(
+	!createDef.inputSchema.properties.mode,
+	"haiku_intent_create must NOT accept mode — it's engine-managed via haiku_select_mode now",
+)
+
+const { INTENT_MODES: modeEnum } = await import(
+	"../src/state/schemas/intent.ts"
+)
 
 test("mode enum contains 'continuous'", () => {
 	assert.ok(
@@ -73,6 +84,13 @@ test("mode enum contains 'autopilot'", () => {
 	)
 })
 
+test("mode enum contains 'quick' (single-stage continuous-style mode)", () => {
+	assert.ok(
+		modeEnum.includes("quick"),
+		`enum is: ${JSON.stringify(modeEnum)}`,
+	)
+})
+
 test("mode enum does NOT contain 'hybrid' (virtual state, not a stored mode)", () => {
 	assert.ok(
 		!modeEnum.includes("hybrid"),
@@ -80,11 +98,11 @@ test("mode enum does NOT contain 'hybrid' (virtual state, not a stored mode)", (
 	)
 })
 
-test("mode enum has exactly 3 values", () => {
+test("mode enum has exactly 5 values (continuous, discrete, autopilot, discrete-hybrid, quick)", () => {
 	assert.strictEqual(
 		modeEnum.length,
-		3,
-		`expected 3-value enum, got: ${JSON.stringify(modeEnum)}`,
+		5,
+		`expected 5-value enum, got: ${JSON.stringify(modeEnum)}`,
 	)
 })
 

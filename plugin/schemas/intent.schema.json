@@ -43,8 +43,8 @@
 		},
 		"mode": {
 			"type": "string",
-			"enum": ["continuous", "discrete", "autopilot", "discrete-hybrid"],
-			"description": "Execution mode."
+			"enum": ["continuous", "discrete", "autopilot", "discrete-hybrid", "quick"],
+			"description": "Execution mode. Engine-managed via haiku_select_mode — never set directly by the agent."
 		},
 		"autopilot": {
 			"type": "boolean",

@@ -119,8 +119,40 @@ test("no studio → select_studio", () => {
 	assert.strictEqual(result.context.studio, "")
 })
 
-test("studio set, no active_stage, not yet reviewed → intent_review", () => {
+test("studio set, no mode → select_mode", () => {
 	const { haikuRoot, cleanup } = fixture("test", { studio: "software" })
+	const result = deriveCurrentState("test", haikuRoot)
+	cleanup()
+	assert.strictEqual(result.state, "select_mode")
+	assert.strictEqual(result.context.studio, "software")
+})
+
+test("mode=quick, no stages → select_stage", () => {
+	const { haikuRoot, cleanup } = fixture("test", {
+		studio: "software",
+		mode: "quick",
+	})
+	const result = deriveCurrentState("test", haikuRoot)
+	cleanup()
+	assert.strictEqual(result.state, "select_stage")
+})
+
+test("mode=quick, stages set → intent_review", () => {
+	const { haikuRoot, cleanup } = fixture("test", {
+		studio: "software",
+		mode: "quick",
+		stages: ["design"],
+	})
+	const result = deriveCurrentState("test", haikuRoot)
+	cleanup()
+	assert.strictEqual(result.state, "intent_review")
+})
+
+test("studio + mode set, no active_stage, not yet reviewed → intent_review", () => {
+	const { haikuRoot, cleanup } = fixture("test", {
+		studio: "software",
+		mode: "continuous",
+	})
 	const result = deriveCurrentState("test", haikuRoot)
 	cleanup()
 	assert.strictEqual(result.state, "intent_review")
@@ -128,9 +160,10 @@ test("studio set, no active_stage, not yet reviewed → intent_review", () => {
 	assert.strictEqual(result.context.currentStage, "")
 })
 
-test("studio set, no active_stage, intent_reviewed=true → start_stage", () => {
+test("studio + mode set, no active_stage, intent_reviewed=true → start_stage", () => {
 	const { haikuRoot, cleanup } = fixture("test", {
 		studio: "software",
+		mode: "continuous",
 		intent_reviewed: true,
 	})
 	const result = deriveCurrentState("test", haikuRoot)
@@ -143,6 +176,7 @@ test("studio set, no active_stage, intent_reviewed=true → start_stage", () => 
 test("intent.phase=intent_review → intent_review", () => {
 	const { haikuRoot, cleanup } = fixture("test", {
 		studio: "software",
+		mode: "continuous",
 		phase: "intent_review",
 	})
 	const result = deriveCurrentState("test", haikuRoot)
@@ -153,6 +187,7 @@ test("intent.phase=intent_review → intent_review", () => {
 test("intent.phase=intent_completion (not dispatched) → intent_completion_review", () => {
 	const { haikuRoot, cleanup } = fixture("test", {
 		studio: "software",
+		mode: "continuous",
 		phase: "intent_completion",
 	})
 	const result = deriveCurrentState("test", haikuRoot)
@@ -163,6 +198,7 @@ test("intent.phase=intent_completion (not dispatched) → intent_completion_revi
 test("intent.phase=intent_completion + dispatched → intent_completion_fix", () => {
 	const { haikuRoot, cleanup } = fixture("test", {
 		studio: "software",
+		mode: "continuous",
 		phase: "intent_completion",
 		completion_review_dispatched: true,
 	})

@@ -176,8 +176,8 @@ ${(opts.criteria || ["- [ ] Default criteria"]).join("\n")}
 
 	console.log("\n=== orchestratorToolDefs ===")
 
-	test("has 12 orchestration tools", () => {
-		assert.strictEqual(orchestratorToolDefs.length, 12)
+	test("has 14 orchestration tools", () => {
+		assert.strictEqual(orchestratorToolDefs.length, 14)
 	})
 
 	test("haiku_await_gate tool defined for two-step gate review", () => {

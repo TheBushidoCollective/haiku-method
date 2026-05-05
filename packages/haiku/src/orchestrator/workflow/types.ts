@@ -31,6 +31,8 @@ export interface WorkflowContext {
 export type StateName =
 	// setup
 	| "select_studio"
+	| "select_mode"
+	| "select_stage"
 	| "intent_review"
 	| "start_stage"
 	// phase progression

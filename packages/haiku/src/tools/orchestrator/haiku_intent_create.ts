@@ -35,7 +35,7 @@ import { text } from "./_text.js"
 export default defineTool({
 	name: "haiku_intent_create",
 	description:
-		"Create a new intent. Returns the slug + path. Title is required (crisp 3–8 word summary, ≤80 chars, single line). Studio is selected separately via haiku_select_studio. Always creates a fresh intent — `/haiku:start` does not resume; use `/haiku:pickup` for that.",
+		"Create a new intent. Returns the slug + path. Title is required (crisp 3–8 word summary, ≤80 chars, single line). Studio, mode, and (for quick) stage are selected separately via the engine-controlled elicitation chain (haiku_select_studio → haiku_select_mode → optional haiku_select_stage). Always creates a fresh intent — `/haiku:start` does not resume; use `/haiku:pickup` for that.",
 	inputSchema: {
 		type: "object" as const,
 		properties: {
@@ -43,11 +43,10 @@ export default defineTool({
 			description: { type: "string" },
 			slug: { type: "string" },
 			context: { type: "string" },
-			mode: { type: "string" },
-			stages: { type: "array", items: { type: "string" } },
 			state_file: { type: "string" },
 		},
 		required: ["title", "description"],
+		additionalProperties: false,
 	},
 	handle(args) {
 		const description = args.description as string
@@ -173,23 +172,19 @@ export default defineTool({
 		mkdirSync(join(iDir, "knowledge"), { recursive: true })
 		mkdirSync(join(iDir, "stages"), { recursive: true })
 
-		// Build intent.md with frontmatter + body (no studio — selected
-		// separately). Title and description are distinct: title is a
-		// short human-readable summary the agent wrote deliberately;
-		// description is the full narrative body.
+		// Build intent.md with frontmatter + body. studio, mode, and
+		// stages are all engine-managed and start UNSET — the workflow
+		// drives haiku_select_studio → haiku_select_mode → (if quick)
+		// haiku_select_stage to populate them via elicitation. Setting
+		// any of them at create-time would let the agent dictate values
+		// the user should be choosing.
 		const context = args.context as string | undefined
-		const mode = (args.mode as string) || "continuous"
-		const stagesOverride = args.stages as string[] | undefined
 		const descriptionBody = (description || "").trim()
 		const intentContent = [
 			"---",
 			`title: "${title.replace(/"/g, '\\"')}"`,
 			`studio: ""`,
-			`mode: ${mode}`,
 			"status: active",
-			...(stagesOverride
-				? [`stages:\n${stagesOverride.map((s) => `  - ${s}`).join("\n")}`]
-				: []),
 			`created_at: ${timestamp()}`,
 			"---",
 			"",

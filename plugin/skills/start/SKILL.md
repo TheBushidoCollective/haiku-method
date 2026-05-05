@@ -22,10 +22,16 @@ description: Start a new H·AI·K·U intent — describe what you want to accomp
 
    The title and description are distinct fields — the tool does NOT derive one from the other. Writing a lazy title (e.g. the first chunk of the description) will be rejected.
 
-4. **Follow the tool's instructions** — The tool will direct you to call `haiku_run_next`, which handles studio selection and begins the lifecycle.
+   **Do NOT pass `mode` or `stages`.** Those fields are engine-managed and chosen by the user via elicitation. The tool's input schema does not accept them; trying to pass them will fail validation.
+
+4. **Follow the tool's instructions** — The tool will direct you to call `haiku_run_next`, which then drives the elicitation chain in order:
+   1. `haiku_select_studio` — user picks the studio.
+   2. `haiku_select_mode` — user picks the mode (continuous, discrete, autopilot, quick).
+   3. `haiku_select_stage` — fires only when mode == `quick`, user picks the single stage to run.
+   4. The pre-stage intent review gate opens for the user's approval before any stage starts.
 
 ## Notes
 
-- Default to **continuous** mode (stages auto-advance)
-- Do NOT ask the user to pick a studio — the workflow engine handles studio selection via elicitation
-- If the user already provided a detailed description, skip prelaboration and go straight to step 3
+- **Never dictate mode or stages.** If the user mentions "discrete" or "single stage" or "just inception" in their description, that's *context for the user when they make the elicit choice* — pass it along into the description if it's load-bearing, but do not pre-set the field. The agent MUST let the user pick via elicitation.
+- Do NOT ask the user to pick a studio — the workflow engine handles studio selection via elicitation.
+- If the user already provided a detailed description, skip prelaboration and go straight to step 3.

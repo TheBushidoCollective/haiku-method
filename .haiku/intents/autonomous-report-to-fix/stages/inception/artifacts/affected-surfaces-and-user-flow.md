@@ -84,7 +84,20 @@ When CI is green and any required reviews pass, the PR is merged. The `report/<f
 
 ## State transitions
 
-The fix-id state machine tracks the lifecycle of a single report from intake to resolution. The following events transition it:
+The fix-id state machine tracks the lifecycle of a single report from intake to resolution. The events that transition it:
+
+- Cloud Run POST succeeds — initial intake; the fix-id moves to `received`
+- OAuth granted — `received` → `attributed`
+- OAuth declined or tab closed — stays `received` (unattributed)
+- Issue opened on GitHub — `received` / `attributed` → `issue_open`
+- PR opened on GitHub — `issue_open` → `pr_open`
+- Review comment received — `pr_open` / `fix_in_progress` → `fix_in_progress`
+- CI status received (failed) — `pr_open` / `fix_in_progress` → `fix_in_progress`
+- CI status received (passed) — `fix_in_progress` → `ci_green`
+- Fix iteration cap hit — `fix_in_progress` → `cap_hit`
+- PR merged — `ci_green` → `merged`
+
+The same events with their from/to states and the surfaces reflecting each change:
 
 | Event | From state(s) | To state | Surfaces reflecting the change |
 |---|---|---|---|

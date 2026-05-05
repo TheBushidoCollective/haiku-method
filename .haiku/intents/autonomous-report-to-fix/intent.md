@@ -11,7 +11,7 @@ stages:
   - development
   - operations
   - security
-phase: intent_review
+intent_reviewed: true
 ---
 
 # Autonomous report-to-fix loop

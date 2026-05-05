@@ -3,7 +3,10 @@ title: Open questions with proposed defaults
 model: sonnet
 depends_on:
   - unit-01-success-criteria-and-acceptance-shape
+  - unit-02-capability-and-system-context
+  - unit-03-affected-surfaces-and-user-flow
   - unit-04-privacy-and-data-handling-principles
+  - unit-05-risk-inventory
 outputs:
   - >-
     .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/open-questions-with-defaults.md

@@ -20,9 +20,10 @@ quality_gates:
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/privacy-and-data-handling-principles.md
       && grep -q '^## Retention and disclosure'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/privacy-and-data-handling-principles.md
-  - name: data-class-coverage
+  - name: scrubbing-data-class-coverage
     command: >-
-      [ "$(grep -cE '^- \*\*'
+      [ "$(awk '/^## Scrubbing principles/{found=1; next} found && /^## /{exit}
+      found && /^- \*\*/{count++} END{print count+0}'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/privacy-and-data-handling-principles.md)"
       -ge 5 ]
 status: pending

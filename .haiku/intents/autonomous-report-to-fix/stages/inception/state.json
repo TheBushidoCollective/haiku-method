@@ -1,7 +1,7 @@
 {
   "stage": "inception",
   "status": "active",
-  "phase": "elaborate",
+  "phase": "execute",
   "started_at": "2026-05-05T22:06:26Z",
   "completed_at": null,
   "gate_entered_at": null,
@@ -16,10 +16,12 @@
       "result": null
     }
   ],
-  "elaboration_turns": 4,
+  "elaboration_turns": 5,
   "elaboration_no_decisions": true,
   "elaboration_no_decisions_rationale": "Inception is research/distillation. The architectural choices that shape the report-to-fix loop (Sentry coexistence model, OAuth callback topology, durable state-store choice between Firestore/GCS, webhook acknowledgment + Cloud Tasks vs synchronous handler) are downstream of inception and belong to the design stage where concrete approaches are weighed. Intent-level scoping decisions (fire-and-forget UX, hardcoded gigsmart/haiku-method target, client-side scrubbing, event-driven invocation, no daemons) were already settled in the design conversation that produced the discovery document and are embedded in the intent context.",
   "elaboration_no_decisions_at": "2026-05-05T22:16:31Z",
   "pre_review_dispatched": true,
-  "pre_review_dispatched_at": "2026-05-05T22:19:24Z"
+  "pre_review_dispatched_at": "2026-05-05T22:19:24Z",
+  "pre_review_reviewers_acknowledged": true,
+  "pre_review_reviewers_acknowledged_at": "2026-05-05T22:27:06Z"
 }

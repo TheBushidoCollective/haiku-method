@@ -18,15 +18,26 @@ quality_gates:
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/capability-and-system-context.md
       && grep -q '^## Trust boundaries'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/capability-and-system-context.md
-  - name: capability-count
+  - name: capability-inventory-count
     command: >-
-      [ "$(grep -cE '^### '
+      [ "$(awk '/^## Capability inventory/{found=1; next} found && /^## /{exit}
+      found && /^### /{count++} END{print count+0}'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/capability-and-system-context.md)"
       -ge 6 ]
+  - name: adjacent-systems-count
+    command: >-
+      [ "$(awk '/^## Adjacent systems/{found=1; next} found && /^## /{exit}
+      found && /^### /{count++} END{print count+0}'
+      .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/capability-and-system-context.md)"
+      -ge 4 ]
 status: pending
 inputs:
   - intent.md
   - knowledge/DISCOVERY.md
+  - packages/haiku/src/repair-agent.ts
+  - deploy/auth-proxy/src/index.ts
+  - deploy/terraform/modules/auth-proxy/main.tf
+  - .github/workflows/claude.yml
 ---
 # Capability Needs and System Context
 

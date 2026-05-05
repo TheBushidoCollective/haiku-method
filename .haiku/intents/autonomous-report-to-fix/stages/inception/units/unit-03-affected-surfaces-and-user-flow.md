@@ -18,11 +18,18 @@ quality_gates:
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/affected-surfaces-and-user-flow.md
       && grep -q '^## State transitions'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/affected-surfaces-and-user-flow.md
-  - name: surface-count
+  - name: surfaces-section-count
     command: >-
-      [ "$(grep -cE '^### '
+      [ "$(awk '/^## Affected surfaces/{found=1; next} found && /^## /{exit}
+      found && /^### /{count++} END{print count+0}'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/affected-surfaces-and-user-flow.md)"
       -ge 4 ]
+  - name: state-transitions-event-count
+    command: >-
+      [ "$(awk '/^## State transitions/{found=1; next} found && /^## /{exit}
+      found && /^- /{count++} END{print count+0}'
+      .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/affected-surfaces-and-user-flow.md)"
+      -ge 9 ]
 status: pending
 inputs:
   - intent.md

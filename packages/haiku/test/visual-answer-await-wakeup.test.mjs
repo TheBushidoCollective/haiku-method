@@ -16,12 +16,13 @@
 //    first non-answer wake. Repro: notify the session WITHOUT
 //    setting status=answered, assert the await keeps waiting.
 //
-// 3. bindSessionCancellation tore down the session on abort.
-//    Repro: rely on the absence of cancellation — the test invokes
-//    the handler without a signal and expects the session to
-//    survive across multiple awaits.
+// 3. bindSessionCancellation tore down the session on abort. Repro:
+//    pass a real AbortController.signal into the handler, abort
+//    mid-wait, and assert (a) the abort propagates as a rejection,
+//    (b) the session survives the abort, (c) a follow-up await on
+//    the same session still resolves once an answer arrives.
 //
-// We exercise the actual MCP handleCallTool dispatch (not just
+// We exercise the actual MCP handleToolCall dispatch (not just
 // awaitGateReviewSession-style helpers) so the test catches a future
 // regression that re-introduces bindSessionCancellation or moves the
 // drain logic out of the handler.

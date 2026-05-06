@@ -567,13 +567,7 @@ export async function handleToolCall(
 		}
 	}
 
-	// State management tools — catch-all for haiku_* names. MUST come
-	// AFTER any inline handlers below that match `haiku_*` (e.g.
-	// haiku_await_visual_answer, haiku_await_design_direction), or
-	// those handlers become unreachable: the state-tool router doesn't
-	// know about them and returns "Unknown tool". This was a real bug
-	// — the await tools were unreachable and silently routed here
-	// before being moved BELOW their inline handlers.
+	// Catch-all for haiku_* names → handleStateTool. Tools with dedicated inline handlers BELOW (haiku_await_visual_answer, haiku_await_design_direction) MUST be excluded here — without an exclusion, every call gets silently swallowed by the state-tool router, which returns "Unknown tool" because it doesn't know about them. That was the original visual-answer bug.
 	if (
 		name.startsWith("haiku_") &&
 		name !== "haiku_await_visual_answer" &&

@@ -289,7 +289,7 @@ function ReviewLayoutLoaded({
 	const gateBadges = gateModes.map(gateBadgeCopy)
 	const studioName =
 		(session.intent?.frontmatter?.studio as string | undefined) ?? null
-	const isAdHoc = (session as { ad_hoc?: boolean }).ad_hoc === true
+	const isAdHoc = session.ad_hoc === true
 
 	// Which stage is in focus + whether the intent overview is active are
 	// both derived from the URL. The current location's pathname decides;

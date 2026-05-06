@@ -392,7 +392,7 @@ export function ReviewPage({
 		}
 	})
 
-	const isAdHoc = (session as { ad_hoc?: boolean }).ad_hoc === true
+	const isAdHoc = session.ad_hoc === true
 
 	return (
 		<FeedbackProvider intent={intentSlug} stage={selectedStage}>

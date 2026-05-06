@@ -64,7 +64,7 @@ function StageLayout(): React.ReactElement {
 	const stagePhase = stageStates[stage]?.phase ?? null
 	const gateModes = resolveGateModes(session.gate_type)
 	const gateBadges = gateModes.map(gateBadgeCopy)
-	const isAdHoc = (session as { ad_hoc?: boolean }).ad_hoc === true
+	const isAdHoc = session.ad_hoc === true
 
 	const scopeStyle = bannerHeight
 		? ({ "--header-height": `${bannerHeight}px` } as React.CSSProperties)

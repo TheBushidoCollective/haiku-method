@@ -25,6 +25,7 @@ import coverage_review_required from "./coverage_review_required.js"
 import dag_cycle_detected from "./dag_cycle_detected.js"
 import design_direction_complete from "./design_direction_complete.js"
 import design_direction_required from "./design_direction_required.js"
+import design_direction_uploaded from "./design_direction_uploaded.js"
 import discovery_missing from "./discovery_missing.js"
 import elaborate from "./elaborate.js"
 import elaboration_insufficient from "./elaboration_insufficient.js"
@@ -79,6 +80,7 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["dag_cycle_detected", dag_cycle_detected],
 	["design_direction_complete", design_direction_complete],
 	["design_direction_required", design_direction_required],
+	["design_direction_uploaded", design_direction_uploaded],
 	["discovery_missing", discovery_missing],
 	["elaborate", elaborate],
 	["elaboration_insufficient", elaboration_insufficient],

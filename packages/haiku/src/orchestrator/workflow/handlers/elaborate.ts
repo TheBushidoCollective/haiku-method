@@ -741,19 +741,42 @@ const emit: WorkflowHandler = (ctx) => {
 		}
 	} else if (!stageState.design_direction_surfaced) {
 		// Recovery / surface-once: the HTTP submit route persisted the
-		// selection (+ any annotated screenshot PNGs) to state.json. The
-		// `pick_design_direction` MCP tool result may have been
-		// discarded by a cancelled MCP request, so this is the durable
-		// path that hands the selection — including screenshot paths
-		// for the agent to Read — back into the conversation. Flip the
-		// surfaced flag so we don't re-emit on every subsequent tick.
+		// selection (+ any annotated screenshot PNGs OR uploaded designs)
+		// to state.json. The `pick_design_direction` MCP tool result may
+		// have been discarded by a cancelled MCP request, so this is the
+		// durable path that hands the selection — including any file
+		// paths for the agent to Read — back into the conversation. Flip
+		// the surfaced flag so we don't re-emit on every subsequent tick.
 		const dd = stageState.design_direction as
 			| {
+					mode?: string
 					archetype?: string
 					comments?: string
 					annotations?: Array<{ comment: string; screenshot_path: string }>
+					uploads?: Array<{
+						filename: string
+						path: string
+						caption?: string
+					}>
 			  }
 			| undefined
+		// Upload mode — designer provided finished designs; surface the
+		// file paths instead of an archetype name. No generation happened.
+		if (dd?.mode === "upload" && dd.uploads && dd.uploads.length > 0) {
+			stageState.design_direction_surfaced = true
+			writeJson(join(iDir, "stages", currentStage, "state.json"), stageState)
+			return {
+				action: "design_direction_uploaded",
+				intent: slug,
+				studio,
+				stage: currentStage,
+				uploads: dd.uploads,
+				...(dd.comments ? { comments: dd.comments } : {}),
+				message: `The user uploaded ${dd.uploads.length} design file${
+					dd.uploads.length === 1 ? "" : "s"
+				} as the chosen direction (no archetypes were generated). Read each \`path\` entry to view the artefacts and incorporate them into elaboration.`,
+			}
+		}
 		if (dd?.archetype) {
 			stageState.design_direction_surfaced = true
 			writeJson(join(iDir, "stages", currentStage, "state.json"), stageState)

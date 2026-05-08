@@ -5,19 +5,99 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.17.0] - 2026-05-08
+## [4.0.0] - 2026-05-08
+
+Major release. The cursor-driven engine refactor in PR [#323](../../pull/323)
+replaces v3's phase-machine and pre-tick gates with a deterministic
+three-track cursor (drift → feedback → intent) that walks on-disk state
+to derive the next action. Auto-migration on first read lifts v0/v3
+intents to v4 — the migrator gate keys on `targetMajor >= 4`, so this
+release is what turns the migrator on.
+
+### Breaking changes
+- **Plugin major bump.** The on-disk schema generation is now v4. The
+  migrator at `packages/haiku/src/orchestrator/migrations/v0-to-v4.ts`
+  runs on first read of any pre-v4 intent: strips deprecated FM,
+  normalizes past-tense iteration results (`"rejected"` → `"reject"`,
+  `"advanced"` → `"advance"`), synthesizes user approvals on
+  completed units, deletes per-stage `state.json` files, and drops
+  pre-v4 baseline noise. Idempotent on re-run.
+- **Per-stage `state.json` removed.** The cursor reads frontmatter
+  directly. Any tool, hook, or external integration that read or
+  wrote `stages/*/state.json` must switch to FM-driven derivation.
+- **`feedback_id` is an integer (1..999) at the wire boundary.** Every
+  `haiku_feedback_*` MCP tool input takes a number; the canonical
+  display form `FB-NNN` only appears in human-facing prose and
+  filenames. Tool calls passing `feedback_id: "FB-001"` (string)
+  are rejected at the AJV gate with `<tool>_input_invalid`.
+- **Numeric prefix padding for files.** New unit and feedback files
+  pad to 3 digits (`unit-NNN-slug.md`, `NNN-slug.md`). Existing
+  2-digit names still resolve via numeric-prefix matching, so
+  in-flight intents migrate transparently.
+- **Auto-resolve refusal in git mode.** `haiku_run_next` no longer
+  falls through to "the only active intent on disk" when the current
+  branch isn't an intent branch. Either pass `intent` explicitly or
+  `git switch haiku/<slug>/main`. Filesystem-mode intents keep the
+  fallback (no branch signal).
+- **`upstream_stage:` field and pre-tick triage gate are gone.**
+  Cross-stage feedback routing is by file location now; classifier
+  hat (first entry in `fix_hats:`) calls `haiku_feedback_set_targets`
+  on dispatch.
+- **`manual_change_assessment` action removed.** Drift events become
+  `drift_detected` directly via Track C of the cursor walk.
 
 ### Added
-- Picker and direction pages for intent navigation and workflow visualization
-- Classifier component available in all stage templates for structured decision-making  
-- Migration tooling to upgrade v0 intents to v4 schema
+- **The cursor.** `packages/haiku/src/orchestrator/workflow/cursor.ts`
+  with `derivePosition(slug)` walking Track C → B → A every tick.
+  Pure observation; same disk state, same answer, every time.
+- **`withIntentMainLock`** serialises stage→intent-main merges.
+  Wraps `mergeStageBranchIntoMain` at all three call-sites
+  (`haiku_run_next`, `side-effects.ts` pre-stage cleanup,
+  `side-effects.ts` finalize-stage).
+- **TypeBox + AJV input gates** on every MCP tool with stable named
+  error codes (`<tool>_input_invalid`). One source of truth per
+  shape.
+- **Width-flexible filename lookup** in `unitPath()` and
+  `findFeedbackFile()`. Legacy 2-digit and new 3-digit names both
+  resolve.
+- **Studio-level review agents + fix hats** (`plugin/studios/{studio}/
+  review-agents/` and `plugin/studios/{studio}/fix-hats/`) for
+  intent-completion review after the final stage gate. Opt out with
+  `intent_completion_review: false`.
+- **Spec review hard gate** between every stage's `execute` phase
+  and the parallel quality review. Engine-owned, no per-studio
+  mandate file, no opt-out.
+- **`clarifications` field** on intent FM for per-stage clarify gates.
+- **`fix_hats:` mechanism** on STAGE.md — dispatch a hat sequence
+  per-finding against open feedback. Terminal `feedback-assessor`
+  hat independently decides closure.
+- **Drift detection rewrite.** Body-sha256 for unit specs, content-
+  aware sha for outputs (markdown body-hashed; binaries full-file).
+  Repo-relative output paths join against `repoRoot` not `intentDir`
+  (was a silent gap on real code artifacts).
 
 ### Changed
-- Feedback dispatch now occurs inline within stage review using closure-reply patterns
-- Workflow state progression refactored to cursor-driven engine for deterministic advancement
+- **Phases are cursor-derived, not stored.** `phase:` is no longer a
+  field on stage state; the cursor reads on-disk shape (units present?
+  hats progressed? reviews signed?) and decides the next action.
+- **Stage loop reframed** as five phases: elaborate, execute, review,
+  approve, merge. Pre-execution adversarial review removed; review
+  fires after execute.
+- **Five operating modes**: `continuous`, `discrete`,
+  `discrete-hybrid`, `autopilot`, `quick`. The HITL/OHOTL/AHOTL
+  taxonomy is deprecated; user involvement is shaped by the
+  per-stage `gate:` field plus the invocation skill.
+- **Cross-stage FB rewalk** via Track B walks every prior stage
+  before the current one. An upstream finding gets attention before
+  forward progress resumes.
 
 ### Fixed
-- Concurrent worktree conflicts and feedback schema validation edge cases
+- All issues from PR #323's nine review rounds (22 total).
+  Notable: `withIntentMainLock` not called, `result: "rejected"`
+  not normalized in migrator, `close_feedback` handler used wrong
+  filename prefix, `parseFbIdFromFilename` raw-basename fallback
+  caused infinite loops, exact semver compare in run-tick.ts would
+  have broken every v4 intent on the first patch bump.
 
 ## [3.16.2] - 2026-05-06
 

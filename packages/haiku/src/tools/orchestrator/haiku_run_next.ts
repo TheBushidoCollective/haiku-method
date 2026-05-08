@@ -27,10 +27,16 @@
 // prompt instructions (rendered by buildRunInstructions, harness-
 // adapted by adaptInstructions).
 
+import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { ensureOnStageBranch } from "../../git-worktree.js"
+import {
+	ensureOnStageBranch,
+	fetchOrigin,
+	pushStageBranch,
+} from "../../git-worktree.js"
 import { adaptInstructions } from "../../harness-instructions.js"
+import { firstUnmergedStage } from "../../orchestrator/workflow/cursor.js"
 import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
 import type { OrchestratorAction as OrchestratorActionType } from "../../orchestrator.js"
 import {
@@ -164,6 +170,11 @@ export default defineTool({
 			intent: { type: "string" },
 			external_review_url: { type: "string" },
 			state_file: { type: "string" },
+			pickup: {
+				type: "boolean" as const,
+				description:
+					"Set true when invoked from /haiku:pickup. The engine fetches origin and materializes the active stage branch locally so the user can `git switch` into in-flight work, then appends a pickup hint to the response.",
+			},
 		},
 	},
 	async handle(args, signal) {
@@ -269,7 +280,6 @@ export default defineTool({
 					const { isGitRepo: checkGitRepo } = await import(
 						"../../state-tools.js"
 					)
-					const { fetchOrigin } = await import("../../git-worktree.js")
 					if (checkGitRepo()) {
 						fetchOrigin()
 						const { resolveStudioStages } = await import(
@@ -309,6 +319,57 @@ export default defineTool({
 			console.error(
 				`[haiku_run_next] pre-cursor reconciliation failed: ${err instanceof Error ? err.message : String(err)}`,
 			)
+		}
+
+		// Pickup auto-fetch: when /haiku:pickup hands off to a fresh user,
+		// they only have intent main locally. The cursor's state.json and
+		// any pending feedback live there, but the active stage branch's
+		// in-flight unit work doesn't. Fetch origin, materialize the
+		// active stage branch as a local ref (no checkout — keep the
+		// user's working tree intact), and surface a hint naming the
+		// branch so they know how to inspect it. Best-effort: never
+		// blocks the tick.
+		let pickupHint = ""
+		if (args.pickup === true && isGitRepo()) {
+			try {
+				fetchOrigin()
+				const intentFile = join(findHaikuRoot(), "intents", slug, "intent.md")
+				if (existsSync(intentFile)) {
+					const im = readFrontmatter(intentFile)
+					const studio = (im.studio as string) || ""
+					if (studio) {
+						const activeStage = firstUnmergedStage(slug, studio)
+						if (activeStage) {
+							const branch = `haiku/${slug}/${activeStage}`
+							try {
+								// `git fetch origin <branch>:<branch>` creates or
+								// fast-forwards the local ref to origin's tip.
+								// Fails when origin lacks the branch (the user is
+								// way ahead, no one's pushed it yet) or when the
+								// local branch has diverged — both are fine, we
+								// just don't make a hint promise we can't keep.
+								execFileSync(
+									"git",
+									["fetch", "origin", `${branch}:${branch}`],
+									{ encoding: "utf8", stdio: "pipe" },
+								)
+								pickupHint = `Active stage branch \`${branch}\` was fetched from origin. Run \`git switch ${branch}\` to inspect in-flight unit work; the engine drives the workflow from intent main and doesn't need you on the stage branch.`
+							} catch {
+								// Origin doesn't have the branch yet, or there's
+								// a divergence we can't fast-forward through.
+								// Fall through silently — the engine still works
+								// from intent main.
+							}
+						}
+					}
+				}
+			} catch (err) {
+				console.error(
+					`[haiku_run_next] pickup auto-fetch threw: ${
+						err instanceof Error ? err.message : String(err)
+					}`,
+				)
+			}
 		}
 
 		// Stage-branch enforcement: before ANY stage-scoped write, align
@@ -1032,7 +1093,44 @@ export default defineTool({
 			}
 		}
 
+		// End-of-tick auto-push: if the active stage branch's HEAD has
+		// advanced past origin (whether from engine state writes or from
+		// agent code commits between ticks), push it. Cheap rev-parse
+		// comparison; no network when no remote is configured.
+		// Best-effort — failures log and never block the tick.
+		try {
+			const intentDirPath = intentDir(slug)
+			const intentMdPath = join(intentDirPath, "intent.md")
+			if (existsSync(intentMdPath)) {
+				const raw = readFileSync(intentMdPath, "utf8")
+				const { data } = parseFrontmatter(raw)
+				const studio = (data.studio as string) || ""
+				if (studio) {
+					const activeStage = firstUnmergedStage(slug, studio)
+					if (activeStage) {
+						const branch = `haiku/${slug}/${activeStage}`
+						// pushStageBranch internally checks branchAheadOfOrigin
+						// and returns { ok: true, skipped: true } when the
+						// branch isn't ahead — no need to gate it here.
+						const pushResult = pushStageBranch(slug, activeStage)
+						if (!pushResult.ok && pushResult.error) {
+							console.error(
+								`[haiku] auto-push of ${branch} failed: ${pushResult.error}`,
+							)
+						}
+					}
+				}
+			}
+		} catch (err) {
+			console.error(
+				`[haiku] auto-push end-of-tick check threw: ${
+					err instanceof Error ? err.message : String(err)
+				}`,
+			)
+		}
+
 		syncSessionMetadata(slug, args.state_file as string | undefined)
-		return text(withInstructions(result))
+		const rendered = withInstructions(result)
+		return text(pickupHint ? `${pickupHint}\n\n${rendered}` : rendered)
 	},
 })

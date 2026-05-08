@@ -89,6 +89,25 @@ If a `external_review_url` was recorded in the stage state, the orchestrator als
 
 This complements Tier 1 by detecting approval before the branch is actually merged. Runs automatically on every `/haiku:pickup`.
 
+## Intent Draft PR Lifecycle
+
+Every intent that runs in a git repo with a provider CLI on PATH (`gh` or `glab`) gets a draft PR opened automatically at intent-create time:
+
+- **At intent_create** — the engine pushes `haiku/{slug}/main` to origin and runs `gh pr create --draft --base <mainline> --head haiku/{slug}/main` (or the `glab mr create --draft` equivalent). The PR URL is stamped on `intent.md` frontmatter as `draft_pr_url`, with `draft_pr_status: "draft"`. The PR is the single place where the intent's work accumulates as stages land.
+- **During the intent** — every stage's commits land on its own branch, then merge into `haiku/{slug}/main`. The draft PR's diff grows as the team progresses through stages.
+- **At intent completion** — just before the agent's merge action, the engine flips draft → ready via `gh pr ready <url>` (or `glab mr update <iid> --ready`). Status moves to `draft_pr_status: "ready"` with `draft_pr_ready_at` stamped.
+- **Failure handling** — if the draft can't be opened (no CLI, push failure, fresh repo with no remote) the engine stamps `draft_pr_status: "failed"` and surfaces a manual `compareUrl` in the tool result. Intent creation never blocks on the PR. Same for the ready-flip — failures log and the user's merge proceeds.
+
+## Stage-Branch Auto-Push
+
+The engine pushes the active stage branch (`haiku/{slug}/{stage}`) to origin automatically on every state-mutation boundary (stage start / stage complete / pre-stage cleanup) and at the end of every `haiku_run_next` tick where the local HEAD has advanced past origin's tip. This catches both engine commits and agent code commits between ticks.
+
+The push is best-effort and never blocks the workflow. Set `HAIKU_NO_AUTO_PUSH=1` to disable for offline development.
+
+## Pickup Auto-Fetch
+
+`/haiku:pickup` (which calls `haiku_run_next { pickup: true }`) fetches origin and materializes the active stage branch as a local ref so a fresh user can `git switch` into in-flight work. The user's working tree isn't auto-checked-out — the engine drives the workflow from intent main; the fetched branch is just there for inspection.
+
 ## Non-Git Environments
 
 When not running in a git repository, the MCP operates in filesystem mode:

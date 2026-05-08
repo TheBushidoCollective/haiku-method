@@ -381,15 +381,19 @@ export function detectPrTool(): "gh" | "glab" | null {
 }
 
 /** Open a PR/MR from `branch` into `mainline` using the detected tool.
- *  Returns the PR URL on success, an error message on failure. */
+ *  Returns the PR URL on success, an error message on failure.
+ *  Set `options.draft` to true to open a draft PR/MR (gh `--draft`,
+ *  glab `--draft`). */
 export function openPullRequest(
 	branch: string,
 	mainline: string,
 	title: string,
 	body: string,
+	options?: { draft?: boolean },
 ): { ok: boolean; url?: string; error?: string } {
 	const tool = detectPrTool()
 	if (!tool) return { ok: false, error: "no PR tool (gh/glab) found on PATH" }
+	const draft = options?.draft === true
 	try {
 		if (tool === "gh") {
 			// Check for an existing PR for this branch first to avoid duplicates
@@ -407,22 +411,19 @@ export function openPullRequest(
 				".[0].url",
 			])
 			if (existing) return { ok: true, url: existing }
-			const out = execFileSync(
-				"gh",
-				[
-					"pr",
-					"create",
-					"--base",
-					mainline,
-					"--head",
-					branch,
-					"--title",
-					title,
-					"--body",
-					body,
-				],
-				{ encoding: "utf8" },
-			).trim()
+			const args = ["pr", "create"]
+			if (draft) args.push("--draft")
+			args.push(
+				"--base",
+				mainline,
+				"--head",
+				branch,
+				"--title",
+				title,
+				"--body",
+				body,
+			)
+			const out = execFileSync("gh", args, { encoding: "utf8" }).trim()
 			return { ok: true, url: out }
 		}
 		// glab: `glab mr list` returns a tabular row like `!123  title  branch  ...`,
@@ -453,22 +454,19 @@ export function openPullRequest(
 				}
 			}
 		}
-		const out = execFileSync(
-			"glab",
-			[
-				"mr",
-				"create",
-				"--target-branch",
-				mainline,
-				"--source-branch",
-				branch,
-				"--title",
-				title,
-				"--description",
-				body,
-			],
-			{ encoding: "utf8" },
-		).trim()
+		const args = ["mr", "create"]
+		if (draft) args.push("--draft")
+		args.push(
+			"--target-branch",
+			mainline,
+			"--source-branch",
+			branch,
+			"--title",
+			title,
+			"--description",
+			body,
+		)
+		const out = execFileSync("glab", args, { encoding: "utf8" }).trim()
 		return { ok: true, url: out }
 	} catch (err) {
 		return {
@@ -637,6 +635,189 @@ export function openStagePullRequest(opts: {
 		? `Stage branch \`${branch}\` is pushed but no provider-specific compare URL could be built (origin host not recognised). Open the MR manually from \`${branch}\` into \`${base}\` via your provider's web UI.`
 		: `Failed to push \`${branch}\` (${push.error}) and no compare URL could be built. Resolve the push, then open the MR from \`${branch}\` into \`${base}\` via your provider's web UI.`
 	return result
+}
+
+/** Result shape for openIntentDraftPullRequest. Mirrors OpenStageMrResult
+ *  but for the intent's main branch — opened once at intent creation. */
+export interface OpenIntentMrResult {
+	branch: string
+	base: string
+	createdUrl?: string
+	compareUrl?: string
+	pushed?: boolean
+	pushError?: string
+	prError?: string
+	message: string
+}
+
+/** Open a DRAFT PR/MR from `haiku/<slug>/main` into the repo's mainline
+ *  branch. Called once at intent_create so the team has a place to watch
+ *  the work happen. The engine flips the draft to ready at intent
+ *  completion via markPullRequestReady().
+ *
+ *  Best-effort: any failure (no git repo, no provider CLI, push or PR
+ *  create error) returns a populated message and lets the caller surface
+ *  it. Intent creation never blocks on this. */
+export function openIntentDraftPullRequest(opts: {
+	slug: string
+	title?: string
+	body?: string
+}): OpenIntentMrResult {
+	const branch = `haiku/${opts.slug}/main`
+	const base = getMainlineBranch()
+	const title = opts.title ?? `H·AI·K·U: ${opts.slug}`
+	const body =
+		opts.body ??
+		`Intent \`${opts.slug}\` is in flight. The H·AI·K·U engine opened this PR as a draft so the work can be watched as stages land. The engine will mark it ready when the intent completes.`
+
+	if (!isGitRepo()) {
+		return {
+			branch,
+			base,
+			message: "Not a git repo — no draft PR opened.",
+		}
+	}
+
+	const push = pushBranchToOrigin(branch)
+	const result: OpenIntentMrResult = {
+		branch,
+		base,
+		pushed: push.ok,
+		pushError: push.ok ? undefined : push.error,
+		message: "",
+	}
+
+	if (push.ok) {
+		const pr = openPullRequest(branch, base, title, body, { draft: true })
+		if (pr.ok && pr.url) {
+			result.createdUrl = pr.url
+			result.message = `Draft PR opened: ${pr.url}`
+			return result
+		}
+		result.prError = pr.error
+	}
+
+	const compare = buildCompareUrl(branch, base)
+	if (compare) {
+		result.compareUrl = compare
+		result.message = push.ok
+			? `Intent main branch \`${branch}\` is pushed. The provider CLI didn't create the draft PR (${result.prError ?? "no tool found"}). Click here to open one manually: ${compare}`
+			: `Failed to push \`${branch}\` (${push.error}). After resolving, open the draft PR at: ${compare}`
+		return result
+	}
+
+	result.message = push.ok
+		? `Pushed \`${branch}\` but no compare URL could be built (origin host not recognised). Open the draft PR manually from \`${branch}\` into \`${base}\`.`
+		: `Failed to push \`${branch}\` (${push.error}) and no compare URL could be built.`
+	return result
+}
+
+/** Flip a draft PR/MR to "ready for review" / remove draft status.
+ *  Detects provider from URL hostname: `gh pr ready <url>` or
+ *  `glab mr update <iid> --ready`. Best-effort; the caller logs failures
+ *  and continues with the user's merge action. */
+export function markPullRequestReady(url: string): {
+	ok: boolean
+	error?: string
+} {
+	if (!url) return { ok: false, error: "empty url" }
+	let parsed: URL
+	try {
+		parsed = new URL(url)
+	} catch {
+		return { ok: false, error: `not a valid URL: ${url}` }
+	}
+	try {
+		// Loose `includes()` match (vs `=== "github.com"`) is intentional
+		// here: catches GitHub Enterprise (`github.company.com`) and self-
+		// hosted GitLab (`gitlab.internal`). The CLI tools (`gh` / `glab`)
+		// already configure themselves against whatever host they're
+		// pointed at, so we don't need to discriminate further. This is
+		// looser than buildCompareUrl's strict host match — that one
+		// builds a URL string and needs the canonical host shape.
+		if (parsed.hostname.includes("github")) {
+			execFileSync("gh", ["pr", "ready", url], {
+				encoding: "utf8",
+				stdio: "pipe",
+			})
+			return { ok: true }
+		}
+		if (parsed.hostname.includes("gitlab")) {
+			// GitLab MR URLs: https://gitlab.com/<group>/<project>/-/merge_requests/<iid>
+			const iidMatch = parsed.pathname.match(/\/merge_requests\/(\d+)/)
+			if (!iidMatch) {
+				return { ok: false, error: "could not parse MR iid from URL" }
+			}
+			execFileSync("glab", ["mr", "update", iidMatch[1], "--ready"], {
+				encoding: "utf8",
+				stdio: "pipe",
+			})
+			return { ok: true }
+		}
+		return {
+			ok: false,
+			error: `unrecognised provider host: ${parsed.hostname}`,
+		}
+	} catch (err) {
+		return {
+			ok: false,
+			error: err instanceof Error ? err.message : String(err),
+		}
+	}
+}
+
+/** Push `haiku/<slug>/<stage>` to origin if the local HEAD has advanced
+ *  past origin's tip (or origin doesn't have the branch yet).
+ *
+ *  Returns:
+ *   - { ok: true }                 — push succeeded
+ *   - { ok: true, skipped: true }  — nothing to push (no remote / branch
+ *                                    missing / origin already up to date)
+ *   - { ok: false, error }         — actual push failure
+ *
+ *  Honors `HAIKU_NO_AUTO_PUSH=1` to opt out for offline development. */
+export function pushStageBranch(
+	slug: string,
+	stage: string,
+): { ok: boolean; skipped?: boolean; error?: string } {
+	if (!isGitRepo()) return { ok: true, skipped: true }
+	if (process.env.HAIKU_NO_AUTO_PUSH === "1") {
+		return { ok: true, skipped: true }
+	}
+	const branch = `haiku/${slug}/${stage}`
+	if (!branchExists(branch)) return { ok: true, skipped: true }
+	if (!tryRun(["git", "remote", "get-url", "origin"])) {
+		return { ok: true, skipped: true }
+	}
+	if (!branchAheadOfOrigin(branch)) {
+		return { ok: true, skipped: true }
+	}
+	return pushBranchToOrigin(branch)
+}
+
+/** True when the local `branch` has commits NOT present on
+ *  `origin/<branch>` — i.e. there's something the auto-push machinery
+ *  should send. Strictly "ahead": diverged-or-behind cases return
+ *  false so we don't fire `git push` against a remote that's ahead
+ *  (which logs a non-fast-forward rejection on every tick). When
+ *  origin has no copy of the branch yet, returns true so the first
+ *  push creates it. Cheap rev-list count — no network. */
+export function branchAheadOfOrigin(branch: string): boolean {
+	if (!isGitRepo()) return false
+	const local = tryRun(["git", "rev-parse", branch])
+	if (!local) return false
+	const remoteSha = tryRun(["git", "rev-parse", `origin/${branch}`])
+	if (!remoteSha) return true // origin lacks the branch → push needed
+	// Count commits on local that aren't on origin. Zero → not ahead
+	// (sync or behind); non-zero → ahead or diverged-but-has-new-commits.
+	const ahead = tryRun([
+		"git",
+		"rev-list",
+		"--count",
+		`origin/${branch}..${branch}`,
+	])
+	if (!ahead) return false
+	return Number.parseInt(ahead, 10) > 0
 }
 
 /** Result of `reconcileMisroutedStageMerges`: per-stage reconciliation

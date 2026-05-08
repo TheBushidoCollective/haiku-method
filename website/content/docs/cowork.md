@@ -30,7 +30,14 @@ The `/haiku:pickup` skill handles cowork transparently:
 
 - Ensures remote tracking is configured for the intent branch
 - Pulls latest changes before starting each unit
+- Fetches the active stage branch from origin and materializes it as a local ref. The pickup hint at the top of the response names the branch — run `git switch <branch>` if you want to inspect in-flight unit work directly. The engine drives the workflow from intent main; you don't need to be on the stage branch.
 - When spawning builder teammates, includes the repo URL so they can clone independently
+
+## Draft PR for the Intent
+
+Every intent that runs in a git repo with a provider CLI (`gh` or `glab`) on PATH gets a draft PR/MR opened automatically at intent-create time, off `haiku/<slug>/main` against the repo mainline. The team has one place to watch the work happen as stages land. The engine flips the draft to ready when the intent completes — just before the agent's merge action.
+
+The PR URL is stamped on the intent's `intent.md` frontmatter as `draft_pr_url`, and the lifecycle status (`draft` / `ready` / `failed`) on `draft_pr_status`. Both are engine-managed; agent writes are rejected with `intent_field_engine_only`.
 
 ## When to Use Cowork
 

@@ -37,8 +37,10 @@ import {
 	finalizeIntentBranches,
 	isBranchMerged,
 	isOnStageBranch,
+	markPullRequestReady,
 	mergeStageBranchForward,
 	mergeStageBranchIntoMain,
+	pushStageBranch,
 	writeOnIntentMain,
 } from "../../git-worktree.js"
 import { withIntentMainLock } from "../../locks.js"
@@ -60,6 +62,28 @@ import {
 } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
 import { clearMarkersForRevisitSync } from "./baseline-clear-marker.js"
+
+/** Best-effort push of the stage branch to origin after an engine
+ *  state mutation. Swallows everything: never throws, never blocks the
+ *  workflow tick. The push itself is gated on no-git / no-origin /
+ *  HAIKU_NO_AUTO_PUSH=1 inside `pushStageBranch`. Logs to console.error
+ *  on real push failures so operators can see why their stage branch
+ *  isn't on origin. */
+function syncStageToOrigin(slug: string, stage: string): void {
+	if (!stage) return
+	try {
+		const result = pushStageBranch(slug, stage)
+		if (!result.ok && result.error) {
+			console.error(
+				`[haiku] auto-push of haiku/${slug}/${stage} failed: ${result.error}`,
+			)
+		}
+	} catch (err) {
+		console.error(
+			`[haiku] auto-push of haiku/${slug}/${stage} threw: ${err instanceof Error ? err.message : String(err)}`,
+		)
+	}
+}
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
 	if (!existsSync(filePath)) return {}
@@ -119,6 +143,7 @@ export function workflowStartStage(slug: string, stage: string): void {
 	// agent rather than silently writing stage state.json on top of
 	// an unstable foundation.
 	gitCommitState(`haiku: pre-stage cleanup for ${slug}/${stage}`)
+	syncStageToOrigin(slug, stage)
 
 	const prevStage = findPreviousStage(slug, stage)
 	const prevStageBranch = prevStage ? `haiku/${slug}/${prevStage}` : ""
@@ -198,6 +223,7 @@ export function workflowStartStage(slug: string, stage: string): void {
 
 	emitTelemetry("haiku.stage.started", { intent: slug, stage })
 	gitCommitState(`haiku: start stage ${stage}`)
+	syncStageToOrigin(slug, stage)
 	sealIntentState(slug)
 }
 
@@ -236,6 +262,7 @@ export function workflowCompleteStage(
 		gate_outcome: gateOutcome,
 	})
 	gitCommitState(`haiku: complete stage ${stage}`)
+	syncStageToOrigin(slug, stage)
 	sealIntentState(slug)
 
 	// Drift-detection lifecycle hook (unit-09): when a stage completes
@@ -525,6 +552,27 @@ export function completeOrReviewIntent(
 export function workflowIntentComplete(slug: string): void {
 	const intentFile = join(intentDir(slug), "intent.md")
 	if (existsSync(intentFile)) {
+		// If we opened a draft PR at intent_create time, flip it to
+		// ready-for-review now (just before the user's merge action).
+		// Best-effort: failures are logged but don't block completion.
+		// The user's merge IS the explicit close signal — if `gh pr ready`
+		// fails because the PR was force-pushed/closed externally, the
+		// merge still proceeds.
+		const fmRaw = readFrontmatter(intentFile)
+		const draftUrl = fmRaw.draft_pr_url as string | undefined
+		const draftStatus = fmRaw.draft_pr_status as string | undefined
+		if (draftUrl && draftStatus === "draft") {
+			const ready = markPullRequestReady(draftUrl)
+			if (ready.ok) {
+				setFrontmatterField(intentFile, "draft_pr_status", "ready")
+				setFrontmatterField(intentFile, "draft_pr_ready_at", timestamp())
+			} else {
+				console.error(
+					`[haiku] mark-ready of ${draftUrl} failed: ${ready.error}`,
+				)
+				setFrontmatterField(intentFile, "draft_pr_status", "failed")
+			}
+		}
 		setFrontmatterField(intentFile, "status", "completed")
 		setFrontmatterField(intentFile, "completed_at", timestamp())
 	}

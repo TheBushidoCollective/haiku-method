@@ -221,6 +221,55 @@ test("rejects engine-only sealed_at", () => {
 	rmSync(root, { recursive: true, force: true })
 })
 
+test("rejects engine-only draft_pr_url", () => {
+	// haiku_intent_create stamps draft_pr_url when isGitRepo() and a
+	// provider CLI is on PATH. The agent must not be able to write or
+	// fake this field via haiku_intent_set — that would bypass the
+	// engine's draft → ready lifecycle.
+	const { root, haiku } = projectRoot()
+	makeIntent(haiku, "x")
+	withCwd(root, () => {
+		const r = call("haiku_intent_set", {
+			intent: "x",
+			field: "draft_pr_url",
+			value: "https://github.com/owner/repo/pull/42",
+		})
+		assert.strictEqual(r.isError, true)
+		assert.strictEqual(r.parsed.error, "intent_field_engine_only")
+	})
+	rmSync(root, { recursive: true, force: true })
+})
+
+test("rejects engine-only draft_pr_status", () => {
+	const { root, haiku } = projectRoot()
+	makeIntent(haiku, "x")
+	withCwd(root, () => {
+		const r = call("haiku_intent_set", {
+			intent: "x",
+			field: "draft_pr_status",
+			value: "ready",
+		})
+		assert.strictEqual(r.isError, true)
+		assert.strictEqual(r.parsed.error, "intent_field_engine_only")
+	})
+	rmSync(root, { recursive: true, force: true })
+})
+
+test("rejects engine-only draft_pr_ready_at", () => {
+	const { root, haiku } = projectRoot()
+	makeIntent(haiku, "x")
+	withCwd(root, () => {
+		const r = call("haiku_intent_set", {
+			intent: "x",
+			field: "draft_pr_ready_at",
+			value: "2026-01-01T00:00:00Z",
+		})
+		assert.strictEqual(r.isError, true)
+		assert.strictEqual(r.parsed.error, "intent_field_engine_only")
+	})
+	rmSync(root, { recursive: true, force: true })
+})
+
 test("rejects immutable studio", () => {
 	const { root, haiku } = projectRoot()
 	makeIntent(haiku, "x")

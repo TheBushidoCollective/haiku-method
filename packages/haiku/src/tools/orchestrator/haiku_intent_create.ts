@@ -17,6 +17,9 @@ import { join } from "node:path"
 import {
 	branchExists,
 	createIntentBranch,
+	detectPrTool,
+	openIntentDraftPullRequest,
+	pushBranchToOrigin,
 	resolveMainlineRef,
 } from "../../git-worktree.js"
 import { validateIdentifier } from "../../prompts/helpers.js"
@@ -26,6 +29,7 @@ import {
 	gitCommitState,
 	intentTitleNeedsRepair,
 	isGitRepo,
+	setFrontmatterField,
 	timestamp,
 } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
@@ -266,6 +270,60 @@ export default defineTool({
 
 		gitCommitState(`haiku: create intent ${slug}`)
 
+		// Open a draft PR off `haiku/<slug>/main` against the repo
+		// mainline so the team has one place to watch the work happen.
+		// The engine flips draft → ready in workflowIntentComplete on the
+		// final approval. Best-effort: failures stamp draft_pr_status:
+		// "failed" but never block intent creation. Skipped silently when
+		// the repo has no provider CLI (gh / glab) on PATH.
+		let draftPrMessage = ""
+		if (isGitRepo() && detectPrTool() !== null) {
+			try {
+				const intentMdPath = join(iDir, "intent.md")
+				const draft = openIntentDraftPullRequest({
+					slug,
+					title: title ? `H·AI·K·U: ${title}` : `H·AI·K·U: ${slug}`,
+					body: description
+						? `${description}\n\n---\n\nIntent slug: \`${slug}\`. The H·AI·K·U engine opened this PR as a draft so the work can be watched as stages land. The engine will mark it ready when the intent completes.`
+						: undefined,
+				})
+				if (draft.createdUrl) {
+					setFrontmatterField(intentMdPath, "draft_pr_url", draft.createdUrl)
+					setFrontmatterField(intentMdPath, "draft_pr_status", "draft")
+					draftPrMessage = `\n\nDraft PR opened: ${draft.createdUrl}`
+				} else if (draft.compareUrl) {
+					setFrontmatterField(intentMdPath, "draft_pr_status", "failed")
+					draftPrMessage = `\n\nThe engine couldn't open the draft PR via the CLI (${draft.prError ?? draft.pushError ?? "unknown"}). Open one manually: ${draft.compareUrl}`
+				} else {
+					setFrontmatterField(intentMdPath, "draft_pr_status", "failed")
+					draftPrMessage = `\n\nThe engine couldn't open a draft PR: ${draft.message}`
+				}
+				gitCommitState(`haiku: stamp draft PR status for ${slug}`)
+				// Push the stamp commit so a handoff user's fetchOrigin()
+				// sees draft_pr_url. Without this, intent main on origin
+				// is one commit behind local — User B picks up, reads
+				// intent.md without draft_pr_url, and workflowIntentComplete
+				// can't flip the draft to ready. Best-effort: push failures
+				// log but don't block intent creation.
+				try {
+					const push = pushBranchToOrigin(intentMainBranch)
+					if (!push.ok && push.error) {
+						console.error(
+							`[haiku_intent_create] push of ${intentMainBranch} after draft-PR stamp failed: ${push.error}`,
+						)
+					}
+				} catch (pushErr) {
+					console.error(
+						`[haiku_intent_create] push after stamp threw: ${pushErr instanceof Error ? pushErr.message : String(pushErr)}`,
+					)
+				}
+			} catch (err) {
+				console.error(
+					`[haiku_intent_create] draft-PR open threw: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}
+
 		emitTelemetry("haiku.intent.created", { intent: slug })
 		if (stateFile)
 			logSessionEvent(stateFile, { event: "intent_created", intent: slug })
@@ -276,7 +334,7 @@ export default defineTool({
 					action: "intent_created",
 					slug,
 					path: `.haiku/intents/${slug}`,
-					message: `Intent '${slug}' created. Call haiku_run_next { intent: "${slug}" } to begin.`,
+					message: `Intent '${slug}' created. Call haiku_run_next { intent: "${slug}" } to begin.${draftPrMessage}`,
 				},
 				null,
 				2,

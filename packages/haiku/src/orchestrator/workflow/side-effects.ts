@@ -37,6 +37,7 @@ import {
 	finalizeIntentBranches,
 	isBranchMerged,
 	isOnStageBranch,
+	markPullRequestReady,
 	mergeStageBranchForward,
 	mergeStageBranchIntoMain,
 	pushStageBranch,
@@ -551,6 +552,27 @@ export function completeOrReviewIntent(
 export function workflowIntentComplete(slug: string): void {
 	const intentFile = join(intentDir(slug), "intent.md")
 	if (existsSync(intentFile)) {
+		// If we opened a draft PR at intent_create time, flip it to
+		// ready-for-review now (just before the user's merge action).
+		// Best-effort: failures are logged but don't block completion.
+		// The user's merge IS the explicit close signal — if `gh pr ready`
+		// fails because the PR was force-pushed/closed externally, the
+		// merge still proceeds.
+		const fmRaw = readFrontmatter(intentFile)
+		const draftUrl = fmRaw.draft_pr_url as string | undefined
+		const draftStatus = fmRaw.draft_pr_status as string | undefined
+		if (draftUrl && draftStatus === "draft") {
+			const ready = markPullRequestReady(draftUrl)
+			if (ready.ok) {
+				setFrontmatterField(intentFile, "draft_pr_status", "ready")
+				setFrontmatterField(intentFile, "draft_pr_ready_at", timestamp())
+			} else {
+				console.error(
+					`[haiku] mark-ready of ${draftUrl} failed: ${ready.error}`,
+				)
+				setFrontmatterField(intentFile, "draft_pr_status", "failed")
+			}
+		}
 		setFrontmatterField(intentFile, "status", "completed")
 		setFrontmatterField(intentFile, "completed_at", timestamp())
 	}

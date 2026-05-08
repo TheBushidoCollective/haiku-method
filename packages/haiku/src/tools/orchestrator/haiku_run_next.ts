@@ -29,7 +29,12 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { ensureOnStageBranch } from "../../git-worktree.js"
+import {
+	branchAheadOfOrigin,
+	ensureOnStageBranch,
+	pushStageBranch,
+} from "../../git-worktree.js"
+import { firstUnmergedStage } from "../../orchestrator/workflow/cursor.js"
 import { adaptInstructions } from "../../harness-instructions.js"
 import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
 import type { OrchestratorAction as OrchestratorActionType } from "../../orchestrator.js"
@@ -1030,6 +1035,41 @@ export default defineTool({
 				// Repair agent not available — fall through to normal
 				// handling.
 			}
+		}
+
+		// End-of-tick auto-push: if the active stage branch's HEAD has
+		// advanced past origin (whether from engine state writes or from
+		// agent code commits between ticks), push it. Cheap rev-parse
+		// comparison; no network when no remote is configured.
+		// Best-effort — failures log and never block the tick.
+		try {
+			const intentDirPath = intentDir(slug)
+			const intentMdPath = join(intentDirPath, "intent.md")
+			if (existsSync(intentMdPath)) {
+				const raw = readFileSync(intentMdPath, "utf8")
+				const { data } = parseFrontmatter(raw)
+				const studio = (data.studio as string) || ""
+				if (studio) {
+					const activeStage = firstUnmergedStage(slug, studio)
+					if (activeStage) {
+						const branch = `haiku/${slug}/${activeStage}`
+						if (branchAheadOfOrigin(branch)) {
+							const pushResult = pushStageBranch(slug, activeStage)
+							if (!pushResult.ok && pushResult.error) {
+								console.error(
+									`[haiku] auto-push of ${branch} failed: ${pushResult.error}`,
+								)
+							}
+						}
+					}
+				}
+			}
+		} catch (err) {
+			console.error(
+				`[haiku] auto-push end-of-tick check threw: ${
+					err instanceof Error ? err.message : String(err)
+				}`,
+			)
 		}
 
 		syncSessionMetadata(slug, args.state_file as string | undefined)

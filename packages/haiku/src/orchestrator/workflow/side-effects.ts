@@ -39,6 +39,7 @@ import {
 	isOnStageBranch,
 	mergeStageBranchForward,
 	mergeStageBranchIntoMain,
+	pushStageBranch,
 	writeOnIntentMain,
 } from "../../git-worktree.js"
 import { withIntentMainLock } from "../../locks.js"
@@ -60,6 +61,28 @@ import {
 } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
 import { clearMarkersForRevisitSync } from "./baseline-clear-marker.js"
+
+/** Best-effort push of the stage branch to origin after an engine
+ *  state mutation. Swallows everything: never throws, never blocks the
+ *  workflow tick. The push itself is gated on no-git / no-origin /
+ *  HAIKU_NO_AUTO_PUSH=1 inside `pushStageBranch`. Logs to console.error
+ *  on real push failures so operators can see why their stage branch
+ *  isn't on origin. */
+function syncStageToOrigin(slug: string, stage: string): void {
+	if (!stage) return
+	try {
+		const result = pushStageBranch(slug, stage)
+		if (!result.ok && result.error) {
+			console.error(
+				`[haiku] auto-push of haiku/${slug}/${stage} failed: ${result.error}`,
+			)
+		}
+	} catch (err) {
+		console.error(
+			`[haiku] auto-push of haiku/${slug}/${stage} threw: ${err instanceof Error ? err.message : String(err)}`,
+		)
+	}
+}
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
 	if (!existsSync(filePath)) return {}
@@ -119,6 +142,7 @@ export function workflowStartStage(slug: string, stage: string): void {
 	// agent rather than silently writing stage state.json on top of
 	// an unstable foundation.
 	gitCommitState(`haiku: pre-stage cleanup for ${slug}/${stage}`)
+	syncStageToOrigin(slug, stage)
 
 	const prevStage = findPreviousStage(slug, stage)
 	const prevStageBranch = prevStage ? `haiku/${slug}/${prevStage}` : ""
@@ -198,6 +222,7 @@ export function workflowStartStage(slug: string, stage: string): void {
 
 	emitTelemetry("haiku.stage.started", { intent: slug, stage })
 	gitCommitState(`haiku: start stage ${stage}`)
+	syncStageToOrigin(slug, stage)
 	sealIntentState(slug)
 }
 
@@ -236,6 +261,7 @@ export function workflowCompleteStage(
 		gate_outcome: gateOutcome,
 	})
 	gitCommitState(`haiku: complete stage ${stage}`)
+	syncStageToOrigin(slug, stage)
 	sealIntentState(slug)
 
 	// Drift-detection lifecycle hook (unit-09): when a stage completes

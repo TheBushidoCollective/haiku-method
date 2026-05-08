@@ -44,10 +44,10 @@ export function runWorkflowTick(
 	slug: string,
 	root?: string,
 ): WorkflowTickResult | null {
-	// `intentDir` resolves against the current haiku root (cwd-driven);
-	// the optional `root` arg here is reserved for future fixture
-	// override but currently unused.
-	void root
+	// `intentDir` resolves against the current haiku root (cwd-driven).
+	// `root` is forwarded to migrateIntent below as repoRoot for ctx;
+	// the cursor walk itself is cwd-driven via intentDir. Tests typically
+	// chdir into a fixture root before calling runWorkflowTick.
 	// Sad-path guard: `intentDir(slug)` walks up from cwd to find a
 	// `.haiku/` directory and throws if none exists. Return null so
 	// `dispatchOrchestratorAction` can surface a structured "intent

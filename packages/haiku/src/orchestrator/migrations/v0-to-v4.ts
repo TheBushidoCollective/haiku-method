@@ -294,6 +294,11 @@ function migrateUnitFile(path: string, details: MigrationStepDetails): void {
 		next.approvals = approvals
 	}
 	writeMatter(path, next, body)
+	// Counter increments AFTER writeMatter — if the file failed to parse
+	// in tryMigrateFile above, this line is unreachable and the count
+	// excludes the failed file. That's intentional: the banner should
+	// report what successfully migrated, not what was attempted.
+	// `tryMigrateFile`'s console.warn is the audit trail for skips.
 	details.units_migrated++
 }
 

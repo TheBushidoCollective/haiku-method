@@ -53,6 +53,7 @@ import intent_completion_review from "./intent_completion_review.js"
 import intent_review from "./intent_review.js"
 import merge_intent from "./merge_intent.js"
 import merge_stage from "./merge_stage.js"
+import migrated from "./migrated.js"
 import outputs_missing from "./outputs_missing.js"
 import review from "./review.js"
 import review_fix from "./review_fix.js"
@@ -115,6 +116,7 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["user_gate", user_gate],
 	["merge_intent", merge_intent],
 	["merge_stage", merge_stage],
+	["migrated", migrated],
 	["drift_detected", drift_detected],
 	["unit_inputs_missing", unit_inputs_missing],
 	["unit_naming_invalid", unit_naming_invalid],

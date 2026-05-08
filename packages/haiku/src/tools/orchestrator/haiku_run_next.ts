@@ -280,7 +280,6 @@ export default defineTool({
 					const { isGitRepo: checkGitRepo } = await import(
 						"../../state-tools.js"
 					)
-					const { fetchOrigin } = await import("../../git-worktree.js")
 					if (checkGitRepo()) {
 						fetchOrigin()
 						const { resolveStudioStages } = await import(

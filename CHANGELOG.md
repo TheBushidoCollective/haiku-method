@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.1] - 2026-05-08
+
+### Fixed
+- Bump-type detector now lets pass 2 (Claude classification) escalate `minor → major` when the diff is clearly a major rewrite, not just `patch → *`. Caught the v3.17.0-was-supposed-to-be-v4.0.0 misclassification at the source so the next cursor-class refactor that arrives with a `feat:` prefix gets caught instead of slipping through.
+
 ## [4.0.0] - 2026-05-08
 
 Major release. The cursor-driven engine refactor in PR [#323](../../pull/323)

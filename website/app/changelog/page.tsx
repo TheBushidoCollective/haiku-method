@@ -50,8 +50,15 @@ function resolveUrl(url: string): string {
 
 function renderChangelogItem(item: string): ReactNode[] {
 	const nodes: ReactNode[] = []
-	// Combined pattern: markdown links [text](url) OR bare PR/issue refs #123
-	const pattern = /\[([^\]]+)\]\(([^)]+)\)|(?<!\w)#(\d+)\b/g
+	// Combined pattern, evaluated left-to-right via a single regex scan:
+	//   - `code spans`  (group 1)
+	//   - **bold**      (group 2) — non-greedy; doesn't span paragraphs
+	//   - [text](url)   (groups 3 and 4)
+	//   - bare #123     (group 5)
+	// Inline markdown lives next to plain prose in CHANGELOG bullets, so
+	// every item gets the full inline-markdown pass — not just links.
+	const pattern =
+		/`([^`]+)`|\*\*([^*]+?)\*\*|\[([^\]]+)\]\(([^)]+)\)|(?<!\w)#(\d+)\b/g
 	let lastIndex = 0
 	let keyIndex = 0
 	let match: RegExpExecArray | null = pattern.exec(item)
@@ -62,11 +69,28 @@ function renderChangelogItem(item: string): ReactNode[] {
 			nodes.push(item.slice(lastIndex, match.index))
 		}
 
-		if (match[1] !== undefined && match[2] !== undefined) {
+		if (match[1] !== undefined) {
+			// `code` span
+			nodes.push(
+				<code
+					key={keyIndex++}
+					className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[0.85em] text-stone-800 dark:bg-stone-800 dark:text-stone-200"
+				>
+					{match[1]}
+				</code>,
+			)
+		} else if (match[2] !== undefined) {
+			// **bold** span
+			nodes.push(
+				<strong key={keyIndex++} className="font-semibold">
+					{match[2]}
+				</strong>,
+			)
+		} else if (match[3] !== undefined && match[4] !== undefined) {
 			// Markdown link: [text](url)
-			const text = match[1]
-			const url = resolveUrl(match[2])
-			const isCommit = match[2].includes("commit/")
+			const text = match[3]
+			const url = resolveUrl(match[4])
+			const isCommit = match[4].includes("commit/")
 			nodes.push(
 				<a
 					key={keyIndex++}
@@ -78,9 +102,9 @@ function renderChangelogItem(item: string): ReactNode[] {
 					{text}
 				</a>,
 			)
-		} else if (match[3] !== undefined) {
+		} else if (match[5] !== undefined) {
 			// Bare PR/issue reference: #123
-			const num = match[3]
+			const num = match[5]
 			nodes.push(
 				<a
 					key={keyIndex++}

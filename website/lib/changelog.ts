@@ -118,11 +118,60 @@ export function getChangelog(): ChangelogEntry[] {
 					: sectionContent.length
 			const itemsContent = sectionContent.slice(sectionStart, sectionEnd)
 
-			// Extract list items
-			const items = itemsContent
-				.split("\n")
-				.filter((line) => line.startsWith("- "))
-				.map((line) => line.slice(2).trim())
+			// Extract list items, supporting two shapes:
+			//   1. `- bullet text` followed by zero or more indented
+			//      continuation lines (common-mark wrapping):
+			//
+			//        - **Plugin major bump.** The on-disk schema is now v4.
+			//          The migrator at `packages/.../v0-to-v4.ts` runs on
+			//          first read of any pre-v4 intent.
+			//
+			//   2. Plain prose blocks (no `-` prefix at all) — older
+			//      entries write a single paragraph under the `### Fixed`
+			//      heading without bulleting. The renderer treats each
+			//      paragraph as one item so the prose still surfaces
+			//      instead of falling through to "No notable changes."
+			const items: string[] = []
+			const lines = itemsContent.split("\n")
+			let current: string | null = null
+			let prose: string | null = null
+
+			const flushBullet = () => {
+				if (current !== null) {
+					const collapsed = current.replace(/\s+/g, " ").trim()
+					if (collapsed.length > 0) items.push(collapsed)
+					current = null
+				}
+			}
+			const flushProse = () => {
+				if (prose !== null) {
+					const collapsed = prose.replace(/\s+/g, " ").trim()
+					if (collapsed.length > 0) items.push(collapsed)
+					prose = null
+				}
+			}
+
+			for (const raw of lines) {
+				if (raw.startsWith("- ")) {
+					flushBullet()
+					flushProse()
+					current = raw.slice(2)
+				} else if (current !== null && /^\s+\S/.test(raw)) {
+					// Indented continuation of the current bullet.
+					current += ` ${raw.trim()}`
+				} else if (current !== null && raw.trim() === "") {
+					// Blank line ends the current bullet.
+					flushBullet()
+				} else if (raw.trim() === "") {
+					flushProse()
+				} else if (current === null) {
+					// Plain prose paragraph (no bullet prefix). Accumulate
+					// until the next blank line or the next bullet.
+					prose = prose === null ? raw.trim() : `${prose} ${raw.trim()}`
+				}
+			}
+			flushBullet()
+			flushProse()
 
 			if (items.length > 0) {
 				sections.push({ type, items })

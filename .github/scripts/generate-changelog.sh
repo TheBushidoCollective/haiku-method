@@ -42,7 +42,16 @@ if [ -z "$GIT_RANGE" ]; then
 fi
 
 # Collect raw commit subjects (filtered)
-COMMITS=$(git log $GIT_RANGE --no-merges --pretty=format:"%s" -- "plugin/" "packages/" 2>/dev/null \
+#
+# 2026-05-08: drop the `-- "plugin/" "packages/"` path filter from the
+# log range. Several recent bumps (3.16.3, 4.0.1) wrote no CHANGELOG
+# entry because every commit in range was outside those paths (CI
+# scripts, website, docs) — but the bump still ran. The missing
+# entries then leave gaps in the public changelog page. Anything
+# that's meaningful enough to motivate a bump is meaningful enough to
+# surface; if a release truly has nothing user-visible, the script
+# now writes a stub instead of exiting silently.
+COMMITS=$(git log $GIT_RANGE --no-merges --pretty=format:"%s" 2>/dev/null \
 	| grep -v "\[skip ci\]" \
 	| grep -v "chore(release):" \
 	| grep -v "chore(plugin): bump" \
@@ -53,16 +62,32 @@ COMMITS=$(git log $GIT_RANGE --no-merges --pretty=format:"%s" -- "plugin/" "pack
 	| grep -v "^Reapply \"" \
 	|| true)
 
-if [ -z "$COMMITS" ]; then
-	echo "No commits found for $PATH_DIR in range $GIT_RANGE"
-	exit 0
-fi
+DIFF_STAT=$(git diff --stat "$GIT_RANGE" 2>/dev/null || true)
 
-DIFF_STAT=$(git diff --stat "$GIT_RANGE" -- "plugin/" "packages/" 2>/dev/null || true)
+# When no meaningful commits remain after filtering, write a stub so
+# the version still surfaces on the changelog page. The version's
+# release notes can be edited in a follow-up PR if the maintainer
+# wants more detail; the alternative (skipping the file write
+# entirely) breaks every consumer that walks the changelog by
+# version-heading order.
+NO_COMMITS=0
+if [ -z "$COMMITS" ]; then
+	echo "No commits found for $PATH_DIR in range $GIT_RANGE — writing stub entry"
+	NO_COMMITS=1
+fi
 
 # ---- Synthesize with Claude CLI ----
 CHANGELOG_ENTRY=""
-if command -v claude >/dev/null 2>&1; then
+
+# Stub path: nothing in the range warrants a synthesized entry, so
+# write a placeholder instead of dropping the version from the
+# changelog entirely. The build / build-and-prepend steps below run
+# normally with this stub.
+if [ "$NO_COMMITS" = "1" ]; then
+	CHANGELOG_ENTRY="No notable changes."
+fi
+
+if [ -z "$CHANGELOG_ENTRY" ] && command -v claude >/dev/null 2>&1; then
 	PROMPT="Write a changelog entry for version $NEW_VERSION of the AI-DLC plugin — a Claude Code plugin for structured software development.
 
 Rules:

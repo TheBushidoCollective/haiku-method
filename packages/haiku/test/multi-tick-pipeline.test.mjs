@@ -8,7 +8,13 @@
 //
 // On every tick we read the action and simulate the agent/engine
 // response by writing the appropriate frontmatter to disk:
-//   - elaborate            → write a wave-ready unit
+//   - elaborate            → record the conversation artifact (gate
+//                            simulator: in real code the agent talks
+//                            to the user; here we just stamp a
+//                            verified body)
+//   - elaborate_review     → seal the artifact (verifier simulator)
+//   - decompose            → write a wave-ready unit (formerly the
+//                            elaborate action's job)
 //   - start_unit_hat       → append iteration with result=advance
 //   - dispatch_review      → stamp reviews.<role>.at
 //   - user_gate            → stamp reviews.user.at OR approvals.user.at
@@ -306,7 +312,47 @@ test("multi-tick: 3-stage continuous intent walks from elaborate to sealed", asy
 			// tick sees fresh state.
 			switch (action.action) {
 				case "elaborate": {
-					// Write one unit for this stage.
+					// Conversation gate (2026-05-08). Write a verified
+					// elaboration artifact to flip both the record + seal
+					// halves at once. Real agents go through the verifier
+					// subagent; tests don't need that fidelity.
+					const stageDir = join(intentDir, "stages", action.stage)
+					mkdirSync(stageDir, { recursive: true })
+					const at = new Date().toISOString()
+					const fm = {
+						recorded_at: at,
+						intent: action.intent ?? slug,
+						stage: action.stage,
+						verified_at: at,
+						verified_notes: "test fixture — gate simulated",
+					}
+					writeFileSync(
+						join(stageDir, "elaboration.md"),
+						matter.stringify("Test elaboration body.", fm),
+					)
+					break
+				}
+				case "elaborate_review": {
+					// Already verified above — but if we land here (artifact
+					// present, no verified_at), seal it now.
+					const elabPath = join(
+						intentDir,
+						"stages",
+						action.stage,
+						"elaboration.md",
+					)
+					const raw = readFileSync(elabPath, "utf8")
+					const parsed = matter(raw)
+					const fm = {
+						...parsed.data,
+						verified_at: new Date().toISOString(),
+					}
+					writeFileSync(elabPath, matter.stringify(parsed.content, fm))
+					break
+				}
+				case "decompose": {
+					// Write one unit for this stage. Was the per-stage
+					// elaborate action's job pre-2026-05-08.
 					const unitName = `unit-01-${action.stage}`
 					createWaveReadyUnit(intentDir, action.stage, unitName)
 					break

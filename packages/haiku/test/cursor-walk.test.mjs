@@ -1180,16 +1180,11 @@ test("cursor: all three gates missing simultaneously → design_direction fires 
 			join(discoveryDir, "tokens.md"),
 			"---\nname: tokens\nlocation: \"stages/design/TOKENS.md\"\nrequired: true\n---\n\nbody\n",
 		)
-		// Plant a wave-ready unit so discovery has SOMETHING to gate on.
-		writeUnit(intentDir, "design", "unit-01", {
-			title: "u1",
-			depends_on: [],
-			started_at: null,
-			iterations: [],
-			reviews: {},
-			approvals: {},
-			discovery: {},
-		})
+		// No unit on the stage — fresh-stage state. Grandfather rule
+		// (2026-05-08): if units already exist on a stage, the cursor
+		// skips the design_direction gate to avoid retroactively
+		// rewinding users with legacy intents. Priority chain assertion
+		// only applies in the fresh-stage case.
 
 		const action = await runTick(repoRoot, slug)
 		assert.strictEqual(

@@ -113,6 +113,33 @@ function applyResponse(intentDir, action) {
 
 	switch (action.action) {
 		case "elaborate": {
+			// Conversation gate (2026-05-08). Write a verified
+			// elaboration artifact so the cursor advances past the gate.
+			// Tests don't simulate the verifier subagent.
+			mkdirSync(stageDir, { recursive: true })
+			const elabPath = join(stageDir, "elaboration.md")
+			writeFm(
+				elabPath,
+				{
+					recorded_at: at,
+					intent: action.intent ?? "",
+					stage,
+					verified_at: at,
+					verified_notes: "test fixture — gate simulated",
+				},
+				"Test elaboration body.",
+			)
+			break
+		}
+		case "elaborate_review": {
+			const elabPath = join(stageDir, "elaboration.md")
+			if (existsSync(elabPath)) {
+				const fm = readFm(elabPath)
+				writeFm(elabPath, { ...fm, verified_at: at })
+			}
+			break
+		}
+		case "decompose": {
 			mkdirSync(unitsDir, { recursive: true })
 			const path = join(unitsDir, "unit-01.md")
 			if (!existsSync(path)) {

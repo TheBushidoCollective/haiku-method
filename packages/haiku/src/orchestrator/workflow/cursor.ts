@@ -717,10 +717,17 @@ function walkIntentTrack(args: {
 						surfaced_at?: string
 				  }
 				| undefined
-			if (!dd) {
+			// Grandfather rule (2026-05-08): if the stage already has units,
+			// the agent has done elaborate-phase work before this gate
+			// existed (or before `requires_design_direction` was flipped on
+			// the studio). Don't retroactively rewind the user to pick a
+			// design direction for work already specced. Fresh-stage case
+			// (units.length === 0) still fires the full gate sequence.
+			const isFreshStage = units.length === 0
+			if (!dd && isFreshStage) {
 				return { kind: "design_direction_required", stage }
 			}
-			if (!dd.surfaced_at) {
+			if (dd && isFreshStage && !dd.surfaced_at) {
 				if (
 					dd.mode === "upload" &&
 					Array.isArray(dd.uploads) &&
@@ -778,15 +785,21 @@ function walkIntentTrack(args: {
 	//      has stamped `verified_at` on its frontmatter (substance check
 	//      — the agent can't self-certify a one-line "user said go").
 	//
-	//      The gate fires on artifact state, NOT on unit count. This is
-	//      deliberate: the user-facing principle is that conversation,
-	//      discovery, and unit-spec writing can all happen concurrently
-	//      within a stage. An agent that drafts units during the
-	//      conversation should still be blocked by an unverified
-	//      artifact — units sit on disk but never dispatch into waves
-	//      until the conversation passes verification. The gate's
-	//      strength is the verifier; allowing parallel speculative work
-	//      around it is the trade.
+	//      Grandfather rule: if the artifact is missing AND the stage
+	//      already has units, treat the stage as legacy work that
+	//      pre-dates this gate. Don't retroactively rewind the user to
+	//      do a conversation about work already shipped. Once an
+	//      artifact exists (even unverified), it's tracked normally —
+	//      the verifier still has to seal it before advancement.
+	//
+	//      Concurrent-work case: when units exist alongside a missing
+	//      artifact, the cursor can't tell "legacy intent" from "agent
+	//      drafted units before recording elaboration." We err toward
+	//      grandfathering (fall through) because (a) re-running on a
+	//      legacy intent that was already happy is the worse failure
+	//      mode and (b) the elaborate prompt explicitly tells fresh
+	//      agents to record before writing units, so the concurrent
+	//      pattern is rare in practice.
 	//
 	//      Autopilot bypasses this gate entirely — there's no human
 	//      conversation to capture. Pre-intent elaborate (intent.md
@@ -794,7 +807,16 @@ function walkIntentTrack(args: {
 	//      is mode-skipped here.
 	if (mode !== "autopilot") {
 		const elabPath = join(stageDir, "elaboration.md")
-		if (!existsSync(elabPath)) {
+		if (existsSync(elabPath)) {
+			const elabFm = readFm(elabPath)?.data ?? {}
+			const verifiedAt =
+				typeof elabFm.verified_at === "string" ? elabFm.verified_at : ""
+			if (!verifiedAt) {
+				return { kind: "elaborate_review", stage }
+			}
+			// verified — fall through to discovery / decompose / waves
+		} else if (units.length === 0) {
+			// Fresh stage, no artifact, no units — fire the gate.
 			return {
 				kind: "elaborate",
 				stage,
@@ -802,13 +824,8 @@ function walkIntentTrack(args: {
 				elaboration_verified: false,
 			}
 		}
-		const elabFm = readFm(elabPath)?.data ?? {}
-		const verifiedAt =
-			typeof elabFm.verified_at === "string" ? elabFm.verified_at : ""
-		if (!verifiedAt) {
-			return { kind: "elaborate_review", stage }
-		}
-		// verified — fall through to discovery / decompose / waves
+		// Else: artifact missing but units exist → grandfathered.
+		// Falls through past the gate without firing.
 	}
 
 	// 3. Discovery (P7). When the studio declares discovery artifacts

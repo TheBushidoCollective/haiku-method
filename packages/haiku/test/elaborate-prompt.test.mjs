@@ -22,8 +22,12 @@ const SRC = join(HERE, "..", "src")
 const REPO_ROOT = resolve(HERE, "..", "..", "..")
 process.env.CLAUDE_PLUGIN_ROOT = join(REPO_ROOT, "plugin")
 
+// 2026-05-08: per-stage elaborate split into a conversation gate
+// (`prompts/elaborate.ts`) and unit-spec writing (`prompts/decompose.ts`,
+// formerly elaborate.ts). The exported `buildElaboratePromptBody`
+// stayed with the unit-spec writer, just under the new file name.
 const { buildElaboratePromptBody } = await import(
-	`${SRC}/orchestrator/prompts/elaborate.ts`
+	`${SRC}/orchestrator/prompts/decompose.ts`
 )
 
 function setupSyntheticStudio(root, name = "synth") {

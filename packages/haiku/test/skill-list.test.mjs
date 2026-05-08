@@ -496,7 +496,7 @@ ${stageName} stage.
 		"elaborate prompt body includes skill registry section when skills are installed",
 		async () => {
 			const { buildElaboratePromptBody } = await import(
-				"../src/orchestrator/prompts/elaborate.ts"
+				"../src/orchestrator/prompts/decompose.ts"
 			)
 			createInlineStudio(projDir, "skill-test-studio", "plan")
 			const slug = "skill-elab-intent"
@@ -565,7 +565,7 @@ Verify the elaborate prompt advertises installed skills.
 			// Those units are exactly the ones that benefit from skill annotation,
 			// so the skill registry must appear in the revisit branch too.
 			const { buildElaboratePromptBody } = await import(
-				"../src/orchestrator/prompts/elaborate.ts"
+				"../src/orchestrator/prompts/decompose.ts"
 			)
 			createInlineStudio(projDir, "skill-revisit-studio", "plan")
 			const slug = "skill-revisit-intent"

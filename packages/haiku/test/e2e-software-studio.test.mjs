@@ -24,7 +24,7 @@ import assert from "node:assert"
 import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import { test } from "node:test"
 import matter from "gray-matter"
 
@@ -98,6 +98,40 @@ function readFm(path) {
 
 function writeFm(path, fm, body = "") {
 	writeFileSync(path, matter.stringify(body, fm))
+}
+
+// Look up a discovery template's `location:` in the studio config and
+// write a stub artifact there. File existence IS the cursor's signal
+// that discovery ran — there's no FM stamp.
+function readDiscoveryLocationAndWriteStub(stage, agent, repoRoot, slug) {
+	const discoveryDir = join(
+		PLUGIN_ROOT,
+		"studios",
+		"software",
+		"stages",
+		stage,
+		"discovery",
+	)
+	if (!existsSync(discoveryDir)) return
+	for (const fname of readdirSync(discoveryDir)) {
+		if (!fname.endsWith(".md")) continue
+		const { data } = matter(readFileSync(join(discoveryDir, fname), "utf8"))
+		if (data.name !== agent) continue
+		const location = (data.location || "").replace(/\{intent-slug\}/g, slug)
+		if (!location) return
+		if (location.endsWith("/")) {
+			// Directory-shaped location: ensure the dir exists and drop a
+			// stub file inside so the cursor's "non-empty dir" check passes.
+			const absDir = join(repoRoot, location)
+			mkdirSync(absDir, { recursive: true })
+			writeFileSync(join(absDir, "stub.md"), "discovery stub\n")
+		} else {
+			const absPath = join(repoRoot, location)
+			mkdirSync(dirname(absPath), { recursive: true })
+			writeFileSync(absPath, "discovery stub\n")
+		}
+		return
+	}
 }
 
 async function runTick(slug, intentDir) {
@@ -312,15 +346,11 @@ function applyResponse(intentDir, action, root, slug) {
 			break
 		}
 		case "discovery_required": {
-			// Stamp the discovery record on the named unit.
-			const targetUnit = (action.units || [])[0] ?? "unit-01"
-			const unitPath = join(unitsDir, `${targetUnit}.md`)
-			if (existsSync(unitPath)) {
-				const fm = readFm(unitPath)
-				const disc = fm.discovery && typeof fm.discovery === "object" ? fm.discovery : {}
-				disc[action.agent] = { at }
-				writeFm(unitPath, { ...fm, discovery: disc })
-			}
+			// Write a stub artifact at the studio template's `location:`
+			// — file existence IS the signal that discovery ran. Look
+			// up the location dynamically so this test stays robust to
+			// studio config changes.
+			void readDiscoveryLocationAndWriteStub(action.stage, action.agent, root, slug)
 			break
 		}
 		case "clarify_required": {

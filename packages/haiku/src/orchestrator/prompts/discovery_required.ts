@@ -1,17 +1,19 @@
-// orchestrator/prompts/discovery_required.ts — Per-unit, per-agent
+// orchestrator/prompts/discovery_required.ts — Per-stage, per-agent
 // discovery dispatch.
 //
 // Cursor returns `discovery_required { stage, agent, units: [name] }`
-// when the next unit on the active stage is missing a discovery
-// record (`fm.discovery[<agent>].at`) for a required discovery agent.
-// The agent dispatches a single subagent against the named template;
-// the subagent writes its artifact, calls
-// `haiku_record_agent_write`, and the next tick re-walks. The
-// cursor will keep emitting `discovery_required` for each missing
-// (unit, agent) pair until every required record exists.
+// when a required discovery agent's artifact is not yet on disk at
+// the location declared by its template. The agent dispatches a
+// single subagent against the named template; the subagent writes
+// its artifact and the next tick re-walks. The artifact existence
+// IS the signal — no FM stamp, no record-call. The cursor will keep
+// emitting `discovery_required` for each missing artifact until every
+// required file exists.
 //
-// This is distinct from `discovery_missing`, which is a validator
-// surface (location-on-disk check) raised by the elaborate handler.
+// `units[0]` is a representative unit — discovery artifacts are
+// typically intent-scoped (one artifact serves all units in the
+// stage), so the unit name is for prompt context only, not for
+// per-unit isolation.
 
 import { join } from "node:path"
 import { resolvePluginRoot } from "../../config.js"
@@ -37,8 +39,11 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	const lines: string[] = []
 	lines.push(`# Discovery required: \`${agent}\` on \`${unit}\``)
 	lines.push("")
+	const resolvedLocation = def
+		? def.location.replace(/\{intent-slug\}/g, slug)
+		: ""
 	lines.push(
-		`Stage \`${stage}\` declares discovery agent \`${agent}\`. Unit \`${unit}\` has no \`fm.discovery.${agent}.at\` record yet. Run the agent before any execute hat dispatches.`,
+		`Stage \`${stage}\` declares discovery agent \`${agent}\`. The artifact at \`${resolvedLocation || "(template missing)"}\` is not on disk yet — run the agent before any execute hat dispatches. (File existence IS the signal that discovery ran; there is no FM stamp.)`,
 	)
 	lines.push("")
 
@@ -51,21 +56,18 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 
 	const templatePath = `plugin/studios/${studio}/stages/${stage}/discovery/${agent}.md`
 	const promptBody = [
-		`You are the **${agent}** discovery agent for unit \`${unit}\` in stage \`${stage}\` of intent "${slug}".`,
+		`You are the **${agent}** discovery agent for stage \`${stage}\` of intent "${slug}". Unit \`${unit}\` is provided as representative context — the artifact you produce serves every unit in the stage.`,
 		"",
 		"## Required context (inlined below)",
-		`Your discovery template is embedded in this prompt. The artifact you produce becomes a knowledge input for every execute hat that runs against this unit.`,
+		`Your discovery template is embedded in this prompt. The artifact you produce becomes a knowledge input for every execute hat that runs in this stage.`,
 		"",
 		inlineFile(templatePath, `Template: ${agent}`),
 		"",
 		"## Output target",
-		`Write your artifact to \`${def.location}\`. The path is relative to the intent root (\`.haiku/intents/${slug}/\`).`,
-		"",
-		"## Recording the write",
-		`After the file lands, call \`haiku_record_agent_write { intent: "${slug}", stage: "${stage}", unit: "${unit}", agent: "${agent}" }\`. The engine stamps \`fm.discovery.${agent}.at\` on the unit and the next cursor tick will either dispatch the next missing discovery agent or move on to the execute wave.`,
+		`Write your artifact to \`${def.location.replace(/\{intent-slug\}/g, slug)}\`. The cursor reads this path on the next tick — file existence IS the signal that discovery ran. No record-call, no FM stamp.`,
 		"",
 		"## Write scope",
-		`The discovery artifact at \`${def.location}\` is your only file write. Do NOT touch unit specs, feedback, or stage state.`,
+		`The discovery artifact is your only file write. Do NOT touch unit specs, feedback, or stage state.`,
 	].join("\n")
 
 	lines.push("## What to do")
@@ -101,7 +103,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	)
 	lines.push("")
 	lines.push(
-		`When the subagent returns, call \`haiku_run_next { intent: "${slug}" }\`. The cursor will dispatch the next missing (unit, agent) pair, or — once every required record is on disk — move on to the execute wave.`,
+		`When the subagent returns, call \`haiku_run_next { intent: "${slug}" }\`. The cursor will dispatch the next missing discovery artifact, or — once every required output is on disk — move on to the execute wave.`,
 	)
 	return lines.join("\n")
 })

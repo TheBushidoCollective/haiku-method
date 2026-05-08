@@ -540,7 +540,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**Track C — drift sweep.** Re-hashes signed witnesses (unit body, declared outputs, discovery records) on the active stage. Mismatch → `drift_detected`. Dedup'd against open drift FBs by `source_ref`.",
+										"**Track C — drift sweep.** Re-hashes signed witnesses (unit body, declared outputs) on the active stage. Mismatch → `drift_detected`. Dedup'd against open drift FBs by `source_ref`. Discovery is NOT a signed witness — its signal is artifact existence on disk, no FM stamp to drift against.",
 									)}
 								/>
 							</li>

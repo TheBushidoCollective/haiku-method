@@ -1074,7 +1074,7 @@ test("cursor: stage with discovery template + unit missing record → discovery_
 	})
 })
 
-test("cursor: discovery_required cleared when unit fm.discovery.<agent> is recorded", async () => {
+test("cursor: discovery_required cleared once the artifact is on disk", async () => {
 	if (!HAS_GIT) return
 	await withTmpRepo("cursor-disc-cleared", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
@@ -1091,7 +1091,7 @@ test("cursor: discovery_required cleared when unit fm.discovery.<agent> is recor
 		mkdirSync(discoveryDir, { recursive: true })
 		writeFileSync(
 			join(discoveryDir, "tokens.md"),
-			"---\nname: tokens\nlocation: \"stages/design/TOKENS.md\"\nrequired: true\n---\n\nResearch design tokens.\n",
+			'---\nname: tokens\nlocation: ".haiku/intents/{intent-slug}/knowledge/TOKENS.md"\nrequired: true\n---\n\nResearch design tokens.\n',
 		)
 		writeUnit(intentDir, "design", "unit-01", {
 			title: "u1",
@@ -1100,8 +1100,14 @@ test("cursor: discovery_required cleared when unit fm.discovery.<agent> is recor
 			iterations: [],
 			reviews: {},
 			approvals: {},
-			discovery: { tokens: { at: "2026-05-06T00:00:00Z" } },
 		})
+		// Write the artifact at the declared `location:`. Once the file
+		// is on disk, the cursor's existence check passes and discovery
+		// is satisfied — no FM stamp needed.
+		const knowledgeDir = join(intentDir, "knowledge")
+		mkdirSync(knowledgeDir, { recursive: true })
+		writeFileSync(join(knowledgeDir, "TOKENS.md"), "design tokens\n")
+
 		const action = await runTick(repoRoot, slug)
 		assert.notStrictEqual(action.action, "discovery_required")
 	})

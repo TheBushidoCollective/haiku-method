@@ -128,7 +128,6 @@ function makeV4IntentDir(root, slug = "v4-native") {
 			],
 			reviews: { spec: { at: "2026-05-01T00:10:00Z" } },
 			approvals: { user: { at: "2026-05-01T00:20:00Z" } },
-			discovery: {},
 		}),
 	)
 

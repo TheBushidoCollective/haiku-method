@@ -1,9 +1,12 @@
-// state/schemas/approval.ts — TypeBox shapes for the three witness
-// records that drive the cursor's review/approval/discovery walk:
+// state/schemas/approval.ts — TypeBox shapes for the two witness
+// records that drive the cursor's review/approval walk:
 //
 //   - REVIEW: agent read the SPEC, confirmed alignment with intent.
 //   - APPROVAL: agent read the OUTPUTS, confirmed alignment with spec.
-//   - DISCOVERY: studio's discovery agent ran for this unit.
+//
+// Discovery is NOT a witness record — its signal is the artifact's
+// existence on disk at the studio template's `location:`. FM state is
+// reserved for actions that don't produce a file.
 //
 // Each record carries only a timestamp `at` — git is the byte witness.
 // Drift sweep walks `git log --since=<at> -- <path>` to detect
@@ -58,16 +61,3 @@ export const APPROVAL_SCHEMA = Type.Object(
 )
 
 export type Approval = Static<typeof APPROVAL_SCHEMA>
-
-export const DISCOVERY_RECORD_SCHEMA = Type.Object(
-	{
-		at: Type.String({
-			description:
-				"ISO 8601 timestamp the discovery agent ran. Drift sweep walks `git log --since=<at>` against both the studio's mandate file (catches studio updates) and the unit's discovery output bytes (catches out-of-band edits to the produced artifact). Mandate drift authorizes the feedback cycle to update discovery artifacts.",
-		}),
-		migrated: Type.Optional(Type.Boolean()),
-	},
-	{ additionalProperties: false },
-)
-
-export type DiscoveryRecord = Static<typeof DISCOVERY_RECORD_SCHEMA>

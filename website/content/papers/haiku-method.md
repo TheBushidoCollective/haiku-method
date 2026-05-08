@@ -391,8 +391,9 @@ The **drift sweep** closes this gap. Every tick, before the cursor advances on i
 
 - **Spec witnesses** — when a reviewer signs `reviews.<role>` on a unit, the engine records the body's SHA-256. The sweep recomputes and compares.
 - **Output witnesses** — when an approval signs `approvals.<role>`, the engine records a `witnesses: { <path>: <sha256> }` map covering each declared output. The sweep recomputes per file.
-- **Discovery witnesses** — when a discovery agent signs `discovery.<agent>`, the engine records hashes for both the discovery output and the studio's mandate file.
 - **Intent-scope witnesses** — `approvals` on intent.md carry the same body hash treatment.
+
+Discovery is not a witnessed surface. Discovery agents produce knowledge artifacts at a studio-declared `location:`, and the cursor decides "did discovery run" by checking whether that file exists on disk — file presence IS the proof, no FM stamp involved. There's no witnessed hash to drift against, so out-of-band edits to a discovery artifact don't surface as `drift_detected`; they just become the new state of that input on the next tick.
 
 Any mismatch surfaces as a `drift_detected` action with one or more drift events listing the unit, role, file, and (in git mode) the commits that touched the path since signing. The agent files a feedback finding for each substantive event, which routes through the normal fix-loop. Once the FB is filed, the source ref is dedup'd so the same drift event doesn't re-emit on every tick until the FB closes.
 

@@ -337,15 +337,17 @@ test("migrateIntent aggregates step details and returns them on MigrationResult"
 	}
 })
 
-// ── Bug B: backfill discovery/reviews/approvals stamps ───────────────────
+// ── Bug B: backfill reviews/approvals stamps ─────────────────────────────
 
-test("migrator backfills discovery/reviews/approvals stamps on completed v3 units", async () => {
-	// Without backfill, the v4 cursor sees `discovery: {}` /
-	// `reviews: {}` / `approvals: {}` on every migrated completed unit
-	// and re-emits `discovery_required`, per-role review actions, etc.
-	// — re-running phases that already happened in v3. This test
-	// verifies the migrator stamps every cursor-checked role with
-	// `migrated: true` so the cursor treats the unit as fully done.
+test("migrator backfills reviews/approvals stamps on completed v3 units", async () => {
+	// Without backfill, the v4 cursor sees `reviews: {}` /
+	// `approvals: {}` on every migrated completed unit and re-emits
+	// per-role review/approval actions on every tick — re-running
+	// phases that already happened in v3. This test verifies the
+	// migrator stamps every cursor-checked role with `migrated: true`
+	// so the cursor treats the unit as fully done. Discovery is NOT
+	// backfilled — the cursor reads the artifact on disk, and v3 has
+	// already written it.
 	//
 	// Uses the real `software/design` studio config, so we point the
 	// plugin-root resolver at the repo's plugin/ directory. Falling
@@ -377,23 +379,16 @@ test("migrator backfills discovery/reviews/approvals stamps on completed v3 unit
 		const fm = readFm(
 			join(intentDir, "stages", "design", "units", "unit-01-foo.md"),
 		)
-		// Discovery stamps for every studio-declared discovery template
-		// in `software/design`: DESIGN-BRIEF, DESIGN-SYSTEM-ANCHOR,
-		// DESIGN-TOKENS. Each carries `migrated: true`. (`name:` field
-		// in each .md frontmatter is the canonical key.)
-		assert.ok(fm.discovery, "discovery object should exist")
-		const discoveryKeys = Object.keys(fm.discovery)
-		assert.ok(
-			discoveryKeys.length > 0,
-			`expected non-empty discovery stamps, got: ${JSON.stringify(fm.discovery)}`,
+		// Discovery is NOT a FM field in v4 — the cursor reads the
+		// artifact's `location:` on disk, so the migration drops any
+		// legacy `discovery: {}` rather than synthesizing stamps. The
+		// v3 artifact files were already on disk, so the cursor's
+		// existence check picks them up naturally.
+		assert.strictEqual(
+			fm.discovery,
+			undefined,
+			`migrated unit must NOT carry an FM-stamp 'discovery' field (output existence is the signal); got: ${JSON.stringify(fm.discovery)}`,
 		)
-		for (const key of discoveryKeys) {
-			assert.strictEqual(
-				fm.discovery[key].migrated,
-				true,
-				`discovery.${key} should be migrated:true`,
-			)
-		}
 
 		// Reviews: `spec`, every review-agent, and `user` are stamped.
 		// software/design ships `accessibility`, `consistency`,
@@ -448,8 +443,9 @@ test("migrator degrades gracefully when studio config is unreachable", async () 
 		const fm = readFm(
 			join(intentDir, "stages", "design", "units", "unit-01-foo.md"),
 		)
-		// Discovery is empty (no studio config to enumerate).
-		assert.deepStrictEqual(fm.discovery, {})
+		// Discovery is dropped from the FM (output existence is the
+		// signal, not an FM field).
+		assert.strictEqual(fm.discovery, undefined)
 		// Reviews and approvals still get the engine-built roles even
 		// without a studio config — the backfill walks a hardcoded list
 		// for those.

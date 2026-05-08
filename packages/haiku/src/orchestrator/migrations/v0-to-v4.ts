@@ -253,11 +253,16 @@ function migrateUnitsInStage(
 
 /**
  * Backfill cursor-checked stamps for a v3 completed unit. The v4 cursor
- * gates progression on per-unit `discovery.<agent>.at`, `reviews.<role>.at`,
- * and `approvals.<role>.at` stamps. v3 didn't track these per-unit; it
- * only tracked stage-level state. Without backfill, every migrated
- * completed unit triggers `discovery_required` / review / approval
- * actions on every tick — re-running phases that already happened.
+ * gates progression on per-unit `reviews.<role>.at` and
+ * `approvals.<role>.at` stamps for actions that don't produce a file
+ * output (review sign-offs, user gates). v3 didn't track these per-unit;
+ * it only tracked stage-level state. Without backfill, every migrated
+ * completed unit triggers per-role review / approval actions on every
+ * tick — re-running phases that already happened.
+ *
+ * Discovery is NOT backfilled here. The cursor's discovery check reads
+ * the artifact's `location` on disk; v3 already wrote the discovery
+ * file, so the existence check passes naturally — no synthesis needed.
  *
  * Synthesized stamps carry `migrated: true` so debugging can distinguish
  * v3-origin stamps from real v4 work. The `at` timestamp is the unit's
@@ -277,23 +282,6 @@ function backfillCompletedUnitStamps(
 	details: MigrationStepDetails,
 ): void {
 	const stamp = { at: timestamp, migrated: true }
-
-	// Discovery: stamp every studio-declared discovery agent for this stage.
-	const discovery = frontmatter.discovery as Record<string, unknown>
-	let discoveryDefs: Array<{ name: string; kind: string }> = []
-	try {
-		discoveryDefs = readStageArtifactDefs(studio, stage).filter(
-			(d) => d.kind === "discovery",
-		)
-	} catch {
-		discoveryDefs = []
-	}
-	for (const def of discoveryDefs) {
-		if (discovery[def.name] == null) {
-			discovery[def.name] = stamp
-			details.discovery_stamps_synthesized++
-		}
-	}
 
 	// Reviews: spec is engine-built and always present. user is the human
 	// gate. Configured review agents come from the studio. autopilot
@@ -358,24 +346,27 @@ function migrateUnitFile(
 			if (iter && iter.result === "advanced") iter.result = "advance"
 		}
 	}
-	if (typeof next.discovery !== "object" || next.discovery === null) {
-		next.discovery = {}
-	}
 	if (typeof next.reviews !== "object" || next.reviews === null) {
 		next.reviews = {}
 	}
 	if (typeof next.approvals !== "object" || next.approvals === null) {
 		next.approvals = {}
 	}
+	// Drop any legacy `discovery: {}` field — v4 reads discovery from
+	// the artifact on disk, not the unit FM. Leaving the field around
+	// just confuses post-migration debugging.
+	delete next.discovery
 	if (wasCompleted) {
-		// Backfill every cursor-checked stamp the v4 engine expects:
-		// discovery, reviews, approvals. Without this, the cursor sees
-		// a "completed" unit with empty `discovery: {}` / `reviews: {}`
-		// and emits `discovery_required` / per-role review actions on
+		// Backfill cursor-checked stamps for actions that don't produce
+		// a file output: review sign-offs and approvals. Without this,
+		// the cursor sees a "completed" unit with empty `reviews: {}` /
+		// `approvals: {}` and emits per-role review/approval actions on
 		// every tick — re-running phases that already happened in v3.
+		// Discovery is NOT backfilled — the v3 artifact is already on
+		// disk and the cursor's existence check picks it up naturally.
 		// `studio` and `stage` come from the migrator's outer walk; the
 		// backfill resolves the studio's per-stage configuration to
-		// know which agents/roles to stamp.
+		// know which roles to stamp.
 		const ts = bestTimestamp([oldCompletedAt])
 		backfillCompletedUnitStamps(next, ts, studio, stage, details)
 		// approvals.user counter is preserved for back-compat with

@@ -1,15 +1,19 @@
 // state/schemas/unit.ts — v4 unit frontmatter schema.
 //
 // In v4 a unit's lifecycle position is fully derived from its
-// `iterations[]`, `reviews{}`, `approvals{}`, and `discovery{}` records,
-// plus whether its branch has merged into the stage branch. There is
-// no `status` field. There is no `hat` field. There is no `bolt`
-// field. Each was a duplicate-source-of-truth fiction; the cursor
-// reads the records directly.
+// `iterations[]`, `reviews{}`, and `approvals{}` records, plus whether
+// its branch has merged into the stage branch. There is no `status`
+// field. There is no `hat` field. There is no `bolt` field. Each was
+// a duplicate-source-of-truth fiction; the cursor reads the records
+// directly.
+//
+// Discovery is signaled by the artifact's existence on disk at the
+// `location` declared by the studio's discovery template — NOT by an
+// FM field. (FM state is only for actions that don't produce a file:
+// review sign-offs, approvals.)
 //
 // Engine-driven fields the agent must NEVER write:
 //   - started_at  : stamped when the first hat is dispatched
-//   - discovery   : per-studio-agent record of when discovery ran
 //   - iterations  : append-only log of hat dispatches
 //   - reviews     : per-reviewer-role record of spec review
 //   - approvals   : per-reviewer-role record of output approval
@@ -49,7 +53,6 @@ import { stateAjv } from "./_ajv.js"
 
 const FSM_DRIVEN_UNIT_FIELDS_LIST = [
 	"started_at",
-	"discovery",
 	"iterations",
 	"reviews",
 	"approvals",

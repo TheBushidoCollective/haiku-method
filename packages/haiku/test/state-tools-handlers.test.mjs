@@ -1163,17 +1163,18 @@ body
 			`---\nname: ${unitName}\nstatus: pending\nhat: ""\nbolt: 0\n---\n# ${unitName}\n`,
 		)
 		try {
-			// v4 FSM-driven fields: started_at, discovery, iterations,
-			// reviews, approvals. v3-only fields (status, hat, bolt,
+			// v4 FSM-driven fields: started_at, iterations, reviews,
+			// approvals. v3-only fields (status, hat, bolt,
 			// hat_started_at, completed_at, scope_reject_attempts) are
 			// gone from the schema entirely — the gate doesn't reject
 			// them as FSM-forbidden because they're not in the FSM list,
 			// they're just unknown deprecated names. v4 unit_set silently
 			// accepts unknowns (additionalProperties: true); the
 			// migrator's deny-list scrubs deprecated names on read.
+			// `discovery` was removed from the FSM list entirely — v4
+			// reads discovery from the artifact on disk, not the unit FM.
 			for (const field of [
 				"started_at",
-				"discovery",
 				"iterations",
 				"reviews",
 				"approvals",

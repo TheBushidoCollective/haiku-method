@@ -256,12 +256,6 @@ function pickReviews(fm: UnitFm): Record<string, ApprovalRecord> {
 	return r as Record<string, ApprovalRecord>
 }
 
-function pickDiscovery(fm: UnitFm): Record<string, ApprovalRecord> {
-	const d = fm.discovery
-	if (d === null || typeof d !== "object" || Array.isArray(d)) return {}
-	return d as Record<string, ApprovalRecord>
-}
-
 function unitName(unitPath: string): string {
 	return basename(unitPath).replace(/\.md$/, "")
 }
@@ -356,17 +350,6 @@ export function pendingApprovalSlots(
 ): string[] {
 	const approvals = pickApprovals(fm)
 	return configuredRoles.filter((r) => !approvals[r])
-}
-
-/**
- * Returns discovery agents whose record on this unit is missing.
- */
-export function discoveryGaps(
-	fm: UnitFm,
-	configuredAgents: string[],
-): string[] {
-	const discovery = pickDiscovery(fm)
-	return configuredAgents.filter((a) => !discovery[a])
 }
 
 /**
@@ -620,12 +603,13 @@ function parseFbIdFromFilename(fbPath: string): string | null {
 // ── Track A: intent walk ─────────────────────────────────────────────
 
 function walkIntentTrack(args: {
+	slug: string
 	intentDir: string
 	studio: string
 	stage: string
 	mode: string
 }): CursorAction | null {
-	const { intentDir, studio, stage, mode } = args
+	const { slug, intentDir, studio, stage, mode } = args
 	const stageDir = join(intentDir, "stages", stage)
 	const unitPaths = listUnitPaths(stageDir)
 	const units = unitPaths
@@ -758,28 +742,33 @@ function walkIntentTrack(args: {
 	}
 
 	// 3. Discovery (P7). When the studio declares discovery artifacts
-	//    for the stage, each wave-ready unit must carry a
-	//    `fm.discovery: { <agent>: { at } }` record for every declared
-	//    agent before the cursor dispatches a hat. First missing
-	//    record triggers `discovery_required`.
+	//    for the stage, the cursor checks the artifact's `location` on
+	//    disk. Missing file → `discovery_required`. The output IS the
+	//    signal — no FM bookkeeping. (FM state is reserved for actions
+	//    that DON'T produce a file: review approvals, user gates.)
 	const discoveryDefs = readStageArtifactDefs(studio, stage).filter(
 		(d) => d.kind === "discovery",
 	)
 	if (discoveryDefs.length > 0 && units.length > 0) {
-		for (const u of units) {
-			const fmDiscovery =
-				u.fm.discovery && typeof u.fm.discovery === "object"
-					? (u.fm.discovery as Record<string, unknown>)
-					: {}
-			for (const def of discoveryDefs) {
-				if (!def.required) continue
-				if (!fmDiscovery[def.name]) {
-					return {
-						kind: "discovery_required",
-						stage,
-						agent: def.name,
-						units: [u.name],
-					}
+		for (const def of discoveryDefs) {
+			if (!def.required) continue
+			if (!def.location) continue
+			const resolved = def.location.replace(/\{intent-slug\}/g, slug)
+			const absPath = join(process.cwd(), resolved)
+			const exists = resolved.endsWith("/")
+				? existsSync(absPath) &&
+					readdirSync(absPath).filter((e) => e !== ".gitkeep").length > 0
+				: existsSync(absPath)
+			if (!exists) {
+				// Discovery artifacts are typically intent-scoped (one
+				// artifact serves all units in the stage). The action
+				// carries a representative unit for prompt context — pick
+				// the first unit alphabetically so the choice is stable.
+				return {
+					kind: "discovery_required",
+					stage,
+					agent: def.name,
+					units: [units[0].name],
 				}
 			}
 		}
@@ -1015,6 +1004,7 @@ export function derivePosition(args: {
 	// Track A — intent track on the active stage.
 	if (activeStage) {
 		const intentAction = walkIntentTrack({
+			slug,
 			intentDir,
 			studio,
 			stage: activeStage,

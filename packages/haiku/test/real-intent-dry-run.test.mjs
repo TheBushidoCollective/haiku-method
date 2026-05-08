@@ -60,6 +60,38 @@ function writeFm(path, fm, body = "") {
 	writeFileSync(path, matter.stringify(body, fm))
 }
 
+// Look up a discovery template's `location:` in the real software
+// studio config and write a stub artifact at the resolved path. File
+// existence is the cursor's signal — no FM stamp.
+function writeDiscoveryStub(stage, agent, repoRoot, slug) {
+	const discoveryDir = join(
+		PLUGIN_ROOT,
+		"studios",
+		"software",
+		"stages",
+		stage,
+		"discovery",
+	)
+	if (!existsSync(discoveryDir)) return
+	for (const fname of readdirSync(discoveryDir)) {
+		if (!fname.endsWith(".md")) continue
+		const { data } = matter(readFileSync(join(discoveryDir, fname), "utf8"))
+		if (data.name !== agent) continue
+		const location = (data.location || "").replace(/\{intent-slug\}/g, slug)
+		if (!location) return
+		if (location.endsWith("/")) {
+			const absDir = join(repoRoot, location)
+			mkdirSync(absDir, { recursive: true })
+			writeFileSync(join(absDir, "stub.md"), "discovery stub\n")
+		} else {
+			const absPath = join(repoRoot, location)
+			mkdirSync(dirname(absPath), { recursive: true })
+			writeFileSync(absPath, "discovery stub\n")
+		}
+		return
+	}
+}
+
 async function withRealStudioRepo(slug, fn) {
 	const root = mkdtempSync(join(tmpdir(), "real-intent-"))
 	const orig = process.cwd()
@@ -133,21 +165,14 @@ function applyResponse(intentDir, action, root, slug) {
 					iterations: [],
 					reviews: {},
 					approvals: {},
-					discovery: {},
 				})
 			}
 			break
 		}
 		case "discovery_required": {
-			const targetUnit = (action.units || [])[0] ?? "unit-01"
-			const unitPath = join(unitsDir, `${targetUnit}.md`)
-			if (existsSync(unitPath)) {
-				const fm = readFm(unitPath)
-				const disc =
-					fm.discovery && typeof fm.discovery === "object" ? fm.discovery : {}
-				disc[action.agent] = { at }
-				writeFm(unitPath, { ...fm, discovery: disc })
-			}
+			// Write a stub artifact at the studio template's `location:`
+			// — file existence IS the cursor's "discovery ran" signal.
+			writeDiscoveryStub(action.stage, action.agent, root, slug)
 			break
 		}
 		case "clarify_required": {

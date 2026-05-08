@@ -159,7 +159,7 @@ export function runWorkflowTick(
 					if (d.units_migrated > 0) {
 						const synth =
 							d.units_with_synthesized_approval > 0
-								? ` (${d.units_with_synthesized_approval} had \`status: completed\` → backfilled \`discovery.<agent>.at\`, \`reviews.<role>.at\`, and \`approvals.<role>.at\` stamps so the cursor treats them as fully done — without these stamps the cursor would re-emit \`discovery_required\` / per-role review actions on every tick)`
+								? ` (${d.units_with_synthesized_approval} had \`status: completed\` → backfilled \`reviews.<role>.at\` and \`approvals.<role>.at\` stamps so the cursor treats them as fully done — without these stamps the cursor would re-emit per-role review/approval actions on every tick. Discovery is NOT backfilled: the cursor reads the artifact on disk, and v3 already wrote it.)`
 								: ""
 						lines.push(`- ${d.units_migrated} unit file(s) migrated${synth}`)
 					}

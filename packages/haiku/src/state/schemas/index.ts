@@ -33,12 +33,10 @@
 
 export type {
 	Approval,
-	DiscoveryRecord,
 	Review,
 } from "./approval.js"
 export {
 	APPROVAL_SCHEMA,
-	DISCOVERY_RECORD_SCHEMA,
 	REVIEW_SCHEMA,
 } from "./approval.js"
 export type {

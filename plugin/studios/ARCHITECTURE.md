@@ -20,7 +20,7 @@ This is consistent with `CLAUDE.md` and `.claude/rules/architecture-prototype-sy
 
 Frontmatter on workflow-managed files (`unit-NNN-*.md`, `NNN-*.md` feedback, `intent.md`) is reserved for the workflow engine. Agents MAY write frontmatter when authoring a file (the elaborator drafts a unit with declared inputs/outputs); agents MUST NOT **interpret** frontmatter for any mechanical purpose.
 
-The v4 cursor reads FM fields as the single source of truth for workflow position — there is no per-stage `state.json`. `iterations[]`, `started_at`, `approvals.<role>`, `reviews.<role>`, and `discovery.<agent>` on the unit FM, plus `closed_at`, `iterations[]`, and `targets` on FB FM, are the witness fields the cursor walks. The migrator deletes any pre-v4 `state.json` files on first read.
+The v4 cursor reads FM fields as the single source of truth for workflow position — there is no per-stage `state.json`. `iterations[]`, `started_at`, `approvals.<role>`, and `reviews.<role>` on the unit FM, plus `closed_at`, `iterations[]`, and `targets` on FB FM, are the witness fields the cursor walks. **Discovery is NOT in this list** — its signal is the artifact's existence on disk at the `location:` declared by the studio template, NOT an FM stamp. FM state is reserved for actions that don't produce a file (review sign-offs, approvals); steps that DO produce files (discovery, output authoring) use the file itself as the witness. The migrator deletes any pre-v4 `state.json` files on first read.
 
 - Reviewer hats do not grep `depends_on:` to detect DAG inversions. The workflow engine rejects bad DAG writes at the source.
 - Verifier hats do not validate frontmatter schema. The workflow engine validates schema at every write.
@@ -245,7 +245,7 @@ That's the entire loop. The agent never asks "what should I do?" — they call `
 
 The v4 cursor is a **pure observation function**. `derivePosition(slug)` reads disk, walks three tracks in priority order, and returns one action:
 
-1. **Track C — drift.** Run a content-hash sweep over every signed witness on the active stage (unit reviews, output approvals, discovery records, intent-scope approvals). Any mismatch → `drift_detected`. Drift is dedup'd against open drift FBs by `source_ref` so a fired FB suppresses re-emission until it closes.
+1. **Track C — drift.** Run a content-hash sweep over every signed witness on the active stage (unit reviews, output approvals, intent-scope approvals). Any mismatch → `drift_detected`. Drift is dedup'd against open drift FBs by `source_ref` so a fired FB suppresses re-emission until it closes.
 2. **Track B — feedback.** Walk every stage from index 0 through the active stage, then intent-scope. Any open FB → emit the next fix-hat dispatch (`start_feedback_hat`) or close action (`close_feedback`) for it. Cross-stage routing is purely by file location: an FB sitting in `stages/inception/feedback/` rewinds the cursor to inception's fix loop, regardless of where it was filed.
 3. **Track A — intent.** On the active stage (first stage whose branch is not merged into intent main), walk the per-stage state machine: gate priority chain → wave logic → review track → approval track → `merge_stage`. The cursor's per-stage walk is described in §5.4 below.
 
@@ -274,7 +274,7 @@ When the active stage is set, `walkIntentTrack` evaluates these conditions in or
 | 1 | Stage declares `requires_design_direction: true` and intent.md has no recorded direction for this stage | `design_direction_required` | Two-phase gate: select then surface-once |
 | 1' | Direction recorded but not yet `surfaced_at` | `design_direction_complete` or `design_direction_uploaded` | One-shot surface so the agent reads annotations before elaborate |
 | 2 | Stage ships `clarify/*.md` and `clarifications[<stage>]` is missing on intent.md | `clarify_required` | Per-stage Q&A captured before discovery |
-| 3 | Studio declares `discovery/*.md` artifacts and any wave-ready unit lacks `discovery.<agent>` | `discovery_required` | One discovery agent per missing record per unit |
+| 3 | Studio declares `discovery/*.md` artifacts and the file at the template's `location:` is not on disk | `discovery_required` | Output existence IS the signal — no FM stamp. The first missing artifact (in studio-defined order) wins; `units[0]` is a representative unit for prompt context |
 | 4 | Stage has 0 units | `elaborate` | Author the stage's unit set |
 | 5 | One or more units are in-flight (started, last iteration result == null) | null (mid-wave noop) | Wait for in-flight subagents to terminate |
 | 6 | Wave-ready units (started_at == null and depends_on all terminal-advanced) | `start_unit_hat` (first hat) | Wave dispatch — N subagents in parallel |
@@ -299,7 +299,7 @@ The cursor emits exactly these `kind` values (mapped 1:1 to `OrchestratorAction.
 | `close_feedback` | Cursor Track B | Terminal fix hat advanced; engine stamps `closed_at` and applies `targets.invalidates` |
 | `design_direction_required` / `_complete` / `_uploaded` | Cursor Track A pre-elaborate | Stage gates on a chosen direction; one of the three fires depending on phase |
 | `clarify_required` | Cursor Track A pre-elaborate | Stage ships `clarify/*.md`; answers not recorded |
-| `discovery_required` | Cursor Track A pre-elaborate | Wave-ready unit lacks a required discovery record |
+| `discovery_required` | Cursor Track A pre-elaborate | Required discovery artifact missing from disk at the studio template's `location:` (output existence is the signal — no FM stamp) |
 | `elaborate` | Cursor Track A | Stage has 0 units |
 | `start_unit_hat` | Cursor Track A | Wave-ready or mid-hat unit batch needs its next hat dispatched |
 | `dispatch_review` | Cursor Track A | A non-user review role hasn't signed `reviews.<role>` on one or more units |

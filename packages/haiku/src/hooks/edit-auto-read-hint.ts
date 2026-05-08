@@ -38,12 +38,11 @@ export default defineHook({
 		const filePath =
 			(toolInput?.file_path as string | undefined) ?? "<the file>"
 
+		// One-line nudge. Claude Code already knows "Read before Edit"
+		// once it sees the error — the hook's job is just to surface
+		// the file path so the recovery is one round-trip, not three.
 		process.stderr.write(
-			`⚠️ Edit failed: file not read yet.\n\n` +
-				`The Edit/MultiEdit tool requires the file to be Read in this session before any modification. The retry pattern is:\n\n` +
-				`  1. Call \`Read\` on \`${filePath}\` (no offset / limit unless the file is large).\n` +
-				`  2. Re-issue the same Edit call with the same args.\n\n` +
-				`Do NOT re-issue the Edit without Read first — it will fail with the same error and burn another turn.\n`,
+			`Read \`${filePath}\` first, then retry the Edit.\n`,
 		)
 		process.exit(2)
 	},

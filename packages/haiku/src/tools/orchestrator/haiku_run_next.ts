@@ -27,11 +27,12 @@
 // prompt instructions (rendered by buildRunInstructions, harness-
 // adapted by adaptInstructions).
 
+import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
-	branchAheadOfOrigin,
 	ensureOnStageBranch,
+	fetchOrigin,
 	pushStageBranch,
 } from "../../git-worktree.js"
 import { adaptInstructions } from "../../harness-instructions.js"
@@ -332,7 +333,6 @@ export default defineTool({
 		let pickupHint = ""
 		if (args.pickup === true && isGitRepo()) {
 			try {
-				const { fetchOrigin } = await import("../../git-worktree.js")
 				fetchOrigin()
 				const intentFile = join(findHaikuRoot(), "intents", slug, "intent.md")
 				if (existsSync(intentFile)) {
@@ -342,7 +342,6 @@ export default defineTool({
 						const activeStage = firstUnmergedStage(slug, studio)
 						if (activeStage) {
 							const branch = `haiku/${slug}/${activeStage}`
-							const { execFileSync } = await import("node:child_process")
 							try {
 								// `git fetch origin <branch>:<branch>` creates or
 								// fast-forwards the local ref to origin's tip.
@@ -1111,13 +1110,14 @@ export default defineTool({
 					const activeStage = firstUnmergedStage(slug, studio)
 					if (activeStage) {
 						const branch = `haiku/${slug}/${activeStage}`
-						if (branchAheadOfOrigin(branch)) {
-							const pushResult = pushStageBranch(slug, activeStage)
-							if (!pushResult.ok && pushResult.error) {
-								console.error(
-									`[haiku] auto-push of ${branch} failed: ${pushResult.error}`,
-								)
-							}
+						// pushStageBranch internally checks branchAheadOfOrigin
+						// and returns { ok: true, skipped: true } when the
+						// branch isn't ahead — no need to gate it here.
+						const pushResult = pushStageBranch(slug, activeStage)
+						if (!pushResult.ok && pushResult.error) {
+							console.error(
+								`[haiku] auto-push of ${branch} failed: ${pushResult.error}`,
+							)
 						}
 					}
 				}

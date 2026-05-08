@@ -430,6 +430,8 @@ The persistence abstraction is what makes studios truly domain-independent. A st
 
 H·AI·K·U supports five execution modes, selected at intent creation. Mode is engine-managed: the framework rejects any attempt by an agent to write `mode` directly to intent metadata, so the human's choice always flows through real elicitation.
 
+In every mode, when the framework runs in a git repository with a provider CLI on PATH (`gh` or `glab`), the engine opens a draft pull request off the intent's main branch (`haiku/<slug>/main`) at intent creation time. The team has one place to watch the work happen as stages land. The engine flips the draft to ready when the intent completes — just before the agent's merge action. Active stage branches push to origin automatically on every state-mutation boundary, so any user picking up the intent can fetch the in-flight unit work without manual git surgery.
+
 ### Continuous Mode
 
 Continuous mode runs each stage in sequence, advancing automatically when review gates allow. Every stage runs its own full cycle — elaborate, execute, adversarial review, gate — with its own hats, review agents, inputs, and outputs. When a review gate passes (`auto`), the framework advances to the next stage without human intervention. When a gate requires approval (`ask`) or external review (`external`), the framework pauses at that gate, then continues through remaining stages once resolved.

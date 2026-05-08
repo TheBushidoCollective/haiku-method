@@ -15,6 +15,13 @@ interface Props {
 	params: Promise<{ slug: string }>
 }
 
+// In dev mode, force every request to re-read the MDX from disk so edits in
+// content/blog/*.mdx surface on reload without a manual server restart. Next
+// only watches webpack-graph dependencies; content files are read via
+// fs.readFileSync at request time, so without this they get cached per-route.
+export const dynamic =
+	process.env.NODE_ENV === "development" ? "force-dynamic" : "auto"
+
 export async function generateStaticParams() {
 	const posts = getAllBlogPosts()
 	return posts.map((post) => ({

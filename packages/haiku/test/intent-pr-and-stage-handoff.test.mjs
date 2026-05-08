@@ -212,7 +212,35 @@ test("local branch with no origin counterpart returns true (push needed)", () =>
 	rmSync(dir, { recursive: true, force: true })
 })
 
-console.log(
-	`\n${passed} test(s) passed, ${failed} failed (${passed + failed} total)`,
-)
+test("local branch in sync with origin returns false (nothing to push)", () => {
+	// Set up a "remote" by cloning the source repo into a bare counterpart
+	// and adding it as origin. Local branch HEAD === origin's HEAD →
+	// branchAheadOfOrigin must return false (no push needed).
+	const src = makeRepo()
+	const bare = mkdtempSync(join(tmpdir(), "haiku-bare-"))
+	rmSync(bare, { recursive: true, force: true })
+	execFileSync("git", ["clone", "--bare", src, bare], { stdio: "pipe" })
+	withCwd(src, () => {
+		execFileSync("git", ["remote", "add", "origin", bare], {
+			cwd: src,
+			stdio: "pipe",
+		})
+		execFileSync("git", ["branch", "haiku/test/design"], {
+			cwd: src,
+			stdio: "pipe",
+		})
+		execFileSync(
+			"git",
+			["push", "origin", "haiku/test/design:haiku/test/design"],
+			{ cwd: src, stdio: "pipe" },
+		)
+		execFileSync("git", ["fetch", "origin"], { cwd: src, stdio: "pipe" })
+		// Local and origin pointing at the same SHA — not ahead.
+		assert.strictEqual(branchAheadOfOrigin("haiku/test/design"), false)
+	})
+	rmSync(src, { recursive: true, force: true })
+	rmSync(bare, { recursive: true, force: true })
+})
+
+console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed > 0 ? 1 : 0)

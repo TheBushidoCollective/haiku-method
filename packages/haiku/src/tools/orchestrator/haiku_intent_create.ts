@@ -19,6 +19,7 @@ import {
 	createIntentBranch,
 	detectPrTool,
 	openIntentDraftPullRequest,
+	pushBranchToOrigin,
 	resolveMainlineRef,
 } from "../../git-worktree.js"
 import { validateIdentifier } from "../../prompts/helpers.js"
@@ -298,6 +299,24 @@ export default defineTool({
 					draftPrMessage = `\n\nThe engine couldn't open a draft PR: ${draft.message}`
 				}
 				gitCommitState(`haiku: stamp draft PR status for ${slug}`)
+				// Push the stamp commit so a handoff user's fetchOrigin()
+				// sees draft_pr_url. Without this, intent main on origin
+				// is one commit behind local — User B picks up, reads
+				// intent.md without draft_pr_url, and workflowIntentComplete
+				// can't flip the draft to ready. Best-effort: push failures
+				// log but don't block intent creation.
+				try {
+					const push = pushBranchToOrigin(intentMainBranch)
+					if (!push.ok && push.error) {
+						console.error(
+							`[haiku_intent_create] push of ${intentMainBranch} after draft-PR stamp failed: ${push.error}`,
+						)
+					}
+				} catch (pushErr) {
+					console.error(
+						`[haiku_intent_create] push after stamp threw: ${pushErr instanceof Error ? pushErr.message : String(pushErr)}`,
+					)
+				}
 			} catch (err) {
 				console.error(
 					`[haiku_intent_create] draft-PR open threw: ${err instanceof Error ? err.message : String(err)}`,

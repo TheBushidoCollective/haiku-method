@@ -728,6 +728,13 @@ export function markPullRequestReady(url: string): {
 		return { ok: false, error: `not a valid URL: ${url}` }
 	}
 	try {
+		// Loose `includes()` match (vs `=== "github.com"`) is intentional
+		// here: catches GitHub Enterprise (`github.company.com`) and self-
+		// hosted GitLab (`gitlab.internal`). The CLI tools (`gh` / `glab`)
+		// already configure themselves against whatever host they're
+		// pointed at, so we don't need to discriminate further. This is
+		// looser than buildCompareUrl's strict host match — that one
+		// builds a URL string and needs the canonical host shape.
 		if (parsed.hostname.includes("github")) {
 			execFileSync("gh", ["pr", "ready", url], {
 				encoding: "utf8",
@@ -788,18 +795,29 @@ export function pushStageBranch(
 	return pushBranchToOrigin(branch)
 }
 
-/** True when the local `branch` HEAD differs from `origin/branch`.
- *  Returns true when origin has no copy of the branch yet (push needed).
- *  Cheap rev-parse comparison — no network. Returns false on any
- *  inspection failure (treats as "nothing to push" rather than spurious
- *  pushes). */
+/** True when the local `branch` has commits NOT present on
+ *  `origin/<branch>` — i.e. there's something the auto-push machinery
+ *  should send. Strictly "ahead": diverged-or-behind cases return
+ *  false so we don't fire `git push` against a remote that's ahead
+ *  (which logs a non-fast-forward rejection on every tick). When
+ *  origin has no copy of the branch yet, returns true so the first
+ *  push creates it. Cheap rev-list count — no network. */
 export function branchAheadOfOrigin(branch: string): boolean {
 	if (!isGitRepo()) return false
 	const local = tryRun(["git", "rev-parse", branch])
 	if (!local) return false
-	const remote = tryRun(["git", "rev-parse", `origin/${branch}`])
-	if (!remote) return true
-	return local !== remote
+	const remoteSha = tryRun(["git", "rev-parse", `origin/${branch}`])
+	if (!remoteSha) return true // origin lacks the branch → push needed
+	// Count commits on local that aren't on origin. Zero → not ahead
+	// (sync or behind); non-zero → ahead or diverged-but-has-new-commits.
+	const ahead = tryRun([
+		"git",
+		"rev-list",
+		"--count",
+		`origin/${branch}..${branch}`,
+	])
+	if (!ahead) return false
+	return Number.parseInt(ahead, 10) > 0
 }
 
 /** Result of `reconcileMisroutedStageMerges`: per-stage reconciliation

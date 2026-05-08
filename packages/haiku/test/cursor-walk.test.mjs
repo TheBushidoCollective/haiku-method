@@ -795,164 +795,13 @@ test("cursor: reject_hat re-entry routes back to prior hat", async () => {
 	})
 })
 
-// ── P3: design-direction hard gate (studio/stage-conditional) ────────
-
-test("cursor: stage with requires_design_direction + no selection → design_direction_required", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo("cursor-dd-required", async ({ repoRoot, intentDir, slug }) => {
-		// Studio whose 'design' stage opts in to the hard gate.
-		makeStudio({
-			repoRoot,
-			studio: "test",
-			stages: [
-				{
-					name: "design",
-					hats: ["planner", "builder", "verifier"],
-					fix_hats: ["classifier", "builder", "feedback-assessor"],
-					review: "ask",
-					review_agents: ["code-reviewer"],
-					requires_design_direction: true,
-				},
-			],
-		})
-		makeIntent({ intentDir, slug, studio: "test" })
-		// No units, no design_directions on intent.md — gate should fire.
-		const action = await runTick(repoRoot, slug)
-		assert.strictEqual(
-			action.action,
-			"design_direction_required",
-			`expected design_direction_required gate; got: ${action.action}`,
-		)
-		assert.strictEqual(action.stage, "design")
-	})
-})
-
-test("cursor: requires_design_direction + selection on intent.md → elaborate", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo("cursor-dd-selected", async ({ repoRoot, intentDir, slug }) => {
-		makeStudio({
-			repoRoot,
-			studio: "test",
-			stages: [
-				{
-					name: "design",
-					hats: ["planner", "builder", "verifier"],
-					fix_hats: ["classifier", "builder", "feedback-assessor"],
-					review: "ask",
-					review_agents: ["code-reviewer"],
-					requires_design_direction: true,
-				},
-			],
-		})
-		// Stamp the design_directions selection on intent.md.
-		makeIntent({
-			intentDir,
-			slug,
-			studio: "test",
-			extraFm: {
-				design_directions: {
-					design: {
-						archetype: "modular-cards",
-						at: "2026-05-06T00:00:00Z",
-						surfaced_at: "2026-05-06T00:00:01Z",
-					},
-				},
-			},
-		})
-		const action = await runTick(repoRoot, slug)
-		assert.ok(
-			action.action === "elaborate" || action.action === "noop",
-			`expected elaborate (or noop) once selection recorded; got: ${action.action}`,
-		)
-	})
-})
-
-test("cursor: design_directions[stage] set without surfaced_at → emits design_direction_complete (archetype mode)", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo(
-		"cursor-dd-surface-once-archetype",
-		async ({ repoRoot, intentDir, slug }) => {
-			makeStudio({
-				repoRoot,
-				studio: "test",
-				stages: [
-					{
-						name: "design",
-						hats: ["planner", "builder", "verifier"],
-						fix_hats: ["classifier", "builder", "feedback-assessor"],
-						review: "ask",
-						review_agents: ["code-reviewer"],
-						requires_design_direction: true,
-					},
-				],
-			})
-			makeIntent({
-				intentDir,
-				slug,
-				studio: "test",
-				extraFm: {
-					design_directions: {
-						design: {
-							mode: "archetype",
-							archetype: "vivid",
-							comments: "lean into the gradients",
-							at: "2026-05-06T00:00:00Z",
-						},
-					},
-				},
-			})
-			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(action.action, "design_direction_complete")
-			assert.strictEqual(action.archetype, "vivid")
-		},
-	)
-})
-
-test("cursor: design_directions[stage] in upload mode without surfaced_at → emits design_direction_uploaded", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo(
-		"cursor-dd-surface-once-upload",
-		async ({ repoRoot, intentDir, slug }) => {
-			makeStudio({
-				repoRoot,
-				studio: "test",
-				stages: [
-					{
-						name: "design",
-						hats: ["planner", "builder", "verifier"],
-						fix_hats: ["classifier", "builder", "feedback-assessor"],
-						review: "ask",
-						review_agents: ["code-reviewer"],
-						requires_design_direction: true,
-					},
-				],
-			})
-			makeIntent({
-				intentDir,
-				slug,
-				studio: "test",
-				extraFm: {
-					design_directions: {
-						design: {
-							mode: "upload",
-							uploads: [
-								{
-									filename: "hero.png",
-									path: "stages/design/artifacts/design-direction/uploads/up-01-hero.png",
-								},
-							],
-							at: "2026-05-06T00:00:00Z",
-						},
-					},
-				},
-			})
-			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(action.action, "design_direction_uploaded")
-			assert.strictEqual(action.uploads.length, 1)
-			assert.match(action.uploads[0].path, /uploads\/up-01-hero\.png$/)
-		},
-	)
-})
+// ── P3: design-direction hard gate ───────────────────────────────────
+// Tests for design_direction_required / _complete / _uploaded and
+// clarify_required deleted 2026-05-08 along with those cursor actions.
+// The discovery-agent reframe replaces them: a discovery template
+// with `tool: pick_design_direction` (or any human-input-driven tool)
+// is the new mechanism. See `discovery_required` tests below for the
+// covered case + the `tool` field.
 
 test("cursor: stage WITHOUT requires_design_direction skips the gate", async () => {
 	if (!HAS_GIT) return
@@ -962,84 +811,6 @@ test("cursor: stage WITHOUT requires_design_direction skips the gate", async () 
 		const action = await runTick(repoRoot, slug)
 		// Default stage has no opt-in → cursor goes straight to elaborate
 		assert.notStrictEqual(action.action, "design_direction_required")
-	})
-})
-
-// ── P4: clarify-questions gate at elaborate-phase entry ──────────────
-
-test("cursor: stage with clarify/*.md + no clarifications → clarify_required", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo("cursor-clarify-required", async ({ repoRoot, intentDir, slug }) => {
-		makeStudio({ repoRoot, studio: "test" })
-		makeIntent({ intentDir, slug, studio: "test" })
-		// Drop two clarify questions in the project-local studio
-		// override path. The cursor reads from
-		// .haiku/studios/<studio>/stages/<stage>/clarify/.
-		const clarifyDir = join(
-			repoRoot,
-			".haiku",
-			"studios",
-			"test",
-			"stages",
-			"design",
-			"clarify",
-		)
-		mkdirSync(clarifyDir, { recursive: true })
-		writeFileSync(
-			join(clarifyDir, "audience.md"),
-			"---\nprompt: Who is the primary audience?\n---\n\nUnderstanding the audience anchors every later decision.\n",
-		)
-		writeFileSync(
-			join(clarifyDir, "tradeoffs.md"),
-			"---\nprompt: What tradeoffs matter most?\n---\n\nPicking between speed / robustness / cost up front avoids rework.\n",
-		)
-		const action = await runTick(repoRoot, slug)
-		assert.strictEqual(
-			action.action,
-			"clarify_required",
-			`expected clarify_required gate; got: ${action.action}`,
-		)
-		assert.strictEqual(action.stage, "design")
-		assert.strictEqual(
-			Array.isArray(action.questions) && action.questions.length,
-			2,
-		)
-	})
-})
-
-test("cursor: clarify gate cleared when clarifications.<stage> is recorded", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo("cursor-clarify-cleared", async ({ repoRoot, intentDir, slug }) => {
-		makeStudio({ repoRoot, studio: "test" })
-		makeIntent({
-			intentDir,
-			slug,
-			studio: "test",
-			extraFm: {
-				clarifications: {
-					design: {
-						answers: [{ id: "audience", question: "?", answer: "engineers" }],
-						at: "2026-05-06T00:00:00Z",
-					},
-				},
-			},
-		})
-		const clarifyDir = join(
-			repoRoot,
-			".haiku",
-			"studios",
-			"test",
-			"stages",
-			"design",
-			"clarify",
-		)
-		mkdirSync(clarifyDir, { recursive: true })
-		writeFileSync(
-			join(clarifyDir, "audience.md"),
-			"---\nprompt: Who is the audience?\n---\n\nbody\n",
-		)
-		const action = await runTick(repoRoot, slug)
-		assert.notStrictEqual(action.action, "clarify_required")
 	})
 })
 
@@ -1128,119 +899,10 @@ test("cursor: discovery_required cleared once the artifact is on disk", async ()
 })
 
 // ── P12: gate stackup priority chain ──────────────────────────────────
-
-test("cursor: all three gates missing simultaneously → design_direction fires first", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo("cursor-gate-stackup", async ({ repoRoot, intentDir, slug }) => {
-		makeStudio({
-			repoRoot,
-			studio: "test",
-			stages: [
-				{
-					name: "design",
-					hats: ["planner", "builder", "verifier"],
-					fix_hats: ["classifier", "builder", "feedback-assessor"],
-					review: "ask",
-					review_agents: ["code-reviewer"],
-					requires_design_direction: true,
-				},
-			],
-		})
-		makeIntent({ intentDir, slug, studio: "test" })
-		// Plant clarify questions AND a discovery template AND
-		// requires_design_direction. None of the three gates have a
-		// recorded answer/selection — all three should be fireable.
-		// Priority chain: design_direction → clarify → discovery →
-		// elaborate. Verify the FIRST emit is design_direction_required.
-		const clarifyDir = join(
-			repoRoot,
-			".haiku",
-			"studios",
-			"test",
-			"stages",
-			"design",
-			"clarify",
-		)
-		mkdirSync(clarifyDir, { recursive: true })
-		writeFileSync(
-			join(clarifyDir, "audience.md"),
-			"---\nprompt: Audience?\n---\n\nbody\n",
-		)
-		const discoveryDir = join(
-			repoRoot,
-			".haiku",
-			"studios",
-			"test",
-			"stages",
-			"design",
-			"discovery",
-		)
-		mkdirSync(discoveryDir, { recursive: true })
-		writeFileSync(
-			join(discoveryDir, "tokens.md"),
-			"---\nname: tokens\nlocation: \"stages/design/TOKENS.md\"\nrequired: true\n---\n\nbody\n",
-		)
-		// No unit on the stage — fresh-stage state. Grandfather rule
-		// (2026-05-08): if units already exist on a stage, the cursor
-		// skips the design_direction gate to avoid retroactively
-		// rewinding users with legacy intents. Priority chain assertion
-		// only applies in the fresh-stage case.
-
-		const action = await runTick(repoRoot, slug)
-		assert.strictEqual(
-			action.action,
-			"design_direction_required",
-			`priority chain failed; expected design_direction first; got: ${action.action}`,
-		)
-	})
-})
-
-test("cursor: design_direction recorded → clarify fires next", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo("cursor-stackup-clarify", async ({ repoRoot, intentDir, slug }) => {
-		makeStudio({
-			repoRoot,
-			studio: "test",
-			stages: [
-				{
-					name: "design",
-					hats: ["planner", "builder", "verifier"],
-					fix_hats: ["classifier", "builder", "feedback-assessor"],
-					review: "ask",
-					review_agents: ["code-reviewer"],
-					requires_design_direction: true,
-				},
-			],
-		})
-		// Stamp design selection but NOT clarify answers.
-		makeIntent({
-			intentDir,
-			slug,
-			studio: "test",
-			extraFm: {
-				design_directions: {
-					design: { archetype: "x", at: "t", surfaced_at: "t" },
-				},
-			},
-		})
-		const clarifyDir = join(
-			repoRoot,
-			".haiku",
-			"studios",
-			"test",
-			"stages",
-			"design",
-			"clarify",
-		)
-		mkdirSync(clarifyDir, { recursive: true })
-		writeFileSync(
-			join(clarifyDir, "audience.md"),
-			"---\nprompt: Audience?\n---\n\nbody\n",
-		)
-		const action = await runTick(repoRoot, slug)
-		assert.strictEqual(action.action, "clarify_required")
-	})
-})
+// 2026-05-08: design_direction + clarify gate stackup tests deleted
+// when those cursor actions were collapsed into the discovery-agent
+// model. The single relevant case (discovery fires when its artifact
+// is missing) is covered below.
 
 test("cursor: design + clarify recorded → discovery fires next", async () => {
 	if (!HAS_GIT) return
@@ -1321,30 +983,9 @@ test("cursor: brand-new intent (no stages dir at all) → elaborate on first dec
 	})
 })
 
-test("cursor: brand-new intent + stage with design_direction gate → design_direction_required (not elaborate)", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo("cursor-pre-stage-dd", async ({ repoRoot, intentDir, slug }) => {
-		makeStudio({
-			repoRoot,
-			studio: "test",
-			stages: [
-				{
-					name: "design",
-					hats: ["planner", "builder", "verifier"],
-					fix_hats: ["classifier", "builder", "feedback-assessor"],
-					review: "ask",
-					review_agents: ["code-reviewer"],
-					requires_design_direction: true,
-				},
-			],
-		})
-		makeIntent({ intentDir, slug, studio: "test" })
-		const action = await runTick(repoRoot, slug)
-		// Pre-stage cursor must fire the design-direction gate BEFORE
-		// emitting elaborate, even when no units exist yet.
-		assert.strictEqual(action.action, "design_direction_required")
-	})
-})
+// "brand-new intent + stage with design_direction gate" test deleted
+// 2026-05-08 — design_direction gate is now a discovery agent, covered
+// by the discovery_required tests above.
 
 test("cursor: brand-new intent with sealed_at already set → sealed (sanity)", async () => {
 	if (!HAS_GIT) return

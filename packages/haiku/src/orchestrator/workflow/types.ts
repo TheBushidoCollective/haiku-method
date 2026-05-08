@@ -89,9 +89,8 @@ export type StateName =
 	| "complete"
 	| "error"
 	| "escalate"
-	| "design_direction_required"
-	| "design_direction_complete"
-	| "clarify_required"
+	// design_direction_required / _complete / _uploaded / clarify_required
+	// deleted 2026-05-08 — collapsed into the discovery-agent model.
 	| "safe_intent_repair"
 	| "composite_run_stage"
 	| "upstream_reconciliation_required"

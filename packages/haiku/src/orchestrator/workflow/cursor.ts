@@ -73,7 +73,6 @@ import {
 import {
 	resolveStageFixHats,
 	resolveStageHats,
-	resolveStageMetadata,
 	resolveStudioStages,
 } from "../studio.js"
 import { type DriftEvent, runDriftSweep } from "./drift-sweep.js"
@@ -88,28 +87,13 @@ export type CursorAction =
 			agent: string
 			units: string[]
 	  }
-	| {
-			kind: "design_direction_required"
-			stage: string
-	  }
-	| {
-			kind: "design_direction_complete"
-			stage: string
-			archetype: string
-			comments?: string
-			annotations?: Array<{ comment: string; screenshot_path: string }>
-	  }
-	| {
-			kind: "design_direction_uploaded"
-			stage: string
-			uploads: Array<{ filename: string; path: string; caption?: string }>
-			comments?: string
-	  }
-	| {
-			kind: "clarify_required"
-			stage: string
-			questions: Array<{ id: string; prompt: string; body: string }>
-	  }
+	// design_direction_* and clarify_required cursor actions deleted
+	// 2026-05-08: collapsed into the discovery-agent model. Studios
+	// now declare a discovery template with `tool:` (e.g., the
+	// software studio's `discovery/DESIGN-DIRECTION.md` declares
+	// `tool: pick_design_direction`) and the cursor's existence
+	// check on the artifact location passes the gate. See
+	// `prompts/discovery_required.ts` for the tool-driven branch.
 	// `elaborate` is the per-stage human-conversation gate. Fires before
 	// `decompose` whenever (a) `intent.mode !== "autopilot"` and
 	// (b) `stages/<stage>/elaboration.md` is missing or unverified. The
@@ -214,64 +198,10 @@ function readFm(path: string): { data: UnitFm; body: string } | null {
 	}
 }
 
-/**
- * Read clarify-question files from a stage's `clarify/` directory.
- * Each file is a markdown doc with frontmatter — the FM `prompt` field
- * (or filename as fallback) is the short prompt; the body is the
- * elaboration. Returns one entry per file, sorted by filename.
- *
- * Search path: project-local `.haiku/studios/<studio>/stages/<stage>/clarify/`
- * first, then plugin-shipped `<plugin>/studios/<studio>/stages/<stage>/clarify/`.
- *
- * Empty array when the dir doesn't exist (which is the common case —
- * stages opt in by adding the directory).
- */
-function readClarifyQuestions(
-	studio: string,
-	stage: string,
-): Array<{ id: string; prompt: string; body: string }> {
-	const candidates = [
-		join(
-			process.cwd(),
-			".haiku",
-			"studios",
-			studio,
-			"stages",
-			stage,
-			"clarify",
-		),
-	]
-	const root = primaryRepoRoot()
-	if (root) {
-		candidates.push(
-			join(root, "plugin", "studios", studio, "stages", stage, "clarify"),
-		)
-	}
-	for (const dir of candidates) {
-		if (!existsSync(dir)) continue
-		const entries = readdirSync(dir).filter((f) => f.endsWith(".md"))
-		const out: Array<{ id: string; prompt: string; body: string }> = []
-		for (const f of entries.sort()) {
-			const path = join(dir, f)
-			try {
-				const raw = readFileSync(path, "utf8")
-				const parsed = matter(raw)
-				const data = parsed.data as Record<string, unknown>
-				out.push({
-					id: f.replace(/\.md$/, ""),
-					prompt:
-						(data.prompt as string) ||
-						f.replace(/\.md$/, "").replace(/-/g, " "),
-					body: parsed.content.trim(),
-				})
-			} catch {
-				/* skip malformed clarify file rather than crash the cursor */
-			}
-		}
-		if (out.length > 0) return out
-	}
-	return []
-}
+// readClarifyQuestions deleted 2026-05-08 along with the
+// clarify_required cursor action. Stages that need pre-decompose Q&A
+// now declare a discovery template with `tool:` (any tool that
+// captures user input). Zero studios shipped clarify dirs at deletion.
 
 function pickIterations(fm: UnitFm | FbFm): Iteration[] {
 	if (!Array.isArray(fm.iterations)) return []
@@ -671,116 +601,15 @@ function walkIntentTrack(args: {
 		? ["spec", "quality_gates"]
 		: ["spec", "quality_gates", ...reviewAgents, "user"]
 
-	// Gate priority chain (2026-05-06): collaboration before
-	// computation. Order:
-	//   1. design_direction_required — strategic decision; the user
-	//      picks a direction the rest of elaborate orbits.
-	//   2. clarify_required — stage-specific Q&A captured before
-	//      anything else fires.
-	//   3. discovery_required — the agents run to gather knowledge
-	//      WITH the user's design + clarifications already on disk,
-	//      so they have richer context.
-	//   4. elaborate / wave logic.
-
-	// 1. Design direction (P3). Two-phase gate:
-	//
-	//    a. Selection: when the stage's STAGE.md declares
-	//       `requires_design_direction: true`, the cursor refuses to
-	//       advance until the user has selected a direction. Stored on
-	//       intent.md as `design_directions: { <stage>: { … } }`.
-	//
-	//    b. Surface-once: after selection, the cursor emits ONE
-	//       `design_direction_complete` (archetype mode) or
-	//       `design_direction_uploaded` (intake/upload mode) action so
-	//       the agent can read screenshot annotations or uploaded files
-	//       before elaboration starts. Surfaced state is tracked by
-	//       `surfaced_at` on the same record — once stamped, the cursor
-	//       falls through to elaborate. The agent stamps `surfaced_at`
-	//       via the engine after it's seen the action.
-	const stageMeta = resolveStageMetadata(studio, stage)
-	if (stageMeta?.requires_design_direction === true) {
-		const intentMdPath = join(intentDir, "intent.md")
-		if (existsSync(intentMdPath)) {
-			const intentFm = readFm(intentMdPath)?.data ?? {}
-			const directions =
-				intentFm.design_directions &&
-				typeof intentFm.design_directions === "object"
-					? (intentFm.design_directions as Record<string, unknown>)
-					: {}
-			const dd = directions[stage] as
-				| {
-						mode?: string
-						archetype?: string
-						comments?: string
-						annotations?: Array<{ comment: string; screenshot_path: string }>
-						uploads?: Array<{
-							filename: string
-							path: string
-							caption?: string
-						}>
-						at?: string
-						surfaced_at?: string
-				  }
-				| undefined
-			// Grandfather rule (2026-05-08): if the stage already has units,
-			// the agent has done elaborate-phase work before this gate
-			// existed (or before `requires_design_direction` was flipped on
-			// the studio). Don't retroactively rewind the user to pick a
-			// design direction for work already specced. Fresh-stage case
-			// (units.length === 0) still fires the full gate sequence.
-			const isFreshStage = units.length === 0
-			if (!dd && isFreshStage) {
-				return { kind: "design_direction_required", stage }
-			}
-			if (dd && isFreshStage && !dd.surfaced_at) {
-				if (
-					dd.mode === "upload" &&
-					Array.isArray(dd.uploads) &&
-					dd.uploads.length > 0
-				) {
-					return {
-						kind: "design_direction_uploaded",
-						stage,
-						uploads: dd.uploads,
-						...(dd.comments ? { comments: dd.comments } : {}),
-					}
-				}
-				if (dd.archetype) {
-					return {
-						kind: "design_direction_complete",
-						stage,
-						archetype: dd.archetype,
-						...(dd.comments ? { comments: dd.comments } : {}),
-						...(dd.annotations && dd.annotations.length > 0
-							? { annotations: dd.annotations }
-							: {}),
-					}
-				}
-			}
-		}
-	}
-
-	// 2. Clarify (P4). Every stage shipping `clarify/*.md` files gets
-	//    a hard gate. Answers recorded on intent.md as
-	//    `clarifications: { <stage>: { answers, at } }`. Stage-conditional.
-	const clarifyQuestions = readClarifyQuestions(studio, stage)
-	if (clarifyQuestions.length > 0) {
-		const intentMdPath = join(intentDir, "intent.md")
-		if (existsSync(intentMdPath)) {
-			const intentFm = readFm(intentMdPath)?.data ?? {}
-			const clarifications =
-				intentFm.clarifications && typeof intentFm.clarifications === "object"
-					? (intentFm.clarifications as Record<string, unknown>)
-					: {}
-			if (!clarifications[stage]) {
-				return {
-					kind: "clarify_required",
-					stage,
-					questions: clarifyQuestions,
-				}
-			}
-		}
-	}
+	// Gate priority chain (collaboration before computation):
+	//   1. elaborate (conversation gate, mode-aware) — the human
+	//      conversation that orbits the rest of the stage.
+	//   2. discovery_required — agents run to gather knowledge,
+	//      including user-input-driven discovery templates
+	//      (e.g., the reframed design-direction picker) that
+	//      replace the bespoke design_direction_required and
+	//      clarify_required gates retired on 2026-05-08.
+	//   3. decompose / wave logic.
 
 	// 2.5. Elaborate gate (mode-aware). Every non-autopilot intent gets a
 	//      per-stage human conversation gate. The agent reads intent +

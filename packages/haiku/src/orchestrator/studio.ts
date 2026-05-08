@@ -298,10 +298,6 @@ export function resolveStageMetadata(
 ): {
 	description: string
 	body: string
-	/** True when the stage's STAGE.md frontmatter declares
-	 *  `requires_design_direction: true` — gates elaborate behind a
-	 *  pick_design_direction selection (P3, 2026-05-06). */
-	requires_design_direction?: boolean
 } | null {
 	const info = resolveStudio(studio)
 	const dir = info ? info.dir : studio
@@ -318,8 +314,6 @@ export function resolveStageMetadata(
 			return {
 				description: (fm.description as string) || stage,
 				body: content.trim(),
-				requires_design_direction:
-					fm.requires_design_direction === true ? true : undefined,
 			}
 		}
 	}

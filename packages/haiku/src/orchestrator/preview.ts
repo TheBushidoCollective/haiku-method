@@ -200,15 +200,10 @@ export function enrichActionWithPreview(action: OrchestratorAction): void {
 			next_step = "Unblock the dependencies, then retry."
 			break
 
-		case "design_direction_required":
-			tell_user = `Stage '${stage}' requires a design direction selection before proceeding.`
-			next_step = "After you select a direction, elaboration continues."
-			break
-
-		case "design_direction_complete":
-			tell_user = `You picked a design direction — I'll fold the selection (and any annotated screenshots) into elaboration.`
-			next_step = "I'll continue elaborating with the chosen archetype."
-			break
+		// design_direction_required / _complete / _uploaded preview cases
+		// deleted 2026-05-08 — those cursor actions were collapsed into
+		// the discovery-agent model. The `discovery_required` case above
+		// covers all gate-driven dispatches now.
 
 		case "outputs_missing":
 			tell_user = `Stage '${stage}' is missing required output artifacts.`

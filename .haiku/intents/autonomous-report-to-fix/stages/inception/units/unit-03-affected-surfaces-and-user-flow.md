@@ -31,16 +31,12 @@ quality_gates:
       found && /^- /{count++} END{print count+0}'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/affected-surfaces-and-user-flow.md)"
       -ge 9 ]
-status: completed
 inputs:
   - intent.md
   - knowledge/DISCOVERY.md
   - website/next.config.ts
   - 'website/app/auth/[provider]/callback/CallbackClient.tsx'
-bolt: 1
-hat: verifier
 started_at: '2026-05-05T22:29:36Z'
-hat_started_at: '2026-05-05T22:35:42Z'
 iterations:
   - hat: researcher
     started_at: '2026-05-05T22:29:36Z'
@@ -54,7 +50,12 @@ iterations:
     started_at: '2026-05-05T22:35:42Z'
     completed_at: '2026-05-05T22:36:53Z'
     result: advance
-completed_at: '2026-05-05T22:42:42Z'
+discovery: {}
+reviews: {}
+approvals:
+  user:
+    at: '2026-05-05T22:42:42Z'
+    migrated: true
 ---
 # Affected Surfaces and User Flow
 

@@ -2,29 +2,26 @@
 title: >-
   Unit-04 scrubbing principles cross into implementation territory with specific
   vendor token prefixes
-status: closed
 origin: adversarial-review
 author: completeness
 author_type: agent
 created_at: '2026-05-05T23:16:51Z'
-iteration: 1
-visit: 1
 source_ref: null
-closed_by: 'fix-loop:FB-05:bolt-1'
-bolt: 1
-triaged_at: '2026-05-05T23:16:51Z'
-resolution: null
 replies: []
 hat: feedback-assessor
 iterations:
   - bolt: 1
     hat: researcher
     completed_at: '2026-05-05T23:19:22Z'
-    result: advanced
+    result: advance
   - bolt: 1
     hat: feedback-assessor
     completed_at: '2026-05-05T23:20:13Z'
     result: closed
+targets:
+  unit: null
+  invalidates: []
+closed_at: 'fix-loop:FB-05:bolt-1'
 ---
 ## Mandate check
 

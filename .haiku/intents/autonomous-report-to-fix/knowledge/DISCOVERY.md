@@ -1,6 +1,7 @@
 ---
 intent: autonomous-report-to-fix
 created: 2026-05-05
+updated: 2026-05-08
 status: active
 ---
 
@@ -26,34 +27,39 @@ The design conversation landed on fire-and-forget as the UX contract: the user f
 
 ### Success Criteria
 
-- A user can run `/haiku:report`, describe what broke, and see a GitHub issue opened on `gigsmart/haiku-method` attributed to their GitHub account, with a linked bot-authored PR, without any additional manual steps beyond the optional OAuth grant.
-- The bot-authored PR reaches CI-green state autonomously — review comments and CI failures trigger fresh agent invocations that push fixes until the checks pass.
-- The session bundle that leaves the user's machine contains no credentials, API keys, environment variables, absolute home paths (`/Users/…`), or other sensitive patterns — scrubbing happens before POST, not at rest.
+The following are stated in user-observable terms. A user watching from their terminal and their GitHub notifications can verify each one without inspecting internal state.
+
+- A user can run `/haiku:report`, describe what broke, and see a GitHub issue opened on `gigsmart/haiku-method` attributed to their GitHub account (or by name/email if OAuth was declined), with a linked bot-authored PR, without any additional manual steps beyond the optional OAuth grant.
+- The bot-authored PR reaches CI-green state autonomously — review comments and CI failures trigger fresh agent invocations that push fixes until the checks pass or the per-fix-id iteration cap is reached.
+- The session bundle that leaves the user's machine contains no credentials, API keys, environment variables, absolute home paths (`/Users/…`), or other sensitive patterns. Scrubbing happens client-side before POST, not at rest.
 - Users who decline OAuth (or don't have a GitHub account) still get the benefit: the issue and PR are opened under the bot account, and the issue body attributes the report to them by name/email if they provided it.
+- When the iteration cap is reached, the user receives a user-observable signal (bot comment on the PR or issue, PR left in draft or as-is) — the loop stops cleanly, and the user is not left wondering if something is still running.
 
 ## Competitive Landscape
 
 ### Who Offers Something Similar
 
-**Cursor's bug reporter** — Cursor includes a built-in feedback mechanism that captures editor state and submits it. It does not open issues or PRs, does not run a fix loop, and does not scrub the bundle client-side before transmission.
+**GitHub Copilot Workspace** — [GitHub Copilot Workspace](https://githubnext.com/projects/copilot-workspace) lets a developer describe a task and generates a PR. It operates on a task description the user writes, not on a diagnostic session bundle. It does not have an autonomous fix-until-green loop driven by webhooks; it requires human iteration at each step. The user must stay engaged to drive progress.
 
-**GitHub Copilot Workspace** — [GitHub Copilot Workspace](https://githubnext.com/projects/copilot-workspace) lets a developer describe a task and generates a PR. It operates on a task description the user writes, not on a diagnostic session bundle. It does not have an autonomous fix-until-green loop driven by webhooks; it requires human iteration.
+**Devin (Cognition AI)** — [Devin](https://www.cognition.ai/) is a fully autonomous software engineer that can fix bugs end-to-end. It operates as a persistent long-running session (daemonized) and requires explicit task delegation through a separate product interface. It is not an embedded capability inside a developer's existing workflow; the user must context-switch to Devin's environment.
 
-**Devin (Cognition AI)** — [Devin](https://www.cognition.ai/) is a fully autonomous software engineer that can fix bugs end-to-end. It operates as a persistent long-running session (daemonized) and requires explicit task delegation. It is a separate paid product, not an embedded capability inside a developer's existing workflow.
+**Sweep AI** — [Sweep](https://sweep.dev) turns GitHub issues into PRs automatically when a user files a `Sweep:`-labeled issue. It does not capture session context, does not do client-side scrubbing, and does not have a fire-and-forget mode from inside the developer's editor. The user must already have a GitHub issue and must label it manually.
 
-**Sweep AI** — [Sweep](https://sweep.dev) turns GitHub issues into PRs automatically when a user files a `Sweep:` labeled issue. It does not capture session context, does not do client-side scrubbing, and does not have a fire-and-forget mode from inside the developer's editor.
+**Cursor's bug reporter** — Cursor includes a built-in feedback mechanism that captures editor state and submits it. It does not open issues or PRs, does not run a fix loop, and does not scrub the bundle client-side before transmission. The feedback goes to Cursor, not to the user's own repo.
 
-**OpenHands (formerly OpenDevin)** — [OpenHands](https://github.com/All-Hands-AI/OpenHands) is an open-source autonomous agent framework that can resolve GitHub issues. It operates as a standalone Docker-based environment rather than being embedded in the developer's workflow.
+**OpenHands (formerly OpenDevin)** — [OpenHands](https://github.com/All-Hands-AI/OpenHands) is an open-source autonomous agent framework that can resolve GitHub issues. It operates as a standalone Docker-based environment rather than being embedded in the developer's existing workflow. The user must run and manage the environment themselves.
 
 ### What They Do Well
 
-Copilot Workspace has a good UX for the "describe the task, get a PR" flow and integrates natively into GitHub's UI. Sweep has a simple trigger model (label an issue) that requires minimal user education. Devin handles genuinely complex multi-step engineering tasks.
+Copilot Workspace has a good UX for the "describe the task, get a PR" flow and integrates natively into GitHub's UI. Sweep has a simple trigger model (label an issue) that requires minimal user education. Devin handles genuinely complex multi-step engineering tasks without requiring the user to understand the approach. OpenHands provides full transparency into agent actions.
 
 ### Gaps and Opportunities
 
 None of the above capture the session transcript as the diagnostic artifact. The session JSONL already contains the full context — tool calls, model responses, subagent chains — which is exactly what's needed to reproduce a workflow-engine bug. The opportunity is to make that context the first-class input to the fix loop, rather than asking the user to describe what happened in natural language after the fact.
 
-The fire-and-forget UX contract is also differentiated. None of the above run autonomously until CI is green without requiring the user to stay engaged. The webhook-driven, stateless invocation model means no daemon to manage, no session to babysit.
+The fire-and-forget UX contract is also differentiated: none of the above run autonomously until CI is green without requiring the user to stay engaged. The webhook-driven, stateless invocation model means no daemon to manage, no session to babysit. The user fires `/haiku:report` and closes their terminal. The fix loop runs in the background via Cloud Run webhooks.
+
+No competitor combines: (a) in-workflow session capture, (b) client-side scrubbing before the bundle leaves the machine, and (c) webhook-driven autonomous fix-until-green targeting the user's own issue tracker.
 
 ## Considerations & Risks
 
@@ -67,6 +73,8 @@ The fire-and-forget UX contract is also differentiated. None of the above run au
 
 **Sentry coexistence** — The existing `haiku_report` tool currently POSTs to Sentry (when `SENTRY_DSN` is configured). The new flow replaces or augments this. Whether the Sentry event still fires alongside the Cloud Run POST is a design question for the downstream stages; the privacy implications are that the same report now touches two external surfaces.
 
+**Bounded loops are required** — Each webhook invocation triggers a fresh Anthropic SDK call. A PR that triggers many review comments or CI failures could burn significant tokens. A per-fix-id iteration cap is necessary for cost control and user trust. The specific cap value and the PR state on cap-hit are product/design decisions. Inception names that a cap must exist and what reaching it looks like; design picks the number.
+
 ### Capability Needs
 
 - Needs a Cloud Run (Functions Framework) deployment target — the new service is a sibling to `deploy/auth-proxy/` and follows the same GCP Cloud Function v2 + Terraform pattern.
@@ -79,21 +87,23 @@ The fire-and-forget UX contract is also differentiated. None of the above run au
 
 ### Open Questions
 
-- What is the consent UX? Does `/haiku:report` explain what data will be sent before collecting it, or does it send first and notify after? The privacy policy change makes this question load-bearing.
-- What scrubbing patterns are "good enough"? Regex-based scrubbing (tokens, API keys, `/Users/...` paths) catches known patterns; it cannot catch custom secrets the user has in their environment. Is there a disclosure model (e.g., "we stripped these patterns; please review the bundle preview") or is it fire-and-forget with a warning?
-- What happens if the fix loop can't fix the bug after N iterations? Is there a cap? Does the issue stay open with a "bot gave up" comment, or does the PR stay as a draft for human pickup?
-- How does the system handle JSONL files that are too large to POST in a single request? The session JSONL for a multi-stage intent can be several MB.
-- Is the durable state store a Cloud Firestore document, a GCS object, or something else? The choice affects cold-start latency and the cost model.
-- Does the report-agent service need its own subdomain (e.g., `report.haikumethod.ai`), or does it share the `auth.haikumethod.ai` subdomain under a path prefix?
-- What is the webhook secret verification model? GitHub webhook payloads must be verified with HMAC-SHA256 against a shared secret stored in Secret Manager.
+- **What is the consent UX?** Does `/haiku:report` explain what data will be sent before collecting it, or does it send first and notify after? The privacy policy change makes this question load-bearing. Proposed default: show a one-line summary of what will be sent before the POST, with an explicit "yes, send" confirmation. `(needs human escalation)` if the legal/privacy bar is higher.
+- **What scrubbing patterns are "good enough"?** Regex-based scrubbing (tokens, API keys, `/Users/...` paths) catches known patterns; it cannot catch custom secrets the user has in their environment. Is there a disclosure model (e.g., "we stripped these patterns; please review the bundle preview") or is it fire-and-forget with a warning? Proposed default: strip on uncertainty (conservative), warn the user which pattern categories were removed, no line-by-line preview in V1.
+- **What is the per-fix-id iteration cap value?** How many webhook-triggered invocations are allowed before the loop gives up? Proposed default: defer to product/design. Inception only names that a cap must exist.
+- **What PR state does the bot leave on cap-hit?** Draft? Closed? Left open with a "bot gave up" comment? Proposed default: defer to product/design. Inception names that the user receives a visible, observable signal.
+- **How does the system handle JSONL files that are too large to POST in a single request?** The session JSONL for a multi-stage intent can be several MB. Proposed default: chunking or truncation strategy is a design-stage decision.
+- **Is the durable state store a Cloud Firestore document, a GCS object, or something else?** The choice affects cold-start latency and the cost model. Defer to design.
+- **Does the report-agent service need its own subdomain** (e.g., `report.haikumethod.ai`), or does it share the `auth.haikumethod.ai` subdomain under a path prefix? Defer to design.
+- **What is the webhook secret verification model?** GitHub webhook payloads must be verified with HMAC-SHA256 against a shared secret stored in Secret Manager. The model is clear; the implementation path is a design question.
 
 ### Risks
 
 - **Scrubbing false negatives** — A scrubber that misses a credential ships it to GCP. This is a user trust risk, not just a policy risk. The scrubber needs to be conservative (strip on uncertainty) rather than permissive.
 - **Bot credential scope creep** — The Cloud Run service holds a bot token with issue-write and PR-create scope on `gigsmart/haiku-method`. If that token is leaked (e.g., in Cloud Run logs), it can create arbitrary issues and PRs. Secret Manager rotation and audit logging are mitigations, not guarantees.
-- **Unbounded fix-loop cost** — Each webhook invocation triggers a fresh Anthropic SDK call. A PR that triggers many review comments or CI failures could burn significant tokens. A per-fix-id iteration cap is necessary.
+- **Unbounded fix-loop cost** — Each webhook invocation triggers a fresh Anthropic SDK call. A per-fix-id iteration cap is necessary; without it, a flaky CI suite could burn unbounded tokens.
 - **Cold-start latency for webhooks** — Cloud Run cold starts can add several seconds to the webhook response time. GitHub expects webhook acknowledgment within 10 seconds; if the function cold-starts and does real work in the handler, it may time out. The fix loop work should be acknowledged immediately and deferred (e.g., via a Cloud Tasks enqueue or by returning 200 and doing the work asynchronously).
 - **JSONL subagent chain traversal correctness** — The bundle must include all subagent JSONLs reachable via `parent_uuid` from the current session ID. If the traversal is incomplete (e.g., it misses a nested subagent level), the diagnostic context will be partial and the fix may target the wrong code path.
+- **User expectation gap on attribution** — Users who grant OAuth expect the issue to appear in their "created issues" list. It won't — it's bot-authored with their name in the body. This is a communication/UX risk, not a technical risk. The skill's confirmation step should set this expectation explicitly.
 
 ## UI Impact
 

@@ -25,16 +25,12 @@ quality_gates:
       found && /^- \*\*/{count++} END{print count+0}'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/privacy-and-data-handling-principles.md)"
       -ge 5 ]
-status: completed
 inputs:
   - intent.md
   - knowledge/DISCOVERY.md
   - website/content/pages/privacy.md
   - packages/haiku/src/telemetry.ts
-bolt: 1
-hat: verifier
 started_at: '2026-05-05T22:29:42Z'
-hat_started_at: '2026-05-05T22:35:18Z'
 iterations:
   - hat: researcher
     started_at: '2026-05-05T22:29:42Z'
@@ -48,7 +44,12 @@ iterations:
     started_at: '2026-05-05T22:35:18Z'
     completed_at: '2026-05-05T22:36:21Z'
     result: advance
-completed_at: '2026-05-05T22:36:21Z'
+discovery: {}
+reviews: {}
+approvals:
+  user:
+    at: '2026-05-05T22:36:21Z'
+    migrated: true
 ---
 # Privacy and Data Handling Principles
 

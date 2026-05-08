@@ -31,7 +31,6 @@ quality_gates:
       found && /^### /{count++} END{print count+0}'
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/capability-and-system-context.md)"
       -ge 4 ]
-status: completed
 inputs:
   - intent.md
   - knowledge/DISCOVERY.md
@@ -39,10 +38,7 @@ inputs:
   - deploy/auth-proxy/src/index.ts
   - deploy/terraform/modules/auth-proxy/main.tf
   - .github/workflows/claude.yml
-bolt: 1
-hat: verifier
 started_at: '2026-05-05T22:29:33Z'
-hat_started_at: '2026-05-05T22:37:48Z'
 iterations:
   - hat: researcher
     started_at: '2026-05-05T22:29:33Z'
@@ -56,7 +52,12 @@ iterations:
     started_at: '2026-05-05T22:37:48Z'
     completed_at: '2026-05-05T22:38:55Z'
     result: advance
-completed_at: '2026-05-05T22:38:55Z'
+discovery: {}
+reviews: {}
+approvals:
+  user:
+    at: '2026-05-05T22:38:55Z'
+    migrated: true
 ---
 # Capability Needs and System Context
 

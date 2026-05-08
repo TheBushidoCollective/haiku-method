@@ -48,11 +48,7 @@ quality_gates:
       .haiku/intents/autonomous-report-to-fix/stages/inception/artifacts/success-criteria-and-acceptance-shape.md
       | grep -ciE '(copilot|devin|sweep|cursor|openhands)' | awk '{exit
       ($1>=4)?0:1}'
-status: completed
-bolt: 1
-hat: verifier
 started_at: '2026-05-05T22:29:27Z'
-hat_started_at: '2026-05-05T22:36:02Z'
 iterations:
   - hat: researcher
     started_at: '2026-05-05T22:29:27Z'
@@ -66,7 +62,12 @@ iterations:
     started_at: '2026-05-05T22:36:02Z'
     completed_at: '2026-05-05T22:37:09Z'
     result: advance
-completed_at: '2026-05-05T22:37:09Z'
+discovery: {}
+reviews: {}
+approvals:
+  user:
+    at: '2026-05-05T22:37:09Z'
+    migrated: true
 ---
 # Success Criteria and Acceptance Shape
 

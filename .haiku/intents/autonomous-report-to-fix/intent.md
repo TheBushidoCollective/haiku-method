@@ -2,7 +2,6 @@
 title: Autonomous report-to-fix loop
 studio: software
 mode: continuous
-status: active
 created_at: '2026-05-05'
 stages:
   - inception
@@ -11,8 +10,10 @@ stages:
   - development
   - operations
   - security
-intent_reviewed: true
-active_stage: design
+plugin_version: 4.0.0
+approvals: {}
+started_at: null
+sealed_at: null
 ---
 
 # Autonomous report-to-fix loop

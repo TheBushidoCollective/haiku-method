@@ -110,7 +110,36 @@ export type CursorAction =
 			stage: string
 			questions: Array<{ id: string; prompt: string; body: string }>
 	  }
-	| { kind: "elaborate"; stage: string }
+	// `elaborate` is the per-stage human-conversation gate. Fires before
+	// `decompose` whenever (a) `intent.mode !== "autopilot"` and
+	// (b) `stages/<stage>/elaboration.md` is missing or unverified. The
+	// agent's job during this action is the conversation: read the
+	// intent + STAGE.md + prior stages' outputs, surface informed
+	// questions to the user, and capture the agreement via
+	// `haiku_stage_elaboration_record`. Autopilot bypasses this clause
+	// entirely — there's no human to converse with, so the cursor walks
+	// straight to `decompose`.
+	| {
+			kind: "elaborate"
+			stage: string
+			elaboration_present: boolean
+			elaboration_verified: boolean
+	  }
+	// `elaborate_review` dispatches the substance verifier on a captured
+	// elaboration artifact. The verifier reads the artifact + intent +
+	// STAGE.md and decides whether the conversation engaged
+	// substantively with the intent on this stage. Pass stamps
+	// `verified_at` via `haiku_stage_elaboration_seal`; fail returns
+	// gaps to the agent so it re-engages the user.
+	| { kind: "elaborate_review"; stage: string }
+	// `decompose` is the unit-spec writing phase. Fires when (a) the
+	// elaborate gate has passed (or autopilot bypassed it) and
+	// (b) `units.length === 0`. The agent dispatches stage-scoped
+	// discovery subagents and writes unit specs informed by the
+	// captured conversation + discovery output. Renamed from the legacy
+	// `elaborate` cursor action; the old name is reserved for the
+	// conversation gate above.
+	| { kind: "decompose"; stage: string }
 	| {
 			kind: "start_unit_hat"
 			stage: string
@@ -741,6 +770,47 @@ function walkIntentTrack(args: {
 		}
 	}
 
+	// 2.5. Elaborate gate (mode-aware). Every non-autopilot intent gets a
+	//      per-stage human conversation gate. The agent reads intent +
+	//      STAGE.md + prior outputs, surfaces informed questions, and
+	//      captures the agreement at `stages/<stage>/elaboration.md`.
+	//      The cursor blocks until the artifact exists AND a verifier
+	//      has stamped `verified_at` on its frontmatter (substance check
+	//      — the agent can't self-certify a one-line "user said go").
+	//
+	//      The gate fires on artifact state, NOT on unit count. This is
+	//      deliberate: the user-facing principle is that conversation,
+	//      discovery, and unit-spec writing can all happen concurrently
+	//      within a stage. An agent that drafts units during the
+	//      conversation should still be blocked by an unverified
+	//      artifact — units sit on disk but never dispatch into waves
+	//      until the conversation passes verification. The gate's
+	//      strength is the verifier; allowing parallel speculative work
+	//      around it is the trade.
+	//
+	//      Autopilot bypasses this gate entirely — there's no human
+	//      conversation to capture. Pre-intent elaborate (intent.md
+	//      creation) still applies in autopilot; only the per-stage gate
+	//      is mode-skipped here.
+	if (mode !== "autopilot") {
+		const elabPath = join(stageDir, "elaboration.md")
+		if (!existsSync(elabPath)) {
+			return {
+				kind: "elaborate",
+				stage,
+				elaboration_present: false,
+				elaboration_verified: false,
+			}
+		}
+		const elabFm = readFm(elabPath)?.data ?? {}
+		const verifiedAt =
+			typeof elabFm.verified_at === "string" ? elabFm.verified_at : ""
+		if (!verifiedAt) {
+			return { kind: "elaborate_review", stage }
+		}
+		// verified — fall through to discovery / decompose / waves
+	}
+
 	// 3. Discovery (P7). When the studio declares discovery artifacts
 	//    for the stage, the cursor checks the artifact's `location` on
 	//    disk. Missing file → `discovery_required`. The output IS the
@@ -788,9 +858,13 @@ function walkIntentTrack(args: {
 		}
 	}
 
-	// 4. No units → elaborate.
+	// 4. No units → decompose. Agent dispatches stage-scoped discovery
+	//    subagents (when configured) and writes unit specs informed by
+	//    the captured elaboration + discovery output. The cursor only
+	//    reaches this clause once the elaborate gate has passed (or
+	//    autopilot bypassed it).
 	if (units.length === 0) {
-		return { kind: "elaborate", stage }
+		return { kind: "decompose", stage }
 	}
 
 	// 5. Wave logic. A unit is "in-flight" if started AND its last

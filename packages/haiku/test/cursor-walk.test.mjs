@@ -26,6 +26,7 @@ import {
 	makeFeedback,
 	makeIntent,
 	makeStudio,
+	seedVerifiedElaboration,
 } from "./_v4-fixtures.mjs"
 
 const HAS_GIT = (() => {
@@ -133,6 +134,7 @@ test("cursor: wave-ready unit (started_at null) → start_unit_hat", async () =>
 	await withTmpRepo("cursor-wave-ready", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		writeUnit(intentDir, "design", "unit-01-foo", {
 			title: "foo",
 			depends_on: [],
@@ -158,6 +160,7 @@ test("cursor: in-flight unit (last iteration result null) → noop", async () =>
 	await withTmpRepo("cursor-inflight", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		writeUnit(intentDir, "design", "unit-01", {
 			title: "u1",
 			depends_on: [],
@@ -190,6 +193,7 @@ test("cursor: hat advanced → next start_unit_hat", async () => {
 	await withTmpRepo("cursor-next-hat", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		writeUnit(intentDir, "design", "unit-01", {
 			title: "u1",
 			depends_on: [],
@@ -221,6 +225,7 @@ test("cursor: all hats done → dispatch_review for spec role", async () => {
 	await withTmpRepo("cursor-spec-review", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		writeUnit(intentDir, "design", "unit-01", {
 			title: "u1",
 			depends_on: [],
@@ -264,6 +269,7 @@ test("cursor: spec review signed → dispatch_review for configured agent", asyn
 	await withTmpRepo("cursor-agent-review", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		writeUnit(intentDir, "design", "unit-01", {
 			title: "u1",
 			depends_on: [],
@@ -292,6 +298,7 @@ test("cursor: all reviews signed → user_gate spec", async () => {
 	await withTmpRepo("cursor-user-spec", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		writeUnit(intentDir, "design", "unit-01", {
 			title: "u1",
 			depends_on: [],
@@ -319,6 +326,7 @@ test("cursor: all reviews + user signed → dispatch_approval spec (post-execute
 	await withTmpRepo("cursor-approval-spec", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		writeUnit(intentDir, "design", "unit-01", {
 			title: "u1",
 			depends_on: [],
@@ -353,6 +361,7 @@ test("cursor: spec approval signed → dispatch_quality_gates (engine actor)", a
 	await withTmpRepo("cursor-qg", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		writeUnit(intentDir, "design", "unit-01", {
 			title: "u1",
 			depends_on: [],
@@ -422,6 +431,7 @@ test("cursor: closed FB does NOT preempt → cursor walks Track A", async () => 
 	await withTmpRepo("cursor-fb-closed", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		writeUnit(intentDir, "design", "unit-01", {
 			title: "u1",
 			depends_on: [],
@@ -465,6 +475,7 @@ test("cursor: fully signed unit (qg done) → merge_stage", async () => {
 	await withTmpRepo("cursor-merge-stage", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		// Every reviewer + approver + qg signed. Cursor should emit
 		// merge_stage so the workflow can fast-forward intent main.
 		writeUnit(intentDir, "design", "unit-01", {
@@ -564,6 +575,7 @@ test("cursor: mid-wave with one in-flight + one wave-ready → noop", async () =
 	await withTmpRepo("cursor-midwave-noop", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 
 		// Unit 1: in-flight (last iteration has no result yet).
 		writeUnit(intentDir, "design", "unit-01-in-flight", {
@@ -730,6 +742,7 @@ test("cursor: reject_hat re-entry routes back to prior hat", async () => {
 	await withTmpRepo("cursor-reject-reentry", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		// Unit advanced through planner, then verifier rejected. Last
 		// iteration is `result: "reject"` on verifier with reason. The
 		// cursor should re-dispatch the PRIOR hat (planner) so the
@@ -1037,6 +1050,7 @@ test("cursor: stage with discovery template + unit missing record → discovery_
 	await withTmpRepo("cursor-disc-required", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
 		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		// Drop a discovery template under the project-local studio
 		// override path. The cursor reads it via readStageArtifactDefs.
 		const discoveryDir = join(
@@ -1263,6 +1277,7 @@ test("cursor: design + clarify recorded → discovery fires next", async () => {
 				},
 			},
 		})
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 		const discoveryDir = join(
 			repoRoot,
 			".haiku",

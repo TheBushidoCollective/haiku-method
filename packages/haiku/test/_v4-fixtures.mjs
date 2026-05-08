@@ -195,6 +195,33 @@ export function makeFeedback({
 }
 
 /**
+ * Pre-write a verified per-stage elaboration artifact so the cursor's
+ * elaborate gate (introduced 2026-05-08) doesn't trip in tests that
+ * are exercising downstream behavior (discovery, decompose, waves,
+ * reviews). Without this, every non-autopilot test would have to
+ * manually emit the conversation cycle (`elaborate` → record →
+ * `elaborate_review` → seal) before reaching the action under test.
+ *
+ * Tests that ARE testing the elaborate gate itself should not call
+ * this — they want the gate to fire naturally.
+ */
+export function seedVerifiedElaboration({ intentDir, stage, body = "Verified test elaboration." }) {
+	const stageDir = join(intentDir, "stages", stage)
+	mkdirSync(stageDir, { recursive: true })
+	const at = new Date().toISOString()
+	const fm = {
+		recorded_at: at,
+		intent: intentDir.split("/").pop() ?? "test-intent",
+		stage,
+		verified_at: at,
+		verified_notes: "test fixture — bypasses gate",
+	}
+	const path = join(stageDir, "elaboration.md")
+	writeFileSync(path, matter.stringify(body, fm))
+	return path
+}
+
+/**
  * Initialize a bare-bones git repo + intent dir layout for a test.
  * Returns { repoRoot, intentDir, slug }.
  */

@@ -6,6 +6,63 @@ import { stateAjv } from "../_ajv.js"
 
 const stateFile = Type.Optional(Type.String())
 
+// ── haiku_stage_elaboration_record ──────────────────────────────────
+//
+// Captures the per-stage human-conversation outcome on disk at
+// `stages/<stage>/elaboration.md`. Called by the agent when the
+// conversation reaches alignment. Overwrites any existing file —
+// re-runs after a verifier rejection clear the prior `verified_at`
+// stamp by replacing the artifact wholesale.
+
+export const HAIKU_STAGE_ELABORATION_RECORD_INPUT_SCHEMA = Type.Object(
+	{
+		intent: Type.String({ minLength: 1, description: "Intent slug" }),
+		stage: Type.String({ minLength: 1, description: "Stage name" }),
+		body: Type.String({
+			minLength: 1,
+			description:
+				"Markdown body of the captured conversation. Should summarize what the agent proposed, what the user clarified, and the final agreement. Anchored on specific intent content.",
+		}),
+	},
+	{ additionalProperties: false },
+)
+export type HaikuStageElaborationRecordInput = Static<
+	typeof HAIKU_STAGE_ELABORATION_RECORD_INPUT_SCHEMA
+>
+export const validateHaikuStageElaborationRecordInputSchema = stateAjv.compile(
+	HAIKU_STAGE_ELABORATION_RECORD_INPUT_SCHEMA,
+)
+
+// ── haiku_stage_elaboration_seal ────────────────────────────────────
+//
+// Verifier-only. Stamps `verified_at: <ISO timestamp>` on the
+// elaboration artifact's frontmatter, signaling to the cursor that
+// the conversation passed substance review. The agent does NOT call
+// this directly — only the verifier subagent (dispatched via the
+// elaborate_review prompt) calls it. Calling without a corresponding
+// `verified_by_agent` token would let the agent self-certify; the
+// handler enforces that the call comes from a verifier context.
+
+export const HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA = Type.Object(
+	{
+		intent: Type.String({ minLength: 1, description: "Intent slug" }),
+		stage: Type.String({ minLength: 1, description: "Stage name" }),
+		notes: Type.Optional(
+			Type.String({
+				description:
+					"Optional verifier notes recorded as the seal's rationale. Stored on FM as `verified_notes`.",
+			}),
+		),
+	},
+	{ additionalProperties: false },
+)
+export type HaikuStageElaborationSealInput = Static<
+	typeof HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA
+>
+export const validateHaikuStageElaborationSealInputSchema = stateAjv.compile(
+	HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA,
+)
+
 // ── haiku_stage_get ───────────────────────────────────────────────
 
 export const HAIKU_STAGE_GET_INPUT_SCHEMA = Type.Object(

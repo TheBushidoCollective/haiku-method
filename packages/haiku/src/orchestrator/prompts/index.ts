@@ -25,6 +25,7 @@ import close_feedback from "./close_feedback.js"
 import commit_wip from "./commit_wip.js"
 import complete from "./complete.js"
 import dag_cycle_detected from "./dag_cycle_detected.js"
+import decompose from "./decompose.js"
 import design_direction_complete from "./design_direction_complete.js"
 import design_direction_required from "./design_direction_required.js"
 import design_direction_uploaded from "./design_direction_uploaded.js"
@@ -34,7 +35,13 @@ import dispatch_approval from "./dispatch_approval.js"
 import dispatch_quality_gates from "./dispatch_quality_gates.js"
 import dispatch_review from "./dispatch_review.js"
 import drift_detected from "./drift_detected.js"
+// `elaborate` was renamed to `decompose` on 2026-05-08. The new
+// `elaborate.ts` is the per-stage human-conversation gate that fires
+// before decompose; `elaborate_review.ts` is its substance verifier.
+// The legacy elaborate prompt body lives in `decompose.ts` (file
+// renamed via git mv to preserve history).
 import elaborate from "./elaborate.js"
+import elaborate_review from "./elaborate_review.js"
 import elaboration_insufficient from "./elaboration_insufficient.js"
 import error from "./error.js"
 import escalate from "./escalate.js"
@@ -82,12 +89,14 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["commit_wip", commit_wip],
 	["complete", complete],
 	["dag_cycle_detected", dag_cycle_detected],
+	["decompose", decompose],
 	["design_direction_complete", design_direction_complete],
 	["design_direction_required", design_direction_required],
 	["design_direction_uploaded", design_direction_uploaded],
 	["discovery_missing", discovery_missing],
 	["discovery_required", discovery_required],
 	["elaborate", elaborate],
+	["elaborate_review", elaborate_review],
 	["elaboration_insufficient", elaboration_insufficient],
 	["error", error],
 	["escalate", escalate],

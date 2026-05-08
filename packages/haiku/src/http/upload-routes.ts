@@ -143,38 +143,26 @@ const BLOCKED_EXTENSIONS: ReadonlySet<string> = new Set([
 ])
 
 /** Stage-output uploads — the SPA writes designer mockups, screenshots,
- *  PDFs, and structured data. Markdown is intentionally allowed because
- *  designers attach `.md` notes alongside binary mockups; markdown is
- *  rendered as `text/plain` by `serveFile` so it does not execute.
+ *  PDFs, structured data, and any artifact the agent will interpret on
+ *  the other side. The agent decides what to do with the file based on
+ *  its content; the server's job is to refuse only what's actively
+ *  dangerous to serve back.
  *
- *  Bolt 3 — `application/octet-stream` removed (red-team R-03): it is the
- *  multipart default when the client omits Content-Type, which made the
- *  allowlist effectively a no-op. Legitimate binary uploads send their
- *  real MIME (image/png, application/pdf, etc.); octet-stream is rejected. */
-const ALLOWED_MIMES_STAGE_OUTPUT: ReadonlySet<string> = new Set([
-	"image/png",
-	"image/jpeg",
-	"image/gif",
-	"image/webp",
-	"application/pdf",
-	"text/plain",
-	"text/markdown",
-	"application/json",
-])
-
-/** Knowledge uploads — same allowlist as stage-output. Knowledge artifacts
- *  are documentation + research material; the same MIME set covers them.
- *  `application/octet-stream` removed in bolt 3 — see stage-output comment. */
-const _ALLOWED_MIMES_KNOWLEDGE: ReadonlySet<string> = new Set([
-	"image/png",
-	"image/jpeg",
-	"image/gif",
-	"image/webp",
-	"application/pdf",
-	"text/plain",
-	"text/markdown",
-	"application/json",
-])
+ *  Liberalized 2026-05-08: previously a fixed allowlist of image / PDF /
+ *  text MIMEs. The new policy accepts ANY MIME that is non-empty AND
+ *  not `application/octet-stream`. Defense lives in `BLOCKED_EXTENSIONS`
+ *  (no .html, .js, .css, .svg, etc.) — those render inline and would be
+ *  a stored-XSS vector regardless of MIME.
+ *
+ *  `application/octet-stream` is still rejected (red-team R-03 from
+ *  bolt 3): it's the multipart default when a client omits Content-Type,
+ *  so accepting it would let an attacker bypass real-MIME inspection.
+ *  Genuine binary uploads send their real MIME. */
+function isStageOutputMimeAccepted(mime: string): boolean {
+	if (!mime) return false
+	if (mime === "application/octet-stream") return false
+	return true
+}
 
 /**
  * VULN-REPORT red-team R-04: bounded `attribute_to_user` validator.
@@ -541,13 +529,12 @@ export async function registerUploadRoutes(
 					return
 				}
 				const stageMime = normaliseMime(filePart.mimetype)
-				if (!ALLOWED_MIMES_STAGE_OUTPUT.has(stageMime)) {
+				if (!isStageOutputMimeAccepted(stageMime)) {
 					reply.status(415).send({
 						error: "unsupported_media_type",
 						code: "unsupported_media_type",
-						message: `MIME type '${stageMime || "<none>"}' is not on the stage-output upload allowlist. Allowed: ${Array.from(ALLOWED_MIMES_STAGE_OUTPUT).sort().join(", ")}.`,
+						message: `MIME type '${stageMime || "<none>"}' is rejected — empty MIME or application/octet-stream cannot be accepted (the latter is a multipart default that bypasses MIME inspection). Send the file's real MIME and retry.`,
 						received_mime: stageMime,
-						allowed_mimes: Array.from(ALLOWED_MIMES_STAGE_OUTPUT).sort(),
 					})
 					return
 				}

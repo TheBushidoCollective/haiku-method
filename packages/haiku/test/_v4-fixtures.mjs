@@ -92,6 +92,14 @@ export function makeMergedUnit({
 
 /**
  * Create a v4-shaped intent.md at `<intentDir>/intent.md`.
+ *
+ * 2026-05-08: pre-intent verifier added (cursor returns
+ * `elaborate_review` (no stage) when intent.md lacks `verified_at`).
+ * Test fixtures default to `verified_at` set so downstream tests walk
+ * past the gate. Tests that ARE exercising the pre-intent gate should
+ * pass `verifyOnCreate: false` to leave the field unset. Autopilot
+ * bypasses the gate at the cursor level, so the field is irrelevant
+ * there.
  */
 export function makeIntent({
 	intentDir,
@@ -100,6 +108,7 @@ export function makeIntent({
 	mode = "continuous",
 	approvals = {},
 	sealed = false,
+	verifyOnCreate = true,
 	extraFm = {},
 }) {
 	mkdirSync(intentDir, { recursive: true })
@@ -112,6 +121,9 @@ export function makeIntent({
 		started_at: at,
 		approvals,
 		sealed_at: sealed ? at : null,
+		...(verifyOnCreate
+			? { verified_at: at, verified_notes: "test fixture" }
+			: {}),
 		...extraFm,
 	}
 	const path = join(intentDir, "intent.md")

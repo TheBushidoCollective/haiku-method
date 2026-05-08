@@ -103,3 +103,27 @@ export type HaikuStageSetInput = Static<typeof HAIKU_STAGE_SET_INPUT_SCHEMA>
 export const validateHaikuStageSetInputSchema = stateAjv.compile(
 	HAIKU_STAGE_SET_INPUT_SCHEMA,
 )
+
+// ── haiku_intent_seal ───────────────────────────────────────────────
+//
+// Verifier-only. Stamps `verified_at: <ISO>` on intent.md frontmatter
+// after the pre-intent elaboration substance check passes. Fired by
+// the verifier subagent dispatched via the pre-intent
+// `elaborate_review` cursor action (no `stage` field).
+
+export const HAIKU_INTENT_SEAL_INPUT_SCHEMA = Type.Object(
+	{
+		intent: Type.String({ minLength: 1, description: "Intent slug" }),
+		notes: Type.Optional(
+			Type.String({
+				description:
+					"Optional verifier notes recorded on intent FM as `verified_notes`.",
+			}),
+		),
+	},
+	{ additionalProperties: false },
+)
+export type HaikuIntentSealInput = Static<typeof HAIKU_INTENT_SEAL_INPUT_SCHEMA>
+export const validateHaikuIntentSealInputSchema = stateAjv.compile(
+	HAIKU_INTENT_SEAL_INPUT_SCHEMA,
+)

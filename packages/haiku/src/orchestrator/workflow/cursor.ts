@@ -126,12 +126,17 @@ export type CursorAction =
 			elaboration_verified: boolean
 	  }
 	// `elaborate_review` dispatches the substance verifier on a captured
-	// elaboration artifact. The verifier reads the artifact + intent +
-	// STAGE.md and decides whether the conversation engaged
-	// substantively with the intent on this stage. Pass stamps
-	// `verified_at` via `haiku_stage_elaboration_seal`; fail returns
-	// gaps to the agent so it re-engages the user.
-	| { kind: "elaborate_review"; stage: string }
+	// elaboration artifact. Two scopes:
+	//   - per-stage (stage field present): reads
+	//     `stages/<stage>/elaboration.md` + intent.md + STAGE.md.
+	//     Pass stamps `verified_at` via `haiku_stage_elaboration_seal`.
+	//   - pre-intent (no stage): reads intent.md and grades whether
+	//     the body reflects a meaningful conversation about what the
+	//     user wants. Pass stamps `verified_at` via
+	//     `haiku_intent_seal`. Fires immediately after intent_create
+	//     (before any stage walk) when mode != autopilot.
+	// Fail returns gaps so the agent re-engages the user and re-records.
+	| { kind: "elaborate_review"; stage?: string }
 	// `decompose` is the unit-spec writing phase. Fires when (a) the
 	// elaborate gate has passed (or autopilot bypassed it) and
 	// (b) `units.length === 0`. The agent dispatches stage-scoped
@@ -1048,6 +1053,32 @@ export function derivePosition(args: {
 		(intentResult.data.sealed_at as string).length > 0
 	) {
 		return { track: "sealed", action: { kind: "sealed" } }
+	}
+
+	// Pre-intent verifier (2026-05-08). The conversation that produced
+	// intent.md needs the same substance check as per-stage elaborate.
+	// Fires right after intent_create on a fresh intent: reads
+	// intent.md, grades whether the body reflects a meaningful
+	// conversation about what the user wants. Pass stamps `verified_at`
+	// on intent FM via `haiku_intent_seal`; fail returns gaps so the
+	// agent re-engages the user and re-creates / updates intent.md.
+	//
+	// Mode bypass: autopilot skips this gate. The user's intent for
+	// autopilot is "the agent runs everything autonomously" — there's
+	// no human to converse with for the substance check. Pre-intent
+	// elaborate still happens (the user creates the intent in chat),
+	// but its rigor isn't enforced by an extra verifier seal.
+	if (intentResult && mode !== "autopilot") {
+		const verifiedAt =
+			typeof intentResult.data.verified_at === "string"
+				? (intentResult.data.verified_at as string)
+				: ""
+		if (!verifiedAt) {
+			return {
+				track: "intent",
+				action: { kind: "elaborate_review" },
+			}
+		}
 	}
 
 	// Determine the active stage (first NOT merged into intent main).

@@ -51,6 +51,11 @@ const FSM_DRIVEN_INTENT_FIELDS_LIST = [
 	"draft_pr_url",
 	"draft_pr_status",
 	"draft_pr_ready_at",
+	// Pre-intent verifier seal (2026-05-08). Stamped by the verifier
+	// subagent after substance check on intent.md. Engine-only — only
+	// the verifier path stamps this, never the agent directly.
+	"verified_at",
+	"verified_notes",
 ] as const
 
 /** Lifecycle states for the intent's draft delivery PR/MR.
@@ -122,6 +127,11 @@ export const INTENT_FRONTMATTER_SCHEMA = Type.Object(
 			Type.String({ enum: [...INTENT_DRAFT_PR_STATUSES] }),
 		),
 		draft_pr_ready_at: Type.Optional(Type.String()),
+		// Pre-intent verifier fields (2026-05-08). Stamped by the verifier
+		// after intent.md passes substance check. Engine-only at write
+		// time per the FSM list above.
+		verified_at: Type.Optional(Type.String()),
+		verified_notes: Type.Optional(Type.String()),
 	},
 	{
 		propertyNames: { not: { enum: [...FSM_DRIVEN_INTENT_FIELDS_LIST] } },

@@ -146,6 +146,17 @@ function applyResponse(intentDir, action, root, slug) {
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
 			writeFm(intentMd, { ...fm, sealed_at: at })
+		} else if (action.action === "elaborate_review") {
+			// Pre-intent elaborate_review (no stage). Stamp verified_at on
+			// intent.md to clear the gate. Tests don't simulate the
+			// verifier subagent.
+			const intentMd = join(intentDir, "intent.md")
+			const fm = readFm(intentMd)
+			writeFm(intentMd, {
+				...fm,
+				verified_at: at,
+				verified_notes: "test fixture — gate simulated",
+			})
 		}
 		return
 	}

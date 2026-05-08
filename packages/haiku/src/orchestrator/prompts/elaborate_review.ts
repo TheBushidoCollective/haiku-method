@@ -29,10 +29,54 @@ import { definePromptBuilder } from "./define.js"
 
 export default definePromptBuilder((ctx) => {
 	const action = ctx.action as { stage?: string; intent?: string }
-	const stage = action.stage ?? "(unknown)"
+	const stageRaw = action.stage
 	const intentSlug = action.intent ?? ctx.slug
+	const isPreIntent = !stageRaw
 
 	const intentMdPath = join(ctx.dir, "intent.md")
+
+	if (isPreIntent) {
+		const sections: string[] = []
+		sections.push(`## Pre-Intent Elaborate Review (Substance Verifier)`)
+		sections.push("")
+		sections.push(
+			`The conversation that produced \`intent.md\` for ${intentSlug} hasn't been verified. Dispatch a verifier subagent to grade the intent for substance before any stage walk fires.`,
+		)
+		sections.push(`### Dispatch the verifier`)
+		sections.push(
+			`Use the Task tool to spawn one subagent with the prompt below. Wait for it to return, then call \`haiku_run_next { intent: "${intentSlug}" }\` to re-tick.`,
+		)
+		sections.push("```")
+		sections.push(`You are the pre-intent elaboration verifier for intent ${intentSlug}.`)
+		sections.push("")
+		sections.push(`Your single job: read \`${intentMdPath}\` and decide whether its body reflects a meaningful conversation between the user and the originating agent.`)
+		sections.push("")
+		sections.push(`Pass criteria (ALL must be true):`)
+		sections.push(`- The body describes a specific goal, not a generic placeholder.`)
+		sections.push(`- The scope reflects real choices the user made (what's in, what's explicitly out).`)
+		sections.push(`- Constraints, integrations, audience, and surfaces are concrete enough that a stage's elaborate phase can anchor on them.`)
+		sections.push(`- The intent is differentiated from "build a generic X" — it has the texture of THIS user wanting THIS thing.`)
+		sections.push("")
+		sections.push(`Fail signals:`)
+		sections.push(`- One-paragraph generic "build a SaaS app" body with no scoping.`)
+		sections.push(`- No mention of audience, constraints, or non-goals.`)
+		sections.push(`- Body looks like the agent guessed at requirements without conversation.`)
+		sections.push("")
+		sections.push(`On pass: call \`haiku_intent_seal\` with { intent: "${intentSlug}" } (and optional \`notes\`). The tool stamps \`verified_at\` on intent FM.`)
+		sections.push("")
+		sections.push(`On fail: do NOT call seal. Return a structured response with the specific gaps the outer agent must address — quote the lines from intent.md that are thin, name what's missing. The outer agent re-engages the user and updates the intent body before the verifier re-tries.`)
+		sections.push("```")
+		sections.push(`### When the verifier returns`)
+		sections.push(
+			`- Pass → call \`haiku_run_next\`. Cursor will advance into the first stage's elaborate gate.`,
+		)
+		sections.push(
+			`- Fail → take the verifier's gap list back to the user. Update intent.md (re-record via the intent_create flow or via direct body update). Then call \`haiku_run_next\` for another verification pass.`,
+		)
+		return sections.join("\n")
+	}
+
+	const stage = stageRaw as string
 	const stageMdPath = join(ctx.dir, "stages", stage, "STAGE.md")
 	const elabPath = join(ctx.dir, "stages", stage, "elaboration.md")
 

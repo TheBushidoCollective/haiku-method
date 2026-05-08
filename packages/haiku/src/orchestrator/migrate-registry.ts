@@ -45,11 +45,19 @@ export type MigrationContext = {
  */
 export type MigrationStepDetails = {
 	intent_md_migrated: boolean
+	/**
+	 * `units_migrated` and `*_synthesized_approval` count UNITS — once
+	 * per file. The `*_stamps_synthesized` counters below count STAMPS
+	 * — once per role-slot written. A v3 unit with three review agents
+	 * contributes 1 to `units_with_synthesized_approval` and 5 to
+	 * `review_stamps_synthesized` (spec + 3 agents + user). The naming
+	 * is explicit so banner copy and tests don't conflate the two.
+	 */
 	units_migrated: number
 	units_with_synthesized_approval: number
-	units_with_synthesized_discovery: number
-	units_with_synthesized_reviews: number
-	units_with_synthesized_approvals: number
+	discovery_stamps_synthesized: number
+	review_stamps_synthesized: number
+	approval_stamps_synthesized: number
 	feedback_migrated: number
 	feedback_with_synthesized_closure: number
 	feedback_relocated: number
@@ -63,9 +71,9 @@ export function emptyMigrationDetails(): MigrationStepDetails {
 		intent_md_migrated: false,
 		units_migrated: 0,
 		units_with_synthesized_approval: 0,
-		units_with_synthesized_discovery: 0,
-		units_with_synthesized_reviews: 0,
-		units_with_synthesized_approvals: 0,
+		discovery_stamps_synthesized: 0,
+		review_stamps_synthesized: 0,
+		approval_stamps_synthesized: 0,
 		feedback_migrated: 0,
 		feedback_with_synthesized_closure: 0,
 		feedback_relocated: 0,
@@ -177,12 +185,12 @@ export function migrateIntent(
 			aggregate.units_migrated += stepDetails.units_migrated
 			aggregate.units_with_synthesized_approval +=
 				stepDetails.units_with_synthesized_approval
-			aggregate.units_with_synthesized_discovery +=
-				stepDetails.units_with_synthesized_discovery
-			aggregate.units_with_synthesized_reviews +=
-				stepDetails.units_with_synthesized_reviews
-			aggregate.units_with_synthesized_approvals +=
-				stepDetails.units_with_synthesized_approvals
+			aggregate.discovery_stamps_synthesized +=
+				stepDetails.discovery_stamps_synthesized
+			aggregate.review_stamps_synthesized +=
+				stepDetails.review_stamps_synthesized
+			aggregate.approval_stamps_synthesized +=
+				stepDetails.approval_stamps_synthesized
 			aggregate.feedback_migrated += stepDetails.feedback_migrated
 			aggregate.feedback_with_synthesized_closure +=
 				stepDetails.feedback_with_synthesized_closure

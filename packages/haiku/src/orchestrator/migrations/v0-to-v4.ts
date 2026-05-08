@@ -291,7 +291,7 @@ function backfillCompletedUnitStamps(
 	for (const def of discoveryDefs) {
 		if (discovery[def.name] == null) {
 			discovery[def.name] = stamp
-			details.units_with_synthesized_discovery++
+			details.discovery_stamps_synthesized++
 		}
 	}
 
@@ -312,7 +312,7 @@ function backfillCompletedUnitStamps(
 	for (const role of reviewRoles) {
 		if (reviews[role] == null) {
 			reviews[role] = stamp
-			details.units_with_synthesized_reviews++
+			details.review_stamps_synthesized++
 		}
 	}
 
@@ -323,7 +323,7 @@ function backfillCompletedUnitStamps(
 	for (const role of approvalRoles) {
 		if (approvals[role] == null) {
 			approvals[role] = stamp
-			details.units_with_synthesized_approvals++
+			details.approval_stamps_synthesized++
 		}
 	}
 }

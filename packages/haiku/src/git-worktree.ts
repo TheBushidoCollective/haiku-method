@@ -1231,8 +1231,16 @@ export function mergeStageBranchIntoMain(
 	message: string
 	isConflict?: boolean
 	conflictFiles?: string[]
+	/** True when the function returned success without performing a
+	 *  merge — the source branch was missing locally and on origin (v3
+	 *  merged-and-deleted), or the environment isn't a git repo at all.
+	 *  Callers that drive a `merge_stage` loop must consult this flag
+	 *  to know they need to advance the cursor's state another way
+	 *  (e.g. stamp `stages_merged` on intent.md) — without it, the
+	 *  cursor re-emits `merge_stage` for the same stage forever. */
+	noop?: boolean
 } {
-	if (!isGitRepo()) return { success: true, message: "no git" }
+	if (!isGitRepo()) return { success: true, message: "no git", noop: true }
 	const stageBranch = `haiku/${slug}/${stage}`
 	const mainBranch = `haiku/${slug}/main`
 	const mergeMessage = `haiku: merge stage ${stage} into main`
@@ -1257,6 +1265,7 @@ export function mergeStageBranchIntoMain(
 		if (!localStage && !originStage) {
 			return {
 				success: true,
+				noop: true,
 				message: `stage branch ${stageBranch} is missing locally and on origin — presumed merged-and-deleted in pre-v4 (3.x) workflow; treating as already merged`,
 			}
 		}

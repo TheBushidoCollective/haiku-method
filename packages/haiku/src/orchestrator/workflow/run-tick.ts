@@ -23,6 +23,7 @@ import { migrateIntent } from "../migrate-registry.js"
 // Importing the migrator file for its side effect: registerMigrator
 // runs at module load and adds the v0→v4 edge to the registry.
 import "../migrations/v0-to-v4.js"
+import { hasV3CruftInIntent } from "../migrations/v0-to-v4.js"
 import {
 	type CursorAction,
 	type CursorPosition,
@@ -91,7 +92,17 @@ export function runWorkflowTick(
 		// `4.0.1`; that's intentional — the FM stamp marks the schema
 		// generation, not the build that last touched it.
 		const sourceMajor = Number(sourceVersion.split(".")[0] ?? "0") || 0
-		if (sourceMajor !== targetMajor) {
+		// Force re-migration when the major matches but v3 cruft survived
+		// into the tree. This catches the post-merge case where a stage
+		// branch's v4 intent.md merges into main but v3 unit/feedback/
+		// state.json files come back from main's pre-migration state.
+		// Without this branch, intent.md's `plugin_version: "4.0.0"`
+		// would short-circuit the gate and the v3 files would sit forever.
+		// hasV3CruftInIntent reads at most one unit + one fb + state.json
+		// per stage, so the per-tick cost is bounded and small.
+		const v3CruftPresent =
+			sourceMajor === targetMajor && hasV3CruftInIntent(iDir)
+		if (sourceMajor !== targetMajor || v3CruftPresent) {
 			// Use the major's canonical schema anchor (e.g. "4.0.0"),
 			// not the running build version (e.g. "4.0.2"). The
 			// migration registry edges are keyed by schema generation
@@ -102,10 +113,19 @@ export function runWorkflowTick(
 			// path from 0 to 4.0.x" and the migration fails entirely.
 			// Reported 2026-05-08 by a user upgrading on v4.0.2.
 			const schemaTarget = `${targetMajor}.0.0`
+			// When forcing re-migration due to v3 cruft, override
+			// sourceVersion to "0". The migrate registry indexes edges
+			// by version pair; with `from === to` (e.g. "4.0.0" → "4.0.0")
+			// findChain returns no migrators and the cleanup never runs.
+			// Treating the cruft-bearing tree as if it were on "0"
+			// re-fires the v0→4.0.0 edge — which is idempotent on
+			// already-migrated files (writing v4 fields to a v4 file is
+			// a no-op) but cleans up any stranded v3 fields.
+			const effectiveSourceVersion = v3CruftPresent ? "0" : sourceVersion
 			try {
 				const migrateResult = migrateIntent(
 					{ intentDir: iDir, repoRoot: root ?? "" },
-					sourceVersion,
+					effectiveSourceVersion,
 					schemaTarget,
 				)
 				intentFm = parseIntentFm(intentMdPath)
@@ -120,9 +140,15 @@ export function runWorkflowTick(
 				if (migrateResult.steps > 0) {
 					const d = migrateResult.details
 					const lines: string[] = []
-					lines.push(
-						`Migrated intent '${slug}' from plugin_version='${sourceVersion}' to '${schemaTarget}'.`,
-					)
+					if (v3CruftPresent) {
+						lines.push(
+							`Re-migrated intent '${slug}' to '${schemaTarget}' — v3-shape frontmatter survived a merge into the otherwise-migrated tree (likely a stage merge into intent main from a pre-migration branch). The migrator is idempotent on already-v4 files; the v3 cruft has been cleaned up.`,
+						)
+					} else {
+						lines.push(
+							`Migrated intent '${slug}' from plugin_version='${sourceVersion}' to '${schemaTarget}'.`,
+						)
+					}
 					lines.push("")
 					lines.push("**What changed on disk** (this is intentional):")
 					if (d.intent_md_migrated) {

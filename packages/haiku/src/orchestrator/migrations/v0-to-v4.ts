@@ -651,6 +651,93 @@ function v0ToV4(ctx: MigrationContext): MigrationStepDetails {
 // we represent that as the literal "0" version string.
 registerMigrator("0", TARGET_VERSION, v0ToV4)
 
+/**
+ * Detect v3-shape frontmatter that survived into an otherwise-migrated
+ * intent. Catches the case where a stage merge brings v3 unit/feedback
+ * files back into a tree whose intent.md is already stamped as v4 —
+ * `runWorkflowTick`'s `sourceMajor !== targetMajor` gate would skip the
+ * migrator (intent.md says v4) and the v3 cruft would sit forever.
+ *
+ * Cheap sentinel check: read intent.md + the first unit/feedback file
+ * per stage, look for any DEPRECATED_INTENT_FIELDS / DEPRECATED_UNIT_FIELDS
+ * / DEPRECATED_FB_FIELDS keys. Returns true on the first hit. Bounded
+ * read count per tick (one file per stage at most).
+ *
+ * Returns true if the migrator should re-run regardless of intent.md's
+ * plugin_version.
+ */
+export function hasV3CruftInIntent(intentDirPath: string): boolean {
+	const intentMd = join(intentDirPath, "intent.md")
+	if (existsSync(intentMd)) {
+		try {
+			const fm = readMatter(intentMd).data
+			for (const key of DEPRECATED_INTENT_FIELDS) {
+				if (key in fm) return true
+			}
+		} catch {
+			/* malformed YAML — let the next tick's tryMigrateFile log it */
+		}
+	}
+	const stagesDir = join(intentDirPath, "stages")
+	if (!existsSync(stagesDir)) return false
+	for (const entry of readdirSync(stagesDir, { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue
+		const stageDir = join(stagesDir, entry.name)
+		// Sentinel: first unit file per stage.
+		const unitsDir = join(stageDir, "units")
+		if (existsSync(unitsDir)) {
+			const unit = readdirSync(unitsDir).find((f) => f.endsWith(".md"))
+			if (unit) {
+				try {
+					const fm = readMatter(join(unitsDir, unit)).data
+					for (const key of DEPRECATED_UNIT_FIELDS) {
+						if (key in fm) return true
+					}
+				} catch {
+					/* skip, same reasoning */
+				}
+			}
+		}
+		// Sentinel: first feedback file per stage.
+		const fbDir = join(stageDir, "feedback")
+		if (existsSync(fbDir)) {
+			const fb = readdirSync(fbDir).find((f) => f.endsWith(".md"))
+			if (fb) {
+				try {
+					const fm = readMatter(join(fbDir, fb)).data
+					for (const key of DEPRECATED_FB_FIELDS) {
+						if (key in fm) return true
+					}
+				} catch {
+					/* skip */
+				}
+			}
+		}
+		// Stage state.json from v3 is itself a fingerprint — v4 never
+		// writes a state.json with `status: "active"|"completed"|"pending"`,
+		// so its presence is enough to force re-migration.
+		const stateJson = join(stageDir, "state.json")
+		if (existsSync(stateJson)) {
+			try {
+				const json = JSON.parse(readFileSync(stateJson, "utf8"))
+				if (
+					typeof json === "object" &&
+					json !== null &&
+					typeof json.status === "string" &&
+					(json.status === "active" ||
+						json.status === "completed" ||
+						json.status === "pending")
+				) {
+					return true
+				}
+			} catch {
+				/* skip */
+			}
+		}
+	}
+	return false
+}
+
 export const __testOnly = {
 	migrateIntentMd,
 	migrateUnitsInStage,

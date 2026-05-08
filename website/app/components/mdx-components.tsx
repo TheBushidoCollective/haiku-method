@@ -1,8 +1,10 @@
 import type { MDXComponents } from "mdx/types"
 import Link from "next/link"
 import type { HTMLAttributes, ReactNode } from "react"
+import { CursorCascade } from "./CursorCascade"
 import { ExpandableDiagram } from "./ExpandableDiagram"
 import { Mermaid } from "./Mermaid"
+import { TickCard, TickSequence } from "./TickSequence"
 
 interface CalloutProps {
 	tone?: "info" | "good" | "warn" | "bad"
@@ -34,7 +36,7 @@ function Callout({ tone = "info", title, children }: CalloutProps) {
 interface CardProps {
 	title?: string
 	eyebrow?: string
-	accent?: "good" | "bad" | "info"
+	accent?: "good" | "bad" | "info" | "warn" | "alert"
 	children: ReactNode
 }
 
@@ -43,6 +45,8 @@ function Card({ title, eyebrow, accent = "info", children }: CardProps) {
 		info: "border-t-blue-500",
 		good: "border-t-green-500",
 		bad: "border-t-red-500",
+		warn: "border-t-amber-400",
+		alert: "border-t-orange-500",
 	}
 	return (
 		<div
@@ -152,7 +156,10 @@ export const mdxComponents: MDXComponents = {
 	Mermaid,
 	Callout,
 	Card,
+	CursorCascade,
 	Grid,
 	KeyPoints,
 	Pill,
+	TickCard,
+	TickSequence,
 }

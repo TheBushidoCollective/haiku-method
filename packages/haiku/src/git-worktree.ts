@@ -747,7 +747,10 @@ export function markPullRequestReady(url: string): {
 			})
 			return { ok: true }
 		}
-		return { ok: false, error: `unrecognised provider host: ${parsed.hostname}` }
+		return {
+			ok: false,
+			error: `unrecognised provider host: ${parsed.hostname}`,
+		}
 	} catch (err) {
 		return {
 			ok: false,

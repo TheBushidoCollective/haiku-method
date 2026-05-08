@@ -34,8 +34,8 @@ import {
 	ensureOnStageBranch,
 	pushStageBranch,
 } from "../../git-worktree.js"
-import { firstUnmergedStage } from "../../orchestrator/workflow/cursor.js"
 import { adaptInstructions } from "../../harness-instructions.js"
+import { firstUnmergedStage } from "../../orchestrator/workflow/cursor.js"
 import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
 import type { OrchestratorAction as OrchestratorActionType } from "../../orchestrator.js"
 import {

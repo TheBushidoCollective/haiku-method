@@ -4627,6 +4627,57 @@ export function persistDesignDirectionSelection(opts: {
 		)
 	}
 
+	// 2026-05-08: also write a markdown manifest at the canonical
+	// artifact location `stages/<stage>/artifacts/design-direction.md`.
+	// This is the file the discovery-agent reframe of design_direction
+	// reads — a studio's `discovery/design-direction.md` template
+	// declares `location:` pointing here, and the cursor's existence
+	// check passes the gate when this file lands. Once the reframe is
+	// fully live, the intent.md FM stamp above can be deprecated; for
+	// now both writes happen so the old cursor clauses keep working
+	// against legacy studios.
+	try {
+		const manifestPath = join(
+			stageDir(opts.slug, opts.stage),
+			"artifacts",
+			"design-direction.md",
+		)
+		const manifestFm: Record<string, unknown> = {
+			intent: opts.slug,
+			stage: opts.stage,
+			mode: "archetype",
+			archetype: opts.archetype,
+			recorded_at: timestamp(),
+		}
+		if (opts.comments) manifestFm.comments = opts.comments
+		if (persisted.length > 0) {
+			manifestFm.annotations = persisted
+		}
+		const bodyParts: string[] = []
+		bodyParts.push(`# Design Direction — ${opts.archetype}`)
+		bodyParts.push("")
+		if (opts.comments) {
+			bodyParts.push(opts.comments.trim())
+			bodyParts.push("")
+		}
+		if (persisted.length > 0) {
+			bodyParts.push("## Annotated screenshots")
+			bodyParts.push("")
+			for (const a of persisted) {
+				bodyParts.push(`- \`${a.screenshot_path}\` — ${a.comment}`)
+			}
+		}
+		mkdirSync(dirname(manifestPath), { recursive: true })
+		writeFileSync(
+			manifestPath,
+			matter.stringify(`${bodyParts.join("\n").trim()}\n`, manifestFm),
+		)
+	} catch (err) {
+		console.error(
+			`[haiku] failed to write design-direction.md manifest: ${err instanceof Error ? err.message : String(err)}`,
+		)
+	}
+
 	return { annotations: persisted, artifactsDir }
 }
 
@@ -4745,6 +4796,52 @@ export function persistDesignDirectionUploads(opts: {
 	} catch (err) {
 		console.error(
 			`[haiku] failed to stamp design_directions (upload) on intent.md: ${err instanceof Error ? err.message : String(err)}`,
+		)
+	}
+
+	// 2026-05-08: also write the design-direction.md manifest at the
+	// canonical artifact location so the discovery-agent reframe of
+	// design_direction can gate on file existence (matches PR #334's
+	// "artifact existence is the signal" model). See companion
+	// persister `persistDesignDirectionSelection` for the archetype
+	// case.
+	try {
+		const manifestPath = join(
+			stageDir(opts.slug, opts.stage),
+			"artifacts",
+			"design-direction.md",
+		)
+		const manifestFm: Record<string, unknown> = {
+			intent: opts.slug,
+			stage: opts.stage,
+			mode: "upload",
+			recorded_at: timestamp(),
+		}
+		if (opts.comments) manifestFm.comments = opts.comments
+		if (uploads.length > 0) manifestFm.uploads = uploads
+		const bodyParts: string[] = []
+		bodyParts.push(`# Design Direction — Uploaded reference materials`)
+		bodyParts.push("")
+		if (opts.comments) {
+			bodyParts.push(opts.comments.trim())
+			bodyParts.push("")
+		}
+		if (uploads.length > 0) {
+			bodyParts.push("## Uploaded files")
+			bodyParts.push("")
+			for (const u of uploads) {
+				const captionTail = u.caption ? ` — ${u.caption}` : ""
+				bodyParts.push(`- \`${u.path}\` (${u.filename})${captionTail}`)
+			}
+		}
+		mkdirSync(dirname(manifestPath), { recursive: true })
+		writeFileSync(
+			manifestPath,
+			matter.stringify(`${bodyParts.join("\n").trim()}\n`, manifestFm),
+		)
+	} catch (err) {
+		console.error(
+			`[haiku] failed to write design-direction.md manifest (upload): ${err instanceof Error ? err.message : String(err)}`,
 		)
 	}
 

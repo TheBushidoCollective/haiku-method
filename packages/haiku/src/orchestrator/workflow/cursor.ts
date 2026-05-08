@@ -839,6 +839,15 @@ function walkIntentTrack(args: {
 	//    signal — no FM bookkeeping. (FM state is reserved for actions
 	//    that DON'T produce a file: review approvals, user gates.)
 	//
+	// 2026-05-08: discovery now fires when units.length === 0 too IF the
+	// template declares a `tool:` field (tool-driven discovery — the
+	// reframed design_direction picker is the canonical case). Without
+	// `tool:`, discovery still gates on `units.length > 0` because
+	// research-style discovery agents need a representative unit for
+	// prompt context. The `units` field on the action is empty when
+	// units don't yet exist; empty array is fine because the tool's
+	// output is stage-scoped.
+	//
 	// Defs are sorted by `name` so dispatch order is deterministic
 	// across filesystems — `readdirSync` returns templates in
 	// platform-dependent order, which makes idempotent retries surface
@@ -846,8 +855,11 @@ function walkIntentTrack(args: {
 	const discoveryDefs = readStageArtifactDefs(studio, stage)
 		.filter((d) => d.kind === "discovery")
 		.sort((a, b) => a.name.localeCompare(b.name))
-	if (discoveryDefs.length > 0 && units.length > 0) {
+	if (discoveryDefs.length > 0) {
 		for (const def of discoveryDefs) {
+			// Skip non-tool discovery agents when units don't exist —
+			// they need a representative unit for prompt context.
+			if (units.length === 0 && !def.tool) continue
 			if (!def.required) continue
 			if (!def.location) {
 				// `required: true` with no `location:` is a studio
@@ -866,15 +878,16 @@ function walkIntentTrack(args: {
 					readdirSync(absPath).filter((e) => e !== ".gitkeep").length > 0
 				: existsSync(absPath)
 			if (!exists) {
-				// Discovery artifacts are typically intent-scoped (one
-				// artifact serves all units in the stage). The action
-				// carries a representative unit for prompt context — pick
-				// the first unit alphabetically so the choice is stable.
+				// Discovery artifacts are stage- or intent-scoped.
+				// `units` is a representative unit for prompt context
+				// when units exist; empty array when the stage hasn't
+				// been decomposed yet (the discovery output informs
+				// decomposition).
 				return {
 					kind: "discovery_required",
 					stage,
 					agent: def.name,
-					units: [units[0].name],
+					units: units.length > 0 ? [units[0].name] : [],
 				}
 			}
 		}

@@ -37,19 +37,47 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	const def = defs.find((d) => d.name === agent)
 
 	const lines: string[] = []
-	lines.push(`# Discovery required: \`${agent}\` on \`${unit}\``)
+	const unitLabel = unit ? ` on \`${unit}\`` : ""
+	lines.push(`# Discovery required: \`${agent}\`${unitLabel}`)
 	lines.push("")
 	const resolvedLocation = def
 		? def.location.replace(/\{intent-slug\}/g, slug)
 		: ""
 	lines.push(
-		`Stage \`${stage}\` declares discovery agent \`${agent}\`. The artifact at \`${resolvedLocation || "(template missing)"}\` is not on disk yet — run the agent before any execute hat dispatches. (File existence IS the signal that discovery ran; there is no FM stamp.)`,
+		`Stage \`${stage}\` declares discovery agent \`${agent}\`. The artifact at \`${resolvedLocation || "(template missing)"}\` is not on disk yet — run the agent before decompose proceeds. (File existence IS the signal that discovery ran; there is no FM stamp.)`,
 	)
 	lines.push("")
 
 	if (!def) {
 		lines.push(
 			`The studio configuration is missing the template file for discovery agent \`${agent}\`. Fix the studio configuration; this should never reach the agent in a healthy intent.`,
+		)
+		return lines.join("\n")
+	}
+
+	// Tool-driven discovery (2026-05-08). When the template declares
+	// `tool: <mcp_tool_name>`, the discovery agent's job is to call
+	// that tool, not fan out a subagent. The tool writes the artifact
+	// at `location:` as a side effect (e.g., `pick_design_direction`
+	// opens the SPA picker, captures the user's choice, and writes
+	// the result to the location declared on the template). This
+	// unifies design-direction-style human-input gates with knowledge-
+	// research discovery agents under one cursor mechanism.
+	if (def.tool) {
+		lines.push(`## What to do`)
+		lines.push("")
+		lines.push(
+			`This discovery template is **tool-driven**: call the \`${def.tool}\` MCP tool. The tool produces the artifact at \`${resolvedLocation}\` as a side effect. The cursor reads that path on the next tick — file existence IS the signal that discovery ran.`,
+		)
+		lines.push("")
+		lines.push("### Template body (for context)")
+		lines.push("")
+		lines.push("```markdown")
+		lines.push(def.body.trim())
+		lines.push("```")
+		lines.push("")
+		lines.push(
+			`Call \`${def.tool} { intent: "${slug}" }\` (plus any tool-specific arguments documented in the template body above). When the tool returns, call \`haiku_run_next { intent: "${slug}" }\` to re-tick.`,
 		)
 		return lines.join("\n")
 	}

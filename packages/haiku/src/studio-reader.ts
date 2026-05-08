@@ -350,6 +350,14 @@ export interface ArtifactDef {
 	required: boolean
 	body: string // markdown body describing the artifact
 	kind: "discovery" | "output" // which subdirectory it came from
+	// Optional MCP tool that produces this artifact (2026-05-08).
+	// When declared, the cursor's discovery prompt instructs the
+	// agent to call the named tool, which writes the artifact to
+	// `location:` as a side effect. Unifies design_direction +
+	// clarify with the discovery-agent model: same artifact
+	// existence check, same gate. Without a tool, the agent runs
+	// a fan-out subagent against the artifact body's instructions.
+	tool?: string
 }
 
 export function readStageArtifactDefs(
@@ -380,6 +388,9 @@ export function readStageArtifactDefs(
 					required: data.required !== false,
 					body,
 					kind: kind === "outputs" ? "output" : "discovery",
+					...(typeof data.tool === "string" && data.tool.length > 0
+						? { tool: data.tool as string }
+						: {}),
 				})
 			}
 		}

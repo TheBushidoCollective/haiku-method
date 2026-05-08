@@ -5,11 +5,12 @@ hats: [designer-prep, designer, design-reviewer]
 fix_hats: [classifier, designer, feedback-assessor]
 review: [external, ask]
 elaboration: collaborative
-# Hard gate: cursor refuses to advance into elaborate until the user
-# has selected a design direction via pick_design_direction. Selection
-# is recorded on intent.md frontmatter as
-# `design_directions: { design: { archetype, at } }`. P3 (2026-05-06).
-requires_design_direction: true
+# Design direction (2026-05-08 reframe): the picker is now a
+# discovery agent. See `discovery/DESIGN-DIRECTION.md` — it declares
+# `tool: pick_design_direction` so the cursor's tool-driven discovery
+# branch fires. The bespoke `requires_design_direction: true` flag is
+# retired; the discovery existence check on
+# `stages/design/artifacts/design-direction.md` is the gate.
 inputs:
   - stage: inception
     discovery: discovery

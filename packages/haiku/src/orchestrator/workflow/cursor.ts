@@ -94,21 +94,18 @@ export type CursorAction =
 	// `tool: pick_design_direction`) and the cursor's existence
 	// check on the artifact location passes the gate. See
 	// `prompts/discovery_required.ts` for the tool-driven branch.
-	// `elaborate` is the per-stage human-conversation gate. Fires before
-	// `decompose` whenever (a) `intent.mode !== "autopilot"` and
-	// (b) `stages/<stage>/elaboration.md` is missing or unverified. The
-	// agent's job during this action is the conversation: read the
-	// intent + STAGE.md + prior stages' outputs, surface informed
-	// questions to the user, and capture the agreement via
-	// `haiku_stage_elaboration_record`. Autopilot bypasses this clause
-	// entirely — there's no human to converse with, so the cursor walks
-	// straight to `decompose`.
-	| {
-			kind: "elaborate"
-			stage: string
-			elaboration_present: boolean
-			elaboration_verified: boolean
-	  }
+	// `elaborate` is the per-stage human-conversation gate. Fires
+	// whenever (a) `intent.mode !== "autopilot"` and
+	// (b) `stages/<stage>/elaboration.md` is missing on a fresh stage
+	// (units.length === 0). The agent's job during this action is the
+	// conversation: read intent + STAGE.md + prior outputs, surface
+	// informed questions to the user, and capture the agreement via
+	// `haiku_stage_elaboration_record`. The artifact-present-but-
+	// unverified case emits `elaborate_review` instead, NOT this
+	// action — so this action's payload doesn't need to convey
+	// "where in the gate cycle we are." Just `stage` is enough.
+	// Autopilot bypasses this clause entirely.
+	| { kind: "elaborate"; stage: string }
 	// `elaborate_review` dispatches the substance verifier on a captured
 	// elaboration artifact. Two scopes:
 	//   - per-stage (stage field present): reads
@@ -651,12 +648,7 @@ function walkIntentTrack(args: {
 			// verified — fall through to discovery / decompose / waves
 		} else if (units.length === 0) {
 			// Fresh stage, no artifact, no units — fire the gate.
-			return {
-				kind: "elaborate",
-				stage,
-				elaboration_present: false,
-				elaboration_verified: false,
-			}
+			return { kind: "elaborate", stage }
 		}
 		// Else: artifact missing but units exist → grandfathered.
 		// Falls through past the gate without firing.
@@ -910,16 +902,39 @@ export function derivePosition(args: {
 	// no human to converse with for the substance check. Pre-intent
 	// elaborate still happens (the user creates the intent in chat),
 	// but its rigor isn't enforced by an extra verifier seal.
+	//
+	// Grandfather rule (mirrors per-stage gate): only fire on a truly
+	// fresh intent — first stage active, no units written yet. Any
+	// existing in-flight intent that was created before this PR
+	// (lacking `verified_at`) but has already shipped stage work is
+	// grandfathered. Without this, every legacy non-autopilot intent
+	// would block permanently at `elaborate_review` on first tick
+	// after the plugin upgrade.
 	if (intentResult && mode !== "autopilot") {
 		const verifiedAt =
 			typeof intentResult.data.verified_at === "string"
 				? (intentResult.data.verified_at as string)
 				: ""
 		if (!verifiedAt) {
-			return {
-				track: "intent",
-				action: { kind: "elaborate_review" },
+			const stages = resolveStudioStages(studio)
+			const firstStage = stages[0] ?? ""
+			const firstStageDir = firstStage
+				? join(intentDir, "stages", firstStage)
+				: ""
+			const firstStageHasUnits =
+				firstStageDir && existsSync(firstStageDir)
+					? listUnitPaths(firstStageDir).length > 0
+					: false
+			const activeForGate = firstUnmergedStage(slug, studio)
+			const isTrulyFresh =
+				activeForGate === firstStage && !firstStageHasUnits
+			if (isTrulyFresh) {
+				return {
+					track: "intent",
+					action: { kind: "elaborate_review" },
+				}
 			}
+			// Grandfathered — fall through.
 		}
 	}
 

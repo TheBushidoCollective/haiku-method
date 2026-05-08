@@ -8,12 +8,21 @@
 // entry below describes a visual position in the map and what the
 // cursor would emit at that point — one of the v4 CursorAction kinds:
 // `select_studio` / `select_mode` / `select_stage` / `drift_detected` /
-// `clarify_required` / `discovery_required` /
-// `design_direction_required` / `design_direction_complete` /
-// `design_direction_uploaded` / `elaborate` / `start_unit_hat` /
-// `start_feedback_hat` / `close_feedback` / `dispatch_review` /
-// `dispatch_quality_gates` / `dispatch_approval` / `user_gate` /
-// `merge_stage` / `intent_review` / `merge_intent` / `sealed`.
+// `discovery_required` / `elaborate` / `elaborate_review` /
+// `decompose` / `start_unit_hat` / `start_feedback_hat` /
+// `close_feedback` / `dispatch_review` / `dispatch_quality_gates` /
+// `dispatch_approval` / `user_gate` / `merge_stage` / `intent_review` /
+// `merge_intent` / `sealed`.
+//
+// 2026-05-08: `design_direction_required` / `_complete` / `_uploaded`
+// and `clarify_required` were collapsed into the discovery-agent
+// model — studios now declare a discovery template with `tool:` and
+// the cursor's existence check on the artifact's `location:` is the
+// gate. Per-stage `elaborate` was split into the conversation gate
+// (new `elaborate`) + unit-spec writing (renamed `decompose`). Pre-
+// intent verifier fires `elaborate_review` (no stage) before any
+// stage walk on non-autopilot intents that lack `verified_at` on
+// intent.md.
 //
 // The TransitionKey enum is the map's visual vocabulary; it does NOT
 // match cursor `kind` values 1:1. Each visual position chooses the
@@ -565,7 +574,7 @@ export function payloadFor(
 					],
 			instructions: opts.isLast
 				? "Final stage's branch is merged. The cursor now walks intent-scope approvals from `intent.md.approvals`: `spec` and `continuity` (engine-built) and `user` (gated through SPA). Mode-shaped: autopilot trims to `[spec, continuity]` only. Each missing role → `intent_review { role }` (one tick per role). Once every intent-scope approval signs → `merge_intent` (engine performs final rebase + stamps `sealed_at`) → `sealed`."
-				: `Cursor returns \`merge_stage { stage: "${stageLower}" }\`. The next \`haiku_run_next\` tick performs the merge under \`withIntentMainLock\` and returns the next instruction — most commonly the next stage's first action (e.g. \`elaborate\` or \`design_direction_required\`).`,
+				: `Cursor returns \`merge_stage { stage: "${stageLower}" }\`. The next \`haiku_run_next\` tick performs the merge under \`withIntentMainLock\` and returns the next instruction — most commonly the next stage's first action (e.g. \`elaborate\` for the conversation gate, or \`discovery_required\` if the next stage declares a tool-driven discovery template).`,
 		},
 		"feedback-dispatch": {
 			injection: [

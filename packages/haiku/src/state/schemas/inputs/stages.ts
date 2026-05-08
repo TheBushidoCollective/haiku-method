@@ -35,13 +35,21 @@ export const validateHaikuStageElaborationRecordInputSchema = stateAjv.compile(
 
 // ── haiku_stage_elaboration_seal ────────────────────────────────────
 //
-// Verifier-only. Stamps `verified_at: <ISO timestamp>` on the
-// elaboration artifact's frontmatter, signaling to the cursor that
-// the conversation passed substance review. The agent does NOT call
-// this directly — only the verifier subagent (dispatched via the
-// elaborate_review prompt) calls it. Calling without a corresponding
-// `verified_by_agent` token would let the agent self-certify; the
-// handler enforces that the call comes from a verifier context.
+// Verifier-only by convention. Stamps `verified_at: <ISO timestamp>`
+// on the elaboration artifact's frontmatter, signaling to the cursor
+// that the conversation passed substance review.
+//
+// IMPORTANT: enforcement is INSTRUCTION-LEVEL ONLY. The handler does
+// NOT verify caller context — there's no token, no nonce, no field
+// distinguishing the verifier subagent from the main agent. The
+// `elaborate_review` prompt instructs the agent to dispatch a
+// verifier subagent that calls this tool, and the tool description
+// says "the agent must NOT call it directly," but a determined or
+// confused agent could self-certify by calling record + seal in the
+// same turn. This matches every other "verifier-only" tool in the
+// codebase (the seal-tool family is uniformly instruction-gated, not
+// runtime-gated). A future hardening pass could add a verifier
+// nonce; for now the protection is the prompt contract.
 
 export const HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA = Type.Object(
 	{

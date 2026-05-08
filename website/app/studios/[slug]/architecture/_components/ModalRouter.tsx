@@ -556,7 +556,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**Track A — intent.** On the active stage, walk: `design_direction_required` → `clarify_required` → `discovery_required` → `elaborate` → `start_unit_hat` → `dispatch_review` / `user_gate { spec }` → `dispatch_quality_gates` / `dispatch_approval` / `user_gate { approval }` → `merge_stage`.",
+										"**Track A — intent.** Pre-stage: `elaborate_review` (no `stage`) when intent.md lacks `verified_at` (non-autopilot, fresh intent). On the active stage, walk: `elaborate` (conversation gate) → `elaborate_review` (substance verifier) → `discovery_required` → `decompose` → `start_unit_hat` → `dispatch_review` / `user_gate { spec }` → `dispatch_quality_gates` / `dispatch_approval` / `user_gate { approval }` → `merge_stage`.",
 									)}
 								/>
 							</li>
@@ -584,7 +584,7 @@ export function ModalRouter({
 						<HtmlBlock
 							className="prose"
 							html={renderInline(
-								"The cursor emits exactly these `kind` values: `select_studio`, `select_mode`, `select_stage`, `drift_detected`, `start_feedback_hat`, `close_feedback`, `design_direction_required` / `_complete` / `_uploaded`, `clarify_required`, `discovery_required`, `elaborate`, `start_unit_hat`, `dispatch_review`, `dispatch_quality_gates`, `dispatch_approval`, `user_gate { spec | approval }`, `merge_stage`, `intent_review`, `merge_intent`, `sealed`.",
+								"The cursor emits exactly these `kind` values: `select_studio`, `select_mode`, `select_stage`, `drift_detected`, `start_feedback_hat`, `close_feedback`, `discovery_required`, `elaborate`, `elaborate_review`, `decompose`, `start_unit_hat`, `dispatch_review`, `dispatch_quality_gates`, `dispatch_approval`, `user_gate { spec | approval }`, `merge_stage`, `intent_review`, `merge_intent`, `sealed`. (Pre-2026-05-08 the cursor also had `design_direction_required` / `_complete` / `_uploaded` and `clarify_required`; those collapsed into the discovery-agent model — discovery templates with `tool:` cover the human-input gates now.)",
 							)}
 						/>
 					</div>

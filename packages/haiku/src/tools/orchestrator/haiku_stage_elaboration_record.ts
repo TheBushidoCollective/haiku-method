@@ -77,25 +77,15 @@ export default defineTool({
 		}
 
 		const stageDir = join(intentDir, "stages", stage)
-		if (!existsSync(stageDir)) {
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: JSON.stringify(
-							{
-								error: "stage_not_found",
-								tool: "haiku_stage_elaboration_record",
-								message: `Stage '${stage}' not found on intent '${slug}'.`,
-							},
-							null,
-							2,
-						),
-					},
-				],
-				isError: true,
-			}
-		}
+		// Note: `stages/<stage>/` may not exist yet on a truly fresh
+		// stage — the cursor fires `elaborate` BEFORE any unit specs
+		// land, so the agent's first call here is exactly the moment
+		// the stage directory needs to be created. The mkdirSync
+		// below handles that (idempotent under `{ recursive: true }`).
+		// We don't gate on `existsSync(stageDir)` because that would
+		// reject every fresh-stage call with `stage_not_found` and
+		// permanently block the gate. The intent existence check
+		// above is the real validation.
 
 		// Ensure we're on the right branch before writing. Stage-scoped
 		// artifacts land on the stage branch, like every other per-stage

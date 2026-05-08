@@ -91,8 +91,6 @@ test("elaborate gate: fires on fresh stage when mode is continuous", async () =>
 		const action = await runTick(repoRoot, slug)
 		assert.strictEqual(action.action, "elaborate")
 		assert.strictEqual(action.stage, "design")
-		assert.strictEqual(action.elaboration_present, false)
-		assert.strictEqual(action.elaboration_verified, false)
 	})
 })
 
@@ -221,6 +219,42 @@ test("pre-intent verifier: clears when verified_at is stamped", async () => {
 		// elaborate gate.
 		assert.strictEqual(action.action, "elaborate")
 		assert.strictEqual(action.stage, "design")
+	})
+})
+
+test("pre-intent verifier: grandfathered when first stage already has units", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo("preintent-grandfather", async ({ repoRoot, intentDir, slug }) => {
+		makeStudio({ repoRoot, studio: "test" })
+		// Legacy intent: created before this PR (no verified_at) but
+		// the first stage already has unit work on disk. Migration
+		// path — gate must NOT block, otherwise every existing
+		// non-autopilot intent gets stuck on plugin upgrade.
+		makeIntent({
+			intentDir,
+			slug,
+			studio: "test",
+			mode: "continuous",
+			verifyOnCreate: false,
+		})
+		const unitsDir = join(intentDir, "stages", "design", "units")
+		mkdirSync(unitsDir, { recursive: true })
+		writeFileSync(
+			join(unitsDir, "unit-01.md"),
+			matter.stringify("u1\n", {
+				title: "u1",
+				depends_on: [],
+				started_at: null,
+				iterations: [],
+				reviews: {},
+				approvals: {},
+			}),
+		)
+		const action = await runTick(repoRoot, slug)
+		// Pre-intent gate is grandfathered. Cursor walks straight into
+		// the per-stage flow (which itself is grandfathered too because
+		// elaboration.md is missing AND units exist).
+		assert.notStrictEqual(action.action, "elaborate_review")
 	})
 })
 

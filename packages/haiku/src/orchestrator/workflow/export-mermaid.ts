@@ -11,8 +11,11 @@
 //
 // What's preserved in the diagram:
 // - Top-level state nodes (one per stage + setup + terminals)
-// - Per-stage phase progression (start_stage → elaborate → execute
-//   → review → review_fix → gate)
+// - Per-stage phase progression (start_stage → elaborate →
+//   elaborate_review → decompose → execute → review → review_fix →
+//   gate). The 2026-05-08 elaborate split shows up here as two new
+//   states (elaborate = conversation gate; decompose = unit-spec
+//   writing) plus the verifier dispatch.
 // - Per-hat sub-states inside execute (the studio's actual hat
 //   sequence)
 // - Per-bolt × per-fix-hat sub-states inside review_fix
@@ -47,8 +50,17 @@ function renderStageBlock(
 	lines.push(`  state ${sid} {`)
 	lines.push(`    [*] --> ${sid}_start_stage`)
 	lines.push(`    ${sid}_start_stage --> ${sid}_elaborate : tick`)
-	lines.push(`    ${sid}_elaborate --> ${sid}_execute : elaborate.advance`)
-	lines.push(`    ${sid}_elaborate --> ${sid}_review_fix : feedback.pending`)
+	lines.push(
+		`    ${sid}_elaborate --> ${sid}_elaborate_review : record.advance`,
+	)
+	lines.push(
+		`    ${sid}_elaborate_review --> ${sid}_decompose : verifier.pass`,
+	)
+	lines.push(
+		`    ${sid}_elaborate_review --> ${sid}_elaborate : verifier.fail`,
+	)
+	lines.push(`    ${sid}_decompose --> ${sid}_execute : decompose.advance`)
+	lines.push(`    ${sid}_decompose --> ${sid}_review_fix : feedback.pending`)
 
 	// Execute sub-machine — hat enumeration.
 	if (hats.length > 0) {

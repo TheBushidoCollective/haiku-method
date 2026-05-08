@@ -37,6 +37,8 @@ export type StateName =
 	| "start_stage"
 	// phase progression
 	| "elaborate"
+	| "elaborate_review"
+	| "decompose"
 	| "advance_phase"
 	| "execute"
 	| "advance_stage"

@@ -122,10 +122,12 @@ test("review_fix has done + escalated terminals", () => {
 	)
 })
 
-test("phase progression: start_stage → elaborate → execute → review → gate", () => {
+test("phase progression: start_stage → elaborate → elaborate_review → decompose → execute → review → gate", () => {
 	for (const phase of [
 		"development_start_stage --> development_elaborate",
-		"development_elaborate --> development_execute",
+		"development_elaborate --> development_elaborate_review",
+		"development_elaborate_review --> development_decompose",
+		"development_decompose --> development_execute",
 		"development_review --> development_gate",
 	]) {
 		assert.ok(mermaid.includes(phase), `transition '${phase}' missing`)

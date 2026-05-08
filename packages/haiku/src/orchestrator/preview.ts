@@ -58,8 +58,7 @@ export function enrichActionWithPreview(action: OrchestratorAction): void {
 				next_step =
 					"On pass, the verifier seals the artifact and the cursor advances to decompose. On fail, the verifier returns specific gaps and we re-engage you with the missing questions."
 			} else {
-				tell_user =
-					"Dispatching the substance verifier on intent.md."
+				tell_user = "Dispatching the substance verifier on intent.md."
 				next_step =
 					"On pass, the cursor walks into the first stage's elaborate gate. On fail, we update the intent body and re-verify."
 			}

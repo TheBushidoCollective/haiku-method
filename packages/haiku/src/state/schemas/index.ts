@@ -178,8 +178,8 @@ export {
 	validateHaikuSelectStudioInputSchema,
 } from "./inputs/selection-tools.js"
 export type {
-	HaikuStageElaborationRecordInput,
 	HaikuIntentSealInput,
+	HaikuStageElaborationRecordInput,
 	HaikuStageElaborationSealInput,
 	HaikuStageGetInput,
 	HaikuStageSetInput,

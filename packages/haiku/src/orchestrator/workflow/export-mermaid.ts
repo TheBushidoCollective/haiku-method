@@ -53,12 +53,8 @@ function renderStageBlock(
 	lines.push(
 		`    ${sid}_elaborate --> ${sid}_elaborate_review : record.advance`,
 	)
-	lines.push(
-		`    ${sid}_elaborate_review --> ${sid}_decompose : verifier.pass`,
-	)
-	lines.push(
-		`    ${sid}_elaborate_review --> ${sid}_elaborate : verifier.fail`,
-	)
+	lines.push(`    ${sid}_elaborate_review --> ${sid}_decompose : verifier.pass`)
+	lines.push(`    ${sid}_elaborate_review --> ${sid}_elaborate : verifier.fail`)
 	lines.push(`    ${sid}_decompose --> ${sid}_execute : decompose.advance`)
 	lines.push(`    ${sid}_decompose --> ${sid}_review_fix : feedback.pending`)
 

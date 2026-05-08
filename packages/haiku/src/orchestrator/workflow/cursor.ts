@@ -926,8 +926,7 @@ export function derivePosition(args: {
 					? listUnitPaths(firstStageDir).length > 0
 					: false
 			const activeForGate = firstUnmergedStage(slug, studio)
-			const isTrulyFresh =
-				activeForGate === firstStage && !firstStageHasUnits
+			const isTrulyFresh = activeForGate === firstStage && !firstStageHasUnits
 			if (isTrulyFresh) {
 				return {
 					track: "intent",

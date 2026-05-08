@@ -101,9 +101,7 @@ export default defineHook({
 		// One-line nudge. Claude Code already knows "Read before Edit"
 		// once it sees the error — the hook's job is just to surface
 		// the file path so the recovery is one round-trip, not three.
-		process.stderr.write(
-			`Read \`${filePath}\` first, then retry the Edit.\n`,
-		)
+		process.stderr.write(`Read \`${filePath}\` first, then retry the Edit.\n`)
 		process.exit(2)
 	},
 })

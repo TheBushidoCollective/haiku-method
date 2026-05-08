@@ -114,9 +114,7 @@ export default defineTool({
 		}
 		writeFileSync(elabPath, matter.stringify(body, fm))
 
-		gitCommitState(
-			`haiku: record elaboration for ${slug}/${stage}`,
-		)
+		gitCommitState(`haiku: record elaboration for ${slug}/${stage}`)
 
 		return text(
 			JSON.stringify(

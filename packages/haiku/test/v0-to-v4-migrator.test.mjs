@@ -15,7 +15,14 @@
 //   4. state.json files deleted
 
 import assert from "node:assert"
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs"
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -26,7 +33,9 @@ function makeV3IntentDir() {
 	const intentDir = join(root, ".haiku", "intents", "test-intent")
 	mkdirSync(intentDir, { recursive: true })
 	mkdirSync(join(intentDir, "stages", "design", "units"), { recursive: true })
-	mkdirSync(join(intentDir, "stages", "design", "feedback"), { recursive: true })
+	mkdirSync(join(intentDir, "stages", "design", "feedback"), {
+		recursive: true,
+	})
 
 	// Pre-v4 intent.md
 	writeFileSync(
@@ -58,9 +67,24 @@ function makeV3IntentDir() {
 			scope_reject_attempts: 0,
 			outputs: ["stages/design/foo.md"],
 			iterations: [
-				{ hat: "researcher", started_at: "2026-04-01T00:00:00Z", completed_at: "2026-04-01T00:10:00Z", result: "advance" },
-				{ hat: "distiller", started_at: "2026-04-01T00:10:00Z", completed_at: "2026-04-01T00:20:00Z", result: "advance" },
-				{ hat: "verifier", started_at: "2026-04-01T00:20:00Z", completed_at: "2026-04-01T01:00:00Z", result: "advance" },
+				{
+					hat: "researcher",
+					started_at: "2026-04-01T00:00:00Z",
+					completed_at: "2026-04-01T00:10:00Z",
+					result: "advance",
+				},
+				{
+					hat: "distiller",
+					started_at: "2026-04-01T00:10:00Z",
+					completed_at: "2026-04-01T00:20:00Z",
+					result: "advance",
+				},
+				{
+					hat: "verifier",
+					started_at: "2026-04-01T00:20:00Z",
+					completed_at: "2026-04-01T01:00:00Z",
+					result: "advance",
+				},
 			],
 		}),
 	)
@@ -238,14 +262,8 @@ test("migrator deletes pre-v4 baseline noise (baseline.json, drift-markers.json,
 
 		// Intent scope.
 		assert.strictEqual(existsSync(join(intentDir, "baseline.json")), false)
-		assert.strictEqual(
-			existsSync(join(intentDir, "drift-markers.json")),
-			false,
-		)
-		assert.strictEqual(
-			existsSync(join(intentDir, "baseline-content")),
-			false,
-		)
+		assert.strictEqual(existsSync(join(intentDir, "drift-markers.json")), false)
+		assert.strictEqual(existsSync(join(intentDir, "baseline-content")), false)
 
 		// Stage scope.
 		assert.strictEqual(
@@ -260,6 +278,60 @@ test("migrator deletes pre-v4 baseline noise (baseline.json, drift-markers.json,
 			existsSync(join(intentDir, "stages", "design", "baseline-content")),
 			false,
 		)
+	} finally {
+		rmSync(root, { recursive: true, force: true })
+	}
+})
+
+test("migrator returns structured MigrationStepDetails counting what it changed", async () => {
+	// Without these counts the engine can't tell the agent what just
+	// happened, and the agent panics on seeing deleted v3 files. The
+	// counts feed the `migrated` action's message in run-tick.ts.
+	const { root, intentDir } = makeV3IntentDir()
+	try {
+		const { __testOnly } = await import(
+			"../src/orchestrator/migrations/v0-to-v4.ts"
+		)
+		const details = __testOnly.v0ToV4({ intentDir, repoRoot: root })
+		assert.ok(details, "v0ToV4 should return MigrationStepDetails")
+		assert.strictEqual(details.intent_md_migrated, true)
+		// Fixture has 1 unit (status: completed) → 1 synthesized approval.
+		assert.strictEqual(details.units_migrated, 1)
+		assert.strictEqual(details.units_with_synthesized_approval, 1)
+		// Fixture has 1 FB (status: closed) → 1 synthesized closure.
+		assert.strictEqual(details.feedback_migrated, 1)
+		assert.strictEqual(details.feedback_with_synthesized_closure, 1)
+		assert.strictEqual(details.feedback_relocated, 0)
+		// Fixture has 1 stage state.json.
+		assert.strictEqual(details.state_json_deleted, 1)
+		// Fixture has no drift artifacts.
+		assert.strictEqual(details.drift_artifacts_deleted, 0)
+	} finally {
+		rmSync(root, { recursive: true, force: true })
+	}
+})
+
+test("migrateIntent aggregates step details and returns them on MigrationResult", async () => {
+	const { root, intentDir } = makeV3IntentDir()
+	try {
+		// Re-register the migrator after any prior test cleared the
+		// registry (clearRegistry exists for parallel-test isolation).
+		await import("../src/orchestrator/migrations/v0-to-v4.ts")
+		const { migrateIntent } = await import(
+			"../src/orchestrator/migrate-registry.ts"
+		)
+		const result = migrateIntent({ intentDir, repoRoot: root }, "0", "4.0.0")
+		assert.strictEqual(result.from, "0")
+		assert.strictEqual(result.to, "4.0.0")
+		assert.strictEqual(result.steps, 1)
+		assert.deepStrictEqual(result.chain, ["0→4.0.0"])
+		assert.ok(
+			result.details,
+			"MigrationResult should carry an aggregated details object",
+		)
+		assert.strictEqual(result.details.intent_md_migrated, true)
+		assert.strictEqual(result.details.units_migrated, 1)
+		assert.strictEqual(result.details.state_json_deleted, 1)
 	} finally {
 		rmSync(root, { recursive: true, force: true })
 	}

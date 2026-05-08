@@ -61,7 +61,12 @@ import {
 } from "node:fs"
 import { dirname, join } from "node:path"
 import matter from "gray-matter"
-import { type MigrationContext, registerMigrator } from "../migrate-registry.js"
+import {
+	emptyMigrationDetails,
+	type MigrationContext,
+	type MigrationStepDetails,
+	registerMigrator,
+} from "../migrate-registry.js"
 
 const TARGET_VERSION = "4.0.0"
 
@@ -191,7 +196,10 @@ function bestTimestamp(candidates: Array<unknown>): string {
 
 // ── Intent.md migrator ───────────────────────────────────────────────
 
-function migrateIntentMd(intentDir: string): void {
+function migrateIntentMd(
+	intentDir: string,
+	details: MigrationStepDetails,
+): void {
 	const path = join(intentDir, "intent.md")
 	if (!existsSync(path)) return
 	tryMigrateFile(
@@ -210,6 +218,7 @@ function migrateIntentMd(intentDir: string): void {
 				next.sealed_at = null
 			}
 			writeMatter(path, next, body)
+			details.intent_md_migrated = true
 		},
 		"intent.md",
 	)
@@ -217,7 +226,10 @@ function migrateIntentMd(intentDir: string): void {
 
 // ── Unit.md migrator (for one stage) ─────────────────────────────────
 
-function migrateUnitsInStage(stageDir: string): void {
+function migrateUnitsInStage(
+	stageDir: string,
+	details: MigrationStepDetails,
+): void {
 	const unitsDir = join(stageDir, "units")
 	if (!existsSync(unitsDir)) return
 	const entries = readdirSync(unitsDir, { withFileTypes: true })
@@ -225,11 +237,15 @@ function migrateUnitsInStage(stageDir: string): void {
 		if (!entry.isFile()) continue
 		if (!entry.name.endsWith(".md")) continue
 		const path = join(unitsDir, entry.name)
-		tryMigrateFile(path, () => migrateUnitFile(path), `unit ${entry.name}`)
+		tryMigrateFile(
+			path,
+			() => migrateUnitFile(path, details),
+			`unit ${entry.name}`,
+		)
 	}
 }
 
-function migrateUnitFile(path: string): void {
+function migrateUnitFile(path: string, details: MigrationStepDetails): void {
 	const { data, body } = readMatter(path)
 	const wasCompleted = data.status === "completed"
 	const oldCompletedAt =
@@ -273,15 +289,21 @@ function migrateUnitFile(path: string): void {
 				at: bestTimestamp([oldCompletedAt]),
 				migrated: true,
 			}
+			details.units_with_synthesized_approval++
 		}
 		next.approvals = approvals
 	}
 	writeMatter(path, next, body)
+	details.units_migrated++
 }
 
 // ── Feedback.md migrator (for one stage or intent-scope) ─────────────
 
-function migrateFeedbackInDir(feedbackDir: string, intentDir: string): void {
+function migrateFeedbackInDir(
+	feedbackDir: string,
+	intentDir: string,
+	details: MigrationStepDetails,
+): void {
 	if (!existsSync(feedbackDir)) return
 	const entries = readdirSync(feedbackDir, { withFileTypes: true })
 	for (const entry of entries) {
@@ -290,7 +312,7 @@ function migrateFeedbackInDir(feedbackDir: string, intentDir: string): void {
 		const path = join(feedbackDir, entry.name)
 		tryMigrateFile(
 			path,
-			() => migrateFeedbackFile(path, intentDir),
+			() => migrateFeedbackFile(path, intentDir, details),
 			`feedback ${entry.name}`,
 		)
 	}
@@ -349,7 +371,11 @@ function relocateFeedbackIfUpstreamStage(
 	return newPath
 }
 
-function migrateFeedbackFile(path: string, intentDir: string): void {
+function migrateFeedbackFile(
+	path: string,
+	intentDir: string,
+	details: MigrationStepDetails,
+): void {
 	const { data, body } = readMatter(path)
 	const oldStatus =
 		typeof data.status === "string" ? (data.status as string) : ""
@@ -368,9 +394,11 @@ function migrateFeedbackFile(path: string, intentDir: string): void {
 	if (typeof next.targets !== "object" || next.targets === null) {
 		next.targets = { unit: null, invalidates: [] as string[] }
 	}
+	let synthesizedClosure = false
 	if (next.closed_at == null) {
 		if (FB_TERMINAL_STATUSES.has(oldStatus)) {
 			next.closed_at = bestTimestamp([oldClosedBy, data.created_at])
+			synthesizedClosure = true
 		} else {
 			next.closed_at = null
 		}
@@ -380,22 +408,26 @@ function migrateFeedbackFile(path: string, intentDir: string): void {
 	// rewrite keeps the file's content correct regardless of whether
 	// the relocate step succeeds.
 	writeMatter(path, next, body)
+	details.feedback_migrated++
+	if (synthesizedClosure) details.feedback_with_synthesized_closure++
 	// v3 used `upstream_stage:` as a routing hint when an FB on stage A
 	// actually targeted stage B. v4 routes by file location. Move the
 	// file now (with renumbering) so the stage that actually owns the
 	// finding sees it on the next cursor walk. `data` is the ORIGINAL
 	// pre-strip frontmatter, which still carries upstream_stage —
 	// after `strip()` the field is gone, but we kept the reference.
-	relocateFeedbackIfUpstreamStage(path, data, intentDir)
+	const relocated = relocateFeedbackIfUpstreamStage(path, data, intentDir)
+	if (relocated) details.feedback_relocated++
 }
 
 // ── Top-level migrator ───────────────────────────────────────────────
 
-function v0ToV4(ctx: MigrationContext): void {
+function v0ToV4(ctx: MigrationContext): MigrationStepDetails {
 	const { intentDir } = ctx
+	const details = emptyMigrationDetails()
 
 	// 1. Intent.md
-	migrateIntentMd(intentDir)
+	migrateIntentMd(intentDir, details)
 
 	// 2. Per-stage walks
 	const stagesDir = join(intentDir, "stages")
@@ -405,15 +437,16 @@ function v0ToV4(ctx: MigrationContext): void {
 			const stageDir = join(stagesDir, entry.name)
 
 			// 2a. Units
-			migrateUnitsInStage(stageDir)
+			migrateUnitsInStage(stageDir, details)
 
 			// 2b. Stage-scope feedback
-			migrateFeedbackInDir(join(stageDir, "feedback"), intentDir)
+			migrateFeedbackInDir(join(stageDir, "feedback"), intentDir, details)
 
 			// 2c. Stage state.json — delete unconditionally
 			const stateJson = join(stageDir, "state.json")
 			if (existsSync(stateJson)) {
 				rmSync(stateJson, { force: true })
+				details.state_json_deleted++
 			}
 
 			// 2d. Pre-v4 drift artifacts — delete unconditionally. The
@@ -429,13 +462,14 @@ function v0ToV4(ctx: MigrationContext): void {
 				const stalePath = join(stageDir, stale)
 				if (existsSync(stalePath)) {
 					rmSync(stalePath, { recursive: true, force: true })
+					details.drift_artifacts_deleted++
 				}
 			}
 		}
 	}
 
 	// 3. Intent-scope feedback
-	migrateFeedbackInDir(join(intentDir, "feedback"), intentDir)
+	migrateFeedbackInDir(join(intentDir, "feedback"), intentDir, details)
 
 	// 4. Intent-scope drift artifacts. Same reasoning as the per-stage
 	// pass: v4 doesn't write or read these, so leaving them around just
@@ -448,8 +482,11 @@ function v0ToV4(ctx: MigrationContext): void {
 		const stalePath = join(intentDir, stale)
 		if (existsSync(stalePath)) {
 			rmSync(stalePath, { recursive: true, force: true })
+			details.drift_artifacts_deleted++
 		}
 	}
+
+	return details
 }
 
 // Register the edge. Pre-v4 intents have no plugin_version field;

@@ -35,7 +35,39 @@ export type MigrationContext = {
 	repoRoot: string
 }
 
-export type Migrator = (ctx: MigrationContext) => void
+/**
+ * Per-step migration counts. Migrators populate these so the engine can
+ * surface a clear "what just happened" notice to the agent — without it,
+ * agents see deleted v3 state files and incorrectly report data loss.
+ *
+ * Each field is cumulative across the migrator's walk of the intent dir.
+ * Intent-md migration is tracked as a boolean (one file).
+ */
+export type MigrationStepDetails = {
+	intent_md_migrated: boolean
+	units_migrated: number
+	units_with_synthesized_approval: number
+	feedback_migrated: number
+	feedback_with_synthesized_closure: number
+	feedback_relocated: number
+	state_json_deleted: number
+	drift_artifacts_deleted: number
+}
+
+export function emptyMigrationDetails(): MigrationStepDetails {
+	return {
+		intent_md_migrated: false,
+		units_migrated: 0,
+		units_with_synthesized_approval: 0,
+		feedback_migrated: 0,
+		feedback_with_synthesized_closure: 0,
+		feedback_relocated: 0,
+		state_json_deleted: 0,
+		drift_artifacts_deleted: 0,
+	}
+}
+
+export type Migrator = (ctx: MigrationContext) => MigrationStepDetails | void
 
 type Edge = { to: string; migrator: Migrator }
 
@@ -89,6 +121,7 @@ export type MigrationResult = {
 	to: string
 	steps: number
 	chain: string[] // version-pair labels for diagnostics
+	details: MigrationStepDetails // aggregated across every migrator step
 }
 
 /**
@@ -108,6 +141,7 @@ export function migrateIntent(
 			to: targetVersion,
 			steps: 0,
 			chain: [],
+			details: emptyMigrationDetails(),
 		}
 	}
 	const chain = findChain(currentVersion, targetVersion)
@@ -117,6 +151,7 @@ export function migrateIntent(
 		)
 	}
 	const labels: string[] = []
+	const aggregate = emptyMigrationDetails()
 	let v = currentVersion
 	for (const step of chain) {
 		// Find the edge label by introspecting the registered edges
@@ -126,13 +161,28 @@ export function migrateIntent(
 			labels.push(`${v}→${edge.to}`)
 			v = edge.to
 		}
-		step(ctx)
+		const stepDetails = step(ctx)
+		if (stepDetails) {
+			// Aggregate: boolean OR, numeric sum.
+			aggregate.intent_md_migrated =
+				aggregate.intent_md_migrated || stepDetails.intent_md_migrated
+			aggregate.units_migrated += stepDetails.units_migrated
+			aggregate.units_with_synthesized_approval +=
+				stepDetails.units_with_synthesized_approval
+			aggregate.feedback_migrated += stepDetails.feedback_migrated
+			aggregate.feedback_with_synthesized_closure +=
+				stepDetails.feedback_with_synthesized_closure
+			aggregate.feedback_relocated += stepDetails.feedback_relocated
+			aggregate.state_json_deleted += stepDetails.state_json_deleted
+			aggregate.drift_artifacts_deleted += stepDetails.drift_artifacts_deleted
+		}
 	}
 	return {
 		from: currentVersion,
 		to: targetVersion,
 		steps: chain.length,
 		chain: labels,
+		details: aggregate,
 	}
 }
 

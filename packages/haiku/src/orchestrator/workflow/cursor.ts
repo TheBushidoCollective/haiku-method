@@ -746,13 +746,27 @@ function walkIntentTrack(args: {
 	//    disk. Missing file → `discovery_required`. The output IS the
 	//    signal — no FM bookkeeping. (FM state is reserved for actions
 	//    that DON'T produce a file: review approvals, user gates.)
-	const discoveryDefs = readStageArtifactDefs(studio, stage).filter(
-		(d) => d.kind === "discovery",
-	)
+	//
+	// Defs are sorted by `name` so dispatch order is deterministic
+	// across filesystems — `readdirSync` returns templates in
+	// platform-dependent order, which makes idempotent retries surface
+	// the gaps in different sequences and complicates debugging.
+	const discoveryDefs = readStageArtifactDefs(studio, stage)
+		.filter((d) => d.kind === "discovery")
+		.sort((a, b) => a.name.localeCompare(b.name))
 	if (discoveryDefs.length > 0 && units.length > 0) {
 		for (const def of discoveryDefs) {
 			if (!def.required) continue
-			if (!def.location) continue
+			if (!def.location) {
+				// `required: true` with no `location:` is a studio
+				// configuration error — the gate cannot fire because
+				// there's no path to check. Surface the misconfiguration
+				// rather than silently letting the intent skip discovery.
+				console.error(
+					`[haiku] Studio configuration error: discovery template '${def.name}' in stage '${stage}' is required but declares no 'location:' field. The gate is being skipped — fix the template.`,
+				)
+				continue
+			}
 			const resolved = def.location.replace(/\{intent-slug\}/g, slug)
 			const absPath = join(process.cwd(), resolved)
 			const exists = resolved.endsWith("/")
@@ -774,12 +788,12 @@ function walkIntentTrack(args: {
 		}
 	}
 
-	// 2. No units → elaborate.
+	// 4. No units → elaborate.
 	if (units.length === 0) {
 		return { kind: "elaborate", stage }
 	}
 
-	// 3. Wave logic. A unit is "in-flight" if started AND its last
+	// 5. Wave logic. A unit is "in-flight" if started AND its last
 	//    iteration's result is null. Mid-wave noop until in-flight
 	//    units terminate.
 	const inFlight = units.filter((u) => {
@@ -792,7 +806,7 @@ function walkIntentTrack(args: {
 		return null
 	}
 
-	// 4. Wave-ready: started_at == null and all depends_on completed
+	// 6. Wave-ready: started_at == null and all depends_on completed
 	//    (their last iteration is terminal advance).
 	const completedNames = new Set(
 		units
@@ -821,7 +835,7 @@ function walkIntentTrack(args: {
 		}
 	}
 
-	// 5. Units that need their next hat (started but not yet done).
+	// 7. Units that need their next hat (started but not yet done).
 	const needNextHat: { unit: string; hat: string; terminal: boolean }[] = []
 	for (const u of units) {
 		if (u.fm.started_at == null) continue
@@ -858,7 +872,7 @@ function walkIntentTrack(args: {
 		}
 	}
 
-	// 6. All units' hat sequences done → spec review track. Walk
+	// 8. All units' hat sequences done → spec review track. Walk
 	//    review roles in declared order.
 	for (const role of reviewRoles) {
 		const missing = units
@@ -874,7 +888,7 @@ function walkIntentTrack(args: {
 		return { kind: "dispatch_review", stage, role, units: missing }
 	}
 
-	// 7. All spec reviews signed → output approval track. Walk
+	// 9. All spec reviews signed → output approval track. Walk
 	//    approvalRoles which may include `quality_gates` (engine-run,
 	//    not subagent-dispatched) before configured agents.
 	for (const role of approvalRoles) {

@@ -136,6 +136,77 @@ test("hasV3CruftInIntent returns false for a fully-migrated tree", () => {
 	}
 })
 
+test("hasV3CruftInIntent returns false for a v4 FB carrying live status / triaged_at / bolt / closed_by / resolution", () => {
+	// Regression: a previous version of this helper checked the first
+	// FB file per stage against DEPRECATED_FB_FIELDS. But v4's
+	// writeFeedbackFile writes status/bolt/triaged_at/closed_by/
+	// resolution to every new FB (the names overlap v3's vocabulary
+	// but the values stay live in v4). The naive check fired on every
+	// v4 intent with feedback → forced re-migration → migrateFeedbackFile's
+	// strip() clobbered triaged_at (looping the triage gate) and
+	// closed_by (losing closure attribution). The FB sentinel was
+	// removed; this test pins the contract so it doesn't come back.
+	const root = mkdtempSync(join(tmpdir(), "haiku-bug-e-fb-"))
+	const intentDir = join(root, ".haiku", "intents", "test-fb")
+	try {
+		mkdirSync(join(intentDir, "stages", "design", "feedback"), {
+			recursive: true,
+		})
+		mkdirSync(join(intentDir, "stages", "design", "units"), { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("# test\n", {
+				title: "test",
+				studio: "software",
+				mode: "continuous",
+				plugin_version: "4.0.0",
+			}),
+		)
+		// v4-shape unit (no v3 fields).
+		writeFileSync(
+			join(intentDir, "stages", "design", "units", "unit-01-foo.md"),
+			matter.stringify("# unit-01-foo\n", {
+				title: "foo",
+				outputs: ["stages/design/foo.md"],
+				iterations: [],
+				discovery: {},
+				reviews: {},
+				approvals: {},
+			}),
+		)
+		// v4-shape FB with the field names that overlap v3 vocabulary.
+		// Mirrors the exact shape `writeFeedbackFile` produces at
+		// state-tools.ts:5017.
+		writeFileSync(
+			join(intentDir, "stages", "design", "feedback", "01-fb.md"),
+			matter.stringify("# fb body\n", {
+				title: "test fb",
+				status: "pending",
+				origin: "user-chat",
+				author: "user",
+				author_type: "human",
+				created_at: "2026-05-08T00:00:00Z",
+				iteration: 0,
+				visit: 0,
+				source_ref: null,
+				closed_by: null,
+				bolt: 0,
+				triaged_at: "2026-05-08T00:00:00Z",
+				resolution: null,
+				replies: [],
+			}),
+		)
+		const cruft = hasV3CruftInIntent(intentDir)
+		assert.strictEqual(
+			cruft,
+			false,
+			"a v4 FB carrying live status/triaged_at/bolt/closed_by/resolution must NOT be flagged as v3 cruft — these are v4 field names too",
+		)
+	} finally {
+		rmSync(root, { recursive: true, force: true })
+	}
+})
+
 test("hasV3CruftInIntent detects v3 state.json with status field", () => {
 	const root = mkdtempSync(join(tmpdir(), "haiku-bug-e-state-"))
 	const intentDir = join(root, ".haiku", "intents", "test-state")

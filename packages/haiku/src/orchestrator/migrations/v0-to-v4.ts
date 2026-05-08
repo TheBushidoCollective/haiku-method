@@ -658,10 +658,18 @@ registerMigrator("0", TARGET_VERSION, v0ToV4)
  * `runWorkflowTick`'s `sourceMajor !== targetMajor` gate would skip the
  * migrator (intent.md says v4) and the v3 cruft would sit forever.
  *
- * Cheap sentinel check: read intent.md + the first unit/feedback file
- * per stage, look for any DEPRECATED_INTENT_FIELDS / DEPRECATED_UNIT_FIELDS
- * / DEPRECATED_FB_FIELDS keys. Returns true on the first hit. Bounded
- * read count per tick (one file per stage at most).
+ * Cheap sentinel check: read intent.md + the first unit file per stage
+ * + the stage's state.json (if present), look for any
+ * DEPRECATED_INTENT_FIELDS / DEPRECATED_UNIT_FIELDS keys, or a v3-shape
+ * `status: "active"|"completed"|"pending"` on state.json. Returns true
+ * on the first hit. Bounded read count per tick.
+ *
+ * Feedback files are intentionally NOT sentinels here even though
+ * DEPRECATED_FB_FIELDS exists for the migrator's strip pass —
+ * v4 `writeFeedbackFile` writes status/bolt/triaged_at/closed_by/
+ * resolution to every new FB, so a `key in fm` check would false-positive
+ * on every v4 intent with feedback. See the inline comment in the
+ * stage walk below.
  *
  * Returns true if the migrator should re-run regardless of intent.md's
  * plugin_version.
@@ -698,21 +706,25 @@ export function hasV3CruftInIntent(intentDirPath: string): boolean {
 				}
 			}
 		}
-		// Sentinel: first feedback file per stage.
-		const fbDir = join(stageDir, "feedback")
-		if (existsSync(fbDir)) {
-			const fb = readdirSync(fbDir).find((f) => f.endsWith(".md"))
-			if (fb) {
-				try {
-					const fm = readMatter(join(fbDir, fb)).data
-					for (const key of DEPRECATED_FB_FIELDS) {
-						if (key in fm) return true
-					}
-				} catch {
-					/* skip */
-				}
-			}
-		}
+		// NOTE: no feedback-file sentinel here. v4's `writeFeedbackFile`
+		// writes every field in DEPRECATED_FB_FIELDS to every new FB
+		// (`status: "pending"`, `bolt: 0`, `triaged_at: <ts>`,
+		// `closed_by: null`, `resolution: null`, `iteration`, `visit`)
+		// — those names overlap v3's vocabulary but the values stay
+		// live in v4. A naive `key in fm` check would fire on every v4
+		// intent that has feedback, force re-migration on the next
+		// tick, and `migrateFeedbackFile`'s `strip(data, DEPRECATED_FB_FIELDS)`
+		// would clobber `triaged_at` (re-untriaging closed FBs and
+		// looping the triage gate) and `closed_by` (losing closure
+		// attribution mid-cycle). The unit-file sentinel and the
+		// state.json sentinel are sufficient: v3 unit fields
+		// (status/hat/bolt/hat_started_at) are NEVER written by v4
+		// unit creation, and v3 state.json `status` field is NEVER
+		// written by v4. Either is a clean fingerprint of post-merge
+		// v3 cruft. v3 feedback files don't carry anything v4 doesn't
+		// also carry, so the FB check provided no marginal detection
+		// value — only false positives.
+		//
 		// Stage state.json from v3 is itself a fingerprint — v4 never
 		// writes a state.json with `status: "active"|"completed"|"pending"`,
 		// so its presence is enough to force re-migration.

@@ -72,13 +72,20 @@ Every stage moves through the same conceptual lifecycle. In v4 these aren't stor
 
 | Phase | When the cursor enters it | Who acts |
 |---|---|---|
-| **elaborate** | Stage has 0 units (or stage was rewound by feedback) → cursor emits `elaborate` | The elaborate-phase agent (one per stage; named per studio) |
+| **elaborate** (conversation gate) | Stage has no `elaboration.md` artifact OR the artifact lacks `verified_at` → cursor emits `elaborate` then `elaborate_review`. Bypassed in autopilot mode | The agent has an informed conversation with the user; a verifier subagent grades the captured conversation for substance |
+| **decompose** (unit-spec writing) | Stage has 0 units AND elaborate gate has passed (or autopilot bypassed it) → cursor emits `decompose` | The decompose-phase agent (one per stage; named per studio); fans out discovery subagents and writes unit specs |
 | **execute** | Units exist, wave-ready or mid-hat → cursor emits `start_unit_hat` | Per-unit subagents, one hat at a time |
 | **review** | Every unit's hat sequence done, but review-role slots unsigned → cursor emits `dispatch_review` (per role) | Engine-built `spec` reviewer + studio-declared review agents |
 | **approve / gate** | Reviews signed, but approval-role slots unsigned → cursor emits `dispatch_approval`, `dispatch_quality_gates`, or `user_gate` | Engine-built quality_gates + configured agents + the human (mode-shaped) |
 | **merge** | Every approval signed → cursor emits `merge_stage` | Engine merges the stage branch into intent main |
 
-**Critical:** units are created **only** during the elaborate phase of THIS stage. Execution NEVER creates units. A different stage NEVER creates units for this stage.
+**The elaborate / decompose split (2026-05-08).** Pre-2026-05-08, "elaborate" meant the whole pre-execute phase: read context, dispatch discovery subagents, write unit specs. The same prompt did all three. This made the human-in-the-loop conversation an implicit instruction inside a heavy autonomous prompt — and agents skipped it.
+
+The split makes engagement load-bearing. `elaborate` is the conversation gate, gated on a real artifact (`stages/<stage>/elaboration.md`) with a verifier seal (`verified_at` stamped by a substance-check subagent). The cursor refuses to advance to `decompose` until both conditions hold. Autopilot mode bypasses the gate entirely; every other mode (continuous, discrete, discrete-hybrid) enforces.
+
+**Pre-intent verifier.** The same shape applies to intent.md itself. Right after `intent_create`, the cursor fires `elaborate_review` (no `stage` field) and a verifier grades intent.md's body for substance. Pass stamps `verified_at` on intent FM via `haiku_intent_seal`. Autopilot bypasses this too.
+
+**Critical:** units are created **only** during the decompose phase of THIS stage. Execution NEVER creates units. A different stage NEVER creates units for this stage.
 
 Each stage is responsible for its own unit set. `inception` does not pre-author units for `development`. `development`'s elaborate phase authors `development`'s units, drawing on `inception`'s knowledge artifacts as inputs.
 
@@ -271,17 +278,20 @@ When the active stage is set, `walkIntentTrack` evaluates these conditions in or
 
 | Order | Condition | Cursor action | Notes |
 |---|---|---|---|
-| 1 | Stage declares `requires_design_direction: true` and intent.md has no recorded direction for this stage | `design_direction_required` | Two-phase gate: select then surface-once |
-| 1' | Direction recorded but not yet `surfaced_at` | `design_direction_complete` or `design_direction_uploaded` | One-shot surface so the agent reads annotations before elaborate |
-| 2 | Stage ships `clarify/*.md` and `clarifications[<stage>]` is missing on intent.md | `clarify_required` | Per-stage Q&A captured before discovery |
-| 3 | Studio declares `discovery/*.md` artifacts and the file at the template's `location:` is not on disk | `discovery_required` | Output existence IS the signal — no FM stamp. The first missing artifact (in studio-defined order) wins; `units[0]` is a representative unit for prompt context |
-| 4 | Stage has 0 units | `elaborate` | Author the stage's unit set |
-| 5 | One or more units are in-flight (started, last iteration result == null) | null (mid-wave noop) | Wait for in-flight subagents to terminate |
-| 6 | Wave-ready units (started_at == null and depends_on all terminal-advanced) | `start_unit_hat` (first hat) | Wave dispatch — N subagents in parallel |
-| 7 | Started units need their next hat | `start_unit_hat` (next hat per `nextHatForUnit`) | Hat advancement; reject rewinds one hat |
-| 8 | All hat sequences done; some review role unsigned | `dispatch_review` (per role) or `user_gate { gate_kind: "spec" }` for the `user` role | `spec` (engine-built) → studio review agents → `user`; mode-shaped (autopilot trims to `[spec]`) |
-| 9 | All reviews signed; some approval role unsigned | `dispatch_quality_gates`, `dispatch_approval` (per role), or `user_gate { gate_kind: "approval" }` | `spec` → `quality_gates` (engine-built) → studio agents → `user`; autopilot trims to `[spec, quality_gates]` |
-| 10 | Every approval signed | `merge_stage` | Engine merges stage branch into intent main |
+| 0 | `intent.mode !== "autopilot"` and `intent.verified_at` is unset | `elaborate_review` (no `stage` field) | Pre-intent verifier — fires before any stage walk; verifier subagent grades intent.md substance and stamps `verified_at` via `haiku_intent_seal` |
+| 1 | `intent.mode !== "autopilot"` and `stages/<stage>/elaboration.md` is missing AND `units.length === 0` | `elaborate` | Per-stage conversation gate. Agent reads context, surfaces informed questions, captures the agreement via `haiku_stage_elaboration_record`. Grandfathered when `units.length > 0` (legacy intents) |
+| 2 | `intent.mode !== "autopilot"` and `stages/<stage>/elaboration.md` exists but `verified_at` is unset | `elaborate_review` (with `stage`) | Per-stage substance verifier — same shape as pre-intent but parameterized on stage scope; seals via `haiku_stage_elaboration_seal` |
+| 3 | Stage declares `requires_design_direction: true` and intent.md has no recorded direction for this stage **AND** `units.length === 0` | `design_direction_required` | Two-phase gate: select then surface-once. Grandfathered when units exist (legacy intents) — to be subsumed by reframing as a discovery agent in a follow-up PR |
+| 3' | Direction recorded but not yet `surfaced_at` (and units.length === 0) | `design_direction_complete` or `design_direction_uploaded` | One-shot surface so the agent reads annotations before decompose |
+| 4 | Stage ships `clarify/*.md` and `clarifications[<stage>]` is missing on intent.md | `clarify_required` | Per-stage Q&A captured before discovery (zero studios ship clarify dirs today) |
+| 5 | Studio declares `discovery/*.md` artifacts and the file at the template's `location:` is not on disk | `discovery_required` | Output existence IS the signal — no FM stamp. The first missing artifact (in studio-defined order) wins; `units[0]` is a representative unit for prompt context |
+| 6 | Stage has 0 units | `decompose` | Write the stage's unit specs (informed by the captured elaboration + discovery). Renamed from per-stage `elaborate` on 2026-05-08 to free that name for the conversation gate above |
+| 7 | One or more units are in-flight (started, last iteration result == null) | null (mid-wave noop) | Wait for in-flight subagents to terminate |
+| 8 | Wave-ready units (started_at == null and depends_on all terminal-advanced) | `start_unit_hat` (first hat) | Wave dispatch — N subagents in parallel |
+| 9 | Started units need their next hat | `start_unit_hat` (next hat per `nextHatForUnit`) | Hat advancement; reject rewinds one hat |
+| 10 | All hat sequences done; some review role unsigned | `dispatch_review` (per role) or `user_gate { gate_kind: "spec" }` for the `user` role | `spec` (engine-built) → studio review agents → `user`; mode-shaped (autopilot trims to `[spec]`) |
+| 11 | All reviews signed; some approval role unsigned | `dispatch_quality_gates`, `dispatch_approval` (per role), or `user_gate { gate_kind: "approval" }` | `spec` → `quality_gates` (engine-built) → studio agents → `user`; autopilot trims to `[spec, quality_gates]` |
+| 12 | Every approval signed | `merge_stage` | Engine merges stage branch into intent main |
 
 The cursor is intentionally narrow: every condition is a derived predicate over FM. There are no hidden flags, no ambient state, no "phase" field. Position falls out of the data.
 
@@ -297,10 +307,12 @@ The cursor emits exactly these `kind` values (mapped 1:1 to `OrchestratorAction.
 | `drift_detected` | Cursor Track C | Any signed witness's content hash no longer matches |
 | `start_feedback_hat` | Cursor Track B | Open FB needs its next fix hat dispatched |
 | `close_feedback` | Cursor Track B | Terminal fix hat advanced; engine stamps `closed_at` and applies `targets.invalidates` |
-| `design_direction_required` / `_complete` / `_uploaded` | Cursor Track A pre-elaborate | Stage gates on a chosen direction; one of the three fires depending on phase |
-| `clarify_required` | Cursor Track A pre-elaborate | Stage ships `clarify/*.md`; answers not recorded |
-| `discovery_required` | Cursor Track A pre-elaborate | Required discovery artifact missing from disk at the studio template's `location:` (output existence is the signal — no FM stamp) |
-| `elaborate` | Cursor Track A | Stage has 0 units |
+| `elaborate_review` | Cursor pre-stage walk OR Cursor Track A pre-decompose | Substance verifier dispatch. No `stage` field = pre-intent (verifies intent.md after creation). With `stage` = per-stage (verifies `stages/<stage>/elaboration.md`). Seals via `haiku_intent_seal` or `haiku_stage_elaboration_seal` |
+| `elaborate` | Cursor Track A pre-decompose | Per-stage conversation gate. `stages/<stage>/elaboration.md` is missing on a fresh stage (units.length === 0) and mode != autopilot. Agent surfaces informed questions, captures the agreement via `haiku_stage_elaboration_record` |
+| `design_direction_required` / `_complete` / `_uploaded` | Cursor Track A pre-decompose | Stage gates on a chosen direction; one of the three fires depending on phase. Slated for replacement by a discovery-agent shape — see "Reframing design_direction" follow-up |
+| `clarify_required` | Cursor Track A pre-decompose | Stage ships `clarify/*.md`; answers not recorded. Same fate as design_direction — discovery-agent shape supersedes |
+| `discovery_required` | Cursor Track A pre-decompose | Required discovery artifact missing from disk at the studio template's `location:` (output existence is the signal — no FM stamp) |
+| `decompose` | Cursor Track A | Stage has 0 units AND elaborate gate has passed (or autopilot bypassed it). Agent writes the stage's unit specs informed by the captured elaboration + discovery output |
 | `start_unit_hat` | Cursor Track A | Wave-ready or mid-hat unit batch needs its next hat dispatched |
 | `dispatch_review` | Cursor Track A | A non-user review role hasn't signed `reviews.<role>` on one or more units |
 | `dispatch_quality_gates` | Cursor Track A | The engine-built `quality_gates` role hasn't signed approvals on one or more units |

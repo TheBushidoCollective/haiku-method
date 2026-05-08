@@ -541,7 +541,7 @@ Every shipped studio runs on the same orchestration machinery. The same cursor w
 ### What Stays the Same
 
 - The four-phase cycle (elaboration → execution → operation → reflection).
-- The stage loop (elaborate → execute → review → approve → merge).
+- The stage loop (elaborate → decompose → execute → review → approve → merge). On 2026-05-08 the stage loop's first phase split: `elaborate` is the human-conversation gate (artifact + substance verifier; bypassed in autopilot), and `decompose` is the autonomous unit-spec writing that follows. The same artifact-and-verifier pattern also gates the pre-intent conversation that produces intent.md.
 - Hat-based role separation with fresh agent context per hat.
 - Completion criteria as the primary progress measure.
 - Input/output contracts between stages.

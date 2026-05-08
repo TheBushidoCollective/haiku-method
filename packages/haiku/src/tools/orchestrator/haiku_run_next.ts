@@ -432,6 +432,25 @@ export default defineTool({
 			}
 		}
 
+		// Drain any review/approval dispatches the cursor emitted on a
+		// prior tick. Each pending entry came from the cursor returning
+		// `dispatch_review` / `dispatch_approval` — the agent has now
+		// had a chance to spawn the review-agent subagent and process
+		// any FBs it filed (Track B drains before Track A). Drain
+		// stamps `reviews.<role>` / `approvals.<role>` on each unit
+		// that the review pass didn't flag with a still-open FB. See
+		// dispatch-stamps.ts for the contract.
+		try {
+			const { drainPendingDispatches } = await import(
+				"../../orchestrator/workflow/dispatch-stamps.js"
+			)
+			drainPendingDispatches(slug)
+		} catch (err) {
+			console.error(
+				`[haiku_run_next] drainPendingDispatches failed: ${err instanceof Error ? err.message : String(err)}`,
+			)
+		}
+
 		// Workflow-engine dispatch: read disk → derive state → run
 		// per-state handler. The handler registry lives in
 		// orchestrator/workflow/handlers/.
@@ -467,13 +486,69 @@ export default defineTool({
 		// directly; the cursor's existence check on that file passes
 		// the gate without a surface-once stamp on intent.md.
 
+		// Stash dispatch_review / dispatch_approval action context on
+		// intent.md so the next tick's drainPendingDispatches stamps
+		// reviews.<role> / approvals.<role>. Without this, the cursor
+		// would re-emit the same dispatch action forever — the prompt
+		// promises "the engine stamps the sigs" but no engine code
+		// stamped them before this fix. See dispatch-stamps.ts for the
+		// full lifecycle contract.
+		if (
+			(result.action === "dispatch_review" ||
+				result.action === "dispatch_approval") &&
+			typeof result.stage === "string" &&
+			typeof result.role === "string" &&
+			Array.isArray(result.units)
+		) {
+			try {
+				const { stashPendingDispatch } = await import(
+					"../../orchestrator/workflow/dispatch-stamps.js"
+				)
+				stashPendingDispatch(
+					slug,
+					result.action === "dispatch_review" ? "review" : "approval",
+					result.stage as string,
+					result.role as string,
+					result.units as string[],
+				)
+			} catch (err) {
+				console.error(
+					`[haiku_run_next] stashPendingDispatch failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}
+
+		// Same shape for intent_review (non-user roles). The user role
+		// goes through haiku_await_gate which stamps approvals.user
+		// directly — no stashing needed there. Agent roles (spec,
+		// continuity, studio review-agents) need this engine-side
+		// stamp because nothing else writes their slot on intent.md.
+		if (
+			result.action === "intent_review" &&
+			typeof result.role === "string" &&
+			result.role !== "user"
+		) {
+			try {
+				const { stashPendingIntentReview } = await import(
+					"../../orchestrator/workflow/dispatch-stamps.js"
+				)
+				stashPendingIntentReview(slug, result.role as string)
+			} catch (err) {
+				console.error(
+					`[haiku_run_next] stashPendingIntentReview failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}
+
 		// Auto-close for `close_feedback`: the cursor returns this when
 		// every fix-hat for an FB has signed advance. The prompt
 		// promises "the engine writes the closure" — same gap as
 		// merge_stage/merge_intent was. We stamp `closed_at` on the FB
-		// file and, when the FB has `origin: "drift"`, refresh the
-		// witnessed reviews/approvals timestamps on the targeted unit
-		// so the drift sweep stops flagging the same commit.
+		// file, apply the FB's `targets.invalidates` (clearing the
+		// named role keys on the target unit so the cursor reroutes
+		// through them), and when the FB has `origin: "drift"`, refresh
+		// the witnessed reviews/approvals timestamps on the targeted
+		// unit so the drift sweep stops flagging the same commit.
 		while (
 			result.action === "close_feedback" &&
 			typeof result.stage === "string" &&
@@ -495,50 +570,68 @@ export default defineTool({
 				const fbFm = found.data
 				const closedAt = new Date().toISOString()
 				setFrontmatterField(fbFile, "closed_at", closedAt)
+				// Apply targets.invalidates — delete the named role keys
+				// from the targeted unit's reviews / approvals so the
+				// cursor reroutes through them. The start_feedback_hat
+				// prompt promises this happens on close.
+				const targets = (fbFm.targets as Record<string, unknown>) ?? {}
+				const targetUnit = targets.unit as string | undefined
+				const invalidates = Array.isArray(targets.invalidates)
+					? (targets.invalidates as string[])
+					: []
+				if (targetUnit && invalidates.length > 0) {
+					const { applyFeedbackInvalidations } = await import(
+						"../../orchestrator/workflow/dispatch-stamps.js"
+					)
+					applyFeedbackInvalidations({
+						slug,
+						stage,
+						targetUnit,
+						invalidates,
+					})
+				}
 				// Refresh witnessed signed_at on the targeted unit when
 				// this is a drift FB — otherwise the drift sweep keeps
 				// finding the same commit past the original sign time.
-				if (fbFm.origin === "drift") {
-					const targets = (fbFm.targets as Record<string, unknown>) ?? {}
-					const targetUnit = targets.unit as string | undefined
-					if (targetUnit) {
-						const unitPath = join(
-							findHaikuRoot(),
-							"intents",
-							slug,
-							"stages",
-							stage,
-							"units",
-							`${targetUnit}.md`,
+				// `targets` and `targetUnit` are reused from the
+				// invalidations block above — same FB, same fields.
+				if (fbFm.origin === "drift" && targetUnit) {
+					const unitPath = join(
+						findHaikuRoot(),
+						"intents",
+						slug,
+						"stages",
+						stage,
+						"units",
+						`${targetUnit}.md`,
+					)
+					if (existsSync(unitPath)) {
+						const intentDirAbs = join(findHaikuRoot(), "intents", slug)
+						const { buildApprovalRecord, buildReviewRecord } = await import(
+							"../../orchestrator/workflow/sign-slot.js"
 						)
-						if (existsSync(unitPath)) {
-							const intentDirAbs = join(findHaikuRoot(), "intents", slug)
-							const { buildApprovalRecord, buildReviewRecord } = await import(
-								"../../orchestrator/workflow/sign-slot.js"
-							)
-							const raw = readFileSync(unitPath, "utf8")
-							const parsed = parseFrontmatter(raw)
-							const fm = parsed.data as Record<string, unknown>
-							const outputs = Array.isArray(fm.outputs)
-								? (fm.outputs as string[])
-								: []
-							const reviews =
-								fm.reviews && typeof fm.reviews === "object"
-									? { ...(fm.reviews as Record<string, unknown>) }
-									: {}
-							for (const role of Object.keys(reviews)) {
-								reviews[role] = buildReviewRecord(unitPath)
-							}
-							const approvals =
-								fm.approvals && typeof fm.approvals === "object"
-									? { ...(fm.approvals as Record<string, unknown>) }
-									: {}
-							for (const role of Object.keys(approvals)) {
-								approvals[role] = buildApprovalRecord(intentDirAbs, outputs)
-							}
-							setFrontmatterField(unitPath, "reviews", reviews)
-							setFrontmatterField(unitPath, "approvals", approvals)
+						const raw = readFileSync(unitPath, "utf8")
+						const parsed = parseFrontmatter(raw)
+						const fm = parsed.data as Record<string, unknown>
+						const outputs = Array.isArray(fm.outputs)
+							? (fm.outputs as string[])
+							: []
+						const reviews =
+							fm.reviews && typeof fm.reviews === "object"
+								? { ...(fm.reviews as Record<string, unknown>) }
+								: {}
+						for (const role of Object.keys(reviews)) {
+							reviews[role] = buildReviewRecord(unitPath)
 						}
+						const approvals =
+							fm.approvals && typeof fm.approvals === "object"
+								? { ...(fm.approvals as Record<string, unknown>) }
+								: {}
+						for (const role of Object.keys(approvals)) {
+							approvals[role] = buildApprovalRecord(intentDirAbs, outputs)
+						}
+						setFrontmatterField(unitPath, "reviews", reviews)
+						setFrontmatterField(unitPath, "approvals", approvals)
 					}
 				}
 				result = dispatchOrchestratorAction(slug)

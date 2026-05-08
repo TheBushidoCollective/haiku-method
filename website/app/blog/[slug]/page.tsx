@@ -15,12 +15,18 @@ interface Props {
 	params: Promise<{ slug: string }>
 }
 
-// In dev mode, force every request to re-read the MDX from disk so edits in
-// content/blog/*.mdx surface on reload without a manual server restart. Next
-// only watches webpack-graph dependencies; content files are read via
-// fs.readFileSync at request time, so without this they get cached per-route.
-export const dynamic =
-	process.env.NODE_ENV === "development" ? "force-dynamic" : "auto"
+// `dynamic = "auto"` is the static-string form Next.js's route-config
+// AST analyzer can resolve at build time. Earlier this file used a
+// process.env.NODE_ENV ternary to flip to "force-dynamic" in dev so
+// that edits to content/blog/*.mdx hot-reloaded without a server
+// restart, but that broke the production build with:
+//   "Next.js can't recognize the exported `config` field in route
+//    /blog/[slug]/page: Unsupported node type ConditionalExpression
+//    at dynamic"
+// Next 15 only accepts a static literal here. Dev reload of MDX edits
+// is not worth a broken production deploy. If we want it back, the
+// path is custom HMR via next.config.js, not a route-level conditional.
+export const dynamic = "auto"
 
 export async function generateStaticParams() {
 	const posts = getAllBlogPosts()

@@ -169,6 +169,11 @@ export default defineTool({
 			intent: { type: "string" },
 			external_review_url: { type: "string" },
 			state_file: { type: "string" },
+			pickup: {
+				type: "boolean" as const,
+				description:
+					"Set true when invoked from /haiku:pickup. The engine fetches origin and materializes the active stage branch locally so the user can `git switch` into in-flight work, then appends a pickup hint to the response.",
+			},
 		},
 	},
 	async handle(args, signal) {
@@ -314,6 +319,59 @@ export default defineTool({
 			console.error(
 				`[haiku_run_next] pre-cursor reconciliation failed: ${err instanceof Error ? err.message : String(err)}`,
 			)
+		}
+
+		// Pickup auto-fetch: when /haiku:pickup hands off to a fresh user,
+		// they only have intent main locally. The cursor's state.json and
+		// any pending feedback live there, but the active stage branch's
+		// in-flight unit work doesn't. Fetch origin, materialize the
+		// active stage branch as a local ref (no checkout — keep the
+		// user's working tree intact), and surface a hint naming the
+		// branch so they know how to inspect it. Best-effort: never
+		// blocks the tick.
+		let pickupHint = ""
+		if (args.pickup === true && isGitRepo()) {
+			try {
+				const { fetchOrigin } = await import("../../git-worktree.js")
+				fetchOrigin()
+				const intentFile = join(findHaikuRoot(), "intents", slug, "intent.md")
+				if (existsSync(intentFile)) {
+					const im = readFrontmatter(intentFile)
+					const studio = (im.studio as string) || ""
+					if (studio) {
+						const activeStage = firstUnmergedStage(slug, studio)
+						if (activeStage) {
+							const branch = `haiku/${slug}/${activeStage}`
+							const { execFileSync } = await import("node:child_process")
+							try {
+								// `git fetch origin <branch>:<branch>` creates or
+								// fast-forwards the local ref to origin's tip.
+								// Fails when origin lacks the branch (the user is
+								// way ahead, no one's pushed it yet) or when the
+								// local branch has diverged — both are fine, we
+								// just don't make a hint promise we can't keep.
+								execFileSync(
+									"git",
+									["fetch", "origin", `${branch}:${branch}`],
+									{ encoding: "utf8", stdio: "pipe" },
+								)
+								pickupHint = `Active stage branch \`${branch}\` was fetched from origin. Run \`git switch ${branch}\` to inspect in-flight unit work; the engine drives the workflow from intent main and doesn't need you on the stage branch.`
+							} catch {
+								// Origin doesn't have the branch yet, or there's
+								// a divergence we can't fast-forward through.
+								// Fall through silently — the engine still works
+								// from intent main.
+							}
+						}
+					}
+				}
+			} catch (err) {
+				console.error(
+					`[haiku_run_next] pickup auto-fetch threw: ${
+						err instanceof Error ? err.message : String(err)
+					}`,
+				)
+			}
 		}
 
 		// Stage-branch enforcement: before ANY stage-scoped write, align
@@ -1073,6 +1131,7 @@ export default defineTool({
 		}
 
 		syncSessionMetadata(slug, args.state_file as string | undefined)
-		return text(withInstructions(result))
+		const rendered = withInstructions(result)
+		return text(pickupHint ? `${pickupHint}\n\n${rendered}` : rendered)
 	},
 })

@@ -42,7 +42,25 @@ const FSM_DRIVEN_INTENT_FIELDS_LIST = [
 	// Archive lifecycle (toggle via haiku_intent_archive / _unarchive).
 	"archived",
 	"archived_at",
+	// Draft PR lifecycle (engine-managed):
+	//   - draft_pr_url: stamped on intent_create when isGitRepo() and a
+	//     provider CLI is available. Persists for audit even after merge.
+	//   - draft_pr_status: "draft" → "ready" | "failed". Flipped by
+	//     workflowIntentComplete just before status:completed.
+	//   - draft_pr_ready_at: ISO timestamp of the ready-flip success.
+	"draft_pr_url",
+	"draft_pr_status",
+	"draft_pr_ready_at",
 ] as const
+
+/** Lifecycle states for the intent's draft delivery PR/MR.
+ *  - "draft":  PR opened on intent_create; intent is in flight.
+ *  - "ready":  PR flipped to ready by workflowIntentComplete on the
+ *              final approval, just before the agent's merge.
+ *  - "failed": Either creation or the ready-flip failed; the intent
+ *              keeps moving (the PR is cosmetic, not load-bearing). */
+export const INTENT_DRAFT_PR_STATUSES = ["draft", "ready", "failed"] as const
+export type IntentDraftPrStatus = (typeof INTENT_DRAFT_PR_STATUSES)[number]
 
 export const INTENT_MODES = [
 	"continuous",
@@ -96,6 +114,14 @@ export const INTENT_FRONTMATTER_SCHEMA = Type.Object(
 		// stage may have a different question set) — the engine reads
 		// `clarifications[stage]` for a presence check, not validation.
 		clarifications: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+		// Draft PR lifecycle fields. Accepted by AJV (so fixtures and
+		// on-disk reads validate) but engine-only at write time — see the
+		// FSM list above.
+		draft_pr_url: Type.Optional(Type.String()),
+		draft_pr_status: Type.Optional(
+			Type.String({ enum: [...INTENT_DRAFT_PR_STATUSES] }),
+		),
+		draft_pr_ready_at: Type.Optional(Type.String()),
 	},
 	{
 		propertyNames: { not: { enum: [...FSM_DRIVEN_INTENT_FIELDS_LIST] } },

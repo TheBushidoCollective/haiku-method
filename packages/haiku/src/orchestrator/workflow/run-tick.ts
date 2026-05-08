@@ -109,7 +109,11 @@ export function runWorkflowTick(
 				return {
 					position: {
 						track: "intent",
-						action: { kind: "intent_review" },
+						// Migration error path — `role` is required by the
+						// CursorAction shape but the outer `action: "error"`
+						// is what the agent actually surfaces. "spec" is the
+						// most generic role and never targets per-stage work.
+						action: { kind: "intent_review", role: "spec" },
 					},
 					action: {
 						action: "error",

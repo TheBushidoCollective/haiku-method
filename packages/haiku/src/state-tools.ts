@@ -518,48 +518,20 @@ export function applyAutoFixes(
 		})
 	}
 
-	// Third pass: fix stage-level state.json issues (completion synthesis)
-	const stageRemaining: RepairIssue[] = []
-	for (const issue of inputsRemaining) {
-		let fixedHere = false
+	// Third pass — REMOVED (was v3-only).
+	//
+	// Previously synthesized a v3-shape `state.json` (with `status`,
+	// `phase`, `gate_entered_at`, `gate_outcome` fields) for any stage
+	// flagged as "before active_stage" by pass `l` above. Both ends
+	// gone now: pass `l` no longer flags these stages (active_stage is
+	// dropped on migration), and writing a v3-shape state.json into a
+	// v4 intent would pollute the file with stale-shape fields the v4
+	// engine doesn't read. v4 state.json is engine-managed (decision
+	// log + iterations) and gets created on first decision/iteration
+	// call — never synthesized as a "I declare this stage done"
+	// receipt.
 
-		// Synthesize or update stage completion records for stages before active_stage
-		if (
-			issue.field.match(/^stages\/[^/]+\/state\.json$/) &&
-			issue.message.includes("before active_stage")
-		) {
-			const stageMatch = issue.field.match(/^stages\/([^/]+)\/state\.json$/)
-			if (stageMatch) {
-				const stageName = stageMatch[1]
-				const stageDir = join(intentRoot, slug, "stages", stageName)
-				const stateFile = join(stageDir, "state.json")
-				mkdirSync(stageDir, { recursive: true })
-
-				const now = new Date().toISOString()
-				const completedState: Record<string, unknown> = {
-					stage: stageName,
-					status: "completed",
-					phase: "gate",
-					started_at: data.started_at || data.created_at || now,
-					completed_at:
-						data.completed_at || data.started_at || data.created_at || now,
-					gate_entered_at: null,
-					gate_outcome: "advanced",
-				}
-				writeJson(stateFile, completedState)
-				applied.push({
-					intent: slug,
-					field: issue.field,
-					description: `Synthesized completion record for stage '${stageName}' (before active_stage)`,
-				})
-				fixedHere = true
-			}
-		}
-
-		if (!fixedHere) stageRemaining.push(issue)
-	}
-
-	return { applied, remaining: stageRemaining }
+	return { applied, remaining: inputsRemaining }
 }
 
 function statSyncSafe(path: string): { mtime: Date } | null {
@@ -844,55 +816,22 @@ function scanOneIntent(
 		})
 	}
 
-	// l. Stage state consistency
-	if (Array.isArray(repairStages) && repairStages.length > 0) {
-		const repairStagesDir = join(intentsDir, slug, "stages")
-		const repairActiveStage = repairData.active_stage as string | undefined
-		const validStatuses = ["pending", "active", "completed"]
-		for (const stageName of repairStages as string[]) {
-			const repairStageDir = join(repairStagesDir, stageName)
-			const repairStateFile = join(repairStageDir, "state.json")
-			const activeIdx = repairActiveStage
-				? (repairStages as string[]).indexOf(repairActiveStage)
-				: -1
-			const thisIdx = (repairStages as string[]).indexOf(stageName)
-			const isBeforeActive = activeIdx > 0 && thisIdx < activeIdx
-
-			if (existsSync(repairStateFile)) {
-				const state = readJson(repairStateFile)
-				if (state.status && !validStatuses.includes(state.status as string)) {
-					issues.push({
-						intent: slug,
-						field: `stages/${stageName}/state.json`,
-						severity: "error",
-						message: `Invalid stage status: '${state.status}'`,
-						fix: `Set status to one of: ${validStatuses.join(", ")}`,
-					})
-				} else if (isBeforeActive && (state.status as string) !== "completed") {
-					// Stage before active_stage should be completed — workflow engine will
-					// reset active_stage backwards if it isn't
-					issues.push({
-						intent: slug,
-						field: `stages/${stageName}/state.json`,
-						severity: "warning",
-						message: `Stage before active_stage has status '${state.status || "pending"}' — should be 'completed'`,
-						fix: `Update state.json to status: "completed" (stage is before active_stage '${repairActiveStage}')`,
-					})
-				}
-			} else if (isBeforeActive) {
-				// Missing state.json for a stage before active_stage — synthesize
-				// a completion record so the workflow engine doesn't reset backwards
-				issues.push({
-					intent: slug,
-					field: `stages/${stageName}/state.json`,
-					severity: "warning",
-					message:
-						"Missing state.json for stage before active_stage — workflow engine will reset backwards",
-					fix: `Create state.json with status: "completed" (stage is before active_stage '${repairActiveStage}')`,
-				})
-			}
-		}
-	}
+	// l. Stage state consistency — REMOVED (was v3-only).
+	//
+	// In v3, each stage's state.json carried `status: "active"|"completed"|
+	// "pending"`, intent.md carried `active_stage`, and the engine reset
+	// `active_stage` backwards if a "before active_stage" stage's
+	// state.json said anything other than "completed". This block flagged
+	// that mismatch, and the third pass below synthesized completion
+	// records to silence it.
+	//
+	// v4 retired both: `active_stage` is in DEPRECATED_INTENT_FIELDS
+	// (stripped on migration), and stage status is derived from per-unit
+	// `iterations[]` + branch-merge state via `firstUnmergedStage`. v4's
+	// state.json carries decision_log, engine iterations, and
+	// reconciliation receipts — no `status` field. The legacy issue flags
+	// pointed at fields that no longer exist; the synthesizer wrote
+	// v3-shaped files into a v4 world. Both paths gone.
 
 	// m. Unit filename format + n. Unit required fields + o. Unit inputs
 	if (Array.isArray(repairStages)) {

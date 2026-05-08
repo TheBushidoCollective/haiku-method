@@ -47,11 +47,15 @@ export type MigrationStepDetails = {
 	intent_md_migrated: boolean
 	units_migrated: number
 	units_with_synthesized_approval: number
+	units_with_synthesized_discovery: number
+	units_with_synthesized_reviews: number
+	units_with_synthesized_approvals: number
 	feedback_migrated: number
 	feedback_with_synthesized_closure: number
 	feedback_relocated: number
 	state_json_deleted: number
 	drift_artifacts_deleted: number
+	stages_merged_stamped: number
 }
 
 export function emptyMigrationDetails(): MigrationStepDetails {
@@ -59,11 +63,15 @@ export function emptyMigrationDetails(): MigrationStepDetails {
 		intent_md_migrated: false,
 		units_migrated: 0,
 		units_with_synthesized_approval: 0,
+		units_with_synthesized_discovery: 0,
+		units_with_synthesized_reviews: 0,
+		units_with_synthesized_approvals: 0,
 		feedback_migrated: 0,
 		feedback_with_synthesized_closure: 0,
 		feedback_relocated: 0,
 		state_json_deleted: 0,
 		drift_artifacts_deleted: 0,
+		stages_merged_stamped: 0,
 	}
 }
 
@@ -169,12 +177,19 @@ export function migrateIntent(
 			aggregate.units_migrated += stepDetails.units_migrated
 			aggregate.units_with_synthesized_approval +=
 				stepDetails.units_with_synthesized_approval
+			aggregate.units_with_synthesized_discovery +=
+				stepDetails.units_with_synthesized_discovery
+			aggregate.units_with_synthesized_reviews +=
+				stepDetails.units_with_synthesized_reviews
+			aggregate.units_with_synthesized_approvals +=
+				stepDetails.units_with_synthesized_approvals
 			aggregate.feedback_migrated += stepDetails.feedback_migrated
 			aggregate.feedback_with_synthesized_closure +=
 				stepDetails.feedback_with_synthesized_closure
 			aggregate.feedback_relocated += stepDetails.feedback_relocated
 			aggregate.state_json_deleted += stepDetails.state_json_deleted
 			aggregate.drift_artifacts_deleted += stepDetails.drift_artifacts_deleted
+			aggregate.stages_merged_stamped += stepDetails.stages_merged_stamped
 		}
 	}
 	return {

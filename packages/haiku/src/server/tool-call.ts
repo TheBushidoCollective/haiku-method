@@ -68,6 +68,9 @@ import {
 	intentFromCurrentBranch,
 	listVisibleIntents,
 	parseFrontmatter,
+	readJson,
+	stageStatePath,
+	writeJson,
 } from "../state-tools.js"
 import { withAnnouncement } from "../tools/orchestrator/_announce.js"
 import { orchestratorToolHandlers } from "../tools/orchestrator/index.js"
@@ -496,6 +499,46 @@ export async function handleToolCall(
 		const reviewUrl = `${base}${stageSuffix}`
 
 		bindSessionCancellation(session.session_id, signal)
+
+		// v4 user-gate path: cursor-driven user_gate actions pass
+		// `gate_kind` ("spec" or "approval") so the cursor's `reviews.user`
+		// or `approvals.user` slot can be filled by the user's decision.
+		// We branch off the ad-hoc flow here:
+		//   - mark the session as gate-bound (not ad_hoc)
+		//   - write gate_review_session_id / url / context to the active
+		//     stage's state.json so haiku_await_gate finds it
+		//   - return the URL immediately; the agent's next call to
+		//     haiku_await_gate does the wait + stamp.
+		// Without this branch, the ad-hoc blocking loop below runs but
+		// never stamps reviews.user / approvals.user — so the cursor
+		// re-emits user_gate every tick. (That's the "closes immediately
+		// without user input" symptom: schema rejection used to drop the
+		// call entirely; with the schema fix in place, the call would
+		// have succeeded but the workflow still wouldn't advance.)
+		const gateKind = (a.gate_kind as string | undefined) || ""
+		if (gateKind === "spec" || gateKind === "approval") {
+			session.ad_hoc = false
+			launchBrowserBestEffort(reviewUrl, "User gate review")
+			if (activeStage) {
+				const ssPath = stageStatePath(slug, activeStage)
+				const stageState = readJson(ssPath)
+				stageState.gate_review_session_id = session.session_id
+				stageState.gate_review_url = reviewUrl
+				// Map cursor's gate_kind → await_gate's gate_review_context
+				// vocabulary (see stampGateApproval in haiku_await_gate.ts).
+				stageState.gate_review_context =
+					gateKind === "spec" ? "elaborate_to_execute" : "stage_gate"
+				writeJson(ssPath, stageState)
+			}
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: `User-gate review opened for stage "${activeStage || "(unspecified)"}". Review URL: ${reviewUrl}\n\nNow call haiku_await_gate { intent: "${slug}" } to block on the user's decision. On approve, the engine stamps ${gateKind === "spec" ? "reviews.user" : "approvals.user"} on each unit and the cursor advances on the next tick.`,
+					},
+				],
+			}
+		}
 
 		launchBrowserBestEffort(reviewUrl, "Ad-hoc review")
 

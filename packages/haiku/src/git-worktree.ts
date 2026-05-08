@@ -1238,6 +1238,28 @@ export function mergeStageBranchIntoMain(
 	const mergeMessage = `haiku: merge stage ${stage} into main`
 
 	try {
+		// Source-branch missing recovery. v3 merged-and-deleted stage
+		// branches once the stage was complete, so migrated intents will
+		// reach this code path with a stage branch that no longer exists
+		// either locally or on origin. The cursor's `isStageBranchMerged`
+		// guard treats that as merged-already and short-circuits, but if
+		// a caller dispatches the merge directly (or origin is reachable
+		// but the local clone is stale) the rev-parse below would throw
+		// and the engine would loop on `merge_stage`. Treat both-missing
+		// as a no-op success so the workflow can advance.
+		const localStage = tryRun(["git", "rev-parse", "--verify", stageBranch])
+		const originStage = tryRun([
+			"git",
+			"rev-parse",
+			"--verify",
+			`origin/${stageBranch}`,
+		])
+		if (!localStage && !originStage) {
+			return {
+				success: true,
+				message: `stage branch ${stageBranch} is missing locally and on origin — presumed merged-and-deleted in pre-v4 (3.x) workflow; treating as already merged`,
+			}
+		}
 		run(["git", "rev-parse", "--verify", stageBranch])
 		run(["git", "rev-parse", "--verify", mainBranch])
 

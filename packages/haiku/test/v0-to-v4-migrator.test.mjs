@@ -336,3 +336,135 @@ test("migrateIntent aggregates step details and returns them on MigrationResult"
 		rmSync(root, { recursive: true, force: true })
 	}
 })
+
+// ── Bug B: backfill discovery/reviews/approvals stamps ───────────────────
+
+test("migrator backfills discovery/reviews/approvals stamps on completed v3 units", async () => {
+	// Without backfill, the v4 cursor sees `discovery: {}` /
+	// `reviews: {}` / `approvals: {}` on every migrated completed unit
+	// and re-emits `discovery_required`, per-role review actions, etc.
+	// — re-running phases that already happened in v3. This test
+	// verifies the migrator stamps every cursor-checked role with
+	// `migrated: true` so the cursor treats the unit as fully done.
+	//
+	// Uses the real `software/design` studio config, so we point the
+	// plugin-root resolver at the repo's plugin/ directory. Falling
+	// back to no-config produces empty stamp lists (the migrator
+	// degrades gracefully) but won't exercise the actual backfill.
+	const { resolve, join: joinPath } = await import("node:path")
+	const { existsSync: exists } = await import("node:fs")
+	const findRepoRoot = () => {
+		let dir = resolve(import.meta.dirname ?? __dirname)
+		while (dir !== "/") {
+			if (exists(joinPath(dir, "plugin", "studios", "software"))) return dir
+			dir = resolve(dir, "..")
+		}
+		throw new Error("could not find repo root")
+	}
+	const PLUGIN_ROOT = joinPath(findRepoRoot(), "plugin")
+	const origPluginRoot = process.env.CLAUDE_PLUGIN_ROOT
+	process.env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT
+	const { _resetPluginRootForTests } = await import("../src/config.ts")
+	_resetPluginRootForTests()
+
+	const { root, intentDir } = makeV3IntentDir()
+	try {
+		const { __testOnly } = await import(
+			"../src/orchestrator/migrations/v0-to-v4.ts"
+		)
+		__testOnly.v0ToV4({ intentDir, repoRoot: root })
+
+		const fm = readFm(
+			join(intentDir, "stages", "design", "units", "unit-01-foo.md"),
+		)
+		// Discovery stamps for every studio-declared discovery template
+		// in `software/design`: DESIGN-BRIEF, DESIGN-SYSTEM-ANCHOR,
+		// DESIGN-TOKENS. Each carries `migrated: true`. (`name:` field
+		// in each .md frontmatter is the canonical key.)
+		assert.ok(fm.discovery, "discovery object should exist")
+		const discoveryKeys = Object.keys(fm.discovery)
+		assert.ok(
+			discoveryKeys.length > 0,
+			`expected non-empty discovery stamps, got: ${JSON.stringify(fm.discovery)}`,
+		)
+		for (const key of discoveryKeys) {
+			assert.strictEqual(
+				fm.discovery[key].migrated,
+				true,
+				`discovery.${key} should be migrated:true`,
+			)
+		}
+
+		// Reviews: `spec`, every review-agent, and `user` are stamped.
+		// software/design ships `accessibility`, `consistency`,
+		// `inception-coverage` review-agents.
+		assert.ok(fm.reviews?.spec, "reviews.spec should be stamped")
+		assert.strictEqual(fm.reviews.spec.migrated, true)
+		assert.ok(fm.reviews?.user, "reviews.user should be stamped")
+		assert.ok(fm.reviews?.accessibility, "reviews.accessibility")
+		assert.ok(fm.reviews?.consistency, "reviews.consistency")
+		assert.ok(fm.reviews?.["inception-coverage"], "reviews.inception-coverage")
+
+		// Approvals: spec, quality_gates, every review-agent, user.
+		assert.ok(fm.approvals?.spec, "approvals.spec")
+		assert.ok(fm.approvals?.quality_gates, "approvals.quality_gates")
+		assert.ok(fm.approvals?.user, "approvals.user")
+		assert.strictEqual(fm.approvals.user.migrated, true)
+		assert.ok(fm.approvals?.accessibility, "approvals.accessibility")
+		assert.ok(fm.approvals?.consistency, "approvals.consistency")
+		assert.ok(
+			fm.approvals?.["inception-coverage"],
+			"approvals.inception-coverage",
+		)
+	} finally {
+		rmSync(root, { recursive: true, force: true })
+		if (origPluginRoot === undefined) {
+			delete process.env.CLAUDE_PLUGIN_ROOT
+		} else {
+			process.env.CLAUDE_PLUGIN_ROOT = origPluginRoot
+		}
+		_resetPluginRootForTests()
+	}
+})
+
+test("migrator degrades gracefully when studio config is unreachable", async () => {
+	// If CLAUDE_PLUGIN_ROOT points at a non-existent dir (or the studio
+	// is custom/missing), readReviewAgentPaths and
+	// readStageArtifactDefs return empty. The backfill should still
+	// stamp the engine-built roles (spec, quality_gates, user) so the
+	// cursor at least doesn't loop on "missing user approval."
+	const origPluginRoot = process.env.CLAUDE_PLUGIN_ROOT
+	process.env.CLAUDE_PLUGIN_ROOT = "/nonexistent-plugin-dir-for-testing"
+	const { _resetPluginRootForTests } = await import("../src/config.ts")
+	_resetPluginRootForTests()
+
+	const { root, intentDir } = makeV3IntentDir()
+	try {
+		const { __testOnly } = await import(
+			"../src/orchestrator/migrations/v0-to-v4.ts"
+		)
+		__testOnly.v0ToV4({ intentDir, repoRoot: root })
+
+		const fm = readFm(
+			join(intentDir, "stages", "design", "units", "unit-01-foo.md"),
+		)
+		// Discovery is empty (no studio config to enumerate).
+		assert.deepStrictEqual(fm.discovery, {})
+		// Reviews and approvals still get the engine-built roles even
+		// without a studio config — the backfill walks a hardcoded list
+		// for those.
+		assert.ok(fm.reviews?.spec, "reviews.spec should still be stamped")
+		assert.ok(fm.reviews?.user, "reviews.user should still be stamped")
+		assert.ok(fm.approvals?.spec, "approvals.spec")
+		assert.ok(fm.approvals?.quality_gates, "approvals.quality_gates")
+		assert.ok(fm.approvals?.user, "approvals.user")
+	} finally {
+		rmSync(root, { recursive: true, force: true })
+		if (origPluginRoot === undefined) {
+			delete process.env.CLAUDE_PLUGIN_ROOT
+		} else {
+			process.env.CLAUDE_PLUGIN_ROOT = origPluginRoot
+		}
+		_resetPluginRootForTests()
+	}
+})

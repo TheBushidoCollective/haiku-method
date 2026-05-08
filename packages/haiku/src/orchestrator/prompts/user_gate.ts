@@ -40,7 +40,7 @@ export default definePromptBuilder(({ slug, action }) => {
 	lines.push("## What to do")
 	lines.push("")
 	lines.push(
-		`1. Call \`haiku_review_open { intent: "${slug}", stage: "${stage}", gate_kind: "${gateKind}" }\` to open the review server session.`,
+		`1. Call \`haiku_review_open { intent: "${slug}", stage: "${stage}", gate_kind: "${gateKind}", units: ${JSON.stringify(units)} }\` to open the gate-bound review session. The tool returns the URL immediately and writes \`gate_review_session_id\` to stage state — it does NOT block; \`haiku_await_gate\` does the blocking + stamp work below.`,
 	)
 	lines.push(
 		`2. Post the returned review URL to the user in chat — one or two sentences, no walls of text.`,

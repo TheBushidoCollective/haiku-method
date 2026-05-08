@@ -41,6 +41,15 @@ function str(name: string, defaultValue: string): string {
 let _pluginRoot: string | null = null
 
 /**
+ * Test-only: clear the cached plugin root so the next `resolvePluginRoot`
+ * call re-reads `CLAUDE_PLUGIN_ROOT`. Production code never calls this.
+ * Ships under a `_` prefix to advertise the test-only contract.
+ */
+export function _resetPluginRootForTests(): void {
+	_pluginRoot = null
+}
+
+/**
  * Return the plugin root directory, using this resolution order:
  *
  *   1. `CLAUDE_PLUGIN_ROOT` env var (set by Claude Code, or manually).

@@ -380,29 +380,39 @@ export function firstUnmergedStage(
 	const stages = resolveStudioStages(studio)
 	if (stages.length === 0) return null
 
-	// Filesystem mode (no git repo): use the intent.md `stages_merged`
-	// list as the canonical signal. Each merged stage gets its name
-	// pushed onto that list when run_next executes its `merge_stage`
-	// handler. The cursor returns the first stage NOT in the list.
+	// `stages_merged` on intent.md is the canonical signal in filesystem
+	// mode and a definitive override in git mode. The migrator populates
+	// it for v3 stages whose branches were merged-and-deleted before
+	// migration (the branch identifier is gone, but the work is on intent
+	// main). Without this list, git-mode would see "branch missing" and
+	// re-emit `merge_stage` forever for every v3-completed stage.
+	const intentMd = join(
+		primaryRepoRoot(),
+		".haiku",
+		"intents",
+		slug,
+		"intent.md",
+	)
+	const result = readFm(intentMd)
+	const stampedMerged: string[] = Array.isArray(result?.data?.stages_merged)
+		? (result.data.stages_merged as string[])
+		: []
+
+	// Filesystem mode (no git repo): the stamp is the only signal.
 	if (!isGitRepo()) {
-		const intentMd = join(
-			primaryRepoRoot(),
-			".haiku",
-			"intents",
-			slug,
-			"intent.md",
-		)
-		const result = readFm(intentMd)
-		const merged: string[] = Array.isArray(result?.data?.stages_merged)
-			? (result.data.stages_merged as string[])
-			: []
 		for (const stage of stages) {
-			if (!merged.includes(stage)) return stage
+			if (!stampedMerged.includes(stage)) return stage
 		}
 		return null
 	}
 
 	for (const stage of stages) {
+		// Definitive override: if the migrator (or `merge_stage` handler)
+		// stamped this stage as merged on intent.md, trust it even if
+		// the branch ref isn't present. This is what unblocks v3→v4
+		// migration on stages whose branches were merged-and-deleted
+		// in v3.
+		if (stampedMerged.includes(stage)) continue
 		const stageBranch = `haiku/${slug}/${stage}`
 		const intentMain = `haiku/${slug}/main`
 		// A stage is "merged" iff:

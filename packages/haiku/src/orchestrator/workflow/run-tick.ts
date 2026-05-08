@@ -133,7 +133,7 @@ export function runWorkflowTick(
 					if (d.units_migrated > 0) {
 						const synth =
 							d.units_with_synthesized_approval > 0
-								? ` (${d.units_with_synthesized_approval} had \`status: completed\` → synthesized \`approvals.user\` so the cursor treats them as merged-and-approved going forward)`
+								? ` (${d.units_with_synthesized_approval} had \`status: completed\` → backfilled \`discovery.<agent>.at\`, \`reviews.<role>.at\`, and \`approvals.<role>.at\` stamps so the cursor treats them as fully done — without these stamps the cursor would re-emit \`discovery_required\` / per-role review actions on every tick)`
 								: ""
 						lines.push(`- ${d.units_migrated} unit file(s) migrated${synth}`)
 					}
@@ -153,6 +153,11 @@ export function runWorkflowTick(
 					if (d.state_json_deleted > 0) {
 						lines.push(
 							`- ${d.state_json_deleted} stage \`state.json\` file(s) deleted — v4 derives stage position from git via \`firstUnmergedStage\`, not from state.json`,
+						)
+					}
+					if (d.stages_merged_stamped > 0) {
+						lines.push(
+							`- ${d.stages_merged_stamped} stage(s) marked as merged on intent.md (\`stages_merged:\`) — preserves the v3 \`status: completed\` signal so the cursor doesn't re-emit \`merge_stage\` for stages whose branches were merged-and-deleted in 3.x`,
 						)
 					}
 					if (d.drift_artifacts_deleted > 0) {

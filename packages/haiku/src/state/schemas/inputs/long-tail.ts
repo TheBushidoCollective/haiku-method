@@ -270,6 +270,31 @@ export const HAIKU_REVIEW_OPEN_INPUT_SCHEMA = Type.Object(
 					"Optional stage name. Defaults to the intent's active_stage.",
 			}),
 		),
+		// Cursor-driven user_gate sessions pass gate_kind ("spec" or
+		// "approval") and the units list. When gate_kind is set, the tool
+		// switches from ad-hoc semantics to a workflow-bound gate session:
+		// it writes gate_review_session_id / url / context to stage state
+		// so haiku_await_gate finds and resumes the session, AND it returns
+		// immediately (no blocking) — the agent calls haiku_await_gate
+		// next to block + dispatch the user's decision + stamp
+		// reviews.user / approvals.user on the listed units.
+		//
+		// Without these fields the call rejects (additionalProperties:
+		// false) — which is the exact failure the v4 user_gate prompt was
+		// hitting before this schema entry existed.
+		gate_kind: Type.Optional(
+			Type.String({
+				enum: ["spec", "approval"],
+				description:
+					"When set, opens the review pane as a workflow-bound gate session (vs. ad-hoc). 'spec' = pre-execute spec review (stamps reviews.user). 'approval' = post-execute output approval (stamps approvals.user).",
+			}),
+		),
+		units: Type.Optional(
+			Type.Array(Type.String(), {
+				description:
+					"Unit identifiers the user is gating. Surfaced by the cursor's user_gate action; ignored when gate_kind is unset.",
+			}),
+		),
 		state_file: stateFile,
 	},
 	{ additionalProperties: false },

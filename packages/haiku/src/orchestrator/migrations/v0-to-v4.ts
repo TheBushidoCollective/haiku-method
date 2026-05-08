@@ -62,6 +62,10 @@ import {
 import { dirname, join } from "node:path"
 import matter from "gray-matter"
 import {
+	readReviewAgentPaths,
+	readStageArtifactDefs,
+} from "../../studio-reader.js"
+import {
 	emptyMigrationDetails,
 	type MigrationContext,
 	type MigrationStepDetails,
@@ -229,6 +233,8 @@ function migrateIntentMd(
 function migrateUnitsInStage(
 	stageDir: string,
 	details: MigrationStepDetails,
+	studio: string,
+	stage: string,
 ): void {
 	const unitsDir = join(stageDir, "units")
 	if (!existsSync(unitsDir)) return
@@ -239,13 +245,95 @@ function migrateUnitsInStage(
 		const path = join(unitsDir, entry.name)
 		tryMigrateFile(
 			path,
-			() => migrateUnitFile(path, details),
+			() => migrateUnitFile(path, details, studio, stage),
 			`unit ${entry.name}`,
 		)
 	}
 }
 
-function migrateUnitFile(path: string, details: MigrationStepDetails): void {
+/**
+ * Backfill cursor-checked stamps for a v3 completed unit. The v4 cursor
+ * gates progression on per-unit `discovery.<agent>.at`, `reviews.<role>.at`,
+ * and `approvals.<role>.at` stamps. v3 didn't track these per-unit; it
+ * only tracked stage-level state. Without backfill, every migrated
+ * completed unit triggers `discovery_required` / review / approval
+ * actions on every tick — re-running phases that already happened.
+ *
+ * Synthesized stamps carry `migrated: true` so debugging can distinguish
+ * v3-origin stamps from real v4 work. The `at` timestamp is the unit's
+ * completion timestamp when available, falling back to created_at, then
+ * to now (which is wrong but never more wrong than blocking the cursor).
+ *
+ * Studio config is read at migration time to determine the configured
+ * roles per stage. If the studio config can't be read (e.g. the studio
+ * is missing the stage's review-agents directory), the backfill is
+ * partial — we stamp what we can find.
+ */
+function backfillCompletedUnitStamps(
+	frontmatter: Record<string, unknown>,
+	timestamp: string,
+	studio: string,
+	stage: string,
+	details: MigrationStepDetails,
+): void {
+	const stamp = { at: timestamp, migrated: true }
+
+	// Discovery: stamp every studio-declared discovery agent for this stage.
+	const discovery = frontmatter.discovery as Record<string, unknown>
+	let discoveryDefs: Array<{ name: string; kind: string }> = []
+	try {
+		discoveryDefs = readStageArtifactDefs(studio, stage).filter(
+			(d) => d.kind === "discovery",
+		)
+	} catch {
+		discoveryDefs = []
+	}
+	for (const def of discoveryDefs) {
+		if (discovery[def.name] == null) {
+			discovery[def.name] = stamp
+			details.units_with_synthesized_discovery++
+		}
+	}
+
+	// Reviews: spec is engine-built and always present. user is the human
+	// gate. Configured review agents come from the studio. autopilot
+	// strips down to spec-only, but the migrator can't know the intent's
+	// runtime mode reliably from a v3→v4 jump (the mode field's
+	// semantics changed). Stamp the full list — extras are harmless,
+	// missing stamps trigger re-review.
+	const reviews = frontmatter.reviews as Record<string, unknown>
+	let reviewAgents: string[] = []
+	try {
+		reviewAgents = Object.keys(readReviewAgentPaths(studio, stage)).sort()
+	} catch {
+		reviewAgents = []
+	}
+	const reviewRoles = ["spec", ...reviewAgents, "user"]
+	for (const role of reviewRoles) {
+		if (reviews[role] == null) {
+			reviews[role] = stamp
+			details.units_with_synthesized_reviews++
+		}
+	}
+
+	// Approvals: spec, quality_gates (engine-built), configured agents,
+	// user. Same logic as reviews.
+	const approvals = frontmatter.approvals as Record<string, unknown>
+	const approvalRoles = ["spec", "quality_gates", ...reviewAgents, "user"]
+	for (const role of approvalRoles) {
+		if (approvals[role] == null) {
+			approvals[role] = stamp
+			details.units_with_synthesized_approvals++
+		}
+	}
+}
+
+function migrateUnitFile(
+	path: string,
+	details: MigrationStepDetails,
+	studio: string,
+	stage: string,
+): void {
 	const { data, body } = readMatter(path)
 	const wasCompleted = data.status === "completed"
 	const oldCompletedAt =
@@ -280,18 +368,21 @@ function migrateUnitFile(path: string, details: MigrationStepDetails): void {
 		next.approvals = {}
 	}
 	if (wasCompleted) {
-		// Synthesize a user approval so the cursor treats this
-		// unit as merged-and-approved going forward. The `migrated`
-		// flag breadcrumbs that this is synthetic.
-		const approvals = next.approvals as Record<string, unknown>
-		if (approvals.user == null) {
-			approvals.user = {
-				at: bestTimestamp([oldCompletedAt]),
-				migrated: true,
-			}
-			details.units_with_synthesized_approval++
-		}
-		next.approvals = approvals
+		// Backfill every cursor-checked stamp the v4 engine expects:
+		// discovery, reviews, approvals. Without this, the cursor sees
+		// a "completed" unit with empty `discovery: {}` / `reviews: {}`
+		// and emits `discovery_required` / per-role review actions on
+		// every tick — re-running phases that already happened in v3.
+		// `studio` and `stage` come from the migrator's outer walk; the
+		// backfill resolves the studio's per-stage configuration to
+		// know which agents/roles to stamp.
+		const ts = bestTimestamp([oldCompletedAt])
+		backfillCompletedUnitStamps(next, ts, studio, stage, details)
+		// approvals.user counter is preserved for back-compat with
+		// existing tests/banner copy that report on it specifically.
+		// `backfillCompletedUnitStamps` already stamps approvals.user;
+		// we just keep the counter incrementing.
+		details.units_with_synthesized_approval++
 	}
 	writeMatter(path, next, body)
 	// Counter increments AFTER writeMatter — if the file failed to parse
@@ -434,22 +525,62 @@ function v0ToV4(ctx: MigrationContext): MigrationStepDetails {
 	// 1. Intent.md
 	migrateIntentMd(intentDir, details)
 
-	// 2. Per-stage walks
+	// 2. Resolve the studio for the stamp backfill. We read intent.md
+	// AFTER step 1 because the intent migrator preserves `studio:` —
+	// whatever was on disk is still there. Empty string when missing
+	// disables the backfill cleanly (both readStageArtifactDefs and
+	// readReviewAgentPaths return empty for an unknown studio, so the
+	// loops skip safely).
+	let studio = ""
+	const intentMdPath = join(intentDir, "intent.md")
+	if (existsSync(intentMdPath)) {
+		try {
+			const intentFm = readMatter(intentMdPath).data
+			if (typeof intentFm.studio === "string") studio = intentFm.studio
+		} catch {
+			studio = ""
+		}
+	}
+
+	// Track which stages v3 had marked complete. The cursor's
+	// `firstUnmergedStage` consults `stages_merged` on intent.md as a
+	// definitive override — without this, v3-merged-and-deleted stage
+	// branches would re-emit `merge_stage` forever (the branch ref is
+	// gone, the cursor can't tell it was already done).
+	const stagesMerged: string[] = []
+
+	// 3. Per-stage walks
 	const stagesDir = join(intentDir, "stages")
 	if (existsSync(stagesDir)) {
 		for (const entry of readdirSync(stagesDir, { withFileTypes: true })) {
 			if (!entry.isDirectory()) continue
 			const stageDir = join(stagesDir, entry.name)
+			const stage = entry.name
 
 			// 2a. Units
-			migrateUnitsInStage(stageDir, details)
+			migrateUnitsInStage(stageDir, details, studio, stage)
 
 			// 2b. Stage-scope feedback
 			migrateFeedbackInDir(join(stageDir, "feedback"), intentDir, details)
 
-			// 2c. Stage state.json — delete unconditionally
+			// 2c. Stage state.json — read v3 status BEFORE deleting so
+			// completed stages get added to `stages_merged`. Then delete.
+			// Reading first preserves the only signal v3 had for "this
+			// stage is done"; the v4 file shape doesn't carry status.
 			const stateJson = join(stageDir, "state.json")
 			if (existsSync(stateJson)) {
+				try {
+					const v3State = JSON.parse(readFileSync(stateJson, "utf8")) as {
+						status?: string
+					}
+					if (v3State.status === "completed") {
+						stagesMerged.push(stage)
+					}
+				} catch {
+					/* malformed v3 state.json — skip the merge stamp; cursor
+					   will fall back to git topology. Better than failing
+					   migration on a single junk file. */
+				}
 				rmSync(stateJson, { force: true })
 				details.state_json_deleted++
 			}
@@ -488,6 +619,28 @@ function v0ToV4(ctx: MigrationContext): MigrationStepDetails {
 		if (existsSync(stalePath)) {
 			rmSync(stalePath, { recursive: true, force: true })
 			details.drift_artifacts_deleted++
+		}
+	}
+
+	// 5. Stamp `stages_merged` on intent.md from v3 state.json statuses
+	// collected above. Only runs if we actually saw completed stages —
+	// avoids stamping an empty list on intents that were mid-flight at
+	// migration time. Existing entries on intent.md (from a partial
+	// previous migration run) are preserved and merged.
+	if (stagesMerged.length > 0 && existsSync(intentMdPath)) {
+		try {
+			const { data, body } = readMatter(intentMdPath)
+			const existing = Array.isArray(data.stages_merged)
+				? (data.stages_merged as string[])
+				: []
+			const next = Array.from(new Set([...existing, ...stagesMerged]))
+			data.stages_merged = next
+			writeMatter(intentMdPath, data, body)
+			details.stages_merged_stamped = stagesMerged.length
+		} catch {
+			/* writing intent.md back failed for some reason — log but
+			   don't fail migration. Cursor will fall back to git topology
+			   for these stages. */
 		}
 	}
 

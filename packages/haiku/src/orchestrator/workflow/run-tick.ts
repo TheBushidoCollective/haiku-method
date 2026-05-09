@@ -302,17 +302,25 @@ export function runWorkflowTick(
 	if (stages.length > 0) {
 		try {
 			const stageList = stages.filter((s): s is string => typeof s === "string")
-			const inferred = inferStagesMergedFromGit(slug, stageList)
-			if (inferred.length > 0) {
-				const existing = Array.isArray(intentFm.stages_merged)
-					? (intentFm.stages_merged as string[])
-					: []
-				const reconciled = reconcileStagesMerged(existing, inferred)
-				if (reconciled.changed) {
-					setFrontmatterField(intentMdPath, "stages_merged", reconciled.value)
-					// Refresh in-memory copy so the cursor walk below sees
-					// the freshly-stamped list.
-					intentFm = parseIntentFm(intentMdPath)
+			const existing = Array.isArray(intentFm.stages_merged)
+				? (intentFm.stages_merged as string[])
+				: []
+			// Skip the git subprocess once stages_merged already covers every
+			// configured stage — recovery is complete and there's nothing
+			// left to infer. The stamp is monotonic, so once it's full it
+			// stays full.
+			const existingSet = new Set(existing)
+			const recoveryComplete = stageList.every((s) => existingSet.has(s))
+			if (!recoveryComplete) {
+				const inferred = inferStagesMergedFromGit(slug, stageList)
+				if (inferred.length > 0) {
+					const reconciled = reconcileStagesMerged(existing, inferred)
+					if (reconciled.changed) {
+						setFrontmatterField(intentMdPath, "stages_merged", reconciled.value)
+						// Refresh in-memory copy so the cursor walk below sees
+						// the freshly-stamped list.
+						intentFm = parseIntentFm(intentMdPath)
+					}
 				}
 			}
 		} catch (err) {

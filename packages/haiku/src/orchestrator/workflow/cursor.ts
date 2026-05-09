@@ -54,18 +54,6 @@ import { basename, join } from "node:path"
 import matter from "gray-matter"
 import { isBranchMerged } from "../../git-worktree.js"
 import { isGitRepo, primaryRepoRoot } from "../../state-tools.js"
-
-function tryRun(args: string[]): string {
-	try {
-		return execFileSync(args[0], args.slice(1), {
-			encoding: "utf8",
-			stdio: ["ignore", "pipe", "pipe"],
-		}).trim()
-	} catch {
-		return ""
-	}
-}
-
 import {
 	readReviewAgentPaths,
 	readStageArtifactDefs,
@@ -77,6 +65,7 @@ import {
 	resolveStudioStages,
 } from "../studio.js"
 import { type DriftEvent, runDriftSweep } from "./drift-sweep.js"
+import { tryRun } from "./git-utils.js"
 
 // ── CursorAction discriminated union ─────────────────────────────────
 

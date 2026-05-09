@@ -643,8 +643,10 @@ function v0ToV4(ctx: MigrationContext): MigrationStepDetails {
 		}
 	}
 
+	// `intentMdPath` was confirmed via the outer existsSync at the top
+	// of the augment block; no need to re-check.
 	const allMerged = Array.from(new Set([...stagesMerged, ...gitInferred]))
-	if (allMerged.length > 0 && existsSync(intentMdPath)) {
+	if (allMerged.length > 0) {
 		try {
 			const { data, body } = readMatter(intentMdPath)
 			const existing = Array.isArray(data.stages_merged)
@@ -653,6 +655,10 @@ function v0ToV4(ctx: MigrationContext): MigrationStepDetails {
 			const next = Array.from(new Set([...existing, ...allMerged]))
 			data.stages_merged = next
 			writeMatter(intentMdPath, data, body)
+			// Counts the union of state.json-derived + git-inferred stages
+			// the migrator contributed (not just the state.json subset).
+			// Pre-existing intent.md entries are preserved in `next` but
+			// excluded here so the metric reads as "what migration added."
 			details.stages_merged_stamped = allMerged.length
 		} catch {
 			/* writing intent.md back failed for some reason — log but

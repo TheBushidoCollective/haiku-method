@@ -66,7 +66,10 @@ async function withRepo(slug, fn) {
 }
 
 function emptyCommit(root, message) {
-	writeFileSync(join(root, ".haiku", `marker-${Date.now()}-${Math.random()}`), "")
+	writeFileSync(
+		join(root, ".haiku", `marker-${Date.now()}-${Math.random()}`),
+		"",
+	)
 	git(root, "add", "-A")
 	git(root, "commit", "-q", "-m", message)
 }
@@ -91,12 +94,16 @@ test("inferStagesMergedFromGit: detects 'haiku: complete stage <X>' commits", as
 test("inferStagesMergedFromGit: detects 'haiku: merge stage <X> into main' commits", async () => {
 	if (!HAS_GIT) return
 	await withRepo("test-intent", async ({ root, slug }) => {
+		emptyCommit(root, "haiku: merge stage inception into main")
 		emptyCommit(root, "haiku: merge stage product into main")
 		const { inferStagesMergedFromGit } = await import(
 			"../src/orchestrator/workflow/infer-stages-merged.js"
 		)
 		const merged = inferStagesMergedFromGit(slug, ["inception", "product"])
-		assert.deepStrictEqual(merged, ["product"])
+		// Lock parser symmetry across multiple stages — same shape as the
+		// `complete stage` test so a regex regression in either pattern
+		// would surface here, not just under the matching test.
+		assert.deepStrictEqual(merged.sort(), ["inception", "product"])
 	})
 })
 

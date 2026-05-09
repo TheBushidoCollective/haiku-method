@@ -31,8 +31,8 @@
 // was later edited. As long as either signal is present anywhere in
 // the intent's main-branch ancestry, the stage is merged.
 
-import { execFileSync } from "node:child_process"
 import { isGitRepo } from "../../state-tools.js"
+import { tryRun } from "./git-utils.js"
 
 /**
  * Walk `git log haiku/<slug>/main` (or `origin/...` when local is
@@ -93,15 +93,4 @@ export function reconcileStagesMerged(
 	}
 	if (!changed) return { value: existing, changed: false }
 	return { value: Array.from(existingSet), changed: true }
-}
-
-function tryRun(args: string[]): string {
-	try {
-		return execFileSync(args[0], args.slice(1), {
-			encoding: "utf8",
-			stdio: ["ignore", "pipe", "pipe"],
-		}).trim()
-	} catch {
-		return ""
-	}
 }

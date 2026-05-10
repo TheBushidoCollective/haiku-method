@@ -31,6 +31,7 @@ import {
 	mergeDiscoveryWorktree,
 	mergeFixChainWorktree,
 	mergeStageBranchForward,
+	sweepDiscoveryWorktrees,
 } from "../src/git-worktree.ts"
 import {
 	_resetIsGitRepoForTests,
@@ -755,6 +756,128 @@ await test("surfaces untracked-files-specific remediation when foreign worktree 
 			}
 			rmSync(userWorktree, { recursive: true, force: true })
 		}
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
+// ── sweepDiscoveryWorktrees (regression: gigsmart/haiku-method#333) ───────
+//
+// `decompose.ts` promises "the workflow engine merges their work back
+// into the stage branch on the next haiku_run_next." Until this fix
+// nothing called `mergeDiscoveryWorktree`, so the discovery file lived
+// only on the discovery branch. The cursor's existence check on the
+// stage branch never saw it → `discovery_required` re-fired every tick.
+
+console.log(
+	"\n=== sweepDiscoveryWorktrees (regression: stuck discovery dispatch loop) ===",
+)
+
+await test("sweep merges every completed discovery worktree into its stage branch", () => {
+	const { tmp, slug, stage } = setupRepo()
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+		git(tmp, "checkout", `haiku/${slug}/${stage}`)
+
+		// Two discovery worktrees both with completed artifacts (the
+		// real-world fan-out shape).
+		for (const template of ["architecture", "competitive"]) {
+			const wt = createDiscoveryWorktree(slug, stage, template)
+			const artifactPath = join(
+				wt,
+				".haiku",
+				"intents",
+				slug,
+				"knowledge",
+				`${template.toUpperCase()}.md`,
+			)
+			mkdirSync(join(artifactPath, ".."), { recursive: true })
+			writeFileSync(artifactPath, `# ${template}\n`)
+			git(wt, "add", "-A")
+			git(wt, "commit", "-m", `${template} discovery`)
+		}
+
+		const results = sweepDiscoveryWorktrees(slug)
+		assert.strictEqual(results.length, 2, "found both worktrees")
+		for (const r of results) {
+			assert.ok(r.success, `${r.template} merged: ${r.message}`)
+		}
+
+		// Both artifacts now visible on the stage branch tree.
+		for (const template of ["architecture", "competitive"]) {
+			const stageCopy = join(
+				tmp,
+				".haiku",
+				"intents",
+				slug,
+				"knowledge",
+				`${template.toUpperCase()}.md`,
+			)
+			assert.ok(existsSync(stageCopy), `${template} landed on stage branch`)
+		}
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
+await test("sweep is a no-op when no discovery worktrees exist", () => {
+	const { tmp, slug } = setupRepo()
+	try {
+		process.chdir(tmp)
+		const results = sweepDiscoveryWorktrees(slug)
+		assert.deepStrictEqual(results, [])
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
+await test("sweep parses stage and template names containing hyphens when stages list is supplied", () => {
+	const { tmp, slug } = setupRepo({ stage: "design-discovery" })
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/design-discovery`, `haiku/${slug}/main`)
+		git(tmp, "checkout", `haiku/${slug}/design-discovery`)
+
+		const wt = createDiscoveryWorktree(
+			slug,
+			"design-discovery",
+			"design-system-anchor",
+		)
+		const artifactPath = join(
+			wt,
+			".haiku",
+			"intents",
+			slug,
+			"knowledge",
+			"DESIGN-SYSTEM-ANCHOR.md",
+		)
+		mkdirSync(join(artifactPath, ".."), { recursive: true })
+		writeFileSync(artifactPath, "# anchor\n")
+		git(wt, "add", "-A")
+		git(wt, "commit", "-m", "anchor discovery")
+
+		const results = sweepDiscoveryWorktrees(slug, [
+			"inception",
+			"design-discovery",
+			"development",
+		])
+		assert.strictEqual(results.length, 1)
+		assert.strictEqual(results[0].stage, "design-discovery")
+		assert.strictEqual(results[0].template, "design-system-anchor")
+		assert.ok(results[0].success, results[0].message)
+		assert.ok(
+			existsSync(
+				join(
+					tmp,
+					".haiku",
+					"intents",
+					slug,
+					"knowledge",
+					"DESIGN-SYSTEM-ANCHOR.md",
+				),
+			),
+		)
 	} finally {
 		cleanupRepo(tmp)
 	}

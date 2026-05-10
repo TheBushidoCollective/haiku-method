@@ -104,11 +104,15 @@ async function runSelectionPicker(
 	signal?: AbortSignal,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
 	const { orchestratorToolHandlers } = await import("./index.js")
-	const tool = orchestratorToolHandlers.get(actionName as string)
+	// Cursor actions are bare names (`select_studio`); handler map keys are
+	// the MCP tool names (`haiku_select_studio`). The mapping is fixed so
+	// agents never see either form — the picker is engine-driven inline.
+	const toolName = `haiku_${actionName}`
+	const tool = orchestratorToolHandlers.get(toolName)
 	if (!tool) {
 		return {
 			ok: false,
-			message: `Engine bug: no handler registered for selection action '${actionName}'.`,
+			message: `Engine bug: no handler registered for selection action '${actionName}' (looked up as '${toolName}').`,
 		}
 	}
 	try {
@@ -497,6 +501,63 @@ export default defineTool({
 		} catch (err) {
 			console.error(
 				`[haiku_run_next] drainPendingDispatches failed: ${err instanceof Error ? err.message : String(err)}`,
+			)
+		}
+
+		// Sweep completed discovery worktrees back into the stage branch
+		// before the cursor walks. The decompose prompt promises this
+		// integration; without it the cursor (running on the stage branch)
+		// never sees the discovery output sitting on the discovery branch
+		// and re-emits the same dispatch every tick. See #333. Conflicts
+		// are surfaced as a hard stop so the agent runs the integrator
+		// instead of looping; clean merges are silent.
+		try {
+			const { sweepDiscoveryWorktrees } = await import("../../git-worktree.js")
+			// Read intent.md once for the stages list so the parser can split
+			// hyphenated stage names correctly. Best-effort — the sweep falls
+			// back to first-hyphen splitting when no stages list is available.
+			let knownStages: string[] = []
+			try {
+				const intentMd = join(findHaikuRoot(), "intents", slug, "intent.md")
+				if (existsSync(intentMd)) {
+					const fm = readFrontmatter(intentMd)
+					if (Array.isArray(fm.stages)) {
+						knownStages = (fm.stages as unknown[]).filter(
+							(s): s is string => typeof s === "string",
+						)
+					}
+				}
+			} catch {
+				/* fall through with empty list */
+			}
+			const sweepResults = sweepDiscoveryWorktrees(slug, knownStages)
+			const conflicts = sweepResults.filter((r) => r.isConflict)
+			if (conflicts.length > 0) {
+				const lines = conflicts.map((c) => {
+					const files = (c.conflictFiles || []).join(", ")
+					return `- discovery \`${c.template}\` on stage \`${c.stage}\`: ${c.message}${files ? ` (files: ${files})` : ""}`
+				})
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Discovery merge conflicts must be resolved before the workflow can continue:\n\n${lines.join("\n")}\n\nResolve the conflicts inside each discovery worktree, commit, then re-run \`haiku_run_next\`.`,
+						},
+					],
+					isError: true,
+				}
+			}
+			const failures = sweepResults.filter((r) => !r.success && !r.isConflict)
+			if (failures.length > 0) {
+				console.error(
+					`[haiku_run_next] discovery merge failures: ${failures
+						.map((f) => `${f.stage}/${f.template}: ${f.message}`)
+						.join("; ")}`,
+				)
+			}
+		} catch (err) {
+			console.error(
+				`[haiku_run_next] sweepDiscoveryWorktrees failed: ${err instanceof Error ? err.message : String(err)}`,
 			)
 		}
 

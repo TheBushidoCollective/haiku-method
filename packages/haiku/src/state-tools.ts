@@ -744,16 +744,15 @@ function scanOneIntent(
 		}
 	}
 
-	// f. Missing status
-	if (!repairData.status) {
-		issues.push({
-			intent: slug,
-			field: "status",
-			severity: "error",
-			message: "Missing status field",
-			fix: "Set `status` to 'active' or 'completed'",
-		})
-	}
+	// f. Missing status — REMOVED.
+	//
+	// In v4, `status` is gone from intent.md frontmatter. It's derived
+	// from `sealed_at` (set / unset) plus per-stage merge state via
+	// `firstUnmergedStage`. The schema (INTENT_FRONTMATTER_SCHEMA) rejects
+	// writes to it via `propertyNames.not.enum`, so the repair "fix" was
+	// uncloseable: the check flagged the field as missing, and the
+	// recommended `haiku_intent_set { field: "status", ... }` returned
+	// `intent_field_engine_only`. See gigsmart/haiku-method#333.
 
 	// g. Missing mode
 	if (!repairData.mode) {
@@ -762,7 +761,7 @@ function scanOneIntent(
 			field: "mode",
 			severity: "error",
 			message: "Missing mode field",
-			fix: "Set `mode` to 'continuous', 'discrete', or 'autopilot'",
+			fix: "Run `haiku_run_next { intent: <slug> }` — the cursor will emit `select_mode` and the engine surfaces the picker. (Auto-apply defaults to 'continuous' as a recovery fallback for corrupted intents.)",
 		})
 	}
 

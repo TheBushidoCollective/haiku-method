@@ -26,8 +26,10 @@ import {
 	writeFileSync as fsWriteFileSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
+	statSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -3259,6 +3261,102 @@ export function mergeDiscoveryWorktree(
 			message: err instanceof Error ? err.message : String(err),
 		}
 	}
+}
+
+/**
+ * Sweep `.haiku/worktrees/{slug}/discovery-*` and merge each completed
+ * discovery worktree back into its stage branch.
+ *
+ * Why this exists:
+ *   `decompose.ts` promises "the workflow engine merges their work back
+ *   into the stage branch on the next haiku_run_next." Nothing actually
+ *   called `mergeDiscoveryWorktree`, so the discovery file lived only on
+ *   the discovery branch. The cursor's discovery-existence check
+ *   (`cursor.ts` step 3) reads `process.cwd()/<location>` while checked
+ *   out on the stage branch — it never sees the file → `discovery_required`
+ *   re-fires every tick. See gigsmart/haiku-method#333.
+ *
+ * Called pre-cursor by `haiku_run_next`. Best-effort: per-worktree
+ * failures log and skip; conflicts are surfaced through the merge result
+ * so callers can decide whether to escalate. Returns one entry per
+ * worktree found.
+ *
+ * `stages` lets us split worktree names like `discovery-{stage}-{template}`
+ * even when the stage itself contains hyphens (e.g. `design-discovery`).
+ * Caller should pass `intent.md`'s `stages:` array. When omitted or empty
+ * the parser falls back to splitting on the first hyphen — correct for
+ * single-word stage names, lossy for hyphenated ones.
+ */
+export function sweepDiscoveryWorktrees(
+	slug: string,
+	stages?: ReadonlyArray<string>,
+): Array<{
+	stage: string
+	template: string
+	success: boolean
+	message: string
+	isConflict?: boolean
+	conflictFiles?: string[]
+}> {
+	if (!isGitRepo()) return []
+	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
+	if (!existsSync(worktreeBase)) return []
+	let entries: string[]
+	try {
+		entries = readdirSync(worktreeBase)
+	} catch {
+		return []
+	}
+	// Sort known stages longest-first so a stage `design-discovery` matches
+	// before a stage `design` would steal the prefix of a worktree named
+	// `discovery-design-discovery-foo`.
+	const knownStages = (stages ?? [])
+		.filter((s) => typeof s === "string" && s.length > 0)
+		.slice()
+		.sort((a, b) => b.length - a.length)
+	const results: Array<{
+		stage: string
+		template: string
+		success: boolean
+		message: string
+		isConflict?: boolean
+		conflictFiles?: string[]
+	}> = []
+	for (const name of entries) {
+		// Discovery worktree dir name: `discovery-{stage}-{template}`.
+		if (!name.startsWith("discovery-")) continue
+		const rest = name.slice("discovery-".length)
+		let stage = ""
+		let template = ""
+		const matched = knownStages.find((s) => rest.startsWith(`${s}-`))
+		if (matched) {
+			stage = matched
+			template = rest.slice(matched.length + 1)
+		} else {
+			const dashIdx = rest.indexOf("-")
+			if (dashIdx <= 0) continue
+			stage = rest.slice(0, dashIdx)
+			template = rest.slice(dashIdx + 1)
+		}
+		if (!stage || !template) continue
+		try {
+			if (!statSync(join(worktreeBase, name)).isDirectory()) continue
+		} catch {
+			continue
+		}
+		try {
+			const merged = mergeDiscoveryWorktree(slug, stage, template)
+			results.push({ stage, template, ...merged })
+		} catch (err) {
+			results.push({
+				stage,
+				template,
+				success: false,
+				message: err instanceof Error ? err.message : String(err),
+			})
+		}
+	}
+	return results
 }
 
 /** Discard a discovery worktree without merging. */

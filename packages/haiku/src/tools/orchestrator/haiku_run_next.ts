@@ -508,9 +508,11 @@ export default defineTool({
 		// before the cursor walks. The decompose prompt promises this
 		// integration; without it the cursor (running on the stage branch)
 		// never sees the discovery output sitting on the discovery branch
-		// and re-emits the same dispatch every tick. See #333. Conflicts
-		// are surfaced as a hard stop so the agent runs the integrator
-		// instead of looping; clean merges are silent.
+		// and re-emits the same dispatch every tick. See #333. Both
+		// conflict and non-conflict failures surface as a hard stop —
+		// silently logging non-conflict failures would re-create the
+		// original loop bug since the cursor's existence check would still
+		// fail on the next tick and respawn discovery subagents.
 		try {
 			const { sweepDiscoveryWorktrees } = await import("../../git-worktree.js")
 			// Read intent.md once for the stages list so the parser can split
@@ -549,16 +551,38 @@ export default defineTool({
 			}
 			const failures = sweepResults.filter((r) => !r.success && !r.isConflict)
 			if (failures.length > 0) {
+				const lines = failures.map(
+					(f) =>
+						`- discovery \`${f.template}\` on stage \`${f.stage}\`: ${f.message}`,
+				)
 				console.error(
 					`[haiku_run_next] discovery merge failures: ${failures
 						.map((f) => `${f.stage}/${f.template}: ${f.message}`)
 						.join("; ")}`,
 				)
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Discovery worktree merge failed (non-conflict). Re-run \`haiku_run_next\` to retry; if it persists, inspect the worktree(s) under \`.haiku/worktrees/${slug}/discovery-*\` and file an issue.\n\n${lines.join("\n")}`,
+						},
+					],
+					isError: true,
+				}
 			}
 		} catch (err) {
 			console.error(
 				`[haiku_run_next] sweepDiscoveryWorktrees failed: ${err instanceof Error ? err.message : String(err)}`,
 			)
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: `Discovery worktree sweep threw: ${err instanceof Error ? err.message : String(err)}. Re-run \`haiku_run_next\` to retry.`,
+					},
+				],
+				isError: true,
+			}
 		}
 
 		// Workflow-engine dispatch: read disk → derive state → run

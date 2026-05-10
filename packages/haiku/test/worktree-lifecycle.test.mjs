@@ -883,6 +883,52 @@ await test("sweep parses stage and template names containing hyphens when stages
 	}
 })
 
+await test("sweep surfaces conflicts so haiku_run_next can hard-stop instead of looping", () => {
+	const { tmp, slug, stage } = setupRepo()
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+		git(tmp, "checkout", `haiku/${slug}/${stage}`)
+
+		// Land a baseline file on the stage branch that the discovery
+		// worktree will diverge from.
+		const sharedRel = join(".haiku", "intents", slug, "knowledge")
+		mkdirSync(join(tmp, sharedRel), { recursive: true })
+		writeFileSync(join(tmp, sharedRel, "ARCHITECTURE.md"), "stage baseline\n")
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-m", "stage baseline")
+
+		// Discovery worktree forks from the previous stage tip, then
+		// rewrites the same file. After the worktree's own merge of the
+		// stage branch, the conflict surfaces.
+		const wt = createDiscoveryWorktree(slug, stage, "architecture")
+		const wtArtifact = join(wt, sharedRel, "ARCHITECTURE.md")
+		writeFileSync(wtArtifact, "discovery edit\n")
+		git(wt, "add", "-A")
+		git(wt, "commit", "-m", "discovery edit")
+
+		// Stage branch advances on the same file too.
+		writeFileSync(join(tmp, sharedRel, "ARCHITECTURE.md"), "stage edit\n")
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-m", "stage advance")
+
+		const results = sweepDiscoveryWorktrees(slug, [stage])
+		assert.strictEqual(results.length, 1)
+		assert.strictEqual(results[0].success, false)
+		assert.strictEqual(
+			results[0].isConflict,
+			true,
+			`expected isConflict=true so haiku_run_next surfaces a hard stop; got: ${JSON.stringify(results[0])}`,
+		)
+		assert.ok(
+			results[0].conflictFiles && results[0].conflictFiles.length > 0,
+			`expected conflictFiles list; got: ${JSON.stringify(results[0])}`,
+		)
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
 // ── Path + name helpers ────────────────────────────────────────────────────
 
 console.log("\n=== path + branch name conventions ===")

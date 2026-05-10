@@ -744,15 +744,8 @@ function scanOneIntent(
 		}
 	}
 
-	// f. Missing status — REMOVED.
-	//
-	// In v4, `status` is gone from intent.md frontmatter. It's derived
-	// from `sealed_at` (set / unset) plus per-stage merge state via
-	// `firstUnmergedStage`. The schema (INTENT_FRONTMATTER_SCHEMA) rejects
-	// writes to it via `propertyNames.not.enum`, so the repair "fix" was
-	// uncloseable: the check flagged the field as missing, and the
-	// recommended `haiku_intent_set { field: "status", ... }` returned
-	// `intent_field_engine_only`. See gigsmart/haiku-method#333.
+	// f. Missing status — REMOVED. v4 derives status (no FM field); the
+	// schema rejects writes, so the "fix" was uncloseable. See #333.
 
 	// g. Missing mode
 	if (!repairData.mode) {

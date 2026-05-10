@@ -62,6 +62,15 @@ function dispatchOrchestratorAction(slug: string): OrchestratorActionType {
 	}
 }
 
+// Loop-guard helpers live in a sibling module so tests can import them
+// without dragging in the circular `index.ts` ↔ `orchestrator.ts` chain
+// this file is part of.
+import {
+	actionSignature,
+	loopAbortResponse,
+	RUN_NEXT_LOOP_CAP,
+} from "./_loop_guard.js"
+
 /**
  * Extract the orchestrator action name from a haiku_await_gate
  * response. The await tool renders its result as `<json>\n\n---\n\n<instructions>`
@@ -128,6 +137,33 @@ async function runSelectionPicker(
 					.join("\n")
 					.trim() || `Picker failed for ${actionName}.`
 			return { ok: false, message: text }
+		}
+		// Cancellation guard. The picker tools return a JSON body with
+		// `action: "cancelled"` when the SPA times out (default 30 min)
+		// or the user dismisses the prompt without choosing — that's NOT
+		// flagged as `isError` because the agent might want to surface a
+		// retry prompt. But here we're inside the engine's blocking tick
+		// loop; if we treat cancellation as success we re-tick, the
+		// cursor still sees the field unset, the picker fires again, and
+		// the call hangs for another 30 minutes per iteration. Treat
+		// cancellation as terminal so the agent gets one clear message
+		// and can decide whether to retry. See #333.
+		const bodyText = result.content
+			?.map((c) => (c.type === "text" ? c.text : ""))
+			.join("\n")
+			.trim()
+		if (bodyText) {
+			try {
+				const parsed = JSON.parse(bodyText) as { action?: unknown }
+				if (parsed?.action === "cancelled") {
+					return {
+						ok: false,
+						message: `Picker for ${actionName} was cancelled or timed out without a selection. Re-run \`haiku_run_next\` to surface the picker again.`,
+					}
+				}
+			} catch {
+				/* not JSON — selection-tool responses are always JSON, so this is fine */
+			}
 		}
 		return { ok: true }
 	} catch (err) {
@@ -598,19 +634,43 @@ export default defineTool({
 		// (`/haiku:change-mode`, etc.) but the tick path drives them
 		// engine-side here so the agent stays out of the loop.
 		let result = dispatchOrchestratorAction(slug)
-		while (
-			result.action === "select_studio" ||
-			result.action === "select_mode" ||
-			result.action === "select_stage"
-		) {
-			const pickerResult = await runSelectionPicker(result.action, slug, signal)
-			if (!pickerResult.ok) {
-				return {
-					content: [{ type: "text" as const, text: pickerResult.message }],
-					isError: true,
+		{
+			let iterations = 0
+			while (
+				result.action === "select_studio" ||
+				result.action === "select_mode" ||
+				result.action === "select_stage"
+			) {
+				const sigBefore = actionSignature(result)
+				if (++iterations > RUN_NEXT_LOOP_CAP) {
+					return loopAbortResponse("select_*", iterations, result, "cap")
+				}
+				const pickerResult = await runSelectionPicker(
+					result.action,
+					slug,
+					signal,
+				)
+				if (!pickerResult.ok) {
+					return {
+						content: [{ type: "text" as const, text: pickerResult.message }],
+						isError: true,
+					}
+				}
+				result = dispatchOrchestratorAction(slug)
+				if (
+					(result.action === "select_studio" ||
+						result.action === "select_mode" ||
+						result.action === "select_stage") &&
+					actionSignature(result) === sigBefore
+				) {
+					return loopAbortResponse(
+						"select_*",
+						iterations,
+						result,
+						"no_progress",
+					)
 				}
 			}
-			result = dispatchOrchestratorAction(slug)
 		}
 
 		// Surface-once stamping for design_direction_complete /
@@ -683,11 +743,31 @@ export default defineTool({
 		// through them), and when the FB has `origin: "drift"`, refresh
 		// the witnessed reviews/approvals timestamps on the targeted
 		// unit so the drift sweep stops flagging the same commit.
+		let closeFbIterations = 0
+		let closeFbLastSig: string | null = null
 		while (
 			result.action === "close_feedback" &&
 			typeof result.stage === "string" &&
 			typeof result.feedback_id === "string"
 		) {
+			const sig = actionSignature(result)
+			if (++closeFbIterations > RUN_NEXT_LOOP_CAP) {
+				return loopAbortResponse(
+					"close_feedback",
+					closeFbIterations,
+					result,
+					"cap",
+				)
+			}
+			if (sig === closeFbLastSig) {
+				return loopAbortResponse(
+					"close_feedback",
+					closeFbIterations,
+					result,
+					"no_progress",
+				)
+			}
+			closeFbLastSig = sig
 			try {
 				const stage = result.stage as string
 				const fbId = result.feedback_id as string
@@ -806,10 +886,30 @@ export default defineTool({
 			}
 		}
 
+		let mergeStageIterations = 0
+		let mergeStageLastSig: string | null = null
 		while (
 			result.action === "merge_stage" &&
 			typeof result.stage === "string"
 		) {
+			const sig = actionSignature(result)
+			if (++mergeStageIterations > RUN_NEXT_LOOP_CAP) {
+				return loopAbortResponse(
+					"merge_stage",
+					mergeStageIterations,
+					result,
+					"cap",
+				)
+			}
+			if (sig === mergeStageLastSig) {
+				return loopAbortResponse(
+					"merge_stage",
+					mergeStageIterations,
+					result,
+					"no_progress",
+				)
+			}
+			mergeStageLastSig = sig
 			const stageToMerge = result.stage
 			try {
 				const { isGitRepo } = await import("../../state-tools.js")
@@ -1014,7 +1114,27 @@ export default defineTool({
 		// haiku_await_gate" two-step. haiku_await_gate stays as a
 		// resume entry point for the case where the original tick
 		// timed out or was interrupted.
+		let gateReviewIterations = 0
+		let gateReviewLastSig: string | null = null
 		while (result.action === "gate_review") {
+			const sig = actionSignature(result)
+			if (++gateReviewIterations > RUN_NEXT_LOOP_CAP) {
+				return loopAbortResponse(
+					"gate_review",
+					gateReviewIterations,
+					result,
+					"cap",
+				)
+			}
+			if (sig === gateReviewLastSig) {
+				return loopAbortResponse(
+					"gate_review",
+					gateReviewIterations,
+					result,
+					"no_progress",
+				)
+			}
+			gateReviewLastSig = sig
 			const stage = (result.stage as string | null) ?? ""
 			const nextStage = result.next_stage as string | null
 			const nextPhase = result.next_phase as string | null

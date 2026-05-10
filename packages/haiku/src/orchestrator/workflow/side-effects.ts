@@ -174,8 +174,18 @@ export function workflowStartStage(slug: string, stage: string): void {
 	if (prevStage && branchExists(prevStageBranch)) {
 		deleteStageBranch(slug, prevStage)
 		try {
+			// Bound the network op so an unresponsive remote / auth prompt
+			// can't hang the MCP call. See gigsmart/haiku-method#333.
 			execFileSync("git", ["push", "origin", "--delete", prevStageBranch], {
 				stdio: "pipe",
+				timeout: 30_000,
+				env: {
+					...process.env,
+					GIT_TERMINAL_PROMPT: "0",
+					GIT_ASKPASS: "true",
+					SSH_ASKPASS: "true",
+					SSH_ASKPASS_REQUIRE: "never",
+				},
 			})
 		} catch {
 			/* non-fatal */
@@ -369,8 +379,18 @@ function workflowFinalizeStageIntoIntentMain(
 	if (branchExists(stageBranch)) {
 		deleteStageBranch(slug, stage)
 		try {
+			// Bound the network op so an unresponsive remote / auth prompt
+			// can't hang the MCP call. See gigsmart/haiku-method#333.
 			execFileSync("git", ["push", "origin", "--delete", stageBranch], {
 				stdio: "pipe",
+				timeout: 30_000,
+				env: {
+					...process.env,
+					GIT_TERMINAL_PROMPT: "0",
+					GIT_ASKPASS: "true",
+					SSH_ASKPASS: "true",
+					SSH_ASKPASS_REQUIRE: "never",
+				},
 			})
 		} catch {
 			/* non-fatal: offline, no push perms, or branch already gone */

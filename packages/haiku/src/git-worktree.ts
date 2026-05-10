@@ -35,6 +35,26 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { isGitRepo, primaryRepoRoot } from "./state-tools.js"
 
+/** Default cap for git network ops (fetch / push / ls-remote). Without
+ *  a timeout, an unresponsive remote, an SSH-key prompt, or an HTTPS-auth
+ *  prompt hangs `haiku_run_next` indefinitely from the agent's view.
+ *  See gigsmart/haiku-method#333. */
+const GIT_NETWORK_TIMEOUT_MS = 30_000
+
+/** Env that suppresses git's interactive credential / SSH prompts so a
+ *  network op fails fast instead of blocking on stdin. Combined with the
+ *  timeout, ensures we never hang. */
+const GIT_NONINTERACTIVE_ENV: NodeJS.ProcessEnv = {
+	...process.env,
+	GIT_TERMINAL_PROMPT: "0",
+	// Force a no-op askpass — if the remote needs HTTPS creds or an SSH
+	// passphrase, exit immediately rather than prompting. (`true` is the
+	// POSIX command that exits 0 without input.)
+	GIT_ASKPASS: "true",
+	SSH_ASKPASS: "true",
+	SSH_ASKPASS_REQUIRE: "never",
+}
+
 function run(args: string[], cwd?: string): string {
 	return execFileSync(args[0], args.slice(1), {
 		encoding: "utf8",
@@ -46,6 +66,25 @@ function run(args: string[], cwd?: string): string {
 function tryRun(args: string[], cwd?: string): string {
 	try {
 		return run(args, cwd)
+	} catch {
+		return ""
+	}
+}
+
+/** Variant of `tryRun` for git operations that talk to a remote
+ *  (`fetch origin`, `push origin`, `ls-remote`). Bounded by
+ *  `GIT_NETWORK_TIMEOUT_MS` and runs with credential / SSH prompts
+ *  suppressed, so an unresponsive remote or auth prompt fails fast
+ *  instead of hanging the MCP call. See gigsmart/haiku-method#333. */
+function tryRunNetwork(args: string[], cwd?: string): string {
+	try {
+		return execFileSync(args[0], args.slice(1), {
+			encoding: "utf8",
+			stdio: "pipe",
+			cwd,
+			timeout: GIT_NETWORK_TIMEOUT_MS,
+			env: GIT_NONINTERACTIVE_ENV,
+		}).trim()
 	} catch {
 		return ""
 	}
@@ -109,11 +148,16 @@ export function resolveMainlineRef(): string {
 }
 
 /** Fetch from origin so subsequent ref lookups and worktree creations see the
- *  current remote state. Non-fatal — returns false on failure (offline, no remote). */
+ *  current remote state. Non-fatal — returns false on failure (offline, no
+ *  remote, auth prompt suppressed, timeout). */
 export function fetchOrigin(): boolean {
 	if (!isGitRepo()) return false
 	try {
-		execFileSync("git", ["fetch", "--prune", "origin"], { stdio: "pipe" })
+		execFileSync("git", ["fetch", "--prune", "origin"], {
+			stdio: "pipe",
+			timeout: GIT_NETWORK_TIMEOUT_MS,
+			env: GIT_NONINTERACTIVE_ENV,
+		})
 		return true
 	} catch {
 		return false
@@ -327,7 +371,11 @@ export function commitAndPushFromWorktree(
 			execFileSync(
 				"git",
 				["-C", worktreePath, "push", "origin", `HEAD:refs/heads/${branch}`],
-				{ stdio: "pipe" },
+				{
+					stdio: "pipe",
+					timeout: GIT_NETWORK_TIMEOUT_MS,
+					env: GIT_NONINTERACTIVE_ENV,
+				},
 			)
 			return { ok: true }
 		} catch (err) {
@@ -352,7 +400,7 @@ export function commitAndPushFromWorktree(
 	const isNonFastForward =
 		/non-fast-forward|fetch first|behind the remote/i.test(first.error ?? "")
 	if (isNonFastForward) {
-		tryRun(["git", "-C", worktreePath, "fetch", "origin", branch])
+		tryRunNetwork(["git", "-C", worktreePath, "fetch", "origin", branch])
 		try {
 			execFileSync("git", ["-C", worktreePath, "rebase", `origin/${branch}`], {
 				stdio: "pipe",
@@ -425,14 +473,18 @@ export function openPullRequest(
 				"--body",
 				body,
 			)
-			const out = execFileSync("gh", args, { encoding: "utf8" }).trim()
+			const out = execFileSync("gh", args, {
+				encoding: "utf8",
+				timeout: GIT_NETWORK_TIMEOUT_MS,
+				env: GIT_NONINTERACTIVE_ENV,
+			}).trim()
 			return { ok: true, url: out }
 		}
 		// glab: `glab mr list` returns a tabular row like `!123  title  branch  ...`,
 		// not JSON, so we extract the MR number via a !NNN regex (not a substring
 		// includes, which would false-positive on labels or error text) and then
 		// call `glab mr view --output json` to get a proper URL.
-		const existing = tryRun([
+		const existing = tryRunNetwork([
 			"glab",
 			"mr",
 			"list",
@@ -446,7 +498,14 @@ export function openPullRequest(
 		const mrNumberMatch = existing.match(/^!(\d+)\b/m)
 		if (mrNumberMatch) {
 			const mrNum = mrNumberMatch[1]
-			const viewJson = tryRun(["glab", "mr", "view", mrNum, "--output", "json"])
+			const viewJson = tryRunNetwork([
+				"glab",
+				"mr",
+				"view",
+				mrNum,
+				"--output",
+				"json",
+			])
 			if (viewJson) {
 				try {
 					const parsed = JSON.parse(viewJson) as { web_url?: string }
@@ -468,7 +527,11 @@ export function openPullRequest(
 			"--description",
 			body,
 		)
-		const out = execFileSync("glab", args, { encoding: "utf8" }).trim()
+		const out = execFileSync("glab", args, {
+			encoding: "utf8",
+			timeout: GIT_NETWORK_TIMEOUT_MS,
+			env: GIT_NONINTERACTIVE_ENV,
+		}).trim()
 		return { ok: true, url: out }
 	} catch (err) {
 		return {
@@ -479,7 +542,9 @@ export function openPullRequest(
 }
 
 /** Push a branch to its origin (creates upstream if missing). Returns
- *  ok:true on success, ok:false with the raw error on failure. */
+ *  ok:true on success, ok:false with the raw error on failure. Bounded
+ *  by `GIT_NETWORK_TIMEOUT_MS` and runs with prompts suppressed so an
+ *  unresponsive remote or auth prompt fails fast instead of hanging. */
 export function pushBranchToOrigin(branch: string): {
 	ok: boolean
 	error?: string
@@ -488,6 +553,8 @@ export function pushBranchToOrigin(branch: string): {
 		execFileSync("git", ["push", "-u", "origin", branch], {
 			encoding: "utf8",
 			stdio: "pipe",
+			timeout: GIT_NETWORK_TIMEOUT_MS,
+			env: GIT_NONINTERACTIVE_ENV,
 		})
 		return { ok: true }
 	} catch (err) {
@@ -741,6 +808,8 @@ export function markPullRequestReady(url: string): {
 			execFileSync("gh", ["pr", "ready", url], {
 				encoding: "utf8",
 				stdio: "pipe",
+				timeout: GIT_NETWORK_TIMEOUT_MS,
+				env: GIT_NONINTERACTIVE_ENV,
 			})
 			return { ok: true }
 		}
@@ -753,6 +822,8 @@ export function markPullRequestReady(url: string): {
 			execFileSync("glab", ["mr", "update", iidMatch[1], "--ready"], {
 				encoding: "utf8",
 				stdio: "pipe",
+				timeout: GIT_NETWORK_TIMEOUT_MS,
+				env: GIT_NONINTERACTIVE_ENV,
 			})
 			return { ok: true }
 		}
@@ -2479,9 +2550,10 @@ export function cleanupOrphanedStageBranches(slug: string): {
 		const segment = stripped.slice(`haiku/${slug}/`.length)
 		if (segment.startsWith("unit-")) continue
 		if (!isBranchMerged(stripped, mainBranch)) continue
-		// git push origin --delete is destructive; wrap in tryRun so a
-		// permission or network issue doesn't crash the workflow engine.
-		if (tryRun(["git", "push", "origin", "--delete", stripped])) {
+		// git push origin --delete is destructive; wrap in tryRunNetwork so
+		// a permission, auth-prompt, or unresponsive-remote issue fails
+		// fast within the network timeout instead of hanging the workflow.
+		if (tryRunNetwork(["git", "push", "origin", "--delete", stripped])) {
 			result.deleted_remote.push(stripped)
 		}
 	}

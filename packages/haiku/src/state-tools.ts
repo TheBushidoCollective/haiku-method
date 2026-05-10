@@ -4020,7 +4020,21 @@ export function gitCommitState(message: string): {
 			stdio: "pipe",
 		})
 		try {
-			execFileSync("git", ["push"], { encoding: "utf8", stdio: "pipe" })
+			// Bound the network op so an unresponsive remote / auth prompt
+			// can't hang the MCP call. Mirror the same noninteractive env
+			// used in git-worktree.ts. See gigsmart/haiku-method#333.
+			execFileSync("git", ["push"], {
+				encoding: "utf8",
+				stdio: "pipe",
+				timeout: 30_000,
+				env: {
+					...process.env,
+					GIT_TERMINAL_PROMPT: "0",
+					GIT_ASKPASS: "true",
+					SSH_ASKPASS: "true",
+					SSH_ASKPASS_REQUIRE: "never",
+				},
+			})
 			return { committed: true, pushed: true }
 		} catch (pushErr) {
 			const pushError =

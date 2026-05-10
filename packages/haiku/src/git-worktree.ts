@@ -38,13 +38,16 @@ import { isGitRepo, primaryRepoRoot } from "./state-tools.js"
 /** Default cap for git network ops (fetch / push / ls-remote). Without
  *  a timeout, an unresponsive remote, an SSH-key prompt, or an HTTPS-auth
  *  prompt hangs `haiku_run_next` indefinitely from the agent's view.
- *  See gigsmart/haiku-method#333. */
-const GIT_NETWORK_TIMEOUT_MS = 30_000
+ *  See gigsmart/haiku-method#333. Exported so other modules that shell
+ *  out to git network ops (state-tools.ts, side-effects.ts) can apply
+ *  the same bound without re-deriving the constant. */
+export const GIT_NETWORK_TIMEOUT_MS = 30_000
 
 /** Env that suppresses git's interactive credential / SSH prompts so a
  *  network op fails fast instead of blocking on stdin. Combined with the
- *  timeout, ensures we never hang. */
-const GIT_NONINTERACTIVE_ENV: NodeJS.ProcessEnv = {
+ *  timeout, ensures we never hang. Exported alongside
+ *  `GIT_NETWORK_TIMEOUT_MS` for the same reason. */
+export const GIT_NONINTERACTIVE_ENV: NodeJS.ProcessEnv = {
 	...process.env,
 	GIT_TERMINAL_PROMPT: "0",
 	// Force a no-op askpass — if the remote needs HTTPS creds or an SSH

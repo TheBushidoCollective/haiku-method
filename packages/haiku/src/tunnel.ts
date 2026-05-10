@@ -248,15 +248,31 @@ function attachTunnelListeners(tunnel: LocaltunnelInstance): void {
 	})
 }
 
+/** Cap for waiting on an in-flight reconnect + per-attempt cap on the
+ *  localtunnel call itself. Without these, `openTunnel` can hang the
+ *  MCP call indefinitely — the reconnect-wait was a busy loop with no
+ *  escape, and `localtunnel({port})` has no built-in timeout. See
+ *  gigsmart/haiku-method#333. */
+const TUNNEL_RECONNECT_WAIT_MS = 30_000
+const TUNNEL_ATTEMPT_TIMEOUT_MS = 15_000
+
 export async function openTunnel(port: number): Promise<string> {
 	if (activeTunnel) return activeTunnel.url
 
 	if (reconnecting) {
-		await new Promise<void>((resolve) => {
+		const waitDeadline = Date.now() + TUNNEL_RECONNECT_WAIT_MS
+		await new Promise<void>((resolve, reject) => {
 			const check = setInterval(() => {
 				if (!reconnecting) {
 					clearInterval(check)
 					resolve()
+				} else if (Date.now() > waitDeadline) {
+					clearInterval(check)
+					reject(
+						new Error(
+							`openTunnel: timed out after ${TUNNEL_RECONNECT_WAIT_MS}ms waiting for an in-flight reconnect to settle`,
+						),
+					)
 				}
 			}, 100)
 		})
@@ -269,7 +285,25 @@ export async function openTunnel(port: number): Promise<string> {
 	const maxRetries = 3
 	for (let attempt = 0; attempt < maxRetries; attempt++) {
 		try {
-			const tunnel = await localtunnel({ port })
+			// Race localtunnel against an attempt timeout. localtunnel has
+			// no built-in timeout — a slow / unresponsive tunnel server
+			// would otherwise hang `openTunnel` (and therefore haiku_run_next
+			// when remote review is on) indefinitely.
+			const attemptTimeout = new Promise<never>((_, reject) =>
+				setTimeout(
+					() =>
+						reject(
+							new Error(
+								`localtunnel did not respond within ${TUNNEL_ATTEMPT_TIMEOUT_MS}ms`,
+							),
+						),
+					TUNNEL_ATTEMPT_TIMEOUT_MS,
+				),
+			)
+			const tunnel = (await Promise.race([
+				localtunnel({ port }),
+				attemptTimeout,
+			])) as LocaltunnelInstance
 			activeTunnel = tunnel
 			attachTunnelListeners(tunnel)
 			console.error(`[haiku] Tunnel opened: ${tunnel.url}`)

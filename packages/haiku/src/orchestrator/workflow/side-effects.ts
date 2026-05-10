@@ -42,6 +42,8 @@ import {
 	ensureOnIntentMain,
 	ensureOnStageBranch,
 	finalizeIntentBranches,
+	GIT_NETWORK_TIMEOUT_MS,
+	GIT_NONINTERACTIVE_ENV,
 	isBranchMerged,
 	isOnStageBranch,
 	markPullRequestReady,
@@ -178,14 +180,8 @@ export function workflowStartStage(slug: string, stage: string): void {
 			// can't hang the MCP call. See gigsmart/haiku-method#333.
 			execFileSync("git", ["push", "origin", "--delete", prevStageBranch], {
 				stdio: "pipe",
-				timeout: 30_000,
-				env: {
-					...process.env,
-					GIT_TERMINAL_PROMPT: "0",
-					GIT_ASKPASS: "true",
-					SSH_ASKPASS: "true",
-					SSH_ASKPASS_REQUIRE: "never",
-				},
+				timeout: GIT_NETWORK_TIMEOUT_MS,
+				env: GIT_NONINTERACTIVE_ENV,
 			})
 		} catch {
 			/* non-fatal */
@@ -383,14 +379,8 @@ function workflowFinalizeStageIntoIntentMain(
 			// can't hang the MCP call. See gigsmart/haiku-method#333.
 			execFileSync("git", ["push", "origin", "--delete", stageBranch], {
 				stdio: "pipe",
-				timeout: 30_000,
-				env: {
-					...process.env,
-					GIT_TERMINAL_PROMPT: "0",
-					GIT_ASKPASS: "true",
-					SSH_ASKPASS: "true",
-					SSH_ASKPASS_REQUIRE: "never",
-				},
+				timeout: GIT_NETWORK_TIMEOUT_MS,
+				env: GIT_NONINTERACTIVE_ENV,
 			})
 		} catch {
 			/* non-fatal: offline, no push perms, or branch already gone */

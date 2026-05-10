@@ -363,7 +363,9 @@ export function applyAutoFixes(
 			}
 		}
 
-		// Git-based date repair: created_at, started_at, completed_at
+		// Git-based date repair: created_at, started_at. The completed_at
+		// branch was removed alongside the dead scanner check that raised
+		// it — `completed_at` is in DEPRECATED_INTENT_FIELDS.
 		if (issue.field === "created_at" && issue.message.includes("git history")) {
 			const dateMatch = issue.fix.match(/'([^']+)' \(from git/)
 			if (dateMatch) {
@@ -386,20 +388,6 @@ export function applyAutoFixes(
 					intent: slug,
 					field: "started_at",
 					description: `Updated started_at to '${dateMatch[1]}' from git history`,
-				})
-				fixedHere = true
-				changed = true
-			}
-		}
-
-		if (issue.field === "completed_at" && issue.fix.includes("from git")) {
-			const dateMatch = issue.fix.match(/'([^']+)' \(from git/)
-			if (dateMatch) {
-				data.completed_at = dateMatch[1]
-				applied.push({
-					intent: slug,
-					field: "completed_at",
-					description: `Updated completed_at to '${dateMatch[1]}' from git history`,
 				})
 				fixedHere = true
 				changed = true
@@ -565,30 +553,6 @@ function gitFirstCommitDateForRepair(
 		// Take the last line (oldest commit)
 		const lines = result.split("\n").filter(Boolean)
 		return lines.length > 0 ? lines[lines.length - 1] : null
-	} catch {
-		return null
-	}
-}
-
-/** Get the most recent commit date for a file/directory from git history.
- *  `gitCwd` allows running git from a worktree path. */
-function gitLastCommitDateForRepair(
-	filePath: string,
-	gitCwd?: string,
-): string | null {
-	if (!isGitRepo()) return null
-	try {
-		const result = execFileSync(
-			"git",
-			["log", "-1", "--format=%aI", "--", filePath],
-			{
-				encoding: "utf8",
-				timeout: 5000,
-				stdio: ["pipe", "pipe", "pipe"],
-				...(gitCwd ? { cwd: gitCwd } : {}),
-			},
-		).trim()
-		return result || null
 	} catch {
 		return null
 	}
@@ -780,35 +744,9 @@ function scanOneIntent(
 		})
 	}
 
-	// j. Invalid active_stage
-	if (
-		repairData.active_stage &&
-		Array.isArray(repairStages) &&
-		repairStages.length > 0
-	) {
-		if (
-			!(repairStages as string[]).includes(repairData.active_stage as string)
-		) {
-			issues.push({
-				intent: slug,
-				field: "active_stage",
-				severity: "error",
-				message: `active_stage '${repairData.active_stage}' not in stages list`,
-				fix: `active_stage '${repairData.active_stage}' not in stages list`,
-			})
-		}
-	}
-
-	// k. Missing active_stage for active intents
-	if (repairData.status === "active" && !repairData.active_stage) {
-		issues.push({
-			intent: slug,
-			field: "active_stage",
-			severity: "warning",
-			message: "Active intent has no active_stage",
-			fix: "Active intent has no active_stage. Set to the first stage.",
-		})
-	}
+	// j + k. active_stage / status checks — REMOVED. Both fields are in
+	// DEPRECATED_INTENT_FIELDS (stripped on v0→v4 migration), so the
+	// conditions could never fire on a live v4 intent. See #333.
 
 	// l. Stage state consistency — REMOVED (was v3-only).
 	//
@@ -958,14 +896,15 @@ function scanOneIntent(
 		}
 	}
 
-	// p. Git-based date repair: derive dates from commit history
+	// p. Git-based date repair: derive dates from commit history.
+	// completed_at branches removed — `completed_at` is in
+	// DEPRECATED_INTENT_FIELDS (stripped on v0→v4 migration); v4 uses
+	// `sealed_at` for terminal completion and the FSM owns its write.
 	if (isGitRepo()) {
 		const intentFilePath = join(intentsDir, slug, "intent.md")
 		const gitCreated = gitFirstCommitDateForRepair(intentFilePath)
-		const gitLastModified = gitLastCommitDateForRepair(join(intentsDir, slug))
 		const currentCreatedAt = repairData.created_at as string | undefined
 		const currentStartedAt = repairData.started_at as string | undefined
-		const currentCompletedAt = repairData.completed_at as string | undefined
 
 		// created_at should match the first commit
 		if (gitCreated && currentCreatedAt) {
@@ -1003,28 +942,6 @@ function scanOneIntent(
 			}
 		}
 
-		// completed_at for completed intents should match the last commit
-		if (
-			repairData.status === "completed" &&
-			gitLastModified &&
-			currentCompletedAt
-		) {
-			const gitDate = gitLastModified.slice(0, 10)
-			const fmDate =
-				typeof currentCompletedAt === "string"
-					? currentCompletedAt.slice(0, 10)
-					: ""
-			if (gitDate !== fmDate) {
-				issues.push({
-					intent: slug,
-					field: "completed_at",
-					severity: "warning",
-					message: `completed_at '${fmDate}' doesn't match git history '${gitDate}'`,
-					fix: `Update completed_at to '${gitLastModified}' (from git last commit)`,
-				})
-			}
-		}
-
 		// Missing started_at — derive from git
 		if (gitCreated && !currentStartedAt) {
 			issues.push({
@@ -1033,21 +950,6 @@ function scanOneIntent(
 				severity: "warning",
 				message: "Missing started_at field",
 				fix: `Set started_at to '${gitCreated}' (from git first commit)`,
-			})
-		}
-
-		// Missing completed_at for completed intents — derive from git
-		if (
-			repairData.status === "completed" &&
-			gitLastModified &&
-			!currentCompletedAt
-		) {
-			issues.push({
-				intent: slug,
-				field: "completed_at",
-				severity: "warning",
-				message: "Completed intent missing completed_at field",
-				fix: `Set completed_at to '${gitLastModified}' (from git last commit)`,
 			})
 		}
 	}

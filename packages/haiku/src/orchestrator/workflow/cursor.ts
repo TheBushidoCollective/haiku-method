@@ -362,40 +362,70 @@ function isUnitFullyApproved(fm: UnitFm, approvalRoles: string[]): boolean {
 /**
  * Is this unit past (no longer needing cursor work)?
  *
- * A unit is PAST when one of:
- *   (a) `started_at` set + no iterations — v3-migrated /
- *       merged-from-elsewhere placeholder. The migrator dropped per-unit
- *       history; treat file presence (with `started_at`) as proof that
- *       this stage's work happened. Fix-loop semantics live in Track B.
- *   (b) Iterations end in a terminal advance on the last hat AND every
- *       required approval role on `approvals.<role>.at` is stamped.
+ * The strongest signal of completion is "every required approval role
+ * is stamped." If the user, spec reviewer, quality gates, and every
+ * configured review-agent have all signed, the unit is done — full
+ * stop. The cursor MUST walk past it regardless of iteration shape.
+ *
+ * Iteration state is a fallback signal when approvals aren't yet all
+ * stamped (mid-flight) and a separate diagnostic for v3-migrated
+ * placeholders that have no iteration history at all.
+ *
+ * A unit is PAST when ANY of:
+ *   (a) Every required approval role on `approvals.<role>.at` is
+ *       stamped. This trumps everything: a malformed iteration
+ *       (missing `result`, wrong hat ordering, etc.) on an otherwise
+ *       fully-approved unit is a data inconsistency from migration or
+ *       manual edit — the approval stamps are the user's explicit
+ *       sign-off and the cursor MUST respect them. This catches the
+ *       v3→v4 migration bug where `backfillCompletedUnitStamps`
+ *       stamps approvals on units whose v3 iterations left a hat
+ *       without a `result:` field; without this branch the cursor
+ *       loops on `merge_stage` forever (the unit looks neither
+ *       mid-flight nor done).
+ *   (b) `started_at` set + no iterations — v3-migrated /
+ *       merged-from-elsewhere placeholder. The migrator dropped
+ *       per-unit history; file presence with `started_at` is the
+ *       proof this stage's work happened.
+ *   (c) Iterations end in a terminal advance on the last hat AND
+ *       every required approval role is stamped. Same as (a)
+ *       structurally; kept as a separate condition only for clarity
+ *       of intent — this is the canonical "fully signed" shape.
  *
  * Otherwise the unit is CURRENT (pins the cursor):
  *   - `started_at` null → wave-ready, OR
  *   - Iterations exist but not terminal-advance → mid-flight, OR
  *   - Terminal-advance but missing approvals → review/approval phase.
  *
- * **Known blindspot on path (a)**: `haiku_unit_start` stamps `started_at`
- * BEFORE the subagent emits its first iteration. If a subagent crashes
- * between `haiku_unit_start` and the first hat's iteration write, the
- * unit lands in the same FM shape as a v3-migrated placeholder
- * (`started_at` set, no iterations) and this check walks past it.
- * Recovery path for that case is `safe_intent_repair`, which can detect
- * a stranded started-at-without-iterations unit and reset it. The old
- * file-existence walk had the same blindspot; the new check makes the
- * assumption explicit.
+ * **Known blindspot on path (b)**: `haiku_unit_start` stamps
+ * `started_at` BEFORE the subagent emits its first iteration. If a
+ * subagent crashes between `haiku_unit_start` and the first hat's
+ * iteration write, the unit lands in the same FM shape as a v3-migrated
+ * placeholder (`started_at` set, no iterations) and this check walks
+ * past it. Recovery path for that case is `safe_intent_repair`, which
+ * can detect a stranded started-at-without-iterations unit and reset
+ * it. The old file-existence walk had the same blindspot; the new
+ * check makes the assumption explicit.
  */
 function isUnitComplete(
 	fm: UnitFm,
 	lastHat: string,
 	approvalRoles: string[],
 ): boolean {
+	// (a) Strongest signal: every approval role is stamped. Trusts the
+	// user's / engine's explicit sign-off over iteration consistency.
+	if (isUnitFullyApproved(fm, approvalRoles)) return true
 	const started = hasStarted(fm)
 	const its = pickIterations(fm)
-	if (started && its.length === 0) return true // (a) placeholder
+	// (b) v3-migrated / merged-from-elsewhere placeholder.
+	if (started && its.length === 0) return true
+	// Wave-ready / not yet started — CURRENT.
 	if (!started) return false
+	// Mid-flight: iterations exist but not terminal-advance — CURRENT.
 	if (!isUnitTerminallyAdvanced(fm, lastHat)) return false
-	return isUnitFullyApproved(fm, approvalRoles) // (b) full lifecycle
+	// Terminal-advance but approvals incomplete (handled by branch (a)
+	// when stamped) — falls here when in the review/approval window.
+	return false
 }
 
 /**

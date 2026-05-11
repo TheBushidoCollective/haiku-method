@@ -29,6 +29,7 @@ import {
 	type CursorPosition,
 	derivePosition,
 } from "./cursor.js"
+import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
 
 /** Result of a single workflow tick. */
 export interface WorkflowTickResult {
@@ -290,6 +291,32 @@ export function runWorkflowTick(
 				message: `Intent '${slug}' is in quick mode with no stage selected.`,
 			},
 		}
+	}
+
+	// Pre-tick self-repair: synthesize missing review/approval stamps
+	// on stages whose units look iteration-complete but carry no
+	// approval bookkeeping AND have demonstrably been moved past
+	// (later stage has on-disk work). This catches migrated intents
+	// whose v0→v4 backfill never landed on the cursor-reachable copy
+	// of the unit files (e.g., migration ran on intent main but the
+	// writes were scattered to another branch by an auto-commit during
+	// stage-branch alignment, never reaching the disk view the cursor
+	// walks). Without this, the cursor pins on stage N forever,
+	// re-emitting `dispatch_review(spec)` while the agent has nowhere
+	// to land the stamps.
+	//
+	// Safe to run every tick — no-op when stamps are already present
+	// or when no later stage has work.
+	try {
+		selfRepairMissingApprovals(iDir, studio, mode)
+	} catch (err) {
+		// Self-repair is opportunistic; if it fails (corrupt unit FM,
+		// studio config gone), let the cursor walk surface the real
+		// error.
+		emitTelemetry("haiku.self_repair.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
 	}
 
 	// Cursor walk — pure read of the current working tree. Pre-tick

@@ -1,12 +1,15 @@
-// context-monitor — Warn at context budget thresholds
+// context-monitor — Warn at context budget thresholds (only while a H·AI·K·U intent is active)
 //
-// Fires on PostToolUse. Checks remaining context capacity and
-// injects warnings at 35% and 25% remaining.
-// Uses debouncing to avoid spamming: only warns once per threshold per session.
+// Fires on PostToolUse. Skips entirely when no intent is active —
+// users running Claude Code for non-intent work shouldn't be nagged by
+// haiku-flavored guidance. When an intent is active, emits one budget
+// note at 35% and 25% remaining, suggestions only (not directives).
+// Debounced so it only fires once per threshold per session.
 
 import { appendFileSync, existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { defineHook } from "./define.js"
+import { findActiveIntent } from "./utils.js"
 
 export async function contextMonitor(
 	input: Record<string, unknown>,
@@ -17,6 +20,10 @@ export async function contextMonitor(
 
 	// Skip if we can't determine usage
 	if (totalTokens === 0 || maxTokens === 0) return
+
+	// Only fire inside an active intent — outside, the haiku-flavored
+	// guidance is noise and pushes the agent into "should I keep going?" loops.
+	if (!findActiveIntent()) return
 
 	// Calculate remaining percentage
 	const remaining = Math.floor(((maxTokens - totalTokens) * 100) / maxTokens)
@@ -34,13 +41,11 @@ export async function contextMonitor(
 		if (!debounceContent.includes("25")) {
 			appendFileSync(debounceFile, "25\n")
 			process.stderr.write(
-				"\u26a0\ufe0f CONTEXT CRITICAL (\u226425% remaining)\n\n" +
-					"**You MUST:**\n" +
-					"1. Commit all working changes NOW\n" +
-					"2. Save state to `.haiku/intents/{intent-slug}/state/`\n" +
-					"3. Complete current task or signal handoff\n" +
-					"4. Do NOT start new tasks\n\n" +
-					"Quality degrades severely at low context. Wrap up.\n",
+				"⚠️ CONTEXT LOW (≤25% remaining)\n\n" +
+					"You're nearing the end of this context window. " +
+					"Consider committing in-flight changes and finding a clean break point — " +
+					"a stage boundary or a successful tick is usually a good spot. " +
+					"Keep going if you're close to one.\n",
 			)
 			process.exit(2)
 		}
@@ -48,12 +53,9 @@ export async function contextMonitor(
 		if (!debounceContent.includes("35")) {
 			appendFileSync(debounceFile, "35\n")
 			process.stderr.write(
-				"\u26a0\ufe0f CONTEXT WARNING (\u226435% remaining)\n\n" +
-					"**Recommended:**\n" +
-					"- Finish current task, avoid starting new ones\n" +
-					"- Commit working changes frequently\n" +
-					"- Consider saving state for session handoff\n" +
-					"- Keep responses concise\n",
+				"⚠️ CONTEXT NOTE (≤35% remaining)\n\n" +
+					"Context is getting tight. Commit working changes when convenient " +
+					"and keep responses lean.\n",
 			)
 			process.exit(2)
 		}
@@ -62,7 +64,8 @@ export async function contextMonitor(
 
 export default defineHook({
 	name: "context-monitor",
-	description: "PostToolUse: warn at 35% / 25% remaining context budget.",
+	description:
+		"PostToolUse: while an intent is active, soft-note at 35% / 25% remaining context budget.",
 	async handle(input, ctx) {
 		await contextMonitor(input, ctx.pluginRoot)
 	},

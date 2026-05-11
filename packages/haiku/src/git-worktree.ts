@@ -3340,7 +3340,7 @@ export function mergeDiscoveryWorktree(
 
 /**
  * Sweep `.haiku/worktrees/{slug}/discovery-*` and merge each completed
- * discovery worktree back into its stage branch.
+ * discovery worktree for the **active stage** back into its stage branch.
  *
  * Why this exists:
  *   `decompose.ts` promises "the workflow engine merges their work back
@@ -3351,20 +3351,39 @@ export function mergeDiscoveryWorktree(
  *   out on the stage branch — it never sees the file → `discovery_required`
  *   re-fires every tick. See gigsmart/haiku-method#333.
  *
+ * Why scoped to the active stage:
+ *   Originally the sweep processed every `discovery-*` subdirectory under
+ *   `.haiku/worktrees/<slug>/`. That bricked an in-flight intent on
+ *   `admin-portal-reimagine`: a leftover worktree from the long-since-
+ *   merged `inception` stage was re-merged on every tick, putting
+ *   inception ahead of main and triggering `merge_stage inception` →
+ *   engine ff-merges main into inception → inception ahead again →
+ *   loop. The cursor only cares about the active stage's discovery
+ *   output; integrating older stages' leftovers re-opens stages that
+ *   have already shipped. Stale worktrees from earlier stages are now
+ *   skipped (they remain on disk for `haiku_repair` or manual cleanup).
+ *
  * Called pre-cursor by `haiku_run_next`. Best-effort: per-worktree
  * failures log and skip; conflicts are surfaced through the merge result
  * so callers can decide whether to escalate. Returns one entry per
- * worktree found.
+ * worktree found (including `success: true, message: "skipped: not
+ * active stage"` for ignored entries — the caller logs but does not
+ * surface those).
  *
  * `stages` lets us split worktree names like `discovery-{stage}-{template}`
  * even when the stage itself contains hyphens (e.g. `design-discovery`).
  * Caller should pass `intent.md`'s `stages:` array. When omitted or empty
  * the parser falls back to splitting on the first hyphen — correct for
  * single-word stage names, lossy for hyphenated ones.
+ *
+ * `activeStage` is the active-stage scope. Required: callers must pass
+ * the active stage so we don't re-process leftovers from completed
+ * stages. When omitted, the sweep is a no-op and emits a console warning.
  */
 export function sweepDiscoveryWorktrees(
 	slug: string,
 	stages?: ReadonlyArray<string>,
+	activeStage?: string,
 ): Array<{
 	stage: string
 	template: string
@@ -3372,8 +3391,15 @@ export function sweepDiscoveryWorktrees(
 	message: string
 	isConflict?: boolean
 	conflictFiles?: string[]
+	skipped?: boolean
 }> {
 	if (!isGitRepo()) return []
+	if (!activeStage) {
+		console.error(
+			`[haiku] sweepDiscoveryWorktrees called without activeStage for ${slug} — skipping. Caller must pass the active stage to avoid re-processing leftover worktrees from completed stages.`,
+		)
+		return []
+	}
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
 	if (!existsSync(worktreeBase)) return []
 	let entries: string[]
@@ -3396,6 +3422,7 @@ export function sweepDiscoveryWorktrees(
 		message: string
 		isConflict?: boolean
 		conflictFiles?: string[]
+		skipped?: boolean
 	}> = []
 	for (const name of entries) {
 		// Discovery worktree dir name: `discovery-{stage}-{template}`.
@@ -3417,6 +3444,19 @@ export function sweepDiscoveryWorktrees(
 		try {
 			if (!statSync(join(worktreeBase, name)).isDirectory()) continue
 		} catch {
+			continue
+		}
+		// Skip worktrees from non-active stages. Re-merging them puts the
+		// completed stage ahead of intent main and re-opens the merge
+		// gate forever (see #333 regression report).
+		if (stage !== activeStage) {
+			results.push({
+				stage,
+				template,
+				success: true,
+				skipped: true,
+				message: `skipped: stage '${stage}' is not the active stage '${activeStage}' — leftover worktree, ignored to avoid re-opening a completed stage`,
+			})
 			continue
 		}
 		try {

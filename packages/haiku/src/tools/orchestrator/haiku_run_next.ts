@@ -544,8 +544,17 @@ export default defineTool({
 		// before the cursor walks. The decompose prompt promises this
 		// integration; without it the cursor (running on the stage branch)
 		// never sees the discovery output sitting on the discovery branch
-		// and re-emits the same dispatch every tick. See #333. Both
-		// conflict and non-conflict failures surface as a hard stop —
+		// and re-emits the same dispatch every tick. See #333.
+		//
+		// Scoped to the active stage only. Re-merging worktrees from
+		// completed stages put those stages ahead of intent main and
+		// re-opened their merge gates — see the regression on
+		// admin-portal-reimagine where a leftover inception worktree
+		// re-fired `merge_stage inception` every tick. Stale worktrees
+		// from earlier stages stay on disk for `haiku_repair` or manual
+		// cleanup.
+		//
+		// Both conflict and non-conflict failures surface as a hard stop —
 		// silently logging non-conflict failures would re-create the
 		// original loop bug since the cursor's existence check would still
 		// fail on the next tick and respawn discovery subagents.
@@ -555,6 +564,7 @@ export default defineTool({
 			// hyphenated stage names correctly. Best-effort — the sweep falls
 			// back to first-hyphen splitting when no stages list is available.
 			let knownStages: string[] = []
+			let sweepActiveStage = ""
 			try {
 				const intentMd = join(findHaikuRoot(), "intents", slug, "intent.md")
 				if (existsSync(intentMd)) {
@@ -564,11 +574,31 @@ export default defineTool({
 							(s): s is string => typeof s === "string",
 						)
 					}
+					const studio = (fm.studio as string) || ""
+					if (studio) {
+						try {
+							sweepActiveStage = firstUnmergedStage(slug, studio) || ""
+						} catch {
+							/* fall through with empty active stage — sweep no-ops */
+						}
+					}
 				}
 			} catch {
 				/* fall through with empty list */
 			}
-			const sweepResults = sweepDiscoveryWorktrees(slug, knownStages)
+			const sweepResults = sweepDiscoveryWorktrees(
+				slug,
+				knownStages,
+				sweepActiveStage || undefined,
+			)
+			const skipped = sweepResults.filter((r) => r.skipped)
+			if (skipped.length > 0) {
+				console.error(
+					`[haiku_run_next] skipped non-active-stage discovery worktrees for ${slug}: ${skipped
+						.map((s) => `${s.stage}/${s.template}`)
+						.join(", ")}`,
+				)
+			}
 			const conflicts = sweepResults.filter((r) => r.isConflict)
 			if (conflicts.length > 0) {
 				const lines = conflicts.map((c) => {

@@ -798,10 +798,11 @@ await test("sweep merges every completed discovery worktree into its stage branc
 			git(wt, "commit", "-m", `${template} discovery`)
 		}
 
-		const results = sweepDiscoveryWorktrees(slug)
+		const results = sweepDiscoveryWorktrees(slug, [stage], stage)
 		assert.strictEqual(results.length, 2, "found both worktrees")
 		for (const r of results) {
 			assert.ok(r.success, `${r.template} merged: ${r.message}`)
+			assert.ok(!r.skipped, `${r.template} should be merged, not skipped`)
 		}
 
 		// Both artifacts now visible on the stage branch tree.
@@ -822,11 +823,127 @@ await test("sweep merges every completed discovery worktree into its stage branc
 })
 
 await test("sweep is a no-op when no discovery worktrees exist", () => {
-	const { tmp, slug } = setupRepo()
+	const { tmp, slug, stage } = setupRepo()
 	try {
 		process.chdir(tmp)
-		const results = sweepDiscoveryWorktrees(slug)
+		const results = sweepDiscoveryWorktrees(slug, [stage], stage)
 		assert.deepStrictEqual(results, [])
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
+await test("sweep without activeStage is a guarded no-op (caller bug)", () => {
+	const { tmp, slug, stage } = setupRepo()
+	try {
+		process.chdir(tmp)
+		git(tmp, "branch", `haiku/${slug}/${stage}`, `haiku/${slug}/main`)
+		git(tmp, "checkout", `haiku/${slug}/${stage}`)
+
+		// Create a discovery worktree to confirm the sweep doesn't touch
+		// it when activeStage is omitted.
+		const wt = createDiscoveryWorktree(slug, stage, "architecture")
+		assert.ok(wt && existsSync(wt), "worktree created")
+
+		// Omit activeStage entirely — defensive: caller must always pass
+		// it post-PR-#333-regression-fix. Sweep returns [] and emits a
+		// console warning rather than re-processing every worktree.
+		const results = sweepDiscoveryWorktrees(slug, [stage])
+		assert.deepStrictEqual(results, [])
+
+		// Worktree untouched.
+		assert.ok(existsSync(wt))
+	} finally {
+		cleanupRepo(tmp)
+	}
+})
+
+// Regression for the admin-portal-reimagine engine loop reported after
+// the initial #333 fix landed. A user on the `design` stage had a
+// leftover discovery worktree from the long-since-merged `inception`
+// stage. The original sweep processed every `discovery-*` subdir
+// regardless of stage, re-merged inception's worktree → put inception
+// ahead of intent main → cursor emitted `merge_stage inception` → engine
+// merged → next tick re-fired the same merge → loop. The loop guard
+// caught it (16-iter cap), but the underlying spurious merge work was
+// the real bug. Fix: scope the sweep to the active stage only.
+await test("sweep skips leftover worktrees from non-active stages (regression: admin-portal-reimagine)", () => {
+	const { tmp, slug } = setupRepo({ stage: "inception" })
+	try {
+		process.chdir(tmp)
+		// Two stages: inception (already done) and design (active).
+		git(tmp, "branch", `haiku/${slug}/inception`, `haiku/${slug}/main`)
+		git(tmp, "branch", `haiku/${slug}/design`, `haiku/${slug}/main`)
+
+		// Land an inception artifact via a normal merge (so inception's
+		// content is on intent main). This simulates a stage that's
+		// already been merged.
+		git(tmp, "checkout", `haiku/${slug}/inception`)
+		const inceptionDoc = join(
+			tmp,
+			".haiku",
+			"intents",
+			slug,
+			"stages",
+			"inception",
+			"INCEPTION.md",
+		)
+		mkdirSync(join(inceptionDoc, ".."), { recursive: true })
+		writeFileSync(inceptionDoc, "# inception done\n")
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-m", "inception artifact")
+		git(tmp, "checkout", `haiku/${slug}/main`)
+		git(
+			tmp,
+			"merge",
+			"--no-ff",
+			`haiku/${slug}/inception`,
+			"-m",
+			"merge inception",
+		)
+
+		// Create a leftover discovery worktree for the COMPLETED inception
+		// stage (the bug scenario — never cleaned up).
+		git(tmp, "checkout", `haiku/${slug}/design`)
+		const leftoverWt = createDiscoveryWorktree(slug, "inception", "leftover")
+		const leftoverPath = join(
+			leftoverWt,
+			".haiku",
+			"intents",
+			slug,
+			"knowledge",
+			"LEFTOVER.md",
+		)
+		mkdirSync(join(leftoverPath, ".."), { recursive: true })
+		writeFileSync(leftoverPath, "# stale\n")
+		git(leftoverWt, "add", "-A")
+		git(leftoverWt, "commit", "-m", "stale discovery commit")
+
+		// Sweep with active stage = design. The leftover inception
+		// worktree must be skipped, NOT merged.
+		const inceptionTipBefore = git(tmp, "rev-parse", `haiku/${slug}/inception`)
+		const results = sweepDiscoveryWorktrees(
+			slug,
+			["inception", "design"],
+			"design",
+		)
+		const inceptionTipAfter = git(tmp, "rev-parse", `haiku/${slug}/inception`)
+
+		assert.strictEqual(results.length, 1, "found the leftover worktree")
+		assert.strictEqual(results[0].stage, "inception")
+		assert.strictEqual(results[0].skipped, true, "must be marked skipped")
+		assert.ok(
+			results[0].message.includes("not the active stage"),
+			`message names the reason; got: ${results[0].message}`,
+		)
+		assert.strictEqual(
+			inceptionTipBefore,
+			inceptionTipAfter,
+			"inception branch must NOT have moved — re-merging completed stages re-opens their merge gate",
+		)
+		// The worktree dir is left in place for haiku_repair / manual
+		// cleanup; we don't auto-delete to avoid surprise data loss.
+		assert.ok(existsSync(leftoverWt), "leftover worktree left on disk")
 	} finally {
 		cleanupRepo(tmp)
 	}
@@ -857,15 +974,16 @@ await test("sweep parses stage and template names containing hyphens when stages
 		git(wt, "add", "-A")
 		git(wt, "commit", "-m", "anchor discovery")
 
-		const results = sweepDiscoveryWorktrees(slug, [
-			"inception",
+		const results = sweepDiscoveryWorktrees(
+			slug,
+			["inception", "design-discovery", "development"],
 			"design-discovery",
-			"development",
-		])
+		)
 		assert.strictEqual(results.length, 1)
 		assert.strictEqual(results[0].stage, "design-discovery")
 		assert.strictEqual(results[0].template, "design-system-anchor")
 		assert.ok(results[0].success, results[0].message)
+		assert.ok(!results[0].skipped, "active-stage worktree must merge, not skip")
 		assert.ok(
 			existsSync(
 				join(
@@ -912,7 +1030,7 @@ await test("sweep surfaces conflicts so haiku_run_next can hard-stop instead of 
 		git(tmp, "add", "-A")
 		git(tmp, "commit", "-m", "stage advance")
 
-		const results = sweepDiscoveryWorktrees(slug, [stage])
+		const results = sweepDiscoveryWorktrees(slug, [stage], stage)
 		assert.strictEqual(results.length, 1)
 		assert.strictEqual(results[0].success, false)
 		assert.strictEqual(

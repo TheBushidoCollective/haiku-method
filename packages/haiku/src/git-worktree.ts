@@ -26,10 +26,8 @@ import {
 	writeFileSync as fsWriteFileSync,
 	mkdirSync,
 	mkdtempSync,
-	readdirSync,
 	readFileSync,
 	rmSync,
-	statSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -1701,59 +1699,6 @@ export function readFileFromBranch(
 	}
 }
 
-/**
- * List filenames in a directory at a specific branch ref WITHOUT
- * checking the branch out. Returns the leaf names (no leading path),
- * filtered to entries directly under `dirPath`. Returns null when the
- * branch or directory doesn't exist.
- *
- * Used by the cursor's "first unmerged stage" walk so the answer is
- * always derived from intent main's tree, regardless of which branch
- * happens to be checked out. See gigsmart/haiku-method#333 — the
- * previous existsSync-based walk lied when called from a stage branch
- * because the stage branch's tree predates later stages' work.
- */
-export function listFilesInBranchDir(
-	branch: string,
-	dirPath: string,
-): string[] | null {
-	if (!isGitRepo()) return null
-	try {
-		// `--name-only` outputs `<path>` per line. `--full-name` ensures
-		// paths are repo-relative (default behavior, but explicit). We
-		// normalize trailing slash on dirPath so the prefix match catches
-		// only direct children, not the dir itself.
-		const normalized = dirPath.endsWith("/") ? dirPath : `${dirPath}/`
-		const out = run(["git", "ls-tree", "--name-only", branch, normalized])
-		if (!out) return []
-		const prefix = normalized
-		return out
-			.split("\n")
-			.filter(Boolean)
-			.map((line) =>
-				line.startsWith(prefix) ? line.slice(prefix.length) : line,
-			)
-			.filter((leaf) => leaf.length > 0 && !leaf.includes("/"))
-	} catch {
-		return null
-	}
-}
-
-/** True iff the branch ref exists and that ref's tree contains
- *  `dirPath` as a non-empty directory. Used by the cursor to ask
- *  "does intent main carry units for stage X?" without checking out
- *  intent main. */
-export function branchDirHasFiles(
-	branch: string,
-	dirPath: string,
-	predicate?: (name: string) => boolean,
-): boolean {
-	const files = listFilesInBranchDir(branch, dirPath)
-	if (!files) return false
-	const filtered = predicate ? files.filter(predicate) : files
-	return filtered.length > 0
-}
-
 /** Absolute path to a unit's worktree under `.haiku/worktrees/{slug}/{unit}`. */
 export function unitWorktreePath(slug: string, unit: string): string {
 	return join(primaryRepoRoot(), ".haiku", "worktrees", slug, unit)
@@ -3389,142 +3334,6 @@ export function mergeDiscoveryWorktree(
 			message: err instanceof Error ? err.message : String(err),
 		}
 	}
-}
-
-/**
- * Sweep `.haiku/worktrees/{slug}/discovery-*` and merge each completed
- * discovery worktree for the **active stage** back into its stage branch.
- *
- * Why this exists:
- *   `decompose.ts` promises "the workflow engine merges their work back
- *   into the stage branch on the next haiku_run_next." Nothing actually
- *   called `mergeDiscoveryWorktree`, so the discovery file lived only on
- *   the discovery branch. The cursor's discovery-existence check
- *   (`cursor.ts` step 3) reads `process.cwd()/<location>` while checked
- *   out on the stage branch — it never sees the file → `discovery_required`
- *   re-fires every tick. See gigsmart/haiku-method#333.
- *
- * Why scoped to the active stage:
- *   Originally the sweep processed every `discovery-*` subdirectory under
- *   `.haiku/worktrees/<slug>/`. That bricked an in-flight intent on
- *   `admin-portal-reimagine`: a leftover worktree from the long-since-
- *   merged `inception` stage was re-merged on every tick, putting
- *   inception ahead of main and triggering `merge_stage inception` →
- *   engine ff-merges main into inception → inception ahead again →
- *   loop. The cursor only cares about the active stage's discovery
- *   output; integrating older stages' leftovers re-opens stages that
- *   have already shipped. Stale worktrees from earlier stages are now
- *   skipped (they remain on disk for `haiku_repair` or manual cleanup).
- *
- * Called pre-cursor by `haiku_run_next`. Best-effort: per-worktree
- * failures log and skip; conflicts are surfaced through the merge result
- * so callers can decide whether to escalate. Returns one entry per
- * worktree found (including `success: true, message: "skipped: not
- * active stage"` for ignored entries — the caller logs but does not
- * surface those).
- *
- * `stages` lets us split worktree names like `discovery-{stage}-{template}`
- * even when the stage itself contains hyphens (e.g. `design-discovery`).
- * Caller should pass `intent.md`'s `stages:` array. When omitted or empty
- * the parser falls back to splitting on the first hyphen — correct for
- * single-word stage names, lossy for hyphenated ones.
- *
- * `activeStage` is the active-stage scope. Required: callers must pass
- * the active stage so we don't re-process leftovers from completed
- * stages. When omitted, the sweep is a no-op and emits a console warning.
- */
-export function sweepDiscoveryWorktrees(
-	slug: string,
-	stages?: ReadonlyArray<string>,
-	activeStage?: string,
-): Array<{
-	stage: string
-	template: string
-	success: boolean
-	message: string
-	isConflict?: boolean
-	conflictFiles?: string[]
-	skipped?: boolean
-}> {
-	if (!isGitRepo()) return []
-	if (!activeStage) {
-		console.error(
-			`[haiku] sweepDiscoveryWorktrees called without activeStage for ${slug} — skipping. Caller must pass the active stage to avoid re-processing leftover worktrees from completed stages.`,
-		)
-		return []
-	}
-	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
-	if (!existsSync(worktreeBase)) return []
-	let entries: string[]
-	try {
-		entries = readdirSync(worktreeBase)
-	} catch {
-		return []
-	}
-	// Sort known stages longest-first so a stage `design-discovery` matches
-	// before a stage `design` would steal the prefix of a worktree named
-	// `discovery-design-discovery-foo`.
-	const knownStages = (stages ?? [])
-		.filter((s) => typeof s === "string" && s.length > 0)
-		.slice()
-		.sort((a, b) => b.length - a.length)
-	const results: Array<{
-		stage: string
-		template: string
-		success: boolean
-		message: string
-		isConflict?: boolean
-		conflictFiles?: string[]
-		skipped?: boolean
-	}> = []
-	for (const name of entries) {
-		// Discovery worktree dir name: `discovery-{stage}-{template}`.
-		if (!name.startsWith("discovery-")) continue
-		const rest = name.slice("discovery-".length)
-		let stage = ""
-		let template = ""
-		const matched = knownStages.find((s) => rest.startsWith(`${s}-`))
-		if (matched) {
-			stage = matched
-			template = rest.slice(matched.length + 1)
-		} else {
-			const dashIdx = rest.indexOf("-")
-			if (dashIdx <= 0) continue
-			stage = rest.slice(0, dashIdx)
-			template = rest.slice(dashIdx + 1)
-		}
-		if (!stage || !template) continue
-		try {
-			if (!statSync(join(worktreeBase, name)).isDirectory()) continue
-		} catch {
-			continue
-		}
-		// Skip worktrees from non-active stages. Re-merging them puts the
-		// completed stage ahead of intent main and re-opens the merge
-		// gate forever (see #333 regression report).
-		if (stage !== activeStage) {
-			results.push({
-				stage,
-				template,
-				success: true,
-				skipped: true,
-				message: `skipped: stage '${stage}' is not the active stage '${activeStage}' — leftover worktree, ignored to avoid re-opening a completed stage`,
-			})
-			continue
-		}
-		try {
-			const merged = mergeDiscoveryWorktree(slug, stage, template)
-			results.push({ stage, template, ...merged })
-		} catch (err) {
-			results.push({
-				stage,
-				template,
-				success: false,
-				message: err instanceof Error ? err.message : String(err),
-			})
-		}
-	}
-	return results
 }
 
 /** Discard a discovery worktree without merging. */

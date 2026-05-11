@@ -66,6 +66,11 @@ export {
 	validateHaikuAwaitGateInputSchema,
 	validateHaikuAwaitVisualAnswerInputSchema,
 } from "./inputs/await-tools.js"
+export type { HaikuDiscoveryCompleteInput } from "./inputs/discovery.js"
+export {
+	HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA,
+	validateHaikuDiscoveryCompleteInputSchema,
+} from "./inputs/discovery.js"
 export type {
 	HaikuFeedbackAdvanceHatInput,
 	HaikuFeedbackDeleteInput,

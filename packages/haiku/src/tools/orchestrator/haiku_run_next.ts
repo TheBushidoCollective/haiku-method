@@ -459,6 +459,7 @@ export default defineTool({
 			if (existsSync(intentFile)) {
 				const im = readFrontmatter(intentFile)
 				const studio = (im.studio as string) || ""
+				const mode = (im.mode as string) || ""
 				// Step 1: ensure on intent main so firstUnmergedStage reads
 				// the authoritative tree. Pass `undefined` for stage —
 				// `ensureOnStageBranch` routes to `haiku/<slug>/main` when
@@ -472,25 +473,32 @@ export default defineTool({
 						"run_next entry — intent main",
 					)
 				}
-				// Step 2: walk intent main's filesystem to name the active
-				// stage. Falls back to the legacy active_stage stamp only
-				// when studio config isn't loadable yet (pre-select_studio)
-				// or `firstUnmergedStage` throws on disk read.
-				let activeStage = ""
-				if (studio) {
+				// Step 2: only switch to a stage branch when BOTH studio
+				// AND mode are set. Switching before that means the
+				// selection chain (select_studio / select_mode) would run
+				// against a stage branch — wrong, the chain belongs on
+				// intent main. See gigsmart/haiku-method#333: "you should
+				// not be on ANY stage branch [pre-selection]. If you are,
+				// then you went into a branch before the studio or mode
+				// was set."
+				if (studio && mode) {
+					let activeStage = ""
 					try {
 						activeStage = firstUnmergedStage(slug, studio) || ""
 					} catch {
-						activeStage = (im.active_stage as string) || ""
+						activeStage = ""
 					}
-				} else {
-					activeStage = (im.active_stage as string) || ""
-				}
-				// Step 3: switch to the active stage's branch so the cursor
-				// walk sees in-flight unit work.
-				const guard = ensureOnStageBranch(slug, activeStage || undefined)
-				if (!guard.ok) {
-					return buildGuardResponse(slug, activeStage, guard, "run_next entry")
+					if (activeStage) {
+						const guard = ensureOnStageBranch(slug, activeStage)
+						if (!guard.ok) {
+							return buildGuardResponse(
+								slug,
+								activeStage,
+								guard,
+								"run_next entry",
+							)
+						}
+					}
 				}
 			}
 		}
@@ -540,116 +548,19 @@ export default defineTool({
 			)
 		}
 
-		// Sweep completed discovery worktrees back into the stage branch
-		// before the cursor walks. The decompose prompt promises this
-		// integration; without it the cursor (running on the stage branch)
-		// never sees the discovery output sitting on the discovery branch
-		// and re-emits the same dispatch every tick. See #333.
-		//
-		// Scoped to the active stage only. Re-merging worktrees from
-		// completed stages put those stages ahead of intent main and
-		// re-opened their merge gates — see the regression on
-		// admin-portal-reimagine where a leftover inception worktree
-		// re-fired `merge_stage inception` every tick. Stale worktrees
-		// from earlier stages stay on disk for `haiku_repair` or manual
-		// cleanup.
-		//
-		// Both conflict and non-conflict failures surface as a hard stop —
-		// silently logging non-conflict failures would re-create the
-		// original loop bug since the cursor's existence check would still
-		// fail on the next tick and respawn discovery subagents.
-		try {
-			const { sweepDiscoveryWorktrees } = await import("../../git-worktree.js")
-			// Read intent.md once for the stages list so the parser can split
-			// hyphenated stage names correctly. Best-effort — the sweep falls
-			// back to first-hyphen splitting when no stages list is available.
-			let knownStages: string[] = []
-			let sweepActiveStage = ""
-			try {
-				const intentMd = join(findHaikuRoot(), "intents", slug, "intent.md")
-				if (existsSync(intentMd)) {
-					const fm = readFrontmatter(intentMd)
-					if (Array.isArray(fm.stages)) {
-						knownStages = (fm.stages as unknown[]).filter(
-							(s): s is string => typeof s === "string",
-						)
-					}
-					const studio = (fm.studio as string) || ""
-					if (studio) {
-						try {
-							sweepActiveStage = firstUnmergedStage(slug, studio) || ""
-						} catch {
-							/* fall through with empty active stage — sweep no-ops */
-						}
-					}
-				}
-			} catch {
-				/* fall through with empty list */
-			}
-			const sweepResults = sweepDiscoveryWorktrees(
-				slug,
-				knownStages,
-				sweepActiveStage || undefined,
-			)
-			const skipped = sweepResults.filter((r) => r.skipped)
-			if (skipped.length > 0) {
-				console.error(
-					`[haiku_run_next] skipped non-active-stage discovery worktrees for ${slug}: ${skipped
-						.map((s) => `${s.stage}/${s.template}`)
-						.join(", ")}`,
-				)
-			}
-			const conflicts = sweepResults.filter((r) => r.isConflict)
-			if (conflicts.length > 0) {
-				const lines = conflicts.map((c) => {
-					const files = (c.conflictFiles || []).join(", ")
-					return `- discovery \`${c.template}\` on stage \`${c.stage}\`: ${c.message}${files ? ` (files: ${files})` : ""}`
-				})
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `Discovery merge conflicts must be resolved before the workflow can continue:\n\n${lines.join("\n")}\n\nResolve the conflicts inside each discovery worktree, commit, then re-run \`haiku_run_next\`.`,
-						},
-					],
-					isError: true,
-				}
-			}
-			const failures = sweepResults.filter((r) => !r.success && !r.isConflict)
-			if (failures.length > 0) {
-				const lines = failures.map(
-					(f) =>
-						`- discovery \`${f.template}\` on stage \`${f.stage}\`: ${f.message}`,
-				)
-				console.error(
-					`[haiku_run_next] discovery merge failures: ${failures
-						.map((f) => `${f.stage}/${f.template}: ${f.message}`)
-						.join("; ")}`,
-				)
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `Discovery worktree merge failed (non-conflict). Re-run \`haiku_run_next\` to retry; if it persists, inspect the worktree(s) under \`.haiku/worktrees/${slug}/discovery-*\` and file an issue.\n\n${lines.join("\n")}`,
-						},
-					],
-					isError: true,
-				}
-			}
-		} catch (err) {
-			console.error(
-				`[haiku_run_next] sweepDiscoveryWorktrees failed: ${err instanceof Error ? err.message : String(err)}`,
-			)
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: `Discovery worktree sweep threw: ${err instanceof Error ? err.message : String(err)}. Re-run \`haiku_run_next\` to retry.`,
-					},
-				],
-				isError: true,
-			}
-		}
+		// Discovery worktree merge-back is the SUBAGENT's responsibility,
+		// not the engine's. The previous sweep here re-merged leftover
+		// worktrees from completed stages on every tick, re-opening their
+		// merge gates and trapping `haiku_run_next` in a `merge_stage` loop
+		// that the in-call loop guard had to catch. See #333. The cursor's
+		// existence check on the artifact's `location:` is the only signal
+		// the engine cares about: if the file isn't on disk after a
+		// discovery dispatch, the cursor re-emits `discovery_required`
+		// and the agent redispatches. The follow-up to this PR will
+		// formalize how subagents commit their findings (likely a
+		// `haiku_discovery_complete` MCP tool that handles the merge with
+		// per-stage locking) — until then the engine takes no action on
+		// `.haiku/worktrees/<slug>/discovery-*` directories.
 
 		// Workflow-engine dispatch: read disk → derive state → run
 		// per-state handler. The handler registry lives in

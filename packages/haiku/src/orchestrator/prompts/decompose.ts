@@ -497,7 +497,7 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			join(studio, "stages", stage, "STAGE.md"),
 		)
 
-		let fanOutText = `## Discovery Fan-Out (REQUIRED)\n\nThis stage produces ${discoveryArtifacts.length} discovery artifact${plural}: ${artifactNames}.\n\n${WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK}\n\n**Spawn one subagent per artifact** using the \`prompt_file\` attribute on each \`<subagent>\` block — pass \`"Read <prompt_file> and execute its instructions exactly."\` as the spawn prompt (substituting the attribute's path). Each subagent writes inside its own isolation worktree — the workflow engine merges their work back into the stage branch on the next \`haiku_run_next\`.\n\n${batchDispatchDirective(discoveryArtifacts.length, "discovery subagents")}\n\n`
+		let fanOutText = `## Discovery Fan-Out (REQUIRED)\n\nThis stage produces ${discoveryArtifacts.length} discovery artifact${plural}: ${artifactNames}.\n\n${WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK}\n\n**Spawn one subagent per artifact** using the \`prompt_file\` attribute on each \`<subagent>\` block — pass \`"Read <prompt_file> and execute its instructions exactly."\` as the spawn prompt (substituting the attribute's path). Each subagent writes inside its own isolation worktree, then calls \`haiku_discovery_complete { intent, stage, template }\` to hand the merge-back over to the engine (which takes a per-stage lock so parallel siblings serialize cleanly).\n\n${batchDispatchDirective(discoveryArtifacts.length, "discovery subagents")}\n\n`
 
 		for (const a of discoveryArtifacts) {
 			const wt = createDiscoveryWorktree(slug, stage, a.name)
@@ -516,8 +516,9 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 					"",
 					`**Rules:**`,
 					`- Write the populated discovery artifact INSIDE this worktree path (under \`${wt}/.haiku/intents/${slug}/knowledge/\` per the template's \`location:\`).`,
-					`- If you commit, use \`git -C "${wt}" add -A && git -C "${wt}" commit -m "..."\`. Do NOT push.`,
-					`- Do NOT run \`git worktree remove\`, \`git branch -d\`, or \`git merge\` — the workflow engine owns merge-back.`,
+					`- Commit your work via \`git -C "${wt}" add -A && git -C "${wt}" commit -m "..."\` (no push).`,
+					`- When the artifact is complete and committed, call \`haiku_discovery_complete { intent: "${slug}", stage: "${stage}", template: "${a.name}" }\`. The engine takes a per-stage lock and merges your branch into the stage branch, then reaps the worktree + branch. On clean success the tool returns \`{ ok: true }\` and you're done. On \`discovery_merge_conflict\` the response lists the conflict files — surface that to the parent agent so the integrator can resolve. On \`discovery_merge_failed\` the response carries the git error — surface it and stop.`,
+					`- Do NOT run \`git worktree remove\`, \`git branch -d\`, or \`git merge\` yourself — \`haiku_discovery_complete\` owns those.`,
 					"",
 				)
 			}
@@ -549,7 +550,9 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 				"2. Use the template's Content Guide as the document structure.",
 				"3. Meet the template's Quality Signals as your acceptance bar.",
 				"4. Write the populated document to the stage's discovery path as defined in the template's `location:` frontmatter above — **inside your isolation worktree** when one is allocated. **This is your ONLY write path** — any file written elsewhere is a scope violation.",
-				"5. Be thorough on YOUR axis — this artifact informs all downstream work. Thoroughness within scope is the goal; thoroughness across scope is a violation.",
+				"5. Commit the artifact inside your worktree (see the Rules block above for the exact git invocation).",
+				`6. Call \`haiku_discovery_complete { intent: "${slug}", stage: "${stage}", template: "${a.name}" }\` to merge your work into the stage branch. The engine takes a per-stage lock so parallel siblings serialize. Surface any conflict / failure response to the parent agent.`,
+				"7. Be thorough on YOUR axis — this artifact informs all downstream work. Thoroughness within scope is the goal; thoroughness across scope is a violation.",
 			)
 			const discoveryModel = resolveStudioMandateModel({
 				mandatePath: a.templatePath,

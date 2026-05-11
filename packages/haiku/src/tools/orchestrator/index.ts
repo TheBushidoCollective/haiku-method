@@ -14,6 +14,7 @@ import haiku_await_gate from "./haiku_await_gate.js"
 import haiku_baseline_init from "./haiku_baseline_init.js"
 // v4: haiku_classify_drift removed — drift sweep auto-files FBs.
 import haiku_coverage_acknowledge from "./haiku_coverage_acknowledge.js"
+import haiku_discovery_complete from "./haiku_discovery_complete.js"
 import haiku_dispatch_quality_gates from "./haiku_dispatch_quality_gates.js"
 import haiku_human_write from "./haiku_human_write.js"
 import haiku_intent_archive from "./haiku_intent_archive.js"
@@ -35,6 +36,7 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 			haiku_await_gate,
 			haiku_baseline_init,
 			haiku_coverage_acknowledge,
+			haiku_discovery_complete,
 			haiku_dispatch_quality_gates,
 			haiku_human_write,
 			haiku_intent_archive,

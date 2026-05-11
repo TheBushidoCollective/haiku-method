@@ -24,10 +24,50 @@
 // workflow engine." For honest agents, the redirect message in the denial output
 // names the right MCP tool to use.
 
-import { resolve } from "node:path"
+import { execFileSync } from "node:child_process"
+import { existsSync } from "node:fs"
+import { join, resolve } from "node:path"
 
 function out(s: string): void {
 	process.stderr.write(s)
+}
+
+/**
+ * Is the repo currently mid-merge? Returns true when `.git/MERGE_HEAD`
+ * exists (a regular merge) OR the rebase/cherry-pick equivalents are
+ * active. During these states, the workflow-managed files in the
+ * working tree may contain `<<<<<<<`/`=======`/`>>>>>>>` markers that
+ * NO MCP tool understands — they expect clean frontmatter. Forcing
+ * the agent through the MCP redirect in this state is a softlock:
+ * the agent can't resolve the conflict any other way.
+ *
+ * Falls back to "not in a merge" on any error (no git, repo missing,
+ * etc.) so the normal guard fires on non-git filesystem mode.
+ */
+function isMidMerge(cwd: string): boolean {
+	try {
+		const gitDir = execFileSync("git", ["rev-parse", "--git-dir"], {
+			cwd,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim()
+		if (!gitDir) return false
+		const absGitDir = gitDir.startsWith("/") ? gitDir : join(cwd, gitDir)
+		// Regular merge, cherry-pick, revert, rebase-merge, rebase-apply
+		// all surface as one of these state files in $GIT_DIR.
+		for (const marker of [
+			"MERGE_HEAD",
+			"CHERRY_PICK_HEAD",
+			"REVERT_HEAD",
+			"rebase-merge",
+			"rebase-apply",
+		]) {
+			if (existsSync(join(absGitDir, marker))) return true
+		}
+		return false
+	} catch {
+		return false
+	}
 }
 
 interface WorkflowPathClassification {
@@ -223,6 +263,16 @@ export async function guardWorkflowFields(
 	const cls = classifyPath(absPath)
 	if (cls.kind === null) return
 
+	// Merge-conflict short-circuit: when the repo is mid-merge / rebase /
+	// cherry-pick, the workflow-managed file on disk likely contains
+	// `<<<<<<<`/`=======`/`>>>>>>>` markers. No MCP tool can resolve
+	// those — they expect parseable frontmatter. The only path forward
+	// is letting the agent edit the file directly to resolve the
+	// conflict, then commit, then the workflow engine takes over again.
+	// Without this exception, the agent loops: engine surfaces
+	// `merge_conflict` → recommends "edit files, git add, git commit" →
+	// guard denies the edit → agent has no way out.
+	if (isMidMerge(process.cwd())) return
 	out(redirectMessage(toolName, cls))
 	process.exit(2)
 }

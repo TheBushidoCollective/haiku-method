@@ -289,6 +289,67 @@ try {
 		assert.ok(!r.blocked, "non-state worktree files are not boundary-guarded")
 	})
 
+	await test("mid-merge: guard short-circuits so agent can resolve workflow file conflicts", async () => {
+		// Reproduces Chris's reported wedge: pre-tick merges intent main
+		// into a stage branch, conflicts land on workflow-managed paths
+		// (intent.md, unit specs). The engine's recovery instruction is
+		// "edit files, git add, git commit" — but without this exception,
+		// the guard denies the edit and the agent has no path out.
+		const { execFileSync } = await import("node:child_process")
+		const { writeFileSync, mkdirSync } = await import("node:fs")
+		const repo = mkdtempSync(join(tmpdir(), "haiku-guard-merge-"))
+		const origCwdInner = process.cwd()
+		try {
+			execFileSync("git", ["init", "-q"], { cwd: repo })
+			execFileSync("git", ["config", "user.email", "test@example.com"], {
+				cwd: repo,
+			})
+			execFileSync("git", ["config", "user.name", "test"], { cwd: repo })
+			const unitDir = join(
+				repo,
+				".haiku/intents/test-intent/stages/inception/units",
+			)
+			mkdirSync(unitDir, { recursive: true })
+			const unitPath = join(unitDir, "unit-01-foo.md")
+			writeFileSync(unitPath, "---\nstatus: pending\n---\nbody A\n")
+			execFileSync("git", ["add", "-A"], { cwd: repo })
+			execFileSync("git", ["commit", "-qm", "init"], { cwd: repo })
+			execFileSync("git", ["checkout", "-qb", "feature"], { cwd: repo })
+			writeFileSync(unitPath, "---\nstatus: pending\n---\nbody B (feature)\n")
+			execFileSync("git", ["commit", "-aqm", "feature edit"], { cwd: repo })
+			execFileSync("git", ["checkout", "-q", "-"], { cwd: repo })
+			writeFileSync(unitPath, "---\nstatus: pending\n---\nbody C (main)\n")
+			execFileSync("git", ["commit", "-aqm", "main edit"], { cwd: repo })
+			// Force a conflicting merge.
+			try {
+				execFileSync("git", ["merge", "feature", "--no-edit"], {
+					cwd: repo,
+					stdio: ["ignore", "ignore", "ignore"],
+				})
+			} catch {
+				/* expected: merge conflict, MERGE_HEAD now exists */
+			}
+
+			process.chdir(repo)
+			const r = await runGuard({
+				tool_name: "Edit",
+				tool_input: {
+					file_path:
+						".haiku/intents/test-intent/stages/inception/units/unit-01-foo.md",
+					old_string: "<<<<<<< HEAD",
+					new_string: "",
+				},
+			})
+			assert.ok(
+				!r.blocked,
+				"mid-merge edit on a workflow-managed file must be allowed so the agent can resolve conflicts",
+			)
+		} finally {
+			process.chdir(origCwdInner)
+			rmSync(repo, { recursive: true, force: true })
+		}
+	})
+
 	await test("Bash tool is not handled by this hook", async () => {
 		// Bash bypass is explicitly out of scope for this hook; a separate
 		// soft-warn hook handles audit logging. This test asserts we don't

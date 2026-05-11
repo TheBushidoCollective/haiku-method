@@ -357,8 +357,22 @@ export default defineTool({
 						execFileSync("git", ["checkout", "-q", original], {
 							stdio: "pipe",
 						})
-					} catch {
-						/* best-effort restore */
+					} catch (restoreErr) {
+						// Stranded on intent main. The active-stage hint is
+						// already computed, but any writes during the rest of
+						// this tick (close_feedback, merge_stage, etc.) would
+						// land on intent main instead of the stage branch.
+						// `ensureOnStageBranch` on the next tick re-aligns,
+						// but the within-tick writes are misrouted. Log it so
+						// the failure mode is visible if it ever surfaces in
+						// the wild — same class of bug this whole PR fixes.
+						console.error(
+							`[haiku_run_next] recomputeActiveStage: failed to restore branch '${original}' after switching to '${intentMain}' for findCurrentStage: ${
+								restoreErr instanceof Error
+									? restoreErr.message
+									: String(restoreErr)
+							}`,
+						)
 					}
 				}
 			} catch {
@@ -675,7 +689,8 @@ export default defineTool({
 						isError: true,
 					}
 				}
-				recomputeActiveStage(); result = dispatchOrchestratorAction(slug, handlerActiveStage)
+				recomputeActiveStage()
+				result = dispatchOrchestratorAction(slug, handlerActiveStage)
 				if (
 					(result.action === "select_studio" ||
 						result.action === "select_mode" ||
@@ -867,7 +882,8 @@ export default defineTool({
 						setFrontmatterField(unitPath, "approvals", approvals)
 					}
 				}
-				recomputeActiveStage(); result = dispatchOrchestratorAction(slug, handlerActiveStage)
+				recomputeActiveStage()
+				result = dispatchOrchestratorAction(slug, handlerActiveStage)
 			} catch (err) {
 				console.error(
 					`[haiku_run_next] close_feedback execution failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -896,7 +912,8 @@ export default defineTool({
 				const intentMd = join(findHaikuRoot(), "intents", slug, "intent.md")
 				if (existsSync(intentMd)) {
 					setFrontmatterField(intentMd, "sealed_at", new Date().toISOString())
-					recomputeActiveStage(); result = dispatchOrchestratorAction(slug, handlerActiveStage)
+					recomputeActiveStage()
+					result = dispatchOrchestratorAction(slug, handlerActiveStage)
 				}
 			} catch (err) {
 				console.error(
@@ -939,7 +956,8 @@ export default defineTool({
 					// path is reached only as a defensive no-op (e.g.
 					// legacy callers that explicitly emit merge_stage).
 					// Re-tick and let the cursor advance.
-					recomputeActiveStage(); result = dispatchOrchestratorAction(slug, handlerActiveStage)
+					recomputeActiveStage()
+					result = dispatchOrchestratorAction(slug, handlerActiveStage)
 					continue
 				}
 				const { mergeStageBranchIntoMain } = await import(
@@ -982,7 +1000,8 @@ export default defineTool({
 				// main (otherwise the merge would never have happened in
 				// v3), so `findCurrentStage` walks past on the next
 				// tick. No stamp needed.
-				recomputeActiveStage(); result = dispatchOrchestratorAction(slug, handlerActiveStage)
+				recomputeActiveStage()
+				result = dispatchOrchestratorAction(slug, handlerActiveStage)
 			} catch (err) {
 				console.error(
 					`[haiku_run_next] merge_stage execution failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -1287,7 +1306,8 @@ export default defineTool({
 					"intent_approved",
 				])
 				if (awaitedAction && RETICK_ACTIONS.has(awaitedAction)) {
-					recomputeActiveStage(); result = dispatchOrchestratorAction(slug, handlerActiveStage)
+					recomputeActiveStage()
+					result = dispatchOrchestratorAction(slug, handlerActiveStage)
 					continue
 				}
 				return awaitResponse
@@ -1378,7 +1398,10 @@ export default defineTool({
 					// Repair agent succeeded — run the workflow again to get the real
 					// next action.
 					recomputeActiveStage()
-					const postRepairResult = dispatchOrchestratorAction(slug, handlerActiveStage)
+					const postRepairResult = dispatchOrchestratorAction(
+						slug,
+						handlerActiveStage,
+					)
 
 					// Guard: if repair didn't actually fix things, don't loop.
 					if (postRepairResult.action === "safe_intent_repair") {

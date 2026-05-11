@@ -320,7 +320,11 @@ export function pendingApprovalSlots(
 // completion on intent main's tree, where signed-but-unmerged units don't
 // exist yet, so the cursor pins on the stage that owes a merge).
 
-function approvalRolesFor(studio: string, stage: string, mode: string): string[] {
+function approvalRolesFor(
+	studio: string,
+	stage: string,
+	mode: string,
+): string[] {
 	const reviewAgents = Object.keys(readReviewAgentPaths(studio, stage)).sort()
 	return mode === "autopilot"
 		? ["spec", "quality_gates"]
@@ -328,7 +332,9 @@ function approvalRolesFor(studio: string, stage: string, mode: string): string[]
 }
 
 function hasStarted(fm: UnitFm): boolean {
-	return typeof fm.started_at === "string" && (fm.started_at as string).length > 0
+	return (
+		typeof fm.started_at === "string" && (fm.started_at as string).length > 0
+	)
 }
 
 function isUnitTerminallyAdvanced(fm: UnitFm, lastHat: string): boolean {
@@ -368,6 +374,16 @@ function isUnitFullyApproved(fm: UnitFm, approvalRoles: string[]): boolean {
  *   - `started_at` null → wave-ready, OR
  *   - Iterations exist but not terminal-advance → mid-flight, OR
  *   - Terminal-advance but missing approvals → review/approval phase.
+ *
+ * **Known blindspot on path (a)**: `haiku_unit_start` stamps `started_at`
+ * BEFORE the subagent emits its first iteration. If a subagent crashes
+ * between `haiku_unit_start` and the first hat's iteration write, the
+ * unit lands in the same FM shape as a v3-migrated placeholder
+ * (`started_at` set, no iterations) and this check walks past it.
+ * Recovery path for that case is `safe_intent_repair`, which can detect
+ * a stranded started-at-without-iterations unit and reset it. The old
+ * file-existence walk had the same blindspot; the new check makes the
+ * assumption explicit.
  */
 function isUnitComplete(
 	fm: UnitFm,
@@ -460,10 +476,7 @@ function isStageComplete(
  * Track A. A previously-signed stage with an open FB still gets
  * rewound through that path. See gigsmart/haiku-method#333.
  */
-export function findCurrentStage(
-	slug: string,
-	studio: string,
-): string | null {
+export function findCurrentStage(slug: string, studio: string): string | null {
 	const stages = resolveStudioStages(studio)
 	if (stages.length === 0) return null
 	const root = primaryRepoRoot()

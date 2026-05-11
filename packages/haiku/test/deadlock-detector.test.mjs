@@ -190,3 +190,81 @@ test("deadlock-detector: healthy progression (A→B→C→D distinct) does NOT t
 		"4 distinct signatures is normal cursor progression, not churn",
 	)
 })
+
+// ─ Integration: confirm the detector is actually wired into runWorkflowTick.
+// The detector being unit-tested correctly is necessary but not sufficient —
+// it has to FIRE on every tick the engine emits. This test calls
+// runWorkflowTick directly and inspects the in-memory tick history to verify
+// the wiring.
+test("deadlock-detector integration: runWorkflowTick records every emitted action", async () => {
+	__resetDeadlockDetector()
+	const { dirname, resolve, join } = await import("node:path")
+	const { fileURLToPath } = await import("node:url")
+	const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = await import(
+		"node:fs"
+	)
+	const { tmpdir } = await import("node:os")
+
+	const __filename = fileURLToPath(import.meta.url)
+	const __dirname = dirname(__filename)
+	process.env.CLAUDE_PLUGIN_ROOT = resolve(
+		__dirname,
+		"..",
+		"..",
+		"..",
+		"plugin",
+	)
+
+	const { runWorkflowTick } = await import(
+		"../src/orchestrator/workflow/run-tick.ts"
+	)
+	await import("../src/orchestrator/migrations/v0-to-v4.ts")
+
+	const root = mkdtempSync(join(tmpdir(), "haiku-detector-integ-"))
+	const haikuRoot = join(root, ".haiku")
+	const slug = "integ-test-intent"
+	const iDir = join(haikuRoot, "intents", slug)
+	mkdirSync(join(iDir, "stages", "inception", "units"), { recursive: true })
+	// Minimal v4 intent — has plugin_version stamped, NO deprecated v3
+	// fields (active_stage, status, phase, etc. are in DEPRECATED_INTENT_FIELDS
+	// and would trigger the migrator). Migrator no-ops; both ticks
+	// produce the same action signature, so the counter increments.
+	writeFileSync(
+		join(iDir, "intent.md"),
+		[
+			"---",
+			"title: Integration test intent",
+			"studio: software",
+			"mode: continuous",
+			"plugin_version: 4.0.0",
+			"stages: [inception]",
+			"---",
+			"body",
+			"",
+		].join("\n"),
+	)
+
+	const origCwd = process.cwd()
+	try {
+		process.chdir(root)
+		runWorkflowTick(slug, haikuRoot)
+		const afterFirst = __getTickHistoryForTests(slug)
+		assert.ok(
+			afterFirst !== null,
+			"runWorkflowTick must record the tick in the detector — found no history",
+		)
+		assert.strictEqual(afterFirst.count, 1, "first recorded tick has count=1")
+		runWorkflowTick(slug, haikuRoot)
+		const afterSecond = __getTickHistoryForTests(slug)
+		// Same disk state → same action signature → counter increments.
+		// This is also the threshold-crossing tick for `suspected`.
+		assert.strictEqual(
+			afterSecond.count,
+			2,
+			"second identical tick must increment the consecutive counter",
+		)
+	} finally {
+		process.chdir(origCwd)
+		rmSync(root, { recursive: true, force: true })
+	}
+})

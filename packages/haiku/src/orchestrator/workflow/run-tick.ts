@@ -347,13 +347,6 @@ export function runWorkflowTick(
 		? cursorActionToOrchestratorAction(slug, position.action)
 		: null
 
-	// Inter-tick deadlock detection. Compare this action's signature
-	// against the prior tick(s) for this intent. If we emit the same
-	// shape repeatedly with no progress, fire telemetry so wedges
-	// surface in dashboards before users report them. Doesn't change
-	// behavior — pure observability.
-	recordTickResult(slug, action as Record<string, unknown> | null)
-
 	return broadcastTick(slug, { position, action })
 }
 
@@ -404,7 +397,10 @@ function cursorActionToOrchestratorAction(
 }
 
 /** Wrap a tick result with a broadcast to the per-intent live-state
- *  pub/sub. */
+ *  pub/sub AND register it with the inter-tick deadlock detector.
+ *  Every return path from runWorkflowTick funnels through here, so
+ *  the detector sees every action — including early-return paths
+ *  (migration banner, select_* gates, sealed shortcut, error paths). */
 function broadcastTick(
 	slug: string,
 	result: WorkflowTickResult,
@@ -415,6 +411,14 @@ function broadcastTick(
 			action: (result.action as { action?: string }).action ?? "unknown",
 		})
 	}
+	// Inter-tick deadlock detection. The same OrchestratorAction
+	// emitted across consecutive ticks (or an A/B/A/B alternation)
+	// surfaces a `haiku.deadlock.suspected` / `haiku.deadlock.churn_suspected`
+	// telemetry signal. Doesn't change behavior — pure observability.
+	recordTickResult(
+		slug,
+		result.action as unknown as Record<string, unknown> | null,
+	)
 	return result
 }
 

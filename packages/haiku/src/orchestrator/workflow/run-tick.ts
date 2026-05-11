@@ -32,6 +32,7 @@ import {
 	type CursorPosition,
 	derivePosition,
 } from "./cursor.js"
+import { recordTickResult } from "./deadlock-detector.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
 
 /** Result of a single workflow tick. */
@@ -345,6 +346,13 @@ export function runWorkflowTick(
 	const action = position.action
 		? cursorActionToOrchestratorAction(slug, position.action)
 		: null
+
+	// Inter-tick deadlock detection. Compare this action's signature
+	// against the prior tick(s) for this intent. If we emit the same
+	// shape repeatedly with no progress, fire telemetry so wedges
+	// surface in dashboards before users report them. Doesn't change
+	// behavior — pure observability.
+	recordTickResult(slug, action as Record<string, unknown> | null)
 
 	return broadcastTick(slug, { position, action })
 }

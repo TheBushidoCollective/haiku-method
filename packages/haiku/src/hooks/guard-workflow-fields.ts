@@ -272,6 +272,22 @@ export async function guardWorkflowFields(
 	// Without this exception, the agent loops: engine surfaces
 	// `merge_conflict` → recommends "edit files, git add, git commit" →
 	// guard denies the edit → agent has no way out.
+	//
+	// The bypass is intentionally UNCONDITIONAL across workflow-managed
+	// paths during a merge — it doesn't try to detect "which specific
+	// files are conflicted" via `git status --porcelain` or similar.
+	// Reasons:
+	//   1. The conflict set isn't stable mid-merge: as the agent stages
+	//      resolutions, new files can become candidates for editing
+	//      (e.g., fixing a downstream reference that broke once the
+	//      conflict markers were removed). A narrow filter would
+	//      re-deny those secondary edits and re-create the softlock
+	//      on a smaller scope.
+	//   2. The threat model assumes honest agents (per the module-
+	//      level comment above). If the threat model tightens to
+	//      include adversarial agents, this needs revisiting alongside
+	//      the rest of the workflow-fields trust surface — narrowing
+	//      this guard alone would not be sufficient.
 	if (isMidMerge(process.cwd())) return
 	out(redirectMessage(toolName, cls))
 	process.exit(2)

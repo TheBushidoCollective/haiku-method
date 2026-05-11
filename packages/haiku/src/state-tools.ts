@@ -7303,11 +7303,12 @@ export function handleStateTool(
 				"haiku_unit_start",
 			)
 			if (unitStartInputErr) return unitStartInputErr
-			// Resolve stage via the unit's actual location (across stage
-			// branches in git mode) rather than the `active_stage` cache.
-			// The cache can be stale after a reset / migration; the unit
-			// file is the authoritative signal. Falls back to the cache
-			// only when the unit truly can't be found.
+			// Resolve stage via the unit's actual on-disk location rather
+			// than the `active_stage` cache. The cache can be stale after
+			// a reset / migration; the unit file in the working tree is
+			// the authoritative signal. Falls back to the cache only when
+			// the unit can't be found in the working tree (brand-new unit
+			// being started for the first time).
 			const startUnitInfo = findUnitFile(
 				args.intent as string,
 				args.unit as string,
@@ -7428,13 +7429,13 @@ export function handleStateTool(
 			)
 			if (advInputErr) return advInputErr
 
-			// Locate the unit FIRST (across all stage branches if needed),
-			// THEN enforce the right branch. The old order pre-switched on
-			// `resolveActiveStage` and could land the working tree on a
-			// branch that didn't contain the unit, producing a spurious
-			// `unit_not_found`. `findUnitFile` is now git-aware and
-			// probes each `haiku/<slug>/<stage>` branch via `git cat-file`
-			// when the working-tree view comes up empty.
+			// Locate the unit FIRST, THEN enforce the right branch. The old
+			// order pre-switched on `resolveActiveStage` (the FM cache) and
+			// could land the working tree on a branch that didn't contain
+			// the unit, producing a spurious `unit_not_found`. `findUnitFile`
+			// reads the working tree only — signal is on disk. If the unit
+			// isn't on this branch's view, `unit_not_found` is the honest
+			// answer; recovery is the cursor's job on the next tick.
 			const unitInfo = findUnitFile(args.intent as string, args.unit as string)
 			if (!unitInfo)
 				return reply(
@@ -7970,8 +7971,8 @@ export function handleStateTool(
 			// for the rationale: a pre-switch on a stale `active_stage`
 			// cache can land the working tree on a branch that doesn't
 			// contain the unit, producing a spurious `unit_not_found`.
-			// `findUnitFile` is git-aware and probes stage branches when
-			// the working-tree view comes up empty.
+			// `findUnitFile` reads the working tree only — signal is on
+			// disk, never git topology.
 			const rejectInfo = findUnitFile(
 				args.intent as string,
 				args.unit as string,

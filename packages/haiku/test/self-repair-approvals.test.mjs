@@ -436,3 +436,72 @@ test("self-repair: never touches the last stage (no later stage by definition)",
 		},
 	)
 })
+
+test("self-repair: autopilot mode synthesizes trimmed role set (spec + quality_gates only)", async () => {
+	// In autopilot mode the role lists are intentionally trimmed:
+	//   reviewRoles    = ["spec"]
+	//   approvalRoles  = ["spec", "quality_gates"]
+	// No agent reviewers, no user gate. This test pins that behavior so
+	// future role-list changes don't silently broaden the autopilot
+	// surface (which would stamp gates that autopilot is supposed to
+	// skip entirely).
+	await withTmpRepo(
+		"self-repair-autopilot",
+		async ({ repoRoot, intentDir }) => {
+			makeStudio({
+				repoRoot,
+				studio: "ms",
+				stages: ["a", "b"].map((name) => ({
+					name,
+					hats: ["planner", "builder", "verifier"],
+					fix_hats: ["builder", "feedback-assessor"],
+					review: "auto",
+					review_agents: ["code-reviewer"], // present in studio
+				})),
+			})
+			makeIntent({
+				intentDir,
+				slug: "self-repair-autopilot",
+				studio: "ms",
+				mode: "autopilot",
+				extraFm: { stages: ["a", "b"] },
+			})
+
+			const unitPath = writeIterationCompleteUnit(intentDir, "a", "unit-01-foo")
+			markStageVisited(intentDir, "b")
+
+			const { selfRepairMissingApprovals } = await import(
+				"../src/orchestrator/workflow/self-repair-approvals.js"
+			)
+			const result = selfRepairMissingApprovals(intentDir, "ms", "autopilot")
+			assert.deepStrictEqual(result.stagesRepaired, ["a"])
+
+			const fm = matter(readFileSync(unitPath, "utf8")).data
+			// Autopilot reviews: spec only.
+			assert.ok(fm.reviews.spec, "spec review stamped")
+			assert.strictEqual(
+				fm.reviews.user,
+				undefined,
+				"autopilot must NOT synthesize user review",
+			)
+			assert.strictEqual(
+				fm.reviews["code-reviewer"],
+				undefined,
+				"autopilot must NOT synthesize review-agent reviews",
+			)
+			// Autopilot approvals: spec + quality_gates only.
+			assert.ok(fm.approvals.spec, "spec approval stamped")
+			assert.ok(fm.approvals.quality_gates, "quality_gates approval stamped")
+			assert.strictEqual(
+				fm.approvals.user,
+				undefined,
+				"autopilot must NOT synthesize user approval",
+			)
+			assert.strictEqual(
+				fm.approvals["code-reviewer"],
+				undefined,
+				"autopilot must NOT synthesize review-agent approvals",
+			)
+		},
+	)
+})

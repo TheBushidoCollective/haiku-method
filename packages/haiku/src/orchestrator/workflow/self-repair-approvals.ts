@@ -34,6 +34,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { readReviewAgentPaths } from "../../studio-reader.js"
+import { emitTelemetry } from "../../telemetry.js"
 import { resolveIntentStages, resolveStageHats } from "../studio.js"
 
 const SYNTH_REASON = "pre-tick-self-repair: later stage has on-disk work"
@@ -66,11 +67,15 @@ function writeMatter(path: string, data: UnitFm, body: string): void {
  * moved past an earlier stage even when that earlier stage's stamps
  * are missing.
  *
- * "Touched" means ANY of: units dir non-empty, elaboration.md exists,
- * discovery output files exist (anywhere under stages/<stage>/), or
- * feedback dir non-empty. The check is intentionally loose — any
- * artifact at all is proof the cursor walked into stage X at least
- * once.
+ * "Touched" means ANY of: a markdown file in units/, elaboration.md
+ * present, a markdown file in feedback/, or a markdown file as a
+ * direct child of the stage dir itself (discovery outputs, ad-hoc
+ * artifacts). The scan is intentionally shallow — `readdirSync` is
+ * not recursive, so files nested deeper than one level under the
+ * stage root (e.g. `stages/<stage>/artifacts/foo/bar.md`) are NOT
+ * detected. Shallow is enough for the proof we need: any artifact at
+ * the standard stage-root locations is proof the cursor walked into
+ * stage X at least once.
  */
 function stageHasWork(intentDir: string, stage: string): boolean {
 	const stageDir = join(intentDir, "stages", stage)
@@ -220,6 +225,15 @@ export function selfRepairMissingApprovals(
 		for (const path of unitFiles) {
 			const parsed = readMatter(path)
 			if (!parsed) {
+				// Unreadable unit FM — flip the gate to "not complete"
+				// (conservative: don't synthesize over a file we can't
+				// parse) and surface the path via telemetry so debugging
+				// has something to grep. Without this, the stage silently
+				// stays unrepaired tick after tick.
+				emitTelemetry("haiku.self_repair.unit_unreadable", {
+					stage,
+					path,
+				})
 				allIterationComplete = false
 				break
 			}

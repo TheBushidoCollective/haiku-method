@@ -1,9 +1,12 @@
 // orchestrator/workflow/run-tick.ts — v4 workflow tick.
 //
-// Pure observation: read disk → run migrators if needed → call
-// cursor.derivePosition → map CursorAction to OrchestratorAction →
-// return. No mutating side effects. Anyone can call run_next; same
-// disk state → same answer every time.
+// One-time idempotent fixups only: read disk → run migrators if
+// needed → run pre-tick self-repair → call cursor.derivePosition →
+// map CursorAction to OrchestratorAction → return. The migrator and
+// the self-repair gate both write to disk, but they're idempotent:
+// repeated ticks against the same disk state produce the same answer
+// (and skip the writes if there's nothing to fix). The cursor walk
+// itself never mutates.
 //
 // Replaces v3's "derive-state → handler dispatch with mutating
 // pre-tick repair" chain. The cursor walks Track C (drift) → Track B
@@ -39,8 +42,10 @@ export interface WorkflowTickResult {
 
 /**
  * Drive one workflow tick and return the next OrchestratorAction.
- * Pure: no disk writes (other than migrator output, which is
- * conceptually a one-time read-time fixup).
+ * Disk writes are bounded to the migrator (v3 → v4 fixup) and the
+ * pre-tick self-repair gate (stamps missing review/approval fields
+ * on partially-migrated intents). Both are idempotent — re-running
+ * on already-fixed disk state is a no-op.
  */
 export function runWorkflowTick(
 	slug: string,
@@ -308,7 +313,16 @@ export function runWorkflowTick(
 	// Safe to run every tick — no-op when stamps are already present
 	// or when no later stage has work.
 	try {
-		selfRepairMissingApprovals(iDir, studio, mode)
+		const repairResult = selfRepairMissingApprovals(iDir, studio, mode)
+		if (repairResult.stagesRepaired.length > 0) {
+			emitTelemetry("haiku.self_repair.applied", {
+				intent: slug,
+				stages_repaired: repairResult.stagesRepaired.join(","),
+				units_touched: String(repairResult.unitsTouched),
+				reviews_added: String(repairResult.reviewsAdded),
+				approvals_added: String(repairResult.approvalsAdded),
+			})
+		}
 	} catch (err) {
 		// Self-repair is opportunistic; if it fails (corrupt unit FM,
 		// studio config gone), let the cursor walk surface the real

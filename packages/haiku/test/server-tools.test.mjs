@@ -214,6 +214,39 @@ test("AGENT_AUTHORABLE_INTENT_FIELDS excludes every FSM_DRIVEN_INTENT_FIELDS ent
 	)
 })
 
+// Belt-and-suspenders: even if a future edit substitutes the interpolated
+// list with a hand-written one, the actual rendered description string
+// must not advertise any FSM-driven field as agent-settable. This test
+// inspects the LITERAL description on the registered tool surface.
+test("haiku_intent_set description does not advertise FSM-driven fields", async () => {
+	const { FSM_DRIVEN_INTENT_FIELDS } = await import(
+		"../src/state/schemas/intent.ts"
+	)
+	const tool = stateToolDefs.find((t) => t.name === "haiku_intent_set")
+	assert.ok(tool, "haiku_intent_set tool must be registered")
+	// Pull the "Agent-authorable fields:" segment specifically — the
+	// description also lists FSM fields in a separate "Engine-only
+	// fields (…) are rejected" clause, which is correct.
+	const desc = tool.description || ""
+	const authorableMatch = desc.match(/Agent-authorable fields:\s*([^.]+)/)
+	assert.ok(
+		authorableMatch,
+		"description must include an 'Agent-authorable fields:' segment",
+	)
+	const advertised = (authorableMatch[1] || "")
+		.split(/[,\s]+/)
+		.map((s) => s.trim())
+		.filter(Boolean)
+	const advertisedFsmLeaks = FSM_DRIVEN_INTENT_FIELDS.filter((f) =>
+		advertised.includes(f),
+	)
+	assert.deepStrictEqual(
+		advertisedFsmLeaks,
+		[],
+		`FSM-driven fields advertised as agent-authorable in haiku_intent_set description: ${advertisedFsmLeaks.join(", ")}`,
+	)
+})
+
 // ── Tool Input Schema Specifics ───────────────────────────────────────────
 
 console.log("\n=== Tool Input Schema Specifics ===")

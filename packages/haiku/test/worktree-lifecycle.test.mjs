@@ -764,14 +764,15 @@ await test("surfaces untracked-files-specific remediation when foreign worktree 
 // no longer merges discovery worktrees as part of every tick — that
 // approach (a) re-merged leftover worktrees from completed stages,
 // re-opening their merge gates, and (b) violated the principle that
-// engine state must come from disk, not from git topology. Discovery
-// merge-back is now the subagent's responsibility (or a future
-// `haiku_discovery_complete` MCP tool with per-stage locking).
+// engine state must come from disk, not from git topology. Subagents
+// now call `haiku_discovery_complete { intent, stage, template }` to
+// trigger the merge-back themselves; see
+// `haiku-discovery-complete.test.mjs` for its coverage.
 //
 // `mergeDiscoveryWorktree` itself is retained — it's the underlying
-// primitive any merge-back model would use. Its tests live above.
+// primitive `haiku_discovery_complete` calls. Its tests live above.
 
-console.log("\n=== sweepDiscoveryWorktrees DELETED (#333 follow-up) ===")
+console.log("\n=== sweepDiscoveryWorktrees DELETED (#333) ===")
 
 // All sweep-specific tests deleted alongside the function.
 

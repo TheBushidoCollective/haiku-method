@@ -548,19 +548,19 @@ export default defineTool({
 			)
 		}
 
-		// Discovery worktree merge-back is the SUBAGENT's responsibility,
-		// not the engine's. The previous sweep here re-merged leftover
-		// worktrees from completed stages on every tick, re-opening their
-		// merge gates and trapping `haiku_run_next` in a `merge_stage` loop
-		// that the in-call loop guard had to catch. See #333. The cursor's
-		// existence check on the artifact's `location:` is the only signal
-		// the engine cares about: if the file isn't on disk after a
-		// discovery dispatch, the cursor re-emits `discovery_required`
-		// and the agent redispatches. The follow-up to this PR will
-		// formalize how subagents commit their findings (likely a
-		// `haiku_discovery_complete` MCP tool that handles the merge with
-		// per-stage locking) — until then the engine takes no action on
-		// `.haiku/worktrees/<slug>/discovery-*` directories.
+		// Discovery worktree merge-back is the SUBAGENT's responsibility.
+		// The dispatch prompt (decompose.ts) instructs each discovery
+		// subagent to call `haiku_discovery_complete { intent, stage,
+		// template }` after committing its artifact inside the isolation
+		// worktree. That tool takes `withStageLock(slug, stage)` so
+		// parallel siblings serialize, calls `mergeDiscoveryWorktree`,
+		// and reaps the worktree + branch. The engine takes no action on
+		// `.haiku/worktrees/<slug>/discovery-*` directories from this
+		// path — the cursor's only signal is whether the artifact file
+		// exists on disk at the template's `location:`. If it doesn't,
+		// the cursor re-emits `discovery_required` and the agent
+		// redispatches. See gigsmart/haiku-method#333 for why the
+		// previous engine-side sweep here was deleted.
 
 		// Workflow-engine dispatch: read disk → derive state → run
 		// per-state handler. The handler registry lives in

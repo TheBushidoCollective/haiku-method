@@ -481,21 +481,22 @@ export function makeStudio({
 }
 
 /**
- * Drive a cursor tick the same way `haiku_run_next` does pre-cursor:
+ * Drive a cursor tick the same way `haiku_run_next` does pre-cursor
+ * under the disk-only cursor model:
  *
- *   1. `reconcileIntentBranches` — fetch + FF intent main + FF stage
- *   2. `ensureOnStageBranch(slug, undefined)` — switch to intent main
- *      so `findCurrentStage` reads the authoritative tree
- *   3. `findCurrentStage` names the active stage from intent main's
- *      filesystem
- *   4. `ensureOnStageBranch(slug, activeStage)` — switch to the
- *      stage's branch where in-flight unit work lives
- *   5. `dispatchOrchestratorAction` — the cursor walk
+ *   1. `reconcileIntentBranches` — fetch + FF intent main + merge main
+ *      into current branch (so the working tree reflects the latest
+ *      content from every past stage).
+ *   2. Walk the disk under the current working tree via
+ *      `findCurrentStage` — whatever stage it names is the cursor's
+ *      active stage.
+ *   3. If the current branch disagrees with the cursor's named stage,
+ *      switch once via `ensureOnStageBranch`. Otherwise stay put.
+ *   4. `dispatchOrchestratorAction` — the cursor walk runs on the
+ *      current disk view.
  *
- * Tests that previously called `dispatchOrchestratorAction` directly
- * should call this helper instead — it gets them the same branch
- * dance the production engine performs, so fixture state written via
- * `onStageBranch` is correctly read by the cursor.
+ * No "switch to main, compute, switch back" dance. No activeStageHint.
+ * The disk after pre-tick merge IS the source of truth.
  */
 export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 	// Two call shapes: (repoRoot, slug) or (slug) — when slug-only the
@@ -512,43 +513,77 @@ export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 		const { ensureOnStageBranch, reconcileIntentBranches } = await import(
 			"../src/git-worktree.js"
 		)
-		const { findCurrentStage } = await import(
+		const { findCurrentStage, isStageComplete } = await import(
 			"../src/orchestrator/workflow/cursor.js"
 		)
 		const { parseFrontmatter } = await import("../src/state-tools.js")
 		const { existsSync, readFileSync } = await import("node:fs")
 		const { join } = await import("node:path")
+		const { execFileSync } = await import("node:child_process")
 		clearStudioCache()
-		// Step 1: reconcile (no-op when there's no remote; cheap).
 		reconcileIntentBranches(slug)
-		// Step 2-4: branch dance.
-		let activeStage = ""
 		const intentFile = join(repoRoot, ".haiku", "intents", slug, "intent.md")
+		// Mirrors haiku_run_next.ts pre-tick alignment.
+		let pendingMergeStage = null
 		if (existsSync(intentFile)) {
 			const im = parseFrontmatter(readFileSync(intentFile, "utf8")).data
 			const studio = im.studio || ""
-			ensureOnStageBranch(slug, undefined)
+			const mode = im.mode || "continuous"
 			if (studio) {
+				const { resolveStudioStages } = await import("../src/orchestrator.js")
+				const stages = resolveStudioStages(studio)
+				let cursorStage = null
 				try {
-					activeStage = findCurrentStage(slug, studio) || ""
+					cursorStage = findCurrentStage(slug, studio) || null
 				} catch {
-					activeStage = im.active_stage || ""
+					cursorStage = null
+				}
+				let here = ""
+				try {
+					here = execFileSync("git", ["branch", "--show-current"], {
+						cwd: repoRoot,
+						encoding: "utf8",
+						stdio: ["ignore", "pipe", "pipe"],
+					}).trim()
+				} catch {}
+				const stagePrefix = `haiku/${slug}/`
+				const onIntentMain = here === `${stagePrefix}main`
+				const hereStage =
+					!onIntentMain && here.startsWith(stagePrefix)
+						? here.slice(stagePrefix.length)
+						: null
+				const cursorIdx = cursorStage ? stages.indexOf(cursorStage) : -1
+				const hereIdx = hereStage ? stages.indexOf(hereStage) : -1
+				const yOwesMerge =
+					hereStage !== null &&
+					hereIdx >= 0 &&
+					(cursorStage === null || (cursorIdx >= 0 && cursorIdx > hereIdx))
+				if (yOwesMerge && hereStage) {
+					pendingMergeStage = {
+						action: "merge_stage",
+						intent: slug,
+						stage: hereStage,
+					}
+				} else if (cursorStage) {
+					const target = `${stagePrefix}${cursorStage}`
+					if (here !== target) {
+						ensureOnStageBranch(slug, cursorStage)
+						const iDir = join(repoRoot, ".haiku", "intents", slug)
+						if (isStageComplete(iDir, studio, cursorStage, mode)) {
+							pendingMergeStage = {
+								action: "merge_stage",
+								intent: slug,
+								stage: cursorStage,
+							}
+						}
+					}
 				}
 			} else {
-				activeStage = im.active_stage || ""
+				ensureOnStageBranch(slug, undefined)
 			}
-			ensureOnStageBranch(slug, activeStage || undefined)
 		}
-		// Pass activeStage as a hint so derivePosition doesn't recompute
-		// from the stage-branch view (where signed-but-unmerged units
-		// would lie and suppress merge_stage). When we couldn't compute
-		// activeStage above, pass undefined so derivePosition falls back
-		// to its own walk.
-		return dispatchOrchestratorAction(
-			slug,
-			"",
-			activeStage ? activeStage : null,
-		)
+		if (pendingMergeStage) return pendingMergeStage
+		return dispatchOrchestratorAction(slug, "")
 	} finally {
 		process.chdir(origCwd)
 	}

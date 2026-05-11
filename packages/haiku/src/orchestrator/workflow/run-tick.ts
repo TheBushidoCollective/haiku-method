@@ -44,15 +44,6 @@ export interface WorkflowTickResult {
 export function runWorkflowTick(
 	slug: string,
 	root?: string,
-	/**
-	 * Active stage computed by the caller on intent main BEFORE any
-	 * branch dance. Threaded into `derivePosition` to bypass its
-	 * recompute-from-cwd, which would lie when the working tree is on
-	 * the active stage branch (signed-but-unmerged units exist there
-	 * and look "done"). Pass `undefined` to let derivePosition fall
-	 * back to its own walk — fine for most tests.
-	 */
-	activeStageHint?: string | null,
 ): WorkflowTickResult | null {
 	// `intentDir` resolves against the current haiku root (cwd-driven).
 	// `root` is forwarded to migrateIntent below as repoRoot for ctx;
@@ -301,13 +292,14 @@ export function runWorkflowTick(
 		}
 	}
 
-	// Cursor walk — pure read. Returns the next CursorAction (or null
-	// for mid-wave noop).
+	// Cursor walk — pure read of the current working tree. Pre-tick
+	// branch reconciliation has already aligned the tree to the active
+	// stage branch (with main merged in), so the walk's disk view IS
+	// the authoritative state.
 	const position = derivePosition({
 		slug,
 		intentDir: iDir,
 		studio,
-		activeStageHint,
 	})
 	const action = position.action
 		? cursorActionToOrchestratorAction(slug, position.action)
@@ -323,9 +315,8 @@ export function runWorkflowTick(
 export function dispatchOrchestratorAction(
 	slug: string,
 	root?: string,
-	activeStageHint?: string | null,
 ): OrchestratorAction {
-	const tick = runWorkflowTick(slug, root, activeStageHint)
+	const tick = runWorkflowTick(slug, root)
 	if (!tick) {
 		return { action: "error", message: `Intent '${slug}' not found` }
 	}

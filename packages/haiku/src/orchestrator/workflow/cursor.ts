@@ -314,11 +314,11 @@ export function pendingApprovalSlots(
 // The names read like English at the call sites: "is this unit complete?",
 // "are this stage's units complete?", "is this stage complete?".
 //
-// "Complete" means "no further cursor work needed at this position." It
-// does NOT mean "merged into intent main" — that's a separate concept the
-// runtime layers on top via the `activeStageHint` (the dance computes
-// completion on intent main's tree, where signed-but-unmerged units don't
-// exist yet, so the cursor pins on the stage that owes a merge).
+// "Complete" means "no further cursor work needed at this position."
+// The runtime ensures the working tree reflects the latest state by
+// merging intent main into the active stage branch before the walk —
+// see `haiku_run_next`'s pre-tick branch alignment. The walk just reads
+// whatever disk it's given.
 
 function approvalRolesFor(
 	studio: string,
@@ -453,7 +453,7 @@ function areStageUnitsComplete(
  * elaboration / discovery / merge state are handled by the per-stage
  * walk (`walkIntentTrack`), not by the active-stage selector.
  */
-function isStageComplete(
+export function isStageComplete(
 	intentDir: string,
 	studio: string,
 	stage: string,
@@ -922,27 +922,8 @@ export function derivePosition(args: {
 	slug: string
 	intentDir: string
 	studio: string
-	/**
-	 * Optional active-stage hint, computed by the caller on intent main
-	 * BEFORE any branch dance. When provided, derivePosition uses this
-	 * value instead of recomputing via `findCurrentStage` from the
-	 * current working tree. This matters because the runtime typically
-	 * checks out the active stage's branch before calling derivePosition
-	 * (so walkIntentTrack can see in-flight unit work). On the stage
-	 * branch, signed-but-not-yet-merged units exist on disk — a fresh
-	 * `findCurrentStage` call from there would walk past the active
-	 * stage (it looks "done") and the cursor would emit intent_review
-	 * instead of merge_stage.
-	 *
-	 * Pass null to mean "no active stage" (every stage is past on intent
-	 * main — fall through to intent-level approvals).
-	 *
-	 * Omit (undefined) for legacy / test callers; derivePosition falls
-	 * back to `findCurrentStage` from the current tree.
-	 */
-	activeStageHint?: string | null
 }): CursorPosition {
-	const { slug, intentDir, studio, activeStageHint } = args
+	const { slug, intentDir, studio } = args
 
 	// Read intent.md once — needed for mode (cursor walk shape) and
 	// for intent-scope approvals (terminal leg).
@@ -1020,20 +1001,11 @@ export function derivePosition(args: {
 		}
 	}
 
-	// Active stage. The caller (haiku_run_next, runWorkflowTick) should
-	// have already computed this on intent main BEFORE any branch dance,
-	// because computing it here on the stage branch would lie:
-	// signed-but-not-yet-merged units exist on the stage branch's disk
-	// view, so `findCurrentStage` from there walks past and returns the
-	// next stage (or null), and we'd emit intent_review when we should
-	// have emitted merge_stage. When the caller didn't pass a hint
-	// (legacy paths, isolated unit tests), fall back to the from-cwd
-	// walk — the test fixtures that omit the hint don't trigger the
-	// signed-but-unmerged scenario.
-	const activeStage =
-		activeStageHint !== undefined
-			? activeStageHint
-			: findCurrentStage(slug, studio)
+	// Active stage. The caller has already merged intent main into the
+	// current branch and aligned the working tree to the cursor's named
+	// stage (see haiku_run_next's pre-tick branch alignment). The walk
+	// here just reads the disk view we were given.
+	const activeStage = findCurrentStage(slug, studio)
 
 	// Track C — drift sweep, only against the active stage.
 	if (activeStage) {

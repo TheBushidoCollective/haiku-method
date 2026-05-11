@@ -7303,18 +7303,20 @@ export function handleStateTool(
 				"haiku_unit_start",
 			)
 			if (unitStartInputErr) return unitStartInputErr
-			// Resolve stage via the unit's actual on-disk location rather
-			// than the `active_stage` cache. The cache can be stale after
-			// a reset / migration; the unit file in the working tree is
-			// the authoritative signal. Falls back to the cache only when
-			// the unit can't be found in the working tree (brand-new unit
-			// being started for the first time).
+			// Resolve stage in priority order:
+			//   1. Caller-supplied `stage` arg (cursor's dispatched action
+			//      carries it — race-safe against concurrent run_next
+			//      calls that may switch the working tree).
+			//   2. The unit's actual on-disk location (working-tree truth).
+			//   3. The `active_stage` cache (legacy / brand-new unit path).
 			const startUnitInfo = findUnitFile(
 				args.intent as string,
 				args.unit as string,
 			)
 			const stage =
-				startUnitInfo?.stage || resolveActiveStage(args.intent as string)
+				(args.stage as string | undefined) ||
+				startUnitInfo?.stage ||
+				resolveActiveStage(args.intent as string)
 			if (!stage)
 				return reply(
 					{
@@ -7429,24 +7431,50 @@ export function handleStateTool(
 			)
 			if (advInputErr) return advInputErr
 
-			// Locate the unit FIRST, THEN enforce the right branch. The old
-			// order pre-switched on `resolveActiveStage` (the FM cache) and
-			// could land the working tree on a branch that didn't contain
-			// the unit, producing a spurious `unit_not_found`. `findUnitFile`
-			// reads the working tree only — signal is on disk. If the unit
-			// isn't on this branch's view, `unit_not_found` is the honest
-			// answer; recovery is the cursor's job on the next tick.
-			const unitInfo = findUnitFile(args.intent as string, args.unit as string)
-			if (!unitInfo)
-				return reply(
-					{
-						error: "unit_not_found",
-						message: `Unit '${args.unit}' not found in any stage of intent '${args.intent}'.`,
-					},
-					{ isError: true },
+			// Resolve the unit's stage in priority order:
+			//   1. Caller-supplied `stage` arg (the cursor's dispatched
+			//      action carries it — race-safe against concurrent
+			//      run_next calls that may switch the working tree out
+			//      from under this subagent's call).
+			//   2. `findUnitFile` working-tree probe (signal on disk).
+			//      The old order pre-switched on `resolveActiveStage`
+			//      (the FM cache) and could land the tree on a branch
+			//      that didn't contain the unit, producing spurious
+			//      `unit_not_found`.
+			// If neither resolves to a stage that contains the unit,
+			// return `unit_not_found` honestly; recovery is the cursor's
+			// job on the next tick.
+			const advStageArg = args.stage as string | undefined
+			let advStage: string
+			let advPath: string
+			if (advStageArg) {
+				advStage = advStageArg
+				advPath = unitPath(args.intent as string, advStage, args.unit as string)
+				if (!existsSync(advPath)) {
+					return reply(
+						{
+							error: "unit_not_found",
+							message: `Unit '${args.unit}' not found at stage '${advStageArg}' of intent '${args.intent}'.`,
+						},
+						{ isError: true },
+					)
+				}
+			} else {
+				const unitInfo = findUnitFile(
+					args.intent as string,
+					args.unit as string,
 				)
-			const advPath = unitInfo.path
-			const advStage = unitInfo.stage
+				if (!unitInfo)
+					return reply(
+						{
+							error: "unit_not_found",
+							message: `Unit '${args.unit}' not found in any stage of intent '${args.intent}'.`,
+						},
+						{ isError: true },
+					)
+				advPath = unitInfo.path
+				advStage = unitInfo.stage
+			}
 
 			// Now align the working tree to the unit's stage branch so
 			// downstream readFileSync / writeFileSync operate on the
@@ -7967,26 +7995,46 @@ export function handleStateTool(
 			)
 			if (rejectInputErr) return rejectInputErr
 
-			// Locate first, enforce second. See `haiku_unit_advance_hat`
-			// for the rationale: a pre-switch on a stale `active_stage`
-			// cache can land the working tree on a branch that doesn't
-			// contain the unit, producing a spurious `unit_not_found`.
-			// `findUnitFile` reads the working tree only — signal is on
-			// disk, never git topology.
-			const rejectInfo = findUnitFile(
-				args.intent as string,
-				args.unit as string,
-			)
-			if (!rejectInfo)
-				return reply(
-					{
-						error: "unit_not_found",
-						message: `Unit '${args.unit}' not found in any stage of intent '${args.intent}'.`,
-					},
-					{ isError: true },
+			// Resolve the unit's stage in priority order:
+			//   1. Caller-supplied `stage` arg (race-safe against
+			//      concurrent run_next calls).
+			//   2. `findUnitFile` working-tree probe.
+			// See `haiku_unit_advance_hat` for the rationale.
+			const rejectStageArg = args.stage as string | undefined
+			let failPath: string
+			let rejectStage: string
+			if (rejectStageArg) {
+				rejectStage = rejectStageArg
+				failPath = unitPath(
+					args.intent as string,
+					rejectStage,
+					args.unit as string,
 				)
-			const failPath = rejectInfo.path
-			const rejectStage = rejectInfo.stage
+				if (!existsSync(failPath)) {
+					return reply(
+						{
+							error: "unit_not_found",
+							message: `Unit '${args.unit}' not found at stage '${rejectStageArg}' of intent '${args.intent}'.`,
+						},
+						{ isError: true },
+					)
+				}
+			} else {
+				const rejectInfo = findUnitFile(
+					args.intent as string,
+					args.unit as string,
+				)
+				if (!rejectInfo)
+					return reply(
+						{
+							error: "unit_not_found",
+							message: `Unit '${args.unit}' not found in any stage of intent '${args.intent}'.`,
+						},
+						{ isError: true },
+					)
+				failPath = rejectInfo.path
+				rejectStage = rejectInfo.stage
+			}
 
 			// Align the working tree to the unit's stage branch so
 			// readFileSync / writeFileSync operate on the right view.

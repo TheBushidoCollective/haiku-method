@@ -83,13 +83,26 @@ export const validateHaikuUnitListInputSchema = stateAjv.compile(
 
 // ── haiku_unit_start ──────────────────────────────────────────────
 //
-// `stage` is intentionally omitted — the handler resolves the unit's
-// stage from the intent's frontmatter / on-disk layout.
+// `stage` is OPTIONAL. When the agent has it (from the cursor's
+// dispatched action — start_unit_hat, dispatch_review, etc., all
+// carry stage), passing it through eliminates a parent-vs-subagent
+// race: the engine knows exactly which branch the unit lives on
+// without re-deriving from cwd / FM cache. When the agent doesn't
+// have it (legacy callers, manual invocation), the handler falls
+// back to findUnitFile across on-disk stages.
+
+const optionalStage = Type.Optional(
+	Type.String({
+		description:
+			"Stage the unit lives on. OPTIONAL — when omitted, the handler resolves it from on-disk layout. Pass it through from the cursor's dispatched action to make this call race-safe against concurrent run_next calls that may switch the working tree.",
+	}),
+)
 
 export const HAIKU_UNIT_START_INPUT_SCHEMA = Type.Object(
 	{
 		intent: Type.String({ minLength: 1 }),
 		unit: Type.String({ minLength: 1 }),
+		stage: optionalStage,
 		state_file: stateFile,
 	},
 	{ additionalProperties: false },
@@ -105,6 +118,7 @@ export const HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA = Type.Object(
 	{
 		intent: Type.String({ minLength: 1 }),
 		unit: Type.String({ minLength: 1 }),
+		stage: optionalStage,
 		state_file: stateFile,
 	},
 	{ additionalProperties: false },
@@ -122,6 +136,7 @@ export const HAIKU_UNIT_REJECT_HAT_INPUT_SCHEMA = Type.Object(
 	{
 		intent: Type.String({ minLength: 1 }),
 		unit: Type.String({ minLength: 1 }),
+		stage: optionalStage,
 		reason: Type.Optional(
 			Type.String({
 				description:

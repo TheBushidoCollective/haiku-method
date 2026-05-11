@@ -108,3 +108,85 @@ test("deadlock-detector: null action records as a stable 'null' signature", () =
 	assert.strictEqual(__getTickHistoryForTests("slug-g").count, 2)
 	assert.strictEqual(__getTickHistoryForTests("slug-g").signature, "null")
 })
+
+test("deadlock-detector: A→B→A→B churn pattern surfaces a churn signal", () => {
+	__resetDeadlockDetector()
+	const A = { action: "dispatch_review", role: "spec" }
+	const B = { action: "merge_stage", stage: "design" }
+	recordTickResult("slug-h", A)
+	recordTickResult("slug-h", B)
+	recordTickResult("slug-h", A)
+	// 4th tick should trigger churn detection — 4 entries cycling
+	// through 2 distinct signatures.
+	recordTickResult("slug-h", B)
+	const h = __getTickHistoryForTests("slug-h")
+	assert.strictEqual(
+		h.churn_fired,
+		true,
+		"A→B→A→B must trigger the churn detector",
+	)
+	assert.strictEqual(
+		h.recent.length,
+		4,
+		"recent window holds the alternating history",
+	)
+})
+
+test("deadlock-detector: churn only fires once per alternation run", () => {
+	__resetDeadlockDetector()
+	const A = { action: "dispatch_review", role: "spec" }
+	const B = { action: "merge_stage", stage: "design" }
+	recordTickResult("slug-i", A)
+	recordTickResult("slug-i", B)
+	recordTickResult("slug-i", A)
+	recordTickResult("slug-i", B) // crosses threshold here
+	const afterCross = __getTickHistoryForTests("slug-i")
+	assert.strictEqual(afterCross.churn_fired, true)
+	// Continued alternation must not re-fire (the churn_fired latch
+	// should stay set).
+	recordTickResult("slug-i", A)
+	recordTickResult("slug-i", B)
+	const afterMore = __getTickHistoryForTests("slug-i")
+	assert.strictEqual(
+		afterMore.churn_fired,
+		true,
+		"latch stays set during continued alternation",
+	)
+})
+
+test("deadlock-detector: a fresh signature in the window resets the churn latch", () => {
+	__resetDeadlockDetector()
+	const A = { action: "dispatch_review", role: "spec" }
+	const B = { action: "merge_stage", stage: "design" }
+	const C = { action: "elaborate", stage: "product" }
+	recordTickResult("slug-j", A)
+	recordTickResult("slug-j", B)
+	recordTickResult("slug-j", A)
+	recordTickResult("slug-j", B) // churn fires
+	assert.strictEqual(__getTickHistoryForTests("slug-j").churn_fired, true)
+	// Brand-new signature C — latch resets, ready to fire again on a
+	// new alternation cycle.
+	recordTickResult("slug-j", C)
+	assert.strictEqual(
+		__getTickHistoryForTests("slug-j").churn_fired,
+		false,
+		"introducing a new signature resets the latch",
+	)
+})
+
+test("deadlock-detector: healthy progression (A→B→C→D distinct) does NOT trigger churn", () => {
+	__resetDeadlockDetector()
+	recordTickResult("slug-k", { action: "elaborate", stage: "inception" })
+	recordTickResult("slug-k", {
+		action: "dispatch_review",
+		stage: "inception",
+		role: "spec",
+	})
+	recordTickResult("slug-k", { action: "merge_stage", stage: "inception" })
+	recordTickResult("slug-k", { action: "elaborate", stage: "design" })
+	assert.strictEqual(
+		__getTickHistoryForTests("slug-k").churn_fired,
+		false,
+		"4 distinct signatures is normal cursor progression, not churn",
+	)
+})

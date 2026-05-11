@@ -31,6 +31,14 @@ interface TickEntry {
 	signature: string
 	count: number
 	first_seen: string
+	/** Recent signatures observed for this intent. Used for the
+	 *  alternating-wedge (churn) detector below. Bounded to
+	 *  `CHURN_WINDOW`. */
+	recent: string[]
+	/** True if the churn detector has already fired for this run of
+	 *  alternating signatures. Reset when a brand-new signature
+	 *  enters the window. */
+	churn_fired: boolean
 }
 
 const tickHistory: Map<string, TickEntry> = new Map()
@@ -42,6 +50,22 @@ const tickHistory: Map<string, TickEntry> = new Map()
  *  produce on-disk progress. Conservative — three would miss
  *  fast-firing wedges; one would false-positive on intentional reruns. */
 const SUSPECTED_THRESHOLD = 2
+
+/** Size of the recent-signature window for the churn detector. A
+ *  classic A→B→A→B wedge needs 4 ticks to surface; 6 gives some
+ *  headroom for slightly noisier patterns. */
+const CHURN_WINDOW = 6
+
+/** Minimum number of recent ticks that must alternate before we call
+ *  it churn. Below this, the signature variety is just normal cursor
+ *  progression. */
+const CHURN_MIN_TICKS = 4
+
+/** A churn pattern is: the LAST `CHURN_MIN_TICKS` signatures cycle
+ *  through ≤ `CHURN_MAX_DISTINCT` distinct values. 2 catches the
+ *  classic A/B alternation; 3 would catch A/B/C cycles too but
+ *  raises the false-positive risk. */
+const CHURN_MAX_DISTINCT = 2
 
 /** Drop tracking older than this — keeps the map bounded across long-
  *  running MCP processes. */
@@ -95,13 +119,20 @@ export function recordTickResult(
 	const now = new Date().toISOString()
 	const prev = tickHistory.get(slug)
 
+	let entry: TickEntry
 	if (prev && prev.signature === signature) {
 		const newCount = prev.count + 1
-		tickHistory.set(slug, {
+		const recent = [...prev.recent, signature].slice(-CHURN_WINDOW)
+		entry = {
 			signature,
 			count: newCount,
 			first_seen: prev.first_seen,
-		})
+			recent,
+			// Once the chain of identical signatures continues, the
+			// churn-fired flag carries forward — repeat A→A→A doesn't
+			// also count as A↔B churn.
+			churn_fired: prev.churn_fired,
+		}
 		// Emit only on the first crossing — once detected, the wedge
 		// is in dashboards; repeat emits add noise without information.
 		if (newCount === SUSPECTED_THRESHOLD) {
@@ -112,10 +143,49 @@ export function recordTickResult(
 				first_seen: prev.first_seen,
 			})
 		}
+	} else if (prev) {
+		// Signature changed. Carry the recent-window forward and reset
+		// the consecutive counter. A NEW signature entering the window
+		// also resets the churn-fired latch — we want fresh detection
+		// when the alternation pattern restarts.
+		const recent = [...prev.recent, signature].slice(-CHURN_WINDOW)
+		const isInWindow = prev.recent.includes(signature)
+		entry = {
+			signature,
+			count: 1,
+			first_seen: prev.first_seen,
+			recent,
+			churn_fired: isInWindow ? prev.churn_fired : false,
+		}
+
+		// Churn detection: take the LAST CHURN_MIN_TICKS entries from
+		// recent. If they cycle through ≤ CHURN_MAX_DISTINCT signatures,
+		// it's an alternating wedge.
+		if (!entry.churn_fired && recent.length >= CHURN_MIN_TICKS) {
+			const tail = recent.slice(-CHURN_MIN_TICKS)
+			const distinct = new Set(tail)
+			if (distinct.size <= CHURN_MAX_DISTINCT && distinct.size > 1) {
+				emitTelemetry("haiku.deadlock.churn_suspected", {
+					intent: slug,
+					recent_signatures: tail.join(" | "),
+					distinct_count: String(distinct.size),
+					window_size: String(tail.length),
+					first_seen: prev.first_seen,
+				})
+				entry.churn_fired = true
+			}
+		}
 	} else {
-		tickHistory.set(slug, { signature, count: 1, first_seen: now })
+		entry = {
+			signature,
+			count: 1,
+			first_seen: now,
+			recent: [signature],
+			churn_fired: false,
+		}
 	}
 
+	tickHistory.set(slug, entry)
 	pruneStale()
 }
 
@@ -125,8 +195,12 @@ export function __resetDeadlockDetector(): void {
 }
 
 /** Test-only: peek at the recorded history for an intent. */
-export function __getTickHistoryForTests(
-	slug: string,
-): { signature: string; count: number; first_seen: string } | null {
+export function __getTickHistoryForTests(slug: string): {
+	signature: string
+	count: number
+	first_seen: string
+	recent: string[]
+	churn_fired: boolean
+} | null {
 	return tickHistory.get(slug) ?? null
 }

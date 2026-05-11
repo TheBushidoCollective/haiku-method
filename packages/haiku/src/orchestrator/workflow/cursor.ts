@@ -337,13 +337,6 @@ function hasStarted(fm: UnitFm): boolean {
 	)
 }
 
-function isUnitTerminallyAdvanced(fm: UnitFm, lastHat: string): boolean {
-	const its = pickIterations(fm)
-	if (its.length === 0) return false
-	const last = its[its.length - 1]
-	return last.result === "advance" && last.hat === lastHat
-}
-
 function isUnitFullyApproved(fm: UnitFm, approvalRoles: string[]): boolean {
 	const approvals = pickApprovals(fm)
 	for (const role of approvalRoles) {
@@ -387,10 +380,11 @@ function isUnitFullyApproved(fm: UnitFm, approvalRoles: string[]): boolean {
  *       merged-from-elsewhere placeholder. The migrator dropped
  *       per-unit history; file presence with `started_at` is the
  *       proof this stage's work happened.
- *   (c) Iterations end in a terminal advance on the last hat AND
- *       every required approval role is stamped. Same as (a)
- *       structurally; kept as a separate condition only for clarity
- *       of intent — this is the canonical "fully signed" shape.
+ *
+ * The canonical healthy shape (iterations end in terminal advance on
+ * the last hat AND every approval role stamped) lands on branch (a) —
+ * the all-approvals check is what makes it complete; the iteration
+ * advance is the route most healthy units take to reach that state.
  *
  * Otherwise the unit is CURRENT (pins the cursor):
  *   - `started_at` null → wave-ready, OR
@@ -407,11 +401,7 @@ function isUnitFullyApproved(fm: UnitFm, approvalRoles: string[]): boolean {
  * it. The old file-existence walk had the same blindspot; the new
  * check makes the assumption explicit.
  */
-function isUnitComplete(
-	fm: UnitFm,
-	lastHat: string,
-	approvalRoles: string[],
-): boolean {
+function isUnitComplete(fm: UnitFm, approvalRoles: string[]): boolean {
 	// (a) Strongest signal: every approval role is stamped. Trusts the
 	// user's / engine's explicit sign-off over iteration consistency.
 	if (isUnitFullyApproved(fm, approvalRoles)) return true
@@ -419,12 +409,11 @@ function isUnitComplete(
 	const its = pickIterations(fm)
 	// (b) v3-migrated / merged-from-elsewhere placeholder.
 	if (started && its.length === 0) return true
-	// Wave-ready / not yet started — CURRENT.
-	if (!started) return false
-	// Mid-flight: iterations exist but not terminal-advance — CURRENT.
-	if (!isUnitTerminallyAdvanced(fm, lastHat)) return false
-	// Terminal-advance but approvals incomplete (handled by branch (a)
-	// when stamped) — falls here when in the review/approval window.
+	// Everything else is CURRENT — the cursor pins on this unit:
+	//   - `!started` → wave-ready (decompose wrote the spec, wave hasn't fired)
+	//   - mid-flight iterations (last result null, or last hat != terminal)
+	//   - terminal-advance but approvals incomplete (the review/approval
+	//     window; branch (a) catches it once stamps land)
 	return false
 }
 
@@ -446,18 +435,15 @@ function areStageUnitsComplete(
 
 	const hats = resolveStageHats(studio, stage)
 	// No hats configured = stage definition broken or unloaded. Conservative
-	// answer: not complete (don't walk past). Without this guard, `lastHat`
-	// is `undefined` and every unit fails the iteration check, so the
-	// function always returns false — but for the wrong reason. Better to
-	// fail fast and visibly here.
+	// answer: not complete (don't walk past). Catches the misconfigured-
+	// stage class of bug early.
 	if (hats.length === 0) return false
-	const lastHat = hats[hats.length - 1]
 	const approvalRoles = approvalRolesFor(studio, stage, mode)
 
 	for (const file of unitFiles) {
 		const fm = readFm(join(unitsDir, file))?.data
 		if (!fm) return false
-		if (!isUnitComplete(fm, lastHat, approvalRoles)) return false
+		if (!isUnitComplete(fm, approvalRoles)) return false
 	}
 	return true
 }

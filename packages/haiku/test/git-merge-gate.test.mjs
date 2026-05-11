@@ -239,7 +239,7 @@ console.log("\n=== gate_outcome=advanced handler ===")
 
 // v4: `awaiting_external_review` action removed. External review is
 // now signaled by the actual merge into intent main — no separate
-// polling action. The cursor's firstUnmergedStage check naturally
+// polling action. The cursor's findCurrentStage check naturally
 // stays on the un-merged stage until the user merges the MR.
 
 // ═══════════════════════════════════════════════════════════════════════════

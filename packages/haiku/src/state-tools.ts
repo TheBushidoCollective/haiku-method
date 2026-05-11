@@ -761,7 +761,7 @@ function scanOneIntent(
 	//
 	// v4 retired both: `active_stage` is in DEPRECATED_INTENT_FIELDS
 	// (stripped on migration), and stage status is derived from per-unit
-	// `iterations[]` + branch-merge state via `firstUnmergedStage`. v4's
+	// `iterations[]` + branch-merge state via `findCurrentStage`. v4's
 	// state.json carries decision_log, engine iterations, and
 	// reconciliation receipts — no `status` field. The legacy issue flags
 	// pointed at fields that no longer exist; the synthesizer wrote

@@ -161,7 +161,7 @@ async function runTick(slug, intentDir) {
 // SKIPPED 2026-05-06: surfaces two real issues that need deeper
 // investigation:
 //   1. The synthetic test scaffolding doesn't track stage branches the
-//      way `firstUnmergedStage` expects — the cursor walks elaborate
+//      way `findCurrentStage` expects — the cursor walks elaborate
 //      across every stage before merging, masking the unit lifecycle.
 //   2. Once all stages are merged, intent_review wheel-spins on `spec`
 //      even after the test stamps `approvals.spec` on intent.md.
@@ -500,7 +500,7 @@ function applyResponse(intentDir, action, root, slug) {
 		case "merge_stage": {
 			// Materialize a "merge" — set every unit as merged.
 			// Real merge involves git, but for the cursor we just need
-			// `firstUnmergedStage` to skip this stage. Easiest: commit
+			// `findCurrentStage` to skip this stage. Easiest: commit
 			// the stage to its own branch and merge into intent main.
 			try {
 				git(root, "add", "-A")

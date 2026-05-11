@@ -166,9 +166,6 @@ function applyResponse(intentDir, action, root, slug) {
 
 	switch (action.action) {
 		case "elaborate": {
-			// Conversation gate (2026-05-08). Write a verified
-			// elaboration artifact so the cursor advances. Tests don't
-			// simulate the verifier subagent.
 			mkdirSync(stageDir, { recursive: true })
 			const elabPath = join(stageDir, "elaboration.md")
 			writeFm(
@@ -330,17 +327,32 @@ function applyResponse(intentDir, action, root, slug) {
 			break
 		}
 		case "merge_stage": {
-			// Materialize a real merge — this is the one place the test
-			// touches git, because the engine drives stage→main merges
-			// via run_next's pre-tick guard but the actual commit happens
-			// in the haiku_run_next handler chain. For this dry-run we
-			// simulate the merge so the cursor's firstUnmergedStage moves
-			// past this stage on the next tick.
+			// Materialize a real merge. The previous form used
+			// `git checkout -b <stage>` to "ensure" the branch existed,
+			// but that throws when the branch already exists (the common
+			// case — the engine created it). The catch then swallowed the
+			// entire try block so the merge into main never ran, and
+			// findCurrentStage on intent main kept returning the same
+			// stage forever. Use the idempotent flow: ensure we're on
+			// the stage branch, commit pending work, switch to main,
+			// merge.
+			const stageBranch = `haiku/${slug}/${stage}`
+			const mainBranch = `haiku/${slug}/main`
 			try {
 				git(root, "add", "-A")
-				git(root, "commit", "-m", `complete ${stage}`)
-				git(root, "checkout", "-q", "-b", `haiku/${slug}/${stage}`)
-				git(root, "checkout", "-q", `haiku/${slug}/main`)
+				try {
+					git(root, "commit", "-m", `complete ${stage}`)
+				} catch {
+					/* nothing to commit — fine */
+				}
+				const currentBr = execFileSync("git", ["branch", "--show-current"], {
+					cwd: root,
+					encoding: "utf8",
+				}).trim()
+				if (currentBr !== stageBranch) {
+					git(root, "checkout", "-q", stageBranch)
+				}
+				git(root, "checkout", "-q", mainBranch)
 				git(
 					root,
 					"merge",
@@ -348,10 +360,12 @@ function applyResponse(intentDir, action, root, slug) {
 					"--no-edit",
 					"-m",
 					`merge ${stage}`,
-					`haiku/${slug}/${stage}`,
+					stageBranch,
 				)
-			} catch {
-				/* may already be merged */
+			} catch (err) {
+				console.error(
+					`[SIM] merge_stage(${stage}) failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
 			}
 			break
 		}
@@ -360,7 +374,7 @@ function applyResponse(intentDir, action, root, slug) {
 	}
 }
 
-test("real-intent: drive software studio to sealed via run_next handler", async () => {
+test("real-intent: drive software studio to sealed via run_next handler", { timeout: 120_000 }, async () => {
 	if (!HAS_GIT) return
 	await withRealStudioRepo("real-intent", async ({ root, intentDir, slug }) => {
 		const now = new Date().toISOString()

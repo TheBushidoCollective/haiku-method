@@ -12,7 +12,7 @@
 //     is covered by drift-no-false-positives.
 //
 // Stage progression in fs mode is determined by per-unit signature
-// state. The cursor's `firstUnmergedStage` uses `isStageFullySigned`
+// state. The cursor's `findCurrentStage` uses `isStageFullySigned`
 // (terminal hat advance + every required approval role signed) to
 // walk past completed stages. The `merge_stage` handler in fs mode
 // is a no-op that re-ticks without writing anything; the cursor
@@ -281,7 +281,7 @@ function applyResponse(intentDir, action) {
 		case "merge_stage": {
 			// In fs mode this is a no-op. The cursor's `isStageFullySigned`
 			// already returns true (terminal hat advance + approvals all
-			// signed), so the next tick walks past via `firstUnmergedStage`
+			// signed), so the next tick walks past via `findCurrentStage`
 			// without anything written here. Kept as an explicit case to
 			// document the contract.
 			break

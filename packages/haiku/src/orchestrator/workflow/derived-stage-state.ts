@@ -191,7 +191,7 @@ function approvalRolesFor(
 }
 
 /** Does intent main's tree carry `stages/<stage>/units/*.md`?
- *  Mirrors `firstUnmergedStage` in cursor.ts — intent main's filesystem
+ *  Mirrors `findCurrentStage` in cursor.ts — intent main's filesystem
  *  IS the canonical "stage's work has merged" signal. We can't use raw
  *  `isBranchMerged(stageBranch, intentMain)` because a freshly-forked
  *  stage branch shares its tip with intent main and would falsely report
@@ -262,7 +262,7 @@ export function deriveStageState(args: {
 	// Prefer the stage branch when it exists — that's where the
 	// in-flight unit work lives. When the stage branch doesn't exist
 	// yet, fall back to disk reads (which on intent main return the
-	// already-merged units, exactly what `firstUnmergedStage`
+	// already-merged units, exactly what `findCurrentStage`
 	// observes).
 	const intentMain = `haiku/${slug}/main`
 	const stageBranch = `haiku/${slug}/${stage}`

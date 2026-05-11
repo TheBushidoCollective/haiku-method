@@ -177,7 +177,7 @@ function stampApprovalRole(intentDir, stage, units, role) {
 /**
  * Materialise a merged stage branch.
  *
- * Cursor's `firstUnmergedStage` walks intent main's filesystem and
+ * Cursor's `findCurrentStage` walks intent main's filesystem and
  * returns the first stage whose `stages/<name>/units/` is empty.
  * Merging the stage branch into intent main with `--no-ff` brings
  * the unit files onto intent main's tree — that's the merged signal

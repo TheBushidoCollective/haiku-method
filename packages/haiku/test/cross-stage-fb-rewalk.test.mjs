@@ -11,7 +11,7 @@
 //   "active_stage = earliest stage with non-complete status; no
 //    future stage may be complete while current isn't"
 //
-// In v4 the cursor reads `firstUnmergedStage` from branch state, so
+// In v4 the cursor reads `findCurrentStage` from branch state, so
 // once stage 1's branch advances past intent main (via the fix-loop
 // commits), the cursor returns "1" until 1 re-merges. Then "2" until
 // 2's state validates, and so on.

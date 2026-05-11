@@ -34,7 +34,7 @@ import { test } from "node:test"
 import matter from "gray-matter"
 
 import { mergeStageBranchIntoMain } from "../src/git-worktree.ts"
-import { firstUnmergedStage } from "../src/orchestrator/workflow/cursor.ts"
+import { findCurrentStage } from "../src/orchestrator/workflow/cursor.ts"
 import { _resetIsGitRepoForTests } from "../src/state-tools.ts"
 
 const COMMITTER_DATE = "2026-05-08T12:00:00+00:00"
@@ -75,7 +75,7 @@ const PLUGIN_ROOT = join(findRepoRoot(), "plugin")
  * Without the no-op stamping in haiku_run_next:
  *   - mergeStageBranchIntoMain returns success (noop)
  *   - dispatchOrchestratorAction re-derives position
- *   - firstUnmergedStage sees: no unit files on intent main for this
+ *   - findCurrentStage sees: no unit files on intent main for this
  *     stage (neither the v3 stages_merged stamp nor a stage branch
  *     exists) → returns the same stage
  *   - while-loop calls merge again → spin
@@ -146,7 +146,7 @@ test("missing-source-branch merge returns noop=true (caller signal)", () => {
 	}
 })
 
-test("after the noop'd stage's unit files land on intent main, firstUnmergedStage advances past it", () => {
+test("after the noop'd stage's unit files land on intent main, findCurrentStage advances past it", () => {
 	_resetIsGitRepoForTests()
 	const slug = "spin-after-stamp"
 	const { tmp, intentDir } = setupSpinTrap(slug)
@@ -157,7 +157,7 @@ test("after the noop'd stage's unit files land on intent main, firstUnmergedStag
 		// Pre-condition: cursor sees inception as unmerged (branch missing,
 		// no unit files on intent main for this stage) — this is what
 		// the spin would loop on.
-		const before = firstUnmergedStage(slug, "software")
+		const before = findCurrentStage(slug, "software")
 		assert.strictEqual(
 			before,
 			"inception",
@@ -180,7 +180,7 @@ test("after the noop'd stage's unit files land on intent main, firstUnmergedStag
 		)
 
 		// Post-write: cursor must advance to the next unmerged stage.
-		const after = firstUnmergedStage(slug, "software")
+		const after = findCurrentStage(slug, "software")
 		assert.notStrictEqual(
 			after,
 			"inception",

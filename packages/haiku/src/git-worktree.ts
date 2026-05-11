@@ -918,7 +918,7 @@ export interface MisroutedStageReconciliation {
  * repo default branch instead of `haiku/<slug>/main`" case. The
  * symptom: `haiku/<slug>/<stage>` is merged into `main` (or whatever
  * the repo default is) but NOT into `haiku/<slug>/main`, so the cursor's
- * `firstUnmergedStage` keeps the stage pinned and pickup wedges.
+ * `findCurrentStage` keeps the stage pinned and pickup wedges.
  *
  * Recovery: fast-forward `haiku/<slug>/main` to the repo mainline so
  * the merge propagates. Only safe when `haiku/<slug>/main` is a strict
@@ -1436,7 +1436,7 @@ export function mergeStageBranchIntoMain(
 	 *  merged-and-deleted), or the environment isn't a git repo at all.
 	 *  Callers can safely re-tick: in git mode the original v3 merge
 	 *  already put the stage's unit files on intent main, so
-	 *  `firstUnmergedStage` walks past on the next tick; in fs mode the
+	 *  `findCurrentStage` walks past on the next tick; in fs mode the
 	 *  cursor uses per-unit signature state via `isStageFullySigned`.
 	 *  No `stages_merged` stamp needed (the field is dead in v4). */
 	noop?: boolean
@@ -1450,7 +1450,7 @@ export function mergeStageBranchIntoMain(
 		// Source-branch missing recovery. v3 merged-and-deleted stage
 		// branches once the stage was complete, so migrated intents will
 		// reach this code path with a stage branch that no longer exists
-		// either locally or on origin. `firstUnmergedStage` reads unit
+		// either locally or on origin. `findCurrentStage` reads unit
 		// files on intent main — when the stage branch is gone, intent
 		// main already carries the merged units (from the original v3
 		// merge), so the cursor walks past naturally. But if a caller
@@ -1911,7 +1911,7 @@ export function ensureOnStageBranch(
 	// intent main so stage-scoped writes have somewhere to land. The
 	// disk-state cursor model expects every active stage to have its
 	// own branch — without this auto-fork, writes would float onto
-	// intent main and `firstUnmergedStage` (which reads intent main's
+	// intent main and `findCurrentStage` (which reads intent main's
 	// tree) would interpret the in-flight content as "stage merged"
 	// and walk past.
 	if (stage && stageBranch && !branchExists(stageBranch)) {
@@ -2046,7 +2046,7 @@ export function ensureOnStageBranch(
 	// Auto-commit any dirty tree on the source branch before
 	// switching. New (untracked or modified) files that don't conflict
 	// with the target branch's tree would otherwise float along to the
-	// target uncommitted — the cursor's `firstUnmergedStage` then
+	// target uncommitted — the cursor's `findCurrentStage` then
 	// sees stage content on intent main when it should still be
 	// branch-isolated. Per the architectural rule "stage-scoped writes
 	// belong on the stage branch," we commit them on the source first.
@@ -2250,12 +2250,7 @@ function autoCommitDirtyTree(
 	branch: string,
 ): { ok: true; committed_files: string[] } | { ok: false; message: string } {
 	try {
-		// Stage everything tracked and untracked. Submodule pointer drift
-		// (the "m" status entries) is included — those point at committed
-		// submodule refs and are safe to commit here; reverting them would
-		// throw away legitimate submodule updates.
 		run(["git", "add", "-A"])
-		// List what we're about to commit so the return value is accurate.
 		const staged = tryRun(["git", "diff", "--cached", "--name-only"])
 		const files = staged.split("\n").filter(Boolean)
 		if (files.length === 0) {

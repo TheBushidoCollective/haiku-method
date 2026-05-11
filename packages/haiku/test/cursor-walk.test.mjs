@@ -8,7 +8,7 @@
 //
 // These are the canonical "new tests required" from the engine
 // refactor plan. They prove the architectural decisions land:
-//   - Stages aren't sealed; cursor walks via firstUnmergedStage
+//   - Stages aren't sealed; cursor walks via findCurrentStage
 //   - Drift detection emits drift_detected before any other track
 //   - Open FBs preempt intent-track work
 //   - intent walk routes through review → approval → merge_stage

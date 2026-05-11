@@ -1,19 +1,19 @@
 #!/usr/bin/env npx tsx
 // merge-stage-missing-branch.test.mjs — Coverage for the "v3
-// merged-and-deleted stage branch" recovery in `firstUnmergedStage`
+// merged-and-deleted stage branch" recovery in `findCurrentStage`
 // (cursor.ts) and `mergeStageBranchIntoMain` (git-worktree.ts).
 //
 // In v3, the workflow merged stage branches into intent main and
 // deleted them. Migrated v3→v4 intents reach v4 with branch names that
 // no longer exist locally or on origin. The v4 cursor reads unit files
 // on intent main as the merged signal — when the migrator landed those
-// units on main during v3, `firstUnmergedStage` walks past the stage
+// units on main during v3, `findCurrentStage` walks past the stage
 // naturally. The risk path: a caller dispatches `merge_stage` directly
 // against the missing branch — without the recovery, merge fails and
 // the engine loops on `merge_stage` every tick.
 //
 // Two tests:
-//   1. `firstUnmergedStage` skips stages whose branch is missing.
+//   1. `findCurrentStage` skips stages whose branch is missing.
 //   2. `mergeStageBranchIntoMain` returns success (not throw) when the
 //      source stage branch is missing locally and on origin.
 
@@ -32,10 +32,10 @@ import { test } from "node:test"
 import matter from "gray-matter"
 
 import { mergeStageBranchIntoMain } from "../src/git-worktree.ts"
-import { firstUnmergedStage } from "../src/orchestrator/workflow/cursor.ts"
+import { findCurrentStage } from "../src/orchestrator/workflow/cursor.ts"
 import { _resetIsGitRepoForTests } from "../src/state-tools.ts"
 
-// `firstUnmergedStage` reads the studio config to know the stage
+// `findCurrentStage` reads the studio config to know the stage
 // order. The lookup walks `process.cwd()/.haiku/studios/` first, then
 // `<plugin-root>/studios/` (via CLAUDE_PLUGIN_ROOT). Tests run in a
 // tmp dir, so we point the plugin-root resolver at the real plugin/
@@ -126,7 +126,7 @@ function setupMigratedRepo(slug) {
 	// Write intent.md + simulate "merged" stages by writing per-stage
 	// unit files into the intent dir on intent main. Under the new
 	// disk-state cursor model, intent main's filesystem IS the
-	// "merged stages" signal — `firstUnmergedStage` walks
+	// "merged stages" signal — `findCurrentStage` walks
 	// `stages/<X>/units/` and returns the first stage with no units.
 	// Inception and design get unit files (they're merged); product
 	// stays empty (the cursor should pin there).
@@ -178,7 +178,7 @@ function restoreCwd() {
 
 // ── Tests ─────────────────────────────────────────────────────────────────
 
-test("firstUnmergedStage: missing branches treated as merged (v3 cleanup)", () => {
+test("findCurrentStage: missing branches treated as merged (v3 cleanup)", () => {
 	_resetIsGitRepoForTests()
 	const slug = "mig-test"
 	const tmp = setupMigratedRepo(slug)
@@ -190,11 +190,11 @@ test("firstUnmergedStage: missing branches treated as merged (v3 cleanup)", () =
 		// product (per studios/software/STUDIO.md). Inception and
 		// design have no branches; product does. The cursor must
 		// skip past the missing branches and pin to product.
-		const result = firstUnmergedStage(slug, "software")
+		const result = findCurrentStage(slug, "software")
 		assert.strictEqual(
 			result,
 			"product",
-			`firstUnmergedStage should skip merged-and-deleted branches and return 'product', got: ${result}`,
+			`findCurrentStage should skip merged-and-deleted branches and return 'product', got: ${result}`,
 		)
 	} finally {
 		restoreCwd()

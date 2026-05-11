@@ -1,7 +1,7 @@
 // Integration test for haiku_run_next + Track-B revisit branch alignment.
 //
 // When the cursor returns `start_feedback_hat` for a stage *earlier*
-// than firstUnmergedStage (a feedback rewind), haiku_run_next must
+// than findCurrentStage (a feedback rewind), haiku_run_next must
 // realign the working tree to that earlier stage's branch BEFORE
 // returning the action — otherwise the agent's fix-hat work commits
 // land on the wrong branch.
@@ -109,9 +109,18 @@ function landStage(repoRoot, slug, stage) {
 		"units",
 	)
 	mkdirSync(unitsDir, { recursive: true })
+	// `started_at` is load-bearing: the cursor's "is this stage past?"
+	// check treats `started_at: null` as wave-ready (current), so a
+	// bare `title:` unit would pin the cursor on the first "merged"
+	// stage. Use the v3-migrated placeholder shape (started_at set,
+	// no iterations) which the cursor recognises as "merged from
+	// elsewhere, FM details not preserved".
 	writeFileSync(
 		join(unitsDir, "unit-01-work.md"),
-		matter.stringify(`# ${stage} unit\n`, { title: `${stage}-work` }),
+		matter.stringify(`# ${stage} unit\n`, {
+			title: `${stage}-work`,
+			started_at: new Date().toISOString(),
+		}),
 	)
 	git(repoRoot, "add", "-A")
 	git(repoRoot, "commit", "-q", "-m", `${stage} work`)
@@ -131,7 +140,7 @@ test("run_next: FB on earlier stage rewinds branch + cursor returns Track-B acti
 	const slug = "rev1"
 	await withRepo(slug, async ({ repoRoot, intentDir }) => {
 		// Land stages a and b. Stage c left unfinished (the active
-		// stage). Now firstUnmergedStage = c.
+		// stage). Now findCurrentStage = c.
 		landStage(repoRoot, slug, "a")
 		landStage(repoRoot, slug, "b")
 		// Create stage c branch with divergent commit so it's "active."

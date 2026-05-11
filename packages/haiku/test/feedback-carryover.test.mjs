@@ -11,14 +11,14 @@
 // are "merged" — their branches are created from intent main with no
 // divergent commits, so `merge-base --is-ancestor` reports merged.
 // Stage C is "active" — its branch carries a divergent commit so
-// firstUnmergedStage() returns "c". From there we plant feedback in
+// findCurrentStage() returns "c". From there we plant feedback in
 // various places and assert what the cursor surfaces.
 //
 // Findings on scenarios that the pure cursor cannot exercise:
 //   - #4 "branch checkout on revisit": dispatchOrchestratorAction is
 //     pure observation. Branch checkout lives in haiku_run_next.ts
 //     (`ensureOnStageBranch(slug, activeStage || undefined)`) and uses
-//     `firstUnmergedStage` — i.e. it checks out the Track-A active
+//     `findCurrentStage` — i.e. it checks out the Track-A active
 //     stage, NOT the FB target stage. The cursor returning a Track-B
 //     action with stage=A does NOT cause the runtime to switch to
 //     stage A's branch. Surfaced as an explicit assertion below.
@@ -112,27 +112,48 @@ function buildThreeStageStudio(repoRoot) {
 /**
  * Place A and B as already-merged, C as the active (unmerged) stage.
  *
- * `firstUnmergedStage` walks studio.stages in order and returns the
- * first stage whose `stages/<name>/units/` directory on intent main
- * has no `.md` files. Merging via `--no-ff` lands the stage branch's
- * unit files on intent main's tree — that's the merged signal the
- * cursor reads.
+ * `findCurrentStage` walks studio.stages in order and returns the first
+ * stage whose units aren't fully signed (FM-aware: every unit's last
+ * iteration is terminal-advance AND every required approval role is
+ * stamped). Merging via `--no-ff` lands the stage branch's unit files
+ * on intent main's tree — but the FM has to reflect realistic
+ * post-execution state, otherwise the cursor pins on stage A because
+ * the bare-FM units look "in-progress".
  *
- * To make stages A and B "actually merged", we add a per-stage unit
- * commit on each branch, switch back to main, and merge with --no-ff.
- * This yields:
- *   haiku/<slug>/main → main carries A's and B's units in the tree
- *   haiku/<slug>/a    → merged into main (units appear on main's tree)
- *   haiku/<slug>/b    → merged into main (units appear on main's tree)
- *   haiku/<slug>/c    → no units on main's tree → cursor pins here
+ * Studio uses hats ["planner", "verifier"] and review_agents
+ * ["code-reviewer"]; non-autopilot approval roles are
+ * [spec, quality_gates, code-reviewer, user]. Each "merged" unit gets
+ * iterations through the terminal hat AND every approval role stamped.
+ *
+ * Yields:
+ *   haiku/<slug>/main → A and B's signed units on main's tree
+ *   haiku/<slug>/a    → merged into main
+ *   haiku/<slug>/b    → merged into main
+ *   haiku/<slug>/c    → diverged, units missing → cursor pins here
  */
 function setCursorOnStageC(repoRoot, slug) {
 	const main = `haiku/${slug}/main`
 	const intentDir = join(repoRoot, ".haiku", "intents", slug)
-	// For each prior stage: branch off main, write per-stage unit
-	// content (the new "merged" disk signal under the disk-state cursor
-	// model — intent main's `stages/<X>/units/` carries merged content),
-	// merge --no-ff back into main. Stage c stays diverged.
+	const at = "2026-04-01T00:00:00Z"
+	const fullFm = (stage) => ({
+		title: `${stage}-work`,
+		started_at: at,
+		iterations: [
+			{ hat: "planner", started_at: at, completed_at: at, result: "advance" },
+			{ hat: "verifier", started_at: at, completed_at: at, result: "advance" },
+		],
+		reviews: {
+			spec: { at },
+			"code-reviewer": { at },
+			user: { at },
+		},
+		approvals: {
+			spec: { at },
+			quality_gates: { at },
+			"code-reviewer": { at },
+			user: { at },
+		},
+	})
 	for (const stage of ["a", "b"]) {
 		const branch = `haiku/${slug}/${stage}`
 		git(repoRoot, "checkout", "-b", branch)
@@ -140,7 +161,7 @@ function setCursorOnStageC(repoRoot, slug) {
 		mkdirSync(unitsDir, { recursive: true })
 		writeFileSync(
 			join(unitsDir, "unit-01-work.md"),
-			matter.stringify(`# ${stage} unit\n`, { title: `${stage}-work` }),
+			matter.stringify(`# ${stage} unit\n`, fullFm(stage)),
 		)
 		git(repoRoot, "add", "-A")
 		git(repoRoot, "commit", "-m", `${stage} work`)
@@ -329,7 +350,7 @@ test("dispatchOrchestratorAction does not switch branches on revisit (pure curso
 		// Post-tick: pure cursor doesn't checkout. Branch unchanged.
 		// Branch switching to the FB target stage is a runtime concern
 		// (haiku_run_next + ensureOnStageBranch), not a cursor concern,
-		// and even there the guard uses firstUnmergedStage (active
+		// and even there the guard uses findCurrentStage (active
 		// stage), not the FB target. Documenting via assertion.
 		const after = currentBranch(repoRoot)
 		assert.strictEqual(

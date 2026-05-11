@@ -58,7 +58,7 @@ function branchExists(repoRoot, branch) {
  * says stage-scoped writes (units, per-stage feedback, reviews,
  * approvals) live on the stage branch; intent main only holds
  * intent-creation + intent-review writes. Tests must respect this
- * invariant or `firstUnmergedStage` (which reads intent main's tree
+ * invariant or `findCurrentStage` (which reads intent main's tree
  * to name the active stage) will see fixture state where production
  * sees only merged content.
  *
@@ -485,8 +485,8 @@ export function makeStudio({
  *
  *   1. `reconcileIntentBranches` — fetch + FF intent main + FF stage
  *   2. `ensureOnStageBranch(slug, undefined)` — switch to intent main
- *      so `firstUnmergedStage` reads the authoritative tree
- *   3. `firstUnmergedStage` names the active stage from intent main's
+ *      so `findCurrentStage` reads the authoritative tree
+ *   3. `findCurrentStage` names the active stage from intent main's
  *      filesystem
  *   4. `ensureOnStageBranch(slug, activeStage)` — switch to the
  *      stage's branch where in-flight unit work lives
@@ -512,7 +512,7 @@ export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 		const { ensureOnStageBranch, reconcileIntentBranches } = await import(
 			"../src/git-worktree.js"
 		)
-		const { firstUnmergedStage } = await import(
+		const { findCurrentStage } = await import(
 			"../src/orchestrator/workflow/cursor.js"
 		)
 		const { parseFrontmatter } = await import("../src/state-tools.js")
@@ -522,15 +522,15 @@ export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 		// Step 1: reconcile (no-op when there's no remote; cheap).
 		reconcileIntentBranches(slug)
 		// Step 2-4: branch dance.
+		let activeStage = ""
 		const intentFile = join(repoRoot, ".haiku", "intents", slug, "intent.md")
 		if (existsSync(intentFile)) {
 			const im = parseFrontmatter(readFileSync(intentFile, "utf8")).data
 			const studio = im.studio || ""
 			ensureOnStageBranch(slug, undefined)
-			let activeStage = ""
 			if (studio) {
 				try {
-					activeStage = firstUnmergedStage(slug, studio) || ""
+					activeStage = findCurrentStage(slug, studio) || ""
 				} catch {
 					activeStage = im.active_stage || ""
 				}
@@ -539,7 +539,16 @@ export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 			}
 			ensureOnStageBranch(slug, activeStage || undefined)
 		}
-		return dispatchOrchestratorAction(slug, "")
+		// Pass activeStage as a hint so derivePosition doesn't recompute
+		// from the stage-branch view (where signed-but-unmerged units
+		// would lie and suppress merge_stage). When we couldn't compute
+		// activeStage above, pass undefined so derivePosition falls back
+		// to its own walk.
+		return dispatchOrchestratorAction(
+			slug,
+			"",
+			activeStage ? activeStage : null,
+		)
 	} finally {
 		process.chdir(origCwd)
 	}

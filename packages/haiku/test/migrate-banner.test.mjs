@@ -135,7 +135,7 @@ test("first tick on a v3 intent returns action: 'migrated' with details", () => 
 	)
 	assert.match(
 		msg,
-		/firstUnmergedStage|derived|derives/i,
+		/findCurrentStage|derived|derives/i,
 		"message must explain v4 derives stage position from git",
 	)
 	assert.match(

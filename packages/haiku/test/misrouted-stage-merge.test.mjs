@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 // misrouted-stage-merge.test.mjs — Coverage for the "User A merged the
 // stage PR into the repo default branch instead of `haiku/<slug>/main`"
-// recovery path. The cursor's `firstUnmergedStage` checks against the
+// recovery path. The cursor's `findCurrentStage` checks against the
 // intent main branch; if the merge landed on the wrong target the
 // engine has to fast-forward intent main to recover. Without this
 // reconciliation, User B's `/haiku:pickup` wedges forever — the stage
@@ -13,7 +13,7 @@
 //      reconciliation needed, returns misrouted: false.
 //   2. misroute: stage merged into `main` (repo default), intent main
 //      is FF-able to main → reconcileMisroutedStageMerges performs the
-//      fast-forward and the cursor's firstUnmergedStage returns the
+//      fast-forward and the cursor's findCurrentStage returns the
 //      next stage (i.e. the misrouted stage is now correctly seen as
 //      merged).
 //   3. divergence: stage merged into `main` but intent main has

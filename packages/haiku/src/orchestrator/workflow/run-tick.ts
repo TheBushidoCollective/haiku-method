@@ -44,6 +44,15 @@ export interface WorkflowTickResult {
 export function runWorkflowTick(
 	slug: string,
 	root?: string,
+	/**
+	 * Active stage computed by the caller on intent main BEFORE any
+	 * branch dance. Threaded into `derivePosition` to bypass its
+	 * recompute-from-cwd, which would lie when the working tree is on
+	 * the active stage branch (signed-but-unmerged units exist there
+	 * and look "done"). Pass `undefined` to let derivePosition fall
+	 * back to its own walk — fine for most tests.
+	 */
+	activeStageHint?: string | null,
 ): WorkflowTickResult | null {
 	// `intentDir` resolves against the current haiku root (cwd-driven).
 	// `root` is forwarded to migrateIntent below as repoRoot for ctx;
@@ -200,7 +209,7 @@ export function runWorkflowTick(
 					lines.push("")
 					lines.push("**What v4 derives instead of stores**:")
 					lines.push(
-						"- Active stage: derived from the current branch name on a stage branch, or by walking intent main's filesystem (`activeStageFromBranchOrFilesystem` → `firstUnmergedStage`)",
+						"- Active stage: derived by walking intent main's filesystem (`findCurrentStage` reads per-stage unit FM)",
 					)
 					lines.push("- Current phase: decided per-tick by the cursor walk")
 					lines.push(
@@ -294,7 +303,12 @@ export function runWorkflowTick(
 
 	// Cursor walk — pure read. Returns the next CursorAction (or null
 	// for mid-wave noop).
-	const position = derivePosition({ slug, intentDir: iDir, studio })
+	const position = derivePosition({
+		slug,
+		intentDir: iDir,
+		studio,
+		activeStageHint,
+	})
 	const action = position.action
 		? cursorActionToOrchestratorAction(slug, position.action)
 		: null
@@ -309,8 +323,9 @@ export function runWorkflowTick(
 export function dispatchOrchestratorAction(
 	slug: string,
 	root?: string,
+	activeStageHint?: string | null,
 ): OrchestratorAction {
-	const tick = runWorkflowTick(slug, root)
+	const tick = runWorkflowTick(slug, root, activeStageHint)
 	if (!tick) {
 		return { action: "error", message: `Intent '${slug}' not found` }
 	}

@@ -486,7 +486,7 @@ export default defineTool({
 				// MR lands on the intent main branch (NOT the repo
 				// default). This was a real footgun — agents would run
 				// `gh pr create` without --base and the PR would target
-				// the repo default, breaking firstUnmergedStage detection
+				// the repo default, breaking findCurrentStage detection
 				// for downstream pickup. The engine now does it
 				// programmatically; if both gh and glab fail, we surface
 				// the provider-specific compare URL so the user can open

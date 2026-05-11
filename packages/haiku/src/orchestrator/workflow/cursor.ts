@@ -25,7 +25,7 @@
 // Stages are NEVER sealed — only intents are. A previously-merged
 // stage that gains a new unit (e.g. because the feedback engine added
 // corrective work) becomes ahead-of-main and the cursor automatically
-// rewinds to it via firstUnmergedStage. merge_stage is a recurring
+// rewinds to it via findCurrentStage. merge_stage is a recurring
 // event, not a terminal one. Forward-only applies to existing units'
 // bytes (immutable post-merge), not to whether a stage is "done."
 //
@@ -48,7 +48,6 @@
 //                 gate, no agent gates, merge_stage auto-fires once
 //                 quality_gates is signed
 
-import { execFileSync } from "node:child_process"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import matter from "gray-matter"
@@ -300,77 +299,95 @@ export function pendingApprovalSlots(
 	return configuredRoles.filter((r) => !approvals[r])
 }
 
-/**
- * Determine the active stage for the cursor walk.
- *
- *   - When the working tree is on a stage branch
- *     (`haiku/<slug>/<stage>` where stage != "main"), the branch name
- *     is the source of truth. Calling `firstUnmergedStage` here would
- *     lie — the stage branch's tree carries the in-flight unit work
- *     that intent main doesn't, so `firstUnmergedStage` would walk
- *     past the active stage.
- *   - Otherwise (intent main, repo default, anywhere else), walk
- *     intent main's filesystem via `firstUnmergedStage`.
- *
- * The caller (`haiku_run_next` / `runTickWithBranchAlignment`)
- * arranges for the working tree to be on the appropriate branch
- * before the cursor walk. This shortcut just reads the branch name
- * the caller already set up.
- */
-function activeStageFromBranchOrFilesystem(
-	slug: string,
-	studio: string,
-): string | null {
-	// The principle: the signal of WHERE we are is on disk at intent
-	// main. The branch-name shortcut below is only valid AFTER the
-	// caller has run the branch dance in haiku_run_next.ts (switch to
-	// intent main → firstUnmergedStage → switch to that stage). At that
-	// point currentBranch IS the active stage and the shortcut is
-	// correct + cheaper than a second filesystem walk against the stage
-	// branch's tree (which has different content than intent main).
-	//
-	// Failure mode this guards against: tree parked on a long-since-
-	// merged stage. The branch dance already realigned to the right
-	// stage, so currentBranch is correct. The user's regression was
-	// caused by the (now-deleted) discovery sweep, not by this
-	// shortcut. See gigsmart/haiku-method#333.
-	const stagePrefix = `haiku/${slug}/`
-	const currentBranch = currentBranchName()
-	if (currentBranch.startsWith(stagePrefix)) {
-		const tail = currentBranch.slice(stagePrefix.length)
-		if (tail !== "main" && tail.length > 0) {
-			const stages = resolveStudioStages(studio)
-			if (stages.includes(tail)) return tail
+// activeStageFromBranchOrFilesystem and currentBranchName deleted
+// 2026-05-10. Cursor position is filesystem-only, never git topology.
+// Callers walk files via `findCurrentStage` regardless of which
+// branch they happen to be on — the pre-tick keeps every stage branch
+// fast-forwarded to intent main, so unit files for past stages exist
+// on disk under every active branch, and the FM walk lands on the
+// same answer from anywhere.
+
+// ── Per-unit / per-stage completion predicates ───────────────────────
+//
+// Each predicate is a small, named yes/no question over disk state.
+// `findCurrentStage` composes them as `first stage where !isStageComplete`.
+// The names read like English at the call sites: "is this unit complete?",
+// "are this stage's units complete?", "is this stage complete?".
+//
+// "Complete" means "no further cursor work needed at this position." It
+// does NOT mean "merged into intent main" — that's a separate concept the
+// runtime layers on top via the `activeStageHint` (the dance computes
+// completion on intent main's tree, where signed-but-unmerged units don't
+// exist yet, so the cursor pins on the stage that owes a merge).
+
+function approvalRolesFor(studio: string, stage: string, mode: string): string[] {
+	const reviewAgents = Object.keys(readReviewAgentPaths(studio, stage)).sort()
+	return mode === "autopilot"
+		? ["spec", "quality_gates"]
+		: ["spec", "quality_gates", ...reviewAgents, "user"]
+}
+
+function hasStarted(fm: UnitFm): boolean {
+	return typeof fm.started_at === "string" && (fm.started_at as string).length > 0
+}
+
+function isUnitTerminallyAdvanced(fm: UnitFm, lastHat: string): boolean {
+	const its = pickIterations(fm)
+	if (its.length === 0) return false
+	const last = its[its.length - 1]
+	return last.result === "advance" && last.hat === lastHat
+}
+
+function isUnitFullyApproved(fm: UnitFm, approvalRoles: string[]): boolean {
+	const approvals = pickApprovals(fm)
+	for (const role of approvalRoles) {
+		const record = approvals[role]
+		if (
+			!record ||
+			typeof record !== "object" ||
+			typeof (record as { at?: unknown }).at !== "string"
+		) {
+			return false
 		}
 	}
-	return firstUnmergedStage(slug, studio)
-}
-
-function currentBranchName(): string {
-	try {
-		return execFileSync("git", ["branch", "--show-current"], {
-			encoding: "utf8",
-			stdio: ["ignore", "pipe", "pipe"],
-		}).trim()
-	} catch {
-		return ""
-	}
+	return true
 }
 
 /**
- * Is every unit in this stage fully signed-off? "Fully signed" =
- * every unit has its last iteration as a terminal advance on the
- * last hat AND every required role on `approvals.<role>.at` carries
- * a timestamp.
+ * Is this unit past (no longer needing cursor work)?
  *
- * In git mode this is a redundant signal — intent main only carries
- * stages whose branches were merged, and merging only happens after
- * every gate signs. But in fs mode (no branches) it's the only way
- * to distinguish "merged-state" from "in-flight" without falling
- * back to a stamp: the cursor's per-stage cascade itself wouldn't
- * fire if `firstUnmergedStage` walked past unsigned stages.
+ * A unit is PAST when one of:
+ *   (a) `started_at` set + no iterations — v3-migrated /
+ *       merged-from-elsewhere placeholder. The migrator dropped per-unit
+ *       history; treat file presence (with `started_at`) as proof that
+ *       this stage's work happened. Fix-loop semantics live in Track B.
+ *   (b) Iterations end in a terminal advance on the last hat AND every
+ *       required approval role on `approvals.<role>.at` is stamped.
+ *
+ * Otherwise the unit is CURRENT (pins the cursor):
+ *   - `started_at` null → wave-ready, OR
+ *   - Iterations exist but not terminal-advance → mid-flight, OR
+ *   - Terminal-advance but missing approvals → review/approval phase.
  */
-function isStageFullySigned(
+function isUnitComplete(
+	fm: UnitFm,
+	lastHat: string,
+	approvalRoles: string[],
+): boolean {
+	const started = hasStarted(fm)
+	const its = pickIterations(fm)
+	if (started && its.length === 0) return true // (a) placeholder
+	if (!started) return false
+	if (!isUnitTerminallyAdvanced(fm, lastHat)) return false
+	return isUnitFullyApproved(fm, approvalRoles) // (b) full lifecycle
+}
+
+/**
+ * Are every unit in this stage complete? "Complete" per `isUnitComplete`.
+ * Returns false when no units exist (the stage hasn't been decomposed yet
+ * — the cursor pins so `decompose` / `elaborate` can fire).
+ */
+function areStageUnitsComplete(
 	intentDir: string,
 	studio: string,
 	stage: string,
@@ -382,77 +399,68 @@ function isStageFullySigned(
 	if (unitFiles.length === 0) return false
 
 	const hats = resolveStageHats(studio, stage)
-	// No hats configured = stage definition broken or unloaded.
-	// Conservative answer: not fully signed (don't walk past). Without
-	// this guard, `lastHat` is `undefined` and `last.hat !== undefined`
-	// is always true — every unit fails the iteration check, the
-	// function always returns false, and the cursor pins to the stage
-	// forever. Same gap exists in walkUnitApprovalTrack's terminal-hat
-	// check (~line 617) and is fixed there too.
+	// No hats configured = stage definition broken or unloaded. Conservative
+	// answer: not complete (don't walk past). Without this guard, `lastHat`
+	// is `undefined` and every unit fails the iteration check, so the
+	// function always returns false — but for the wrong reason. Better to
+	// fail fast and visibly here.
 	if (hats.length === 0) return false
 	const lastHat = hats[hats.length - 1]
-	const reviewAgentPaths = readReviewAgentPaths(studio, stage)
-	const reviewAgents = Object.keys(reviewAgentPaths).sort()
-	const isAutopilot = mode === "autopilot"
-	const approvalRoles: string[] = isAutopilot
-		? ["spec", "quality_gates"]
-		: ["spec", "quality_gates", ...reviewAgents, "user"]
+	const approvalRoles = approvalRolesFor(studio, stage, mode)
 
 	for (const file of unitFiles) {
 		const fm = readFm(join(unitsDir, file))?.data
 		if (!fm) return false
-		// Last hat advanced?
-		const its = pickIterations(fm)
-		if (its.length === 0) return false
-		const last = its[its.length - 1]
-		if (last.result !== "advance" || last.hat !== lastHat) return false
-		// Every approval role signed?
-		const approvals = pickApprovals(fm)
-		for (const role of approvalRoles) {
-			const record = approvals[role]
-			if (
-				!record ||
-				typeof record !== "object" ||
-				typeof (record as { at?: unknown }).at !== "string"
-			) {
-				return false
-			}
-		}
+		if (!isUnitComplete(fm, lastHat, approvalRoles)) return false
 	}
 	return true
 }
 
 /**
- * First stage whose work hasn't landed on intent main yet — the stage
- * the cursor is currently positioned in.
- *
- * **The signal is intent main's own filesystem.** A stage's work
- * lives in `stages/<stage>/units/*.md`; when the stage merges into
- * intent main, those files come with it. So:
- *
- *   - first stage whose `units/` is missing or empty on intent main
- *     = the stage that hasn't been finished yet.
- *
- * That's the entire derivation. No `git log`, no `merge-base`, no
- * `stages_merged` stamp, no commit-message grep. The disk state of
- * intent main IS the truth of which stages are done.
- *
- * **Caller contract**: the working tree must be checked out on
- * `haiku/<slug>/main`. `haiku_run_next` enforces this before calling
- * the cursor — that's the whole point of the two-step branch dance:
- *   1. on intent main, walk filesystem → name the active stage
- *   2. switch to that stage's branch → walk the per-stage cascade
- *      against the in-flight unit work that lives there
- *
- * Reading from any other branch lies: a stage branch carries
- * in-flight unit work that hasn't been merged yet, so it would name
- * the wrong "current" stage. The caller-on-intent-main invariant is
- * load-bearing.
- *
- * Same logic applies in filesystem-only (non-git) mode — the
- * "intent main filesystem" just IS the working tree.
+ * Is this stage complete? Currently equivalent to "all units complete";
+ * elaboration / discovery / merge state are handled by the per-stage
+ * walk (`walkIntentTrack`), not by the active-stage selector.
  */
-export function firstUnmergedStage(
+function isStageComplete(
+	intentDir: string,
+	studio: string,
+	stage: string,
+	mode: string,
+): boolean {
+	return areStageUnitsComplete(intentDir, studio, stage, mode)
+}
+
+/**
+ * Find the stage the cursor is currently positioned in — the first
+ * stage that isn't complete on disk.
+ *
+ * **The signal is per-unit FM, not file existence and not git
+ * topology.** For each stage in order, ask `isStageComplete`. The first
+ * stage where the answer is "no" is the current one.
+ *
+ * Why FM and not file existence: a stage's unit files can be present
+ * on disk for two distinct reasons —
+ *   (a) the stage was previously fully signed and merged into intent
+ *       main, bringing the signed unit files with it; OR
+ *   (b) feedback / drift / a corrective bolt added new units to a
+ *       stage that was previously "done"; the new units exist but
+ *       their FM is unsigned.
+ * File-existence alone treats (a) and (b) identically and walks past
+ * the rewound stage. FM distinguishes them.
+ *
+ * **Branch-agnostic**: this returns the same answer from any branch
+ * because the pre-tick fast-forwards every active stage branch with
+ * intent main, so units from past stages are present on disk under
+ * every checkout. The walk's signal is per-unit FM, never the branch
+ * name. Same semantics in filesystem-only (non-git) mode — there are
+ * no branches, so "the tree" IS the working tree.
+ *
+ * Open feedback and drift events don't enter into this walk — they're
+ * handled by Track B and Track C in `derivePosition`, which preempt
+ * Track A. A previously-signed stage with an open FB still gets
+ * rewound through that path. See gigsmart/haiku-method#333.
+ */
+export function findCurrentStage(
 	slug: string,
 	studio: string,
 ): string | null {
@@ -460,46 +468,15 @@ export function firstUnmergedStage(
 	if (stages.length === 0) return null
 	const root = primaryRepoRoot()
 	const intentDir = join(root, ".haiku", "intents", slug)
-	const isGit = (() => {
-		try {
-			return existsSync(join(root, ".git"))
-		} catch {
-			return false
-		}
-	})()
 
-	if (!isGit) {
-		// Fs mode: no branches, so "stage X has units on disk" doesn't
-		// distinguish merged from in-flight — they live in the same
-		// tree throughout the stage's lifecycle. Derive the merged
-		// signal from per-unit signature state instead: a stage is
-		// "merged-state" iff every unit's last iteration is terminal
-		// advance on the last hat AND every required approval role is
-		// signed. Pure disk read on existing FM, no stamp needed.
-		const intentMdPath = join(intentDir, "intent.md")
-		const intentFm = readFm(intentMdPath)?.data
-		const mode =
-			typeof intentFm?.mode === "string" && intentFm.mode.length > 0
-				? (intentFm.mode as string)
-				: "continuous"
-		for (const stage of stages) {
-			if (!isStageFullySigned(intentDir, studio, stage, mode)) return stage
-		}
-		return null
-	}
-
-	// Git mode: walk the WORKING TREE filesystem, not a git ref. The
-	// disk is the source of truth — `git ls-tree` is "looking at git"
-	// and violates the principle. The caller is responsible for being
-	// on intent main (or any branch whose tree is consistent with intent
-	// main, since the engine maintains the invariant that stage branches
-	// are always ahead of main, never behind, via `ensureOnStageBranch`'s
-	// ff-merge of main on entry). See gigsmart/haiku-method#333.
+	const intentMdPath = join(intentDir, "intent.md")
+	const intentFm = readFm(intentMdPath)?.data
+	const mode =
+		typeof intentFm?.mode === "string" && intentFm.mode.length > 0
+			? (intentFm.mode as string)
+			: "continuous"
 	for (const stage of stages) {
-		const unitsDir = join(intentDir, "stages", stage, "units")
-		if (!existsSync(unitsDir)) return stage
-		const mdFiles = readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-		if (mdFiles.length === 0) return stage
+		if (!isStageComplete(intentDir, studio, stage, mode)) return stage
 	}
 	return null
 }
@@ -916,8 +893,27 @@ export function derivePosition(args: {
 	slug: string
 	intentDir: string
 	studio: string
+	/**
+	 * Optional active-stage hint, computed by the caller on intent main
+	 * BEFORE any branch dance. When provided, derivePosition uses this
+	 * value instead of recomputing via `findCurrentStage` from the
+	 * current working tree. This matters because the runtime typically
+	 * checks out the active stage's branch before calling derivePosition
+	 * (so walkIntentTrack can see in-flight unit work). On the stage
+	 * branch, signed-but-not-yet-merged units exist on disk — a fresh
+	 * `findCurrentStage` call from there would walk past the active
+	 * stage (it looks "done") and the cursor would emit intent_review
+	 * instead of merge_stage.
+	 *
+	 * Pass null to mean "no active stage" (every stage is past on intent
+	 * main — fall through to intent-level approvals).
+	 *
+	 * Omit (undefined) for legacy / test callers; derivePosition falls
+	 * back to `findCurrentStage` from the current tree.
+	 */
+	activeStageHint?: string | null
 }): CursorPosition {
-	const { slug, intentDir, studio } = args
+	const { slug, intentDir, studio, activeStageHint } = args
 
 	// Read intent.md once — needed for mode (cursor walk shape) and
 	// for intent-scope approvals (terminal leg).
@@ -983,7 +979,7 @@ export function derivePosition(args: {
 				firstStageDir && existsSync(firstStageDir)
 					? listUnitPaths(firstStageDir).length > 0
 					: false
-			const activeForGate = activeStageFromBranchOrFilesystem(slug, studio)
+			const activeForGate = findCurrentStage(slug, studio)
 			const isTrulyFresh = activeForGate === firstStage && !firstStageHasUnits
 			if (isTrulyFresh) {
 				return {
@@ -995,26 +991,20 @@ export function derivePosition(args: {
 		}
 	}
 
-	// Determine the active stage. The new disk-state cursor model
-	// (cursor-disk-state-stage-walk) says intent main's filesystem is
-	// the canonical source for "which stages have landed":
-	//
-	//   - When the working tree is on intent main, walk the filesystem.
-	//   - When the working tree is on a stage branch (where the
-	//     in-flight unit work lives), the branch name itself names
-	//     the active stage — `firstUnmergedStage` would lie if called
-	//     here because the stage branch's tree HAS the units that
-	//     intent main does not.
-	//
-	// `haiku_run_next` ensures the working tree is on the right
-	// branch before this function runs, so the branch-name shortcut
-	// is reliable. Tests use `runTickWithBranchAlignment` to do the
-	// same dance.
-	//
-	// When every stage is merged, `firstUnmergedStage` returns null
-	// and we fall through to intent-level approvals (Track A only
-	// fires when there's an active stage).
-	const activeStage = activeStageFromBranchOrFilesystem(slug, studio)
+	// Active stage. The caller (haiku_run_next, runWorkflowTick) should
+	// have already computed this on intent main BEFORE any branch dance,
+	// because computing it here on the stage branch would lie:
+	// signed-but-not-yet-merged units exist on the stage branch's disk
+	// view, so `findCurrentStage` from there walks past and returns the
+	// next stage (or null), and we'd emit intent_review when we should
+	// have emitted merge_stage. When the caller didn't pass a hint
+	// (legacy paths, isolated unit tests), fall back to the from-cwd
+	// walk — the test fixtures that omit the hint don't trigger the
+	// signed-but-unmerged scenario.
+	const activeStage =
+		activeStageHint !== undefined
+			? activeStageHint
+			: findCurrentStage(slug, studio)
 
 	// Track C — drift sweep, only against the active stage.
 	if (activeStage) {

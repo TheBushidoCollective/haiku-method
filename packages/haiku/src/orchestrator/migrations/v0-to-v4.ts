@@ -167,12 +167,11 @@ function tryMigrateFile(
 		console.warn(
 			`[haiku-migrate-v0-to-v4] Skipped ${context} at ${path} due to parse error: ${msg}. The file is preserved as-is; fix the YAML and re-tick to migrate.`,
 		)
-		// Telemetry so silent migration skips surface in dashboards
-		// without needing to grep server logs. The original Chris
-		// session shape — migrator partially completed, some units
-		// stayed v3, cursor pinned forever — was invisible until I
-		// inspected the on-disk files by hand. This makes the same
-		// failure show up in OTel/Sentry as it happens.
+		// Telemetry so silent migration skips surface in dashboards —
+		// console.warn is invisible in MCP sessions, and partial-
+		// migration wedges (some units v4-stamped, others stranded
+		// in v3) only show up post-hoc when someone inspects the
+		// on-disk files by hand.
 		emitTelemetry("haiku.migrator.unit_skip", {
 			path,
 			context,

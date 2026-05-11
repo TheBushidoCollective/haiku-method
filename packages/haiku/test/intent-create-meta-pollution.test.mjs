@@ -1,12 +1,12 @@
 #!/usr/bin/env npx tsx
 // intent-create-meta-pollution.test.mjs
 //
-// Reported 2026-05-11 by Tara: she said "I want to start an intent only
-// with the inception phase." Claude obediently called haiku_intent_create
-// with description = "Tara only wants to run this in the inception phase."
-// The intent's description became metadata about workflow shape, not the
-// actual subject of work she wanted to do. The engine owns studio / mode /
-// stage selection via the SPA picker; the description should be substance.
+// Failure mode this guards against: a user says "I want to start an
+// intent only with the inception phase." The agent obediently passes
+// that phrasing through as the intent's description, which becomes
+// workflow-shape commentary instead of the subject of work the user
+// wanted done. The engine owns studio / mode / stage selection via the
+// SPA picker; the description should be substance.
 //
 // This test pins the guard: when title or description contains
 // workflow-meta phrasing, haiku_intent_create returns
@@ -62,11 +62,11 @@ function withTmpRepo(fn) {
 
 // ── Pollution rejected ────────────────────────────────────────────
 
-test("rejects: 'only with the inception phase' (Tara's exact case)", () => {
+test("rejects: 'only with the inception phase' (the reported user phrasing)", () => {
 	withTmpRepo(() => {
 		const res = intentCreate.handle({
 			title: "Some Intent",
-			description: "Tara only wants to run this in the inception phase.",
+			description: "only wants to run this in the inception phase.",
 		})
 		const j = getJson(res)
 		assert.strictEqual(j.error, "intent_create_meta_pollution")
@@ -183,5 +183,49 @@ test("accepts: 'development environment' as ordinary tech jargon", () => {
 		})
 		const j = getJson(res)
 		assert.notStrictEqual(j.error, "intent_create_meta_pollution")
+	})
+})
+
+test("accepts: 'the yoga studio' as a domain noun (physical studio)", () => {
+	// Regression: an earlier pattern `(use|using|in|with|the) X studio`
+	// false-positived on "the <word> studio" for ANY word — including
+	// real businesses like yoga, recording, tattoo, art. Narrowed to
+	// directive verbs only (`use`/`using`) so domain content passes.
+	withTmpRepo(() => {
+		const res = intentCreate.handle({
+			title: "Yoga studio booking system",
+			description:
+				"Build a booking and scheduling system for the yoga studio chain so instructors can manage classes and members can reserve spots.",
+		})
+		const j = getJson(res)
+		assert.notStrictEqual(j.error, "intent_create_meta_pollution")
+	})
+})
+
+test("accepts: 'recording studio' as a domain noun", () => {
+	withTmpRepo(() => {
+		const res = intentCreate.handle({
+			title: "Session manager for the recording studio",
+			description:
+				"The recording studio needs a session manager that tracks track lists, takes, and final mixes per project.",
+		})
+		const j = getJson(res)
+		assert.notStrictEqual(j.error, "intent_create_meta_pollution")
+	})
+})
+
+test("rejects: both title and description polluted — `where: 'title and description'`", () => {
+	withTmpRepo(() => {
+		const res = intentCreate.handle({
+			title: "Build in autopilot mode",
+			description: "Only with the inception phase.",
+		})
+		const j = getJson(res)
+		assert.strictEqual(j.error, "intent_create_meta_pollution")
+		assert.strictEqual(
+			j.where,
+			"title and description",
+			"`where` must report both when both contain pollution",
+		)
 	})
 })

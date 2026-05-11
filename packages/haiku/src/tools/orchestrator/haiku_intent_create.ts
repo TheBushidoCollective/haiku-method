@@ -41,15 +41,14 @@ import { text } from "./_text.js"
  * phrases that name engine-managed configuration (mode, studio, stage,
  * phase) instead of describing what the user wants to build.
  *
- * Real-world failure mode (reported 2026-05-11): user says "I want to
- * start an intent only with the inception phase." The agent calls
- * haiku_intent_create with description = "Tara only wants to run this
- * in the inception phase." That sentence is configuration intent, not
- * substance — and once it lands as the intent's description, the
- * actual subject of work is lost. The engine has dedicated selection
- * tools (haiku_select_studio / haiku_select_mode / haiku_select_stage)
- * with elicitation pickers; the description field is reserved for
- * what the user wants to ACCOMPLISH.
+ * Failure mode this guards against: the user says "I want to start
+ * an intent only with the inception phase." The agent obediently
+ * passes that phrasing through as the intent's description. The
+ * description ends up as workflow-shape commentary instead of the
+ * subject of work the user wanted done. The engine has dedicated
+ * selection tools (haiku_select_studio / haiku_select_mode /
+ * haiku_select_stage) with elicitation pickers; the description
+ * field is reserved for what the user wants to ACCOMPLISH.
  *
  * Patterns flagged:
  *   - "in X mode" / "X-mode" / "only X mode" / "use X mode"
@@ -110,10 +109,12 @@ function detectWorkflowMetaPollution(s: string): string | null {
 			),
 			label: "stage / phase reference",
 		},
-		// "use the software studio" / "in the software studio" — `studio`
-		// is workflow-meta in any qualifying position
+		// "use the software studio" / "using the design studio" — flag
+		// only directive verbs ("use", "using"). Anchoring on `in`,
+		// `with`, or `the` would false-positive on legitimate domain
+		// uses like "the yoga studio" / "the recording studio".
 		{
-			re: /\b(?:use|using|in|with|the)\s+(?:the\s+)?\w+\s+studio\b/i,
+			re: /\b(?:use|using)\s+(?:the\s+)?\w+\s+studio\b/i,
 			label: "studio reference",
 		},
 		// Bare "studio:" / "mode:" / "stages:" — looks like the agent

@@ -174,6 +174,30 @@ test("deadlock-detector: a fresh signature in the window resets the churn latch"
 	)
 })
 
+test("deadlock-detector: A→A→A→B fires churn on B's arrival", () => {
+	// Intended contract: when the recent window narrows to 2 distinct
+	// signatures with the most recent tick being a transition, that's
+	// churn — even when the prior signature repeated. The `suspected`
+	// signal fired at tick 2 (A→A), and the churn signal fires at
+	// tick 4 (when B arrives and the window becomes [A,A,A,B]: distinct
+	// size = 2, > 1, ≤ CHURN_MAX_DISTINCT). The two signals are
+	// independent observations of the same wedge; both firing is
+	// expected and useful — dashboards can correlate them.
+	__resetDeadlockDetector()
+	const A = { action: "dispatch_review", role: "spec" }
+	const B = { action: "merge_stage", stage: "design" }
+	recordTickResult("slug-l", A) // count=1
+	recordTickResult("slug-l", A) // count=2 (suspected fires)
+	recordTickResult("slug-l", A) // count=3 (suspected silent)
+	recordTickResult("slug-l", B) // recent=[A,A,A,B] → churn fires
+	const h = __getTickHistoryForTests("slug-l")
+	assert.strictEqual(
+		h.churn_fired,
+		true,
+		"A→A→A→B must fire churn when B's arrival narrows the window to 2 distinct sigs",
+	)
+})
+
 test("deadlock-detector: healthy progression (A→B→C→D distinct) does NOT trigger churn", () => {
 	__resetDeadlockDetector()
 	recordTickResult("slug-k", { action: "elaborate", stage: "inception" })
@@ -207,6 +231,7 @@ test("deadlock-detector integration: runWorkflowTick records every emitted actio
 
 	const __filename = fileURLToPath(import.meta.url)
 	const __dirname = dirname(__filename)
+	const origPluginRoot = process.env.CLAUDE_PLUGIN_ROOT
 	process.env.CLAUDE_PLUGIN_ROOT = resolve(
 		__dirname,
 		"..",
@@ -266,5 +291,10 @@ test("deadlock-detector integration: runWorkflowTick records every emitted actio
 	} finally {
 		process.chdir(origCwd)
 		rmSync(root, { recursive: true, force: true })
+		if (origPluginRoot === undefined) {
+			delete process.env.CLAUDE_PLUGIN_ROOT
+		} else {
+			process.env.CLAUDE_PLUGIN_ROOT = origPluginRoot
+		}
 	}
 })

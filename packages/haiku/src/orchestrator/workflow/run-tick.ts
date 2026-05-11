@@ -105,8 +105,11 @@ export function runWorkflowTick(
 		// state.json files come back from main's pre-migration state.
 		// Without this branch, intent.md's `plugin_version: "4.0.0"`
 		// would short-circuit the gate and the v3 files would sit forever.
-		// hasV3CruftInIntent reads at most one unit + one fb + state.json
-		// per stage, so the per-tick cost is bounded and small.
+		// hasV3CruftInIntent scans intent.md, every unit file under
+		// every stage, and the state.json sentinel — the per-tick cost
+		// is bounded by the intent's unit count. We walk every unit
+		// (not just the first) so a partial migration that stamped
+		// some units v4 but left others v3 still triggers re-migration.
 		const v3CruftPresent =
 			sourceMajor === targetMajor && hasV3CruftInIntent(iDir)
 		if (sourceMajor !== targetMajor || v3CruftPresent) {

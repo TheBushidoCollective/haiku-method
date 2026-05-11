@@ -7309,6 +7309,16 @@ export function handleStateTool(
 			//      calls that may switch the working tree).
 			//   2. The unit's actual on-disk location (working-tree truth).
 			//   3. The `active_stage` cache (legacy / brand-new unit path).
+			//
+			// Note: `findUnitFile` runs even when `args.stage` is supplied.
+			// Unlike `advance_hat` / `reject_hat` where the unit file MUST
+			// already exist on disk, `start` is the CREATE path — the file
+			// may not exist yet (brand-new unit). When the unit doesn't
+			// exist, findUnitFile returns null and we fall through to the
+			// cache. Skipping the call when args.stage is set would change
+			// no observable behavior here (findUnitFile is a no-op cost
+			// when the file doesn't exist) but it would obscure the fallback
+			// chain. Keeping it makes the priority order self-documenting.
 			const startUnitInfo = findUnitFile(
 				args.intent as string,
 				args.unit as string,

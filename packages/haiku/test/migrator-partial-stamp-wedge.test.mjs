@@ -66,6 +66,13 @@ function setupPartialStampIntent() {
 	const unitsDir = join(intentDir, "stages/inception/units")
 	mkdirSync(unitsDir, { recursive: true })
 
+	// intent.md is clean v4 — no DEPRECATED_INTENT_FIELDS keys
+	// (active_stage, status, phase). This is deliberate: the wedge
+	// under test is specifically about the UNIT sentinel skipping
+	// the cruft check when the first unit happens to be v4-shape.
+	// If intent.md itself contained v3 fields, the sentinel would
+	// fire on intent.md before even reaching the unit walk, and
+	// the test would pass even if the unit-walk fix was reverted.
 	writeFileSync(
 		join(intentDir, "intent.md"),
 		`---
@@ -73,9 +80,7 @@ title: Reimagine admin portal as operator-first tool
 studio: software
 mode: continuous
 plugin_version: 4.0.0
-active_stage: inception
 stages: [inception, design, product, development, operations, security]
-status: active
 ---
 
 body

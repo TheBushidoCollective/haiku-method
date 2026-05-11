@@ -19,9 +19,13 @@
 
 import {
 	HAIKU_AWAIT_GATE_INPUT_SCHEMA,
+	HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA,
+	HAIKU_INTENT_SEAL_INPUT_SCHEMA,
 	HAIKU_SELECT_MODE_INPUT_SCHEMA,
 	HAIKU_SELECT_STAGE_INPUT_SCHEMA,
 	HAIKU_SELECT_STUDIO_INPUT_SCHEMA,
+	HAIKU_STAGE_ELABORATION_RECORD_INPUT_SCHEMA,
+	HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA,
 } from "../state/schemas/index.js"
 import { jsonSchemaOf } from "../state/schemas/inputs/_validate.js"
 
@@ -280,6 +284,30 @@ export const orchestratorToolDefs = [
 			},
 			required: ["intent_slug", "path", "content"],
 		},
+	},
+	{
+		name: "haiku_intent_seal",
+		description:
+			"Stamp `verified_at` on intent.md frontmatter after the pre-intent substance verifier passes. The verifier subagent (dispatched via the cursor's pre-intent `elaborate_review` action) calls this on a pass; the outer agent must NOT call it directly. Stamps the verification timestamp and optional notes, freeing the cursor to walk into the first stage's elaborate gate. Idempotent (no-op when already verified). Lands on intent main, not a stage branch — the seal precedes any stage walk.",
+		inputSchema: jsonSchemaOf(HAIKU_INTENT_SEAL_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_stage_elaboration_record",
+		description:
+			"Capture the per-stage human-conversation outcome at `stages/<stage>/elaboration.md`. Call this when the conversation with the user has reached alignment for the active stage's `elaborate` action. The artifact's frontmatter records `recorded_at`; `verified_at` is stamped separately by the verifier subagent via `haiku_stage_elaboration_seal`. Overwrites any prior artifact (clearing a stale `verified_at`). Cursor stays at `elaborate_review` until the verifier seals the artifact.",
+		inputSchema: jsonSchemaOf(HAIKU_STAGE_ELABORATION_RECORD_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_stage_elaboration_seal",
+		description:
+			"Stamp `verified_at` on the per-stage elaboration artifact's frontmatter. The verifier subagent (dispatched via the cursor's `elaborate_review` action) calls this on a pass; the outer agent must NOT call it directly. Stamps the verification timestamp and optional notes, freeing the cursor to advance past `elaborate_review`. Idempotent (no-op when already verified).",
+		inputSchema: jsonSchemaOf(HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_discovery_complete",
+		description:
+			"Discovery subagent's completion hand-off. Merges the discovery worktree's branch back into its stage branch under a per-stage lock. Call AFTER committing your artifact inside the isolation worktree. Returns `{ ok: true }` on clean merge, `discovery_merge_conflict` with `conflict_files` on a real conflict, `discovery_merge_failed` with the git error on other failures, `intent_not_found` when the intent dir is missing, `worktree_not_found` when the discovery worktree doesn't exist (already merged or never created).",
+		inputSchema: jsonSchemaOf(HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_record_agent_write",

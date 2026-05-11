@@ -148,9 +148,18 @@ export const validateIntentFrontmatterSchema = stateAjv.compile(
 	INTENT_FRONTMATTER_SCHEMA,
 )
 
+// Schema's `properties` enumerates every field — including the FSM-driven
+// ones that `propertyNames.not.enum` rejects at write time. If we exposed
+// the raw keys as "agent-authorable," the haiku_intent_set tool description
+// would advertise fields like `verified_at`/`verified_notes`/`mode` as
+// settable while the schema actually denies the write — a self-contradicting
+// surface that confuses agents and triggers the `fsm_field_forbidden` /
+// `propertyNames-not` error. Subtract the FSM-driven list so the surfaced
+// names match what AJV will accept.
+const FSM_DRIVEN_SET = new Set<string>(FSM_DRIVEN_INTENT_FIELDS_LIST)
 export const AGENT_AUTHORABLE_INTENT_FIELDS = Object.keys(
 	INTENT_FRONTMATTER_SCHEMA.properties ?? {},
-) as ReadonlyArray<string>
+).filter((k) => !FSM_DRIVEN_SET.has(k)) as ReadonlyArray<string>
 
 export const FSM_DRIVEN_INTENT_FIELDS = FSM_DRIVEN_INTENT_FIELDS_LIST
 

@@ -4208,7 +4208,25 @@ function enforceStageBranch(
 	return null
 }
 
-/** Find a unit file by searching through stages. Returns { path, stage } or null. */
+/**
+ * Find a unit file by searching through stages. Returns { path, stage }
+ * or null.
+ *
+ * Lookup order:
+ *   1. Active stage in the current working tree (fast happy path).
+ *   2. Every stage dir on disk under `stages/`.
+ *   3. (git mode only) Every `haiku/<slug>/<stage>` branch via
+ *      `git cat-file -e`. Returns the path as it WOULD be on disk
+ *      if the branch were checked out — caller is expected to
+ *      enforce the branch before reading.
+ *
+ * The git-aware fallback (step 3) catches the case where the working
+ * tree is on intent main (e.g., a prior tick switched off the stage
+ * branch via `enforceStageBranch`) but the unit file still exists on
+ * its stage branch. Without it, every unit-lifecycle tool call from
+ * intent main reports `unit_not_found` even though the unit is alive
+ * one branch over — and the agent has no MCP path to recover.
+ */
 function findUnitFile(
 	intent: string,
 	unit: string,
@@ -4220,12 +4238,81 @@ function findUnitFile(
 		const p = unitPath(intent, activeStage, unit)
 		if (existsSync(p)) return { path: p, stage: activeStage }
 	}
-	// Fallback: search all stages
+	// Fallback: search all stages on disk
 	const stagesDir = join(root, "intents", intent, "stages")
-	if (!existsSync(stagesDir)) return null
-	for (const stage of readdirSync(stagesDir)) {
+	const onDiskStages = existsSync(stagesDir) ? readdirSync(stagesDir) : []
+	for (const stage of onDiskStages) {
 		const p = unitPath(intent, stage, unit)
 		if (existsSync(p)) return { path: p, stage }
+	}
+	// Git-aware fallback: working tree may be on the wrong branch.
+	// Probe `haiku/<slug>/<stage>` branches for the unit blob.
+	if (!isGitRepo()) return null
+	const name = unit.endsWith(".md") ? unit : `${unit}.md`
+	// Resolve the candidate stage list: prefer intent.stages frontmatter
+	// (the intent's own scoping), else fall back to studio stage list
+	// from intent.md, else the on-disk stages dir. Belt-and-suspenders
+	// for partially-migrated intents whose intent.md is sparse.
+	const candidateStages = new Set<string>(onDiskStages)
+	try {
+		const intentFile = join(root, "intents", intent, "intent.md")
+		if (existsSync(intentFile)) {
+			const { data } = parseFrontmatter(readFileSync(intentFile, "utf8"))
+			if (Array.isArray(data.stages)) {
+				for (const s of data.stages as unknown[]) {
+					if (typeof s === "string" && s.length > 0) candidateStages.add(s)
+				}
+			}
+		}
+	} catch {
+		/* sparse intent.md is fine — fall through */
+	}
+	for (const stage of candidateStages) {
+		const branch = `haiku/${intent}/${stage}`
+		// List the branch's units dir. Real git returns the path on a
+		// hit and exits 0; on a miss (branch absent / path absent) it
+		// exits non-zero. Stubs that always-exit-0 still betray themselves
+		// because the stdout will be empty.
+		const m = name.match(/^unit-(\d+)-(.+)\.md$/)
+		const targetNum = m ? Number.parseInt(m[1], 10) : -1
+		const targetSlug = m ? m[2] : ""
+		const relPathExact = `.haiku/intents/${intent}/stages/${stage}/units/${name}`
+		let treeRaw = ""
+		try {
+			treeRaw = execFileSync(
+				"git",
+				[
+					"ls-tree",
+					"--name-only",
+					"-r",
+					branch,
+					`.haiku/intents/${intent}/stages/${stage}/units/`,
+				],
+				{ encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+			)
+		} catch {
+			/* branch doesn't exist or ls-tree failed — try next stage */
+			continue
+		}
+		const entries = treeRaw.split("\n").filter((e) => e.endsWith(".md"))
+		if (entries.length === 0) continue
+		// Exact-name match first.
+		if (entries.includes(relPathExact)) {
+			return { path: unitPath(intent, stage, unit), stage }
+		}
+		// Numeric-prefix tolerance: agent passes "unit-002-foo" but
+		// the file on disk is "unit-2-foo" (or vice versa).
+		if (!m) continue
+		for (const entry of entries) {
+			const em = entry
+				.split("/")
+				.pop()
+				?.match(/^unit-(\d+)-(.+)\.md$/)
+			if (!em) continue
+			if (Number.parseInt(em[1], 10) === targetNum && em[2] === targetSlug) {
+				return { path: join(root, "..", entry), stage }
+			}
+		}
 	}
 	return null
 }
@@ -7282,8 +7369,17 @@ export function handleStateTool(
 				"haiku_unit_start",
 			)
 			if (unitStartInputErr) return unitStartInputErr
-			// Resolve stage and first hat internally
-			const stage = resolveActiveStage(args.intent as string)
+			// Resolve stage via the unit's actual location (across stage
+			// branches in git mode) rather than the `active_stage` cache.
+			// The cache can be stale after a reset / migration; the unit
+			// file is the authoritative signal. Falls back to the cache
+			// only when the unit truly can't be found.
+			const startUnitInfo = findUnitFile(
+				args.intent as string,
+				args.unit as string,
+			)
+			const stage =
+				startUnitInfo?.stage || resolveActiveStage(args.intent as string)
 			if (!stage)
 				return reply(
 					{
@@ -7397,17 +7493,14 @@ export function handleStateTool(
 				"haiku_unit_advance_hat",
 			)
 			if (advInputErr) return advInputErr
-			// Align branch BEFORE findUnitFile — the unit spec lives on the stage
-			// branch, so lookups from intent-main spuriously report unit_not_found.
-			// Use active_stage as the best-guess stage to align; findUnitFile below
-			// handles the rare cross-stage case internally.
-			const advPreBranchErr = enforceStageBranch(
-				args.intent as string,
-				resolveActiveStage(args.intent as string),
-			)
-			if (advPreBranchErr) return advPreBranchErr
 
-			// Resolve stage and unit path internally
+			// Locate the unit FIRST (across all stage branches if needed),
+			// THEN enforce the right branch. The old order pre-switched on
+			// `resolveActiveStage` and could land the working tree on a
+			// branch that didn't contain the unit, producing a spurious
+			// `unit_not_found`. `findUnitFile` is now git-aware and
+			// probes each `haiku/<slug>/<stage>` branch via `git cat-file`
+			// when the working-tree view comes up empty.
 			const unitInfo = findUnitFile(args.intent as string, args.unit as string)
 			if (!unitInfo)
 				return reply(
@@ -7420,8 +7513,9 @@ export function handleStateTool(
 			const advPath = unitInfo.path
 			const advStage = unitInfo.stage
 
-			// Re-enforce if findUnitFile resolved to a different stage (rare but
-			// possible for cross-stage go-backs); idempotent when already aligned.
+			// Now align the working tree to the unit's stage branch so
+			// downstream readFileSync / writeFileSync operate on the
+			// right view. Idempotent when already aligned.
 			const advBranchErr = enforceStageBranch(args.intent as string, advStage)
 			if (advBranchErr) return advBranchErr
 
@@ -7937,17 +8031,13 @@ export function handleStateTool(
 				"haiku_unit_reject_hat",
 			)
 			if (rejectInputErr) return rejectInputErr
-			// Align branch BEFORE findUnitFile — see haiku_unit_advance_hat for
-			// the rationale. Without this, a unit file that lives only on the
-			// stage branch spuriously returns unit_not_found when checkout is
-			// on intent-main.
-			const rejectPreBranchErr = enforceStageBranch(
-				args.intent as string,
-				resolveActiveStage(args.intent as string),
-			)
-			if (rejectPreBranchErr) return rejectPreBranchErr
 
-			// Hat failed — move back one hat, increment bolt count
+			// Locate first, enforce second. See `haiku_unit_advance_hat`
+			// for the rationale: a pre-switch on a stale `active_stage`
+			// cache can land the working tree on a branch that doesn't
+			// contain the unit, producing a spurious `unit_not_found`.
+			// `findUnitFile` is git-aware and probes stage branches when
+			// the working-tree view comes up empty.
 			const rejectInfo = findUnitFile(
 				args.intent as string,
 				args.unit as string,
@@ -7963,7 +8053,8 @@ export function handleStateTool(
 			const failPath = rejectInfo.path
 			const rejectStage = rejectInfo.stage
 
-			// Re-enforce for cross-stage case; idempotent when already aligned.
+			// Align the working tree to the unit's stage branch so
+			// readFileSync / writeFileSync operate on the right view.
 			const rejectBranchErr = enforceStageBranch(
 				args.intent as string,
 				rejectStage,

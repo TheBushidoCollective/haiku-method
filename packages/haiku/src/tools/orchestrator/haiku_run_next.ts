@@ -583,7 +583,6 @@ export default defineTool({
 							const { isStageComplete } = await import(
 								"../../orchestrator/workflow/cursor.js"
 							)
-							const { intentDir } = await import("../../state-tools.js")
 							const iDir = intentDir(slug)
 							if (isStageComplete(iDir, studio, cursorStage, mode)) {
 								pendingPreMerge = {
@@ -1017,7 +1016,16 @@ export default defineTool({
 				// main (otherwise the merge would never have happened in
 				// v3), so `findCurrentStage` walks past on the next
 				// tick. No stamp needed.
-				// pre-tick merge + cursor walk handle branch alignment
+				// Branch contract: `mergeStageBranchIntoMain` leaves the
+				// primary on intent main (see git-worktree.ts:1527 — when
+				// invoked from the stage branch, it `safeCheckout`s the
+				// main branch before merging). The cursor walk below
+				// reads from that vantage, so the now-merged stage's
+				// content is visible and `findCurrentStage` advances
+				// past it without an explicit re-checkout here. If that
+				// branch-behavior ever changes, this re-tick will silently
+				// read from the wrong tree — verify the post-merge branch
+				// before deleting this note.
 				result = dispatchOrchestratorAction(slug)
 			} catch (err) {
 				console.error(

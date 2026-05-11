@@ -1,15 +1,28 @@
-// context-monitor — Warn at context budget thresholds (only while a H·AI·K·U intent is active)
+// context-monitor — Suggest /clear when elaboration is the cursor and context is tight
 //
 // Fires on PostToolUse. Skips entirely when no intent is active —
-// users running Claude Code for non-intent work shouldn't be nagged by
-// haiku-flavored guidance. When an intent is active, emits one budget
-// note at 35% and 25% remaining, suggestions only (not directives).
-// Debounced so it only fires once per threshold per session.
+// users running Claude Code for non-intent work shouldn't be nagged
+// by haiku-flavored guidance. When an intent is active, checks the
+// active stage's phase: if it's `elaborate` and remaining context is
+// at/below the threshold, suggest `/clear` so the user can start
+// elaboration with a fresh context. Mid-execute / mid-review work is
+// left alone — clearing there would lose load-bearing in-conversation
+// state (open tool plans, partial review reasoning).
 
 import { appendFileSync, existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { defineHook } from "./define.js"
-import { findActiveIntent } from "./utils.js"
+import { findActiveIntent, readFrontmatterField, readJson } from "./utils.js"
+
+function cursorPhase(intentDir: string): string | null {
+	const intentFile = join(intentDir, "intent.md")
+	const activeStage = readFrontmatterField(intentFile, "active_stage")
+	if (!activeStage) return null
+	const stateFile = join(intentDir, "stages", activeStage, "state.json")
+	const state = readJson(stateFile)
+	const phase = typeof state.phase === "string" ? state.phase : ""
+	return phase || null
+}
 
 export async function contextMonitor(
 	input: Record<string, unknown>,
@@ -23,7 +36,13 @@ export async function contextMonitor(
 
 	// Only fire inside an active intent — outside, the haiku-flavored
 	// guidance is noise and pushes the agent into "should I keep going?" loops.
-	if (!findActiveIntent()) return
+	const intentDir = findActiveIntent()
+	if (!intentDir) return
+
+	// Only fire while the cursor is on elaborate. Once execute/review/gate
+	// is running, a /clear nudge could drop in-flight reasoning the agent
+	// needs to finish the bolt.
+	if (cursorPhase(intentDir) !== "elaborate") return
 
 	// Calculate remaining percentage
 	const remaining = Math.floor(((maxTokens - totalTokens) * 100) / maxTokens)
@@ -41,11 +60,11 @@ export async function contextMonitor(
 		if (!debounceContent.includes("25")) {
 			appendFileSync(debounceFile, "25\n")
 			process.stderr.write(
-				"⚠️ CONTEXT LOW (≤25% remaining)\n\n" +
-					"You're nearing the end of this context window. " +
-					"Consider committing in-flight changes and finding a clean break point — " +
-					"a stage boundary or a successful tick is usually a good spot. " +
-					"Keep going if you're close to one.\n",
+				"⚠️ CONTEXT LOW (≤25% remaining) — elaboration in progress\n\n" +
+					"You're partway through elaboration with a tight context window. " +
+					"Run `/clear` to start with a fresh session — elaboration state is " +
+					"already on disk (`intent.md`, unit files, stage `state.json`), so " +
+					"the next tick will pick up exactly where you left off.\n",
 			)
 			process.exit(2)
 		}
@@ -53,9 +72,10 @@ export async function contextMonitor(
 		if (!debounceContent.includes("35")) {
 			appendFileSync(debounceFile, "35\n")
 			process.stderr.write(
-				"⚠️ CONTEXT NOTE (≤35% remaining)\n\n" +
-					"Context is getting tight. Commit working changes when convenient " +
-					"and keep responses lean.\n",
+				"⚠️ CONTEXT NOTE (≤35% remaining) — elaboration in progress\n\n" +
+					"Context is getting tight while elaborating. Consider `/clear` to " +
+					"give elaboration a fresh window — your unit/intent files on disk " +
+					"are the source of truth, so the next tick resumes cleanly.\n",
 			)
 			process.exit(2)
 		}
@@ -65,7 +85,7 @@ export async function contextMonitor(
 export default defineHook({
 	name: "context-monitor",
 	description:
-		"PostToolUse: while an intent is active, soft-note at 35% / 25% remaining context budget.",
+		"PostToolUse: while elaborating in an active intent, suggest /clear at 35% / 25% remaining context budget.",
 	async handle(input, ctx) {
 		await contextMonitor(input, ctx.pluginRoot)
 	},

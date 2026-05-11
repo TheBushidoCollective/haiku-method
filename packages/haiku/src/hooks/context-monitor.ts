@@ -16,6 +16,11 @@ import { findActiveIntent, readFrontmatterField, readJson } from "./utils.js"
 
 function cursorPhase(intentDir: string): string | null {
 	const intentFile = join(intentDir, "intent.md")
+	// `active_stage` is a derived cache written by side-effects.ts after each
+	// tick — the lightest way to locate the right state.json without pulling
+	// in the cursor machinery. The field is also in DEPRECATED_INTENT_FIELDS
+	// (v0-to-v4 strips it on migration), so if a future cleanup sweep stops
+	// writing it, this hook silently skips. That's the safe failure mode.
 	const activeStage = readFrontmatterField(intentFile, "active_stage")
 	if (!activeStage) return null
 	const stateFile = join(intentDir, "stages", activeStage, "state.json")

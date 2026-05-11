@@ -1008,24 +1008,15 @@ export default defineTool({
 					// can investigate, instead of hanging in a loop.
 					break
 				}
-				// No-op success path: branch was missing locally + on
-				// origin (v3 merged-and-deleted), so the merge function
-				// short-circuited without performing a merge. Under the
-				// disk-state cursor model, that case is fine on its own
-				// — the unit files for the stage are already on intent
-				// main (otherwise the merge would never have happened in
-				// v3), so `findCurrentStage` walks past on the next
-				// tick. No stamp needed.
+				// Success path: stage merged (or v3 short-circuit on a
+				// merged-and-deleted branch). Re-tick — the cursor walk
+				// will advance past the now-merged stage.
 				// Branch contract: `mergeStageBranchIntoMain` leaves the
-				// primary on intent main (see git-worktree.ts:1527 — when
-				// invoked from the stage branch, it `safeCheckout`s the
-				// main branch before merging). The cursor walk below
-				// reads from that vantage, so the now-merged stage's
-				// content is visible and `findCurrentStage` advances
-				// past it without an explicit re-checkout here. If that
-				// branch-behavior ever changes, this re-tick will silently
-				// read from the wrong tree — verify the post-merge branch
-				// before deleting this note.
+				// primary on intent main (git-worktree.ts:1527 —
+				// safeCheckout([main]) before merge when invoked from the
+				// stage branch). The re-tick reads from that vantage. If
+				// that branch behavior changes, this re-tick will silently
+				// read from the wrong tree.
 				result = dispatchOrchestratorAction(slug)
 			} catch (err) {
 				console.error(

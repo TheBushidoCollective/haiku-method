@@ -25,6 +25,7 @@ import {
 	initTestRepo,
 	makeFeedback,
 	makeIntent,
+	makeMergedUnit,
 	makeStudio,
 	onStageBranch,
 	runTickWithBranchAlignment,
@@ -1190,6 +1191,73 @@ test("cursor: intent with FB on a stage that hasn't started yet → start_feedba
 			// FB triage takes priority. Either start_feedback_hat or another
 			// FB-related action is acceptable.
 			assert.notStrictEqual(action.action, "elaborate")
+		},
+	)
+})
+
+// ── Intent stage filtering (resolveIntentStages vs resolveStudioStages) ─
+
+// Regression: an intent that declared `stages: [a, b, c]` in a studio
+// whose full stage list is [a, b, c, d, e, f] used to surface `elaborate(d)`
+// once a/b/c were fully signed, because the cursor walked the full studio
+// stage list. The cursor now walks `resolveIntentStages` so unintended
+// stages stay invisible.
+test("cursor: intent restricted to subset of studio stages does NOT surface unscoped stages", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo(
+		"cursor-intent-stage-filter",
+		async ({ repoRoot, intentDir, slug }) => {
+			const stageDef = (name) => ({
+				name,
+				hats: ["researcher", "distiller", "verifier"],
+				fix_hats: ["distiller", "feedback-assessor"],
+				review: "auto",
+				review_agents: [],
+			})
+			makeStudio({
+				repoRoot,
+				studio: "multi",
+				stages: ["a", "b", "c", "d", "e"].map(stageDef),
+			})
+			makeIntent({
+				intentDir,
+				slug,
+				studio: "multi",
+				extraFm: { stages: ["a", "b", "c"] },
+			})
+			// Mark a/b/c complete with a fully-signed unit each; leave d/e
+			// without any scaffolding (mirrors the screenshot scenario).
+			for (const stage of ["a", "b", "c"]) {
+				seedVerifiedElaboration({ intentDir, stage })
+				makeMergedUnit({
+					intentDir,
+					stage,
+					unit: `unit-01-${stage}`,
+					roles: ["spec", "user"],
+				})
+			}
+			const action = await runTick(repoRoot, slug)
+			// The bug: cursor used to return `elaborate(d)` here. The fix
+			// keeps it walking intent.stages only — never `d` or `e`.
+			assert.notStrictEqual(
+				action.stage,
+				"d",
+				`cursor leaked past intent.stages into 'd': ${action.action}/${action.stage}`,
+			)
+			assert.notStrictEqual(
+				action.stage,
+				"e",
+				`cursor leaked past intent.stages into 'e': ${action.action}/${action.stage}`,
+			)
+			// Sanity: the action is something that makes sense for "all
+			// declared stages done" — intent-level review, merge_intent,
+			// noop, sealed, or similar. Not `elaborate` on an unscoped
+			// stage.
+			assert.notStrictEqual(
+				action.action,
+				"elaborate",
+				`cursor should not be elaborating an unscoped stage: ${action.action}/${action.stage}`,
+			)
 		},
 	)
 })

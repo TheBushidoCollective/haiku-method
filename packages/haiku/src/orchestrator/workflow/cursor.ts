@@ -57,9 +57,9 @@ import {
 	readStageArtifactDefs,
 } from "../../studio-reader.js"
 import {
+	resolveIntentStages,
 	resolveStageFixHats,
 	resolveStageHats,
-	resolveStudioStages,
 } from "../studio.js"
 import { type DriftEvent, runDriftSweep } from "./drift-sweep.js"
 
@@ -493,15 +493,21 @@ export function isStageComplete(
  * rewound through that path. See gigsmart/haiku-method#333.
  */
 export function findCurrentStage(slug: string, studio: string): string | null {
-	const stages = resolveStudioStages(studio)
-	if (stages.length === 0) return null
 	const root = primaryRepoRoot()
 	const intentDir = join(root, ".haiku", "intents", slug)
 
 	const intentMdPath = join(intentDir, "intent.md")
-	const intentFm = readFm(intentMdPath)?.data
+	const intentFm = readFm(intentMdPath)?.data ?? {}
+	// Use the intent's effective stage list — intersection of studio
+	// stages with `intent.stages` (if set) minus `intent.skip_stages`.
+	// Walking the full studio list would surface stages the intent
+	// explicitly opted out of (e.g. a `/haiku:quick` intent that
+	// declared only [inception, design, product] in a 6-stage software
+	// studio would otherwise loop trying to elaborate `development`).
+	const stages = resolveIntentStages(intentFm, studio)
+	if (stages.length === 0) return null
 	const mode =
-		typeof intentFm?.mode === "string" && intentFm.mode.length > 0
+		typeof intentFm?.mode === "string" && (intentFm.mode as string).length > 0
 			? (intentFm.mode as string)
 			: "continuous"
 	for (const stage of stages) {
@@ -516,11 +522,16 @@ function walkFeedbackTrack(args: {
 	intentDir: string
 	studio: string
 	currentStage: string
+	intent: Record<string, unknown>
 }): CursorAction | null {
-	const { intentDir, studio, currentStage } = args
+	const { intentDir, studio, currentStage, intent } = args
 	// Walk feedback in stage order: every prior stage's open FBs come
 	// before the current stage's open FBs come before intent-scope.
-	const stages = resolveStudioStages(studio)
+	// Use intent-effective stages so an intent scoped to a subset of the
+	// studio's stages (e.g. `/haiku:quick` restricting to 3 stages in a
+	// 6-stage studio) doesn't surface FBs from stages the intent opted
+	// out of.
+	const stages = resolveIntentStages(intent, studio)
 	const cutoff = stages.indexOf(currentStage)
 	// `cutoff === -1` means `currentStage` isn't in this studio's
 	// configured stage list (renamed stage, misconfigured studio).
@@ -980,7 +991,7 @@ export function derivePosition(args: {
 				? (intentResult.data.verified_at as string)
 				: ""
 		if (!verifiedAt) {
-			const stages = resolveStudioStages(studio)
+			const stages = resolveIntentStages(intentResult.data, studio)
 			const firstStage = stages[0] ?? ""
 			const firstStageDir = firstStage
 				? join(intentDir, "stages", firstStage)
@@ -1034,15 +1045,19 @@ export function derivePosition(args: {
 	// ahead of intent main; once the FB closes, the merge_stage tick
 	// re-merges it and the cursor resumes downstream walks.
 	{
+		const intent = intentResult?.data ?? {}
 		const fbAction = walkFeedbackTrack({
 			intentDir,
 			studio,
+			intent,
 			// When every stage is merged, treat the LAST stage as the
 			// cutoff so walkFeedbackTrack walks all of them. When a
 			// stage is active, walk 0..active inclusive (existing
-			// behaviour).
+			// behaviour). The cutoff uses intent-effective stages so a
+			// quick-mode intent's "last stage" is its own last, not the
+			// studio's tail (which the intent may have skipped).
 			currentStage:
-				activeStage ?? resolveStudioStages(studio).slice(-1)[0] ?? "",
+				activeStage ?? resolveIntentStages(intent, studio).slice(-1)[0] ?? "",
 		})
 		if (fbAction) return { track: "feedback", action: fbAction }
 	}

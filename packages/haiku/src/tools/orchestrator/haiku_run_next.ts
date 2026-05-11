@@ -531,9 +531,11 @@ export default defineTool({
 							: null
 					// Resolve stage order so we can tell "earlier" from
 					// "later" when the walk's answer disagrees with our
-					// branch.
-					const { resolveStudioStages } = await import("../../orchestrator.js")
-					const stages = resolveStudioStages(studio)
+					// branch. Use intent-effective stages so a quick-mode
+					// intent restricted to a subset of the studio's stages
+					// orders against its own list, not the full studio.
+					const { resolveIntentStages } = await import("../../orchestrator.js")
+					const stages = resolveIntentStages(im, studio)
 					const cursorIdx = cursorStage ? stages.indexOf(cursorStage) : -1
 					const hereIdx = hereStage ? stages.indexOf(hereStage) : -1
 					// Cases (b) and (e): I'm on a stage branch Y. Either the

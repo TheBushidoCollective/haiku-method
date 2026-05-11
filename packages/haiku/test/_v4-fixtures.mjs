@@ -530,8 +530,8 @@ export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 			const studio = im.studio || ""
 			const mode = im.mode || "continuous"
 			if (studio) {
-				const { resolveStudioStages } = await import("../src/orchestrator.js")
-				const stages = resolveStudioStages(studio)
+				const { resolveIntentStages } = await import("../src/orchestrator.js")
+				const stages = resolveIntentStages(im, studio)
 				let cursorStage = null
 				try {
 					cursorStage = findCurrentStage(slug, studio) || null

@@ -38,9 +38,13 @@ const repoRoot = resolve(__dirname, "..")
 // Thresholds — chosen to flag the obvious god-file shape without
 // nagging on every reasonable >300-line module:
 //
-//   - 1500 LOC: lower bound where any one .ts file usually wants a
-//     split. The audit found state-tools.ts at 11k and the next
-//     largest engine module (git-worktree.ts) at 2.8k; the 1500
+//   - 1500 code LOC: lower bound where any one .ts file usually
+//     wants a split. We count code lines only (non-blank,
+//     non-comment) so well-documented files don't get penalized
+//     for explaining themselves — the budget is about logical
+//     surface area, not file scroll length. The audit found
+//     state-tools.ts at 8.6k code LOC and the next largest engine
+//     module (git-worktree.ts) at 2.8k code LOC; the 1500
 //     threshold catches future drift without forcing immediate
 //     action on the existing 1.5k–2.8k cluster (those are
 //     explicitly allowlisted with reasons).
@@ -69,10 +73,6 @@ const ALLOWLIST = new Map([
 	[
 		"packages/haiku/src/git-worktree.ts",
 		"Single concern: every git branch / worktree mechanic for the engine. The 46 exports are all topical (createUnitWorktree, mergeFixChainWorktree, ensureStageBranch, etc.). Splittable into `branch-creation.ts` + `merge-strategies.ts` + `worktree-discovery.ts` if it grows past 4000 LOC; under that, the cohesion outweighs the size.",
-	],
-	[
-		"packages/haiku/src/orchestrator/workflow/drift-baseline.ts",
-		"Single concern: drift baseline read/write/sidecar/recovery. The 52 exports are tightly coupled to the baseline lifecycle and benefit from co-location (one file to grep when debugging baseline state). Worth revisiting if it gains another 500 LOC.",
 	],
 	[
 		"packages/haiku-ui/src/pages/review/stage/StageReview.tsx",
@@ -117,7 +117,35 @@ function listTrackedFiles() {
 
 function fileMetrics(absPath) {
 	const text = readFileSync(absPath, "utf8")
-	const loc = text.split("\n").length
+	const lines = text.split("\n")
+	// Count code lines only — non-blank, non-comment — so a file that
+	// invests in explaining itself isn't penalized for the explanation.
+	// `loc` here is logical surface area, not file scroll length.
+	//
+	// Comment forms handled:
+	//   //               line comment
+	//   /* … */          block (single-line or multi-line)
+	//   `// trailing`    counts as code (only purely-comment lines skip)
+	//
+	// Edge case ignored: strings or template literals that contain `//`
+	// or `/*`. A misclassification there would only undercount by a few
+	// lines and never triggers a false-positive over the 1500 budget.
+	let loc = 0
+	let inBlock = false
+	for (const raw of lines) {
+		const line = raw.trim()
+		if (line === "") continue
+		if (inBlock) {
+			if (line.includes("*/")) inBlock = false
+			continue
+		}
+		if (line.startsWith("//")) continue
+		if (line.startsWith("/*")) {
+			if (!line.includes("*/")) inBlock = true
+			continue
+		}
+		loc++
+	}
 	// Naive but effective: count lines that begin (after optional
 	// whitespace) with `export `. Catches `export function`,
 	// `export const`, `export interface`, `export type`, `export {`
@@ -130,7 +158,7 @@ function fileMetrics(absPath) {
 
 function describeViolation(rel, loc, exportCount) {
 	const reasons = []
-	if (loc > LOC_BUDGET) reasons.push(`${loc} LOC > ${LOC_BUDGET}`)
+	if (loc > LOC_BUDGET) reasons.push(`${loc} code LOC > ${LOC_BUDGET}`)
 	if (exportCount > EXPORTS_BUDGET)
 		reasons.push(`${exportCount} exports > ${EXPORTS_BUDGET}`)
 	return `  ${rel} — ${reasons.join(", ")}`
@@ -155,7 +183,7 @@ function main() {
 		const allow = ALLOWLIST.get(rel)
 		if (allow) {
 			allowlistInfo.push(
-				`  ${rel} — ${loc} LOC, ${exportCount} exports — ALLOWED: ${allow}`,
+				`  ${rel} — ${loc} code LOC, ${exportCount} exports — ALLOWED: ${allow}`,
 			)
 			continue
 		}
@@ -171,7 +199,7 @@ function main() {
 
 	if (violations.length === 0) {
 		console.log(
-			`\n✓ No god files detected. Budget: ${LOC_BUDGET} LOC / ${EXPORTS_BUDGET} exports per .ts/.tsx file.`,
+			`\n✓ No god files detected. Budget: ${LOC_BUDGET} code LOC / ${EXPORTS_BUDGET} exports per .ts/.tsx file.`,
 		)
 		return
 	}
@@ -181,7 +209,7 @@ function main() {
 	)
 	for (const line of violations) console.error(line)
 	console.error(
-		`\nBudget: ${LOC_BUDGET} LOC / ${EXPORTS_BUDGET} exports per .ts/.tsx file.\n` +
+		`\nBudget: ${LOC_BUDGET} code LOC / ${EXPORTS_BUDGET} exports per .ts/.tsx file.\n` +
 			"\n" +
 			"Options:\n" +
 			"  1. Split the file into per-concern modules (preferred). The\n" +

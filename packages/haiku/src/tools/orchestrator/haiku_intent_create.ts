@@ -36,6 +36,100 @@ import { emitTelemetry } from "../../telemetry.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
 
+/**
+ * Detect "workflow-meta pollution" in an intent title or description —
+ * phrases that name engine-managed configuration (mode, studio, stage,
+ * phase) instead of describing what the user wants to build.
+ *
+ * Real-world failure mode (reported 2026-05-11): user says "I want to
+ * start an intent only with the inception phase." The agent calls
+ * haiku_intent_create with description = "Tara only wants to run this
+ * in the inception phase." That sentence is configuration intent, not
+ * substance — and once it lands as the intent's description, the
+ * actual subject of work is lost. The engine has dedicated selection
+ * tools (haiku_select_studio / haiku_select_mode / haiku_select_stage)
+ * with elicitation pickers; the description field is reserved for
+ * what the user wants to ACCOMPLISH.
+ *
+ * Patterns flagged:
+ *   - "in X mode" / "X-mode" / "only X mode" / "use X mode"
+ *   - "in/with/use the X studio" / "X studio" as qualifier
+ *   - "only in/with X stage|phase" / "only the X stage|phase"
+ *   - References to the studio's stage names (inception, design,
+ *     product, development, operations, security) used as workflow
+ *     qualifiers, not as domain nouns
+ *
+ * Returns the matched phrase when polluted; null when clean.
+ *
+ * Deliberately permissive on domain usage — "build a stage manager"
+ * or "develop a design system" should NOT trip the guard. We require
+ * the workflow-config phrasing pattern, not just keyword presence.
+ */
+function detectWorkflowMetaPollution(s: string): string | null {
+	const text = s.trim()
+	if (!text) return null
+	// Known mode names as standalone qualifiers (must be one of these,
+	// not arbitrary content).
+	const MODE_NAMES = "quick|continuous|discrete|hybrid|autopilot"
+	const STAGE_NAMES = "inception|design|product|development|operations|security"
+	const patterns: Array<{ re: RegExp; label: string }> = [
+		// "in continuous mode" / "using quick mode" / "the autopilot mode"
+		{
+			re: new RegExp(
+				`\\b(?:in|using|use|with|the|a)\\s+(?:${MODE_NAMES})\\s+mode\\b`,
+				"i",
+			),
+			label: "mode reference",
+		},
+		// "X-mode" hyphenated form
+		{
+			re: new RegExp(`\\b(?:${MODE_NAMES})-mode\\b`, "i"),
+			label: "mode reference",
+		},
+		// "only in/with/the/a inception phase" / "only the design stage"
+		{
+			re: new RegExp(
+				`\\bonly\\s+(?:in|with|the|a)?\\s*(?:${STAGE_NAMES})\\s+(?:stage|phase)\\b`,
+				"i",
+			),
+			label: "stage / phase restriction",
+		},
+		// "only with the inception phase" / "only run the inception phase"
+		{
+			re: new RegExp(
+				`\\bonly\\s+(?:run|use|do|in|with)\\s+(?:the\\s+)?(?:${STAGE_NAMES})\\s+(?:stage|phase)?\\b`,
+				"i",
+			),
+			label: "stage / phase restriction",
+		},
+		// "in inception phase" / "in the design stage"
+		{
+			re: new RegExp(
+				`\\bin\\s+(?:the\\s+)?(?:${STAGE_NAMES})\\s+(?:stage|phase)\\b`,
+				"i",
+			),
+			label: "stage / phase reference",
+		},
+		// "use the software studio" / "in the software studio" — `studio`
+		// is workflow-meta in any qualifying position
+		{
+			re: /\b(?:use|using|in|with|the)\s+(?:the\s+)?\w+\s+studio\b/i,
+			label: "studio reference",
+		},
+		// Bare "studio:" / "mode:" / "stages:" — looks like the agent
+		// tried to bake FM fields into the description.
+		{
+			re: /\b(?:studio|mode|stages?)\s*:\s*\w+/i,
+			label: "raw frontmatter in description",
+		},
+	]
+	for (const { re, label } of patterns) {
+		const m = text.match(re)
+		if (m) return `${label}: "${m[0]}"`
+	}
+	return null
+}
+
 export default defineTool({
 	name: "haiku_intent_create",
 	description:
@@ -88,6 +182,44 @@ export default defineTool({
 				JSON.stringify({
 					error: "invalid_title",
 					message: `\`title\` must be non-empty and ≤80 chars after trimming. Got ${title.length} chars. Rewrite as a 3–8 word summary and call again.`,
+				}),
+			)
+		}
+
+		// Reject workflow-meta pollution in title or description. The
+		// engine owns studio / mode / stage selection via the SPA
+		// elicitation pickers (haiku_select_studio / haiku_select_mode /
+		// haiku_select_stage). If the user said "only with the inception
+		// phase" or "in quick mode," that's a workflow-config preference,
+		// NOT what they want to build — the intent's description should
+		// describe substance. Baking the preference into the description
+		// loses the actual subject of the work and surfaces as a
+		// confused-looking intent. Reject early with a clear redirect.
+		const titlePollution = detectWorkflowMetaPollution(title)
+		const descPollution = detectWorkflowMetaPollution(
+			(description as string) || "",
+		)
+		if (titlePollution || descPollution) {
+			const where =
+				titlePollution && descPollution
+					? "title and description"
+					: titlePollution
+						? "title"
+						: "description"
+			const match = titlePollution || descPollution
+			return text(
+				JSON.stringify({
+					error: "intent_create_meta_pollution",
+					where,
+					match,
+					message:
+						`The ${where} contains workflow configuration phrasing (${match}). ` +
+						`Studio, mode, and stage are engine-managed — the next haiku_run_next ` +
+						`call will run the SPA picker to let the user choose them. The intent's ` +
+						`title and description should describe the substance of what to build or ` +
+						`accomplish, not the workflow shape. Re-ask the user what they want to ` +
+						`BUILD (not how to configure the workflow), then call haiku_intent_create ` +
+						`again with that as the description.`,
 				}),
 			)
 		}

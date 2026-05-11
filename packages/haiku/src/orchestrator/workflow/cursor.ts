@@ -48,10 +48,10 @@
 //                 gate, no agent gates, merge_stage auto-fires once
 //                 quality_gates is signed
 
-import { execFileSync } from "node:child_process"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import matter from "gray-matter"
+import { branchDirHasFiles } from "../../git-worktree.js"
 import { primaryRepoRoot } from "../../state-tools.js"
 import {
 	readReviewAgentPaths,
@@ -321,31 +321,20 @@ function activeStageFromBranchOrFilesystem(
 	slug: string,
 	studio: string,
 ): string | null {
-	const stagePrefix = `haiku/${slug}/`
-	const currentBranch = currentBranchName()
-	if (currentBranch.startsWith(stagePrefix)) {
-		const tail = currentBranch.slice(stagePrefix.length)
-		if (tail !== "main" && tail.length > 0) {
-			// Confirm the branch name matches a configured stage; otherwise
-			// fall through to the filesystem walk so a misnamed branch
-			// doesn't pin the cursor to a non-existent stage.
-			const stages = resolveStudioStages(studio)
-			if (stages.includes(tail)) return tail
-		}
-	}
+	// The "active stage" answer must come from intent main's filesystem,
+	// not from the current branch. The previous shortcut returned the
+	// checked-out stage's name without consulting main, so a tree parked
+	// on a long-since-merged stage (e.g. `inception` after design started)
+	// pinned the cursor to that stage forever — walkIntentTrack saw all
+	// units signed and emitted `merge_stage` on every tick. The user's
+	// principle: "the signal of WHERE I am is on disk at intent main."
+	// See gigsmart/haiku-method#333.
 	return firstUnmergedStage(slug, studio)
 }
 
-function currentBranchName(): string {
-	try {
-		return execFileSync("git", ["branch", "--show-current"], {
-			encoding: "utf8",
-			stdio: ["ignore", "pipe", "pipe"],
-		}).trim()
-	} catch {
-		return ""
-	}
-}
+// `currentBranchName` was deleted alongside the activeStageFromBranchOrFilesystem
+// shortcut (#333). The cursor's "active stage" answer is derived from
+// intent main's tree, never from the working tree's checked-out branch.
 
 /**
  * Is every unit in this stage fully signed-off? "Fully signed" =
@@ -478,16 +467,23 @@ export function firstUnmergedStage(
 		return null
 	}
 
-	// Git mode: walk intent main's filesystem. The caller's branch
-	// dance has put us on intent main (or on a stage branch, in
-	// which case this function isn't the active-stage source —
-	// `activeStageFromBranchOrFilesystem` short-circuits before
-	// calling here).
+	// Git mode: read the units/ directory directly from intent main's
+	// tree via `git ls-tree haiku/<slug>/main`. Doing this against the
+	// current checkout would lie when the working tree happens to be on
+	// a stage branch (a stage branch's tree is a snapshot from when it
+	// was forked, missing later stages' work). The user's principle: the
+	// signal of "where the workflow is" is on intent main's disk, not
+	// the working tree's. See gigsmart/haiku-method#333.
+	const intentMainBranch = `haiku/${slug}/main`
+	const intentRel = join(".haiku", "intents", slug, "stages")
 	for (const stage of stages) {
-		const unitsDir = join(intentDir, "stages", stage, "units")
-		if (!existsSync(unitsDir)) return stage
-		const mdFiles = readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-		if (mdFiles.length === 0) return stage
+		const stageUnitsRel = join(intentRel, stage, "units")
+		const hasUnitFiles = branchDirHasFiles(
+			intentMainBranch,
+			stageUnitsRel,
+			(name) => name.endsWith(".md"),
+		)
+		if (!hasUnitFiles) return stage
 	}
 	return null
 }

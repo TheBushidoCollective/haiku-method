@@ -71,7 +71,7 @@ test("actionSignature distinguishes actions on stage / unit / feedback_id / role
 	assert.notStrictEqual(actionSignature(base), actionSignature(otherFb))
 })
 
-test("loopAbortResponse(cap) renders structured isError + names the loop + cap value", () => {
+test("loopAbortResponse(cap) returns isError but does NOT leak engine-internal action names to the agent", () => {
 	const r = loopAbortResponse(
 		"merge_stage",
 		17,
@@ -81,16 +81,21 @@ test("loopAbortResponse(cap) renders structured isError + names the loop + cap v
 	assert.strictEqual(r.isError, true)
 	assert.ok(Array.isArray(r.content) && r.content.length === 1)
 	const text = r.content[0].text
-	assert.match(text, /merge_stage/)
-	assert.match(text, /17 iteration/)
-	assert.match(text, new RegExp(`safety cap of ${RUN_NEXT_LOOP_CAP}`))
-	// Mentions the offending action signature so the file-an-issue path is
-	// concrete instead of "engine bug, dunno where."
-	assert.match(text, /action=merge_stage/)
-	assert.match(text, /stage=design/)
+	// Surfaced text is opaque — merging is engine internals; the agent
+	// doesn't need to know which loop fired or against which stage. See
+	// gigsmart/haiku-method#333: "merge_stage is engine internals... agent
+	// DOES NOT NEED TO KNOW."
+	assert.doesNotMatch(text, /merge_stage/)
+	assert.doesNotMatch(text, /design/)
+	assert.doesNotMatch(text, /\b17\b/)
+	// Still actionable: the agent knows to retry and where to look for
+	// diagnostic detail.
+	assert.match(text, /retry/i)
+	assert.match(text, /haiku_run_next/)
+	assert.match(text, /loop guard fired/)
 })
 
-test("loopAbortResponse(no_progress) names the same-action condition", () => {
+test("loopAbortResponse(no_progress) is also opaque to the agent", () => {
 	const r = loopAbortResponse(
 		"select_*",
 		3,
@@ -99,10 +104,10 @@ test("loopAbortResponse(no_progress) names the same-action condition", () => {
 	)
 	assert.strictEqual(r.isError, true)
 	const text = r.content[0].text
-	assert.match(text, /select_\*/)
-	assert.match(text, /3 iteration/)
-	assert.match(text, /no progress/i)
-	assert.match(text, /action=select_studio/)
+	assert.doesNotMatch(text, /select_studio/)
+	assert.doesNotMatch(text, /select_\*/)
+	assert.doesNotMatch(text, /no_progress/)
+	assert.match(text, /retry/i)
 })
 
 console.log("")

@@ -165,10 +165,12 @@ test("after the noop'd stage's unit files land on intent main, firstUnmergedStag
 		)
 
 		// Simulate haiku_run_next's noop-handling under the new
-		// disk-state cursor model: instead of stamping `stages_merged`
-		// (deprecated), write the inception stage's content onto
-		// intent main. The disk presence of the stage's units IS the
-		// "merged" signal.
+		// disk-state cursor model: write the inception stage's content
+		// AND commit it on intent main. Under the strict "intent main's
+		// tree is the source of truth" rule (#333), the cursor reads via
+		// `git ls-tree haiku/<slug>/main` — uncommitted working-tree
+		// changes don't count, only what's actually on the branch ref.
+		git(tmp, "checkout", `haiku/${slug}/main`)
 		const inceptionUnits = join(intentDir, "stages", "inception", "units")
 		mkdirSync(inceptionUnits, { recursive: true })
 		writeFileSync(
@@ -178,13 +180,15 @@ test("after the noop'd stage's unit files land on intent main, firstUnmergedStag
 				started_at: new Date().toISOString(),
 			}),
 		)
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-m", `haiku: simulate inception merge into main`)
 
-		// Post-write: cursor must advance to the next unmerged stage.
+		// Post-commit: cursor must advance to the next unmerged stage.
 		const after = firstUnmergedStage(slug, "software")
 		assert.notStrictEqual(
 			after,
 			"inception",
-			`post-stamp the cursor must advance past inception (or the loop spins), got: ${after}`,
+			`post-commit the cursor must advance past inception (or the loop spins), got: ${after}`,
 		)
 	} finally {
 		restoreCwd()

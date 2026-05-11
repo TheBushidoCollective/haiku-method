@@ -1701,6 +1701,59 @@ export function readFileFromBranch(
 	}
 }
 
+/**
+ * List filenames in a directory at a specific branch ref WITHOUT
+ * checking the branch out. Returns the leaf names (no leading path),
+ * filtered to entries directly under `dirPath`. Returns null when the
+ * branch or directory doesn't exist.
+ *
+ * Used by the cursor's "first unmerged stage" walk so the answer is
+ * always derived from intent main's tree, regardless of which branch
+ * happens to be checked out. See gigsmart/haiku-method#333 — the
+ * previous existsSync-based walk lied when called from a stage branch
+ * because the stage branch's tree predates later stages' work.
+ */
+export function listFilesInBranchDir(
+	branch: string,
+	dirPath: string,
+): string[] | null {
+	if (!isGitRepo()) return null
+	try {
+		// `--name-only` outputs `<path>` per line. `--full-name` ensures
+		// paths are repo-relative (default behavior, but explicit). We
+		// normalize trailing slash on dirPath so the prefix match catches
+		// only direct children, not the dir itself.
+		const normalized = dirPath.endsWith("/") ? dirPath : `${dirPath}/`
+		const out = run(["git", "ls-tree", "--name-only", branch, normalized])
+		if (!out) return []
+		const prefix = normalized
+		return out
+			.split("\n")
+			.filter(Boolean)
+			.map((line) =>
+				line.startsWith(prefix) ? line.slice(prefix.length) : line,
+			)
+			.filter((leaf) => leaf.length > 0 && !leaf.includes("/"))
+	} catch {
+		return null
+	}
+}
+
+/** True iff the branch ref exists and that ref's tree contains
+ *  `dirPath` as a non-empty directory. Used by the cursor to ask
+ *  "does intent main carry units for stage X?" without checking out
+ *  intent main. */
+export function branchDirHasFiles(
+	branch: string,
+	dirPath: string,
+	predicate?: (name: string) => boolean,
+): boolean {
+	const files = listFilesInBranchDir(branch, dirPath)
+	if (!files) return false
+	const filtered = predicate ? files.filter(predicate) : files
+	return filtered.length > 0
+}
+
 /** Absolute path to a unit's worktree under `.haiku/worktrees/{slug}/{unit}`. */
 export function unitWorktreePath(slug: string, unit: string): string {
 	return join(primaryRepoRoot(), ".haiku", "worktrees", slug, unit)

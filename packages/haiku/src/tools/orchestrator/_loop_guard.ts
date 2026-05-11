@@ -30,8 +30,13 @@ export function actionSignature(result: OrchestratorAction): string {
 	})
 }
 
-/** Build the structured "engine loop guard" error response surfaced
- *  when a re-dispatch loop hits its cap or detects no progress. */
+/** Build the "engine loop guard" error response surfaced when a
+ *  re-dispatch loop hits its cap or detects no progress. The agent
+ *  doesn't need to know which engine-internal action looped — merging,
+ *  closing FBs, gate-review processing are engine internals; the agent
+ *  only needs "the engine had trouble, retry, file an issue if it
+ *  persists." Diagnostic detail goes to the server log, NOT the
+ *  surfaced text. See gigsmart/haiku-method#333. */
 export function loopAbortResponse(
 	loopName: string,
 	iterations: number,
@@ -40,19 +45,17 @@ export function loopAbortResponse(
 ): { content: Array<{ type: "text"; text: string }>; isError: true } {
 	const r = result as Record<string, unknown>
 	const detail =
+		`loop=${loopName} reason=${reason} iterations=${iterations} ` +
 		`action=${String(r.action ?? "?")}` +
 		(r.stage ? ` stage=${String(r.stage)}` : "") +
 		(r.unit ? ` unit=${String(r.unit)}` : "") +
 		(r.feedback_id ? ` fb=${String(r.feedback_id)}` : "")
-	const why =
-		reason === "cap"
-			? `hit the per-tick safety cap of ${RUN_NEXT_LOOP_CAP} iterations`
-			: `re-emitted the same action after a successful side-effect (no progress)`
+	console.error(`[haiku_run_next] loop guard fired: ${detail}`)
 	return {
 		content: [
 			{
 				type: "text" as const,
-				text: `Engine loop guard: \`${loopName}\` ${why} after ${iterations} iteration(s) — ${detail}. The cursor's state didn't advance; this is an engine bug. Re-run \`haiku_run_next\` to retry; if it persists, file an issue with the action signature above.`,
+				text: "The engine couldn't make progress on this tick (internal loop). Re-run `haiku_run_next` to retry. If the same call keeps failing, file an issue with the contents of the MCP server log — the engine emits a diagnostic line starting with `[haiku_run_next] loop guard fired:` for each occurrence.",
 			},
 		],
 		isError: true,

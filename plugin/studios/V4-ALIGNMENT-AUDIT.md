@@ -82,9 +82,37 @@ When per-stage reset lands, it must:
 
 - `PR #347` (this branch): tree-equality merge wedge, mid-merge detector, loop-guard diagnostic surface, post-migration sentinel narrow, await_gate session lookup, /haiku:repair + /haiku:revisit docs, this audit file
 
+## Invariant 6 — Studio hats produce meaningful output
+
+ARCHITECTURE.md §2.4 defines the content-placement taxonomy (studio / stage / phase / hat / review-agent). Studio hats must be verbose enough to produce useful output without leaning on team-specific conventions; team specifics belong in project overlays at `.haiku/studios/<studio>/...`.
+
+Audit of `plugin/studios/software/` hats (the studio most users hit first):
+
+| Hat | Lines | Has Process section? | Self-check? | Notes |
+|---|---|---|---|---|
+| inception/researcher | 7 | no | no | Sparse |
+| inception/distiller | 14 | no | no | Sparse |
+| inception/verifier | (read) | TODO | TODO | TODO |
+| design/* | most ≥ 30 | mixed | rarely | Moderate |
+| product/product | 264 | yes | yes | **Expanded 2026-05-12** — canonical template |
+| product/specification | 162 | yes | implicit | Good |
+| product/validator | 70 | yes | implicit | Acceptable |
+| product/classifier | 66 | yes | implicit | Acceptable (fix-loop) |
+| product/feedback-assessor | 11 | no | n/a (verifier role) | Intentionally minimal — guardrails not process |
+| development/planner | 100 | yes | yes | Good |
+| development/builder | 21 | no | no | **Sparse** — TDD red flags + repair operator but no step-by-step |
+| development/reviewer | 15 | implicit | no | **Sparse** — has CoVe guidance but no concrete process |
+| development/classifier | 66 | yes | implicit | Acceptable |
+| development/feedback-assessor | 11 | no | n/a (verifier role) | Intentionally minimal |
+
+Across all studios, ~30 hats are under 10 lines — most concentrated in `gamedev/`, `hwdev/`, `libdev/`. These were scaffolded by the studio template generator and have not been expanded to produce meaningful output. Tracked here for future expansion; each follows the `software/product/product.md` shape (Focus → Process → Output → Self-check → Anti-patterns).
+
+The `software/product/product.md` template extracts org-agnostic AC-writing best practices (Variability Brief, NOTE callouts, do-NOT-display states, classify existing/modified/net-new). Team conventions (Notion fetches, GigSmart color tokens, named UI components) deliberately stay OUT of the plugin default and live in project overlay.
+
 ## Open follow-ups (separate PRs)
 
 - Per-stage `/haiku:reset` (task #25)
 - Remove the FM-cache writes after auditing consumers (Invariant 1)
 - Fix `close_feedback` cursor emission OR remove the action entirely (Invariant 2 cont.)
+- Expand sparse hats per the `software/product/product.md` shape, prioritized by user-visibility: `software/development/{builder,reviewer}`, `software/inception/{researcher,distiller,verifier}`, then the gamedev/hwdev/libdev studio hats
 - SPA wire payload audit (task #23) — three known bugs: outputs labeled as discovery, cross-stage artifact leak, .feature files not rendering

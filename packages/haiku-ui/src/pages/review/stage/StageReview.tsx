@@ -2216,6 +2216,18 @@ function resolveStageSummary(
 
 function inferKind(filename: string): string {
 	const lower = filename.toLowerCase()
+	// Kind is derived from the file's directory prefix first (the
+	// wire payload's `name` retains paths relative to stages/<stage>/
+	// or stages/<stage>/artifacts/, so `discovery/X` / `knowledge/X` /
+	// `wireframes/X` are the real signal), then by extension only as
+	// a fallback. Pre-2026-05-12 this function defaulted to
+	// `"discovery"` for every unrecognized extension — mislabeling
+	// .md outputs like ACCEPTANCE-CRITERIA.md as discovery in the
+	// review pane and confusing reviewers.
+	if (lower.startsWith("knowledge/")) return "knowledge"
+	if (lower.startsWith("discovery/")) return "discovery"
+	if (lower.startsWith("wireframes/") || lower.startsWith("wireframe/"))
+		return "wireframe"
 	if (lower.endsWith(".svg")) return "diagram"
 	if (
 		lower.endsWith(".png") ||
@@ -2225,7 +2237,7 @@ function inferKind(filename: string): string {
 		return "image"
 	if (lower.endsWith(".html")) return "wireframe"
 	if (lower.endsWith(".pdf")) return "artifact"
-	return "discovery"
+	return "artifact"
 }
 
 function inferOutputKind(a: { name: string; type: string }): string {
@@ -2236,9 +2248,9 @@ function inferOutputKind(a: { name: string; type: string }): string {
 
 function inferMime(filename: string): string {
 	const lower = filename.toLowerCase()
-	if (lower.endsWith(".md")) return "markdown"
+	if (lower.endsWith(".md") || lower.endsWith(".markdown")) return "markdown"
 	if (lower.endsWith(".svg")) return "svg"
-	if (lower.endsWith(".html")) return "html"
+	if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html"
 	if (
 		lower.endsWith(".png") ||
 		lower.endsWith(".jpg") ||
@@ -2246,7 +2258,56 @@ function inferMime(filename: string): string {
 	)
 		return "image"
 	if (lower.endsWith(".pdf")) return "pdf"
-	return "text"
+	// ASCII text formats the reviewer should be able to READ in-pane,
+	// not just download. Gherkin .feature files for Cucumber were
+	// landing as "text" mime and falling through to the file-download
+	// path; reviewers reported they couldn't see the spec they were
+	// supposed to be reviewing. Treat text-shaped files as text so the
+	// renderer's text path picks them up.
+	if (
+		lower.endsWith(".feature") ||
+		lower.endsWith(".gherkin") ||
+		lower.endsWith(".txt") ||
+		lower.endsWith(".yaml") ||
+		lower.endsWith(".yml") ||
+		lower.endsWith(".json") ||
+		lower.endsWith(".toml") ||
+		lower.endsWith(".ini") ||
+		lower.endsWith(".env") ||
+		lower.endsWith(".log") ||
+		lower.endsWith(".sql") ||
+		lower.endsWith(".graphql") ||
+		lower.endsWith(".gql") ||
+		lower.endsWith(".sh") ||
+		lower.endsWith(".bash") ||
+		lower.endsWith(".zsh") ||
+		lower.endsWith(".ts") ||
+		lower.endsWith(".tsx") ||
+		lower.endsWith(".js") ||
+		lower.endsWith(".jsx") ||
+		lower.endsWith(".py") ||
+		lower.endsWith(".rb") ||
+		lower.endsWith(".go") ||
+		lower.endsWith(".rs") ||
+		lower.endsWith(".java") ||
+		lower.endsWith(".kt") ||
+		lower.endsWith(".swift") ||
+		lower.endsWith(".c") ||
+		lower.endsWith(".h") ||
+		lower.endsWith(".cpp") ||
+		lower.endsWith(".cs") ||
+		lower.endsWith(".rs") ||
+		lower.endsWith(".css") ||
+		lower.endsWith(".scss") ||
+		lower.endsWith(".dockerfile") ||
+		lower.endsWith("makefile") ||
+		lower.endsWith(".cue") ||
+		lower.endsWith(".tf") ||
+		lower.endsWith(".hcl")
+	) {
+		return "text"
+	}
+	return "binary"
 }
 
 function firstLine(content: string): string {

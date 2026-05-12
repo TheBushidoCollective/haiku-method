@@ -367,6 +367,54 @@ export async function parseStageArtifacts(
 
 const OUTPUT_IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif"]
 const OUTPUT_HTML_EXTS = [".html", ".htm"]
+// ASCII / text-shaped outputs that the review pane should be able to
+// render inline (read, not download). Gherkin `.feature` files for
+// Cucumber are the canonical case — reviewers reported they couldn't
+// read the behavioral spec they were supposed to be reviewing because
+// .feature fell through to the `file` (download-only) path.
+//
+// Keep this list narrow enough that a binary file mis-named with a
+// listed extension doesn't get inlined and blow up the wire payload.
+// Anything ambiguous goes through the `file` path with `relativePath`.
+const OUTPUT_TEXT_EXTS = [
+	".feature",
+	".gherkin",
+	".txt",
+	".yaml",
+	".yml",
+	".json",
+	".toml",
+	".ini",
+	".env",
+	".sql",
+	".graphql",
+	".gql",
+	".sh",
+	".bash",
+	".zsh",
+	".ts",
+	".tsx",
+	".js",
+	".jsx",
+	".mjs",
+	".cjs",
+	".py",
+	".rb",
+	".go",
+	".rs",
+	".java",
+	".kt",
+	".swift",
+	".c",
+	".h",
+	".cpp",
+	".cs",
+	".css",
+	".scss",
+	".cue",
+	".tf",
+	".hcl",
+]
 
 export interface OutputArtifact {
 	stage: string
@@ -439,6 +487,28 @@ async function buildArtifactEntry(
 	}
 	if (OUTPUT_IMAGE_EXTS.includes(ext)) {
 		return { stage, name, type: "image", relativePath }
+	}
+	if (OUTPUT_TEXT_EXTS.includes(ext)) {
+		try {
+			const content = await readFile(fullPath, "utf-8")
+			// Surface text-shaped outputs (.feature, .yaml, .ts, etc.) as
+			// markdown so the renderer's existing markdown viewer renders
+			// them as readable text rather than offering a download. The
+			// content isn't actually markdown — but the renderer's
+			// markdown path tolerates plain text gracefully (no markdown
+			// syntax = renders as paragraphs), and the alternative
+			// (binary file download) is the bug we're fixing.
+			return {
+				stage,
+				name,
+				type: "markdown",
+				content,
+				relativePath,
+			}
+		} catch {
+			// Unreadable — fall through to file-download path so the
+			// reviewer at least sees the entry.
+		}
 	}
 	// Unknown extension — surface as a download link rather than silently
 	// dropping the file. A stage's artifact set should be visible in the

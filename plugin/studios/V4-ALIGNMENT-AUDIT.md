@@ -109,6 +109,16 @@ Across all studios, ~30 hats are under 10 lines — most concentrated in `gamede
 
 The `software/product/product.md` template extracts org-agnostic AC-writing best practices (Variability Brief, NOTE callouts, do-NOT-display states, classify existing/modified/net-new). Team conventions (Notion fetches, GigSmart color tokens, named UI components) deliberately stay OUT of the plugin default and live in project overlay.
 
+## Invariant 7 — SPA renderer surfaces every artifact correctly
+
+Two confirmed bugs in the SPA wire-payload + renderer pipeline, fixed 2026-05-12:
+
+**Bug 1**: `inferKind` in `StageReview.tsx` defaulted to `"discovery"` for every unrecognized extension. Acceptance-criteria docs (.md outputs) were being labeled discovery in the review pane and confusing reviewers ("our PM thinks the AC isn't what they expected"). Fix: derive kind from the file's directory prefix (`knowledge/`, `discovery/`, `wireframes/`) when present; default to `"artifact"` (not `"discovery"`) when no prefix matches.
+
+**Bug 2**: ASCII text files like Gherkin `.feature` weren't rendering — they fell through `buildArtifactEntry`'s extension matcher into the `"file"` (download-only) path, so reviewers couldn't read the behavioral specs they were supposed to be reviewing. Fix: extended `buildArtifactEntry` to inline content for an explicit list of text-shaped extensions (`.feature`, `.gherkin`, `.txt`, `.yaml`, `.yml`, `.json`, `.toml`, source-code extensions, etc.) and return them as `type: "markdown"` so the renderer's markdown viewer picks them up. The SPA's `inferMime` updated to match.
+
+**Investigated but not a bug**: cross-stage artifact leak. `StageReview.tsx` and `ReviewPage.tsx` both filter `stage_artifacts` and `output_artifacts` by current `stageName` (lines 348-352 in StageReview, 874-878 in ReviewPage). The only intent-level surface is `IntentReview.tsx` which intentionally shows all stages' artifacts (intent-completion review covers the full intent). If a user on stage X saw outputs from stage Y, the likely cause is either (a) they were on IntentReview not StageReview, or (b) a unit in stage X declared an `outputs:` path inside another stage's directory — that artifact gets tagged with stage X (the unit's stage) but its path appears to belong elsewhere. Both are by-design behaviors; tagged for UX clarity but not a code bug.
+
 ## Open follow-ups (separate PRs)
 
 - Per-stage `/haiku:reset` (task #25)

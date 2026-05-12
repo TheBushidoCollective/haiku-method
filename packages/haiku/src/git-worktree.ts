@@ -97,7 +97,7 @@ function tryRun(args: string[], cwd?: string): string {
  * triggered the opposite-direction sync on the next tick. Loop guard
  * fired forever. Tree-equality gates kill the no-op merge chain.
  */
-function refsHaveIdenticalTrees(refA: string, refB: string): boolean {
+export function refsHaveIdenticalTrees(refA: string, refB: string): boolean {
 	const a = tryRun(["git", "rev-parse", `${refA}^{tree}`])
 	if (!a) return false
 	const b = tryRun(["git", "rev-parse", `${refB}^{tree}`])

@@ -530,8 +530,29 @@ export default defineTool({
 					// happens AFTER the cursor produces an action.
 					const sync = syncBranchDownstream(slug)
 					if (!sync.ok) {
-						// Real conflict during the downstream sync. The
-						// recovery instructions differ by step:
+						// The downstream sync failed. Two distinct failure
+						// modes need distinct error codes:
+						//   - `pre_cursor_sync_conflict` (conflictFiles
+						//     non-empty): real content conflict. Recovery
+						//     differs by step (in-place vs temp worktree).
+						//   - `pre_cursor_sync_failed` (conflictFiles
+						//     empty or missing): the merge couldn't even
+						//     start — target branch checked out elsewhere
+						//     with a dirty tree, worktree locked, or git
+						//     refused for a non-conflict reason. Reported
+						//     2026-05-12: an agent ran into this when the
+						//     temp-worktree path for mainline → intent
+						//     main couldn't run. The old generic message
+						//     told the user to "resolve the conflict
+						//     files" — but the list was empty and no
+						//     conflict markers existed anywhere, so the
+						//     user looked for nothing and got stuck. The
+						//     two codes give the agent a stable handle to
+						//     branch on, and the messages give the user
+						//     actionable recovery for each shape.
+						//
+						// Recovery for the real-conflict path differs by
+						// step:
 						//   - intent_main_to_stage (in-place): working
 						//     tree is mid-merge, agent edits conflicted
 						//     files in place (workflow-fields guard's
@@ -540,18 +561,43 @@ export default defineTool({
 						//   - mainline_to_intent_main (temp worktree):
 						//     withTempWorktree's finally block already
 						//     force-removed the temp worktree. No
-						//     conflict markers exist in the agent's
-						//     working tree. Recovery requires manually
-						//     checking out intent main, replaying the
-						//     merge, resolving, committing, and
-						//     switching back. Without this branching,
-						//     an agent encountering a step-1 conflict
-						//     would chase `git status` for markers that
-						//     aren't there and loop.
+						//     conflict markers exist. Recovery requires
+						//     manually checking out intent main,
+						//     replaying the merge, resolving, committing,
+						//     and switching back.
+						const hasConflictFiles = (sync.conflictFiles ?? []).length > 0
+						if (!hasConflictFiles) {
+							const targetBranch = sync.conflictBranch ?? `haiku/${slug}/main`
+							const targetMainline =
+								sync.conflictAt === "mainline_to_intent_main"
+									? "merge the mainline ref into it"
+									: "merge intent main into it"
+							return text(
+								JSON.stringify(
+									{
+										action: "error",
+										intent: slug,
+										error: "pre_cursor_sync_failed",
+										conflict_at: sync.conflictAt,
+										conflict_branch: sync.conflictBranch,
+										underlying_error: sync.message,
+										message:
+											`Pre-cursor downstream sync FAILED on branch '${targetBranch}' ` +
+											`(${sync.conflictAt}). The merge couldn't start — there are NO ` +
+											"conflict markers to resolve. Likely cause: the target branch is " +
+											"checked out elsewhere with dirty tracked changes, the worktree " +
+											"is locked, or git refused for another non-conflict reason. " +
+											`To recover: \`git checkout ${targetBranch}\`, ${targetMainline} ` +
+											"manually, resolve any conflicts and commit, then `git checkout` " +
+											"back to your original branch and re-run `haiku_run_next`. " +
+											`Underlying error: ${sync.message ?? "(none reported)"}.`,
+									},
+									null,
+									2,
+								),
+							)
+						}
 						const files = (sync.conflictFiles ?? []).join(", ")
-						const fileList = files
-							? ` Conflicted files: ${files}.`
-							: " (No files reported — check git status.)"
 						const recovery =
 							sync.conflictAt === "mainline_to_intent_main"
 								? `The conflict happened in a temp worktree that's already been cleaned up — there are NO conflict markers in your working tree. To resolve: \`git checkout ${sync.conflictBranch}\`, merge the mainline ref manually (\`git merge <mainline-ref>\`), resolve the listed files, \`git add\` + \`git commit\`, then \`git checkout\` back to your original branch and re-run \`haiku_run_next\`.`
@@ -567,7 +613,7 @@ export default defineTool({
 									conflict_files: sync.conflictFiles,
 									message:
 										`Pre-cursor downstream sync hit a conflict on branch '${sync.conflictBranch}' ` +
-										`(${sync.conflictAt}). ${recovery}${fileList}`,
+										`(${sync.conflictAt}). ${recovery} Conflicted files: ${files}.`,
 								},
 								null,
 								2,
@@ -659,7 +705,7 @@ export default defineTool({
 		// Post-walk merge-debt synthesis. When the cursor advances past a
 		// stage (e.g., the agent is on `inception`'s branch but the cursor's
 		// answer is `design`'s next action), the upstream stage `inception`
-		// owes its merge to intent main BEFORE the agent moves on. The
+		// MAY owe its merge to intent main BEFORE the agent moves on. The
 		// cursor itself only emits `merge_stage` from inside
 		// walkIntentTrack(<active stage>) — it doesn't synthesize a
 		// merge_stage for a previous stage when the active stage advances.
@@ -670,15 +716,24 @@ export default defineTool({
 		// forked off intent main BEFORE the inception merge that never
 		// happened), pings back to inception, and we ping-pong forever.
 		//
-		// This block restores the case (b)/(e) semantics from the OLD
-		// pre-tick branch-alignment block (deleted as part of the
-		// pre-cursor-sync restructure), now in the correct post-walk
-		// position. If I'm on stage Y's branch, Y is `isStageComplete`,
-		// and the cursor returned an action targeting a DIFFERENT stage,
-		// rewrite the result to `merge_stage(Y)` so Y merges into intent
-		// main first. The existing merge_stage while-loop below handles
-		// the merge and re-ticks; the next tick walks correctly from
-		// intent main.
+		// This block restores case (b)/(e) semantics from the OLD pre-
+		// tick branch-alignment block (deleted as part of the pre-cursor-
+		// sync restructure), now in the correct post-walk position.
+		//
+		// CRITICAL: only synthesize when there's ACTUAL merge debt. If
+		// inception's tree already matches intent main's tree (post-v3-
+		// migration: a previous v3 merge landed inception's units on
+		// intent main already), the merge would be a `--no-ff` no-op —
+		// caught by `mergeStageBranchIntoMain`'s tree-equality short-
+		// circuit. But the short-circuit returns `noop: true` (success)
+		// and the merge_stage handler re-dispatches the cursor, which
+		// then returns the SAME design action, this synthesis re-fires,
+		// merge_stage(inception) goes around again, and the loop guard
+		// fires on consecutive merge_stage emissions for an already-
+		// merged stage. Reported 2026-05-12 by a user on 4.4.1 after
+		// resetting branches to pre-migration tips and re-migrating.
+		// Skip the synthesis when trees are already identical — the
+		// merge debt is already paid, agent should just switch branches.
 		try {
 			const here = safeCurrentBranchHere()
 			const stagePrefix = `haiku/${slug}/`
@@ -703,10 +758,28 @@ export default defineTool({
 							"../../orchestrator/workflow/cursor.js"
 						)
 						if (isStageComplete(iDir, studio, hereStage, mode)) {
-							result = {
-								action: "merge_stage",
-								intent: slug,
-								stage: hereStage,
+							// Only synthesize merge_stage when there's real
+							// merge debt (trees differ). When trees already
+							// match (the merge already landed in an earlier
+							// cycle — v3 lifecycle, or this session's
+							// previous successful merge), skip the
+							// synthesis so the post-cursor branch switch
+							// below moves the agent to the cursor's named
+							// stage. Without this guard, the merge_stage
+							// handler's no-op success re-dispatches the
+							// cursor, the cursor returns the same action,
+							// this synthesis re-fires forever.
+							const { refsHaveIdenticalTrees } = await import(
+								"../../git-worktree.js"
+							)
+							const hereBranch = `haiku/${slug}/${hereStage}`
+							const intentMainBranch = `haiku/${slug}/main`
+							if (!refsHaveIdenticalTrees(hereBranch, intentMainBranch)) {
+								result = {
+									action: "merge_stage",
+									intent: slug,
+									stage: hereStage,
+								}
 							}
 						}
 					}

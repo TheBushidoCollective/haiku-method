@@ -33,6 +33,7 @@ import { join } from "node:path"
 import {
 	ensureOnStageBranch,
 	fetchOrigin,
+	getCurrentBranch,
 	pushStageBranch,
 	reconcileIntentBranches,
 	syncBranchDownstream,
@@ -645,13 +646,40 @@ export default defineTool({
 						//     manually checking out intent main,
 						//     replaying the merge, resolving, committing,
 						//     and switching back.
+						// Pick a sensible fallback branch when conflictBranch is
+						// missing (the syncBranchDownstream contract always
+						// populates it on real conflicts, but
+						// mergeRefIntoBranch's outer catch in git-worktree.ts
+						// returns { ok: false, message } with no
+						// conflictBranch when withWorktreeOnBranch itself
+						// throws — e.g., target branch locked by another
+						// worktree). Case-specific fallback: intent main for
+						// the mainline-side step; the agent's current branch
+						// (the stage they're checked out on) for the in-place
+						// intent-main → stage step.
+						const fallbackBranch =
+							sync.conflictAt === "mainline_to_intent_main"
+								? `haiku/${slug}/main`
+								: getCurrentBranch() || `haiku/${slug}/main`
+						const targetBranch = sync.conflictBranch ?? fallbackBranch
+						// Surface conflict_branch as `null` (never `undefined`)
+						// so agents/tests can rely on the key always being
+						// present in the JSON body.
+						const conflictBranchJson = sync.conflictBranch ?? null
 						const hasConflictFiles = (sync.conflictFiles ?? []).length > 0
 						if (!hasConflictFiles) {
-							const targetBranch = sync.conflictBranch ?? `haiku/${slug}/main`
-							const targetMainline =
+							// Recovery shape differs by step:
+							//   - mainline_to_intent_main: agent is on the stage
+							//     branch; needs to switch to intent main, replay
+							//     the merge there, switch back.
+							//   - intent_main_to_stage: agent is already on the
+							//     stage branch (that's where the in-place merge
+							//     was attempted). No checkout dance needed; just
+							//     merge intent main into it where they are.
+							const recovery =
 								sync.conflictAt === "mainline_to_intent_main"
-									? "merge the mainline ref into it"
-									: "merge intent main into it"
+									? `To recover: \`git checkout ${targetBranch}\`, merge the mainline ref into it manually, resolve any conflicts and commit, then \`git checkout\` back to your original branch and re-run \`haiku_run_next\`.`
+									: `To recover: \`git merge haiku/${slug}/main\` on this branch (you're already on '${targetBranch}'), resolve any conflicts and commit, then re-run \`haiku_run_next\`.`
 							return text(
 								JSON.stringify(
 									{
@@ -659,17 +687,14 @@ export default defineTool({
 										intent: slug,
 										error: "pre_cursor_sync_failed",
 										conflict_at: sync.conflictAt,
-										conflict_branch: sync.conflictBranch,
+										conflict_branch: conflictBranchJson,
 										underlying_error: sync.message,
 										message:
 											`Pre-cursor downstream sync FAILED on branch '${targetBranch}' ` +
 											`(${sync.conflictAt}). The merge couldn't start — there are NO ` +
 											"conflict markers to resolve. Likely cause: the target branch is " +
 											"checked out elsewhere with dirty tracked changes, the worktree " +
-											"is locked, or git refused for another non-conflict reason. " +
-											`To recover: \`git checkout ${targetBranch}\`, ${targetMainline} ` +
-											"manually, resolve any conflicts and commit, then `git checkout` " +
-											"back to your original branch and re-run `haiku_run_next`. " +
+											`is locked, or git refused for another non-conflict reason. ${recovery} ` +
 											`Underlying error: ${sync.message ?? "(none reported)"}.`,
 									},
 									null,
@@ -680,7 +705,7 @@ export default defineTool({
 						const files = (sync.conflictFiles ?? []).join(", ")
 						const recovery =
 							sync.conflictAt === "mainline_to_intent_main"
-								? `The conflict happened in a temp worktree that's already been cleaned up — there are NO conflict markers in your working tree. To resolve: \`git checkout ${sync.conflictBranch}\`, merge the mainline ref manually (\`git merge <mainline-ref>\`), resolve the listed files, \`git add\` + \`git commit\`, then \`git checkout\` back to your original branch and re-run \`haiku_run_next\`.`
+								? `The conflict happened in a temp worktree that's already been cleaned up — there are NO conflict markers in your working tree. To resolve: \`git checkout ${targetBranch}\`, merge the mainline ref manually (\`git merge <mainline-ref>\`), resolve the listed files, \`git add\` + \`git commit\`, then \`git checkout\` back to your original branch and re-run \`haiku_run_next\`.`
 								: `Resolve the conflict on the listed files in place, run \`git add <files>\` and \`git commit\`, then re-run \`haiku_run_next\`.`
 						return text(
 							JSON.stringify(
@@ -689,10 +714,10 @@ export default defineTool({
 									intent: slug,
 									error: "pre_cursor_sync_conflict",
 									conflict_at: sync.conflictAt,
-									conflict_branch: sync.conflictBranch,
+									conflict_branch: conflictBranchJson,
 									conflict_files: sync.conflictFiles,
 									message:
-										`Pre-cursor downstream sync hit a conflict on branch '${sync.conflictBranch}' ` +
+										`Pre-cursor downstream sync hit a conflict on branch '${targetBranch}' ` +
 										`(${sync.conflictAt}). ${recovery} Conflicted files: ${files}.`,
 								},
 								null,
@@ -854,6 +879,15 @@ export default defineTool({
 							)
 							const hereBranch = `haiku/${slug}/${hereStage}`
 							const intentMainBranch = `haiku/${slug}/main`
+							// `refsHaveIdenticalTrees` returns false when
+							// either ref is missing (rev-parse on a missing
+							// branch yields empty stdout). Conservative-by-
+							// design: if we can't prove trees match, assume
+							// they don't and synthesize the merge. The
+							// surrounding try/catch (above) absorbs any
+							// downstream failure on the synthesized
+							// merge_stage call, so the worst case is a
+							// recoverable error message instead of a wedge.
 							if (!refsHaveIdenticalTrees(hereBranch, intentMainBranch)) {
 								result = {
 									action: "merge_stage",

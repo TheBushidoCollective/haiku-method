@@ -2296,7 +2296,6 @@ function inferMime(filename: string): string {
 		lower.endsWith(".h") ||
 		lower.endsWith(".cpp") ||
 		lower.endsWith(".cs") ||
-		lower.endsWith(".rs") ||
 		lower.endsWith(".css") ||
 		lower.endsWith(".scss") ||
 		lower.endsWith(".dockerfile") ||

@@ -130,6 +130,7 @@ export type {
 	HaikuSeedInput,
 	HaikuSettingsGetInput,
 	HaikuSettingsSetInput,
+	HaikuStageResetInput,
 	HaikuStudioGetInput,
 	HaikuStudioStageGetInput,
 } from "./inputs/long-tail.js"
@@ -149,6 +150,7 @@ export {
 	HAIKU_SEED_INPUT_SCHEMA,
 	HAIKU_SETTINGS_GET_INPUT_SCHEMA,
 	HAIKU_SETTINGS_SET_INPUT_SCHEMA,
+	HAIKU_STAGE_RESET_INPUT_SCHEMA,
 	HAIKU_STUDIO_GET_INPUT_SCHEMA,
 	HAIKU_STUDIO_STAGE_GET_INPUT_SCHEMA,
 	validateHaikuBacklogInputSchema,
@@ -166,6 +168,7 @@ export {
 	validateHaikuSeedInputSchema,
 	validateHaikuSettingsGetInputSchema,
 	validateHaikuSettingsSetInputSchema,
+	validateHaikuStageResetInputSchema,
 	validateHaikuStudioGetInputSchema,
 	validateHaikuStudioStageGetInputSchema,
 } from "./inputs/long-tail.js"

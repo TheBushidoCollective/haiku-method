@@ -368,6 +368,23 @@ export const validateHaikuReleaseNotesInputSchema = stateAjv.compile(
 	HAIKU_RELEASE_NOTES_INPUT_SCHEMA,
 )
 
+// ── haiku_stage_reset ─────────────────────────────────────────────
+
+export const HAIKU_STAGE_RESET_INPUT_SCHEMA = Type.Object(
+	{
+		intent: Type.String({ minLength: 1, description: "Intent slug" }),
+		stage: Type.String({
+			minLength: 1,
+			description: "Stage name to reset (e.g. 'product')",
+		}),
+	},
+	{ additionalProperties: false },
+)
+export type HaikuStageResetInput = Static<typeof HAIKU_STAGE_RESET_INPUT_SCHEMA>
+export const validateHaikuStageResetInputSchema = stateAjv.compile(
+	HAIKU_STAGE_RESET_INPUT_SCHEMA,
+)
+
 // ── haiku_repair ──────────────────────────────────────────────────
 
 export const HAIKU_REPAIR_INPUT_SCHEMA = Type.Object(

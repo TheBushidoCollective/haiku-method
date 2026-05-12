@@ -67,5 +67,7 @@ terraform.tfvars
 .haiku/**/action-log.jsonl
 .haiku/**/.last_action.json
 .haiku/**/write-audit.jsonl
+# Engine diagnostics (loop-guard log, etc — runtime-only)
+.haiku/diagnostics/
 bun.lock
 plugin/bin/haiku.mjs.map

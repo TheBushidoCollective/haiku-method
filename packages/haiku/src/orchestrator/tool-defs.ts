@@ -26,6 +26,7 @@ import {
 	HAIKU_SELECT_STUDIO_INPUT_SCHEMA,
 	HAIKU_STAGE_ELABORATION_RECORD_INPUT_SCHEMA,
 	HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA,
+	HAIKU_STAGE_RESET_INPUT_SCHEMA,
 } from "../state/schemas/index.js"
 import { jsonSchemaOf } from "../state/schemas/inputs/_validate.js"
 
@@ -138,17 +139,7 @@ export const orchestratorToolDefs = [
 		name: "haiku_stage_reset",
 		description:
 			"Reset ONE stage of an intent: wipe its units, outputs, artifacts, elaboration, feedback, and stage branch. The intent's other stages are untouched. Use after fixing the stage's hat instructions or studio config when the user wants the agent to re-run that stage cleanly. Requires user confirmation via the SPA picker.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				stage: {
-					type: "string",
-					description: "Stage name to reset (e.g. 'product')",
-				},
-			},
-			required: ["intent", "stage"],
-		},
+		inputSchema: jsonSchemaOf(HAIKU_STAGE_RESET_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_intent_archive",

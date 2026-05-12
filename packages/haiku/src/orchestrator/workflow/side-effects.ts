@@ -442,11 +442,11 @@ export function findIncompleteStages(
  *  (when a stale completion-review marker is detected before any handler
  *  runs). Idempotent — calling it on a healthy intent is a no-op.
  *
- *  Resets every workflow-tracked completion field plus `status` and
- *  `active_stage`, then re-seals the integrity checksum. The first
- *  incomplete stage becomes the new `active_stage` so the next tick
- *  routes through `start_stage` instead of looping back into
- *  `awaiting_completion_review`. */
+ *  Clears every workflow-tracked completion-review FSM marker, then
+ *  re-seals the integrity checksum. v4 derives `active_stage` from
+ *  disk on the next tick via `findCurrentStage`, so routing to the
+ *  first incomplete stage falls out naturally — this function only
+ *  needs to undo the engine's own completion-review state. */
 export function rewindFromCompletionReview(slug: string, root?: string): void {
 	const iDir = root ? join(root, "intents", slug) : intentDir(slug)
 	const intentFile = join(iDir, "intent.md")
@@ -509,7 +509,7 @@ export function completeOrReviewIntent(
 			message:
 				`Cannot complete intent '${slug}': ${incompleteStages.length} stage(s) are not yet completed: ` +
 				`[${incompleteStages.join(", ")}]. ` +
-				`Reset active_stage to '${incompleteStages[0]}' and cleared completion-review markers. ` +
+				`Cleared completion-review markers; next tick will route to '${incompleteStages[0]}' (derived from disk). ` +
 				`Call \`haiku_run_next { intent: "${slug}" }\` to resume.`,
 		}
 	}
@@ -520,10 +520,13 @@ export function completeOrReviewIntent(
 	// Authors disable per-intent with intent_completion_review: false.
 	const reviewOnCompletion = intent.intent_completion_review !== false
 
-	const finalStage =
-		typeof intent.active_stage === "string"
-			? (intent.active_stage as string)
-			: ""
+	// v4: derive the final stage from the studio topology, not from the
+	// `intent.active_stage` FM field (which is no longer written by any
+	// workflow path). The final stage is by definition the last entry in
+	// `resolveIntentStages` — that's where the terminal merge into
+	// `haiku/<slug>/main` originates.
+	const studioStages = resolveIntentStages(intent, studio)
+	const finalStage = studioStages.at(-1) ?? ""
 	if (finalStage) {
 		workflowFinalizeStageIntoIntentMain(slug, finalStage)
 	}

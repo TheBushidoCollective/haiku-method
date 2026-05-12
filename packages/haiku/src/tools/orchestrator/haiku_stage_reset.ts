@@ -29,6 +29,15 @@ import {
 	getMainlineBranch,
 } from "../../git-worktree.js"
 import { runPicker } from "../../server/picker.js"
+import {
+	HAIKU_STAGE_RESET_INPUT_SCHEMA,
+	type HaikuStageResetInput,
+	validateHaikuStageResetInputSchema,
+} from "../../state/schemas/index.js"
+import {
+	jsonSchemaOf,
+	validateToolInput,
+} from "../../state/schemas/inputs/_validate.js"
 import { findHaikuRoot, gitCommitState, isGitRepo } from "../../state-tools.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
@@ -37,20 +46,15 @@ export default defineTool({
 	name: "haiku_stage_reset",
 	description:
 		"Reset ONE stage of an intent: wipe its units, outputs, artifacts, elaboration, feedback, and stage branch. The intent's other stages are untouched. Use after fixing the stage's hat instructions or studio config when the user wants the agent to re-run that stage cleanly. Requires user confirmation via the SPA picker.",
-	inputSchema: {
-		type: "object" as const,
-		properties: {
-			intent: { type: "string", description: "Intent slug" },
-			stage: {
-				type: "string",
-				description: "Stage name to reset (e.g. 'product')",
-			},
-		},
-		required: ["intent", "stage"],
-	},
+	inputSchema: jsonSchemaOf(HAIKU_STAGE_RESET_INPUT_SCHEMA),
 	async handle(args, signal) {
-		const slug = args.intent as string
-		const stage = args.stage as string
+		const inputErr = validateToolInput(
+			args,
+			validateHaikuStageResetInputSchema,
+			"haiku_stage_reset",
+		)
+		if (inputErr) return inputErr
+		const { intent: slug, stage } = args as HaikuStageResetInput
 
 		const root = findHaikuRoot()
 		const iDir = join(root, "intents", slug)

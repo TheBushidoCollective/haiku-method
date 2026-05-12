@@ -11,7 +11,10 @@
 // circular `tools/orchestrator/index.ts` ↔ `orchestrator.ts` chain
 // that haiku_run_next is part of. See gigsmart/haiku-method#333.
 
+import { appendFileSync, mkdirSync } from "node:fs"
+import { dirname, join } from "node:path"
 import type { OrchestratorAction } from "../../orchestrator.js"
+import { findHaikuRoot } from "../../state-tools.js"
 
 /** Hard cap on per-tick re-dispatch loop iterations. */
 export const RUN_NEXT_LOOP_CAP = 16
@@ -30,13 +33,42 @@ export function actionSignature(result: OrchestratorAction): string {
 	})
 }
 
+/** Append a line to `<repo>/.haiku/diagnostics/loop-guards.log`.
+ *  The MCP server's stderr is captured over a unix socket by Claude
+ *  Code, which the user can't grep from disk. A file on disk in the
+ *  repo's `.haiku` directory is recoverable: the user pastes the last
+ *  N lines back when filing a bug. Fail-open: if the write fails
+ *  (no haiku root, FS error), still emit to stderr so we don't
+ *  silently lose the diagnostic.
+ *
+ *  Lives here (not in `state-tools` or a shared sink) so the loop
+ *  guard's signal doesn't depend on a feature flag or a session
+ *  context — it MUST land regardless of MCP state. */
+function writeLoopGuardDiagnostic(line: string): void {
+	const stamped = `[${new Date().toISOString()}] ${line}\n`
+	try {
+		const root = findHaikuRoot()
+		const logFile = join(root, "diagnostics", "loop-guards.log")
+		mkdirSync(dirname(logFile), { recursive: true })
+		appendFileSync(logFile, stamped)
+	} catch {
+		/* fall through — stderr still gets the line below */
+	}
+}
+
 /** Build the "engine loop guard" error response surfaced when a
  *  re-dispatch loop hits its cap or detects no progress. The agent
  *  doesn't need to know which engine-internal action looped — merging,
  *  closing FBs, gate-review processing are engine internals; the agent
  *  only needs "the engine had trouble, retry, file an issue if it
- *  persists." Diagnostic detail goes to the server log, NOT the
- *  surfaced text. See gigsmart/haiku-method#333. */
+ *  persists." Diagnostic detail goes to:
+ *    1. stderr (`console.error`) — captured by the MCP runner
+ *    2. `.haiku/diagnostics/loop-guards.log` — recoverable from disk
+ *       when stderr is buried in the MCP socket
+ *    3. The error-response text's `diagnostic:` suffix — so the user
+ *       can paste the response into a bug report without grepping
+ *  See gigsmart/haiku-method#333 (original) and the HAIKU-BUG-
+ *  merge-loop-after-v0-to-v4-migration report (diagnostic recovery). */
 export function loopAbortResponse(
 	loopName: string,
 	iterations: number,
@@ -51,11 +83,17 @@ export function loopAbortResponse(
 		(r.unit ? ` unit=${String(r.unit)}` : "") +
 		(r.feedback_id ? ` fb=${String(r.feedback_id)}` : "")
 	console.error(`[haiku_run_next] loop guard fired: ${detail}`)
+	writeLoopGuardDiagnostic(`loop guard fired: ${detail}`)
 	return {
 		content: [
 			{
 				type: "text" as const,
-				text: "The engine couldn't make progress on this tick (internal loop). Re-run `haiku_run_next` to retry. If the same call keeps failing, file an issue with the contents of the MCP server log — the engine emits a diagnostic line starting with `[haiku_run_next] loop guard fired:` for each occurrence.",
+				text:
+					"The engine couldn't make progress on this tick (internal loop). " +
+					"Re-run `haiku_run_next` to retry. If the same call keeps failing, " +
+					"file an issue with the diagnostic line below — also persisted to " +
+					"`.haiku/diagnostics/loop-guards.log` for later recovery.\n\n" +
+					`diagnostic: ${detail}`,
 			},
 		],
 		isError: true,

@@ -71,7 +71,15 @@ test("actionSignature distinguishes actions on stage / unit / feedback_id / role
 	assert.notStrictEqual(actionSignature(base), actionSignature(otherFb))
 })
 
-test("loopAbortResponse(cap) returns isError but does NOT leak engine-internal action names to the agent", () => {
+test("loopAbortResponse(cap) returns isError and surfaces the diagnostic for user-side recovery", () => {
+	// Contract revised 2026-05-12 (HAIKU-BUG-merge-loop-after-v0-to-v4-
+	// migration): the diagnostic line MUST appear in the response text
+	// so the user can recover it without grepping the MCP socket's
+	// stderr (which Claude Code captures into a unix-socket buffer
+	// they can't reach from disk). Without it, a real wedged user
+	// reported they couldn't tell which loop fired. The diagnostic is
+	// ALSO written to `.haiku/diagnostics/loop-guards.log` for offline
+	// recovery and emitted to stderr.
 	const r = loopAbortResponse(
 		"merge_stage",
 		17,
@@ -81,21 +89,21 @@ test("loopAbortResponse(cap) returns isError but does NOT leak engine-internal a
 	assert.strictEqual(r.isError, true)
 	assert.ok(Array.isArray(r.content) && r.content.length === 1)
 	const text = r.content[0].text
-	// Surfaced text is opaque — merging is engine internals; the agent
-	// doesn't need to know which loop fired or against which stage. See
-	// gigsmart/haiku-method#333: "merge_stage is engine internals... agent
-	// DOES NOT NEED TO KNOW."
-	assert.doesNotMatch(text, /merge_stage/)
-	assert.doesNotMatch(text, /design/)
-	assert.doesNotMatch(text, /\b17\b/)
-	// Still actionable: the agent knows to retry and where to look for
-	// diagnostic detail.
+	// Actionable instructions for the user.
 	assert.match(text, /retry/i)
 	assert.match(text, /haiku_run_next/)
-	assert.match(text, /loop guard fired/)
+	// Diagnostic line is in the body (the user-recoverable signal).
+	assert.match(text, /diagnostic: /)
+	assert.match(text, /loop=merge_stage/)
+	assert.match(text, /reason=cap/)
+	assert.match(text, /iterations=17/)
+	assert.match(text, /action=merge_stage/)
+	assert.match(text, /stage=design/)
+	// Path to the on-disk log so the user can grep history.
+	assert.match(text, /\.haiku\/diagnostics\/loop-guards\.log/)
 })
 
-test("loopAbortResponse(no_progress) is also opaque to the agent", () => {
+test("loopAbortResponse(no_progress) also surfaces the diagnostic", () => {
 	const r = loopAbortResponse(
 		"select_*",
 		3,
@@ -104,10 +112,11 @@ test("loopAbortResponse(no_progress) is also opaque to the agent", () => {
 	)
 	assert.strictEqual(r.isError, true)
 	const text = r.content[0].text
-	assert.doesNotMatch(text, /select_studio/)
-	assert.doesNotMatch(text, /select_\*/)
-	assert.doesNotMatch(text, /no_progress/)
 	assert.match(text, /retry/i)
+	assert.match(text, /diagnostic: /)
+	assert.match(text, /loop=select_\*/)
+	assert.match(text, /reason=no_progress/)
+	assert.match(text, /action=select_studio/)
 })
 
 console.log("")

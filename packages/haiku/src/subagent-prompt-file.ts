@@ -93,6 +93,18 @@ function maybePeriodicOwnSessionCleanup(dir: string): void {
 	}
 }
 
+/**
+ * Resolve a path inside the current MCP session's prompt-files directory
+ * (`$TMPDIR/haiku-prompts/{session_id}/{filename}`). Same directory the
+ * subagent prompts live in, so per-session diagnostics (e.g. loop-guard
+ * logs) sit next to the subagent traces a user already knows to look at.
+ * Creates the directory if needed; best-effort cleanup on first call per
+ * MCP process (`promptDir`).
+ */
+export function sessionLogPath(filename: string): string {
+	return join(promptDir(), filename)
+}
+
 /** Result type for action-prompt writes (e.g. elaborate). Only `path` is
  *  returned because action-prompt callers set the action's `message` field
  *  themselves — they never consume the pre-built instruction string. */

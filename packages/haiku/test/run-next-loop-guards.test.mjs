@@ -78,8 +78,10 @@ test("loopAbortResponse(cap) returns isError and surfaces the diagnostic for use
 	// stderr (which Claude Code captures into a unix-socket buffer
 	// they can't reach from disk). Without it, a real wedged user
 	// reported they couldn't tell which loop fired. The diagnostic is
-	// ALSO written to `.haiku/diagnostics/loop-guards.log` for offline
-	// recovery and emitted to stderr.
+	// ALSO written to the per-session log file at
+	// `$TMPDIR/haiku-prompts/{session_id}/loop-guards.log` (same dir
+	// the subagent prompts live in, so the user has one place to look
+	// for everything the engine wrote in their session).
 	const r = loopAbortResponse(
 		"merge_stage",
 		17,
@@ -99,8 +101,10 @@ test("loopAbortResponse(cap) returns isError and surfaces the diagnostic for use
 	assert.match(text, /iterations=17/)
 	assert.match(text, /action=merge_stage/)
 	assert.match(text, /stage=design/)
-	// Path to the on-disk log so the user can grep history.
-	assert.match(text, /\.haiku\/diagnostics\/loop-guards\.log/)
+	// Path to the per-session log file ($TMPDIR/haiku-prompts/{session_id}/...).
+	assert.match(text, /log: /)
+	assert.match(text, /haiku-prompts/)
+	assert.match(text, /loop-guards\.log/)
 })
 
 test("loopAbortResponse(no_progress) also surfaces the diagnostic", () => {

@@ -194,27 +194,37 @@ export default defineTool({
 		const activeStage = (intentMeta.active_stage as string) || ""
 		const intentPhase = (intentMeta.phase as string) || ""
 
-		// Gate-pointer source: per-stage `gate-session.json` for
-		// stage-scope gates, intent.md frontmatter for intent-scope
-		// gates (intent_review pre-stage, intent_completion post-final).
-		// v4: state.json is gone; gate session pointers live on the
-		// dedicated disk artifact.
+		// Gate-pointer source: intent.md frontmatter for both stage-scope
+		// and intent-scope gates. v4: state.json is gone, and there's no
+		// dedicated `stages/<stage>/gate-session.json` artifact either —
+		// every gate-prep write goes to intent.md keyed by stage.
+		//
+		// Stage-scope keys (per haiku_run_next.ts gate-review handler):
+		//   - gate_review_session_<stage>
+		//   - gate_review_url_<stage>
+		//
+		// Intent-scope keys (no stage suffix):
+		//   - gate_review_session_id
+		//   - gate_review_url
+		//
+		// Pre-2026-05-12: this code looked up `gate_review_session_id`
+		// (unkeyed) for stage-scope reattach, and also probed a
+		// `stages/<stage>/gate-session.json` file that nobody writes.
+		// Both failed; await_gate returned "nothing to await" while the
+		// session was sitting under `gate_review_session_<stage>`.
+		// See session.txt 2026-05-12.
 		const isIntentScopeGate =
 			!activeStage ||
 			intentPhase === "intent_review" ||
 			intentPhase === "awaiting_completion_review" ||
 			intentPhase === "intent_completion"
 
-		const gateSessionFile = activeStage
-			? join(intentDir(slug), "stages", activeStage, "gate-session.json")
+		const stageScopedSidKey = activeStage
+			? `gate_review_session_${activeStage}`
 			: ""
-		const stageState: Record<string, unknown> =
-			gateSessionFile && existsSync(gateSessionFile)
-				? readJson(gateSessionFile)
-				: {}
-
-		const stagePersistedSid =
-			(stageState.gate_review_session_id as string | undefined) || ""
+		const stagePersistedSid = stageScopedSidKey
+			? ((intentMeta[stageScopedSidKey] as string | undefined) ?? "")
+			: ""
 		const intentPersistedSid =
 			(intentMeta.gate_review_session_id as string | undefined) || ""
 		const persistedSid = isIntentScopeGate
@@ -235,21 +245,20 @@ export default defineTool({
 		}
 
 		const stage = activeStage
-		const nextStage = isIntentScopeGate
-			? ((intentMeta.gate_review_next_stage as string | null | undefined) ??
-				null)
-			: ((stageState.gate_review_next_stage as string | null | undefined) ??
-				null)
-		const nextPhase = isIntentScopeGate
-			? ((intentMeta.gate_review_next_phase as string | null | undefined) ??
-				null)
-			: ((stageState.gate_review_next_phase as string | null | undefined) ??
-				null)
-		const gateContext = isIntentScopeGate
-			? (intentMeta.gate_review_context as string | undefined) ||
-				(stageState.gate_review_context as string | undefined) ||
-				"stage_gate"
-			: (stageState.gate_review_context as string | undefined) || "stage_gate"
+		// next_stage / next_phase / context live on intent.md frontmatter
+		// for both scopes — haiku_run_next's gate-review handler writes
+		// them un-keyed (single review session at a time, intent-scoped
+		// fields). Pre-2026-05-12 this read from a non-existent
+		// `stages/<stage>/gate-session.json` for stage scope; the read
+		// always returned undefined and the gate then defaulted next_*
+		// to null. The defaulting masked the bug; now we read the same
+		// place haiku_run_next writes.
+		const nextStage =
+			(intentMeta.gate_review_next_stage as string | null | undefined) ?? null
+		const nextPhase =
+			(intentMeta.gate_review_next_phase as string | null | undefined) ?? null
+		const gateContext =
+			(intentMeta.gate_review_context as string | undefined) || "stage_gate"
 		const intentDirPath = `.haiku/intents/${slug}`
 
 		const _awaitGateReviewSession = getAwaitGateReviewSession()
@@ -278,26 +287,29 @@ export default defineTool({
 		// Clear the persisted session pointers as soon as the await tool
 		// owns the wait — even if the wait throws, we don't want stale
 		// state to suggest an open session that's no longer in memory.
-		// Stage-scope pointers live on the per-stage gate-session.json;
-		// intent-scope pointers live on intent.md frontmatter.
+		// Both stage-scope (gate_review_session_<stage>) and intent-
+		// scope (gate_review_session_id) pointers live on intent.md
+		// frontmatter under v4.
 		try {
-			if (gateSessionFile && existsSync(gateSessionFile)) {
-				const ss = readJson(gateSessionFile)
-				delete ss.gate_review_session_id
-				delete ss.gate_review_url
-				delete ss.gate_review_context
-				delete ss.gate_review_next_stage
-				delete ss.gate_review_next_phase
-				writeJson(gateSessionFile, ss)
-			}
-			if (isIntentScopeGate) {
-				deleteFrontmatterFields(intentMd, [
-					"gate_review_session_id",
-					"gate_review_url",
-					"gate_review_context",
-					"gate_review_next_stage",
-					"gate_review_next_phase",
-				])
+			const keysToClear = isIntentScopeGate
+				? [
+						"gate_review_session_id",
+						"gate_review_url",
+						"gate_review_context",
+						"gate_review_next_stage",
+						"gate_review_next_phase",
+					]
+				: activeStage
+					? [
+							`gate_review_session_${activeStage}`,
+							`gate_review_url_${activeStage}`,
+							"gate_review_context",
+							"gate_review_next_stage",
+							"gate_review_next_phase",
+						]
+					: []
+			if (keysToClear.length > 0) {
+				deleteFrontmatterFields(intentMd, keysToClear)
 			}
 		} catch {
 			/* non-fatal */

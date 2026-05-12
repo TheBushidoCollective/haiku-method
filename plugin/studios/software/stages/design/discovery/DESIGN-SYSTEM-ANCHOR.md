@@ -23,22 +23,22 @@ For each reusable atomic component found in source (e.g. Button, Surface, Card, 
 - **States** — list any conditional styles for the canonical 8-state set: `default, hover, focus, active, disabled, error, loading, empty` (cited to file:line). Match `DESIGN-BRIEF.md`'s state vocabulary so downstream consistency review can compare like-for-like.
 - **Variants** — any size/color/shape variants the component declares (cited to file:line)
 
-Example entry:
+Example entry (substitute your project's actual paths):
 ```
 ### Button
-Source: atorasu/atoms/Button.tsx
+Source: <atoms-dir>/Button.<ext>
 
-- height: 44px             # Button.tsx:23
-- border-radius: 8px        # Button.tsx:31
-- padding-h: 16px           # Button.tsx:28
-- default: solid bg, brand-primary text  # Button.tsx:18
-- disabled-opacity: 0.4     # Button.tsx:47
-- empty: ghost variant w/ placeholder copy  # Button.tsx:55
+- height: 44px             # Button.<ext>:23
+- border-radius: 8px       # Button.<ext>:31
+- padding-h: 16px          # Button.<ext>:28
+- default: solid bg, brand-primary text  # Button.<ext>:18
+- disabled-opacity: 0.4    # Button.<ext>:47
+- empty: ghost variant w/ placeholder copy  # Button.<ext>:55
 ```
 
 ### 2. Tokens
 
-Color, spacing, typography, and radius scales pulled from the project's tokens module (e.g. `atorasu/style/theme/colors.ts`, `style/spacing.ts`):
+Color, spacing, typography, and radius scales pulled from the project's tokens module (whichever path your design system uses — `theme/colors.*`, `tokens/spacing.*`, `style/typography.*`, or equivalent):
 
 Every recorded color value MUST carry both its raw source value AND its named-token alias as defined in `knowledge/DESIGN-TOKENS.md`. The designer hat is forbidden from using raw hex; if a color exists in source but has no named alias yet, route the gap to `## Open Questions` rather than emitting a raw hex into the anchor — never let unaliased values flow into the design context.
 
@@ -48,15 +48,15 @@ Every recorded color value MUST carry both its raw source value AND its named-to
 - **Radius scale** — each named radius alias and value (cited to file:line)
 - **Shadow/elevation** — any named shadow tokens (cited to file:line)
 
-Example entry:
+Example entry (substitute your project's actual paths):
 ```
 ### Color Tokens
-Source: atorasu/style/theme/colors.ts → mapped to knowledge/DESIGN-TOKENS.md
+Source: <theme-dir>/colors.<ext> → mapped to knowledge/DESIGN-TOKENS.md
 
-- color.brand.primary    = #1A73E8    # colors.ts:12 → DESIGN-TOKENS.md:8
-- color.surface.bg       = #FFFFFF    # colors.ts:18 → DESIGN-TOKENS.md:14
-- color.text.primary     = #212121    # colors.ts:24 → DESIGN-TOKENS.md:20
-- (gap) #F5A623 used in Button.tsx:62 has no named alias → see Open Questions
+- color.brand.primary    = #1A73E8    # colors.<ext>:12 → DESIGN-TOKENS.md:8
+- color.surface.bg       = #FFFFFF    # colors.<ext>:18 → DESIGN-TOKENS.md:14
+- color.text.primary     = #212121    # colors.<ext>:24 → DESIGN-TOKENS.md:20
+- (gap) #F5A623 used in Button.<ext>:62 has no named alias → see Open Questions
 ```
 
 ### 3. Active vs Dormant Patterns
@@ -64,7 +64,7 @@ Source: atorasu/style/theme/colors.ts → mapped to knowledge/DESIGN-TOKENS.md
 Cross-reference era/status tags from the inception stage's `DISCOVERY.md` `## Existing Code Structure` section. For each prior-art file listed there:
 
 - **Active** — pattern is used in the current codebase, values are current
-- **Dormant** — era-tagged as legacy (e.g. Stripe-era, Branch-era) — flag these explicitly so the designer avoids them
+- **Dormant** — era-tagged as legacy (e.g. predecessor-product-era, deprecated-vendor-era) — flag these explicitly so the designer avoids them
 
 ### 4. Open Questions
 

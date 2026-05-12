@@ -136,6 +136,109 @@ Link related sections rather than restating. When `Section X` is referenced, wri
 
 Always anchor when the section has a known anchor — it makes AC easier to navigate during review.
 
+#### Common AC patterns
+
+Reusable templates for the AC shapes that recur across applications. Adapt the bracketed values; keep the structure. Whenever a section in your AC looks like one of these, write it in this shape rather than inventing a new one — engineers benefit from the consistency more than from your originality.
+
+**Adding a column to an existing table:**
+
+```
+1. Add "[Column Name]" Column to [Table Name]
+   1. Add a new column to the [Table Name] table
+      1. Column Header: [Column Name]
+      2. Column Position: Place after the "[Previous Column]" column
+   2. Column Data Display
+      1. IF [condition]:
+         1. Display [data description]
+            1. This is the same value described in [Section X](#anchor)
+         2. Format: `[format]`
+            1. Example: `[example]`
+      2. IF [alternate condition]:
+         1. Display: `[sentinel value]`
+```
+
+**Updating an existing column with a tooltip:**
+
+```
+1. Update [Column Name] Column
+   1. Update text to Bold
+   2. Add question mark tooltip icon
+      1. icon: `question`
+      2. color: `info`
+      3. Selecting tooltip should open [Modal Name]
+         1. See [Section X](#anchor)
+```
+
+**Referencing a modal from an action:**
+
+```
+1. For [action]: Use updated [Modal Name]
+   1. See [Section X](#anchor)
+```
+
+**Settings card with a toggle that reveals a configuration section:**
+
+```
+1. Create [Setting Name] Card
+   1. Header
+      1. Icon
+         1. squareicon
+         2. icon: `[icon-name]`
+         3. color: `[token]`
+      2. title: [Setting Title]
+   2. Description
+      1. text: [Description copy]
+   3. Toggle Row
+      1. label: [Toggle label]?
+      2. Toggle
+         1. Default state: OFF (NO)
+         2. When toggled ON (YES), show [Configuration Section]
+         3. When toggled OFF (NO), hide [Configuration Section]
+   4. Highlighted Reminder
+      1. icon: `circle-info`
+      2. color: `info`
+      3. text: [Reminder copy]
+      4. Always show
+   5. Save Changes Button
+      1. text: Save Changes
+      2. color when enabled: `[primary-token]`
+      3. Keep disabled if no changes made or validation errors exist
+      4. When selected, save and show success toast
+```
+
+**Variant-based component placement** (the canonical shape when a component appears in multiple states with placement deltas):
+
+```
+1. General Rules
+   1. The [Component Name] (see [Section X](#anchor) for full component AC) is added to [Screen Name]
+   2. The component should be collapsed by default in all states
+   3. The component should NOT display on the **[Tab Name]** in any state
+2. [Variant 1]: [State Name]
+   1. **[Tab A]:**
+      1. [Component] Placement:
+         1. Place below [element above]
+         2. Place above [element below]
+      2. [Secondary Component] Placement:
+         1. Place directly below [Primary Component]
+         2. Only display if [condition] (see [Section X](#anchor))
+   2. **[Tab B]:**
+      1. [Component] Placement:
+         1. Place below [element above]
+         2. Place above [element below]
+3. [Variant 2]: [State Name]
+   1. **[Tab A]:**
+      1. [Component] Placement:
+         1. Same placement as [Variant 1] [Tab A]
+      2. [Secondary Component]: Do NOT display
+   2. **[Tab B]:**
+      1. [Component] Placement:
+         1. Place below [different element]
+         2. NOTE: This differs from [Variant 1] — [explain the change]
+      2. [Secondary Component]: Do NOT display
+```
+
+When a project-level overlay defines additional house patterns (specific design-system color tokens, icon set, section-numbering scheme, Notion / Confluence / Jira-specific markup), prefer the overlay's shapes over these defaults.
+
 ### 5. Self-check before handing off
 
 Before declaring AC complete:

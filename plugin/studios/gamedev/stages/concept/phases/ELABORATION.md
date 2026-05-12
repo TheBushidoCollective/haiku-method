@@ -28,7 +28,7 @@ Knowledge-artifact criteria are about **substance and internal coherence**, plus
 - "Core loop §3 names every player-facing action with what it produces (resource, progression, expression) and how it returns the player to the loop entry"
 - "Fantasy §4 has a first-person 'I feel like X' sentence + ≥2 experiences that deliver it"
 - "Audience §5 names a primary demographic, primary motivation, and ≥3 comparable titles the audience already plays"
-- "Scope §6 names target platforms (e.g., Steam + Switch), content volume in hours, and a budget range — no adjectival placeholders ('large', 'reasonable')"
+- "Scope §6 names target platforms (the specific PC / console / mobile / handheld combination), content volume in hours, and a budget range — no adjectival placeholders ('large', 'reasonable')"
 - "Open questions section: each entry has a proposed default for veto-style approval OR `(needs human escalation)`"
 
 ### Bad criteria — vague or wrong-stage language

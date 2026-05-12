@@ -112,6 +112,44 @@ Failure modes:
 - Activities that run independently and don't pass anything meaningful between them are stage-level activities, not hats. Express them as separate stage phases or as parallel review-agents, not as `hats:`.
 - Activities where hat N+1 doesn't actually consume hat N's output are misnamed hats; restructure or rename.
 
+### 2.4 Content layering — what belongs in studio vs stage vs hat vs review agent
+
+A recurring drift in this codebase is content landing at the wrong layer: studios get hat-specific process; stages duplicate hat content; hats stay as stubs because their guidance lives in the stage. The rule is one content concern per layer.
+
+| Layer | File | Owns | Does NOT own |
+|---|---|---|---|
+| **Studio** | `studios/<name>/STUDIO.md` | The lifecycle's scope and identity; the stage list; cross-cutting principles that apply to every stage; aliases / category metadata | Per-stage process, per-hat conventions, artifact format, tool choices (Notion vs Jira vs Confluence), house-style numbering or color tokens |
+| **Stage** | `studios/<name>/stages/<stage>/STAGE.md` | The stage's role within the lifecycle; the I/O contract (`inputs:`, `outputs:`); the hat list + `fix_hats:` chain + `review:` gate; a brief orientation across the per-unit baton | The per-hat process (lives in the hat md); the per-artifact format (lives in the discovery / outputs md); concrete review-lens checks (live in review-agent md) |
+| **Phase** | `stages/<stage>/phases/{ELABORATION,EXECUTION}.md` | How elaborate / execute work for THIS stage; criteria guidance specific to the stage role; what happens between hat-end and gate (review → fix loop → gate) | The per-hat process; project-tooling specifics |
+| **Hat** | `stages/<stage>/hats/<hat>.md` | ONE role's process, end to end; the format conventions for the artifact(s) THIS hat produces; reusable patterns / templates for that artifact; this hat's anti-patterns (RFC 2119) | Other hats' work, the stage's I/O contract, review-lens responsibilities |
+| **Review agent** | `stages/<stage>/review-agents/<agent>.md` | ONE lens + mandate + concrete checks + common failure modes for that lens; files feedback if a check fails | Producing artifacts, fixing findings, editing units |
+| **Discovery / Outputs (artifact spec)** | `stages/<stage>/{discovery,outputs}/<ARTIFACT>.md` | The artifact's location, scope, format, required-ness; the artifact's content guide; quality signals | How to write the artifact (that's the producing hat's md) |
+
+#### Project overlays vs plugin defaults
+
+Project-specific tooling and house style do NOT belong in the plugin's default studio / stage / hat md files. They belong in a **project overlay** at `.haiku/studios/<studio>/...` which inherits and augments the plugin defaults. Examples of content that MUST go in an overlay rather than the plugin default:
+
+- Tool-specific commands (`notion-fetch`, `gh pr create`, project-specific MCP tools)
+- House-style markup conventions (Roman-numeral section headers, doc-platform-specific embeds)
+- Project-specific design-system tokens (`gigsmart-orange`, named color tokens, custom icon set)
+- URL patterns for the project's design platform, ticketing system, docs platform
+- Project-specific verify commands beyond the language / runtime defaults
+
+The plugin's job is to make the agent produce **meaningful generic output**. The overlay's job is to shape that output for the specific team. A plugin default that hardcodes Notion is broken for every team that doesn't use Notion.
+
+#### Test for "is this in the right layer?"
+
+Before adding a paragraph anywhere, ask:
+
+- **Is this true for every stage in this studio?** → Studio
+- **Is this true for every hat in this stage, regardless of role?** → Stage or Phase
+- **Is this how ONE hat does its job?** → That hat's md
+- **Is this how to write ONE artifact?** → That artifact's discovery / outputs md
+- **Is this a single lens for finding problems?** → Review agent
+- **Is this true only for our specific team / tooling?** → Project overlay, not a plugin default
+
+If a paragraph passes more than one test, split it. Duplication across layers is how drift starts.
+
 ## 3. Hat sequence pattern: plan → do → verify
 
 Every stage's `hats:` list MUST follow `plan → do → verify`, in that order, as the leading three roles. Additional hats (e.g., adversarial loops) MAY follow but never precede.

@@ -868,44 +868,27 @@ export default defineTool({
 		} catch {
 			/* non-fatal — falls through to normal dispatch */
 		}
-		{
-			let iterations = 0
-			while (
-				result.action === "select_studio" ||
-				result.action === "select_mode" ||
-				result.action === "select_stage"
-			) {
-				const sigBefore = actionSignature(result)
-				if (++iterations > RUN_NEXT_LOOP_CAP) {
-					return loopAbortResponse("select_*", iterations, result, "cap")
-				}
-				const pickerResult = await runSelectionPicker(
-					result.action,
-					slug,
-					signal,
-				)
-				if (!pickerResult.ok) {
-					return {
-						content: [{ type: "text" as const, text: pickerResult.message }],
-						isError: true,
-					}
-				}
-				// pre-tick merge + cursor walk handle branch alignment
-				result = dispatchOrchestratorAction(slug)
-				if (
-					(result.action === "select_studio" ||
-						result.action === "select_mode" ||
-						result.action === "select_stage") &&
-					actionSignature(result) === sigBefore
-				) {
-					return loopAbortResponse(
-						"select_*",
-						iterations,
-						result,
-						"no_progress",
-					)
+		// Single-pass selection. Run ONE picker (the cursor's current
+		// answer), re-tick ONCE, return whatever's next. If the cursor
+		// returns another `select_*` (studio chose → mode needed), the
+		// agent calls haiku_run_next again and we handle it there. If
+		// the same selector returns (picker didn't write), the agent
+		// sees it twice and surfaces "engine wants picker" to the user
+		// — a visible failure, not a silent spin. No while, no loop
+		// guard reachable from this path. See #347 design discussion.
+		if (
+			result.action === "select_studio" ||
+			result.action === "select_mode" ||
+			result.action === "select_stage"
+		) {
+			const pickerResult = await runSelectionPicker(result.action, slug, signal)
+			if (!pickerResult.ok) {
+				return {
+					content: [{ type: "text" as const, text: pickerResult.message }],
+					isError: true,
 				}
 			}
+			result = dispatchOrchestratorAction(slug)
 		}
 
 		// Surface-once stamping for design_direction_complete /
@@ -978,31 +961,15 @@ export default defineTool({
 		// through them), and when the FB has `origin: "drift"`, refresh
 		// the witnessed reviews/approvals timestamps on the targeted
 		// unit so the drift sweep stops flagging the same commit.
-		let closeFbIterations = 0
-		let closeFbLastSig: string | null = null
-		while (
+		// Single-pass FB close. Close ONE feedback, re-tick once, return.
+		// Multiple consecutive close_feedback actions now drain across
+		// multiple agent calls. Agent's prompt already says
+		// "call haiku_run_next again" — no UX change.
+		if (
 			result.action === "close_feedback" &&
 			typeof result.stage === "string" &&
 			typeof result.feedback_id === "string"
 		) {
-			const sig = actionSignature(result)
-			if (++closeFbIterations > RUN_NEXT_LOOP_CAP) {
-				return loopAbortResponse(
-					"close_feedback",
-					closeFbIterations,
-					result,
-					"cap",
-				)
-			}
-			if (sig === closeFbLastSig) {
-				return loopAbortResponse(
-					"close_feedback",
-					closeFbIterations,
-					result,
-					"no_progress",
-				)
-			}
-			closeFbLastSig = sig
 			try {
 				const stage = result.stage as string
 				const fbId = result.feedback_id as string
@@ -1014,82 +981,87 @@ export default defineTool({
 				// matches the file's leading-digit prefix — single source
 				// of truth for the lookup, no chance of drift.
 				const found = findFeedbackFile(slug, stage, fbId)
-				if (!found) break
-				const fbFile = found.path
-				const fbFm = found.data
-				const closedAt = new Date().toISOString()
-				setFrontmatterField(fbFile, "closed_at", closedAt)
-				// Apply targets.invalidates — delete the named role keys
-				// from the targeted unit's reviews / approvals so the
-				// cursor reroutes through them. The start_feedback_hat
-				// prompt promises this happens on close.
-				const targets = (fbFm.targets as Record<string, unknown>) ?? {}
-				const targetUnit = targets.unit as string | undefined
-				const invalidates = Array.isArray(targets.invalidates)
-					? (targets.invalidates as string[])
-					: []
-				if (targetUnit && invalidates.length > 0) {
-					const { applyFeedbackInvalidations } = await import(
-						"../../orchestrator/workflow/dispatch-stamps.js"
-					)
-					applyFeedbackInvalidations({
-						slug,
-						stage,
-						targetUnit,
-						invalidates,
-					})
-				}
-				// Refresh witnessed signed_at on the targeted unit when
-				// this is a drift FB — otherwise the drift sweep keeps
-				// finding the same commit past the original sign time.
-				// `targets` and `targetUnit` are reused from the
-				// invalidations block above — same FB, same fields.
-				if (fbFm.origin === "drift" && targetUnit) {
-					const unitPath = join(
-						findHaikuRoot(),
-						"intents",
-						slug,
-						"stages",
-						stage,
-						"units",
-						`${targetUnit}.md`,
-					)
-					if (existsSync(unitPath)) {
-						const intentDirAbs = join(findHaikuRoot(), "intents", slug)
-						const { buildApprovalRecord, buildReviewRecord } = await import(
-							"../../orchestrator/workflow/sign-slot.js"
+				if (found) {
+					const fbFile = found.path
+					const fbFm = found.data
+					const closedAt = new Date().toISOString()
+					setFrontmatterField(fbFile, "closed_at", closedAt)
+					// Apply targets.invalidates — delete the named role keys
+					// from the targeted unit's reviews / approvals so the
+					// cursor reroutes through them. The start_feedback_hat
+					// prompt promises this happens on close.
+					const targets = (fbFm.targets as Record<string, unknown>) ?? {}
+					const targetUnit = targets.unit as string | undefined
+					const invalidates = Array.isArray(targets.invalidates)
+						? (targets.invalidates as string[])
+						: []
+					if (targetUnit && invalidates.length > 0) {
+						const { applyFeedbackInvalidations } = await import(
+							"../../orchestrator/workflow/dispatch-stamps.js"
 						)
-						const raw = readFileSync(unitPath, "utf8")
-						const parsed = parseFrontmatter(raw)
-						const fm = parsed.data as Record<string, unknown>
-						const outputs = Array.isArray(fm.outputs)
-							? (fm.outputs as string[])
-							: []
-						const reviews =
-							fm.reviews && typeof fm.reviews === "object"
-								? { ...(fm.reviews as Record<string, unknown>) }
-								: {}
-						for (const role of Object.keys(reviews)) {
-							reviews[role] = buildReviewRecord(unitPath)
+						applyFeedbackInvalidations({
+							slug,
+							stage,
+							targetUnit,
+							invalidates,
+						})
+					}
+					// Refresh witnessed signed_at on the targeted unit when
+					// this is a drift FB — otherwise the drift sweep keeps
+					// finding the same commit past the original sign time.
+					// `targets` and `targetUnit` are reused from the
+					// invalidations block above — same FB, same fields.
+					if (fbFm.origin === "drift" && targetUnit) {
+						const unitPath = join(
+							findHaikuRoot(),
+							"intents",
+							slug,
+							"stages",
+							stage,
+							"units",
+							`${targetUnit}.md`,
+						)
+						if (existsSync(unitPath)) {
+							const intentDirAbs = join(findHaikuRoot(), "intents", slug)
+							const { buildApprovalRecord, buildReviewRecord } = await import(
+								"../../orchestrator/workflow/sign-slot.js"
+							)
+							const raw = readFileSync(unitPath, "utf8")
+							const parsed = parseFrontmatter(raw)
+							const fm = parsed.data as Record<string, unknown>
+							const outputs = Array.isArray(fm.outputs)
+								? (fm.outputs as string[])
+								: []
+							const reviews =
+								fm.reviews && typeof fm.reviews === "object"
+									? { ...(fm.reviews as Record<string, unknown>) }
+									: {}
+							for (const role of Object.keys(reviews)) {
+								reviews[role] = buildReviewRecord(unitPath)
+							}
+							const approvals =
+								fm.approvals && typeof fm.approvals === "object"
+									? { ...(fm.approvals as Record<string, unknown>) }
+									: {}
+							for (const role of Object.keys(approvals)) {
+								approvals[role] = buildApprovalRecord(intentDirAbs, outputs)
+							}
+							setFrontmatterField(unitPath, "reviews", reviews)
+							setFrontmatterField(unitPath, "approvals", approvals)
 						}
-						const approvals =
-							fm.approvals && typeof fm.approvals === "object"
-								? { ...(fm.approvals as Record<string, unknown>) }
-								: {}
-						for (const role of Object.keys(approvals)) {
-							approvals[role] = buildApprovalRecord(intentDirAbs, outputs)
-						}
-						setFrontmatterField(unitPath, "reviews", reviews)
-						setFrontmatterField(unitPath, "approvals", approvals)
 					}
 				}
-				// pre-tick merge + cursor walk handle branch alignment
+				// Re-tick whether or not we found the FB. If we did, the
+				// cursor sees `closed_at` set and routes past. If we
+				// didn't, the cursor sees the same state — agent's next
+				// call surfaces the cursor's view of why.
 				result = dispatchOrchestratorAction(slug)
 			} catch (err) {
 				console.error(
 					`[haiku_run_next] close_feedback execution failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
-				break
+				/* fall through — agent re-call lands on the cursor's
+				   updated view. Visible failure beats silent loop. */
 			}
 		}
 
@@ -1123,91 +1095,55 @@ export default defineTool({
 			}
 		}
 
-		let mergeStageIterations = 0
-		let mergeStageLastSig: string | null = null
-		while (
-			result.action === "merge_stage" &&
-			typeof result.stage === "string"
-		) {
-			const sig = actionSignature(result)
-			if (++mergeStageIterations > RUN_NEXT_LOOP_CAP) {
-				return loopAbortResponse(
-					"merge_stage",
-					mergeStageIterations,
-					result,
-					"cap",
-				)
-			}
-			if (sig === mergeStageLastSig) {
-				return loopAbortResponse(
-					"merge_stage",
-					mergeStageIterations,
-					result,
-					"no_progress",
-				)
-			}
-			mergeStageLastSig = sig
+		// Single-pass stage merge. Merge ONE stage, re-tick, return
+		// whatever the cursor now sees. If the cursor returns another
+		// merge_stage (next stage's units are also approved), the
+		// agent calls haiku_run_next again and we merge the next one.
+		// No internal while, no loop guard. See #347 design discussion.
+		if (result.action === "merge_stage" && typeof result.stage === "string") {
 			const stageToMerge = result.stage
 			try {
 				const { isGitRepo } = await import("../../state-tools.js")
 				if (!isGitRepo()) {
-					// Filesystem mode: no git merge to perform. The new
-					// disk-state cursor walks past fully-signed stages
-					// directly via `isStageFullySigned`, so this code
-					// path is reached only as a defensive no-op (e.g.
-					// legacy callers that explicitly emit merge_stage).
-					// Re-tick and let the cursor advance.
-					// pre-tick merge + cursor walk handle branch alignment
+					// Filesystem mode: no git merge to perform. Re-tick;
+					// the cursor will advance based on disk state.
 					result = dispatchOrchestratorAction(slug)
-					continue
-				}
-				const { mergeStageBranchIntoMain } = await import(
-					"../../git-worktree.js"
-				)
-				const { withIntentMainLock } = await import("../../locks.js")
-				// Serialize stage → intent-main merges. Two concurrent
-				// haiku_run_next ticks targeting the same intent (e.g. an
-				// autopilot retry overlapping a manual run) would otherwise
-				// race on the merge commit, producing `merge in progress`
-				// git errors or silently clobbering each other's writes.
-				// merge_stage.ts:28 already promises this lock to the
-				// agent — this call makes that promise true.
-				const mergeOutcome = withIntentMainLock(slug, () =>
-					mergeStageBranchIntoMain(slug, stageToMerge),
-				)
-				if (!mergeOutcome.success) {
-					if (mergeOutcome.isConflict) {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: `Stage merge ${stageToMerge} → main blocked by conflict: ${mergeOutcome.message}`,
-								},
-							],
-							isError: true,
+				} else {
+					const { mergeStageBranchIntoMain } = await import(
+						"../../git-worktree.js"
+					)
+					const { withIntentMainLock } = await import("../../locks.js")
+					const mergeOutcome = withIntentMainLock(slug, () =>
+						mergeStageBranchIntoMain(slug, stageToMerge),
+					)
+					if (!mergeOutcome.success) {
+						if (mergeOutcome.isConflict) {
+							return {
+								content: [
+									{
+										type: "text" as const,
+										text: `Stage merge ${stageToMerge} → main blocked by conflict: ${mergeOutcome.message}`,
+									},
+								],
+								isError: true,
+							}
 						}
+						// Non-conflict failure (dirty tree, missing branch,
+						// etc.). Fall through — the cursor will see the
+						// unchanged state on the next agent call and
+						// surface a more specific action.
 					}
-					// Non-conflict failure (dirty tree, missing branch,
-					// etc.). Return the original merge_stage action so
-					// the agent sees the engine's diagnostic message and
-					// can investigate, instead of hanging in a loop.
-					break
+					// Re-tick. Either the merge succeeded and the cursor
+					// walks past, or the merge was a tree-equal no-op
+					// (mergeStageBranchIntoMain's short-circuit) and the
+					// cursor walks past anyway because nothing changed.
+					result = dispatchOrchestratorAction(slug)
 				}
-				// Success path: stage merged (or v3 short-circuit on a
-				// merged-and-deleted branch). Re-tick — the cursor walk
-				// will advance past the now-merged stage.
-				// Branch contract: `mergeStageBranchIntoMain` leaves the
-				// primary on intent main (git-worktree.ts:1527 —
-				// safeCheckout([main]) before merge when invoked from the
-				// stage branch). The re-tick reads from that vantage. If
-				// that branch behavior changes, this re-tick will silently
-				// read from the wrong tree.
-				result = dispatchOrchestratorAction(slug)
 			} catch (err) {
 				console.error(
 					`[haiku_run_next] merge_stage execution failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
-				break
+				/* fall through — agent re-call surfaces the failure */
 			}
 		}
 
@@ -1363,27 +1299,10 @@ export default defineTool({
 		// haiku_await_gate" two-step. haiku_await_gate stays as a
 		// resume entry point for the case where the original tick
 		// timed out or was interrupted.
-		let gateReviewIterations = 0
-		let gateReviewLastSig: string | null = null
-		while (result.action === "gate_review") {
-			const sig = actionSignature(result)
-			if (++gateReviewIterations > RUN_NEXT_LOOP_CAP) {
-				return loopAbortResponse(
-					"gate_review",
-					gateReviewIterations,
-					result,
-					"cap",
-				)
-			}
-			if (sig === gateReviewLastSig) {
-				return loopAbortResponse(
-					"gate_review",
-					gateReviewIterations,
-					result,
-					"no_progress",
-				)
-			}
-			gateReviewLastSig = sig
+		// Single-pass gate review. Open ONE review UI, handle the
+		// decision once, re-tick once. Consecutive gates (advance_phase
+		// → next gate fires) now drain across multiple agent calls.
+		if (result.action === "gate_review") {
 			const stage = (result.stage as string | null) ?? ""
 			const nextStage = result.next_stage as string | null
 			const nextPhase = result.next_phase as string | null
@@ -1517,11 +1436,15 @@ export default defineTool({
 					"intent_approved",
 				])
 				if (awaitedAction && RETICK_ACTIONS.has(awaitedAction)) {
-					// pre-tick merge + cursor walk handle branch alignment
+					// Re-tick once. If the cursor returns ANOTHER
+					// gate_review (e.g., the next phase's gate fires
+					// immediately), the agent sees it and calls
+					// haiku_run_next again. Single pass — no internal
+					// loop.
 					result = dispatchOrchestratorAction(slug)
-					continue
+				} else {
+					return awaitResponse
 				}
-				return awaitResponse
 			} catch (err) {
 				const errorMsg = err instanceof Error ? err.message : String(err)
 				const errorStack = err instanceof Error ? err.stack : ""

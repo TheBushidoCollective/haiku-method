@@ -2,6 +2,18 @@
 
 Inventory of code paths that violate v4 architecture invariants. Goal: drive each entry to closure so every skill / tool / function aligns with v4.
 
+## Status summary
+
+| Invariant | Status as of 2026-05-12 |
+|---|---|
+| 1. Outputs are the signal, not FM state | Authoritative-read bugs closed. Writes stay as legacy cache (intentional). |
+| 2. Skills don't reference dead actions | Closed. `revisited` removed. `close_feedback` vocab fixed. |
+| 3. Engine internals stay engine internals | Per user direction 2026-05-12: keep loops, fix re-emit paths. Closed. |
+| 4. `/haiku:repair` narrow under v4 | Closed. Docs rewritten. |
+| 5. Per-stage `/haiku:reset` | Closed. `haiku_stage_reset` shipped. |
+| 6. Hats produce meaningful output | Closed. Every non-template hat is now ≥24 lines; feedback-assessor and classifier templates are intentionally minimal. |
+| 7. SPA renderer surfaces every artifact correctly | Closed. `inferKind` no longer defaults to "discovery"; text-shaped extensions render. |
+
 ## Invariant 1 — Outputs are the signal, not FM state
 
 The v4 cursor derives state from disk: per-unit FM (`iterations`, `reviews`, `approvals`), per-stage `elaboration.md` `verified_at`, per-stage discovery artifact existence, branch-merge topology. The intent.md fields `active_stage`, `phase`, `status`, `completed_at` and the per-unit fields `status`, `bolt`, `hat`, `hat_started_at` are **legacy caches** — written for the SPA / dashboard / legacy tooling, **never read as authoritative** by the cursor.
@@ -121,8 +133,5 @@ Two confirmed bugs in the SPA wire-payload + renderer pipeline, fixed 2026-05-12
 
 ## Open follow-ups (separate PRs)
 
-- Per-stage `/haiku:reset` (task #25)
-- Remove the FM-cache writes after auditing consumers (Invariant 1)
-- Fix `close_feedback` cursor emission OR remove the action entirely (Invariant 2 cont.)
-- Expand sparse hats per the `software/product/product.md` shape, prioritized by user-visibility: `software/development/{builder,reviewer}`, `software/inception/{researcher,distiller,verifier}`, then the gamedev/hwdev/libdev studio hats
+- Remove the FM-cache WRITES (active_stage, phase, status, completed_at on intent.md; status/bolt/hat/hat_started_at on units). Authoritative reads were fixed in this PR; the writes themselves remain as legacy cache for the SPA / dashboard / telemetry. Removing the writes requires migrating those consumers too — separate PR.
 - SPA wire payload audit (task #23) — three known bugs: outputs labeled as discovery, cross-stage artifact leak, .feature files not rendering

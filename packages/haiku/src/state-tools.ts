@@ -4362,6 +4362,12 @@ export function syncSessionMetadata(
 			readFileSync(intentFile, "utf8"),
 		)
 		const studio = (intentData.studio as string) || ""
+		// Telemetry snapshot only — reads the FM `active_stage` cache
+		// rather than calling findCurrentStage to avoid a state-tools →
+		// cursor import cycle. Drift between the cache and the disk-
+		// derived truth shows up here as stale telemetry, not as
+		// incorrect engine routing. The cache is written by side-effects
+		// on stage transitions; this is a non-authoritative read.
 		const activeStage = (intentData.active_stage as string) || ""
 
 		let phase = ""

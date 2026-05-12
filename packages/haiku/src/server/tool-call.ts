@@ -416,8 +416,20 @@ export async function handleToolCall(
 
 		const stageArg = (a.stage as string) || ""
 		const frontmatter = intent.frontmatter as unknown as Record<string, unknown>
-		const activeStage =
-			stageArg || ((frontmatter.active_stage as string | undefined) ?? "")
+		// Active stage is DERIVED from disk via findCurrentStage when the
+		// caller didn't pin a stage. The FM `active_stage` cache is
+		// written by side-effects on stage transitions but the v4 source
+		// of truth is the cursor's disk walk. Reading the cache as
+		// authoritative routes the review pane to a stale stage when the
+		// cache lags actual state. The `stageArg` argument still wins —
+		// callers that explicitly target a stage keep that choice.
+		const studio = (frontmatter.studio as string | undefined) ?? ""
+		const { findCurrentStage } = await import(
+			"../orchestrator/workflow/cursor.js"
+		)
+		const derivedStage =
+			stageArg || (studio ? (findCurrentStage(slug, studio) ?? "") : "")
+		const activeStage = derivedStage
 
 		const units = await parseAllUnits(intentDirAbs)
 		const dag = buildDAG(units)
@@ -1270,8 +1282,19 @@ export async function awaitDesignDirectionSession(
 				join(findHaikuRoot(), "intents", intentSlug, "intent.md"),
 				"utf-8",
 			)
-			const activeStage =
-				(parseFrontmatter(intentRaw).data.active_stage as string) || ""
+			// Branch reconciliation needs the current stage. DERIVE it
+			// from the cursor's disk walk (findCurrentStage), not from
+			// intent.md's `active_stage` FM cache — the cache lags actual
+			// state on transitions and could route the branch enforcement
+			// to a stale stage.
+			const studio =
+				(parseFrontmatter(intentRaw).data.studio as string) || ""
+			const { findCurrentStage } = await import(
+				"../orchestrator/workflow/cursor.js"
+			)
+			const activeStage = studio
+				? (findCurrentStage(intentSlug, studio) ?? "")
+				: ""
 			if (activeStage) {
 				const guard = ensureOnStageBranch(intentSlug, activeStage)
 				if (!guard.ok) {

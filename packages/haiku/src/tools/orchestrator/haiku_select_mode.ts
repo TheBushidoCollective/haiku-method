@@ -111,7 +111,14 @@ export default defineTool({
 			)
 		}
 		const currentMode = ((intentFm.mode as string) || "").toLowerCase()
-		const activeStage = (intentFm.active_stage as string) || ""
+		// "Has the intent started a stage yet?" — DERIVED from the
+		// cursor's disk walk, not the FM `active_stage` cache. Cache
+		// could be stale (e.g., set to a stage that's since been wiped
+		// via /haiku:reset). The disk view is the source of truth.
+		const { findCurrentStage } = await import(
+			"../../orchestrator/workflow/cursor.js"
+		)
+		const activeStage = findCurrentStage(slug, studio) ?? ""
 		const intentStarted = !!activeStage
 
 		// Filter the mode option list:

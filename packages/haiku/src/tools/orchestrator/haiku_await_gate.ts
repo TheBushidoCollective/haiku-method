@@ -192,7 +192,23 @@ export default defineTool({
 		const intentMd = join(intentDir(slug), "intent.md")
 		const intentMeta = readFrontmatter(intentMd)
 		const intentStudio = (intentMeta.studio as string) || ""
-		const activeStage = (intentMeta.active_stage as string) || ""
+		// Active stage is DERIVED from disk via findCurrentStage, NOT
+		// read from intent.md's `active_stage` FM cache. The FM cache is
+		// written by side-effects on stage transitions but the v4 source
+		// of truth is the cursor's disk walk. Reading the cache as
+		// authoritative violates the "outputs are the signal, not FM
+		// state" invariant and can route the await tool to the wrong
+		// session key when the cache lags actual state.
+		//
+		// findCurrentStage returns null when every stage is complete
+		// (intent-scope phase) — preserve the empty-string sentinel
+		// downstream consumers expect.
+		const { findCurrentStage } = await import(
+			"../../orchestrator/workflow/cursor.js"
+		)
+		const activeStage = intentStudio
+			? (findCurrentStage(slug, intentStudio) ?? "")
+			: ""
 		const intentPhase = (intentMeta.phase as string) || ""
 
 		// Gate-pointer source: intent.md frontmatter for both stage-scope

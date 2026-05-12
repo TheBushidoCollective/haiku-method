@@ -102,10 +102,15 @@ function detectWorkflowMetaPollution(s: string): string | null {
 			),
 			label: "stage / phase restriction",
 		},
-		// "in inception phase" / "in the design stage"
+		// "in inception phase" / "in the design stage" — but NOT
+		// "in the development stage of a startup" or "in the inception
+		// phase of their project," which are ordinary domain phrases.
+		// The trailing negative lookahead for `of` is what splits the
+		// workflow-directive form (terse, terminal) from the domain
+		// form (genitive, continues with "of X").
 		{
 			re: new RegExp(
-				`\\bin\\s+(?:the\\s+)?(?:${STAGE_NAMES})\\s+(?:stage|phase)\\b`,
+				`\\bin\\s+(?:the\\s+)?(?:${STAGE_NAMES})\\s+(?:stage|phase)\\b(?!\\s+of\\b)`,
 				"i",
 			),
 			label: "stage / phase reference",

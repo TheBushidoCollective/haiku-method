@@ -35,6 +35,7 @@ import {
 	fetchOrigin,
 	pushStageBranch,
 	reconcileIntentBranches,
+	syncBranchDownstream,
 } from "../../git-worktree.js"
 import { adaptInstructions } from "../../harness-instructions.js"
 import { findCurrentStage } from "../../orchestrator/workflow/cursor.js"
@@ -308,14 +309,6 @@ export default defineTool({
 		}
 		const stFile = args.state_file as string | undefined
 
-		// Set by the pre-tick branch-alignment block below when we detect
-		// "I'm on stage Y's branch and Y owes a merge to intent main"
-		// (either because the walk says a later stage is current, or
-		// because the walk says every stage is complete). Surfaced as the
-		// initial dispatch result so the existing merge_stage handler
-		// performs the merge and re-ticks.
-		let pendingPreMerge: OrchestratorActionType | null = null
-
 		const branchCheck = validateBranch(slug, "intent")
 		if (branchCheck) {
 			return {
@@ -506,6 +499,10 @@ export default defineTool({
 				const studio = (im.studio as string) || ""
 				const mode = (im.mode as string) || ""
 				if (!studio || !mode) {
+					// Selection-phase guard: when studio or mode isn't set
+					// yet, the selection chain (`select_studio` /
+					// `select_mode`) belongs on intent main, not a stage
+					// branch.
 					const mainGuard = ensureOnStageBranch(slug, undefined)
 					if (!mainGuard.ok) {
 						return buildGuardResponse(
@@ -516,89 +513,51 @@ export default defineTool({
 						)
 					}
 				} else {
-					let cursorStage: string | null = null
-					try {
-						cursorStage = findCurrentStage(slug, studio) || null
-					} catch {
-						cursorStage = null
-					}
-					const here = safeCurrentBranchHere()
-					const stagePrefix = `haiku/${slug}/`
-					const onIntentMain = here === `${stagePrefix}main`
-					const hereStage =
-						!onIntentMain && here.startsWith(stagePrefix)
-							? here.slice(stagePrefix.length)
-							: null
-					// Resolve stage order so we can tell "earlier" from
-					// "later" when the walk's answer disagrees with our
-					// branch. Use intent-effective stages so a quick-mode
-					// intent restricted to a subset of the studio's stages
-					// orders against its own list, not the full studio.
-					const { resolveIntentStages } = await import("../../orchestrator.js")
-					const stages = resolveIntentStages(im, studio)
-					const cursorIdx = cursorStage ? stages.indexOf(cursorStage) : -1
-					const hereIdx = hereStage ? stages.indexOf(hereStage) : -1
-					// Cases (b) and (e): I'm on a stage branch Y. Either the
-					// walk says a LATER stage X (Y is complete but unmerged)
-					// or the walk says null (all stages complete, including
-					// Y — Y still owes its merge). Surface merge_stage(Y).
-					const yOwesMerge =
-						hereStage !== null &&
-						hereIdx >= 0 &&
-						(cursorStage === null || (cursorIdx >= 0 && cursorIdx > hereIdx))
-					if (yOwesMerge && hereStage) {
-						const mergeAction: OrchestratorActionType = {
-							action: "merge_stage",
-							intent: slug,
-							stage: hereStage,
-						}
-						// Hand off directly to the merge_stage handling
-						// below by setting `result` AFTER initial dispatch.
-						// Simpler: synthesize the result and skip the
-						// initial cursor dispatch — the merge_stage while-
-						// loop will pick it up.
-						pendingPreMerge = mergeAction
-					} else if (cursorStage) {
-						// Cases (c) and (d): walk and branch disagree, but
-						// not because Y owes a merge. Switch to the walk's
-						// answer.
-						const target = `${stagePrefix}${cursorStage}`
-						if (here !== target) {
-							const guard = ensureOnStageBranch(slug, cursorStage)
-							if (!guard.ok) {
-								return buildGuardResponse(
-									slug,
-									cursorStage,
-									guard,
-									"run_next entry — branch / cursor disagreement",
-								)
-							}
-							// Post-switch check: I just landed on the stage's
-							// branch. If that branch's content shows the stage
-							// is itself complete (every unit signed), the stage
-							// owes its merge to main. Walking from intent main
-							// said "this stage is current" (its content isn't
-							// on main yet); walking from the stage's branch
-							// (now that we're here) shows it's done. The two
-							// views differ because the stage branch is ahead
-							// of main. Emit merge_stage to reconcile.
-							const { isStageComplete } = await import(
-								"../../orchestrator/workflow/cursor.js"
-							)
-							const iDir = intentDir(slug)
-							if (isStageComplete(iDir, studio, cursorStage, mode)) {
-								pendingPreMerge = {
-									action: "merge_stage",
+					// PRE-CURSOR DOWNSTREAM SYNC. The cursor's walk reads
+					// per-unit FM from the current working tree. If the
+					// branch isn't up to date with intent main (and intent
+					// main isn't up to date with the org mainline), the
+					// cursor sees a stale view and emits wrong actions —
+					// the exact admin-portal-reimagine wedge reported
+					// 2026-05-11, where design's branch had pre-migration
+					// inception unit FM and the cursor concluded inception
+					// wasn't complete.
+					//
+					// Sync downstream BEFORE the cursor walks: mainline →
+					// intent main, then intent main → current stage. Both
+					// merges short-circuit on tree-equality (no `--no-ff`
+					// no-op commits). No branch switching here — switching
+					// happens AFTER the cursor produces an action.
+					const sync = syncBranchDownstream(slug)
+					if (!sync.ok) {
+						// Real conflict during the downstream sync. Leave
+						// the working tree mid-merge so the agent can
+						// resolve via the workflow-fields guard's
+						// mid-merge bypass (PR #344), then commit and re-
+						// tick.
+						const files = (sync.conflictFiles ?? []).join(", ")
+						return text(
+							JSON.stringify(
+								{
+									action: "error",
 									intent: slug,
-									stage: cursorStage,
-								}
-							}
-						}
+									error: "pre_cursor_sync_conflict",
+									conflict_at: sync.conflictAt,
+									conflict_branch: sync.conflictBranch,
+									conflict_files: sync.conflictFiles,
+									message:
+										`Pre-cursor downstream sync hit a conflict on branch '${sync.conflictBranch}' ` +
+										`(${sync.conflictAt}). Resolve the conflict on the listed files, run ` +
+										"`git add <files>` and `git commit`, then re-run `haiku_run_next`. " +
+										(files
+											? `Conflicted files: ${files}.`
+											: "(No files reported — check git status.)"),
+								},
+								null,
+								2,
+							),
+						)
 					}
-					// Case (a): cursorStage matches here — no action.
-					// Case (f): cursorStage null + on intent main — no
-					//           action; the cursor walk will surface the
-					//           intent-level next action.
 				}
 			}
 		}
@@ -675,16 +634,71 @@ export default defineTool({
 		// (`/haiku:change-mode`, etc.) but the tick path drives them
 		// engine-side here so the agent stays out of the loop.
 		//
-		// Pre-merge synthesis: if the pre-tick branch-alignment block
-		// above detected "I'm on a stage branch that owes a merge"
-		// (case (b) or (e) of the alignment algorithm), it set
-		// `pendingPreMerge` to the merge_stage action. Skip the cursor
-		// walk for this initial dispatch — the merge_stage handler
-		// below performs the merge, then re-ticks; on the next tick the
-		// walk + alignment will route forward.
-		let result: OrchestratorActionType = pendingPreMerge
-			? pendingPreMerge
-			: dispatchOrchestratorAction(slug)
+		// The cursor walks on a tree that pre-cursor sync has already
+		// brought up to date (mainline → intent main → current stage).
+		// Branch switching for the result's stage happens AFTER the walk
+		// (via the post-cursor revisit alignment block below).
+		let result: OrchestratorActionType = dispatchOrchestratorAction(slug)
+
+		// Post-walk merge-debt synthesis. When the cursor advances past a
+		// stage (e.g., the agent is on `inception`'s branch but the cursor's
+		// answer is `design`'s next action), the upstream stage `inception`
+		// owes its merge to intent main BEFORE the agent moves on. The
+		// cursor itself only emits `merge_stage` from inside
+		// walkIntentTrack(<active stage>) — it doesn't synthesize a
+		// merge_stage for a previous stage when the active stage advances.
+		// Without this rewrite, the agent would switch to design (or be
+		// switched by the post-cursor revisit alignment), leaving
+		// inception's commits stranded on its branch. The next tick walks
+		// from design's branch, sees inception's units missing (design
+		// forked off intent main BEFORE the inception merge that never
+		// happened), pings back to inception, and we ping-pong forever.
+		//
+		// This block restores the case (b)/(e) semantics from the OLD
+		// pre-tick branch-alignment block (deleted as part of the
+		// pre-cursor-sync restructure), now in the correct post-walk
+		// position. If I'm on stage Y's branch, Y is `isStageComplete`,
+		// and the cursor returned an action targeting a DIFFERENT stage,
+		// rewrite the result to `merge_stage(Y)` so Y merges into intent
+		// main first. The existing merge_stage while-loop below handles
+		// the merge and re-ticks; the next tick walks correctly from
+		// intent main.
+		try {
+			const here = safeCurrentBranchHere()
+			const stagePrefix = `haiku/${slug}/`
+			const hereStage =
+				here.startsWith(stagePrefix) && here !== `${stagePrefix}main`
+					? here.slice(stagePrefix.length)
+					: null
+			if (
+				hereStage &&
+				typeof result.stage === "string" &&
+				result.stage.length > 0 &&
+				result.stage !== hereStage
+			) {
+				const iDir = intentDir(slug)
+				const intentFile = join(iDir, "intent.md")
+				if (existsSync(intentFile)) {
+					const im = readFrontmatter(intentFile)
+					const studio = (im.studio as string) || ""
+					const mode = (im.mode as string) || "continuous"
+					if (studio) {
+						const { isStageComplete } = await import(
+							"../../orchestrator/workflow/cursor.js"
+						)
+						if (isStageComplete(iDir, studio, hereStage, mode)) {
+							result = {
+								action: "merge_stage",
+								intent: slug,
+								stage: hereStage,
+							}
+						}
+					}
+				}
+			}
+		} catch {
+			/* non-fatal — falls through to normal dispatch */
+		}
 		{
 			let iterations = 0
 			while (
@@ -1028,15 +1042,25 @@ export default defineTool({
 			}
 		}
 
-		// Revisit-branch guard: when the cursor returned a Track-B
-		// action whose `stage` is *earlier* than findCurrentStage
-		// (a feedback rewind), the pre-tick guard above checked out
-		// the wrong branch — it always uses findCurrentStage.
-		// Re-align so the agent's fix work lands on the right
-		// stage's branch. Only relevant for actions that name a
-		// concrete stage AND differ from the active one. Other
-		// actions (intent_review, merge_intent, sealed) don't carry
-		// a stage; they no-op this guard.
+		// POST-CURSOR BRANCH SWITCH. After the cursor has produced an
+		// action (a fully-decided Track C/B/A result, not just a
+		// `findCurrentStage` peek), switch the working tree to the
+		// action's stage if it differs from the current branch.
+		//
+		// Direction is unrestricted: forward (advancing into a new
+		// stage), backward (feedback rewind, drift go-back, intent-
+		// completion review rejection routing to an earlier stage),
+		// or same-stage (no-op). The cursor's algorithm decides what's
+		// legitimate; this code just executes the move.
+		//
+		// If the target stage branch doesn't exist (v3 merged-and-
+		// deleted, or never created), ensureStageBranch (called
+		// internally by ensureOnStageBranch) forks it from intent
+		// main — preserving the merged content as the starting point
+		// for any corrective work.
+		//
+		// Only fires when the action carries a `stage` field. Intent-
+		// scope actions (`intent_review`, `merge_intent`, `sealed`) skip.
 		if (typeof result.stage === "string" && result.stage.length > 0) {
 			try {
 				const intentFile = join(findHaikuRoot(), "intents", slug, "intent.md")

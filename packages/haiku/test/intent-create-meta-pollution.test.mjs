@@ -214,6 +214,61 @@ test("accepts: 'recording studio' as a domain noun", () => {
 	})
 })
 
+test("accepts: 'in the development stage of a startup' (domain genitive, not workflow directive)", () => {
+	// Pattern 5 (the bare "in [the] X stage|phase" form) used to
+	// false-positive on legitimate domain phrases like "in the
+	// development stage of a startup" — flagged on PR #346 review.
+	// Workflow directives are terse and terminal ("in inception
+	// phase."), domain phrases continue with `of` ("in the development
+	// stage of a startup"). The negative lookahead for ` of ` splits
+	// them.
+	withTmpRepo(() => {
+		const res = intentCreate.handle({
+			title: "Tooling for early-stage startups",
+			description:
+				"Build tooling for companies in the development stage of a startup journey, focusing on founder-led teams pre-Series A.",
+		})
+		const j = getJson(res)
+		assert.notStrictEqual(
+			j.error,
+			"intent_create_meta_pollution",
+			`'in the development stage of a startup' is domain language and must pass; got: ${JSON.stringify(j)}`,
+		)
+	})
+})
+
+test("accepts: 'in the inception phase of their project' (domain genitive)", () => {
+	withTmpRepo(() => {
+		const res = intentCreate.handle({
+			title: "Coach app for new founders",
+			description:
+				"A coaching app that helps founders in the inception phase of their project clarify scope and pick a first customer.",
+		})
+		const j = getJson(res)
+		assert.notStrictEqual(
+			j.error,
+			"intent_create_meta_pollution",
+			`'in the inception phase of their project' is domain language; got: ${JSON.stringify(j)}`,
+		)
+	})
+})
+
+test("still rejects: 'in inception phase' (terse workflow directive)", () => {
+	// Sanity: the negative-lookahead narrowing must NOT swallow the
+	// real workflow-directive form. The Tara case ("only with the
+	// inception phase") still trips earlier patterns; this test pins
+	// the bare form too.
+	withTmpRepo(() => {
+		const res = intentCreate.handle({
+			title: "Build a quick prototype",
+			description:
+				"Run the work only in inception phase. Skip everything else.",
+		})
+		const j = getJson(res)
+		assert.strictEqual(j.error, "intent_create_meta_pollution")
+	})
+})
+
 test("rejects: both title and description polluted — `where: 'title and description'`", () => {
 	withTmpRepo(() => {
 		const res = intentCreate.handle({

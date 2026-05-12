@@ -150,6 +150,111 @@ test("ensureOnStageBranch: trees identical → skips main→stage merge, no new 
 	}
 })
 
+test("ensureOnStageBranch + pre-tick: agent on a LATER stage is never switched backwards to an earlier one", async (t) => {
+	if (!HAS_GIT) {
+		t.skip("no git in environment")
+		return
+	}
+	// Verbatim from project memory (feedback_v4_cursor_algorithm.md +
+	// feedback_no_backward_branch_switch.md):
+	//   "I merge in main, figure out if I am on the right stage and
+	//    ONLY CHANGE if I am on the wrong stage."
+	//
+	// "Wrong stage" means BEHIND where the cursor walked, not ahead of
+	// it. If we're physically on `design` and the cursor's walk says
+	// `inception` is current (because some upstream FM hasn't caught
+	// up), the agent has ALREADY moved past inception — switching back
+	// produces the no-op merge loop reported on 2026-05-11.
+	//
+	// This test sets up the exact shape: stages [inception, design],
+	// agent on design, intent.md FM such that findCurrentStage would
+	// return inception (its units lack approval stamps). The pre-tick
+	// in haiku_run_next must NOT call ensureOnStageBranch(slug,
+	// "inception") — it must leave the agent on design and let the
+	// cursor walk produce design's next action.
+	const repo = mkdtempSync(join(tmpdir(), "haiku-forward-only-"))
+	try {
+		git(repo, "init", "-q")
+		git(repo, "config", "user.email", "test@haiku.test")
+		git(repo, "config", "user.name", "test")
+		const slug = "forward-only"
+		const intentDir = join(repo, ".haiku/intents", slug)
+		const inceptionUnitsDir = join(intentDir, "stages/inception/units")
+		const designUnitsDir = join(intentDir, "stages/design/units")
+		mkdirSync(inceptionUnitsDir, { recursive: true })
+		mkdirSync(designUnitsDir, { recursive: true })
+
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			`---
+title: Forward-only test
+studio: software
+mode: continuous
+plugin_version: 4.0.0
+stages: [inception, design]
+---
+body
+`,
+		)
+		// Inception unit with iterations terminal-advance BUT no
+		// approval stamps. findCurrentStage will see this as "not
+		// complete" and return inception.
+		writeFileSync(
+			join(inceptionUnitsDir, "unit-01-foo.md"),
+			`---
+title: foo
+started_at: '2026-04-27T19:00:00Z'
+iterations:
+  - hat: researcher
+    started_at: '2026-04-27T19:00:00Z'
+    completed_at: '2026-04-27T19:01:00Z'
+    result: advance
+  - hat: verifier
+    started_at: '2026-04-27T19:01:00Z'
+    completed_at: '2026-04-27T19:02:00Z'
+    result: advance
+---
+`,
+		)
+		// Design unit so the cursor knows design is real and in-flight.
+		writeFileSync(
+			join(designUnitsDir, "unit-01-bar.md"),
+			`---
+title: bar
+started_at: null
+iterations: []
+---
+`,
+		)
+		git(repo, "add", "-A")
+		git(repo, "commit", "-qm", "seed")
+		git(repo, "checkout", "-qb", `haiku/${slug}/main`)
+		git(repo, "checkout", "-qb", `haiku/${slug}/inception`)
+		git(repo, "checkout", "-qb", `haiku/${slug}/design`)
+
+		// Agent is on design. Run a workflow tick and inspect the
+		// resulting branch state. The forward-only rule means:
+		// regardless of what the cursor returns, the agent's branch
+		// must NOT be `haiku/<slug>/inception` after the tick.
+		process.chdir(repo)
+		const { dispatchOrchestratorAction } = await import(
+			"../src/orchestrator/workflow/run-tick.ts"
+		)
+		await import("../src/orchestrator/migrations/v0-to-v4.ts")
+		dispatchOrchestratorAction(slug)
+		const finalBranch = git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+		assert.notStrictEqual(
+			finalBranch,
+			`haiku/${slug}/inception`,
+			"pre-tick switched agent BACKWARDS from design to inception — forward-only rule violated. " +
+				`Final branch: ${finalBranch}`,
+		)
+	} finally {
+		process.chdir(tmpdir())
+		rmSync(repo, { recursive: true, force: true })
+	}
+})
+
 test("mergeStageBranchIntoMain: trees DIFFER → merge proceeds normally", async (t) => {
 	if (!HAS_GIT) {
 		t.skip("no git in environment")

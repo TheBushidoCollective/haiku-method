@@ -91,18 +91,27 @@ await test("preserves directory hierarchy in artifact name", async () => {
 	assert.ok(wireframe.content?.includes("upload"), "html content inlined")
 })
 
-await test("unknown extensions surface as type:file with relativePath", async () => {
+await test("text-shaped unknown extensions surface as type:markdown with content (so the renderer's markdown path picks them up)", async () => {
 	const intentDir = setupIntent()
 	const artifacts = await parseOutputArtifacts(intentDir)
 	const tokens = artifacts.find((a) => a.name === "tokens")
-	assert.ok(tokens, "tokens.json (unknown ext) should surface")
-	assert.strictEqual(tokens.type, "file")
-	assert.strictEqual(tokens.relativePath, "stages/design/artifacts/tokens.json")
-	assert.strictEqual(
-		tokens.content,
-		undefined,
-		"file type does not inline content",
+	assert.ok(tokens, "tokens.json should surface")
+	// Contract change 2026-05-12: text-shaped outputs (.json, .yaml,
+	// .feature, source code, etc.) are inlined as type:"markdown" so
+	// reviewers can READ them in the review pane instead of getting a
+	// download link they have to open in a different editor. The OLD
+	// behavior (type:"file" for everything non-{md,html,image}) made
+	// Gherkin .feature files unreviewable. See OUTPUT_TEXT_EXTS in
+	// packages/haiku/src/parser.ts.
+	assert.strictEqual(tokens.type, "markdown")
+	assert.ok(
+		typeof tokens.content === "string" && tokens.content.length > 0,
+		"text-shaped output must inline its content for the renderer",
 	)
+	// relativePath stays populated so the artifact's URL still works
+	// for download / link-out use cases — only the rendering path
+	// changed.
+	assert.strictEqual(tokens.relativePath, "stages/design/artifacts/tokens.json")
 })
 
 await test("relativePath for nested files preserves the hierarchy", async () => {
@@ -213,11 +222,19 @@ await test("unit-declared markdown is rendered with stripped frontmatter", async
 	assert.ok(!ac.content?.includes("title: Acceptance"), "frontmatter stripped")
 })
 
-await test("unit-declared unknown extension (.feature) surfaces as type:file", async () => {
+await test("unit-declared .feature file surfaces as type:markdown so it renders in the review pane", async () => {
 	const intentDir = setupIntentWithUnitOutputs()
 	const artifacts = await parseOutputArtifacts(intentDir)
 	const feat = artifacts.find((a) => a.name === "features/drift-detection")
-	assert.strictEqual(feat.type, "file")
+	// .feature files are Gherkin (text-shaped). Pre-2026-05-12 they
+	// surfaced as type:"file" → reviewers got a download link instead
+	// of the readable spec. Now treated as markdown so the renderer
+	// inlines them.
+	assert.strictEqual(feat.type, "markdown")
+	assert.ok(
+		typeof feat.content === "string" && feat.content.length > 0,
+		"text-shaped output must inline its content",
+	)
 	assert.strictEqual(feat.relativePath, "features/drift-detection.feature")
 })
 
@@ -331,8 +348,13 @@ await test("catch-all: ad-hoc top-level files inside the stage dir surface", asy
 	)
 	assert.strictEqual(readme.type, "markdown")
 	assert.ok(readme.content?.includes("stage readme body"))
-	assert.ok(notes, "expected notes.txt to surface as type:file")
-	assert.strictEqual(notes.type, "file")
+	assert.ok(notes, "expected notes.txt to surface")
+	// .txt is text-shaped → type:markdown (renderable) post-2026-05-12.
+	assert.strictEqual(notes.type, "markdown")
+	assert.ok(
+		typeof notes.content === "string" && notes.content.length > 0,
+		"text-shaped output must inline its content",
+	)
 	assert.strictEqual(notes.relativePath, "stages/design/notes.txt")
 })
 

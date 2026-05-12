@@ -135,6 +135,22 @@ export const orchestratorToolDefs = [
 		},
 	},
 	{
+		name: "haiku_stage_reset",
+		description:
+			"Reset ONE stage of an intent: wipe its units, outputs, artifacts, elaboration, feedback, and stage branch. The intent's other stages are untouched. Use after fixing the stage's hat instructions or studio config when the user wants the agent to re-run that stage cleanly. Requires user confirmation via the SPA picker.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string", description: "Intent slug" },
+				stage: {
+					type: "string",
+					description: "Stage name to reset (e.g. 'product')",
+				},
+			},
+			required: ["intent", "stage"],
+		},
+	},
+	{
 		name: "haiku_intent_archive",
 		description:
 			"Archive an intent — sets the `archived: true` frontmatter flag so the intent is hidden from default list views. Reversible via haiku_intent_unarchive. Does not prompt for confirmation.",

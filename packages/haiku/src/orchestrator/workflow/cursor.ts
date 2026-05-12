@@ -164,7 +164,13 @@ type Iteration = {
 	hat: string
 	started_at: string
 	completed_at: string | null
-	result: "advance" | "reject" | null
+	// `advance` / `reject` come from unit iterations
+	// (`haiku_unit_advance_hat` / `haiku_unit_reject_hat`).
+	// `advanced` / `closed` come from FB iterations
+	// (`haiku_feedback_advance_hat` — `advanced` for mid-chain hats,
+	// `closed` for the terminal hat). Both vocabularies coexist here
+	// because units and feedback share the iteration shape on disk.
+	result: "advance" | "reject" | "advanced" | "closed" | null
 	reason?: string | null
 }
 
@@ -598,11 +604,33 @@ function nextActionForFeedback(
 	if (next === null) {
 		// Either in-flight (no action) or terminal advance landed
 		// (close FB with invalidations).
+		//
+		// FB iterations use a different result vocabulary than unit
+		// iterations: `haiku_feedback_advance_hat` writes
+		// `result: "advanced"` for mid-chain hats and `result: "closed"`
+		// for the terminal hat. Unit-style `result: "advance"` is never
+		// written for FBs. Match both forms here so the cursor's
+		// terminal-fb detection actually fires:
+		//   - `closed`: written by advance_hat on the last fix-hat call
+		//     (the canonical terminal signal — matches the
+		//     `status: "closed"` write at the same point)
+		//   - `advance`: kept for back-compat with any legacy FBs whose
+		//     iterations were written before the vocabulary split
+		//
+		// Pre-2026-05-12: this branch only matched `"advance"` →
+		// close_feedback never fired in practice → the close_feedback
+		// handler's invalidations (clearing target unit approvals on
+		// FB closure) never ran. The FB-as-unit fix loop's load-bearing
+		// invalidation contract was silently broken. See
+		// V4-ALIGNMENT-AUDIT.md Invariant 2.
 		const iterations = pickIterations(fm)
 		if (iterations.length === 0) return null
 		const last = iterations[iterations.length - 1]
 		if (last.result === null) return null // in-flight
-		if (last.result === "advance" && last.hat === fixHats[fixHats.length - 1]) {
+		const terminalAdvance =
+			(last.result === "closed" || last.result === "advance") &&
+			last.hat === fixHats[fixHats.length - 1]
+		if (terminalAdvance) {
 			return { kind: "close_feedback", stage, feedback_id: fbId }
 		}
 		return null

@@ -211,9 +211,10 @@ export function workflowStartStage(slug: string, stage: string): void {
 
 	appendStageIteration(slug, stage, { trigger: "initial" })
 
-	if (existsSync(intentFile)) {
-		setFrontmatterField(intentFile, "active_stage", stage)
-	}
+	// `active_stage` write removed 2026-05-12 (V4-ALIGNMENT-AUDIT
+	// Invariant 1 closure). The v4 cursor derives active stage from
+	// `findCurrentStage`; callers that need it for display derive
+	// inline. No FM cache.
 
 	cleanupOrphanedStageBranches(slug)
 
@@ -298,11 +299,8 @@ export function workflowAdvanceStage(
 ): void {
 	workflowCompleteStage(slug, currentStage, "advanced")
 
-	const intentFile = join(intentDir(slug), "intent.md")
-	if (existsSync(intentFile)) {
-		setFrontmatterField(intentFile, "active_stage", nextStage)
-	}
-
+	// `active_stage` write removed 2026-05-12 — see workflowStartStage
+	// for the rationale (cursor derives via findCurrentStage).
 	workflowStartStage(slug, nextStage)
 
 	// Reseal: workflowCompleteStage sealed against active_stage=currentStage,

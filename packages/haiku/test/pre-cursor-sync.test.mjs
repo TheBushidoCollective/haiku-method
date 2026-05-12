@@ -340,6 +340,11 @@ test("syncBranchDownstream: conflict at mainline→intent main returns conflictA
 		git(repo, "commit", "-qm", "intent main edits shared.txt")
 		// Agent is on stage (so the conflict surfaces in the temp worktree path).
 		git(repo, "checkout", "-q", `haiku/${slug}/${stage}`)
+		// Pin pre-merge state so we can verify nothing got corrupted by
+		// the failed-merge cleanup.
+		const intentMainBeforeFail = git(repo, "rev-parse", `haiku/${slug}/main`)
+		const stageBeforeFail = git(repo, "rev-parse", `haiku/${slug}/${stage}`)
+		const branchBeforeFail = git(repo, "rev-parse", "--abbrev-ref", "HEAD")
 
 		const { syncBranchDownstream } = await import("../src/git-worktree.ts")
 		const result = syncBranchDownstream(slug)
@@ -355,6 +360,27 @@ test("syncBranchDownstream: conflict at mainline→intent main returns conflictA
 			Array.isArray(result.conflictFiles) &&
 				result.conflictFiles.includes("shared.txt"),
 			`expected conflictFiles to include shared.txt, got: ${JSON.stringify(result.conflictFiles)}`,
+		)
+		// Step-1 conflicts run inside a temp worktree that's force-
+		// removed in `withTempWorktree`'s finally block. Branch HEADs
+		// must NOT have moved (a half-applied merge commit on intent
+		// main would set up the same alternating-no-op wedge from a
+		// different angle). And the agent's working tree must NOT have
+		// been switched away from where it was.
+		assert.strictEqual(
+			git(repo, "rev-parse", `haiku/${slug}/main`),
+			intentMainBeforeFail,
+			"intent main HEAD must NOT move after a step-1 conflict — the temp worktree's failed merge must not leak a half-merge commit onto the branch",
+		)
+		assert.strictEqual(
+			git(repo, "rev-parse", `haiku/${slug}/${stage}`),
+			stageBeforeFail,
+			"stage HEAD must NOT move after a step-1 conflict",
+		)
+		assert.strictEqual(
+			git(repo, "rev-parse", "--abbrev-ref", "HEAD"),
+			branchBeforeFail,
+			"agent's working tree must stay on the original branch after a step-1 conflict",
 		)
 	} finally {
 		process.chdir(origCwd)

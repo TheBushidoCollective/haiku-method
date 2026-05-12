@@ -161,10 +161,24 @@ export function branchExists(branch: string): boolean {
  * a real conflict blocks the sync. Trees-identical and no-merge-
  * needed paths return `ok: true, performed: false`. A successful
  * merge returns `ok: true, performed: true`. A real conflict returns
- * `ok: false, conflictAt`, and the merge is left in an in-progress
- * state so the agent can edit + commit (the workflow-fields guard
- * hook's mid-merge bypass — PR #344 — lets the agent touch the
- * conflicted files via generic Edit/Write).
+ * `ok: false, conflictAt`.
+ *
+ * Conflict recovery is DIFFERENT for the two steps and callers must
+ * branch on `conflictAt` when surfacing recovery instructions:
+ *
+ *   - `intent_main_to_stage` (step 2, in-place merge): the merge is
+ *     left mid-merge in the agent's working tree. The agent edits
+ *     the conflicted files (the workflow-fields guard's mid-merge
+ *     bypass — PR #344 — permits generic Edit/Write during a merge),
+ *     `git add`s them, and `git commit`s. Then re-tick.
+ *   - `mainline_to_intent_main` (step 1, temp worktree): the temp
+ *     worktree was force-removed by `withTempWorktree`'s finally
+ *     block. Nothing in the agent's working tree changed; the intent
+ *     main branch HEAD is still at its pre-merge position. The agent
+ *     cannot edit conflict markers locally because there are none.
+ *     Recovery is manual: `git checkout haiku/<slug>/main`, merge
+ *     the mainline ref, resolve, commit, switch back to the original
+ *     branch, re-tick.
  *
  * Non-git mode is a no-op (`ok: true, performed: false`).
  *

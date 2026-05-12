@@ -530,12 +530,32 @@ export default defineTool({
 					// happens AFTER the cursor produces an action.
 					const sync = syncBranchDownstream(slug)
 					if (!sync.ok) {
-						// Real conflict during the downstream sync. Leave
-						// the working tree mid-merge so the agent can
-						// resolve via the workflow-fields guard's
-						// mid-merge bypass (PR #344), then commit and re-
-						// tick.
+						// Real conflict during the downstream sync. The
+						// recovery instructions differ by step:
+						//   - intent_main_to_stage (in-place): working
+						//     tree is mid-merge, agent edits conflicted
+						//     files in place (workflow-fields guard's
+						//     mid-merge bypass — PR #344), then commits
+						//     and re-ticks.
+						//   - mainline_to_intent_main (temp worktree):
+						//     withTempWorktree's finally block already
+						//     force-removed the temp worktree. No
+						//     conflict markers exist in the agent's
+						//     working tree. Recovery requires manually
+						//     checking out intent main, replaying the
+						//     merge, resolving, committing, and
+						//     switching back. Without this branching,
+						//     an agent encountering a step-1 conflict
+						//     would chase `git status` for markers that
+						//     aren't there and loop.
 						const files = (sync.conflictFiles ?? []).join(", ")
+						const fileList = files
+							? ` Conflicted files: ${files}.`
+							: " (No files reported — check git status.)"
+						const recovery =
+							sync.conflictAt === "mainline_to_intent_main"
+								? `The conflict happened in a temp worktree that's already been cleaned up — there are NO conflict markers in your working tree. To resolve: \`git checkout ${sync.conflictBranch}\`, merge the mainline ref manually (\`git merge <mainline-ref>\`), resolve the listed files, \`git add\` + \`git commit\`, then \`git checkout\` back to your original branch and re-run \`haiku_run_next\`.`
+								: `Resolve the conflict on the listed files in place, run \`git add <files>\` and \`git commit\`, then re-run \`haiku_run_next\`.`
 						return text(
 							JSON.stringify(
 								{
@@ -547,11 +567,7 @@ export default defineTool({
 									conflict_files: sync.conflictFiles,
 									message:
 										`Pre-cursor downstream sync hit a conflict on branch '${sync.conflictBranch}' ` +
-										`(${sync.conflictAt}). Resolve the conflict on the listed files, run ` +
-										"`git add <files>` and `git commit`, then re-run `haiku_run_next`. " +
-										(files
-											? `Conflicted files: ${files}.`
-											: "(No files reported — check git status.)"),
+										`(${sync.conflictAt}). ${recovery}${fileList}`,
 								},
 								null,
 								2,

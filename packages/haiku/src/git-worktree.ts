@@ -72,6 +72,39 @@ function tryRun(args: string[], cwd?: string): string {
 	}
 }
 
+/**
+ * Are two refs pointing at identical tree contents?
+ *
+ * Compares `<ref>^{tree}` hashes — Git's deterministic hash of the
+ * directory contents (mode + name + blob SHA, recursively). Two refs
+ * with different commit IDs but identical trees return TRUE here; that
+ * means the working tree would be byte-identical after a checkout
+ * (modulo timestamps), so any merge between them produces a no-op
+ * merge commit. `--no-ff` would still create the commit; the tree
+ * comparison lets callers short-circuit before that happens.
+ *
+ * Returns false on any git failure (missing ref, not-a-repo). Callers
+ * should treat that as "fall through to the normal merge logic" — the
+ * tree-equality check is an optimization, not a correctness gate.
+ *
+ * Why this exists: bug report 2026-05-11 (admin-portal-reimagine after
+ * v0→v4 migration). Engine kept emitting alternating
+ *   merge intent-main → stage inception
+ *   merge stage inception into main
+ * with empty `git diff --stat` between branches. Each merge was a
+ * pure no-op (trees identical), but `--no-ff` minted a new commit on
+ * the target. The new commit made the OTHER side look "behind," which
+ * triggered the opposite-direction sync on the next tick. Loop guard
+ * fired forever. Tree-equality gates kill the no-op merge chain.
+ */
+function refsHaveIdenticalTrees(refA: string, refB: string): boolean {
+	const a = tryRun(["git", "rev-parse", `${refA}^{tree}`])
+	if (!a) return false
+	const b = tryRun(["git", "rev-parse", `${refB}^{tree}`])
+	if (!b) return false
+	return a === b
+}
+
 /** Variant of `tryRun` for git operations that talk to a remote
  *  (`fetch origin`, `push origin`, `ls-remote`). Bounded by
  *  `GIT_NETWORK_TIMEOUT_MS` and runs with credential / SSH prompts
@@ -1475,6 +1508,20 @@ export function mergeStageBranchIntoMain(
 		run(["git", "rev-parse", "--verify", stageBranch])
 		run(["git", "rev-parse", "--verify", mainBranch])
 
+		// Tree-equality short-circuit. If stage and main already point
+		// at identical trees, a merge here would mint a `--no-ff` no-op
+		// commit on main; the opposite-direction sync in
+		// ensureOnStageBranch would then re-merge it. Skip when trees
+		// match. Without this, the two sync sites alternate forever
+		// (admin-portal-reimagine wedge after v0→v4 migration, 2026-05-11).
+		if (refsHaveIdenticalTrees(stageBranch, mainBranch)) {
+			return {
+				success: true,
+				noop: true,
+				message: `${stageBranch} and ${mainBranch} already point at identical trees — skipping no-op merge`,
+			}
+		}
+
 		const current = getCurrentBranch()
 
 		// Run the merge and surface conflicts as structured data —
@@ -2078,7 +2125,15 @@ export function ensureOnStageBranch(
 			"--count",
 			`${stageBranch}..${intentMain}`,
 		])
-		if (aheadCount && Number.parseInt(aheadCount, 10) > 0) {
+		// Tree-equality short-circuit. If main and the stage branch
+		// already point at identical trees, the merge would be a
+		// `--no-ff` no-op commit that the opposite-direction sync
+		// then re-merges. Skip the merge entirely; the checkout below
+		// is sufficient. Without this gate, two no-op merge commits
+		// would alternate forever (admin-portal-reimagine wedge after
+		// v0→v4 migration, 2026-05-11).
+		const treesEqual = refsHaveIdenticalTrees(stageBranch, intentMain)
+		if (aheadCount && Number.parseInt(aheadCount, 10) > 0 && !treesEqual) {
 			// Stage 1: checkout stage branch. Dirty tree on this step is
 			// auto-recoverable.
 			try {

@@ -868,7 +868,14 @@ function scanOneIntent(
 					})
 				}
 				const { data: unitData } = parseFrontmatter(unitRaw)
-				if (!unitData.status) {
+				// v3-era check: `status` was a load-bearing FM field. v4 derives
+				// status from `iterations[]` + branch-merge state (architecture
+				// §1: outputs are the signal, not FM bookkeeping). For v4
+				// intents (plugin_version set on intent.md), the absence of
+				// `status` is correct, not a defect. Only flag on v3 intents
+				// that haven't migrated yet.
+				const repairIsV4 = typeof repairData.plugin_version === "string"
+				if (!unitData.status && !repairIsV4) {
 					issues.push({
 						intent: slug,
 						field: `stages/${stageName}/units/${f.name}:status`,

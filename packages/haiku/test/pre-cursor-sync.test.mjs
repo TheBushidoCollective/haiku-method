@@ -52,7 +52,10 @@ function commitCount(cwd, ref) {
 	return parseInt(git(cwd, "rev-list", "--count", ref), 10)
 }
 
-function setupThreeBranchRepo({ slug = "sync-test", stage = "inception" } = {}) {
+function setupThreeBranchRepo({
+	slug = "sync-test",
+	stage = "inception",
+} = {}) {
 	const repo = mkdtempSync(join(tmpdir(), "haiku-pre-cursor-sync-"))
 	git(repo, "init", "-q", "-b", "main")
 	git(repo, "config", "user.email", "test@haiku.test")
@@ -93,8 +96,16 @@ test("syncBranchDownstream: mainline ahead → flows down through intent main to
 		const { syncBranchDownstream } = await import("../src/git-worktree.ts")
 		const result = syncBranchDownstream(slug)
 
-		assert.strictEqual(result.ok, true, `expected ok=true, got: ${result.message}`)
-		assert.strictEqual(result.performed, true, "merge work should have happened")
+		assert.strictEqual(
+			result.ok,
+			true,
+			`expected ok=true, got: ${result.message}`,
+		)
+		assert.strictEqual(
+			result.performed,
+			true,
+			"merge work should have happened",
+		)
 		assert.ok(
 			commitCount(repo, `haiku/${slug}/main`) > intentMainBefore,
 			"intent main should have new commits from the mainline merge",
@@ -104,7 +115,13 @@ test("syncBranchDownstream: mainline ahead → flows down through intent main to
 			"stage should have new commits from the intent-main merge",
 		)
 		// Mainline change is reachable from the stage branch.
-		const stageTree = git(repo, "ls-tree", "-r", "--name-only", `haiku/${slug}/${stage}`)
+		const stageTree = git(
+			repo,
+			"ls-tree",
+			"-r",
+			"--name-only",
+			`haiku/${slug}/${stage}`,
+		)
 		assert.ok(
 			stageTree.includes("mainline-change.txt"),
 			"stage tree must contain the mainline change after sync",
@@ -149,7 +166,13 @@ test("syncBranchDownstream: intent main ahead of stage only — step 2 runs, ste
 			commitCount(repo, `haiku/${slug}/${stage}`) > stageBefore,
 			"stage should have the intent-main change after sync",
 		)
-		const stageTree = git(repo, "ls-tree", "-r", "--name-only", `haiku/${slug}/${stage}`)
+		const stageTree = git(
+			repo,
+			"ls-tree",
+			"-r",
+			"--name-only",
+			`haiku/${slug}/${stage}`,
+		)
 		assert.ok(
 			stageTree.includes("intent-main-change.txt"),
 			"stage tree must contain the intent main change after sync",
@@ -219,7 +242,13 @@ test("syncBranchDownstream: agent on intent main → step 2 skipped (no stage to
 
 		assert.strictEqual(result.ok, true)
 		assert.strictEqual(result.performed, true, "step 1 should have run")
-		const intentMainTree = git(repo, "ls-tree", "-r", "--name-only", `haiku/${slug}/main`)
+		const intentMainTree = git(
+			repo,
+			"ls-tree",
+			"-r",
+			"--name-only",
+			`haiku/${slug}/main`,
+		)
 		assert.ok(
 			intentMainTree.includes("mainline-change.txt"),
 			"intent main must contain the mainline change",
@@ -323,7 +352,8 @@ test("syncBranchDownstream: conflict at mainline→intent main returns conflictA
 		)
 		assert.strictEqual(result.conflictBranch, `haiku/${slug}/main`)
 		assert.ok(
-			Array.isArray(result.conflictFiles) && result.conflictFiles.includes("shared.txt"),
+			Array.isArray(result.conflictFiles) &&
+				result.conflictFiles.includes("shared.txt"),
 			`expected conflictFiles to include shared.txt, got: ${JSON.stringify(result.conflictFiles)}`,
 		)
 	} finally {

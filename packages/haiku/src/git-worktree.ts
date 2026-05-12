@@ -267,7 +267,12 @@ function mergeRefIntoBranch(
 	targetBranch: string,
 	currentBranch: string,
 	message: string,
-): { ok: boolean; performed: boolean; conflictFiles?: string[]; message?: string } {
+): {
+	ok: boolean
+	performed: boolean
+	conflictFiles?: string[]
+	message?: string
+} {
 	if (currentBranch === targetBranch) {
 		return mergeRefInPlace(sourceRef, message)
 	}
@@ -303,8 +308,7 @@ function mergeRefIntoBranch(
 						ok: false,
 						performed: false,
 						conflictFiles: [],
-						message:
-							err instanceof Error ? err.message : String(err),
+						message: err instanceof Error ? err.message : String(err),
 					}
 				}
 				return {
@@ -329,7 +333,12 @@ function mergeRefIntoBranch(
 function mergeRefInPlace(
 	sourceRef: string,
 	message: string,
-): { ok: boolean; performed: boolean; conflictFiles?: string[]; message?: string } {
+): {
+	ok: boolean
+	performed: boolean
+	conflictFiles?: string[]
+	message?: string
+} {
 	try {
 		execFileSync(
 			"git",
@@ -338,12 +347,7 @@ function mergeRefInPlace(
 		)
 		return { ok: true, performed: true }
 	} catch (err) {
-		const conflicts = tryRun([
-			"git",
-			"diff",
-			"--name-only",
-			"--diff-filter=U",
-		])
+		const conflicts = tryRun(["git", "diff", "--name-only", "--diff-filter=U"])
 			.split("\n")
 			.filter(Boolean)
 		if (conflicts.length === 0) {

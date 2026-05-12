@@ -540,7 +540,9 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				// Path 2: caller didn't author any new findings. Only meaningful
 				// if there is at least one open FB the pre-tick gate can route
 				// off — untriaged → `feedback_triage`, triaged on earlier stage
-				// → `revisited`, triaged on current stage → `feedback_dispatch`.
+				// → `start_feedback_hat` (via feedback walk; post-cursor switch
+				// moves the agent to that stage), triaged on current stage →
+				// `feedback_dispatch`.
 				// Resolution doesn't matter; the gate routes regardless of
 				// whether it's `stage_revisit`, `inline_fix`, `question`, or
 				// `null`. Otherwise the click is a no-op — the user's

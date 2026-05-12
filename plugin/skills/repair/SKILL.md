@@ -1,81 +1,40 @@
 ---
 name: repair
-description: Scan intents for metadata issues, auto-apply safe fixes, push to all intent branches, and open PRs for merged branches
+description: Rebuild a corrupted drift baseline, relocate misplaced worktrees, or open PRs against mainline for already-merged intent branches
 ---
 
 # Repair
 
-Call `haiku_repair` to scan intents for metadata issues. The MCP tool auto-applies the fixes it can do mechanically; remaining issues need agent or user attention.
+Call `haiku_repair` for one of the three remaining v4 recovery paths.
 
-> **v4 note (2026-05-06):** `haiku_repair` is split-purpose under v4.
->
-> **Still load-bearing under v4:**
-> - **Drift baseline rebuilds** — when `drift-baseline.ts` reports a corrupt baseline, the recovery path is `haiku_repair`.
-> - **Worktree relocation** — older H·AI·K·U versions rooted `.haiku/worktrees/` at cwd instead of the primary repo; repair migrates them via `git worktree move`. Still relevant for any user upgrading from those versions.
-> - **Mainline PR/MR generation** — repair pushes fixes and opens PRs against mainline for already-merged branches. The migrator can't do this; only repair walks intent branches sequentially.
->
-> **Obsolete under v4 (no-ops on v4 intents):**
-> - The metadata-cleanup checks listed in "Auto-Applied Fixes" below — `state.json` synthesis, unit-level `status: "completed"`, `active_stage` validation — target v3 frontmatter shape. Under v4 those fields are derived or removed; the v0-to-v4 soft-scrub migrator runs at `haiku_run_next` time and handles schema migration in-band. These checks see nothing to fix on a v4 intent and no-op.
->
-> Run `haiku_repair` when (a) you're upgrading from a pre-2026-04 H·AI·K·U build (worktree relocation), (b) drift baseline reports corruption, or (c) you're auditing a known-v3 intent that hasn't been opened on a v4 build yet.
+## When to use this skill
 
-## Default Behavior (Git Repo)
+`haiku_repair` under v4 is narrow. Use it for:
 
-In a git repository, `haiku_repair` (with no arguments) scans **every** intent branch (`haiku/<slug>/main`) sequentially via temporary worktrees. For each branch:
+1. **Drift baseline corruption** — the drift sweep reports the baseline can't be read or parsed. The repair tool rebuilds the baseline from the unit's current outputs.
+2. **Worktree relocation** — older H·AI·K·U builds (pre-2026-04) rooted `.haiku/worktrees/` at the agent's cwd instead of the primary repo root. After upgrading, the misplaced worktrees still exist and confuse the engine. Repair migrates them via `git worktree move` for clean trees; dirty ones are reported for manual resolution.
+3. **Mainline PR/MR generation** — when an intent branch is already merged into mainline but a fixable issue is found, repair pushes a fix commit and opens a PR against mainline.
 
-1. Scans the intent for metadata issues
-2. Auto-applies safe fixes (title trim, legacy field rename, missing-field defaults, studio alias migration)
-3. Commits the fixes with a `repair: ...` message
-4. Pushes the commit to `origin/<branch>`
-5. If the branch was already merged into mainline (`main` or `master`), opens a PR/MR back to mainline carrying the repair commit
-6. Reports any remaining issues that need agent attention
+## When NOT to use this skill
 
-The loop is sequential because some fixes may require user input — the agent processes branches one at a time and can pause for interaction.
+Do not run `/haiku:repair` to "fix a wedge" on a v4 intent that won't advance. The fixes it once did under v3 — synthesizing `state.json`, validating `active_stage`, enforcing `status: completed`/`active` on units — are **no-ops on v4 intents**. v4 derives stage position from disk (unit FM + branch topology), has no `state.json`, and uses iterations + approval stamps instead of unit-level `status` enums. The v0→v4 migrator runs in-band at `haiku_run_next` time and handles every schema-shape concern.
+
+If a v4 intent won't advance, the right diagnostic is the loop-guard diagnostic in `haiku_run_next`'s response (writes to `$TMPDIR/haiku-prompts/{session_id}/loop-guards.log` and surfaces a `diagnostic:` line in the error body). Paste that into a bug report — don't run `/haiku:repair` hoping it'll patch something.
+
+## Default behavior (git repo)
+
+In a git repository, `haiku_repair` (no args) scans every intent branch via temp worktrees, applies the narrow fixes above, pushes, and opens PRs when applicable. The loop is sequential because some fixes need user input.
 
 ## Args
 
 - `intent: <slug>` — repair a single intent in the current working directory only (skips multi-branch mode)
-- `apply: false` — scan without applying fixes (returns the issue report only)
+- `apply: false` — scan without applying fixes (returns the report only)
 - `skip_branches: true` — force cwd-only mode even in a git repo
-
-## Auto-Applied Fixes (Mechanical)
-
-The MCP tool applies these without asking — they have no judgment component:
-
-- **Overlong/multiline titles** — trimmed to a one-liner using `deriveIntentTitle`; the full original description is preserved as a paragraph in the body
-- **Legacy `created` field** → renamed to `created_at`
-- **Missing `created_at`** — defaulted from file mtime
-- **Missing `mode`** — defaulted to `continuous`
-- **Stages mismatch** — updated to match the studio's stage definition
-- **Legacy `studio: software`** → migrated to `application-development` (the canonical name); aliases continue to resolve
-- **Missing stage completion records** — for stages before `active_stage` with no `state.json` or non-completed status, synthesizes `state.json` with `status: "completed"`. Fixes migrated intents that cause the workflow engine to reset backwards.
-- **Date repair from git** — `created_at`, `started_at`, and `completed_at` are derived from git commit history (first commit date, last commit date) when they don't match the frontmatter values.
-
-## Issues Returned to Agent (Need Judgment)
-
-These come back as remaining issues — handle them interactively:
-
-- **Missing `studio`** — needs the user to pick one
-- **Missing `status`** — needs to be inferred from state files or asked
-- **Invalid `active_stage`** — needs review of stage progression
-- **Stage `state.json` invalid status** — needs the right status set
-- **Unit filename pattern violations** — rename units explicitly
-- **Unit missing `inputs:`** — declare upstream artifact paths
-- **Completed but not merged** — intent marked `completed` but branch is not merged into mainline. Either merge the branch or downgrade status to `active`.
 
 ## Workflow
 
-1. Call `haiku_repair` (no args) — scans every branch, applies what it can, pushes, opens PRs
-2. Read the multi-branch report
-3. For each branch with **remaining issues**, address them in the worktree path noted in the report (or check out the branch locally)
-4. Commit your manual fixes and push
-5. If a branch is now clean and was already merged, open a PR/MR back to mainline manually
+1. Call `haiku_repair` with the specific concern (drift baseline / worktree / mainline-PR) — passing `intent: <slug>` if scoped to one intent.
+2. Read the report.
+3. For anything that needs manual attention, follow the report's per-issue instructions.
 
-## Checks Performed
-
-- Missing/invalid intent fields (title, studio, stages, status, mode)
-- Overlong / multiline titles (titles must be ≤80 chars, single line)
-- Stage state consistency and active_stage validity
-- Unit file naming convention (`unit-NN-slug.md`)
-- Unit required fields (type, status)
-- **Unit inputs validation** — every unit must have a non-empty `inputs:` field declaring upstream artifacts it references. Units without inputs will block execution.
+If the report is empty on a v4 intent, that's the expected outcome. Repair has nothing to do — the engine handles state in-band.

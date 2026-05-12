@@ -58,11 +58,13 @@ export type StateName =
 	// intent-completion review
 	| "intent_completion_review"
 	| "intent_completion_fix"
-	// revisit
+	// revisit — `revisited` removed 2026-05-12: declared but never emitted.
+	// The feedback walk handles stage rewinds via `start_feedback_hat` at
+	// the target stage; no distinct cursor action needed. See
+	// `plugin/skills/revisit/SKILL.md`.
 	| "feedback_revisit"
 	| "feedback_dispatch"
 	| "feedback_triage"
-	| "revisited"
 	// gates
 	| "gate_review"
 	| "intent_approved"

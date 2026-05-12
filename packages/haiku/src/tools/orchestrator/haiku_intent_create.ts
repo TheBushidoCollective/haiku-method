@@ -52,7 +52,8 @@ import { text } from "./_text.js"
  *
  * Patterns flagged:
  *   - "in X mode" / "X-mode" / "only X mode" / "use X mode"
- *   - "in/with/use the X studio" / "X studio" as qualifier
+ *   - "use/using the X studio" — directive verbs only; bare nouns
+ *     like "the yoga studio" or "the recording studio" pass through
  *   - "only in/with X stage|phase" / "only the X stage|phase"
  *   - References to the studio's stage names (inception, design,
  *     product, development, operations, security) used as workflow

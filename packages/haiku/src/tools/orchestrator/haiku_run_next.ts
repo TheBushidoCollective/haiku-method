@@ -317,6 +317,86 @@ export default defineTool({
 			}
 		}
 
+		// Mid-merge detector — runs BEFORE any other guard so a working
+		// tree that's mid-merge from a prior pre-cursor sync conflict
+		// surfaces a single clean recovery message instead of falling
+		// through to the stage-branch enforcement guard's cryptic
+		// "git operation in progress" error.
+		//
+		// The wedge it fixes (reproduced 2026-05-12 against the real
+		// admin-portal-reimagine state): pre-cursor sync's step 2
+		// (intent main → stage, in-place merge) hits a real conflict
+		// on intent.md. mergeRefInPlace leaves the working tree mid-
+		// merge with `<<<<<<<` markers in intent.md. The conflict
+		// markers corrupt the YAML frontmatter so readFrontmatter
+		// returns {} — studio/mode read as empty, the selection-phase
+		// guard at line ~506 fires, ensureOnStageBranch sees MERGE_HEAD,
+		// and surfaces "Finish or abort the merge before stage-branch
+		// enforcement can realign the checkout." The agent has no idea
+		// which files to resolve.
+		//
+		// This block runs early and tells the agent EXACTLY what to do:
+		// resolve the conflicted files (workflow-fields guard's mid-
+		// merge bypass — PR #344 — permits generic Edit/Write during a
+		// merge), `git add` them, `git commit`, then re-run
+		// haiku_run_next.
+		if (isGitRepo()) {
+			try {
+				const gitDir = execFileSync("git", ["rev-parse", "--git-dir"], {
+					encoding: "utf8",
+					stdio: ["ignore", "pipe", "pipe"],
+				}).trim()
+				const midMergeMarker = [
+					"MERGE_HEAD",
+					"REBASE_HEAD",
+					"CHERRY_PICK_HEAD",
+					"REVERT_HEAD",
+				].find((m) => existsSync(join(gitDir, m)))
+				if (midMergeMarker) {
+					const conflicts = execFileSync(
+						"git",
+						["diff", "--name-only", "--diff-filter=U"],
+						{
+							encoding: "utf8",
+							stdio: ["ignore", "pipe", "pipe"],
+						},
+					)
+						.split("\n")
+						.filter(Boolean)
+					const branch = execFileSync("git", ["branch", "--show-current"], {
+						encoding: "utf8",
+						stdio: ["ignore", "pipe", "pipe"],
+					}).trim()
+					const fileList =
+						conflicts.length > 0
+							? `Conflicted files: ${conflicts.join(", ")}.`
+							: `(No conflict files reported — try \`git status\` to inspect, or \`git ${midMergeMarker === "MERGE_HEAD" ? "merge" : "rebase"} --abort\` to bail out.)`
+					return text(
+						JSON.stringify(
+							{
+								action: "error",
+								intent: slug,
+								error: "mid_merge_blocking_tick",
+								marker: midMergeMarker,
+								branch,
+								conflict_files: conflicts,
+								message:
+									`The working tree on '${branch}' is mid-merge (${midMergeMarker} present) — most likely from the previous tick's pre-cursor sync hitting a real conflict. ` +
+									"Resolve the conflicted files in place (the workflow-fields guard's mid-merge bypass permits Edit/Write during a merge), " +
+									"run `git add <files>` and `git commit`, then re-run `haiku_run_next`. " +
+									fileList,
+							},
+							null,
+							2,
+						),
+					)
+				}
+			} catch {
+				/* non-fatal — if git probe fails, fall through and let the
+				   later guards surface whatever they find */
+			}
+		}
+
 		// Pre-cursor reconciliation: when external review is pending OR
 		// the user might have merged a stage PR externally, fetch from
 		// origin and check for the "merged into wrong branch" footgun.

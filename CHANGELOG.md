@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] - 2026-05-12
+
+### Added
+- Workflow auto-repairs missing review and approval stamps on pre-tick with deadlock detection to prevent recovery loops.
+- Intent creation is now available as a standalone tool with metadata-pollution safeguards.
+- Automatic migration from v0 to v4 workflow state.
+
 ## [4.3.2] - 2026-05-11
 
 ### Fixed

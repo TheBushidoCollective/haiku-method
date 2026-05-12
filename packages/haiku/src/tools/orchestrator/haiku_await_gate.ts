@@ -636,7 +636,11 @@ export default defineTool({
 
 			if (gateContext === "intent_completion") {
 				const intentFilePath = join(intentDir(slug), "intent.md")
-				setFrontmatterField(intentFilePath, "phase", "active")
+				// `phase` write removed 2026-05-12 (Invariant 1). The
+				// engine's FSM markers (completion_review_dispatched /
+				// completion_review_skipped) are what gate logic
+				// branches on; `phase: "active"` was a derived display
+				// label.
 				setFrontmatterField(
 					intentFilePath,
 					"completion_review_dispatched",

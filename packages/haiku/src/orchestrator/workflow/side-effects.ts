@@ -330,7 +330,9 @@ export function workflowGateAsk(slug: string, stage: string): void {
 function workflowEnterIntentCompletionReview(slug: string): void {
 	const intentFile = join(intentDir(slug), "intent.md")
 	if (!existsSync(intentFile)) return
-	setFrontmatterField(intentFile, "phase", "awaiting_completion_review")
+	// `phase` write removed 2026-05-12 (Invariant 1). The engine's
+	// FSM marker `completion_review_entered_at` is what consumers
+	// actually need; phase was a derived label on top of it.
 	setFrontmatterField(intentFile, "completion_review_entered_at", timestamp())
 	emitTelemetry("haiku.intent.completion_review_entered", { intent: slug })
 	sealIntentState(slug)
@@ -455,10 +457,11 @@ export function rewindFromCompletionReview(
 	const iDir = root ? join(root, "intents", slug) : intentDir(slug)
 	const intentFile = join(iDir, "intent.md")
 	if (!existsSync(intentFile)) return
-	setFrontmatterField(intentFile, "status", "active")
-	setFrontmatterField(intentFile, "active_stage", firstIncomplete)
-	setFrontmatterField(intentFile, "phase", "")
-	setFrontmatterField(intentFile, "completed_at", "")
+	// status / active_stage / phase / completed_at writes removed
+	// 2026-05-12 (Invariant 1 closure). v4 derives all four from
+	// disk (sealed_at, findCurrentStage, branch-merge topology).
+	// completion_review_* fields stay — they're the engine's own
+	// FSM markers, not a v4-derived field.
 	setFrontmatterField(intentFile, "completion_review_entered_at", "")
 	setFrontmatterField(intentFile, "completion_review_dispatched", false)
 	setFrontmatterField(intentFile, "completion_review_skipped", false)
@@ -578,8 +581,11 @@ export function workflowIntentComplete(slug: string): void {
 				setFrontmatterField(intentFile, "draft_pr_status", "failed")
 			}
 		}
-		setFrontmatterField(intentFile, "status", "completed")
-		setFrontmatterField(intentFile, "completed_at", timestamp())
+		// status / completed_at writes removed 2026-05-12 (Invariant 1).
+		// Completion is now derived from sealed_at (when set) or "every
+		// stage merged into intent main" (when not). haiku_intent_list
+		// + dashboard derive on read. The canonical completion stamp
+		// is `sealed_at`, written by the intent-completion path.
 	}
 	emitTelemetry("haiku.intent.completed", { intent: slug })
 	gitCommitState(`haiku: complete intent ${slug}`)

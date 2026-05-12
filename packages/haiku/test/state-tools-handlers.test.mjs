@@ -418,8 +418,7 @@ writeFileSync(
 title: Second Intent
 studio: ideation
 mode: discrete
-active_stage: ""
-status: completed
+sealed_at: '2026-04-01T00:00:00Z'
 ---
 
 Second intent body.
@@ -435,8 +434,7 @@ writeFileSync(
 title: Archived Intent
 studio: software
 mode: continuous
-active_stage: ""
-status: completed
+sealed_at: '2026-04-01T00:00:00Z'
 archived: true
 ---
 

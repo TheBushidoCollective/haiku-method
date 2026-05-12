@@ -28,6 +28,7 @@ import {
 import { Ajv } from "ajv"
 import matter from "gray-matter"
 import { features, resolvePluginRoot } from "./config.js"
+import { findCurrentStage } from "./orchestrator/workflow/cursor.js"
 import { sanitizeFeedbackBody } from "./state/sanitize-feedback.js"
 
 // V-04 (Symlink TOCTOU): `haiku_human_write` (registered via this module's
@@ -7048,12 +7049,32 @@ export function handleStateTool(
 			// skills use this to skip the "which intent?" prompt when the
 			// user's git branch already names the intent.
 			const branchMatch = intentFromCurrentBranch()
+			// status + active_stage are DERIVED, not read from the FM
+			// cache. v4 source of truth:
+			//   - status: "sealed" if sealed_at; "completed" if every
+			//     stage merged into intent main; else "active"
+			//   - active_stage: findCurrentStage(slug, studio); null
+			//     means every stage merged (intent in completion-review
+			//     or sealed)
+			// The FM `data.status` / `data.active_stage` fields are no
+			// longer written by v4 side-effects; deriving here keeps
+			// the haiku_intent_list response shape stable. Per
+			// V4-ALIGNMENT-AUDIT.md Invariant 1.
 			const intents = entries.map(({ slug, data }) => {
+				const studio = (data.studio as string) || ""
+				const sealedAt =
+					typeof data.sealed_at === "string" && data.sealed_at.length > 0
+				const activeStage = studio ? findCurrentStage(slug, studio) : null
+				// Both "sealed_at set" and "every stage merged" surface as
+				// "completed" to callers. The distinction (sealed vs.
+				// pre-seal-complete) is internal to the engine.
+				const derivedStatus =
+					sealedAt || activeStage === null ? "completed" : "active"
 				const base: Record<string, unknown> = {
 					slug,
 					studio: data.studio,
-					status: data.status,
-					active_stage: data.active_stage,
+					status: derivedStatus,
+					active_stage: activeStage ?? "",
 				}
 				if (includeArchived) {
 					base.archived = data.archived === true

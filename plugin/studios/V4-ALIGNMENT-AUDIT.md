@@ -133,5 +133,45 @@ Two confirmed bugs in the SPA wire-payload + renderer pipeline, fixed 2026-05-12
 
 ## Open follow-ups (separate PRs)
 
-- Remove the FM-cache WRITES (active_stage, phase, status, completed_at on intent.md; status/bolt/hat/hat_started_at on units). Authoritative reads were fixed in this PR; the writes themselves remain as legacy cache for the SPA / dashboard / telemetry. Removing the writes requires migrating those consumers too — separate PR.
+### The FM-cache write removal is a coordinated migration, not a one-PR refactor
+
+Authoritative ROUTING reads of FM-cache fields were closed in this PR (Invariant 1). The writes themselves stay because the following NON-ROUTING consumers still depend on them, and each requires a careful migration:
+
+**Unit-level fields (`status`, `bolt`, `hat`, `hat_started_at` written by `haiku_unit_start`):**
+
+| Reader | File:line | Migration target |
+|---|---|---|
+| `syncSessionMetadata` telemetry "active unit" | `state-tools.ts:4403–4406` | Derive from iterations[].result === null |
+| `haiku_unit_start` "already active" guard | `state-tools.ts:7372` | Derive from started_at + iterations |
+| `haiku_unit_advance_hat` last-iter guard | `state-tools.ts:7534` | Already uses iterations; the .hat reference is in an error message string only |
+| `listUnits` (v3 orchestrator path) | `orchestrator/units.ts:79–104` | Whole v3 unit-status derivation needs retirement. Used by `isStagePreExecute` + `haiku_await_gate`'s `unstartedUnits` check |
+| `computeUnitWaves` / `currentWaveNumber` | `orchestrator/units.ts:108–167` | v3 wave logic; v4 cursor walk subsumes this. Needs caller audit. |
+| `preview.ts` agent prompt rendering | `orchestrator/preview.ts:163` | UI render; safe to derive from iterations |
+| `decompose.ts` prompt | `orchestrator/prompts/decompose.ts:208` | Same — prompt rendering |
+| Dashboard / SPA wire payload | `state-tools.ts:5266, 9326, 9470` | SPA-side; needs Zod schema sync |
+
+**Intent-level fields (`active_stage`, `phase`, `status`, `completed_at` written by `side-effects.ts`):**
+
+| Reader | File:line | Migration target |
+|---|---|---|
+| `state-integrity.ts` checksum slots | `state-integrity.ts:83, 136` | Legit — checksum covers the cache itself, NOT a routing decision |
+| `current-state.ts` SPA payload builder | `current-state.ts` | SPA-side; needs Zod schema sync |
+| `state-tools.ts:7030` SPA wire | `state-tools.ts:7030` | Same — SPA payload |
+| `state-tools.ts:9064` dashboard render | `state-tools.ts:9064` | Dashboard render |
+
+The honest sequence to close this:
+
+1. Migrate `listUnits` + the v3 wave logic in `orchestrator/units.ts` to derive from iterations (or retire entirely if v4 cursor + walkIntentTrack covers every caller).
+2. Migrate `syncSessionMetadata` to use `findCurrentStage` + iteration-based active-unit derivation.
+3. Update the SPA's Zod schema (`packages/haiku-api/src/schemas/session.ts`) to either:
+   a. Continue accepting the FM-cache fields, with the server building them from disk-derived values at session-payload assembly time, OR
+   b. Remove them from the wire payload, and the SPA derives them client-side from `units` + `stage_states` data already present.
+4. Update the dashboard's render path to do the same.
+5. ONLY THEN — remove the writes.
+
+Doing steps 5 without 1–4 would break the SPA, dashboard, and telemetry consumers, ship breakage to users, and create a worse v4 misalignment than the one being fixed. This is multi-PR scope.
+
+### Other open items
+
+- The on-disk legacy cache values eventually drift from disk truth. If we keep the writes, we should add a self-repair pass that overwrites them with derived values per tick. Cleaner: remove the writes per the migration above.
 - SPA wire payload audit (task #23) — three known bugs: outputs labeled as discovery, cross-stage artifact leak, .feature files not rendering

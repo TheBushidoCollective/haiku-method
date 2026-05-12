@@ -44,29 +44,71 @@ function makeIntentDir() {
 	return intentDir
 }
 
-test("post-unit-start: hasV3CruftInIntent does NOT fire on v4-written status/bolt/hat/hat_started_at", () => {
+test("post-unit-start: v4 unit FM has NO status/bolt/hat/hat_started_at (Invariant 1 closure)", () => {
 	const intentDir = makeIntentDir()
 	try {
-		// Exactly what `haiku_unit_start` writes — these are v4 writes,
-		// not v3 cruft. Sentinel must NOT match.
+		// Contract revised 2026-05-12 (Invariant 1 closure per
+		// V4-ALIGNMENT-AUDIT.md): `haiku_unit_start` no longer writes
+		// `status`, `bolt`, `hat`, or `hat_started_at` on the unit FM.
+		// Only `started_at` + the first iteration entry get written.
+		// Consumers that need status / hat / bolt derive them from
+		// `iterations[]` + `started_at` (deriveUnitState in
+		// orchestrator/units.ts). The cruft sentinel CORRECTLY fires
+		// on v3-shape units containing those fields — they're now
+		// genuinely v3-only.
+		//
+		// The v4-canonical unit FM after haiku_unit_start:
 		writeFileSync(
 			join(intentDir, "stages/inception/units/unit-01-foo.md"),
 			matter.stringify("# foo\n", {
 				title: "foo",
-				status: "active", // ← v4 writes "active" via unit_start
-				bolt: 1,
-				hat: "researcher",
-				hat_started_at: "2026-05-12T12:00:00Z",
 				started_at: "2026-05-12T12:00:00Z",
-				iterations: [],
+				iterations: [
+					{
+						hat: "researcher",
+						started_at: "2026-05-12T12:00:00Z",
+						completed_at: null,
+						result: null,
+					},
+				],
 			}),
 		)
 		assert.strictEqual(
 			hasV3CruftInIntent(intentDir),
 			false,
-			"v4-written unit FM (status: 'active', bolt, hat, hat_started_at) MUST NOT trip the v3 cruft sentinel. " +
-				"If it does, the migrator re-fires every tick, consuming the engine's dispatch instruction and " +
-				"forcing the agent to manually re-dispatch hats. See session.txt 2026-05-12 (kagami pickup).",
+			"v4-canonical unit FM (started_at + iterations only) MUST NOT trip the v3 cruft sentinel.",
+		)
+	} finally {
+		rmSync(intentDir.replace("/.haiku/intents/test-intent", ""), {
+			recursive: true,
+			force: true,
+		})
+	}
+})
+
+test("post-unit-start: a unit with v3-shape `hat`/`bolt` cache fields DOES trip the sentinel", () => {
+	const intentDir = makeIntentDir()
+	try {
+		// Post-2026-05-12 Invariant 1 closure: v4 stops writing
+		// `hat`/`bolt`/`hat_started_at`/`status` on units. A unit
+		// carrying those fields is unambiguously v3-shape (or has been
+		// merged in from a pre-v4 branch). The sentinel SHOULD fire to
+		// force re-migration.
+		writeFileSync(
+			join(intentDir, "stages/inception/units/unit-01-foo.md"),
+			matter.stringify("# foo\n", {
+				title: "foo",
+				status: "active",
+				bolt: 1,
+				hat: "researcher",
+				hat_started_at: "2026-04-27T19:00:00Z",
+				started_at: "2026-04-27T19:00:00Z",
+			}),
+		)
+		assert.strictEqual(
+			hasV3CruftInIntent(intentDir),
+			true,
+			"Unit FM carrying any of {status, bolt, hat, hat_started_at} is v3-shape — sentinel must fire to force re-migration.",
 		)
 	} finally {
 		rmSync(intentDir.replace("/.haiku/intents/test-intent", ""), {

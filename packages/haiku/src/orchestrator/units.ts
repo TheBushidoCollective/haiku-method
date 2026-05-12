@@ -76,6 +76,78 @@ export function cleanupPreExecuteFeedback(
 	return removed
 }
 
+/** Derive a unit's `status` / `hat` / `bolt` from its v4 source of
+ *  truth — `started_at` + `iterations[]` + `approvals.*` — NOT from
+ *  the legacy `status` / `hat` / `bolt` FM cache fields.
+ *
+ *  Returned `status` values match the v3 enum so callers that switch
+ *  on `"pending"` / `"active"` / `"completed"` keep working:
+ *    - "pending"   — `started_at` is null; the unit hasn't been
+ *                    dispatched yet
+ *    - "active"    — `started_at` is set; iterations[] is non-empty
+ *                    or empty (post-dispatch but pre-iteration)
+ *    - "completed" — last iteration's `result` is "advance" on the
+ *                    terminal hat, OR every required approval role
+ *                    is stamped (`approvals.<role>.at`)
+ *
+ *  This function is intentionally permissive on the "completed"
+ *  check — either the iteration-terminal-advance signal OR the
+ *  approvals-stamped signal counts. v4's cursor walk uses the same
+ *  union via `isUnitFullyApproved` + the placeholder fallback. */
+function deriveUnitState(fm: Record<string, unknown>): {
+	status: "pending" | "active" | "completed"
+	hat: string
+	bolt: number
+} {
+	const startedAt =
+		typeof fm.started_at === "string" && (fm.started_at as string).length > 0
+	const iterations = Array.isArray(fm.iterations)
+		? (fm.iterations as Array<Record<string, unknown>>)
+		: []
+	const lastIter = iterations.length > 0 ? iterations[iterations.length - 1] : null
+
+	// Completed signal — terminal-advance on the last hat OR approvals
+	// stamped (mirrors `isUnitFullyApproved` from cursor.ts). We don't
+	// have the studio's required-role list here so we check whether
+	// `approvals` has ANY stamped role; the cursor's stricter check
+	// runs separately.
+	const approvals =
+		fm.approvals && typeof fm.approvals === "object"
+			? (fm.approvals as Record<string, unknown>)
+			: {}
+	const anyApprovalStamped = Object.values(approvals).some(
+		(rec) =>
+			rec !== null &&
+			typeof rec === "object" &&
+			typeof (rec as { at?: unknown }).at === "string",
+	)
+	const terminalAdvance =
+		lastIter !== null &&
+		(lastIter.result === "advance" || lastIter.result === "closed") &&
+		typeof lastIter.hat === "string"
+
+	let status: "pending" | "active" | "completed"
+	if (anyApprovalStamped || terminalAdvance) {
+		status = "completed"
+	} else if (startedAt) {
+		status = "active"
+	} else {
+		status = "pending"
+	}
+
+	// Current hat — last iteration's hat if iterations exist, else "".
+	// The FM cache used to track this; deriving keeps the contract
+	// stable for callers (preview rendering, decompose prompts).
+	const hat =
+		lastIter !== null && typeof lastIter.hat === "string" ? lastIter.hat : ""
+
+	// Bolt — iterations[].length is the v4 source. v3 used a separate
+	// `bolt` counter at unit FM root; iteration-count subsumes it.
+	const bolt = iterations.length
+
+	return { status, hat, bolt }
+}
+
 export function listUnits(intentDirPath: string, stage: string): UnitInfo[] {
 	const unitsDir = join(intentDirPath, "stages", stage, "units")
 	if (!existsSync(unitsDir)) return []
@@ -83,11 +155,12 @@ export function listUnits(intentDirPath: string, stage: string): UnitInfo[] {
 	const files = readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
 	const units: UnitInfo[] = files.map((f) => {
 		const fm = readFrontmatter(join(unitsDir, f))
+		const derived = deriveUnitState(fm)
 		return {
 			name: f.replace(".md", ""),
-			status: (fm.status as string) || "pending",
-			hat: (fm.hat as string) || "",
-			bolt: (fm.bolt as number) || 0,
+			status: derived.status,
+			hat: derived.hat,
+			bolt: derived.bolt,
 			dependsOn: (fm.depends_on as string[]) || [],
 			depsComplete: false,
 		}

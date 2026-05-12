@@ -142,30 +142,30 @@ const V3_ONLY_INTENT_FIELDS = new Set([
 ])
 
 const V3_ONLY_UNIT_FIELDS = new Set([
-	// `status`, `bolt`, `hat`, `hat_started_at` — NOT in the sentinel
-	// even though they're "deprecated." v4's haiku_unit_start writes
-	// all four; including them re-fires migration on every wave.
-	// Instead, we detect v3 status via the VALUE check
-	// `isV3UnitShape` below — v4 only writes `status: "active"`, so a
-	// unit with `status: "completed"` is unambiguously v3.
-	// `completed_at` at unit root is v3-only (v4 only writes it inside
-	// iteration entries); we check it as a key-presence sentinel.
-	"completed_at",
-	"iteration", // singular — v3 only
+	// As of 2026-05-12 (Invariant 1 closure), `haiku_unit_start` no
+	// longer writes `status`, `bolt`, `hat`, or `hat_started_at` on
+	// units — v4 derives those from `iterations[]` + `started_at`.
+	// All four are now genuinely v3-only and safe to include as
+	// sentinel triggers for re-migration when a post-v3 merge brings
+	// them back.
+	"status",
+	"bolt",
+	"hat",
+	"hat_started_at",
+	"completed_at", // unit root — v4 only writes inside iteration entries
+	"iteration", // singular — v3 only (v4 uses plural `iterations`)
 	"visit",
 	"scope_reject_attempts",
 ])
 
 /** Returns true if `fm` has v3-only field values v4 never writes.
- *  Pairs with `V3_ONLY_UNIT_FIELDS` for cases where a field NAME
- *  matches between v3 and v4 but the VALUE distinguishes them.
- *
- *  v4 writes `status: "active"` (haiku_unit_start) but never
- *  `status: "completed"` — v4 represents completion via approval
- *  stamps and iteration history, not a `status` enum. So
- *  `status === "completed"` is a strict v3 marker. */
-function isV3UnitShape(fm: Record<string, unknown>): boolean {
-	if (fm.status === "completed") return true
+ *  Retained for backward-compat with pre-2026-05-12 audit logic,
+ *  but as of that date `status` is itself a v3-only field (v4
+ *  doesn't write status on units at all). The key-presence check
+ *  in V3_ONLY_UNIT_FIELDS already catches all v3 units; this
+ *  function is now a no-op that we keep for the API surface in
+ *  case future v3 cousins need value-shape distinguishing. */
+function isV3UnitShape(_fm: Record<string, unknown>): boolean {
 	return false
 }
 

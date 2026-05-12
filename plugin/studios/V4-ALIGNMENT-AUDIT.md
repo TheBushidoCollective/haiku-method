@@ -6,7 +6,7 @@ Inventory of code paths that violate v4 architecture invariants. Goal: drive eac
 
 | Invariant | Status as of 2026-05-12 |
 |---|---|
-| 1. Outputs are the signal, not FM state | Authoritative-read bugs closed. Writes stay as legacy cache (intentional). |
+| 1. Outputs are the signal, not FM state | **Closed**. Every authoritative read derives from disk. Every write of `status`/`bolt`/`hat`/`hat_started_at`/`active_stage`/`phase`/`completed_at` removed from packages/haiku/src/. |
 | 2. Skills don't reference dead actions | Closed. `revisited` removed. `close_feedback` vocab fixed. |
 | 3. Engine internals stay engine internals | Per user direction 2026-05-12: keep loops, fix re-emit paths. Closed. |
 | 4. `/haiku:repair` narrow under v4 | Closed. Docs rewritten. |
@@ -133,7 +133,13 @@ Two confirmed bugs in the SPA wire-payload + renderer pipeline, fixed 2026-05-12
 
 ## Open follow-ups (separate PRs)
 
-### The FM-cache write removal is a coordinated migration, not a one-PR refactor
+### ALL seven invariants are closed as of 2026-05-12.
+
+The detailed reader-migration plan below is RETAINED as historical record of the migration steps that landed in this PR — not as an open task list.
+
+### Original migration plan (now landed)
+
+#### The FM-cache write removal is a coordinated migration, not a one-PR refactor
 
 Authoritative ROUTING reads of FM-cache fields were closed in this PR (Invariant 1). The writes themselves stay because the following NON-ROUTING consumers still depend on them, and each requires a careful migration:
 

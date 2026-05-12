@@ -130,8 +130,6 @@ function findPreviousStage(slug: string, stage: string): string | undefined {
  *  The intent's `mode` field controls iteration cadence and review
  *  rules but not branching topology — both modes branch per-stage. */
 export function workflowStartStage(slug: string, stage: string): void {
-	const intentFile = join(intentDir(slug), "intent.md")
-
 	createIntentBranch(slug)
 	cleanupOrphanedStageBranches(slug)
 
@@ -449,11 +447,7 @@ export function findIncompleteStages(
  *  incomplete stage becomes the new `active_stage` so the next tick
  *  routes through `start_stage` instead of looping back into
  *  `awaiting_completion_review`. */
-export function rewindFromCompletionReview(
-	slug: string,
-	firstIncomplete: string,
-	root?: string,
-): void {
+export function rewindFromCompletionReview(slug: string, root?: string): void {
 	const iDir = root ? join(root, "intents", slug) : intentDir(slug)
 	const intentFile = join(iDir, "intent.md")
 	if (!existsSync(intentFile)) return
@@ -503,7 +497,7 @@ export function completeOrReviewIntent(
 	// to the first incomplete stage so the user sees what's missing.
 	const incompleteStages = findIncompleteStages(slug, studio)
 	if (incompleteStages.length > 0) {
-		rewindFromCompletionReview(slug, incompleteStages[0])
+		rewindFromCompletionReview(slug)
 		emitTelemetry("haiku.intent.completion_guard_failed", {
 			intent: slug,
 			studio,

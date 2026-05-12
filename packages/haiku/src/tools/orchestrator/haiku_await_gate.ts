@@ -9,12 +9,14 @@
 // setups, and any case where the MCP host can't auto-open the user's
 // browser). haiku_await_gate then:
 //
-//   1. Reads gate_review_session_id from stage state (or accepts an
-//      explicit session_id argument).
+//   1. Reads gate_review_session_<stage> (stage-scope) or
+//      gate_review_session_id (intent-scope) from intent.md frontmatter
+//      (or accepts an explicit session_id argument).
 //   2. Calls the gate-review await callback (registered via
 //      setGateReviewHandlers) — opens the browser best-effort if
 //      auto_open is true, then blocks on waitForSession.
-//   3. On decision: clears gate_review_session_id from stage state,
+//   3. On decision: clears gate_review_session_<stage> (or
+//      gate_review_session_id) from intent.md frontmatter,
 //      then dispatches based on (decision × gate_context). Mirrors
 //      the prior haiku_run_next post-decision switch verbatim.
 //   4. On infra failure: falls back to MCP elicitation when the host
@@ -73,10 +75,8 @@ import {
 	intentDir,
 	isGitRepo,
 	parseFrontmatter,
-	readJson,
 	setFrontmatterField,
 	syncSessionMetadata,
-	writeJson,
 } from "../../state-tools.js"
 import { defineTool } from "../define.js"
 import { withAnnouncement } from "./_announce.js"
@@ -168,8 +168,9 @@ export default defineTool({
 		"the user's decision, and returns the post-decision action all in " +
 		"one tool call. Use haiku_await_gate only when the original tick " +
 		"timed out, the MCP host disconnected, or the agent restart lost " +
-		"the in-memory blocking call; reads gate_review_session_id from " +
-		"intent.md to reattach. Returns the same post-decision action " +
+		"the in-memory blocking call; reads gate_review_session_<stage> " +
+		"(stage-scope) or gate_review_session_id (intent-scope) from " +
+		"intent.md frontmatter to reattach. Returns the same post-decision action " +
 		"shape (advance_stage / advance_phase / changes_requested / " +
 		"external_review_requested / intent_complete / etc.).",
 	inputSchema: jsonSchemaOf(HAIKU_AWAIT_GATE_INPUT_SCHEMA),

@@ -1287,8 +1287,7 @@ export async function awaitDesignDirectionSession(
 			// intent.md's `active_stage` FM cache — the cache lags actual
 			// state on transitions and could route the branch enforcement
 			// to a stale stage.
-			const studio =
-				(parseFrontmatter(intentRaw).data.studio as string) || ""
+			const studio = (parseFrontmatter(intentRaw).data.studio as string) || ""
 			const { findCurrentStage } = await import(
 				"../orchestrator/workflow/cursor.js"
 			)

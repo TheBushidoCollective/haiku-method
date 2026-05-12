@@ -104,7 +104,8 @@ function deriveUnitState(fm: Record<string, unknown>): {
 	const iterations = Array.isArray(fm.iterations)
 		? (fm.iterations as Array<Record<string, unknown>>)
 		: []
-	const lastIter = iterations.length > 0 ? iterations[iterations.length - 1] : null
+	const lastIter =
+		iterations.length > 0 ? iterations[iterations.length - 1] : null
 
 	// Completed signal — terminal-advance on the last hat OR approvals
 	// stamped (mirrors `isUnitFullyApproved` from cursor.ts). We don't

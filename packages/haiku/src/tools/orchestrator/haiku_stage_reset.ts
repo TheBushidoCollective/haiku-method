@@ -29,11 +29,7 @@ import {
 	getMainlineBranch,
 } from "../../git-worktree.js"
 import { runPicker } from "../../server/picker.js"
-import {
-	findHaikuRoot,
-	gitCommitState,
-	isGitRepo,
-} from "../../state-tools.js"
+import { findHaikuRoot, gitCommitState, isGitRepo } from "../../state-tools.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
 
@@ -114,7 +110,8 @@ export default defineTool({
 				return false
 			}
 		})()
-		if (hasDiscoveryOutputs) candidates.push("discovery (outputs only, templates preserved)")
+		if (hasDiscoveryOutputs)
+			candidates.push("discovery (outputs only, templates preserved)")
 
 		const stageBranch = `haiku/${slug}/${stage}`
 		const willDeleteBranch = isGitRepo() && branchExists(stageBranch)
@@ -182,9 +179,7 @@ export default defineTool({
 				if (currentBranch === stageBranch) {
 					const intentMain = `haiku/${slug}/main`
 					const mainlineBranch = getMainlineBranch()
-					const target = branchExists(intentMain)
-						? intentMain
-						: mainlineBranch
+					const target = branchExists(intentMain) ? intentMain : mainlineBranch
 					try {
 						execFileSync("git", ["checkout", target], {
 							encoding: "utf8",

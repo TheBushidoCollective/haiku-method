@@ -13,10 +13,14 @@ import {
 	writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 
 import { test } from "node:test"
 import matter from "gray-matter"
+
+const _here = dirname(fileURLToPath(import.meta.url))
+process.env.CLAUDE_PLUGIN_ROOT = resolve(_here, "..", "..", "..", "plugin")
 
 import {
 	createDiscoveryWorktree,
@@ -139,6 +143,57 @@ test("clean merge: subagent commits in worktree → tool merges into stage branc
 			"DISCOVERY.md",
 		)
 		assert.ok(existsSync(stageArtifact), "artifact landed on stage branch")
+	} finally {
+		process.chdir(originalCwd)
+		rmSync(tmp, { recursive: true, force: true })
+		_resetIsGitRepoForTests()
+	}
+})
+
+test("discovery_artifact_missing: subagent calls without writing the template's `location:` file → tool refuses to merge", async () => {
+	// Closes the `coverage-mapping` loop reported 2026-05-13: a
+	// subagent that calls haiku_discovery_complete without actually
+	// writing the artifact file would ff-merge an empty commit, the
+	// cursor's `existsSync` would then keep flagging discovery as
+	// missing every tick, and the agent's `{ ok: true }` would lie
+	// to the parent.
+	_resetIsGitRepoForTests()
+	const { tmp, slug, stage } = setupRepo()
+	try {
+		process.chdir(tmp)
+		// Dispatch creates the worktree, but the subagent (we) does
+		// NOT write the artifact file. Just commits something else.
+		const wt = createDiscoveryWorktree(slug, stage, "discovery")
+		assert.ok(wt && existsSync(wt))
+		writeFileSync(join(wt, "WRONG-FILE.md"), "# I wrote the wrong path\n")
+		git(wt, "add", "-A")
+		git(wt, "commit", "-m", "wrong-place artifact")
+
+		const result = await haiku_discovery_complete.handle({
+			intent: slug,
+			stage,
+			template: "discovery",
+		})
+		const body = parseToolResponse(result)
+		assert.strictEqual(body.ok, false)
+		assert.strictEqual(body.error, "discovery_artifact_missing")
+		assert.strictEqual(body.template, "discovery")
+		// The response MUST carry the expected absolute path so the
+		// agent can fix the write location without a round trip.
+		assert.ok(
+			typeof body.expected_path === "string" && body.expected_path.length > 0,
+			`expected_path must be present; got ${JSON.stringify(body)}`,
+		)
+		assert.ok(
+			body.expected_path.includes(wt),
+			`expected_path should be inside the worktree; got ${body.expected_path}`,
+		)
+		// The failure message echoes the expected path so a downstream
+		// agent reading just the message body has the same guidance.
+		assert.match(body.message, /Expected.*absolute/i)
+		// And critically: the worktree was NOT reaped (the merge never
+		// ran) — the subagent can fix the write and retry.
+		assert.ok(existsSync(wt), "worktree should NOT be reaped on missing-artifact")
 	} finally {
 		process.chdir(originalCwd)
 		rmSync(tmp, { recursive: true, force: true })

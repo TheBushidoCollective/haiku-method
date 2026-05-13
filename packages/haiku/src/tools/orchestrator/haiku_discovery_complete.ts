@@ -35,7 +35,7 @@
 //   - Run on every tick. The engine no longer auto-merges discovery
 //     work; only this explicit call does.
 
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
 	discoveryWorktreePath,
@@ -51,15 +51,37 @@ import {
 	jsonSchemaOf,
 	validateToolInput,
 } from "../../state/schemas/inputs/_validate.js"
-import { findHaikuRoot } from "../../state-tools.js"
+import { findHaikuRoot, parseFrontmatter } from "../../state-tools.js"
+import { readStageArtifactDefs } from "../../studio-reader.js"
 import { emitTelemetry } from "../../telemetry.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
 
+/** Resolve the discovery template's `location:` field to an absolute
+ *  path INSIDE the discovery worktree (mirror of decompose.ts:455-468).
+ *
+ *  - `.haiku/...` paths are repo-root relative → `<worktree>/<loc>`
+ *  - `/abs/...` paths stay absolute (rare; discovery templates
+ *    shouldn't declare absolute paths but support them for parity).
+ *  - Anything else is intent-relative → `<worktree>/.haiku/intents/<slug>/<loc>`
+ *
+ *  Substitutes `{intent-slug}` token like the cursor does. */
+function resolveArtifactPathInWorktree(
+	worktree: string,
+	slug: string,
+	location: string,
+): string | null {
+	if (!location) return null
+	const resolved = location.replace(/\{intent-slug\}/g, slug)
+	if (resolved.startsWith(".haiku/")) return join(worktree, resolved)
+	if (resolved.startsWith("/")) return resolved
+	return join(worktree, ".haiku", "intents", slug, resolved)
+}
+
 export default defineTool({
 	name: "haiku_discovery_complete",
 	description:
-		"Discovery subagent's completion hand-off. Merges the discovery worktree's branch back into its stage branch under a per-stage lock. Call AFTER committing your artifact inside the isolation worktree. Returns `{ ok: true }` on clean merge, `discovery_merge_conflict` with conflict_files on real conflict, `discovery_merge_failed` with the git error on other failures, `intent_not_found` when the intent dir is missing, `worktree_not_found` when the discovery worktree doesn't exist (already merged or never created).",
+		"Discovery subagent's completion hand-off. Merges the discovery worktree's branch back into its stage branch under a per-stage lock. Call AFTER committing your artifact inside the isolation worktree. Returns `{ ok: true }` on clean merge, `discovery_artifact_missing` with `expected_path` when the template's `location:` file isn't present in the worktree (you skipped or misplaced the write), `discovery_merge_conflict` with conflict_files on real conflict, `discovery_merge_failed` with the git error on other failures, `intent_not_found` when the intent dir is missing, `worktree_not_found` when the discovery worktree doesn't exist (already merged or never created).",
 	inputSchema: jsonSchemaOf(HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA),
 	async handle(args) {
 		const inputErr = validateToolInput(
@@ -98,6 +120,83 @@ export default defineTool({
 					message: `No discovery worktree at ${worktreePath}. The worktree may have been merged or never created — re-tick haiku_run_next; if the cursor still requests this discovery, redispatch the subagent.`,
 				}),
 			)
+		}
+
+		// ARTIFACT-PRESENCE GATE (added 2026-05-13 — closes the
+		// "discovery_complete returns ok: true 3× but the cursor still
+		// flags it as missing" loop reported on `coverage-mapping`).
+		//
+		// The merge below was previously the first place anything
+		// checked disk — it would happily ff-merge an empty commit if
+		// the subagent claimed completion without writing the file.
+		// Now we look up the studio's discovery template definition,
+		// resolve its `location:` to the absolute path INSIDE the
+		// worktree, and require the file to exist there before the
+		// merge runs. If it doesn't, we surface the expected path so
+		// the subagent (or the parent agent reading the error) knows
+		// exactly what to write.
+		try {
+			const intentFm = parseFrontmatter(
+				readFileSync(join(intentDir, "intent.md"), "utf8"),
+			).data
+			const studio =
+				typeof intentFm.studio === "string" ? intentFm.studio : ""
+			if (studio) {
+				// Case-insensitive name match: `readStageArtifactDefs`
+				// preserves the template filename's case (e.g.
+				// `DISCOVERY.md` → name `"DISCOVERY"`), but the
+				// dispatch flow normalizes to lowercase (see
+				// `decompose.ts`), and the subagent passes the
+				// lowercased form as `template`. Compare lowercase on
+				// both sides so the lookup matches regardless of
+				// filename casing convention.
+				const want = template.toLowerCase()
+				const def = readStageArtifactDefs(studio, stage)
+					.filter((d) => d.kind === "discovery")
+					.find((d) => d.name.toLowerCase() === want)
+				if (def) {
+					const expectedPath = resolveArtifactPathInWorktree(
+						worktreePath,
+						slug,
+						def.location,
+					)
+					if (expectedPath && !existsSync(expectedPath)) {
+						const stageRelPath = expectedPath.startsWith(worktreePath)
+							? expectedPath.slice(worktreePath.length + 1)
+							: expectedPath
+						return text(
+							JSON.stringify({
+								ok: false,
+								error: "discovery_artifact_missing",
+								intent: slug,
+								stage,
+								template,
+								expected_path: expectedPath,
+								location: def.location,
+								message: [
+									`Discovery template '${template}' declares location '${def.location}', but no file exists at the expected path inside your isolation worktree.`,
+									``,
+									`Expected (absolute):  ${expectedPath}`,
+									`Expected (worktree-relative):  ${stageRelPath}`,
+									``,
+									`Before calling haiku_discovery_complete you MUST:`,
+									`  1. Write the populated discovery artifact to the path above.`,
+									`  2. \`git -C "${worktreePath}" add -A && git -C "${worktreePath}" commit -m "..."\``,
+									`  3. Re-call \`haiku_discovery_complete { intent: "${slug}", stage: "${stage}", template: "${template}" }\`.`,
+									``,
+									`If you wrote the file somewhere else (intent main, the stage branch directly, or another path), move it into the worktree at the expected path and commit there — haiku_discovery_complete only merges from the isolation worktree.`,
+								].join("\n"),
+							}),
+						)
+					}
+				}
+			}
+		} catch {
+			// Best-effort presence check. If reading intent.md or the
+			// studio's artifact defs throws (corrupt frontmatter, studio
+			// renamed, etc.), fall through to the merge — the merge will
+			// surface a more specific git error and we don't want this
+			// check to be the thing that blocks recovery.
 		}
 
 		try {

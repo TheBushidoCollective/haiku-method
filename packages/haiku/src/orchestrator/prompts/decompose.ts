@@ -501,6 +501,22 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 
 		for (const a of discoveryArtifacts) {
 			const wt = createDiscoveryWorktree(slug, stage, a.name)
+			// Compute the absolute path the artifact MUST be written to
+			// inside the worktree. The cursor and discovery_complete both
+			// gate on this exact path — telling the subagent the
+			// resolved path up front (not the template's literal
+			// `location:` string) closes the "I wrote the file but the
+			// engine still says it's missing" loop reported on
+			// `coverage-mapping`.
+			const expectedArtifactPath = wt
+				? a.outputPath
+					? a.outputPath.startsWith(dir)
+						? join(wt, ".haiku", "intents", slug, a.outputPath.slice(dir.length + 1))
+						: a.outputPath.startsWith(process.cwd())
+							? join(wt, a.outputPath.slice(process.cwd().length + 1))
+							: a.outputPath
+					: join(wt, ".haiku", "intents", slug, "knowledge", `${a.name.toUpperCase()}.md`)
+				: null
 			const lines: string[] = [
 				`You are researching and producing the "${a.name}" discovery artifact for intent "${slug}" in stage "${stage}" of studio "${studio}".`,
 				"",
@@ -514,10 +530,24 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 					``,
 					`This worktree is on branch \`${discoveryBranchName(slug, stage, a.name)}\`, forked from the stage branch at dispatch time.`,
 					"",
+				)
+				if (expectedArtifactPath) {
+					lines.push(
+						"## Required artifact path (EXACT)",
+						"",
+						`You MUST create exactly ONE file at this absolute path:`,
+						"",
+						`    ${expectedArtifactPath}`,
+						"",
+						`This is the path the engine's existence check reads. Writing the artifact anywhere else (a different filename, a different directory, intent main instead of the worktree) will cause \`haiku_discovery_complete\` to return \`discovery_artifact_missing\` and the cursor to keep flagging discovery as incomplete on every tick.`,
+						"",
+					)
+				}
+				lines.push(
 					`**Rules:**`,
-					`- Write the populated discovery artifact INSIDE this worktree path (under \`${wt}/.haiku/intents/${slug}/knowledge/\` per the template's \`location:\`).`,
+					`- Write the populated discovery artifact at the EXACT path above (inside the worktree, not on intent main).`,
 					`- Commit your work via \`git -C "${wt}" add -A && git -C "${wt}" commit -m "..."\` (no push).`,
-					`- When the artifact is complete and committed, call \`haiku_discovery_complete { intent: "${slug}", stage: "${stage}", template: "${a.name}" }\`. The engine takes a per-stage lock and merges your branch into the stage branch, then reaps the worktree + branch. On clean success the tool returns \`{ ok: true }\` and you're done. On \`discovery_merge_conflict\` the response lists the conflict files — surface that to the parent agent so the integrator can resolve. On \`discovery_merge_failed\` the response carries the git error — surface it and stop.`,
+					`- When the artifact is complete and committed, call \`haiku_discovery_complete { intent: "${slug}", stage: "${stage}", template: "${a.name}" }\`. The engine verifies the file exists at the expected path, then takes a per-stage lock and merges your branch into the stage branch, then reaps the worktree + branch. On clean success the tool returns \`{ ok: true }\` and you're done. On \`discovery_artifact_missing\` you skipped or misplaced the write — the response carries the expected path; write the file there, commit, and re-call. On \`discovery_merge_conflict\` the response lists the conflict files — surface that to the parent agent so the integrator can resolve. On \`discovery_merge_failed\` the response carries the git error — surface it and stop.`,
 					`- Do NOT run \`git worktree remove\`, \`git branch -d\`, or \`git merge\` yourself — \`haiku_discovery_complete\` owns those.`,
 					"",
 				)

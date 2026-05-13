@@ -187,3 +187,59 @@ test("relocate skipped: declared location already has a file (no overwrite)", as
 		rmSync(tmp, { recursive: true, force: true })
 	}
 })
+
+test("relocate skipped: template's location IS knowledge/<NAME>.md (no self-move)", async () => {
+	// When a template legitimately declares
+	// `knowledge/<NAME>.md` as its `location:` (some studios use the
+	// knowledge dir as the canonical home), the engine must NOT
+	// self-move the file. Implementation guards via
+	// `legacyPath === a.outputPath`; this test pins that guard.
+	//
+	// We seed a fake discovery template under the project-local
+	// studio overlay that declares `knowledge/DISCOVERY.md` as its
+	// output, then run decompose. Expected: the file stays put.
+	const tmp = mkdtempSync(join(tmpdir(), "haiku-disc-relocate-self-"))
+	const intentDir = join(tmp, ".haiku", "intents", "test-intent")
+	const knowledgeDir = join(intentDir, "knowledge")
+	const stageDir = join(intentDir, "stages", "inception")
+	mkdirSync(knowledgeDir, { recursive: true })
+	mkdirSync(stageDir, { recursive: true })
+	// Use the real software studio's inception/discovery template
+	// (DISCOVERY.md declares `location: .haiku/intents/{intent-slug}/
+	// knowledge/DISCOVERY.md` — knowledge/ IS the canonical home).
+	writeFileSync(
+		join(intentDir, "intent.md"),
+		matter.stringify("# test\n", {
+			title: "test",
+			studio: "software",
+			mode: "continuous",
+			plugin_version: "5.0.0",
+		}),
+	)
+	const legacyPath = join(knowledgeDir, "DISCOVERY.md")
+	writeFileSync(legacyPath, "# Knowledge IS the canonical home\n")
+	process.env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT
+	try {
+		await runDecompose({
+			tmp,
+			intentDir,
+			slug: "test-intent",
+			stage: "inception",
+		})
+		// File still exists at its original location (which is also
+		// the template's declared location — self-move was
+		// correctly skipped).
+		assert.strictEqual(
+			existsSync(legacyPath),
+			true,
+			"file must NOT be self-moved when knowledge/<NAME>.md IS the declared location",
+		)
+		assert.strictEqual(
+			readFileSync(legacyPath, "utf8"),
+			"# Knowledge IS the canonical home\n",
+			"content preserved (no rename happened)",
+		)
+	} finally {
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})

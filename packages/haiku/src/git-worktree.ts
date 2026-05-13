@@ -171,10 +171,13 @@ export function branchExists(branch: string): boolean {
  * intent main into the agent's current stage branch so the stage sees
  * the freshly-updated intent main (plus the inherited mainline work).
  *
- * Both steps use `refsHaveIdenticalTrees` to short-circuit when no
- * content actually differs — that's what kills the no-op-merge loop
- * (PR #346) and keeps repeated ticks from minting fresh `--no-ff`
- * commits on already-synced branches.
+ * Step 1 short-circuits via `hasNoMergeDebt(mainlineRef, intentMain)`
+ * (trees match OR mainline is an ancestor of intent main) — that's
+ * what kills the no-op-merge loop (PR #346 + PR #348 ancestor case)
+ * and keeps repeated ticks from minting fresh `--no-ff` commits on
+ * already-synced branches. Step 2 short-circuits on tree equality
+ * only; the ancestor direction doesn't apply because main can have
+ * accreted commits that the stage genuinely needs to absorb.
  *
  * NO BRANCH SWITCHING happens here. This is purely the "bring the
  * branch up to date" phase that runs BEFORE the cursor walks. Branch
@@ -244,11 +247,7 @@ export function syncBranchDownstream(slug: string): PreCursorSyncResult {
 		// from elsewhere — common after a downstream sync). Without
 		// the ancestor check, we'd cut a no-op merge commit on intent
 		// main every tick. See `hasNoMergeDebt` for the bug history.
-		if (
-			mainlineRef &&
-			!refsHaveIdenticalTrees(intentMain, mainlineRef) &&
-			!isAncestor(mainlineRef, intentMain)
-		) {
+		if (mainlineRef && !hasNoMergeDebt(mainlineRef, intentMain)) {
 			// Use a temp worktree to merge mainline into intent main
 			// without disturbing the agent's current checkout. Falls back
 			// to in-place when the agent IS on intent main.
@@ -2434,21 +2433,21 @@ export function ensureOnStageBranch(
 			"--count",
 			`${stageBranch}..${intentMain}`,
 		])
-		// No-merge-debt short-circuit. If main and the stage branch
-		// already point at identical trees OR the stage is already an
-		// ancestor of main, the merge would be a `--no-ff` no-op the
-		// opposite-direction sync then re-merges. Skip when either
-		// condition holds; the checkout below is sufficient. Without
-		// these gates, two no-op merge commits alternate forever
-		// (admin-portal-reimagine wedge — first 2026-05-11 tree-equality,
-		// then 2026-05-12 ancestor-of-main). Order matters: only probe
-		// trees/ancestry when aheadCount > 0, otherwise we burn extra
-		// `git rev-parse` / `merge-base` subprocesses per tick on the
-		// common already-aligned path.
+		// Tree-equality short-circuit. This direction is intent-main →
+		// stage (recovery path); the relevant no-op condition is
+		// "trees match" — `hasNoMergeDebt(stage, main)` is the WRONG
+		// predicate here because its `isAncestor(stage, main)` arm
+		// returns true when stage is reachable from main, which is
+		// the case for a freshly-forked stage branch that main has
+		// since accreted commits onto. Skipping the merge in that
+		// situation strands the new main commits on the wrong branch
+		// (regression caught by numeric-id-migration test on 2026-05-12).
+		// Use the bare tree-equality check that PR #347 shipped for
+		// this site.
 		if (
 			aheadCount &&
 			Number.parseInt(aheadCount, 10) > 0 &&
-			!hasNoMergeDebt(stageBranch, intentMain)
+			!refsHaveIdenticalTrees(stageBranch, intentMain)
 		) {
 			// Stage 1: checkout stage branch. Dirty tree on this step is
 			// auto-recoverable.

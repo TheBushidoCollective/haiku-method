@@ -65,7 +65,14 @@ import { text } from "./_text.js"
  *    shouldn't declare absolute paths but support them for parity).
  *  - Anything else is intent-relative → `<worktree>/.haiku/intents/<slug>/<loc>`
  *
- *  Substitutes `{intent-slug}` token like the cursor does. */
+ *  Substitutes `{intent-slug}` token like the cursor does.
+ *
+ *  Returns `null` when `location` is empty. The caller's
+ *  artifact-presence gate short-circuits on null, which means
+ *  templates without a `location:` field are NOT protected by the
+ *  presence gate — they pre-date the `location:` convention and the
+ *  gate has no path to check. New templates should always declare a
+ *  `location:` so the gate fires. */
 function resolveArtifactPathInWorktree(
 	worktree: string,
 	slug: string,

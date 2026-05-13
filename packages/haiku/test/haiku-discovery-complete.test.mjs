@@ -151,12 +151,22 @@ test("clean merge: subagent commits in worktree → tool merges into stage branc
 })
 
 test("discovery_artifact_missing: subagent calls without writing the template's `location:` file → tool refuses to merge", async () => {
-	// Closes the `coverage-mapping` loop reported 2026-05-13: a
-	// subagent that calls haiku_discovery_complete without actually
+	// Closes the `coverage-mapping` loop reported 2026-05-13 (#356):
+	// a subagent that calls haiku_discovery_complete without actually
 	// writing the artifact file would ff-merge an empty commit, the
 	// cursor's `existsSync` would then keep flagging discovery as
 	// missing every tick, and the agent's `{ ok: true }` would lie
 	// to the parent.
+	//
+	// COUPLING: This test loads the real `software` studio via
+	// `CLAUDE_PLUGIN_ROOT` and depends on the inception stage having
+	// a discovery template whose name matches `template: "discovery"`
+	// (case-insensitive) and whose `location:` resolves to
+	// `knowledge/DISCOVERY.md` inside the intent dir. If the template
+	// is renamed or its location changes, this test will start
+	// returning `ok: true` unexpectedly (no def lookup → no gate
+	// fires). Source of truth: `plugin/studios/software/stages/
+	// inception/discovery/DISCOVERY.md`.
 	_resetIsGitRepoForTests()
 	const { tmp, slug, stage } = setupRepo()
 	try {

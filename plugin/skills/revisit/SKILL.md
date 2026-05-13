@@ -49,7 +49,7 @@ When the user wants to address something at a stage that's already past, log one
 `/haiku:revisit` routes the agent and runs the fix-hat sequence against the FB. It does NOT:
 
 - Clear the target stage's prior approval stamps (the fix-hat may invalidate specific roles via `targets.invalidates`, but global approval reset is the per-stage reset job).
-- Reset the target stage's elaboration / discovery / units. If you fixed the studio hat instructions and want the stage to re-run cleanly from elaborate, that's `/haiku:reset --stage <name>` (per-stage reset).
+- Reset the target stage's elaboration / discovery / units. If you fixed the studio hat instructions and want the stage to re-run cleanly from elaborate, that's `/haiku:reset-stage` (per-stage reset).
 - Rewind merge state. Stages already merged into intent main stay merged; new work supersedes the prior approval via the fix-hat's invalidation contract.
 
-If you need a full stage rewind (re-elaborate, re-decompose, re-execute), use `/haiku:reset` with a stage argument.
+If you need a full stage rewind (re-elaborate, re-decompose, re-execute), use `/haiku:reset-stage`. If the whole intent's premise was wrong from the start, use `/haiku:reset-intent` instead.

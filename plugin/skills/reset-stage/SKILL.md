@@ -20,9 +20,10 @@ The intent is fine, but a specific stage produced output that no longer matches 
 
 When the user says "reset the product stage" (or names one stage):
 
-1. Call `haiku_stage_reset { intent: "<slug>", stage: "<stage-name>" }`. The tool confirms via the SPA picker and lists what's about to be deleted.
-2. After the user confirms, the tool performs the wipe (details below).
-3. The tool returns a message saying to call `haiku_run_next` — the next tick re-enters the stage at its elaborate phase. The agent picks up the conversation and re-runs the stage's hat sequence.
+1. **Identify the intent.** If no intent slug is known from context, call `haiku_intent_list` first. If multiple are active and the user didn't name one, ask which intent before proceeding — the same discovery preflight `/haiku:reset-intent` does.
+2. Call `haiku_stage_reset { intent: "<slug>", stage: "<stage-name>" }`. The tool confirms via the SPA picker and lists what's about to be deleted.
+3. After the user confirms, the tool performs the wipe (details below).
+4. The tool returns a message saying to call `haiku_run_next` — the next tick re-enters the stage at its elaborate phase. The agent picks up the conversation and re-runs the stage's hat sequence.
 
 ## What gets wiped
 

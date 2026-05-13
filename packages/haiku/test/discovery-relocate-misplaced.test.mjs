@@ -161,7 +161,7 @@ test("relocate skipped: legacy file doesn't exist (nothing to move)", async () =
 })
 
 test("relocate skipped: declared location already has a file (no overwrite)", async () => {
-	const { tmp, intentDir, legacyPath, declaredPath } = setupIntent({
+	const { tmp, intentDir, declaredPath } = setupIntent({
 		stage: "product",
 		withLegacyFile: true,
 		withDeclaredFile: true,

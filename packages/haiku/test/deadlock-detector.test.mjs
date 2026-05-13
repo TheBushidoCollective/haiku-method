@@ -262,7 +262,10 @@ test("deadlock-detector integration: runWorkflowTick records every emitted actio
 	// major bump doesn't break this test the same way the 4 → 5 bump
 	// did when the fixture was hard-coded to "4.0.0".
 	const { getPluginVersion } = await import("../src/version.ts")
-	const fixtureVersion = `${getPluginVersion().split(".")[0] ?? "4"}.0.0`
+	// `|| "4"` (not `?? "4"`) so the fallback also catches the
+	// empty-string case from a malformed version. `split(".")[0]`
+	// on `""` returns `""`, which `??` would happily pass through.
+	const fixtureVersion = `${getPluginVersion().split(".")[0] || "4"}.0.0`
 	writeFileSync(
 		join(iDir, "intent.md"),
 		[

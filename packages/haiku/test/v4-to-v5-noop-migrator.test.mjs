@@ -35,9 +35,11 @@ import {
 	migrateIntent,
 	migrationsAvailable,
 } from "../src/orchestrator/migrate-registry.ts"
-// Importing the migrator triggers `registerMigrator("4.0.0", "5.0.0", ...)`.
+// The named import below executes the module — including its
+// `registerMigrator("4.0.0", "5.0.0", v4ToV5)` side effect. No
+// separate bare side-effect import is needed (ES module cache
+// deduplicates by specifier anyway).
 import { v4ToV5 } from "../src/orchestrator/migrations/v4-to-v5.ts"
-import "../src/orchestrator/migrations/v4-to-v5.ts"
 
 function setupIntent(overrideFm = {}) {
 	const tmp = mkdtempSync(join(tmpdir(), "haiku-v4-to-v5-"))

@@ -1185,6 +1185,50 @@ export default defineTool({
 					}
 					break
 				}
+
+				// Downstream-invalidation on revisit re-completion.
+				//
+				// If any stage AFTER `stageToComplete` has stamped
+				// reviews/approvals, we just merged a revisited upstream
+				// stage back into intent main — the downstream stamps
+				// reference content that no longer reflects current
+				// upstream. Clear them so the cursor re-fires
+				// dispatch_review / dispatch_approval / user_gate on
+				// every downstream unit. The continuity contract is
+				// enforced once on decompose; this fills the gap on
+				// the output side. See `invalidate-downstream.ts`.
+				try {
+					const { invalidateDownstreamApprovals } = await import(
+						"../../orchestrator/workflow/invalidate-downstream.js"
+					)
+					const iDir = intentDir(slug)
+					const intentFile = join(iDir, "intent.md")
+					if (existsSync(intentFile)) {
+						const im = readFrontmatter(intentFile)
+						const studio = (im.studio as string) || ""
+						if (studio) {
+							const cleared = invalidateDownstreamApprovals({
+								intentDir: iDir,
+								intentFm: im,
+								studio,
+								completedStage: stageToComplete,
+							})
+							if (cleared.units_cleared > 0) {
+								emitTelemetry("haiku.revisit.downstream_invalidated", {
+									intent: slug,
+									completed_stage: stageToComplete,
+									stages_cleared: cleared.stages_cleared.join(","),
+									units_cleared: String(cleared.units_cleared),
+								})
+							}
+						}
+					}
+				} catch (err) {
+					console.error(
+						`[haiku_run_next] downstream invalidation failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
+					)
+				}
+
 				result = dispatchOrchestratorAction(slug)
 			} catch (err) {
 				console.error(

@@ -45,6 +45,7 @@ import {
 } from "../shared/section-helpers"
 import type { ReviewPageSessionData } from "../shared/session-data"
 import type { ReviewDetailKind, ReviewTab } from "../shared/stage-tabs"
+import { deriveUnitStatus } from "../shared/UnitsTable"
 import {
 	type ArtifactKind,
 	type SeenState,
@@ -1143,9 +1144,9 @@ function UnitCard({
 						</span>
 					)}
 					<span
-						className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${statusPillClass(fm.status)}`}
+						className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${statusPillClass(deriveUnitStatus(fm))}`}
 					>
-						{fm.status ?? "unknown"}
+						{deriveUnitStatus(fm)}
 					</span>
 					<svg
 						className="w-4 h-4 text-stone-500"
@@ -1203,9 +1204,9 @@ function CondensedUnitRow({
 				</span>
 			)}
 			<span
-				className={`shrink-0 px-1.5 py-0.5 rounded-full text-xs font-semibold ${statusPillClass(fm.status)}`}
+				className={`shrink-0 px-1.5 py-0.5 rounded-full text-xs font-semibold ${statusPillClass(deriveUnitStatus(fm))}`}
 			>
-				{fm.status ?? "unknown"}
+				{deriveUnitStatus(fm)}
 			</span>
 		</button>
 	)
@@ -1445,9 +1446,9 @@ function UnitDetailView({
 							)}
 							<ModelBadge model={fm.model} />
 							<span
-								className={`shrink-0 px-1.5 py-0.5 rounded-full text-xs font-semibold ${statusPillClass(fm.status)}`}
+								className={`shrink-0 px-1.5 py-0.5 rounded-full text-xs font-semibold ${statusPillClass(deriveUnitStatus(fm))}`}
 							>
-								{fm.status ?? "unknown"}
+								{deriveUnitStatus(fm)}
 							</span>
 						</div>
 						<p className="text-xs font-mono text-stone-500 dark:text-stone-500 mt-1">

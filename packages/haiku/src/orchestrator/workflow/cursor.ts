@@ -260,7 +260,17 @@ export function nextHatForUnit(
 		// In-flight on the last appended hat. No new dispatch.
 		return null
 	}
-	if (last.result === "advance") {
+	// `advance` is the unit-iteration mid-chain/terminal vocab written
+	// by `haiku_unit_advance_hat`. `advanced` is the FB-iteration
+	// mid-chain vocab written by `haiku_feedback_advance_hat` (terminal
+	// FB hat writes `closed` and is handled by the null branch below).
+	// Both mean the same thing for cursor walking: "this hat finished
+	// successfully, dispatch the next one." Reported 2026-05-13 on
+	// `admin-portal-reimagine` design: 23 agent-authored FBs stuck at
+	// `addressed` because `nextHatForUnit` only matched the unit form,
+	// returned null on every mid-chain FB iteration, and the cursor
+	// stopped re-dispatching the fix-hat sequence.
+	if (last.result === "advance" || last.result === "advanced") {
 		const idx = configuredHats.indexOf(last.hat)
 		if (idx < 0) return null // last hat name not in configured set — drift
 		const nextIdx = idx + 1

@@ -2148,29 +2148,23 @@ export function ensureStageBranch(slug: string, stage: string): string {
  * sweep fixes" problem.
  */
 /**
- * Wrap a branch-switching `git checkout` with a worktree-lock guard.
- * P10 (2026-05-06): every checkout that switches branches must go
- * through this helper so locked worktrees can't be hijacked. The
- * file-level `git checkout <ref> -- <path>` form is NOT a branch
- * switch and doesn't need this guard — it's a content fetch.
+ * Wrap a branch-switching `git checkout` with a single call site.
  *
- * Throws on a locked worktree with a descriptive error so callers
- * surface the failure to the user. Callers that catch in turn
- * (ensureOnStageBranch, mergeStageBranchIntoMain, etc.) translate
- * the throw into their own structured "block: worktree_locked"
- * response.
+ * Earlier this helper hard-refused on locked worktrees — that turned
+ * out to be wrong. `git worktree lock` only protects the worktree
+ * from `git worktree remove` / pruning; branch switching inside a
+ * locked worktree is a normal, supported operation (H·AI·K·U's own
+ * per-intent worktree pattern parks intents under `.claude/worktrees`
+ * and runs ticks against them, each one needing branch switches as
+ * the cursor advances). The user-facing locked-worktrees rule
+ * (`locked-worktrees.md`) is "don't unlock or remove" — it never
+ * said "don't switch branches."
+ *
+ * The helper is kept as a single funnel for branch-switching
+ * checkouts so any future cross-cutting guard (telemetry, retry,
+ * pre-switch hook) lands in one place.
  */
 function safeCheckout(args: string[]): void {
-	if (isCurrentWorktreeLocked()) {
-		const targetHint = args[args.length - 1] ?? "<unknown>"
-		throw new Error(
-			`Refusing to \`git checkout ${args.join(" ")}\` — current worktree is locked. ` +
-				`Locked worktrees are reserved for in-flight work and must not be hijacked ` +
-				`by a parallel intent's branch enforcement. Run from a different worktree, ` +
-				`or unlock with \`git worktree unlock\` if the lock is stale. ` +
-				`(Target branch: ${targetHint})`,
-		)
-	}
 	run(["git", ...args])
 }
 
@@ -2211,16 +2205,11 @@ export function ensureOnStageBranch(
 	message: string
 	switched: boolean
 	/** When ok=false and the block is dirty-tree, this is set so callers can
-	 *  emit a `commit_wip` action rather than a hard error requiring a human.
+	 *  emit a `save_wip` action rather than a hard error requiring a human.
 	 *  Values: "dirty_tree" — uncommitted changes blocked a branch switch;
 	 *  "merge_conflict" — the merge left conflicts to resolve;
-	 *  "merge_in_progress" — MERGE_HEAD/REBASE_HEAD etc present;
-	 *  "worktree_locked" — current worktree is locked, refusing to checkout. */
-	block?:
-		| "dirty_tree"
-		| "merge_conflict"
-		| "merge_in_progress"
-		| "worktree_locked"
+	 *  "merge_in_progress" — MERGE_HEAD/REBASE_HEAD etc present. */
+	block?: "dirty_tree" | "merge_conflict" | "merge_in_progress"
 	/** For block=dirty_tree: the paths git reported as "would be overwritten". */
 	dirty_files?: string[]
 	/** The branch we were trying to reach when blocked. */
@@ -2229,37 +2218,16 @@ export function ensureOnStageBranch(
 	if (!isGitRepo())
 		return { ok: true, branch: "", message: "no git", switched: false }
 
-	// P9 (2026-05-06): hard refuse on locked worktrees. If the current
-	// working tree is locked (typically because another in-flight
-	// engine run or a manual `git worktree lock` reserved it for a
-	// specific purpose), DO NOT switch branches under it. Surface a
-	// clear error so the caller (or the user) sees what happened
-	// instead of a silently-hijacked tree.
-	if (isCurrentWorktreeLocked()) {
-		const targetBranchHint = stage
-			? `haiku/${slug}/${stage}`
-			: `haiku/${slug}/main`
-		const current = getCurrentBranch()
-		// Already on the target — no checkout needed; locked tree is
-		// fine because we're not switching anything.
-		if (current === targetBranchHint) {
-			return {
-				ok: true,
-				branch: current,
-				message: `worktree locked; already on '${current}', no switch needed`,
-				switched: false,
-			}
-		}
-		return {
-			ok: false,
-			branch: current,
-			message: `Refusing to checkout '${targetBranchHint}' on a locked worktree (current: '${current}'). Locked worktrees are reserved for in-flight work and must not be hijacked by a parallel intent's branch enforcement. Run from a different worktree, or unlock this one with \`git worktree unlock\` if the lock is stale.`,
-			switched: false,
-			block: "worktree_locked",
-			target_branch: targetBranchHint,
-		}
-	}
-
+	// NOTE (2026-05-13): the prior hard-refuse on locked worktrees has
+	// been removed. A `git worktree lock` only prevents `git worktree
+	// remove` / pruning; switching branches in a locked worktree is a
+	// normal operation. The old guard surfaced a confusing
+	// `worktree_locked` block on every tick run from a parked intent
+	// worktree, which is exactly the workflow the engine is supposed to
+	// support. The user-facing locked-worktrees rule (`locked-worktrees
+	// .md`) is "don't unlock or remove" — it never said "don't switch
+	// branches." See gigsmart/haiku-method admin-portal-reimagine wedge
+	// reported the same day.
 	const intentMain = `haiku/${slug}/main`
 	const stageBranch = stage ? `haiku/${slug}/${stage}` : ""
 	// When a stage is named but its branch doesn't exist, fork it from

@@ -1,16 +1,25 @@
 #!/usr/bin/env npx tsx
-// worktree-lock-guard.test.mjs — P9 (2026-05-06).
+// worktree-lock-guard.test.mjs — locked-worktree branch-switch contract.
 //
-// Locks in the contract: ensureOnStageBranch refuses to checkout
-// branches on a locked worktree. The hijack incident on 2026-05-06
-// happened because the worktree wasn't locked AND the engine's branch
-// enforcement didn't check; a stray run_next for a different intent
-// switched the tree to that intent's branch and overwrote uncommitted
-// edits. This test proves the new guard fires.
+// Original 2026-05-06 contract: `ensureOnStageBranch` refused every
+// branch switch on a locked worktree to block a hijack scenario. That
+// turned out to be the wrong cut. `git worktree lock` only protects
+// the worktree from `git worktree remove` / pruning — branch switching
+// inside a locked worktree is a normal, supported operation. The
+// engine's per-intent worktree pattern parks intents under
+// `.claude/worktrees/<slug>/` (always locked) and runs ticks against
+// them, each tick needing branch switches as the cursor advances.
+// The 2026-05-06 hard-refuse made every parked-intent tick fail with
+// `worktree_locked`. Removed 2026-05-13.
+//
+// This file now pins the inverse: `isCurrentWorktreeLocked` still
+// reports lock state (so callers that care for OTHER reasons — e.g.
+// "don't auto-`git worktree remove` this" — can check), but
+// `ensureOnStageBranch` no longer hard-refuses on locked worktrees.
 
 import assert from "node:assert"
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -70,25 +79,26 @@ test("isCurrentWorktreeLocked reads the lock file", async () => {
 	})
 })
 
-test("ensureOnStageBranch refuses checkout when worktree is locked + branch differs", async () => {
+test("ensureOnStageBranch allows checkout on a locked worktree (locked != frozen)", async () => {
 	if (!HAS_GIT) return
 	await withLockedWorktree(async (root) => {
-		// Create a different intent's branch the engine might try to
-		// checkout. Without the lock guard, ensureOnStageBranch would
-		// switch onto it (this is the hijack).
+		// Per the 2026-05-13 contract: `git worktree lock` only blocks
+		// `git worktree remove`. Branch switching is supported. The
+		// engine's parked-intent worktrees are always locked AND
+		// constantly switch branches as ticks advance — refusing the
+		// switch would wedge every parked intent.
 		git(root, "branch", "haiku/foreign-intent/main")
 		const { ensureOnStageBranch } = await import("../src/git-worktree.ts")
 		const result = ensureOnStageBranch("foreign-intent", undefined)
-		assert.strictEqual(result.ok, false)
-		assert.strictEqual(result.block, "worktree_locked")
-		assert.strictEqual(result.target_branch, "haiku/foreign-intent/main")
-		// Branch should NOT have been switched.
+		assert.strictEqual(result.ok, true)
+		// Block field must NOT be `worktree_locked` (no such block any more).
+		assert.notStrictEqual(result.block, "worktree_locked")
 		const cur = git(root, "rev-parse", "--abbrev-ref", "HEAD")
-		assert.strictEqual(cur, "haiku/test-intent/main")
+		assert.strictEqual(cur, "haiku/foreign-intent/main")
 	})
 })
 
-test("ensureOnStageBranch on locked worktree but already on target branch is a no-op success", async () => {
+test("ensureOnStageBranch on locked worktree already on target branch is a no-op success", async () => {
 	if (!HAS_GIT) return
 	await withLockedWorktree(async () => {
 		const { ensureOnStageBranch } = await import("../src/git-worktree.ts")

@@ -157,6 +157,33 @@ export function decideMode(args: {
 	return "disabled"
 }
 
+/**
+ * Count addressed / answered feedback items that ONLY a human reviewer
+ * can close — exported for unit tests. Exposed as a pure helper so the
+ * filter is independently testable from the React render path.
+ *
+ * Why only `author_type === "human"`: agent- and system-authored FBs
+ * (adversarial-review, drift, studio-review, etc.) auto-close on the
+ * terminal fix-hat advance. They never need a human in the loop. If
+ * they're sitting at `addressed`/`answered` without closing, that's an
+ * engine bug to fix in the workflow — the SPA should not put a wall in
+ * front of the user. Reported 2026-05-13 on `admin-portal-reimagine`
+ * design (23 agent-authored items stuck at `addressed`, blocking
+ * Approve with "23 to verify").
+ */
+export function countItemsNeedingUserVerification(
+	items: ReadonlyArray<{
+		status: string
+		author_type: "agent" | "human" | "system" | null
+	}>,
+): number {
+	return items.filter(
+		(i) =>
+			(i.status === "addressed" || i.status === "answered") &&
+			i.author_type === "human",
+	).length
+}
+
 export function FeedbackSidebar({
 	stage,
 	activeStage,
@@ -216,11 +243,19 @@ export function FeedbackSidebar({
 	// addressed FBs that the engine still considers open (the FB-level
 	// gate refuses to advance the stage until the human closes the
 	// human-authored items).
-	const unverifiedCount = items.filter(
-		(i) => i.status === "addressed" || i.status === "answered",
-	).length
+	//
+	// SCOPE: ONLY human-authored items require user verification. Agent-
+	// and system-authored FBs (adversarial review, drift, etc.) auto-
+	// close on the terminal fix-hat advance — they don't need a human in
+	// the loop. If they're sitting at `addressed`/`answered` without
+	// closing, that's an engine bug to fix in the workflow, not a wall
+	// the SPA should put in front of the user. Reported 2026-05-13 on
+	// `admin-portal-reimagine` design (23 agent-authored items stuck at
+	// `addressed`, blocking Approve). Logic lives in
+	// `countItemsNeedingUserVerification` (exported above) so it's unit
+	// testable.
+	const unverifiedCount = countItemsNeedingUserVerification(items)
 	const hasUnverified = unverifiedCount > 0
-	const hasOpen = hasPending || hasUnverified
 	const openCount = pendingCount + unverifiedCount
 
 	// Upload handler — POSTs each file to
@@ -400,7 +435,7 @@ export function FeedbackSidebar({
 							: awaitActive
 								? "Engine is waiting on your decision. Approve to advance, or leave feedback to request changes."
 								: "No engine call is awaiting a decision right now. Leave feedback to force one on the next tick, or wait for the agent to drive back to a gate."
-					: `Type a comment above or click into another stage.`
+						: `Type a comment above or click into another stage.`
 
 	return (
 		<Aside

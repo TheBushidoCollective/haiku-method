@@ -30,7 +30,7 @@ This guide covers migrating from AI-DLC to H·AI·K·U. Most migration is automa
 | `/ai-dlc:quick` | `/haiku:quick` |
 | `/ai-dlc:operate` | `/haiku:operate` |
 | `/ai-dlc:resume` | `/haiku:pickup` |
-| `/ai-dlc:reset` | `/haiku:reset` |
+| `/ai-dlc:reset` | `/haiku:reset-intent` (whole intent) or `/haiku:reset-stage` (single stage) |
 | `/ai-dlc:refine` | `/haiku:refine` |
 | `/ai-dlc:followup` | `/haiku:followup` |
 | `/ai-dlc:compound` | `/haiku:compound` |

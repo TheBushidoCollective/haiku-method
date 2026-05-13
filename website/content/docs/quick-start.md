@@ -77,7 +77,8 @@ Your progress is preserved - the AI picks up where it left off.
 |---------|---------|
 | `/haiku:gate-review` | Pre-delivery code review -- catches issues before external CI/bots |
 | `/haiku:pickup [slug]` | Resume an existing intent after a break |
-| `/haiku:reset` | Abandon current work and start fresh |
+| `/haiku:reset-intent` | Wipe the whole intent (every stage, every branch) and recreate from the preserved title/description |
+| `/haiku:reset-stage` | Wipe a single stage (units, outputs, artifacts, branch) so the agent re-runs it from scratch — other stages stay put |
 | `/methodology [question]` | Ask questions about H·AI·K·U |
 
 ## Example: Complete Workflow

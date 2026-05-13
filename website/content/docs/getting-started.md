@@ -86,7 +86,8 @@ Your progress is preserved — the AI picks up where it left off.
 | `/haiku:pickup [slug]` | Resume an existing intent after a break |
 | `/haiku:quick` | Quick mode for small tasks — skip full pipeline |
 | `/haiku:zap` | Zero-ceremony hat loop — typo/one-liner work, no intent or workflow scaffolding |
-| `/haiku:reset` | Abandon current work and start fresh |
+| `/haiku:reset-intent` | Wipe the whole intent (every stage, every branch) and recreate from the preserved title/description |
+| `/haiku:reset-stage` | Wipe a single stage (units, outputs, artifacts, branch) so the agent re-runs it from scratch — other stages stay put |
 | `/haiku:autopilot` | Full autonomous workflow — create, run, review, deliver |
 
 ## Example: Complete Workflow

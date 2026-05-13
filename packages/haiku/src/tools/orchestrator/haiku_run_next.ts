@@ -864,31 +864,33 @@ export default defineTool({
 						)
 						if (isStageComplete(iDir, studio, hereStage, mode)) {
 							// Only synthesize merge_stage when there's real
-							// merge debt (trees differ). When trees already
-							// match (the merge already landed in an earlier
-							// cycle — v3 lifecycle, or this session's
-							// previous successful merge), skip the
-							// synthesis so the post-cursor branch switch
-							// below moves the agent to the cursor's named
-							// stage. Without this guard, the merge_stage
-							// handler's no-op success re-dispatches the
-							// cursor, the cursor returns the same action,
-							// this synthesis re-fires forever.
-							const { refsHaveIdenticalTrees } = await import(
+							// merge debt. Two no-merge-debt shapes exist
+							// and BOTH must short-circuit, or this
+							// synthesis re-fires every tick and the
+							// merge_stage handler's no-op success
+							// re-dispatches the cursor:
+							//
+							//   1. trees match (PR #347, 2026-05-11) —
+							//      the merge already landed in an earlier
+							//      cycle or v3 lifecycle.
+							//   2. stage is an ancestor of intent main
+							//      (2026-05-12) — intent main has accreted
+							//      commits from a downstream sync, but
+							//      stage is still fully reachable from
+							//      intent main, so `git merge stage`
+							//      reports "Already up to date".
+							//
+							// `hasNoMergeDebt` returns true for either
+							// case. Conservative-by-design: if we can't
+							// prove no-debt, synthesize and let the handler
+							// surface conflicts; the surrounding try/catch
+							// absorbs downstream failure.
+							const { hasNoMergeDebt } = await import(
 								"../../git-worktree.js"
 							)
 							const hereBranch = `haiku/${slug}/${hereStage}`
 							const intentMainBranch = `haiku/${slug}/main`
-							// `refsHaveIdenticalTrees` returns false when
-							// either ref is missing (rev-parse on a missing
-							// branch yields empty stdout). Conservative-by-
-							// design: if we can't prove trees match, assume
-							// they don't and synthesize the merge. The
-							// surrounding try/catch (above) absorbs any
-							// downstream failure on the synthesized
-							// merge_stage call, so the worst case is a
-							// recoverable error message instead of a wedge.
-							if (!refsHaveIdenticalTrees(hereBranch, intentMainBranch)) {
+							if (!hasNoMergeDebt(hereBranch, intentMainBranch)) {
 								result = {
 									action: "merge_stage",
 									intent: slug,

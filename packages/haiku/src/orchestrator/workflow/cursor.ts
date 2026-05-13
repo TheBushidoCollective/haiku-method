@@ -48,9 +48,12 @@
 //                 gate, no agent gates, merge_stage auto-fires once
 //                 quality_gates is signed
 
+import { execFileSync } from "node:child_process"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import matter from "gray-matter"
+import { branchExists, hasNoMergeDebt } from "../../git-worktree.js"
+import { isGitRepo } from "../../state/shared.js"
 import { primaryRepoRoot } from "../../state-tools.js"
 import {
 	readReviewAgentPaths,
@@ -517,9 +520,126 @@ export function findCurrentStage(slug: string, studio: string): string | null {
 			? (intentFm.mode as string)
 			: "continuous"
 	for (const stage of stages) {
-		if (!isStageComplete(intentDir, studio, stage, mode)) return stage
+		if (isStageComplete(intentDir, studio, stage, mode)) continue
+		// FM signal says "incomplete" — but in git mode, corroborate
+		// with topology when the stage's GIT HISTORY proves the work
+		// already landed on intent main. The narrow case:
+		//
+		//   1. Stage branch HEAD ≠ intent main HEAD (the stage made
+		//      its own commits at some point — proof of history).
+		//   2. Stage branch is an ancestor of intent main, or has
+		//      identical trees (no merge debt — those commits were
+		//      merged in).
+		//   3. At least one approval stamp exists on at least one
+		//      unit (corroborates "the engine TRIED to mark this
+		//      stage approved" — distinguishes post-migration drift
+		//      from a genuinely partial mid-pipeline stage).
+		//
+		// All three must hold. (1) excludes fresh-fork stages whose
+		// branches track main exactly because work-in-progress is
+		// FM-only in tests / mid-pipeline. (2) is the no-merge-debt
+		// gate. (3) excludes stages that have done iterations but
+		// never reached the review / approval steps.
+		//
+		// Without this corroborating walk-past, `findCurrentStage`
+		// pins on a post-migration stage whose history is on main but
+		// whose per-unit FM has malformed approval stamps;
+		// `walkIntentTrack` reaches its terminal `merge_stage`
+		// emission (the step-9 truthy check passes even though
+		// `isUnitFullyApproved`'s .at check doesn't); the handler
+		// short-circuits as a no-op merge (`hasNoMergeDebt` true);
+		// cursor re-walks; same action; loop guard fires. Reported
+		// 2026-05-12 on admin-portal-reimagine after PR #347 shipped
+		// the tree-equality fix that wasn't sufficient for the
+		// ancestor-of-main topology.
+		if (
+			stageHasAnyApprovalStamped(intentDir, stage) &&
+			stageWasMergedIntoMain(slug, stage)
+		) {
+			continue
+		}
+		return stage
 	}
 	return null
+}
+
+/**
+ * Has at least one approval been stamped on at least one unit in this
+ * stage? Used by `findCurrentStage` to distinguish a stage that's
+ * "FM-malformed-but-actually-merged" (some approvals exist in any
+ * shape) from a stage that's mid-pipeline (no approvals stamped yet —
+ * step 9 of walkIntentTrack hasn't run).
+ *
+ * Truthy check, not `.at` check: post-migration backfill may stamp
+ * approvals in a shape `isUnitFullyApproved` rejects (missing .at,
+ * boolean instead of object). We want to catch those — the truthy
+ * presence is the signal that the migration TRIED to mark this stage
+ * approved, which corroborates the git "no merge debt" topology.
+ */
+function stageHasAnyApprovalStamped(intentDir: string, stage: string): boolean {
+	const unitsDir = join(intentDir, "stages", stage, "units")
+	if (!existsSync(unitsDir)) return false
+	const unitFiles = readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+	if (unitFiles.length === 0) return false
+	for (const file of unitFiles) {
+		const fm = readFm(join(unitsDir, file))?.data
+		if (!fm) continue
+		const approvals = (fm as { approvals?: Record<string, unknown> }).approvals
+		if (approvals && typeof approvals === "object") {
+			for (const v of Object.values(approvals)) {
+				if (v != null && v !== false) return true
+			}
+		}
+	}
+	return false
+}
+
+/**
+ * Git-mode corroborating signal for `findCurrentStage`. Returns true
+ * when the stage's branch shows evidence of having been merged into
+ * intent main historically:
+ *
+ *   - stage HEAD differs from intent main HEAD (the stage made its
+ *     own commits at some point — not a fresh fork tracking main), AND
+ *   - the stage has no merge debt against intent main (trees match OR
+ *     stage is an ancestor of main — those commits landed in main).
+ *
+ * Returns false in non-git mode or when either branch is missing —
+ * the conservative fall-back is "we don't have evidence of merge,
+ * defer to FM signal." That keeps filesystem-mode, brand-new-intent,
+ * and mid-pipeline paths unchanged.
+ *
+ * Distinct from the bare `hasNoMergeDebt` predicate: the additional
+ * "stage HEAD differs from main HEAD" gate excludes the case where a
+ * stage branch points at the same commit as main because no work has
+ * been committed to it yet (fresh fork, or mid-pipeline FM-only work
+ * that hasn't reached a stage merge yet).
+ */
+function stageWasMergedIntoMain(slug: string, stage: string): boolean {
+	try {
+		if (!isGitRepo()) return false
+		const stageBranch = `haiku/${slug}/${stage}`
+		const intentMain = `haiku/${slug}/main`
+		if (!branchExists(stageBranch) || !branchExists(intentMain)) return false
+		const stageHead = tryRevParse(stageBranch)
+		const mainHead = tryRevParse(intentMain)
+		if (!stageHead || !mainHead) return false
+		if (stageHead === mainHead) return false
+		return hasNoMergeDebt(stageBranch, intentMain)
+	} catch {
+		return false
+	}
+}
+
+function tryRevParse(ref: string): string {
+	try {
+		return execFileSync("git", ["rev-parse", "--verify", ref], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		}).trim()
+	} catch {
+		return ""
+	}
 }
 
 // ── Track B: feedback walk ───────────────────────────────────────────

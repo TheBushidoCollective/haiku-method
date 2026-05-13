@@ -105,6 +105,28 @@ export function refsHaveIdenticalTrees(refA: string, refB: string): boolean {
 	return a === b
 }
 
+/**
+ * Combined "is the stage→main merge a no-op?" predicate. Returns true
+ * when either condition holds:
+ *
+ *   - trees match (a merge would mint a `--no-ff` no-op commit), OR
+ *   - stage is already an ancestor of intent main (the merge is
+ *     "Already up to date" — the trees differ only because intent main
+ *     has accreted later commits from elsewhere).
+ *
+ * Either case means there is no merge debt to discharge; emitting
+ * `merge_stage` again would re-execute a no-op and re-dispatch the
+ * cursor, producing the merge_stage loop guard the consumer ran into
+ * on 2026-05-11 and 2026-05-12. Callers MUST gate both the cursor's
+ * `merge_stage` synthesis AND the in-handler short-circuit on this
+ * predicate so the loop can't fire from either side.
+ */
+export function hasNoMergeDebt(stageBranch: string, intentMain: string): boolean {
+	if (refsHaveIdenticalTrees(stageBranch, intentMain)) return true
+	if (isAncestor(stageBranch, intentMain)) return true
+	return false
+}
+
 /** Variant of `tryRun` for git operations that talk to a remote
  *  (`fetch origin`, `push origin`, `ls-remote`). Bounded by
  *  `GIT_NETWORK_TIMEOUT_MS` and runs with credential / SSH prompts
@@ -213,7 +235,17 @@ export function syncBranchDownstream(slug: string): PreCursorSyncResult {
 			: tryRun(["git", "rev-parse", "--verify", `origin/${mainlineBranch}`])
 				? `origin/${mainlineBranch}`
 				: ""
-		if (mainlineRef && !refsHaveIdenticalTrees(intentMain, mainlineRef)) {
+		// Skip the mainline → intent main sync when there's no debt to
+		// discharge: either trees match, or mainline is already an
+		// ancestor of intent main (intent main has accreted commits
+		// from elsewhere — common after a downstream sync). Without
+		// the ancestor check, we'd cut a no-op merge commit on intent
+		// main every tick. See `hasNoMergeDebt` for the bug history.
+		if (
+			mainlineRef &&
+			!refsHaveIdenticalTrees(intentMain, mainlineRef) &&
+			!isAncestor(mainlineRef, intentMain)
+		) {
 			// Use a temp worktree to merge mainline into intent main
 			// without disturbing the agent's current checkout. Falls back
 			// to in-place when the agent IS on intent main.
@@ -1453,8 +1485,33 @@ export function reconcileIntentBranches(
 	return result
 }
 
-/** Helpers used by reconcileMisroutedStageMerges. Internal — not exported. */
-function isAncestor(maybeAncestor: string, descendant: string): boolean {
+/**
+ * Is `maybeAncestor` reachable from `descendant`? Wraps
+ * `git merge-base --is-ancestor`, which signals via exit code: 0 when
+ * the first ref is an ancestor of the second, 1 when not, other codes
+ * on error (missing ref, not-a-repo, etc.). Both error and "not
+ * ancestor" map to `false` here — same conservative posture as
+ * `refsHaveIdenticalTrees`: the caller's contract is "fall through to
+ * normal merge logic" when the optimization can't prove the merge
+ * would be a no-op.
+ *
+ * Used by `hasNoMergeDebt` (above) and by `reconcileMisroutedStageMerges`
+ * (below) plus the pre-cursor mainline → intent-main short-circuit.
+ *
+ * Why `hasNoMergeDebt` needs both this AND tree equality:
+ * bug report 2026-05-12 (admin-portal-reimagine, second occurrence
+ * after PR #347 shipped). The tree-equality short-circuit catches the
+ * shape where stage and intent main share the same tree, but trees can
+ * DIFFER and the merge can still be a no-op when the stage is already
+ * an ancestor of intent main — intent main has accreted commits from
+ * downstream sync, the stage hasn't been touched since the original
+ * merge. `git merge inception` against intent main reports
+ * "Already up to date", the merge "succeeds" with no new commit, the
+ * cursor re-walks and returns the same `merge_stage(inception)`. Loop
+ * guard fires after 2 ticks. Either signal (trees equal OR ancestor)
+ * means there's no merge debt and the merge must be skipped.
+ */
+export function isAncestor(maybeAncestor: string, descendant: string): boolean {
 	if (!maybeAncestor || !descendant) return false
 	try {
 		execFileSync(
@@ -1755,17 +1812,19 @@ export function mergeStageBranchIntoMain(
 		run(["git", "rev-parse", "--verify", stageBranch])
 		run(["git", "rev-parse", "--verify", mainBranch])
 
-		// Tree-equality short-circuit. If stage and main already point
-		// at identical trees, a merge here would mint a `--no-ff` no-op
-		// commit on main; the opposite-direction sync in
-		// ensureOnStageBranch would then re-merge it. Skip when trees
-		// match. Without this, the two sync sites alternate forever
-		// (admin-portal-reimagine wedge after v0→v4 migration, 2026-05-11).
-		if (refsHaveIdenticalTrees(stageBranch, mainBranch)) {
+		// No-merge-debt short-circuit. If stage and main already point
+		// at identical trees, OR stage is already an ancestor of main
+		// (main has accreted commits from a downstream sync but the
+		// stage is fully reachable from main), a merge here would be a
+		// no-op — and the cursor synthesis would then re-emit
+		// `merge_stage` next tick, looping forever. Skip when either
+		// condition holds. See `hasNoMergeDebt` for the bug history
+		// across 2026-05-11 (tree-equality) and 2026-05-12 (ancestor).
+		if (hasNoMergeDebt(stageBranch, mainBranch)) {
 			return {
 				success: true,
 				noop: true,
-				message: `${stageBranch} and ${mainBranch} already point at identical trees — skipping no-op merge`,
+				message: `${stageBranch} has no merge debt against ${mainBranch} (trees match or stage is already an ancestor of main) — skipping no-op merge`,
 			}
 		}
 
@@ -2372,20 +2431,21 @@ export function ensureOnStageBranch(
 			"--count",
 			`${stageBranch}..${intentMain}`,
 		])
-		// Tree-equality short-circuit. If main and the stage branch
-		// already point at identical trees, the merge would be a
-		// `--no-ff` no-op commit that the opposite-direction sync
-		// then re-merges. Skip the merge entirely; the checkout below
-		// is sufficient. Without this gate, two no-op merge commits
-		// would alternate forever (admin-portal-reimagine wedge after
-		// v0→v4 migration, 2026-05-11). Order matters: only probe
-		// trees when aheadCount > 0, otherwise we burn two
-		// `git rev-parse` subprocesses per tick on the common
-		// already-aligned path.
+		// No-merge-debt short-circuit. If main and the stage branch
+		// already point at identical trees OR the stage is already an
+		// ancestor of main, the merge would be a `--no-ff` no-op the
+		// opposite-direction sync then re-merges. Skip when either
+		// condition holds; the checkout below is sufficient. Without
+		// these gates, two no-op merge commits alternate forever
+		// (admin-portal-reimagine wedge — first 2026-05-11 tree-equality,
+		// then 2026-05-12 ancestor-of-main). Order matters: only probe
+		// trees/ancestry when aheadCount > 0, otherwise we burn extra
+		// `git rev-parse` / `merge-base` subprocesses per tick on the
+		// common already-aligned path.
 		if (
 			aheadCount &&
 			Number.parseInt(aheadCount, 10) > 0 &&
-			!refsHaveIdenticalTrees(stageBranch, intentMain)
+			!hasNoMergeDebt(stageBranch, intentMain)
 		) {
 			// Stage 1: checkout stage branch. Dirty tree on this step is
 			// auto-recoverable.

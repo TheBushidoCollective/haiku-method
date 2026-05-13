@@ -455,3 +455,130 @@ test("mergeStageBranchIntoMain: trees DIFFER → merge proceeds normally", async
 		rmSync(repo, { recursive: true, force: true })
 	}
 })
+
+test("findCurrentStage: walks past stage with no merge debt + malformed approval stamps", async (t) => {
+	if (!HAS_GIT) {
+		t.skip("no git in environment")
+		return
+	}
+	// Cursor-side defense for the post-migration loop class. When a
+	// stage has malformed approval stamps (truthy values without `.at`,
+	// from v0→v4 backfill drift) AND its branch shows evidence of
+	// having been merged into main (HEAD differs from main HEAD AND no
+	// merge debt), findCurrentStage MUST walk past it. Otherwise
+	// walkIntentTrack pins on the stage and emits merge_stage every
+	// tick — the handler short-circuits noop, cursor re-walks, loop
+	// guard fires. The synthesis-side hasNoMergeDebt check in
+	// haiku_run_next can't help here because that synthesis is gated on
+	// `result.stage !== hereStage`; when the agent is on inception's
+	// branch and the cursor returns merge_stage(inception), those are
+	// equal and the synthesis doesn't fire. Reported 2026-05-12 on
+	// admin-portal-reimagine — STILL REPRODUCES on 4.5.1 because the
+	// fix only covered the synthesis site, not the cursor site.
+	const pluginRoot = join(import.meta.dirname, "..", "..", "..", "plugin")
+	const prevPluginRoot = process.env.CLAUDE_PLUGIN_ROOT
+	process.env.CLAUDE_PLUGIN_ROOT = pluginRoot
+	const { _resetPluginRootForTests } = await import("../src/config.ts")
+	_resetPluginRootForTests()
+
+	const repo = mkdtempSync(join(tmpdir(), "haiku-cursor-walks-past-"))
+	try {
+		git(repo, "init", "-q")
+		git(repo, "config", "user.email", "test@haiku.test")
+		git(repo, "config", "user.name", "test")
+		const slug = "cursor-walks-past-merged"
+		const intentDir = join(repo, ".haiku/intents", slug)
+		const inceptionUnitsDir = join(intentDir, "stages/inception/units")
+		const designUnitsDir = join(intentDir, "stages/design/units")
+		mkdirSync(inceptionUnitsDir, { recursive: true })
+		mkdirSync(designUnitsDir, { recursive: true })
+
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			`---
+title: Cursor walks past merged stage
+studio: software
+mode: continuous
+plugin_version: 4.0.0
+stages: [inception, design]
+---
+body
+`,
+		)
+		// Inception unit with iterations terminal-advance AND a
+		// backfilled approval stamp in a shape isUnitFullyApproved
+		// rejects (boolean instead of {at: ...} object — the v0→v4
+		// backfill drift shape).
+		writeFileSync(
+			join(inceptionUnitsDir, "unit-01-foo.md"),
+			`---
+title: foo
+started_at: '2026-04-27T19:00:00Z'
+iterations:
+  - hat: researcher
+    started_at: '2026-04-27T19:00:00Z'
+    completed_at: '2026-04-27T19:01:00Z'
+    result: advance
+  - hat: verifier
+    started_at: '2026-04-27T19:01:00Z'
+    completed_at: '2026-04-27T19:02:00Z'
+    result: advance
+approvals:
+  spec: true
+  user: true
+---
+`,
+		)
+		writeFileSync(
+			join(designUnitsDir, "unit-01-bar.md"),
+			`---
+title: bar
+started_at: null
+iterations: []
+---
+`,
+		)
+		git(repo, "add", "-A")
+		git(repo, "commit", "-qm", "seed")
+		git(repo, "checkout", "-qb", `haiku/${slug}/main`)
+		// Inception forks from main, makes its own commit, then main
+		// fast-forwards to inception — the post-merge ancestor shape.
+		git(repo, "checkout", "-qb", `haiku/${slug}/inception`)
+		writeFileSync(
+			join(inceptionUnitsDir, "unit-01-foo-work.md"),
+			"# inception's per-unit work\n",
+		)
+		git(repo, "add", "-A")
+		git(repo, "commit", "-qm", "haiku(inception): unit-01 work")
+		git(repo, "checkout", "-q", `haiku/${slug}/main`)
+		git(repo, "merge", "--ff-only", "-q", `haiku/${slug}/inception`)
+		// Main accretes content from "downstream sync" — now trees
+		// differ from inception, but inception is still an ancestor.
+		writeFileSync(
+			join(repo, "downstream-sync.md"),
+			"content from downstream dev sync\n",
+		)
+		git(repo, "add", "-A")
+		git(repo, "commit", "-qm", "haiku: merge dev → intent main")
+		git(repo, "checkout", "-qb", `haiku/${slug}/design`)
+
+		process.chdir(repo)
+		const { findCurrentStage } = await import(
+			"../src/orchestrator/workflow/cursor.ts"
+		)
+		const active = findCurrentStage(slug, "software")
+		assert.strictEqual(
+			active,
+			"design",
+			`findCurrentStage must walk past inception (HEAD ≠ main HEAD, ancestor of main, ≥1 approval stamped) and return design. Got: ${active}. Pre-fix: returned inception → cursor emits merge_stage(inception) → handler noop → re-tick → loop guard fires.`,
+		)
+	} finally {
+		if (prevPluginRoot === undefined) {
+			delete process.env.CLAUDE_PLUGIN_ROOT
+		} else {
+			process.env.CLAUDE_PLUGIN_ROOT = prevPluginRoot
+		}
+		process.chdir(tmpdir())
+		rmSync(repo, { recursive: true, force: true })
+	}
+})

@@ -24,19 +24,25 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const TAB_ROUTE_FILE = resolve(HERE, "..", "$tab.tsx")
 
 // Each known ReviewTab value the SPA can navigate to. Kept here so a
-// reader of the test can see what the union should contain; the
-// compile-time check `const _typeCheck: ReviewTab` below pins that
-// the array stays in sync with the union (TS will refuse to compile
-// if a tab is added or removed without updating this array).
+// reader of the test can see what the union should contain.
+//
+// Compile-time exhaustiveness: the Exclude check below fails to compile
+// when any ReviewTab member is absent from EXPECTED_TABS. The `satisfies`
+// clause ensures every element is a valid ReviewTab (no extras). Together
+// they enforce coverage in both directions.
 const EXPECTED_TABS = [
 	"overview",
 	"units",
 	"knowledge",
 	"outputs",
 	"other",
-] as const
-const _typeCheck: ReviewTab = EXPECTED_TABS[0]
-void _typeCheck
+] as const satisfies readonly ReviewTab[]
+// Fails to compile if any ReviewTab member is missing from EXPECTED_TABS.
+type _Exhaustive = Exclude<ReviewTab, (typeof EXPECTED_TABS)[number]> extends never
+	? true
+	: never
+const _exhaustive: _Exhaustive = true
+void _exhaustive
 
 describe("$tab.tsx — VALID_TABS allowlist", () => {
 	it("VALID_TABS covers every ReviewTab the SPA can route to", () => {

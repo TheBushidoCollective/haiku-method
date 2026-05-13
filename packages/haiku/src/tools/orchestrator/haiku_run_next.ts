@@ -1666,10 +1666,17 @@ export default defineTool({
 				// for what was really an await-phase disconnect.
 				const isAwaitDisconnect = errorMsg.includes("lost presence")
 				const isAborted = errorMsg === "aborted" || signal?.aborted
-				const failurePhase = isAwaitDisconnect
-					? "await"
-					: isAborted
-						? "abort"
+				// Single ordering source. Abort wins over disconnect (a
+				// cancelled MCP call should always read as cancelled even
+				// if the SPA tab also went away). Used by BOTH the log
+				// line and the response-routing if-chain below so they
+				// can't drift. Reported on PR #355 review — prior version
+				// had log saying `phase: await` while response said
+				// `GATE ABORTED`.
+				const failurePhase = isAborted
+					? "abort"
+					: isAwaitDisconnect
+						? "await"
 						: "prepare"
 
 				console.error(`[haiku] gate_review ${failurePhase} failed: ${errorMsg}`)
@@ -1688,7 +1695,9 @@ export default defineTool({
 				}
 
 				syncSessionMetadata(slug, args.state_file as string | undefined)
-				if (isAborted) {
+				// Route off `failurePhase` (computed above) so the log
+				// line and the response label are always the same phase.
+				if (failurePhase === "abort") {
 					return {
 						content: [
 							{
@@ -1699,7 +1708,7 @@ export default defineTool({
 						isError: true,
 					}
 				}
-				if (isAwaitDisconnect) {
+				if (failurePhase === "await") {
 					return {
 						content: [
 							{

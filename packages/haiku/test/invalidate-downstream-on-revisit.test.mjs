@@ -219,20 +219,24 @@ test("idempotent — second call clears nothing more", () => {
 	}
 })
 
-test("per-unit error isolation: one malformed YAML doesn't abort downstream walk", () => {
+test("per-unit error isolation: one unreadable unit doesn't abort downstream walk", () => {
 	const { root, intentDir, intentFm } = setup()
 	try {
-		// design/unit-01 is malformed YAML; design/unit-02 + product/unit-01
-		// are valid and have stamps. Before the fix, the readFileSync /
-		// parseFrontmatter throw on unit-01 would skip every remaining
-		// design unit AND the entire product stage. After the fix, the
-		// per-unit try/catch isolates the failure to that one file.
+		// design has three units: unit-01 is a DIRECTORY named like a
+		// .md file (readdirSync still lists it because the filter only
+		// checks the `.md` suffix; readFileSync on a directory throws
+		// EISDIR — a guaranteed-throw scenario that doesn't depend on
+		// gray-matter's YAML strictness). unit-02 is valid + has
+		// stamps. product/unit-01 is valid + has stamps.
+		//
+		// Before the fix, readFileSync's EISDIR on unit-01 would bubble
+		// out of the for-loop and silently skip every remaining design
+		// unit AND the entire product stage. After the fix, the per-
+		// unit try/catch isolates the failure to that one file —
+		// design/unit-02 + product/unit-01 still clear.
 		const designUnitsDir = join(intentDir, "stages", "design", "units")
 		mkdirSync(designUnitsDir, { recursive: true })
-		writeFileSync(
-			join(designUnitsDir, "unit-01.md"),
-			"---\nthis is: not: valid: yaml:\n: bad\n---\nbody\n",
-		)
+		mkdirSync(join(designUnitsDir, "unit-01.md"), { recursive: true })
 		writeUnit(intentDir, "design", "unit-02.md", {
 			title: "design u2",
 			reviews: { user: stamp() },
@@ -249,8 +253,6 @@ test("per-unit error isolation: one malformed YAML doesn't abort downstream walk
 			studio: "software",
 			completedStage: "inception",
 		})
-		// design counts because unit-02 cleared; product counts because
-		// unit-01 cleared. unit-01 in design was skipped, not aborted.
 		assert.deepStrictEqual(result.stages_cleared.sort(), ["design", "product"])
 		assert.strictEqual(result.units_cleared, 2)
 	} finally {

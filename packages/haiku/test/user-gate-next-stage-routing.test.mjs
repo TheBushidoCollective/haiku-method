@@ -108,6 +108,9 @@ async function simulateUserGatePrepare({ tmp, intentDir, stage, gateKind }) {
 				nextStage = stages[idx + 1]
 			}
 		}
+		// Spec gates always transition elaborate → execute. Mirror the
+		// handler in haiku_run_next.ts.
+		const nextPhase = gateKind === "spec" ? "execute" : null
 		const gateContext =
 			gateKind === "spec" ? "elaborate_to_execute" : "stage_gate"
 		setFrontmatterField(
@@ -124,8 +127,11 @@ async function simulateUserGatePrepare({ tmp, intentDir, stage, gateKind }) {
 		if (nextStage !== null && nextStage !== undefined) {
 			setFrontmatterField(intentFile, "gate_review_next_stage", nextStage)
 		}
+		if (nextPhase !== null && nextPhase !== undefined) {
+			setFrontmatterField(intentFile, "gate_review_next_phase", nextPhase)
+		}
 		const finalFm = matter(readFileSync(intentFile, "utf8")).data
-		return { nextStage, finalFm }
+		return { nextStage, nextPhase, finalFm }
 	} finally {
 		process.chdir(orig)
 	}
@@ -182,15 +188,33 @@ test("user_gate(approval) on final stage leaves gate_review_next_stage unset", a
 	}
 })
 
-test("user_gate(spec) does not set gate_review_next_stage", async () => {
+test("user_gate(spec) writes gate_review_next_phase = 'execute' and leaves nextStage unset", async () => {
+	// Sibling of the #357 approval fix. Pre-fix: nextPhase was
+	// unconditionally null for user_gate, so await_gate's "approved"
+	// branch fell past `if (gateContext === "elaborate_to_execute"
+	// && nextPhase)` into completeOrReviewIntent — which rejected
+	// with "Cannot complete intent" if any later stage wasn't done.
+	// Reported on `admin-portal-reimagine` 2026-05-13. Now spec
+	// gates always write `gate_review_next_phase: "execute"` so
+	// approval routes to advance_phase cleanly.
 	const { tmp, intentDir } = setupRepo("test-intent", "inception")
 	try {
-		const { nextStage, finalFm } = await simulateUserGatePrepare({
+		const { nextStage, nextPhase, finalFm } = await simulateUserGatePrepare({
 			tmp,
 			intentDir,
 			stage: "inception",
 			gateKind: "spec",
 		})
+		assert.strictEqual(
+			nextPhase,
+			"execute",
+			"spec gates must write next_phase = 'execute' so await_gate routes to advance_phase",
+		)
+		assert.strictEqual(
+			finalFm.gate_review_next_phase,
+			"execute",
+			"FM must carry gate_review_next_phase for the spec-gate routing branch",
+		)
 		assert.strictEqual(
 			nextStage,
 			null,

@@ -1480,7 +1480,32 @@ export default defineTool({
 					/* fall back to null — final-stage path still works */
 				}
 			}
-			const nextPhase = isUserGate ? null : (result.next_phase as string | null)
+			// next_phase handling for user_gate (sibling of the #357
+			// approval fix; reported on `admin-portal-reimagine` 2026-05-13).
+			//
+			// `gate_kind: "spec"` is the elaborate→execute gate. When the
+			// SPA approves it, await_gate's "approved" branch checks (3):
+			// `gateContext === "elaborate_to_execute" && nextPhase`. With
+			// `nextPhase` unconditionally null for user_gate, that
+			// check failed → fell through to (5) → completeOrReviewIntent
+			// → "Cannot complete intent: N stages not completed." Same
+			// shape as the approval bug, different routing branch.
+			//
+			// Fix: when gate_kind === "spec", write
+			// `gate_review_next_phase: "execute"` so await_gate routes
+			// to advance_phase via branch (3). Non-spec gates keep
+			// nextPhase = null (their advancement runs through the
+			// nextStage path or the legacy gate_review pre-computed
+			// field).
+			let nextPhase: string | null = isUserGate
+				? null
+				: ((result.next_phase as string | null) ?? null)
+			if (isUserGate && gateKind === "spec") {
+				// Spec gates always transition elaborate → execute. The
+				// cursor doesn't emit alternate phases for this gate
+				// kind today.
+				nextPhase = "execute"
+			}
 			const gateContext = isUserGate
 				? gateKind === "spec"
 					? "elaborate_to_execute"

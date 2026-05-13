@@ -365,3 +365,262 @@ test("cursor invariant: cursor module imports nothing from git-worktree (FS is t
 		)
 	}
 })
+
+// ─────────────────────────────────────────────────────────────────────
+// Feedback: agent-origin FB does NOT clear user approval — auto-merge
+// path. User-origin FB DOES clear user approval — user-approval-
+// required path. The classifier's `target_invalidates` is the
+// mechanism that produces the divergence; this test pins both
+// branches by side-by-side simulation.
+// ─────────────────────────────────────────────────────────────────────
+test("feedback: agent-origin FB leaves user approval intact (auto-merge back); user-origin FB clears it (user_gate required)", async () => {
+	const repo = mkdtempSync(join(tmpdir(), "haiku-principle-fb-both-"))
+	try {
+		const slug = "fb-both"
+		const intentDir = join(repo, ".haiku/intents", slug)
+		mkdirSync(intentDir, { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("# intent\n", {
+				title: slug,
+				studio: "software",
+				mode: "continuous",
+			}),
+		)
+		// Pre-write two units fully approved (user stamp present).
+		const baseFm = () => ({
+			started_at: "2026-04-27T19:00:00Z",
+			iterations: [
+				{
+					hat: "researcher",
+					started_at: "2026-04-27T19:00:00Z",
+					completed_at: "2026-04-27T19:01:00Z",
+					result: "advance",
+				},
+			],
+			reviews: { spec: true, user: true },
+			approvals: { spec: true, user: { at: "2026-04-27T19:10:00Z" } },
+		})
+		writeUnit(intentDir, "inception", "unit-agent-fb", baseFm())
+		writeUnit(intentDir, "inception", "unit-user-fb", baseFm())
+
+		const { setHaikuRootForTests } = await import("../src/state/shared.ts")
+		setHaikuRootForTests(join(repo, ".haiku"))
+		try {
+			const { applyFeedbackInvalidations } = await import(
+				"../src/orchestrator/workflow/dispatch-stamps.ts"
+			)
+			const { readFileSync } = await import("node:fs")
+			const readApprovals = (unit) =>
+				matter(
+					readFileSync(
+						join(intentDir, "stages/inception/units", `${unit}.md`),
+						"utf8",
+					),
+				).data.approvals
+
+			// Agent-origin FB closes with empty invalidates (the classifier
+			// default for `agent` origin) — user approval stays intact, so
+			// the cursor will NOT re-fire user_gate; the stage auto-advances
+			// back to wherever it was.
+			applyFeedbackInvalidations({
+				slug,
+				stage: "inception",
+				targetUnit: "unit-agent-fb",
+				invalidates: [],
+			})
+			const agentApprovals = readApprovals("unit-agent-fb")
+			assert.ok(
+				agentApprovals?.user,
+				"agent-origin FB (invalidates=[]) must NOT clear the user approval — the agent's fix flows through without re-asking the user",
+			)
+
+			// User-origin FB closes with invalidates=['user'] (the
+			// classifier default for `user-chat`/`user-visual`/etc.) —
+			// user approval is cleared, so the cursor's next walk will
+			// re-emit user_gate before the stage can advance back.
+			applyFeedbackInvalidations({
+				slug,
+				stage: "inception",
+				targetUnit: "unit-user-fb",
+				invalidates: ["user"],
+			})
+			const userApprovals = readApprovals("unit-user-fb")
+			assert.strictEqual(
+				userApprovals?.user,
+				undefined,
+				"user-origin FB (invalidates=['user']) must clear the user approval — user must re-approve before the stage advances back to the later stage",
+			)
+			assert.ok(
+				userApprovals?.spec,
+				"non-invalidated approvals (spec, etc.) remain stamped",
+			)
+		} finally {
+			setHaikuRootForTests(null)
+		}
+	} finally {
+		rmSync(repo, { recursive: true, force: true })
+	}
+})
+
+// ─────────────────────────────────────────────────────────────────────
+// Feedback: cursor walks intent-scope FBs (intent-level FB must be
+// solved before the intent seals)
+// ─────────────────────────────────────────────────────────────────────
+test("feedback: intent-scope FB walks via Track B (intent-level FB must be solved before seal)", async () => {
+	const repo = mkdtempSync(join(tmpdir(), "haiku-principle-fb-intent-"))
+	try {
+		const slug = "fb-intent-scope"
+		const intentDir = join(repo, ".haiku/intents", slug)
+		mkdirSync(intentDir, { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("# intent\n", {
+				title: slug,
+				studio: "software",
+				mode: "continuous",
+			}),
+		)
+		// One FM-complete stage so findCurrentStage returns null
+		// (every stage merged in FM sense).
+		writeUnit(intentDir, "inception", "unit-01", {
+			started_at: "2026-04-27T19:00:00Z",
+			iterations: [
+				{
+					hat: "researcher",
+					started_at: "2026-04-27T19:00:00Z",
+					completed_at: "2026-04-27T19:01:00Z",
+					result: "advance",
+				},
+			],
+			reviews: {
+				spec: true,
+				completeness: true,
+				feasibility: true,
+				user: true,
+			},
+			approvals: {
+				spec: true,
+				quality_gates: true,
+				completeness: true,
+				feasibility: true,
+				user: true,
+			},
+		})
+		// Plant an intent-scope FB.
+		const intentFbDir = join(intentDir, "feedback")
+		mkdirSync(intentFbDir, { recursive: true })
+		writeFileSync(
+			join(intentFbDir, "01-cross-cutting.md"),
+			matter.stringify("# cross-cutting concern\n", {
+				origin: "user-chat",
+				author: "user",
+				author_type: "human",
+				status: "pending",
+				created_at: "2026-04-27T20:00:00Z",
+				targets: { unit: null, invalidates: ["user"] },
+				triaged_at: "2026-04-27T20:00:01Z",
+			}),
+		)
+
+		const pluginRoot = join(import.meta.dirname, "..", "..", "..", "plugin")
+		const prevPluginRoot = process.env.CLAUDE_PLUGIN_ROOT
+		process.env.CLAUDE_PLUGIN_ROOT = pluginRoot
+		const { _resetPluginRootForTests } = await import("../src/config.ts")
+		_resetPluginRootForTests()
+		const { setHaikuRootForTests } = await import("../src/state/shared.ts")
+		setHaikuRootForTests(join(repo, ".haiku"))
+		try {
+			const { derivePosition } = await import(
+				"../src/orchestrator/workflow/cursor.ts"
+			)
+			const pos = derivePosition({ slug, intentDir, studio: "software" })
+			assert.strictEqual(
+				pos.track,
+				"feedback",
+				`intent-scope FB must surface via Track B; cursor returned track=${pos.track}, action=${JSON.stringify(pos.action)}`,
+			)
+			assert.ok(
+				pos.action,
+				"cursor must produce a non-null feedback action for the intent-scope FB",
+			)
+		} finally {
+			setHaikuRootForTests(null)
+			if (prevPluginRoot === undefined) {
+				delete process.env.CLAUDE_PLUGIN_ROOT
+			} else {
+				process.env.CLAUDE_PLUGIN_ROOT = prevPluginRoot
+			}
+		}
+	} finally {
+		rmSync(repo, { recursive: true, force: true })
+	}
+})
+
+// ─────────────────────────────────────────────────────────────────────
+// Feedback: stage-level FB on the current stage walks via Track B,
+// pinning the cursor to the FB-handling action before any stage-track
+// (Track A) action.
+// ─────────────────────────────────────────────────────────────────────
+test("feedback: stage-level FB on current stage preempts Track A", async () => {
+	const repo = mkdtempSync(join(tmpdir(), "haiku-principle-fb-stage-"))
+	try {
+		const slug = "fb-stage-current"
+		const intentDir = join(repo, ".haiku/intents", slug)
+		mkdirSync(intentDir, { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("# intent\n", {
+				title: slug,
+				studio: "software",
+				mode: "continuous",
+			}),
+		)
+		writeUnit(intentDir, "inception", "unit-01", {
+			started_at: null,
+			iterations: [],
+		})
+		const stageFbDir = join(intentDir, "stages/inception/feedback")
+		mkdirSync(stageFbDir, { recursive: true })
+		writeFileSync(
+			join(stageFbDir, "01-inline.md"),
+			matter.stringify("# stage-scope finding\n", {
+				origin: "agent",
+				author: "agent",
+				author_type: "agent",
+				status: "pending",
+				created_at: "2026-04-27T20:00:00Z",
+				targets: { unit: "unit-01", invalidates: [] },
+				triaged_at: "2026-04-27T20:00:01Z",
+			}),
+		)
+
+		const pluginRoot = join(import.meta.dirname, "..", "..", "..", "plugin")
+		const prevPluginRoot = process.env.CLAUDE_PLUGIN_ROOT
+		process.env.CLAUDE_PLUGIN_ROOT = pluginRoot
+		const { _resetPluginRootForTests } = await import("../src/config.ts")
+		_resetPluginRootForTests()
+		const { setHaikuRootForTests } = await import("../src/state/shared.ts")
+		setHaikuRootForTests(join(repo, ".haiku"))
+		try {
+			const { derivePosition } = await import(
+				"../src/orchestrator/workflow/cursor.ts"
+			)
+			const pos = derivePosition({ slug, intentDir, studio: "software" })
+			assert.strictEqual(
+				pos.track,
+				"feedback",
+				`stage-level FB on the current stage must surface via Track B before Track A (intent track); cursor returned track=${pos.track}`,
+			)
+		} finally {
+			setHaikuRootForTests(null)
+			if (prevPluginRoot === undefined) {
+				delete process.env.CLAUDE_PLUGIN_ROOT
+			} else {
+				process.env.CLAUDE_PLUGIN_ROOT = prevPluginRoot
+			}
+		}
+	} finally {
+		rmSync(repo, { recursive: true, force: true })
+	}
+})

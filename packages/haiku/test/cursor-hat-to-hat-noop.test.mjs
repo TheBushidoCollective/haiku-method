@@ -157,3 +157,40 @@ test("nextHatForUnit: FB reject vocab — 'rejected' on first hat re-dispatches 
 		rejected: true,
 	})
 })
+
+// ── Drift case ────────────────────────────────────────────────────
+//
+// When the open iter's `hat` name is not in the studio's configured
+// hat set, the cursor cannot meaningfully dispatch. The unit's
+// iterations point at a stale hat name (studio renamed / removed
+// that hat after the unit's prior run). nextHatForUnit must return
+// null rather than mis-dispatch the stale name.
+
+test("nextHatForUnit: open iter on a hat NOT in the configured set (drift) → null", () => {
+	const hats = ["planner", "implementer", "reviewer"]
+	const out = nextHatForUnit(
+		fm([
+			{ hat: "planner", completed_at: "t", result: "advance" },
+			// `bogus-hat` is not in the configured set — studio drift.
+			{ hat: "bogus-hat", completed_at: null, result: null },
+		]),
+		hats,
+	)
+	assert.strictEqual(
+		out,
+		null,
+		"open iter on a drift hat must return null (cursor cannot dispatch a name the studio no longer has)",
+	)
+})
+
+test("nextHatForUnit: closed iter on a hat NOT in the configured set (drift) → null", () => {
+	// Symmetric: closed iter pointing at a drift hat also returns
+	// null. The advance/advanced/reject/rejected branches all guard
+	// on `idx < 0`, so this is the path through each of them too.
+	const hats = ["planner", "implementer", "reviewer"]
+	const out = nextHatForUnit(
+		fm([{ hat: "bogus-hat", completed_at: "t", result: "advance" }]),
+		hats,
+	)
+	assert.strictEqual(out, null)
+})

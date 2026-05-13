@@ -3995,11 +3995,6 @@ function stageHaikuStateForCommit(haikuRoot: string): void {
 }
 
 /**
- * Git add + commit + push for lifecycle state changes.
- * No-op in non-git environments (filesystem mode).
- * Non-fatal: git failures are logged but never crash the MCP.
- */
-/**
  * Like `gitCommitState`, but stages EVERY dirty path in the working
  * tree (`git add -A`) instead of just `.haiku/**`. Use when the caller
  * has already validated that all dirty files belong to a single
@@ -4012,6 +4007,21 @@ function stageHaikuStateForCommit(haikuRoot: string): void {
  * `git add` + `git commit` by hand (the
  * `kagami-slice-1-sendgrid-mirror` wedge reported 2026-05-13,
  * image 3 of the session screenshots).
+ *
+ * Edge case to be aware of (clean-entry invariant): `validateUnitScope`
+ * uses the unit's `hat_started_at` timestamp to scope its check to
+ * files modified DURING the hat's run. `gitCommitAll` then stages every
+ * dirty path with `git add -A`, which includes any pre-hat dirty files
+ * the scope check did NOT validate. In the intended workflow the
+ * worktree is clean when a hat is dispatched (the prior hat's
+ * `advance_hat` committed; nothing else writes between hats), so
+ * pre-hat dirty files shouldn't exist. They CAN appear when a prior
+ * advance crashed after `validateUnitScope` but before its commit —
+ * in that case the leftover dirty files get rolled into the current
+ * hat's commit. That's the same outcome the agent would have reached
+ * by running `git add -A && git commit` manually, so the auto-bundle
+ * is the right call; just note the implicit assumption when reading
+ * git history.
  */
 export function gitCommitAll(message: string): {
 	committed: boolean
@@ -4059,6 +4069,17 @@ export function gitCommitAll(message: string): {
 	}
 }
 
+/**
+ * Git add + commit + push for lifecycle state changes (`.haiku/**`
+ * only). Use this when the caller is mutating engine state and the
+ * surrounding user-code working tree may legitimately be dirty —
+ * the narrow stage keeps engine commits free of unrelated changes.
+ * For hat advances, where the caller has already validated user-
+ * code dirty paths are in scope, use `gitCommitAll` instead.
+ *
+ * No-op in non-git environments (filesystem mode).
+ * Non-fatal: git failures are logged but never crash the MCP.
+ */
 export function gitCommitState(message: string): {
 	committed: boolean
 	pushed: boolean

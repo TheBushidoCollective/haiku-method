@@ -115,6 +115,48 @@ function gateAcceptsLocalApprove(gateType: string | undefined): boolean {
 	return true
 }
 
+export type DecisionMode =
+	| "add"
+	| "request"
+	| "verify-required"
+	| "approve"
+	| "disabled"
+
+/**
+ * Pure mode-decision logic — exported for unit tests. Mirrors the
+ * inline logic in `FeedbackSidebar` exactly.
+ *
+ * The principle (2026-05-12): "a person cannot approve a stage if
+ * there is still open feedback." Open includes:
+ *
+ *   - `pending`  — awaiting agent fix-loop
+ *   - `fixing`   — agent actively working
+ *   - `addressed` — agent marked done; awaiting USER verification
+ *                   via the FeedbackItem "Verify & Close" button
+ *   - `answered`  — question-type FB answered; awaiting user
+ *                   verification
+ *
+ * If any pending items exist, Request Changes is the primary action
+ * (mode=`request`). If only addressed/answered items exist (agent has
+ * worked everything but user hasn't verified yet), Approve is blocked
+ * with mode=`verify-required` — the user must click "Verify & Close"
+ * on each addressed card before the gate opens.
+ */
+export function decideMode(args: {
+	hasTyped: boolean
+	hasPending: boolean
+	hasUnverified: boolean
+	adHoc: boolean
+	isCurrent: boolean
+}): DecisionMode {
+	if (args.hasTyped) return "add"
+	if (args.hasPending) return "request"
+	if (args.hasUnverified) return "verify-required"
+	if (args.adHoc) return "approve"
+	if (args.isCurrent) return "approve"
+	return "disabled"
+}
+
 export function FeedbackSidebar({
 	stage,
 	activeStage,
@@ -165,6 +207,21 @@ export function FeedbackSidebar({
 
 	const pendingCount = items.filter((i) => i.status === "pending").length
 	const hasPending = pendingCount > 0
+	// Items the agent has marked as addressed / answered but the user
+	// has not yet verified (set to `closed` via the review UI's
+	// "Verify & Close" button). These block Approve too — per the
+	// workflow principle "a person cannot approve a stage if there is
+	// still open feedback" (2026-05-12). Without this gate the user
+	// could close the SPA after the agent's fix-loop runs, leaving
+	// addressed FBs that the engine still considers open (the FB-level
+	// gate refuses to advance the stage until the human closes the
+	// human-authored items).
+	const unverifiedCount = items.filter(
+		(i) => i.status === "addressed" || i.status === "answered",
+	).length
+	const hasUnverified = unverifiedCount > 0
+	const hasOpen = hasPending || hasUnverified
+	const openCount = pendingCount + unverifiedCount
 
 	// Upload handler — POSTs each file to
 	// `/api/intents/:intent/uploads/knowledge` (registered in
@@ -227,8 +284,10 @@ export function FeedbackSidebar({
 
 	// Decide which action to emphasize. Typed text → Add is the primary
 	// action (stage a comment). Any pending items → Request Changes is
-	// primary (fire revisit). Otherwise the stage is clean and we offer
-	// Approve.
+	// primary (fire revisit). Addressed-but-unverified items →
+	// `verify-required` mode (the user MUST click "Verify & Close" on
+	// each addressed FB before the stage can be approved). Otherwise
+	// the stage is clean and we offer Approve.
 	//
 	// Ad-hoc pane: Approve is never shown (no gate). When nothing is
 	// pending the primary button becomes "Done" (just close the tab —
@@ -236,15 +295,13 @@ export function FeedbackSidebar({
 	// is swapped below). When feedback is pending it becomes "Request
 	// Changes" that closes the tab without firing revisit — the next
 	// run_next picks the feedback up via the normal fix-loop.
-	const mode: "add" | "request" | "approve" | "disabled" = hasTyped
-		? "add"
-		: hasPending
-			? "request"
-			: adHoc
-				? "approve"
-				: isCurrent
-					? "approve"
-					: "disabled"
+	const mode: DecisionMode = decideMode({
+		hasTyped,
+		hasPending,
+		hasUnverified,
+		adHoc,
+		isCurrent,
+	})
 
 	const handleAddComment = useCallback(async () => {
 		const body = composerText.trim()
@@ -328,17 +385,21 @@ export function FeedbackSidebar({
 			? "Adds a pending feedback item. Persisted immediately — the next run_next picks it up via the normal fix-loop."
 			: mode === "request"
 				? `${pendingCount} pending item${pendingCount === 1 ? "" : "s"} already persisted. Request Changes closes this pane; the next run_next routes each item through the normal fix-loop.`
-				: "Ad-hoc review — no gate to advance. Done closes the pane without touching the workflow engine."
+				: mode === "verify-required"
+					? `${unverifiedCount} addressed item${unverifiedCount === 1 ? "" : "s"} waiting for your verification. Click "Verify & Close" on each card above to confirm the agent's fix, or "Reopen" to send it back to the agent.`
+					: "Ad-hoc review — no gate to advance. Done closes the pane without touching the workflow engine."
 		: mode === "add"
 			? 'Adds a pending feedback item. Use the Route dropdown to steer the agent, or leave it on "Let agent decide" and the triage pass will classify.'
 			: mode === "request"
 				? `Hands ${pendingCount} item${pendingCount === 1 ? "" : "s"} to the agent on ${stage ?? "(stage)"}. Each routes per its resolution: reply, inline fix, stage revisit, or upstream rewind.`
-				: mode === "approve"
-					? pendingDecisionQueued
-						? "Decision queued — waiting for the engine to consume it on the next tick."
-						: awaitActive
-							? "Engine is waiting on your decision. Approve to advance, or leave feedback to request changes."
-							: "No engine call is awaiting a decision right now. Leave feedback to force one on the next tick, or wait for the agent to drive back to a gate."
+				: mode === "verify-required"
+					? `Approve is blocked: ${unverifiedCount} addressed item${unverifiedCount === 1 ? "" : "s"} need${unverifiedCount === 1 ? "s" : ""} your verification before the stage can advance. Click "Verify & Close" on each card above to confirm the agent's fix, or "Reopen" to send it back. The stage cannot be approved while any feedback is open.`
+					: mode === "approve"
+						? pendingDecisionQueued
+							? "Decision queued — waiting for the engine to consume it on the next tick."
+							: awaitActive
+								? "Engine is waiting on your decision. Approve to advance, or leave feedback to request changes."
+								: "No engine call is awaiting a decision right now. Leave feedback to force one on the next tick, or wait for the agent to drive back to a gate."
 					: `Type a comment above or click into another stage.`
 
 	return (
@@ -401,15 +462,29 @@ export function FeedbackSidebar({
 					<span className="text-xs font-semibold text-stone-700 dark:text-stone-200 uppercase tracking-wider">
 						Feedback
 					</span>
-					<span
-						className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${
-							pendingCount > 0
-								? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-								: "bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
-						}`}
-					>
-						{pendingCount}
-					</span>
+					{pendingCount > 0 && (
+						<span
+							className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+							title={`${pendingCount} pending — awaiting agent fix`}
+							data-testid="feedback-count-pending"
+						>
+							{pendingCount}
+						</span>
+					)}
+					{unverifiedCount > 0 && (
+						<span
+							className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+							title={`${unverifiedCount} addressed — verify each before approving`}
+							data-testid="feedback-count-unverified"
+						>
+							{unverifiedCount} to verify
+						</span>
+					)}
+					{openCount === 0 && (
+						<span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+							0
+						</span>
+					)}
 				</div>
 				<span className="text-xs text-stone-500 italic">
 					everything is specification
@@ -514,6 +589,18 @@ export function FeedbackSidebar({
 							title="Ad-hoc review: pending feedback is already persisted. Clicking this closes the pane and signals the MCP call to return; the next run_next routes each item through the normal fix-loop."
 						>
 							{submitting ? "Submitting…" : `Request Changes (${pendingCount})`}
+						</button>
+					)}
+					{mode === "verify-required" && (
+						<button
+							type="button"
+							disabled
+							data-decision="approve-blocked-verify"
+							data-testid="approve-blocked-verify"
+							title={`Approve is blocked. ${unverifiedCount} addressed item${unverifiedCount === 1 ? "" : "s"} need${unverifiedCount === 1 ? "s" : ""} your verification — click "Verify & Close" on each card above. The stage cannot be approved while any feedback is open.`}
+							className={`${touchTargetClass} flex-1 min-w-0 inline-flex items-center justify-center gap-2 rounded-md bg-emerald-100 border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/30 dark:border-emerald-800 dark:text-emerald-300 cursor-not-allowed`}
+						>
+							Verify {unverifiedCount} to approve
 						</button>
 					)}
 					{mode === "approve" && !adHoc && showLocalApprove && (

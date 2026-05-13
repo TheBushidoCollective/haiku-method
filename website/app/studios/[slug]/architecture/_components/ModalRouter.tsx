@@ -556,7 +556,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**Track A — intent.** Pre-stage: `elaborate_review` (no `stage`) when intent.md lacks `verified_at` (non-autopilot, fresh intent). On the active stage, walk: `elaborate` (conversation gate) → `elaborate_review` (substance verifier) → `discovery_required` → `decompose` → `start_unit_hat` → `dispatch_review` / `user_gate { spec }` → `dispatch_quality_gates` / `dispatch_approval` / `user_gate { approval }` → `merge_stage`.",
+										"**Track A — intent.** Pre-stage: `elaborate_review` (no `stage`) when intent.md lacks `verified_at` (non-autopilot, fresh intent). On the active stage, walk: `elaborate` (conversation gate) → `elaborate_review` (substance verifier) → `discovery_required` → `decompose` → `start_unit_hat` → `dispatch_review` / `user_gate { spec }` → `dispatch_quality_gates` / `dispatch_approval` / `user_gate { approval }` → `complete_stage`.",
 									)}
 								/>
 							</li>
@@ -564,7 +564,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**Terminal walk.** All stages merged → intent-scope approvals (`spec`, `continuity`, `user`) → `intent_review` per missing role → `merge_intent` → `sealed`.",
+										"**Terminal walk.** All stages merged → intent-scope approvals (`spec`, `continuity`, `user`) → `intent_review` per missing role → `seal_intent` → `sealed`.",
 									)}
 								/>
 							</li>
@@ -584,7 +584,7 @@ export function ModalRouter({
 						<HtmlBlock
 							className="prose"
 							html={renderInline(
-								"The cursor emits exactly these `kind` values: `select_studio`, `select_mode`, `select_stage`, `drift_detected`, `start_feedback_hat`, `close_feedback`, `discovery_required`, `elaborate`, `elaborate_review`, `decompose`, `start_unit_hat`, `dispatch_review`, `dispatch_quality_gates`, `dispatch_approval`, `user_gate { spec | approval }`, `merge_stage`, `intent_review`, `merge_intent`, `sealed`. (Pre-2026-05-08 the cursor also had `design_direction_required` / `_complete` / `_uploaded` and `clarify_required`; those collapsed into the discovery-agent model — discovery templates with `tool:` cover the human-input gates now.)",
+								"The cursor emits exactly these `kind` values: `select_studio`, `select_mode`, `select_stage`, `drift_detected`, `start_feedback_hat`, `close_feedback`, `discovery_required`, `elaborate`, `elaborate_review`, `decompose`, `start_unit_hat`, `dispatch_review`, `dispatch_quality_gates`, `dispatch_approval`, `user_gate { spec | approval }`, `complete_stage`, `intent_review`, `seal_intent`, `sealed`. (Pre-2026-05-08 the cursor also had `design_direction_required` / `_complete` / `_uploaded` and `clarify_required`; those collapsed into the discovery-agent model — discovery templates with `tool:` cover the human-input gates now.)",
 							)}
 						/>
 					</div>
@@ -676,7 +676,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**Track A — intent.** On the active stage (first stage whose branch is not merged into intent main, derived via `firstUnmergedStage`), walk the per-stage state machine in §5.4 order: design_direction → clarify → discovery → elaborate → wave logic → review track → approval track → `merge_stage`.",
+										"**Track A — intent.** On the active stage (first stage whose branch is not merged into intent main, derived via `firstUnmergedStage`), walk the per-stage state machine in §5.4 order: design_direction → clarify → discovery → elaborate → wave logic → review track → approval track → `complete_stage`.",
 									)}
 								/>
 							</li>
@@ -692,11 +692,11 @@ export function ModalRouter({
 						/>
 					</div>
 					<div className="modal-section">
-						<h3>recurring merge_stage</h3>
+						<h3>recurring complete_stage</h3>
 						<HtmlBlock
 							className="prose"
 							html={renderInline(
-								"Stages are NEVER sealed — only intents are. A previously-merged stage that gains a new unit (because the fix-loop authored corrective work) becomes ahead-of-main and `firstUnmergedStage` rewinds the cursor to it on the next tick. `merge_stage` is a recurring event, not a terminal one. Forward-only applies to existing units' bytes (immutable post-merge), not to whether a stage is \"done.\"",
+								"Stages are NEVER sealed — only intents are. A previously-merged stage that gains a new unit (because the fix-loop authored corrective work) becomes ahead-of-main and `firstUnmergedStage` rewinds the cursor to it on the next tick. `complete_stage` is a recurring event, not a terminal one. Forward-only applies to existing units' bytes (immutable post-merge), not to whether a stage is \"done.\"",
 							)}
 						/>
 					</div>

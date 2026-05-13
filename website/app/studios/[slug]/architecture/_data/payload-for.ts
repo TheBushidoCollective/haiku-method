@@ -11,8 +11,8 @@
 // `discovery_required` / `elaborate` / `elaborate_review` /
 // `decompose` / `start_unit_hat` / `start_feedback_hat` /
 // `close_feedback` / `dispatch_review` / `dispatch_quality_gates` /
-// `dispatch_approval` / `user_gate` / `merge_stage` / `intent_review` /
-// `merge_intent` / `sealed`.
+// `dispatch_approval` / `user_gate` / `complete_stage` / `intent_review` /
+// `seal_intent` / `sealed`.
 //
 // 2026-05-08: `design_direction_required` / `_complete` / `_uploaded`
 // and `clarify_required` were collapsed into the discovery-agent
@@ -475,7 +475,7 @@ export function payloadFor(
 				},
 			],
 			instructions:
-				"Approval agents focus on built artifacts (architecture, performance, security, test coverage). Each role gets its own tick. After every studio approval signs, the cursor returns `user_gate { gate_kind: \"approval\" }` (skipped under autopilot, where `merge_stage` auto-fires once `quality_gates` is signed).",
+				"Approval agents focus on built artifacts (architecture, performance, security, test coverage). Each role gets its own tick. After every studio approval signs, the cursor returns `user_gate { gate_kind: \"approval\" }` (skipped under autopilot, where `complete_stage` auto-fires once `quality_gates` is signed).",
 		},
 		"review-to-gate": {
 			injection: [
@@ -483,17 +483,17 @@ export function payloadFor(
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
 					what: isAutopilot
-						? "autopilot: approvalRoles trimmed to `[spec, quality_gates]`. Once both are signed the cursor returns `merge_stage` directly — no user gate, no studio agents."
+						? "autopilot: approvalRoles trimmed to `[spec, quality_gates]`. Once both are signed the cursor returns `complete_stage` directly — no user gate, no studio agents."
 						: "every studio approval agent has signed → `user_gate { gate_kind: \"approval\" }`. `haiku_run_next` opens the review SPA inline and blocks on `haiku_await_gate`.",
 				},
 			],
-			action: isAutopilot ? "merge_stage" : "user_gate",
+			action: isAutopilot ? "complete_stage" : "user_gate",
 			summary: isAutopilot
-				? "autopilot: every required approval signed → merge_stage"
+				? "autopilot: every required approval signed → complete_stage"
 				: "every studio approval signed → user_gate { gate_kind: \"approval\" }",
 			payload: isAutopilot
 				? {
-						action: "merge_stage",
+						action: "complete_stage",
 						intent: "{slug}",
 						stage: stageLower,
 					}
@@ -507,20 +507,20 @@ export function payloadFor(
 			validations: [
 				"`approvals.<role>` signed on every unit for every approvalRole except the next one",
 				isAutopilot
-					? "autopilot: `quality_gates` signed → no further approval work; cursor returns `merge_stage`"
+					? "autopilot: `quality_gates` signed → no further approval work; cursor returns `complete_stage`"
 					: "non-autopilot: every studio approval agent has signed; cursor returns `user_gate { gate_kind: \"approval\" }`",
 			],
 			writes: [
 				{
 					path: ".haiku/intents/{slug}/stages/{stage}/units/<unit>.md",
 					change: isAutopilot
-						? "no write at this transition — `merge_stage` is the next mainline action"
+						? "no write at this transition — `complete_stage` is the next mainline action"
 						: "on approve: engine signs `approvals.user` on every listed unit; on request_changes: engine writes annotations as feedback files and Track B walks them on the next tick.",
 				},
 			],
 			instructions: isAutopilot
-				? "Autopilot: cursor returns `merge_stage` directly. The engine merges the stage branch into intent main under `withIntentMainLock`."
-				: "Cursor returns `user_gate { gate_kind: \"approval\" }`. `haiku_run_next` opens the SPA review session inline and blocks on `haiku_await_gate`. On approve, the cursor advances to `merge_stage`. On request_changes, engine writes feedback and Track B walks the fix loop. **In `discrete` mode, the user gate dispatches differently — the engine opens a real PR/MR for the stage branch and the merge into intent main IS the approval signal.**",
+				? "Autopilot: cursor returns `complete_stage` directly. The engine merges the stage branch into intent main under `withIntentMainLock`."
+				: "Cursor returns `user_gate { gate_kind: \"approval\" }`. `haiku_run_next` opens the SPA review session inline and blocks on `haiku_await_gate`. On approve, the cursor advances to `complete_stage`. On request_changes, engine writes feedback and Track B walks the fix loop. **In `discrete` mode, the user gate dispatches differently — the engine opens a real PR/MR for the stage branch and the merge into intent main IS the approval signal.**",
 		},
 		"gate-to-next-stage": {
 			injection: [
@@ -528,7 +528,7 @@ export function payloadFor(
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
 					what: opts.isLast
-						? "every stage merged → cursor walks intent-scope approvals (`spec`, `continuity`, `user`) and emits `intent_review { role }` per missing role, then `merge_intent`, then `sealed`."
+						? "every stage merged → cursor walks intent-scope approvals (`spec`, `continuity`, `user`) and emits `intent_review { role }` per missing role, then `seal_intent`, then `sealed`."
 						: "stage merged into intent main; cursor's next tick walks the next stage (the new `firstUnmergedStage`).",
 				},
 				{
@@ -537,17 +537,17 @@ export function payloadFor(
 					what: "every stage→main merge runs under the lock so concurrent stages can't race the merge into intent main.",
 				},
 			],
-			action: opts.isLast ? "merge_intent" : "merge_stage",
+			action: opts.isLast ? "seal_intent" : "complete_stage",
 			summary: opts.isLast
-				? "final stage merged → walk intent-scope approvals → merge_intent → sealed"
+				? "final stage merged → walk intent-scope approvals → seal_intent → sealed"
 				: `merge stage \`${stageLower}\` into intent main → next stage (${opts.nextStageName ?? "?"})`,
 			payload: opts.isLast
 				? {
-						action: "merge_intent",
+						action: "seal_intent",
 						intent: "{slug}",
 					}
 				: {
-						action: "merge_stage",
+						action: "complete_stage",
 						intent: "{slug}",
 						stage: stageLower,
 					},
@@ -562,7 +562,7 @@ export function payloadFor(
 						{
 							path: ".haiku/intents/{slug}/intent.md",
 							change:
-								"after intent-scope approvals all sign and `merge_intent` runs, the engine stamps `sealed_at`. The next tick returns `sealed` (terminal).",
+								"after intent-scope approvals all sign and `seal_intent` runs, the engine stamps `sealed_at`. The next tick returns `sealed` (terminal).",
 						},
 					]
 				: [
@@ -573,8 +573,8 @@ export function payloadFor(
 						},
 					],
 			instructions: opts.isLast
-				? "Final stage's branch is merged. The cursor now walks intent-scope approvals from `intent.md.approvals`: `spec` and `continuity` (engine-built) and `user` (gated through SPA). Mode-shaped: autopilot trims to `[spec, continuity]` only. Each missing role → `intent_review { role }` (one tick per role). Once every intent-scope approval signs → `merge_intent` (engine performs final rebase + stamps `sealed_at`) → `sealed`."
-				: `Cursor returns \`merge_stage { stage: "${stageLower}" }\`. The next \`haiku_run_next\` tick performs the merge under \`withIntentMainLock\` and returns the next instruction — most commonly the next stage's first action (e.g. \`elaborate\` for the conversation gate, or \`discovery_required\` if the next stage declares a tool-driven discovery template).`,
+				? "Final stage's branch is merged. The cursor now walks intent-scope approvals from `intent.md.approvals`: `spec` and `continuity` (engine-built) and `user` (gated through SPA). Mode-shaped: autopilot trims to `[spec, continuity]` only. Each missing role → `intent_review { role }` (one tick per role). Once every intent-scope approval signs → `seal_intent` (engine performs final rebase + stamps `sealed_at`) → `sealed`."
+				: `Cursor returns \`complete_stage { stage: "${stageLower}" }\`. Semantic action ("stage is done") — under a git-backed portfolio the engine merges the stage branch into intent main under \`withIntentMainLock\` as an implementation detail; under filesystem-only backings it transitions stage state. The next instruction is most commonly the next stage's first action (e.g. \`elaborate\` for the conversation gate, or \`discovery_required\` if the next stage declares a tool-driven discovery template). Renamed 2026-05-12 from \`merge_stage\` per the principle "no engine action reflects a git or VCS operation."`,
 		},
 		"feedback-dispatch": {
 			injection: [

@@ -20,8 +20,11 @@ stateDiagram-v2
   state inception {
     [*] --> inception_start_stage
     inception_start_stage --> inception_elaborate : tick
-    inception_elaborate --> inception_execute : elaborate.advance
-    inception_elaborate --> inception_review_fix : feedback.pending
+    inception_elaborate --> inception_elaborate_review : record.advance
+    inception_elaborate_review --> inception_decompose : verifier.pass
+    inception_elaborate_review --> inception_elaborate : verifier.fail
+    inception_decompose --> inception_execute : decompose.advance
+    inception_decompose --> inception_review_fix : feedback.pending
     state inception_execute {
       [*] --> inception_execute_researcher
       inception_execute_researcher --> inception_execute_distiller : hat.advance
@@ -73,8 +76,11 @@ stateDiagram-v2
   state requirements {
     [*] --> requirements_start_stage
     requirements_start_stage --> requirements_elaborate : tick
-    requirements_elaborate --> requirements_execute : elaborate.advance
-    requirements_elaborate --> requirements_review_fix : feedback.pending
+    requirements_elaborate --> requirements_elaborate_review : record.advance
+    requirements_elaborate_review --> requirements_decompose : verifier.pass
+    requirements_elaborate_review --> requirements_elaborate : verifier.fail
+    requirements_decompose --> requirements_execute : decompose.advance
+    requirements_decompose --> requirements_review_fix : feedback.pending
     state requirements_execute {
       [*] --> requirements_execute_systems_engineer
       requirements_execute_systems_engineer --> requirements_execute_compliance_officer : hat.advance
@@ -128,8 +134,11 @@ stateDiagram-v2
   state design {
     [*] --> design_start_stage
     design_start_stage --> design_elaborate : tick
-    design_elaborate --> design_execute : elaborate.advance
-    design_elaborate --> design_review_fix : feedback.pending
+    design_elaborate --> design_elaborate_review : record.advance
+    design_elaborate_review --> design_decompose : verifier.pass
+    design_elaborate_review --> design_elaborate : verifier.fail
+    design_decompose --> design_execute : decompose.advance
+    design_decompose --> design_review_fix : feedback.pending
     state design_execute {
       [*] --> design_execute_electrical_engineer
       design_execute_electrical_engineer --> design_execute_mechanical_engineer : hat.advance
@@ -186,8 +195,11 @@ stateDiagram-v2
   state firmware {
     [*] --> firmware_start_stage
     firmware_start_stage --> firmware_elaborate : tick
-    firmware_elaborate --> firmware_execute : elaborate.advance
-    firmware_elaborate --> firmware_review_fix : feedback.pending
+    firmware_elaborate --> firmware_elaborate_review : record.advance
+    firmware_elaborate_review --> firmware_decompose : verifier.pass
+    firmware_elaborate_review --> firmware_elaborate : verifier.fail
+    firmware_decompose --> firmware_execute : decompose.advance
+    firmware_decompose --> firmware_review_fix : feedback.pending
     state firmware_execute {
       [*] --> firmware_execute_firmware_engineer
       firmware_execute_firmware_engineer --> firmware_execute_reviewer : hat.advance
@@ -237,8 +249,11 @@ stateDiagram-v2
   state validation {
     [*] --> validation_start_stage
     validation_start_stage --> validation_elaborate : tick
-    validation_elaborate --> validation_execute : elaborate.advance
-    validation_elaborate --> validation_review_fix : feedback.pending
+    validation_elaborate --> validation_elaborate_review : record.advance
+    validation_elaborate_review --> validation_decompose : verifier.pass
+    validation_elaborate_review --> validation_elaborate : verifier.fail
+    validation_decompose --> validation_execute : decompose.advance
+    validation_decompose --> validation_review_fix : feedback.pending
     state validation_execute {
       [*] --> validation_execute_test_engineer
       validation_execute_test_engineer --> validation_execute_compliance_officer : hat.advance
@@ -292,8 +307,11 @@ stateDiagram-v2
   state manufacturing {
     [*] --> manufacturing_start_stage
     manufacturing_start_stage --> manufacturing_elaborate : tick
-    manufacturing_elaborate --> manufacturing_execute : elaborate.advance
-    manufacturing_elaborate --> manufacturing_review_fix : feedback.pending
+    manufacturing_elaborate --> manufacturing_elaborate_review : record.advance
+    manufacturing_elaborate_review --> manufacturing_decompose : verifier.pass
+    manufacturing_elaborate_review --> manufacturing_elaborate : verifier.fail
+    manufacturing_decompose --> manufacturing_execute : decompose.advance
+    manufacturing_decompose --> manufacturing_review_fix : feedback.pending
     state manufacturing_execute {
       [*] --> manufacturing_execute_manufacturing_engineer
       manufacturing_execute_manufacturing_engineer --> manufacturing_execute_qa_lead : hat.advance

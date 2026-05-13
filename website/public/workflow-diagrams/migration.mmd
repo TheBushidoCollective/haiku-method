@@ -19,8 +19,11 @@ stateDiagram-v2
   state assessment {
     [*] --> assessment_start_stage
     assessment_start_stage --> assessment_elaborate : tick
-    assessment_elaborate --> assessment_execute : elaborate.advance
-    assessment_elaborate --> assessment_review_fix : feedback.pending
+    assessment_elaborate --> assessment_elaborate_review : record.advance
+    assessment_elaborate_review --> assessment_decompose : verifier.pass
+    assessment_elaborate_review --> assessment_elaborate : verifier.fail
+    assessment_decompose --> assessment_execute : decompose.advance
+    assessment_decompose --> assessment_review_fix : feedback.pending
     state assessment_execute {
       [*] --> assessment_execute_migration_analyst
       assessment_execute_migration_analyst --> assessment_execute_risk_assessor : hat.advance
@@ -70,8 +73,11 @@ stateDiagram-v2
   state mapping {
     [*] --> mapping_start_stage
     mapping_start_stage --> mapping_elaborate : tick
-    mapping_elaborate --> mapping_execute : elaborate.advance
-    mapping_elaborate --> mapping_review_fix : feedback.pending
+    mapping_elaborate --> mapping_elaborate_review : record.advance
+    mapping_elaborate_review --> mapping_decompose : verifier.pass
+    mapping_elaborate_review --> mapping_elaborate : verifier.fail
+    mapping_decompose --> mapping_execute : decompose.advance
+    mapping_decompose --> mapping_review_fix : feedback.pending
     state mapping_execute {
       [*] --> mapping_execute_schema_mapper
       mapping_execute_schema_mapper --> mapping_execute_compatibility_reviewer : hat.advance
@@ -121,8 +127,11 @@ stateDiagram-v2
   state migrate {
     [*] --> migrate_start_stage
     migrate_start_stage --> migrate_elaborate : tick
-    migrate_elaborate --> migrate_execute : elaborate.advance
-    migrate_elaborate --> migrate_review_fix : feedback.pending
+    migrate_elaborate --> migrate_elaborate_review : record.advance
+    migrate_elaborate_review --> migrate_decompose : verifier.pass
+    migrate_elaborate_review --> migrate_elaborate : verifier.fail
+    migrate_decompose --> migrate_execute : decompose.advance
+    migrate_decompose --> migrate_review_fix : feedback.pending
     state migrate_execute {
       [*] --> migrate_execute_migration_engineer
       migrate_execute_migration_engineer --> migrate_execute_integration_tester : hat.advance
@@ -174,8 +183,11 @@ stateDiagram-v2
   state validation {
     [*] --> validation_start_stage
     validation_start_stage --> validation_elaborate : tick
-    validation_elaborate --> validation_execute : elaborate.advance
-    validation_elaborate --> validation_review_fix : feedback.pending
+    validation_elaborate --> validation_elaborate_review : record.advance
+    validation_elaborate_review --> validation_decompose : verifier.pass
+    validation_elaborate_review --> validation_elaborate : verifier.fail
+    validation_decompose --> validation_execute : decompose.advance
+    validation_decompose --> validation_review_fix : feedback.pending
     state validation_execute {
       [*] --> validation_execute_validator
       validation_execute_validator --> validation_execute_regression_tester : hat.advance
@@ -227,8 +239,11 @@ stateDiagram-v2
   state cutover {
     [*] --> cutover_start_stage
     cutover_start_stage --> cutover_elaborate : tick
-    cutover_elaborate --> cutover_execute : elaborate.advance
-    cutover_elaborate --> cutover_review_fix : feedback.pending
+    cutover_elaborate --> cutover_elaborate_review : record.advance
+    cutover_elaborate_review --> cutover_decompose : verifier.pass
+    cutover_elaborate_review --> cutover_elaborate : verifier.fail
+    cutover_decompose --> cutover_execute : decompose.advance
+    cutover_decompose --> cutover_review_fix : feedback.pending
     state cutover_execute {
       [*] --> cutover_execute_cutover_coordinator
       cutover_execute_cutover_coordinator --> cutover_execute_rollback_engineer : hat.advance

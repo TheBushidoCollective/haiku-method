@@ -19,8 +19,11 @@ stateDiagram-v2
   state research {
     [*] --> research_start_stage
     research_start_stage --> research_elaborate : tick
-    research_elaborate --> research_execute : elaborate.advance
-    research_elaborate --> research_review_fix : feedback.pending
+    research_elaborate --> research_elaborate_review : record.advance
+    research_elaborate_review --> research_decompose : verifier.pass
+    research_elaborate_review --> research_elaborate : verifier.fail
+    research_decompose --> research_execute : decompose.advance
+    research_decompose --> research_review_fix : feedback.pending
     state research_execute {
       [*] --> research_execute_market_researcher
       research_execute_market_researcher --> research_execute_audience_analyst : hat.advance
@@ -72,8 +75,11 @@ stateDiagram-v2
   state strategy {
     [*] --> strategy_start_stage
     strategy_start_stage --> strategy_elaborate : tick
-    strategy_elaborate --> strategy_execute : elaborate.advance
-    strategy_elaborate --> strategy_review_fix : feedback.pending
+    strategy_elaborate --> strategy_elaborate_review : record.advance
+    strategy_elaborate_review --> strategy_decompose : verifier.pass
+    strategy_elaborate_review --> strategy_elaborate : verifier.fail
+    strategy_decompose --> strategy_execute : decompose.advance
+    strategy_decompose --> strategy_review_fix : feedback.pending
     state strategy_execute {
       [*] --> strategy_execute_strategist
       strategy_execute_strategist --> strategy_execute_brand_reviewer : hat.advance
@@ -123,8 +129,11 @@ stateDiagram-v2
   state content {
     [*] --> content_start_stage
     content_start_stage --> content_elaborate : tick
-    content_elaborate --> content_execute : elaborate.advance
-    content_elaborate --> content_review_fix : feedback.pending
+    content_elaborate --> content_elaborate_review : record.advance
+    content_elaborate_review --> content_decompose : verifier.pass
+    content_elaborate_review --> content_elaborate : verifier.fail
+    content_decompose --> content_execute : decompose.advance
+    content_decompose --> content_review_fix : feedback.pending
     state content_execute {
       [*] --> content_execute_content_creator
       content_execute_content_creator --> content_execute_copy_editor : hat.advance
@@ -176,8 +185,11 @@ stateDiagram-v2
   state launch {
     [*] --> launch_start_stage
     launch_start_stage --> launch_elaborate : tick
-    launch_elaborate --> launch_execute : elaborate.advance
-    launch_elaborate --> launch_review_fix : feedback.pending
+    launch_elaborate --> launch_elaborate_review : record.advance
+    launch_elaborate_review --> launch_decompose : verifier.pass
+    launch_elaborate_review --> launch_elaborate : verifier.fail
+    launch_decompose --> launch_execute : decompose.advance
+    launch_decompose --> launch_review_fix : feedback.pending
     state launch_execute {
       [*] --> launch_execute_campaign_manager
       launch_execute_campaign_manager --> launch_execute_channel_coordinator : hat.advance
@@ -229,8 +241,11 @@ stateDiagram-v2
   state measure {
     [*] --> measure_start_stage
     measure_start_stage --> measure_elaborate : tick
-    measure_elaborate --> measure_execute : elaborate.advance
-    measure_elaborate --> measure_review_fix : feedback.pending
+    measure_elaborate --> measure_elaborate_review : record.advance
+    measure_elaborate_review --> measure_decompose : verifier.pass
+    measure_elaborate_review --> measure_elaborate : verifier.fail
+    measure_decompose --> measure_execute : decompose.advance
+    measure_decompose --> measure_review_fix : feedback.pending
     state measure_execute {
       [*] --> measure_execute_analyst
       measure_execute_analyst --> measure_execute_report_writer : hat.advance

@@ -18,8 +18,11 @@ stateDiagram-v2
   state research {
     [*] --> research_start_stage
     research_start_stage --> research_elaborate : tick
-    research_elaborate --> research_execute : elaborate.advance
-    research_elaborate --> research_review_fix : feedback.pending
+    research_elaborate --> research_elaborate_review : record.advance
+    research_elaborate_review --> research_decompose : verifier.pass
+    research_elaborate_review --> research_elaborate : verifier.fail
+    research_decompose --> research_execute : decompose.advance
+    research_decompose --> research_review_fix : feedback.pending
     state research_execute {
       [*] --> research_execute_researcher
       research_execute_researcher --> research_execute_analyst : hat.advance
@@ -71,8 +74,11 @@ stateDiagram-v2
   state create {
     [*] --> create_start_stage
     create_start_stage --> create_elaborate : tick
-    create_elaborate --> create_execute : elaborate.advance
-    create_elaborate --> create_review_fix : feedback.pending
+    create_elaborate --> create_elaborate_review : record.advance
+    create_elaborate_review --> create_decompose : verifier.pass
+    create_elaborate_review --> create_elaborate : verifier.fail
+    create_decompose --> create_execute : decompose.advance
+    create_decompose --> create_review_fix : feedback.pending
     state create_execute {
       [*] --> create_execute_creator
       create_execute_creator --> create_execute_editor : hat.advance
@@ -124,8 +130,11 @@ stateDiagram-v2
   state review {
     [*] --> review_start_stage
     review_start_stage --> review_elaborate : tick
-    review_elaborate --> review_execute : elaborate.advance
-    review_elaborate --> review_review_fix : feedback.pending
+    review_elaborate --> review_elaborate_review : record.advance
+    review_elaborate_review --> review_decompose : verifier.pass
+    review_elaborate_review --> review_elaborate : verifier.fail
+    review_decompose --> review_execute : decompose.advance
+    review_decompose --> review_review_fix : feedback.pending
     state review_execute {
       [*] --> review_execute_review_planner
       review_execute_review_planner --> review_execute_synthesizer : hat.advance
@@ -181,8 +190,11 @@ stateDiagram-v2
   state deliver {
     [*] --> deliver_start_stage
     deliver_start_stage --> deliver_elaborate : tick
-    deliver_elaborate --> deliver_execute : elaborate.advance
-    deliver_elaborate --> deliver_review_fix : feedback.pending
+    deliver_elaborate --> deliver_elaborate_review : record.advance
+    deliver_elaborate_review --> deliver_decompose : verifier.pass
+    deliver_elaborate_review --> deliver_elaborate : verifier.fail
+    deliver_decompose --> deliver_execute : decompose.advance
+    deliver_decompose --> deliver_review_fix : feedback.pending
     state deliver_execute {
       [*] --> deliver_execute_publisher
       deliver_execute_publisher --> deliver_execute_verifier : hat.advance

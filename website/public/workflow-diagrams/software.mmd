@@ -20,8 +20,11 @@ stateDiagram-v2
   state inception {
     [*] --> inception_start_stage
     inception_start_stage --> inception_elaborate : tick
-    inception_elaborate --> inception_execute : elaborate.advance
-    inception_elaborate --> inception_review_fix : feedback.pending
+    inception_elaborate --> inception_elaborate_review : record.advance
+    inception_elaborate_review --> inception_decompose : verifier.pass
+    inception_elaborate_review --> inception_elaborate : verifier.fail
+    inception_decompose --> inception_execute : decompose.advance
+    inception_decompose --> inception_review_fix : feedback.pending
     state inception_execute {
       [*] --> inception_execute_researcher
       inception_execute_researcher --> inception_execute_distiller : hat.advance
@@ -73,8 +76,11 @@ stateDiagram-v2
   state design {
     [*] --> design_start_stage
     design_start_stage --> design_elaborate : tick
-    design_elaborate --> design_execute : elaborate.advance
-    design_elaborate --> design_review_fix : feedback.pending
+    design_elaborate --> design_elaborate_review : record.advance
+    design_elaborate_review --> design_decompose : verifier.pass
+    design_elaborate_review --> design_elaborate : verifier.fail
+    design_decompose --> design_execute : decompose.advance
+    design_decompose --> design_review_fix : feedback.pending
     state design_execute {
       [*] --> design_execute_designer_prep
       design_execute_designer_prep --> design_execute_designer : hat.advance
@@ -126,8 +132,11 @@ stateDiagram-v2
   state product {
     [*] --> product_start_stage
     product_start_stage --> product_elaborate : tick
-    product_elaborate --> product_execute : elaborate.advance
-    product_elaborate --> product_review_fix : feedback.pending
+    product_elaborate --> product_elaborate_review : record.advance
+    product_elaborate_review --> product_decompose : verifier.pass
+    product_elaborate_review --> product_elaborate : verifier.fail
+    product_decompose --> product_execute : decompose.advance
+    product_decompose --> product_review_fix : feedback.pending
     state product_execute {
       [*] --> product_execute_product
       product_execute_product --> product_execute_specification : hat.advance
@@ -179,8 +188,11 @@ stateDiagram-v2
   state development {
     [*] --> development_start_stage
     development_start_stage --> development_elaborate : tick
-    development_elaborate --> development_execute : elaborate.advance
-    development_elaborate --> development_review_fix : feedback.pending
+    development_elaborate --> development_elaborate_review : record.advance
+    development_elaborate_review --> development_decompose : verifier.pass
+    development_elaborate_review --> development_elaborate : verifier.fail
+    development_decompose --> development_execute : decompose.advance
+    development_decompose --> development_review_fix : feedback.pending
     state development_execute {
       [*] --> development_execute_planner
       development_execute_planner --> development_execute_builder : hat.advance
@@ -232,8 +244,11 @@ stateDiagram-v2
   state operations {
     [*] --> operations_start_stage
     operations_start_stage --> operations_elaborate : tick
-    operations_elaborate --> operations_execute : elaborate.advance
-    operations_elaborate --> operations_review_fix : feedback.pending
+    operations_elaborate --> operations_elaborate_review : record.advance
+    operations_elaborate_review --> operations_decompose : verifier.pass
+    operations_elaborate_review --> operations_elaborate : verifier.fail
+    operations_decompose --> operations_execute : decompose.advance
+    operations_decompose --> operations_review_fix : feedback.pending
     state operations_execute {
       [*] --> operations_execute_ops_engineer
       operations_execute_ops_engineer --> operations_execute_sre : hat.advance
@@ -285,8 +300,11 @@ stateDiagram-v2
   state security {
     [*] --> security_start_stage
     security_start_stage --> security_elaborate : tick
-    security_elaborate --> security_execute : elaborate.advance
-    security_elaborate --> security_review_fix : feedback.pending
+    security_elaborate --> security_elaborate_review : record.advance
+    security_elaborate_review --> security_decompose : verifier.pass
+    security_elaborate_review --> security_elaborate : verifier.fail
+    security_decompose --> security_execute : decompose.advance
+    security_decompose --> security_review_fix : feedback.pending
     state security_execute {
       [*] --> security_execute_threat_modeler
       security_execute_threat_modeler --> security_execute_security_engineer : hat.advance

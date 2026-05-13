@@ -16,6 +16,18 @@ This is consistent with `CLAUDE.md` and `.claude/rules/architecture-prototype-sy
 
 ## 1. Hard boundaries
 
+### 1.0 Filesystem is the only signal; engine actions are semantic
+
+Two interlocking rules (2026-05-12):
+
+**Rule 1 — Filesystem is the only signal.** The cursor's decision of "what to do next" is derived from the filesystem (frontmatter on unit / feedback / intent files, artifact existence at declared `location:`). The cursor never consults git topology to make a workflow decision. Git's only jobs are (A) merging default → intent main → stage branch, and (B) switching the agent to the appropriate stage. Both are implementation details under action handlers, not signals the cursor reads.
+
+**Rule 2 — No action name reflects a VCS / git operation.** Action names must describe what the workflow **means** at that step, not what git does under the hood. `merge_stage` is invalid; the semantic equivalent is `complete_stage` (stage is done). `merge_intent` is invalid; the semantic equivalent is `seal_intent` (intent is sealed in FM — there's no actual merge there). `commit_wip` is invalid as a name; the semantic equivalent is `save_wip` (the body still tells the agent to run `git commit` under git-backed portfolios, but the action surface uses the workflow verb).
+
+A static guard at `packages/haiku/test/no-vcs-action-names.test.mjs` enforces Rule 2 — every `CursorAction` variant and every prompt-registry entry is scanned for forbidden VCS tokens (`merge_`, `branch_`, `checkout_`, `rebase_`, `cherry_pick_`, `push_`, `pull_`, `fetch_`, `clone_`, `commit_`, `stash_`, `reset_`, `revert_`, `fast_forward`). If a future PR adds a VCS-named action back, this test fails with an explicit "rename to a semantic name" message.
+
+A second static guard at `packages/haiku/test/principle-scenarios.test.mjs` (`cursor invariant`) enforces Rule 1 — the cursor module imports nothing from `git-worktree.ts`, never calls `execFileSync`, and never shells to `git`.
+
 ### 1.1 Frontmatter is workflow engine-only
 
 Frontmatter on workflow-managed files (`unit-NNN-*.md`, `NNN-*.md` feedback, `intent.md`) is reserved for the workflow engine. Agents MAY write frontmatter when authoring a file (the elaborator drafts a unit with declared inputs/outputs); agents MUST NOT **interpret** frontmatter for any mechanical purpose.
@@ -62,7 +74,7 @@ In v4, status is derived from on-disk FM fields, not stored as an enum:
 
 **Stage revisit creates new pending units; it never modifies completed units.** If a closed FB diagnoses a defect in a completed unit, the next elaborate iteration creates a corrective unit (or a follow-up unit) — it does not edit the original. Front-loading review (verifier hats + pre-execute review) is therefore critical.
 
-**Stages are not sealed; only intents are.** Forward-only applies to existing units' bytes (immutable post-merge). A previously-merged stage that gains a new unit (e.g. because the feedback engine added corrective work via a stage revisit) becomes ahead-of-main and the cursor automatically rewinds to it via `firstUnmergedStage`. `merge_stage` is a recurring event, not a terminal one.
+**Stages are not sealed; only intents are.** Forward-only applies to existing units' bytes (immutable post-merge). A previously-merged stage that gains a new unit (e.g. because the feedback engine added corrective work via a stage revisit) becomes ahead-of-main and the cursor automatically rewinds to it via `firstUnmergedStage`. `complete_stage` is a recurring event, not a terminal one (renamed 2026-05-12 from the prior VCS-named `merge_stage`).
 
 ## 2. Stage anatomy
 
@@ -77,7 +89,7 @@ Every stage moves through the same conceptual lifecycle. In v4 these aren't stor
 | **execute** | Units exist, wave-ready or mid-hat → cursor emits `start_unit_hat` | Per-unit subagents, one hat at a time |
 | **review** | Every unit's hat sequence done, but review-role slots unsigned → cursor emits `dispatch_review` (per role) | Engine-built `spec` reviewer + studio-declared review agents |
 | **approve / gate** | Reviews signed, but approval-role slots unsigned → cursor emits `dispatch_approval`, `dispatch_quality_gates`, or `user_gate` | Engine-built quality_gates + configured agents + the human (mode-shaped) |
-| **merge** | Every approval signed → cursor emits `merge_stage` | Engine merges the stage branch into intent main |
+| **merge** | Every approval signed → cursor emits `complete_stage` | Engine merges the stage branch into intent main |
 
 **The elaborate / decompose split (2026-05-08).** Pre-2026-05-08, "elaborate" meant the whole pre-execute phase: read context, dispatch discovery subagents, write unit specs. The same prompt did all three. This made the human-in-the-loop conversation an implicit instruction inside a heavy autonomous prompt — and agents skipped it.
 
@@ -292,9 +304,9 @@ The v4 cursor is a **pure observation function**. `derivePosition(slug)` reads d
 
 1. **Track C — drift.** Run a content-hash sweep over every signed witness on the active stage (unit reviews, output approvals, intent-scope approvals). Any mismatch → `drift_detected`. Drift is dedup'd against open drift FBs by `source_ref` so a fired FB suppresses re-emission until it closes.
 2. **Track B — feedback.** Walk every stage from index 0 through the active stage, then intent-scope. Any open FB → emit the next fix-hat dispatch (`start_feedback_hat`) or close action (`close_feedback`) for it. Cross-stage routing is purely by file location: an FB sitting in `stages/inception/feedback/` rewinds the cursor to inception's fix loop, regardless of where it was filed.
-3. **Track A — intent.** On the active stage (first stage whose branch is not merged into intent main), walk the per-stage state machine: gate priority chain → wave logic → review track → approval track → `merge_stage`. The cursor's per-stage walk is described in §5.4 below.
+3. **Track A — intent.** On the active stage (first stage whose branch is not merged into intent main), walk the per-stage state machine: gate priority chain → wave logic → review track → approval track → `complete_stage`. The cursor's per-stage walk is described in §5.4 below.
 
-After all three tracks return null and every stage is merged, the cursor walks intent-scope approvals (`spec`, `continuity`, `user`) and emits `intent_review` per missing role, then `merge_intent`, then `sealed`.
+After all three tracks return null and every stage is merged, the cursor walks intent-scope approvals (`spec`, `continuity`, `user`) and emits `intent_review` per missing role, then `seal_intent`, then `sealed`.
 
 ### 5.3 Why this model matters
 
@@ -326,7 +338,7 @@ When the active stage is set, `walkIntentTrack` evaluates these conditions in or
 | 9 | Started units need their next hat | `start_unit_hat` (next hat per `nextHatForUnit`) | Hat advancement; reject rewinds one hat |
 | 10 | All hat sequences done; some review role unsigned | `dispatch_review` (per role) or `user_gate { gate_kind: "spec" }` for the `user` role | `spec` (engine-built) → studio review agents → `user`; mode-shaped (autopilot trims to `[spec]`) |
 | 11 | All reviews signed; some approval role unsigned | `dispatch_quality_gates`, `dispatch_approval` (per role), or `user_gate { gate_kind: "approval" }` | `spec` → `quality_gates` (engine-built) → studio agents → `user`; autopilot trims to `[spec, quality_gates]` |
-| 12 | Every approval signed | `merge_stage` | Engine merges stage branch into intent main |
+| 12 | Every approval signed | `complete_stage` | Engine merges stage branch into intent main |
 
 The cursor is intentionally narrow: every condition is a derived predicate over FM. There are no hidden flags, no ambient state, no "phase" field. Position falls out of the data.
 
@@ -351,9 +363,9 @@ The cursor emits exactly these `kind` values (mapped 1:1 to `OrchestratorAction.
 | `dispatch_quality_gates` | Cursor Track A | The engine-built `quality_gates` role hasn't signed approvals on one or more units |
 | `dispatch_approval` | Cursor Track A | A non-user approval role hasn't signed `approvals.<role>` on one or more units |
 | `user_gate` | Cursor Track A | The `user` role is the next unsigned review or approval slot; gate dispatches via review SPA (`ask`) or branch-merge poll (`external` / `await`) |
-| `merge_stage` | Cursor Track A | Every approval signed; merge stage branch into intent main |
+| `complete_stage` | Cursor Track A | Every approval signed. Semantic action ("stage is done"). Under a git-backed portfolio the engine merges stage→intent-main; under filesystem-only it transitions stage state. The action name doesn't reflect VCS mechanism — that's the engine's concern. |
 | `intent_review` | Cursor terminal walk | All stages merged; intent-scope approval `spec`/`continuity`/`user` unsigned |
-| `merge_intent` | Cursor terminal walk | Intent-scope approvals signed; ready to seal |
+| `seal_intent` | Cursor terminal walk | Intent-scope approvals signed. Engine stamps `sealed_at` in FM. Renamed 2026-05-12 from `merge_intent` (the old name described the wrong thing — there's no merge here, just a FM stamp). |
 | `sealed` | Cursor terminal walk | `intent.sealed_at` is set; nothing left to do |
 
 The pre-stage chain — `select_studio → select_mode → (quick? → select_stage)` — is the only place orientation choices are made. The agent **never** writes `mode` or `stages` directly; both fields are FSM-driven (rejected by `haiku_intent_set` with `intent_field_engine_only`). `haiku_intent_create` does not accept `mode` or `stages` either — every orientation choice flows through real elicitation.

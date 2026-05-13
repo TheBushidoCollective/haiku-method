@@ -19,8 +19,11 @@ stateDiagram-v2
   state triage {
     [*] --> triage_start_stage
     triage_start_stage --> triage_elaborate : tick
-    triage_elaborate --> triage_execute : elaborate.advance
-    triage_elaborate --> triage_review_fix : feedback.pending
+    triage_elaborate --> triage_elaborate_review : record.advance
+    triage_elaborate_review --> triage_decompose : verifier.pass
+    triage_elaborate_review --> triage_elaborate : verifier.fail
+    triage_decompose --> triage_execute : decompose.advance
+    triage_decompose --> triage_review_fix : feedback.pending
     state triage_execute {
       [*] --> triage_execute_incident_commander
       triage_execute_incident_commander --> triage_execute_first_responder : hat.advance
@@ -72,8 +75,11 @@ stateDiagram-v2
   state investigate {
     [*] --> investigate_start_stage
     investigate_start_stage --> investigate_elaborate : tick
-    investigate_elaborate --> investigate_execute : elaborate.advance
-    investigate_elaborate --> investigate_review_fix : feedback.pending
+    investigate_elaborate --> investigate_elaborate_review : record.advance
+    investigate_elaborate_review --> investigate_decompose : verifier.pass
+    investigate_elaborate_review --> investigate_elaborate : verifier.fail
+    investigate_decompose --> investigate_execute : decompose.advance
+    investigate_decompose --> investigate_review_fix : feedback.pending
     state investigate_execute {
       [*] --> investigate_execute_investigator
       investigate_execute_investigator --> investigate_execute_log_analyst : hat.advance
@@ -125,8 +131,11 @@ stateDiagram-v2
   state mitigate {
     [*] --> mitigate_start_stage
     mitigate_start_stage --> mitigate_elaborate : tick
-    mitigate_elaborate --> mitigate_execute : elaborate.advance
-    mitigate_elaborate --> mitigate_review_fix : feedback.pending
+    mitigate_elaborate --> mitigate_elaborate_review : record.advance
+    mitigate_elaborate_review --> mitigate_decompose : verifier.pass
+    mitigate_elaborate_review --> mitigate_elaborate : verifier.fail
+    mitigate_decompose --> mitigate_execute : decompose.advance
+    mitigate_decompose --> mitigate_review_fix : feedback.pending
     state mitigate_execute {
       [*] --> mitigate_execute_mitigator
       mitigate_execute_mitigator --> mitigate_execute_verifier : hat.advance
@@ -176,8 +185,11 @@ stateDiagram-v2
   state resolve {
     [*] --> resolve_start_stage
     resolve_start_stage --> resolve_elaborate : tick
-    resolve_elaborate --> resolve_execute : elaborate.advance
-    resolve_elaborate --> resolve_review_fix : feedback.pending
+    resolve_elaborate --> resolve_elaborate_review : record.advance
+    resolve_elaborate_review --> resolve_decompose : verifier.pass
+    resolve_elaborate_review --> resolve_elaborate : verifier.fail
+    resolve_decompose --> resolve_execute : decompose.advance
+    resolve_decompose --> resolve_review_fix : feedback.pending
     state resolve_execute {
       [*] --> resolve_execute_engineer
       resolve_execute_engineer --> resolve_execute_reviewer : hat.advance
@@ -227,8 +239,11 @@ stateDiagram-v2
   state postmortem {
     [*] --> postmortem_start_stage
     postmortem_start_stage --> postmortem_elaborate : tick
-    postmortem_elaborate --> postmortem_execute : elaborate.advance
-    postmortem_elaborate --> postmortem_review_fix : feedback.pending
+    postmortem_elaborate --> postmortem_elaborate_review : record.advance
+    postmortem_elaborate_review --> postmortem_decompose : verifier.pass
+    postmortem_elaborate_review --> postmortem_elaborate : verifier.fail
+    postmortem_decompose --> postmortem_execute : decompose.advance
+    postmortem_decompose --> postmortem_review_fix : feedback.pending
     state postmortem_execute {
       [*] --> postmortem_execute_postmortem_author
       postmortem_execute_postmortem_author --> postmortem_execute_action_item_tracker : hat.advance

@@ -19,8 +19,11 @@ stateDiagram-v2
   state discovery {
     [*] --> discovery_start_stage
     discovery_start_stage --> discovery_elaborate : tick
-    discovery_elaborate --> discovery_execute : elaborate.advance
-    discovery_elaborate --> discovery_review_fix : feedback.pending
+    discovery_elaborate --> discovery_elaborate_review : record.advance
+    discovery_elaborate_review --> discovery_decompose : verifier.pass
+    discovery_elaborate_review --> discovery_elaborate : verifier.fail
+    discovery_decompose --> discovery_execute : decompose.advance
+    discovery_decompose --> discovery_review_fix : feedback.pending
     state discovery_execute {
       [*] --> discovery_execute_market_explorer
       discovery_execute_market_explorer --> discovery_execute_competitive_analyst : hat.advance
@@ -72,8 +75,11 @@ stateDiagram-v2
   state user_research {
     [*] --> user_research_start_stage
     user_research_start_stage --> user_research_elaborate : tick
-    user_research_elaborate --> user_research_execute : elaborate.advance
-    user_research_elaborate --> user_research_review_fix : feedback.pending
+    user_research_elaborate --> user_research_elaborate_review : record.advance
+    user_research_elaborate_review --> user_research_decompose : verifier.pass
+    user_research_elaborate_review --> user_research_elaborate : verifier.fail
+    user_research_decompose --> user_research_execute : decompose.advance
+    user_research_decompose --> user_research_review_fix : feedback.pending
     state user_research_execute {
       [*] --> user_research_execute_user_researcher
       user_research_execute_user_researcher --> user_research_execute_insights_synthesizer : hat.advance
@@ -125,8 +131,11 @@ stateDiagram-v2
   state prioritization {
     [*] --> prioritization_start_stage
     prioritization_start_stage --> prioritization_elaborate : tick
-    prioritization_elaborate --> prioritization_execute : elaborate.advance
-    prioritization_elaborate --> prioritization_review_fix : feedback.pending
+    prioritization_elaborate --> prioritization_elaborate_review : record.advance
+    prioritization_elaborate_review --> prioritization_decompose : verifier.pass
+    prioritization_elaborate_review --> prioritization_elaborate : verifier.fail
+    prioritization_decompose --> prioritization_execute : decompose.advance
+    prioritization_decompose --> prioritization_review_fix : feedback.pending
     state prioritization_execute {
       [*] --> prioritization_execute_prioritizer
       prioritization_execute_prioritizer --> prioritization_execute_stakeholder_proxy : hat.advance
@@ -178,8 +187,11 @@ stateDiagram-v2
   state roadmap {
     [*] --> roadmap_start_stage
     roadmap_start_stage --> roadmap_elaborate : tick
-    roadmap_elaborate --> roadmap_execute : elaborate.advance
-    roadmap_elaborate --> roadmap_review_fix : feedback.pending
+    roadmap_elaborate --> roadmap_elaborate_review : record.advance
+    roadmap_elaborate_review --> roadmap_decompose : verifier.pass
+    roadmap_elaborate_review --> roadmap_elaborate : verifier.fail
+    roadmap_decompose --> roadmap_execute : decompose.advance
+    roadmap_decompose --> roadmap_review_fix : feedback.pending
     state roadmap_execute {
       [*] --> roadmap_execute_roadmap_architect
       roadmap_execute_roadmap_architect --> roadmap_execute_capacity_planner : hat.advance
@@ -231,8 +243,11 @@ stateDiagram-v2
   state stakeholder_review {
     [*] --> stakeholder_review_start_stage
     stakeholder_review_start_stage --> stakeholder_review_elaborate : tick
-    stakeholder_review_elaborate --> stakeholder_review_execute : elaborate.advance
-    stakeholder_review_elaborate --> stakeholder_review_review_fix : feedback.pending
+    stakeholder_review_elaborate --> stakeholder_review_elaborate_review : record.advance
+    stakeholder_review_elaborate_review --> stakeholder_review_decompose : verifier.pass
+    stakeholder_review_elaborate_review --> stakeholder_review_elaborate : verifier.fail
+    stakeholder_review_decompose --> stakeholder_review_execute : decompose.advance
+    stakeholder_review_decompose --> stakeholder_review_review_fix : feedback.pending
     state stakeholder_review_execute {
       [*] --> stakeholder_review_execute_presenter
       stakeholder_review_execute_presenter --> stakeholder_review_execute_feedback_synthesizer : hat.advance

@@ -1583,7 +1583,7 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 							all stages merged → cursor walks intent-scope approvals
 							(<code>spec</code>, <code>continuity</code>, <code>user</code>) →{" "}
 							<code>intent_review</code> per missing role →{" "}
-							<code>merge_intent</code> → <code>sealed</code>
+							<code>seal_intent</code> → <code>sealed</code>
 						</span>
 					</header>
 					<div className="post-steps">
@@ -1612,10 +1612,10 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 						</div>
 						<div className="step-arrow">→</div>
 						<div className="post-step">
-							<div className="step-title">✅ merge_intent → sealed</div>
+							<div className="step-title">✅ seal_intent → sealed</div>
 							<div className="step-desc">
 								every intent-scope approval signed → cursor emits{" "}
-								<code>merge_intent</code>; engine performs final rebase under{" "}
+								<code>seal_intent</code>; engine performs final rebase under{" "}
 								<code>withIntentMainLock</code>, stamps <code>sealed_at</code>;
 								next tick emits <code>sealed</code>.
 							</div>

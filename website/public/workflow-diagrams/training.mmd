@@ -19,8 +19,11 @@ stateDiagram-v2
   state needs_analysis {
     [*] --> needs_analysis_start_stage
     needs_analysis_start_stage --> needs_analysis_elaborate : tick
-    needs_analysis_elaborate --> needs_analysis_execute : elaborate.advance
-    needs_analysis_elaborate --> needs_analysis_review_fix : feedback.pending
+    needs_analysis_elaborate --> needs_analysis_elaborate_review : record.advance
+    needs_analysis_elaborate_review --> needs_analysis_decompose : verifier.pass
+    needs_analysis_elaborate_review --> needs_analysis_elaborate : verifier.fail
+    needs_analysis_decompose --> needs_analysis_execute : decompose.advance
+    needs_analysis_decompose --> needs_analysis_review_fix : feedback.pending
     state needs_analysis_execute {
       [*] --> needs_analysis_execute_analyst
       needs_analysis_execute_analyst --> needs_analysis_execute_consultant : hat.advance
@@ -72,8 +75,11 @@ stateDiagram-v2
   state design {
     [*] --> design_start_stage
     design_start_stage --> design_elaborate : tick
-    design_elaborate --> design_execute : elaborate.advance
-    design_elaborate --> design_review_fix : feedback.pending
+    design_elaborate --> design_elaborate_review : record.advance
+    design_elaborate_review --> design_decompose : verifier.pass
+    design_elaborate_review --> design_elaborate : verifier.fail
+    design_decompose --> design_execute : decompose.advance
+    design_decompose --> design_review_fix : feedback.pending
     state design_execute {
       [*] --> design_execute_designer
       design_execute_designer --> design_execute_subject_expert : hat.advance
@@ -125,8 +131,11 @@ stateDiagram-v2
   state develop {
     [*] --> develop_start_stage
     develop_start_stage --> develop_elaborate : tick
-    develop_elaborate --> develop_execute : elaborate.advance
-    develop_elaborate --> develop_review_fix : feedback.pending
+    develop_elaborate --> develop_elaborate_review : record.advance
+    develop_elaborate_review --> develop_decompose : verifier.pass
+    develop_elaborate_review --> develop_elaborate : verifier.fail
+    develop_decompose --> develop_execute : decompose.advance
+    develop_decompose --> develop_review_fix : feedback.pending
     state develop_execute {
       [*] --> develop_execute_developer
       develop_execute_developer --> develop_execute_editor : hat.advance
@@ -178,8 +187,11 @@ stateDiagram-v2
   state deliver {
     [*] --> deliver_start_stage
     deliver_start_stage --> deliver_elaborate : tick
-    deliver_elaborate --> deliver_execute : elaborate.advance
-    deliver_elaborate --> deliver_review_fix : feedback.pending
+    deliver_elaborate --> deliver_elaborate_review : record.advance
+    deliver_elaborate_review --> deliver_decompose : verifier.pass
+    deliver_elaborate_review --> deliver_elaborate : verifier.fail
+    deliver_decompose --> deliver_execute : decompose.advance
+    deliver_decompose --> deliver_review_fix : feedback.pending
     state deliver_execute {
       [*] --> deliver_execute_facilitator
       deliver_execute_facilitator --> deliver_execute_coordinator : hat.advance
@@ -231,8 +243,11 @@ stateDiagram-v2
   state evaluate {
     [*] --> evaluate_start_stage
     evaluate_start_stage --> evaluate_elaborate : tick
-    evaluate_elaborate --> evaluate_execute : elaborate.advance
-    evaluate_elaborate --> evaluate_review_fix : feedback.pending
+    evaluate_elaborate --> evaluate_elaborate_review : record.advance
+    evaluate_elaborate_review --> evaluate_decompose : verifier.pass
+    evaluate_elaborate_review --> evaluate_elaborate : verifier.fail
+    evaluate_decompose --> evaluate_execute : decompose.advance
+    evaluate_decompose --> evaluate_review_fix : feedback.pending
     state evaluate_execute {
       [*] --> evaluate_execute_evaluator
       evaluate_execute_evaluator --> evaluate_execute_analyst : hat.advance

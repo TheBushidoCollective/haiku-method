@@ -19,8 +19,11 @@ stateDiagram-v2
   state research {
     [*] --> research_start_stage
     research_start_stage --> research_elaborate : tick
-    research_elaborate --> research_execute : elaborate.advance
-    research_elaborate --> research_review_fix : feedback.pending
+    research_elaborate --> research_elaborate_review : record.advance
+    research_elaborate_review --> research_decompose : verifier.pass
+    research_elaborate_review --> research_elaborate : verifier.fail
+    research_decompose --> research_execute : decompose.advance
+    research_decompose --> research_review_fix : feedback.pending
     state research_execute {
       [*] --> research_execute_prospect_researcher
       research_execute_prospect_researcher --> research_execute_industry_analyst : hat.advance
@@ -72,8 +75,11 @@ stateDiagram-v2
   state qualification {
     [*] --> qualification_start_stage
     qualification_start_stage --> qualification_elaborate : tick
-    qualification_elaborate --> qualification_execute : elaborate.advance
-    qualification_elaborate --> qualification_review_fix : feedback.pending
+    qualification_elaborate --> qualification_elaborate_review : record.advance
+    qualification_elaborate_review --> qualification_decompose : verifier.pass
+    qualification_elaborate_review --> qualification_elaborate : verifier.fail
+    qualification_decompose --> qualification_execute : decompose.advance
+    qualification_decompose --> qualification_review_fix : feedback.pending
     state qualification_execute {
       [*] --> qualification_execute_qualifier
       qualification_execute_qualifier --> qualification_execute_deal_strategist : hat.advance
@@ -125,8 +131,11 @@ stateDiagram-v2
   state proposal {
     [*] --> proposal_start_stage
     proposal_start_stage --> proposal_elaborate : tick
-    proposal_elaborate --> proposal_execute : elaborate.advance
-    proposal_elaborate --> proposal_review_fix : feedback.pending
+    proposal_elaborate --> proposal_elaborate_review : record.advance
+    proposal_elaborate_review --> proposal_decompose : verifier.pass
+    proposal_elaborate_review --> proposal_elaborate : verifier.fail
+    proposal_decompose --> proposal_execute : decompose.advance
+    proposal_decompose --> proposal_review_fix : feedback.pending
     state proposal_execute {
       [*] --> proposal_execute_proposal_writer
       proposal_execute_proposal_writer --> proposal_execute_solution_architect : hat.advance
@@ -178,8 +187,11 @@ stateDiagram-v2
   state negotiation {
     [*] --> negotiation_start_stage
     negotiation_start_stage --> negotiation_elaborate : tick
-    negotiation_elaborate --> negotiation_execute : elaborate.advance
-    negotiation_elaborate --> negotiation_review_fix : feedback.pending
+    negotiation_elaborate --> negotiation_elaborate_review : record.advance
+    negotiation_elaborate_review --> negotiation_decompose : verifier.pass
+    negotiation_elaborate_review --> negotiation_elaborate : verifier.fail
+    negotiation_decompose --> negotiation_execute : decompose.advance
+    negotiation_decompose --> negotiation_review_fix : feedback.pending
     state negotiation_execute {
       [*] --> negotiation_execute_negotiator
       negotiation_execute_negotiator --> negotiation_execute_legal_reviewer : hat.advance
@@ -229,8 +241,11 @@ stateDiagram-v2
   state close {
     [*] --> close_start_stage
     close_start_stage --> close_elaborate : tick
-    close_elaborate --> close_execute : elaborate.advance
-    close_elaborate --> close_review_fix : feedback.pending
+    close_elaborate --> close_elaborate_review : record.advance
+    close_elaborate_review --> close_decompose : verifier.pass
+    close_elaborate_review --> close_elaborate : verifier.fail
+    close_decompose --> close_execute : decompose.advance
+    close_decompose --> close_review_fix : feedback.pending
     state close_execute {
       [*] --> close_execute_closer
       close_execute_closer --> close_execute_handoff_coordinator : hat.advance

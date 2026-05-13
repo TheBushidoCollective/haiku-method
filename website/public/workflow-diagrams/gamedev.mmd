@@ -19,8 +19,11 @@ stateDiagram-v2
   state concept {
     [*] --> concept_start_stage
     concept_start_stage --> concept_elaborate : tick
-    concept_elaborate --> concept_execute : elaborate.advance
-    concept_elaborate --> concept_review_fix : feedback.pending
+    concept_elaborate --> concept_elaborate_review : record.advance
+    concept_elaborate_review --> concept_decompose : verifier.pass
+    concept_elaborate_review --> concept_elaborate : verifier.fail
+    concept_decompose --> concept_execute : decompose.advance
+    concept_decompose --> concept_review_fix : feedback.pending
     state concept_execute {
       [*] --> concept_execute_game_designer
       concept_execute_game_designer --> concept_execute_creative_director : hat.advance
@@ -74,8 +77,11 @@ stateDiagram-v2
   state prototype {
     [*] --> prototype_start_stage
     prototype_start_stage --> prototype_elaborate : tick
-    prototype_elaborate --> prototype_execute : elaborate.advance
-    prototype_elaborate --> prototype_review_fix : feedback.pending
+    prototype_elaborate --> prototype_elaborate_review : record.advance
+    prototype_elaborate_review --> prototype_decompose : verifier.pass
+    prototype_elaborate_review --> prototype_elaborate : verifier.fail
+    prototype_decompose --> prototype_execute : decompose.advance
+    prototype_decompose --> prototype_review_fix : feedback.pending
     state prototype_execute {
       [*] --> prototype_execute_prototype_engineer
       prototype_execute_prototype_engineer --> prototype_execute_game_designer : hat.advance
@@ -129,8 +135,11 @@ stateDiagram-v2
   state production {
     [*] --> production_start_stage
     production_start_stage --> production_elaborate : tick
-    production_elaborate --> production_execute : elaborate.advance
-    production_elaborate --> production_review_fix : feedback.pending
+    production_elaborate --> production_elaborate_review : record.advance
+    production_elaborate_review --> production_decompose : verifier.pass
+    production_elaborate_review --> production_elaborate : verifier.fail
+    production_decompose --> production_execute : decompose.advance
+    production_decompose --> production_review_fix : feedback.pending
     state production_execute {
       [*] --> production_execute_gameplay_engineer
       production_execute_gameplay_engineer --> production_execute_content_author : hat.advance
@@ -184,8 +193,11 @@ stateDiagram-v2
   state polish {
     [*] --> polish_start_stage
     polish_start_stage --> polish_elaborate : tick
-    polish_elaborate --> polish_execute : elaborate.advance
-    polish_elaborate --> polish_review_fix : feedback.pending
+    polish_elaborate --> polish_elaborate_review : record.advance
+    polish_elaborate_review --> polish_decompose : verifier.pass
+    polish_elaborate_review --> polish_elaborate : verifier.fail
+    polish_decompose --> polish_execute : decompose.advance
+    polish_decompose --> polish_review_fix : feedback.pending
     state polish_execute {
       [*] --> polish_execute_gameplay_engineer
       polish_execute_gameplay_engineer --> polish_execute_tuner : hat.advance
@@ -239,8 +251,11 @@ stateDiagram-v2
   state release {
     [*] --> release_start_stage
     release_start_stage --> release_elaborate : tick
-    release_elaborate --> release_execute : elaborate.advance
-    release_elaborate --> release_review_fix : feedback.pending
+    release_elaborate --> release_elaborate_review : record.advance
+    release_elaborate_review --> release_decompose : verifier.pass
+    release_elaborate_review --> release_elaborate : verifier.fail
+    release_decompose --> release_execute : decompose.advance
+    release_decompose --> release_review_fix : feedback.pending
     state release_execute {
       [*] --> release_execute_release_engineer
       release_execute_release_engineer --> release_execute_platform_cert_specialist : hat.advance

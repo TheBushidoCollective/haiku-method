@@ -807,13 +807,12 @@ export default defineTool({
 		// (via the post-cursor revisit alignment block below).
 		let result: OrchestratorActionType = dispatchOrchestratorAction(slug)
 
-		// (Post-walk merge-debt synthesis deleted 2026-05-12 per the
-		// principle: no engine action reflects a git/VCS operation.
-		// Stage→main merges are handled in the pre-tick housekeeping
-		// step `mergeFullySignedStagesIntoMain` above, invisible to
-		// the agent. The cursor's `walkIntentTrack` returns null for
-		// fully-signed stages; findCurrentStage walks past them on
-		// the FM signal alone.)
+		// (Post-walk merge-debt synthesis deleted 2026-05-12. The
+		// cursor's `walkIntentTrack` step 10 emits `complete_stage`
+		// when a stage is fully signed, and the auto-execute path
+		// below performs the underlying git merge as an
+		// implementation detail of the semantic action. There's no
+		// need for a separate synthesis to second-guess the cursor.)
 		{
 			let iterations = 0
 			while (

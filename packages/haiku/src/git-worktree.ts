@@ -307,65 +307,6 @@ export function syncBranchDownstream(slug: string): PreCursorSyncResult {
 	return { ok: true, performed }
 }
 
-/**
- * Engine-internal pre-tick housekeeping: walk every stage in order
- * and merge any FM-complete (fully-signed) stage's branch into intent
- * main if it hasn't been merged yet. NEVER surfaced to the agent as an
- * action — per the principle (2026-05-12), no engine action reflects
- * a git/VCS operation. This is the engine doing its own job invisibly.
- *
- * Called from `haiku_run_next` at tick entry, BEFORE the cursor walks.
- * After this returns, `findCurrentStage` walks past every merged stage
- * via the FM signal, so the cursor lands on the next genuinely-active
- * stage without ever emitting `merge_stage`.
- *
- * Returns a structured result. Per-stage merge failures are surfaced
- * separately so the caller can route conflicts to the agent (the
- * agent resolves the conflict locally; the merge isn't an action, but
- * the conflict resolution still is — via standard edit / commit).
- *
- * Non-git mode is a no-op.
- */
-export interface HousekeepMergesResult {
-	ok: boolean
-	merged: string[] // stage names that were freshly merged this tick
-	conflictStage?: string
-	conflictFiles?: string[]
-	message?: string
-}
-
-export function mergeFullySignedStagesIntoMain(
-	slug: string,
-	stages: string[],
-	isStageFullySignedFn: (stage: string) => boolean,
-): HousekeepMergesResult {
-	if (!isGitRepo()) return { ok: true, merged: [] }
-	const intentMain = `haiku/${slug}/main`
-	if (!branchExists(intentMain)) return { ok: true, merged: [] }
-	const merged: string[] = []
-	for (const stage of stages) {
-		const stageBranch = `haiku/${slug}/${stage}`
-		if (!branchExists(stageBranch)) continue
-		if (!isStageFullySignedFn(stage)) continue
-		if (hasNoMergeDebt(stageBranch, intentMain)) continue
-		const outcome = mergeStageBranchIntoMain(slug, stage)
-		if (!outcome.success) {
-			if (outcome.isConflict) {
-				return {
-					ok: false,
-					merged,
-					conflictStage: stage,
-					conflictFiles: outcome.conflictFiles,
-					message: outcome.message,
-				}
-			}
-			return { ok: false, merged, message: outcome.message }
-		}
-		if (!outcome.noop) merged.push(stage)
-	}
-	return { ok: true, merged }
-}
-
 /** Helper: merge `sourceRef` into `targetBranch`. If the agent's
  *  current checkout is `targetBranch`, merge in-place. Otherwise use
  *  a temp worktree so the agent's tree isn't disturbed. */

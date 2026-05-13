@@ -19,8 +19,11 @@ stateDiagram-v2
   state forecast {
     [*] --> forecast_start_stage
     forecast_start_stage --> forecast_elaborate : tick
-    forecast_elaborate --> forecast_execute : elaborate.advance
-    forecast_elaborate --> forecast_review_fix : feedback.pending
+    forecast_elaborate --> forecast_elaborate_review : record.advance
+    forecast_elaborate_review --> forecast_decompose : verifier.pass
+    forecast_elaborate_review --> forecast_elaborate : verifier.fail
+    forecast_decompose --> forecast_execute : decompose.advance
+    forecast_decompose --> forecast_review_fix : feedback.pending
     state forecast_execute {
       [*] --> forecast_execute_analyst
       forecast_execute_analyst --> forecast_execute_forecaster : hat.advance
@@ -72,8 +75,11 @@ stateDiagram-v2
   state budget {
     [*] --> budget_start_stage
     budget_start_stage --> budget_elaborate : tick
-    budget_elaborate --> budget_execute : elaborate.advance
-    budget_elaborate --> budget_review_fix : feedback.pending
+    budget_elaborate --> budget_elaborate_review : record.advance
+    budget_elaborate_review --> budget_decompose : verifier.pass
+    budget_elaborate_review --> budget_elaborate : verifier.fail
+    budget_decompose --> budget_execute : decompose.advance
+    budget_decompose --> budget_review_fix : feedback.pending
     state budget_execute {
       [*] --> budget_execute_budget_owner
       budget_execute_budget_owner --> budget_execute_allocator : hat.advance
@@ -125,8 +131,11 @@ stateDiagram-v2
   state analysis {
     [*] --> analysis_start_stage
     analysis_start_stage --> analysis_elaborate : tick
-    analysis_elaborate --> analysis_execute : elaborate.advance
-    analysis_elaborate --> analysis_review_fix : feedback.pending
+    analysis_elaborate --> analysis_elaborate_review : record.advance
+    analysis_elaborate_review --> analysis_decompose : verifier.pass
+    analysis_elaborate_review --> analysis_elaborate : verifier.fail
+    analysis_decompose --> analysis_execute : decompose.advance
+    analysis_decompose --> analysis_review_fix : feedback.pending
     state analysis_execute {
       [*] --> analysis_execute_analyst
       analysis_execute_analyst --> analysis_execute_auditor : hat.advance
@@ -176,8 +185,11 @@ stateDiagram-v2
   state reporting {
     [*] --> reporting_start_stage
     reporting_start_stage --> reporting_elaborate : tick
-    reporting_elaborate --> reporting_execute : elaborate.advance
-    reporting_elaborate --> reporting_review_fix : feedback.pending
+    reporting_elaborate --> reporting_elaborate_review : record.advance
+    reporting_elaborate_review --> reporting_decompose : verifier.pass
+    reporting_elaborate_review --> reporting_elaborate : verifier.fail
+    reporting_decompose --> reporting_execute : decompose.advance
+    reporting_decompose --> reporting_review_fix : feedback.pending
     state reporting_execute {
       [*] --> reporting_execute_reporter
       reporting_execute_reporter --> reporting_execute_visualizer : hat.advance
@@ -229,8 +241,11 @@ stateDiagram-v2
   state close {
     [*] --> close_start_stage
     close_start_stage --> close_elaborate : tick
-    close_elaborate --> close_execute : elaborate.advance
-    close_elaborate --> close_review_fix : feedback.pending
+    close_elaborate --> close_elaborate_review : record.advance
+    close_elaborate_review --> close_decompose : verifier.pass
+    close_elaborate_review --> close_elaborate : verifier.fail
+    close_decompose --> close_execute : decompose.advance
+    close_decompose --> close_review_fix : feedback.pending
     state close_execute {
       [*] --> close_execute_controller
       close_execute_controller --> close_execute_reconciler : hat.advance

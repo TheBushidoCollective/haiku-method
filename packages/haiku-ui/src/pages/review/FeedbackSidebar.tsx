@@ -169,7 +169,7 @@ export function FeedbackSidebar({
 	getAnnotations,
 	onFeedbackItemClick,
 	onDecisionSuccess,
-	adHoc,
+	adHoc = false,
 	awaitActive,
 	pendingDecisionQueued,
 	className,

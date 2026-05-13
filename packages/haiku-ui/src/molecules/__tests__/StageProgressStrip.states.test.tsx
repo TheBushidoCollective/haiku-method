@@ -279,4 +279,64 @@ describe("StageProgressStrip — state matrix", () => {
 		expect(marker?.className).toMatch(/ring-4/)
 		expect(marker?.className).toMatch(/ring-amber-400/)
 	})
+
+	// ── Phase surfacing in the hover card ────────────────────────────────────
+	//
+	// When `phase` is supplied, the current stage's hover card surfaces
+	// "<Phase> phase" as a sub-line so reviewers see WHICH phase the
+	// stage sits in without leaving the stepper.
+
+	it("hover card on current stage surfaces the phase sub-line", () => {
+		render(
+			<StageProgressStrip
+				stages={[
+					{ name: "inception", status: "completed", visits: 1 },
+					{ name: "design", status: "current", visits: 1, phase: "review" },
+				]}
+				currentStage="design"
+			/>,
+		)
+		const designButton = screen.getByTitle("design (current)")
+		// The hover card lives inside the button as a role=tooltip span
+		// so SR users get the same content via aria-describedby's
+		// implicit fallthrough. We assert on the rendered text.
+		expect(designButton.textContent).toMatch(/Review phase/)
+	})
+
+	it("hover card on completed stage does NOT surface a phase sub-line", () => {
+		// Completed stages have no live phase — surfacing one would
+		// confuse "completed" with "still in review".
+		render(
+			<StageProgressStrip
+				stages={[
+					{ name: "inception", status: "completed", visits: 1, phase: "" },
+					{ name: "design", status: "current", visits: 1, phase: "execute" },
+				]}
+				currentStage="design"
+			/>,
+		)
+		const inceptionButton = screen.getByTitle("inception (completed)")
+		expect(inceptionButton.textContent).not.toMatch(/phase$/i)
+		// Status sub-line still reads "completed".
+		expect(inceptionButton.textContent).toMatch(/completed/i)
+	})
+
+	it("hover card surfaces pending-feedback count when > 0", () => {
+		render(
+			<StageProgressStrip
+				stages={[
+					{
+						name: "inception",
+						status: "completed",
+						visits: 1,
+						pendingCount: 3,
+					},
+					{ name: "design", status: "current", visits: 1, phase: "review" },
+				]}
+				currentStage="design"
+			/>,
+		)
+		const inceptionButton = screen.getByTitle("inception (completed)")
+		expect(inceptionButton.textContent).toMatch(/3 pending feedback/i)
+	})
 })

@@ -320,6 +320,7 @@ function ReviewLayoutLoaded({
 					visits?: number
 					pending_feedback?: number
 					mergedIntoMain?: boolean
+					phase?: string | null
 			  }
 			| undefined
 		// v4: derive a v3-compatible status string from mergedIntoMain.
@@ -342,6 +343,7 @@ function ReviewLayoutLoaded({
 			status: derivedStatus,
 			visits: state?.visits ?? 0,
 			pendingCount: state?.pending_feedback ?? 0,
+			phase: typeof state?.phase === "string" ? state.phase : undefined,
 		}
 	})
 
@@ -357,7 +359,9 @@ function ReviewLayoutLoaded({
 	const allStagesMerged =
 		stageStateKeys.length > 0 &&
 		stageStateKeys.every(
-			(name) => (stageStates[name] as { mergedIntoMain?: boolean })?.mergedIntoMain === true,
+			(name) =>
+				(stageStates[name] as { mergedIntoMain?: boolean })?.mergedIntoMain ===
+				true,
 		)
 	const isIntentTerminal =
 		intentSealed.length > 0 ||

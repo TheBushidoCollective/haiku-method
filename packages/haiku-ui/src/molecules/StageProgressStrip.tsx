@@ -7,6 +7,11 @@ interface StageInfo {
 	visits?: number
 	pendingCount?: number
 	sublabel?: string
+	/** Per-stage phase derived from disk (one of: elaborate | execute |
+	 *  review | gate | ""). Optional — when present, the marker's hover
+	 *  card surfaces the phase as a sub-line so reviewers see WHICH
+	 *  phase the current stage sits in without leaving the stepper. */
+	phase?: string
 }
 
 interface Props {
@@ -113,6 +118,26 @@ export function StageProgressStrip({
 					// gets a teal ring + underline + `aria-current="location"` so
 					// they can see where they are without losing the workflow engine pointer.
 					const isViewingDifferent = isViewing && !isCurrent
+
+					// Hover-card copy: stage + state line + (when current)
+					// phase line. Phase only carries useful info on the
+					// current stage — completed stages have no live phase,
+					// and pending/future stages haven't entered any phase
+					// yet. Reviewers viewing a non-current stage see
+					// "viewing" instead of phase.
+					const stateLine = isCurrent
+						? "in progress"
+						: isCompleted
+							? "completed"
+							: hasVisits
+								? "previously visited"
+								: "upcoming"
+					const phaseSubline = (() => {
+						if (isViewingDifferent) return "you are viewing"
+						if (!isCurrent || !stage.phase) return null
+						const phaseTitle = `${stage.phase[0].toUpperCase()}${stage.phase.slice(1)}`
+						return `${phaseTitle} phase`
+					})()
 					return (
 						<li key={stage.name} className="w-24">
 							<button
@@ -121,6 +146,10 @@ export function StageProgressStrip({
 								data-viewing={isViewing ? "true" : undefined}
 								disabled={!(isClickable || isCurrent)}
 								onClick={() => isClickable && onStageClick?.(stage.name)}
+								/* `title` retained for backward-compat + as a plain-text
+								 * fallback when the styled hover card is suppressed
+								 * (reduced-motion preferences, headless tooling). The
+								 * styled card is the primary affordance. */
 								title={`${stage.name} (${stage.status})${isViewingDifferent ? " — viewing" : ""}`}
 								aria-label={
 									isViewingDifferent
@@ -134,7 +163,7 @@ export function StageProgressStrip({
 											? "location"
 											: undefined
 								}
-								className={`group w-full flex flex-col items-center transition-colors ${focusRingCompactClass} ${
+								className={`group relative w-full flex flex-col items-center transition-colors ${focusRingCompactClass} ${
 									isFuture && !hasVisits
 										? "cursor-not-allowed text-stone-500 dark:text-stone-600"
 										: isClickable
@@ -142,6 +171,45 @@ export function StageProgressStrip({
 											: "cursor-default"
 								}`}
 							>
+								{/* Hover card — capitalized stage name +
+								 *  status line + (when current) which
+								 *  phase the cursor sits in. Anchored
+								 *  ABOVE the marker via the parent
+								 *  button being `relative`. */}
+								<span
+									role="tooltip"
+									className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+								>
+									<span className="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight">
+										{stage.name}
+									</span>
+									<span
+										className={`block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 ${
+											isCurrent
+												? "text-teal-300 dark:text-teal-700"
+												: isCompleted
+													? "text-green-300 dark:text-green-700"
+													: "text-stone-300 dark:text-stone-600"
+										}`}
+									>
+										{stateLine}
+									</span>
+									{phaseSubline && (
+										<span className="block text-xs font-normal text-stone-200 dark:text-stone-700 leading-snug mt-1">
+											{phaseSubline}
+										</span>
+									)}
+									{pending > 0 && (
+										<span className="block text-xs font-semibold text-amber-300 dark:text-amber-600 leading-snug mt-1">
+											{pending} pending feedback
+										</span>
+									)}
+									{/* caret anchoring the card to the marker */}
+									<span
+										aria-hidden="true"
+										className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+									/>
+								</span>
 								<div className="flex items-center w-full h-10">
 									<div
 										className={`flex-1 h-0.5 ${leftConnectorClass}`}

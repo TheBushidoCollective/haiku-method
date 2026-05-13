@@ -15,7 +15,7 @@
 
 import { cleanup, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
-import { StageBanner } from "../-stage-banner"
+import { PhaseStepper, StageBanner } from "../-stage-banner"
 
 afterEach(() => {
 	cleanup()
@@ -94,5 +94,67 @@ describe("StageBanner — ad-hoc vs. gate-review affordances", () => {
 		)
 		expect(screen.queryByText("Ad-hoc")).toBeNull()
 		expect(screen.queryByText("Approve specs")).toBeNull()
+	})
+})
+
+describe("PhaseStepper — bubble + tooltip per phase", () => {
+	it("renders one bubble per phase (4 phases total)", () => {
+		const { container } = render(
+			<PhaseStepper phase="execute" stageStatus="current" />,
+		)
+		const list = container.querySelector("ol")
+		expect(list).toBeTruthy()
+		expect(list?.children.length).toBe(4)
+	})
+
+	it("active phase carries aria-current='step' on its bubble", () => {
+		render(<PhaseStepper phase="review" stageStatus="current" />)
+		// review is index 2 of 4. The active bubble's wrapper carries
+		// aria-current and the SR label includes the active state.
+		const active = screen.getByLabelText(/Review — active/i)
+		expect(active.getAttribute("aria-current")).toBe("step")
+	})
+
+	it("pending phases do NOT carry aria-current", () => {
+		render(<PhaseStepper phase="execute" stageStatus="current" />)
+		// gate is downstream of execute → still pending.
+		const pending = screen.getByLabelText(/Gate — pending/i)
+		expect(pending.getAttribute("aria-current")).toBeNull()
+	})
+
+	it("done phases carry the green check glyph, NOT a number", () => {
+		const { container } = render(
+			<PhaseStepper phase="gate" stageStatus="current" />,
+		)
+		// elaborate, execute, review are all done (i < activeIndex=3).
+		// Each done bubble renders an <svg> with a check path.
+		const svgs = container.querySelectorAll("svg")
+		// 3 done = 3 svg checks.
+		expect(svgs.length).toBe(3)
+	})
+
+	it("when the stage is complete, every phase shows done — no active bubble", () => {
+		const { container } = render(
+			<PhaseStepper phase="" stageStatus="completed" />,
+		)
+		// No bubble should carry aria-current="step" once the stage is
+		// terminal; the trailing count slot reads "done" instead of "N/M".
+		const allBubbles = screen.queryAllByLabelText(/— active/i)
+		expect(allBubbles.length).toBe(0)
+		// Find the trailing count slot specifically — the only `font-mono`
+		// child of the outer group. (svg <title>done</title> elements also
+		// match the literal "done" text but live inside aria-hidden bubbles.)
+		const countSlot = container.querySelector(".font-mono")
+		expect(countSlot?.textContent).toBe("done")
+	})
+
+	it("tooltip card carries the phase title AND description", () => {
+		render(<PhaseStepper phase="execute" stageStatus="current" />)
+		// Aria-label encodes both. We pin on the aria-label since the
+		// CSS-driven hover card isn't visible in jsdom.
+		const execute = screen.getByLabelText(
+			/Execute — active.*hats land code and artifacts for each unit/i,
+		)
+		expect(execute).toBeTruthy()
 	})
 })

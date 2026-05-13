@@ -17,11 +17,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage inception, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             title="inception (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                inception
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -77,11 +96,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage design, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
             title="design (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                design
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -138,12 +176,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
           <button
             aria-current="step"
             aria-label="Stage product, current"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="product"
             data-viewing="true"
             title="product (current)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                product
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-teal-300 dark:text-teal-700"
+              >
+                in progress
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -188,12 +245,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage development, future"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="development"
             disabled=""
             title="development (future)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                development
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                upcoming
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -238,12 +314,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage review, future"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="review"
             disabled=""
             title="review (future)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                review
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                upcoming
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -302,12 +397,36 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
           <button
             aria-current="location"
             aria-label="Stage inception, completed, currently viewing"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             data-viewing="true"
             title="inception (completed) — viewing"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                inception
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                class="block text-xs font-normal text-stone-200 dark:text-stone-700 leading-snug mt-1"
+              >
+                you are viewing
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -363,11 +482,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage design, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
             title="design (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                design
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -423,11 +561,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage product, visited"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="product"
             title="product (current)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                product
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                previously visited
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -472,12 +629,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage development, future"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="development"
             disabled=""
             title="development (future)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                development
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                upcoming
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -522,12 +698,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage review, future"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="review"
             disabled=""
             title="review (future)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                review
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                upcoming
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -585,11 +780,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage inception, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             title="inception (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                inception
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -645,11 +859,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage design, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
             title="design (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                design
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -705,11 +938,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage product, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="product"
             title="product (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                product
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -765,11 +1017,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage development, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="development"
             title="development (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                development
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -826,12 +1097,36 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
           <button
             aria-current="location"
             aria-label="Stage review, completed, currently viewing"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="review"
             data-viewing="true"
             title="review (completed) — viewing"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                review
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                class="block text-xs font-normal text-stone-200 dark:text-stone-700 leading-snug mt-1"
+              >
+                you are viewing
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -900,11 +1195,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage inception, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             title="inception (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                inception
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -960,11 +1274,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage design, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
             title="design (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                design
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1021,12 +1354,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
           <button
             aria-current="step"
             aria-label="Stage product, current"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="product"
             data-viewing="true"
             title="product (current)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                product
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-teal-300 dark:text-teal-700"
+              >
+                in progress
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1071,12 +1423,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage development, future"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="development"
             disabled=""
             title="development (future)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                development
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                upcoming
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1121,12 +1492,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage review, future"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="review"
             disabled=""
             title="review (future)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                review
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                upcoming
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1184,11 +1574,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage inception, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             title="inception (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                inception
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1244,11 +1653,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage design, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
             title="design (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                design
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1305,12 +1733,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
           <button
             aria-current="step"
             aria-label="Stage product, current"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="product"
             data-viewing="true"
             title="product (current)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                product
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-teal-300 dark:text-teal-700"
+              >
+                in progress
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1355,11 +1802,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage development, visited"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="development"
             title="development (future)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                development
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                previously visited
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1404,12 +1870,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage review, future"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="review"
             disabled=""
             title="review (future)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                review
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                upcoming
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1468,12 +1953,36 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
           <button
             aria-current="location"
             aria-label="Stage inception, completed, currently viewing"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             data-viewing="true"
             title="inception (completed) — viewing"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                inception
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                class="block text-xs font-normal text-stone-200 dark:text-stone-700 leading-snug mt-1"
+              >
+                you are viewing
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1529,11 +2038,30 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage design, completed"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
             title="design (completed)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                design
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1589,12 +2117,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage product, future"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="product"
             disabled=""
             title="product (current)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                product
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                upcoming
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1639,12 +2186,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage development, future"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="development"
             disabled=""
             title="development (future)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                development
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                upcoming
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1689,12 +2255,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage review, future"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="review"
             disabled=""
             title="review (future)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                review
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                upcoming
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1753,12 +2338,36 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
           <button
             aria-current="location"
             aria-label="Stage inception, completed, currently viewing"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             data-viewing="true"
             title="inception (completed) — viewing"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                inception
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-green-300 dark:text-green-700"
+              >
+                completed
+              </span>
+              <span
+                class="block text-xs font-normal text-stone-200 dark:text-stone-700 leading-snug mt-1"
+              >
+                you are viewing
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >
@@ -1814,12 +2423,31 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
         >
           <button
             aria-label="Stage design, future"
-            class="group w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
+            class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="design"
             disabled=""
             title="design (future)"
             type="button"
           >
+            <span
+              class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 transition-all duration-150 z-50"
+              role="tooltip"
+            >
+              <span
+                class="block text-xs font-bold text-white dark:text-stone-900 capitalize leading-tight"
+              >
+                design
+              </span>
+              <span
+                class="block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 text-stone-300 dark:text-stone-600"
+              >
+                upcoming
+              </span>
+              <span
+                aria-hidden="true"
+                class="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+              />
+            </span>
             <div
               class="flex items-center w-full h-10"
             >

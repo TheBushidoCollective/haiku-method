@@ -1426,13 +1426,60 @@ export default defineTool({
 			// Field translation:
 			//   - gate_review (legacy): pre-computed fields present
 			//   - user_gate (v4): map gate_kind → gate_review_context;
-			//     gate_type is implicit "ask" (local SPA review);
-			//     next_stage/next_phase aren't supplied because the
-			//     await tool's stampGateApproval handles advancement off
-			//     the gate_review_context alone for per-unit reviews.
+			//     gate_type is implicit "ask" (local SPA review).
+			//
+			// next_stage handling for user_gate (#357 fix, 2026-05-13):
+			//
+			// Pre-fix: nextStage was unconditionally null for user_gate.
+			// The comment claimed `await_gate` derived advancement from
+			// `gate_review_context` alone. That worked for per-unit
+			// review approvals (where the agent stamps `approvals.user`
+			// on units, not the stage) but it was wrong for stage-gate
+			// approvals on a non-final stage. The await_gate "approved"
+			// branch routes:
+			//   1. gateContext === "intent_completion" → complete intent
+			//   2. gateContext === "intent_review"     → advance phase
+			//   3. gateContext === "elaborate_to_execute" → spec gate
+			//   4. nextStage truthy                     → advance_stage
+			//   5. else                                  → completeOrReviewIntent
+			// When nextStage was null, a stage-gate approval on a
+			// non-final stage fell into (5), which called
+			// `completeOrReviewIntent` → `findIncompleteStages` →
+			// returned "Cannot complete intent" because later stages
+			// (design/product/etc) had not run yet. The SPA's cached
+			// `approved` decision then replayed on every tick → loop.
+			//
+			// Fix: when gate_kind === "approval" AND stage is non-final,
+			// compute nextStage from the studio's stage list so the FM
+			// stamp routes the await_gate to branch (4) cleanly. Final
+			// stage stays nextStage=null so branch (5) fires for the
+			// real completion path.
 			const isUserGate = result.action === "user_gate"
 			const gateKind = isUserGate ? (result.gate_kind as string) : ""
-			const nextStage = isUserGate ? null : (result.next_stage as string | null)
+			let nextStage: string | null = isUserGate
+				? null
+				: ((result.next_stage as string | null) ?? null)
+			if (isUserGate && gateKind === "approval" && stage) {
+				try {
+					const { resolveStudioStages } = await import(
+						"../../orchestrator/studio.js"
+					)
+					const intentFile = join(findHaikuRoot(), "intents", slug, "intent.md")
+					const intentFm = existsSync(intentFile)
+						? parseFrontmatter(readFileSync(intentFile, "utf8")).data
+						: {}
+					const studioName = (intentFm.studio as string) || ""
+					if (studioName) {
+						const stages = resolveStudioStages(studioName) ?? []
+						const idx = stages.indexOf(stage)
+						if (idx >= 0 && idx < stages.length - 1) {
+							nextStage = stages[idx + 1]
+						}
+					}
+				} catch {
+					/* fall back to null — final-stage path still works */
+				}
+			}
 			const nextPhase = isUserGate ? null : (result.next_phase as string | null)
 			const gateContext = isUserGate
 				? gateKind === "spec"

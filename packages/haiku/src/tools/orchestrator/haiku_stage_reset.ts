@@ -21,7 +21,13 @@
 //   - Other stages' state — they're untouched
 
 import { execFileSync } from "node:child_process"
-import { existsSync, readdirSync, rmSync, statSync } from "node:fs"
+import {
+	existsSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+} from "node:fs"
 import { join } from "node:path"
 import {
 	branchExists,
@@ -38,7 +44,13 @@ import {
 	jsonSchemaOf,
 	validateToolInput,
 } from "../../state/schemas/inputs/_validate.js"
-import { findHaikuRoot, gitCommitState, isGitRepo } from "../../state-tools.js"
+import {
+	deleteFrontmatterFields,
+	findHaikuRoot,
+	gitCommitState,
+	isGitRepo,
+	parseFrontmatter,
+} from "../../state-tools.js"
 import { defineTool } from "../define.js"
 import { text } from "./_text.js"
 
@@ -247,6 +259,54 @@ export default defineTool({
 			} catch {
 				/* skip */
 			}
+		}
+
+		// Clear stale gate-review markers in intent.md FM that pointed
+		// at this stage's gate session (added 2026-05-13 — secondary
+		// cause flagged in #357). Without this, the cached
+		// `gate_review_session_<stage>`, `gate_review_url_<stage>`,
+		// and the global `gate_review_context` survive the reset, so
+		// the next `haiku_await_gate` attaches to a SPA session whose
+		// pending_decision was made for the pre-reset version of the
+		// stage. The replay then drives the engine into routing paths
+		// that disagree with disk state.
+		//
+		// Only clear the global `gate_review_context` (and
+		// `gate_review_next_*`) when they currently point at this
+		// stage's gate — otherwise we'd nuke another stage's pending
+		// session. The keyed `gate_review_session_<stage>` and
+		// `gate_review_url_<stage>` are safe to clear unconditionally
+		// because they're scoped to this stage by name.
+		try {
+			const intentFmRaw = readFileSync(intentFile, "utf8")
+			const { data: intentFm } = parseFrontmatter(intentFmRaw)
+			const keysToClear: string[] = []
+			if (`gate_review_session_${stage}` in intentFm) {
+				keysToClear.push(`gate_review_session_${stage}`)
+			}
+			if (`gate_review_url_${stage}` in intentFm) {
+				keysToClear.push(`gate_review_url_${stage}`)
+			}
+			// Global context fields: only clear if they reference this
+			// stage. The most reliable signal is `gate_review_next_stage`
+			// pointing at this stage's successor OR the active session
+			// id matching the keyed one we just cleared. To stay safe,
+			// always clear the global trio when we cleared the keyed
+			// pair — a non-this-stage gate would have its own keyed
+			// session, not the global one.
+			if (keysToClear.length > 0) {
+				for (const k of [
+					"gate_review_context",
+					"gate_review_next_stage",
+					"gate_review_next_phase",
+				]) {
+					if (k in intentFm) keysToClear.push(k)
+				}
+				deleteFrontmatterFields(intentFile, keysToClear)
+			}
+		} catch {
+			/* non-fatal: stage-reset's primary contract is the on-disk
+			 * wipe; FM marker cleanup is defensive. */
 		}
 
 		// Delete the stage branch. The next haiku_run_next will fork a

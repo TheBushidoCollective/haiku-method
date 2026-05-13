@@ -1,24 +1,26 @@
 /**
  * Walkthrough composition for StageReview.
  *
- * Picks the SET of relevant items the reviewer steps through, based
- * on which gate fired. Order is file-natural — what matters is
- * coverage of the relevant set, not a strict sequence (the seen-tracker
- * drives Next; Previous is plain previous-in-set for browsing).
+ * Picks the SET of items the reviewer actually needs to look at,
+ * based on which gate fired. The rule is binary, per the 2026-05-13
+ * contract: pre-execute the reviewer is approving unit SPECS;
+ * post-execute the reviewer is approving OUTPUTS. Nothing else is
+ * relevant to the gate decision, so nothing else gets walked.
  *
  * Mapping:
- *   - `elaborate_to_execute` (pre-execution gate) → units only. The
- *     reviewer is approving the unit decomposition before execute
- *     starts.
- *   - `stage_gate` (post-execute) → outputs only. The reviewer is
- *     approving the deliverables.
- *   - `intent_completion` (final cross-stage review) → outputs only.
- *     Same shape as stage_gate; the deliverables are what's being
- *     reviewed against the intent.
- *   - `intent_review` (first-stage elaborate gate) AND default → the
- *     existing units → knowledge → outputs union. `intent_review` is
- *     handled at the IntentReview surface (no walkthrough chrome
- *     there); the union is the safe fallback for ad-hoc reviews.
+ *   - `elaborate_to_execute` (pre-execution gate)
+ *   - `intent_review` (first-stage elaborate gate)
+ *   - default / ad-hoc when no outputs exist
+ *     → units only.
+ *
+ *   - `stage_gate` (post-execute)
+ *   - `intent_completion` (final cross-stage review)
+ *   - default / ad-hoc when outputs exist
+ *     → outputs only.
+ *
+ * Knowledge artifacts are never in the walkthrough — they're
+ * informational, not gate-relevant. They remain reachable through
+ * the Knowledge tab, just not via the prev/next stepper.
  */
 
 export type WalkthroughItem =
@@ -34,19 +36,27 @@ export interface WalkthroughInputs {
 
 export function composeWalkthroughItems(
 	gateContext: string | undefined,
-	{ units, knowledgeVMs, outputVMs }: WalkthroughInputs,
+	{ units, outputVMs }: WalkthroughInputs,
 ): WalkthroughItem[] {
-	if (gateContext === "elaborate_to_execute") {
+	// Pre-execute gates → units only.
+	if (
+		gateContext === "elaborate_to_execute" ||
+		gateContext === "intent_review"
+	) {
 		return units.map((u) => ({ tab: "units" as const, name: u.slug }))
 	}
+	// Post-execute gates → outputs only.
 	if (gateContext === "stage_gate" || gateContext === "intent_completion") {
 		return outputVMs.map((a) => ({ tab: "outputs" as const, name: a.name }))
 	}
-	return [
-		...units.map((u) => ({ tab: "units" as const, name: u.slug })),
-		...knowledgeVMs.map((a) => ({ tab: "knowledge" as const, name: a.name })),
-		...outputVMs.map((a) => ({ tab: "outputs" as const, name: a.name })),
-	]
+	// No gate context (ad-hoc review). Best heuristic without a gate
+	// signal: outputs if there are any (post-execute review), else
+	// units (pre-execute review). Knowledge stays out of the
+	// walkthrough either way.
+	if (outputVMs.length > 0) {
+		return outputVMs.map((a) => ({ tab: "outputs" as const, name: a.name }))
+	}
+	return units.map((u) => ({ tab: "units" as const, name: u.slug }))
 }
 
 /**

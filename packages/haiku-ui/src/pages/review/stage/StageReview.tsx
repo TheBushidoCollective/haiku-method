@@ -269,20 +269,17 @@ function feedbackBadgeColor(status: string): string {
 	}
 }
 
-function seenBorderClass(state: SeenState): string {
-	if (state === "unseen") return "border-sky-300 dark:border-sky-800"
+// Seen-state visible affordances removed 2026-05-13 — the tracker's
+// indicators "didn't work" (state was unreliable, sha-keying drifted
+// across renders). The hooks remain in place so the data still flows
+// for future re-introduction, but the user-facing border color +
+// "NEW" pill are no-ops: the rendering settles to the static "not
+// seen" style and no badge is shown.
+function seenBorderClass(_state: SeenState): string {
 	return "border-stone-200 dark:border-stone-700"
 }
 
-function StateBadge({ state }: { state: SeenState }) {
-	if (state === "unseen") {
-		return (
-			<span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-sky-500 text-white">
-				<span className="w-1.5 h-1.5 rounded-full bg-white" />
-				NEW
-			</span>
-		)
-	}
+function StateBadge(_props: { state: SeenState }) {
 	return null
 }
 
@@ -540,44 +537,23 @@ export function StageReview({
 		: -1
 	// Walkthrough = the SET of items relevant to this gate. Order is
 	// just file-natural; what matters is that every relevant item gets
-	// reviewed. Next jumps to the next *unseen* item (so reviewers
-	// aren't yanked through items they've already cleared); Previous
-	// is plain previous-in-set for browsing back to something they
-	// just looked at.
-	const seenStateForItem = useCallback(
-		(item: { tab: "units" | "knowledge" | "outputs"; name: string }) => {
-			if (item.tab === "units") {
-				const u = units.find((x) => x.slug === item.name)
-				if (!u) return "unseen" as const
-				return seen.state("unit", stageName, u.slug, shaOf(u))
-			}
-			if (item.tab === "knowledge") {
-				const a = knowledgeVMs.find((x) => x.name === item.name)
-				if (!a) return "unseen" as const
-				return seen.state("knowledge", stageName, a.name, shaOf(a))
-			}
-			const a = outputVMs.find((x) => x.name === item.name)
-			if (!a) return "unseen" as const
-			return seen.state("output", stageName, a.name, shaOf(a))
-		},
-		// biome-ignore lint/correctness/useExhaustiveDependencies: knowledgeVMs / outputVMs are derived arrays whose identity flips every render but only the contained name strings matter for the lookup; matches the existing convention used for walkthroughItems
-		[units, knowledgeVMs, outputVMs, seen, stageName],
-	)
+	// reviewed. Next/Previous are plain index walks — seen-state-driven
+	// navigation was removed 2026-05-13 because the indicators it relied
+	// on were unreliable.
 	// Find the next unseen item, scanning forward from walkIndex with
 	// wraparound. Falls back to plain next-in-array when everything is
 	// already seen — rare case where the reviewer revisits the
 	// walkthrough after closing.
+	// Next-in-list (no longer "next unseen" — see seen-state removal
+	// note above startWalkthrough). When walkIndex === -1 (no detail
+	// open yet), Next opens the first item; otherwise it advances by
+	// one and stops at the end.
 	const walkNext = useMemo(() => {
 		if (walkthroughItems.length === 0) return null
-		const start = walkIndex >= 0 ? walkIndex : -1
-		for (let step = 1; step <= walkthroughItems.length; step++) {
-			const idx = (start + step) % walkthroughItems.length
-			if (idx === walkIndex) continue
-			const candidate = walkthroughItems[idx]
-			if (seenStateForItem(candidate) !== "seen") return candidate
-		}
-		return null
-	}, [walkthroughItems, walkIndex, seenStateForItem])
+		const nextIdx = walkIndex + 1
+		if (nextIdx >= walkthroughItems.length) return null
+		return walkthroughItems[nextIdx]
+	}, [walkthroughItems, walkIndex])
 	const walkPrev = walkIndex > 0 ? walkthroughItems[walkIndex - 1] : null
 	const walkPrevHandler = useCallback(() => {
 		if (walkPrev) openDetail(walkPrev.tab, walkPrev.name)
@@ -586,28 +562,14 @@ export function StageReview({
 		if (walkNext) openDetail(walkNext.tab, walkNext.name)
 	}, [walkNext, openDetail])
 
-	// "Start walkthrough" lands on the first *unseen* relevant item.
-	// If everything is already seen, fall back to the first item — a
-	// reviewer who explicitly invokes the walkthrough still gets
-	// somewhere to land.
+	// "Start walkthrough" lands on the first item. We used to land on
+	// the first UNSEEN item, but seen-state proved unreliable across
+	// sessions and surfaced as broken indicators (2026-05-13). Strict
+	// "open at index 0" gives the reviewer a stable starting point.
 	const startWalkthrough = useCallback(() => {
-		const firstUnseen = walkthroughItems.find(
-			(item) => seenStateForItem(item) !== "seen",
-		)
-		const target = firstUnseen ?? walkthroughItems[0]
+		const target = walkthroughItems[0]
 		if (target) openDetail(target.tab, target.name)
-	}, [walkthroughItems, seenStateForItem, openDetail])
-
-	const totalUnseen =
-		units.filter(
-			(u) => seen.state("unit", stageName, u.slug, shaOf(u)) !== "seen",
-		).length +
-		knowledgeVMs.filter(
-			(a) => seen.state("knowledge", stageName, a.name, shaOf(a)) !== "seen",
-		).length +
-		outputVMs.filter(
-			(a) => seen.state("output", stageName, a.name, shaOf(a)) !== "seen",
-		).length
+	}, [walkthroughItems, openDetail])
 
 	const tabs: TabDef[] = [
 		{
@@ -627,7 +589,6 @@ export function StageReview({
 					stageId={stageName}
 					onNavigate={openDetail}
 					onStartWalkthrough={startWalkthrough}
-					totalUnseen={totalUnseen}
 				/>
 			),
 		},
@@ -817,7 +778,6 @@ function OverviewTab({
 	stageId,
 	onNavigate,
 	onStartWalkthrough,
-	totalUnseen,
 }: {
 	stageName: string
 	stageSummary: string | null
@@ -831,24 +791,16 @@ function OverviewTab({
 	stageId: string
 	onNavigate: (tab: "units" | "knowledge" | "outputs", name: string) => void
 	onStartWalkthrough: () => void
-	totalUnseen: number
 }) {
 	return (
 		<div className="space-y-4">
-			<div className="flex items-center justify-between gap-3 flex-wrap">
-				<p className="text-xs text-stone-600 dark:text-stone-300">
-					{totalUnseen > 0
-						? `${totalUnseen} artifact${totalUnseen === 1 ? "" : "s"} still to review in this stage.`
-						: "Everything in this stage has been seen."}
-				</p>
+			<div className="flex items-center justify-end gap-3 flex-wrap">
 				<button
 					type="button"
 					onClick={onStartWalkthrough}
 					className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-teal-700 hover:bg-teal-800 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 transition-colors"
 				>
-					{totalUnseen > 0
-						? `Start walkthrough (${totalUnseen}) →`
-						: "Review all →"}
+					Start walkthrough →
 				</button>
 			</div>
 

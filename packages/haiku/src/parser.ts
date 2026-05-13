@@ -220,8 +220,29 @@ export async function listIntents(haikuDir: string): Promise<string[]> {
 }
 
 /**
- * Parse all stage state.json files from an intent's stages/ directory.
- * Returns a map of stage name to parsed StageState.
+ * Parse per-stage state for the SPA banner / stepper.
+ *
+ * v4 contract (2026-05-13): state.json is gone. Phase + status come
+ * from on-disk signals — elaboration.md presence, unit iterations,
+ * per-unit `reviews.*` / `approvals.*` stamps. Reading whatever
+ * state.json file survived migration would surface stale phase
+ * values (typical user-visible failure: "Elaborating" badge while
+ * the user is actually at the final review gate).
+ *
+ * Derivation, in order:
+ *   - No `elaboration.md` AND no units → `elaborate` (gate hasn't
+ *     fired yet).
+ *   - `elaboration.md` present but no units → `elaborate` (still
+ *     decomposing).
+ *   - Units present but any unit has `started_at: null` or no
+ *     iterations → `execute` (wave-ready or mid-flight).
+ *   - All units terminal-advanced but any `reviews.*` slot empty
+ *     → `review`.
+ *   - All reviews stamped but any `approvals.*` slot empty
+ *     → `gate`.
+ *   - All approvals stamped → `complete` (status `completed`).
+ *
+ * Knowledge stays out of this; it's not a phase signal.
  */
 export async function parseStageStates(
 	intentDir: string,
@@ -232,27 +253,84 @@ export async function parseStageStates(
 		const entries = await readdir(stagesDir, { withFileTypes: true })
 		for (const entry of entries) {
 			if (!entry.isDirectory()) continue
-			try {
-				const stateFile = join(stagesDir, entry.name, "state.json")
-				const raw = await readFile(stateFile, "utf-8")
-				const parsed = JSON.parse(raw)
-				states[entry.name] = {
-					stage: parsed.stage ?? entry.name,
-					status: parsed.status ?? "pending",
-					phase: parsed.phase ?? "",
-					started_at: parsed.started_at,
-					completed_at: parsed.completed_at,
-					gate_entered_at: parsed.gate_entered_at,
-					gate_outcome: parsed.gate_outcome,
-				}
-			} catch {
-				// No state.json or parse error — skip
+			const stageName = entry.name
+			const derived = await deriveStagePhaseFromDisk(stagesDir, stageName)
+			states[stageName] = {
+				stage: stageName,
+				status: derived.status,
+				phase: derived.phase,
+				started_at: undefined,
+				completed_at: undefined,
+				gate_entered_at: undefined,
+				gate_outcome: undefined,
 			}
 		}
 	} catch {
 		// No stages/ directory
 	}
 	return states
+}
+
+async function deriveStagePhaseFromDisk(
+	stagesDir: string,
+	stageName: string,
+): Promise<{ status: string; phase: string }> {
+	const stageDir = join(stagesDir, stageName)
+	const unitsDir = join(stageDir, "units")
+	let unitFmList: Array<Record<string, unknown>> = []
+	try {
+		const unitFiles = (await readdir(unitsDir)).filter((f) => f.endsWith(".md"))
+		unitFmList = await Promise.all(
+			unitFiles.map(async (f) => {
+				try {
+					const raw = await readFile(join(unitsDir, f), "utf-8")
+					return matter(raw).data as Record<string, unknown>
+				} catch {
+					return {} as Record<string, unknown>
+				}
+			}),
+		)
+	} catch {
+		// no units dir — fall through; phase is `elaborate`
+	}
+	if (unitFmList.length === 0) {
+		return { status: "pending", phase: "elaborate" }
+	}
+	const anyWaveReady = unitFmList.some(
+		(fm) => !fm.started_at || fm.started_at === null,
+	)
+	const anyMidFlight = unitFmList.some((fm) => {
+		const its = Array.isArray(fm.iterations) ? (fm.iterations as unknown[]) : []
+		if (its.length === 0) return false
+		const last = its[its.length - 1] as { result?: unknown } | undefined
+		return !last?.result
+	})
+	if (anyWaveReady || anyMidFlight) {
+		return { status: "in_progress", phase: "execute" }
+	}
+	const allReviewsStamped = unitFmList.every((fm) => {
+		const r = fm.reviews
+		return (
+			r &&
+			typeof r === "object" &&
+			Object.values(r as Record<string, unknown>).every((v) => Boolean(v))
+		)
+	})
+	if (!allReviewsStamped) {
+		return { status: "in_progress", phase: "review" }
+	}
+	const allApprovalsStamped = unitFmList.every((fm) => {
+		const a = fm.approvals
+		return (
+			a &&
+			typeof a === "object" &&
+			Object.values(a as Record<string, unknown>).every((v) => Boolean(v))
+		)
+	})
+	if (!allApprovalsStamped) {
+		return { status: "in_progress", phase: "gate" }
+	}
+	return { status: "completed", phase: "" }
 }
 
 /**

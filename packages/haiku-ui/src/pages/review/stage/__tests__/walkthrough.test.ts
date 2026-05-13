@@ -3,10 +3,15 @@
  * the relevant set of items for the StageReview walkthrough based on
  * which gate fired.
  *
- * The mapping is load-bearing for the user-facing review flow:
- *   - pre-exec gates (`elaborate_to_execute`) → units only
+ * The mapping is load-bearing for the user-facing review flow
+ * (2026-05-13 contract — "only review what's relevant"):
+ *   - pre-exec gates (`elaborate_to_execute`, `intent_review`) → units only
  *   - post-exec gates (`stage_gate`, `intent_completion`) → outputs only
- *   - everything else → existing units → knowledge → outputs union
+ *   - ad-hoc / undefined / unknown gate context → outputs when any
+ *     exist (post-execute review), else units (pre-execute review).
+ *   - knowledge is never in the walkthrough — it's informational, not
+ *     gate-relevant. Reachable through the Knowledge tab, not via
+ *     prev/next.
  */
 
 import { describe, expect, it } from "vitest"
@@ -43,43 +48,49 @@ describe("composeWalkthroughItems", () => {
 		expect(items.map((i) => i.name)).toEqual(["ARCHITECTURE", "wireframes/foo"])
 	})
 
-	it("intent_review → falls through to the union (handled at IntentReview surface)", () => {
+	it("intent_review → units only (pre-execute)", () => {
 		const items = composeWalkthroughItems("intent_review", inputs)
-		expect(items.map((i) => i.tab)).toEqual([
-			"units",
-			"units",
-			"knowledge",
-			"knowledge",
-			"outputs",
-			"outputs",
+		expect(items.map((i) => i.tab)).toEqual(["units", "units"])
+		expect(items.map((i) => i.name)).toEqual([
+			"unit-01-acceptance",
+			"unit-02-design",
 		])
 	})
 
-	it("undefined gate context → existing union (back-compat for ad-hoc reviews)", () => {
+	it("undefined gate context with outputs present → outputs only (ad-hoc post-execute review)", () => {
 		const items = composeWalkthroughItems(undefined, inputs)
-		expect(items.map((i) => i.tab)).toEqual([
-			"units",
-			"units",
-			"knowledge",
-			"knowledge",
-			"outputs",
-			"outputs",
-		])
+		expect(items.map((i) => i.tab)).toEqual(["outputs", "outputs"])
+		expect(items.map((i) => i.name)).toEqual(["ARCHITECTURE", "wireframes/foo"])
 	})
 
-	it("unknown gate context → falls through to the union", () => {
+	it("undefined gate context with no outputs → units only (ad-hoc pre-execute review)", () => {
+		const items = composeWalkthroughItems(undefined, {
+			...inputs,
+			outputVMs: [],
+		})
+		expect(items.map((i) => i.tab)).toEqual(["units", "units"])
+	})
+
+	it("unknown gate context with outputs → outputs only (same shape as ad-hoc post-execute)", () => {
 		const items = composeWalkthroughItems(
 			"future_gate_we_dont_know_about",
 			inputs,
 		)
-		expect(items.map((i) => i.tab)).toEqual([
-			"units",
-			"units",
-			"knowledge",
-			"knowledge",
-			"outputs",
-			"outputs",
-		])
+		expect(items.map((i) => i.tab)).toEqual(["outputs", "outputs"])
+	})
+
+	it("knowledge is never in the walkthrough regardless of gate context", () => {
+		for (const ctx of [
+			undefined,
+			"elaborate_to_execute",
+			"intent_review",
+			"stage_gate",
+			"intent_completion",
+			"future_unknown",
+		]) {
+			const items = composeWalkthroughItems(ctx, inputs)
+			expect(items.every((i) => i.tab !== "knowledge")).toBe(true)
+		}
 	})
 
 	it("empty inputs produce empty output regardless of gate context", () => {
@@ -87,17 +98,6 @@ describe("composeWalkthroughItems", () => {
 		expect(composeWalkthroughItems("elaborate_to_execute", empty)).toEqual([])
 		expect(composeWalkthroughItems("stage_gate", empty)).toEqual([])
 		expect(composeWalkthroughItems(undefined, empty)).toEqual([])
-	})
-
-	it("preserves union order: units → knowledge → outputs", () => {
-		const items = composeWalkthroughItems(undefined, inputs)
-		// First two are units, then knowledge, then outputs.
-		expect(items[0].tab).toBe("units")
-		expect(items[1].tab).toBe("units")
-		expect(items[2].tab).toBe("knowledge")
-		expect(items[3].tab).toBe("knowledge")
-		expect(items[4].tab).toBe("outputs")
-		expect(items[5].tab).toBe("outputs")
 	})
 })
 
@@ -127,7 +127,10 @@ describe("resolveWalkthroughForDetail (UX fallback for off-tab browsing)", () =>
 			inputs,
 		)
 		expect(out.map((i) => i.tab)).toEqual(["knowledge", "knowledge"])
-		expect(out.map((i) => i.name)).toEqual(["DISCOVERY", "knowledge/UPLOAD-FLOW"])
+		expect(out.map((i) => i.name)).toEqual([
+			"DISCOVERY",
+			"knowledge/UPLOAD-FLOW",
+		])
 	})
 
 	it("falls back to tab-scoped outputs walk when reviewer browses Outputs during a units-only gate", () => {

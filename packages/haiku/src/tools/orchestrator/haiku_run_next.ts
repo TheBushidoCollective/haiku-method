@@ -807,12 +807,69 @@ export default defineTool({
 		// (via the post-cursor revisit alignment block below).
 		let result: OrchestratorActionType = dispatchOrchestratorAction(slug)
 
-		// (Post-walk merge-debt synthesis deleted 2026-05-12. The
-		// cursor's `walkIntentTrack` step 10 emits `complete_stage`
-		// when a stage is fully signed, and the auto-execute path
-		// below performs the underlying git merge as an
-		// implementation detail of the semantic action. There's no
-		// need for a separate synthesis to second-guess the cursor.)
+		// POST-WALK STAGE-COMPLETION SYNTHESIS. When the cursor advances
+		// past a stage (e.g., the agent is on `inception`'s branch but
+		// the cursor's answer targets `design`'s next action), the
+		// upstream stage `inception` MAY owe its merge to intent main
+		// BEFORE the agent moves on. `walkIntentTrack` only emits
+		// `complete_stage` from inside the walk OF the active stage —
+		// when `findCurrentStage` advances past inception, the cursor
+		// hands back design's action without ever surfacing inception's
+		// completion. Without this synthesis the next tick walks from
+		// design's branch (forked from intent main BEFORE inception's
+		// merge that never happened), sees inception's units missing,
+		// flips back to inception, and we ping-pong forever — the
+		// real-intent-dry-run regression.
+		//
+		// The check is FM (filesystem) for "complete?" and git topology
+		// for "still owes a merge?" — the latter is purely an
+		// implementation detail of running the semantic action under a
+		// git-backed portfolio, not a cursor signal. `hasNoMergeDebt`
+		// short-circuits identical-tree and ancestor cases so a stage
+		// that's already on main doesn't re-fire the synthesis.
+		try {
+			const here = _safeCurrentBranchHere()
+			const stagePrefix = `haiku/${slug}/`
+			const hereStage =
+				here.startsWith(stagePrefix) && here !== `${stagePrefix}main`
+					? here.slice(stagePrefix.length)
+					: null
+			if (
+				hereStage &&
+				typeof result.stage === "string" &&
+				result.stage.length > 0 &&
+				result.stage !== hereStage
+			) {
+				const iDir = intentDir(slug)
+				const intentFile = join(iDir, "intent.md")
+				if (existsSync(intentFile)) {
+					const im = readFrontmatter(intentFile)
+					const studio = (im.studio as string) || ""
+					const mode = (im.mode as string) || "continuous"
+					if (studio) {
+						const { isStageComplete } = await import(
+							"../../orchestrator/workflow/cursor.js"
+						)
+						if (isStageComplete(iDir, studio, hereStage, mode)) {
+							const { hasNoMergeDebt } = await import(
+								"../../git-worktree.js"
+							)
+							const hereBranch = `haiku/${slug}/${hereStage}`
+							const intentMainBranch = `haiku/${slug}/main`
+							if (!hasNoMergeDebt(hereBranch, intentMainBranch)) {
+								result = {
+									action: "complete_stage",
+									intent: slug,
+									stage: hereStage,
+								}
+							}
+						}
+					}
+				}
+			}
+		} catch {
+			/* non-fatal — falls through to normal dispatch */
+		}
 		{
 			let iterations = 0
 			while (

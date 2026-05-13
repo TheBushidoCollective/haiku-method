@@ -51,7 +51,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import matter from "gray-matter"
-import { primaryRepoRoot } from "../../state-tools.js"
+import { findHaikuRoot } from "../../state-tools.js"
 import {
 	readReviewAgentPaths,
 	readStageArtifactDefs,
@@ -501,12 +501,27 @@ export function isStageComplete(
  * handled by Track B and Track C in `derivePosition`, which preempt
  * Track A. A previously-signed stage with an open FB still gets
  * rewound through that path. See gigsmart/haiku-method#333.
+ *
+ * **Path resolution**: callers should pass `intentDir` (the same value
+ * the rest of the engine uses, resolved via `findHaikuRoot()`). When
+ * omitted, the fallback walks up from `process.cwd()` via
+ * `findHaikuRoot()`. The function used to re-resolve via
+ * `primaryRepoRoot()`, which returns the *primary* worktree path even
+ * inside a linked worktree where `.haiku/` lives in the linked tree.
+ * In that setup the re-resolved path didn't exist, every per-stage
+ * `isStageComplete` answered "false", and the walk pinned on the first
+ * stage forever — see admin-portal-reimagine merge_stage loop
+ * (2026-05-12).
  */
-export function findCurrentStage(slug: string, studio: string): string | null {
-	const root = primaryRepoRoot()
-	const intentDir = join(root, ".haiku", "intents", slug)
+export function findCurrentStage(
+	slug: string,
+	studio: string,
+	intentDir?: string,
+): string | null {
+	const resolvedIntentDir =
+		intentDir ?? join(findHaikuRoot(), "intents", slug)
 
-	const intentMdPath = join(intentDir, "intent.md")
+	const intentMdPath = join(resolvedIntentDir, "intent.md")
 	const intentFm = readFm(intentMdPath)?.data ?? {}
 	// Use the intent's effective stage list — intersection of studio
 	// stages with `intent.stages` (if set) minus `intent.skip_stages`.
@@ -521,7 +536,7 @@ export function findCurrentStage(slug: string, studio: string): string | null {
 			? (intentFm.mode as string)
 			: "continuous"
 	for (const stage of stages) {
-		if (!isStageComplete(intentDir, studio, stage, mode)) return stage
+		if (!isStageComplete(resolvedIntentDir, studio, stage, mode)) return stage
 	}
 	return null
 }
@@ -1039,7 +1054,7 @@ export function derivePosition(args: {
 				firstStageDir && existsSync(firstStageDir)
 					? listUnitPaths(firstStageDir).length > 0
 					: false
-			const activeForGate = findCurrentStage(slug, studio)
+			const activeForGate = findCurrentStage(slug, studio, intentDir)
 			const isTrulyFresh = activeForGate === firstStage && !firstStageHasUnits
 			if (isTrulyFresh) {
 				return {
@@ -1055,7 +1070,7 @@ export function derivePosition(args: {
 	// current branch and aligned the working tree to the cursor's named
 	// stage (see haiku_run_next's pre-tick branch alignment). The walk
 	// here just reads the disk view we were given.
-	const activeStage = findCurrentStage(slug, studio)
+	const activeStage = findCurrentStage(slug, studio, intentDir)
 
 	// Track C — drift sweep, only against the active stage.
 	if (activeStage) {

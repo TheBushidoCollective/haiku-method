@@ -27,30 +27,6 @@ import {
 import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
 import { broadcastIntent } from "../intent-broadcaster.js"
 
-// v4: feedback-triage-gate deleted. Replacement predicate: an FB is
-// "open" when its frontmatter `closed_at` is null. (status / closed_by
-// fields no longer exist post-migration.) Inlined here to avoid a
-// circular import via state-tools.
-const isFeedbackOpen = (fb: {
-	closed_at?: string | null
-	status?: string
-	closed_by?: string | null
-}): boolean => {
-	if (typeof fb.closed_at === "string" && fb.closed_at.length > 0) return false
-	// Migration shim: pre-v4 FBs that haven't been migrated yet still
-	// carry status / closed_by. Treat the v3 closed/addressed/rejected
-	// trio as not-open so the route doesn't 409 on legacy data.
-	if (
-		fb.status === "closed" ||
-		fb.status === "addressed" ||
-		fb.status === "rejected"
-	) {
-		return false
-	}
-	if (typeof fb.closed_by === "string" && fb.closed_by.length > 0) return false
-	return true
-}
-
 import {
 	type DirectionSelection,
 	getSession,
@@ -68,7 +44,6 @@ import {
 	parseFrontmatter,
 	persistDesignDirectionSelection,
 	persistDesignDirectionUploads,
-	readFeedbackFiles,
 	readJson,
 	stageStatePath,
 	timestamp,
@@ -536,43 +511,19 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			// pre-tick gate, not a synchronous side effect of this endpoint.
 			// Same routing path as agent-authored stage_revisit FBs.
 			const reasons = parsed.data.reasons ?? []
-			if (reasons.length === 0) {
-				// Path 2: caller didn't author any new findings. Only meaningful
-				// if there is at least one open FB the pre-tick gate can route
-				// off — untriaged → `feedback_triage`, triaged on earlier stage
-				// → `start_feedback_hat` (via feedback walk; post-cursor switch
-				// moves the agent to that stage), triaged on current stage →
-				// `feedback_dispatch`.
-				// Resolution doesn't matter; the gate routes regardless of
-				// whether it's `stage_revisit`, `inline_fix`, `question`, or
-				// `null`. Otherwise the click is a no-op — the user's
-				// "Request Changes" intent would silently disappear.
-				//
-				// `isFeedbackOpen` is the same predicate the pre-tick triage
-				// gate uses (closed_by + status !== closed/addressed/rejected).
-				// They MUST stay in sync — a divergence here means the HTTP
-				// handler reports "you have an open FB" while the gate finds
-				// none, recreating the silent-no-op bug this 409 was added to
-				// prevent.
-				const hasOpenFeedback = readFeedbackFiles(slug, targetStage).some(
-					isFeedbackOpen,
-				)
-				if (!hasOpenFeedback) {
-					logFeedbackAction({
-						reqId: req.id,
-						action: "revisit",
-						status: 409,
-						intent: slug,
-						stage: targetStage,
-						detail: "nothing_to_revisit",
-					})
-					reply.status(409).send({
-						error: "nothing_to_revisit",
-						detail: `no reasons provided and no open feedback at ${targetStage}`,
-					})
-					return
-				}
-			}
+			// 2026-05-13: the prior 409 ("nothing_to_revisit") was wrong.
+			// FBs land on disk via `/api/feedback` as the reviewer types
+			// them — by the time this endpoint fires, the canonical
+			// state is already on disk. The endpoint's only remaining
+			// job is to wake the gate session so the next
+			// `haiku_run_next` tick fires; the cursor + pre-tick gates
+			// route off the on-disk FBs regardless of whether anything
+			// is "open" right this instant (it's also legitimate to
+			// click after addressing every FB to advance — the gate
+			// re-renders the empty state, and the agent ticks past).
+			// Falling through with zero new FBs and zero open FBs is
+			// fine: the session wakeup below still fires and the next
+			// tick takes the natural-next path.
 			const feedbackCreated: string[] = []
 			for (const reason of reasons) {
 				try {
@@ -617,27 +568,24 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 					? `Created ${feedbackCreated.length} stage_revisit feedback item(s) at \`${targetStage}\`. The next \`haiku_run_next\` tick will route the rewind via the pre-tick gate.`
 					: `No new feedback items provided. The next \`haiku_run_next\` tick's pre-tick gate will route the rewind based on existing pending feedback at \`${targetStage}\` (if any).`
 
-			// Wake the gate_review waiter parked inside the agent's
-			// haiku_await_gate call. Without this, the agent stays parked
-			// for the full timeout and the reviewer's click looks like a
-			// no-op. On wake, awaitGateReviewSession drains
-			// pending_decision and short-circuits to the revisit dispatch
-			// (haiku_await_gate.ts checks annotations.revisit_action).
+			// V4 alignment (2026-05-13): the SPA's signal back to the
+			// MCP is just "advance" — the next `haiku_run_next` tick's
+			// cursor reads on-disk FB state and routes whatever's
+			// natural (feedback_dispatch / start_feedback_hat /
+			// complete_stage / etc.). We DON'T encode a workflow verb
+			// here (no more `revisit_action: "revisit_pending"`,
+			// no more `decision: "changes_requested"`) — that would
+			// make the SPA a workflow driver, which it isn't.
 			//
-			// Live-session model: the canonical decision channel is
-			// pending_decision, NOT status="decided". The HTTP /decide
-			// endpoint was migrated; this revisit endpoint must match or
-			// awaitGateReviewSession's loop wakes, finds pending_decision
-			// null, and re-blocks for the full 30-min timeout.
+			// The pending_decision is just the wakeup channel; its
+			// `decision: "advance"` value tells the await tool "user
+			// clicked the button, just unblock and let run_next tick."
+			// The cursor handles everything else.
 			updateSession(req.params.sessionId, {
 				pending_decision: {
-					decision: "changes_requested",
+					decision: "advance",
 					feedback: "",
-					annotations: {
-						revisit_action: "revisit_pending",
-						revisit_stage: targetStage,
-						revisit_message: message,
-					},
+					annotations: {},
 					submitted_at: new Date().toISOString(),
 				},
 			})
@@ -651,7 +599,7 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 
 			const response: RevisitResponse = {
 				ok: true,
-				action: "revisit_pending",
+				action: "advance",
 				stage: targetStage,
 				feedback_created: feedbackCreated,
 				message,
@@ -662,7 +610,7 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				status: 200,
 				intent: slug,
 				stage: targetStage,
-				detail: `revisit_action=revisit_pending${
+				detail: `revisit_action=advance${
 					feedbackCreated.length > 0
 						? ` feedback_created=${feedbackCreated.join(",")}`
 						: ""

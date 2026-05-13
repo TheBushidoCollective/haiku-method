@@ -730,7 +730,14 @@ async function run() {
 		assert.strictEqual(res.status, 404)
 	})
 
-	await test("POST /api/revisit/:id returns 409 nothing_to_revisit when target stage has no open feedback", async () => {
+	await test("POST /api/revisit/:id succeeds even when target stage has no open feedback (v4 alignment: neutral 'advance' signal)", async () => {
+		// Pre-2026-05-13 contract: 409 nothing_to_revisit. That was wrong
+		// — the endpoint's job under the v4 architecture is to signal
+		// "advance" to the awaiting MCP, NOT to gate on workflow state.
+		// FBs land via /api/feedback as the reviewer types; the cursor
+		// on the next tick reads disk state and routes accordingly.
+		// Even with zero open FBs at the target stage, advancing is
+		// valid (cursor will fall through to whatever's natural).
 		const { createSession } = await import("../src/sessions.ts")
 		const revSession = createSession({
 			intent_slug: intentSlug,
@@ -738,16 +745,31 @@ async function run() {
 			review_type: "intent",
 			target: "review",
 		})
-		// `security` stage starts with zero feedback — empty `reasons[]` +
-		// no open FBs is the silent-no-op guard.
 		const res = await fetch(`${baseUrl}/api/revisit/${revSession.session_id}`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ stage: "security" }),
 		})
-		assert.strictEqual(res.status, 409)
-		const data = await res.json()
-		assert.strictEqual(data.error, "nothing_to_revisit")
+		assert.strictEqual(
+			res.status,
+			200,
+			"no-open-FB case should now 200, not 409",
+		)
+		// Verify the wake-up shape: decision === "advance", empty
+		// annotations (no workflow verb).
+		const { getSession } = await import("../src/sessions.ts")
+		const updated = getSession(revSession.session_id)
+		assert.ok(updated?.pending_decision, "pending_decision should be set")
+		assert.strictEqual(
+			updated?.pending_decision?.decision,
+			"advance",
+			"decision must be the neutral 'advance' signal",
+		)
+		assert.deepStrictEqual(
+			updated?.pending_decision?.annotations ?? {},
+			{},
+			"annotations must be empty — no SPA-driven workflow routing",
+		)
 	})
 
 	await test("POST /api/revisit/:id succeeds with empty reasons when an open FB exists with non-stage_revisit resolution", async () => {
@@ -778,7 +800,10 @@ async function run() {
 		assert.strictEqual(res.status, 200)
 		const data = await res.json()
 		assert.strictEqual(data.ok, true)
-		assert.strictEqual(data.action, "revisit_pending")
+		// 2026-05-13: response action is now the neutral 'advance' signal
+		// — the SPA tells the engine the user clicked, the cursor on the
+		// next tick handles routing off on-disk FBs.
+		assert.strictEqual(data.action, "advance")
 		assert.strictEqual(data.stage, "security")
 		assert.deepStrictEqual(data.feedback_created, [])
 	})

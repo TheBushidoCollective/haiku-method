@@ -1645,6 +1645,11 @@ export default defineTool({
 					"advance_phase",
 					"advance_stage",
 					"intent_approved",
+					// V4 alignment (2026-05-13): generic "advance" =
+					// SPA's neutral signal back to the MCP. Just
+					// re-tick; the cursor reads disk state and emits
+					// whatever's natural-next.
+					"advance",
 				])
 				if (awaitedAction && RETICK_ACTIONS.has(awaitedAction)) {
 					// pre-tick merge + cursor walk handle branch alignment

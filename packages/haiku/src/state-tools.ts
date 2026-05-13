@@ -2862,64 +2862,55 @@ function readDecisionLog(
 	return out
 }
 
-/** Reduce the iterations.jsonl log into the canonical in-memory array.
- *  Each "open" line opens a new entry; the next "close" line attaches
- *  result/completed_at to it. Malformed lines are skipped. */
+/** Derive the per-stage iteration history from closed feedback files.
+ *
+ *  The prior implementation persisted iterations to a sidecar
+ *  `iterations.jsonl` log — a second source of truth alongside the
+ *  canonical feedback files. Removed 2026-05-13: each closed FB at the
+ *  stage IS a completed revisit cycle. The current (incomplete) cycle
+ *  is synthesized as the trailing entry. No persistence; the read
+ *  derives on every call from `readFeedbackFiles`.
+ *
+ *  Ordering: closed FBs sorted by `closed_at` ascending. Indices
+ *  start at 1; the trailing in-flight cycle (if any) gets the next
+ *  index with `completed_at: null`.
+ *
+ *  Loop-detection signatures are dropped (the prior implementation
+ *  hashed titles at revisit-time; without history-of-titles-at-time-T
+ *  we can't reconstruct the same signal). `maybeEscalate`'s
+ *  `loopDetected` branch becomes permanently false — but that
+ *  function is also currently unwired (no caller), so this loses no
+ *  live functionality. The `exceeded` branch (count-based cap) still
+ *  works off the derived count. */
 function readStageIterations(slug: string, stage: string): StageIteration[] {
-	const path = stageIterationsPath(slug, stage)
-	if (!existsSync(path)) return []
-	const raw = readFileSync(path, "utf8")
-	const out: StageIteration[] = []
-	for (const line of raw.split("\n")) {
-		const trimmed = line.trim()
-		if (!trimmed) continue
-		let parsed: Record<string, unknown>
-		try {
-			parsed = JSON.parse(trimmed) as Record<string, unknown>
-		} catch {
-			continue
-		}
-		if (parsed.kind === "open") {
-			out.push({
-				index: out.length + 1,
-				started_at: (parsed.at as string) || timestamp(),
-				completed_at: null,
-				trigger: (parsed.trigger as StageIterationTrigger) || "initial",
-				result: null,
-				...(parsed.reason ? { reason: parsed.reason as string } : {}),
-				...(parsed.feedback_signature
-					? { feedback_signature: parsed.feedback_signature as string }
-					: {}),
-			})
-		} else if (parsed.kind === "close" && out.length > 0) {
-			const last = out[out.length - 1]
-			last.completed_at = (parsed.at as string) || timestamp()
-			last.result =
-				(parsed.result as StageIterationResult) ||
-				("advanced" as StageIterationResult)
-			if (parsed.reason && !last.reason) last.reason = parsed.reason as string
-		}
-	}
+	const fbs = readFeedbackFiles(slug, stage)
+	const closed = fbs
+		.filter((f) => typeof f.closed_at === "string" && f.closed_at.length > 0)
+		.slice()
+		.sort((a, b) => (a.closed_at ?? "").localeCompare(b.closed_at ?? ""))
+	const out: StageIteration[] = closed.map((f, i) => ({
+		index: i + 1,
+		started_at: f.created_at || "",
+		completed_at: f.closed_at ?? null,
+		trigger: "feedback" as StageIterationTrigger,
+		result: "feedback-revisit" as StageIterationResult,
+		...(f.title ? { reason: f.title } : {}),
+	}))
 	return out
 }
 
-/** Append a structured line to iterations.jsonl. Best-effort — never
- *  throws; failures are logged but don't roll back the engine
- *  transition that triggered the append. */
+/** No-op — kept as a stub so any in-flight engine paths that touched
+ *  the old JSONL writer don't throw. Stage iteration data is now
+ *  derived from closed feedback files; there is nothing to persist.
+ *  The previous implementation wrote to a sidecar `iterations.jsonl`
+ *  log — see `readStageIterations` for the derivation that
+ *  replaces it. */
 function appendIterationLogLine(
-	slug: string,
-	stage: string,
-	line: Record<string, unknown>,
+	_slug: string,
+	_stage: string,
+	_line: Record<string, unknown>,
 ): void {
-	const path = stageIterationsPath(slug, stage)
-	try {
-		mkdirSync(dirname(path), { recursive: true })
-		appendFileSync(path, `${JSON.stringify(line)}\n`)
-	} catch (err) {
-		console.error(
-			`[haiku] failed to append iteration log for ${slug}/${stage}: ${err instanceof Error ? err.message : String(err)}`,
-		)
-	}
+	// intentionally empty
 }
 
 /** Normalized iteration count — read from the JSONL log. The legacy

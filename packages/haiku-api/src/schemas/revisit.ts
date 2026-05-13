@@ -53,7 +53,7 @@ export const RevisitResponseSchema = z
 		action: z
 			.string()
 			.describe(
-				"Always 'revisit_pending' — the actual rewind happens on the next `haiku_run_next` tick when the pre-tick gate sees the open stage_revisit FBs.",
+				"Always 'advance' — the SPA's neutral signal back to the MCP. The next `haiku_run_next` tick re-evaluates disk state (open FBs, approvals, drift) and emits whatever's natural. Renamed 2026-05-13 from 'revisit_pending' per the v4 contract 'SPA writes data, cursor drives the workflow.'",
 			),
 		stage: z
 			.string()

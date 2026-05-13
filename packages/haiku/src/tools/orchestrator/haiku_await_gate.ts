@@ -369,6 +369,26 @@ export default defineTool({
 				})
 			}
 
+			// V4 alignment (2026-05-13): "advance" is the new neutral
+			// SPA signal — the user clicked the button, the gate is
+			// done waiting, the next `haiku_run_next` tick re-evaluates
+			// disk state and emits whatever's natural. No workflow verb
+			// encoded here; cursor handles routing on the re-tick.
+			if (reviewResult.decision === "advance") {
+				syncSessionMetadata(slug, stFile)
+				return text(
+					withInstructions({
+						action: "advance",
+						intent: slug,
+						stage,
+						message: withAnnouncement(
+							"User signaled advance. Run the next tick — the cursor will pick up on-disk feedback / approvals / drift and emit the natural next action.",
+							"Call haiku_run_next to continue.",
+						),
+					}),
+				)
+			}
+
 			if (reviewResult.decision === "approved") {
 				if (gateContext === "intent_completion") {
 					const studioForCompletion =

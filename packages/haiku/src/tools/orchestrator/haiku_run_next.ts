@@ -851,9 +851,7 @@ export default defineTool({
 							"../../orchestrator/workflow/cursor.js"
 						)
 						if (isStageComplete(iDir, studio, hereStage, mode)) {
-							const { hasNoMergeDebt } = await import(
-								"../../git-worktree.js"
-							)
+							const { hasNoMergeDebt } = await import("../../git-worktree.js")
 							const hereBranch = `haiku/${slug}/${hereStage}`
 							const intentMainBranch = `haiku/${slug}/main`
 							if (!hasNoMergeDebt(hereBranch, intentMainBranch)) {

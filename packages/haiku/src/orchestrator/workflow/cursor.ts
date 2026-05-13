@@ -518,8 +518,7 @@ export function findCurrentStage(
 	studio: string,
 	intentDir?: string,
 ): string | null {
-	const resolvedIntentDir =
-		intentDir ?? join(findHaikuRoot(), "intents", slug)
+	const resolvedIntentDir = intentDir ?? join(findHaikuRoot(), "intents", slug)
 
 	const intentMdPath = join(resolvedIntentDir, "intent.md")
 	const intentFm = readFm(intentMdPath)?.data ?? {}

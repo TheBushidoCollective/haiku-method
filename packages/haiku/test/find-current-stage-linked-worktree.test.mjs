@@ -39,6 +39,15 @@ import matter from "gray-matter"
 import { findCurrentStage } from "../src/orchestrator/workflow/cursor.ts"
 import { _resetIsGitRepoForTests } from "../src/state-tools.ts"
 
+const HAS_GIT = (() => {
+	try {
+		execFileSync("git", ["--version"], { stdio: "pipe" })
+		return true
+	} catch {
+		return false
+	}
+})()
+
 function findRepoRoot() {
 	let dir = resolve(import.meta.dirname ?? __dirname)
 	while (dir !== "/") {
@@ -97,7 +106,14 @@ function setupLinkedWorktreeRepo(slug) {
 			title: "linked worktree pinning test",
 			studio: "software",
 			mode: "continuous",
-			stages: ["inception", "design", "product", "development", "operations", "security"],
+			stages: [
+				"inception",
+				"design",
+				"product",
+				"development",
+				"operations",
+				"security",
+			],
 		}),
 	)
 	const stamp = "2026-05-12T19:00:00Z"
@@ -108,9 +124,24 @@ function setupLinkedWorktreeRepo(slug) {
 			title: "Origin",
 			started_at: stamp,
 			iterations: [
-				{ hat: "researcher", started_at: stamp, completed_at: stamp, result: "advance" },
-				{ hat: "distiller", started_at: stamp, completed_at: stamp, result: "advance" },
-				{ hat: "verifier", started_at: stamp, completed_at: stamp, result: "advance" },
+				{
+					hat: "researcher",
+					started_at: stamp,
+					completed_at: stamp,
+					result: "advance",
+				},
+				{
+					hat: "distiller",
+					started_at: stamp,
+					completed_at: stamp,
+					result: "advance",
+				},
+				{
+					hat: "verifier",
+					started_at: stamp,
+					completed_at: stamp,
+					result: "advance",
+				},
 			],
 			reviews: { spec: ref, completeness: ref, feasibility: ref, user: ref },
 			approvals: {
@@ -137,6 +168,7 @@ function restoreCwd() {
 }
 
 test("findCurrentStage: resolves linked-worktree .haiku/ via cwd walk (not primary worktree)", () => {
+	if (!HAS_GIT) return
 	_resetIsGitRepoForTests()
 	const slug = "linked-wt"
 	const { primary, linked } = setupLinkedWorktreeRepo(slug)
@@ -180,9 +212,10 @@ test("findCurrentStage: resolves linked-worktree .haiku/ via cwd walk (not prima
 })
 
 test("findCurrentStage: caller-provided intentDir overrides cwd walk", () => {
+	if (!HAS_GIT) return
 	_resetIsGitRepoForTests()
 	const slug = "linked-wt-explicit"
-	const { primary, linked, intentDir } = setupLinkedWorktreeRepo(slug)
+	const { primary, intentDir } = setupLinkedWorktreeRepo(slug)
 	const origPluginRoot = process.env.CLAUDE_PLUGIN_ROOT
 	process.env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT
 	try {

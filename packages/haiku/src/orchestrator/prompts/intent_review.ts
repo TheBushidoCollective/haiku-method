@@ -3,7 +3,7 @@
 // merged into intent main and at least one role on `intent.approvals`
 // is still missing. One tick per role; the engine signs each via the
 // review server / agent dispatch and walks again until every role is
-// signed, then emits `merge_intent`.
+// signed, then emits `seal_intent`.
 //
 // Roles fall into three buckets:
 //   - "spec"        → spec-conformance subagent over the merged intent
@@ -47,7 +47,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 			`3. Call \`haiku_await_gate { intent: "${slug}" }\` and block on the decision.`,
 		)
 		lines.push(
-			`4. On approve, the engine stamps \`approvals.user\` on intent.md and the next tick emits \`merge_intent\` → \`sealed\`. On request_changes, the engine writes the annotations as intent-scope feedback and the cursor walks Track B on the next tick.`,
+			`4. On approve, the engine stamps \`approvals.user\` on intent.md and the next tick emits \`seal_intent\` → \`sealed\`. On request_changes, the engine writes the annotations as intent-scope feedback and the cursor walks Track B on the next tick.`,
 		)
 		return lines.join("\n")
 	}
@@ -106,7 +106,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		)
 		lines.push("")
 		lines.push(
-			`When the subagent returns, call \`haiku_run_next { intent: "${slug}" }\`. The engine reconciles \`approvals.${role}\` and either advances to the next role or emits \`merge_intent\`.`,
+			`When the subagent returns, call \`haiku_run_next { intent: "${slug}" }\`. The engine reconciles \`approvals.${role}\` and either advances to the next role or emits \`seal_intent\`.`,
 		)
 		return lines.join("\n")
 	}
@@ -125,7 +125,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	)
 	lines.push("")
 	lines.push(
-		`When the subagent returns, call \`haiku_run_next { intent: "${slug}" }\`. The engine reconciles \`approvals.${role}\` and either advances to the next role or emits \`merge_intent\`.`,
+		`When the subagent returns, call \`haiku_run_next { intent: "${slug}" }\`. The engine reconciles \`approvals.${role}\` and either advances to the next role or emits \`seal_intent\`.`,
 	)
 	return lines.join("\n")
 })

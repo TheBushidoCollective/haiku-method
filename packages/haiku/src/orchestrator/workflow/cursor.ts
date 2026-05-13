@@ -166,11 +166,13 @@ type Iteration = {
 	completed_at: string | null
 	// `advance` / `reject` come from unit iterations
 	// (`haiku_unit_advance_hat` / `haiku_unit_reject_hat`).
-	// `advanced` / `closed` come from FB iterations
-	// (`haiku_feedback_advance_hat` — `advanced` for mid-chain hats,
-	// `closed` for the terminal hat). Both vocabularies coexist here
-	// because units and feedback share the iteration shape on disk.
-	result: "advance" | "reject" | "advanced" | "closed" | null
+	// `advanced` / `closed` / `rejected` come from FB iterations
+	// (`haiku_feedback_advance_hat` writes `advanced` for mid-chain
+	// hats and `closed` for the terminal hat;
+	// `haiku_feedback_reject_hat` writes `rejected`). Both
+	// vocabularies coexist here because units and feedback share the
+	// iteration shape on disk.
+	result: "advance" | "reject" | "advanced" | "closed" | "rejected" | null
 	reason?: string | null
 }
 
@@ -257,8 +259,41 @@ export function nextHatForUnit(
 	}
 	const last = iterations[iterations.length - 1]
 	if (last.result === null) {
-		// In-flight on the last appended hat. No new dispatch.
-		return null
+		// Open iter on `last.hat`. Two cases produce this state and
+		// the cursor's answer for both is "dispatch the open hat":
+		//
+		// 1. Mid-chain engine pre-open. `haiku_unit_advance_hat` /
+		//    `_reject_hat` close the prior iter (result="advance" /
+		//    "rejected") and append a fresh open iter for the next /
+		//    previous hat respectively. The subagent that called
+		//    advance_hat terminates immediately after; the parent
+		//    calls run_next; the open iter sits with no subagent
+		//    actually running it. The cursor must emit
+		//    `start_unit_hat` for `last.hat` so the parent dispatches
+		//    the next subagent.
+		//
+		// 2. Orphaned fresh open (`haiku_unit_start` ran, subagent
+		//    crashed before calling advance_hat / reject_hat). Again,
+		//    no subagent is running — re-dispatching is the right
+		//    move (idempotent: if the subagent left the unit's
+		//    worktree in a partial state, the re-dispatched hat picks
+		//    up where it left off; advance_hat's output gate refuses
+		//    to merge unless the outputs are present).
+		//
+		// Pre-2026-05-13 this branch returned `null`, treating the
+		// open iter as "in-flight, no new dispatch needed." That
+		// assumed the parent only calls run_next while a subagent is
+		// running — but the design contract is the OPPOSITE: the
+		// parent batches dispatches, waits for ALL subagents to
+		// return, THEN calls run_next. At run_next time no subagent
+		// is running, so "in-flight" is never the correct read of an
+		// open iter. The cursor must dispatch.
+		const idx = configuredHats.indexOf(last.hat)
+		if (idx < 0) return null // open hat not in configured set — drift
+		return {
+			hat: last.hat,
+			terminal: idx === configuredHats.length - 1,
+		}
 	}
 	// `advance` is the unit-iteration mid-chain/terminal vocab written
 	// by `haiku_unit_advance_hat`. `advanced` is the FB-iteration
@@ -283,7 +318,15 @@ export function nextHatForUnit(
 			terminal: nextIdx === configuredHats.length - 1,
 		}
 	}
-	if (last.result === "reject") {
+	// `reject` is the unit-iteration vocab written by
+	// `haiku_unit_reject_hat`. `rejected` is the FB vocab written by
+	// `haiku_feedback_reject_hat`. Both mean the same thing: this hat
+	// was rejected, re-dispatch the prior hat on a new bolt.
+	// Pre-2026-05-13 only `reject` was matched, so FB rejections fell
+	// through to `null` and the cursor returned noop after every
+	// `feedback-assessor` rejection — the exact failure mode reported
+	// in image 4 of the kagami-slice-1-sendgrid-mirror screenshots.
+	if (last.result === "reject" || last.result === "rejected") {
 		const idx = configuredHats.indexOf(last.hat)
 		if (idx <= 0) {
 			// Reject on first hat — re-dispatch first hat.
@@ -860,18 +903,29 @@ function walkIntentTrack(args: {
 		return { kind: "decompose", stage }
 	}
 
-	// 5. Wave logic. A unit is "in-flight" if started AND its last
-	//    iteration's result is null. Mid-wave noop until in-flight
-	//    units terminate.
-	const inFlight = units.filter((u) => {
-		if (u.fm.started_at == null) return false
-		const its = pickIterations(u.fm)
-		if (its.length === 0) return false
-		return its[its.length - 1].result === null
-	})
-	if (inFlight.length > 0) {
-		return null
-	}
+	// 5. Wave logic removed 2026-05-13.
+	//
+	// The previous version of this clause short-circuited the whole
+	// stage walk to `null` whenever ANY unit had an open iteration
+	// (last.result === null). That made sense if the parent polled
+	// run_next while subagents were running, but the actual contract
+	// is the opposite: the parent batches subagent dispatches in
+	// parallel, waits for ALL to return, then calls run_next exactly
+	// once. At that moment no subagent is actively running, and an
+	// open iter is either engine-pre-opened (mid-chain advance_hat
+	// closed the prior hat and opened the next) OR orphaned (subagent
+	// crashed). Both should re-emit dispatch — exactly what
+	// `nextHatForUnit` now returns for `last.result === null`.
+	//
+	// Reported 2026-05-13 (images 1 & 2 of the
+	// kagami-slice-1-sendgrid-mirror screenshots): "engine commits
+	// the advance but doesn't auto-dispatch the next hat — manual
+	// dispatch is needed." Every wave was a coin flip on whether the
+	// agent had to bypass the engine to keep moving.
+	//
+	// Wave-ready (next clause) still serves its purpose: only units
+	// with `started_at == null` AND all `depends_on` completed are
+	// candidates for the first hat of the current wave.
 
 	// 6. Wave-ready: started_at == null and all depends_on completed
 	//    (their last iteration is terminal advance).

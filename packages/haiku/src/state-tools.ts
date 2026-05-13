@@ -3999,6 +3999,66 @@ function stageHaikuStateForCommit(haikuRoot: string): void {
  * No-op in non-git environments (filesystem mode).
  * Non-fatal: git failures are logged but never crash the MCP.
  */
+/**
+ * Like `gitCommitState`, but stages EVERY dirty path in the working
+ * tree (`git add -A`) instead of just `.haiku/**`. Use when the caller
+ * has already validated that all dirty files belong to a single
+ * scope-bounded operation (a hat advance whose `validateUnitScope`
+ * just passed, an output validation that confirmed every declared
+ * artifact exists). Without this, hat advances that produced user-
+ * code files (anything outside `.haiku/`) left those files
+ * uncommitted in the parent worktree — the next branch switch / merge
+ * then refused with a dirty-tree error and the agent had to run
+ * `git add` + `git commit` by hand (the
+ * `kagami-slice-1-sendgrid-mirror` wedge reported 2026-05-13,
+ * image 3 of the session screenshots).
+ */
+export function gitCommitAll(message: string): {
+	committed: boolean
+	pushed: boolean
+	pushError?: string
+} {
+	if (!isGitRepo()) return { committed: false, pushed: false }
+	try {
+		// Stage every dirty path in the worktree — `git add -A` covers
+		// modifications, deletions, and untracked files. Exclude
+		// `.haiku/worktrees/**` to mirror `stageHaikuStateForCommit`'s
+		// long-standing rule (those are linked-worktree trees, not part
+		// of the primary's content).
+		execFileSync(
+			"git",
+			[
+				"add",
+				"-A",
+				"--",
+				":(exclude,glob,top).haiku/worktrees/**",
+				findHaikuRoot(),
+				".",
+			],
+			{ encoding: "utf8", stdio: "pipe" },
+		)
+		execFileSync("git", ["commit", "-m", message, "--allow-empty"], {
+			encoding: "utf8",
+			stdio: "pipe",
+		})
+		try {
+			execFileSync("git", ["push"], {
+				encoding: "utf8",
+				stdio: "pipe",
+				timeout: GIT_NETWORK_TIMEOUT_MS,
+				env: GIT_NONINTERACTIVE_ENV,
+			})
+			return { committed: true, pushed: true }
+		} catch (pushErr) {
+			const pushError =
+				pushErr instanceof Error ? pushErr.message : String(pushErr)
+			return { committed: true, pushed: false, pushError }
+		}
+	} catch {
+		return { committed: false, pushed: false }
+	}
+}
+
 export function gitCommitState(message: string): {
 	committed: boolean
 	pushed: boolean
@@ -7836,7 +7896,14 @@ export function handleStateTool(
 							unit: args.unit,
 						})
 				}
-				const completeGit = gitCommitState(
+				// Commit ALL dirty files (not just .haiku/*) — at this
+				// point validateUnitScope + the outputs check have
+				// already confirmed every dirty path is part of the
+				// unit's declared scope, so committing them is safe
+				// and prevents the "user code stays dirty after
+				// advance" wedge reported on
+				// kagami-slice-1-sendgrid-mirror.
+				const completeGit = gitCommitAll(
 					`haiku: complete unit ${args.unit as string}`,
 				)
 
@@ -8035,7 +8102,11 @@ export function handleStateTool(
 				unit: args.unit as string,
 				hat: nextHat,
 			})
-			const advGit = gitCommitState(
+			// Mid-chain advance: same scope-guarantee as terminal
+			// advance — validateUnitScope just passed, so all dirty
+			// paths are in-scope. Commit them all so the parent tree
+			// stays clean for the next hat's subagent dispatch.
+			const advGit = gitCommitAll(
 				`haiku: advance hat to ${nextHat} on ${args.unit as string}`,
 			)
 			syncSessionMetadata(

@@ -158,7 +158,19 @@ test("cursor: wave-ready unit (started_at null) → start_unit_hat", async () =>
 	)
 })
 
-test("cursor: in-flight unit (last iteration result null) → noop", async () => {
+test("cursor: open iter on a started unit → re-emit start_unit_hat for the open hat", async () => {
+	// Pre-2026-05-13: the cursor returned noop here, on the theory
+	// that an open iter meant "a subagent is currently running this
+	// hat, don't re-dispatch." That theory was wrong: the design
+	// contract is that the parent batches subagent dispatches and
+	// calls run_next ONLY after all subagents return. So at run_next
+	// time, no subagent is running — an open iter is either
+	// engine-pre-opened (by haiku_unit_advance_hat) OR orphaned
+	// (subagent crashed). Both should re-emit dispatch.
+	//
+	// This was the root cause of the kagami-slice-1-sendgrid-mirror
+	// "engine commits the advance but doesn't auto-dispatch the next
+	// hat — manual dispatch is needed" loop reported 2026-05-13.
 	if (!HAS_GIT) return
 	await withTmpRepo(
 		"cursor-inflight",
@@ -183,13 +195,13 @@ test("cursor: in-flight unit (last iteration result null) → noop", async () =>
 				discovery: {},
 			})
 			const action = await runTick(repoRoot, slug)
-			// Mid-wave noop: the cursor sees the in-flight unit and returns
-			// null; run-tick wraps null as { action: "noop" }.
 			assert.strictEqual(
 				action.action,
-				"noop",
-				`expected noop (mid-wave), got: ${action.action}`,
+				"start_unit_hat",
+				`expected start_unit_hat dispatch for the open hat; got: ${action.action} — ${action.message ?? ""}`,
 			)
+			assert.strictEqual(action.hat, "planner")
+			assert.deepStrictEqual(action.units, ["unit-01"])
 		},
 	)
 })
@@ -677,56 +689,64 @@ test("cursor: open FB on earlier stage preempts current-stage work", async () =>
 	)
 })
 
-test("cursor: mid-wave with one in-flight + one wave-ready → noop", async () => {
+test("cursor: one open-iter unit + one wave-ready sibling → wave-ready dispatches first", async () => {
+	// Pre-2026-05-13: cursor returned noop on the theory that any
+	// open iter was an "in-flight subagent" and you shouldn't
+	// dispatch siblings during a wave. But the in-flight read was
+	// wrong (the parent only calls run_next AFTER all subagents
+	// return), AND it blocked the wave-ready sibling from starting.
+	//
+	// New behavior: wave-ready clause fires first (unit-02 with
+	// started_at=null), so the cursor returns start_unit_hat for
+	// hat[0] dispatching unit-02. The open-iter unit-01 stays
+	// pending for the next tick — it'll be picked up by the
+	// needNextHat clause once unit-02's wave dispatch returns.
 	if (!HAS_GIT) return
-	await withTmpRepo(
-		"cursor-midwave-noop",
-		async ({ repoRoot, intentDir, slug }) => {
-			makeStudio({ repoRoot, studio: "test" })
-			makeIntent({ intentDir, slug, studio: "test" })
-			seedVerifiedElaboration({ intentDir, stage: "design" })
+	await withTmpRepo("cursor-midwave", async ({ repoRoot, intentDir, slug }) => {
+		makeStudio({ repoRoot, studio: "test" })
+		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
 
-			// Unit 1: in-flight (last iteration has no result yet).
-			writeUnit(intentDir, "design", "unit-01-in-flight", {
-				title: "u1",
-				depends_on: [],
-				started_at: "t",
-				iterations: [
-					{
-						hat: "planner",
-						started_at: "t",
-						completed_at: null,
-						result: null,
-					},
-				],
-				reviews: {},
-				approvals: {},
-				discovery: {},
-			})
+		// Unit 1: open-iter on planner (engine pre-opened or orphaned).
+		writeUnit(intentDir, "design", "unit-01-open-iter", {
+			title: "u1",
+			depends_on: [],
+			started_at: "t",
+			iterations: [
+				{
+					hat: "planner",
+					started_at: "t",
+					completed_at: null,
+					result: null,
+				},
+			],
+			reviews: {},
+			approvals: {},
+			discovery: {},
+		})
 
-			// Unit 2: wave-ready — fresh, no iterations yet. Without the
-			// in-flight sibling, this would be a start_unit_hat dispatch.
-			writeUnit(intentDir, "design", "unit-02-wave-ready", {
-				title: "u2",
-				depends_on: [],
-				started_at: null,
-				iterations: [],
-				reviews: {},
-				approvals: {},
-				discovery: {},
-			})
+		// Unit 2: wave-ready — fresh, no iterations yet.
+		writeUnit(intentDir, "design", "unit-02-wave-ready", {
+			title: "u2",
+			depends_on: [],
+			started_at: null,
+			iterations: [],
+			reviews: {},
+			approvals: {},
+			discovery: {},
+		})
 
-			const action = await runTick(repoRoot, slug)
-			// Mid-wave noop: cursor must NOT dispatch new work while a
-			// sibling on the same wave is still in-flight. The architectural
-			// invariant: one wave at a time, no cross-wave dispatches.
-			assert.strictEqual(
-				action.action,
-				"noop",
-				`mid-wave with in-flight sibling must be noop; got: ${action.action} — ${action.message}`,
-			)
-		},
-	)
+		const action = await runTick(repoRoot, slug)
+		assert.strictEqual(
+			action.action,
+			"start_unit_hat",
+			`wave-ready unit must dispatch; got: ${action.action} — ${action.message ?? ""}`,
+		)
+		assert.strictEqual(action.hat, "planner")
+		// Wave-ready dispatches the wave-ready unit first; the
+		// open-iter unit comes through the next tick.
+		assert.deepStrictEqual(action.units, ["unit-02-wave-ready"])
+	})
 })
 
 test("cursor: closed FB with invalidates clears the listed approvals", async () => {

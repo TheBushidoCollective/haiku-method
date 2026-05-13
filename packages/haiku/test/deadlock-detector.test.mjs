@@ -250,10 +250,19 @@ test("deadlock-detector integration: runWorkflowTick records every emitted actio
 	const slug = "integ-test-intent"
 	const iDir = join(haikuRoot, "intents", slug)
 	mkdirSync(join(iDir, "stages", "inception", "units"), { recursive: true })
-	// Minimal v4 intent — has plugin_version stamped, NO deprecated v3
-	// fields (active_stage, status, phase, etc. are in DEPRECATED_INTENT_FIELDS
-	// and would trigger the migrator). Migrator no-ops; both ticks
-	// produce the same action signature, so the counter increments.
+	// Minimal current-major intent — plugin_version stamped at the
+	// running plugin's major.0.0 so the migration registry is a no-op
+	// on both ticks (no major-version delta → no migrate edge fires).
+	// NO deprecated v3 fields (active_stage / status / phase, all in
+	// DEPRECATED_INTENT_FIELDS) so the cruft re-migrator also stays
+	// quiet. Both ticks produce the same action signature, so the
+	// detector's consecutive counter increments cleanly.
+	//
+	// We pull the major from getPluginVersion at runtime so a future
+	// major bump doesn't break this test the same way the 4 → 5 bump
+	// did when the fixture was hard-coded to "4.0.0".
+	const { getPluginVersion } = await import("../src/version.ts")
+	const fixtureVersion = `${getPluginVersion().split(".")[0] ?? "4"}.0.0`
 	writeFileSync(
 		join(iDir, "intent.md"),
 		[
@@ -261,7 +270,7 @@ test("deadlock-detector integration: runWorkflowTick records every emitted actio
 			"title: Integration test intent",
 			"studio: software",
 			"mode: continuous",
-			"plugin_version: 4.0.0",
+			`plugin_version: ${fixtureVersion}`,
 			"stages: [inception]",
 			"---",
 			"body",

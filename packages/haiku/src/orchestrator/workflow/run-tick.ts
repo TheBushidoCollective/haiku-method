@@ -23,9 +23,13 @@ import { intentDir } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
 import { getPluginVersion } from "../../version.js"
 import { migrateIntent } from "../migrate-registry.js"
-// Importing the migrator file for its side effect: registerMigrator
-// runs at module load and adds the v0→v4 edge to the registry.
+// Importing the migrator files for their side effect:
+// registerMigrator runs at module load and adds edges to the
+// registry. v0→v4 covers pre-v4 intents; v4→v5 is a schema-noop
+// stamp for the 4.x → 5.0.0 user-facing-only major bump (see
+// v4-to-v5.ts for the why).
 import "../migrations/v0-to-v4.js"
+import "../migrations/v4-to-v5.js"
 import { hasV3CruftInIntent } from "../migrations/v0-to-v4.js"
 import {
 	type CursorAction,

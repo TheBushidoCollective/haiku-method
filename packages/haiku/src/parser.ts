@@ -308,6 +308,25 @@ async function deriveStagePhaseFromDisk(
 	if (anyWaveReady || anyMidFlight) {
 		return { status: "in_progress", phase: "execute" }
 	}
+	// The user approval (`approvals.user`) is the terminal slot in the
+	// canonical role order: spec → quality_gates → configured review
+	// agents → user. If `approvals.user` is stamped on every unit,
+	// every prior role must already be stamped — the workflow won't
+	// surface the user gate until they are. So a single-key check on
+	// `approvals.user` is sufficient for the SPA's "stage done" signal
+	// and avoids needing studio config (approvalRolesFor) at this
+	// layer. Without this, a partially-stamped unit with only the
+	// terminal slot present looked "complete" because `Object.values
+	// (approvals).every(Boolean)` only iterates keys that exist.
+	const allUserApproved = unitFmList.every((fm) => {
+		const a = fm.approvals
+		return (
+			a && typeof a === "object" && Boolean((a as Record<string, unknown>).user)
+		)
+	})
+	if (allUserApproved) {
+		return { status: "completed", phase: "" }
+	}
 	const allReviewsStamped = unitFmList.every((fm) => {
 		const r = fm.reviews
 		return (
@@ -804,17 +823,51 @@ async function walkStageDirRecursive(
  * Markdown and HTML bodies are inlined; images and unknown extensions are
  * exposed via `relativePath` so the HTTP route can serve them.
  */
+/**
+ * Back-compat shim — returns outputs PLUS catch-all "other" files
+ * as a single flat list, matching the pre-2026-05-13 behavior. New
+ * callers that want the two buckets separated should call
+ * `parseStageFiles` directly.
+ */
 export async function parseOutputArtifacts(
 	intentDir: string,
 ): Promise<OutputArtifact[]> {
-	const artifacts: OutputArtifact[] = []
+	const { outputs, other } = await parseStageFiles(intentDir)
+	return [...outputs, ...other]
+}
+
+/**
+ * Split per-stage files into tracked outputs vs stray "other" files.
+ *
+ *   - outputs:  declared deliverables. Anything under
+ *               `stages/<stage>/artifacts/**` (canonical artifact
+ *               surface) plus paths named in any unit's `outputs:`
+ *               frontmatter.
+ *   - other:    files present under `stages/<stage>/` that no unit
+ *               declared and that aren't living under
+ *               `artifacts/`, `knowledge/`, or `discovery/`. Scratch
+ *               notes, debug logs, screenshots dropped during a
+ *               revisit — anything a reviewer should still be able
+ *               to see in case it needs to be associated, but
+ *               doesn't belong in the Outputs tab.
+ *
+ * Workflow-internal entries (state.json, etc.) are excluded entirely
+ * via STAGE_INTERNAL_ENTRIES inside `walkStageDirRecursive`.
+ *
+ * Reported 2026-05-13.
+ */
+export async function parseStageFiles(
+	intentDir: string,
+): Promise<{ outputs: OutputArtifact[]; other: OutputArtifact[] }> {
+	const outputs: OutputArtifact[] = []
+	const other: OutputArtifact[] = []
 	const seen = new Set<string>()
 	let stageNames: string[] = []
 	try {
 		const stagesDir = join(intentDir, "stages")
 		const stageEntries = await readdir(stagesDir, { withFileTypes: true })
 		stageNames = stageEntries.filter((e) => e.isDirectory()).map((e) => e.name)
-		// Source 1: stages/<stage>/artifacts/** walk
+		// Source 1: stages/<stage>/artifacts/** walk → outputs
 		for (const stageName of stageNames) {
 			const artifactsDir = join(stagesDir, stageName, "artifacts")
 			const files = (await walkArtifactsDir(artifactsDir)).sort()
@@ -836,7 +889,7 @@ export async function parseOutputArtifacts(
 					httpPath,
 				)
 				if (entry) {
-					artifacts.push(entry)
+					outputs.push(entry)
 					seen.add(fullPath)
 				}
 			}
@@ -844,13 +897,17 @@ export async function parseOutputArtifacts(
 	} catch {
 		// No stages/ directory
 	}
-	// Source 2: unit `outputs:` frontmatter (paths often outside stage dir)
+	// Source 2: unit `outputs:` frontmatter → outputs (paths often
+	// outside stage dir).
 	for (const { absPath, artifact } of await parseUnitOutputs(intentDir)) {
 		if (seen.has(absPath)) continue
-		artifacts.push(artifact)
+		outputs.push(artifact)
 		seen.add(absPath)
 	}
-	// Source 3: catch-all walk of every stage dir minus workflow-internal entries
+	// Source 3: catch-all walk of every stage dir, minus
+	// workflow-internal entries, minus knowledge/ and discovery/. Files
+	// that landed here weren't declared anywhere — they're the "other"
+	// bucket. Surfaced so a reviewer can associate them if relevant.
 	for (const stageName of stageNames) {
 		const stageDir = join(intentDir, "stages", stageName)
 		const files = await walkStageDirRecursive(stageDir)
@@ -868,10 +925,10 @@ export async function parseOutputArtifacts(
 				httpPath,
 			)
 			if (entry) {
-				artifacts.push(entry)
+				other.push(entry)
 				seen.add(absPath)
 			}
 		}
 	}
-	return artifacts
+	return { outputs, other }
 }

@@ -184,6 +184,29 @@ export function countItemsNeedingUserVerification(
 	).length
 }
 
+/**
+ * Count human-authored items the user might still hand to the agent
+ * via the "Send N to agent" / "Request Changes" affordance — exported
+ * for unit tests. Same reasoning as
+ * `countItemsNeedingUserVerification`: agent- and system-authored
+ * pending FBs are picked up by the cursor's feedback walk on the next
+ * tick without any human action. They MUST NOT be surfaced as items
+ * the user needs to "send" — that copy implies the agent doesn't know
+ * about them yet, which is false. Reported 2026-05-13 on
+ * `admin-portal-reimagine` design (23 agent-authored pending FBs
+ * showing "Send 23 to agent").
+ */
+export function countItemsAwaitingUserSubmission(
+	items: ReadonlyArray<{
+		status: string
+		author_type: "agent" | "human" | "system" | null
+	}>,
+): number {
+	return items.filter(
+		(i) => i.status === "pending" && i.author_type === "human",
+	).length
+}
+
 export function FeedbackSidebar({
 	stage,
 	activeStage,
@@ -232,7 +255,14 @@ export function FeedbackSidebar({
 	const [submitting, setSubmitting] = useState<DecisionKind | null>(null)
 	const [revisitOpen, setRevisitOpen] = useState(false)
 
-	const pendingCount = items.filter((i) => i.status === "pending").length
+	// Only HUMAN-authored pending FBs count toward the "Send N to
+	// agent" affordance. Agent / system FBs at pending are already
+	// queued for the next tick's feedback walk — surfacing them as
+	// "items to hand to the agent" lies about the workflow state and
+	// confused reviewers (reported 2026-05-13: 23 agent-authored
+	// pending FBs surfaced "Send 23 to agent"). Logic in
+	// `countItemsAwaitingUserSubmission` (exported above).
+	const pendingCount = countItemsAwaitingUserSubmission(items)
 	const hasPending = pendingCount > 0
 	// Items the agent has marked as addressed / answered but the user
 	// has not yet verified (set to `closed` via the review UI's

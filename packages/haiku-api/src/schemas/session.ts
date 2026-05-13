@@ -226,6 +226,11 @@ export const ReviewSessionPayloadSchema = z
 		knowledge_files: z.array(KnowledgeFileSchema).optional(),
 		stage_artifacts: z.array(StageArtifactSchema).optional(),
 		output_artifacts: z.array(OutputArtifactSchema).optional(),
+		/** Stray files under `stages/<stage>/` not declared by any unit
+		 *  and not living under artifacts/ / knowledge/ / discovery/.
+		 *  Same wire shape as outputs — surfaced in the SPA's "Other"
+		 *  tab. Reported 2026-05-13. */
+		other_files: z.array(OutputArtifactSchema).optional(),
 		/** Per-unit output preview entries keyed by unit slug. Built
 		 *  server-side at session creation so the SPA doesn't have to
 		 *  per-row-fetch each output's bytes. */

@@ -20,6 +20,7 @@ export {
 	parseKnowledgeFiles,
 	parseOutputArtifacts,
 	parseStageArtifacts,
+	parseStageFiles,
 	parseStageStates,
 	parseUnit,
 } from "./parser.js"

@@ -252,6 +252,19 @@ export interface ReviewSession {
 		relativePath?: string
 		intentRelativePath?: string
 	}>
+	/** Stray files under `stages/<stage>/` that no unit declared and
+	 *  that aren't in `artifacts/`, `knowledge/`, or `discovery/`.
+	 *  Surfaced in the SPA's "Other" tab so reviewers can still see
+	 *  them in case they need to be associated with something.
+	 *  Reported 2026-05-13. */
+	otherFiles?: Array<{
+		stage: string
+		name: string
+		type: string
+		content?: string
+		relativePath?: string
+		intentRelativePath?: string
+	}>
 	/** Per-unit output preview entries keyed by unit slug. The SPA's
 	 *  Units tab renders each entry as a click-out link with a hover
 	 *  popover preview. Built server-side at session creation so the

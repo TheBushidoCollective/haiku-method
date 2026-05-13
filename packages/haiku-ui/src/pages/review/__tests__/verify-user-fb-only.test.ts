@@ -14,7 +14,10 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { countItemsNeedingUserVerification } from "../FeedbackSidebar"
+import {
+	countItemsAwaitingUserSubmission,
+	countItemsNeedingUserVerification,
+} from "../FeedbackSidebar"
 
 type Item = Parameters<typeof countItemsNeedingUserVerification>[0][number]
 

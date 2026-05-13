@@ -346,14 +346,18 @@ function hasStarted(fm: UnitFm): boolean {
 function isUnitFullyApproved(fm: UnitFm, approvalRoles: string[]): boolean {
 	const approvals = pickApprovals(fm)
 	for (const role of approvalRoles) {
-		const record = approvals[role]
-		if (
-			!record ||
-			typeof record !== "object" ||
-			typeof (record as { at?: unknown }).at !== "string"
-		) {
-			return false
-		}
+		// Truthy presence is the signal — same shape that walkIntentTrack
+		// step 9's `!approvals[role]` check accepts. The two sides MUST
+		// agree on what counts as "approved" or `findCurrentStage` pins
+		// on a stage that walkIntentTrack thinks is already past, and
+		// the cursor loops on merge_stage. Production stamps are
+		// `{at: <timestamp>, ...}` (object with `.at`); post-migration
+		// backfill stamps can be bare booleans or `{}`. All three shapes
+		// are truthy — we accept all three. The filesystem (FM) is the
+		// signal; the SHAPE of the stamp is not. Reported 2026-05-12 on
+		// admin-portal-reimagine: pre-fix `.at`-strict check disagreed
+		// with step 9's truthy check, producing the merge_stage loop.
+		if (!approvals[role]) return false
 	}
 	return true
 }

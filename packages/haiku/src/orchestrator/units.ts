@@ -111,16 +111,18 @@ function deriveUnitState(fm: Record<string, unknown>): {
 	// stamped (mirrors `isUnitFullyApproved` from cursor.ts). We don't
 	// have the studio's required-role list here so we check whether
 	// `approvals` has ANY stamped role; the cursor's stricter check
-	// runs separately.
+	// runs separately. Truthy check, matching `isUnitFullyApproved` and
+	// walkIntentTrack step 9: the FM's presence of an approval entry is
+	// the signal, regardless of stamp shape (boolean, `{}`, or
+	// `{at: timestamp}`). The two sides must agree — see the
+	// admin-portal-reimagine 2026-05-12 bug for what disagreement
+	// produces.
 	const approvals =
 		fm.approvals && typeof fm.approvals === "object"
 			? (fm.approvals as Record<string, unknown>)
 			: {}
 	const anyApprovalStamped = Object.values(approvals).some(
-		(rec) =>
-			rec !== null &&
-			typeof rec === "object" &&
-			typeof (rec as { at?: unknown }).at === "string",
+		(rec) => rec !== null && rec !== false && rec !== undefined,
 	)
 	const terminalAdvance =
 		lastIter !== null &&

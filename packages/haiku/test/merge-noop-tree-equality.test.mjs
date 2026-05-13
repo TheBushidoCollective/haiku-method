@@ -455,3 +455,106 @@ test("mergeStageBranchIntoMain: trees DIFFER → merge proceeds normally", async
 		rmSync(repo, { recursive: true, force: true })
 	}
 })
+
+test("findCurrentStage: walks past stage whose approvals are stamped as bare truthy values (post-migration backfill drift)", async () => {
+	// Filesystem is the signal — the FM is the signal. The SHAPE of an
+	// approval stamp doesn't matter beyond "truthy means approved."
+	// `isUnitFullyApproved` (used by `isStageComplete` →
+	// `findCurrentStage`) and `walkIntentTrack` step 9 MUST agree on
+	// this — otherwise the cursor pins on a stage walkIntentTrack
+	// already considers past, emits merge_stage, the handler
+	// short-circuits noop, cursor re-walks, loop guard fires.
+	//
+	// This test pins the truthy-check alignment with a representative
+	// post-migration FM shape: approvals as bare booleans (no `{at: ...}`
+	// object). Pre-fix `.at`-strict check disagreed with step 9's truthy
+	// check, producing the admin-portal-reimagine 2026-05-12 loop. No
+	// git topology is consulted — this works in filesystem-only mode.
+	const repo = mkdtempSync(join(tmpdir(), "haiku-truthy-approvals-"))
+	const origCwd = process.cwd()
+	try {
+		const slug = "truthy-approvals"
+		const intentDir = join(repo, ".haiku/intents", slug)
+		const inceptionUnitsDir = join(intentDir, "stages/inception/units")
+		const designUnitsDir = join(intentDir, "stages/design/units")
+		mkdirSync(inceptionUnitsDir, { recursive: true })
+		mkdirSync(designUnitsDir, { recursive: true })
+
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			`---
+title: Truthy-approval cursor test
+studio: software
+mode: continuous
+plugin_version: 4.0.0
+stages: [inception, design]
+---
+body
+`,
+		)
+		writeFileSync(
+			join(inceptionUnitsDir, "unit-01-foo.md"),
+			`---
+title: foo
+started_at: '2026-04-27T19:00:00Z'
+iterations:
+  - hat: researcher
+    started_at: '2026-04-27T19:00:00Z'
+    completed_at: '2026-04-27T19:01:00Z'
+    result: advance
+  - hat: verifier
+    started_at: '2026-04-27T19:01:00Z'
+    completed_at: '2026-04-27T19:02:00Z'
+    result: advance
+reviews:
+  spec: true
+  completeness: true
+  feasibility: true
+  user: true
+approvals:
+  spec: true
+  quality_gates: true
+  completeness: true
+  feasibility: true
+  user: true
+---
+`,
+		)
+		writeFileSync(
+			join(designUnitsDir, "unit-01-bar.md"),
+			`---
+title: bar
+started_at: null
+iterations: []
+---
+`,
+		)
+
+		const pluginRoot = join(import.meta.dirname, "..", "..", "..", "plugin")
+		const prevPluginRoot = process.env.CLAUDE_PLUGIN_ROOT
+		process.env.CLAUDE_PLUGIN_ROOT = pluginRoot
+		const { _resetPluginRootForTests } = await import("../src/config.ts")
+		_resetPluginRootForTests()
+		try {
+			process.chdir(repo)
+			const { findCurrentStage } = await import(
+				"../src/orchestrator/workflow/cursor.ts"
+			)
+			const active = findCurrentStage(slug, "software")
+			assert.strictEqual(
+				active,
+				"design",
+				`findCurrentStage must walk past inception when its approvals are truthy (any shape). Got: ${active}. Pre-fix: returned inception because the .at-strict check rejected bare boolean stamps → cursor emitted merge_stage(inception) → handler noop → re-tick → loop guard.`,
+			)
+		} finally {
+			if (prevPluginRoot === undefined) {
+				delete process.env.CLAUDE_PLUGIN_ROOT
+			} else {
+				process.env.CLAUDE_PLUGIN_ROOT = prevPluginRoot
+			}
+		}
+	} finally {
+		process.chdir(origCwd)
+		rmSync(repo, { recursive: true, force: true })
+	}
+})

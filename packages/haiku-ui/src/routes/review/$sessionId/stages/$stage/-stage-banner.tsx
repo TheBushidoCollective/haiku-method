@@ -48,12 +48,21 @@ export function PhaseStepper({
 		: -1
 	const isStageComplete =
 		stageStatus === "completed" || stageStatus === "complete"
+	// Group-level SR label. Three cases:
+	//   - stage complete: "All phases complete" (don't say "Phase 0 of 4").
+	//   - active phase known: "Phase N of M"
+	//   - no live phase (pending stage): "Phase progress" (neutral)
+	const groupAriaLabel = isStageComplete
+		? "All phases complete"
+		: activeIndex >= 0
+			? `Phase ${activeIndex + 1} of ${STAGE_PHASES.length}`
+			: "Phase progress"
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: a fieldset would force a legend + form-context semantics that don't apply here; role=group on a div is the right minimal grouping
 		<div
 			className="inline-flex items-center gap-2"
 			role="group"
-			aria-label={`Phase ${activeIndex + 1} of ${STAGE_PHASES.length}`}
+			aria-label={groupAriaLabel}
 		>
 			<span className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
 				Phase
@@ -69,17 +78,21 @@ export function PhaseStepper({
 						<li key={p} className="flex items-center gap-1">
 							{/*
 							 * Tooltip card — two-line card (title + description)
-							 * shown on pointer hover + keyboard focus. The hit-
-							 * target wrapper has `p-1 -m-1` for a forgiving
-							 * 24×24 hit zone over the 14×14 bubble. The card
-							 * carries a caret triangle at the bottom so it
-							 * visually anchors to its bubble.
+							 * shown on pointer hover. The hit-target wrapper has
+							 * `p-1 -m-1` for a forgiving 28×28 hit zone over the
+							 * 20×20 bubble. The card carries a caret triangle at
+							 * the bottom so it visually anchors to its bubble.
 							 *
-							 * SR contract: `role="button"` would imply
-							 * interactivity (there's no click); we use a
-							 * focusable `span` with `tabIndex={0}` so keyboard
-							 * users can tab through phases and receive the
-							 * same hover-card via `:focus-visible`.
+							 * SR / keyboard contract: each bubble is `role="img"`
+							 * with a full `aria-label` (title + state + body).
+							 * Screen readers expose the parent `<ol>` as a list
+							 * and announce each bubble's aria-label on list
+							 * navigation — no extra tab stops needed. We
+							 * deliberately do NOT use `tabIndex={0}` because
+							 * adding 4 extra focus stops per stage banner
+							 * crowds the keyboard nav path; the active phase
+							 * also carries `aria-current="step"` so the user
+							 * lands on the right one when list-nav'ing.
 							 */}
 							<span
 								className="relative inline-flex items-center justify-center p-1 -m-1 group rounded-md"

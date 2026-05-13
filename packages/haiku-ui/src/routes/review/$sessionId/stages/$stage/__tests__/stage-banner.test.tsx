@@ -157,4 +157,33 @@ describe("PhaseStepper — bubble + tooltip per phase", () => {
 		)
 		expect(execute).toBeTruthy()
 	})
+
+	// ── Group-level aria-label (regression for "Phase 0 of 4" on complete) ──
+	//
+	// The group wrapper's `aria-label` previously used
+	// `Phase ${activeIndex + 1} of ${STAGE_PHASES.length}`. When a stage
+	// was complete (`phase === ""` → activeIndex = -1), screen readers
+	// announced "Phase 0 of 4" — a confusing incomplete count that
+	// contradicted the visible "done" text. The label now branches on
+	// stage state so SRs hear something coherent in each case.
+
+	it("group aria-label reads 'All phases complete' when the stage is complete", () => {
+		render(<PhaseStepper phase="" stageStatus="completed" />)
+		expect(screen.getByLabelText(/all phases complete/i)).toBeTruthy()
+		// And the misleading old form must not surface.
+		expect(screen.queryByLabelText(/phase 0 of 4/i)).toBeNull()
+	})
+
+	it("group aria-label reads 'Phase N of M' when an active phase is set", () => {
+		render(<PhaseStepper phase="review" stageStatus="current" />)
+		// review is index 2 → N=3, M=4.
+		expect(screen.getByLabelText(/^phase 3 of 4$/i)).toBeTruthy()
+	})
+
+	it("group aria-label reads 'Phase progress' when stage is pending with no phase", () => {
+		render(<PhaseStepper phase={null} stageStatus="pending" />)
+		// Neutral fallback when there's no live phase and the stage
+		// isn't complete (the in-between "we haven't entered yet" state).
+		expect(screen.getByLabelText(/^phase progress$/i)).toBeTruthy()
+	})
 })

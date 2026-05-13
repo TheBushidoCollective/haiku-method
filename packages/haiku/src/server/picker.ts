@@ -54,6 +54,25 @@ export async function runPicker(args: RunPickerArgs): Promise<RunPickerResult> {
 	if (args.options.length === 0) {
 		throw new Error("runPicker called with empty options array")
 	}
+	// Test seam: `HAIKU_TEST_PICKER_AUTO_SELECT=<option-id>` returns
+	// the matching option immediately without spinning up the HTTP
+	// server / SPA picker. Only honored when an option with that id
+	// exists in the current call's options; otherwise falls through to
+	// the normal path. Lets regression tests for destructive flows
+	// (intent_reset, etc.) confirm without injecting a real SPA
+	// session.
+	const auto = process.env.HAIKU_TEST_PICKER_AUTO_SELECT
+	if (auto) {
+		const match = args.options.find((o) => o.id === auto)
+		if (match) {
+			return {
+				sessionId: "test-auto",
+				url: "",
+				selection: { id: match.id },
+				timedOut: false,
+			}
+		}
+	}
 	const session = createPickerSession({
 		intent_slug: args.intentSlug,
 		kind: args.kind,

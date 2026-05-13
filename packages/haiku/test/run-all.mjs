@@ -26,11 +26,17 @@ for (const file of testFiles) {
 	console.log(`${"═".repeat(60)}`)
 
 	try {
+		// Default per-file timeout is 60s — catches hangs in the fast
+		// majority of tests. End-to-end mode-coverage files (`e2e-*`)
+		// drive a real intent start → sealed across multiple modes and
+		// can legitimately run 60-120s. Give them a wider budget.
+		const isLongRunning = file.startsWith("e2e-")
+		const timeoutMs = isLongRunning ? 180000 : 60000
 		const output = execSync(`npx tsx "${filePath}"`, {
 			encoding: "utf8",
 			stdio: ["pipe", "pipe", "pipe"],
 			cwd: join(testDir, ".."),
-			timeout: 60000,
+			timeout: timeoutMs,
 		})
 		process.stdout.write(output)
 

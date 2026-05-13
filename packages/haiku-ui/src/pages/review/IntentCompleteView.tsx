@@ -22,27 +22,12 @@
  */
 
 import type { DiscoveredReviewUrl } from "haiku-api"
-import { withAuthQuery } from "../../api/auth"
 import type { IntentFrontmatter } from "../../parsed"
 import type { OutputArtifact } from "../../types"
+import { authedAssetUrl } from "./shared/asset-url"
 import { DeclaringUnitsBanner } from "./shared/DeclaringUnitsBanner"
 
 export type { DiscoveredReviewUrl }
-
-const TUNNEL_ASSET_PREFIXES = [
-	"/files/",
-	"/mockups/",
-	"/wireframe/",
-	"/stage-artifacts/",
-	"/question-image/",
-]
-
-function authedAssetUrl(url: string | undefined | null): string {
-	if (!url) return ""
-	return TUNNEL_ASSET_PREFIXES.some((p) => url.startsWith(p))
-		? withAuthQuery(url)
-		: url
-}
 
 export interface IntentCompleteViewStageState {
 	// v4: mergedIntoMain is the authoritative completion signal

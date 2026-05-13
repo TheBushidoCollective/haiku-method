@@ -2,9 +2,13 @@
 // intent-reset-clean.test.mjs — proves haiku_intent_reset wipes every
 // per-intent artifact: stage branches, intent main, the intent
 // directory tree (stages/, feedback/, knowledge/, drift sidecars,
-// iterations.jsonl, gate-session.json, decisions.jsonl, etc.) — and
-// that a follow-up haiku_intent_create starts on a clean slate with
-// no carry-over.
+// gate-session.json, decisions.jsonl, legacy iterations.jsonl from
+// pre-2026-05-13 v3 intents, etc.) — and that a follow-up
+// haiku_intent_create starts on a clean slate with no carry-over.
+//
+// Note: iterations.jsonl is seeded in this fixture as a *legacy*
+// artifact (pre-2026-05-13). It's never written by current code, but
+// reset must still scrub it so migrated v3 intents don't leak state.
 //
 // Pinning the 2026-05-13 contract: "reseting the intent should not
 // carry any stage/feedback/etc artifacts."
@@ -49,6 +53,11 @@ function git(cwd, ...args) {
 
 function writeFm(path, fm, body = "") {
 	writeFileSync(path, matter.stringify(body, fm))
+}
+
+function repoRootFromIntentDir(intentDir) {
+	// intentDir = <root>/.haiku/intents/<slug>; walk three up to the repo root.
+	return dirname(dirname(dirname(intentDir)))
 }
 
 async function withRepo(slug, fn) {
@@ -157,8 +166,7 @@ function seedIntentArtifacts(intentDir, slug) {
 	// stuff here sometimes.
 	writeFileSync(join(intentDir, "scratch.txt"), "scratch")
 	// Create the stage branches that reset is supposed to delete.
-	const root = dirname(dirname(dirname(intentDir)))
-	const _ = root // keep tsc happy if linter complains
+	const root = repoRootFromIntentDir(intentDir)
 	try {
 		execFileSync("git", ["branch", `haiku/${slug}/inception`], {
 			cwd: root,
@@ -222,9 +230,16 @@ test("haiku_intent_reset wipes intent dir + every haiku/{slug}/* branch", {
 			`expected inception branch pre-reset; got: ${branchesBefore.join(",")}`,
 		)
 
-		// Drive the reset tool. We bypass the SPA picker by
-		// monkey-patching the picker handler to return "reset"
-		// without touching the network.
+		// Drive the reset tool. We bypass the SPA picker via the
+		// `HAIKU_TEST_PICKER_AUTO_SELECT` env seam (see
+		// `packages/haiku/src/server/picker.ts`).
+		//
+		// COUPLING: The value below ("reset") must match the option
+		// `id` that `haiku_intent_reset`'s confirmation picker emits.
+		// If that handler is ever renamed (e.g. to "confirm-reset"),
+		// the picker seam falls through to the real SPA path and this
+		// test hangs until the picker timeout. Source of truth:
+		// `packages/haiku/src/tools/orchestrator/haiku_intent_reset.ts`.
 		const { orchestratorToolHandlers } = await import(
 			`${SRC}/tools/orchestrator/index.ts`
 		)

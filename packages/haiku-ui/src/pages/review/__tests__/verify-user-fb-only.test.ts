@@ -97,3 +97,72 @@ describe("countItemsNeedingUserVerification — only human-authored FBs require 
 		).toBe(2)
 	})
 })
+
+/**
+ * Mirror suite for `countItemsAwaitingUserSubmission` — the same
+ * "human-only" filter applied to the "pending → submit to agent"
+ * pile. The original bug was the same shape: a count that included
+ * agent-authored FBs surfaced "Send 23 to agent" when those 23 were
+ * already on disk waiting for the next tick. Human-authored pending
+ * FBs are the only items the user actually needs to submit.
+ */
+describe("countItemsAwaitingUserSubmission — only human-authored pending FBs need submission", () => {
+	it("counts human-authored pending items", () => {
+		expect(
+			countItemsAwaitingUserSubmission([
+				item({ status: "pending", author_type: "human" }),
+				item({ status: "pending", author_type: "human" }),
+			]),
+		).toBe(2)
+	})
+
+	it("SKIPS agent-authored pending items (the admin-portal-reimagine regression)", () => {
+		expect(
+			countItemsAwaitingUserSubmission([
+				item({ status: "pending", author_type: "agent" }),
+				item({ status: "pending", author_type: "agent" }),
+				item({ status: "pending", author_type: "agent" }),
+			]),
+		).toBe(0)
+	})
+
+	it("SKIPS system-authored pending items", () => {
+		expect(
+			countItemsAwaitingUserSubmission([
+				item({ status: "pending", author_type: "system" }),
+			]),
+		).toBe(0)
+	})
+
+	it("SKIPS items with null author_type (defensive)", () => {
+		expect(
+			countItemsAwaitingUserSubmission([
+				item({ status: "pending", author_type: null }),
+			]),
+		).toBe(0)
+	})
+
+	it("SKIPS addressed / answered / closed — only pending counts for submission", () => {
+		expect(
+			countItemsAwaitingUserSubmission([
+				item({ status: "addressed", author_type: "human" }),
+				item({ status: "answered", author_type: "human" }),
+				item({ status: "closed", author_type: "human" }),
+				item({ status: "fixing", author_type: "human" }),
+			]),
+		).toBe(0)
+	})
+
+	it("mixed list: only human-authored pending count", () => {
+		expect(
+			countItemsAwaitingUserSubmission([
+				item({ status: "pending", author_type: "human" }), // ✓
+				item({ status: "pending", author_type: "agent" }), // skip
+				item({ status: "pending", author_type: "system" }), // skip
+				item({ status: "addressed", author_type: "human" }), // skip
+				item({ status: "answered", author_type: "human" }), // skip
+				item({ status: "pending", author_type: "human" }), // ✓
+			]),
+		).toBe(2)
+	})
+})

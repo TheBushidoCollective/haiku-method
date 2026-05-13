@@ -2803,15 +2803,6 @@ export interface AppendIterationResult {
 	signature: string
 }
 
-/** Path to the per-stage iteration log. v4 disk-artifact home —
- *  replaces state.json's `iterations[]` array. JSONL append-only:
- *  every appendStageIteration writes one line, every
- *  closeCurrentStageIteration appends a "close" line. Read by
- *  re-folding the lines into the in-memory iteration array. */
-function stageIterationsPath(slug: string, stage: string): string {
-	return join(stageDir(slug, stage), "iterations.jsonl")
-}
-
 /** Path to the per-stage decision log. v4 disk-artifact home —
  *  replaces state.json's `decision_log[]` array. JSONL append-only:
  *  every `haiku_decision_record` (and the implicit acknowledgement

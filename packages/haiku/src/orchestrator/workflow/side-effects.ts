@@ -1,6 +1,6 @@
 // orchestrator/workflow/side-effects.ts — All workflow-engine state
 // mutators. Every function here writes disk (intent.md frontmatter,
-// per-stage sidecar JSONL logs like iterations.jsonl), runs git
+// per-stage decisions.jsonl), runs git
 // operations (branch create / merge / reap), or both. State.json is
 // dead in v4 — stage status / phase / gate outcome are derived on
 // demand from per-unit FM and branch-merge state via
@@ -121,9 +121,10 @@ function findPreviousStage(slug: string, stage: string): string | undefined {
  *    4. Reap A's branch (commits now live on main). Delete remote too.
  *    5. Checkout B: if B's branch already exists (go-back), merge main
  *       forward into it; otherwise create B from main.
- *    6. Open the first iteration entry on the per-stage iterations.jsonl
- *       log (status="active" + phase="elaborate" are derived from this
- *       on the next tick — there is no state.json write).
+ *    6. Stage iteration metadata is derived from closed feedback in the
+ *       stage's `feedback/` dir at read-time — no sidecar log is written.
+ *       status="active" + phase="elaborate" are derived on the next tick
+ *       from per-unit FM + branch-merge state.
  *    7. Guard 3 (post-stage cleanup): scan again for orphans that
  *       slipped through the merge-reap cycle.
  *
@@ -244,9 +245,11 @@ export function workflowCompleteStage(
 ): void {
 	// v4: status / completed_at / gate_outcome are derived from
 	// branch-merge state + per-unit approvals. No state.json mutation.
-	// `closeCurrentStageIteration` still runs to maintain the per-stage
-	// iteration log (loop detection, cap checking) — that log is the
-	// next piece slated for migration to a JSONL disk artifact.
+	// `closeCurrentStageIteration` is a semantic no-op as of 2026-05-13;
+	// stage iteration history is derived from closed feedback in the
+	// stage's `feedback/` dir at read-time (see
+	// `state-tools.ts:readStageIterations`). Call is retained as a
+	// breadcrumb in case a future migration needs a write hook.
 	closeCurrentStageIteration(
 		slug,
 		stage,

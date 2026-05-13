@@ -35,9 +35,13 @@
  *   (same module, line 1431).
  * - `drift-assessments/` — drift assessment records (`run-tick.ts:502`,
  *   `tools/orchestrator/haiku_classify_drift.ts:141`).
- * - `iterations.jsonl` — v4 per-stage iteration log
- *   (`state-tools.ts:appendIterationLogLine` /
- *   `closeCurrentStageIteration`).
+ * - `iterations.jsonl` — DEPRECATED 2026-05-13. The stage-level
+ *   iteration log was a second source of truth; stage iteration
+ *   history is now derived from closed feedback files in the
+ *   stage's `feedback/` dir. The entry stays in this set so legacy
+ *   files (from pre-2026-05-13 intents) are still skipped by
+ *   parsers — they're harmless if present but should never be
+ *   written or read going forward.
  * - `decisions.jsonl` — v4 per-stage decision log
  *   (`state-tools.ts:appendDecisionLogLine`, written by
  *   `haiku_decision_record` and `haiku_reconciliation_acknowledge`).

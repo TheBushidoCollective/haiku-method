@@ -301,40 +301,12 @@ function applyResponse(intentDir, action, root, slug) {
 			}
 			break
 		}
-		case "complete_stage": {
-			const stageBranch = `haiku/${slug}/${stage}`
-			const mainBranch = `haiku/${slug}/main`
-			try {
-				git(root, "add", "-A")
-				try {
-					git(root, "commit", "-m", `complete ${stage}`)
-				} catch {
-					/* nothing to commit — fine */
-				}
-				const currentBr = execFileSync("git", ["branch", "--show-current"], {
-					cwd: root,
-					encoding: "utf8",
-				}).trim()
-				if (currentBr !== stageBranch) {
-					git(root, "checkout", "-q", stageBranch)
-				}
-				git(root, "checkout", "-q", mainBranch)
-				git(
-					root,
-					"merge",
-					"--no-ff",
-					"--no-edit",
-					"-m",
-					`merge ${stage}`,
-					stageBranch,
-				)
-			} catch (err) {
-				console.error(
-					`[e2e] complete_stage(${stage}) failed: ${err instanceof Error ? err.message : String(err)}`,
-				)
-			}
-			break
-		}
+		// NOTE: `complete_stage` is intentionally NOT handled here.
+		// It auto-executes inline inside `haiku_run_next` (the workflow
+		// engine performs the stage→main merge in-process) and never
+		// surfaces to the agent loop, so it cannot appear in
+		// `seenActions`. Keep this comment as the breadcrumb — adding
+		// a `case "complete_stage":` block is dead code.
 		default:
 			break
 	}

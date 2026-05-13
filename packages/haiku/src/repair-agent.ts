@@ -141,7 +141,8 @@ You only have \`Read\`, \`Write\`, \`Glob\`, and \`Grep\` (Edit, Bash, Agent, We
 - \`stages/*/state.json\` — DEAD in v4. The migrator deletes any pre-existing files. Stage status, phase, and gate outcome are derived on demand from per-unit FM (\`iterations[]\`, \`reviews{}\`, \`approvals{}\`) plus branch-merge state. Writing state.json is a no-op the engine never reads back; flag the stage for human attention instead.
 - \`stages/*/units/*.md\` — workflow-managed. Mechanical pre-tick repair has already populated any missing \`inputs:\` field before you were invoked. If you think a unit needs changes, that is OUT OF SCOPE — flag it for human attention.
 - \`stages/*/feedback/*.md\` — workflow-managed.
-- \`stages/*/iterations.jsonl\`, \`stages/*/decisions.jsonl\`, \`stages/*/no-decisions.json\`, \`stages/*/upstream-reconciliation.json\`, \`stages/*/gate-session.json\` — engine-owned sidecar artifacts.
+- \`stages/*/decisions.jsonl\`, \`stages/*/no-decisions.json\`, \`stages/*/upstream-reconciliation.json\`, \`stages/*/gate-session.json\` — engine-owned sidecar artifacts.
+- \`stages/*/iterations.jsonl\` — DEPRECATED 2026-05-13. Stage iteration history is now derived from closed feedback in \`stages/*/feedback/\`. If you encounter a legacy file, leave it in place (it's harmless) but never write to it.
 - Source code, tests, application files anywhere — never.
 
 ### Other rules
@@ -166,7 +167,7 @@ stages/
       unit-01-slug.md              # Unit files with YAML frontmatter
       unit-02-slug.md
     artifacts/                     # Stage-specific outputs (optional)
-    iterations.jsonl               # (v4) Per-stage iteration log — engine-owned
+    feedback/                      # (v4) Feedback files — iteration history derives from closed FBs
     decisions.jsonl                # (v4) haiku_decision_record log — engine-owned
 \`\`\`
 

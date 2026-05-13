@@ -1,32 +1,13 @@
 import { useState } from "react"
-import { withAuthQuery } from "../../../api/auth"
 import { Card, SectionHeading } from "../../../atoms/Card"
 import {
 	type InlineCommentEntry,
 	InlineComments,
 } from "../../../organisms/InlineComments"
 import type { OutputArtifact } from "../../../types"
+import { authedAssetUrl } from "./asset-url"
 import { DeclaringUnitsBanner } from "./DeclaringUnitsBanner"
 import { markdownToSimpleHtml } from "./section-helpers"
-
-/**
- * Tunnel-served asset paths whose responses require the JWT gate
- * (FB-30). External http/https URLs pass through untouched.
- */
-const TUNNEL_ASSET_PREFIXES = [
-	"/files/",
-	"/mockups/",
-	"/wireframe/",
-	"/stage-artifacts/",
-	"/question-image/",
-]
-
-function authedAssetUrl(url: string | undefined | null): string {
-	if (!url) return ""
-	return TUNNEL_ASSET_PREFIXES.some((p) => url.startsWith(p))
-		? withAuthQuery(url)
-		: url
-}
 
 /**
  * OutputArtifactsTab — renders the Outputs tab inside the intent review.

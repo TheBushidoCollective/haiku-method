@@ -23,7 +23,6 @@
 import { MarkdownViewer } from "@haiku/shared"
 import DOMPurify from "dompurify"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { withAuthQuery } from "../../../api/auth"
 import { Card, SectionHeading } from "../../../atoms/Card"
 import { OutputCardMenu } from "../../../molecules/OutputCardMenu"
 import { type TabDef, Tabs } from "../../../molecules/Tabs"
@@ -39,6 +38,7 @@ import {
 } from "../../../organisms/ReplaceOutputDialog"
 import type { ParsedUnit } from "../../../parsed"
 import type { FeedbackItemData } from "../../../types"
+import { authedAssetUrl } from "../shared/asset-url"
 import { DeclaringUnitsBanner } from "../shared/DeclaringUnitsBanner"
 import {
 	markdownToSimpleHtml,
@@ -282,26 +282,6 @@ function seenBorderClass(_state: SeenState): string {
 
 function StateBadge(_props: { state: SeenState }) {
 	return null
-}
-
-// Tunnel-asset prefixes the server prepends when rewriting on-disk
-// paths into HTTP URLs for the SPA. URLs starting with one of these
-// need an auth-query stamp; absolute URLs and external URLs don't.
-// Kept in sync with the matching constants in `OutputArtifactsTab.tsx`
-// and `IntentCompleteView.tsx`.
-const TUNNEL_ASSET_PREFIXES = [
-	"/files/",
-	"/mockups/",
-	"/wireframe/",
-	"/stage-artifacts/",
-	"/question-image/",
-]
-
-function authedAssetUrl(url: string | undefined | null): string {
-	if (!url) return ""
-	return TUNNEL_ASSET_PREFIXES.some((p) => url.startsWith(p))
-		? withAuthQuery(url)
-		: url
 }
 
 interface ArtifactViewModel {

@@ -1,32 +1,18 @@
-import { withAuthQuery } from "../../../api/auth"
 import type { MockupInfo } from "../../../types"
+import { authedAssetUrl } from "./asset-url"
 import { isImageUrl } from "./section-helpers"
-
-/**
- * Tunnel-served asset paths whose responses require the JWT gate
- * (FB-30). External http/https URLs (user-supplied reference links)
- * pass through untouched.
- */
-const TUNNEL_ASSET_PREFIXES = [
-	"/files/",
-	"/mockups/",
-	"/wireframe/",
-	"/stage-artifacts/",
-	"/question-image/",
-]
-
-function needsTunnelAuth(url: string): boolean {
-	return TUNNEL_ASSET_PREFIXES.some((p) => url.startsWith(p))
-}
 
 /**
  * Append `?t=<jwt>` to URLs served under the tunnel, leave other URLs
  * alone. `<img>` and `<iframe>` cannot attach an `Authorization` header
  * from the browser, so the token rides as a query param — the server's
  * `requireTunnelAuth` accepts either shape.
+ *
+ * Thin wrapper over the shared `authedAssetUrl` helper, narrowed to
+ * the non-empty-string contract this file's callers actually use.
  */
 function resolveAssetUrl(url: string): string {
-	return needsTunnelAuth(url) ? withAuthQuery(url) : url
+	return authedAssetUrl(url) || url
 }
 
 /**

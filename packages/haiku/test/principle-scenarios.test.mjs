@@ -481,8 +481,12 @@ test("feedback: intent-scope FB walks via Track B (intent-level FB must be solve
 				mode: "continuous",
 			}),
 		)
-		// One FM-complete stage so findCurrentStage returns null
-		// (every stage merged in FM sense).
+		// One FM-complete inception stage. findCurrentStage advances
+		// past it and returns the next unstarted stage (`design`) —
+		// `areStageUnitsComplete` returns false for stages with no
+		// units dir, so the walk pins there. The assertion below
+		// checks the FB track wins regardless of the active-stage
+		// result.
 		writeUnit(intentDir, "inception", "unit-01", {
 			started_at: "2026-04-27T19:00:00Z",
 			iterations: [

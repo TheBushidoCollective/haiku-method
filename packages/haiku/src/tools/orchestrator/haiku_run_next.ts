@@ -34,12 +34,16 @@ import {
 	ensureOnStageBranch,
 	fetchOrigin,
 	getCurrentBranch,
+	hasNoMergeDebt,
 	pushStageBranch,
 	reconcileIntentBranches,
 	syncBranchDownstream,
 } from "../../git-worktree.js"
 import { adaptInstructions } from "../../harness-instructions.js"
-import { findCurrentStage } from "../../orchestrator/workflow/cursor.js"
+import {
+	findCurrentStage,
+	isStageComplete,
+} from "../../orchestrator/workflow/cursor.js"
 import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
 import type { OrchestratorAction as OrchestratorActionType } from "../../orchestrator.js"
 import {
@@ -846,20 +850,14 @@ export default defineTool({
 					const im = readFrontmatter(intentFile)
 					const studio = (im.studio as string) || ""
 					const mode = (im.mode as string) || "continuous"
-					if (studio) {
-						const { isStageComplete } = await import(
-							"../../orchestrator/workflow/cursor.js"
-						)
-						if (isStageComplete(iDir, studio, hereStage, mode)) {
-							const { hasNoMergeDebt } = await import("../../git-worktree.js")
-							const hereBranch = `haiku/${slug}/${hereStage}`
-							const intentMainBranch = `haiku/${slug}/main`
-							if (!hasNoMergeDebt(hereBranch, intentMainBranch)) {
-								result = {
-									action: "complete_stage",
-									intent: slug,
-									stage: hereStage,
-								}
+					if (studio && isStageComplete(iDir, studio, hereStage, mode)) {
+						const hereBranch = `haiku/${slug}/${hereStage}`
+						const intentMainBranch = `haiku/${slug}/main`
+						if (!hasNoMergeDebt(hereBranch, intentMainBranch)) {
+							result = {
+								action: "complete_stage",
+								intent: slug,
+								stage: hereStage,
 							}
 						}
 					}

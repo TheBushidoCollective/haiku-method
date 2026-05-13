@@ -11,7 +11,7 @@
 //   - Stages aren't sealed; cursor walks via findCurrentStage
 //   - Drift detection emits drift_detected before any other track
 //   - Open FBs preempt intent-track work
-//   - intent walk routes through review → approval → merge_stage
+//   - intent walk routes through review → approval → complete_stage
 //   - Mode-shaped role list (autopilot trims to spec + quality_gates)
 
 import assert from "node:assert"
@@ -551,13 +551,13 @@ test("cursor: closed FB does NOT preempt → cursor walks Track A", async () => 
 // Original 13 scenarios cover the canonical Track A → user_gate flow
 // and basic Track B preemption. The set below fills the load-bearing
 // gaps surfaced during the v4 ship review:
-//   - merge_stage transition (last unit fully signed → emit merge)
+//   - complete_stage transition (last unit fully signed → emit merge)
 //   - Cross-stage FB priority (FB on earlier stage preempts current)
 //   - Mid-wave noop with siblings (one in-flight + one wave-ready)
 //   - Approval invalidation re-route (FB closes; cleared approval
 //     resurfaces as dispatch_approval)
 
-test("cursor: fully signed unit (qg done) → merge_stage", async () => {
+test("cursor: fully signed unit (qg done) → complete_stage", async () => {
 	if (!HAS_GIT) return
 	await withTmpRepo(
 		"cursor-merge-stage",
@@ -566,7 +566,7 @@ test("cursor: fully signed unit (qg done) → merge_stage", async () => {
 			makeIntent({ intentDir, slug, studio: "test" })
 			seedVerifiedElaboration({ intentDir, stage: "design" })
 			// Every reviewer + approver + qg signed. Cursor should emit
-			// merge_stage so the workflow can fast-forward intent main.
+			// complete_stage so the workflow can fast-forward intent main.
 			writeUnit(intentDir, "design", "unit-01", {
 				title: "u1",
 				depends_on: [],
@@ -608,7 +608,7 @@ test("cursor: fully signed unit (qg done) → merge_stage", async () => {
 			assert.strictEqual(
 				action.action,
 				"complete_stage",
-				`expected merge_stage with all sigs in place; got: ${action.action} — ${action.message}`,
+				`expected complete_stage with all sigs in place; got: ${action.action} — ${action.message}`,
 			)
 			assert.strictEqual(action.stage, "design")
 		},
@@ -790,7 +790,7 @@ test("cursor: closed FB with invalidates clears the listed approvals", async () 
 			// on the target unit; the fixture above stages that
 			// post-clear state. The cursor MUST see the missing user
 			// approval and route through user re-approval again, NOT
-			// emit merge_stage / sealed.
+			// emit complete_stage / sealed.
 			makeFeedback({
 				intentDir,
 				stage: "design",
@@ -808,7 +808,7 @@ test("cursor: closed FB with invalidates clears the listed approvals", async () 
 			// We don't assert exact next action (engine could route to
 			// dispatch_approval, user_gate, or run a re-review track —
 			// implementation choice). What MUST hold: the cursor isn't
-			// stuck on merge_stage / sealed — the closed FB's invalidation
+			// stuck on complete_stage / sealed — the closed FB's invalidation
 			// reopened SOMETHING that needs attention.
 			assert.ok(
 				action.action !== "sealed" && action.action !== "complete_stage",
@@ -920,7 +920,7 @@ test("cursor: reject_hat re-entry routes back to prior hat", async () => {
 			})
 			const action = await runTick(repoRoot, slug)
 			// Cursor must dispatch a hat — anything other than start_unit_hat
-			// (or merge_stage / sealed) means we lost the rejection.
+			// (or complete_stage / sealed) means we lost the rejection.
 			assert.strictEqual(
 				action.action,
 				"start_unit_hat",

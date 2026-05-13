@@ -174,7 +174,14 @@ type Iteration = {
 	reason?: string | null
 }
 
-type ApprovalRecord = { at: string; migrated?: boolean } | null
+// Approval slot shapes the cursor accepts as "stamped":
+//   - object `{ at, migrated? }` — production write from a hat advance or
+//     a synthesized backfill stamp (the canonical shape).
+//   - bare `true` — post-migration backfill (`backfillCompletedUnitStamps`
+//     writes plain booleans on v3-shaped units). `isUnitFullyApproved`
+//     keys off truthy presence; the SHAPE of the stamp is not the signal.
+//   - null — no stamp.
+type ApprovalRecord = { at: string; migrated?: boolean } | boolean | null
 
 function readFm(path: string): { data: UnitFm; body: string } | null {
 	if (!existsSync(path)) return null

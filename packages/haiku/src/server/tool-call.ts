@@ -24,7 +24,6 @@ import {
 	parseCriteria,
 	parseIntent,
 	parseKnowledgeFiles,
-	parseOutputArtifacts,
 	parseStageArtifacts,
 	parseStageFiles,
 	parseStageStates,

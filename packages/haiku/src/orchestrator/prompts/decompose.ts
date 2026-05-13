@@ -511,11 +511,24 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			const expectedArtifactPath = wt
 				? a.outputPath
 					? a.outputPath.startsWith(dir)
-						? join(wt, ".haiku", "intents", slug, a.outputPath.slice(dir.length + 1))
+						? join(
+								wt,
+								".haiku",
+								"intents",
+								slug,
+								a.outputPath.slice(dir.length + 1),
+							)
 						: a.outputPath.startsWith(process.cwd())
 							? join(wt, a.outputPath.slice(process.cwd().length + 1))
 							: a.outputPath
-					: join(wt, ".haiku", "intents", slug, "knowledge", `${a.name.toUpperCase()}.md`)
+					: join(
+							wt,
+							".haiku",
+							"intents",
+							slug,
+							"knowledge",
+							`${a.name.toUpperCase()}.md`,
+						)
 				: null
 			const lines: string[] = [
 				`You are researching and producing the "${a.name}" discovery artifact for intent "${slug}" in stage "${stage}" of studio "${studio}".`,

@@ -146,8 +146,7 @@ export default defineTool({
 			const intentFm = parseFrontmatter(
 				readFileSync(join(intentDir, "intent.md"), "utf8"),
 			).data
-			const studio =
-				typeof intentFm.studio === "string" ? intentFm.studio : ""
+			const studio = typeof intentFm.studio === "string" ? intentFm.studio : ""
 			if (studio) {
 				// Case-insensitive name match: `readStageArtifactDefs`
 				// preserves the template filename's case (e.g.

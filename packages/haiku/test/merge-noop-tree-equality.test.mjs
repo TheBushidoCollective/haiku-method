@@ -418,13 +418,7 @@ test("findCurrentStage: walks past stage with no merge debt even when FM looks i
 	// `node --test --import tsx` the resolver doesn't find the plugin
 	// from the test file's path. Reset the module-level cache before
 	// setting the env so the next `resolvePluginRoot` call picks it up.
-	const pluginRoot = join(
-		import.meta.dirname,
-		"..",
-		"..",
-		"..",
-		"plugin",
-	)
+	const pluginRoot = join(import.meta.dirname, "..", "..", "..", "plugin")
 	const prevPluginRoot = process.env.CLAUDE_PLUGIN_ROOT
 	process.env.CLAUDE_PLUGIN_ROOT = pluginRoot
 	const { _resetPluginRootForTests } = await import("../src/config.ts")

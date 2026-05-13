@@ -885,9 +885,7 @@ export default defineTool({
 							// prove no-debt, synthesize and let the handler
 							// surface conflicts; the surrounding try/catch
 							// absorbs downstream failure.
-							const { hasNoMergeDebt } = await import(
-								"../../git-worktree.js"
-							)
+							const { hasNoMergeDebt } = await import("../../git-worktree.js")
 							const hereBranch = `haiku/${slug}/${hereStage}`
 							const intentMainBranch = `haiku/${slug}/main`
 							if (!hasNoMergeDebt(hereBranch, intentMainBranch)) {

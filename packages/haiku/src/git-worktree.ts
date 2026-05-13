@@ -121,7 +121,10 @@ export function refsHaveIdenticalTrees(refA: string, refB: string): boolean {
  * `merge_stage` synthesis AND the in-handler short-circuit on this
  * predicate so the loop can't fire from either side.
  */
-export function hasNoMergeDebt(stageBranch: string, intentMain: string): boolean {
+export function hasNoMergeDebt(
+	stageBranch: string,
+	intentMain: string,
+): boolean {
 	if (refsHaveIdenticalTrees(stageBranch, intentMain)) return true
 	if (isAncestor(stageBranch, intentMain)) return true
 	return false

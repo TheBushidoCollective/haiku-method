@@ -36,8 +36,14 @@
 // `buildElaboratePromptBody`, exported so the workflow handler can
 // invoke it without going through `buildRunInstructions`.
 
-import { existsSync, readdirSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+} from "node:fs"
+import { dirname, join } from "node:path"
 import {
 	createDiscoveryWorktree,
 	discoveryBranchName,
@@ -480,7 +486,42 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	// (produced on a prior tick, already merged). Uses the template's
 	// declared `location:` path when present so this works across
 	// studios with different output conventions.
+	//
+	// Self-heal: when an artifact's declared `outputPath` is empty
+	// but a matching file exists at the legacy `knowledge/<NAME>.md`
+	// convention, auto-relocate it. This catches the historical bad
+	// state reported on `location-timesheet-summary` (issue #356,
+	// 2026-05-13): a subagent on a pre-fix engine wrote
+	// `COVERAGE-MAPPING.md` to `knowledge/` while the template
+	// declared `product/COVERAGE-MAPPING.md`; the cursor's existence
+	// check then re-emitted the Discovery Fan-Out on every tick
+	// because the expected location was empty. Moving the file
+	// preserves the agent's work AND clears the wedge without manual
+	// intervention. Only triggers when the destination is empty (no
+	// overwrite risk) and the source name matches the template name
+	// uppercased (the long-standing legacy convention).
 	const knowledgeDir = join(dir, "knowledge")
+	for (const a of discoveryArtifactsAll) {
+		if (!a.outputPath) continue
+		if (existsSync(a.outputPath)) continue
+		const legacyName = `${a.name.toUpperCase()}.md`
+		const legacyPath = join(knowledgeDir, legacyName)
+		// Don't move if the legacy path IS the declared outputPath
+		// (templates that legitimately declare knowledge/<NAME>.md).
+		if (legacyPath === a.outputPath) continue
+		if (!existsSync(legacyPath)) continue
+		try {
+			mkdirSync(dirname(a.outputPath), { recursive: true })
+			renameSync(legacyPath, a.outputPath)
+			console.error(
+				`[haiku] Relocated misplaced discovery artifact: '${legacyPath}' → '${a.outputPath}' (template '${a.name}' declares ${a.outputPath}). Clears the cursor re-emission wedge from pre-2026-05-13 engine versions.`,
+			)
+		} catch (err) {
+			console.error(
+				`[haiku] Could not relocate '${legacyPath}' to '${a.outputPath}': ${err instanceof Error ? err.message : String(err)}. Discovery will continue to re-emit until the file is moved manually.`,
+			)
+		}
+	}
 	const discoveryArtifacts = discoveryArtifactsAll.filter((a) => {
 		if (a.outputPath) return !existsSync(a.outputPath)
 		const candidate = join(knowledgeDir, `${a.name.toUpperCase()}.md`)

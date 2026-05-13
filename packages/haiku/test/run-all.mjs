@@ -7,6 +7,15 @@ import { readdirSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
+// Shrink the browser-attach grace to 1s for tests. Production
+// default is 60s (haiku_run_next.ts) so users have time to switch
+// windows and open the gate tab; tests that stumble into the
+// inline-await path would otherwise stall for a full minute waiting
+// for a heartbeat that never arrives.
+if (!process.env.HAIKU_GATE_ATTACH_GRACE_MS) {
+	process.env.HAIKU_GATE_ATTACH_GRACE_MS = "1000"
+}
+
 const testDir = dirname(fileURLToPath(import.meta.url))
 // Exclude state-tools.test.mjs — it tests the haiku-parse CLI binary
 // and requires a build step first (npm run build). Run it separately

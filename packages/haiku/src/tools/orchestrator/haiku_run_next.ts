@@ -1618,7 +1618,19 @@ export default defineTool({
 				// engine inlines the wait; the URL+await-gate two-step
 				// is the fallback when we can't open a browser or no
 				// signal arrives in time."
-				const BROWSER_ATTACH_GRACE_MS = 8_000
+				//
+				// Grace defaults to 60s — that's the realistic budget
+				// for a user to switch windows, click open, and let the
+				// tab finish loading. Previously 8s, which fired
+				// fallback before the user could open the tab on a
+				// busy laptop or remote desktop (reported 2026-05-13 on
+				// `admin-portal-reimagine` design spec gate). Tests
+				// override via `HAIKU_GATE_ATTACH_GRACE_MS` to keep
+				// suites fast.
+				const BROWSER_ATTACH_GRACE_MS = (() => {
+					const env = Number(process.env.HAIKU_GATE_ATTACH_GRACE_MS)
+					return Number.isFinite(env) && env > 0 ? env : 60_000
+				})()
 				const POLL_INTERVAL_MS = 250
 				if (!prepared.browser_attached) {
 					launchBrowserBestEffort(prepared.review_url, "Gate review")

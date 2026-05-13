@@ -121,15 +121,25 @@ test("clears reviews + approvals on every unit of every downstream stage", () =>
 			quality_gates: stamp(),
 		})
 
-		// design + product units have empty reviews + approvals.
+		// design + product units have NO `reviews` / `approvals` keys
+		// (the helper deletes them rather than writing empty objects so
+		// the YAML doesn't carry stale empty bag keys).
 		for (const [stage, file] of [
 			["design", "unit-01.md"],
 			["design", "unit-02.md"],
 			["product", "unit-01.md"],
 		]) {
 			const fm = readUnitFm(intentDir, stage, file)
-			assert.deepStrictEqual(fm.reviews, {}, `${stage}/${file} reviews`)
-			assert.deepStrictEqual(fm.approvals, {}, `${stage}/${file} approvals`)
+			assert.strictEqual(
+				fm.reviews,
+				undefined,
+				`${stage}/${file} reviews should be removed, not set to {}`,
+			)
+			assert.strictEqual(
+				fm.approvals,
+				undefined,
+				`${stage}/${file} approvals should be removed, not set to {}`,
+			)
 		}
 	} finally {
 		rmSync(root, { recursive: true, force: true })
@@ -204,6 +214,45 @@ test("idempotent — second call clears nothing more", () => {
 		})
 		assert.strictEqual(second.units_cleared, 0)
 		assert.deepStrictEqual(second.stages_cleared, [])
+	} finally {
+		rmSync(root, { recursive: true, force: true })
+	}
+})
+
+test("per-unit error isolation: one malformed YAML doesn't abort downstream walk", () => {
+	const { root, intentDir, intentFm } = setup()
+	try {
+		// design/unit-01 is malformed YAML; design/unit-02 + product/unit-01
+		// are valid and have stamps. Before the fix, the readFileSync /
+		// parseFrontmatter throw on unit-01 would skip every remaining
+		// design unit AND the entire product stage. After the fix, the
+		// per-unit try/catch isolates the failure to that one file.
+		const designUnitsDir = join(intentDir, "stages", "design", "units")
+		mkdirSync(designUnitsDir, { recursive: true })
+		writeFileSync(
+			join(designUnitsDir, "unit-01.md"),
+			"---\nthis is: not: valid: yaml:\n: bad\n---\nbody\n",
+		)
+		writeUnit(intentDir, "design", "unit-02.md", {
+			title: "design u2",
+			reviews: { user: stamp() },
+			approvals: { user: stamp() },
+		})
+		writeUnit(intentDir, "product", "unit-01.md", {
+			title: "product u1",
+			reviews: { user: stamp() },
+			approvals: { user: stamp() },
+		})
+		const result = invalidateDownstreamApprovals({
+			intentDir,
+			intentFm,
+			studio: "software",
+			completedStage: "inception",
+		})
+		// design counts because unit-02 cleared; product counts because
+		// unit-01 cleared. unit-01 in design was skipped, not aborted.
+		assert.deepStrictEqual(result.stages_cleared.sort(), ["design", "product"])
+		assert.strictEqual(result.units_cleared, 2)
 	} finally {
 		rmSync(root, { recursive: true, force: true })
 	}

@@ -37,7 +37,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { parseFrontmatter, setFrontmatterField } from "../../state-tools.js"
+import { deleteFrontmatterFields, parseFrontmatter } from "../../state-tools.js"
 import { resolveIntentStages } from "../studio.js"
 
 /**
@@ -69,22 +69,42 @@ export function invalidateDownstreamApprovals(args: {
 		const files = readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
 		let stageTouched = false
 		for (const file of files) {
+			// Per-unit try/catch so one malformed FM (bad YAML, perm
+			// error, race with another write) doesn't abort the walk and
+			// leave downstream stages partially invalidated. Surface the
+			// error to stderr with the path so it's recoverable; the
+			// outer `complete_stage` caller's catch logs the overall
+			// invalidation pass as non-fatal regardless. Reported on
+			// PR #353 review.
 			const unitPath = join(unitsDir, file)
-			const raw = readFileSync(unitPath, "utf8")
-			const fm = parseFrontmatter(raw).data as Record<string, unknown>
-			const hadReviews =
-				fm.reviews &&
-				typeof fm.reviews === "object" &&
-				Object.keys(fm.reviews as Record<string, unknown>).length > 0
-			const hadApprovals =
-				fm.approvals &&
-				typeof fm.approvals === "object" &&
-				Object.keys(fm.approvals as Record<string, unknown>).length > 0
-			if (!hadReviews && !hadApprovals) continue
-			if (hadReviews) setFrontmatterField(unitPath, "reviews", {})
-			if (hadApprovals) setFrontmatterField(unitPath, "approvals", {})
-			unitsCleared++
-			stageTouched = true
+			try {
+				const raw = readFileSync(unitPath, "utf8")
+				const fm = parseFrontmatter(raw).data as Record<string, unknown>
+				const hadReviews =
+					fm.reviews &&
+					typeof fm.reviews === "object" &&
+					Object.keys(fm.reviews as Record<string, unknown>).length > 0
+				const hadApprovals =
+					fm.approvals &&
+					typeof fm.approvals === "object" &&
+					Object.keys(fm.approvals as Record<string, unknown>).length > 0
+				if (!hadReviews && !hadApprovals) continue
+				// Use `deleteFrontmatterFields` (not setFrontmatterField
+				// to `{}`) so the YAML doesn't end up with stale empty
+				// `reviews: {}` / `approvals: {}` keys. Single
+				// read-parse-write per unit; matches the docstring of
+				// the canonical "clear everything" helper.
+				const toDelete: string[] = []
+				if (hadReviews) toDelete.push("reviews")
+				if (hadApprovals) toDelete.push("approvals")
+				deleteFrontmatterFields(unitPath, toDelete)
+				unitsCleared++
+				stageTouched = true
+			} catch (err) {
+				console.error(
+					`[invalidate-downstream] skipping ${unitPath}: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
 		}
 		if (stageTouched) stagesCleared.push(stage)
 	}

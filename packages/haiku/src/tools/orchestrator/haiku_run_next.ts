@@ -1551,11 +1551,24 @@ export default defineTool({
 				if (!prepared.browser_attached) {
 					launchBrowserBestEffort(prepared.review_url, "Gate review")
 					const deadline = Date.now() + BROWSER_ATTACH_GRACE_MS
+					// Respect AbortSignal during the poll — if the MCP call
+					// is cancelled (user Ctrl-C, client reconnect, host
+					// timeout), exit the wait immediately rather than
+					// draining the full grace window. Without this, abort
+					// could land up to ~8s after the user requested it.
+					// Reported on PR #352 review.
 					while (
 						Date.now() < deadline &&
-						!isBrowserAttached(prepared.session_id)
+						!isBrowserAttached(prepared.session_id) &&
+						!signal?.aborted
 					) {
 						await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
+					}
+					// If the wait was cut short by abort, propagate via
+					// the same path the inline await would have taken
+					// instead of emitting the URL fallback.
+					if (signal?.aborted) {
+						throw new Error("aborted")
 					}
 					if (!isBrowserAttached(prepared.session_id)) {
 						// No SPA heartbeat within the grace window. Either the
@@ -1643,15 +1656,31 @@ export default defineTool({
 				const errorMsg = err instanceof Error ? err.message : String(err)
 				const errorStack = err instanceof Error ? err.stack : ""
 
-				console.error(`[haiku] gate_review prepare failed: ${errorMsg}`)
-				reportError(err, { intent: slug, stage })
+				// The try block covers prepare + browser launch + inline
+				// await, so distinguish the failure phase in the surface
+				// message. "Lost presence" comes from awaitGateReviewSession
+				// when the SPA tab disconnects mid-await; "aborted" is the
+				// AbortSignal-cut short of the attach poll above; anything
+				// else is treated as a prepare-phase failure. Reported on
+				// PR #352 review — agents were seeing "GATE PREPARE FAILED"
+				// for what was really an await-phase disconnect.
+				const isAwaitDisconnect = errorMsg.includes("lost presence")
+				const isAborted = errorMsg === "aborted" || signal?.aborted
+				const failurePhase = isAwaitDisconnect
+					? "await"
+					: isAborted
+						? "abort"
+						: "prepare"
+
+				console.error(`[haiku] gate_review ${failurePhase} failed: ${errorMsg}`)
+				if (!isAborted) reportError(err, { intent: slug, stage })
 
 				try {
 					const logDir = join(process.cwd(), ".haiku", "logs")
 					mkdirSync(logDir, { recursive: true })
 					writeFileSync(
 						join(logDir, "gate-review-error.log"),
-						`${new Date().toISOString()}\nintent: ${slug}\nstage: ${stage}\nphase: prepare\nerror: ${errorMsg}\n${errorStack}\n---\n`,
+						`${new Date().toISOString()}\nintent: ${slug}\nstage: ${stage}\nphase: ${failurePhase}\nerror: ${errorMsg}\n${errorStack}\n---\n`,
 						{ flag: "a" },
 					)
 				} catch {
@@ -1659,6 +1688,28 @@ export default defineTool({
 				}
 
 				syncSessionMetadata(slug, args.state_file as string | undefined)
+				if (isAborted) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `GATE ABORTED: the tool call was cancelled while waiting for the browser. Call haiku_run_next { intent: "${slug}" } to retry.`,
+							},
+						],
+						isError: true,
+					}
+				}
+				if (isAwaitDisconnect) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `GATE DISCONNECTED: ${errorMsg}`,
+							},
+						],
+						isError: true,
+					}
+				}
 				return {
 					content: [
 						{

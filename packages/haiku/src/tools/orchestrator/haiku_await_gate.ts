@@ -754,6 +754,29 @@ export default defineTool({
 				return buildAwaitTimeoutResponse(slug)
 			}
 
+			// Presence-loss is a distinct user-action error: the SPA tab
+			// disconnected mid-await (no heartbeat for ≥120s). The throw
+			// message from `awaitGateReviewSession` already names the
+			// recovery path ("re-open the URL and call haiku_await_gate
+			// when ready") — wrapping it in the generic "Review UI
+			// failed to start" / "investigate the SPA server (port
+			// conflict? blocked browser launch?)" boilerplate below
+			// would direct the agent at a problem that doesn't exist
+			// (the UI started fine; the user closed the tab). Surface
+			// the message verbatim. Reported on PR #352 review.
+			if (errorMsg.includes("lost presence")) {
+				syncSessionMetadata(slug, stFile)
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `GATE DISCONNECTED: ${errorMsg}`,
+						},
+					],
+					isError: true,
+				}
+			}
+
 			const agentFixable =
 				errorMsg.includes("Could not parse intent") ||
 				errorMsg.includes("No such file") ||

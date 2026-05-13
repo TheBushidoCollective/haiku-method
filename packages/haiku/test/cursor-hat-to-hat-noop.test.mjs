@@ -184,9 +184,18 @@ test("nextHatForUnit: open iter on a hat NOT in the configured set (drift) → n
 })
 
 test("nextHatForUnit: closed iter on a hat NOT in the configured set (drift) → null", () => {
-	// Symmetric: closed iter pointing at a drift hat also returns
-	// null. The advance/advanced/reject/rejected branches all guard
-	// on `idx < 0`, so this is the path through each of them too.
+	// Pins the `if (idx < 0) return null` guard inside the
+	// advance/advanced/closed branch when a closed iter points at a
+	// hat the studio no longer has.
+	//
+	// NOTE: the reject/rejected branch is intentionally asymmetric.
+	// It guards with `if (idx <= 0)` and dispatches `configuredHats[0]`
+	// rather than returning null — a drift rejection falls back to
+	// re-running the fix-hat sequence from the start. So this test
+	// pins ONLY the advance-side drift contract; the reject-side
+	// drift behavior (fall back to first hat) is covered by the
+	// "FB reject vocab — 'rejected' on first hat re-dispatches first
+	// hat" case above and is the correct behavior.
 	const hats = ["planner", "implementer", "reviewer"]
 	const out = nextHatForUnit(
 		fm([{ hat: "bogus-hat", completed_at: "t", result: "advance" }]),

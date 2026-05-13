@@ -256,7 +256,7 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 			}
 			break
 		}
-		case "merge_stage": {
+		case "complete_stage": {
 			// Discrete & continuous both reach this — for discrete, the
 			// external provider performs the merge; for continuous, the
 			// engine does. Either way the test simulates the resulting
@@ -337,7 +337,7 @@ async function driveToSealed(slug, intentDir, repoRoot, maxTicks = 100) {
 		applyResponse(intentDir, action, repoRoot, slug)
 		// Auto-stamp sealed_at when merge_intent fires (mirrors run_next's
 		// auto-seal — we're testing the cursor here, not run_next).
-		if (action.action === "merge_intent") {
+		if (action.action === "seal_intent") {
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
 			writeFm(intentMd, { ...fm, sealed_at: new Date().toISOString() })
@@ -459,7 +459,7 @@ test("mode change: continuous → autopilot mid-flight; subsequent ticks honor n
 
 			if (action.action === "sealed") break
 			applyResponse(intentDir, action, repoRoot, slug)
-			if (action.action === "merge_intent") {
+			if (action.action === "seal_intent") {
 				const intentMd = join(intentDir, "intent.md")
 				const fm = readFm(intentMd)
 				writeFm(intentMd, { ...fm, sealed_at: new Date().toISOString() })

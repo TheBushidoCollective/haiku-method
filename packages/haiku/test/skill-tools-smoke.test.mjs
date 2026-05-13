@@ -93,7 +93,12 @@ function setupRepo() {
 			title: "u1",
 			started_at: "2026-04-15T10:00:00Z",
 			iterations: [
-				{ hat: "verifier", started_at: "t", completed_at: "t", result: "advance" },
+				{
+					hat: "verifier",
+					started_at: "t",
+					completed_at: "t",
+					result: "advance",
+				},
 			],
 			reviews: { user: { at: "t" } },
 			approvals: { user: { at: "t" } },

@@ -7,12 +7,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import {
-	mkdirSync,
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -28,19 +23,16 @@ function gitInit(root) {
 	execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root })
 	execFileSync("git", ["config", "user.email", "t@t"], { cwd: root })
 	execFileSync("git", ["config", "user.name", "t"], { cwd: root })
-	execFileSync(
-		"git",
-		["commit", "--allow-empty", "-q", "-m", "init"],
-		{ cwd: root },
-	)
+	execFileSync("git", ["commit", "--allow-empty", "-q", "-m", "init"], {
+		cwd: root,
+	})
 }
 
 function fm(o, body = "") {
 	const lines = ["---"]
 	for (const [k, v] of Object.entries(o)) {
 		if (v === null) lines.push(`${k}: null`)
-		else if (typeof v === "object")
-			lines.push(`${k}: ${JSON.stringify(v)}`)
+		else if (typeof v === "object") lines.push(`${k}: ${JSON.stringify(v)}`)
 		else if (typeof v === "string") lines.push(`${k}: ${JSON.stringify(v)}`)
 		else lines.push(`${k}: ${v}`)
 	}

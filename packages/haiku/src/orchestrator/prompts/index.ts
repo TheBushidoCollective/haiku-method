@@ -27,8 +27,8 @@ import advance_stage from "./advance_stage.js"
 import blocked from "./blocked.js"
 import changes_requested from "./changes_requested.js"
 import close_feedback from "./close_feedback.js"
-import commit_wip from "./commit_wip.js"
 import complete from "./complete.js"
+import complete_stage from "./complete_stage.js"
 import dag_cycle_detected from "./dag_cycle_detected.js"
 import decompose from "./decompose.js"
 import discovery_missing from "./discovery_missing.js"
@@ -60,13 +60,13 @@ import intent_complete from "./intent_complete.js"
 import intent_completion_fix from "./intent_completion_fix.js"
 import intent_completion_review from "./intent_completion_review.js"
 import intent_review from "./intent_review.js"
-import merge_intent from "./merge_intent.js"
-import merge_stage from "./merge_stage.js"
 import migrated from "./migrated.js"
 import outputs_missing from "./outputs_missing.js"
 import review from "./review.js"
 import review_fix from "./review_fix.js"
 import safe_intent_repair from "./safe_intent_repair.js"
+import save_wip from "./save_wip.js"
+import seal_intent from "./seal_intent.js"
 import select_studio from "./select_studio.js"
 import start_feedback_hat from "./start_feedback_hat.js"
 import start_stage from "./start_stage.js"
@@ -87,7 +87,7 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["blocked", blocked],
 	["changes_requested", changes_requested],
 	["close_feedback", close_feedback],
-	["commit_wip", commit_wip],
+	["save_wip", save_wip],
 	["complete", complete],
 	["dag_cycle_detected", dag_cycle_detected],
 	["decompose", decompose],
@@ -121,8 +121,8 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["dispatch_approval", dispatch_approval],
 	["dispatch_quality_gates", dispatch_quality_gates],
 	["user_gate", user_gate],
-	["merge_intent", merge_intent],
-	["merge_stage", merge_stage],
+	["seal_intent", seal_intent],
+	["complete_stage", complete_stage],
 	["migrated", migrated],
 	["drift_detected", drift_detected],
 	["unit_inputs_missing", unit_inputs_missing],

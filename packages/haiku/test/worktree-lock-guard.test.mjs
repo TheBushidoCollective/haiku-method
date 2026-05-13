@@ -10,12 +10,7 @@
 
 import assert from "node:assert"
 import { execFileSync } from "node:child_process"
-import {
-	existsSync,
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs"
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -70,9 +65,7 @@ async function withLockedWorktree(fn) {
 test("isCurrentWorktreeLocked reads the lock file", async () => {
 	if (!HAS_GIT) return
 	await withLockedWorktree(async () => {
-		const { isCurrentWorktreeLocked } = await import(
-			"../src/git-worktree.ts"
-		)
+		const { isCurrentWorktreeLocked } = await import("../src/git-worktree.ts")
 		assert.strictEqual(isCurrentWorktreeLocked(), true)
 	})
 })

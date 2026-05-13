@@ -208,7 +208,11 @@ await test("approve round-trip — wire POST /decide queues + status flip resolv
 			body: JSON.stringify({ decision: "approved", feedback: "" }),
 		},
 	)
-	assert.strictEqual(wireRes.status, 200, `expected 200 from /decide, got ${wireRes.status}`)
+	assert.strictEqual(
+		wireRes.status,
+		200,
+		`expected 200 from /decide, got ${wireRes.status}`,
+	)
 	const wireBody = await wireRes.json()
 	assert.strictEqual(wireBody.ok, true)
 	assert.strictEqual(wireBody.decision, "approved")
@@ -223,10 +227,7 @@ await test("approve round-trip — wire POST /decide queues + status flip resolv
 		/no changes requested/i.test(body) || /Done/.test(body),
 		`approve return must signal no-changes; got: ${body.slice(0, 300)}`,
 	)
-	assert.ok(
-		!result.isError,
-		"approve return must not be flagged isError",
-	)
+	assert.ok(!result.isError, "approve return must not be flagged isError")
 })
 
 await test("request-changes round-trip — return nudges agent toward haiku_run_next", async () => {
@@ -236,7 +237,10 @@ await test("request-changes round-trip — return nudges agent toward haiku_run_
 	for (let i = 0; i < 100 && !_capturedSessionId; i++) {
 		await delay(10)
 	}
-	assert.ok(_capturedSessionId, "session id not captured from console.error in time")
+	assert.ok(
+		_capturedSessionId,
+		"session id not captured from console.error in time",
+	)
 	const sessionId = _capturedSessionId
 
 	const port = getActualPort()
@@ -268,7 +272,10 @@ await test("request-changes round-trip — return nudges agent toward haiku_run_
 		/haiku_run_next/.test(body),
 		`return must nudge toward haiku_run_next so feedback flows into fix-loop; got: ${body.slice(0, 300)}`,
 	)
-	assert.ok(!result.isError, "request-changes return must not be flagged isError")
+	assert.ok(
+		!result.isError,
+		"request-changes return must not be flagged isError",
+	)
 })
 
 await test("schema rejection — malformed args returns haiku_review_open_input_invalid", async () => {

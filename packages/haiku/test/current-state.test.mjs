@@ -112,9 +112,17 @@ function fixture(slug, frontmatter, stages = {}) {
 			unitApprovals = approvals
 		} else if (phase === "execute") {
 			// Mid-hat: only first hat advanced.
-			iterations = hats.length > 0
-				? [{ hat: hats[0], started_at: at, completed_at: at, result: "advance" }]
-				: []
+			iterations =
+				hats.length > 0
+					? [
+							{
+								hat: hats[0],
+								started_at: at,
+								completed_at: at,
+								result: "advance",
+							},
+						]
+					: []
 		} else if (phase === "review") {
 			iterations = hats.map((hat) => ({
 				hat,

@@ -45,7 +45,7 @@ test("deadlock-detector: same action twice in a row reaches threshold", () => {
 test("deadlock-detector: changing action signature resets the counter", () => {
 	__resetDeadlockDetector()
 	recordTickResult("slug-b", { action: "dispatch_review", role: "spec" })
-	recordTickResult("slug-b", { action: "merge_stage", stage: "design" })
+	recordTickResult("slug-b", { action: "complete_stage", stage: "design" })
 	recordTickResult("slug-b", { action: "dispatch_review", role: "spec" })
 	// Last call lands on a NEW count=1 — the previous alternating tick
 	// reset the chain.
@@ -112,7 +112,7 @@ test("deadlock-detector: null action records as a stable 'null' signature", () =
 test("deadlock-detector: A→B→A→B churn pattern surfaces a churn signal", () => {
 	__resetDeadlockDetector()
 	const A = { action: "dispatch_review", role: "spec" }
-	const B = { action: "merge_stage", stage: "design" }
+	const B = { action: "complete_stage", stage: "design" }
 	recordTickResult("slug-h", A)
 	recordTickResult("slug-h", B)
 	recordTickResult("slug-h", A)
@@ -135,7 +135,7 @@ test("deadlock-detector: A→B→A→B churn pattern surfaces a churn signal", (
 test("deadlock-detector: churn only fires once per alternation run", () => {
 	__resetDeadlockDetector()
 	const A = { action: "dispatch_review", role: "spec" }
-	const B = { action: "merge_stage", stage: "design" }
+	const B = { action: "complete_stage", stage: "design" }
 	recordTickResult("slug-i", A)
 	recordTickResult("slug-i", B)
 	recordTickResult("slug-i", A)
@@ -157,7 +157,7 @@ test("deadlock-detector: churn only fires once per alternation run", () => {
 test("deadlock-detector: a fresh signature in the window resets the churn latch", () => {
 	__resetDeadlockDetector()
 	const A = { action: "dispatch_review", role: "spec" }
-	const B = { action: "merge_stage", stage: "design" }
+	const B = { action: "complete_stage", stage: "design" }
 	const C = { action: "elaborate", stage: "product" }
 	recordTickResult("slug-j", A)
 	recordTickResult("slug-j", B)
@@ -185,7 +185,7 @@ test("deadlock-detector: A→A→A→B fires churn on B's arrival", () => {
 	// expected and useful — dashboards can correlate them.
 	__resetDeadlockDetector()
 	const A = { action: "dispatch_review", role: "spec" }
-	const B = { action: "merge_stage", stage: "design" }
+	const B = { action: "complete_stage", stage: "design" }
 	recordTickResult("slug-l", A) // count=1
 	recordTickResult("slug-l", A) // count=2 (suspected fires)
 	recordTickResult("slug-l", A) // count=3 (suspected silent)
@@ -206,7 +206,7 @@ test("deadlock-detector: healthy progression (A→B→C→D distinct) does NOT t
 		stage: "inception",
 		role: "spec",
 	})
-	recordTickResult("slug-k", { action: "merge_stage", stage: "inception" })
+	recordTickResult("slug-k", { action: "complete_stage", stage: "inception" })
 	recordTickResult("slug-k", { action: "elaborate", stage: "design" })
 	assert.strictEqual(
 		__getTickHistoryForTests("slug-k").churn_fired,

@@ -285,7 +285,7 @@ design unit body
 		const cursorResult = dispatchOrchestratorAction(slug)
 		assert.notStrictEqual(
 			cursorResult.action,
-			"merge_stage",
+			"complete_stage",
 			`Cursor walk must not emit merge_stage when inception is complete and the active stage is design. Saw: ${JSON.stringify(cursorResult)}`,
 		)
 	} finally {

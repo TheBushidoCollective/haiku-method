@@ -310,7 +310,13 @@ await test("happy path: existing main + divergent last stage → 2-parent merge 
 		git(tmp, "add", "-A")
 		git(tmp, "commit", "-m", "main side")
 
-		git(tmp, "checkout", "-b", `haiku/${slug}/development`, `haiku/${slug}/main~1`)
+		git(
+			tmp,
+			"checkout",
+			"-b",
+			`haiku/${slug}/development`,
+			`haiku/${slug}/main~1`,
+		)
 		writeFileSync(join(tmp, "dev-side.md"), "from dev\n")
 		git(tmp, "add", "-A")
 		git(tmp, "commit", "-m", "dev side")
@@ -333,7 +339,13 @@ await test("conflict path: prompt names file + says git add / git commit", () =>
 		git(tmp, "add", "-A")
 		git(tmp, "commit", "-m", "main side")
 
-		git(tmp, "checkout", "-b", `haiku/${slug}/development`, `haiku/${slug}/main~1`)
+		git(
+			tmp,
+			"checkout",
+			"-b",
+			`haiku/${slug}/development`,
+			`haiku/${slug}/main~1`,
+		)
 		writeFileSync(join(tmp, "shared.md"), "dev side\n")
 		git(tmp, "add", "-A")
 		git(tmp, "commit", "-m", "dev side")

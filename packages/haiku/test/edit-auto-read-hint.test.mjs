@@ -27,7 +27,9 @@ test("false positive: edit succeeded but content mentions 'read before edit'", (
 	// to findNotReadError) and gates on isError.
 	const result = findNotReadError({
 		isError: false,
-		content: [{ type: "text", text: "The file has been updated successfully." }],
+		content: [
+			{ type: "text", text: "The file has been updated successfully." },
+		],
 	})
 	assert.strictEqual(
 		result,

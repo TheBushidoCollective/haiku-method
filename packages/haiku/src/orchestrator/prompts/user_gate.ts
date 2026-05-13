@@ -53,7 +53,7 @@ export default definePromptBuilder(({ slug, action }) => {
 	)
 	lines.push("")
 	lines.push(
-		`On approve, await_gate stamps \`${gateKind === "spec" ? "reviews" : "approvals"}.user\` on each listed unit and the cursor on the next tick routes forward (next role / merge_stage / next stage).`,
+		`On approve, await_gate stamps \`${gateKind === "spec" ? "reviews" : "approvals"}.user\` on each listed unit and the cursor on the next tick routes forward (next role / complete_stage / next stage).`,
 	)
 	lines.push("")
 	lines.push(

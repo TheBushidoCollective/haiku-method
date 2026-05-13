@@ -1757,7 +1757,8 @@ body
 			value: [
 				{
 					name: "compile clean",
-					command: "cd services/api && MIX_ENV=test mix compile --warnings-as-errors",
+					command:
+						"cd services/api && MIX_ENV=test mix compile --warnings-as-errors",
 				},
 			],
 		})

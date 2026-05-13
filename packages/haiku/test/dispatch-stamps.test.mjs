@@ -26,7 +26,9 @@ async function withRepo(fn) {
 	const root = mkdtempSync(join(tmpdir(), "haiku-dispatch-stamps-"))
 	const orig = process.cwd()
 	try {
-		mkdirSync(join(root, ".haiku", "intents", "test-intent"), { recursive: true })
+		mkdirSync(join(root, ".haiku", "intents", "test-intent"), {
+			recursive: true,
+		})
 		process.chdir(root)
 		return await fn(root)
 	} finally {
@@ -86,7 +88,15 @@ function writeUnit(root, stage, name, fm = {}) {
 
 function writeFeedback(root, stage, num, fm = {}) {
 	const dir = stage
-		? join(root, ".haiku", "intents", "test-intent", "stages", stage, "feedback")
+		? join(
+				root,
+				".haiku",
+				"intents",
+				"test-intent",
+				"stages",
+				stage,
+				"feedback",
+			)
 		: join(root, ".haiku", "intents", "test-intent", "feedback")
 	mkdirSync(dir, { recursive: true })
 	const path = join(dir, `${num}-stub.md`)
@@ -119,17 +129,16 @@ test("dispatch_review: stash + drain stamps reviews.<role> on each unit", async 
 		const { stashPendingDispatch, drainPendingDispatches } = await import(
 			"../src/orchestrator/workflow/dispatch-stamps.js"
 		)
-		stashPendingDispatch(
-			"test-intent",
-			"review",
-			"inception",
-			"spec",
-			["unit-01", "unit-02"],
-		)
+		stashPendingDispatch("test-intent", "review", "inception", "spec", [
+			"unit-01",
+			"unit-02",
+		])
 
 		// Stash should land on intent.md.
 		const intentFm = readFm(intentPath)
-		assert.ok(intentFm._pending_review_dispatches?.inception?.spec?.dispatched_at)
+		assert.ok(
+			intentFm._pending_review_dispatches?.inception?.spec?.dispatched_at,
+		)
 		assert.deepStrictEqual(
 			intentFm._pending_review_dispatches.inception.spec.units,
 			["unit-01", "unit-02"],
@@ -156,13 +165,10 @@ test("dispatch_review: drain skips units with open invalidating FBs filed since 
 		const { stashPendingDispatch, drainPendingDispatches } = await import(
 			"../src/orchestrator/workflow/dispatch-stamps.js"
 		)
-		stashPendingDispatch(
-			"test-intent",
-			"review",
-			"inception",
-			"spec",
-			["unit-01", "unit-02"],
-		)
+		stashPendingDispatch("test-intent", "review", "inception", "spec", [
+			"unit-01",
+			"unit-02",
+		])
 
 		// File an open FB targeting unit-02 with target_invalidates: ["spec"].
 		writeFeedback(root, "inception", "001", {

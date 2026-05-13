@@ -83,7 +83,7 @@ export function buildGuardResponse(
 				? `\n\nFiles to commit:\n${files.map((f) => `  - ${f}`).join("\n")}`
 				: ""
 		const action = {
-			action: "commit_wip",
+			action: "save_wip",
 			intent: slug,
 			stage: stage || null,
 			context: contextLabel,

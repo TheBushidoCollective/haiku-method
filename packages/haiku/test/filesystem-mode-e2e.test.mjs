@@ -278,7 +278,7 @@ function applyResponse(intentDir, action) {
 			}
 			break
 		}
-		case "merge_stage": {
+		case "complete_stage": {
 			// In fs mode this is a no-op. The cursor's `isStageFullySigned`
 			// already returns true (terminal hat advance + approvals all
 			// signed), so the next tick walks past via `findCurrentStage`
@@ -308,7 +308,7 @@ async function driveToSealed(slug, intentDir, maxTicks = 100) {
 			throw new Error(`dispatch returned error: ${action.message}`)
 		}
 		applyResponse(intentDir, action)
-		if (action.action === "merge_intent") {
+		if (action.action === "seal_intent") {
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
 			writeFm(intentMd, { ...fm, sealed_at: new Date().toISOString() })
@@ -410,7 +410,7 @@ test("fs-mode change: continuous → autopilot mid-flight; pipeline seals", asyn
 			}
 			if (action.action === "sealed") break
 			applyResponse(intentDir, action)
-			if (action.action === "merge_intent") {
+			if (action.action === "seal_intent") {
 				const intentMd = join(intentDir, "intent.md")
 				const fm = readFm(intentMd)
 				writeFm(intentMd, { ...fm, sealed_at: new Date().toISOString() })
@@ -472,7 +472,7 @@ test("fs-mode FB mid-flight: opens after stage A merge, fix loop runs, pipeline 
 			if (action.action === "close_feedback") fbClosedSeen = true
 			if (action.action === "sealed") break
 			applyResponse(intentDir, action)
-			if (action.action === "merge_intent") {
+			if (action.action === "seal_intent") {
 				const intentMd = join(intentDir, "intent.md")
 				const fm = readFm(intentMd)
 				writeFm(intentMd, { ...fm, sealed_at: new Date().toISOString() })

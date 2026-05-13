@@ -386,7 +386,7 @@ test("multi-tick: 3-stage continuous intent walks from elaborate to sealed", {
 						)
 						break
 					}
-					case "merge_stage": {
+					case "complete_stage": {
 						mergeStageBranch(repoRoot, slug, action.stage)
 						break
 					}
@@ -400,7 +400,7 @@ test("multi-tick: 3-stage continuous intent walks from elaborate to sealed", {
 						writeIntentFm(path, fm, parsed.content)
 						break
 					}
-					case "merge_intent": {
+					case "seal_intent": {
 						// Engine response: stamp sealed_at on intent.md.
 						const { path, parsed } = readIntentFm(intentDir)
 						const fm = { ...parsed.data }

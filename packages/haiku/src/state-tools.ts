@@ -4189,7 +4189,7 @@ function enforceStageBranch(
 					? `\n\nFiles to commit:\n${files.map((f) => `  - ${f}`).join("\n")}`
 					: ""
 			const action = {
-				action: "commit_wip",
+				action: "save_wip",
 				intent,
 				stage: stage ?? null,
 				context: "state-tool branch enforcement",

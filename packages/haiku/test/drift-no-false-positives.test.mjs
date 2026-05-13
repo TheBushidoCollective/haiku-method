@@ -73,7 +73,9 @@ async function withRepo(slug, fn) {
 test("engine FM mutation does NOT trip drift on previously signed review", async () => {
 	if (!HAS_GIT) return
 	await withRepo("no-trip-engine", async ({ root, intentDir }) => {
-		const { bodySha256 } = await import(`${SRC}/orchestrator/workflow/sign-slot.ts`)
+		const { bodySha256 } = await import(
+			`${SRC}/orchestrator/workflow/sign-slot.ts`
+		)
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)
@@ -150,7 +152,9 @@ test("engine FM mutation does NOT trip drift on previously signed review", async
 test("file read does NOT trip drift", async () => {
 	if (!HAS_GIT) return
 	await withRepo("no-trip-read", async ({ root, intentDir }) => {
-		const { bodySha256 } = await import(`${SRC}/orchestrator/workflow/sign-slot.ts`)
+		const { bodySha256 } = await import(
+			`${SRC}/orchestrator/workflow/sign-slot.ts`
+		)
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)
@@ -208,7 +212,9 @@ test("file read does NOT trip drift", async () => {
 test("real body change DOES trip drift", async () => {
 	if (!HAS_GIT) return
 	await withRepo("trip-real", async ({ root, intentDir }) => {
-		const { bodySha256 } = await import(`${SRC}/orchestrator/workflow/sign-slot.ts`)
+		const { bodySha256 } = await import(
+			`${SRC}/orchestrator/workflow/sign-slot.ts`
+		)
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)
@@ -293,7 +299,10 @@ test("legacy slot (no body_sha256) is treated as baseline — no drift", async (
 		// slots have no baseline to compare against.
 		const raw = readFileSync(unitPath, "utf8")
 		const parsed = matter(raw)
-		writeFileSync(unitPath, matter.stringify("# u1\n\nlater edit\n", parsed.data))
+		writeFileSync(
+			unitPath,
+			matter.stringify("# u1\n\nlater edit\n", parsed.data),
+		)
 		git(root, "add", "-A")
 		git(root, "commit", "-q", "-m", "post-legacy edit")
 
@@ -322,7 +331,9 @@ test("filesystem mode (no git): drift detection still works via sha256", async (
 		mkdirSync(join(intentDir, "stages", "design", "units"), {
 			recursive: true,
 		})
-		const { bodySha256 } = await import(`${SRC}/orchestrator/workflow/sign-slot.ts`)
+		const { bodySha256 } = await import(
+			`${SRC}/orchestrator/workflow/sign-slot.ts`
+		)
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)
@@ -387,7 +398,9 @@ test("filesystem mode (no git): drift detection still works via sha256", async (
 test("legacy fileSha256 witness on markdown output validates without drift", async () => {
 	if (!HAS_GIT) return
 	await withRepo("legacy-witness-noprob", async ({ root, intentDir }) => {
-		const { fileSha256 } = await import(`${SRC}/orchestrator/workflow/sign-slot.ts`)
+		const { fileSha256 } = await import(
+			`${SRC}/orchestrator/workflow/sign-slot.ts`
+		)
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)
@@ -471,7 +484,9 @@ test("legacy fileSha256 witness on markdown output validates without drift", asy
 test("real body change on markdown output IS detected as drift (regardless of witness vintage)", async () => {
 	if (!HAS_GIT) return
 	await withRepo("legacy-witness-real-drift", async ({ root, intentDir }) => {
-		const { fileSha256 } = await import(`${SRC}/orchestrator/workflow/sign-slot.ts`)
+		const { fileSha256 } = await import(
+			`${SRC}/orchestrator/workflow/sign-slot.ts`
+		)
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)

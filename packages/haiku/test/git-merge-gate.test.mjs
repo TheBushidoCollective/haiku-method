@@ -164,10 +164,13 @@ test("completed+advanced stage NOT merged stays current", () => {
 		git("git checkout haiku/gate-test/main")
 		// Remove the unit files from the working tree on intent main
 		// so the on-disk view reflects "stage hasn't merged yet."
-		rmSync(join(root, ".haiku", "intents", "gate-test", "stages", "inception"), {
-			recursive: true,
-			force: true,
-		})
+		rmSync(
+			join(root, ".haiku", "intents", "gate-test", "stages", "inception"),
+			{
+				recursive: true,
+				force: true,
+			},
+		)
 
 		process.chdir(root)
 		_resetIsGitRepoForTests()

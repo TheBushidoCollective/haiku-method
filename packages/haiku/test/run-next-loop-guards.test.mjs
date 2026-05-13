@@ -12,7 +12,7 @@
 //    again, and each iteration burns another 30 minutes.
 //
 // 2. Re-dispatch loops with no progress — every `while` block in
-//    `handle` (select_*, close_feedback, merge_stage, gate_review)
+//    `handle` (select_*, close_feedback, complete_stage, gate_review)
 //    re-ticks after a side-effect. If the side-effect didn't advance
 //    cursor state, the loop spins inside the call. The cap +
 //    same-action signature check catches both cases with a clear
@@ -47,20 +47,20 @@ test("RUN_NEXT_LOOP_CAP is a sane positive integer", () => {
 
 test("actionSignature normalises identical actions to identical strings", () => {
 	const a = {
-		action: "merge_stage",
+		action: "complete_stage",
 		stage: "design",
 		unit: null,
 		feedback_id: null,
 		role: null,
 	}
-	const b = { action: "merge_stage", stage: "design" }
+	const b = { action: "complete_stage", stage: "design" }
 	assert.strictEqual(actionSignature(a), actionSignature(b))
 })
 
 test("actionSignature distinguishes actions on stage / unit / feedback_id / role", () => {
-	const base = { action: "merge_stage", stage: "design" }
-	const otherStage = { action: "merge_stage", stage: "development" }
-	const otherUnit = { action: "merge_stage", stage: "design", unit: "u-01" }
+	const base = { action: "complete_stage", stage: "design" }
+	const otherStage = { action: "complete_stage", stage: "development" }
+	const otherUnit = { action: "complete_stage", stage: "design", unit: "u-01" }
 	const otherFb = {
 		action: "close_feedback",
 		stage: "design",
@@ -83,9 +83,9 @@ test("loopAbortResponse(cap) returns isError and surfaces the diagnostic for use
 	// the subagent prompts live in, so the user has one place to look
 	// for everything the engine wrote in their session).
 	const r = loopAbortResponse(
-		"merge_stage",
+		"complete_stage",
 		17,
-		{ action: "merge_stage", stage: "design" },
+		{ action: "complete_stage", stage: "design" },
 		"cap",
 	)
 	assert.strictEqual(r.isError, true)
@@ -96,10 +96,10 @@ test("loopAbortResponse(cap) returns isError and surfaces the diagnostic for use
 	assert.match(text, /haiku_run_next/)
 	// Diagnostic line is in the body (the user-recoverable signal).
 	assert.match(text, /diagnostic: /)
-	assert.match(text, /loop=merge_stage/)
+	assert.match(text, /loop=complete_stage/)
 	assert.match(text, /reason=cap/)
 	assert.match(text, /iterations=17/)
-	assert.match(text, /action=merge_stage/)
+	assert.match(text, /action=complete_stage/)
 	assert.match(text, /stage=design/)
 	// Path to the per-session log file ($TMPDIR/haiku-prompts/{session_id}/...).
 	assert.match(text, /log: /)

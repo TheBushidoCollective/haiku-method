@@ -87,7 +87,7 @@ export type StateName =
 	// drift-detection
 	| "manual_change_assessment"
 	// ops
-	| "commit_wip"
+	| "save_wip"
 	// terminal / special
 	| "blocked"
 	| "complete"

@@ -142,7 +142,7 @@ function applyResponse(intentDir, action, root, slug) {
 				fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
 			apps[action.role] = { at }
 			writeFm(intentMd, { ...fm, approvals: apps })
-		} else if (action.action === "merge_intent") {
+		} else if (action.action === "seal_intent") {
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
 			writeFm(intentMd, { ...fm, sealed_at: at })
@@ -326,7 +326,7 @@ function applyResponse(intentDir, action, root, slug) {
 			}
 			break
 		}
-		case "merge_stage": {
+		case "complete_stage": {
 			// Materialize a real merge. The previous form used
 			// `git checkout -b <stage>` to "ensure" the branch existed,
 			// but that throws when the branch already exists (the common
@@ -374,7 +374,9 @@ function applyResponse(intentDir, action, root, slug) {
 	}
 }
 
-test("real-intent: drive software studio to sealed via run_next handler", { timeout: 120_000 }, async () => {
+test("real-intent: drive software studio to sealed via run_next handler", {
+	timeout: 120_000,
+}, async () => {
 	if (!HAS_GIT) return
 	await withRealStudioRepo("real-intent", async ({ root, intentDir, slug }) => {
 		const now = new Date().toISOString()
@@ -409,9 +411,7 @@ test("real-intent: drive software studio to sealed via run_next handler", { time
 			const resp = await runNextTool.handle({ intent: slug })
 			const text = resp.content?.[0]?.text ?? ""
 			// Extract action from the embedded JSON block.
-			const match = text.match(
-				/```json\s*([\s\S]*?)\s*```/,
-			)
+			const match = text.match(/```json\s*([\s\S]*?)\s*```/)
 			let action = null
 			if (match) {
 				try {

@@ -257,7 +257,7 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 			}
 			break
 		}
-		case "merge_stage": {
+		case "complete_stage": {
 			const stageBranch = `haiku/${slug}/${stage}`
 			const mainBranch = `haiku/${slug}/main`
 			try {
@@ -362,7 +362,7 @@ test("e2e: FB opens after stage A merged, fix loop runs, FB closes, pipeline sea
 			// tick.
 			if (
 				!injectedFb &&
-				action.action === "merge_stage" &&
+				action.action === "complete_stage" &&
 				action.stage === "a"
 			) {
 				applyResponse(intentDir, action, repoRoot, slug)
@@ -381,7 +381,7 @@ test("e2e: FB opens after stage A merged, fix loop runs, FB closes, pipeline sea
 			if (action.action === "close_feedback") fbClosedSeen = true
 			if (action.action === "sealed") break
 			applyResponse(intentDir, action, repoRoot, slug)
-			if (action.action === "merge_intent") {
+			if (action.action === "seal_intent") {
 				const intentMd = join(intentDir, "intent.md")
 				const fm = readFm(intentMd)
 				writeFm(intentMd, { ...fm, sealed_at: new Date().toISOString() })

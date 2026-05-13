@@ -31,8 +31,7 @@ const { buildElaboratePromptBody } = await import(
 )
 
 function setupSyntheticStudio(root, name = "synth") {
-	const stageDir = (s) =>
-		join(root, ".haiku", "studios", name, "stages", s)
+	const stageDir = (s) => join(root, ".haiku", "studios", name, "stages", s)
 	for (const [s, hats] of [
 		["a", ["planner", "builder", "verifier"]],
 		["b", ["planner", "builder", "verifier"]],
@@ -108,21 +107,13 @@ test("elaborate fresh: emits stage def + workflow contracts + decide block", () 
 			dir: join(root, ".haiku", "intents", "fresh"),
 		})
 		assert.match(body, /Stage a/, "stage def header inlined")
-		assert.match(
-			body,
-			/Body for stage a/,
-			"stage body inlined",
-		)
+		assert.match(body, /Body for stage a/, "stage body inlined")
 		assert.match(
 			body,
 			/Workflow Contracts/i,
 			"workflow contracts block emitted",
 		)
-		assert.match(
-			body,
-			/haiku_run_next/,
-			"agent told to call haiku_run_next",
-		)
+		assert.match(body, /haiku_run_next/, "agent told to call haiku_run_next")
 		assert.ok(body.length > 500, `body too short (${body.length} chars)`)
 	} finally {
 		process.chdir(cwd)
@@ -163,21 +154,13 @@ test("elaborate iterative re-entry: emits knowledge block + decide A/B/C", () =>
 			"knowledge block",
 		)
 		assert.match(body, /unit-01-x/, "completed unit listed by name")
-		assert.match(
-			body,
-			/A\. New units are needed/,
-			"decision option A present",
-		)
+		assert.match(body, /A\. New units are needed/, "decision option A present")
 		assert.match(
 			body,
 			/B\. Pending units need revision/,
 			"decision option B present",
 		)
-		assert.match(
-			body,
-			/C\. No changes needed/,
-			"decision option C present",
-		)
+		assert.match(body, /C\. No changes needed/, "decision option C present")
 	} finally {
 		process.chdir(cwd)
 		rmSync(root, { recursive: true, force: true })

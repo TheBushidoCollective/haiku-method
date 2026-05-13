@@ -617,9 +617,7 @@ try {
 		const parsed = JSON.parse(getTextResult(result))
 		assert.strictEqual(parsed.error, "haiku_feedback_input_invalid")
 		assert.ok(
-			parsed.errors.some((e) =>
-				e.path?.startsWith("/inline_anchor"),
-			),
+			parsed.errors.some((e) => e.path?.startsWith("/inline_anchor")),
 			`expected /inline_anchor in errors; got ${JSON.stringify(parsed.errors)}`,
 		)
 	})
@@ -834,7 +832,10 @@ try {
 			if (raw.includes("closed_at: null")) {
 				writeFileSync(
 					fbAbs,
-					raw.replace(/closed_at: null/, `closed_at: ${new Date().toISOString()}`),
+					raw.replace(
+						/closed_at: null/,
+						`closed_at: ${new Date().toISOString()}`,
+					),
 				)
 			} else if (!raw.includes("closed_at:")) {
 				// Pre-v4 fixture without closed_at — add it.

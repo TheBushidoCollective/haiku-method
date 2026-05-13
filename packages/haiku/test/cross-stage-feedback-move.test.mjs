@@ -107,12 +107,7 @@ test("haiku_feedback_move: cross-stage relocation moves the file (panda 2026-05-
 			author: "user",
 		})
 
-		const inceptionFbDir = join(
-			intentDir,
-			"stages",
-			"inception",
-			"feedback",
-		)
+		const inceptionFbDir = join(intentDir, "stages", "inception", "feedback")
 		const designFbDir = join(intentDir, "stages", "design", "feedback")
 		assert.ok(
 			existsSync(join(inceptionFbDir, "008-chart-spec-belongs-to-design.md")),
@@ -127,9 +122,7 @@ test("haiku_feedback_move: cross-stage relocation moves the file (panda 2026-05-
 			git(repoRoot, "checkout", "-q", `haiku/${slug}/design`)
 		}
 
-		const { handleStateTool } = await import(
-			"../src/state-tools.ts"
-		)
+		const { handleStateTool } = await import("../src/state-tools.ts")
 		const { clearStudioCache } = await import("../src/studio-reader.ts")
 		clearStudioCache()
 		const result = handleStateTool("haiku_feedback_move", {
@@ -150,7 +143,8 @@ test("haiku_feedback_move: cross-stage relocation moves the file (panda 2026-05-
 			`expected moved: true on cross-stage relocation; got: ${text}`,
 		)
 		assert.ok(
-			typeof parsed.feedback_id === "string" && parsed.feedback_id.startsWith("FB-"),
+			typeof parsed.feedback_id === "string" &&
+				parsed.feedback_id.startsWith("FB-"),
 			`expected new FB-NN id; got: ${parsed.feedback_id}`,
 		)
 		assert.ok(
@@ -204,9 +198,7 @@ test("haiku_feedback_move: same-stage call confirms triage without moving the fi
 			git(repoRoot, "checkout", "-q", `haiku/${slug}/inception`)
 		}
 
-		const { handleStateTool } = await import(
-			"../src/state-tools.ts"
-		)
+		const { handleStateTool } = await import("../src/state-tools.ts")
 		const { clearStudioCache } = await import("../src/studio-reader.ts")
 		clearStudioCache()
 		const result = handleStateTool("haiku_feedback_move", {
@@ -243,9 +235,7 @@ test("haiku_feedback_move: rejects when target stage isn't a stage of the intent
 			author: "user",
 		})
 
-		const { handleStateTool } = await import(
-			"../src/state-tools.ts"
-		)
+		const { handleStateTool } = await import("../src/state-tools.ts")
 		const { clearStudioCache } = await import("../src/studio-reader.ts")
 		clearStudioCache()
 		const result = handleStateTool("haiku_feedback_move", {

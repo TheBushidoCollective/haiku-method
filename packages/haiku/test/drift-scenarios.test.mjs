@@ -18,7 +18,13 @@
 
 import assert from "node:assert"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -76,12 +82,7 @@ function writeUnit(intentDir, stage, name, fm, body = "") {
 // guarantees `git log --since=at` excludes the fixture-creation
 // commit while still including any drift commits we make next.
 function setupAndGetSignTime(root) {
-	const epoch = git(
-		root,
-		"log",
-		"-1",
-		"--format=%cI",
-	)
+	const epoch = git(root, "log", "-1", "--format=%cI")
 	const dt = new Date(epoch)
 	dt.setSeconds(dt.getSeconds() + 1)
 	return dt.toISOString()
@@ -163,15 +164,11 @@ test("spec drift: signed review + later commit on unit.md → drift_detected", a
 		)
 		// Initial commit with deterministic init date.
 		execFileSync("git", ["add", "-A"], { cwd: root, stdio: "pipe" })
-		execFileSync(
-			"git",
-			["commit", "-m", "initial unit", "--date", initAt],
-			{
-				cwd: root,
-				stdio: "pipe",
-				env: { ...process.env, GIT_COMMITTER_DATE: initAt },
-			},
-		)
+		execFileSync("git", ["commit", "-m", "initial unit", "--date", initAt], {
+			cwd: root,
+			stdio: "pipe",
+			env: { ...process.env, GIT_COMMITTER_DATE: initAt },
+		})
 		// Now drift the spec — keep the FM intact (don't blow it away),
 		// just change the body. Real drift = a developer edits content,
 		// the FM with started_at still resolves so the sweep sees it.
@@ -456,15 +453,11 @@ test("drift on a previous stage's signed unit: cursor can sweep that stage indep
 			outputs: [],
 		})
 		execFileSync("git", ["add", "-A"], { cwd: root, stdio: "pipe" })
-		execFileSync(
-			"git",
-			["commit", "-m", "two stages", "--date", initAt],
-			{
-				cwd: root,
-				stdio: "pipe",
-				env: { ...process.env, GIT_COMMITTER_DATE: initAt },
-			},
-		)
+		execFileSync("git", ["commit", "-m", "two stages", "--date", initAt], {
+			cwd: root,
+			stdio: "pipe",
+			env: { ...process.env, GIT_COMMITTER_DATE: initAt },
+		})
 		// Drift stage A's unit while we're working on stage B.
 		// Keep the FM intact (drift = body edit, not FM erasure).
 		// Preserve body_sha256 baseline so the sweep can detect drift.

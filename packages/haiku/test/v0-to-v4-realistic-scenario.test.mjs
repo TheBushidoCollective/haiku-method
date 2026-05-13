@@ -37,22 +37,25 @@ function makeRichV3Fixture() {
 	// ── intent.md ──────────────────────────────────────────────────────
 	writeFileSync(
 		join(intentDir, "intent.md"),
-		matter.stringify("# Rebuild ingest pipeline\n\nReplaces the legacy CSV pipeline.\n", {
-			title: "Rebuild ingest pipeline",
-			studio: "software",
-			mode: "discrete",
-			active_stage: "build",
-			phase: "execute",
-			status: "active",
-			composite: false,
-			intent_reviewed: true,
-			completion_review_dispatched: false,
-			gate_review_session_id: "old-session-xyz",
-			gate_review_url: "https://review.example/abc",
-			started_at: "2026-04-15T09:00:00Z",
-			created_at: "2026-04-15T08:55:00Z",
-			intent_completion_review: true,
-		}),
+		matter.stringify(
+			"# Rebuild ingest pipeline\n\nReplaces the legacy CSV pipeline.\n",
+			{
+				title: "Rebuild ingest pipeline",
+				studio: "software",
+				mode: "discrete",
+				active_stage: "build",
+				phase: "execute",
+				status: "active",
+				composite: false,
+				intent_reviewed: true,
+				completion_review_dispatched: false,
+				gate_review_session_id: "old-session-xyz",
+				gate_review_url: "https://review.example/abc",
+				started_at: "2026-04-15T09:00:00Z",
+				created_at: "2026-04-15T08:55:00Z",
+				intent_completion_review: true,
+			},
+		),
 	)
 
 	// ── Stage 1: design (fully merged into intent main) ────────────────
@@ -87,9 +90,24 @@ function makeRichV3Fixture() {
 			depends_on: [],
 			model: "sonnet",
 			iterations: [
-				{ hat: "researcher", started_at: "2026-04-15T10:00:00Z", completed_at: "2026-04-15T11:00:00Z", result: "advance" },
-				{ hat: "distiller", started_at: "2026-04-15T11:00:00Z", completed_at: "2026-04-15T13:00:00Z", result: "advance" },
-				{ hat: "verifier", started_at: "2026-04-16T16:00:00Z", completed_at: "2026-04-16T17:00:00Z", result: "advance" },
+				{
+					hat: "researcher",
+					started_at: "2026-04-15T10:00:00Z",
+					completed_at: "2026-04-15T11:00:00Z",
+					result: "advance",
+				},
+				{
+					hat: "distiller",
+					started_at: "2026-04-15T11:00:00Z",
+					completed_at: "2026-04-15T13:00:00Z",
+					result: "advance",
+				},
+				{
+					hat: "verifier",
+					started_at: "2026-04-16T16:00:00Z",
+					completed_at: "2026-04-16T17:00:00Z",
+					result: "advance",
+				},
 			],
 		}),
 	)
@@ -97,32 +115,35 @@ function makeRichV3Fixture() {
 	// Closed feedback on design w/ a user reply thread (must survive).
 	writeFileSync(
 		join(designDir, "feedback", "01-schema-naming.md"),
-		matter.stringify("Field `evt_id` is inconsistent with the rest of the codebase.\n", {
-			title: "Schema naming",
-			origin: "adversarial-review",
-			author: "naming-conventions-reviewer",
-			author_type: "agent",
-			status: "closed",
-			bolt: 1,
-			triaged_at: "2026-04-16T10:00:00Z",
-			closed_by: "fix-loop:FB-001:bolt-1",
-			resolution: "inline_fix",
-			created_at: "2026-04-16T09:30:00Z",
-			replies: [
-				{
-					author: "user",
-					author_type: "human",
-					body: "Agreed; rename to `event_id`.",
-					created_at: "2026-04-16T09:45:00Z",
-				},
-				{
-					author: "agent",
-					author_type: "agent",
-					body: "Renamed across schema + downstream consumers.",
-					created_at: "2026-04-16T11:00:00Z",
-				},
-			],
-		}),
+		matter.stringify(
+			"Field `evt_id` is inconsistent with the rest of the codebase.\n",
+			{
+				title: "Schema naming",
+				origin: "adversarial-review",
+				author: "naming-conventions-reviewer",
+				author_type: "agent",
+				status: "closed",
+				bolt: 1,
+				triaged_at: "2026-04-16T10:00:00Z",
+				closed_by: "fix-loop:FB-001:bolt-1",
+				resolution: "inline_fix",
+				created_at: "2026-04-16T09:30:00Z",
+				replies: [
+					{
+						author: "user",
+						author_type: "human",
+						body: "Agreed; rename to `event_id`.",
+						created_at: "2026-04-16T09:45:00Z",
+					},
+					{
+						author: "agent",
+						author_type: "agent",
+						body: "Renamed across schema + downstream consumers.",
+						created_at: "2026-04-16T11:00:00Z",
+					},
+				],
+			},
+		),
 	)
 
 	// ── Stage 2: build (in-flight) ─────────────────────────────────────
@@ -154,7 +175,12 @@ function makeRichV3Fixture() {
 			outputs: [],
 			depends_on: ["unit-01-schema"],
 			iterations: [
-				{ hat: "planner", started_at: "2026-04-17T10:00:00Z", completed_at: "2026-04-17T12:00:00Z", result: "advance" },
+				{
+					hat: "planner",
+					started_at: "2026-04-17T10:00:00Z",
+					completed_at: "2026-04-17T12:00:00Z",
+					result: "advance",
+				},
 				{ hat: "builder", started_at: "2026-04-19T14:00:00Z" },
 			],
 		}),
@@ -172,8 +198,19 @@ function makeRichV3Fixture() {
 			scope_reject_attempts: 1,
 			outputs: [],
 			iterations: [
-				{ hat: "planner", started_at: "2026-04-18T10:00:00Z", completed_at: "2026-04-18T10:30:00Z", result: "advance" },
-				{ hat: "verifier", started_at: "2026-04-18T11:00:00Z", completed_at: "2026-04-18T11:30:00Z", result: "rejected", reason: "Out of scope" },
+				{
+					hat: "planner",
+					started_at: "2026-04-18T10:00:00Z",
+					completed_at: "2026-04-18T10:30:00Z",
+					result: "advance",
+				},
+				{
+					hat: "verifier",
+					started_at: "2026-04-18T11:00:00Z",
+					completed_at: "2026-04-18T11:30:00Z",
+					result: "rejected",
+					reason: "Out of scope",
+				},
 			],
 		}),
 	)
@@ -181,15 +218,18 @@ function makeRichV3Fixture() {
 	// Open user-chat FB
 	writeFileSync(
 		join(buildDir, "feedback", "01-rate-limit.md"),
-		matter.stringify("Need a per-tenant rate limit; the global limit lets noisy tenants starve quiet ones.\n", {
-			title: "Per-tenant rate limit needed",
-			origin: "user-chat",
-			author: "user",
-			author_type: "human",
-			status: "pending",
-			bolt: 0,
-			created_at: "2026-04-19T08:30:00Z",
-		}),
+		matter.stringify(
+			"Need a per-tenant rate limit; the global limit lets noisy tenants starve quiet ones.\n",
+			{
+				title: "Per-tenant rate limit needed",
+				origin: "user-chat",
+				author: "user",
+				author_type: "human",
+				status: "pending",
+				bolt: 0,
+				created_at: "2026-04-19T08:30:00Z",
+			},
+		),
 	)
 
 	// ── Stage 3: polish (untouched — no state, no units, no feedback) ──
@@ -199,17 +239,20 @@ function makeRichV3Fixture() {
 	mkdirSync(join(intentDir, "feedback"), { recursive: true })
 	writeFileSync(
 		join(intentDir, "feedback", "01-cross-stage-naming.md"),
-		matter.stringify("Need a unified glossary across stages; `event` vs `record` is inconsistent.\n", {
-			title: "Cross-stage glossary",
-			origin: "studio-review",
-			author: "completeness",
-			author_type: "agent",
-			status: "addressed",
-			bolt: 1,
-			triaged_at: "2026-04-18T15:00:00Z",
-			closed_by: null,
-			created_at: "2026-04-18T14:00:00Z",
-		}),
+		matter.stringify(
+			"Need a unified glossary across stages; `event` vs `record` is inconsistent.\n",
+			{
+				title: "Cross-stage glossary",
+				origin: "studio-review",
+				author: "completeness",
+				author_type: "agent",
+				status: "addressed",
+				bolt: 1,
+				triaged_at: "2026-04-18T15:00:00Z",
+				closed_by: null,
+				created_at: "2026-04-18T14:00:00Z",
+			},
+		),
 	)
 
 	return { root, intentDir, slug }
@@ -263,7 +306,10 @@ test("realistic v3 → v4 — completed unit gets synthetic user approval, in-pr
 		const completedFm = readFm(
 			join(intentDir, "stages", "design", "units", "unit-01-schema.md"),
 		)
-		assert.ok(completedFm.approvals?.user, "completed unit must get synthetic user approval")
+		assert.ok(
+			completedFm.approvals?.user,
+			"completed unit must get synthetic user approval",
+		)
 		assert.strictEqual(completedFm.approvals.user.migrated, true)
 		assert.strictEqual(completedFm.iterations.length, 3)
 		assert.strictEqual(completedFm.iterations[2].result, "advance")
@@ -356,7 +402,10 @@ test("realistic v3 → v4 — closed FB user reply thread MUST survive migration
 		assert.ok(typeof fm.closed_at === "string")
 		// Replies thread preserved — losing the conversation on
 		// migration would silently delete user data.
-		assert.ok(Array.isArray(fm.replies), "replies must remain an array post-migration")
+		assert.ok(
+			Array.isArray(fm.replies),
+			"replies must remain an array post-migration",
+		)
 		assert.strictEqual(fm.replies.length, 2)
 		assert.strictEqual(fm.replies[0].author, "user")
 		assert.strictEqual(fm.replies[0].body, "Agreed; rename to `event_id`.")
@@ -378,7 +427,11 @@ test("realistic v3 → v4 — open human-authored FB stays open (no synthetic cl
 			join(intentDir, "stages", "build", "feedback", "01-rate-limit.md"),
 		)
 		assert.strictEqual(fm.status, undefined)
-		assert.strictEqual(fm.closed_at, null, "open FBs MUST NOT get a synthetic closed_at")
+		assert.strictEqual(
+			fm.closed_at,
+			null,
+			"open FBs MUST NOT get a synthetic closed_at",
+		)
 		assert.strictEqual(fm.author_type, "human")
 	} finally {
 		rmSync(root, { recursive: true, force: true })
@@ -393,9 +446,7 @@ test("realistic v3 → v4 — intent-scope feedback (no stage path) migrates", a
 		)
 		__testOnly.v0ToV4({ intentDir, repoRoot: root })
 
-		const fm = readFm(
-			join(intentDir, "feedback", "01-cross-stage-naming.md"),
-		)
+		const fm = readFm(join(intentDir, "feedback", "01-cross-stage-naming.md"))
 		// v3 fields stripped
 		assert.strictEqual(fm.status, undefined)
 		assert.strictEqual(fm.bolt, undefined)
@@ -438,13 +489,7 @@ test("realistic v3 → v4 — malformed YAML in one FB does NOT abort the migrat
 		// Sanity: every other FB still migrated. The good neighbour FB-001
 		// on the design stage must have its v3 fields stripped.
 		const goodFm = readFm(
-			join(
-				intentDir,
-				"stages",
-				"design",
-				"feedback",
-				"01-schema-naming.md",
-			),
+			join(intentDir, "stages", "design", "feedback", "01-schema-naming.md"),
 		)
 		assert.strictEqual(goodFm.status, undefined)
 
@@ -497,10 +542,10 @@ test("realistic v3 → v4 — FB with upstream_stage relocates to that stage's f
 		const designFbDir = join(intentDir, "stages", "design", "feedback")
 		const designFiles = readFileSync ? null : null // satisfy ts; use require
 		const fs = await import("node:fs")
-		const allDesign = fs.readdirSync(designFbDir).filter((f) => f.endsWith(".md"))
-		const relocated = allDesign.find((f) =>
-			f.includes("cross-stage"),
-		)
+		const allDesign = fs
+			.readdirSync(designFbDir)
+			.filter((f) => f.endsWith(".md"))
+		const relocated = allDesign.find((f) => f.includes("cross-stage"))
 		assert.ok(
 			relocated,
 			`expected a cross-stage FB to land in design/feedback/; got: ${allDesign.join(", ")}`,

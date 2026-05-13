@@ -150,9 +150,9 @@ export type CursorAction =
 			units: string[]
 	  }
 	| { kind: "close_feedback"; stage: string; feedback_id: string }
-	| { kind: "merge_stage"; stage: string }
+	| { kind: "complete_stage"; stage: string }
 	| { kind: "intent_review"; role: string }
-	| { kind: "merge_intent" }
+	| { kind: "seal_intent" }
 	| { kind: "sealed" }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -950,8 +950,15 @@ function walkIntentTrack(args: {
 		return { kind: "dispatch_approval", stage, role, units: missing }
 	}
 
-	// 8. Every approval signed. Merge stage branch into intent main.
-	return { kind: "merge_stage", stage }
+	// 8. Every approval signed. Emit `complete_stage` — a SEMANTIC
+	//    action ("this stage is done"), NOT a VCS verb. The underlying
+	//    implementation under a git-backed portfolio happens to merge
+	//    the stage branch into intent main, but the action's name
+	//    doesn't reflect that — the engine handles git as an
+	//    implementation detail. Filesystem-only backings perform
+	//    whatever "complete" means there (stamp `completed_at`, move
+	//    artifacts, etc.) without touching git.
+	return { kind: "complete_stage", stage }
 }
 
 // ── Top-level derivePosition ─────────────────────────────────────────
@@ -1139,7 +1146,7 @@ export function derivePosition(args: {
 		if (intentResult.data.sealed_at == null) {
 			return {
 				track: "intent",
-				action: { kind: "merge_intent" },
+				action: { kind: "seal_intent" },
 			}
 		}
 	}

@@ -560,7 +560,7 @@ export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 					(cursorStage === null || (cursorIdx >= 0 && cursorIdx > hereIdx))
 				if (yOwesMerge && hereStage) {
 					pendingMergeStage = {
-						action: "merge_stage",
+						action: "complete_stage",
 						intent: slug,
 						stage: hereStage,
 					}
@@ -571,7 +571,7 @@ export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 						const iDir = join(repoRoot, ".haiku", "intents", slug)
 						if (isStageComplete(iDir, studio, cursorStage, mode)) {
 							pendingMergeStage = {
-								action: "merge_stage",
+								action: "complete_stage",
 								intent: slug,
 								stage: cursorStage,
 							}

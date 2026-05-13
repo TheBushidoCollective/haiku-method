@@ -236,7 +236,7 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 			}
 			break
 		}
-		case "merge_stage": {
+		case "complete_stage": {
 			const stageBranch = `haiku/${slug}/${stage}`
 			const mainBranch = `haiku/${slug}/main`
 			try {
@@ -374,7 +374,7 @@ test("e2e (interpretation A): FB on s1 lands while s4 is in flight → cursor wa
 
 			if (
 				!s3MergedBeforeInject &&
-				action.action === "merge_stage" &&
+				action.action === "complete_stage" &&
 				action.stage === "s3"
 			) {
 				applyResponse(intentDir, action, repoRoot, slug)
@@ -391,7 +391,7 @@ test("e2e (interpretation A): FB on s1 lands while s4 is in flight → cursor wa
 
 			if (action.action === "sealed") break
 			applyResponse(intentDir, action, repoRoot, slug)
-			if (action.action === "merge_intent") {
+			if (action.action === "seal_intent") {
 				const intentMd = join(intentDir, "intent.md")
 				const fm = readFm(intentMd)
 				writeFm(intentMd, { ...fm, sealed_at: new Date().toISOString() })
@@ -454,7 +454,7 @@ test("e2e (interpretation B): FB on s1 lands AFTER s4 merged → cursor walks Tr
 
 			if (
 				!s4MergedBeforeInject &&
-				action.action === "merge_stage" &&
+				action.action === "complete_stage" &&
 				action.stage === "s4"
 			) {
 				applyResponse(intentDir, action, repoRoot, slug)
@@ -465,7 +465,7 @@ test("e2e (interpretation B): FB on s1 lands AFTER s4 merged → cursor walks Tr
 			if (
 				!injectedFb &&
 				s4MergedBeforeInject &&
-				action.action !== "merge_stage"
+				action.action !== "complete_stage"
 			) {
 				makeFeedback({
 					intentDir,
@@ -489,7 +489,7 @@ test("e2e (interpretation B): FB on s1 lands AFTER s4 merged → cursor walks Tr
 
 			if (action.action === "sealed") break
 			applyResponse(intentDir, action, repoRoot, slug)
-			if (action.action === "merge_intent") {
+			if (action.action === "seal_intent") {
 				const intentMd = join(intentDir, "intent.md")
 				const fm = readFm(intentMd)
 				writeFm(intentMd, { ...fm, sealed_at: new Date().toISOString() })

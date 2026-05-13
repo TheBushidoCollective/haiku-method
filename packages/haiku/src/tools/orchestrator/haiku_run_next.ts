@@ -73,7 +73,7 @@ function dispatchOrchestratorAction(slug: string): OrchestratorActionType {
 /** Returns the current branch name, or "" if not in a git repo or the
  *  command fails. Used by the pre-tick "is my branch the cursor's
  *  named stage?" disagreement check. */
-function safeCurrentBranchHere(): string {
+function _safeCurrentBranchHere(): string {
 	try {
 		return execFileSync("git", ["branch", "--show-current"], {
 			encoding: "utf8",
@@ -807,101 +807,13 @@ export default defineTool({
 		// (via the post-cursor revisit alignment block below).
 		let result: OrchestratorActionType = dispatchOrchestratorAction(slug)
 
-		// Post-walk merge-debt synthesis. When the cursor advances past a
-		// stage (e.g., the agent is on `inception`'s branch but the cursor's
-		// answer is `design`'s next action), the upstream stage `inception`
-		// MAY owe its merge to intent main BEFORE the agent moves on. The
-		// cursor itself only emits `merge_stage` from inside
-		// walkIntentTrack(<active stage>) — it doesn't synthesize a
-		// merge_stage for a previous stage when the active stage advances.
-		// Without this rewrite, the agent would switch to design (or be
-		// switched by the post-cursor revisit alignment), leaving
-		// inception's commits stranded on its branch. The next tick walks
-		// from design's branch, sees inception's units missing (design
-		// forked off intent main BEFORE the inception merge that never
-		// happened), pings back to inception, and we ping-pong forever.
-		//
-		// This block restores case (b)/(e) semantics from the OLD pre-
-		// tick branch-alignment block (deleted as part of the pre-cursor-
-		// sync restructure), now in the correct post-walk position.
-		//
-		// CRITICAL: only synthesize when there's ACTUAL merge debt. If
-		// inception's tree already matches intent main's tree (post-v3-
-		// migration: a previous v3 merge landed inception's units on
-		// intent main already), the merge would be a `--no-ff` no-op —
-		// caught by `mergeStageBranchIntoMain`'s tree-equality short-
-		// circuit. But the short-circuit returns `noop: true` (success)
-		// and the merge_stage handler re-dispatches the cursor, which
-		// then returns the SAME design action, this synthesis re-fires,
-		// merge_stage(inception) goes around again, and the loop guard
-		// fires on consecutive merge_stage emissions for an already-
-		// merged stage. Reported 2026-05-12 by a user on 4.4.1 after
-		// resetting branches to pre-migration tips and re-migrating.
-		// Skip the synthesis when trees are already identical — the
-		// merge debt is already paid, agent should just switch branches.
-		try {
-			const here = safeCurrentBranchHere()
-			const stagePrefix = `haiku/${slug}/`
-			const hereStage =
-				here.startsWith(stagePrefix) && here !== `${stagePrefix}main`
-					? here.slice(stagePrefix.length)
-					: null
-			if (
-				hereStage &&
-				typeof result.stage === "string" &&
-				result.stage.length > 0 &&
-				result.stage !== hereStage
-			) {
-				const iDir = intentDir(slug)
-				const intentFile = join(iDir, "intent.md")
-				if (existsSync(intentFile)) {
-					const im = readFrontmatter(intentFile)
-					const studio = (im.studio as string) || ""
-					const mode = (im.mode as string) || "continuous"
-					if (studio) {
-						const { isStageComplete } = await import(
-							"../../orchestrator/workflow/cursor.js"
-						)
-						if (isStageComplete(iDir, studio, hereStage, mode)) {
-							// Only synthesize merge_stage when there's real
-							// merge debt. Two no-merge-debt shapes exist
-							// and BOTH must short-circuit, or this
-							// synthesis re-fires every tick and the
-							// merge_stage handler's no-op success
-							// re-dispatches the cursor:
-							//
-							//   1. trees match (PR #347, 2026-05-11) —
-							//      the merge already landed in an earlier
-							//      cycle or v3 lifecycle.
-							//   2. stage is an ancestor of intent main
-							//      (2026-05-12) — intent main has accreted
-							//      commits from a downstream sync, but
-							//      stage is still fully reachable from
-							//      intent main, so `git merge stage`
-							//      reports "Already up to date".
-							//
-							// `hasNoMergeDebt` returns true for either
-							// case. Conservative-by-design: if we can't
-							// prove no-debt, synthesize and let the handler
-							// surface conflicts; the surrounding try/catch
-							// absorbs downstream failure.
-							const { hasNoMergeDebt } = await import("../../git-worktree.js")
-							const hereBranch = `haiku/${slug}/${hereStage}`
-							const intentMainBranch = `haiku/${slug}/main`
-							if (!hasNoMergeDebt(hereBranch, intentMainBranch)) {
-								result = {
-									action: "merge_stage",
-									intent: slug,
-									stage: hereStage,
-								}
-							}
-						}
-					}
-				}
-			}
-		} catch {
-			/* non-fatal — falls through to normal dispatch */
-		}
+		// (Post-walk merge-debt synthesis deleted 2026-05-12 per the
+		// principle: no engine action reflects a git/VCS operation.
+		// Stage→main merges are handled in the pre-tick housekeeping
+		// step `mergeFullySignedStagesIntoMain` above, invisible to
+		// the agent. The cursor's `walkIntentTrack` returns null for
+		// fully-signed stages; findCurrentStage walks past them on
+		// the FM signal alone.)
 		{
 			let iterations = 0
 			while (
@@ -1142,7 +1054,7 @@ export default defineTool({
 		// The engine stamps `sealed_at` and re-walks. Same fix as
 		// merge_stage — was promised by the prompt, never executed by a
 		// handler.
-		if (result.action === "merge_intent") {
+		if (result.action === "seal_intent") {
 			try {
 				const intentMd = join(findHaikuRoot(), "intents", slug, "intent.md")
 				if (existsSync(intentMd)) {
@@ -1157,41 +1069,45 @@ export default defineTool({
 			}
 		}
 
-		let mergeStageIterations = 0
-		let mergeStageLastSig: string | null = null
+		// Auto-execute for `complete_stage`: a SEMANTIC action ("stage
+		// is done"). Under a git-backed portfolio this triggers a stage
+		// branch → intent main merge; under filesystem-only backings it
+		// runs whatever "complete" means there. The action name reflects
+		// the intent, not the implementation — git is internal detail.
+		// Renamed 2026-05-12 from the prior verb-based `merge_stage`,
+		// per the principle "no engine action reflects a git/VCS
+		// operation."
+		let completeStageIterations = 0
+		let completeStageLastSig: string | null = null
 		while (
-			result.action === "merge_stage" &&
+			result.action === "complete_stage" &&
 			typeof result.stage === "string"
 		) {
 			const sig = actionSignature(result)
-			if (++mergeStageIterations > RUN_NEXT_LOOP_CAP) {
+			if (++completeStageIterations > RUN_NEXT_LOOP_CAP) {
 				return loopAbortResponse(
-					"merge_stage",
-					mergeStageIterations,
+					"complete_stage",
+					completeStageIterations,
 					result,
 					"cap",
 				)
 			}
-			if (sig === mergeStageLastSig) {
+			if (sig === completeStageLastSig) {
 				return loopAbortResponse(
-					"merge_stage",
-					mergeStageIterations,
+					"complete_stage",
+					completeStageIterations,
 					result,
 					"no_progress",
 				)
 			}
-			mergeStageLastSig = sig
-			const stageToMerge = result.stage
+			completeStageLastSig = sig
+			const stageToComplete = result.stage
 			try {
 				const { isGitRepo } = await import("../../state-tools.js")
 				if (!isGitRepo()) {
-					// Filesystem mode: no git merge to perform. The new
-					// disk-state cursor walks past fully-signed stages
-					// directly via `isStageFullySigned`, so this code
-					// path is reached only as a defensive no-op (e.g.
-					// legacy callers that explicitly emit merge_stage).
-					// Re-tick and let the cursor advance.
-					// pre-tick merge + cursor walk handle branch alignment
+					// Filesystem-only backing: no git merge. The FM signal
+					// itself is what marks the stage complete (every unit
+					// fully approved). Re-tick — findCurrentStage walks past.
 					result = dispatchOrchestratorAction(slug)
 					continue
 				}
@@ -1199,47 +1115,27 @@ export default defineTool({
 					"../../git-worktree.js"
 				)
 				const { withIntentMainLock } = await import("../../locks.js")
-				// Serialize stage → intent-main merges. Two concurrent
-				// haiku_run_next ticks targeting the same intent (e.g. an
-				// autopilot retry overlapping a manual run) would otherwise
-				// race on the merge commit, producing `merge in progress`
-				// git errors or silently clobbering each other's writes.
-				// merge_stage.ts:28 already promises this lock to the
-				// agent — this call makes that promise true.
-				const mergeOutcome = withIntentMainLock(slug, () =>
-					mergeStageBranchIntoMain(slug, stageToMerge),
+				const outcome = withIntentMainLock(slug, () =>
+					mergeStageBranchIntoMain(slug, stageToComplete),
 				)
-				if (!mergeOutcome.success) {
-					if (mergeOutcome.isConflict) {
+				if (!outcome.success) {
+					if (outcome.isConflict) {
 						return {
 							content: [
 								{
 									type: "text" as const,
-									text: `Stage merge ${stageToMerge} → main blocked by conflict: ${mergeOutcome.message}`,
+									text: `Stage '${stageToComplete}' completion blocked by conflict: ${outcome.message}`,
 								},
 							],
 							isError: true,
 						}
 					}
-					// Non-conflict failure (dirty tree, missing branch,
-					// etc.). Return the original merge_stage action so
-					// the agent sees the engine's diagnostic message and
-					// can investigate, instead of hanging in a loop.
 					break
 				}
-				// Success path: stage merged (or v3 short-circuit on a
-				// merged-and-deleted branch). Re-tick — the cursor walk
-				// will advance past the now-merged stage.
-				// Branch contract: `mergeStageBranchIntoMain` leaves the
-				// primary on intent main (git-worktree.ts:1527 —
-				// safeCheckout([main]) before merge when invoked from the
-				// stage branch). The re-tick reads from that vantage. If
-				// that branch behavior changes, this re-tick will silently
-				// read from the wrong tree.
 				result = dispatchOrchestratorAction(slug)
 			} catch (err) {
 				console.error(
-					`[haiku_run_next] merge_stage execution failed: ${err instanceof Error ? err.message : String(err)}`,
+					`[haiku_run_next] complete_stage execution failed: ${err instanceof Error ? err.message : String(err)}`,
 				)
 				break
 			}

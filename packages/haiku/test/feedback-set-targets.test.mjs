@@ -102,7 +102,8 @@ function setupRepo() {
 
 function teardown() {
 	if (originalCwd) process.chdir(originalCwd)
-	if (projDir && existsSync(projDir)) rmSync(projDir, { recursive: true, force: true })
+	if (projDir && existsSync(projDir))
+		rmSync(projDir, { recursive: true, force: true })
 }
 
 console.log("\n── haiku_feedback_set_targets ───────────────────────────")
@@ -124,13 +125,7 @@ try {
 
 		const fm = matter(
 			readFileSync(
-				join(
-					intentDir,
-					"stages",
-					"design",
-					"feedback",
-					"01-rate-limit.md",
-				),
+				join(intentDir, "stages", "design", "feedback", "01-rate-limit.md"),
 				"utf8",
 			),
 		).data
@@ -172,13 +167,7 @@ try {
 
 		const fm = matter(
 			readFileSync(
-				join(
-					intentDir,
-					"stages",
-					"design",
-					"feedback",
-					"05-with-reason.md",
-				),
+				join(intentDir, "stages", "design", "feedback", "05-with-reason.md"),
 				"utf8",
 			),
 		).data

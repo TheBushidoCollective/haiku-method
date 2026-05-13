@@ -42,7 +42,10 @@ test("session-api: scrubEngineWitnessFields strips body_sha256 and witnesses[] f
 				at: "2026-05-07T12:00:00Z",
 				witnesses: [
 					{ path: "stages/design/units/unit-01.md", sha256: "a".repeat(64) },
-					{ path: "stages/design/artifacts/output.png", sha256: "b".repeat(64) },
+					{
+						path: "stages/design/artifacts/output.png",
+						sha256: "b".repeat(64),
+					},
 				],
 			},
 			"code-reviewer": {

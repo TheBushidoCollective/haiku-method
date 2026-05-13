@@ -1163,7 +1163,10 @@ async function run() {
 				`${c.name} should upload successfully (got ${res.status}). Knowledge accepts any file; serveFile handles XSS at serve time.`,
 			)
 			const dest = join(intentDirPath, "knowledge", c.name)
-			assert.ok(existsSync(dest), `${c.name} must land on disk after accepted upload`)
+			assert.ok(
+				existsSync(dest),
+				`${c.name} must land on disk after accepted upload`,
+			)
 		}
 	})
 

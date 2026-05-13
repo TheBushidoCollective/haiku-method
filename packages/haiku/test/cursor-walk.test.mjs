@@ -607,7 +607,7 @@ test("cursor: fully signed unit (qg done) → merge_stage", async () => {
 			const action = await runTick(repoRoot, slug)
 			assert.strictEqual(
 				action.action,
-				"merge_stage",
+				"complete_stage",
 				`expected merge_stage with all sigs in place; got: ${action.action} — ${action.message}`,
 			)
 			assert.strictEqual(action.stage, "design")
@@ -811,7 +811,7 @@ test("cursor: closed FB with invalidates clears the listed approvals", async () 
 			// stuck on merge_stage / sealed — the closed FB's invalidation
 			// reopened SOMETHING that needs attention.
 			assert.ok(
-				action.action !== "sealed" && action.action !== "merge_stage",
+				action.action !== "sealed" && action.action !== "complete_stage",
 				`closed-FB invalidation must reopen the approval cycle; cursor incorrectly emitted: ${action.action}`,
 			)
 		},

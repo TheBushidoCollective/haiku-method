@@ -107,7 +107,11 @@ test("haiku_run_next refuses to auto-resolve when not on an intent branch (git m
 		// that intent's runtime journals.
 		makeActiveIntent(repoRoot, "stranger-intent")
 		const result = await runNext()
-		assert.strictEqual(result.isError, true, "expected refusal on non-intent branch")
+		assert.strictEqual(
+			result.isError,
+			true,
+			"expected refusal on non-intent branch",
+		)
 		const text = result.content?.[0]?.text ?? ""
 		assert.ok(
 			text.toLowerCase().includes("intent branch") ||
@@ -155,7 +159,8 @@ test("haiku_run_next still accepts explicit `intent` arg on any branch", async (
 		const result = await runNext({ intent: slug })
 		const text = result.content?.[0]?.text ?? ""
 		assert.ok(
-			!text.toLowerCase().includes("not an intent branch") || text.includes(slug),
+			!text.toLowerCase().includes("not an intent branch") ||
+				text.includes(slug),
 			`expected explicit slug to flow through; got: ${text}`,
 		)
 	})

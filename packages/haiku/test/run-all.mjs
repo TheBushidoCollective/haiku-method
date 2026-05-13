@@ -81,11 +81,9 @@ for (const file of testFiles) {
 		// Attempt to parse pass/fail counts from stdout even on non-zero exit
 		const crashMatch = e.stdout?.match(/(\d+) passed, (\d+) failed/)
 		const crashNodeTestPass =
-			e.stdout?.match(/ℹ pass (\d+)/) ||
-			e.stdout?.match(/^# pass (\d+)/m)
+			e.stdout?.match(/ℹ pass (\d+)/) || e.stdout?.match(/^# pass (\d+)/m)
 		const crashNodeTestFail =
-			e.stdout?.match(/ℹ fail (\d+)/) ||
-			e.stdout?.match(/^# fail (\d+)/m)
+			e.stdout?.match(/ℹ fail (\d+)/) || e.stdout?.match(/^# fail (\d+)/m)
 		if (crashMatch) {
 			const p = Number.parseInt(crashMatch[1], 10)
 			const f = Number.parseInt(crashMatch[2], 10)
@@ -158,15 +156,11 @@ if (silentFiles.length > 0) {
 	for (const r of silentFiles) {
 		console.error(`    - ${r.file}`)
 	}
-	console.error(
-		`\n  Either: (a) the file truly runs zero tests (delete it),`,
-	)
+	console.error(`\n  Either: (a) the file truly runs zero tests (delete it),`)
 	console.error(
 		`  or (b) its output format isn't parsed by run-all.mjs's regex set.`,
 	)
-	console.error(
-		`  See the silent-test-loss guard for context.\n`,
-	)
+	console.error(`  See the silent-test-loss guard for context.\n`)
 	process.exit(1)
 }
 

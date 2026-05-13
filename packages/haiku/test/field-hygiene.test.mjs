@@ -2,12 +2,7 @@
 // field-hygiene.test.mjs — Verify the post-migration cruft detector.
 
 import assert from "node:assert"
-import {
-	mkdirSync,
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"

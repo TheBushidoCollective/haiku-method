@@ -55,10 +55,7 @@ test("does NOT classify generic errors as timeouts", () => {
 		isAwaitWaitTimeoutError("Could not parse intent frontmatter"),
 		false,
 	)
-	assert.strictEqual(
-		isAwaitWaitTimeoutError("session not found"),
-		false,
-	)
+	assert.strictEqual(isAwaitWaitTimeoutError("session not found"), false)
 })
 
 console.log("\n── buildAwaitTimeoutResponse ──────────────────────────────")
@@ -98,5 +95,7 @@ test("response does NOT use alarming language ('failed', 'error')", () => {
 	)
 })
 
-console.log(`\n── Result: ${passed} passed, ${failed} failed ────────────────────`)
+console.log(
+	`\n── Result: ${passed} passed, ${failed} failed ────────────────────`,
+)
 process.exit(failed > 0 ? 1 : 0)

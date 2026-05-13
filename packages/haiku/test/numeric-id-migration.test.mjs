@@ -21,12 +21,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import {
-	mkdirSync,
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import matter from "gray-matter"
@@ -100,14 +95,20 @@ const baseFm = {
 test("FB lookup: legacy 2-digit on disk resolves with integer 8", async () => {
 	if (!HAS_GIT) return
 	await withRepo("nim-fb2", async ({ intentDir, slug }) => {
-		writeFb(intentDir, "design", "08-legacy.md", { title: "legacy 2dig", ...baseFm })
+		writeFb(intentDir, "design", "08-legacy.md", {
+			title: "legacy 2dig",
+			...baseFm,
+		})
 		const { handleStateTool } = await import("../src/state-tools.ts")
 		const r = handleStateTool("haiku_feedback_read", {
 			intent: slug,
 			stage: "design",
 			feedback_id: 8,
 		})
-		assert.ok(!r.isError, `expected lookup to succeed; got: ${JSON.stringify(r)}`)
+		assert.ok(
+			!r.isError,
+			`expected lookup to succeed; got: ${JSON.stringify(r)}`,
+		)
 		const parsed = JSON.parse(r.content[0].text)
 		assert.strictEqual(parsed.title, "legacy 2dig")
 	})
@@ -116,14 +117,20 @@ test("FB lookup: legacy 2-digit on disk resolves with integer 8", async () => {
 test("FB lookup: 3-digit on disk resolves with integer 8", async () => {
 	if (!HAS_GIT) return
 	await withRepo("nim-fb3", async ({ intentDir, slug }) => {
-		writeFb(intentDir, "design", "008-modern.md", { title: "modern 3dig", ...baseFm })
+		writeFb(intentDir, "design", "008-modern.md", {
+			title: "modern 3dig",
+			...baseFm,
+		})
 		const { handleStateTool } = await import("../src/state-tools.ts")
 		const r = handleStateTool("haiku_feedback_read", {
 			intent: slug,
 			stage: "design",
 			feedback_id: 8,
 		})
-		assert.ok(!r.isError, `expected lookup to succeed; got: ${JSON.stringify(r)}`)
+		assert.ok(
+			!r.isError,
+			`expected lookup to succeed; got: ${JSON.stringify(r)}`,
+		)
 		const parsed = JSON.parse(r.content[0].text)
 		assert.strictEqual(parsed.title, "modern 3dig")
 	})
@@ -133,7 +140,9 @@ test("FB write: new file uses 3-digit zero padding", async () => {
 	if (!HAS_GIT) return
 	await withRepo("nim-fbwrite", async ({ intentDir, slug }) => {
 		// stage dir must exist for haiku_feedback to resolve target
-		mkdirSync(join(intentDir, "stages", "design", "feedback"), { recursive: true })
+		mkdirSync(join(intentDir, "stages", "design", "feedback"), {
+			recursive: true,
+		})
 		const { handleStateTool } = await import("../src/state-tools.ts")
 		const r = handleStateTool("haiku_feedback", {
 			intent: slug,
@@ -143,7 +152,10 @@ test("FB write: new file uses 3-digit zero padding", async () => {
 			origin: "user-chat",
 			author: "user",
 		})
-		assert.ok(!r.isError, `expected create to succeed; got: ${JSON.stringify(r)}`)
+		assert.ok(
+			!r.isError,
+			`expected create to succeed; got: ${JSON.stringify(r)}`,
+		)
 		const parsed = JSON.parse(r.content[0].text)
 		// On-disk filename should be NNN-padded
 		assert.ok(

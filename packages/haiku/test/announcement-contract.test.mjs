@@ -95,5 +95,7 @@ test("zero-unit dispatch returns the noop hint", () => {
 	assert.match(out, /no units|retick/i)
 })
 
-console.log(`\n── Result: ${passed} passed, ${failed} failed ──────────────────`)
+console.log(
+	`\n── Result: ${passed} passed, ${failed} failed ──────────────────`,
+)
 process.exit(failed > 0 ? 1 : 0)

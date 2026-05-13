@@ -22,7 +22,15 @@
 
 import assert from "node:assert"
 import { execFileSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { test } from "node:test"
@@ -146,7 +154,7 @@ async function runTick(slug, intentDir) {
 	// surface the haiku_run_next tool would expose to the agent —
 	// otherwise the prompt_file/message stamping never runs.
 	try {
-		const studio = (action.studio ?? "software")
+		const studio = action.studio ?? "software"
 		buildRunInstructions(slug, studio, action, intentDir)
 	} catch {
 		/* a builder may legitimately fail on synthetic state; the
@@ -195,12 +203,7 @@ test("e2e: software-studio pipeline never wheel-spins; every action is actionabl
 				approvals: {},
 				sealed_at: null,
 				stages: ["inception", "design"],
-				skip_stages: [
-					"product",
-					"development",
-					"operations",
-					"security",
-				],
+				skip_stages: ["product", "development", "operations", "security"],
 				design_directions: {
 					design: { archetype: "modular-cards", at: now },
 				},
@@ -316,7 +319,7 @@ function applyResponse(intentDir, action, root, slug) {
 				fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
 			apps[action.role] = { at }
 			writeFm(intentMd, { ...fm, approvals: apps })
-		} else if (action.action === "merge_intent") {
+		} else if (action.action === "seal_intent") {
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
 			writeFm(intentMd, { ...fm, sealed_at: at })
@@ -388,14 +391,22 @@ function applyResponse(intentDir, action, root, slug) {
 			// — file existence IS the signal that discovery ran. Look
 			// up the location dynamically so this test stays robust to
 			// studio config changes.
-			void readDiscoveryLocationAndWriteStub(action.stage, action.agent, root, slug)
+			void readDiscoveryLocationAndWriteStub(
+				action.stage,
+				action.agent,
+				root,
+				slug,
+			)
 			break
 		}
 		case "clarify_required": {
 			// Stamp the clarifications on intent.md.
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
-			const cl = fm.clarifications && typeof fm.clarifications === "object" ? fm.clarifications : {}
+			const cl =
+				fm.clarifications && typeof fm.clarifications === "object"
+					? fm.clarifications
+					: {}
 			cl[stage] = { answers: [], at }
 			writeFm(intentMd, { ...fm, clarifications: cl })
 			break
@@ -403,7 +414,10 @@ function applyResponse(intentDir, action, root, slug) {
 		case "design_direction_required": {
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
-			const dd = fm.design_directions && typeof fm.design_directions === "object" ? fm.design_directions : {}
+			const dd =
+				fm.design_directions && typeof fm.design_directions === "object"
+					? fm.design_directions
+					: {}
 			dd[stage] = { mode: "archetype", archetype: "auto", at }
 			writeFm(intentMd, { ...fm, design_directions: dd })
 			break
@@ -416,8 +430,12 @@ function applyResponse(intentDir, action, root, slug) {
 			// elaborate instead of re-emitting.
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
-			const dd = fm.design_directions && typeof fm.design_directions === "object" ? { ...fm.design_directions } : {}
-			const rec = dd[stage] && typeof dd[stage] === "object" ? { ...dd[stage] } : {}
+			const dd =
+				fm.design_directions && typeof fm.design_directions === "object"
+					? { ...fm.design_directions }
+					: {}
+			const rec =
+				dd[stage] && typeof dd[stage] === "object" ? { ...dd[stage] } : {}
 			rec.surfaced_at = at
 			dd[stage] = rec
 			writeFm(intentMd, { ...fm, design_directions: dd })
@@ -436,7 +454,11 @@ function applyResponse(intentDir, action, root, slug) {
 					completed_at: at,
 					result: "advance",
 				})
-				writeFm(unitPath, { ...fm, started_at: fm.started_at || at, iterations: its })
+				writeFm(unitPath, {
+					...fm,
+					started_at: fm.started_at || at,
+					iterations: its,
+				})
 			}
 			break
 		}
@@ -447,7 +469,8 @@ function applyResponse(intentDir, action, root, slug) {
 			for (const f of unitFiles) {
 				const path = join(unitsDir, f)
 				const fm = readFm(path)
-				const reviews = fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
+				const reviews =
+					fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
 				reviews[action.role] = { at }
 				writeFm(path, { ...fm, reviews })
 			}
@@ -460,7 +483,8 @@ function applyResponse(intentDir, action, root, slug) {
 			for (const f of unitFiles) {
 				const path = join(unitsDir, f)
 				const fm = readFm(path)
-				const approvals = fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
+				const approvals =
+					fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
 				approvals[action.role] = { at }
 				writeFm(path, { ...fm, approvals })
 			}
@@ -476,8 +500,10 @@ function applyResponse(intentDir, action, root, slug) {
 			for (const f of unitFiles) {
 				const path = join(unitsDir, f)
 				const fm = readFm(path)
-				const reviews = fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
-				const approvals = fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
+				const reviews =
+					fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
+				const approvals =
+					fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
 				reviews.user = reviews.user || { at }
 				approvals.user = approvals.user || { at }
 				writeFm(path, { ...fm, reviews, approvals })
@@ -491,13 +517,14 @@ function applyResponse(intentDir, action, root, slug) {
 			for (const f of unitFiles) {
 				const path = join(unitsDir, f)
 				const fm = readFm(path)
-				const approvals = fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
+				const approvals =
+					fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
 				approvals.quality_gates = { at }
 				writeFm(path, { ...fm, approvals })
 			}
 			break
 		}
-		case "merge_stage": {
+		case "complete_stage": {
 			// Materialize a "merge" — set every unit as merged.
 			// Real merge involves git, but for the cursor we just need
 			// `findCurrentStage` to skip this stage. Easiest: commit
@@ -507,7 +534,15 @@ function applyResponse(intentDir, action, root, slug) {
 				git(root, "commit", "-m", `complete ${stage}`)
 				git(root, "checkout", "-q", "-b", `haiku/${slug}/${stage}`)
 				git(root, "checkout", "-q", `haiku/${slug}/main`)
-				git(root, "merge", "-q", "--no-ff", "-m", `merge ${stage}`, `haiku/${slug}/${stage}`)
+				git(
+					root,
+					"merge",
+					"-q",
+					"--no-ff",
+					"-m",
+					`merge ${stage}`,
+					`haiku/${slug}/${stage}`,
+				)
 			} catch {
 				/* may already be merged */
 			}
@@ -516,12 +551,13 @@ function applyResponse(intentDir, action, root, slug) {
 		case "intent_review": {
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
-			const apps = fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
+			const apps =
+				fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
 			apps[action.role] = { at }
 			writeFm(intentMd, { ...fm, approvals: apps })
 			break
 		}
-		case "merge_intent": {
+		case "seal_intent": {
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
 			writeFm(intentMd, { ...fm, sealed_at: at })

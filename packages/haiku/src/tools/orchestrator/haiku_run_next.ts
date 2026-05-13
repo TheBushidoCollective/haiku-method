@@ -201,8 +201,9 @@ async function runSelectionPicker(
 }
 
 import { reportError } from "../../sentry.js"
+import { launchBrowserBestEffort } from "../../server/tool-call.js"
 import { logSessionEvent } from "../../session-metadata.js"
-import { getSession, updateSession } from "../../sessions.js"
+import { getSession, isBrowserAttached, updateSession } from "../../sessions.js"
 import {
 	findFeedbackFile,
 	findHaikuRoot,
@@ -1345,9 +1346,20 @@ export default defineTool({
 		// haiku_await_gate" two-step. haiku_await_gate stays as a
 		// resume entry point for the case where the original tick
 		// timed out or was interrupted.
+		//
+		// Action shapes the loop handles:
+		//   - `gate_review` (legacy): emitted by the v3 dispatcher with
+		//     pre-computed next_stage/next_phase/gate_context/gate_type.
+		//   - `user_gate` (v4 cursor): emitted by walkIntentTrack for
+		//     per-unit spec/approval reviews. Carries gate_kind ("spec"
+		//     or "approval") and the unit list; this code translates it
+		//     to the prepare/await shape on entry. gateType is always
+		//     "ask" — user_gate IS the local SPA review path. The await
+		//     tool stamps reviews.user / approvals.user via
+		//     stampGateApproval keyed off gate_review_context.
 		let gateReviewIterations = 0
 		let gateReviewLastSig: string | null = null
-		while (result.action === "gate_review") {
+		while (result.action === "gate_review" || result.action === "user_gate") {
 			const sig = actionSignature(result)
 			if (++gateReviewIterations > RUN_NEXT_LOOP_CAP) {
 				return loopAbortResponse(
@@ -1367,10 +1379,23 @@ export default defineTool({
 			}
 			gateReviewLastSig = sig
 			const stage = (result.stage as string | null) ?? ""
-			const nextStage = result.next_stage as string | null
-			const nextPhase = result.next_phase as string | null
-			const gateContext = (result.gate_context as string) || "stage_gate"
-			const gateType = result.gate_type as string
+			// Field translation:
+			//   - gate_review (legacy): pre-computed fields present
+			//   - user_gate (v4): map gate_kind → gate_review_context;
+			//     gate_type is implicit "ask" (local SPA review);
+			//     next_stage/next_phase aren't supplied because the
+			//     await tool's stampGateApproval handles advancement off
+			//     the gate_review_context alone for per-unit reviews.
+			const isUserGate = result.action === "user_gate"
+			const gateKind = isUserGate ? (result.gate_kind as string) : ""
+			const nextStage = isUserGate ? null : (result.next_stage as string | null)
+			const nextPhase = isUserGate ? null : (result.next_phase as string | null)
+			const gateContext = isUserGate
+				? gateKind === "spec"
+					? "elaborate_to_execute"
+					: "stage_gate"
+				: (result.gate_context as string) || "stage_gate"
+			const gateType = isUserGate ? "ask" : (result.gate_type as string)
 			const intentDirPath = `.haiku/intents/${slug}`
 			if (stFile)
 				logSessionEvent(stFile, {
@@ -1382,6 +1407,15 @@ export default defineTool({
 
 			const _prepareGateReview = getPrepareGateReview()
 			if (!_prepareGateReview) {
+				if (isUserGate) {
+					// No SPA server wired (test env, or a harness without
+					// the review server). Fall through: emit the cursor's
+					// user_gate action as a normal JSON response and let
+					// the agent take the URL+await fallback path. This
+					// is the same response shape the test harness has
+					// always handled.
+					break
+				}
 				return text(
 					"Gate-review prepare handler not registered — server.ts wiring is broken. File a bug.",
 				)
@@ -1452,6 +1486,58 @@ export default defineTool({
 					}
 				}
 
+				// Browser launch + attach detection.
+				//
+				// If `prepared.browser_attached === true`, a live SPA tab
+				// is already heartbeating for this session — skip the
+				// launch entirely. Re-launching would spawn a duplicate
+				// tab and surprise the user.
+				//
+				// Otherwise: best-effort launch, then wait up to
+				// BROWSER_ATTACH_GRACE_MS for the SPA's first heartbeat.
+				// If a heartbeat lands → proceed inline-block (happy
+				// path). If no heartbeat lands → fall back to URL-print
+				// mode and tell the agent to call haiku_await_gate when
+				// the user is ready. This matches the contract: "the
+				// engine inlines the wait; the URL+await-gate two-step
+				// is the fallback when we can't open a browser or no
+				// signal arrives in time."
+				const BROWSER_ATTACH_GRACE_MS = 8_000
+				const POLL_INTERVAL_MS = 250
+				if (!prepared.browser_attached) {
+					launchBrowserBestEffort(prepared.review_url, "Gate review")
+					const deadline = Date.now() + BROWSER_ATTACH_GRACE_MS
+					while (
+						Date.now() < deadline &&
+						!isBrowserAttached(prepared.session_id)
+					) {
+						await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
+					}
+					if (!isBrowserAttached(prepared.session_id)) {
+						// No SPA heartbeat within the grace window. Either the
+						// host couldn't spawn a browser (headless, sandboxed)
+						// or the user is on a remote/desktop where the URL
+						// needs to be hand-delivered. Hand the agent the URL
+						// + session id and tell it to call haiku_await_gate
+						// when the user is ready.
+						return text(
+							[
+								`Gate review session prepared but no browser attached within ${BROWSER_ATTACH_GRACE_MS / 1000}s.`,
+								"",
+								`**Review URL:** ${prepared.review_url}`,
+								"",
+								"Post this URL to the user. When they have the tab open, call:",
+								"",
+								"```",
+								`haiku_await_gate { intent: "${slug}", session_id: "${prepared.session_id}" }`,
+								"```",
+								"",
+								"to block on the user's decision. The await tool reuses the same session — no new tab will open.",
+							].join("\n"),
+						)
+					}
+				}
+
 				// Engine-side blocking: dispatch to haiku_await_gate
 				// inline. The await tool drains the session, blocks on
 				// the user's decision, runs every post-decision side
@@ -1462,6 +1548,10 @@ export default defineTool({
 				// workflow action) or return the response directly
 				// (terminal / changes-requested / external-review
 				// cases).
+				//
+				// `auto_open: false` because we already launched (or
+				// reused) the browser above — the await tool would
+				// otherwise spawn a second tab.
 				const { orchestratorToolHandlers: gateHandlers } = await import(
 					"./index.js"
 				)
@@ -1476,6 +1566,7 @@ export default defineTool({
 						intent: slug,
 						session_id: prepared.session_id,
 						review_url: prepared.review_url,
+						auto_open: false,
 						...(stFile ? { state_file: stFile } : {}),
 					},
 					signal,

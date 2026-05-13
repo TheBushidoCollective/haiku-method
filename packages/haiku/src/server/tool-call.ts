@@ -1140,9 +1140,18 @@ export async function awaitGateReviewSession(
 
 			if (timedOut) break
 
+			// Presence loss = the SPA's heartbeat went dark for
+			// HEARTBEAT_GRACE_MS (120s). Previously the await tool
+			// logged this and continued waiting, which left the tool
+			// blocked for up to 4h on a session the user had abandoned.
+			// The agent surface should fail-fast so the caller can
+			// surface a recovery path. Per the 2026-05-13 contract:
+			// the inline gate path fails the tool when the browser
+			// disconnects mid-await; the URL+await fallback is the
+			// recovery channel.
 			if (hasPresenceLost(sessionId)) {
-				console.error(
-					`[haiku] Review session ${sessionId} lost presence — continuing to wait (no reopen)`,
+				throw new Error(
+					`Review session ${sessionId} lost presence — the SPA tab disconnected (no heartbeat for ≥120s). The user likely closed the browser. Re-open the URL and call haiku_await_gate when ready.`,
 				)
 			}
 		}

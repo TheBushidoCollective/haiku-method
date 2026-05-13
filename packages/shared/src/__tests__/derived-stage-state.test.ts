@@ -139,7 +139,12 @@ test("Date-typed iteration.completed_at flows through to completed_at output", (
 	const u = unit("u1", {
 		started_at: at,
 		iterations: [
-			{ hat: "researcher", started_at: at, completed_at: at, result: "advance" },
+			{
+				hat: "researcher",
+				started_at: at,
+				completed_at: at,
+				result: "advance",
+			},
 			{
 				hat: "verifier",
 				started_at: at,

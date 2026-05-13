@@ -10,8 +10,10 @@
 
 import assert from "node:assert"
 import {
+	deriveActiveStageFromStageTree,
 	deriveStageStatusFromUnits,
 	deriveV4ActiveStage,
+	parseFeedback,
 	parseIntentFromRaw,
 } from "../intent-parsing"
 import { deriveUnitStatus } from "../types"
@@ -229,7 +231,10 @@ test("parseIntentFromRaw on v4 input emits sealed_at-derived status", () => {
 })
 
 test("parseIntentFromRaw on v4 sealed input emits 'completed' status", () => {
-	const sealedRaw = v4Raw.replace("sealed_at: null", "sealed_at: \"2026-05-01T12:00:00Z\"")
+	const sealedRaw = v4Raw.replace(
+		"sealed_at: null",
+		'sealed_at: "2026-05-01T12:00:00Z"',
+	)
 	const intent = parseIntentFromRaw("local", "v4-sealed", sealedRaw)
 	assert.strictEqual(intent.status, "completed")
 	assert.ok(intent.completedAt) // sealed_at proxies completedAt
@@ -254,6 +259,130 @@ test("parseIntentFromRaw on malformed input recovers (empty data, body preserved
 	// Title falls back to slug
 	assert.strictEqual(intent.title, "broken")
 	// Doesn't throw; the test reaching here is the assertion
+})
+
+console.log("\n── deriveActiveStageFromStageTree ─────────────────────────")
+
+test("returns last stage with units (declaration order)", () => {
+	const out = deriveActiveStageFromStageTree(
+		["inception", "design", "build"],
+		new Set(["inception", "design"]),
+	)
+	assert.strictEqual(out, "design")
+})
+
+test("returns stages[0] when nothing has units yet", () => {
+	const out = deriveActiveStageFromStageTree(["inception", "design"], new Set())
+	assert.strictEqual(out, "inception")
+})
+
+test("respects declaration order, not set iteration order", () => {
+	// Set order is insertion order in JS — feed in reverse to confirm we
+	// walk `stages` array, not the set.
+	const out = deriveActiveStageFromStageTree(
+		["inception", "design", "build"],
+		new Set(["build", "inception"]),
+	)
+	assert.strictEqual(out, "build")
+})
+
+test("empty stages → empty string", () => {
+	assert.strictEqual(
+		deriveActiveStageFromStageTree([], new Set(["whatever"])),
+		"",
+	)
+})
+
+console.log("\n── parseFeedback ──────────────────────────────────────────")
+
+const fbHumanRaw = `---
+title: "Button copy is wrong"
+origin: user-chat
+author: jason
+author_type: human
+created_at: "2026-05-10T12:00:00Z"
+targets:
+  unit: unit-03-cta
+  invalidates: ["user"]
+---
+
+The CTA should say "Get Started" not "Click Here".
+`
+
+const fbAgentClosedRaw = `---
+title: "Spec drift on auth flow"
+origin: drift
+author: drift-detector
+author_type: agent
+created_at: "2026-05-09T08:00:00Z"
+closed_at: "2026-05-09T15:00:00Z"
+targets:
+  unit: unit-05-auth
+  invalidates: []
+closure_reply:
+  text: "Rolled the auth changes back to spec."
+  at: "2026-05-09T15:00:00Z"
+---
+
+The build deviated from the auth spec.
+`
+
+test("parseFeedback human FB", () => {
+	const fb = parseFeedback(
+		"local",
+		"my-intent",
+		"design",
+		"FB-01-bad-copy.md",
+		fbHumanRaw,
+		".haiku/intents/my-intent/stages/design/feedback/FB-01-bad-copy.md",
+	)
+	assert.strictEqual(fb.id, "FB-01-bad-copy")
+	assert.strictEqual(fb.title, "Button copy is wrong")
+	assert.strictEqual(fb.authorType, "human")
+	assert.strictEqual(fb.origin, "user-chat")
+	assert.strictEqual(fb.unit, "unit-03-cta")
+	assert.deepStrictEqual(fb.invalidates, ["user"])
+	assert.strictEqual(fb.closedAt, null)
+	assert.ok(fb.body.includes("Get Started"))
+})
+
+test("parseFeedback closed agent FB with closure reply", () => {
+	const fb = parseFeedback(
+		"local",
+		"my-intent",
+		"build",
+		"FB-02-drift.md",
+		fbAgentClosedRaw,
+		".haiku/intents/my-intent/stages/build/feedback/FB-02-drift.md",
+	)
+	assert.strictEqual(fb.authorType, "agent")
+	assert.strictEqual(fb.closedAt, "2026-05-09T15:00:00Z")
+	assert.ok(fb.closureReply)
+	assert.strictEqual(
+		fb.closureReply?.text,
+		"Rolled the auth changes back to spec.",
+	)
+})
+
+test("parseFeedback intent-scope (null stage) keeps unit=null when FM omits targets", () => {
+	const noTargetsRaw = `---
+title: "General concern"
+origin: user-chat
+author_type: human
+---
+
+body text
+`
+	const fb = parseFeedback(
+		"local",
+		"slug",
+		null,
+		"FB-09-concern.md",
+		noTargetsRaw,
+		".haiku/intents/slug/feedback/FB-09-concern.md",
+	)
+	assert.strictEqual(fb.unit, null)
+	assert.deepStrictEqual(fb.invalidates, [])
 })
 
 console.log(`\n── Result: ${passed} passed, ${failed} failed ──────────────`)

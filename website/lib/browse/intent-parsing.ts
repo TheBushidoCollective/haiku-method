@@ -7,10 +7,15 @@
  */
 
 import {
-	deriveStageStatePure,
 	type DerivedUnitView,
+	deriveStageStatePure,
 } from "@haiku/shared/derived-stage-state"
-import type { HaikuArtifact, HaikuIntent, HaikuKnowledgeFile } from "./types"
+import type {
+	HaikuArtifact,
+	HaikuFeedback,
+	HaikuIntent,
+	HaikuKnowledgeFile,
+} from "./types"
 import { normalizeIntentStatus, parseFrontmatter } from "./types"
 
 /** Map a filename to the artifact-type the SPA renders. */
@@ -147,14 +152,16 @@ export function parseIntentFromRaw(
 			// declared stage so the chrome doesn't render blank.
 			(stages[0] as string) || ""
 		: (data.active_stage as string) || ""
-	const sealedAt = v4 ? ((data.sealed_at as string) || null) : null
+	const sealedAt = v4 ? (data.sealed_at as string) || null : null
 	const v3Status = (data.status as string) || ""
 	const computedStatus = v4
 		? sealedAt
 			? "completed"
 			: "active"
 		: v3Status || "active"
-	const completedAtForStatus = v4 ? sealedAt : (data.completed_at as string) || null
+	const completedAtForStatus = v4
+		? sealedAt
+		: (data.completed_at as string) || null
 	const composite = v4
 		? null
 		: (data.composite as Array<{ studio: string; stages: string[] }>) || null
@@ -234,6 +241,97 @@ export function deriveV4ActiveStage(
  * The "completed" → "complete" remapping mirrors the v3 wire shape
  * the SPA components were built against.
  */
+/**
+ * Parse a feedback `.md` file into a `HaikuFeedback`. Mirrors the v4 FB
+ * frontmatter shape from `packages/haiku/src/state/schemas/feedback.ts`
+ * but trimmed to the fields the browse UI surfaces. The body of the FB
+ * file is the markdown content after the YAML fence.
+ *
+ * `id` is derived from the filename (e.g. "FB-03-bad-copy.md" →
+ * "FB-03-bad-copy") so links and keys stay stable even when the FM is
+ * sparse (early-state human FBs frequently land with just title+body).
+ */
+export function parseFeedback(
+	provider: "gitlab" | "github" | "local",
+	slug: string,
+	stageName: string | null,
+	fileName: string,
+	raw: string,
+	path: string,
+): HaikuFeedback {
+	const { data, content } = parseFrontmatter(raw, {
+		provider,
+		path,
+		slug,
+		branch: undefined,
+	})
+	const id = fileName.replace(/\.md$/, "")
+	const targets = (data.targets as Record<string, unknown> | undefined) ?? {}
+	const closureReplyRaw = data.closure_reply as
+		| { text?: unknown; at?: unknown }
+		| undefined
+	const closureReply =
+		closureReplyRaw &&
+		typeof closureReplyRaw.text === "string" &&
+		typeof closureReplyRaw.at === "string"
+			? { text: closureReplyRaw.text, at: closureReplyRaw.at }
+			: null
+	const authorTypeRaw = data.author_type
+	const authorType: "agent" | "human" | "system" | null =
+		authorTypeRaw === "agent" ||
+		authorTypeRaw === "human" ||
+		authorTypeRaw === "system"
+			? authorTypeRaw
+			: null
+	// stage scope unused here but kept in the signature so providers can
+	// disambiguate intent vs stage scope when constructing the path —
+	// the field is reserved for future per-scope rendering.
+	void stageName
+	return {
+		id,
+		title: typeof data.title === "string" ? data.title : null,
+		origin: typeof data.origin === "string" ? data.origin : null,
+		author: typeof data.author === "string" ? data.author : null,
+		authorType,
+		body: content,
+		unit: typeof targets.unit === "string" ? targets.unit : null,
+		invalidates: Array.isArray(targets.invalidates)
+			? (targets.invalidates as unknown[]).filter(
+					(x): x is string => typeof x === "string",
+				)
+			: [],
+		closedAt: typeof data.closed_at === "string" ? data.closed_at : null,
+		createdAt: typeof data.created_at === "string" ? data.created_at : null,
+		closureReply,
+		closureReplyUnread: data.closure_reply_unread === true,
+		path,
+		raw: data,
+	}
+}
+
+/**
+ * Pick the active-stage candidate for v4 intents in the list view, where
+ * per-unit FM isn't loaded. Walks the supplied `stages` (declaration
+ * order) and returns the LAST one whose `stagesWithUnits` set has it —
+ * i.e. the latest stage the agent has actually touched (created at least
+ * one unit file in `units/`). When no stage has units yet, falls back to
+ * `stages[0]` so the chrome doesn't render blank.
+ *
+ * Intentionally cheap: providers feed the set from a single tree-list
+ * call, no per-file reads.
+ */
+export function deriveActiveStageFromStageTree(
+	stages: ReadonlyArray<string>,
+	stagesWithUnits: ReadonlySet<string>,
+): string {
+	if (stages.length === 0) return ""
+	let last: string | null = null
+	for (const s of stages) {
+		if (stagesWithUnits.has(s)) last = s
+	}
+	return last ?? stages[0] ?? ""
+}
+
 export function deriveStageStatusFromUnits(
 	units: ReadonlyArray<{ raw: Record<string, unknown> }>,
 	stage = "",

@@ -11,8 +11,10 @@ import ListIntentsQuery from "./graphql/github/__generated__/operationsListInten
 import ReadFileQuery from "./graphql/github/__generated__/operationsReadFileQuery.graphql"
 import {
 	classifyArtifact,
+	deriveActiveStageFromStageTree,
 	deriveStageStatusFromUnits,
 	mergeKnowledge as mergeKnowledgeShared,
+	parseFeedback,
 	parseIntentFromRaw as parseIntentFromRawShared,
 	parseStageStateJson,
 } from "./intent-parsing"
@@ -20,6 +22,7 @@ import { parseSettingsYaml } from "./resolve-links"
 import type {
 	BrowseProvider,
 	HaikuArtifact,
+	HaikuFeedback,
 	HaikuIntent,
 	HaikuIntentDetail,
 	HaikuKnowledgeFile,
@@ -156,6 +159,79 @@ export class GitHubProvider implements BrowseProvider {
 			.filter((e) => e.type === "blob")
 			.map((e) => e.name)
 			.sort()
+	}
+
+	/** Cheaply detect which declared stages have at least one unit file
+	 *  on disk. Returns a Set of stage names with non-empty `units/`
+	 *  dirs. Used by listIntents() to derive a v4 active-stage candidate
+	 *  without per-unit FM reads. One GraphQL call per intent (tree
+	 *  listing of `.haiku/intents/<slug>/stages` on the intent main
+	 *  branch). When the stages directory is missing entirely, returns
+	 *  an empty set. */
+	private async probeStagesWithUnits(
+		slug: string,
+		ref: string,
+		stages: ReadonlyArray<string>,
+	): Promise<Set<string>> {
+		const stagesExpr = `${ref}:.haiku/intents/${slug}/stages`
+		const _cacheKey = `gh:${this.owner}/${this.repo}:listFiles:${stagesExpr}:withUnits`
+		type StageTreeData = {
+			repository: {
+				object: {
+					entries?: ReadonlyArray<{
+						name: string
+						type: string
+						object?: {
+							entries?: ReadonlyArray<{
+								name: string
+								type: string
+								object?: {
+									entries?: ReadonlyArray<{
+										name: string
+										type: string
+									}> | null
+								} | null
+							}> | null
+						} | null
+					}> | null
+				} | null
+			} | null
+		}
+		// Reuse GetIntentQuery's deep traversal — it already includes
+		// stages → stage → subdir → files. Pull just the stagesTree slice.
+		const data = await this.cachedQuery<operationsGetIntentQuery$data>(
+			GetIntentQuery,
+			{
+				owner: this.owner,
+				name: this.repo,
+				intentExpr: `${ref}:.haiku/intents/${slug}/intent.md`,
+				stagesExpr,
+				knowledgeExpr: `${ref}:.haiku/intents/${slug}/knowledge`,
+				operationsExpr: `${ref}:.haiku/intents/${slug}/operations`,
+				reflectionExpr: `${ref}:.haiku/intents/${slug}/reflection.md`,
+			},
+			`gh:${this.owner}/${this.repo}:getIntent:${slug}:${ref}`,
+		)
+		const stagesEntries = data?.repository?.stagesTree?.entries ?? []
+		const declaredStages = new Set(stages)
+		const stagesWithUnits = new Set<string>()
+		for (const stageDir of stagesEntries) {
+			if (stageDir.type !== "tree" || !declaredStages.has(stageDir.name))
+				continue
+			const subdirs = stageDir.object?.entries ?? []
+			const unitsDir = subdirs.find(
+				(e) => e.name === "units" && e.type === "tree",
+			)
+			const files = unitsDir?.object?.entries ?? []
+			const hasMd = files.some(
+				(f) => f.type === "blob" && f.name.endsWith(".md"),
+			)
+			if (hasMd) stagesWithUnits.add(stageDir.name)
+		}
+		// Silence the unused type alias — kept for documentation of the
+		// nested shape we're traversing.
+		void (null as unknown as StageTreeData)
+		return stagesWithUnits
 	}
 
 	/** Read a file from a specific branch (bypasses this.branch). */
@@ -308,6 +384,25 @@ export class GitHubProvider implements BrowseProvider {
 				branch: branchName,
 				...prMeta,
 			})
+			// v4 active-stage refinement — when intent.md has no
+			// `active_stage` (v4 dropped it), look at the stages tree
+			// (cheap directory listing — no per-unit reads) and pick the
+			// last stage that has any unit files. Falls back to stages[0]
+			// when the agent hasn't touched any stage yet.
+			const isV4 =
+				typeof intent.raw.plugin_version === "string" &&
+				intent.raw.plugin_version.startsWith("4.")
+			if (isV4 && intent.studioStages.length > 0) {
+				const stagesWithUnits = await this.probeStagesWithUnits(
+					slug,
+					branchName,
+					intent.studioStages,
+				)
+				intent.activeStage = deriveActiveStageFromStageTree(
+					intent.studioStages,
+					stagesWithUnits,
+				)
+			}
 			intentsBySlug.set(slug, intent)
 			this.intentBranchMap.set(slug, branchName)
 			this.intentMetaMap.set(slug, { branch: branchName, ...prMeta })
@@ -457,6 +552,28 @@ export class GitHubProvider implements BrowseProvider {
 			}
 		}
 
+		// Feedback files (stages/<stage>/feedback/*.md). Distinct from
+		// units + artifacts; rendered as annotations in the detail view.
+		const feedback: HaikuFeedback[] = []
+		const feedbackEntry = stageChildren.find(
+			(e) => e.name === "feedback" && e.type === "tree",
+		)
+		for (const fe of feedbackEntry?.object?.entries ?? []) {
+			if (fe.type !== "blob" || !fe.name.endsWith(".md")) continue
+			const text = fe.object?.text
+			if (!text) continue
+			feedback.push(
+				parseFeedback(
+					"github",
+					slug,
+					stageName,
+					fe.name,
+					text,
+					`.haiku/intents/${slug}/stages/${stageName}/feedback/${fe.name}`,
+				),
+			)
+		}
+
 		// state.json — shared parsing keeps gitlab + github in sync.
 		// v4 intents have no state.json (deleted by the migrator); the
 		// dual-path falls through to per-unit derivation.
@@ -488,7 +605,54 @@ export class GitHubProvider implements BrowseProvider {
 			gateOutcome,
 			units,
 			artifacts: artifacts.length > 0 ? artifacts : undefined,
+			feedback: feedback.length > 0 ? feedback : undefined,
 		}
+	}
+
+	/** Extract intent-scope feedback (`feedback/*.md` at intent root). The
+	 *  existing GetIntent query doesn't include this directory in its
+	 *  payload, so we list it separately. Returns an empty array when the
+	 *  directory is missing — that's the common case for intents that
+	 *  never accumulated intent-scope FBs. */
+	private async fetchIntentFeedback(
+		slug: string,
+		ref: string,
+	): Promise<HaikuFeedback[]> {
+		const dir = `.haiku/intents/${slug}/feedback`
+		const expression = `${ref}:${dir}`
+		const cacheKey = `gh:${this.owner}/${this.repo}:listFiles:${expression}`
+		type TreeData = {
+			repository: {
+				object: {
+					entries?: ReadonlyArray<{
+						name: string
+						type: string
+						object?: { text?: string | null } | null
+					}> | null
+				} | null
+			} | null
+		}
+		// Reuse the existing read-file query — we can't easily list+read
+		// in a single call here without churning the schema, so fall back
+		// to listFiles + per-file reads. Intent-scope FB volumes are tiny
+		// in practice (usually 0-3 items), so the N+1 cost is acceptable.
+		const data = await this.cachedQuery<TreeData>(
+			ListFilesQuery,
+			{ owner: this.owner, name: this.repo, expression },
+			cacheKey,
+		)
+		const entries = data?.repository?.object?.entries
+		if (!entries) return []
+		const mdFiles = entries
+			.filter((e) => e.type === "blob" && e.name.endsWith(".md"))
+			.map((e) => e.name)
+		const fbs: HaikuFeedback[] = []
+		for (const name of mdFiles) {
+			const raw = await this.readFileFromBranch(ref, `${dir}/${name}`)
+			if (!raw) continue
+			fbs.push(parseFeedback("github", slug, null, name, raw, `${dir}/${name}`))
+		}
+		return fbs
 	}
 
 	/** Extract knowledge files from a query result's knowledgeTree. */
@@ -706,6 +870,13 @@ export class GitHubProvider implements BrowseProvider {
 			defaultData?.repository?.reflectionFile?.text ??
 			null
 
+		// Intent-scope feedback — prefer intent branch, fall back to default.
+		const intentFeedbackRef = intentBranch ?? "HEAD"
+		const intentFeedback = await this.fetchIntentFeedback(
+			slug,
+			intentFeedbackRef,
+		)
+
 		return {
 			slug,
 			title: (frontmatter.title as string) || slug,
@@ -740,6 +911,7 @@ export class GitHubProvider implements BrowseProvider {
 			reflection,
 			content,
 			assets: [],
+			intentFeedback,
 			...(this.intentMetaMap.get(slug) || {}),
 		}
 	}
@@ -857,6 +1029,10 @@ export class GitHubProvider implements BrowseProvider {
 			.filter((e) => e.type === "blob" && e.name.endsWith(".md"))
 			.map((e) => ({ name: e.name, content: e.object?.text || "" }))
 		const reflection = data.repository.reflectionFile?.text ?? null
+		const intentFeedback = await this.fetchIntentFeedback(
+			slug,
+			this.branch || "HEAD",
+		)
 
 		return {
 			slug,
@@ -892,6 +1068,7 @@ export class GitHubProvider implements BrowseProvider {
 			reflection,
 			content,
 			assets: [],
+			intentFeedback,
 			branch: this.branch,
 		}
 	}

@@ -13,15 +13,18 @@ import ListIntentsTreeQuery from "./graphql/gitlab/__generated__/operationsListI
 import ReadFileQuery from "./graphql/gitlab/__generated__/operationsReadFileQuery.graphql"
 import {
 	classifyArtifact,
-	mergeKnowledge as mergeKnowledgeShared,
-	parseIntentFromRaw as parseIntentFromRawShared,
+	deriveActiveStageFromStageTree,
 	deriveStageStatusFromUnits,
+	mergeKnowledge as mergeKnowledgeShared,
+	parseFeedback,
+	parseIntentFromRaw as parseIntentFromRawShared,
 	parseStageStateJson,
 } from "./intent-parsing"
 import { parseSettingsYaml } from "./resolve-links"
 import type {
 	BrowseProvider,
 	HaikuArtifact,
+	HaikuFeedback,
 	HaikuIntent,
 	HaikuIntentDetail,
 	HaikuKnowledgeFile,
@@ -371,6 +374,21 @@ export class GitLabProvider implements BrowseProvider {
 				prStatus,
 				prNumber,
 			})
+			// v4 active-stage refinement (see github-provider.ts).
+			const isV4 =
+				typeof intent.raw.plugin_version === "string" &&
+				intent.raw.plugin_version.startsWith("4.")
+			if (isV4 && intent.studioStages.length > 0) {
+				const stagesWithUnits = await this.probeStagesWithUnits(
+					slug,
+					branchName,
+					intent.studioStages,
+				)
+				intent.activeStage = deriveActiveStageFromStageTree(
+					intent.studioStages,
+					stagesWithUnits,
+				)
+			}
 			intentsBySlug.set(slug, intent)
 			this.intentBranchMap.set(slug, branchName)
 			this.intentMetaMap.set(slug, {
@@ -470,6 +488,42 @@ export class GitLabProvider implements BrowseProvider {
 	}
 
 	// ── Three-level merge helpers ────────────────────────────────────────
+
+	/** Cheaply probe which declared stages have at least one unit file
+	 *  on disk. Recursive tree-list scoped to the intent's stages dir on
+	 *  a single ref (intent main branch). No per-file reads — just the
+	 *  blob paths from the tree. Used by listIntents() to derive a v4
+	 *  active-stage candidate. */
+	private async probeStagesWithUnits(
+		slug: string,
+		ref: string,
+		stages: ReadonlyArray<string>,
+	): Promise<Set<string>> {
+		const stagesPath = `.haiku/intents/${slug}/stages`
+		const cacheKey = `gl:${this.host}:${this.projectPath}:probeStages:${slug}:${ref}`
+		const treeData = await this.cachedQuery<operationsIntentTreeQuery$data>(
+			IntentTreeQuery,
+			{ fullPath: this.projectPath, path: stagesPath, ref },
+			cacheKey,
+		)
+		const blobs = (
+			treeData?.project?.repository?.tree?.blobs?.nodes ?? []
+		).filter((b): b is { name: string; path: string } => b?.path != null)
+		const declared = new Set(stages)
+		const out = new Set<string>()
+		for (const blob of blobs) {
+			if (!blob.path.startsWith(`${stagesPath}/`)) continue
+			const rest = blob.path.slice(stagesPath.length + 1)
+			const parts = rest.split("/")
+			if (parts.length < 3) continue
+			const [stageName, subdir, fileName] = parts
+			if (!declared.has(stageName)) continue
+			if (subdir !== "units") continue
+			if (!fileName?.endsWith(".md")) continue
+			out.add(stageName)
+		}
+		return out
+	}
 
 	/** Data returned by fetchIntentTreeFromRef — all blobs, trees, and resolved assets for one ref. */
 	private static readonly EMPTY_REF_DATA: GitLabIntentRefData = {
@@ -602,6 +656,20 @@ export class GitLabProvider implements BrowseProvider {
 			}
 		}
 
+		// Feedback files (stages/<stage>/feedback/*.md).
+		const feedback: HaikuFeedback[] = []
+		const feedbackPrefix = `${stagePath}/feedback/`
+		for (const blob of data.allBlobs) {
+			if (!blob.path.startsWith(feedbackPrefix)) continue
+			const fileName = blob.path.slice(feedbackPrefix.length)
+			if (fileName.includes("/") || !fileName.endsWith(".md")) continue
+			const raw = data.blobByPath.get(blob.path)
+			if (!raw) continue
+			feedback.push(
+				parseFeedback("gitlab", slug, stageName, fileName, raw, blob.path),
+			)
+		}
+
 		// state.json — shared parsing keeps gitlab + github in sync.
 		// v4 intents have no state.json (deleted by the migrator); the
 		// dual-path falls through to per-unit derivation.
@@ -631,7 +699,26 @@ export class GitLabProvider implements BrowseProvider {
 			gateOutcome,
 			units,
 			artifacts: artifacts.length > 0 ? artifacts : undefined,
+			feedback: feedback.length > 0 ? feedback : undefined,
 		}
+	}
+
+	/** Extract intent-scope feedback files (`.haiku/intents/<slug>/feedback/`). */
+	private parseIntentFeedbackFromBlobs(
+		slug: string,
+		data: GitLabIntentRefData,
+	): HaikuFeedback[] {
+		const prefix = `.haiku/intents/${slug}/feedback/`
+		const out: HaikuFeedback[] = []
+		for (const blob of data.allBlobs) {
+			if (!blob.path.startsWith(prefix)) continue
+			const fileName = blob.path.slice(prefix.length)
+			if (fileName.includes("/") || !fileName.endsWith(".md")) continue
+			const raw = data.blobByPath.get(blob.path)
+			if (!raw) continue
+			out.push(parseFeedback("gitlab", slug, null, fileName, raw, blob.path))
+		}
+		return out
 	}
 
 	/** Extract knowledge files from fetched blob data. */
@@ -970,6 +1057,14 @@ export class GitLabProvider implements BrowseProvider {
 		}
 		const assets = Array.from(assetsByPath.values())
 
+		// Intent-scope feedback — prefer intent branch overlay over default.
+		const intentFeedback = intentData
+			? this.parseIntentFeedbackFromBlobs(slug, intentData)
+			: this.parseIntentFeedbackFromBlobs(
+					slug,
+					defaultData ?? GitLabProvider.EMPTY_REF_DATA,
+				)
+
 		return {
 			slug,
 			title: (frontmatter.title as string) || slug,
@@ -1004,6 +1099,7 @@ export class GitLabProvider implements BrowseProvider {
 			reflection,
 			content,
 			assets,
+			intentFeedback,
 			...(this.intentMetaMap.get(slug) || {}),
 		}
 	}
@@ -1050,6 +1146,7 @@ export class GitLabProvider implements BrowseProvider {
 		const knowledge = this.parseKnowledgeFromBlobs(slug, data)
 		const operations = this.parseOperationsFromBlobs(slug, data)
 		const reflection = data.blobByPath.get(`${basePath}/reflection.md`) ?? null
+		const intentFeedback = this.parseIntentFeedbackFromBlobs(slug, data)
 
 		return {
 			slug,
@@ -1085,6 +1182,7 @@ export class GitLabProvider implements BrowseProvider {
 			reflection,
 			content,
 			assets: data.assets,
+			intentFeedback,
 			branch: this.branch,
 		}
 	}

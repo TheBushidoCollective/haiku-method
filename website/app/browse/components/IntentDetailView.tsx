@@ -8,6 +8,7 @@ import type {
 	BrowseProvider,
 	HaikuArtifact,
 	HaikuAsset,
+	HaikuFeedback,
 	HaikuIntent,
 	HaikuIntentDetail,
 	HaikuKnowledgeFile,
@@ -192,6 +193,10 @@ export function IntentDetailView({
 	}
 
 	if (selectedUnit) {
+		const stageData = intent.stages.find((s) => s.name === selectedUnit.stage)
+		const unitFeedback =
+			stageData?.feedback?.filter((f) => f.unit === selectedUnit.unit.name) ??
+			[]
 		return (
 			<UnitDetailView
 				unit={selectedUnit.unit}
@@ -200,6 +205,7 @@ export function IntentDetailView({
 				provider={provider}
 				assets={intent.assets}
 				host={host || undefined}
+				feedback={unitFeedback}
 				onBack={handleBackFromUnit}
 			/>
 		)
@@ -263,9 +269,7 @@ export function IntentDetailView({
 							typeof intent.raw.plugin_version === "string"
 								? (intent.raw.plugin_version as string)
 								: ""
-						const schema = ver
-							? `v${ver.split(".")[0] ?? "?"}`
-							: "v3"
+						const schema = ver ? `v${ver.split(".")[0] ?? "?"}` : "v3"
 						return (
 							<span>
 								Schema:{" "}
@@ -433,6 +437,20 @@ export function IntentDetailView({
 						</section>
 					)}
 				</>
+			)}
+
+			{/* Intent-scope Feedback */}
+			{intent.intentFeedback && intent.intentFeedback.length > 0 && (
+				<section className="mb-8">
+					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+						Intent Feedback
+					</h2>
+					<FeedbackList
+						feedback={intent.intentFeedback}
+						scope="intent"
+						title={null}
+					/>
+				</section>
 			)}
 
 			{/* Knowledge Artifacts */}
@@ -1098,6 +1116,7 @@ function StageDetail({
 }) {
 	const hasUnits = stage.units.length > 0
 	const hasArtifacts = (stage.artifacts?.length ?? 0) > 0
+	const hasFeedback = (stage.feedback?.length ?? 0) > 0
 	const [fullscreenArtifact, setFullscreenArtifact] =
 		useState<HaikuArtifact | null>(null)
 	const isGitLab = providerName === "GitLab"
@@ -1121,7 +1140,7 @@ function StageDetail({
 			(a) => a.type !== "html" && a.type !== "image" && a.type !== "markdown",
 		) ?? []
 
-	if (!(hasUnits || hasArtifacts)) {
+	if (!(hasUnits || hasArtifacts || hasFeedback)) {
 		return (
 			<div className="rounded-xl border border-stone-200 px-6 py-8 text-center dark:border-stone-700">
 				<p className="text-stone-500">No units in this stage yet.</p>
@@ -1207,49 +1226,73 @@ function StageDetail({
 				)}
 			</div>
 			{hasUnits && (
-				<div className="space-y-2">
-					{stage.units.map((unit) => {
-						const checkedCount = unit.criteria.filter((c) => c.checked).length
-						const totalCriteria = unit.criteria.length
-						return (
-							<button
-								type="button"
-								key={unit.name}
-								onClick={() => onSelectUnit(unit)}
-								className="w-full rounded-lg border border-stone-200 px-5 py-3 text-left transition hover:border-teal-300 dark:border-stone-700 dark:hover:border-teal-700"
-							>
-								<div className="flex items-center justify-between">
-									<div className="flex items-center gap-3">
-										<span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-											{titleCase(unit.name)}
-										</span>
-										<span
-											className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${unitStatusColors[unit.status] || unitStatusColors.pending}`}
-										>
-											{unit.status}
-										</span>
+				<div className="space-y-3">
+					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+						Units
+					</h4>
+					<div className="space-y-2">
+						{stage.units.map((unit) => {
+							const checkedCount = unit.criteria.filter((c) => c.checked).length
+							const totalCriteria = unit.criteria.length
+							const unitFb = (stage.feedback ?? []).filter(
+								(f) => f.unit === unit.name,
+							)
+							return (
+								<button
+									type="button"
+									key={unit.name}
+									onClick={() => onSelectUnit(unit)}
+									className="w-full rounded-lg border border-stone-200 px-5 py-3 text-left transition hover:border-teal-300 dark:border-stone-700 dark:hover:border-teal-700"
+								>
+									<div className="flex items-center justify-between">
+										<div className="flex items-center gap-3">
+											<span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+												{titleCase(unit.name)}
+											</span>
+											<span
+												className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${unitStatusColors[unit.status] || unitStatusColors.pending}`}
+											>
+												{unit.status}
+											</span>
+											{unitFb.length > 0 && (
+												<span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+													{unitFb.length} feedback
+												</span>
+											)}
+										</div>
+										{totalCriteria > 0 && (
+											<span className="text-xs text-stone-400">
+												{checkedCount}/{totalCriteria} criteria
+											</span>
+										)}
 									</div>
-									{totalCriteria > 0 && (
-										<span className="text-xs text-stone-400">
-											{checkedCount}/{totalCriteria} criteria
-										</span>
+									{unit.dependsOn.length > 0 && (
+										<div className="mt-1 text-xs text-stone-400">
+											Depends on: {unit.dependsOn.join(", ")}
+										</div>
 									)}
-								</div>
-								{unit.dependsOn.length > 0 && (
-									<div className="mt-1 text-xs text-stone-400">
-										Depends on: {unit.dependsOn.join(", ")}
-									</div>
-								)}
-							</button>
-						)
-					})}
+								</button>
+							)
+						})}
+					</div>
 				</div>
 			)}
+			<FeedbackList
+				feedback={stage.feedback ?? []}
+				scope="stage"
+				title="Stage Feedback"
+			/>
 			{hasArtifacts && (
 				<div className="space-y-3">
 					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
 						Stage Artifacts
 					</h4>
+					<p className="-mt-1 text-[11px] text-stone-400">
+						Files under{" "}
+						<code className="font-mono">stages/{stage.name}/artifacts/</code> —
+						declared outputs, discovery inputs from upstream stages, and other
+						working files.
+					</p>
 					{/* Thumbnail grid for HTML and Image artifacts */}
 					{thumbnailArtifacts.length > 0 && (
 						<div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1286,6 +1329,131 @@ function StageDetail({
 					host={host}
 					onClose={() => setFullscreenArtifact(null)}
 				/>
+			)}
+		</div>
+	)
+}
+
+/** Compact list of feedback annotations. Each card is collapsed by default;
+ *  clicking reveals the body. Distinguishes user-authored (amber) vs
+ *  agent-authored (stone) and shows closed-state with strikethrough title. */
+function FeedbackList({
+	feedback,
+	scope,
+	title,
+}: {
+	feedback: HaikuFeedback[]
+	scope: "stage" | "intent"
+	title: string | null
+}) {
+	if (feedback.length === 0) return null
+	const visible = feedback
+	return (
+		<div className="space-y-2">
+			{title && (
+				<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+					{title} ({visible.length})
+				</h4>
+			)}
+			<div className="space-y-2">
+				{visible.map((fb) => (
+					<FeedbackCard key={fb.id} fb={fb} scope={scope} />
+				))}
+			</div>
+		</div>
+	)
+}
+
+function FeedbackCard({
+	fb,
+	scope,
+}: {
+	fb: HaikuFeedback
+	scope: "stage" | "intent"
+}) {
+	const [open, setOpen] = useState(false)
+	const isHuman = fb.authorType === "human"
+	const isClosed = fb.closedAt != null
+	const pillClass = isHuman
+		? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+		: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400"
+	const statusLabel = isClosed ? "closed" : "open"
+	const statusClass = isClosed
+		? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+		: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+	return (
+		<div
+			className={`rounded-lg border ${
+				isClosed
+					? "border-stone-200 dark:border-stone-700"
+					: "border-amber-200 dark:border-amber-900/50"
+			}`}
+		>
+			<button
+				type="button"
+				onClick={() => setOpen(!open)}
+				className="w-full px-4 py-2.5 text-left"
+			>
+				<div className="flex flex-wrap items-center gap-2">
+					<span
+						className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${pillClass}`}
+					>
+						{isHuman ? "user" : "agent"}
+					</span>
+					<span
+						className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${statusClass}`}
+					>
+						{statusLabel}
+					</span>
+					{fb.origin && (
+						<span className="rounded bg-stone-50 dark:bg-stone-900 px-1.5 py-0.5 text-[10px] font-mono text-stone-500 dark:text-stone-400">
+							{fb.origin}
+						</span>
+					)}
+					<span
+						className={`text-sm font-medium text-stone-800 dark:text-stone-200 ${
+							isClosed ? "line-through text-stone-400 dark:text-stone-500" : ""
+						}`}
+					>
+						{fb.title ?? fb.id}
+					</span>
+					{scope === "stage" && fb.unit && (
+						<span className="text-xs text-stone-400">
+							→ {titleCase(fb.unit)}
+						</span>
+					)}
+					<span className="ml-auto text-[10px] text-stone-400 font-mono">
+						{fb.id}
+					</span>
+				</div>
+			</button>
+			{open && (
+				<div className="border-t border-stone-100 dark:border-stone-800 px-4 py-3 text-sm text-stone-700 dark:text-stone-300">
+					{fb.body ? (
+						<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
+							<pre className="whitespace-pre-wrap font-sans text-sm">
+								{fb.body}
+							</pre>
+						</div>
+					) : (
+						<p className="text-stone-400 italic">No body.</p>
+					)}
+					{fb.closureReply && (
+						<div className="mt-3 rounded-md bg-stone-50 dark:bg-stone-900 px-3 py-2">
+							<div className="text-[10px] uppercase tracking-wider text-stone-400 mb-1">
+								Closure reply
+							</div>
+							<div className="text-sm text-stone-700 dark:text-stone-300 whitespace-pre-wrap">
+								{fb.closureReply.text}
+							</div>
+						</div>
+					)}
+					{fb.invalidates.length > 0 && (
+						<div className="mt-2 text-[11px] text-stone-400">
+							Invalidates: {fb.invalidates.join(", ")}
+						</div>
+					)}
+				</div>
 			)}
 		</div>
 	)

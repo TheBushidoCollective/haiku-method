@@ -1,6 +1,8 @@
 import {
+	deriveActiveStageFromStageTree,
 	deriveStageStatusFromUnits,
 	deriveV4ActiveStage,
+	parseFeedback,
 	parseIntentFromRaw,
 	parseStageStateJson,
 } from "./intent-parsing"
@@ -8,6 +10,7 @@ import { parseSettingsYaml } from "./resolve-links"
 import type {
 	BrowseProvider,
 	HaikuArtifact,
+	HaikuFeedback,
 	HaikuIntent,
 	HaikuIntentDetail,
 	HaikuKnowledgeFile,
@@ -105,7 +108,30 @@ export class LocalProvider implements BrowseProvider {
 			// Route through the shared parser so v3↔v4 dual-pathing
 			// (sealed_at-derived status, plugin_version detection,
 			// activeStage default) lands consistently across providers.
-			intents.push(parseIntentFromRaw("local", slug, raw))
+			const intent = parseIntentFromRaw("local", slug, raw)
+			// v4 active-stage refinement — list-view-cheap, mirrors the
+			// VCS providers' probeStagesWithUnits behavior.
+			const isV4 =
+				typeof intent.raw.plugin_version === "string" &&
+				intent.raw.plugin_version.startsWith("4.")
+			if (isV4 && intent.studioStages.length > 0) {
+				const stageDirs = await this.listDirs(`.haiku/intents/${slug}/stages`)
+				const stagesWithUnits = new Set<string>()
+				for (const stage of intent.studioStages) {
+					if (!stageDirs.includes(stage)) continue
+					const unitFiles = await this.listFiles(
+						`.haiku/intents/${slug}/stages/${stage}/units`,
+					)
+					if (unitFiles.some((f) => f.endsWith(".md"))) {
+						stagesWithUnits.add(stage)
+					}
+				}
+				intent.activeStage = deriveActiveStageFromStageTree(
+					intent.studioStages,
+					stagesWithUnits,
+				)
+			}
+			intents.push(intent)
 		}
 
 		return intents
@@ -202,6 +228,21 @@ export class LocalProvider implements BrowseProvider {
 				}
 			}
 
+			// Stage feedback files
+			const feedbackFiles = await this.listFiles(
+				`.haiku/intents/${slug}/stages/${stageName}/feedback`,
+			)
+			const stageFeedback: HaikuFeedback[] = []
+			for (const fb of feedbackFiles) {
+				if (!fb.endsWith(".md")) continue
+				const fbPath = `.haiku/intents/${slug}/stages/${stageName}/feedback/${fb}`
+				const fbRaw = await this.readFile(fbPath)
+				if (!fbRaw) continue
+				stageFeedback.push(
+					parseFeedback("local", slug, stageName, fb, fbRaw, fbPath),
+				)
+			}
+
 			stages.push({
 				name: stageName,
 				status,
@@ -211,6 +252,7 @@ export class LocalProvider implements BrowseProvider {
 				gateOutcome,
 				units,
 				artifacts: stageArtifacts.length > 0 ? stageArtifacts : undefined,
+				feedback: stageFeedback.length > 0 ? stageFeedback : undefined,
 			})
 		}
 
@@ -245,14 +287,25 @@ export class LocalProvider implements BrowseProvider {
 		// in declaration order and pick the first one that isn't
 		// "complete." Keeps v3 behavior intact when active_stage is
 		// stamped on intent.md.
-		const stageStatusByName: Record<
-			string,
-			"pending" | "active" | "complete"
-		> = {}
+		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
+			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
 		const refinedActiveStage = activeStage
 			? activeStage
 			: deriveV4ActiveStage(stageNames, stageStatusByName)
+
+		// Intent-scope feedback
+		const intentFeedbackFiles = await this.listFiles(
+			`.haiku/intents/${slug}/feedback`,
+		)
+		const intentFeedback: HaikuFeedback[] = []
+		for (const fb of intentFeedbackFiles) {
+			if (!fb.endsWith(".md")) continue
+			const fbPath = `.haiku/intents/${slug}/feedback/${fb}`
+			const fbRaw = await this.readFile(fbPath)
+			if (!fbRaw) continue
+			intentFeedback.push(parseFeedback("local", slug, null, fb, fbRaw, fbPath))
+		}
 
 		return {
 			slug,
@@ -283,6 +336,7 @@ export class LocalProvider implements BrowseProvider {
 			reflection: await this.readFile(`.haiku/intents/${slug}/reflection.md`),
 			content,
 			assets: [],
+			intentFeedback,
 		}
 	}
 }

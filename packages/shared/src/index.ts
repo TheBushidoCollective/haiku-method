@@ -31,6 +31,7 @@ export type {
 	CriterionItem,
 	HaikuArtifact,
 	HaikuAsset,
+	HaikuFeedback,
 	HaikuIntent,
 	HaikuIntentDetail,
 	HaikuKnowledgeFile,

@@ -4,7 +4,12 @@ import { useEffect, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { resolveLinks } from "@/lib/browse/resolve-links"
-import type { BrowseProvider, HaikuAsset, HaikuUnit } from "@/lib/browse/types"
+import type {
+	BrowseProvider,
+	HaikuAsset,
+	HaikuFeedback,
+	HaikuUnit,
+} from "@/lib/browse/types"
 import { formatDate, formatDuration } from "@/lib/browse/types"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
@@ -31,6 +36,7 @@ interface Props {
 	provider: BrowseProvider
 	assets?: HaikuAsset[]
 	host?: string
+	feedback?: HaikuFeedback[]
 	onBack: () => void
 }
 
@@ -41,6 +47,7 @@ export function UnitDetailView({
 	provider,
 	assets = [],
 	host,
+	feedback = [],
 	onBack,
 }: Props) {
 	const checkedCount = unit.criteria.filter((c) => c.checked).length
@@ -187,6 +194,20 @@ export function UnitDetailView({
 									{criterion.text}
 								</span>
 							</div>
+						))}
+					</div>
+				</section>
+			)}
+
+			{/* Feedback targeting this unit */}
+			{feedback.length > 0 && (
+				<section className="mb-8">
+					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+						Feedback ({feedback.length})
+					</h2>
+					<div className="space-y-2">
+						{feedback.map((fb) => (
+							<UnitFeedbackCard key={fb.id} fb={fb} />
 						))}
 					</div>
 				</section>
@@ -351,6 +372,83 @@ export function UnitDetailView({
 						{JSON.stringify(unit.raw, null, 2)}
 					</pre>
 				</details>
+			)}
+		</div>
+	)
+}
+
+function UnitFeedbackCard({ fb }: { fb: HaikuFeedback }) {
+	const [open, setOpen] = useState(false)
+	const isHuman = fb.authorType === "human"
+	const isClosed = fb.closedAt != null
+	const pillClass = isHuman
+		? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+		: "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400"
+	const statusLabel = isClosed ? "closed" : "open"
+	const statusClass = isClosed
+		? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+		: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+	return (
+		<div
+			className={`rounded-lg border ${
+				isClosed
+					? "border-stone-200 dark:border-stone-700"
+					: "border-amber-200 dark:border-amber-900/50"
+			}`}
+		>
+			<button
+				type="button"
+				onClick={() => setOpen(!open)}
+				className="w-full px-4 py-2.5 text-left"
+			>
+				<div className="flex flex-wrap items-center gap-2">
+					<span
+						className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${pillClass}`}
+					>
+						{isHuman ? "user" : "agent"}
+					</span>
+					<span
+						className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${statusClass}`}
+					>
+						{statusLabel}
+					</span>
+					{fb.origin && (
+						<span className="rounded bg-stone-50 dark:bg-stone-900 px-1.5 py-0.5 text-[10px] font-mono text-stone-500 dark:text-stone-400">
+							{fb.origin}
+						</span>
+					)}
+					<span
+						className={`text-sm font-medium text-stone-800 dark:text-stone-200 ${
+							isClosed ? "line-through text-stone-400 dark:text-stone-500" : ""
+						}`}
+					>
+						{fb.title ?? fb.id}
+					</span>
+					<span className="ml-auto text-[10px] text-stone-400 font-mono">
+						{fb.id}
+					</span>
+				</div>
+			</button>
+			{open && (
+				<div className="border-t border-stone-100 dark:border-stone-800 px-4 py-3 text-sm text-stone-700 dark:text-stone-300">
+					{fb.body ? (
+						<pre className="whitespace-pre-wrap font-sans text-sm">
+							{fb.body}
+						</pre>
+					) : (
+						<p className="text-stone-400 italic">No body.</p>
+					)}
+					{fb.closureReply && (
+						<div className="mt-3 rounded-md bg-stone-50 dark:bg-stone-900 px-3 py-2">
+							<div className="text-[10px] uppercase tracking-wider text-stone-400 mb-1">
+								Closure reply
+							</div>
+							<div className="text-sm text-stone-700 dark:text-stone-300 whitespace-pre-wrap">
+								{fb.closureReply.text}
+							</div>
+						</div>
+					)}
+				</div>
 			)}
 		</div>
 	)

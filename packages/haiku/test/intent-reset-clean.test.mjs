@@ -20,6 +20,7 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs"
@@ -300,21 +301,41 @@ test("reset → intent_create produces a clean slate (no stale stages/feedback/e
 			`${SRC}/tools/orchestrator/index.ts`
 		)
 		process.env.HAIKU_TEST_PICKER_AUTO_SELECT = "reset"
+		let preservedContext = ""
 		try {
 			const resetTool = orchestratorToolHandlers.get("haiku_intent_reset")
-			await resetTool.handle({ intent: slug })
+			const resetResp = await resetTool.handle({ intent: slug })
+			// reset returns the conversation context as a `context`
+			// field on its structured payload — that's how the
+			// preservation contract works. Reset itself doesn't write
+			// it to disk; the recreate flow does, via intent_create's
+			// `context:` argument. Pull it out so we can prove the
+			// roundtrip.
+			const resetTxt = resetResp.content?.[0]?.text ?? ""
+			const ctxMatch = resetTxt.match(/"context":\s*"((?:[^"\\]|\\.)*)"/)
+			if (ctxMatch) preservedContext = ctxMatch[1].replace(/\\n/g, "\n")
 		} finally {
 			delete process.env.HAIKU_TEST_PICKER_AUTO_SELECT
 		}
+		assert.ok(
+			preservedContext.length > 0,
+			"reset should return preserved CONVERSATION-CONTEXT.md content in its payload — got empty",
+		)
+		assert.ok(
+			preservedContext.includes("user told me to do X"),
+			`preserved context should carry the seeded body; got: ${preservedContext.slice(0, 200)}`,
+		)
 
 		// Now create a fresh intent at the same slug — the dance the
-		// reset prompt instructs the agent to do.
+		// reset prompt instructs the agent to do. Pass the preserved
+		// context through so the recreate flow writes it back to disk.
 		const createTool = orchestratorToolHandlers.get("haiku_intent_create")
 		assert.ok(createTool, "haiku_intent_create not registered")
 		const createResp = await createTool.handle({
 			slug,
 			title: "fat intent",
 			description: "Real-ish body.",
+			context: preservedContext,
 		})
 		const createTxt = createResp.content?.[0]?.text ?? ""
 		assert.ok(
@@ -338,16 +359,30 @@ test("reset → intent_create produces a clean slate (no stale stages/feedback/e
 				`stages/ should be empty after create; got: ${stageEntries.join(",")}`,
 			)
 		}
-		// knowledge/ must have only CONVERSATION-CONTEXT.md
-		// (preserved by reset) or be empty — no stale DISCOVERY.md.
+		// knowledge/ proves the preservation roundtrip:
+		//   - CONVERSATION-CONTEXT.md MUST exist (recreate-with-context
+		//     restored it from the reset payload).
+		//   - DISCOVERY.md must be absent (it was stage-produced output,
+		//     not session context — reset must not resurrect it).
 		const knowledgeDir = join(intentRoot, "knowledge")
-		if (existsSync(knowledgeDir)) {
-			const kEntries = readdirSync(knowledgeDir)
-			assert.ok(
-				!kEntries.includes("DISCOVERY.md"),
-				`knowledge/ should not contain stale DISCOVERY.md; got: ${kEntries.join(",")}`,
-			)
-		}
+		assert.ok(existsSync(knowledgeDir), "knowledge/ should be recreated")
+		const kEntries = readdirSync(knowledgeDir)
+		assert.ok(
+			kEntries.includes("CONVERSATION-CONTEXT.md"),
+			`CONVERSATION-CONTEXT.md should be restored post-recreate; got: ${kEntries.join(",")}`,
+		)
+		const ctxBody = readFileSync(
+			join(knowledgeDir, "CONVERSATION-CONTEXT.md"),
+			"utf8",
+		)
+		assert.ok(
+			ctxBody.includes("user told me to do X"),
+			`restored CONVERSATION-CONTEXT.md should carry the seeded body; got: ${ctxBody.slice(0, 200)}`,
+		)
+		assert.ok(
+			!kEntries.includes("DISCOVERY.md"),
+			`knowledge/ should not contain stale DISCOVERY.md; got: ${kEntries.join(",")}`,
+		)
 		// No scratch files survive at the intent root.
 		assert.strictEqual(
 			existsSync(join(intentRoot, "scratch.txt")),

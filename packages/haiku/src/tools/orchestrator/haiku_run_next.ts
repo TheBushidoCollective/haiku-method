@@ -611,7 +611,9 @@ export default defineTool({
 					// engine resilient if any future guard re-introduces
 					// a non-stage-branch-of-this-intent constraint.
 					const currentBranch = getCurrentBranch()
-					const alreadyOnIntentBranch = currentBranch?.startsWith(
+					// `getCurrentBranch()` is typed as `string` (returns ""
+					// on failure), not nullable — no optional chaining needed.
+					const alreadyOnIntentBranch = currentBranch.startsWith(
 						`haiku/${slug}/`,
 					)
 					if (!alreadyOnIntentBranch) {

@@ -270,11 +270,13 @@ async function run() {
 		assert.strictEqual(res.status, 401)
 	})
 
-	await test("POST /api/revisit/:sid without token returns 401 (Origin sent → CSRF passes)", async () => {
-		const res = await fetch(`${baseUrl}/api/revisit/${session.session_id}`, {
+	await test("POST /api/advance/:sid without token returns 401 (Origin sent → CSRF passes)", async () => {
+		// /api/advance takes no body — drop the Content-Type header so
+		// fastify's body parser doesn't trip on the empty payload before
+		// the auth gate runs.
+		const res = await fetch(`${baseUrl}/api/advance/${session.session_id}`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json", ...csrfPassHeaders },
-			body: JSON.stringify({ reason: "x" }),
+			headers: csrfPassHeaders,
 		})
 		assert.strictEqual(res.status, 401)
 	})

@@ -10,18 +10,17 @@
 // tool dispatcher and rebroadcasts the result via session annotations
 // so the parked gate_review waiter unblocks.
 
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { FastifyInstance } from "fastify"
 import {
+	type AdvanceResponse,
 	DirectionSelectRequestSchema,
 	type DirectionSelectResponse,
 	QuestionAnswerRequestSchema,
 	type QuestionAnswerResponse,
 	ReviewDecisionRequestSchema,
 	type ReviewDecisionResponse,
-	RevisitRequestSchema,
-	type RevisitResponse,
 	SESSION_ANSWER_MAX_BYTES,
 } from "haiku-api"
 import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
@@ -44,12 +43,18 @@ import {
 	parseFrontmatter,
 	persistDesignDirectionSelection,
 	persistDesignDirectionUploads,
+	readFeedbackFiles,
 	readJson,
+	setFrontmatterField,
 	stageStatePath,
 	timestamp,
 	writeFeedbackFile,
 	writeJson,
 } from "../state-tools.js"
+import {
+	buildApprovalRecord,
+	buildReviewRecord,
+} from "../orchestrator/workflow/sign-slot.js"
 import { logFeedbackAction } from "./action-log.js"
 import { requireTunnelAuth } from "./auth.js"
 import { respondSessionApi } from "./session-api.js"
@@ -450,15 +455,37 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 		},
 	)
 
+	// POST /api/advance/:sessionId — the ONLY SPA → engine signal
+	// besides /api/feedback (which writes feedback files to disk) and
+	// the heartbeat / GET routes. No body, no payload, no workflow
+	// verb: the SPA is purely a data-writer + wake source. The cursor
+	// reads disk on the next `haiku_run_next` tick and decides.
+	//
+	// Two effects:
+	//
+	//   1. Stamp `reviews.user` and `approvals.user` on every unit in
+	//      the active stage IF no feedback items are open on that
+	//      stage. The user's act of advancing with nothing pending IS
+	//      the approval — there's no other signal the SPA needs to
+	//      send. When FBs are open, no stamps fire; the cursor walks
+	//      Track B first, and the next advance signal (after closure)
+	//      does the stamping.
+	//   2. Wake the gate session so `haiku_await_gate` returns and the
+	//      agent re-enters `haiku_run_next`.
+	//
+	// Was previously `/api/revisit` with a `reasons[]` payload that
+	// bundled FB-create + workflow-verb together — removed
+	// 2026-05-14 per the v4 rule "SPA writes data + signals advance;
+	// engine decides everything else."
 	instance.post<{ Params: { sessionId: string } }>(
-		"/api/revisit/:sessionId",
+		"/api/advance/:sessionId",
 		async (req, reply) => {
 			if (!requireTunnelAuth(req, reply, req.params.sessionId)) return
 			const session = getSession(req.params.sessionId)
 			if (!session || session.session_type !== "review") {
 				logFeedbackAction({
 					reqId: req.id,
-					action: "revisit",
+					action: "advance",
 					status: 404,
 					detail: `session=${req.params.sessionId} not_found_or_wrong_type`,
 				})
@@ -468,25 +495,19 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			if (!session.intent_slug) {
 				logFeedbackAction({
 					reqId: req.id,
-					action: "revisit",
+					action: "advance",
 					status: 409,
 					detail: `session=${req.params.sessionId} no_intent_context`,
 				})
 				reply.status(409).send({ error: "Session has no intent context" })
 				return
 			}
-			const parsed = parseBodyWithSchema(reply, req.body, RevisitRequestSchema)
-			if (!parsed.ok) return
-
-			// Resolve target stage — explicit `stage` arg wins, else the
-			// intent's active_stage. Without one we can't write the FBs at
-			// the right location.
 			const slug = session.intent_slug
-			const targetStage = parsed.data.stage || readActiveStage(slug)
+			const targetStage = readActiveStage(slug)
 			if (!targetStage) {
 				logFeedbackAction({
 					reqId: req.id,
-					action: "revisit",
+					action: "advance",
 					status: 409,
 					intent: slug,
 					detail: "no_active_stage",
@@ -498,89 +519,32 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				return
 			}
 
-			// Two paths:
-			//   1. reasons[] provided → write each as a stage_revisit FB.
-			//      Origin "user-revisit" auto-stamps `triaged_at:` so the
-			//      pre-tick gate routes the rewind on the next tick.
-			//   2. no reasons + pending FBs already exist on the stage →
-			//      relies on the pre-tick gate seeing those FBs and routing.
-			//      No new FBs to write here.
-			//
-			// In neither case does the HTTP handler call `revisit()` directly
-			// — the rewind is a property of the next `haiku_run_next` tick's
-			// pre-tick gate, not a synchronous side effect of this endpoint.
-			// Same routing path as agent-authored stage_revisit FBs.
-			const reasons = parsed.data.reasons ?? []
-			// 2026-05-13: the prior 409 ("nothing_to_revisit") was wrong.
-			// FBs land on disk via `/api/feedback` as the reviewer types
-			// them — by the time this endpoint fires, the canonical
-			// state is already on disk. The endpoint's only remaining
-			// job is to wake the gate session so the next
-			// `haiku_run_next` tick fires; the cursor + pre-tick gates
-			// route off the on-disk FBs regardless of whether anything
-			// is "open" right this instant (it's also legitimate to
-			// click after addressing every FB to advance — the gate
-			// re-renders the empty state, and the agent ticks past).
-			// Falling through with zero new FBs and zero open FBs is
-			// fine: the session wakeup below still fires and the next
-			// tick takes the natural-next path.
-			const feedbackCreated: string[] = []
-			for (const reason of reasons) {
+			const stageOpenFbs = readFeedbackFiles(slug, targetStage).filter(
+				(item) =>
+					item.status === "pending" ||
+					item.status === "fixing" ||
+					item.status === "addressed",
+			)
+			let stampedUserSlots = false
+			if (stageOpenFbs.length === 0) {
 				try {
-					const fb = writeFeedbackFile(slug, targetStage, {
-						title: reason.title,
-						body: reason.body,
-						origin: "user-revisit",
-						author: "user",
-						resolution: "stage_revisit",
-						// User clicked "Request Changes" — that IS the
-						// triage decision. Stamp `triaged_at` explicitly so
-						// the pre-tick gate routes the rewind on the next
-						// tick instead of asking the agent to triage the
-						// user's explicit request.
-						triaged_at: timestamp(),
-					})
-					feedbackCreated.push(fb.feedback_id)
+					stampUserSlotsForCompletedStage(slug, targetStage)
+					stampedUserSlots = true
+					gitCommitStateBackgroundPush(
+						`haiku: user advance with no pending feedback on ${targetStage} — stamp user slots`,
+					)
 				} catch (err) {
 					logFeedbackAction({
 						reqId: req.id,
-						action: "revisit",
+						action: "advance",
 						status: 500,
 						intent: slug,
 						stage: targetStage,
-						detail: `feedback_write_failed: ${err instanceof Error ? err.message : String(err)}`,
+						detail: `user_slot_stamp_failed: ${err instanceof Error ? err.message : String(err)}`,
 					})
-					reply.status(500).send({
-						error: "feedback_write_failed",
-						detail: err instanceof Error ? err.message : String(err),
-					})
-					return
 				}
 			}
-			if (feedbackCreated.length > 0) {
-				gitCommitStateBackgroundPush(
-					`haiku: revisit feedback in ${targetStage} (${feedbackCreated.length} items)`,
-				)
-			}
 
-			const message =
-				feedbackCreated.length > 0
-					? `Created ${feedbackCreated.length} stage_revisit feedback item(s) at \`${targetStage}\`. The next \`haiku_run_next\` tick will route the rewind via the pre-tick gate.`
-					: `No new feedback items provided. The next \`haiku_run_next\` tick's pre-tick gate will route the rewind based on existing pending feedback at \`${targetStage}\` (if any).`
-
-			// V4 alignment (2026-05-13): the SPA's signal back to the
-			// MCP is just "advance" — the next `haiku_run_next` tick's
-			// cursor reads on-disk FB state and routes whatever's
-			// natural (feedback_dispatch / start_feedback_hat /
-			// complete_stage / etc.). We DON'T encode a workflow verb
-			// here (no more `revisit_action: "revisit_pending"`,
-			// no more `decision: "changes_requested"`) — that would
-			// make the SPA a workflow driver, which it isn't.
-			//
-			// The pending_decision is just the wakeup channel; its
-			// `decision: "advance"` value tells the await tool "user
-			// clicked the button, just unblock and let run_next tick."
-			// The cursor handles everything else.
 			updateSession(req.params.sessionId, {
 				pending_decision: {
 					decision: "advance",
@@ -597,24 +561,19 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				})
 			}
 
-			const response: RevisitResponse = {
+			const response: AdvanceResponse = {
 				ok: true,
-				action: "advance",
 				stage: targetStage,
-				feedback_created: feedbackCreated,
-				message,
+				open_feedback_count: stageOpenFbs.length,
+				stamped_user_slots: stampedUserSlots,
 			}
 			logFeedbackAction({
 				reqId: req.id,
-				action: "revisit",
+				action: "advance",
 				status: 200,
 				intent: slug,
 				stage: targetStage,
-				detail: `revisit_action=advance${
-					feedbackCreated.length > 0
-						? ` feedback_created=${feedbackCreated.join(",")}`
-						: ""
-				}`,
+				detail: `open_fbs=${stageOpenFbs.length} stamped=${stampedUserSlots}`,
 			})
 			reply.send(response)
 		},
@@ -629,5 +588,51 @@ function readActiveStage(slug: string): string {
 		return (data.active_stage as string) || ""
 	} catch {
 		return ""
+	}
+}
+
+/** Stamp `reviews.user` and `approvals.user` (when missing) on every
+ *  unit in the stage whose unit FM is still waiting for the user gate.
+ *  Called when the SPA signals advance with no open feedback on the
+ *  stage — the user clicked "I'm done" and there's nothing for the
+ *  cursor to walk, so the per-unit user slots get filled and the
+ *  cursor advances on the next tick. Pure filesystem write; no
+ *  workflow verbs cross the SPA boundary. */
+function stampUserSlotsForCompletedStage(slug: string, stage: string): void {
+	const intentDirAbs = intentDir(slug)
+	const unitsDir = join(intentDirAbs, "stages", stage, "units")
+	if (!existsSync(unitsDir)) return
+	const files = readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+	for (const f of files) {
+		const unitPath = join(unitsDir, f)
+		try {
+			const { data } = parseFrontmatter(readFileSync(unitPath, "utf8"))
+			const outputs = Array.isArray(data.outputs)
+				? (data.outputs as string[])
+				: []
+			const reviews =
+				data.reviews && typeof data.reviews === "object"
+					? { ...(data.reviews as Record<string, unknown>) }
+					: {}
+			const approvals =
+				data.approvals && typeof data.approvals === "object"
+					? { ...(data.approvals as Record<string, unknown>) }
+					: {}
+			let changedReviews = false
+			let changedApprovals = false
+			if (!reviews.user) {
+				reviews.user = buildReviewRecord(unitPath)
+				changedReviews = true
+			}
+			if (!approvals.user) {
+				approvals.user = buildApprovalRecord(intentDirAbs, outputs)
+				changedApprovals = true
+			}
+			if (changedReviews) setFrontmatterField(unitPath, "reviews", reviews)
+			if (changedApprovals) setFrontmatterField(unitPath, "approvals", approvals)
+		} catch {
+			// best-effort per-unit; a malformed unit FM shouldn't block the
+			// rest of the stage from advancing
+		}
 	}
 }

@@ -25,8 +25,7 @@ import {
 	type ReviewCurrentPayload,
 	type ReviewDecisionRequest,
 	type ReviewDecisionResponse,
-	type RevisitRequest,
-	type RevisitResponse,
+	type AdvanceResponse,
 	type SessionPayload,
 } from "haiku-api"
 import { authHeader, getAuthToken } from "./auth"
@@ -87,10 +86,7 @@ export interface ApiClient {
 		sessionId: string,
 		body: PickerSelectRequest,
 	): Promise<PickerSelectResponse>
-	submitRevisit(
-		sessionId: string,
-		body: RevisitRequest,
-	): Promise<RevisitResponse>
+	submitAdvance(sessionId: string): Promise<AdvanceResponse>
 	feedback: {
 		list(
 			intent: string,
@@ -196,14 +192,13 @@ export function createDefaultApiClient(): ApiClient {
 			})
 			return parseJsonOrThrow<PickerSelectResponse>(res)
 		},
-		async submitRevisit(sessionId, body) {
-			const res = await fetch(paths.revisit(sessionId), {
+		async submitAdvance(sessionId) {
+			const res = await fetch(paths.advance(sessionId), {
 				method: "POST",
-				headers: withAuth(JSON_HEADERS),
-				body: JSON.stringify(body),
+				headers: withAuth(FETCH_HEADERS),
 				keepalive: true,
 			})
-			return parseJsonOrThrow<RevisitResponse>(res)
+			return parseJsonOrThrow<AdvanceResponse>(res)
 		},
 		feedback: {
 			async list(intent, stage, status) {

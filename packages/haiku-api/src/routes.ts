@@ -35,14 +35,11 @@ import {
 	QuestionAnswerRequestSchema,
 	QuestionAnswerResponseSchema,
 } from "./schemas/question.js"
+import { AdvanceResponseSchema } from "./schemas/advance.js"
 import {
 	ReviewDecisionRequestSchema,
 	ReviewDecisionResponseSchema,
 } from "./schemas/review.js"
-import {
-	RevisitRequestSchema,
-	RevisitResponseSchema,
-} from "./schemas/revisit.js"
 import {
 	HeartbeatResponseSchema,
 	PickerSelectRequestSchema,
@@ -98,7 +95,7 @@ export const paths = {
 	questionPage: (id: string) => `/question/${id}`,
 	questionAnswer: (id: string, _?: never) => `/question/${id}/answer`,
 	reviewCurrent: () => "/api/review/current",
-	revisit: (id: string) => `/api/revisit/${id}`,
+	advance: (id: string) => `/api/advance/${id}`,
 	feedbackList: (intent: string, stage: string) =>
 		`/api/feedback/${intent}/${stage}`,
 	feedbackItem: (intent: string, stage: string, id: string) =>
@@ -291,15 +288,15 @@ export const routes: readonly RouteSpec[] = [
 		maxBodyBytes: FEEDBACK_CREATE_MAX_BYTES,
 	},
 
-	// Revisit ────────────────────────────────────────────────────────────
+	// Advance ────────────────────────────────────────────────────────────
 	{
 		method: "POST",
-		pathTemplate: "/api/revisit/{sessionId}",
-		operationId: "postRevisit",
-		request: RevisitRequestSchema,
-		response: RevisitResponseSchema,
+		pathTemplate: "/api/advance/{sessionId}",
+		operationId: "postAdvance",
+		request: null,
+		response: AdvanceResponseSchema,
 		summary:
-			"Request a stage revisit from the review UI. Optionally includes reasons that are written as feedback files before rollback.",
+			"SPA wake signal. No body. If no feedback is open on the stage, the engine stamps `reviews.user` / `approvals.user` on every unit and the cursor walks past the user gate on the next tick. Replaces the legacy /api/revisit endpoint.",
 		tag: "review",
 		transport: "loopback",
 	},

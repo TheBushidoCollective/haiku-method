@@ -26,7 +26,7 @@
  *   - Submit failure surfaces a `role="alert"` banner — modal stays open
  */
 
-import type { RevisitRequest, RevisitResponse } from "haiku-api"
+import type { AdvanceResponse } from "haiku-api"
 import { useEffect, useId, useRef, useState } from "react"
 import {
 	focusRingClass,
@@ -66,7 +66,7 @@ export interface RevisitModalProps {
 	sessionId: string
 	open: boolean
 	onClose: () => void
-	onSuccess?: (response: RevisitResponse) => void
+	onSuccess?: (response: AdvanceResponse) => void
 	targetStage?: string
 	/** Pending feedback items currently on the stage — they ARE the
 	 *  reasons, so we just list them and confirm. Empty / missing is
@@ -140,15 +140,13 @@ export function RevisitModal({
 		if (submitting) return
 		setSubmitting(true)
 		setSubmitError(null)
-		// Empty `reasons` — the pending feedback items on disk are the
-		// payload. The server's revisit handler + the orchestrator's
-		// post-revisit routing pick up each item's `resolution` and
-		// dispatch it per the resolver table above.
-		const payload: RevisitRequest = {
-			...(targetStage ? { stage: targetStage } : {}),
-		}
+		// SPA → engine surface is `/api/feedback` (one per FB the user
+		// authored — already on disk by the time we get here, since the
+		// composer writes each one immediately) plus `/api/advance` to
+		// wake the gate. The engine reads disk on the next tick and
+		// decides. We send no body and no workflow verb.
 		try {
-			const response = await apiClient.submitRevisit(sessionId, payload)
+			const response = await apiClient.submitAdvance(sessionId)
 			onSuccess?.(response)
 			onClose()
 		} catch (err) {

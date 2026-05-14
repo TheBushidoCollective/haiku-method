@@ -3,7 +3,7 @@
 //
 //   "SPA actions = feedback writes / drift upload / advance only."
 //
-// Specifically: the `/api/revisit/:sessionId` HTTP endpoint must NOT
+// Specifically: the `/api/advance/:sessionId` HTTP endpoint must NOT
 // encode a workflow verb in its session wake-up. Previously it set
 // `pending_decision: { decision: "changes_requested", annotations:
 // { revisit_action: "revisit_pending", ... } }` — that's the SPA
@@ -12,7 +12,7 @@
 // "advance" — the cursor on the next tick routes off on-disk state.
 //
 // What this test verifies:
-//   1. After POST /api/revisit, pending_decision.decision === "advance"
+//   1. After POST /api/advance, pending_decision.decision === "advance"
 //      (NOT "changes_requested" or any workflow verb).
 //   2. The annotations bag is empty (no revisit_action, revisit_stage,
 //      revisit_message — those were SPA-driven routing hints).
@@ -35,7 +35,7 @@ test("revisit-endpoint shape: pending_decision is the neutral 'advance' signal",
 		gate_type: "ask",
 		target: "",
 	})
-	// Simulate what the (refactored) /api/revisit handler now writes.
+	// Simulate what the (refactored) /api/advance handler now writes.
 	updateSession(session.session_id, {
 		pending_decision: {
 			decision: "advance",

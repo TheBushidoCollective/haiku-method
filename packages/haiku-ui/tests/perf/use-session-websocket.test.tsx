@@ -53,7 +53,7 @@ function makeClient(ws: FakeWebSocket): ApiClient {
 		submitDecision: vi.fn(),
 		submitAnswer: vi.fn(),
 		submitDirection: vi.fn(),
-		submitRevisit: vi.fn(),
+		submitAdvance: vi.fn(),
 		feedback: {
 			list: vi.fn(),
 			create: vi.fn(),

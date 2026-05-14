@@ -7,7 +7,7 @@
  */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import type { RevisitRequest, RevisitResponse } from "haiku-api"
+import type { AdvanceResponse } from "haiku-api"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ApiClient } from "../../api/client"
 import type { FeedbackItemData } from "../../types"
@@ -25,14 +25,12 @@ function makeStubClient(overrides: Partial<ApiClient> = {}): ApiClient {
 		submitAnswer: vi.fn(),
 		submitDirection: vi.fn(),
 		submitPicker: vi.fn(),
-		submitRevisit: vi.fn(
-			async (
-				_sessionId: string,
-				_body: RevisitRequest,
-			): Promise<RevisitResponse> => ({
+		submitAdvance: vi.fn(
+			async (_sessionId: string): Promise<AdvanceResponse> => ({
 				ok: true as const,
-				action: "revisit",
-				message: "Revisit accepted",
+				stage: "design",
+				open_feedback_count: 0,
+				stamped_user_slots: true,
 			}),
 		),
 		feedback: {
@@ -127,7 +125,7 @@ describe("RevisitModal — confirm shell", () => {
 		expect((submit as HTMLButtonElement).disabled).toBe(true)
 	})
 
-	it("submit POSTs revisit with empty reasons and calls onSuccess + onClose", async () => {
+	it("submit POSTs advance with no body and calls onSuccess + onClose", async () => {
 		const onClose = vi.fn()
 		const onSuccess = vi.fn()
 		const client = makeStubClient()
@@ -146,9 +144,7 @@ describe("RevisitModal — confirm shell", () => {
 		const submit = screen.getByRole("button", { name: /Send 1 item/ })
 		fireEvent.click(submit)
 		await new Promise((r) => setTimeout(r, 0))
-		expect(client.submitRevisit).toHaveBeenCalledWith("s1", {
-			stage: "development",
-		})
+		expect(client.submitAdvance).toHaveBeenCalledWith("s1")
 		expect(onSuccess).toHaveBeenCalledTimes(1)
 		expect(onClose).toHaveBeenCalledTimes(1)
 	})
@@ -156,9 +152,9 @@ describe("RevisitModal — confirm shell", () => {
 	it("surfaces submit errors via role=alert and keeps modal open", async () => {
 		const onClose = vi.fn()
 		const client = makeStubClient({
-			submitRevisit: vi.fn(async () => {
+			submitAdvance: vi.fn(async () => {
 				throw new Error("Server exploded")
-			}) as unknown as ApiClient["submitRevisit"],
+			}) as unknown as ApiClient["submitAdvance"],
 		})
 		const items = [makeItem()]
 		render(

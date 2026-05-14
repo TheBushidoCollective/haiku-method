@@ -12,7 +12,7 @@ import {
 	screen,
 	waitFor,
 } from "@testing-library/react"
-import type { RevisitRequest, RevisitResponse } from "haiku-api"
+import type { AdvanceResponse } from "haiku-api"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ApiClient } from "../../api/client"
 import type { FeedbackItemData } from "../../types"
@@ -24,10 +24,7 @@ afterEach(() => {
 })
 
 function makeStubClient(
-	submitRevisit?: (
-		sessionId: string,
-		body: RevisitRequest,
-	) => Promise<RevisitResponse>,
+	submitAdvance?: (sessionId: string) => Promise<AdvanceResponse>,
 ): ApiClient {
 	return {
 		fetchSession: vi.fn(),
@@ -36,13 +33,14 @@ function makeStubClient(
 		submitAnswer: vi.fn(),
 		submitDirection: vi.fn(),
 		submitPicker: vi.fn(),
-		submitRevisit:
-			submitRevisit ??
+		submitAdvance:
+			submitAdvance ??
 			vi.fn(
-				async (_s: string, _b: RevisitRequest): Promise<RevisitResponse> => ({
+				async (_s: string): Promise<AdvanceResponse> => ({
 					ok: true as const,
-					action: "revisit",
-					message: "Revisit accepted",
+					stage: "design",
+					open_feedback_count: 0,
+					stamped_user_slots: true,
 				}),
 			),
 		feedback: {
@@ -105,13 +103,13 @@ describe("RevisitModal — state matrix (behavioral)", () => {
 		expect(labelEl?.textContent).toMatch(/send feedback/i)
 	})
 
-	it('open-with-target-stage=product: submit dispatches stage="product" in the body', async () => {
-		const submitRevisit = vi.fn(
-			async (_s: string, _b: RevisitRequest): Promise<RevisitResponse> => ({
+	it("submit calls /api/advance — no body, no workflow verb", async () => {
+		const submitAdvance = vi.fn(
+			async (_s: string): Promise<AdvanceResponse> => ({
 				ok: true,
-				action: "revisit",
 				stage: "product",
-				message: "ok",
+				open_feedback_count: 1,
+				stamped_user_slots: false,
 			}),
 		)
 		render(
@@ -120,49 +118,51 @@ describe("RevisitModal — state matrix (behavioral)", () => {
 				open
 				onClose={() => {}}
 				targetStage="product"
-				apiClient={makeStubClient(submitRevisit)}
+				apiClient={makeStubClient(submitAdvance)}
 				pendingItems={[makeItem()]}
 			/>,
 		)
 		fireEvent.click(screen.getByRole("button", { name: /Send/ }))
-		await waitFor(() => expect(submitRevisit).toHaveBeenCalledTimes(1))
-		expect(submitRevisit.mock.calls[0][1]).toEqual({ stage: "product" })
+		await waitFor(() => expect(submitAdvance).toHaveBeenCalledTimes(1))
+		// Single-arg call: only sessionId. No body, no stage, no verbs.
+		expect(submitAdvance.mock.calls[0]).toEqual(["s1"])
 	})
 
-	it('open-target-development: submit dispatches stage="development"', async () => {
-		const submitRevisit = vi.fn(
-			async (_s: string, _b: RevisitRequest): Promise<RevisitResponse> => ({
+	it("submit passes through the sessionId verbatim regardless of targetStage", async () => {
+		const submitAdvance = vi.fn(
+			async (_s: string): Promise<AdvanceResponse> => ({
 				ok: true,
-				action: "revisit",
 				stage: "development",
-				message: "ok",
+				open_feedback_count: 0,
+				stamped_user_slots: true,
 			}),
 		)
 		render(
 			<RevisitModal
-				sessionId="s1"
+				sessionId="s2-alt"
 				open
 				onClose={() => {}}
 				targetStage="development"
-				apiClient={makeStubClient(submitRevisit)}
+				apiClient={makeStubClient(submitAdvance)}
 				pendingItems={[makeItem()]}
 			/>,
 		)
 		fireEvent.click(screen.getByRole("button", { name: /Send/ }))
-		await waitFor(() => expect(submitRevisit).toHaveBeenCalledTimes(1))
-		expect(submitRevisit.mock.calls[0][1].stage).toBe("development")
+		await waitFor(() => expect(submitAdvance).toHaveBeenCalledTimes(1))
+		expect(submitAdvance.mock.calls[0][0]).toBe("s2-alt")
 	})
 
-	it("open-with-success-cb: onSuccess fires before onClose on valid submit", async () => {
+	it("onSuccess fires before onClose with the AdvanceResponse", async () => {
 		const order: string[] = []
-		const submitRevisit = vi.fn(
-			async (_s: string, _b: RevisitRequest): Promise<RevisitResponse> => ({
+		const submitAdvance = vi.fn(
+			async (_s: string): Promise<AdvanceResponse> => ({
 				ok: true,
-				action: "revisit",
-				message: "Revisit accepted",
+				stage: "design",
+				open_feedback_count: 0,
+				stamped_user_slots: true,
 			}),
 		)
-		const onSuccess = vi.fn((_r: RevisitResponse) => {
+		const onSuccess = vi.fn((_r: AdvanceResponse) => {
 			order.push("onSuccess")
 		})
 		const onClose = vi.fn(() => {
@@ -174,58 +174,13 @@ describe("RevisitModal — state matrix (behavioral)", () => {
 				open
 				onClose={onClose}
 				onSuccess={onSuccess}
-				apiClient={makeStubClient(submitRevisit)}
+				apiClient={makeStubClient(submitAdvance)}
 				pendingItems={[makeItem()]}
 			/>,
 		)
 		fireEvent.click(screen.getByRole("button", { name: /Send/ }))
-		await waitFor(() => expect(submitRevisit).toHaveBeenCalledTimes(1))
+		await waitFor(() => expect(submitAdvance).toHaveBeenCalledTimes(1))
 		await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
 		expect(order).toEqual(["onSuccess", "onClose"])
-	})
-
-	it("open-alt-session: submit path receives the alternate sessionId verbatim", async () => {
-		const submitRevisit = vi.fn(
-			async (_s: string, _b: RevisitRequest): Promise<RevisitResponse> => ({
-				ok: true,
-				action: "revisit",
-				message: "ok",
-			}),
-		)
-		render(
-			<RevisitModal
-				sessionId="s2-alt"
-				open
-				onClose={() => {}}
-				apiClient={makeStubClient(submitRevisit)}
-				pendingItems={[makeItem()]}
-			/>,
-		)
-		fireEvent.click(screen.getByRole("button", { name: /Send/ }))
-		await waitFor(() => expect(submitRevisit).toHaveBeenCalledTimes(1))
-		expect(submitRevisit.mock.calls[0][0]).toBe("s2-alt")
-	})
-
-	it("open-default without targetStage: submit body omits the stage field entirely", async () => {
-		const submitRevisit = vi.fn(
-			async (_s: string, _b: RevisitRequest): Promise<RevisitResponse> => ({
-				ok: true,
-				action: "revisit",
-				message: "ok",
-			}),
-		)
-		render(
-			<RevisitModal
-				sessionId="s1"
-				open
-				onClose={() => {}}
-				apiClient={makeStubClient(submitRevisit)}
-				pendingItems={[makeItem()]}
-			/>,
-		)
-		fireEvent.click(screen.getByRole("button", { name: /Send/ }))
-		await waitFor(() => expect(submitRevisit).toHaveBeenCalledTimes(1))
-		const body = submitRevisit.mock.calls[0][1] as Record<string, unknown>
-		expect("stage" in body).toBe(false)
 	})
 })

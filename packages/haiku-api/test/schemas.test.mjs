@@ -1086,15 +1086,13 @@ if (typeof buildOpenApi !== "function") {
 	throw new Error("buildOpenApi not exported from haiku-api barrel")
 }
 
-// ─── revisit / validation / route metadata ───────────────────────────────
+// ─── advance / validation / route metadata ───────────────────────────────
 
 import {
+	AdvanceResponseSchema,
 	DEFAULT_BODY_MAX_BYTES,
 	FEEDBACK_BODY_MAX_BYTES,
 	FEEDBACK_CREATE_MAX_BYTES,
-	RevisitReasonSchema,
-	RevisitRequestSchema,
-	RevisitResponseSchema,
 	ROUTE_BODY_LIMITS,
 	RouteTransportSchema,
 	routeBodyLimit,
@@ -1105,94 +1103,37 @@ import {
 	ZodIssueWireSchema,
 } from "../dist/index.js"
 
-describe("schemas/revisit.ts — RevisitReasonSchema", () => {
-	test("parses valid", () => {
-		assertValid(RevisitReasonSchema, { title: "t", body: "b" })
-	})
-	test("rejects invalid", () => {
-		assertInvalid(RevisitReasonSchema, { title: "", body: "b" })
-		assertInvalid(RevisitReasonSchema, { title: "t" })
-	})
-})
-
-describe("schemas/revisit.ts — RevisitReasonSchema string caps", () => {
-	test("accepts max-length title/body", () => {
-		assertValid(RevisitReasonSchema, {
-			title: "t".repeat(200),
-			body: "b".repeat(10_000),
-		})
-	})
-	test("rejects title > 200", () => {
-		assertInvalid(RevisitReasonSchema, {
-			title: "t".repeat(201),
-			body: "b",
-		})
-	})
-	test("rejects body > 10_000", () => {
-		assertInvalid(RevisitReasonSchema, {
-			title: "t",
-			body: "b".repeat(10_001),
-		})
-	})
-})
-
-describe("schemas/revisit.ts — RevisitRequestSchema", () => {
-	test("parses valid (empty)", () => {
-		assertValid(RevisitRequestSchema, {})
-	})
-	test("parses valid (with stage + reasons)", () => {
-		assertValid(RevisitRequestSchema, {
-			stage: "development",
-			reasons: [{ title: "t", body: "b" }],
-		})
-	})
-	test("rejects invalid (stage not a string)", () => {
-		assertInvalid(RevisitRequestSchema, { stage: 5 })
-	})
-})
-
-describe("schemas/revisit.ts — RevisitRequestSchema caps", () => {
-	test("accepts 50 reasons", () => {
-		const reasons = Array.from({ length: 50 }, () => ({
-			title: "t",
-			body: "b",
-		}))
-		assertValid(RevisitRequestSchema, { reasons })
-	})
-	test("rejects 51 reasons", () => {
-		const reasons = Array.from({ length: 51 }, () => ({
-			title: "t",
-			body: "b",
-		}))
-		assertInvalid(RevisitRequestSchema, { reasons })
-	})
-	test("accepts max-length stage", () => {
-		assertValid(RevisitRequestSchema, { stage: "s".repeat(200) })
-	})
-	test("rejects stage > 200", () => {
-		assertInvalid(RevisitRequestSchema, { stage: "s".repeat(201) })
-	})
-})
-
-describe("schemas/revisit.ts — RevisitResponseSchema", () => {
-	test("parses valid (minimum)", () => {
-		assertValid(RevisitResponseSchema, {
+describe("schemas/advance.ts — AdvanceResponseSchema", () => {
+	test("parses valid (stamped slots)", () => {
+		assertValid(AdvanceResponseSchema, {
 			ok: true,
-			action: "revisit",
-			message: "rolled back",
-		})
-	})
-	test("parses valid (full)", () => {
-		assertValid(RevisitResponseSchema, {
-			ok: true,
-			action: "revisit",
 			stage: "design",
-			feedback_created: ["FB-01", "FB-02"],
-			message: "rolled back",
+			open_feedback_count: 0,
+			stamped_user_slots: true,
 		})
 	})
-	test("rejects invalid (missing action)", () => {
-		assertInvalid(RevisitResponseSchema, { ok: true, message: "bad" })
+	test("parses valid (open FBs blocked stamping)", () => {
+		assertValid(AdvanceResponseSchema, {
+			ok: true,
+			stage: "design",
+			open_feedback_count: 3,
+			stamped_user_slots: false,
+		})
+	})
+	test("rejects negative open_feedback_count", () => {
+		assertInvalid(AdvanceResponseSchema, {
+			ok: true,
+			stage: "design",
+			open_feedback_count: -1,
+			stamped_user_slots: false,
+		})
+	})
+	test("rejects missing stage", () => {
+		assertInvalid(AdvanceResponseSchema, {
+			ok: true,
+			open_feedback_count: 0,
+			stamped_user_slots: true,
+		})
 	})
 })
 
@@ -1355,18 +1296,18 @@ describe("routes.ts — transport invariant + body caps", () => {
 		}
 	})
 
-	test("revisit route exists with RevisitRequestSchema", () => {
+	test("advance route exists with no request schema and AdvanceResponseSchema", () => {
 		const r = routes.find(
 			(route) =>
 				route.method === "POST" &&
-				route.pathTemplate === "/api/revisit/{sessionId}",
+				route.pathTemplate === "/api/advance/{sessionId}",
 		)
-		if (!r) throw new Error("missing revisit route")
-		if (r.request !== RevisitRequestSchema) {
-			throw new Error("revisit request schema drift")
+		if (!r) throw new Error("missing advance route")
+		if (r.request !== null) {
+			throw new Error("advance route should accept no body (request: null)")
 		}
-		if (r.response !== RevisitResponseSchema) {
-			throw new Error("revisit response schema drift")
+		if (r.response !== AdvanceResponseSchema) {
+			throw new Error("advance response schema drift")
 		}
 	})
 })

@@ -43,7 +43,7 @@ function makeMockClient(overrides: Partial<ApiClient> = {}): ApiClient {
 		submitAnswer: vi.fn(async () => ({ ok: true as const })),
 		submitDirection: vi.fn(),
 		submitPicker: vi.fn(async () => ({ ok: true as const, id: "x" })),
-		submitRevisit: vi.fn(),
+		submitAdvance: vi.fn(),
 		feedback: {
 			list: vi.fn(async (intent: string, stage: string) => ({
 				intent,

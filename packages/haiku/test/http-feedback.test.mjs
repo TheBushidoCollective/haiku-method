@@ -699,45 +699,21 @@ async function run() {
 		assert.strictEqual(res.status, 200)
 	})
 
-	// ── Revisit endpoint ─────────────────────────────────────────────────────
+	// ── Advance endpoint ─────────────────────────────────────────────────────
 
-	console.log("\n=== POST /api/revisit/:sessionId ===")
+	console.log("\n=== POST /api/advance/:sessionId ===")
 
-	await test("POST /api/revisit/:id rejects malformed JSON", async () => {
-		const { createSession } = await import("../src/sessions.ts")
-		const revSession = createSession({
-			intent_slug: intentSlug,
-			intent_dir: intentDirPath,
-			review_type: "intent",
-			target: "review",
-		})
-		const res = await fetch(`${baseUrl}/api/revisit/${revSession.session_id}`, {
+	await test("POST /api/advance/:id returns 404 for missing session", async () => {
+		const res = await fetch(`${baseUrl}/api/advance/nonexistent-session-id`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: "{bad",
-		})
-		assert.strictEqual(res.status, 400)
-		const data = await res.json()
-		assert.strictEqual(data.error, "validation_failed")
-	})
-
-	await test("POST /api/revisit/:id returns 404 for missing session", async () => {
-		const res = await fetch(`${baseUrl}/api/revisit/nonexistent-session-id`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({}),
 		})
 		assert.strictEqual(res.status, 404)
 	})
 
-	await test("POST /api/revisit/:id succeeds even when target stage has no open feedback (v4 alignment: neutral 'advance' signal)", async () => {
-		// Pre-2026-05-13 contract: 409 nothing_to_revisit. That was wrong
-		// — the endpoint's job under the v4 architecture is to signal
-		// "advance" to the awaiting MCP, NOT to gate on workflow state.
-		// FBs land via /api/feedback as the reviewer types; the cursor
-		// on the next tick reads disk state and routes accordingly.
-		// Even with zero open FBs at the target stage, advancing is
-		// valid (cursor will fall through to whatever's natural).
+	await test("POST /api/advance/:id wakes the gate with the neutral 'advance' signal", async () => {
+		// The /api/advance endpoint is the SPA's ONE wake signal. No body,
+		// no workflow verb. The pending_decision is queued so awaitGate
+		// returns; the cursor on the next tick reads disk and decides.
 		const { createSession } = await import("../src/sessions.ts")
 		const revSession = createSession({
 			intent_slug: intentSlug,
@@ -745,18 +721,13 @@ async function run() {
 			review_type: "intent",
 			target: "review",
 		})
-		const res = await fetch(`${baseUrl}/api/revisit/${revSession.session_id}`, {
+		const res = await fetch(`${baseUrl}/api/advance/${revSession.session_id}`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ stage: "security" }),
 		})
-		assert.strictEqual(
-			res.status,
-			200,
-			"no-open-FB case should now 200, not 409",
-		)
-		// Verify the wake-up shape: decision === "advance", empty
-		// annotations (no workflow verb).
+		assert.strictEqual(res.status, 200)
+		const data = await res.json()
+		assert.strictEqual(data.ok, true)
+		// Verify the wake-up shape on the session.
 		const { getSession } = await import("../src/sessions.ts")
 		const updated = getSession(revSession.session_id)
 		assert.ok(updated?.pending_decision, "pending_decision should be set")
@@ -772,15 +743,13 @@ async function run() {
 		)
 	})
 
-	await test("POST /api/revisit/:id succeeds with empty reasons when an open FB exists with non-stage_revisit resolution", async () => {
-		// Regression guard for #294: the HTTP handler used to filter
-		// `resolution === "stage_revisit"` here, which rejected legitimate
-		// revisit clicks where the open FB was tagged `inline_fix`,
-		// `question`, or null (untriaged). Pre-tick gate routes any open
-		// FB regardless of resolution; the handler must agree.
+	await test("POST /api/advance/:id does NOT stamp user slots when open FBs exist", async () => {
+		// When there are open feedback items on the stage, the engine
+		// leaves reviews.user / approvals.user unstamped so the cursor
+		// walks Track B (feedback) first.
 		writeFeedbackFile(intentSlug, "security", {
-			title: "inline-fix-tagged finding",
-			body: "Pre-tick gate dispatches this even though resolution !== stage_revisit.",
+			title: "open finding",
+			body: "Still open.",
 			origin: "user-visual",
 			author: "user",
 			resolution: "inline_fix",
@@ -792,20 +761,18 @@ async function run() {
 			review_type: "intent",
 			target: "review",
 		})
-		const res = await fetch(`${baseUrl}/api/revisit/${revSession.session_id}`, {
+		const res = await fetch(`${baseUrl}/api/advance/${revSession.session_id}`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ stage: "security" }),
 		})
 		assert.strictEqual(res.status, 200)
 		const data = await res.json()
 		assert.strictEqual(data.ok, true)
-		// 2026-05-13: response action is now the neutral 'advance' signal
-		// — the SPA tells the engine the user clicked, the cursor on the
-		// next tick handles routing off on-disk FBs.
-		assert.strictEqual(data.action, "advance")
-		assert.strictEqual(data.stage, "security")
-		assert.deepStrictEqual(data.feedback_created, [])
+		assert.ok(data.open_feedback_count >= 1, "should report open FB count")
+		assert.strictEqual(
+			data.stamped_user_slots,
+			false,
+			"open FBs block user-slot stamping",
+		)
 	})
 
 	// ── Cleanup ───────────────────────────────────────────────────────────────

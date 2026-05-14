@@ -666,14 +666,14 @@ test("review decide route uses default 1 MiB cap", () => {
 	)
 })
 
-test("revisit endpoint is in the route table", () => {
+test("advance endpoint is in the route table", () => {
 	const r = apiRoutes.find(
 		(route) =>
 			route.method === "POST" &&
-			route.pathTemplate === "/api/revisit/{sessionId}",
+			route.pathTemplate === "/api/advance/{sessionId}",
 	)
-	assert.ok(r, "missing revisit route")
-	assert.strictEqual(r.operationId, "postRevisit")
+	assert.ok(r, "missing advance route")
+	assert.strictEqual(r.operationId, "postAdvance")
 })
 
 // ── Server-level body cap + transport invariant ───────────────────────────

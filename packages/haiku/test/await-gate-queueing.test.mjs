@@ -137,24 +137,20 @@ await test("last-write-wins on multiple submits", async () => {
 	deleteSession(session.session_id)
 })
 
-await test("revisit-style queued decision drains with annotations intact", async () => {
-	// The revisit endpoint (POST /api/revisit/:sessionId) writes a
-	// pending_decision with revisit_action / revisit_stage /
-	// revisit_message annotations. awaitGateReviewSession must drain
-	// it AND surface the annotations so haiku_await_gate's revisit
-	// short-circuit can dispatch correctly. This guards the bug
-	// where the revisit endpoint was left on status="decided" while
-	// the rest of the system migrated to pending_decision.
+await test("advance-style queued decision drains with empty annotations", async () => {
+	// The /api/advance endpoint (the SPA's wake signal) writes a
+	// pending_decision with `decision: "advance"` and an EMPTY
+	// annotations bag — no workflow verbs encoded on the wire.
+	// awaitGateReviewSession must drain it and surface the
+	// (empty) annotations to the caller. The cursor on the next
+	// tick reads on-disk feedback / drift state and decides; the
+	// SPA's job is to write data + wake.
 	const session = makeSession()
 	updateSession(session.session_id, {
 		pending_decision: {
-			decision: "changes_requested",
+			decision: "advance",
 			feedback: "",
-			annotations: {
-				revisit_action: "revisit_pending",
-				revisit_stage: "design",
-				revisit_message: "Created 1 stage_revisit feedback item.",
-			},
+			annotations: {},
 			submitted_at: new Date().toISOString(),
 		},
 	})
@@ -162,12 +158,12 @@ await test("revisit-style queued decision drains with annotations intact", async
 		autoOpen: false,
 		timeoutMs: 30_000,
 	})
-	assert.strictEqual(result.decision, "changes_requested")
-	const ann = result.annotations
-	assert.ok(ann, "annotations should pass through to caller")
-	assert.strictEqual(ann.revisit_action, "revisit_pending")
-	assert.strictEqual(ann.revisit_stage, "design")
-	assert.match(ann.revisit_message, /stage_revisit/)
+	assert.strictEqual(result.decision, "advance")
+	assert.deepStrictEqual(
+		result.annotations ?? {},
+		{},
+		"annotations must be empty — no SPA-driven workflow routing",
+	)
 	deleteSession(session.session_id)
 })
 

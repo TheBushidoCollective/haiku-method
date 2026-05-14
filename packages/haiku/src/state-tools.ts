@@ -78,7 +78,7 @@ import {
 	readStudioFixHatPaths,
 	resolveStudio,
 } from "./studio-reader.js"
-import { nextRelayPath, setSessionId } from "./subagent-prompt-file.js"
+import { setSessionId } from "./subagent-prompt-file.js"
 import { emitTelemetry } from "./telemetry.js"
 import { getPluginVersion, MCP_VERSION } from "./version.js"
 
@@ -2426,6 +2426,21 @@ function getUnitWorktreeChanges(
 		// Uncommitted writes matter because a subagent might write a file
 		// outside scope, not commit it, and "pass" scope validation — then
 		// the file gets lost on merge. Include staged + unstaged diffs.
+		//
+		// Bug (task #23, 2026-05-13): `git diff ${forkSha}..HEAD` only shows
+		// files that DIFFER between the fork tip and HEAD. Files that were
+		// written + committed in a PRIOR bolt and are stable (unchanged)
+		// across subsequent bolts CAN disappear from this diff if the unit
+		// branch later picks up the stage branch's state for those paths
+		// (e.g. a state-overwrite merge from another sibling unit, or a
+		// merge that reset the merge-base forward). The auto-populate then
+		// returns nothing, the agent gets `unit_outputs_empty` even though
+		// the file is sitting on disk.
+		//
+		// Fix: also walk `git log ${forkSha}..HEAD --name-only` so EVERY
+		// file touched by ANY commit on the unit branch since fork is
+		// included — not just the net diff. This is a strict superset of
+		// the diff and catches the regression.
 		const lines = new Set<string>()
 		const add = (s: string) => {
 			for (const line of s.split("\n").map((l) => l.trim())) {
@@ -2434,6 +2449,14 @@ function getUnitWorktreeChanges(
 		}
 		add(
 			execSync(`git diff --name-only ${forkSha}..HEAD`, {
+				cwd: worktreePath,
+				encoding: "utf8",
+			}).toString(),
+		)
+		// Every file touched by any commit since fork — catches files
+		// committed in a prior bolt that are stable in the current diff.
+		add(
+			execSync(`git log --name-only --pretty=format: ${forkSha}..HEAD`, {
 				cwd: worktreePath,
 				encoding: "utf8",
 			}).toString(),
@@ -2459,7 +2482,11 @@ function getUnitWorktreeChanges(
 				encoding: "utf8",
 			}).toString(),
 		)
-		return [...lines]
+		// Filter to files that still exist on disk. `git log` can surface
+		// paths from prior commits that were later deleted; those should
+		// not pollute outputs[] (they'd fail the downstream
+		// `unitOutputExists` check on the next advance).
+		return [...lines].filter((p) => existsSync(join(worktreePath, p)))
 	} catch {
 		return null
 	}
@@ -2775,6 +2802,51 @@ export const MAX_STAGE_ITERATIONS = 2
  * practice; do NOT inline a different number elsewhere.
  */
 export const MAX_UNIT_BOLTS = 5
+
+/** Reject-loop escalation — fires BEFORE MAX_UNIT_BOLTS when the agent
+ *  is in a tight loop with the same reviewer rejecting for the same
+ *  reason. Bolt 1 / bolt 2 of "same hat, same normalized reason" is
+ *  normal back-and-forth; once we hit `REJECT_LOOP_MIN_REPEATS`
+ *  identical rejects in a row, the doer can't fix it (the issue
+ *  needs user input or a spec change). The handler files a
+ *  system-authored FB and refuses the next reject, surfacing the
+ *  stuck state to the user 2 bolts before the cap. */
+export const REJECT_LOOP_MIN_REPEATS = 3
+
+/** Normalize a reject reason for similarity comparison. Whitespace
+ *  collapsed, lowercased, trimmed, truncated to 100 chars — enough
+ *  prefix to distinguish "missing X" from "missing Y" but tolerant
+ *  of "...still missing X" trailing variation. */
+export function normalizeRejectReason(reason: string | undefined): string {
+	if (!reason) return ""
+	return reason.replace(/\s+/g, " ").trim().toLowerCase().slice(0, 100)
+}
+
+/** Walk `iterations[]` backward from the most-recent COMPLETED reject
+ *  and count consecutive rejects from the same hat with the same
+ *  normalized reason as `currentNormalized`. Stops at the first
+ *  mismatch, advance result, or in-flight entry. Returns the run
+ *  length (>= 0) — `currentNormalized` is the reason about to be
+ *  appended, NOT yet in iterations[]. */
+export function countConsecutiveSameRejects(
+	iterations: UnitIteration[],
+	rejectingHat: string,
+	currentNormalized: string,
+): number {
+	if (!currentNormalized) return 0
+	let count = 0
+	for (let i = iterations.length - 1; i >= 0; i--) {
+		const it = iterations[i]
+		// Skip the in-flight current iteration (the one being rejected) —
+		// it has completed_at === null and result === null.
+		if (it.completed_at === null || it.result === null) continue
+		if (it.result !== "reject") break
+		if (it.hat !== rejectingHat) break
+		if (normalizeRejectReason(it.reason) !== currentNormalized) break
+		count++
+	}
+	return count
+}
 
 /** Build a loop-detection signature from a list of feedback titles.
  *  Stable hash of the sorted, normalized title set. */
@@ -5157,6 +5229,11 @@ export function writeFeedbackFile(
 			 *  saved. Used to detect drift on revisit. */
 			contentSha?: string
 		} | null
+		/** Override author_type. When omitted, derived from origin via
+		 *  deriveAuthorType (origin → agent/human). Pass "system" for
+		 *  engine-authored FBs (e.g. reject-loop escalation) so the SPA
+		 *  and HUMAN_ORIGINS check don't misclassify them. */
+		authorType?: "agent" | "human" | "system"
 	},
 ): { feedback_id: string; file: string; num: number } {
 	const dir = feedbackDir(slug, stage)
@@ -5169,7 +5246,7 @@ export function writeFeedbackFile(
 	const filePath = join(dir, filename)
 
 	const origin = opts.origin || "agent"
-	const authorType = deriveAuthorType(origin)
+	const authorType = opts.authorType ?? deriveAuthorType(origin)
 	const author = opts.author || deriveDefaultAuthor(origin)
 
 	// Read current iteration count from the per-stage iterations log,
@@ -5252,7 +5329,7 @@ export function writeFeedbackFile(
 		triaged_at:
 			opts.triaged_at !== undefined
 				? opts.triaged_at
-				: authorType === "agent"
+				: authorType !== "human"
 					? timestamp()
 					: null,
 		resolution: normalizedResolution,
@@ -8241,6 +8318,154 @@ export function handleStateTool(
 			// the reject will append for the prior hat).
 			const currentBolt = _failIters.length
 
+			// ── Task #24 prep: classify the reject reason so the response
+			// can disambiguate "files exist, content is the problem" from
+			// "no files produced". The doer keeps reading "rejected for
+			// substance" messages as "no files on disk" and re-running the
+			// builder — even when 309/617/714 byte stubs already exist on
+			// disk. Prefix the message with a hard tag so the
+			// disambiguation is unmissable.
+			const rejectReasonRaw = (args.reason as string) || undefined
+			const reasonForPattern = (rejectReasonRaw || "").toLowerCase()
+			// True positives we want to catch: "missing", "no artifacts",
+			// "empty", "not produced", "no files".
+			const reasonImpliesMissing =
+				/\b(missing|no\s+artifacts?|empty|no\s+files?|not\s+produced|no\s+output)\b/.test(
+					reasonForPattern,
+				)
+			// Declared outputs that actually resolve on disk (across the
+			// main intent dir, the unit worktree, and the repo root).
+			const declaredOutputs = Array.isArray(failData.outputs)
+				? (failData.outputs as unknown[]).filter(
+						(o): o is string => typeof o === "string",
+					)
+				: []
+			const presentOutputs: string[] = []
+			const missingOutputsList: string[] = []
+			for (const o of declaredOutputs) {
+				if (unitOutputExists(args.intent as string, args.unit as string, o)) {
+					presentOutputs.push(o)
+				} else {
+					missingOutputsList.push(o)
+				}
+			}
+			const outputsPresent = presentOutputs.length > 0
+			// Tag selection — see issue #24:
+			//   - reason mentions missing/empty AND files exist → reviewer
+			//     is wrong about absence; flag the contradiction loudly.
+			//   - declared outputs but none exist → standard "no artifacts
+			//     produced" reject; tag it so the doer knows to write files,
+			//     not iterate on content.
+			//   - any files present → "content quality" reject.
+			//   - no declared outputs at all → stay neutral.
+			let rejectClarityTag: string
+			if (reasonImpliesMissing && outputsPresent) {
+				rejectClarityTag = "[FILES EXIST — REJECTED FOR CONTENT QUALITY]"
+			} else if (!outputsPresent && declaredOutputs.length > 0) {
+				rejectClarityTag =
+					"[NO FILES PRODUCED — REJECTED FOR MISSING ARTIFACTS]"
+			} else if (outputsPresent) {
+				rejectClarityTag = "[FILES EXIST — REJECTED FOR CONTENT QUALITY]"
+			} else {
+				rejectClarityTag = ""
+			}
+
+			// ── Task #22: Reject-loop escalation ────────────────────────
+			// Before the MAX_UNIT_BOLTS cap fires, detect the tight loop
+			// pattern from the session log: same hat, same normalized
+			// reason, REJECT_LOOP_MIN_REPEATS rejects in a row. The doer
+			// can't fix what the reviewer keeps rejecting for the same
+			// reason — escalate to the user via a system-authored FB
+			// rather than burning the remaining bolts.
+			const currentNormalized = normalizeRejectReason(rejectReasonRaw)
+			const sameReasonStreak = countConsecutiveSameRejects(
+				_failIters,
+				currentHat,
+				currentNormalized,
+			)
+			// streak counts COMPLETED prior rejects matching this one. The
+			// current reject in flight makes streak+1; escalate when
+			// streak+1 >= REJECT_LOOP_MIN_REPEATS (default 3) so the third
+			// same-reason reject is the one that triggers, NOT a fourth.
+			if (
+				currentNormalized.length > 0 &&
+				sameReasonStreak + 1 >= REJECT_LOOP_MIN_REPEATS &&
+				currentBolt + 1 <= MAX_UNIT_BOLTS
+			) {
+				// File a system-authored FB so the user sees the stuck
+				// state in the SPA. Best-effort: a write failure must
+				// not block the structured error response below.
+				let escalationFbId: string | null = null
+				try {
+					const reasonSummary = (rejectReasonRaw || "").trim().slice(0, 80)
+					const fbTitle = `Reject-loop escalation: ${reasonSummary || "unit stuck on same reason"}`
+					const fbBody =
+						`Unit \`${args.unit as string}\` (stage \`${rejectStage}\`) has been rejected ` +
+						`${sameReasonStreak + 1} consecutive times by hat \`${currentHat}\` ` +
+						`for substantially the same reason. The doer cannot fix what requires ` +
+						`a spec change, an open question, or user input.\n\n` +
+						`**Last reject reason**:\n\n> ${rejectReasonRaw || "(none)"}\n\n` +
+						`**Outputs status**: ${
+							outputsPresent
+								? `files exist on disk (${presentOutputs.length}/${declaredOutputs.length} declared)`
+								: declaredOutputs.length > 0
+									? "no declared output files exist on disk"
+									: "unit declares no outputs"
+						}.\n\n` +
+						`**Next steps**: revisit the spec/unit, answer any open question the ` +
+						`reviewer is pointing at, or split the unit. Reject-loop escalation ` +
+						`fires before the ${MAX_UNIT_BOLTS}-bolt cap so the user can intervene ` +
+						`without losing the remaining bolts.`
+					const fbResult = writeFeedbackFile(
+						args.intent as string,
+						rejectStage,
+						{
+							title: fbTitle,
+							body: fbBody,
+							origin: "agent",
+							author: "engine",
+							authorType: "system",
+							source_ref: `reject-loop:${args.unit as string}:${currentHat}`,
+						},
+					)
+					escalationFbId = fbResult.feedback_id
+					gitCommitState(
+						`feedback: reject-loop escalation ${fbResult.feedback_id} on ${args.unit as string} (${currentHat})`,
+					)
+				} catch (e) {
+					console.error(
+						`[haiku] reject-loop escalation FB write failed: ${(e as Error).message}`,
+					)
+				}
+				return reply(
+					{
+						error: "reject_loop_escalation",
+						unit: args.unit,
+						stage: rejectStage,
+						hat: currentHat,
+						bolt: currentBolt,
+						consecutive_same_reason_rejects: sameReasonStreak + 1,
+						min_repeats: REJECT_LOOP_MIN_REPEATS,
+						last_reason: rejectReasonRaw ?? null,
+						outputs_present: outputsPresent,
+						outputs_files_present: presentOutputs,
+						outputs_files_missing: missingOutputsList,
+						escalation_feedback_id: escalationFbId,
+						message:
+							`${rejectClarityTag ? `${rejectClarityTag} ` : ""}` +
+							`Reject-loop detected: hat '${currentHat}' has rejected unit ` +
+							`'${args.unit as string}' ${sameReasonStreak + 1} times in a row for ` +
+							`the same reason. The doer cannot resolve this on its own — ` +
+							`the issue likely needs user input, a spec change, or a unit split. ` +
+							`Filed system feedback ${escalationFbId ?? "(write failed)"} so the user sees the stuck state. ` +
+							`Stop iterating and escalate. ` +
+							`(Loop signal fires at ${REJECT_LOOP_MIN_REPEATS} consecutive same-reason rejects ` +
+							`from the same hat, ${MAX_UNIT_BOLTS - (currentBolt + 1)} bolts ahead of the hard cap.)`,
+					},
+					{ isError: true },
+				)
+			}
+
 			// Enforce max bolt limit. Persistent scope violations no
 			// longer get a separate counter — every reject (scope or
 			// otherwise) increments iterations.length, so the cap fires
@@ -8251,7 +8476,10 @@ export function handleStateTool(
 						error: "max_bolts_exceeded",
 						bolt: currentBolt,
 						max: MAX_UNIT_BOLTS,
-						message: `Unit has exceeded ${MAX_UNIT_BOLTS} bolt iterations. Escalate to the user — this unit may need to be redesigned, split, or have a persistent scope violation manually reverted (\`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${rejectStage})\` in the unit worktree).`,
+						outputs_present: outputsPresent,
+						outputs_files_present: presentOutputs,
+						outputs_files_missing: missingOutputsList,
+						message: `${rejectClarityTag ? `${rejectClarityTag} ` : ""}Unit has exceeded ${MAX_UNIT_BOLTS} bolt iterations. Escalate to the user — this unit may need to be redesigned, split, or have a persistent scope violation manually reverted (\`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${rejectStage})\`)`,
 					},
 					{ isError: true },
 				)
@@ -8321,7 +8549,7 @@ export function handleStateTool(
 				}
 			}
 
-			const rejectReason = (args.reason as string) || undefined
+			const rejectReason = rejectReasonRaw
 			// v4: stamp the rejection on the in-flight iteration, then
 			// append a new iteration entry for the prior hat. Hat /
 			// hat_started_at / bolt frontmatter fields are gone — the
@@ -8359,9 +8587,27 @@ export function handleStateTool(
 			// v4: no Workflow Result file. Subagent terminates with a
 			// plain message; parent calls run_next on the next tick to
 			// dispatch the prevHat as a fresh subagent.
-			return text(
-				`rejected — back to ${prevHat} (iteration ${currentBolt + 1}). Reason: ${rejectReason ?? "(none)"}${pushWarning(rejectGit)}`,
-			)
+			//
+			// Task #24: prefix the success message with `rejectClarityTag`
+			// so the next subagent can't read "rejected for substance" as
+			// "no artifacts on disk." Surface `outputs_present` and the
+			// present/missing file lists in the structured response too —
+			// agents matching on the JSON (rather than the text body) get
+			// the disambiguation without re-parsing prose.
+			const successPrefix = rejectClarityTag ? `${rejectClarityTag} ` : ""
+			const successMessage = `${successPrefix}rejected — back to ${prevHat} (iteration ${currentBolt + 1}). Reason: ${rejectReason ?? "(none)"}${pushWarning(rejectGit)}`
+			return reply({
+				ok: true,
+				unit: args.unit,
+				stage: rejectStage,
+				prev_hat: prevHat,
+				bolt: currentBolt + 1,
+				reason: rejectReason ?? null,
+				outputs_present: outputsPresent,
+				outputs_files_present: presentOutputs,
+				outputs_files_missing: missingOutputsList,
+				message: successMessage,
+			})
 		}
 		// v4: haiku_unit_increment_bolt removed. Bolt is derived from
 		// iterations.length; there is no separate counter to increment.
@@ -11125,41 +11371,20 @@ export function handleStateTool(
 			)
 			const nextDispatchedHat = isLast ? null : fixHats[callingIdx + 1]
 
-			// Return the next-hat dispatch block from the sidecar file the
-			// dispatch builder wrote at fix-loop entry. The block is keyed by
-			// the CALLING hat (the one whose advance triggered this code
-			// path), so we look up the sidecar for callingHat's slug.
+			// v4 cursor-is-source-of-truth contract: do NOT build the next
+			// dispatch block inline here. The prior implementation read a
+			// sidecar file written by the previous dispatch — but the
+			// sidecar was keyed to the CALLING hat's bolt, and any path
+			// where the sidecar didn't exist (re-entry, agent retry,
+			// fix-loop kicked off out of band) returned `null` while the
+			// message still said "relay it verbatim". The parent then had
+			// nothing to relay and the next hat never dispatched (task #30,
+			// 2026-05-13).
 			//
-			// Why a sidecar instead of building inline: the dispatch builder
-			// already resolves agent_type, model, parent-instruction, and
-			// heading — duplicating that here risks drift. Sidecar = single
-			// source of truth.
-			//
-			// Why this closes #272 review issue 3: an agent that calls
-			// `haiku_feedback_reject` instead of advance_hat never reaches
-			// this code path, never reads the sidecar, never receives the
-			// `next_subagent_dispatch_block` field — so there is no relay
-			// block in their context they could mistakenly emit. Mechanics,
-			// not LLM compliance.
-			let nextSubagentDispatchBlock: string | null = null
-			if (!isLast && nextDispatchedHat) {
-				const sidecarUnit = stageArg
-					? `fix-${feedbackId}`
-					: `intent-fix-${feedbackId}`
-				try {
-					const sidecar = nextRelayPath({
-						unit: sidecarUnit,
-						hat: callingHat,
-						bolt: curBolt,
-					})
-					if (existsSync(sidecar)) {
-						nextSubagentDispatchBlock = readFileSync(sidecar, "utf8")
-					}
-				} catch {
-					/* Best-effort. If the sidecar is missing or unreadable, the
-					   agent's prompt tells them to fall back to haiku_run_next. */
-				}
-			}
+			// Align with `haiku_unit_advance_hat`: just record the state
+			// change and tell the agent to call `haiku_run_next` for the
+			// next instruction. The cursor is pure observation; same answer
+			// every time. No second source of truth for dispatch.
 
 			return reply({
 				ok: true,
@@ -11167,12 +11392,11 @@ export function handleStateTool(
 				stage: stageArg || null,
 				calling_hat: callingHat,
 				next_dispatched_hat: nextDispatchedHat,
-				next_subagent_dispatch_block: nextSubagentDispatchBlock,
 				closed: isLast,
 				bolt: curBolt,
 				message: isLast
-					? `FB '${feedbackId}' closed by ${closedBy} after '${callingHat}' (last hat in fix_hats sequence ${callingIdx + 1}/${fixHats.length}).`
-					: `FB '${feedbackId}': '${callingHat}' (${callingIdx + 1}/${fixHats.length}) finished; next hat to dispatch is '${nextDispatchedHat}'. The next-hat dispatch block is in the \`next_subagent_dispatch_block\` field of this response — relay it verbatim to your parent.`,
+					? `FB '${feedbackId}' closed by ${closedBy} after '${callingHat}' (last hat in fix_hats sequence ${callingIdx + 1}/${fixHats.length}). Call \`haiku_run_next\` for the next instruction.`
+					: `FB '${feedbackId}': '${callingHat}' (${callingIdx + 1}/${fixHats.length}) finished; next hat to dispatch is '${nextDispatchedHat}'. Call \`haiku_run_next\` for the dispatch block.`,
 			})
 		}
 

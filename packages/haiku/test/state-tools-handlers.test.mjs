@@ -169,6 +169,7 @@ writeFileSync(
 name: unit-01-no-outputs
 type: research
 depends_on: []
+inputs: []
 started_at: "2020-01-01T00:00:00Z"
 iterations:
   - hat: analyst
@@ -190,6 +191,7 @@ writeFileSync(
 name: unit-02-with-outputs
 type: research
 depends_on: []
+inputs: []
 started_at: "2020-01-01T00:00:00Z"
 iterations:
   - hat: analyst
@@ -206,6 +208,33 @@ outputs:
 `,
 )
 writeFileSync(join(intentDirPath, "knowledge", "findings.md"), "# Findings\n")
+
+// Pre-dispatch inputs gate fixture — unit with NO `inputs:` field
+// declared at all. advance_hat must refuse with
+// `unit_inputs_not_declared` BEFORE running any hat work. An empty
+// array (`inputs: []`) is a deliberate declaration and passes; only
+// field absence trips this gate.
+writeFileSync(
+	join(intentDirPath, "stages", "analysis", "units", "unit-03-no-inputs-field.md"),
+	`---
+name: unit-03-no-inputs-field
+type: research
+depends_on: []
+started_at: "2020-01-01T00:00:00Z"
+iterations:
+  - hat: analyst
+    started_at: "2020-01-01T00:00:00Z"
+    completed_at: null
+    result: null
+outputs:
+  - knowledge/findings.md
+---
+
+## Completion Criteria
+
+- [x] Analysis complete
+`,
+)
 
 // Studio stage definition with a single hat so analysis/analyst is the last hat
 mkdirSync(join(haikuRoot, "studios", "software", "stages", "analysis"), {
@@ -1430,6 +1459,27 @@ body
 		assert.strictEqual(value.db, "postgres")
 	})
 
+	// ── haiku_unit_advance_hat: unit_inputs_not_declared pre-dispatch gate ────
+	// Mirror of the unit_outputs_empty backpressure: refuse advance_hat
+	// when the unit's frontmatter has NO `inputs:` field at all. This is
+	// the engine's self-detected version of the structural drift the
+	// repair tool flags — without this gate, agents end up calling
+	// `haiku_repair` as a recovery step, which is exactly what should
+	// NOT happen in normal flow.
+
+	console.log("\n=== haiku_unit_advance_hat: inputs not declared ===")
+
+	test("blocks advance when unit has no inputs: field at all", () => {
+		const result = handleStateTool("haiku_unit_advance_hat", {
+			intent: intentSlug,
+			unit: "unit-03-no-inputs-field",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.error, "unit_inputs_not_declared")
+		assert.ok(parsed.message.includes("inputs:"))
+		assert.ok(parsed.message.includes("haiku_unit_set"))
+	})
+
 	// ── haiku_unit_advance_hat: unit_outputs_empty backpressure ───────────────
 
 	console.log("\n=== haiku_unit_advance_hat: outputs backpressure ===")
@@ -2140,6 +2190,75 @@ Test stage.
 			p2.closed,
 			true,
 			"2-hat sequence MUST close on assessor's advance — this is the B4 off-by-one regression",
+		)
+	})
+
+	test("haiku_feedback_advance_hat: response message must NOT promise next_subagent_dispatch_block when the field is absent (engine-bug-30 regression)", () => {
+		// Bug 30: the handler used to return a `next_subagent_dispatch_block`
+		// field sourced from a sidecar file that the v4 cursor never writes
+		// (the sidecar relay belongs to the legacy review_fix / intent_completion_fix
+		// dispatch paths, neither of which is emitted by the v4 cursor). The
+		// field was always null, but the response message still told the agent:
+		//   "The next-hat dispatch block is in the `next_subagent_dispatch_block`
+		//    field — relay it verbatim to your parent."
+		// Result: rally-race handoff broke. Fix: drop the sidecar read, drop
+		// the field, message tells the agent to call haiku_run_next (mirrors
+		// haiku_unit_advance_hat). Pin the new contract: either the field is
+		// present and non-null OR the message no longer references it.
+		// Stand up a fresh FB so this test owns its fixture (the B4 regression
+		// fixture above is already consumed by call 1's advance).
+		writeFileSync(
+			join(fbDir, "05-no-relay-promise.md"),
+			`---
+title: No-relay-promise FB
+status: pending
+origin: adversarial-review
+author: completeness
+author_type: agent
+created_at: 2026-05-13T00:00:00Z
+---
+
+Body for no-relay-promise regression test.
+`,
+		)
+		const result = handleStateTool("haiku_feedback_advance_hat", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: 5,
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(parsed.ok, true)
+		assert.strictEqual(parsed.calling_hat, "fixer")
+		assert.strictEqual(
+			parsed.closed,
+			false,
+			"non-terminal advance MUST NOT close on the first of a 2-hat sequence",
+		)
+		// The non-terminal advance must report a real next_dispatched_hat so
+		// the agent (and the cursor's next tick) know what's coming.
+		assert.strictEqual(
+			parsed.next_dispatched_hat,
+			"feedback-assessor",
+			"non-terminal advance MUST name the next fix-hat",
+		)
+		// The pin: EITHER the response carries a non-null
+		// next_subagent_dispatch_block OR the message does not promise it.
+		const hasBlock =
+			typeof parsed.next_subagent_dispatch_block === "string" &&
+			parsed.next_subagent_dispatch_block.length > 0
+		const messagePromisesBlock = (parsed.message || "").includes(
+			"next_subagent_dispatch_block",
+		)
+		assert.ok(
+			hasBlock || !messagePromisesBlock,
+			`response message must not promise next_subagent_dispatch_block when the field is null/absent. Got: field=${JSON.stringify(parsed.next_subagent_dispatch_block)}, message=${JSON.stringify(parsed.message)}`,
+		)
+		// And the message should point the agent at the canonical next step
+		// — haiku_run_next — so the rally-race progresses through the cursor
+		// rather than relying on a non-existent in-band relay block.
+		assert.ok(
+			/haiku_run_next/.test(parsed.message || ""),
+			`non-terminal advance message must direct the agent to call haiku_run_next. Got: ${JSON.stringify(parsed.message)}`,
 		)
 	})
 

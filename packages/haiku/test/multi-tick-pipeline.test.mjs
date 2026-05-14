@@ -116,6 +116,9 @@ function createWaveReadyUnit(intentDir, stage, name) {
 	const fm = {
 		title: name,
 		depends_on: [],
+		// Explicit empty inputs — the v4 pre-dispatch gate (task #25) refuses
+		// to advance units whose frontmatter lacks the `inputs:` field.
+		inputs: [],
 		started_at: null,
 		iterations: [],
 		reviews: {},

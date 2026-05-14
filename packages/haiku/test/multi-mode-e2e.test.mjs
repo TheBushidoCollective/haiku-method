@@ -168,6 +168,10 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 				writeFm(path, {
 					title: "u1",
 					depends_on: [],
+					// `inputs: []` is the deliberate "no upstream artifacts" declaration
+					// — the pre-dispatch gate (task #25) refuses to advance units whose
+					// frontmatter lacks the field entirely.
+					inputs: [],
 					started_at: null,
 					iterations: [],
 					reviews: {},

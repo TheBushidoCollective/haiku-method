@@ -136,13 +136,16 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 	const unitsDir = join(stageDir, "units")
 	const fbDir = join(stageDir, "feedback")
 	switch (action.action) {
-		case "elaborate": {
+		case "elaborate":
+		case "decompose": {
 			mkdirSync(unitsDir, { recursive: true })
 			const path = join(unitsDir, "unit-01.md")
 			if (!existsSync(path)) {
 				writeFm(path, {
 					title: "u1",
 					depends_on: [],
+					// `inputs: []` is required — v4 pre-dispatch gate (#25).
+					inputs: [],
 					started_at: null,
 					iterations: [],
 					reviews: {},

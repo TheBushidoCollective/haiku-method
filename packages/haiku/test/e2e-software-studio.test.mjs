@@ -377,6 +377,8 @@ function applyResponse(intentDir, action, root, slug) {
 				writeFm(path, {
 					title: "u1",
 					depends_on: [],
+					// `inputs: []` is required — v4 pre-dispatch gate (#25).
+					inputs: [],
 					started_at: null,
 					iterations: [],
 					reviews: {},

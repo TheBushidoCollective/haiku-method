@@ -196,6 +196,9 @@ function applyResponse(intentDir, action, root, slug) {
 				writeFm(path, {
 					title: "u1",
 					depends_on: [],
+					// `inputs: []` is required — v4's pre-dispatch gate (task #25)
+					// refuses to advance units whose FM lacks the field entirely.
+					inputs: [],
 					started_at: null,
 					iterations: [],
 					reviews: {},

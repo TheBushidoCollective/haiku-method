@@ -51,7 +51,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import matter from "gray-matter"
-import { findHaikuRoot } from "../../state-tools.js"
+import { findHaikuRoot, MAX_FIX_LOOP_BOLTS } from "../../state-tools.js"
 import {
 	readReviewAgentPaths,
 	readStageArtifactDefs,
@@ -154,6 +154,40 @@ export type CursorAction =
 	| { kind: "intent_review"; role: string }
 	| { kind: "seal_intent" }
 	| { kind: "sealed" }
+	// Pre-dispatch validation — refuse to fire `start_unit_hat` when
+	// one or more units in the wave/dispatch set are structurally
+	// invalid in ways that `haiku_repair` would otherwise have to flag.
+	// Surfaces as a structured action so the agent fixes the unit spec
+	// (via `haiku_unit_set` / `haiku_unit_write`) before re-ticking,
+	// instead of subagents being dispatched against broken units and
+	// then erroring or producing wrong artifacts. Two distinct shapes
+	// because the agent's remediation differs:
+	//
+	//   - `unit_inputs_not_declared`: unit FM has no `inputs:` field at
+	//     all. An empty array (`inputs: []`) is a DELIBERATE "no
+	//     inputs" declaration and passes; a missing field is structural
+	//     drift. Fires only on non-first stages where the upstream-
+	//     artifact contract applies. The agent should declare
+	//     `inputs:` with the upstream paths the unit depends on (or
+	//     `inputs: []` to make "no inputs" explicit) via
+	//     `haiku_unit_set { field: "inputs", value: [...] }`.
+	//   - `unit_outputs_empty_iterations`: unit declares `outputs:`
+	//     (non-empty) but `iterations: []` — the unit was created and
+	//     possibly started but never ran a single hat. Spec review
+	//     against this state would file `unit_outputs_empty` feedback
+	//     N times. The agent should either dispatch the wave-ready /
+	//     needs-next-hat tick to build the unit, or — if the unit was
+	//     created in error — delete it via `haiku_unit_delete`.
+	| {
+			kind: "unit_inputs_not_declared"
+			stage: string
+			units: string[]
+	  }
+	| {
+			kind: "unit_outputs_empty_iterations"
+			stage: string
+			units: string[]
+	  }
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -478,7 +512,23 @@ function isUnitComplete(fm: UnitFm, approvalRoles: string[]): boolean {
 	const started = hasStarted(fm)
 	const its = pickIterations(fm)
 	// (b) v3-migrated / merged-from-elsewhere placeholder.
-	if (started && its.length === 0) return true
+	//
+	// Task #28 narrowing (2026-05-13): a unit with `started_at` set and
+	// empty iterations is treated as a v3-migrated placeholder ONLY when
+	// it does NOT declare non-empty `outputs:`. A unit declaring outputs
+	// is a build-class unit with an explicit output contract — if its
+	// iterations are empty, the per-unit builder hats never ran and the
+	// unit is unbuilt, not migrated. Reported 2026-05-13: 9 simultaneous
+	// `unit_outputs_empty` FBs because units 03-11 on a stage had empty
+	// `iterations[]` and the cursor walked past the stage as complete.
+	// Without this narrowing the cursor advances into spec review and
+	// the review-track files findings against empty artifacts.
+	if (started && its.length === 0) {
+		const outs = Array.isArray(fm.outputs) ? (fm.outputs as unknown[]) : []
+		if (outs.length === 0) return true
+		// outputs declared + iterations empty → unbuilt; pin cursor here.
+		return false
+	}
 	// Everything else is CURRENT — the cursor pins on this unit:
 	//   - `!started` → wave-ready (decompose wrote the spec, wave hasn't fired)
 	//   - mid-flight iterations (last result null, or last hat != terminal)
@@ -665,6 +715,30 @@ function nextActionForFeedback(
 		// Skip rather than emit an unresolvable dispatch ID — see
 		// parseFbIdFromFilename's docstring for why this matters.
 		return null
+	}
+	// Bolt-cap escalation guard. Each iteration carries a `bolt` number;
+	// one bolt = one full pass through the stage's `fix_hats` chain. When
+	// the FB has consumed its full MAX_FIX_LOOP_BOLTS budget without
+	// closure, stop dispatching new bolts so the loop can't run forever.
+	// The FB's derived status flips to "escalated" via the same signal in
+	// `readFeedbackFiles`; the SPA surfaces these so a human can intervene.
+	// Human-authored FBs are exempt — humans expect to drive their own
+	// resolution, not be told "the agent gave up."
+	const isAgentAuthored =
+		(fm.author_type as string) === "agent" ||
+		(fm.author_type as string) === "system"
+	if (isAgentAuthored) {
+		const iters = pickIterations(fm)
+		const distinctBolts = new Set<number>()
+		for (const it of iters) {
+			const b = (it as unknown as { bolt?: number }).bolt
+			if (typeof b === "number" && b > 0) distinctBolts.add(b)
+		}
+		if (distinctBolts.size >= MAX_FIX_LOOP_BOLTS) {
+			// Cap reached — do not dispatch another bolt. The cursor walk
+			// continues; later FBs may still be dispatchable.
+			return null
+		}
 	}
 	const fixHats = resolveStageFixHats(studio, stage)
 	if (fixHats.length === 0) {
@@ -947,6 +1021,40 @@ function walkIntentTrack(args: {
 			: []
 		return deps.every((d) => completedNames.has(d))
 	})
+
+	// Task #25 pre-dispatch gate: refuse to fire `start_unit_hat` when
+	// any wave-ready unit's FM lacks an `inputs:` field entirely on a
+	// non-first stage. Empty `inputs: []` is a deliberate "no inputs"
+	// declaration and passes (the existing on-disk `unit_inputs_missing`
+	// gate in `haiku_unit_start` covers the case where declared paths
+	// don't exist). A missing field is structural drift — `haiku_repair`
+	// would flag it with `"Unit has no inputs: — execution will be
+	// blocked"`, and the user's principle is that repair should never be
+	// the normal recovery path. Surface the structured action so the
+	// agent fixes the spec via `haiku_unit_set { field: "inputs", ... }`
+	// before re-ticking.
+	//
+	// First-stage exemption: the first stage of an intent has nothing
+	// upstream to draw `inputs:` from. The contract only applies to
+	// stages that consume prior-stage artifacts.
+	const intentStages = resolveIntentStages(
+		readFm(join(intentDir, "intent.md"))?.data ?? {},
+		studio,
+	)
+	const isFirstStage = intentStages.length > 0 && intentStages[0] === stage
+	if (!isFirstStage && waveReady.length > 0) {
+		const missingInputs = waveReady
+			.filter((u) => !("inputs" in u.fm))
+			.map((u) => u.name)
+		if (missingInputs.length > 0) {
+			return {
+				kind: "unit_inputs_not_declared",
+				stage,
+				units: missingInputs,
+			}
+		}
+	}
+
 	if (waveReady.length > 0) {
 		return {
 			kind: "start_unit_hat",
@@ -969,6 +1077,26 @@ function walkIntentTrack(args: {
 			terminal: next.terminal,
 		})
 	}
+
+	// Task #25 pre-dispatch gate for the needs-next-hat path. Same
+	// rationale as the wave-ready gate above, but applied to units
+	// that have already started. A unit with `started_at` set whose
+	// `inputs:` field was never declared is the same structural drift
+	// — refuse dispatch and surface for spec fix.
+	if (!isFirstStage && needNextHat.length > 0) {
+		const dispatchNames = new Set(needNextHat.map((r) => r.unit))
+		const missingInputs = units
+			.filter((u) => dispatchNames.has(u.name) && !("inputs" in u.fm))
+			.map((u) => u.name)
+		if (missingInputs.length > 0) {
+			return {
+				kind: "unit_inputs_not_declared",
+				stage,
+				units: missingInputs,
+			}
+		}
+	}
+
 	if (needNextHat.length > 0) {
 		// Group by hat — main agent dispatches all units on the same
 		// hat as a parallel batch.
@@ -991,6 +1119,42 @@ function walkIntentTrack(args: {
 			hat,
 			units: unitsForHat,
 			terminal: idx === hats.length - 1,
+		}
+	}
+
+	// Task #28 pre-review gate: refuse to advance from execute to the
+	// review track when any unit declares non-empty `outputs:` but has
+	// `iterations: []` — the per-unit builder hats never ran. Spec
+	// review against this state files `unit_outputs_empty` feedback
+	// once per affected unit (a session was reported 2026-05-13 with 9
+	// simultaneous such FBs on units 03-11 of a single stage).
+	//
+	// The wave-ready / needs-next-hat clauses above SHOULD have picked
+	// these up — a unit with `started_at: null` and outputs declared is
+	// wave-ready by definition, and a unit with `started_at` set and
+	// empty iterations triggers `nextHatForUnit`'s first-hat branch.
+	// This guard catches the case where neither clause fires — for
+	// example, a unit blocked by a `depends_on` cycle, or a stranded
+	// started-without-iterations unit that `isUnitComplete` path (b)
+	// would otherwise treat as a v3-migrated placeholder. Either way,
+	// outputs-declared + iterations-empty is unbuilt; refusing review
+	// dispatch surfaces the structural problem instead of generating
+	// review feedback against empty artifacts.
+	{
+		const unbuilt = units
+			.filter((u) => {
+				const outs = Array.isArray(u.fm.outputs) ? (u.fm.outputs as unknown[]) : []
+				if (outs.length === 0) return false
+				const its = pickIterations(u.fm)
+				return its.length === 0
+			})
+			.map((u) => u.name)
+		if (unbuilt.length > 0) {
+			return {
+				kind: "unit_outputs_empty_iterations",
+				stage,
+				units: unbuilt,
+			}
 		}
 	}
 

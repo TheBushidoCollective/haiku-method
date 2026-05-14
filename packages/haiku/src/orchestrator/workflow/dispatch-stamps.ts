@@ -421,4 +421,74 @@ export function applyFeedbackInvalidations(args: {
 	}
 	if (changedReviews) setFrontmatterField(unitPath, "reviews", reviews)
 	if (changedApprovals) setFrontmatterField(unitPath, "approvals", approvals)
+
+	// Task #27 (2026-05-13): also evict this unit from any pending
+	// dispatch entry for the same (stage, role). Without this, the
+	// drain runs against the stale dispatch entry — when the
+	// invalidating FB closes, `hasOpenInvalidatingFeedback` returns
+	// false (no open FB after close), drain stamps reviews.<role>
+	// using the OLD dispatched_at, and the reviewer subagent never
+	// re-ran. The unit ends up witnessed without an actual review.
+	//
+	// Cleaner than tracking `reviews_invalidated_at` on the unit: the
+	// pending entry IS the dispatch contract; if the contract is no
+	// longer valid (invalidation happened), drop the entry. The cursor
+	// will re-emit dispatch_review next walk, re-stash with a fresh
+	// dispatched_at, and the drain will be against the new dispatch
+	// after the reviewer subagent actually runs.
+	if (changedReviews) {
+		evictPendingDispatchEntry({
+			slug: args.slug,
+			stage: args.stage,
+			role: args.invalidates,
+			unit: args.targetUnit,
+			field: PENDING_REVIEW_FIELD,
+		})
+	}
+	if (changedApprovals) {
+		evictPendingDispatchEntry({
+			slug: args.slug,
+			stage: args.stage,
+			role: args.invalidates,
+			unit: args.targetUnit,
+			field: PENDING_APPROVAL_FIELD,
+		})
+	}
+}
+
+/** Remove a unit from any per-(stage, role) pending dispatch entry on
+ *  the intent. Called from `applyFeedbackInvalidations` so the next
+ *  `drainPendingDispatches` doesn't stamp a unit with a stale
+ *  dispatched_at — see task #27 comment above. Empty role entries are
+ *  cleaned up so the drain can short-circuit on empty pending maps. */
+function evictPendingDispatchEntry(args: {
+	slug: string
+	stage: string
+	role: string[]
+	unit: string
+	field: string
+}): void {
+	const intent = readIntentFm(args.slug)
+	if (!intent) return
+	const pending = readPendingMap(intent.fm, args.field)
+	const perStage = pending[args.stage]
+	if (!perStage) return
+	let changed = false
+	for (const r of args.role) {
+		const entry = perStage[r]
+		if (!entry || !Array.isArray(entry.units)) continue
+		const filtered = entry.units.filter((u) => u !== args.unit)
+		if (filtered.length === entry.units.length) continue
+		if (filtered.length === 0) {
+			delete perStage[r]
+		} else {
+			perStage[r] = { ...entry, units: filtered }
+		}
+		changed = true
+	}
+	if (!changed) return
+	if (Object.keys(perStage).length === 0) {
+		delete pending[args.stage]
+	}
+	setFrontmatterField(intent.path, args.field, pending)
 }

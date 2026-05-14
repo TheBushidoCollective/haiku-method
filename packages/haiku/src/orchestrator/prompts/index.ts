@@ -74,7 +74,9 @@ import start_unit from "./start_unit.js"
 import start_unit_hat from "./start_unit_hat.js"
 import type { PromptBuilder } from "./types.js"
 import unit_inputs_missing from "./unit_inputs_missing.js"
+import unit_inputs_not_declared from "./unit_inputs_not_declared.js"
 import unit_naming_invalid from "./unit_naming_invalid.js"
+import unit_outputs_empty_iterations from "./unit_outputs_empty_iterations.js"
 import unresolved_dependencies from "./unresolved_dependencies.js"
 import user_gate from "./user_gate.js"
 
@@ -126,6 +128,8 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["migrated", migrated],
 	["drift_detected", drift_detected],
 	["unit_inputs_missing", unit_inputs_missing],
+	["unit_inputs_not_declared", unit_inputs_not_declared],
 	["unit_naming_invalid", unit_naming_invalid],
+	["unit_outputs_empty_iterations", unit_outputs_empty_iterations],
 	["unresolved_dependencies", unresolved_dependencies],
 ])

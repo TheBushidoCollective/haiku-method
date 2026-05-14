@@ -7575,16 +7575,39 @@ export function handleStateTool(
 				}
 			}
 
-			// Validate every declared input path exists on disk BEFORE the
-			// unit transitions to active. The FM schema's pattern check
-			// catches freeform-text entries at write time, but a path that
-			// LOOKS valid (e.g. references a prior-stage artifact that
-			// never landed) needs a runtime gate too — without this, the
-			// unit's hats start work against missing inputs and either
-			// silently produce wrong artifacts or fail later in cryptic
-			// ways.
+			// Validate the unit's `inputs:` frontmatter field BEFORE the
+			// unit transitions to active. Two checks, in order:
+			//
+			// 1. Structural: the field MUST be declared. A unit with NO
+			//    `inputs:` key at all is structural drift — the repair
+			//    tool flags it the same way. Refusing here means the
+			//    engine self-detects the condition instead of waiting for
+			//    an agent to notice and call `haiku_repair` (task #25,
+			//    2026-05-13). An empty array (`inputs: []`) is a
+			//    deliberate "this unit reads nothing" declaration and
+			//    passes — only field absence triggers this gate.
+			//
+			// 2. Path existence: every declared input path MUST exist on
+			//    disk. The FM schema's pattern check catches freeform-
+			//    text entries at write time, but a path that LOOKS valid
+			//    (e.g. references a prior-stage artifact that never
+			//    landed) needs a runtime gate too — without this, the
+			//    unit's hats start work against missing inputs and either
+			//    silently produce wrong artifacts or fail later in
+			//    cryptic ways.
 			{
 				const startUnitFm = parseFrontmatter(readFileSync(uPath, "utf8")).data
+				if (!("inputs" in startUnitFm)) {
+					return reply(
+						{
+							error: "unit_inputs_not_declared",
+							unit: args.unit,
+							stage,
+							message: `Cannot start unit '${args.unit}': no \`inputs:\` field declared in frontmatter. Every unit MUST declare what upstream artifacts it reads (intent doc, knowledge docs, prior-stage outputs). Set inputs explicitly via \`haiku_unit_set { intent: "${args.intent}", unit: "${args.unit}", field: "inputs", value: [...] }\` — an empty array is fine if the unit genuinely reads nothing, but the field itself must be present.`,
+						},
+						{ isError: true },
+					)
+				}
 				const startInputs = Array.isArray(startUnitFm.inputs)
 					? (startUnitFm.inputs as string[])
 					: []
@@ -7743,6 +7766,26 @@ export function handleStateTool(
 			const currentHat = _lastIter.hat
 			// 30-second hat backpressure removed in v4 — a pause doesn't
 			// prevent shallow work; reviewer agents and quality_gates do.
+
+			// ── Structural: `inputs:` MUST be declared ──────────────────
+			// Mirror of the unit_start gate. If a unit's `inputs:` field
+			// has been stripped between unit_start and a later
+			// advance_hat (e.g. drift from a manual edit), refuse to
+			// progress — the same condition the repair tool flags. An
+			// empty array is fine; only field absence triggers this gate.
+			// Task #25 (2026-05-13): engine self-detects this so agents
+			// don't need to call `haiku_repair` as a recovery step.
+			if (!("inputs" in unitFm)) {
+				return reply(
+					{
+						error: "unit_inputs_not_declared",
+						unit: args.unit,
+						stage: advStage,
+						message: `Cannot advance hat: unit '${args.unit}' has no \`inputs:\` field declared in frontmatter. Every unit MUST declare what upstream artifacts it reads. Set inputs explicitly via \`haiku_unit_set { intent: "${args.intent}", unit: "${args.unit}", field: "inputs", value: [...] }\` — an empty array is fine if the unit genuinely reads nothing, but the field itself must be present.`,
+					},
+					{ isError: true },
+				)
+			}
 
 			// ── Validate declared outputs exist (every hat transition) ──
 			// Artifacts may live in the UNIT'S worktree (if running via start_units)

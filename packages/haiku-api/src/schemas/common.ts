@@ -15,9 +15,9 @@ import { z } from "zod"
 /** Authorship type derived from origin — declared early so
  *  FeedbackReplySchema below can reference it. */
 const AuthorTypeSchemaInternal = z
-	.enum(["human", "agent"])
+	.enum(["human", "agent", "system"])
 	.describe(
-		"Derived from origin. Human-authored feedback cannot be closed/deleted by agents.",
+		"Derived from origin. Human-authored feedback cannot be closed/deleted by agents. `system` is reserved for engine-authored FBs (e.g. reject-loop escalation) that the SPA surfaces to humans but treats distinctly from agent and human authorship.",
 	)
 
 /** Origins a feedback item can come from. */
@@ -37,11 +37,26 @@ export const FeedbackOriginSchema = z
 	)
 export type FeedbackOrigin = z.infer<typeof FeedbackOriginSchema>
 
-/** Lifecycle status of a feedback item. */
+/** Lifecycle status of a feedback item.
+ *
+ * `escalated` is reached when an agent-authored FB's fix loop exceeds
+ * MAX_FIX_LOOP_BOLTS without closure. The workflow engine stamps it and
+ * stops dispatching further bolts; the SPA surfaces escalated FBs in
+ * the sidebar (filtered through `Show agent feedback` toggle defaults)
+ * so a human can intervene. Reversible: a human can flip an escalated
+ * FB back to `pending`, `rejected`, or `closed` via the review UI. */
 export const FeedbackStatusSchema = z
-	.enum(["pending", "fixing", "addressed", "answered", "closed", "rejected"])
+	.enum([
+		"pending",
+		"fixing",
+		"addressed",
+		"answered",
+		"escalated",
+		"closed",
+		"rejected",
+	])
 	.describe(
-		"Lifecycle: pending -> fixing -> addressed -> closed, or pending -> answered (question resolved by reply, no code delta), or pending -> rejected. Only pending/fixing block the stage gate.",
+		"Lifecycle: pending -> fixing -> addressed -> closed, or pending -> answered (question resolved by reply, no code delta), or pending -> rejected, or pending|fixing -> escalated (bolt cap exceeded on agent FBs). Only pending/fixing block the stage gate; escalated is a human-intervention waypoint, not a blocker.",
 	)
 export type FeedbackStatus = z.infer<typeof FeedbackStatusSchema>
 

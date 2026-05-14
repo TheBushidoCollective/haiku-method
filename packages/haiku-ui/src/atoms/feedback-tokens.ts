@@ -41,6 +41,12 @@ export const feedbackStatusColors: Record<FeedbackStatus, string> = {
 	// matches agent/reply activity and distinguishes it from `closed`
 	// (code delta landed) in the at-a-glance list.
 	answered: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
+	// `escalated` — fix-loop bolt cap exceeded on an agent FB. Surfaced
+	// to a human reviewer; the engine has stopped retrying. Rose-leaning
+	// orange palette distinguishes it from amber (pending/fixing) and
+	// rose (adversarial-review origin) at a glance.
+	escalated:
+		"bg-orange-100 text-orange-800 border border-orange-500 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-400",
 	closed:
 		"bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
 	rejected:
@@ -64,6 +70,7 @@ export const statusDotClasses: Record<FeedbackStatus, string> = {
 	fixing: "bg-amber-600 dark:bg-amber-500",
 	addressed: "bg-blue-600 dark:bg-blue-500",
 	answered: "bg-teal-600 dark:bg-teal-400",
+	escalated: "bg-orange-600 dark:bg-orange-400",
 	closed: "bg-green-600 dark:bg-green-400",
 	rejected: "bg-stone-600 dark:bg-stone-400",
 }
@@ -75,6 +82,7 @@ export const statusBorderLeft: Record<FeedbackStatus, string> = {
 	fixing: "border-l-[3px] border-l-amber-400 dark:border-l-amber-500",
 	addressed: "border-l-[3px] border-l-blue-400 dark:border-l-blue-500",
 	answered: "border-l-[3px] border-l-teal-400 dark:border-l-teal-500",
+	escalated: "border-l-[3px] border-l-orange-500 dark:border-l-orange-400",
 	closed: "border-l-[3px] border-l-green-500 dark:border-l-green-400",
 	rejected: "border-l-[3px] border-l-stone-400 dark:border-l-stone-500",
 }
@@ -84,6 +92,7 @@ export const statusBackground: Record<FeedbackStatus, string> = {
 	fixing: "bg-amber-50/50 dark:bg-amber-950/20",
 	addressed: "bg-blue-50/50 dark:bg-blue-950/20",
 	answered: "bg-teal-50/50 dark:bg-teal-950/20",
+	escalated: "bg-orange-50/60 dark:bg-orange-950/25",
 	closed: "bg-green-50/60 dark:bg-green-950/25",
 	rejected: "bg-stone-100 dark:bg-stone-800/50",
 }

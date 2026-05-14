@@ -8,6 +8,7 @@
 
 import { useMemo, useState } from "react"
 import type { FeedbackStatus } from "../../atoms/feedback-tokens"
+import { AgentFeedbackToggle } from "../../molecules/AgentFeedbackToggle"
 import { FeedbackSummaryBar } from "../../molecules/FeedbackSummaryBar"
 import { FeedbackList } from "../../organisms/FeedbackList"
 import type { FeedbackItemData } from "../../types"
@@ -57,9 +58,42 @@ export function FeedbackPanelBody({
 	// to the status filter (a reply lives on a closed FB; the user
 	// filtering by "pending" never sees them otherwise).
 	const [unreadReplyOnly, setUnreadReplyOnly] = useState(false)
+	// Agent-item visibility (task #32). Default OFF: agent-authored FBs
+	// at non-escalated statuses (pending, fixing, addressed, answered,
+	// closed, rejected) are noise to a human reviewer — the engine
+	// handles them. Only items the human MUST see surface by default:
+	//   - every human-authored item, regardless of status
+	//   - agent-authored items at `escalated` (bolt cap exhausted; needs
+	//     human intervention)
+	// Toggling on reveals the full agent set so a reviewer can audit
+	// without flipping context.
+	const [showAgentItems, setShowAgentItems] = useState(false)
+
+	// Count of agent-authored items hidden when the toggle is off, so
+	// the toggle chip surfaces it as "{N} hidden".
+	const hiddenAgentCount = useMemo(
+		() =>
+			items.filter(
+				(i) =>
+					(i.author_type === "agent" || i.author_type === "system") &&
+					i.status !== "escalated",
+			).length,
+		[items],
+	)
 
 	const filtered = useMemo(() => {
 		let next = items
+		// Agent-item filter is a HARD pre-filter — it determines what's
+		// even visible to the rest of the pipeline. The status filter
+		// then applies on top of the visible set.
+		if (!showAgentItems) {
+			next = next.filter(
+				(i) =>
+					i.author_type === "human" ||
+					i.author_type === "system" ||
+					i.status === "escalated",
+			)
+		}
 		if (unreadReplyOnly) {
 			next = next.filter((i) => i.closure_reply_unread === true)
 		}
@@ -71,7 +105,7 @@ export function FeedbackPanelBody({
 			next = next.filter((item) => item.status === activeStatus)
 		}
 		return next
-	}, [items, activeStatus, unreadReplyOnly])
+	}, [items, activeStatus, unreadReplyOnly, showAgentItems])
 
 	return (
 		<div className="flex flex-col flex-1 min-h-0">
@@ -84,7 +118,7 @@ export function FeedbackPanelBody({
 					<div className="h-full w-1/3 animate-pulse bg-teal-500 dark:bg-teal-400" />
 				</div>
 			)}
-			<div className="shrink-0 px-4 py-3 border-b border-stone-200 dark:border-stone-700">
+			<div className="shrink-0 px-4 py-3 border-b border-stone-200 dark:border-stone-700 space-y-2">
 				<FeedbackSummaryBar
 					items={items}
 					activeStatus={activeStatus}
@@ -92,6 +126,13 @@ export function FeedbackPanelBody({
 					unreadReplyOnly={unreadReplyOnly}
 					onToggleUnreadReplyOnly={() => setUnreadReplyOnly((v) => !v)}
 				/>
+				{hiddenAgentCount > 0 || showAgentItems ? (
+					<AgentFeedbackToggle
+						checked={showAgentItems}
+						onChange={setShowAgentItems}
+						count={hiddenAgentCount}
+					/>
+				) : null}
 			</div>
 			{/* The FeedbackList owns its own scroll: the plain <ul> branch
 			    sets `h-full overflow-y-auto` directly so it fills the

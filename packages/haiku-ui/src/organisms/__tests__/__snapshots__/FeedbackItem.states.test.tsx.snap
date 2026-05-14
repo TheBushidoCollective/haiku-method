@@ -2,7 +2,7 @@
 
 exports[`FeedbackItem — state matrix > renders every (status × interaction) cell (snapshot with token-hash header) 1`] = `
 <div
-  data-token-hash="fa9f004f38d5ccf1"
+  data-token-hash="27cdf90208a68e61"
 >
   <div
     data-status-row="pending"
@@ -642,105 +642,23 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           <div
             class="text-xs text-stone-700 dark:text-stone-300 feedback-markdown prose prose-stone prose-sm dark:prose-invert max-w-none"
           >
-            <div
-              class="feedback-body-attachment-host [&_img]:cursor-zoom-in [&_img]:transition-opacity [&_img:hover]:opacity-90"
+            <p
+              class="text-xs text-stone-700 dark:text-stone-300 [overflow-wrap:anywhere]"
             >
-              <div
-                class="prose prose-sm prose-stone dark:prose-invert max-w-none min-w-0 [overflow-wrap:anywhere]
-        prose-code:bg-stone-100 prose-code:dark:bg-stone-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:[overflow-wrap:anywhere]
-        prose-pre:bg-stone-100 prose-pre:dark:bg-stone-800 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-pre:max-w-full prose-pre:whitespace-pre-wrap
-        prose-table:border-collapse prose-th:border prose-th:border-stone-300 prose-th:dark:border-stone-600 prose-th:px-3 prose-th:py-1.5
-        prose-td:border prose-td:border-stone-300 prose-td:dark:border-stone-600 prose-td:px-3 prose-td:py-1.5 "
-                id="feedback-body"
-              >
-                <p>
-                  The test bypasses the browser keyboard path:
-                </p>
-                
-
-                <ul>
-                  
-
-                  <li>
-                    Expected: simulate a real 
-                    <em>
-                      keydown
-                    </em>
-                     of 
-                    <code>
-                      Escape
-                    </code>
-                     on the sheet.
-                  </li>
-                  
-
-                  <li>
-                    Actual: calls 
-                    <code>
-                      dialog.close()
-                    </code>
-                     imperatively via the 
-                    <strong>
-                      test-only
-                    </strong>
-                     API.
-                    
-
-                    <ul>
-                      
-
-                      <li>
-                        This sidesteps the 
-                        <code>
-                          onOpenChange
-                        </code>
-                         callback we actually ship.
-                      </li>
-                      
-
-                      <li>
-                        It also hides a real bug where 
-                        <code>
-                          autoFocus
-                        </code>
-                         on the primary action     swallows the keystroke in Safari.
-                      </li>
-                      
-
-                    </ul>
-                    
-
-                  </li>
-                  
-
-                </ul>
-                
-
-                <p>
-                  See 
-                  <a
-                    href="packages/haiku-ui/src/organisms/FeedbackSheet.tsx:88"
-                  >
-                    FeedbackSheet.tsx:88
-                  </a>
-                   and compare with the 
-                  <a
-                    href="https://www.radix-ui.com/docs"
-                  >
-                    Radix dialog reference
-                  </a>
-                  .
-                </p>
-                
-
-                <p>
-                  <em>
-                    Blocker for external-review gate.
-                  </em>
-                </p>
-              </div>
-            </div>
+              The test bypasses the browser keyboard path: - Expected: simulate a real keydown of Escape on the sheet. - Actual: calls dialog.close() imperatively via the test-only API. - This sidesteps the onOpenChange callback we actually ship. - It also hides a real bug where autoFocus on…
+            </p>
           </div>
+          <button
+            aria-expanded="false"
+            aria-haspopup="dialog"
+            aria-label="Read full body of feedback FB-02"
+            class="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 mt-1 inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900 dark:text-teal-400 dark:hover:text-teal-200 underline decoration-dotted underline-offset-2"
+            data-action="read-more"
+            data-testid="feedback-read-more-FB-02"
+            type="button"
+          >
+            Read more
+          </button>
           <div
             class="flex gap-1 mt-2 flex-wrap"
           >

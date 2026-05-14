@@ -1033,14 +1033,36 @@ export async function prepareGateReviewSession(
 }
 
 // Exported for unit testing — the spawn-based browser launch is hard to assert against directly.
+//
+// `intentSlug` (optional, added 2026-05-13 for intent-scoped dedupe):
+// when provided, we additionally suppress the launch if ANY live (non-
+// presence-lost) review session exists for this intent — even if it's
+// a different session_id than the one we're about to await on. This
+// closes the "new session_id per haiku_run_next tick" hole: each
+// run_next that fires user_gate creates a fresh session, and the
+// previously-attached tab from a prior cycle isn't bound to the new
+// session_id, so `isBrowserAttached(newSessionId)` would return false
+// and we'd launch a duplicate tab. The presence map is intent-scoped
+// via `findLiveReviewSessionForIntent`, which is the right granularity
+// — the SPA tab follows the intent, not individual session ids.
+//
+// Bug reported 2026-05-13: "review popped multiple times despite it
+// already being open." Each gate cycle's run_next minted a new
+// session_id; the per-session attach check missed the existing tab;
+// the launch fired a duplicate window on every cycle.
 export function shouldLaunchReviewBrowser(
 	autoOpen: boolean,
 	reviewUrl: string | undefined,
 	sessionId: string,
+	intentSlug?: string,
 ): boolean {
 	if (!autoOpen) return false
 	if (!reviewUrl) return false
 	if (isBrowserAttached(sessionId)) return false
+	// Intent-scoped dedupe: if a live session for this intent already
+	// exists (any session id), skip the launch. The SPA tab on that
+	// session receives the broadcast and refreshes; no new tab needed.
+	if (intentSlug && findLiveReviewSessionForIntent(intentSlug)) return false
 	return true
 }
 
@@ -1073,7 +1095,14 @@ export async function awaitGateReviewSession(
 	// propagates `signal` to unwind the await promptly; the SPA stays
 	// connected and the next agent tick can call haiku_await_gate
 	// again.
-	if (shouldLaunchReviewBrowser(autoOpen, reviewUrl, sessionId)) {
+	if (
+		shouldLaunchReviewBrowser(
+			autoOpen,
+			reviewUrl,
+			sessionId,
+			existing.intent_slug,
+		)
+	) {
 		launchBrowserBestEffort(reviewUrl as string, "Review gate")
 	}
 

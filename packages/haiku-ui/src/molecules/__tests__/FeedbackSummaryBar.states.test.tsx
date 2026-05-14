@@ -153,8 +153,9 @@ describe("FeedbackSummaryBar — filter pills meet 44×44", () => {
 		const pills = container.querySelectorAll<HTMLButtonElement>(
 			"button[data-status]",
 		)
-		// Five visible statuses — pending, addressed, answered, closed, rejected.
-		expect(pills.length).toBe(5)
+		// Six visible statuses — pending, addressed, answered, escalated,
+		// closed, rejected.
+		expect(pills.length).toBe(6)
 		for (const pill of pills) {
 			const style = getComputedStyle(pill)
 			expect(parseFloat(style.minHeight)).toBeGreaterThanOrEqual(44)

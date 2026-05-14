@@ -21,7 +21,7 @@
 // No new external dependencies — uses node:crypto, node:fs/promises, node:path
 // (already required by drift-baseline.ts) and existing gray-matter.
 
-import { existsSync, readFileSync, statSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import matter from "gray-matter"
 import {
@@ -37,6 +37,10 @@ import {
 	type TrackingClass,
 	writeBaseline,
 } from "../../orchestrator/workflow/drift-baseline.js"
+import {
+	bodySha256,
+	outputSha256,
+} from "../../orchestrator/workflow/sign-slot.js"
 import { findHaikuRoot } from "../../state-tools.js"
 import { defineTool, validateSlugArgs } from "../define.js"
 import { text } from "./_text.js"
@@ -104,6 +108,251 @@ async function buildEntry(
 		acknowledged_via: "baseline-init",
 		stage: stageOwner,
 		tracking_class: trackingClass,
+	}
+}
+
+/** Re-stamp v4 witness hashes (the drift-sweep signal source) on every
+ *  signed slot whose witnessed file matches one of `targetPaths`. The
+ *  drift-baseline subsystem (this tool's primary purpose) and the v4
+ *  drift-sweep subsystem use independent signals — the baseline tracks
+ *  raw file SHAs in baseline.json, the drift-sweep compares
+ *  per-slot witness hashes stamped at sign-time (`reviews.<role>.body_sha256`,
+ *  `approvals.<role>.witnesses[<path>]`, `discovery.<agent>.{output,mandate}_sha256`).
+ *  An agent calling `haiku_baseline_init` after a drift event is
+ *  declaring "the current file content IS the new baseline." For that
+ *  declaration to silence the drift-sweep gate too, we need to bump the
+ *  witness hashes as well. Without this step, baseline_init was a
+ *  surface-level acknowledgement that the cursor's Track C kept
+ *  ignoring, producing the repeat-drift loop seen in production on
+ *  2026-05-12.
+ *
+ *  Returns a count of slots restamped, for the response payload. The
+ *  caller can include this in the user-facing summary so operators
+ *  can see whether anything was actually re-stamped.
+ */
+function restampWitnessesForPaths(
+	intentDir: string,
+	targetPaths: string[],
+): { units_touched: number; slots_restamped: number } {
+	if (targetPaths.length === 0) {
+		return { units_touched: 0, slots_restamped: 0 }
+	}
+	// Canonicalise once. The drift-sweep stores witness keys exactly as
+	// they were declared on the unit's `outputs:` array — typically
+	// either intent-relative (`stages/<X>/.../foo.md`) or repo-relative
+	// (`src/components/Foo.tsx`). The target paths passed to this tool
+	// are intent-relative (validateTrackedSurfacePath enforces that).
+	// We match witness keys against the target set as-is and against
+	// their basenames for the rare case where output declarations got
+	// abbreviated.
+	const targetSet = new Set(targetPaths.map(canonicalisePath))
+	const targetBasenames = new Set(
+		Array.from(targetSet).map((p) => p.split("/").pop() ?? p),
+	)
+
+	let units_touched = 0
+	let slots_restamped = 0
+
+	const stagesDir = join(intentDir, "stages")
+	if (!existsSync(stagesDir)) {
+		return { units_touched, slots_restamped }
+	}
+
+	for (const stageEntry of readdirSync(stagesDir, { withFileTypes: true })) {
+		if (!stageEntry.isDirectory()) continue
+		const stage = stageEntry.name
+		const unitsDir = join(stagesDir, stage, "units")
+		if (!existsSync(unitsDir)) continue
+
+		for (const fName of readdirSync(unitsDir)) {
+			if (!fName.endsWith(".md")) continue
+			const unitPath = join(unitsDir, fName)
+			const unitTouched = restampWitnessesOnFile({
+				absPath: unitPath,
+				intentDir,
+				targetSet,
+				targetBasenames,
+				stage,
+			})
+			if (unitTouched.changed) {
+				units_touched++
+				slots_restamped += unitTouched.slotsRestamped
+			}
+		}
+	}
+
+	// Intent.md (intent-scope approvals) — body_sha256 witnesses get
+	// restamped when intent.md itself is in the target list.
+	const intentMdRel = "intent.md"
+	if (targetSet.has(intentMdRel)) {
+		const intentMdAbs = join(intentDir, intentMdRel)
+		if (existsSync(intentMdAbs)) {
+			const r = restampIntentMdApprovals(intentMdAbs)
+			if (r.changed) {
+				units_touched++
+				slots_restamped += r.slotsRestamped
+			}
+		}
+	}
+
+	return { units_touched, slots_restamped }
+}
+
+/** Re-stamp witnesses on one unit file. Walks every signed slot
+ *  (reviews / approvals / discovery) and rewrites the witness hash for
+ *  any path matching the target set. */
+function restampWitnessesOnFile(args: {
+	absPath: string
+	intentDir: string
+	targetSet: Set<string>
+	targetBasenames: Set<string>
+	stage: string
+}): { changed: boolean; slotsRestamped: number } {
+	const { absPath, intentDir, targetSet, targetBasenames, stage } = args
+	try {
+		const raw = readFileSync(absPath, "utf8")
+		const parsed = matter(raw)
+		const fm = parsed.data as Record<string, unknown>
+		let changed = false
+		let slotsRestamped = 0
+
+		// reviews.<role>.body_sha256 witnesses the unit body — restamp
+		// when the unit file itself is in the target set.
+		const unitRel = canonicalisePath(absPath.slice(intentDir.length + 1))
+		const unitMatches =
+			targetSet.has(unitRel) ||
+			targetBasenames.has(unitRel.split("/").pop() ?? "")
+		if (unitMatches && fm.reviews && typeof fm.reviews === "object") {
+			const newSha = bodySha256(absPath)
+			for (const [role, record] of Object.entries(
+				fm.reviews as Record<string, unknown>,
+			)) {
+				if (record === null || typeof record !== "object") continue
+				const r = record as Record<string, unknown>
+				if (typeof r.at !== "string" || r.at.length === 0) continue
+				if (typeof r.body_sha256 !== "string") continue
+				if (r.body_sha256 !== newSha) {
+					r.body_sha256 = newSha
+					changed = true
+					slotsRestamped++
+				}
+				;(fm.reviews as Record<string, unknown>)[role] = r
+			}
+		}
+
+		// approvals.<role>.witnesses[<path>] — rewrite any entry whose key
+		// matches a target path.
+		if (fm.approvals && typeof fm.approvals === "object") {
+			for (const [role, record] of Object.entries(
+				fm.approvals as Record<string, unknown>,
+			)) {
+				if (record === null || typeof record !== "object") continue
+				const r = record as Record<string, unknown>
+				if (typeof r.at !== "string" || r.at.length === 0) continue
+				const witnesses = r.witnesses
+				if (witnesses === null || typeof witnesses !== "object") continue
+				const w = witnesses as Record<string, unknown>
+				let witnessChanged = false
+				for (const [outRel, _stored] of Object.entries(w)) {
+					if (typeof _stored !== "string") continue
+					const matches =
+						targetSet.has(outRel) ||
+						targetBasenames.has(outRel.split("/").pop() ?? "")
+					if (!matches) continue
+					// Same path resolution as drift-sweep / sign-slot.
+					const outAbs = outRel.startsWith("stages/")
+						? join(intentDir, outRel)
+						: join(intentDir, "..", "..", "..", outRel)
+					const newSha = outputSha256(outAbs)
+					if (newSha && newSha !== _stored) {
+						w[outRel] = newSha
+						witnessChanged = true
+						slotsRestamped++
+					}
+				}
+				if (witnessChanged) {
+					r.witnesses = w
+					;(fm.approvals as Record<string, unknown>)[role] = r
+					changed = true
+				}
+			}
+		}
+
+		// discovery.<agent> output / mandate hashes. Output paths live
+		// under `stages/<stage>/discovery/<agent>.md` — we check whether
+		// either file path is in the target set.
+		if (fm.discovery && typeof fm.discovery === "object") {
+			for (const [agent, record] of Object.entries(
+				fm.discovery as Record<string, unknown>,
+			)) {
+				if (record === null || typeof record !== "object") continue
+				const r = record as Record<string, unknown>
+				if (typeof r.at !== "string" || r.at.length === 0) continue
+				const outputRel = `stages/${stage}/discovery/${agent}.md`
+				if (
+					(targetSet.has(outputRel) ||
+						targetBasenames.has(`${agent}.md`)) &&
+					typeof r.output_sha256 === "string"
+				) {
+					const outputAbs = join(intentDir, outputRel)
+					const newSha = outputSha256(outputAbs)
+					if (newSha && newSha !== r.output_sha256) {
+						r.output_sha256 = newSha
+						changed = true
+						slotsRestamped++
+					}
+				}
+				// Mandate path is under plugin/studios/.../discovery — we
+				// don't restamp mandate hashes here because the plugin
+				// source is not part of the intent's tracked surface.
+				;(fm.discovery as Record<string, unknown>)[agent] = r
+			}
+		}
+
+		if (changed) {
+			writeFileSync(absPath, matter.stringify(parsed.content, fm))
+		}
+		return { changed, slotsRestamped }
+	} catch {
+		return { changed: false, slotsRestamped: 0 }
+	}
+}
+
+/** Re-stamp intent.md approvals' body_sha256 witnesses. */
+function restampIntentMdApprovals(absPath: string): {
+	changed: boolean
+	slotsRestamped: number
+} {
+	try {
+		const raw = readFileSync(absPath, "utf8")
+		const parsed = matter(raw)
+		const fm = parsed.data as Record<string, unknown>
+		if (!fm.approvals || typeof fm.approvals !== "object") {
+			return { changed: false, slotsRestamped: 0 }
+		}
+		let changed = false
+		let slotsRestamped = 0
+		const newSha = bodySha256(absPath)
+		for (const [role, record] of Object.entries(
+			fm.approvals as Record<string, unknown>,
+		)) {
+			if (record === null || typeof record !== "object") continue
+			const r = record as Record<string, unknown>
+			if (typeof r.at !== "string" || r.at.length === 0) continue
+			if (typeof r.body_sha256 !== "string") continue
+			if (r.body_sha256 !== newSha) {
+				r.body_sha256 = newSha
+				changed = true
+				slotsRestamped++
+			}
+			;(fm.approvals as Record<string, unknown>)[role] = r
+		}
+		if (changed) {
+			writeFileSync(absPath, matter.stringify(parsed.content, fm))
+		}
+		return { changed, slotsRestamped }
+	} catch {
+		return { changed: false, slotsRestamped: 0 }
 	}
 }
 
@@ -408,6 +657,14 @@ export default defineTool({
 			stageToUpdates.set(baselineStage, group)
 		}
 
+		// Restamp v4 drift-sweep witnesses for the listed paths BEFORE
+		// the baseline.json writes. The witness re-stamp closes the
+		// drift-sweep loop in one call: after this returns, the cursor's
+		// Track C compares the witness against current content and finds
+		// no mismatch, so it stops emitting `drift_detected` for the
+		// listed paths.
+		const witnessResult = restampWitnessesForPaths(intentDir, paths)
+
 		// Write each stage's baseline.
 		for (const [stage, updates] of stageToUpdates.entries()) {
 			const baseline: Baseline = readBaseline(intentDir, stage) ?? {
@@ -464,6 +721,8 @@ export default defineTool({
 			baselines_created,
 			baselines_skipped_existing,
 			tracking_classes: tracking_class_counts,
+			witnesses_restamped: witnessResult.slots_restamped,
+			units_touched_by_witness_restamp: witnessResult.units_touched,
 		}
 		if (driftDisabled) {
 			result.drift_disabled_warning =

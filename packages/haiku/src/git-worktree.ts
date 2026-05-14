@@ -31,7 +31,14 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { hasV3CruftInIntent } from "./orchestrator/migrations/v0-to-v4.js"
+// Side-effect import: registers the v0→v4 migrator edge with
+// migrate-registry. Without this, `migrateIntent("0", "4.0.0")` from
+// the post-merge sweep would throw "no migration path."
+import "./orchestrator/migrations/v0-to-v4.js"
+import { migrateIntent } from "./orchestrator/migrate-registry.js"
 import { isGitRepo, primaryRepoRoot } from "./state-tools.js"
+import { emitTelemetry } from "./telemetry.js"
 
 /** Default cap for git network ops (fetch / push / ls-remote). Without
  *  a timeout, an unresponsive remote, an SSH-key prompt, or an HTTPS-auth
@@ -1868,10 +1875,53 @@ export function mergeStageBranchIntoMain(
 			}
 		}
 
-		let mergeOutcome: { conflictFiles: string[] }
+		// Post-merge migration sweep, run in the same worktree as the
+		// merge so the rewritten files land on the right branch. A stage
+		// merge into intent main can bring back v3-shape frontmatter
+		// from main (if the intent migration happened on the stage
+		// branch but main was on a pre-migration commit), even when
+		// intent.md itself is already v4. Without this sweep, the v3
+		// cruft sits on intent main until the next `haiku_run_next`
+		// tick notices it via the `hasV3CruftInIntent` gate in
+		// run-tick.ts. Inline cleanup keeps the post-merge tree clean.
+		//
+		// The migrator is idempotent on already-v4 files (key-presence
+		// detection on v3-only fields, no false positives on v4 fields
+		// that share v3 vocabulary), so running it unconditionally is
+		// safe — but we still gate on `hasV3CruftInIntent` to avoid the
+		// rewrite churn on clean trees.
+		const mergeAndMigrate = (
+			cwd?: string,
+		): {
+			conflictFiles: string[]
+			postMergeMigration: { migrated: boolean; unitsMigrated: number }
+		} => {
+			const outcome = mergeInTree(cwd)
+			if (outcome.conflictFiles.length > 0) {
+				return {
+					conflictFiles: outcome.conflictFiles,
+					postMergeMigration: { migrated: false, unitsMigrated: 0 },
+				}
+			}
+			let postMergeMigration = { migrated: false, unitsMigrated: 0 }
+			try {
+				postMergeMigration = runPostMergeMigrationAt(slug, cwd)
+			} catch (err) {
+				// Re-migration is best-effort — never block a clean merge
+				// on it. The next tick's run-tick.ts will pick up any
+				// cruft via the same `hasV3CruftInIntent` gate.
+				emitMigrationError(slug, err)
+			}
+			return { conflictFiles: [], postMergeMigration }
+		}
+
+		let mergeOutcome: {
+			conflictFiles: string[]
+			postMergeMigration: { migrated: boolean; unitsMigrated: number }
+		}
 		if (current === mainBranch) {
 			// Primary already on the target. Merge here.
-			mergeOutcome = mergeInTree()
+			mergeOutcome = mergeAndMigrate()
 		} else if (current === stageBranch) {
 			// Primary on the stage branch — the steady-state position for
 			// in-progress stage work. Switch primary to intent-main, then merge.
@@ -1890,14 +1940,14 @@ export function mergeStageBranchIntoMain(
 					message: `cannot switch primary worktree from '${stageBranch}' to '${mainBranch}' for stage merge: ${raw}`,
 				}
 			}
-			mergeOutcome = mergeInTree()
+			mergeOutcome = mergeAndMigrate()
 		} else {
 			// Primary on something else (foreign branch, mainline, etc.) —
 			// don't disturb it. Prefer an existing worktree on
 			// `mainBranch` (handles the "user has intent main checked out
 			// in their own worktree" case); fall back to a temp worktree.
 			mergeOutcome = withWorktreeOnBranch(mainBranch, (tmpPath) =>
-				mergeInTree(tmpPath),
+				mergeAndMigrate(tmpPath),
 			)
 		}
 
@@ -1910,6 +1960,13 @@ export function mergeStageBranchIntoMain(
 			}
 		}
 
+		if (mergeOutcome.postMergeMigration.migrated) {
+			return {
+				success: true,
+				message: `merged ${stageBranch} → ${mainBranch}; post-merge re-migration cleaned up v3-shape frontmatter on ${mergeOutcome.postMergeMigration.unitsMigrated} unit(s) brought back through the merge`,
+			}
+		}
+
 		return {
 			success: true,
 			message: `merged ${stageBranch} → ${mainBranch}`,
@@ -1919,6 +1976,81 @@ export function mergeStageBranchIntoMain(
 			success: false,
 			message: err instanceof Error ? err.message : String(err),
 		}
+	}
+}
+
+/** Post-merge sweep: if `hasV3CruftInIntent` returns true for the intent
+ *  in the merge worktree, force-re-run the v0→v4 migrator on the merged
+ *  tree. Returns `{ migrated: false, unitsMigrated: 0 }` on a clean
+ *  tree.
+ *
+ *  When `cwd` is provided (the merge happened in a temp worktree or a
+ *  user worktree), the migrator runs against that worktree's intent
+ *  dir and commits there. When `cwd` is undefined, falls back to the
+ *  primary repo root. This is load-bearing: the merge target branch
+ *  is checked out in `cwd`, not necessarily in the primary worktree,
+ *  so running the migrator on the primary root would rewrite the
+ *  wrong branch's files. */
+function runPostMergeMigrationAt(
+	slug: string,
+	cwd?: string,
+): {
+	migrated: boolean
+	unitsMigrated: number
+} {
+	const root = cwd ?? primaryRepoRoot()
+	const intentDirAbs = join(root, ".haiku", "intents", slug)
+	if (!existsSync(intentDirAbs)) {
+		return { migrated: false, unitsMigrated: 0 }
+	}
+	if (!hasV3CruftInIntent(intentDirAbs)) {
+		return { migrated: false, unitsMigrated: 0 }
+	}
+	const result = migrateIntent(
+		{ intentDir: intentDirAbs, repoRoot: root },
+		"0",
+		"4.0.0",
+	)
+	// Commit the migrator's writes so the post-merge tree on intent main
+	// is clean. Without a commit, the rewritten files sit as a dirty
+	// working tree on top of the merge commit, and the next checkout
+	// (e.g. back to stage branch for fix loop) would have to deal with
+	// "would be overwritten by checkout" errors.
+	if (result.steps > 0) {
+		try {
+			const cwdArgs = cwd ? ["-C", cwd] : []
+			run(["git", ...cwdArgs, "add", "-A"])
+			run([
+				"git",
+				...cwdArgs,
+				"commit",
+				"-m",
+				`haiku: post-merge v3→v4 cleanup for ${slug}`,
+				"--allow-empty",
+			])
+		} catch {
+			// Best effort. If the commit fails (e.g. no changes after
+			// the migrator no-op'd everything), that's fine — the tree
+			// is already in the right shape.
+		}
+	}
+	return {
+		migrated: result.steps > 0,
+		unitsMigrated: result.details.units_migrated,
+	}
+}
+
+/** Surface a migration error without throwing. Used by the post-merge
+ *  re-migration path so a malformed-fm crash never breaks the merge.
+ *  Routes to the same telemetry sink as the run-tick migration path. */
+function emitMigrationError(slug: string, err: unknown): void {
+	try {
+		emitTelemetry("haiku.post_merge_migrate.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	} catch {
+		// Telemetry sink unavailable — swallow.
 	}
 }
 

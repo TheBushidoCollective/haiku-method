@@ -122,10 +122,13 @@ describe("ReviewPage — responsive parity", () => {
 			</ApiClientProvider>,
 		)
 		// Wait for the feedback list to populate — look for the first
-		// PENDING feedback's title (the default filter shows pending
-		// only, so non-pending fixture items are hidden).
+		// PENDING human-authored feedback's title. Default filter shows
+		// pending only AND hides agent-authored items unless escalated
+		// (task #32 sidebar toggle defaults to off), so we anchor parity
+		// on a human-authored fixture item.
 		const firstPendingTitle =
-			items.find((i) => i.status === "pending")?.title ?? items[0].title
+			items.find((i) => i.status === "pending" && i.author_type === "human")
+				?.title ?? items[0].title
 		await waitFor(() => {
 			expect(screen.getAllByText(firstPendingTitle).length).toBeGreaterThan(0)
 		})
@@ -150,7 +153,13 @@ describe("ReviewPage — responsive parity", () => {
 		// that the same pending set renders on both branches — desktop
 		// shows it inside the sidebar, mobile shows it inside the sheet
 		// (which renders even when closed for hidden-dialog semantics).
-		const pendingItems = items.filter((i) => i.status === "pending")
+		// Parity check uses only the items the sidebar actually surfaces
+		// under the default filter (human-authored or escalated).
+		const pendingItems = items.filter(
+			(i) =>
+				i.status === "pending" &&
+				(i.author_type === "human" || i.author_type === "system"),
+		)
 		expect(desktop.length).toBeGreaterThanOrEqual(pendingItems.length)
 		expect(mobile.length).toBeGreaterThanOrEqual(pendingItems.length)
 

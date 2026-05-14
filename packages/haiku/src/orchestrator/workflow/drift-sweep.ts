@@ -401,21 +401,66 @@ export function runDriftSweep(args: {
 		}
 	}
 
-	// Dedup against open drift FBs by source_ref. Once an agent files
-	// an FB for a drift event, we suppress re-emission until the FB
-	// closes — otherwise Track C (drift) would always win over Track B
-	// (the fix loop) and the loop could never complete.
-	const filedRefs = collectOpenDriftSourceRefs(args.intentDir)
+	// Dedup against open drift FBs. Once an agent files an FB for a
+	// drift event, we suppress re-emission until the FB closes —
+	// otherwise Track C (drift) would always win over Track B (the fix
+	// loop) and the loop could never complete.
+	//
+	// Two-layer dedup:
+	//   1. EXACT source_ref match — `drift:<kind>:<file>` against the
+	//      FB's `source_ref` frontmatter. The fast path when the agent
+	//      followed the drift_detected prompt's instructions verbatim.
+	//   2. PATH-based fallback — any open drift FB whose source_ref or
+	//      body mentions the event's file path. Catches the case where
+	//      the agent filed an FB but the source_ref shape drifted
+	//      (different kind classification, missing `drift:` prefix,
+	//      hand-typed source_ref, etc.). Without this, a single file
+	//      could re-emit drift_detected on every tick despite an open
+	//      FB, because the dedup key didn't quite match. Observed in
+	//      production 2026-05-12: drift on `SEMANTIC-TOKENS.md` fired
+	//      12 times in a row even though the agent had already filed an
+	//      FB about it.
+	const filed = collectOpenDriftFbDedup(args.intentDir)
 	const filtered = events.filter((e) => {
 		const ref = `drift:${e.kind}:${e.file}`
-		return !filedRefs.has(ref)
+		if (filed.refs.has(ref)) return false
+		if (filed.paths.has(e.file)) return false
+		// File path is sometimes recorded as basename or as a
+		// stage-relative path. Match on basename as a final fallback —
+		// any open drift FB whose source_ref or body mentions the file's
+		// basename is treated as "agent already knows about this drift."
+		const basename = e.file.split("/").pop() ?? ""
+		if (basename && filed.basenames.has(basename)) return false
+		return true
 	})
 
 	return { events: filtered, scanned, skipped }
 }
 
-function collectOpenDriftSourceRefs(intentDir: string): Set<string> {
+/** Open-drift-FB dedup index. Built by walking every feedback dir in
+ *  the intent and collecting three views of every open FB with
+ *  `origin: "drift"`:
+ *
+ *  - `refs` — the literal `source_ref` value (e.g. `drift:spec:foo.md`).
+ *    Fast exact match for FBs the agent filed via the drift_detected
+ *    prompt's instructions verbatim.
+ *  - `paths` — the file path extracted from `source_ref` (third segment
+ *    after `drift:<kind>:`). Catches FBs where the kind drifted but the
+ *    file matches.
+ *  - `basenames` — basename of every collected path AND every path-like
+ *    token in the FB body. Final fallback for FBs whose source_ref shape
+ *    is unrecognised but the file is mentioned in the body.
+ *
+ *  Closed FBs (`closed_at` set) are ignored — once closure ships, the
+ *  drift loop is allowed to re-arm on the same file. */
+function collectOpenDriftFbDedup(intentDir: string): {
+	refs: Set<string>
+	paths: Set<string>
+	basenames: Set<string>
+} {
 	const refs = new Set<string>()
+	const paths = new Set<string>()
+	const basenames = new Set<string>()
 	const fbDirs: string[] = []
 	const stagesDir = join(intentDir, "stages")
 	if (existsSync(stagesDir)) {
@@ -429,13 +474,42 @@ function collectOpenDriftSourceRefs(intentDir: string): Set<string> {
 		if (!existsSync(dir)) continue
 		for (const f of readdirSync(dir)) {
 			if (!f.endsWith(".md")) continue
-			const fm = readFm(join(dir, f))
+			const fbPath = join(dir, f)
+			const fm = readFm(fbPath)
 			if (!fm) continue
 			if (fm.origin !== "drift") continue
 			if (typeof fm.closed_at === "string" && fm.closed_at.length > 0) continue
 			const ref = fm.source_ref
-			if (typeof ref === "string" && ref.length > 0) refs.add(ref)
+			if (typeof ref === "string" && ref.length > 0) {
+				refs.add(ref)
+				// Extract file path from `drift:<kind>:<file>`. We allow
+				// kind to be anything (or empty); the path is whatever
+				// follows the second colon.
+				const m = ref.match(/^drift:[^:]*:(.+)$/)
+				if (m?.[1]) {
+					const filePath = m[1]
+					paths.add(filePath)
+					const base = filePath.split("/").pop() ?? ""
+					if (base) basenames.add(base)
+				}
+			}
+			// Body scan: any token that looks like a basename mentioned
+			// in the FB body counts as "agent acknowledged this file."
+			// Cheap regex over file extensions we care about — markdown
+			// outputs and common source files. This is a fallback only;
+			// the source_ref path above is the primary signal.
+			try {
+				const raw = readFileSync(fbPath, "utf8")
+				const body = matter(raw).content
+				for (const match of body.matchAll(
+					/[\w.-]+\.(?:md|mdx|markdown|tsx?|jsx?|css|scss|json|ya?ml)/g,
+				)) {
+					basenames.add(match[0])
+				}
+			} catch {
+				// FB body parse failure — skip body scan, keep refs/paths.
+			}
 		}
 	}
-	return refs
+	return { refs, paths, basenames }
 }

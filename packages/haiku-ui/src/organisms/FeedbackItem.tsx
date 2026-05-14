@@ -42,6 +42,15 @@ import {
 } from "../atoms/feedback-tokens"
 import type { FeedbackItemData } from "../types"
 import { AttachmentLightbox } from "./AttachmentLightbox"
+import { FeedbackExpandedPanel } from "./FeedbackExpandedPanel"
+
+/** Inline-preview budget. Bodies longer than this get truncated in the
+ *  expanded card, with a "Read more" affordance opening the slide-over
+ *  reading panel. Tuned to the narrow sidebar column width — long
+ *  findings are unreadable inline without truncation (FB-20).
+ *  Conservative on purpose: better to show the affordance than to bury
+ *  the user in wall-of-text. */
+const INLINE_PREVIEW_BUDGET = 280
 
 const RESOLUTION_LABELS: Record<
 	"question" | "inline_fix" | "stage_revisit",
@@ -79,9 +88,14 @@ const RESOLUTION_LABELS: Record<
 function FeedbackBody({
 	title,
 	body,
+	previewText,
 }: {
 	title: string
 	body: string
+	/** When provided, the truncated preview text is rendered as a plain
+	 *  string instead of the full markdown body. The "Read more" button
+	 *  in `FeedbackItem` opens a slide-over with the full body. */
+	previewText?: string
 }): React.ReactElement {
 	const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(
 		null,
@@ -92,6 +106,18 @@ function FeedbackBody({
 		e.preventDefault()
 		setLightbox({ src: target.src, alt: target.alt || "Attachment" })
 	}, [])
+	// Preview path: render the truncated string in a paragraph so the
+	// sidebar column stays scannable. Avoid the full markdown pipeline
+	// (no code blocks, no headings, no images) — those routinely blow
+	// past the narrow column and waste vertical real estate. The user
+	// gets the rich render in the slide-over.
+	if (typeof previewText === "string") {
+		return (
+			<p className="text-xs text-stone-700 dark:text-stone-300 [overflow-wrap:anywhere]">
+				{previewText}
+			</p>
+		)
+	}
 	return (
 		<>
 			{/* biome-ignore lint/a11y/noStaticElementInteractions: click delegation on the markdown body catches img clicks; each img already has alt text, and the lightbox trigger is accessible via the image's focusable wrapping. */}
@@ -120,6 +146,29 @@ function FeedbackBody({
 			)}
 		</>
 	)
+}
+
+/** Compute a preview string from a markdown body. Strips obvious
+ *  markdown noise (heading markers, code-fence markers) and collapses
+ *  whitespace so the truncated preview reads as plain prose. */
+function buildPreviewText(body: string): {
+	preview: string
+	truncated: boolean
+} {
+	const cleaned = body
+		.replace(/```[\s\S]*?```/g, " [code] ")
+		.replace(/^#{1,6}\s+/gm, "")
+		.replace(/[*_`~]+/g, "")
+		.replace(/\s+/g, " ")
+		.trim()
+	if (cleaned.length <= INLINE_PREVIEW_BUDGET) {
+		return { preview: cleaned, truncated: false }
+	}
+	// Trim back to a word boundary so the preview doesn't cut mid-word.
+	const sliced = cleaned.slice(0, INLINE_PREVIEW_BUDGET)
+	const lastSpace = sliced.lastIndexOf(" ")
+	const safe = lastSpace > INLINE_PREVIEW_BUDGET - 60 ? sliced.slice(0, lastSpace) : sliced
+	return { preview: `${safe}…`, truncated: true }
 }
 
 export interface FeedbackItemProps {
@@ -197,11 +246,19 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 		forwardedRef,
 	): React.ReactElement {
 		const localCardRef = useRef<HTMLDivElement | null>(null)
+		const readMoreBtnRef = useRef<HTMLButtonElement | null>(null)
 		const previousStatusRef = useRef<FeedbackStatus>(item.status)
 		const [replyOpen, setReplyOpen] = useState(false)
 		const [replyText, setReplyText] = useState("")
 		const [replySubmitting, setReplySubmitting] = useState(false)
 		const [replyError, setReplyError] = useState<string | null>(null)
+		const [expandedPanelOpen, setExpandedPanelOpen] = useState(false)
+		// Build the preview lazily so we don't re-walk the body on every
+		// render. Body content is immutable per FB read.
+		const { preview, truncated } = useMemo(
+			() => buildPreviewText(item.body),
+			[item.body],
+		)
 		// Tracks whether focus was inside the card at the moment the user
 		// clicked an action button. The click handler updates this before
 		// React re-renders (which may unmount the focused button) so the
@@ -320,8 +377,16 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 			.filter(Boolean)
 			.join(" ")
 
+		const handleExpandedClose = () => {
+			setExpandedPanelOpen(false)
+			// Restore focus to the trigger so keyboard nav continues from
+			// where it left off.
+			readMoreBtnRef.current?.focus()
+		}
+
 		return (
-			// biome-ignore lint/a11y/useSemanticElements: a native <button> cannot wrap the nested action buttons this card contains (invalid HTML). The disclosure pattern here uses role=button on the card root intentionally.
+			<>
+			{/* biome-ignore lint/a11y/useSemanticElements: a native <button> cannot wrap the nested action buttons this card contains (invalid HTML). The disclosure pattern here uses role=button on the card root intentionally. */}
 			<div
 				ref={setCardRef}
 				data-testid="feedback-item"
@@ -388,8 +453,40 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 				{isExpanded && (
 					<div className="mt-2">
 						<div className="text-xs text-stone-700 dark:text-stone-300 feedback-markdown prose prose-stone prose-sm dark:prose-invert max-w-none">
-							<FeedbackBody title={item.title} body={item.body} />
+							<FeedbackBody
+								title={item.title}
+								body={item.body}
+								previewText={truncated ? preview : undefined}
+							/>
 						</div>
+						{truncated && (
+							<button
+								ref={readMoreBtnRef}
+								type="button"
+								data-action="read-more"
+								data-testid={`feedback-read-more-${item.feedback_id}`}
+								onClick={(e) => {
+									e.stopPropagation()
+									setExpandedPanelOpen(true)
+								}}
+								onKeyDown={(e) => {
+									// Card root handles Enter/Space as the
+									// disclosure toggle. Stop those keys here so
+									// activating Read more doesn't also collapse
+									// the card underneath. The native click
+									// handler still fires the open.
+									if (e.key === "Enter" || e.key === " ") {
+										e.stopPropagation()
+									}
+								}}
+								aria-label={`Read full body of feedback ${item.feedback_id}`}
+								aria-expanded={expandedPanelOpen}
+								aria-haspopup="dialog"
+								className={`${focusRingCompactClass} mt-1 inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900 dark:text-teal-400 dark:hover:text-teal-200 underline decoration-dotted underline-offset-2`}
+							>
+								Read more
+							</button>
+						)}
 						{item.closed_by && (
 							<p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
 								Closed by: {item.closed_by}
@@ -700,6 +797,15 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 					</div>
 				)}
 			</div>
+			{expandedPanelOpen && (
+				<FeedbackExpandedPanel
+					feedbackId={item.feedback_id}
+					title={item.title}
+					body={item.body}
+					onClose={handleExpandedClose}
+				/>
+			)}
+			</>
 		)
 	},
 )

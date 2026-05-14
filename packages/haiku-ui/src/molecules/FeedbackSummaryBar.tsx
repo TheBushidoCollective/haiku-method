@@ -16,6 +16,7 @@ const VISIBLE_STATUSES: ReadonlyArray<FeedbackStatus> = [
 	"pending",
 	"addressed",
 	"answered",
+	"escalated",
 	"closed",
 	"rejected",
 ]
@@ -25,6 +26,7 @@ const STATUS_LABELS: Record<FeedbackStatus, string> = {
 	fixing: "Fixing",
 	addressed: "Addressed",
 	answered: "Answered",
+	escalated: "Escalated",
 	closed: "Closed",
 	rejected: "Rejected",
 }
@@ -50,6 +52,7 @@ function countByStatus(
 		fixing: 0,
 		addressed: 0,
 		answered: 0,
+		escalated: 0,
 		closed: 0,
 		rejected: 0,
 	}

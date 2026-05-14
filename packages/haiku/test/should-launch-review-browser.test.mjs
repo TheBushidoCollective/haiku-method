@@ -147,5 +147,75 @@ test("autoOpen=true on unknown session → launch (nothing to suppress)", () => 
 	)
 })
 
+// Intent-scoped dedupe (added 2026-05-13). Each haiku_run_next tick
+// firing user_gate mints a new session_id. The per-session attach
+// check (isBrowserAttached) misses the prior session's still-alive
+// tab, so the launch fires a duplicate window. Pass the intent slug
+// and the predicate suppresses launch when ANY live session for the
+// intent exists — the SPA tab follows the intent, not the session id.
+test("intent_slug arg: live session for SAME intent on different session id → DO NOT launch", () => {
+	// A previously-attached session (heartbeat fresh) for intent
+	// "shared-intent". Then a NEW session for the same intent comes
+	// in. shouldLaunchReviewBrowser is asked about the new session id
+	// — its own attach status is false (no heartbeat ever recorded),
+	// but the older session for the same intent is still alive. With
+	// the intentSlug arg, we suppress the launch.
+	const older = createSession({
+		intent_dir: "/tmp/no-such-dir",
+		intent_slug: "shared-intent",
+		target: "test",
+	})
+	const newer = createSession({
+		intent_dir: "/tmp/no-such-dir",
+		intent_slug: "shared-intent",
+		target: "test",
+	})
+	try {
+		recordHeartbeat(older.session_id) // older tab is live
+		// Without intentSlug: the predicate doesn't know about the
+		// other live session and would launch a duplicate tab.
+		assert.strictEqual(
+			shouldLaunchReviewBrowser(
+				true,
+				"https://example.test",
+				newer.session_id,
+			),
+			true,
+			"without intent slug, no cross-session dedupe",
+		)
+		// With intentSlug: predicate finds the live older session for
+		// the same intent → suppresses the launch.
+		assert.strictEqual(
+			shouldLaunchReviewBrowser(
+				true,
+				"https://example.test",
+				newer.session_id,
+				"shared-intent",
+			),
+			false,
+			"intent slug dedupe: an existing live SPA tab on the same intent must suppress the launch",
+		)
+	} finally {
+		deleteSession(older.session_id)
+		deleteSession(newer.session_id)
+	}
+})
+
+test("intent_slug arg: no live session for intent → launch", () => {
+	// No sessions for the intent at all. The predicate should still
+	// say "launch" — there's no tab to refresh.
+	const result = shouldLaunchReviewBrowser(
+		true,
+		"https://example.test",
+		"sess-does-not-exist",
+		"orphan-intent",
+	)
+	assert.strictEqual(
+		result,
+		true,
+		"intent slug present but no live session: launch as normal",
+	)
+})
+
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed > 0 ? 1 : 0)

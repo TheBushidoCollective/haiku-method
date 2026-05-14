@@ -2,7 +2,7 @@
 
 exports[`FeedbackOriginIcon — state matrix > renders every (origin × label-visibility) cell (snapshot) 1`] = `
 <div
-  data-token-hash="fa9f004f38d5ccf1"
+  data-token-hash="27cdf90208a68e61"
 >
   <div
     data-cell="with-label-adversarial-review"

@@ -117,10 +117,16 @@ describe("ReviewPage — status-change announcement", () => {
 			</ApiClientProvider>,
 		)
 
-		// Expand the first pending item — its body + action buttons are inside
-		// the disclosure. FB-01 is the first pending item in the fixture.
-		const firstPendingItem = items.find((i) => i.status === "pending")
-		if (!firstPendingItem) throw new Error("fixture missing pending item")
+		// Expand the first pending human-authored item — its body + action
+		// buttons are inside the disclosure. The FB sidebar's default
+		// agent-filter (task #32) hides agent-authored items unless
+		// escalated; the test asserts against a human-authored fixture
+		// item so the filter doesn't suppress it.
+		const firstPendingItem = items.find(
+			(i) => i.status === "pending" && i.author_type === "human",
+		)
+		if (!firstPendingItem)
+			throw new Error("fixture missing pending human-authored item")
 
 		// Wait for the list to populate.
 		await waitFor(() => {

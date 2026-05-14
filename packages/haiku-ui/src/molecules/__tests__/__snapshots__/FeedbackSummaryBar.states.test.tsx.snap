@@ -2,7 +2,7 @@
 
 exports[`FeedbackSummaryBar — state matrix > renders (active filter × status) + empty cells (snapshot) 1`] = `
 <div
-  data-token-hash="fa9f004f38d5ccf1"
+  data-token-hash="27cdf90208a68e61"
 >
   <div
     data-cell="active-none"
@@ -65,6 +65,26 @@ exports[`FeedbackSummaryBar — state matrix > renders (active filter × status)
         />
         <span>
           Answered
+        </span>
+        <span
+          class="tabular-nums"
+        >
+          0
+        </span>
+      </button>
+      <button
+        aria-label="Filter by escalated (0)"
+        aria-pressed="false"
+        class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-status="escalated"
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          class="h-2 w-2 rounded-full bg-orange-600 dark:bg-orange-400"
+        />
+        <span>
+          Escalated
         </span>
         <span
           class="tabular-nums"
@@ -183,6 +203,26 @@ exports[`FeedbackSummaryBar — state matrix > renders (active filter × status)
         </span>
       </button>
       <button
+        aria-label="Filter by escalated (0)"
+        aria-pressed="false"
+        class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-status="escalated"
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          class="h-2 w-2 rounded-full bg-orange-600 dark:bg-orange-400"
+        />
+        <span>
+          Escalated
+        </span>
+        <span
+          class="tabular-nums"
+        >
+          0
+        </span>
+      </button>
+      <button
         aria-label="Filter by closed (5)"
         aria-pressed="false"
         class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
@@ -285,6 +325,26 @@ exports[`FeedbackSummaryBar — state matrix > renders (active filter × status)
         />
         <span>
           Answered
+        </span>
+        <span
+          class="tabular-nums"
+        >
+          0
+        </span>
+      </button>
+      <button
+        aria-label="Filter by escalated (0)"
+        aria-pressed="false"
+        class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-status="escalated"
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          class="h-2 w-2 rounded-full bg-orange-600 dark:bg-orange-400"
+        />
+        <span>
+          Escalated
         </span>
         <span
           class="tabular-nums"
@@ -403,6 +463,26 @@ exports[`FeedbackSummaryBar — state matrix > renders (active filter × status)
         </span>
       </button>
       <button
+        aria-label="Filter by escalated (0)"
+        aria-pressed="false"
+        class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-status="escalated"
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          class="h-2 w-2 rounded-full bg-orange-600 dark:bg-orange-400"
+        />
+        <span>
+          Escalated
+        </span>
+        <span
+          class="tabular-nums"
+        >
+          0
+        </span>
+      </button>
+      <button
         aria-label="Filter by closed (5)"
         aria-pressed="true"
         class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
@@ -505,6 +585,26 @@ exports[`FeedbackSummaryBar — state matrix > renders (active filter × status)
         />
         <span>
           Answered
+        </span>
+        <span
+          class="tabular-nums"
+        >
+          0
+        </span>
+      </button>
+      <button
+        aria-label="Filter by escalated (0)"
+        aria-pressed="false"
+        class="touch-target inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full border transition-colors border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:border-stone-300 dark:hover:border-stone-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900"
+        data-status="escalated"
+        type="button"
+      >
+        <span
+          aria-hidden="true"
+          class="h-2 w-2 rounded-full bg-orange-600 dark:bg-orange-400"
+        />
+        <span>
+          Escalated
         </span>
         <span
           class="tabular-nums"

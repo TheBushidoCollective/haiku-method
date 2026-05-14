@@ -53,7 +53,7 @@ interface ParsedPath {
  *   - `inputs` / `outputs` are path strings relative to the intent
  *     dir. They carry their own stage in the path.
  */
-function pathToReviewRoute(
+export function pathToReviewRoute(
 	path: string,
 	currentStage: string,
 ): ParsedPath | null {
@@ -128,33 +128,19 @@ function PathLink({
 	return (
 		<button
 			type="button"
-			onClick={() => {
-				if (route.kind === "units") {
-					// `units` tab + the unit name in the same URL is the
-					// canonical unit-detail surface.
-					navigate({
-						to: "/review/$sessionId/stages/$stage/$kind/$name",
-						params: {
-							sessionId: sessionId as string,
-							stage: route.stage,
-							kind: "units",
-							name: route.name,
-						},
-					})
-				} else {
-					navigate({
-						to: "/review/$sessionId/stages/$stage/$kind/$name",
-						params: {
-							sessionId: sessionId as string,
-							stage: route.stage,
-							kind: route.kind,
-							name: route.name,
-						},
-					})
-				}
-			}}
+			onClick={() =>
+				navigate({
+					to: "/review/$sessionId/stages/$stage/$kind/$name",
+					params: {
+						sessionId: sessionId as string,
+						stage: route.stage,
+						kind: route.kind,
+						name: route.name,
+					},
+				})
+			}
 			className="text-xs font-mono text-teal-700 dark:text-teal-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 rounded text-left"
-			title={`Open ${path}`}
+			aria-label={`Open ${path}`}
 		>
 			{path}
 		</button>

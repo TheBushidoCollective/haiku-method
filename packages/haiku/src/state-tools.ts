@@ -9507,7 +9507,7 @@ export function handleStateTool(
 			// caller routes through the proper workflow tool.
 			return errOut(
 				"stage_field_engine_only",
-				`Stage state.json is workflow engine-managed — agents cannot set fields directly. Stage fields are mutated by haiku_run_next ticks (start, advance phase, complete) and lifecycle tools (haiku_unit_advance_hat, haiku_feedback_advance_hat). To force a stage transition manually, use /haiku:repair or /haiku:revisit. Field '${field}' on stage '${stage}' of intent '${slug}' was not written.`,
+				`Stage state.json is workflow engine-managed — agents cannot set fields directly. Stage fields are mutated by haiku_run_next ticks (start, advance phase, complete) and lifecycle tools (haiku_unit_advance_hat, haiku_feedback_advance_hat). To force a stage transition manually, use /haiku:repair, or file a stage_revisit feedback via \`haiku_feedback({ resolution: "stage_revisit" })\` to re-open the target stage. Field '${field}' on stage '${stage}' of intent '${slug}' was not written.`,
 			)
 		}
 

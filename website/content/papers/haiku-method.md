@@ -483,7 +483,7 @@ User-facing commands are intentionally thin — they're entry points, not logic.
 - **`/haiku:pickup`** resumes an active intent — calling `haiku_run_next` to derive the cursor position and surface the next action.
 - **`/haiku:autopilot`** runs an intent end-to-end on autopilot — same workflow, trimmed review/approval surface, no human gates.
 - **`/haiku:quick`** runs a single-stage intent for small targeted work.
-- **`/haiku:revisit`**, **`/haiku:change-mode`**, **`/haiku:reflect`**, and a handful of operational commands (dashboard, capacity, archive, etc.) round out the surface.
+- **`/haiku:change-mode`**, **`/haiku:reflect`**, and a handful of operational commands (dashboard, capacity, archive, etc.) round out the surface. To rewind to an earlier stage there is no separate slash command — file a stage_revisit feedback at the target stage via `haiku_feedback({ stage: "<target>", resolution: "stage_revisit" })` and call `haiku_run_next`. The cursor's Track B walks open feedback by file location and reroutes through the target stage; the engine's only verb is still `haiku_run_next`.
 
 The agent's contract is: receive an action from `haiku_run_next`, do what it says, call `haiku_run_next` again — unless the action is terminal. Forward motion has exactly one verb. The cursor model that drives those tick decisions is documented in `plugin/studios/ARCHITECTURE.md` §5.
 

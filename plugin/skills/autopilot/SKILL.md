@@ -32,4 +32,4 @@ Run the full H·AI·K·U lifecycle autonomously from description to delivery. Au
 ## Combined with other skills
 
 - `/haiku:quick` + autopilot: set `stages: [<one>]` AND `mode: autopilot`. Single-stage, no pauses except external/completion gates.
-- `/haiku:revisit` while in autopilot: the revisit action itself pauses autopilot until the user confirms the revisit target.
+- Filing a stage_revisit feedback while in autopilot: the resulting feedback walk pauses autopilot at the target stage until the user confirms the corrective work.

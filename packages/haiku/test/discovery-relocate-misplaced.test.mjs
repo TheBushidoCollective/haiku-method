@@ -84,7 +84,7 @@ async function runDecompose({ tmp, intentDir, slug, stage }) {
 	try {
 		process.chdir(tmp)
 		const { buildElaboratePromptBody } = await import(
-			`${REPO_ROOT}/packages/haiku/src/orchestrator/prompts/decompose.ts`
+			`${REPO_ROOT}/packages/haiku/src/orchestrator/prompts/stage/elaborate/decompose/index.ts`
 		)
 		// Minimal action shape the prompt builder needs.
 		const action = { stage, elaboration: "collaborative", iteration: 1 }

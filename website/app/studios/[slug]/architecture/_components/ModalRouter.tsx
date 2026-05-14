@@ -325,7 +325,7 @@ export function ModalRouter({
 			return (
 				<Modal
 					open
-					title="↺ /haiku:revisit"
+					title="↺ Stage revisit"
 					subtitle={`${stageName} · go-back semantics`}
 					onClose={onClose}
 				>
@@ -556,7 +556,7 @@ export function ModalRouter({
 								<HtmlBlock
 									className="prose"
 									html={renderInline(
-										"**Track A — intent.** Pre-stage: `elaborate_review` (no `stage`) when intent.md lacks `verified_at` (non-autopilot, fresh intent). On the active stage, walk: `elaborate` (conversation gate) → `elaborate_review` (substance verifier) → `discovery_required` → `decompose` → `start_unit_hat` → `dispatch_review` / `user_gate { spec }` → `dispatch_quality_gates` / `dispatch_approval` / `user_gate { approval }` → `complete_stage`.",
+										"**Track A — intent.** Pre-stage: `elaborate_loop` (no `stage`, `signals_unmet: [{signal: \"verify_conversation\"}]`) when intent.md lacks `verified_at` (non-autopilot, fresh intent). On the active stage, walk: `elaborate_loop` (single state carrying every unmet completion signal — `conversation` / `verify_conversation` / `discovery` / `decompose` / `verify_decompose`) → `start_unit_hat` → `dispatch_review` / `user_gate { spec }` → `dispatch_quality_gates` / `dispatch_approval` / `user_gate { approval }` → `complete_stage`. The loop self-cycles as each signal flips on disk; the verifier signals carry `verifier_nonces.<signal>` for the matching seal tool.",
 									)}
 								/>
 							</li>
@@ -584,7 +584,7 @@ export function ModalRouter({
 						<HtmlBlock
 							className="prose"
 							html={renderInline(
-								"The cursor emits exactly these `kind` values: `select_studio`, `select_mode`, `select_stage`, `drift_detected`, `start_feedback_hat`, `close_feedback`, `discovery_required`, `elaborate`, `elaborate_review`, `decompose`, `start_unit_hat`, `dispatch_review`, `dispatch_quality_gates`, `dispatch_approval`, `user_gate { spec | approval }`, `complete_stage`, `intent_review`, `seal_intent`, `sealed`. (Pre-2026-05-08 the cursor also had `design_direction_required` / `_complete` / `_uploaded` and `clarify_required`; those collapsed into the discovery-agent model — discovery templates with `tool:` cover the human-input gates now.)",
+								"The cursor emits exactly these `kind` values: `select_studio`, `select_mode`, `select_stage`, `drift_detected`, `start_feedback_hat`, `feedback_question`, `close_feedback`, `elaborate_loop`, `start_unit_hat`, `dispatch_review`, `dispatch_quality_gates`, `dispatch_approval`, `user_gate { spec | approval }`, `complete_stage`, `intent_review`, `seal_intent`, `sealed`. (Pre-2026-05-14 the cursor had five separate elaborate-loop kinds — `elaborate` / `elaborate_review` / `discovery_required` / `decompose` / `decompose_review` — collapsed under GAPS § 1a / Option A into the single `elaborate_loop` action whose `signals_unmet[]` enumerates which signals are currently unmet. Pre-2026-05-08 the cursor also had `design_direction_required` / `_complete` / `_uploaded` and `clarify_required`; those collapsed into the discovery-agent model.)",
 							)}
 						/>
 					</div>
@@ -706,6 +706,153 @@ export function ModalRouter({
 							className="prose"
 							html={renderInline(
 								'`plugin/studios/ARCHITECTURE.md` §5.2–§5.4 (cursor model, properties, per-stage walk). Source: `packages/haiku/src/orchestrator/workflow/cursor.ts`.',
+							)}
+						/>
+					</div>
+				</Modal>
+			)
+		case "discoveryQuestionRouting":
+			return (
+				<Modal
+					open
+					title="↘ discovery → user-decidable fork"
+					subtitle="how a discovery subagent routes a fork through Track B"
+					onClose={onClose}
+				>
+					<div className="modal-section">
+						<h3>summary</h3>
+						<HtmlBlock
+							className="prose"
+							html={renderInline(
+								"When a discovery subagent surfaces a user-decidable fork (e.g. 'auth library narrowed to OAuth2 vs session cookies, which?') instead of guessing, it files an FB at elaborate scope and lets the next tick route the question through the main agent.",
+							)}
+						/>
+					</div>
+					<div className="modal-section">
+						<h3>the FB the subagent files</h3>
+						<HtmlBlock
+							className="prose"
+							html={renderInline(
+								'`haiku_feedback({ origin: "discovery", resolution: "question", stage: "<current>", source_ref: "<template-name>", body: "<question + what\'s at stake>" })` — the FB lives at the stage\'s scope alongside the elaboration artifact.',
+							)}
+						/>
+					</div>
+					<div className="modal-section">
+						<h3>routing on the next tick</h3>
+						<ol className="writes-list">
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"Pre-tick Track B walks the open FB and returns `feedback_question` (preempts `start_feedback_hat` because the resolution is `question`, not `inline_fix`).",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"The main agent reads the FB body, surfaces the question to the user via `ask_user_chat` (or `ask_user_visual_question` for option-shaped choices).",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"The agent writes the answer back on the FB body via `haiku_feedback_write` (the body becomes the canonical decision record), then closes the FB via `haiku_feedback_update { status: \"closed\" }`.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"Call `haiku_run_next` — the elaborate-loop's discovery-question completion signal flips, and the cursor falls through to whichever signal is still unmet (or out of the loop entirely).",
+									)}
+								/>
+							</li>
+						</ol>
+					</div>
+					<div className="modal-section">
+						<h3>why this exists</h3>
+						<HtmlBlock
+							className="prose"
+							html={renderInline(
+								"Discovery subagents run in parallel, in their own contexts — they can't enter the main conversation directly. The FB is the structured-message bus that bridges subagent → cursor → main agent → user → main agent → close. Without it, a subagent that hits a fork mid-research would either block (bad) or guess (worse).",
+							)}
+						/>
+					</div>
+				</Modal>
+			)
+		case "verifyDecomposeFlow":
+			return (
+				<Modal
+					open
+					title="⑤ verify_decompose signal (coverage verifier)"
+					subtitle="5th elaborate-loop signal · GAPS § 1a (2026-05-14)"
+					onClose={onClose}
+				>
+					<div className="modal-section">
+						<h3>summary</h3>
+						<HtmlBlock
+							className="prose"
+							html={renderInline(
+								"Once units exist on disk, the elaborate loop's 5th completion signal (`verify_decompose`) requires a verifier subagent to audit unit coverage against the captured conversation transcript before the cursor can leave elaborate. Closes the gap where an agent could write any units and call them done.",
+							)}
+						/>
+					</div>
+					<div className="modal-section">
+						<h3>flow</h3>
+						<ol className="writes-list">
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"Cursor includes `{ signal: \"verify_decompose\" }` in `signals_unmet[]` on the `elaborate_loop` action, with the seal nonce on `verifier_nonces.verify_decompose`.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"Agent dispatches the decompose-verifier subagent with the inlined verifier prompt (one-shot, fresh context).",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"Verifier reads the elaboration artifact, the intent body, the stage definition, and every unit spec. Audits whether units cover what the conversation agreed to ship.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**On pass:** verifier calls `haiku_stage_decompose_seal { intent, stage, nonce }`. The tool stamps `decompose_verified_at` on the elaboration artifact's frontmatter; the cursor advances past `decompose_review` on the next tick.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"**On fail:** verifier files feedback with `targets.invalidates: [\"decompose_complete\"]` describing the coverage gap; the cursor routes through the fix loop on the next tick to rerun decomposition.",
+									)}
+								/>
+							</li>
+						</ol>
+					</div>
+					<div className="modal-section">
+						<h3>why the nonce</h3>
+						<HtmlBlock
+							className="prose"
+							html={renderInline(
+								"The seal tool refuses to stamp without a matching nonce (`verifier_nonce_invalid` error). The cursor mints the nonce when emitting the signal and consumes it once on seal. Prevents an agent from short-circuiting the verifier by calling the seal tool directly.",
 							)}
 						/>
 					</div>

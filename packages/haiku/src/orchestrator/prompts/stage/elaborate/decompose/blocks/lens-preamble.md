@@ -1,0 +1,3 @@
+## Review-Agent Lenses (carry these while drafting)
+
+You will be reviewed against the following lenses. These are NOT a checklist to apply after drafting — a well-written unit shows the lens was applied because the spec was written with the lens in mind. Carry every lens while you write. There is no "review your work" step; if a lens wasn't internalized during drafting, no later check will save you.

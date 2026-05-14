@@ -16,7 +16,7 @@ const _origCwd = process.cwd()
 process.env.CLAUDE_PLUGIN_ROOT = `${_origCwd}/../../plugin`
 
 const { default: selectStudioPrompt } = await import(
-	"../src/orchestrator/prompts/select_studio.ts"
+	"../src/orchestrator/prompts/intent/setup/select_studio/index.ts"
 )
 
 let passed = 0

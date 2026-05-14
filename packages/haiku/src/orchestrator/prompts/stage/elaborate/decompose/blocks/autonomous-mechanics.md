@@ -1,0 +1,1 @@
+Mode: **autonomous** — elaborate independently. When you DO need user input (genuine blockers, ambiguity that the codebase can't resolve), use `AskUserQuestion` with pre-selected `options[]` — never plain-text option lists. Autonomous mode does not require `haiku_decision_record` calls; the gate only enforces decisions in collaborative mode.

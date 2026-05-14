@@ -1,0 +1,1 @@
+**Autonomy:** You are in the execution phase. Execute without asking the user to confirm per-step. Use `AskUserQuestion`/`ask_user_visual_question` only when genuinely blocked on ambiguous requirements — always with pre-populated options.

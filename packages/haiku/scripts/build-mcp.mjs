@@ -22,6 +22,8 @@ import { spawnSync } from "node:child_process"
 import { chmodSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import * as esbuild from "esbuild"
+import { inlinePromptTemplatesPlugin } from "./inline-prompt-templates.mjs"
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 const root = join(__dir, "..")
@@ -69,26 +71,35 @@ const pluginJson = JSON.parse(
 )
 const mcpVersion = pluginJson.version
 
-const args = [
-	"src/main.ts",
-	"--bundle",
-	"--platform=node",
-	"--format=esm",
-	"--tree-shaking=true",
-	"--minify",
-	"--sourcemap=external",
-	`--outfile=${outfile}`,
-	'--banner:js=import{createRequire}from"module";const require=createRequire(import.meta.url);',
-	`--define:process.env.HAIKU_SENTRY_DSN_MCP=${JSON.stringify(sentryDsn)}`,
-	`--define:process.env.HAIKU_MCP_VERSION=${JSON.stringify(mcpVersion)}`,
-]
-
-const result = spawnSync("npx", ["esbuild", ...args], {
-	cwd: root,
-	stdio: "inherit",
-})
-if (result.status !== 0) {
-	process.exit(result.status || 1)
+// Switched from the esbuild CLI (npx esbuild …) to the JS API so the
+// `inline-prompt-templates` plugin can run. The plugin rewrites every
+// `loadTemplate(import.meta.url)` call in
+// `src/orchestrator/prompts/<action>/index.ts` to a literal string of
+// the sibling `template.eta.md`, so the bundled binary never has to
+// fs-read template files at runtime.
+try {
+	await esbuild.build({
+		absWorkingDir: root,
+		entryPoints: ["src/main.ts"],
+		bundle: true,
+		platform: "node",
+		format: "esm",
+		treeShaking: true,
+		minify: true,
+		sourcemap: "external",
+		outfile,
+		banner: {
+			js: 'import{createRequire}from"module";const require=createRequire(import.meta.url);',
+		},
+		define: {
+			"process.env.HAIKU_SENTRY_DSN_MCP": JSON.stringify(sentryDsn),
+			"process.env.HAIKU_MCP_VERSION": JSON.stringify(mcpVersion),
+		},
+		plugins: [inlinePromptTemplatesPlugin],
+		logLevel: "info",
+	})
+} catch {
+	process.exit(1)
 }
 chmodSync(outfile, 0o755)
 

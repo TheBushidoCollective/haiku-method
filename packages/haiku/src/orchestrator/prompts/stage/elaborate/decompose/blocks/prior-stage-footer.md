@@ -1,0 +1,1 @@
+Do NOT limit yourself to the declared `inputs:` list when drafting units — it is the **minimum**, not the maximum. When a unit references an artifact you discovered via prior-stage enumeration, add that path to the unit's own `inputs:` frontmatter so the execution agents (one per hat) have the same context.

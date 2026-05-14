@@ -1,0 +1,3 @@
+## Elaboration Insufficient
+
+<%= message %>

@@ -129,7 +129,7 @@ export function maybeEscalate(
 
 	const reason = iter.exceeded ? "iteration_limit" : "loop_detected"
 	const message = iter.exceeded
-		? `Stage '${stage}' has exceeded ${MAX_STAGE_ITERATIONS} agent-invoked iterations (now at ${iter.count}). The autonomous loop has stopped — a human must decide whether to keep pushing, reject feedback items, split the work, or terminate the intent. To force another cycle (user-invoked, uncapped), invoke the /haiku:revisit slash command — it logs stage_revisit feedback items so the next \`haiku_run_next\` reroutes via the pre-tick gate. Or use \`haiku_feedback_reject\` to dismiss specific items, or mark the stage complete manually.`
+		? `Stage '${stage}' has exceeded ${MAX_STAGE_ITERATIONS} agent-invoked iterations (now at ${iter.count}). The autonomous loop has stopped — a human must decide whether to keep pushing, reject feedback items, split the work, or terminate the intent. To force another cycle (user-invoked, uncapped), file feedback at the target stage via \`haiku_feedback({ intent, stage: "<target-stage>", resolution: "stage_revisit", title, body })\` and call \`haiku_run_next\` — the pre-tick feedback walk reroutes through that stage. Or use \`haiku_feedback_reject\` to dismiss specific items, or mark the stage complete manually.`
 		: `Stage '${stage}' is in a loop: iteration ${iter.count}'s feedback set is the same as the previous iteration's. The agent keeps regenerating identical findings, which usually means the spec is wrong or the criteria are unreachable. A human must intervene — adjust the feedback items, relax the criteria, or terminate the intent.`
 
 	emitTelemetry("haiku.stage.escalate", {

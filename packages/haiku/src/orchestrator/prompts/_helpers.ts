@@ -401,3 +401,77 @@ export function batchDispatchDirective(
 		`4. Process items in the order listed below so re-entries after interruption are deterministic.`,
 	].join("\n")
 }
+
+/** The five completion signals that all live inside the single conceptual
+ *  "elaborate loop" cursor state. The cursor walks them first-unmet-wins
+ *  and emits ONE action per tick, but the agent is NOT restricted to that
+ *  one activity — the prompts invite concurrent progress on any signal
+ *  whose precondition is already met. See GOALS.md § "Elaboration as a
+ *  concurrent loop" and GAPS.md § "Option B" for the design rationale. */
+export type ElaborateLoopSignal =
+	| "conversation"
+	| "verify_conversation"
+	| "discovery"
+	| "decompose"
+	| "verify_decompose"
+
+/** Build the standardized "concurrent elaborate-loop activities" block
+ *  appended to every elaborate-loop prompt builder. The primary signal —
+ *  the one the cursor emitted this tick — is the only one repeated above
+ *  the block (it's the task headline). This block names the OTHER four
+ *  signals the agent may stack into the same response, with the primary
+ *  filtered out so it isn't redundantly listed as "also welcome."
+ *
+ *  Design note: the elaborate loop is one conceptual state with five
+ *  completion signals. The cursor returns first-unmet-wins per tick for
+ *  back-compat (consumers still switch on `action.kind`), but the agent's
+ *  behavior is closer to the spec's "single state, concurrent activities"
+ *  when prompts invite multi-signal progress per response. */
+export function buildConcurrentElaborateLoopBlock(
+	primary: ElaborateLoopSignal,
+	args: { slug: string; stage?: string },
+): string {
+	const { slug, stage } = args
+	const stageRef = stage ? `\`${stage}\`` : "the active stage"
+	const activities: Array<{ signal: ElaborateLoopSignal; line: string }> = [
+		{
+			signal: "conversation",
+			line: `**Capture (or extend) the conversation.** If alignment on substance for ${stageRef} is already reached, call \`haiku_stage_elaboration_record\` now — the cursor's next tick fires the substance verifier without re-prompting for conversation.`,
+		},
+		{
+			signal: "verify_conversation",
+			line: `**Dispatch the elaborate-substance verifier** if a conversation artifact exists but is unverified. Spawning the verifier in this same tick lets the next \`haiku_run_next\` advance past \`elaborate_review\` immediately.`,
+		},
+		{
+			signal: "discovery",
+			line: `**Fan out missing discovery subagents** for any \`discovery/*.md\` templates whose \`location:\` artifacts aren't on disk yet. Each subagent runs in its own isolation worktree and writes one file; the cursor's next tick skips \`discovery_required\` for every artifact already present.`,
+		},
+		{
+			signal: "decompose",
+			line: `**Draft units as scope crystallizes** via \`haiku_unit_write\`. Units written during the elaborate loop are first-class — the decompose-coverage verifier catches missing units and drift either way, so there's no penalty for landing them early.`,
+		},
+		{
+			signal: "verify_decompose",
+			line: `**Dispatch the decompose-coverage verifier** if units exist for ${stageRef} but \`decompose_verified_at\` is missing on the elaboration artifact. Stacking it onto this tick lets the next \`haiku_run_next\` advance past \`decompose_review\` immediately.`,
+		},
+	]
+
+	const concurrent = activities.filter((a) => a.signal !== primary)
+	if (concurrent.length === 0) return ""
+
+	const lines: string[] = [
+		"### Concurrent elaborate-loop activities (you may stack these into this tick)",
+		"",
+		`The elaborate loop is **one conceptual cursor state** with five completion signals (conversation captured, conversation verified, discovery artifacts present, units drafted, decompose coverage verified). The cursor emits the *first* still-unmet signal per tick — your primary task above — but you are NOT restricted to that one activity. If any of the following preconditions are met right now, addressing them in the same response collapses ticks: the next \`haiku_run_next\` re-walks the signals and skips ahead.`,
+		"",
+		"You may make progress on any of these alongside the primary task:",
+		"",
+		...concurrent.map((a) => `- ${a.line}`),
+		"",
+		`Then call \`haiku_run_next { intent: "${slug}" }\` once. The cursor re-evaluates which signal is still unmet and dispatches the next.`,
+		"",
+		"**Filing user-decision FBs.** If discovery (running or already returned) surfaced a fork the user must resolve, file `haiku_feedback { origin: \"discovery\", resolution: \"question\", … }` rather than guessing. Open `origin: discovery, resolution: question` FBs keep the elaborate loop's question-completion signal unmet, so the next tick routes Track B's `feedback_question` action and the cursor stays in this loop until the user answers.",
+	]
+
+	return lines.join("\n")
+}

@@ -1,0 +1,3 @@
+## Missing Discovery Artifacts
+
+<%= message %>

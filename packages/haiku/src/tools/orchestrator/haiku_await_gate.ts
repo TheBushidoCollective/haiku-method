@@ -683,7 +683,7 @@ export default defineTool({
 					feedback_ids: feedbackIds,
 					message: withAnnouncement(
 						`The user requested changes at intent-completion review on "${slug}": ${reviewResult.feedback || "(see annotations)"}.`,
-						`${feedbackSummary ? `${feedbackSummary.trim()} ` : ""}The intent is no longer in final review. Invoke the /haiku:revisit slash command (or log stage_revisit feedback at the target stage directly via \`haiku_feedback\` with \`resolution: "stage_revisit"\`) to re-open the relevant stage, then address the feedback and call \`haiku_run_next\` to drive back to final review.`,
+						`${feedbackSummary ? `${feedbackSummary.trim()} ` : ""}The intent is no longer in final review. Log stage_revisit feedback at the target stage via \`haiku_feedback\` with \`resolution: "stage_revisit"\` to re-open the relevant stage, then address the feedback and call \`haiku_run_next\` to drive back to final review.`,
 					),
 				}
 				return text(withInstructions(gateResult))

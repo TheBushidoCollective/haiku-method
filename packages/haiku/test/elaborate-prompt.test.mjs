@@ -26,8 +26,13 @@ process.env.CLAUDE_PLUGIN_ROOT = join(REPO_ROOT, "plugin")
 // (`prompts/elaborate.ts`) and unit-spec writing (`prompts/decompose.ts`,
 // formerly elaborate.ts). The exported `buildElaboratePromptBody`
 // stayed with the unit-spec writer, just under the new file name.
+// 2026-05-14 (GAPS § 1a → Option A): both per-signal prompt builders
+// live in their respective directories (`elaborate/`, `decompose/`,
+// etc.) and the `elaborate_loop` router composes them. The decompose
+// signal builder still exports `buildElaboratePromptBody` so this
+// test exercises the heavy elaboration body directly.
 const { buildElaboratePromptBody } = await import(
-	`${SRC}/orchestrator/prompts/decompose.ts`
+	`${SRC}/orchestrator/prompts/stage/elaborate/decompose/index.ts`
 )
 
 function setupSyntheticStudio(root, name = "synth") {

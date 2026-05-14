@@ -1,135 +1,146 @@
 // orchestrator/prompts/index.ts — Registry of per-action prompt
 // builders.
 //
-// Each per-action file under this directory exports a
-// `PromptBuilder` as its default export. The registry collects them
-// into `actionPromptBuilders` (Map<actionName, PromptBuilder>) so
-// buildRunInstructions can dispatch by name with a single lookup.
+// Builders live in scope/phase folders per `prompts/PROMPTS.md`:
 //
-// v4: 18 v3-only prompts deleted (continue_unit/_units, start_units,
-// feedback_dispatch/_triage/_revisit, integrate_fix_chains,
-// revise_unit_specs, revisited, pre_review[_waiting], spec_review,
-// awaiting_external_review, external_*, coverage_review_required,
-// output_liveness_review_required, composite_run_stage,
-// manual_change_assessment). The new cursor actions (start_unit_hat,
-// start_feedback_hat, dispatch_review, dispatch_approval,
-// dispatch_quality_gates, merge_stage, merge_intent, etc.) get their
-// own prompt files in M5.
+//   stage/<phase>/<action>/   per-stage actions (cursor Track A)
+//   intent/<phase>/<action>/  intent-scope actions (cursor Track A intent walk)
+//   feedback/<action>/        Track B (FB classification routing + fix loops)
+//   drift/<action>/           Track C (filesystem reconciliation)
+//   global/<action>/          scope-agnostic surfaces (error, complete)
+//
+// Phase names match ARCHITECTURE.md §2.1 (elaborate / execute /
+// review / approve / complete) plus stage/error/ for engine-refused
+// surfaces. The registry below maps cursor action name → builder; the
+// folder layout is for human navigation only — the engine sees a
+// flat name → builder map.
+//
+// 2026-05-14 (GAPS § 1a → Option A): the five per-signal elaborate-
+// loop kinds (`elaborate`, `elaborate_review`, `decompose`,
+// `decompose_review`, `discovery_required`) collapsed into a single
+// `elaborate_loop` action. The per-signal builders are still
+// imported by `stage/elaborate/elaborate_loop/index.ts` (the router)
+// but are NOT registered as top-level dispatch entries.
 
-// clarify_required and design_direction_* prompt builders deleted
-// 2026-05-08 — collapsed into the discovery-agent model. Studios
-// declare a discovery template with `tool:` (e.g., software/design's
-// `discovery/DESIGN-DIRECTION.md` declares `tool: pick_design_direction`)
-// and the existing `discovery_required` prompt routes the dispatch
-// through the named tool.
-import advance_phase from "./advance_phase.js"
-import advance_stage from "./advance_stage.js"
-import blocked from "./blocked.js"
-import changes_requested from "./changes_requested.js"
-import close_feedback from "./close_feedback.js"
-import complete from "./complete.js"
-import complete_stage from "./complete_stage.js"
-import dag_cycle_detected from "./dag_cycle_detected.js"
-import decompose from "./decompose.js"
-import discovery_missing from "./discovery_missing.js"
-import discovery_required from "./discovery_required.js"
-import dispatch_approval from "./dispatch_approval.js"
-import dispatch_quality_gates from "./dispatch_quality_gates.js"
-import dispatch_review from "./dispatch_review.js"
-import drift_detected from "./drift_detected.js"
-// `elaborate` was renamed to `decompose` on 2026-05-08. The new
-// `elaborate.ts` is the per-stage human-conversation gate that fires
-// before decompose; `elaborate_review.ts` is its substance verifier.
-// The legacy elaborate prompt body lives in `decompose.ts` (file
-// renamed via git mv to preserve history).
-import elaborate from "./elaborate.js"
-import elaborate_review from "./elaborate_review.js"
-import elaboration_insufficient from "./elaboration_insufficient.js"
-import error from "./error.js"
-import escalate from "./escalate.js"
-import fix_quality_gates from "./fix_quality_gates.js"
-import gate_blocked from "./gate_blocked.js"
-// gate_review prompt builder removed — under v4, the gate_review
-// action never reaches the agent. haiku_run_next prepares the session,
-// blocks on haiku_await_gate inline, and returns the post-decision
-// next action (advance_phase / advance_stage / external_review_requested
-// / changes_requested / etc.). The old prompt that told the agent to
-// "post URL + call haiku_await_gate" is dead.
-import intent_approved from "./intent_approved.js"
-import intent_complete from "./intent_complete.js"
-import intent_completion_fix from "./intent_completion_fix.js"
-import intent_completion_review from "./intent_completion_review.js"
-import intent_review from "./intent_review.js"
-import migrated from "./migrated.js"
-import outputs_missing from "./outputs_missing.js"
-import review from "./review.js"
-import review_fix from "./review_fix.js"
-import safe_intent_repair from "./safe_intent_repair.js"
-import save_wip from "./save_wip.js"
-import seal_intent from "./seal_intent.js"
-import select_studio from "./select_studio.js"
-import start_feedback_hat from "./start_feedback_hat.js"
-import start_stage from "./start_stage.js"
-import start_unit from "./start_unit.js"
-import start_unit_hat from "./start_unit_hat.js"
+// ── stage/ ────────────────────────────────────────────────────────
+import elaborate_loop from "./stage/elaborate/elaborate_loop/index.js"
+import start_unit from "./stage/execute/start_unit/index.js"
+import start_unit_hat from "./stage/execute/start_unit_hat/index.js"
+import dispatch_review from "./stage/review/dispatch_review/index.js"
+import review from "./stage/review/review/index.js"
+import dispatch_approval from "./stage/approve/dispatch_approval/index.js"
+import dispatch_quality_gates from "./stage/approve/dispatch_quality_gates/index.js"
+import user_gate from "./stage/gate/user_gate/index.js"
+import advance_phase from "./stage/complete/advance_phase/index.js"
+import advance_stage from "./stage/complete/advance_stage/index.js"
+import complete_stage from "./stage/complete/complete_stage/index.js"
+import start_stage from "./stage/start_stage/index.js"
+import blocked from "./stage/error/blocked/index.js"
+import coverage_review_required from "./stage/error/coverage_review_required/index.js"
+import dag_cycle_detected from "./stage/error/dag_cycle_detected/index.js"
+import discovery_missing from "./stage/error/discovery_missing/index.js"
+import elaboration_insufficient from "./stage/error/elaboration_insufficient/index.js"
+import escalate from "./stage/error/escalate/index.js"
+import gate_blocked from "./stage/error/gate_blocked/index.js"
+import output_liveness_review_required from "./stage/error/output_liveness_review_required/index.js"
+import outputs_missing from "./stage/error/outputs_missing/index.js"
+import save_wip from "./stage/error/save_wip/index.js"
+import unit_inputs_missing from "./stage/error/unit_inputs_missing/index.js"
+import unit_inputs_not_declared from "./stage/error/unit_inputs_not_declared/index.js"
+import unit_naming_invalid from "./stage/error/unit_naming_invalid/index.js"
+import unit_outputs_empty_iterations from "./stage/error/unit_outputs_empty_iterations/index.js"
+import unresolved_dependencies from "./stage/error/unresolved_dependencies/index.js"
+
+// ── intent/ ───────────────────────────────────────────────────────
+import migrated from "./intent/setup/migrated/index.js"
+import select_studio from "./intent/setup/select_studio/index.js"
+import intent_completion_review from "./intent/review/intent_completion_review/index.js"
+import intent_review from "./intent/review/intent_review/index.js"
+import intent_approved from "./intent/seal/intent_approved/index.js"
+import intent_complete from "./intent/seal/intent_complete/index.js"
+import seal_intent from "./intent/seal/seal_intent/index.js"
+import external_review_requested from "./intent/repair/external_review_requested/index.js"
+import revise_unit_specs from "./intent/repair/revise_unit_specs/index.js"
+import safe_intent_repair from "./intent/repair/safe_intent_repair/index.js"
+
+// ── feedback/ (Track B — single-track per GOALS § "Two loop primitives") ─
+// Fix loops are not a separate phase; they're feedback dispatch
+// against the stage's `fix_hats:` (or studio's `fix-hats:` for
+// intent-scope). Same handler, different FB origin + scope.
+import changes_requested from "./feedback/changes_requested/index.js"
+import close_feedback from "./feedback/close_feedback/index.js"
+import feedback_question from "./feedback/feedback_question/index.js"
+import fix_quality_gates from "./feedback/fix_quality_gates/index.js"
+import intent_completion_fix from "./feedback/intent_completion_fix/index.js"
+import review_fix from "./feedback/review_fix/index.js"
+import start_feedback_hat from "./feedback/start_feedback_hat/index.js"
+
+// ── drift/ (Track C — filesystem reconciliation) ─────────────────
+import drift_detected from "./drift/drift_detected/index.js"
+
+// ── global/ (scope-agnostic) ─────────────────────────────────────
+import complete from "./global/complete/index.js"
+import error from "./global/error/index.js"
+
 import type { PromptBuilder } from "./types.js"
-import unit_inputs_missing from "./unit_inputs_missing.js"
-import unit_inputs_not_declared from "./unit_inputs_not_declared.js"
-import unit_naming_invalid from "./unit_naming_invalid.js"
-import unit_outputs_empty_iterations from "./unit_outputs_empty_iterations.js"
-import unresolved_dependencies from "./unresolved_dependencies.js"
-import user_gate from "./user_gate.js"
 
 export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	string,
 	PromptBuilder
 >([
-	["advance_phase", advance_phase],
-	["advance_stage", advance_stage],
-	["blocked", blocked],
-	["changes_requested", changes_requested],
-	["close_feedback", close_feedback],
-	["save_wip", save_wip],
-	["complete", complete],
-	["dag_cycle_detected", dag_cycle_detected],
-	["decompose", decompose],
-	["discovery_missing", discovery_missing],
-	["discovery_required", discovery_required],
-	["elaborate", elaborate],
-	["elaborate_review", elaborate_review],
-	["elaboration_insufficient", elaboration_insufficient],
-	["error", error],
-	["escalate", escalate],
-	["fix_quality_gates", fix_quality_gates],
-	["gate_blocked", gate_blocked],
-	["intent_approved", intent_approved],
-	["intent_complete", intent_complete],
-	["intent_completion_fix", intent_completion_fix],
-	["intent_completion_review", intent_completion_review],
-	["intent_review", intent_review],
-	["outputs_missing", outputs_missing],
-	["review", review],
-	["review_fix", review_fix],
-	["safe_intent_repair", safe_intent_repair],
-	["select_studio", select_studio],
+	// stage/
 	["start_stage", start_stage],
-	// start_unit serves the v4 start_unit_hat dispatch by name —
+	["elaborate_loop", elaborate_loop],
+	// `start_unit` serves the v4 start_unit_hat dispatch by name —
 	// the dispatch tool aliases the action key when calling
 	// buildRunInstructions.
 	["start_unit", start_unit],
 	["start_unit_hat", start_unit_hat],
-	["start_feedback_hat", start_feedback_hat],
 	["dispatch_review", dispatch_review],
+	["review", review],
 	["dispatch_approval", dispatch_approval],
 	["dispatch_quality_gates", dispatch_quality_gates],
 	["user_gate", user_gate],
-	["seal_intent", seal_intent],
+	["advance_phase", advance_phase],
+	["advance_stage", advance_stage],
 	["complete_stage", complete_stage],
-	["migrated", migrated],
-	["drift_detected", drift_detected],
+	["blocked", blocked],
+	["coverage_review_required", coverage_review_required],
+	["dag_cycle_detected", dag_cycle_detected],
+	["discovery_missing", discovery_missing],
+	["elaboration_insufficient", elaboration_insufficient],
+	["escalate", escalate],
+	["gate_blocked", gate_blocked],
+	["output_liveness_review_required", output_liveness_review_required],
+	["outputs_missing", outputs_missing],
+	["save_wip", save_wip],
 	["unit_inputs_missing", unit_inputs_missing],
 	["unit_inputs_not_declared", unit_inputs_not_declared],
 	["unit_naming_invalid", unit_naming_invalid],
 	["unit_outputs_empty_iterations", unit_outputs_empty_iterations],
 	["unresolved_dependencies", unresolved_dependencies],
+	// intent/
+	["migrated", migrated],
+	["select_studio", select_studio],
+	["intent_completion_review", intent_completion_review],
+	["intent_review", intent_review],
+	["intent_approved", intent_approved],
+	["intent_complete", intent_complete],
+	["seal_intent", seal_intent],
+	["external_review_requested", external_review_requested],
+	["revise_unit_specs", revise_unit_specs],
+	["safe_intent_repair", safe_intent_repair],
+	// feedback/ (Track B)
+	["changes_requested", changes_requested],
+	["close_feedback", close_feedback],
+	["feedback_question", feedback_question],
+	["fix_quality_gates", fix_quality_gates],
+	["intent_completion_fix", intent_completion_fix],
+	["review_fix", review_fix],
+	["start_feedback_hat", start_feedback_hat],
+	// drift/ (Track C)
+	["drift_detected", drift_detected],
+	// global/
+	["complete", complete],
+	["error", error],
 ])

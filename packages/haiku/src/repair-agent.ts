@@ -249,7 +249,7 @@ ${diagnosis.needsManualReview.map((s) => `- **${s}**`).join("\n")}
 **Do NOT write state.json or unit files.** Stage status is derived in v4 — there is no file you can edit to mark a stage complete. For each stage listed above:
 1. Read the unit files in \`stages/${"{stage}"}/units/\` (read-only).
 2. Note in your end-of-run summary: which units appear stuck, what hat sequence they're missing, what role hasn't signed approval.
-3. The user will resolve manually via \`haiku_run_next\` ticks (or \`/haiku:revisit\` if a stage needs to be re-opened).`,
+3. The user will resolve manually via \`haiku_run_next\` ticks (or by filing a stage_revisit feedback at the target stage with \`haiku_feedback({ resolution: "stage_revisit" })\` if a stage needs to be re-opened).`,
 		)
 	}
 

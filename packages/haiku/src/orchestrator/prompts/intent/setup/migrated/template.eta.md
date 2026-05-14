@@ -1,0 +1,3 @@
+## Intent Migrated
+
+<%= message %>

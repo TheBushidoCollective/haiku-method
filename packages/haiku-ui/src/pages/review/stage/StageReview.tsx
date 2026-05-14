@@ -640,6 +640,7 @@ export function StageReview({
 						currentName={detail.name}
 						seen={seen}
 						stageId={stageName}
+						sessionId={sessionId}
 						intentSlug={intentSlug}
 						feedbackByUnit={feedbackByUnit}
 						walkIndex={walkIndex}
@@ -1372,6 +1373,7 @@ function UnitDetailView({
 	currentName,
 	seen,
 	stageId,
+	sessionId,
 	intentSlug,
 	feedbackByUnit,
 	walkIndex,
@@ -1390,6 +1392,7 @@ function UnitDetailView({
 	currentName: string
 	seen: ReturnType<typeof useSeenTracker>
 	stageId: string
+	sessionId: string
 	intentSlug: string | null
 	feedbackByUnit: Map<string, FeedbackItemData[]>
 	walkIndex: number
@@ -1527,6 +1530,8 @@ function UnitDetailView({
 						dependsOn={fm.depends_on as string[] | undefined}
 						hat={fm.hat}
 						bolt={fm.bolt}
+						sessionId={sessionId}
+						currentStage={stageId}
 					/>
 					{current.rawContent &&
 						(() => {

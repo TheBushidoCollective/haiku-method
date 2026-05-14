@@ -313,7 +313,22 @@ function ReviewLayoutLoaded({
 	// set so we show *something*.
 	const orderedStageNames =
 		intentStageOrder.length > 0 ? intentStageOrder : stageStateKeys
-	const stageProgressData = orderedStageNames.map((name) => {
+	// Topology-truth override (added 2026-05-13 after a user reported
+	// inception rendering as outlined-future while design was completed,
+	// which is topologically impossible — design depends on inception
+	// completing). The cursor's `current_state.stage` is the
+	// authoritative "we are working on this stage" signal; every stage
+	// before it in the studio's declared order MUST be completed (the
+	// cursor would not have walked past otherwise). Trusting the
+	// per-stage `parseStageStates` output here was wrong because that
+	// reader's view depends on which branch's unit FM it walked — a
+	// stage branch viewing earlier stages can see un-stamped unit FM
+	// (frozen at fork time) even though the cursor itself recognizes
+	// those stages as merged-and-done.
+	const currentStageIdx = activeStage
+		? orderedStageNames.indexOf(activeStage)
+		: -1
+	const stageProgressData = orderedStageNames.map((name, idx) => {
 		const state = stageStates[name] as
 			| {
 					status?: string
@@ -323,21 +338,25 @@ function ReviewLayoutLoaded({
 					phase?: string | null
 			  }
 			| undefined
-		// v4: derive a v3-compatible status string from mergedIntoMain.
-		// merged → "completed"; not merged → "current" if first
-		// unmerged, else "pending". Legacy v3 status field still wins
-		// when present (server hasn't migrated this intent yet).
-		const v3Status = state?.status
-		const v4Status = (() => {
-			if (state?.mergedIntoMain === true) return "completed"
-			if (state?.mergedIntoMain === false) return "current"
-			return "pending"
-		})()
-		const derivedStatus = v3Status
-			? v3Status === "active"
-				? "current"
-				: v3Status
-			: v4Status
+		// Topology override: any stage BEFORE current is completed by
+		// definition. Any stage AFTER current is pending. The current
+		// stage itself is "current".
+		let derivedStatus: string
+		if (currentStageIdx >= 0) {
+			if (idx < currentStageIdx) {
+				derivedStatus = "completed"
+			} else if (idx === currentStageIdx) {
+				derivedStatus = "current"
+			} else {
+				derivedStatus = "pending"
+			}
+		} else {
+			// No active stage (intent terminal or pre-selection). Fall
+			// back to per-stage merge state: merged → completed,
+			// otherwise pending. The intent-terminal branch downstream
+			// blanks the strip out anyway.
+			derivedStatus = state?.mergedIntoMain === true ? "completed" : "pending"
+		}
 		return {
 			name,
 			status: derivedStatus,

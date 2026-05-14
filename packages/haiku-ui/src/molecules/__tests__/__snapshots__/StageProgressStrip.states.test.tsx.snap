@@ -19,7 +19,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage inception, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
-            title="inception (completed)"
             type="button"
           >
             <span
@@ -98,7 +97,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage design, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
-            title="design (completed)"
             type="button"
           >
             <span
@@ -179,7 +177,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="product"
             data-viewing="true"
-            title="product (current)"
             type="button"
           >
             <span
@@ -248,7 +245,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="development"
             disabled=""
-            title="development (future)"
             type="button"
           >
             <span
@@ -317,7 +313,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="review"
             disabled=""
-            title="review (future)"
             type="button"
           >
             <span
@@ -400,7 +395,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             data-viewing="true"
-            title="inception (completed) — viewing"
             type="button"
           >
             <span
@@ -484,7 +478,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage design, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
-            title="design (completed)"
             type="button"
           >
             <span
@@ -563,7 +556,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage product, visited"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="product"
-            title="product (current)"
             type="button"
           >
             <span
@@ -632,7 +624,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="development"
             disabled=""
-            title="development (future)"
             type="button"
           >
             <span
@@ -701,7 +692,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="review"
             disabled=""
-            title="review (future)"
             type="button"
           >
             <span
@@ -782,7 +772,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage inception, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
-            title="inception (completed)"
             type="button"
           >
             <span
@@ -861,7 +850,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage design, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
-            title="design (completed)"
             type="button"
           >
             <span
@@ -940,7 +928,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage product, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="product"
-            title="product (completed)"
             type="button"
           >
             <span
@@ -1019,7 +1006,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage development, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="development"
-            title="development (completed)"
             type="button"
           >
             <span
@@ -1100,7 +1086,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="review"
             data-viewing="true"
-            title="review (completed) — viewing"
             type="button"
           >
             <span
@@ -1197,7 +1182,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage inception, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
-            title="inception (completed)"
             type="button"
           >
             <span
@@ -1276,7 +1260,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage design, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
-            title="design (completed)"
             type="button"
           >
             <span
@@ -1357,7 +1340,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="product"
             data-viewing="true"
-            title="product (current)"
             type="button"
           >
             <span
@@ -1426,7 +1408,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="development"
             disabled=""
-            title="development (future)"
             type="button"
           >
             <span
@@ -1495,7 +1476,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="review"
             disabled=""
-            title="review (future)"
             type="button"
           >
             <span
@@ -1576,7 +1556,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage inception, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
-            title="inception (completed)"
             type="button"
           >
             <span
@@ -1655,7 +1634,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage design, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
-            title="design (completed)"
             type="button"
           >
             <span
@@ -1736,7 +1714,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="product"
             data-viewing="true"
-            title="product (current)"
             type="button"
           >
             <span
@@ -1804,7 +1781,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage development, visited"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="development"
-            title="development (future)"
             type="button"
           >
             <span
@@ -1873,7 +1849,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="review"
             disabled=""
-            title="review (future)"
             type="button"
           >
             <span
@@ -1956,7 +1931,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             data-viewing="true"
-            title="inception (completed) — viewing"
             type="button"
           >
             <span
@@ -2040,7 +2014,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             aria-label="Stage design, completed"
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="design"
-            title="design (completed)"
             type="button"
           >
             <span
@@ -2120,7 +2093,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="product"
             disabled=""
-            title="product (current)"
             type="button"
           >
             <span
@@ -2189,7 +2161,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="development"
             disabled=""
-            title="development (future)"
             type="button"
           >
             <span
@@ -2258,7 +2229,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="review"
             disabled=""
-            title="review (future)"
             type="button"
           >
             <span
@@ -2341,7 +2311,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-pointer hover:scale-[1.02] hover:border-teal-400"
             data-stage="inception"
             data-viewing="true"
-            title="inception (completed) — viewing"
             type="button"
           >
             <span
@@ -2426,7 +2395,6 @@ exports[`StageProgressStrip — state matrix > renders every documented state ce
             class="group relative w-full flex flex-col items-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-stone-900 cursor-not-allowed text-stone-500 dark:text-stone-600"
             data-stage="design"
             disabled=""
-            title="design (future)"
             type="button"
           >
             <span

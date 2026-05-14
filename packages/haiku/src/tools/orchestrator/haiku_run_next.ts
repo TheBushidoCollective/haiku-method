@@ -1636,36 +1636,21 @@ export default defineTool({
 					}
 				}
 
-				// Browser launch + attach detection.
-				//
-				// If `prepared.browser_attached === true`, a live SPA tab
-				// is already heartbeating for this session — skip the
-				// launch entirely. Re-launching would spawn a duplicate
-				// tab and surprise the user.
-				//
-				// Otherwise: best-effort launch, then wait up to
-				// BROWSER_ATTACH_GRACE_MS for the SPA's first heartbeat.
-				// If a heartbeat lands → proceed inline-block (happy
-				// path). If no heartbeat lands → fall back to URL-print
-				// mode and tell the agent to call haiku_await_gate when
-				// the user is ready. This matches the contract: "the
-				// engine inlines the wait; the URL+await-gate two-step
-				// is the fallback when we can't open a browser or no
-				// signal arrives in time."
-				//
-				// Grace defaults to 60s — that's the realistic budget
-				// for a user to switch windows, click open, and let the
-				// tab finish loading. Previously 8s, which fired
-				// fallback before the user could open the tab on a
-				// busy laptop or remote desktop (reported 2026-05-13 on
-				// `admin-portal-reimagine` design spec gate). Tests
-				// override via `HAIKU_GATE_ATTACH_GRACE_MS` to keep
-				// suites fast.
-				const BROWSER_ATTACH_GRACE_MS = (() => {
-					const env = Number(process.env.HAIKU_GATE_ATTACH_GRACE_MS)
-					return Number.isFinite(env) && env > 0 ? env : 60_000
-				})()
-				const POLL_INTERVAL_MS = 250
+				// Browser launch — always inline-await. We launch on this
+				// host if no SPA tab is alive for this intent, then proceed
+				// straight to the inline await. No grace timeout, no URL
+				// fallback: the prior two-step pattern (run_next emits URL
+				// → agent calls await_gate) was forcing an extra tool round
+				// trip on browser-capable machines where the user had
+				// already opened the tab (reported 2026-05-14). The await
+				// tool will block for as long as the user needs — on
+				// headless / sandbox hosts the launch silently no-ops, the
+				// URL still appears in stderr logs, and external viewers
+				// can attach to the broadcast at any time. The two-step
+				// path is no longer reachable from run_next; agents can
+				// still call `haiku_await_gate` directly when entering
+				// from a resumed session, but they should not need to from
+				// a fresh tick.
 				// Intent-scoped attach predicate (task #26 follow-up,
 				// 2026-05-14): the SPA tab follows the intent, not the
 				// session id. Each gate cycle's run_next mints a fresh
@@ -1678,54 +1663,27 @@ export default defineTool({
 				// engine proceeds to inline-await immediately. Closes the
 				// gap left by the earlier `shouldLaunchReviewBrowser`
 				// dedupe (which only suppressed the launch, not the wait).
+				// Browser launch — fire-and-forget. We launch on this host
+				// (best-effort `open` / `xdg-open` / PowerShell `Start-Process`)
+				// and then fall straight through to the inline await below.
+				// No 60s grace, no URL-emission fallback: on machines that can
+				// pop a browser this just works, and the inline await waits as
+				// long as it needs to for the user's decision. On headless /
+				// sandboxed hosts the launch silently no-ops, the inline await
+				// still blocks, and the URL is visible to the agent in stderr
+				// logs (`[haiku] Gate review ready → <url>`) plus the
+				// announcement broadcast for any external viewer. Reported
+				// 2026-05-14: the prior two-step pattern (run_next emits URL →
+				// agent calls await_gate) was forcing an extra tool round-trip
+				// on browser-capable machines where the user explicitly
+				// confirmed the tab was open. The user's guidance:
+				// `run_next` should always handle the pop AND the await on
+				// these hosts.
 				const isAttachedForIntent = () =>
 					isBrowserAttached(prepared.session_id) ||
 					findLiveReviewSessionForIntent(slug) !== undefined
 				if (!prepared.browser_attached && !isAttachedForIntent()) {
 					launchBrowserBestEffort(prepared.review_url, "Gate review")
-					const deadline = Date.now() + BROWSER_ATTACH_GRACE_MS
-					// Respect AbortSignal during the poll — if the MCP call
-					// is cancelled (user Ctrl-C, client reconnect, host
-					// timeout), exit the wait immediately rather than
-					// draining the full grace window. Without this, abort
-					// could land up to ~8s after the user requested it.
-					// Reported on PR #352 review.
-					while (
-						Date.now() < deadline &&
-						!isAttachedForIntent() &&
-						!signal?.aborted
-					) {
-						await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
-					}
-					// If the wait was cut short by abort, propagate via
-					// the same path the inline await would have taken
-					// instead of emitting the URL fallback.
-					if (signal?.aborted) {
-						throw new Error("aborted")
-					}
-					if (!isAttachedForIntent()) {
-						// No SPA heartbeat within the grace window. Either the
-						// host couldn't spawn a browser (headless, sandboxed)
-						// or the user is on a remote/desktop where the URL
-						// needs to be hand-delivered. Hand the agent the URL
-						// + session id and tell it to call haiku_await_gate
-						// when the user is ready.
-						return text(
-							[
-								`Gate review session prepared but no browser attached within ${BROWSER_ATTACH_GRACE_MS / 1000}s.`,
-								"",
-								`**Review URL:** ${prepared.review_url}`,
-								"",
-								"Post this URL to the user. When they have the tab open, call:",
-								"",
-								"```",
-								`haiku_await_gate { intent: "${slug}", session_id: "${prepared.session_id}" }`,
-								"```",
-								"",
-								"to block on the user's decision. The await tool reuses the same session — no new tab will open.",
-							].join("\n"),
-						)
-					}
 				}
 
 				// Engine-side blocking: dispatch to haiku_await_gate

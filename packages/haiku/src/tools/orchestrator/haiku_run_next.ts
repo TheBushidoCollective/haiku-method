@@ -589,14 +589,43 @@ export default defineTool({
 					// yet, the selection chain (`select_studio` /
 					// `select_mode`) belongs on intent main, not a stage
 					// branch.
-					const mainGuard = ensureOnStageBranch(slug, undefined)
-					if (!mainGuard.ok) {
-						return buildGuardResponse(
-							slug,
-							undefined,
-							mainGuard,
-							"run_next entry — intent main (pre-selection)",
-						)
+					//
+					// Short-circuit (2026-05-13, task #21): if the worktree
+					// is ALREADY on a stage branch of THIS intent
+					// (`haiku/<slug>/*`), skip the intent-main switch.
+					// We're already inside the intent's branch family — the
+					// selection picker is going to write the picked
+					// studio/mode to `intent.md` on whatever branch we're
+					// on, and the subsequent pre-tick reconciliation will
+					// fan that out to the rest of the family. Forcing a
+					// checkout back to `haiku/<slug>/main` on a fresh
+					// pickup wasted a branch switch AND, on the previous
+					// 2026-05-06 locked-worktree contract, would
+					// hard-refuse on locked parked worktrees (the exact
+					// "Refusing to checkout … on a locked worktree" the
+					// user reported from a stale v5.0.2 build). The
+					// underlying lock-guard refusal was removed in PR #355
+					// (see worktree-lock-guard.test.mjs for the inverted
+					// contract), but the wasteful switch itself is still
+					// worth avoiding — and the short-circuit keeps the
+					// engine resilient if any future guard re-introduces
+					// a non-stage-branch-of-this-intent constraint.
+					const currentBranch = getCurrentBranch()
+					// `getCurrentBranch()` is typed as `string` (returns ""
+					// on failure), not nullable — no optional chaining needed.
+					const alreadyOnIntentBranch = currentBranch.startsWith(
+						`haiku/${slug}/`,
+					)
+					if (!alreadyOnIntentBranch) {
+						const mainGuard = ensureOnStageBranch(slug, undefined)
+						if (!mainGuard.ok) {
+							return buildGuardResponse(
+								slug,
+								undefined,
+								mainGuard,
+								"run_next entry — intent main (pre-selection)",
+							)
+						}
 					}
 				} else {
 					// PRE-CURSOR DOWNSTREAM SYNC. The cursor's walk reads

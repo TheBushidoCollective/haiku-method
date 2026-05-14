@@ -43,12 +43,13 @@
 // time or a dedicated migration pass) is more complexity than the
 // case warrants.
 //
-// Works in both git and filesystem persistence modes — the sweep no
-// longer requires a git repo. When git is available, drift events
-// can be enriched with the SHAs that touched the path (for the FB
-// body), but that's commentary, not the detection signal.
+// Filesystem-only. The sweep hashes files on disk and compares against
+// stored witnesses; it does not consult git history. (Earlier passes
+// included a `commits: <SHAs>` enrichment from `git log --since=<at>`,
+// but it was load-bearing for nothing — the detection signal is the
+// hash mismatch alone — and was a source of subtle path-resolution
+// bugs in worktrees. Filesystem-as-source-of-truth, applied here too.)
 
-import { execFileSync } from "node:child_process"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
 import matter from "gray-matter"
@@ -66,39 +67,16 @@ export type DriftEvent = {
 	unit: string
 	role: string
 	kind: DriftKind
+	/** Intent-relative path to the drifted file. Used in the FB body
+	 *  and source_ref; no longer fed to git. */
 	file: string
 	since: string
-	commits: string[] // optional git enrichment; empty in fs mode
 }
 
 export type DriftSweepResult = {
 	events: DriftEvent[]
 	scanned: number
 	skipped: number
-}
-
-/**
- * Optional git enrichment: when git is available, list the SHAs that
- * touched `path` since `sinceISO`. Used to populate the `commits`
- * field on a drift event for human readability. Returns [] in fs
- * mode or when git fails.
- */
-function gitLogSinceTimestamp(
-	cwd: string,
-	path: string,
-	sinceISO: string,
-): string[] {
-	try {
-		const out = execFileSync(
-			"git",
-			["log", `--since=${sinceISO}`, "--format=%H", "--", path],
-			{ encoding: "utf8", stdio: "pipe", cwd },
-		).trim()
-		if (out.length === 0) return []
-		return out.split("\n").filter((s) => s.length > 0)
-	} catch {
-		return []
-	}
 }
 
 function readFm(path: string): Record<string, unknown> | null {
@@ -208,42 +186,6 @@ function discoveryMandatePath(
  * signed slot, hash the witnessed body/files and compare to the
  * stored hash. Mismatch = drift.
  */
-/** Resolve the git root containing `intentDir`. When the intent lives
- *  inside a linked worktree (e.g. `<primary>/.claude/worktrees/<name>/
- *  .haiku/intents/<slug>`), the worktree IS its own git root — distinct
- *  from `primaryRepoRoot()`. Drift event file paths and the `git log`
- *  cwd MUST resolve against THIS root, not the primary, otherwise:
- *
- *    - `relative(primaryRoot, outAbs)` produces a doubly-prefixed
- *      `.claude/worktrees/<name>/.haiku/.../foo.md` string that doesn't
- *      exist in the primary's git history.
- *    - `git log` from the primary repo with that path finds no commits
- *      because the file's history lives on the worktree branch, not on
- *      the primary's HEAD.
- *
- *  Result before this fix (reported 2026-05-14 on `admin-portal-
- *  reimagine` design stage): drift events always reported `commits: []`,
- *  and the doubly-prefixed path leaked into FB bodies. Closing the FB
- *  cleared its dedup key but couldn't clear the witness, so the next
- *  tick re-detected the same drift. Infinite loop.
- *
- *  Resolution: probe `git -C <intentDir> rev-parse --show-toplevel`.
- *  Falls back to `repoRoot` when git isn't available or the call fails. */
-function resolveWorktreeRoot(intentDir: string, repoRoot: string): string {
-	try {
-		const out = execFileSync(
-			"git",
-			["-C", intentDir, "rev-parse", "--show-toplevel"],
-			{ encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
-		)
-			.toString()
-			.trim()
-		return out.length > 0 ? out : repoRoot
-	} catch {
-		return repoRoot
-	}
-}
-
 export function runDriftSweep(args: {
 	intentDir: string
 	stage: string
@@ -251,7 +193,6 @@ export function runDriftSweep(args: {
 	repoRoot?: string
 }): DriftSweepResult {
 	const repoRoot = args.repoRoot ?? primaryRepoRoot()
-	const worktreeRoot = resolveWorktreeRoot(args.intentDir, repoRoot)
 	const haikuRoot = join(repoRoot, ".haiku")
 	if (isDriftDetectionDisabled(haikuRoot)) {
 		return { events: [], scanned: 0, skipped: 0 }
@@ -274,11 +215,13 @@ export function runDriftSweep(args: {
 			skipped++
 			continue
 		}
-		// All drift-event paths and git-log lookups must be rooted at the
-		// worktree (not the primary repo) so the path string matches what
-		// `git log` sees in this worktree's branch history. See
-		// resolveWorktreeRoot's docstring for the failure mode.
-		const unitRel = relative(worktreeRoot, unitPath)
+		// All drift-event paths are intent-relative. The intent dir is
+		// the natural unit of reference for FB bodies + source_refs;
+		// rooting events here also means the path resolves the same way
+		// regardless of whether the intent lives in the primary repo or
+		// a linked worktree (no `.claude/worktrees/<name>/` prefix to
+		// strip downstream).
+		const unitRel = relative(args.intentDir, unitPath)
 
 		// reviews.<role> witnesses the unit body. Hash it now and
 		// compare to the stored body_sha256. When the slot has no
@@ -300,7 +243,6 @@ export function runDriftSweep(args: {
 					kind: "spec",
 					file: unitRel,
 					since: at,
-					commits: gitLogSinceTimestamp(worktreeRoot, unitRel, at),
 				})
 			}
 		}
@@ -331,23 +273,26 @@ export function runDriftSweep(args: {
 				// code). Distinguish by leading segment: anything starting
 				// with `stages/` is intent-relative; everything else is
 				// repo-relative.
-				// Repo-relative paths join against the WORKTREE root, not
-				// the primary repo root — the worktree is its own git
-				// root and `<primary>/src/...` doesn't exist there.
+				// Repo-scoped paths (no leading `stages/`) live outside the
+				// intent dir — they're rooted at the intent's repo root,
+				// which is whatever git considers the toplevel here.
+				// `repoRoot` was reasonable in the primary repo and wrong
+				// in a linked worktree; the safer move is to keep the
+				// stored path verbatim in the event payload (it's already
+				// the agent's reference shape) and only resolve it to an
+				// absolute path for the hash compare.
 				const outAbs = outRel.startsWith("stages/")
 					? join(args.intentDir, outRel)
-					: join(worktreeRoot, outRel)
+					: join(repoRoot, outRel)
 				const cmp = outputMatchesAnyStrategy(outAbs, storedHash)
 				if (!cmp) continue // file deleted; not a drift signal here
 				if (!cmp.matches) {
-					const fileRel = relative(worktreeRoot, outAbs)
 					events.push({
 						unit: unitName,
 						role,
 						kind: "output",
-						file: fileRel,
+						file: outRel,
 						since: at,
-						commits: gitLogSinceTimestamp(worktreeRoot, fileRel, at),
 					})
 				}
 			}
@@ -371,14 +316,12 @@ export function runDriftSweep(args: {
 			if (outputStored) {
 				const cmp = outputMatchesAnyStrategy(outputAbs, outputStored)
 				if (cmp && !cmp.matches) {
-					const fileRel = relative(worktreeRoot, outputAbs)
 					events.push({
 						unit: unitName,
 						role: agent,
 						kind: "discovery_output",
-						file: fileRel,
+						file: relative(args.intentDir, outputAbs),
 						since: at,
-						commits: gitLogSinceTimestamp(worktreeRoot, fileRel, at),
 					})
 				}
 			}
@@ -394,21 +337,15 @@ export function runDriftSweep(args: {
 				const cmp = outputMatchesAnyStrategy(mandateAbs, mandateStored)
 				if (cmp && !cmp.matches) {
 					// Discovery mandates live under the studio plugin root
-					// (which is INSIDE the primary repo, not the worktree),
-					// so the relative path here still uses repoRoot — that
-					// matches where `git log` should look for mandate
-					// commits.
+					// inside the primary repo, so the natural relativization
+					// is against `repoRoot` here — it's the same path shape
+					// the studio reader uses elsewhere.
 					events.push({
 						unit: unitName,
 						role: agent,
 						kind: "discovery_mandate",
 						file: relative(repoRoot, mandateAbs),
 						since: at,
-						commits: gitLogSinceTimestamp(
-							repoRoot,
-							relative(repoRoot, mandateAbs),
-							at,
-						),
 					})
 				}
 			}
@@ -423,7 +360,7 @@ export function runDriftSweep(args: {
 	if (intentFm) {
 		const intentApprovals =
 			(intentFm.approvals as Record<string, unknown>) ?? {}
-		const intentRel = relative(worktreeRoot, intentMdPath)
+		const intentRel = relative(args.intentDir, intentMdPath)
 		for (const [role, record] of Object.entries(intentApprovals)) {
 			scanned++
 			const at = pickAt(record)
@@ -438,7 +375,6 @@ export function runDriftSweep(args: {
 					kind: "spec",
 					file: intentRel,
 					since: at,
-					commits: gitLogSinceTimestamp(worktreeRoot, intentRel, at),
 				})
 			}
 		}

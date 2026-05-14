@@ -1,11 +1,13 @@
 // orchestrator/prompts/drift_detected.ts — v4 drift sweep response.
 //
 // Cursor's Track C (drift sweep) returns `drift_detected { events }`
-// when `git log --since=<at>` finds out-of-band edits to a witnessed
-// artifact (unit spec, output, discovery output, studio mandate)
-// since its review/approval was signed. The agent files an FB for
-// each drift event; the next tick walks Track B (feedback) and the
-// fix loop assesses the drift's impact.
+// when a witnessed artifact's current content sha256 stops matching
+// the witness recorded at sign time. Detection is purely filesystem:
+// hash the file on disk, compare to the stored witness. No git log,
+// no commit enrichment — the hash mismatch IS the signal.
+//
+// The agent files an FB for each drift event; the next tick walks
+// Track B (feedback) and the fix loop assesses the drift's impact.
 //
 // Forward-only invariant: completed work is not edited in place.
 // The fix loop either closes the FB as cosmetic (no action) or
@@ -19,7 +21,6 @@ type DriftEvent = {
 	kind: string
 	file: string
 	since: string
-	commits: string[]
 }
 
 export default definePromptBuilder(({ slug, action }) => {
@@ -34,7 +35,7 @@ export default definePromptBuilder(({ slug, action }) => {
 	lines.push("")
 	for (const e of events) {
 		lines.push(
-			`- \`${e.kind}\` drift on \`${e.unit}\` / role \`${e.role}\`: \`${e.file}\` has ${e.commits.length} commit(s) since \`${e.since}\``,
+			`- \`${e.kind}\` drift on \`${e.unit}\` / role \`${e.role}\`: \`${e.file}\` (witnessed at \`${e.since}\`, current content sha256 no longer matches)`,
 		)
 	}
 	lines.push("")
@@ -50,9 +51,7 @@ export default definePromptBuilder(({ slug, action }) => {
 	lines.push(
 		`- \`target_invalidates: []\` — the assessor decides whether the drift is material; closure with empty invalidates means "cosmetic, no action"; a non-empty list re-routes the cursor through the named approval roles`,
 	)
-	lines.push(
-		`- body: include the kind, file path, since timestamp, and commits`,
-	)
+	lines.push(`- body: include the kind, file path, and since timestamp`)
 	lines.push("")
 	lines.push(
 		`After filing each FB, call \`haiku_run_next { intent: "${slug}" }\`. The cursor walks Track B and dispatches the fix loop on the new FB(s).`,

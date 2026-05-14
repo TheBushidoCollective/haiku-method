@@ -381,8 +381,14 @@ test("filesystem mode (no git): drift detection still works via sha256", async (
 			specDrift.length >= 1,
 			`fs-mode drift detection: expected spec event; got: ${JSON.stringify(result.events)}`,
 		)
-		// commits[] is empty in fs mode — no git to enrich with.
-		assert.deepEqual(specDrift[0].commits, [])
+		// Drift events no longer carry `commits` — detection is pure
+		// filesystem hash compare, agents classify materiality on their
+		// own (and may use git in the process, but that's an agent-
+		// layer call, not an engine function).
+		assert.ok(
+			!("commits" in specDrift[0]),
+			"drift events must not carry a commits field",
+		)
 	} finally {
 		process.chdir(orig)
 		rmSync(root, { recursive: true, force: true })

@@ -8369,13 +8369,6 @@ export function handleStateTool(
 			// disk. Prefix the message with a hard tag so the
 			// disambiguation is unmissable.
 			const rejectReasonRaw = (args.reason as string) || undefined
-			const reasonForPattern = (rejectReasonRaw || "").toLowerCase()
-			// True positives we want to catch: "missing", "no artifacts",
-			// "empty", "not produced", "no files".
-			const reasonImpliesMissing =
-				/\b(missing|no\s+artifacts?|empty|no\s+files?|not\s+produced|no\s+output)\b/.test(
-					reasonForPattern,
-				)
 			// Declared outputs that actually resolve on disk (across the
 			// main intent dir, the unit worktree, and the repo root).
 			const declaredOutputs = Array.isArray(failData.outputs)
@@ -8402,12 +8395,14 @@ export function handleStateTool(
 			//   - any files present → "content quality" reject.
 			//   - no declared outputs at all → stay neutral.
 			let rejectClarityTag: string
-			if (reasonImpliesMissing && outputsPresent) {
-				rejectClarityTag = "[FILES EXIST — REJECTED FOR CONTENT QUALITY]"
-			} else if (!outputsPresent && declaredOutputs.length > 0) {
+			if (!outputsPresent && declaredOutputs.length > 0) {
 				rejectClarityTag =
 					"[NO FILES PRODUCED — REJECTED FOR MISSING ARTIFACTS]"
 			} else if (outputsPresent) {
+				// Files-on-disk + reject means content-quality reject — the
+				// reviewer's reason text may falsely imply "no files," but
+				// we tag the response so the doer stops trying to "write
+				// the missing files."
 				rejectClarityTag = "[FILES EXIST — REJECTED FOR CONTENT QUALITY]"
 			} else {
 				rejectClarityTag = ""

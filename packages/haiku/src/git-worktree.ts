@@ -31,12 +31,11 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { hasV3CruftInIntent } from "./orchestrator/migrations/v0-to-v4.js"
-// Side-effect import: registers the v0→v4 migrator edge with
-// migrate-registry. Without this, `migrateIntent("0", "4.0.0")` from
-// the post-merge sweep would throw "no migration path."
-import "./orchestrator/migrations/v0-to-v4.js"
 import { migrateIntent } from "./orchestrator/migrate-registry.js"
+// Named import also triggers the side-effect registration on
+// migrate-registry — without that registration, the post-merge sweep's
+// `migrateIntent("0", "4.0.0")` would throw "no migration path."
+import { hasV3CruftInIntent } from "./orchestrator/migrations/v0-to-v4.js"
 import { isGitRepo, primaryRepoRoot } from "./state-tools.js"
 import { emitTelemetry } from "./telemetry.js"
 

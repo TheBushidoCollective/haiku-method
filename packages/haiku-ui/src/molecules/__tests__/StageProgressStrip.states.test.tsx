@@ -30,6 +30,14 @@ function byStage(name: string): HTMLButtonElement {
 	return el as HTMLButtonElement
 }
 
+/** Non-throwing variant for "marker may not be rendered" probes (e.g.
+ *  iterating an enum where some entries are intentionally omitted). */
+function byStageOrNull(name: string): HTMLButtonElement | null {
+	return document.querySelector<HTMLButtonElement>(
+		`button[data-stage="${name}"]`,
+	)
+}
+
 afterEach(() => {
 	cleanup()
 })
@@ -269,12 +277,7 @@ describe("StageProgressStrip — state matrix", () => {
 		expect(fsmCurrent.getAttribute("aria-current")).toBe("step")
 		// No stage should report aria-current="location" when viewing == current
 		for (const s of STAGES) {
-			let btn: HTMLButtonElement | null = null
-			try {
-				btn = byStage(s.name)
-			} catch {
-				/* stage not rendered — skip */
-			}
+			const btn = byStageOrNull(s.name)
 			if (btn && btn !== fsmCurrent) {
 				expect(btn.getAttribute("aria-current")).toBeNull()
 			}

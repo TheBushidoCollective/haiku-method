@@ -73,13 +73,15 @@ export function pathToReviewRoute(
 			name: knowledgeMatch[1],
 		}
 	}
-	// stages/<stage>/units/<file>.md → units tab.
+	// stages/<stage>/units/<file>.md → units tab. The optional `(?:\.md)?$`
+	// suffix is captured outside group 2, so unitsMatch[2] is already the
+	// extension-less unit name.
 	const unitsMatch = path.match(/^stages\/([^/]+)\/units\/(.+?)(?:\.md)?$/)
 	if (unitsMatch) {
 		return {
 			stage: unitsMatch[1],
 			kind: "units",
-			name: unitsMatch[2].replace(/\.md$/, ""),
+			name: unitsMatch[2],
 		}
 	}
 	// stages/<stage>/artifacts/<file> → outputs tab.

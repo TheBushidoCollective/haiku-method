@@ -146,20 +146,7 @@ export function StageProgressStrip({
 								data-viewing={isViewing ? "true" : undefined}
 								disabled={!(isClickable || isCurrent)}
 								onClick={() => isClickable && onStageClick?.(stage.name)}
-								/* `title=` removed 2026-05-13: leaving it on caused
-								 * the native OS tooltip to render simultaneously with
-								 * the styled hover card. Worse, the two contained
-								 * contradictory text — the styled card reads from
-								 * the topology-derived state ("upcoming"/"complete"/
-								 * "in progress") while the native title used the
-								 * raw `stage.status` string ("in_progress" with the
-								 * underscore, etc.). Reported on
-								 * `twelve-week-plan-accountability-app` design view
-								 * where Inception hover showed BOTH "Inception
-								 * UPCOMING" (styled) AND "inception (in_progress)"
-								 * (native) at once. SR users still have
-								 * `aria-label` for the spoken description; sighted
-								 * users get the styled card. */
+								// Intentionally no `title=`: it double-rendered with the styled hover card and the strings disagreed.
 								aria-label={
 									isViewingDifferent
 										? `${ariaLabel}, currently viewing`

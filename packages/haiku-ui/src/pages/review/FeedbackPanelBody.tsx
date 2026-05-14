@@ -70,14 +70,14 @@ export function FeedbackPanelBody({
 	const [showAgentItems, setShowAgentItems] = useState(false)
 
 	// Count of agent-authored items hidden when the toggle is off, so
-	// the toggle chip surfaces it as "{N} hidden".
+	// the toggle chip surfaces it as "{N} hidden". Must match the
+	// filter's hide predicate exactly — `system`-authored FBs pass
+	// through the filter unconditionally (engine-authored notifications
+	// the user always sees), so they don't count as hidden here.
 	const hiddenAgentCount = useMemo(
 		() =>
-			items.filter(
-				(i) =>
-					(i.author_type === "agent" || i.author_type === "system") &&
-					i.status !== "escalated",
-			).length,
+			items.filter((i) => i.author_type === "agent" && i.status !== "escalated")
+				.length,
 		[items],
 	)
 

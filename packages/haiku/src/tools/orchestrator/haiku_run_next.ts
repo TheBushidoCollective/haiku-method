@@ -203,7 +203,12 @@ async function runSelectionPicker(
 import { reportError } from "../../sentry.js"
 import { launchBrowserBestEffort } from "../../server/tool-call.js"
 import { logSessionEvent } from "../../session-metadata.js"
-import { getSession, isBrowserAttached, updateSession } from "../../sessions.js"
+import {
+	findLiveReviewSessionForIntent,
+	getSession,
+	isBrowserAttached,
+	updateSession,
+} from "../../sessions.js"
 import {
 	findFeedbackFile,
 	findHaikuRoot,
@@ -1661,7 +1666,22 @@ export default defineTool({
 					return Number.isFinite(env) && env > 0 ? env : 60_000
 				})()
 				const POLL_INTERVAL_MS = 250
-				if (!prepared.browser_attached) {
+				// Intent-scoped attach predicate (task #26 follow-up,
+				// 2026-05-14): the SPA tab follows the intent, not the
+				// session id. Each gate cycle's run_next mints a fresh
+				// session_id; the prior tab is still alive but bound to
+				// the old id, so `isBrowserAttached(prepared.session_id)`
+				// returns false and we'd wait the full 60s grace before
+				// falling back to URL-emission mode — even though a live
+				// reviewer tab is heartbeating on the same intent. Treat
+				// any live session for THIS intent as "attached" so the
+				// engine proceeds to inline-await immediately. Closes the
+				// gap left by the earlier `shouldLaunchReviewBrowser`
+				// dedupe (which only suppressed the launch, not the wait).
+				const isAttachedForIntent = () =>
+					isBrowserAttached(prepared.session_id) ||
+					findLiveReviewSessionForIntent(slug) !== undefined
+				if (!prepared.browser_attached && !isAttachedForIntent()) {
 					launchBrowserBestEffort(prepared.review_url, "Gate review")
 					const deadline = Date.now() + BROWSER_ATTACH_GRACE_MS
 					// Respect AbortSignal during the poll — if the MCP call
@@ -1672,7 +1692,7 @@ export default defineTool({
 					// Reported on PR #352 review.
 					while (
 						Date.now() < deadline &&
-						!isBrowserAttached(prepared.session_id) &&
+						!isAttachedForIntent() &&
 						!signal?.aborted
 					) {
 						await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
@@ -1683,7 +1703,7 @@ export default defineTool({
 					if (signal?.aborted) {
 						throw new Error("aborted")
 					}
-					if (!isBrowserAttached(prepared.session_id)) {
+					if (!isAttachedForIntent()) {
 						// No SPA heartbeat within the grace window. Either the
 						// host couldn't spawn a browser (headless, sandboxed)
 						// or the user is on a remote/desktop where the URL

@@ -785,6 +785,79 @@ export function ModalRouter({
 					</div>
 				</Modal>
 			)
+		case "fbAsUnitFixLoop":
+			return (
+				<Modal
+					open
+					title="🔁 FB-as-unit fix loop (Track B)"
+					subtitle="how a finding becomes a unit-shaped fix dispatch"
+					onClose={onClose}
+				>
+					<div className="modal-section">
+						<h3>summary</h3>
+						<HtmlBlock
+							className="prose"
+							html={renderInline(
+								"Open feedback findings dispatch through the same shape as units — a fix-hat sequence runs against the FB file. The FB body IS the spec; the flagged artifact stays read-only.",
+							)}
+						/>
+					</div>
+					<div className="modal-section">
+						<h3>flow</h3>
+						<ol className="writes-list">
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"Cursor's Track B walks open FBs and emits `start_feedback_hat` per finding (preempts when `resolution: question` — that routes through `feedback_question` instead).",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"Fixers edit the FB body via `haiku_feedback_write`. The flagged unit stays read-only via `haiku_unit_read`.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"Chain progresses via `haiku_feedback_advance_hat`. Each hat in the stage's `fix_hats:` sequence runs against the FB body in turn.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"When the terminal hat advances, the engine emits `close_feedback`, stamps `closed_at` on the FB, and applies `targets.invalidates` to the targeted unit's approvals.",
+									)}
+								/>
+							</li>
+							<li>
+								<HtmlBlock
+									className="prose"
+									html={renderInline(
+										"Next tick re-fires the role whose stamp was cleared by `targets.invalidates` (e.g., `reviews.spec` re-dispatches if a spec FB closed). Loop continues until that role's review stamps cleanly with no new FBs filed.",
+									)}
+								/>
+							</li>
+						</ol>
+					</div>
+					<div className="modal-section">
+						<h3>why this shape</h3>
+						<HtmlBlock
+							className="prose"
+							html={renderInline(
+								"Every fix loop in the system (spec review, adversarial review, quality gates, user gate) is the same handler with different FB origins — per GOALS § 'Two loop primitives.' The originating role only decides what to write into the FB (`origin`, `resolution`, `targets.invalidates`); the dispatch shape is identical.",
+							)}
+						/>
+					</div>
+				</Modal>
+			)
 		case "verifyDecomposeFlow":
 			return (
 				<Modal

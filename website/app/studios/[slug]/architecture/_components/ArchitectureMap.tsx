@@ -1203,24 +1203,15 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 								</div>
 							)
 						})()}
-						<div
-							className="agents-caption"
-							style={{
-								textAlign: "left",
-								fontSize: 11,
-								lineHeight: 1.5,
-								marginTop: 8,
-							}}
+						<button
+							type="button"
+							className="check"
+							onClick={() => setModal({ kind: "fbAsUnitFixLoop" })}
+							style={{ marginTop: 8 }}
+							title="FB-as-unit fix-loop mechanics — Track B dispatch flow"
 						>
-							Track B's <code>start_feedback_hat</code> dispatches directly
-							against the FB file. <strong>FB-as-unit:</strong> fixers edit the
-							FB body via <code>haiku_feedback_write</code>; the flagged unit
-							stays read-only via <code>haiku_unit_read</code>. The chain
-							progresses via <code>haiku_feedback_advance_hat</code>; the engine
-							emits <code>close_feedback</code> when the terminal hat advances,
-							then stamps <code>closed_at</code> and applies{" "}
-							<code>targets.invalidates</code> to the targeted unit's approvals.
-						</div>
+							ⓘ FB-as-unit fix-loop mechanics
+						</button>
 						<div
 							style={{
 								marginTop: 8,

@@ -82,6 +82,14 @@ import { setSessionId } from "./subagent-prompt-file.js"
 import { emitTelemetry } from "./telemetry.js"
 import { getPluginVersion, MCP_VERSION } from "./version.js"
 
+// Imported AFTER the other modules above so that `feedback-close-hook`
+// — which depends on `dispatch-stamps` and `sign-slot` (both of which
+// pull from this file) — sees `state-tools`'s exports already
+// initialized at import-resolution time. Lazy-loading via a side-
+// effect-free import is fine because the hook only runs from a tool
+// handler, never during module init.
+import { closeFeedbackPostHook } from "./feedback-close-hook.js"
+
 // ── Drift-assessment rationale caps (VULN-REPORT V-09) ────────────────────
 //
 // V-09: unbounded `agent_rationale` and per-classification `rationale_excerpt`
@@ -11396,6 +11404,25 @@ export function handleStateTool(
 						error: String((err as Error)?.message ?? err),
 					})
 				}
+
+				// Apply `targets.invalidates` — delete the named review /
+				// approval roles from the targeted unit's FM so the cursor
+				// re-routes the gate. Mirrors the close_feedback handler
+				// in run_next.ts; without this hook the closure leaves
+				// the witnessed approval slot alive and the drift sweep
+				// keeps re-firing on the same SHA mismatch forever
+				// (reported 2026-05-14 on admin-portal-reimagine design).
+				//
+				// For drift-origin FBs, also REBUILD the surviving slots
+				// with fresh witnesses against the current on-disk content
+				// so the next drift sweep tick compares against today's
+				// SHAs, not the pre-drift ones.
+				closeFeedbackPostHook({
+					slug: intentArg,
+					stage: stageArg ?? undefined,
+					feedbackId,
+					fbFm: advFm,
+				})
 			}
 
 			emitTelemetry(

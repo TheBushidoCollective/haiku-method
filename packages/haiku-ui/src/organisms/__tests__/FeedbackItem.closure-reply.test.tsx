@@ -55,11 +55,7 @@ describe("FeedbackItem — closure_reply card", () => {
 
 	it("does NOT render the card when closure_reply is absent", () => {
 		render(
-			<FeedbackItem
-				item={baseClosed}
-				isExpanded={true}
-				onToggle={() => {}}
-			/>,
+			<FeedbackItem item={baseClosed} isExpanded={true} onToggle={() => {}} />,
 		)
 		expect(screen.queryByTestId("feedback-closure-reply-FB-07")).toBeNull()
 	})

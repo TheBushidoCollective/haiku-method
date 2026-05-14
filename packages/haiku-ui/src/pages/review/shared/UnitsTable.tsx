@@ -30,9 +30,7 @@ export interface UnitsTableHandle {
  * Prefers explicit v3 `status` when present (un-migrated sessions still
  * emit it) so live v3 deployments don't lose their existing labels.
  */
-export function deriveUnitStatus(
-	frontmatter: Record<string, unknown>,
-): string {
+export function deriveUnitStatus(frontmatter: Record<string, unknown>): string {
 	if (typeof frontmatter.status === "string" && frontmatter.status) {
 		return frontmatter.status
 	}

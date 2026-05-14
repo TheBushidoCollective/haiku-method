@@ -10,7 +10,7 @@
  * rendered button — not by snapshot-equality of arrangement variants.
  */
 
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { StageProgressStrip } from "../StageProgressStrip"

@@ -27,10 +27,6 @@ interface Props {
 	sessionId: string
 }
 
-interface StudioMeta {
-	stages?: string[]
-}
-
 /**
  * Pull stage-chain hints out of an option's description. The picker
  * description is plain prose written by the engine, but for studio
@@ -76,6 +72,7 @@ function ModeTimeline({ id }: { id: string }): React.ReactElement | null {
 		<div className="mt-3 flex items-center gap-1" aria-hidden="true">
 			{timeline.map((kind, i) => (
 				<span
+					// biome-ignore lint/suspicious/noArrayIndexKey: timeline is a fixed-position visual sequence (human/agent pills in declared order). Index keys are stable because the array's order is the rendering contract.
 					key={`${id}-${i}`}
 					className={
 						kind === "human"
@@ -96,7 +93,11 @@ function StageChain({ stages }: { stages: string[] }): React.ReactElement {
 	return (
 		<div className="mt-2 flex flex-wrap items-center gap-1 text-xs text-stone-600 dark:text-stone-300">
 			{stages.map((stage, i) => (
-				<span key={`${stage}-${i}`} className="inline-flex items-center gap-1">
+				<span
+					// biome-ignore lint/suspicious/noArrayIndexKey: stages render in declared order; the composite `${stage}-${i}` disambiguates repeats while keeping order-as-contract.
+					key={`${stage}-${i}`}
+					className="inline-flex items-center gap-1"
+				>
 					{i > 0 && (
 						<span className="text-stone-500 dark:text-stone-400">→</span>
 					)}
@@ -171,7 +172,9 @@ function OptionCard({
 					{description}
 				</div>
 			)}
-			{stageChain && stageChain.length > 0 && <StageChain stages={stageChain} />}
+			{stageChain && stageChain.length > 0 && (
+				<StageChain stages={stageChain} />
+			)}
 			{kind === "mode" && <ModeTimeline id={option.id} />}
 		</button>
 	)
@@ -345,7 +348,9 @@ export function PickerPage({ session, sessionId }: Props): React.ReactElement {
 					)}
 
 					{session.kind === "confirm" && error && (
-						<div className="text-sm text-red-600 dark:text-red-400">{error}</div>
+						<div className="text-sm text-red-600 dark:text-red-400">
+							{error}
+						</div>
 					)}
 				</div>
 			</Card>

@@ -1143,7 +1143,9 @@ function walkIntentTrack(args: {
 	{
 		const unbuilt = units
 			.filter((u) => {
-				const outs = Array.isArray(u.fm.outputs) ? (u.fm.outputs as unknown[]) : []
+				const outs = Array.isArray(u.fm.outputs)
+					? (u.fm.outputs as unknown[])
+					: []
 				if (outs.length === 0) return false
 				const its = pickIterations(u.fm)
 				return its.length === 0

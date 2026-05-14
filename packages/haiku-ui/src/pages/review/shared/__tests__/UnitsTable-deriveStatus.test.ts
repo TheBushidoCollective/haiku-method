@@ -18,9 +18,7 @@ describe("deriveUnitStatus", () => {
 		expect(
 			deriveUnitStatus({
 				status: "in_progress",
-				iterations: [
-					{ hat: "verifier", result: "advance", started_at: "x" },
-				],
+				iterations: [{ hat: "verifier", result: "advance", started_at: "x" }],
 			}),
 		).toBe("in_progress")
 	})

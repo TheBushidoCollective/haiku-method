@@ -76,6 +76,7 @@ export function FeedbackExpandedPanel({
 			}}
 		>
 			<div className="flex-1 bg-stone-900/40 backdrop-blur-[1px]" />
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: the panel is the slide-over body; click/key handlers here exist solely to stop propagation so the outer overlay's close-on-click doesn't fire when interacting with content inside the panel. role="dialog" sits on the parent wrapper. */}
 			<div
 				ref={panelRef}
 				className="w-[32rem] max-w-[90vw] h-full bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-700 shadow-2xl flex flex-col"

@@ -76,11 +76,7 @@ describe("FeedbackItem — iterations disclosure", () => {
 
 	it("does NOT render when iterations[] is missing or empty", () => {
 		render(
-			<FeedbackItem
-				item={baseClosed}
-				isExpanded={true}
-				onToggle={() => {}}
-			/>,
+			<FeedbackItem item={baseClosed} isExpanded={true} onToggle={() => {}} />,
 		)
 		expect(screen.queryByTestId("feedback-iterations-FB-12")).toBeNull()
 	})

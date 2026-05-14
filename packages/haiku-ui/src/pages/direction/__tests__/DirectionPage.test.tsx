@@ -500,10 +500,7 @@ describe("DirectionPage — intake mode (no archetypes)", () => {
 	it("renders the intake screen when archetypes is empty", () => {
 		render(
 			<Harness client={makeMockClient()}>
-				<DirectionPage
-					session={intakeSession()}
-					sessionId="intake-session"
-				/>
+				<DirectionPage session={intakeSession()} sessionId="intake-session" />
 			</Harness>,
 		)
 		expect(screen.getByText(/i have designs to upload/i)).toBeTruthy()
@@ -517,10 +514,7 @@ describe("DirectionPage — intake mode (no archetypes)", () => {
 		const client = makeMockClient({ submitDirection })
 		render(
 			<Harness client={client}>
-				<DirectionPage
-					session={intakeSession()}
-					sessionId="intake-session"
-				/>
+				<DirectionPage session={intakeSession()} sessionId="intake-session" />
 			</Harness>,
 		)
 		fireEvent.click(
@@ -542,10 +536,7 @@ describe("DirectionPage — intake mode (no archetypes)", () => {
 		const client = makeMockClient({ submitDirection })
 		render(
 			<Harness client={client}>
-				<DirectionPage
-					session={intakeSession()}
-					sessionId="intake-session"
-				/>
+				<DirectionPage session={intakeSession()} sessionId="intake-session" />
 			</Harness>,
 		)
 
@@ -557,9 +548,13 @@ describe("DirectionPage — intake mode (no archetypes)", () => {
 		// jsdom's File / FileReader stubs accept Blob inputs and emit a
 		// synthetic data URL. A trivial PNG header is fine — we only
 		// assert the wire shape downstream.
-		const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "hero.png", {
-			type: "image/png",
-		})
+		const file = new File(
+			[new Uint8Array([0x89, 0x50, 0x4e, 0x47])],
+			"hero.png",
+			{
+				type: "image/png",
+			},
+		)
 		Object.defineProperty(fileInput, "files", {
 			value: [file],
 			configurable: true,
@@ -572,7 +567,9 @@ describe("DirectionPage — intake mode (no archetypes)", () => {
 		})
 
 		fireEvent.click(
-			screen.getByRole("button", { name: /use these 1 design as the direction/i }),
+			screen.getByRole("button", {
+				name: /use these 1 design as the direction/i,
+			}),
 		)
 
 		await waitFor(() => {

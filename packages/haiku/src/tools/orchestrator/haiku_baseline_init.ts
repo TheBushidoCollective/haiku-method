@@ -21,7 +21,13 @@
 // No new external dependencies — uses node:crypto, node:fs/promises, node:path
 // (already required by drift-baseline.ts) and existing gray-matter.
 
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import {
+	existsSync,
+	readdirSync,
+	readFileSync,
+	statSync,
+	writeFileSync,
+} from "node:fs"
 import { join, resolve } from "node:path"
 import matter from "gray-matter"
 import {
@@ -290,8 +296,7 @@ function restampWitnessesOnFile(args: {
 				if (typeof r.at !== "string" || r.at.length === 0) continue
 				const outputRel = `stages/${stage}/discovery/${agent}.md`
 				if (
-					(targetSet.has(outputRel) ||
-						targetBasenames.has(`${agent}.md`)) &&
+					(targetSet.has(outputRel) || targetBasenames.has(`${agent}.md`)) &&
 					typeof r.output_sha256 === "string"
 				) {
 					const outputAbs = join(intentDir, outputRel)

@@ -38,9 +38,10 @@ const EXPECTED_TABS = [
 	"other",
 ] as const satisfies readonly ReviewTab[]
 // Fails to compile if any ReviewTab member is missing from EXPECTED_TABS.
-type _Exhaustive = Exclude<ReviewTab, (typeof EXPECTED_TABS)[number]> extends never
-	? true
-	: never
+type _Exhaustive =
+	Exclude<ReviewTab, (typeof EXPECTED_TABS)[number]> extends never
+		? true
+		: never
 const _exhaustive: _Exhaustive = true
 void _exhaustive
 

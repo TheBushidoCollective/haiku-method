@@ -140,12 +140,8 @@ export function IntentReview({
 							// migration window.
 							const fm = intent.frontmatter as Record<string, unknown>
 							const ver =
-								typeof fm.plugin_version === "string"
-									? fm.plugin_version
-									: ""
-							const schema = ver
-								? `v${ver.split(".")[0] ?? "?"}`
-								: "v3"
+								typeof fm.plugin_version === "string" ? fm.plugin_version : ""
+							const schema = ver ? `v${ver.split(".")[0] ?? "?"}` : "v3"
 							return <StatusBadge label="Schema" status={schema} />
 						})()}
 					</div>
@@ -158,10 +154,7 @@ export function IntentReview({
 						// not a real user signature. Surface this so the
 						// reviewer doesn't trust the synthetic approval
 						// as if it were manually signed.
-						const intentFm = intent.frontmatter as Record<
-							string,
-							unknown
-						>
+						const intentFm = intent.frontmatter as Record<string, unknown>
 						const intentApprovals =
 							(intentFm.approvals as Record<string, { migrated?: boolean }>) ||
 							{}
@@ -172,8 +165,7 @@ export function IntentReview({
 						for (const u of units) {
 							const ufm = u.frontmatter as Record<string, unknown>
 							const uapps =
-								(ufm.approvals as Record<string, { migrated?: boolean }>) ||
-								{}
+								(ufm.approvals as Record<string, { migrated?: boolean }>) || {}
 							if (Object.values(uapps).some((a) => a?.migrated === true)) {
 								unitMigratedCount += 1
 							}
@@ -187,20 +179,19 @@ export function IntentReview({
 								<div className="text-amber-700 dark:text-amber-200">
 									{intentMigrated && (
 										<p className="mb-1">
-											One or more intent-level approvals were synthesized by
-											the v0→v4 migrator from a v3 <code>completed</code>{" "}
-											record. The approval is a stand-in — not a real user
-											signature.
+											One or more intent-level approvals were synthesized by the
+											v0→v4 migrator from a v3 <code>completed</code> record.
+											The approval is a stand-in — not a real user signature.
 										</p>
 									)}
 									{unitMigratedCount > 0 && (
 										<p>
-											{unitMigratedCount} unit{unitMigratedCount === 1 ? "" : "s"}{" "}
-											have synthesized approvals (look for the{" "}
-											<em>migrated</em> indicator on the unit row). These were
-											stamped by the migrator to preserve the v3 completion
-											signal; the cursor treats them as approved but the user
-											never signed them.
+											{unitMigratedCount} unit
+											{unitMigratedCount === 1 ? "" : "s"} have synthesized
+											approvals (look for the <em>migrated</em> indicator on the
+											unit row). These were stamped by the migrator to preserve
+											the v3 completion signal; the cursor treats them as
+											approved but the user never signed them.
 										</p>
 									)}
 								</div>

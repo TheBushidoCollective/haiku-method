@@ -79,9 +79,7 @@ export function DirectionPage({
 			/>
 		)
 	}
-	return (
-		<ArchetypePage session={session} sessionId={sessionId} wsRef={wsRef} />
-	)
+	return <ArchetypePage session={session} sessionId={sessionId} wsRef={wsRef} />
 }
 
 function ArchetypePage({
@@ -725,52 +723,55 @@ function IntakePage({
 	const captionsId = "intake-comments"
 	const dropzoneLabelId = "intake-dropzone-label"
 
-	const ingestFiles = useCallback(async (incoming: FileList | File[]) => {
-		const list = Array.from(incoming)
-		if (list.length === 0) return
-		const accepted: IntakeFile[] = []
-		for (const f of list) {
-			// Per-file cap mirrors the wire schema's 1.5 MB data_url limit.
-			// Base64 inflates by ~33%, so the raw cap is ~1.1 MB; round to
-			// 1.5 MB on the wire side so the picker matches.
-			if (f.size > 1_500_000) {
-				announce(
-					"assertive",
-					`File ${f.name} is too large (${(f.size / 1024 / 1024).toFixed(1)} MB > 1.5 MB)`,
-				)
-				continue
+	const ingestFiles = useCallback(
+		async (incoming: FileList | File[]) => {
+			const list = Array.from(incoming)
+			if (list.length === 0) return
+			const accepted: IntakeFile[] = []
+			for (const f of list) {
+				// Per-file cap mirrors the wire schema's 1.5 MB data_url limit.
+				// Base64 inflates by ~33%, so the raw cap is ~1.1 MB; round to
+				// 1.5 MB on the wire side so the picker matches.
+				if (f.size > 1_500_000) {
+					announce(
+						"assertive",
+						`File ${f.name} is too large (${(f.size / 1024 / 1024).toFixed(1)} MB > 1.5 MB)`,
+					)
+					continue
+				}
+				try {
+					const dataUrl = await readFileAsDataUrl(f)
+					accepted.push({
+						filename: f.name,
+						data_url: dataUrl,
+						caption: "",
+						preview_url: dataUrl,
+					})
+				} catch (err) {
+					announce(
+						"assertive",
+						`Could not read ${f.name}: ${err instanceof Error ? err.message : String(err)}`,
+					)
+				}
 			}
-			try {
-				const dataUrl = await readFileAsDataUrl(f)
-				accepted.push({
-					filename: f.name,
-					data_url: dataUrl,
-					caption: "",
-					preview_url: dataUrl,
-				})
-			} catch (err) {
-				announce(
-					"assertive",
-					`Could not read ${f.name}: ${err instanceof Error ? err.message : String(err)}`,
-				)
-			}
-		}
-		if (accepted.length === 0) return
-		setFiles((prev) => {
-			// Cap the in-memory list at 20 to match the wire schema. Excess
-			// files are dropped silently with an announcement; the user can
-			// retry after removing some.
-			const merged = [...prev, ...accepted]
-			if (merged.length > 20) {
-				announce(
-					"assertive",
-					`Only the first 20 files are kept (${merged.length - 20} dropped)`,
-				)
-				return merged.slice(0, 20)
-			}
-			return merged
-		})
-	}, [announce])
+			if (accepted.length === 0) return
+			setFiles((prev) => {
+				// Cap the in-memory list at 20 to match the wire schema. Excess
+				// files are dropped silently with an announcement; the user can
+				// retry after removing some.
+				const merged = [...prev, ...accepted]
+				if (merged.length > 20) {
+					announce(
+						"assertive",
+						`Only the first 20 files are kept (${merged.length - 20} dropped)`,
+					)
+					return merged.slice(0, 20)
+				}
+				return merged
+			})
+		},
+		[announce],
+	)
 
 	const removeFile = useCallback((idx: number) => {
 		setFiles((prev) => prev.filter((_, i) => i !== idx))
@@ -929,9 +930,7 @@ function IntakePage({
 					} ${focusRingClass}`}
 				>
 					<span className="text-sm font-medium text-stone-900 dark:text-stone-100">
-						{dragActive
-							? "Drop to add"
-							: "Drag files here, or click to browse"}
+						{dragActive ? "Drop to add" : "Drag files here, or click to browse"}
 					</span>
 					<span className="text-xs text-stone-500 dark:text-stone-400">
 						{hasFiles
@@ -944,6 +943,7 @@ function IntakePage({
 					<ul className="mt-4 space-y-3">
 						{files.map((f, i) => (
 							<li
+								// biome-ignore lint/suspicious/noArrayIndexKey: intake files render in upload order; filename alone can repeat across renames, so the index composite keeps keys unique without reordering.
 								key={`intake-${i}-${f.filename}`}
 								className="flex items-start gap-3 p-3 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900"
 							>

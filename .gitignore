@@ -71,3 +71,4 @@ terraform.tfvars
 .haiku/diagnostics/
 bun.lock
 plugin/bin/haiku.mjs.map
+.claude/scheduled_tasks.lock

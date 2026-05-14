@@ -8394,6 +8394,61 @@ export function handleStateTool(
 				}
 			}
 			const outputsPresent = presentOutputs.length > 0
+
+			// Bug 1 from 2026-05-14 report: a design-reviewer subagent
+			// running in an isolated git worktree that wasn't seeded
+			// with the unit's stage branch saw an empty filesystem and
+			// rejected the unit with "artifacts missing on disk" even
+			// though every declared output existed on the stage branch.
+			// The host re-spawned the reviewer 5 times; each iteration
+			// hallucinated the same absence; the bolt cap fired; the
+			// unit got stuck.
+			//
+			// Filesystem is the source of truth: if every declared
+			// output exists on disk (intent dir, unit worktree, or repo
+			// root — `unitOutputExists` walks all three) AND the reject
+			// reason claims the files are missing, refuse the reject.
+			// The reviewer is wrong about a verifiable fact; we don't
+			// promote that mistake into iterations history.
+			//
+			// Strict gate: only reject reasons that explicitly invoke
+			// absence ("missing", "no artifacts", "empty", "not
+			// produced", "no files", "no output") trigger this refusal.
+			// Content-quality rejects ("the prose is shallow", "the
+			// design doesn't address Q13") pass through untouched —
+			// those are legitimate reviewer judgments the doer needs to
+			// hear.
+			const reasonImpliesMissing = rejectReasonRaw
+				? /\b(missing|no\s+artifacts?|empty|no\s+files?|not\s+produced|no\s+output)\b/.test(
+						rejectReasonRaw.toLowerCase(),
+					)
+				: false
+			if (
+				declaredOutputs.length > 0 &&
+				missingOutputsList.length === 0 &&
+				reasonImpliesMissing
+			) {
+				return reply(
+					{
+						error: "reject_contradicts_filesystem",
+						unit: args.unit,
+						reason: rejectReasonRaw,
+						declared_outputs: declaredOutputs,
+						files_present: presentOutputs,
+						message:
+							"Reject refused: every declared output for this unit exists on " +
+							"disk, but the reject reason claims they are missing. The " +
+							"reviewer's filesystem view is stale (likely running in an " +
+							"isolated git worktree that wasn't seeded with the unit's " +
+							"stage branch). Re-dispatch the reviewer from a worktree that " +
+							"sees the stage branch state, or — if the reviewer's real " +
+							"concern is content quality, not file presence — re-issue the " +
+							"reject with a reason that describes the substantive problem. " +
+							"No iteration was recorded; the bolt count is unchanged.",
+					},
+					{ isError: true },
+				)
+			}
 			// Tag selection — see issue #24:
 			//   - reason mentions missing/empty AND files exist → reviewer
 			//     is wrong about absence; flag the contradiction loudly.

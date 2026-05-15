@@ -98,12 +98,11 @@ const bundle = readFileSync(bundlePath, "utf8")
 const tplStringRegex = /\bimport\.meta\.url\s*,\s*("[^"]+\.md"|'[^']+\.md')/g
 const matches = Array.from(bundle.matchAll(tplStringRegex), (m) => m[0])
 // The minifier rewrites the helper's identifier, but the SOURCE
-// identifier `loadTemplate` would only survive if it's referenced as
-// a string literal somewhere (e.g. an error message that includes the
-// helper name). Greppable check — flag it as a sample if seen so the
-// reviewer can audit. We only fail when the named-arg form fires
-// (the historically-failing one); the bare-name greppable serves as
-// a soft signal in the failure message.
+// identifier `loadTemplate` would only survive in the bundled output
+// if a call site was preserved verbatim (the inliner missed it).
+// Both the named-arg sweep above AND this bare-form check feed into
+// the same `matches` array, so EITHER pattern matching causes the
+// gate to fail — they're hard checks, not soft signals.
 if (bundle.includes("loadTemplate(import.meta.url)")) {
 	matches.push("loadTemplate(import.meta.url)")
 }
@@ -127,9 +126,16 @@ await new Promise((resolve) => {
 	})
 	let stderrBuf = ""
 	let resolved = false
+	// Hard cap — the server binds in <1s on a fresh box; 15s is a
+	// huge margin of error. Captured here so settle() can clear it on
+	// success — without the clear, a fast success leaves the timer
+	// pinning the event loop for the full 15s after we're done. Per
+	// claude-bot review on PR #365.
+	let killTimer
 	const settle = (ok, msg) => {
 		if (resolved) return
 		resolved = true
+		clearTimeout(killTimer)
 		try {
 			proc.kill("SIGTERM")
 		} catch {}
@@ -157,9 +163,7 @@ await new Promise((resolve) => {
 	proc.on("error", (err) => {
 		settle(false, `failed to spawn MCP: ${err.message}`)
 	})
-	// Hard cap — the server binds in <1s on a fresh box; 15s is a
-	// huge margin of error.
-	setTimeout(() => {
+	killTimer = setTimeout(() => {
 		settle(
 			false,
 			`MCP did not print "running on stdio" within 15s. Stderr so far:\n${stderrBuf || "(empty)"}`,

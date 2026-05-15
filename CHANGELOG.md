@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.3] - 2026-05-14
+
+### Added
+- Workflows can now resume from intermediate stages and continue work from where they left off.
+- Unit outputs auto-populate from prior iteration bolts when available, reducing manual data entry.
+
+### Fixed
+- Engine now self-heals from workflow drift conditions without requiring manual intervention.
+- Feedback advancement through review hat sequences is now properly tracked and dispatched.
+
+### Changed
+- Review UI refactored with expanded feedback panels for clearer visualization and improved mobile responsiveness.
+
 ## [5.0.2] - 2026-05-13
 
 ### Fixed

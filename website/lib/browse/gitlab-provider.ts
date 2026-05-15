@@ -1167,7 +1167,14 @@ export class GitLabProvider implements BrowseProvider {
 			stagesTotal: stageNames.length,
 			archived: frontmatter.archived === true,
 			follows: (frontmatter.follows as string) || null,
-			raw: currentStageFrontmatter,
+			// Stable structural fields (plugin_version, granularity,
+			// composite, etc.) live on the intent-branch parse and may
+			// pre-date the stage branch; volatile fields (approvals,
+			// sealed_at, completed_at, title) ride the stage branch.
+			// Merge with intent-branch as the base so a stage-branched
+			// intent.md that's missing a never-edited structural field
+			// doesn't drop it. Per claude-bot review on PR #363.
+			raw: { ...frontmatter, ...currentStageFrontmatter },
 			stages,
 			knowledge,
 			operations,

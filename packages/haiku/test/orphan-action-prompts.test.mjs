@@ -48,10 +48,7 @@ const cases = [
 for (const c of cases) {
 	test(`${c.action} prompt is registered + renders the message`, () => {
 		const builder = actionPromptBuilders.get(c.action)
-		assert.ok(
-			builder,
-			`registry missing builder for action: ${c.action}`,
-		)
+		assert.ok(builder, `registry missing builder for action: ${c.action}`)
 		const body = builder({
 			slug: "test-intent",
 			studio: "software",

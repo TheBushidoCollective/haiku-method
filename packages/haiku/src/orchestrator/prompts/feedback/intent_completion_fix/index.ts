@@ -26,12 +26,12 @@ import {
 	readInterpretation,
 	resolveStudioMandateModel,
 } from "../../_helpers.js"
-import { definePromptBuilder } from "../../define.js"
 import { loadTemplate } from "../../_load-template.js"
 import {
 	WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK,
 	WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK,
 } from "../../_shared/index.js"
+import { definePromptBuilder } from "../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)

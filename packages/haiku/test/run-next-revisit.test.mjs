@@ -10,12 +10,12 @@
 // isolation) to cover the post-cursor branch-alignment guard added
 // in 2026-05-06.
 
-import { test } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
+import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import matter from "gray-matter"
 import {
@@ -200,7 +200,7 @@ test("run_next: action with no stage doesn't disturb the branch", async () => {
 	// Sanity: when the cursor returns an intent-scope action (no
 	// stage), the post-cursor revisit guard must NOT do anything.
 	const slug = "rev2"
-	await withRepo(slug, async ({ repoRoot, intentDir }) => {
+	await withRepo(slug, async ({ repoRoot, intentDir: _intentDir }) => {
 		// Land all three stages so the cursor goes intent-level.
 		landStage(repoRoot, slug, "a")
 		landStage(repoRoot, slug, "b")

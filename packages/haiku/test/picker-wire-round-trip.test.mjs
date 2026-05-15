@@ -6,11 +6,9 @@
 // Mirrors spa-wire-round-trip.test.mjs (the ad-hoc review wire test),
 // just for the picker route.
 
-import { test } from "node:test"
 import assert from "node:assert/strict"
-import { mkdtempSync, rmSync } from "node:fs"
-import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
+import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 
 const HERE = dirname(fileURLToPath(import.meta.url))

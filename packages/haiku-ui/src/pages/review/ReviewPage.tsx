@@ -754,8 +754,8 @@ function StageBanner({
 						)}
 					</div>
 					{pendingSignals && pendingSignals.length > 0 && (
-						<div
-							className="flex items-center gap-1.5 mt-2 flex-wrap"
+						<fieldset
+							className="flex items-center gap-1.5 mt-2 flex-wrap border-0 p-0 m-0"
 							data-testid="elaborate-pending-signals"
 							aria-label="Elaborate-loop signals waiting on the agent"
 						>
@@ -771,7 +771,7 @@ function StageBanner({
 									{pendingSignalLabel(sig)}
 								</span>
 							))}
-						</div>
+						</fieldset>
 					)}
 				</div>
 			</div>

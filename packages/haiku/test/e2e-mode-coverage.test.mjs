@@ -174,9 +174,7 @@ function applyResponse(intentDir, action, root, slug) {
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
 			const apps =
-				fm.approvals && typeof fm.approvals === "object"
-					? fm.approvals
-					: {}
+				fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
 			apps.intent_quality_gates = { at }
 			writeFm(intentMd, { ...fm, approvals: apps })
 		}
@@ -649,7 +647,9 @@ test("e2e: quick mode drives single-stage intent to sealed", {
 		// elaborate_loop occurrence before sealing (subsequent emissions
 		// for the same stage walk through the loop's other signals but
 		// don't constitute a "new stage open").
-		const elaborateLoops = seenActions.filter((a) => a === "elaborate_loop").length
+		const elaborateLoops = seenActions.filter(
+			(a) => a === "elaborate_loop",
+		).length
 		assert.ok(
 			elaborateLoops >= 1,
 			`quick: expected at least 1 elaborate_loop; got ${elaborateLoops} (${seenActions.join(" → ")})`,

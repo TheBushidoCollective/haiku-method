@@ -22,12 +22,12 @@
 // targeted whatever intent dir happened to be on disk with
 // `status: active`. Fixed by removing the fallback in git mode.
 
-import { test } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { test } from "node:test"
 import matter from "gray-matter"
 
 // Go through the orchestrator's public dispatcher rather than

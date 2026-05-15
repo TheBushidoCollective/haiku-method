@@ -24,7 +24,6 @@ import matter from "gray-matter"
 import {
 	assertLoopSignal,
 	assertNotLoopSignal,
-	pickLoopSignal,
 } from "./_elaborate-loop-helpers.mjs"
 import {
 	initTestRepo,

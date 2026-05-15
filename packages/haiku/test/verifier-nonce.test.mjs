@@ -78,62 +78,64 @@ function readSidecar(intentDir) {
 
 test("cursor mints verifier_nonce on elaborate_review (per-stage)", async () => {
 	if (!HAS_GIT) return
-	await withRepo("test-nonce-elaborate", async ({ repoRoot, intentDir, slug }) => {
-		makeStudio({
-			repoRoot,
-			studio: "test",
-			stages: [{ name: "design", hats: ["planner", "verifier"], review: "ask" }],
-		})
-		makeIntent({ intentDir, slug, studio: "test", stages: ["design"] })
+	await withRepo(
+		"test-nonce-elaborate",
+		async ({ repoRoot, intentDir, slug }) => {
+			makeStudio({
+				repoRoot,
+				studio: "test",
+				stages: [
+					{ name: "design", hats: ["planner", "verifier"], review: "ask" },
+				],
+			})
+			makeIntent({ intentDir, slug, studio: "test", stages: ["design"] })
 
-		// Record an unverified elaboration so the cursor emits
-		// elaborate_review on the next tick. We seed it directly rather
-		// than going through `haiku_stage_elaboration_record` because we
-		// want the cursor to be the thing that mints the nonce, not the
-		// record tool.
-		const elabPath = join(intentDir, "stages", "design", "elaboration.md")
-		onStageBranch(repoRoot, slug, "design", () => {
-			mkdirSync(join(intentDir, "stages", "design"), { recursive: true })
-			writeFileSync(
-				elabPath,
-				matter.stringify("test elaboration", {
-					recorded_at: new Date().toISOString(),
-					intent: slug,
-					stage: "design",
-				}),
+			// Record an unverified elaboration so the cursor emits
+			// elaborate_review on the next tick. We seed it directly rather
+			// than going through `haiku_stage_elaboration_record` because we
+			// want the cursor to be the thing that mints the nonce, not the
+			// record tool.
+			const elabPath = join(intentDir, "stages", "design", "elaboration.md")
+			onStageBranch(repoRoot, slug, "design", () => {
+				mkdirSync(join(intentDir, "stages", "design"), { recursive: true })
+				writeFileSync(
+					elabPath,
+					matter.stringify("test elaboration", {
+						recorded_at: new Date().toISOString(),
+						intent: slug,
+						stage: "design",
+					}),
+				)
+				execFileSync("git", ["-C", repoRoot, "add", elabPath])
+				execFileSync("git", ["-C", repoRoot, "commit", "-m", "seed elab"])
+			})
+
+			const tick = await runTickWithBranchAlignment(slug)
+			// Post-Option-A: the cursor emits a single `elaborate_loop`
+			// carrying `verify_conversation` in `signals_unmet`, with the
+			// nonce surfaced on `verifier_nonces.verify_conversation`.
+			assert.strictEqual(tick.action, "elaborate_loop")
+			assert.strictEqual(tick.stage, "design")
+			const nonce = tick.verifier_nonces?.verify_conversation
+			assert.ok(
+				typeof nonce === "string" && nonce.length === 32,
+				`expected 32-char hex nonce on verifier_nonces.verify_conversation; got ${JSON.stringify(tick.verifier_nonces)}`,
 			)
-			execFileSync("git", ["-C", repoRoot, "add", elabPath])
-			execFileSync("git", ["-C", repoRoot, "commit", "-m", "seed elab"])
-		})
 
-		const tick = await runTickWithBranchAlignment(slug)
-		// Post-Option-A: the cursor emits a single `elaborate_loop`
-		// carrying `verify_conversation` in `signals_unmet`, with the
-		// nonce surfaced on `verifier_nonces.verify_conversation`.
-		assert.strictEqual(tick.action, "elaborate_loop")
-		assert.strictEqual(tick.stage, "design")
-		const nonce = tick.verifier_nonces?.verify_conversation
-		assert.ok(
-			typeof nonce === "string" && nonce.length === 32,
-			`expected 32-char hex nonce on verifier_nonces.verify_conversation; got ${JSON.stringify(tick.verifier_nonces)}`,
-		)
+			const sidecar = readSidecar(intentDir)
+			assert.deepStrictEqual(
+				Object.keys(sidecar).sort(),
+				["stages/design/elaborate"],
+				`unexpected sidecar keys: ${JSON.stringify(sidecar)}`,
+			)
+			assert.strictEqual(sidecar["stages/design/elaborate"].nonce, nonce)
 
-		const sidecar = readSidecar(intentDir)
-		assert.deepStrictEqual(
-			Object.keys(sidecar).sort(),
-			["stages/design/elaborate"],
-			`unexpected sidecar keys: ${JSON.stringify(sidecar)}`,
-		)
-		assert.strictEqual(sidecar["stages/design/elaborate"].nonce, nonce)
-
-		// Idempotent: a second tick against the same disk state reuses
-		// the same nonce (no rotation while recorded_at is unchanged).
-		const tick2 = await runTickWithBranchAlignment(slug)
-		assert.strictEqual(
-			tick2.verifier_nonces?.verify_conversation,
-			nonce,
-		)
-	})
+			// Idempotent: a second tick against the same disk state reuses
+			// the same nonce (no rotation while recorded_at is unchanged).
+			const tick2 = await runTickWithBranchAlignment(slug)
+			assert.strictEqual(tick2.verifier_nonces?.verify_conversation, nonce)
+		},
+	)
 })
 
 test("haiku_stage_elaboration_seal refuses without nonce, accepts the minted one once", async () => {
@@ -142,7 +144,9 @@ test("haiku_stage_elaboration_seal refuses without nonce, accepts the minted one
 		makeStudio({
 			repoRoot,
 			studio: "test",
-			stages: [{ name: "design", hats: ["planner", "verifier"], review: "ask" }],
+			stages: [
+				{ name: "design", hats: ["planner", "verifier"], review: "ask" },
+			],
 		})
 		makeIntent({ intentDir, slug, studio: "test", stages: ["design"] })
 
@@ -221,70 +225,75 @@ test("haiku_stage_elaboration_seal refuses without nonce, accepts the minted one
 
 test("haiku_stage_elaboration_record clears pending nonces (in-flight verifier can't seal new body)", async () => {
 	if (!HAS_GIT) return
-	await withRepo("test-nonce-rerecord", async ({ repoRoot, intentDir, slug }) => {
-		makeStudio({
-			repoRoot,
-			studio: "test",
-			stages: [{ name: "design", hats: ["planner", "verifier"], review: "ask" }],
-		})
-		makeIntent({ intentDir, slug, studio: "test", stages: ["design"] })
+	await withRepo(
+		"test-nonce-rerecord",
+		async ({ repoRoot, intentDir, slug }) => {
+			makeStudio({
+				repoRoot,
+				studio: "test",
+				stages: [
+					{ name: "design", hats: ["planner", "verifier"], review: "ask" },
+				],
+			})
+			makeIntent({ intentDir, slug, studio: "test", stages: ["design"] })
 
-		const elabPath = join(intentDir, "stages", "design", "elaboration.md")
-		onStageBranch(repoRoot, slug, "design", () => {
-			mkdirSync(join(intentDir, "stages", "design"), { recursive: true })
-			writeFileSync(
-				elabPath,
-				matter.stringify("first body", {
-					recorded_at: new Date().toISOString(),
+			const elabPath = join(intentDir, "stages", "design", "elaboration.md")
+			onStageBranch(repoRoot, slug, "design", () => {
+				mkdirSync(join(intentDir, "stages", "design"), { recursive: true })
+				writeFileSync(
+					elabPath,
+					matter.stringify("first body", {
+						recorded_at: new Date().toISOString(),
+						intent: slug,
+						stage: "design",
+					}),
+				)
+				execFileSync("git", ["-C", repoRoot, "add", elabPath])
+				execFileSync("git", ["-C", repoRoot, "commit", "-m", "seed elab v1"])
+			})
+
+			const tick1 = await runTickWithBranchAlignment(slug)
+			const oldNonce = tick1.verifier_nonces?.verify_conversation
+			assert.ok(typeof oldNonce === "string" && oldNonce.length === 32)
+
+			// Re-record clears the nonce.
+			const { default: recordTool } = await import(
+				"../src/tools/orchestrator/haiku_stage_elaboration_record.ts"
+			)
+			await onStageBranch(repoRoot, slug, "design", async () => {
+				const r = await recordTool.handle({
 					intent: slug,
 					stage: "design",
-				}),
+					body: "rewritten body with more substance",
+				})
+				assert.ok(!r.isError)
+			})
+
+			// Old nonce in the stale verifier subagent's hands is gone.
+			const sidecarAfter = readSidecar(intentDir)
+			assert.strictEqual(sidecarAfter["stages/design/elaborate"], undefined)
+
+			const { default: sealTool } = await import(
+				"../src/tools/orchestrator/haiku_stage_elaboration_seal.ts"
 			)
-			execFileSync("git", ["-C", repoRoot, "add", elabPath])
-			execFileSync("git", ["-C", repoRoot, "commit", "-m", "seed elab v1"])
-		})
-
-		const tick1 = await runTickWithBranchAlignment(slug)
-		const oldNonce = tick1.verifier_nonces?.verify_conversation
-		assert.ok(typeof oldNonce === "string" && oldNonce.length === 32)
-
-		// Re-record clears the nonce.
-		const { default: recordTool } = await import(
-			"../src/tools/orchestrator/haiku_stage_elaboration_record.ts"
-		)
-		await onStageBranch(repoRoot, slug, "design", async () => {
-			const r = await recordTool.handle({
+			const stale = await sealTool.handle({
 				intent: slug,
 				stage: "design",
-				body: "rewritten body with more substance",
+				nonce: oldNonce,
 			})
-			assert.ok(!r.isError)
-		})
+			assert.ok(stale.isError)
+			const staleBody = JSON.parse(stale.content[0].text)
+			assert.strictEqual(staleBody.error, "verifier_nonce_invalid")
+			assert.strictEqual(staleBody.reason, "missing")
 
-		// Old nonce in the stale verifier subagent's hands is gone.
-		const sidecarAfter = readSidecar(intentDir)
-		assert.strictEqual(sidecarAfter["stages/design/elaborate"], undefined)
-
-		const { default: sealTool } = await import(
-			"../src/tools/orchestrator/haiku_stage_elaboration_seal.ts"
-		)
-		const stale = await sealTool.handle({
-			intent: slug,
-			stage: "design",
-			nonce: oldNonce,
-		})
-		assert.ok(stale.isError)
-		const staleBody = JSON.parse(stale.content[0].text)
-		assert.strictEqual(staleBody.error, "verifier_nonce_invalid")
-		assert.strictEqual(staleBody.reason, "missing")
-
-		// Next tick mints a fresh nonce tied to the new recorded_at.
-		const tick2 = await runTickWithBranchAlignment(slug)
-		assert.strictEqual(tick2.action, "elaborate_loop")
-		const newNonce = tick2.verifier_nonces?.verify_conversation
-		assert.ok(typeof newNonce === "string")
-		assert.notStrictEqual(newNonce, oldNonce)
-	})
+			// Next tick mints a fresh nonce tied to the new recorded_at.
+			const tick2 = await runTickWithBranchAlignment(slug)
+			assert.strictEqual(tick2.action, "elaborate_loop")
+			const newNonce = tick2.verifier_nonces?.verify_conversation
+			assert.ok(typeof newNonce === "string")
+			assert.notStrictEqual(newNonce, oldNonce)
+		},
+	)
 })
 
 test("haiku_intent_seal requires nonce for pre-intent elaborate_review", async () => {
@@ -293,7 +302,9 @@ test("haiku_intent_seal requires nonce for pre-intent elaborate_review", async (
 		makeStudio({
 			repoRoot,
 			studio: "test",
-			stages: [{ name: "design", hats: ["planner", "verifier"], review: "ask" }],
+			stages: [
+				{ name: "design", hats: ["planner", "verifier"], review: "ask" },
+			],
 		})
 		// Truly-fresh intent: no verified_at, no units. Pre-intent
 		// elaborate_review fires.
@@ -317,7 +328,7 @@ test("haiku_intent_seal requires nonce for pre-intent elaborate_review", async (
 
 		const wrong = await intentSeal.handle({
 			intent: slug,
-			nonce: "wrongwrong".repeat(3) + "ab",
+			nonce: `${"wrongwrong".repeat(3)}ab`,
 		})
 		assert.ok(wrong.isError)
 		const wrongBody = JSON.parse(wrong.content[0].text)

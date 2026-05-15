@@ -111,9 +111,11 @@ setIsGitRepoForTests(false)
 
 const { handleToolCall } = await import("../src/server/tool-call.ts")
 const { stopHttpServer, getActualPort } = await import("../src/http.ts")
-const { deleteSession, getSession, updateSession } = await import(
-	"../src/sessions.ts"
-)
+const {
+	deleteSession,
+	getSession,
+	updateSession: _updateSession,
+} = await import("../src/sessions.ts")
 
 // ─── Test runner ──────────────────────────────────────────────────────────
 

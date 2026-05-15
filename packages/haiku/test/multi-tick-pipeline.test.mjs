@@ -371,10 +371,7 @@ test("multi-tick: 3-stage continuous intent walks from elaborate to sealed", {
 										...parsed.data,
 										decompose_verified_at: new Date().toISOString(),
 									}
-									writeFileSync(
-										elabPath,
-										matter.stringify(parsed.content, fm),
-									)
+									writeFileSync(elabPath, matter.stringify(parsed.content, fm))
 									break
 								}
 								case "discovery": {
@@ -387,9 +384,7 @@ test("multi-tick: 3-stage continuous intent walks from elaborate to sealed", {
 								}
 								default: {
 									console.error("Unknown loop signal:", entry)
-									assert.fail(
-										`Unknown elaborate_loop signal '${entry.signal}'`,
-									)
+									assert.fail(`Unknown elaborate_loop signal '${entry.signal}'`)
 								}
 							}
 						}
@@ -484,6 +479,7 @@ test("multi-tick: 3-stage continuous intent walks from elaborate to sealed", {
 						assert.fail(
 							`Unexpected action '${action.action}' at tick ${tick}: ${action.message}`,
 						)
+						break
 					}
 					default: {
 						console.error("Unknown action:", action)

@@ -14,16 +14,13 @@
 // the discovery fan-out, the unit-decomposition mechanics, the
 // verifier subagent prompts. The router just composes.
 
-import elaborateBuilder from "../elaborate/index.js"
-import elaborateReviewBuilder from "../elaborate_review/index.js"
+import { definePromptBuilder } from "../../../define.js"
+import type { PromptBuilder, PromptBuilderContext } from "../../../types.js"
 import decomposeBuilder from "../decompose/index.js"
 import decomposeReviewBuilder from "../decompose_review/index.js"
 import discoveryRequiredBuilder from "../discovery_required/index.js"
-import { definePromptBuilder } from "../../../define.js"
-import type {
-	PromptBuilder,
-	PromptBuilderContext,
-} from "../../../types.js"
+import elaborateBuilder from "../elaborate/index.js"
+import elaborateReviewBuilder from "../elaborate_review/index.js"
 
 type SignalEntry = {
 	signal:
@@ -190,7 +187,7 @@ export default definePromptBuilder((ctx) => {
 			"",
 			"The signals above are mutually independent unless explicitly noted in a signal block. You can dispatch the discovery subagent AND draft units AND record the elaboration conversation in the same response. The cursor's next tick re-evaluates the loop against the disk and returns whichever signals are still unmet (possibly an empty set, in which case the cursor walks past the loop).",
 			"",
-			"When you need to surface a user decision (e.g. discovery turned up two viable forks), file `origin: \"discovery\", resolution: \"question\"` feedback via `haiku_feedback` instead of guessing. The next tick will route the FB through `feedback_question` so the user picks before the loop continues.",
+			'When you need to surface a user decision (e.g. discovery turned up two viable forks), file `origin: "discovery", resolution: "question"` feedback via `haiku_feedback` instead of guessing. The next tick will route the FB through `feedback_question` so the user picks before the loop continues.',
 		].join("\n"),
 	)
 

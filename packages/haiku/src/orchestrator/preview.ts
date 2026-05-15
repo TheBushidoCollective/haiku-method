@@ -67,7 +67,7 @@ export function enrichActionWithPreview(action: OrchestratorAction): void {
 		case "decompose_review":
 			tell_user = `Dispatching the decompose-verifier on the drafted units for stage '${stage}'.`
 			next_step =
-				"The verifier audits whether the units collectively cover the captured conversation transcript — nothing scoped is missing a unit, no unit is out of scope. On pass, it stamps `decompose_verified_at` on elaboration.md and the cursor advances to execute. On fail, it files feedback with `targets.invalidates: [\"decompose_complete\"]` and the fix loop reruns decomposition."
+				'The verifier audits whether the units collectively cover the captured conversation transcript — nothing scoped is missing a unit, no unit is out of scope. On pass, it stamps `decompose_verified_at` on elaboration.md and the cursor advances to execute. On fail, it files feedback with `targets.invalidates: ["decompose_complete"]` and the fix loop reruns decomposition.'
 			break
 
 		case "decompose": {
@@ -181,7 +181,7 @@ export function enrichActionWithPreview(action: OrchestratorAction): void {
 					? `Stage '${stage}' is stuck in a loop — iteration ${escIteration} regenerated the same feedback set as iteration ${escIteration - 1}.`
 					: `Stage '${stage}' hit the ${escMax}-iteration ceiling (now at ${escIteration}) — stopping the autonomous loop.`
 			next_step =
-				"STOP. Surface this to the human: the autonomous loop is halted. Do NOT call haiku_run_next again until the human makes a decision (reject feedback items, file a stage_revisit feedback via `haiku_feedback({ resolution: \"stage_revisit\" })` to force another cycle, or terminate the intent)."
+				'STOP. Surface this to the human: the autonomous loop is halted. Do NOT call haiku_run_next again until the human makes a decision (reject feedback items, file a stage_revisit feedback via `haiku_feedback({ resolution: "stage_revisit" })` to force another cycle, or terminate the intent).'
 			break
 		}
 

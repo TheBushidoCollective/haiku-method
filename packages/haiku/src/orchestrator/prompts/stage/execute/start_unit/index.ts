@@ -51,9 +51,9 @@ import {
 	inlineFile,
 	readInterpretation,
 } from "../../../_helpers.js"
-import { definePromptBuilder } from "../../../define.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { SUBAGENT_ERROR_RECOVERY } from "../../../_shared/index.js"
+import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 
@@ -70,10 +70,7 @@ const SKILLS_PREAMBLE = loadTemplate(
 	"blocks/skills-preamble.md",
 )
 const AUTONOMY_NOTE = loadTemplate(import.meta.url, "blocks/autonomy-note.md")
-const TICKETING_NOTE = loadTemplate(
-	import.meta.url,
-	"blocks/ticketing-note.md",
-)
+const TICKETING_NOTE = loadTemplate(import.meta.url, "blocks/ticketing-note.md")
 const PARENT_INSTRUCTIONS_TPL = loadTemplate(
 	import.meta.url,
 	"blocks/parent-instructions.eta.md",

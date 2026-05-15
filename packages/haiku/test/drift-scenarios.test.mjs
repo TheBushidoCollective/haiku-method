@@ -90,7 +90,7 @@ function setupAndGetSignTime(root) {
 
 // Force a commit's date so test ordering is deterministic
 // regardless of how fast the test runs.
-function commitWithDate(root, message, isoDate) {
+function _commitWithDate(root, message, isoDate) {
 	execFileSync(
 		"git",
 		[
@@ -117,7 +117,7 @@ function commitWithDate(root, message, isoDate) {
 
 test("spec drift: signed review + later commit on unit.md → drift_detected", async () => {
 	if (!HAS_GIT) return
-	await withRepo("drift-spec", async ({ root, intentDir, slug }) => {
+	await withRepo("drift-spec", async ({ root, intentDir, slug: _slug }) => {
 		const initAt = "2026-04-01T00:00:00Z"
 		const signedAt = "2026-05-01T00:00:00Z"
 		const driftAt = "2026-06-01T00:00:00Z"
@@ -229,7 +229,7 @@ test("spec drift: signed review + later commit on unit.md → drift_detected", a
 
 test("output drift: signed approval + commit on declared output → drift_detected", async () => {
 	if (!HAS_GIT) return
-	await withRepo("drift-output", async ({ root, intentDir, slug }) => {
+	await withRepo("drift-output", async ({ root, intentDir, slug: _slug }) => {
 		const fixedAt = "2026-05-01T00:00:00Z"
 		const outputRel = "stages/design/SPEC.md"
 		const outputAbs = join(intentDir, outputRel)
@@ -304,7 +304,7 @@ test("output drift: signed approval + commit on declared output → drift_detect
 
 test("no drift baseline: signed unit with no subsequent commits → empty event list", async () => {
 	if (!HAS_GIT) return
-	await withRepo("drift-clean", async ({ root, intentDir, slug }) => {
+	await withRepo("drift-clean", async ({ root, intentDir, slug: _slug }) => {
 		const placeholderAt = "2026-05-01T00:00:00Z"
 		writeUnit(intentDir, "design", "unit-01", {
 			title: "u1",
@@ -361,154 +361,160 @@ test("no drift baseline: signed unit with no subsequent commits → empty event 
 
 test("pre-execute unit (started_at: null) is skipped from drift sweep", async () => {
 	if (!HAS_GIT) return
-	await withRepo("drift-pre-execute", async ({ root, intentDir, slug }) => {
-		const fixedAt = "2026-05-01T00:00:00Z"
-		const unitPath = writeUnit(intentDir, "design", "unit-01", {
-			title: "u1",
-			depends_on: [],
-			started_at: null,
-			iterations: [],
-			reviews: { spec: { at: fixedAt } }, // Stale review on unstarted unit (rare)
-			approvals: {},
-			outputs: [],
-		})
-		git(root, "add", "-A")
-		git(root, "commit", "-m", "initial", "--date", fixedAt)
-		// Edit the spec — this WOULD normally count as drift, but
-		// pre-execute units are always fair game and the sweep skips them.
-		writeFileSync(unitPath, "# u1\n\nEdited.\n")
-		git(root, "add", "-A")
-		git(root, "commit", "-m", "edit on pre-execute unit")
+	await withRepo(
+		"drift-pre-execute",
+		async ({ root, intentDir, slug: _slug }) => {
+			const fixedAt = "2026-05-01T00:00:00Z"
+			const unitPath = writeUnit(intentDir, "design", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				started_at: null,
+				iterations: [],
+				reviews: { spec: { at: fixedAt } }, // Stale review on unstarted unit (rare)
+				approvals: {},
+				outputs: [],
+			})
+			git(root, "add", "-A")
+			git(root, "commit", "-m", "initial", "--date", fixedAt)
+			// Edit the spec — this WOULD normally count as drift, but
+			// pre-execute units are always fair game and the sweep skips them.
+			writeFileSync(unitPath, "# u1\n\nEdited.\n")
+			git(root, "add", "-A")
+			git(root, "commit", "-m", "edit on pre-execute unit")
 
-		const { runDriftSweep } = await import(
-			"../src/orchestrator/workflow/drift-sweep.js"
-		)
-		const result = runDriftSweep({
-			intentDir,
-			stage: "design",
-			studio: "test",
-			repoRoot: root,
-		})
-		assert.strictEqual(result.events.length, 0)
-		assert.ok(result.skipped >= 1)
-	})
+			const { runDriftSweep } = await import(
+				"../src/orchestrator/workflow/drift-sweep.js"
+			)
+			const result = runDriftSweep({
+				intentDir,
+				stage: "design",
+				studio: "test",
+				repoRoot: root,
+			})
+			assert.strictEqual(result.events.length, 0)
+			assert.ok(result.skipped >= 1)
+		},
+	)
 })
 
 // ── Previous stage drift ────────────────────────────────────────────
 
 test("drift on a previous stage's signed unit: cursor can sweep that stage independently", async () => {
 	if (!HAS_GIT) return
-	await withRepo("drift-prev-stage", async ({ root, intentDir, slug }) => {
-		const initAt = "2026-04-01T00:00:00Z"
-		const signedAt = "2026-05-01T00:00:00Z"
-		const driftAt = "2026-06-01T00:00:00Z"
-		// Set up TWO stages. Sign and approve stage A's unit. Drift it.
-		const { bodySha256 } = await import(
-			"../src/orchestrator/workflow/sign-slot.js"
-		)
-		const aUnitPath = writeUnit(intentDir, "a", "unit-01", {
-			title: "a-unit",
-			depends_on: [],
-			started_at: signedAt,
-			iterations: [
-				{
-					hat: "verifier",
+	await withRepo(
+		"drift-prev-stage",
+		async ({ root, intentDir, slug: _slug }) => {
+			const initAt = "2026-04-01T00:00:00Z"
+			const signedAt = "2026-05-01T00:00:00Z"
+			const driftAt = "2026-06-01T00:00:00Z"
+			// Set up TWO stages. Sign and approve stage A's unit. Drift it.
+			const { bodySha256 } = await import(
+				"../src/orchestrator/workflow/sign-slot.js"
+			)
+			const aUnitPath = writeUnit(intentDir, "a", "unit-01", {
+				title: "a-unit",
+				depends_on: [],
+				started_at: signedAt,
+				iterations: [
+					{
+						hat: "verifier",
+						started_at: signedAt,
+						completed_at: signedAt,
+						result: "advance",
+					},
+				],
+				outputs: [],
+			})
+			const initialAHash = bodySha256(aUnitPath)
+			writeFileSync(
+				aUnitPath,
+				matter.stringify(matter(readFileSync(aUnitPath, "utf8")).content, {
+					title: "a-unit",
+					depends_on: [],
 					started_at: signedAt,
-					completed_at: signedAt,
-					result: "advance",
-				},
-			],
-			outputs: [],
-		})
-		const initialAHash = bodySha256(aUnitPath)
-		writeFileSync(
-			aUnitPath,
-			matter.stringify(matter(readFileSync(aUnitPath, "utf8")).content, {
-				title: "a-unit",
-				depends_on: [],
-				started_at: signedAt,
-				iterations: [
-					{
-						hat: "verifier",
-						started_at: signedAt,
-						completed_at: signedAt,
-						result: "advance",
+					iterations: [
+						{
+							hat: "verifier",
+							started_at: signedAt,
+							completed_at: signedAt,
+							result: "advance",
+						},
+					],
+					reviews: { spec: { at: signedAt, body_sha256: initialAHash } },
+					approvals: {
+						spec: { at: signedAt, witnesses: {} },
+						user: { at: signedAt, witnesses: {} },
 					},
-				],
-				reviews: { spec: { at: signedAt, body_sha256: initialAHash } },
-				approvals: {
-					spec: { at: signedAt, witnesses: {} },
-					user: { at: signedAt, witnesses: {} },
-				},
-				outputs: [],
-			}),
-		)
-		writeUnit(intentDir, "b", "unit-01", {
-			title: "b-unit",
-			depends_on: [],
-			started_at: null,
-			iterations: [],
-			reviews: {},
-			approvals: {},
-			outputs: [],
-		})
-		execFileSync("git", ["add", "-A"], { cwd: root, stdio: "pipe" })
-		execFileSync("git", ["commit", "-m", "two stages", "--date", initAt], {
-			cwd: root,
-			stdio: "pipe",
-			env: { ...process.env, GIT_COMMITTER_DATE: initAt },
-		})
-		// Drift stage A's unit while we're working on stage B.
-		// Keep the FM intact (drift = body edit, not FM erasure).
-		// Preserve body_sha256 baseline so the sweep can detect drift.
-		writeFileSync(
-			aUnitPath,
-			matter.stringify("# a-unit\n\nDRIFT in previous stage.\n", {
-				title: "a-unit",
+					outputs: [],
+				}),
+			)
+			writeUnit(intentDir, "b", "unit-01", {
+				title: "b-unit",
 				depends_on: [],
-				started_at: signedAt,
-				iterations: [
-					{
-						hat: "verifier",
-						started_at: signedAt,
-						completed_at: signedAt,
-						result: "advance",
-					},
-				],
-				reviews: { spec: { at: signedAt, body_sha256: initialAHash } },
-				approvals: {
-					spec: { at: signedAt, witnesses: {} },
-					user: { at: signedAt, witnesses: {} },
-				},
+				started_at: null,
+				iterations: [],
+				reviews: {},
+				approvals: {},
 				outputs: [],
-			}),
-		)
-		execFileSync("git", ["add", "-A"], { cwd: root, stdio: "pipe" })
-		execFileSync(
-			"git",
-			["commit", "-m", "drift: edit prev-stage unit", "--date", driftAt],
-			{
+			})
+			execFileSync("git", ["add", "-A"], { cwd: root, stdio: "pipe" })
+			execFileSync("git", ["commit", "-m", "two stages", "--date", initAt], {
 				cwd: root,
 				stdio: "pipe",
-				env: { ...process.env, GIT_COMMITTER_DATE: driftAt },
-			},
-		)
+				env: { ...process.env, GIT_COMMITTER_DATE: initAt },
+			})
+			// Drift stage A's unit while we're working on stage B.
+			// Keep the FM intact (drift = body edit, not FM erasure).
+			// Preserve body_sha256 baseline so the sweep can detect drift.
+			writeFileSync(
+				aUnitPath,
+				matter.stringify("# a-unit\n\nDRIFT in previous stage.\n", {
+					title: "a-unit",
+					depends_on: [],
+					started_at: signedAt,
+					iterations: [
+						{
+							hat: "verifier",
+							started_at: signedAt,
+							completed_at: signedAt,
+							result: "advance",
+						},
+					],
+					reviews: { spec: { at: signedAt, body_sha256: initialAHash } },
+					approvals: {
+						spec: { at: signedAt, witnesses: {} },
+						user: { at: signedAt, witnesses: {} },
+					},
+					outputs: [],
+				}),
+			)
+			execFileSync("git", ["add", "-A"], { cwd: root, stdio: "pipe" })
+			execFileSync(
+				"git",
+				["commit", "-m", "drift: edit prev-stage unit", "--date", driftAt],
+				{
+					cwd: root,
+					stdio: "pipe",
+					env: { ...process.env, GIT_COMMITTER_DATE: driftAt },
+				},
+			)
 
-		const { runDriftSweep } = await import(
-			"../src/orchestrator/workflow/drift-sweep.js"
-		)
-		// Sweep stage A explicitly — the drift sweep is per-stage; the
-		// cursor's Track C iterates stages and calls this for each.
-		const result = runDriftSweep({
-			intentDir,
-			stage: "a",
-			studio: "test",
-			repoRoot: root,
-		})
-		assert.ok(
-			result.events.length >= 1,
-			"drift on previous stage's signed unit must surface",
-		)
-		assert.strictEqual(result.events[0].unit, "unit-01")
-	})
+			const { runDriftSweep } = await import(
+				"../src/orchestrator/workflow/drift-sweep.js"
+			)
+			// Sweep stage A explicitly — the drift sweep is per-stage; the
+			// cursor's Track C iterates stages and calls this for each.
+			const result = runDriftSweep({
+				intentDir,
+				stage: "a",
+				studio: "test",
+				repoRoot: root,
+			})
+			assert.ok(
+				result.events.length >= 1,
+				"drift on previous stage's signed unit must surface",
+			)
+			assert.strictEqual(result.events[0].unit, "unit-01")
+		},
+	)
 })

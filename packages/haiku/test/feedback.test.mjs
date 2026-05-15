@@ -601,7 +601,7 @@ try {
 		assert.ok(raw.includes("selected_text: this claim has no citation"))
 		assert.ok(raw.includes("paragraph: 3"))
 		assert.ok(raw.includes("comment_id: agent-anchor-001"))
-		assert.ok(raw.includes("content_sha: " + "deadbeef".repeat(8)))
+		assert.ok(raw.includes(`content_sha: ${"deadbeef".repeat(8)}`))
 	})
 
 	test("MCP tool rejects malformed inline_anchor (missing selected_text)", () => {

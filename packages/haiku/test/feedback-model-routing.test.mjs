@@ -16,7 +16,6 @@
 //     (haiku→sonnet→opus), so the next bolt's dispatch picks up the
 //     escalated value.
 
-import { test } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
 import {
@@ -28,6 +27,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
+import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import matter from "gray-matter"
 import {

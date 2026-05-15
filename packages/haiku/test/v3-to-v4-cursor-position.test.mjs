@@ -33,13 +33,7 @@
 
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import {
-	existsSync,
-	mkdirSync,
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { test } from "node:test"
@@ -80,12 +74,30 @@ async function withRepo(slug, fn) {
 		// Real-ish git topology — the cursor's pre-tick can read git
 		// state, and derivePosition's findCurrentStage needs cwd
 		// inside a haiku tree to walk.
-		execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root, stdio: "pipe" })
-		execFileSync("git", ["config", "user.email", "test@haiku.test"], { cwd: root, stdio: "pipe" })
-		execFileSync("git", ["config", "user.name", "haiku-test"], { cwd: root, stdio: "pipe" })
-		execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: root, stdio: "pipe" })
-		execFileSync("git", ["commit", "--allow-empty", "-q", "-m", "init"], { cwd: root, stdio: "pipe" })
-		execFileSync("git", ["checkout", "-q", "-b", `haiku/${slug}/main`], { cwd: root, stdio: "pipe" })
+		execFileSync("git", ["init", "-q", "-b", "main"], {
+			cwd: root,
+			stdio: "pipe",
+		})
+		execFileSync("git", ["config", "user.email", "test@haiku.test"], {
+			cwd: root,
+			stdio: "pipe",
+		})
+		execFileSync("git", ["config", "user.name", "haiku-test"], {
+			cwd: root,
+			stdio: "pipe",
+		})
+		execFileSync("git", ["config", "commit.gpgsign", "false"], {
+			cwd: root,
+			stdio: "pipe",
+		})
+		execFileSync("git", ["commit", "--allow-empty", "-q", "-m", "init"], {
+			cwd: root,
+			stdio: "pipe",
+		})
+		execFileSync("git", ["checkout", "-q", "-b", `haiku/${slug}/main`], {
+			cwd: root,
+			stdio: "pipe",
+		})
 		const haikuDir = join(root, ".haiku")
 		mkdirSync(haikuDir, { recursive: true })
 		writeFileSync(join(haikuDir, "settings.yml"), "drift_detection: false\n")
@@ -153,16 +165,35 @@ test("v3→v4 cursor: mid-execute on build (design merged) pins on build", async
 					started_at: "2026-04-15T09:00:00Z",
 					hat: "verifier",
 					iterations: [
-						{ hat: "researcher", started_at: "...", completed_at: "...", result: "advance" },
-						{ hat: "distiller", started_at: "...", completed_at: "...", result: "advance" },
-						{ hat: "verifier", started_at: "...", completed_at: "...", result: "advance" },
+						{
+							hat: "researcher",
+							started_at: "...",
+							completed_at: "...",
+							result: "advance",
+						},
+						{
+							hat: "distiller",
+							started_at: "...",
+							completed_at: "...",
+							result: "advance",
+						},
+						{
+							hat: "verifier",
+							started_at: "...",
+							completed_at: "...",
+							result: "advance",
+						},
 					],
 				},
 			},
 		])
 		writeFileSync(
 			join(intentDir, "stages", "inception", "state.json"),
-			JSON.stringify({ stage: "inception", status: "completed", phase: "gate" }),
+			JSON.stringify({
+				stage: "inception",
+				status: "completed",
+				phase: "gate",
+			}),
 		)
 		// Design = in-progress (units have iterations but no verifier-
 		// terminal-advance + no `status: completed`).
@@ -176,7 +207,12 @@ test("v3→v4 cursor: mid-execute on build (design merged) pins on build", async
 					started_at: "2026-04-16T09:00:00Z",
 					hat: "designer",
 					iterations: [
-						{ hat: "designer", started_at: "...", completed_at: null, result: null },
+						{
+							hat: "designer",
+							started_at: "...",
+							completed_at: null,
+							result: null,
+						},
 					],
 				},
 			},
@@ -243,7 +279,12 @@ test("v3→v4 cursor: design fully approved + no later stage progress → walk p
 						started_at: "2026-04-15T09:00:00Z",
 						hat: "verifier",
 						iterations: [
-							{ hat: "verifier", started_at: "...", completed_at: "...", result: "advance" },
+							{
+								hat: "verifier",
+								started_at: "...",
+								completed_at: "...",
+								result: "advance",
+							},
 						],
 					},
 				},
@@ -254,7 +295,9 @@ test("v3→v4 cursor: design fully approved + no later stage progress → walk p
 			)
 		}
 		// Product stage exists but has zero units (not yet decomposed).
-		mkdirSync(join(intentDir, "stages", "product", "units"), { recursive: true })
+		mkdirSync(join(intentDir, "stages", "product", "units"), {
+			recursive: true,
+		})
 
 		const result = await runMigrator(intentDir, root)
 		assert.strictEqual(result.to, "4.0.0")
@@ -364,7 +407,12 @@ test("v3→v4 cursor: every stage approved + verified_at set → terminal leg (i
 						started_at: "2026-04-15T09:00:00Z",
 						hat: "verifier",
 						iterations: [
-							{ hat: "verifier", started_at: "...", completed_at: "...", result: "advance" },
+							{
+								hat: "verifier",
+								started_at: "...",
+								completed_at: "...",
+								result: "advance",
+							},
 						],
 					},
 				},

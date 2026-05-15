@@ -1,15 +1,13 @@
 #!/usr/bin/env npx tsx
+
 // scrub-witness-fields.test.mjs — Verifies that engine witness fields
 // (body_sha256, witnesses[]) are stripped from the intent + unit
 // frontmatter projections before the SPA sees them. Reviewers
 // shouldn't see "scary sha artifacts" (Matt's session) just because
 // the cursor needs them on disk for drift detection.
 
-import { test } from "node:test"
 import assert from "node:assert/strict"
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { test } from "node:test"
 
 test("session-api: scrubEngineWitnessFields strips body_sha256 and witnesses[] from approvals + reviews", async () => {
 	// Import the projection helper indirectly by exercising the wire

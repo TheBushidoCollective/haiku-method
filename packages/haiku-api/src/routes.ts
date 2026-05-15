@@ -11,6 +11,7 @@
  */
 
 import type { ZodTypeAny } from "zod"
+import { AdvanceResponseSchema } from "./schemas/advance.js"
 import {
 	DEFAULT_BODY_MAX_BYTES,
 	FEEDBACK_BODY_MAX_BYTES,
@@ -35,7 +36,6 @@ import {
 	QuestionAnswerRequestSchema,
 	QuestionAnswerResponseSchema,
 } from "./schemas/question.js"
-import { AdvanceResponseSchema } from "./schemas/advance.js"
 import {
 	ReviewDecisionRequestSchema,
 	ReviewDecisionResponseSchema,

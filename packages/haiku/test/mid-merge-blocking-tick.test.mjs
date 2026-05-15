@@ -146,7 +146,7 @@ body
 		let parsed
 		try {
 			parsed = JSON.parse(head.trim())
-		} catch (err) {
+		} catch (_err) {
 			throw new Error(`expected JSON head, got: ${text.slice(0, 200)}`)
 		}
 

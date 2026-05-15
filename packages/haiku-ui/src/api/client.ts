@@ -8,6 +8,7 @@
  */
 
 import {
+	type AdvanceResponse,
 	type DirectionSelectRequest,
 	type DirectionSelectResponse,
 	type FeedbackCreateRequest,
@@ -25,7 +26,6 @@ import {
 	type ReviewCurrentPayload,
 	type ReviewDecisionRequest,
 	type ReviewDecisionResponse,
-	type AdvanceResponse,
 	type SessionPayload,
 } from "haiku-api"
 import { authHeader, getAuthToken } from "./auth"

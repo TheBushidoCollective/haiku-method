@@ -538,7 +538,7 @@ test("realistic v3 → v4 — FB with upstream_stage relocates to that stage's f
 		)
 		// Target must have a renumbered FB containing the original body.
 		const designFbDir = join(intentDir, "stages", "design", "feedback")
-		const designFiles = readFileSync ? null : null // satisfy ts; use require
+		const _designFiles = readFileSync ? null : null // satisfy ts; use require
 		const fs = await import("node:fs")
 		const allDesign = fs
 			.readdirSync(designFbDir)

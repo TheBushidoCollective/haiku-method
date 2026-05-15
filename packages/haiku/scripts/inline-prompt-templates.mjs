@@ -38,9 +38,7 @@ export const inlinePromptTemplatesPlugin = {
 				// any error positions still point at the right spot.
 				const codeOnly = source
 					.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-					.replace(/(^|\n)\s*\/\/[^\n]*/g, (m) =>
-						m.replace(/[^\n]/g, " "),
-					)
+					.replace(/(^|\n)\s*\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "))
 				if (!codeOnly.includes("loadTemplate(import.meta.url")) return null
 				const dir = dirname(args.path)
 				const inlined = source.replaceAll(

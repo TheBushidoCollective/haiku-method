@@ -190,7 +190,14 @@ export const IntentCurrentStateSchema = z
 			.object({
 				stage: z.string().optional(),
 				phase: z
-					.enum(["elaborate", "execute", "review", "approve", "complete", "gate"])
+					.enum([
+						"elaborate",
+						"execute",
+						"review",
+						"approve",
+						"complete",
+						"gate",
+					])
 					.optional(),
 				step: z.string().optional(),
 				blockedOn: z

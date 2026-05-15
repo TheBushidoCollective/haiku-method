@@ -291,7 +291,7 @@ export function respondSessionApi(
 		// has an active stage; the sweep folds in intent-scope approval
 		// drift on intent.md too.
 		const slugForDrift = session.intent_slug
-		if (slugForDrift && current && current.stage && current.studio) {
+		if (slugForDrift && current?.stage && current.studio) {
 			try {
 				const sweep = runDriftSweep({
 					intentDir: intentDir(slugForDrift),

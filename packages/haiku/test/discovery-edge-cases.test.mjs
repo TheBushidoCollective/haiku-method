@@ -32,11 +32,7 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { test } from "node:test"
 import matter from "gray-matter"
-import {
-	assertLoopSignal,
-	assertNotLoopSignal,
-	pickLoopSignal,
-} from "./_elaborate-loop-helpers.mjs"
+import { assertNotLoopSignal } from "./_elaborate-loop-helpers.mjs"
 import {
 	initTestRepo,
 	makeIntent,

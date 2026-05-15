@@ -26,15 +26,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 process.env.CLAUDE_PLUGIN_ROOT = resolve(__dirname, "..", "..", "..", "plugin")
 
 const { getCurrentState } = await import("../src/current-state.ts")
-const { runWorkflowTick } = await import(
+const { runWorkflowTick: _runWorkflowTick } = await import(
 	"../src/orchestrator/workflow/run-tick.ts"
 )
 const { checkoutFromBranchOnIntentMain } = await import(
 	"../src/git-worktree.ts"
 )
-const { _resetIsGitRepoForTests, setHaikuRootForTests } = await import(
-	"../src/state/shared.ts"
-)
+const { _resetIsGitRepoForTests, setHaikuRootForTests: _setHaikuRootForTests } =
+	await import("../src/state/shared.ts")
 const { resolveStageHats: _resolveStageHats } = await import(
 	"../src/orchestrator/studio.ts"
 )
@@ -89,7 +88,7 @@ function writeIntent(root, slug, frontmatter) {
 	writeFileSync(join(iDir, "intent.md"), lines.join("\n"))
 }
 
-function writeStageState(root, slug, stage, state) {
+function _writeStageState(root, slug, stage, state) {
 	const sd = join(root, ".haiku", "intents", slug, "stages", stage)
 	mkdirSync(sd, { recursive: true })
 	writeFileSync(join(sd, "state.json"), JSON.stringify(state, null, 2))

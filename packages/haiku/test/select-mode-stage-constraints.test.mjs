@@ -21,7 +21,6 @@
 import assert from "node:assert"
 import {
 	chmodSync,
-	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
@@ -41,9 +40,10 @@ writeFileSync(join(tmp, "fake-bin", "git"), "#!/bin/sh\nexit 0\n")
 chmodSync(join(tmp, "fake-bin", "git"), 0o755)
 process.env.PATH = `${join(tmp, "fake-bin")}:${process.env.PATH}`
 
-const { handleOrchestratorTool, setElicitInputHandler } = await import(
-	"../src/orchestrator.ts"
-)
+const {
+	handleOrchestratorTool,
+	setElicitInputHandler: _setElicitInputHandler,
+} = await import("../src/orchestrator.ts")
 const { parseFrontmatter } = await import("../src/state-tools.ts")
 
 let passed = 0

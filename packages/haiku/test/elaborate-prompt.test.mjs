@@ -3,18 +3,12 @@
 // few forward-progress invariants that prove the agent has enough
 // data to act without asking us back.
 
-import { test } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import {
-	mkdirSync,
-	mkdtempSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
+import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -133,7 +127,7 @@ test("elaborate iterative re-entry: emits knowledge block + decide A/B/C", () =>
 	const intentDir = setupIntent(root, "iter")
 	writeFileSync(
 		join(intentDir, "stages", "a", "units", "unit-01-x.md"),
-		`---\nname: unit-01-x\ntitle: x\nhat: builder\noutputs: [\"foo.txt\"]\nstatus: completed\n---\nbody\n`,
+		`---\nname: unit-01-x\ntitle: x\nhat: builder\noutputs: ["foo.txt"]\nstatus: completed\n---\nbody\n`,
 	)
 	const cwd = process.cwd()
 	process.chdir(root)
@@ -214,7 +208,7 @@ test("elaborate fresh on stage b: prior-stage references included", () => {
 	// Land an artifact on stage a so its existence shows up.
 	writeFileSync(
 		join(intentDir, "stages", "a", "units", "unit-01-foo.md"),
-		`---\nname: unit-01-foo\ntitle: foo\nhat: builder\noutputs: [\"a-output.txt\"]\nstatus: completed\n---\n`,
+		`---\nname: unit-01-foo\ntitle: foo\nhat: builder\noutputs: ["a-output.txt"]\nstatus: completed\n---\n`,
 	)
 	const cwd = process.cwd()
 	process.chdir(root)
@@ -287,7 +281,7 @@ test("elaborate iterative: completed unit body references the unit file path", (
 	const intentDir = setupIntent(root, "paths")
 	writeFileSync(
 		join(intentDir, "stages", "a", "units", "unit-01-x.md"),
-		`---\nname: unit-01-x\ntitle: x\nhat: builder\noutputs: [\"foo.txt\"]\nstatus: completed\n---\n`,
+		`---\nname: unit-01-x\ntitle: x\nhat: builder\noutputs: ["foo.txt"]\nstatus: completed\n---\n`,
 	)
 	const cwd = process.cwd()
 	process.chdir(root)

@@ -42,6 +42,13 @@ import { sanitizeFeedbackBody } from "./state/sanitize-feedback.js"
 // the same module that registers the human-write tool.
 export { safeMkdirAndRename } from "./state/safe-write.js"
 
+// Imported AFTER the other modules above so that `feedback-close-hook`
+// — which depends on `dispatch-stamps` and `sign-slot` (both of which
+// pull from this file) — sees `state-tools`'s exports already
+// initialized at import-resolution time. Lazy-loading via a side-
+// effect-free import is fine because the hook only runs from a tool
+// handler, never during module init.
+import { closeFeedbackPostHook } from "./feedback-close-hook.js"
 // workflow-fields module retained for state-integrity sealing; no direct imports
 // needed here since the completion-only guard is narrow to status/completed.
 import {
@@ -81,14 +88,6 @@ import {
 import { setSessionId } from "./subagent-prompt-file.js"
 import { emitTelemetry } from "./telemetry.js"
 import { getPluginVersion, MCP_VERSION } from "./version.js"
-
-// Imported AFTER the other modules above so that `feedback-close-hook`
-// — which depends on `dispatch-stamps` and `sign-slot` (both of which
-// pull from this file) — sees `state-tools`'s exports already
-// initialized at import-resolution time. Lazy-loading via a side-
-// effect-free import is fine because the hook only runs from a tool
-// handler, never during module init.
-import { closeFeedbackPostHook } from "./feedback-close-hook.js"
 
 // ── Drift-assessment rationale caps (VULN-REPORT V-09) ────────────────────
 //

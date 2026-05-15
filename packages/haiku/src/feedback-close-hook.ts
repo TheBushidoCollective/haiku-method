@@ -48,7 +48,8 @@ export interface CloseFeedbackPostHookArgs {
 }
 
 export function closeFeedbackPostHook(args: CloseFeedbackPostHookArgs): void {
-	const targets = (args.fbFm.targets as Record<string, unknown> | undefined) ?? {}
+	const targets =
+		(args.fbFm.targets as Record<string, unknown> | undefined) ?? {}
 	const targetUnit = typeof targets.unit === "string" ? targets.unit : undefined
 	const invalidates = Array.isArray(targets.invalidates)
 		? (targets.invalidates as unknown[]).filter(

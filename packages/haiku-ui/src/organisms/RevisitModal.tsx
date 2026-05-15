@@ -83,7 +83,7 @@ export function RevisitModal({
 	open,
 	onClose,
 	onSuccess,
-	targetStage,
+	targetStage: _targetStage,
 	pendingItems,
 	apiClient = defaultApiClient,
 }: RevisitModalProps): React.ReactElement | null {

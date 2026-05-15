@@ -25,7 +25,10 @@ import {
 } from "haiku-api"
 import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
 import { broadcastIntent } from "../intent-broadcaster.js"
-
+import {
+	buildApprovalRecord,
+	buildReviewRecord,
+} from "../orchestrator/workflow/sign-slot.js"
 import {
 	type DirectionSelection,
 	getSession,
@@ -48,13 +51,8 @@ import {
 	setFrontmatterField,
 	stageStatePath,
 	timestamp,
-	writeFeedbackFile,
 	writeJson,
 } from "../state-tools.js"
-import {
-	buildApprovalRecord,
-	buildReviewRecord,
-} from "../orchestrator/workflow/sign-slot.js"
 import { logFeedbackAction } from "./action-log.js"
 import { requireTunnelAuth } from "./auth.js"
 import { respondSessionApi } from "./session-api.js"
@@ -629,7 +627,8 @@ function stampUserSlotsForCompletedStage(slug: string, stage: string): void {
 				changedApprovals = true
 			}
 			if (changedReviews) setFrontmatterField(unitPath, "reviews", reviews)
-			if (changedApprovals) setFrontmatterField(unitPath, "approvals", approvals)
+			if (changedApprovals)
+				setFrontmatterField(unitPath, "approvals", approvals)
 		} catch {
 			// best-effort per-unit; a malformed unit FM shouldn't block the
 			// rest of the stage from advancing

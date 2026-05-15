@@ -17,7 +17,13 @@
 
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { test } from "node:test"
@@ -154,9 +160,7 @@ test("mergeStageBranchIntoMain re-runs v0→v4 migrator when post-merge tree has
 		git(root, "checkout", "-q", "main")
 
 		// 5. Run the merge.
-		const { mergeStageBranchIntoMain } = await import(
-			`${SRC}/git-worktree.ts`
-		)
+		const { mergeStageBranchIntoMain } = await import(`${SRC}/git-worktree.ts`)
 		const result = mergeStageBranchIntoMain(slug, "design")
 
 		// 6. Assert: merge succeeded AND the success message names the
@@ -260,9 +264,7 @@ test("mergeStageBranchIntoMain returns clean success message when no cruft", asy
 
 		git(root, "checkout", "-q", "main")
 
-		const { mergeStageBranchIntoMain } = await import(
-			`${SRC}/git-worktree.ts`
-		)
+		const { mergeStageBranchIntoMain } = await import(`${SRC}/git-worktree.ts`)
 		const result = mergeStageBranchIntoMain(slug, "design")
 		assert.equal(result.success, true)
 		// No mention of post-merge migration when there's nothing to

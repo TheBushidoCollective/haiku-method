@@ -53,7 +53,10 @@ import {
 	resolveStageInputs,
 	studioSearchPaths,
 } from "../../../../../studio-reader.js"
-import { resolveIntentStages, resolveStudioFilePath } from "../../../../studio.js"
+import {
+	resolveIntentStages,
+	resolveStudioFilePath,
+} from "../../../../studio.js"
 import { buildOutputRequirements } from "../../../../validators.js"
 import {
 	batchDispatchDirective,
@@ -62,13 +65,13 @@ import {
 	inlineFile,
 	resolveStudioMandateModel,
 } from "../../../_helpers.js"
-import { definePromptBuilder } from "../../../define.js"
 import { loadTemplate } from "../../../_load-template.js"
-import type { PromptBuilderContext } from "../../../types.js"
 import {
 	WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK,
 	WORKFLOW_CONTRACTS_ELABORATE_BLOCK,
 } from "../../../_shared/index.js"
+import { definePromptBuilder } from "../../../define.js"
+import type { PromptBuilderContext } from "../../../types.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 
@@ -653,7 +656,9 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	if (skillSection) sections.push(skillSection)
 
 	const mechanicsBlock =
-		elaboration === "collaborative" ? COLLABORATIVE_MECHANICS : AUTONOMOUS_MECHANICS
+		elaboration === "collaborative"
+			? COLLABORATIVE_MECHANICS
+			: AUTONOMOUS_MECHANICS
 	const tail = eta.renderString(ELABORATE_OUTPUT_TAIL_TPL, { slug, stage })
 	sections.push(`${SCOPE_HEADER}\n\n${mechanicsBlock}\n\n${tail}`)
 
@@ -671,7 +676,9 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	}
 
 	if (!composed) {
-		sections.push(buildConcurrentElaborateLoopBlock("decompose", { slug, stage }))
+		sections.push(
+			buildConcurrentElaborateLoopBlock("decompose", { slug, stage }),
+		)
 	}
 
 	return sections.join("\n\n")

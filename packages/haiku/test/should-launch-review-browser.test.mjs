@@ -175,11 +175,7 @@ test("intent_slug arg: live session for SAME intent on different session id → 
 		// Without intentSlug: the predicate doesn't know about the
 		// other live session and would launch a duplicate tab.
 		assert.strictEqual(
-			shouldLaunchReviewBrowser(
-				true,
-				"https://example.test",
-				newer.session_id,
-			),
+			shouldLaunchReviewBrowser(true, "https://example.test", newer.session_id),
 			true,
 			"without intent slug, no cross-session dedupe",
 		)

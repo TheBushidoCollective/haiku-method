@@ -9,8 +9,8 @@ import {
 	MAX_FIX_LOOP_BOLTS,
 	MAX_STAGE_ITERATIONS,
 } from "../../../../../state-tools.js"
-import { definePromptBuilder } from "../../../define.js"
 import { loadTemplate } from "../../../_load-template.js"
+import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)

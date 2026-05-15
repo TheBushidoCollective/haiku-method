@@ -14,9 +14,8 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
-import { fileURLToPath } from "node:url"
-
 import { test } from "node:test"
+import { fileURLToPath } from "node:url"
 import matter from "gray-matter"
 
 const _here = dirname(fileURLToPath(import.meta.url))
@@ -25,7 +24,6 @@ process.env.CLAUDE_PLUGIN_ROOT = resolve(_here, "..", "..", "..", "plugin")
 import {
 	createDiscoveryWorktree,
 	discoveryBranchName,
-	discoveryWorktreePath,
 } from "../src/git-worktree.ts"
 import { _resetIsGitRepoForTests } from "../src/state-tools.ts"
 import haiku_discovery_complete from "../src/tools/orchestrator/haiku_discovery_complete.ts"
@@ -203,7 +201,10 @@ test("discovery_artifact_missing: subagent calls without writing the template's 
 		assert.match(body.message, /Expected.*absolute/i)
 		// And critically: the worktree was NOT reaped (the merge never
 		// ran) — the subagent can fix the write and retry.
-		assert.ok(existsSync(wt), "worktree should NOT be reaped on missing-artifact")
+		assert.ok(
+			existsSync(wt),
+			"worktree should NOT be reaped on missing-artifact",
+		)
 	} finally {
 		process.chdir(originalCwd)
 		rmSync(tmp, { recursive: true, force: true })

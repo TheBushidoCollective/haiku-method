@@ -2,8 +2,8 @@
 // to the user and ask for guidance — no autonomous unblocking.
 
 import { Eta } from "eta"
-import { definePromptBuilder } from "../../../define.js"
 import { loadTemplate } from "../../../_load-template.js"
+import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)

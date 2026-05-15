@@ -111,13 +111,7 @@ test("discovery → question FB → feedback_question → close → cursor falls
 				}),
 			)
 			execFileSync("git", ["-C", repoRoot, "add", unitPath])
-			execFileSync("git", [
-				"-C",
-				repoRoot,
-				"commit",
-				"-m",
-				"test: seed unit",
-			])
+			execFileSync("git", ["-C", repoRoot, "commit", "-m", "test: seed unit"])
 		})
 
 		// Step 1 — discovery subagent files a question FB on the

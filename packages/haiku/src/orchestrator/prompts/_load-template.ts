@@ -24,6 +24,9 @@
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
-export function loadTemplate(metaUrl: string, name = "template.eta.md"): string {
+export function loadTemplate(
+	metaUrl: string,
+	name = "template.eta.md",
+): string {
 	return readFileSync(fileURLToPath(new URL(name, metaUrl)), "utf8")
 }

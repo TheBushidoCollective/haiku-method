@@ -22,19 +22,40 @@
 // imported by `stage/elaborate/elaborate_loop/index.ts` (the router)
 // but are NOT registered as top-level dispatch entries.
 
-// ── stage/ ────────────────────────────────────────────────────────
-import elaborate_loop from "./stage/elaborate/elaborate_loop/index.js"
-import start_unit from "./stage/execute/start_unit/index.js"
-import start_unit_hat from "./stage/execute/start_unit_hat/index.js"
-import dispatch_review from "./stage/review/dispatch_review/index.js"
-import review from "./stage/review/review/index.js"
+// ── drift/ (Track C — filesystem reconciliation) ─────────────────
+import drift_detected from "./drift/drift_detected/index.js"
+// ── feedback/ (Track B — single-track per GOALS § "Two loop primitives") ─
+// Fix loops are not a separate phase; they're feedback dispatch
+// against the stage's `fix_hats:` (or studio's `fix-hats:` for
+// intent-scope). Same handler, different FB origin + scope.
+import changes_requested from "./feedback/changes_requested/index.js"
+import close_feedback from "./feedback/close_feedback/index.js"
+import feedback_question from "./feedback/feedback_question/index.js"
+import fix_quality_gates from "./feedback/fix_quality_gates/index.js"
+import intent_completion_fix from "./feedback/intent_completion_fix/index.js"
+import review_fix from "./feedback/review_fix/index.js"
+import start_feedback_hat from "./feedback/start_feedback_hat/index.js"
+// ── global/ (scope-agnostic) ─────────────────────────────────────
+import complete from "./global/complete/index.js"
+import error from "./global/error/index.js"
+import external_review_requested from "./intent/repair/external_review_requested/index.js"
+import revise_unit_specs from "./intent/repair/revise_unit_specs/index.js"
+import safe_intent_repair from "./intent/repair/safe_intent_repair/index.js"
+import intent_completion_review from "./intent/review/intent_completion_review/index.js"
+import intent_review from "./intent/review/intent_review/index.js"
+import intent_approved from "./intent/seal/intent_approved/index.js"
+import intent_complete from "./intent/seal/intent_complete/index.js"
+import seal_intent from "./intent/seal/seal_intent/index.js"
+// ── intent/ ───────────────────────────────────────────────────────
+import migrated from "./intent/setup/migrated/index.js"
+import select_studio from "./intent/setup/select_studio/index.js"
 import dispatch_approval from "./stage/approve/dispatch_approval/index.js"
 import dispatch_quality_gates from "./stage/approve/dispatch_quality_gates/index.js"
-import user_gate from "./stage/gate/user_gate/index.js"
 import advance_phase from "./stage/complete/advance_phase/index.js"
 import advance_stage from "./stage/complete/advance_stage/index.js"
 import complete_stage from "./stage/complete/complete_stage/index.js"
-import start_stage from "./stage/start_stage/index.js"
+// ── stage/ ────────────────────────────────────────────────────────
+import elaborate_loop from "./stage/elaborate/elaborate_loop/index.js"
 import blocked from "./stage/error/blocked/index.js"
 import coverage_review_required from "./stage/error/coverage_review_required/index.js"
 import dag_cycle_detected from "./stage/error/dag_cycle_detected/index.js"
@@ -50,37 +71,12 @@ import unit_inputs_not_declared from "./stage/error/unit_inputs_not_declared/ind
 import unit_naming_invalid from "./stage/error/unit_naming_invalid/index.js"
 import unit_outputs_empty_iterations from "./stage/error/unit_outputs_empty_iterations/index.js"
 import unresolved_dependencies from "./stage/error/unresolved_dependencies/index.js"
-
-// ── intent/ ───────────────────────────────────────────────────────
-import migrated from "./intent/setup/migrated/index.js"
-import select_studio from "./intent/setup/select_studio/index.js"
-import intent_completion_review from "./intent/review/intent_completion_review/index.js"
-import intent_review from "./intent/review/intent_review/index.js"
-import intent_approved from "./intent/seal/intent_approved/index.js"
-import intent_complete from "./intent/seal/intent_complete/index.js"
-import seal_intent from "./intent/seal/seal_intent/index.js"
-import external_review_requested from "./intent/repair/external_review_requested/index.js"
-import revise_unit_specs from "./intent/repair/revise_unit_specs/index.js"
-import safe_intent_repair from "./intent/repair/safe_intent_repair/index.js"
-
-// ── feedback/ (Track B — single-track per GOALS § "Two loop primitives") ─
-// Fix loops are not a separate phase; they're feedback dispatch
-// against the stage's `fix_hats:` (or studio's `fix-hats:` for
-// intent-scope). Same handler, different FB origin + scope.
-import changes_requested from "./feedback/changes_requested/index.js"
-import close_feedback from "./feedback/close_feedback/index.js"
-import feedback_question from "./feedback/feedback_question/index.js"
-import fix_quality_gates from "./feedback/fix_quality_gates/index.js"
-import intent_completion_fix from "./feedback/intent_completion_fix/index.js"
-import review_fix from "./feedback/review_fix/index.js"
-import start_feedback_hat from "./feedback/start_feedback_hat/index.js"
-
-// ── drift/ (Track C — filesystem reconciliation) ─────────────────
-import drift_detected from "./drift/drift_detected/index.js"
-
-// ── global/ (scope-agnostic) ─────────────────────────────────────
-import complete from "./global/complete/index.js"
-import error from "./global/error/index.js"
+import start_unit from "./stage/execute/start_unit/index.js"
+import start_unit_hat from "./stage/execute/start_unit_hat/index.js"
+import user_gate from "./stage/gate/user_gate/index.js"
+import dispatch_review from "./stage/review/dispatch_review/index.js"
+import review from "./stage/review/review/index.js"
+import start_stage from "./stage/start_stage/index.js"
 
 import type { PromptBuilder } from "./types.js"
 

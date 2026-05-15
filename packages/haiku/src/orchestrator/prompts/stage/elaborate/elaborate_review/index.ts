@@ -32,8 +32,8 @@
 import { join } from "node:path"
 import { Eta } from "eta"
 import { buildConcurrentElaborateLoopBlock } from "../../../_helpers.js"
-import { definePromptBuilder } from "../../../define.js"
 import { loadTemplate } from "../../../_load-template.js"
+import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)

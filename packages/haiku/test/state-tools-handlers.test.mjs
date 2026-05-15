@@ -215,7 +215,13 @@ writeFileSync(join(intentDirPath, "knowledge", "findings.md"), "# Findings\n")
 // array (`inputs: []`) is a deliberate declaration and passes; only
 // field absence trips this gate.
 writeFileSync(
-	join(intentDirPath, "stages", "analysis", "units", "unit-03-no-inputs-field.md"),
+	join(
+		intentDirPath,
+		"stages",
+		"analysis",
+		"units",
+		"unit-03-no-inputs-field.md",
+	),
 	`---
 name: unit-03-no-inputs-field
 type: research

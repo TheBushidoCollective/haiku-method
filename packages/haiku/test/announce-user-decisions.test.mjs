@@ -254,7 +254,9 @@ test("pick_design_direction's await uses withAnnouncement on select + regenerate
 	// Select path: anchor on the archetype-selection announcement
 	// string itself — that text is the user-facing announcement and is
 	// part of the contract this PR introduces.
-	const selectIdx = src.indexOf("The user selected the **${sel.archetype}**")
+	const selectIdx = src.indexOf(
+		"The user selected the **$" + "{sel.archetype}**",
+	)
 	assert.ok(
 		selectIdx > 0,
 		"must have a select branch with the archetype announcement",

@@ -14,14 +14,7 @@
 
 import assert from "node:assert"
 import { execFileSync } from "node:child_process"
-import {
-	existsSync,
-	mkdirSync,
-	mkdtempSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -202,35 +195,38 @@ function seedCompleteDesign({ intentDir, repoRoot, slug }) {
 
 test("cursor: wave-ready unit on non-first stage with missing inputs: field → unit_inputs_not_declared", async () => {
 	if (!HAS_GIT) return
-	await withTmpRepo("inputs-gate-wave", async ({ repoRoot, intentDir, slug }) => {
-		twoStageStudio({ repoRoot })
-		makeIntent({ intentDir, slug, studio: "test" })
+	await withTmpRepo(
+		"inputs-gate-wave",
+		async ({ repoRoot, intentDir, slug }) => {
+			twoStageStudio({ repoRoot })
+			makeIntent({ intentDir, slug, studio: "test" })
 
-		seedCompleteDesign({ intentDir, repoRoot, slug })
+			seedCompleteDesign({ intentDir, repoRoot, slug })
 
-		// On `build` (non-first stage), seed a wave-ready unit that
-		// omits the `inputs:` field entirely. Cursor should refuse.
-		seedVerifiedElaboration({ intentDir, stage: "build" })
-		writeUnit(intentDir, "build", "unit-01-no-inputs", {
-			title: "missing inputs",
-			depends_on: [],
-			// inputs: <-- intentionally absent
-			started_at: null,
-			iterations: [],
-			reviews: {},
-			approvals: {},
-			discovery: {},
-		})
+			// On `build` (non-first stage), seed a wave-ready unit that
+			// omits the `inputs:` field entirely. Cursor should refuse.
+			seedVerifiedElaboration({ intentDir, stage: "build" })
+			writeUnit(intentDir, "build", "unit-01-no-inputs", {
+				title: "missing inputs",
+				depends_on: [],
+				// inputs: <-- intentionally absent
+				started_at: null,
+				iterations: [],
+				reviews: {},
+				approvals: {},
+				discovery: {},
+			})
 
-		const action = await runTick(repoRoot, slug)
-		assert.strictEqual(
-			action.action,
-			"unit_inputs_not_declared",
-			`expected unit_inputs_not_declared, got: ${action.action} — ${action.message ?? ""}`,
-		)
-		assert.strictEqual(action.stage, "build")
-		assert.deepStrictEqual(action.units, ["unit-01-no-inputs"])
-	})
+			const action = await runTick(repoRoot, slug)
+			assert.strictEqual(
+				action.action,
+				"unit_inputs_not_declared",
+				`expected unit_inputs_not_declared, got: ${action.action} — ${action.message ?? ""}`,
+			)
+			assert.strictEqual(action.stage, "build")
+			assert.deepStrictEqual(action.units, ["unit-01-no-inputs"])
+		},
+	)
 })
 
 test("cursor: started unit on non-first stage with missing inputs: field → unit_inputs_not_declared (needNextHat path)", async () => {

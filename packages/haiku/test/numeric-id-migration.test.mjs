@@ -18,12 +18,12 @@
 //   3. Unit path: 2-digit on disk + agent passes 3-digit slug → resolves
 //   4. Unit path: 3-digit on disk + agent passes 2-digit slug → resolves
 
-import { test } from "node:test"
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { test } from "node:test"
 import matter from "gray-matter"
 
 const HAS_GIT = (() => {

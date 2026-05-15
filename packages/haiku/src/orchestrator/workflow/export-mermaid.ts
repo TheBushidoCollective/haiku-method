@@ -69,12 +69,8 @@ function renderStageBlock(
 	lines.push(
 		`    ${sid}_elaborate_loop --> ${sid}_elaborate_loop : signals.partial`,
 	)
-	lines.push(
-		`    ${sid}_elaborate_loop --> ${sid}_execute : signals.all_met`,
-	)
-	lines.push(
-		`    ${sid}_elaborate_loop --> ${sid}_review_fix : verifier.fail`,
-	)
+	lines.push(`    ${sid}_elaborate_loop --> ${sid}_execute : signals.all_met`)
+	lines.push(`    ${sid}_elaborate_loop --> ${sid}_review_fix : verifier.fail`)
 	lines.push(
 		`    ${sid}_elaborate_loop --> ${sid}_review_fix : feedback.pending`,
 	)

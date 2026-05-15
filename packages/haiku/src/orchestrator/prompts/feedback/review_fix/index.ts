@@ -28,12 +28,12 @@ import {
 	readInterpretation,
 	resolveStudioMandateModel,
 } from "../../_helpers.js"
-import { definePromptBuilder } from "../../define.js"
 import { loadTemplate } from "../../_load-template.js"
 import {
 	WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK,
 	WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK,
 } from "../../_shared/index.js"
+import { definePromptBuilder } from "../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
@@ -133,11 +133,15 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 					"",
 				)
 				if (stageBasePath) {
-					promptLines.push(inlineFile(stageBasePath, `Stage scope: ${fixStage}`))
+					promptLines.push(
+						inlineFile(stageBasePath, `Stage scope: ${fixStage}`),
+					)
 				}
 				if (hatPath && existsSync(hatPath)) {
 					promptLines.push(inlineFile(hatPath, `Hat mandate: ${hat}`))
-					const fixInterp = buildInterpretationBlock(readInterpretation(hatPath))
+					const fixInterp = buildInterpretationBlock(
+						readInterpretation(hatPath),
+					)
 					if (fixInterp) promptLines.push("", fixInterp)
 				}
 				if (existsSync(fbAbsPath)) {

@@ -29,7 +29,6 @@ import { join, resolve } from "node:path"
 import matter from "gray-matter"
 import { resolvePluginRoot } from "../config.js"
 import type { OrchestratorAction } from "../orchestrator.js"
-import { resolveStudioFilePath } from "./studio.js"
 import {
 	findHaikuRoot,
 	gitCommitState,
@@ -37,6 +36,7 @@ import {
 	writeFeedbackFile,
 } from "../state-tools.js"
 import { readStageArtifactDefs } from "../studio-reader.js"
+import { resolveStudioFilePath } from "./studio.js"
 
 function readFrontmatter(filePath: string): Record<string, unknown> {
 	if (!existsSync(filePath)) return {}

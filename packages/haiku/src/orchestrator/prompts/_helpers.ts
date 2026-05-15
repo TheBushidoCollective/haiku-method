@@ -470,7 +470,7 @@ export function buildConcurrentElaborateLoopBlock(
 		"",
 		`Then call \`haiku_run_next { intent: "${slug}" }\` once. The cursor re-evaluates which signal is still unmet and dispatches the next.`,
 		"",
-		"**Filing user-decision FBs.** If discovery (running or already returned) surfaced a fork the user must resolve, file `haiku_feedback { origin: \"discovery\", resolution: \"question\", … }` rather than guessing. Open `origin: discovery, resolution: question` FBs keep the elaborate loop's question-completion signal unmet, so the next tick routes Track B's `feedback_question` action and the cursor stays in this loop until the user answers.",
+		'**Filing user-decision FBs.** If discovery (running or already returned) surfaced a fork the user must resolve, file `haiku_feedback { origin: "discovery", resolution: "question", … }` rather than guessing. Open `origin: discovery, resolution: question` FBs keep the elaborate loop\'s question-completion signal unmet, so the next tick routes Track B\'s `feedback_question` action and the cursor stays in this loop until the user answers.',
 	]
 
 	return lines.join("\n")

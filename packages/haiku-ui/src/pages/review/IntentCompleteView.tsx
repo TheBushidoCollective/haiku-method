@@ -300,7 +300,9 @@ function IntentApprovalsSection({
 }): React.ReactElement | null {
 	const approvalsRaw = intentFrontmatter.approvals
 	const approvals =
-		approvalsRaw && typeof approvalsRaw === "object" && !Array.isArray(approvalsRaw)
+		approvalsRaw &&
+		typeof approvalsRaw === "object" &&
+		!Array.isArray(approvalsRaw)
 			? (approvalsRaw as Record<string, unknown>)
 			: {}
 	// Render the canonical intent-scope role list. Other roles emitted
@@ -337,9 +339,7 @@ function IntentApprovalsSection({
 						>
 							<span
 								className={`inline-block w-2 h-2 rounded-full ${
-									stamped
-										? "bg-green-500"
-										: "bg-stone-300 dark:bg-stone-700"
+									stamped ? "bg-green-500" : "bg-stone-300 dark:bg-stone-700"
 								}`}
 								aria-hidden="true"
 							/>

@@ -247,7 +247,14 @@ export function runWorkflowTick(
 					to: schemaTarget,
 					error: String((err as Error)?.message ?? err),
 				})
-				return {
+				// Per claude-bot review on PR #367: route through
+				// `broadcastTick` so a stuck migration error (same `action:
+				// "error"` returned every tick because intent.md is corrupt
+				// or the schema edge is missing) hits the deadlock detector
+				// and halts after HALT_THRESHOLD repeats. Without this, the
+				// engine would emit the same migration error indefinitely
+				// with no halting mechanism.
+				return broadcastTick(slug, {
 					position: {
 						track: "intent",
 						// Migration error path — `role` is required by the
@@ -261,7 +268,7 @@ export function runWorkflowTick(
 						intent: slug,
 						message: `Migration from plugin_version='${sourceVersion}' to '${schemaTarget}' failed: ${String((err as Error)?.message ?? err)}. Resolve manually before continuing.`,
 					},
-				}
+				})
 			}
 		}
 	}
@@ -276,26 +283,31 @@ export function runWorkflowTick(
 	// handle it.
 	const studio = (intentFm.studio as string) || ""
 	if (!studio) {
-		return {
+		// Route through broadcastTick so the deadlock detector sees the
+		// emit. select_* gates are usually transient — the user picks via
+		// the SPA and the next tick advances — but a bug in the picker
+		// (or a runaway test harness that never picks) would otherwise
+		// loop without bound.
+		return broadcastTick(slug, {
 			position: { track: "intent", action: null },
 			action: {
 				action: "select_studio",
 				intent: slug,
 				message: `Intent '${slug}' has no studio.`,
 			},
-		}
+		})
 	}
 
 	const mode = (intentFm.mode as string) || ""
 	if (!mode) {
-		return {
+		return broadcastTick(slug, {
 			position: { track: "intent", action: null },
 			action: {
 				action: "select_mode",
 				intent: slug,
 				message: `Intent '${slug}' has no mode.`,
 			},
-		}
+		})
 	}
 
 	const stages = Array.isArray(intentFm.stages)
@@ -303,14 +315,14 @@ export function runWorkflowTick(
 		: []
 
 	if (mode === "quick" && stages.length === 0) {
-		return {
+		return broadcastTick(slug, {
 			position: { track: "intent", action: null },
 			action: {
 				action: "select_stage",
 				intent: slug,
 				message: `Intent '${slug}' is in quick mode with no stage selected.`,
 			},
-		}
+		})
 	}
 
 	// Pre-tick self-repair: synthesize missing review/approval stamps

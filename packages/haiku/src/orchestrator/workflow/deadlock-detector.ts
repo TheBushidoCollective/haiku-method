@@ -146,10 +146,26 @@ export function recordTickResult(
 	const now = new Date().toISOString()
 	const prev = tickHistory.get(slug)
 
+	// Per claude-bot review on PR #367: when the engine has just SWAPPED
+	// the cursor's action for `loop_halted`, we still want to track that
+	// a halt fired (count + signature update + telemetry), but we must
+	// NOT append `loop_halted` to the `recent` window. The window
+	// represents real workflow-action progression for the churn check;
+	// dropping a meta-halt marker into it would add a 3rd distinct value
+	// and silently disable churn detection for the next CHURN_WINDOW
+	// ticks (the alternating wedge would resume unchecked until
+	// `loop_halted` scrolled off).
+	const isHaltMarker =
+		typeof action === "object" &&
+		action !== null &&
+		(action as Record<string, unknown>).action === "loop_halted"
+
 	let entry: TickEntry
 	if (prev && prev.signature === signature) {
 		const newCount = prev.count + 1
-		const recent = [...prev.recent, signature].slice(-CHURN_WINDOW)
+		const recent = isHaltMarker
+			? prev.recent
+			: [...prev.recent, signature].slice(-CHURN_WINDOW)
 		entry = {
 			signature,
 			count: newCount,
@@ -174,8 +190,12 @@ export function recordTickResult(
 		// Signature changed. Carry the recent-window forward and reset
 		// the consecutive counter. A NEW signature entering the window
 		// also resets the churn-fired latch — we want fresh detection
-		// when the alternation pattern restarts.
-		const recent = [...prev.recent, signature].slice(-CHURN_WINDOW)
+		// when the alternation pattern restarts. Same `loop_halted`
+		// exemption as above: don't pollute the window with the meta
+		// marker.
+		const recent = isHaltMarker
+			? prev.recent
+			: [...prev.recent, signature].slice(-CHURN_WINDOW)
 		const isInWindow = prev.recent.includes(signature)
 		entry = {
 			signature,
@@ -203,11 +223,16 @@ export function recordTickResult(
 			}
 		}
 	} else {
+		// Fresh history. If the very first record is somehow a halt
+		// marker (defensive — shouldn't happen in practice since the
+		// detector only halts after seeing a prior chain), still keep
+		// the recent window empty rather than seeding it with the
+		// marker.
 		entry = {
 			signature,
 			count: 1,
 			first_seen: now,
-			recent: [signature],
+			recent: isHaltMarker ? [] : [signature],
 			churn_fired: false,
 		}
 	}
@@ -266,11 +291,30 @@ export function wouldDeadlock(
  *  agent reads `action: "loop_halted"` and is expected to STOP
  *  re-ticking — surface the halt to the user, do not auto-recover. The
  *  message names the loop kind, the offending signature, and a
- *  concrete next-step (file an FB or invoke /haiku:repair). */
+ *  concrete next-step (file an FB or invoke /haiku:repair).
+ *
+ *  Also fires `haiku.deadlock.halted` telemetry — the engine's hard-
+ *  halt counterpart to the existing `haiku.deadlock.suspected` /
+ *  `churn_suspected` advisory signals. Operators see (a) early
+ *  suspicion, (b) the eventual hard halt; both flow to the OTLP /
+ *  Sentry sink via `emitTelemetry`. */
 export function buildLoopHaltAction(
 	slug: string,
 	verdict: NonNullable<ReturnType<typeof wouldDeadlock>>,
 ): { action: "loop_halted"; intent: string; message: string; loop: string } {
+	emitTelemetry("haiku.deadlock.halted", {
+		intent: slug,
+		loop: verdict.kind,
+		...(verdict.kind === "repeat"
+			? {
+					signature: verdict.signature,
+					consecutive_ticks: String(verdict.count),
+				}
+			: {
+					distinct: String(verdict.distinct),
+					window: String(verdict.window),
+				}),
+	})
 	const detail =
 		verdict.kind === "repeat"
 			? `The engine emitted the SAME action signature ${verdict.count} consecutive times for intent '${slug}' with no on-disk progress between ticks. Signature: ${verdict.signature}.`

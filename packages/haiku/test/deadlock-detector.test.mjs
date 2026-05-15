@@ -322,7 +322,7 @@ test("deadlock-detector integration: runWorkflowTick records every emitted actio
 // consecutive ticks. These tests pin the predicate behavior; the
 // run-tick.ts wiring is integration-tested elsewhere.
 
-test("wouldDeadlock: returns null until HALT_THRESHOLD-1 consecutive identical ticks", () => {
+test("wouldDeadlock: fires on the HALT_THRESHOLD-th consecutive identical tick", () => {
 	__resetDeadlockDetector()
 	const action = { action: "dispatch_review", stage: "design", role: "spec" }
 	// Simulate 3 identical recorded ticks (count=3 in history).
@@ -387,4 +387,30 @@ test("first tick of a brand-new intent: wouldDeadlock returns null (no prior his
 		stage: "design",
 	})
 	assert.strictEqual(verdict, null, "fresh intent has no prior — no halt")
+})
+
+test("recordTickResult: loop_halted action does NOT pollute the recent window", () => {
+	__resetDeadlockDetector()
+	const A = { action: "dispatch_review", role: "spec" }
+	const B = { action: "complete_stage", stage: "design" }
+	// Build up an A↔B alternation.
+	for (const x of [A, B, A, B, A, B, A]) recordTickResult("slug-k", x)
+	const before = __getTickHistoryForTests("slug-k")
+	const beforeLen = before.recent.length
+	// Now record a halt — must NOT extend the window.
+	recordTickResult("slug-k", {
+		action: "loop_halted",
+		intent: "slug-k",
+		message: "halt",
+	})
+	const after = __getTickHistoryForTests("slug-k")
+	assert.strictEqual(
+		after.recent.length,
+		beforeLen,
+		"loop_halted action must not append to recent window",
+	)
+	assert.ok(
+		!after.recent.some((s) => s.includes("loop_halted")),
+		"loop_halted signature must not appear in recent window",
+	)
 })

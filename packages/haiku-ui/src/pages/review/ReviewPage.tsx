@@ -131,21 +131,38 @@ function gateBadgeCopy(mode: GateMode): { label: string; classes: string } {
 }
 
 /**
- * Derive the "what phase/gate is active for this stage right now" label.
- * The workflow engine exposes `phase` on stage_state; we map it to the canonical
- * mockup's gate-phase nouns: "Final Review Gate" when the stage is at
- * its close-out review, "In Review" for mid-review, etc.
+ * Per-stage phase model. Matches ARCHITECTURE.md §2.1 and the cursor's
+ * walkIntentTrack walk:
+ *   elaborate → execute → review → approve → complete
+ *
+ * "review" = pre-execution sign-offs (`reviews.<role>` — spec, adversarial
+ *            agents, user_gate { gate_kind: "spec" }).
+ * "approve" = post-execution sign-offs (`approvals.<role>` — spec,
+ *             quality_gates, adversarial agents, user_gate { gate_kind:
+ *             "approval" }).
+ * "complete" = the merge step the cursor emits as `complete_stage`.
+ *
+ * The legacy "gate" phase (a single bucket conflating everything
+ * post-execute) is gone; user gates fire INSIDE both `review` and
+ * `approve`, distinguished by `gate_kind`.
  */
-// Canonical phase sequence inside a stage (excluding the implicit
-// pre-elaborate seed state). Surfaced as a mini stepper in the banner
-// so reviewers can see where the stage sits in its own lifecycle.
-export const STAGE_PHASES = ["elaborate", "execute", "review", "gate"] as const
+export const STAGE_PHASES = [
+	"elaborate",
+	"execute",
+	"review",
+	"approve",
+	"complete",
+] as const
 
 const PHASE_TOOLTIPS: Record<(typeof STAGE_PHASES)[number], string> = {
-	elaborate: "Elaborate — specify the work (hats plan unit files)",
+	elaborate:
+		"Elaborate — concurrent loop: conversation, discovery, unit drafting, verifiers",
 	execute: "Execute — hats land code and artifacts for each unit",
-	review: "Review — adversarial agents + quality gates",
-	gate: "Gate — final review checkpoint; human or external approval",
+	review:
+		"Review — pre-execution sign-offs (spec / adversarial / user spec gate)",
+	approve:
+		"Approve — post-execution sign-offs (spec / quality_gates / adversarial / final user gate)",
+	complete: "Complete — merge stage into intent main",
 }
 
 function phaseBadgeCopy(
@@ -159,9 +176,16 @@ function phaseBadgeCopy(
 				"bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
 		}
 	}
-	if (phase === "gate") {
+	if (phase === "complete") {
 		return {
-			label: "Final Review Gate",
+			label: "Completing",
+			classes:
+				"bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border border-green-300 dark:border-green-700",
+		}
+	}
+	if (phase === "approve") {
+		return {
+			label: "Approving",
 			classes:
 				"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-300 dark:border-amber-700",
 		}
@@ -184,6 +208,15 @@ function phaseBadgeCopy(
 		return {
 			label: "Elaborating",
 			classes: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
+		}
+	}
+	// Back-compat: surfaces emitting the legacy "gate" string land in the
+	// approve bucket (which is what the old name conflated).
+	if (phase === "gate") {
+		return {
+			label: "Approving",
+			classes:
+				"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-300 dark:border-amber-700",
 		}
 	}
 	return null

@@ -325,7 +325,11 @@ async function deriveStagePhaseFromDisk(
 		)
 	})
 	if (allUserApproved) {
-		return { status: "completed", phase: "" }
+		// Every approval signed including the terminal user role —
+		// the cursor's next emission is `complete_stage` (the merge).
+		// Surface this as the canonical `complete` phase before the
+		// stage flips to `completed` status.
+		return { status: "in_progress", phase: "complete" }
 	}
 	const allReviewsStamped = unitFmList.every((fm) => {
 		const r = fm.reviews
@@ -347,7 +351,12 @@ async function deriveStagePhaseFromDisk(
 		)
 	})
 	if (!allApprovalsStamped) {
-		return { status: "in_progress", phase: "gate" }
+		// Post-execute sign-offs unsigned. Per ARCHITECTURE.md §2.1
+		// the cursor walks this as the `approve` phase (post-exec
+		// spec → quality_gates → adversarial → final user gate). The
+		// legacy "gate" name conflated this with the user gate; the
+		// cursor doesn't have a "gate" phase.
+		return { status: "in_progress", phase: "approve" }
 	}
 	return { status: "completed", phase: "" }
 }

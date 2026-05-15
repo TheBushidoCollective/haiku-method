@@ -143,12 +143,26 @@ export const IntentCurrentStateSchema = z
 	.object({
 		studio: z.string(),
 		stage: z.string(),
-		phase: z.enum(["elaborate", "execute", "review", "gate", ""]),
+		// Per ARCHITECTURE.md §2.1 + cursor.ts walkIntentTrack:
+		//   elaborate / execute / review / approve / complete
+		// (legacy "gate" string accepted for back-compat with older
+		// clients; engine emits the canonical names today.)
+		phase: z.enum([
+			"elaborate",
+			"execute",
+			"review",
+			"approve",
+			"complete",
+			"gate",
+			"",
+		]),
 		step: z.string().optional(),
 		nextState: z
 			.object({
 				stage: z.string().optional(),
-				phase: z.enum(["elaborate", "execute", "review", "gate"]).optional(),
+				phase: z
+					.enum(["elaborate", "execute", "review", "approve", "complete", "gate"])
+					.optional(),
 				step: z.string().optional(),
 				blockedOn: z
 					.enum(["user-gate", "external-review", "feedback-fix"])

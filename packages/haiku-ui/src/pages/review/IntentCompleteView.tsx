@@ -191,6 +191,8 @@ export function IntentCompleteView({
 				)}
 			</section>
 
+			<IntentApprovalsSection intentFrontmatter={intentFrontmatter} />
+
 			{outputArtifacts && outputArtifacts.length > 0 && (
 				<section
 					data-testid="intent-complete-outputs"
@@ -275,6 +277,94 @@ export function IntentCompleteView({
 				</div>
 			</section>
 		</div>
+	)
+}
+
+// ── Intent-scope approvals ───────────────────────────────────────────────
+//
+// Per ARCHITECTURE.md §2.1 + GOALS.md § "Intent scope": after every
+// stage merges into intent main, the cursor walks intent-scope
+// approvals (`spec`, `continuity`, configured studio review-agents,
+// `user`, then `intent_quality_gates`) and emits one `intent_review`
+// per missing role plus `dispatch_quality_gates { scope: "intent" }`
+// for the QG re-run, before emitting `seal_intent`.
+//
+// This section visualizes which intent-level approvals are stamped
+// vs missing so the reviewer can see why the cursor isn't yet at
+// `seal_intent` even though every stage is merged.
+
+function IntentApprovalsSection({
+	intentFrontmatter,
+}: {
+	intentFrontmatter: Record<string, unknown>
+}): React.ReactElement | null {
+	const approvalsRaw = intentFrontmatter.approvals
+	const approvals =
+		approvalsRaw && typeof approvalsRaw === "object" && !Array.isArray(approvalsRaw)
+			? (approvalsRaw as Record<string, unknown>)
+			: {}
+	// Render the canonical intent-scope role list. Other roles emitted
+	// by studios beyond the engine-built ones get appended in stable
+	// alphabetical order so the reviewer sees them too.
+	const ENGINE_ROLES = ["spec", "continuity", "user", "intent_quality_gates"]
+	const studioRoles = Object.keys(approvals)
+		.filter((r) => !ENGINE_ROLES.includes(r))
+		.sort()
+	const allRoles = [...ENGINE_ROLES, ...studioRoles]
+	if (allRoles.length === 0) return null
+	return (
+		<section
+			data-testid="intent-complete-approvals"
+			className="rounded-lg border-2 border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-5 py-4"
+		>
+			<p className="text-xs font-bold uppercase tracking-widest text-stone-500 dark:text-stone-500 mb-3">
+				Intent-scope approvals
+			</p>
+			<ul className="space-y-2 m-0 p-0 list-none">
+				{allRoles.map((role) => {
+					const slot = approvals[role]
+					const stamped =
+						slot &&
+						typeof slot === "object" &&
+						typeof (slot as { at?: unknown }).at === "string"
+					const at = stamped
+						? formatTimestamp((slot as { at: string }).at)
+						: null
+					return (
+						<li
+							key={role}
+							className="flex items-center gap-3 text-sm font-mono"
+						>
+							<span
+								className={`inline-block w-2 h-2 rounded-full ${
+									stamped
+										? "bg-green-500"
+										: "bg-stone-300 dark:bg-stone-700"
+								}`}
+								aria-hidden="true"
+							/>
+							<span className="font-semibold text-stone-900 dark:text-stone-100">
+								{role}
+							</span>
+							{role === "intent_quality_gates" && (
+								<span className="text-xs uppercase tracking-wider text-purple-700 dark:text-purple-400">
+									derived · union of unit gates
+								</span>
+							)}
+							<span
+								className={`ml-auto text-xs ${
+									stamped
+										? "text-green-700 dark:text-green-400"
+										: "text-stone-500 dark:text-stone-400"
+								}`}
+							>
+								{stamped ? at : "unsigned"}
+							</span>
+						</li>
+					)
+				})}
+			</ul>
+		</section>
 	)
 }
 

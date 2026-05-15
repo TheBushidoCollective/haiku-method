@@ -36,9 +36,15 @@ export const inlinePromptTemplatesPlugin = {
 				// loadTemplate calls in docstrings don't get treated as real
 				// call sites. Replacement preserves length / line numbers so
 				// any error positions still point at the right spot.
+				// Strip BOTH leading-of-line and trailing-of-line `//`
+				// comments. The previous `(^|\n)\s*` prefix only matched
+				// leading-of-line comments; a trailing inline comment like
+				// `const X = expr // loadTemplate(import.meta.url, "x.md")`
+				// would slip through and the inliner would try to resolve a
+				// non-existent template. Per claude-bot review on PR #363.
 				const codeOnly = source
 					.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-					.replace(/(^|\n)\s*\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "))
+					.replace(/\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "))
 				if (!codeOnly.includes("loadTemplate(import.meta.url")) return null
 				const dir = dirname(args.path)
 				const inlined = source.replaceAll(

@@ -16,7 +16,10 @@ import {
 	resolveIntentStages,
 	resolveStudioStages,
 } from "../orchestrator/studio.js"
-import { runDriftSweep } from "../orchestrator/workflow/drift-sweep.js"
+import {
+	type DriftEvent,
+	runDriftSweep,
+} from "../orchestrator/workflow/drift-sweep.js"
 import { getSession, type ReviewSession } from "../sessions.js"
 import { intentDir, parseFrontmatter } from "../state-tools.js"
 import { readStudioReviewAgentPaths } from "../studio-reader.js"
@@ -98,6 +101,37 @@ function readIntentFrontmatterFresh(
 	} catch {
 		return {}
 	}
+}
+
+/** Per-(slug, stage) cache for the Track-C drift sweep so repeated
+ *  /api/session GETs from the SPA's ~5s heartbeat don't re-hash every
+ *  witnessed output file each time. TTL is short (2s) — well under the
+ *  poll cadence so the displayed banner stays fresh, but enough to
+ *  collapse a heartbeat burst into a single sweep. Per claude-bot
+ *  review on PR #363. */
+const driftCache = new Map<
+	string,
+	{ events: DriftEvent[]; at: number }
+>()
+const DRIFT_TTL_MS = 2000
+
+function getDriftEventsCached(args: {
+	slug: string
+	stage: string
+	studio: string
+	intentDir: string
+}): DriftEvent[] {
+	const key = `${args.slug}::${args.stage}`
+	const now = Date.now()
+	const cached = driftCache.get(key)
+	if (cached && now - cached.at < DRIFT_TTL_MS) return cached.events
+	const result = runDriftSweep({
+		intentDir: args.intentDir,
+		stage: args.stage,
+		studio: args.studio,
+	})
+	driftCache.set(key, { events: result.events, at: now })
+	return result.events
 }
 
 /** Decide what the Approve button should say based on what approval will
@@ -293,13 +327,14 @@ export function respondSessionApi(
 		const slugForDrift = session.intent_slug
 		if (slugForDrift && current?.stage && current.studio) {
 			try {
-				const sweep = runDriftSweep({
-					intentDir: intentDir(slugForDrift),
+				const events = getDriftEventsCached({
+					slug: slugForDrift,
 					stage: current.stage,
 					studio: current.studio,
+					intentDir: intentDir(slugForDrift),
 				})
-				if (sweep.events.length > 0) {
-					data.drift = sweep.events.map((e) => ({
+				if (events.length > 0) {
+					data.drift = events.map((e) => ({
 						path: e.file,
 						stage: e.unit === "(intent)" ? "" : current.stage,
 						intent: slugForDrift,

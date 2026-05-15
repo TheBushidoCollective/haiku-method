@@ -305,14 +305,20 @@ function IntentApprovalsSection({
 		!Array.isArray(approvalsRaw)
 			? (approvalsRaw as Record<string, unknown>)
 			: {}
-	// Render the canonical intent-scope role list. Other roles emitted
-	// by studios beyond the engine-built ones get appended in stable
-	// alphabetical order so the reviewer sees them too.
+	// Render the engine-known role list IN preferred order, but ONLY
+	// the ones actually present in `approvals`. Engine-known roles that
+	// the engine never stamps (e.g. `continuity` is a legacy v3 term —
+	// the v4 engine doesn't emit it) would otherwise render as
+	// permanently "unsigned," which reads as a blocking sign-off rather
+	// than a non-applicable role. Studio-defined roles get appended in
+	// stable alphabetical order. Reviewer audit per claude-bot review on
+	// PR #363.
 	const ENGINE_ROLES = ["spec", "continuity", "user", "intent_quality_gates"]
+	const presentEngineRoles = ENGINE_ROLES.filter((r) => r in approvals)
 	const studioRoles = Object.keys(approvals)
 		.filter((r) => !ENGINE_ROLES.includes(r))
 		.sort()
-	const allRoles = [...ENGINE_ROLES, ...studioRoles]
+	const allRoles = [...presentEngineRoles, ...studioRoles]
 	if (allRoles.length === 0) return null
 	return (
 		<section

@@ -38,7 +38,11 @@ import {
 	type CursorPosition,
 	derivePosition,
 } from "./cursor.js"
-import { recordTickResult } from "./deadlock-detector.js"
+import {
+	buildLoopHaltAction,
+	recordTickResult,
+	wouldDeadlock,
+} from "./deadlock-detector.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
 import { ensureNonce } from "./verifier-nonce.js"
 
@@ -486,21 +490,51 @@ function broadcastTick(
 	slug: string,
 	result: WorkflowTickResult,
 ): WorkflowTickResult {
-	if (result.action) {
+	// Loop-halt gate. If returning this action would push the
+	// inter-tick deadlock detector past HALT_THRESHOLD (or trigger the
+	// churn-halt path), swap the action for a `loop_halted` directive
+	// BEFORE we broadcast/record. The agent reads the halt and stops
+	// re-ticking; the user sees an explicit message naming the wedge.
+	//
+	// Per goal "ensure nothing in our engine can put us in an infinite
+	// loop, that includes an internal loop to the call itself, or an
+	// agent loop that cannot progress" (2026-05-15). This is the
+	// architectural floor — even if every other prevention misses
+	// (drift dedup, bolt cap, migration idempotency), the same
+	// signature CANNOT be returned more than HALT_THRESHOLD consecutive
+	// times. A fresh signature on the next tick resets the counter,
+	// so the halt is recoverable: fix the underlying state, the halt
+	// disappears.
+	const verdict = wouldDeadlock(
+		slug,
+		result.action as unknown as Record<string, unknown> | null,
+	)
+	let finalResult = result
+	if (verdict !== null) {
+		const halt = buildLoopHaltAction(slug, verdict)
+		finalResult = {
+			position: result.position,
+			action: halt as unknown as WorkflowTickResult["action"],
+		}
+	}
+
+	if (finalResult.action) {
 		broadcastIntent(slug, {
 			type: "tick_committed",
-			action: (result.action as { action?: string }).action ?? "unknown",
+			action: (finalResult.action as { action?: string }).action ?? "unknown",
 		})
 	}
 	// Inter-tick deadlock detection. The same OrchestratorAction
 	// emitted across consecutive ticks (or an A/B/A/B alternation)
 	// surfaces a `haiku.deadlock.suspected` / `haiku.deadlock.churn_suspected`
-	// telemetry signal. Doesn't change behavior — pure observability.
+	// telemetry signal. Records whatever action ACTUALLY went out
+	// (the halt action, when we swapped) so the next tick's check
+	// sees fresh state.
 	recordTickResult(
 		slug,
-		result.action as unknown as Record<string, unknown> | null,
+		finalResult.action as unknown as Record<string, unknown> | null,
 	)
-	return result
+	return finalResult
 }
 
 // v3 compatibility shims — kept transiently so callers that imported

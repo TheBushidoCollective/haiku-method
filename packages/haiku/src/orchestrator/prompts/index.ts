@@ -38,6 +38,7 @@ import start_feedback_hat from "./feedback/start_feedback_hat/index.js"
 // ── global/ (scope-agnostic) ─────────────────────────────────────
 import complete from "./global/complete/index.js"
 import error from "./global/error/index.js"
+import loop_halted from "./global/loop_halted/index.js"
 import external_review_requested from "./intent/repair/external_review_requested/index.js"
 import revise_unit_specs from "./intent/repair/revise_unit_specs/index.js"
 import safe_intent_repair from "./intent/repair/safe_intent_repair/index.js"
@@ -139,4 +140,5 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	// global/
 	["complete", complete],
 	["error", error],
+	["loop_halted", loop_halted],
 ])

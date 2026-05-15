@@ -20,6 +20,8 @@ import { test } from "node:test"
 
 const {
 	recordTickResult,
+	wouldDeadlock,
+	buildLoopHaltAction,
 	__resetDeadlockDetector,
 	__getTickHistoryForTests,
 	actionSignatureForDeadlock,
@@ -309,4 +311,80 @@ test("deadlock-detector integration: runWorkflowTick records every emitted actio
 			process.env.CLAUDE_PLUGIN_ROOT = origPluginRoot
 		}
 	}
+})
+
+// ── HALT GATE: enforcing prevention (added 2026-05-15) ─────────────
+//
+// The detector previously emitted telemetry only. Per the goal
+// "ensure nothing in our engine can put us in an infinite loop"
+// (PR adding wouldDeadlock + buildLoopHaltAction), the engine now
+// REFUSES to return the same action signature beyond HALT_THRESHOLD
+// consecutive ticks. These tests pin the predicate behavior; the
+// run-tick.ts wiring is integration-tested elsewhere.
+
+test("wouldDeadlock: returns null until HALT_THRESHOLD-1 consecutive identical ticks", () => {
+	__resetDeadlockDetector()
+	const action = { action: "dispatch_review", stage: "design", role: "spec" }
+	// Simulate 3 identical recorded ticks (count=3 in history).
+	// HALT_THRESHOLD is 4, so the NEXT tick (4th) should fire.
+	for (let i = 0; i < 3; i++) recordTickResult("slug-h", action)
+	const verdict = wouldDeadlock("slug-h", action)
+	assert.ok(verdict, "4th identical tick must trigger halt verdict")
+	assert.strictEqual(verdict.kind, "repeat")
+	assert.strictEqual(verdict.count, 4)
+})
+
+test("wouldDeadlock: returns null when next signature differs (loop broken)", () => {
+	__resetDeadlockDetector()
+	const same = { action: "dispatch_review", stage: "design", role: "spec" }
+	for (let i = 0; i < 3; i++) recordTickResult("slug-i", same)
+	const verdict = wouldDeadlock("slug-i", {
+		action: "complete_stage",
+		stage: "design",
+	})
+	assert.strictEqual(
+		verdict,
+		null,
+		"different signature breaks the chain — no halt",
+	)
+})
+
+test("wouldDeadlock: churn pattern (A↔B over 8 ticks) triggers halt", () => {
+	__resetDeadlockDetector()
+	const a = { action: "dispatch_review", stage: "design", role: "spec" }
+	const b = { action: "dispatch_review", stage: "design", role: "user" }
+	// Record 7 alternating ticks; the 8th is the verdict probe.
+	const seq = [a, b, a, b, a, b, a]
+	for (const x of seq) recordTickResult("slug-j", x)
+	const verdict = wouldDeadlock("slug-j", b)
+	assert.ok(verdict, "A↔B over 8 ticks must trigger halt")
+	assert.strictEqual(verdict.kind, "churn")
+	assert.ok(verdict.distinct === 2)
+})
+
+test("buildLoopHaltAction: produces a `loop_halted` action with surfaced detail", () => {
+	const verdict = {
+		kind: "repeat",
+		count: 4,
+		signature: '{"action":"dispatch_review","role":"spec"}',
+	}
+	const halt = buildLoopHaltAction("test-slug", verdict)
+	assert.strictEqual(halt.action, "loop_halted")
+	assert.strictEqual(halt.intent, "test-slug")
+	assert.strictEqual(halt.loop, "repeat")
+	assert.ok(halt.message.includes("4 consecutive times"))
+	assert.ok(halt.message.includes("test-slug"))
+	assert.ok(
+		halt.message.includes("dispatch_review"),
+		"halt message must surface the offending signature",
+	)
+})
+
+test("first tick of a brand-new intent: wouldDeadlock returns null (no prior history)", () => {
+	__resetDeadlockDetector()
+	const verdict = wouldDeadlock("slug-fresh", {
+		action: "start_stage",
+		stage: "design",
+	})
+	assert.strictEqual(verdict, null, "fresh intent has no prior — no halt")
 })

@@ -52,9 +52,11 @@ const tickHistory: Map<string, TickEntry> = new Map()
 const SUSPECTED_THRESHOLD = 2
 
 /** Size of the recent-signature window for the churn detector. A
- *  classic A→B→A→B wedge needs 4 ticks to surface; 6 gives some
- *  headroom for slightly noisier patterns. */
-const CHURN_WINDOW = 6
+ *  classic A→B→A→B wedge needs 4 ticks to surface (the suspected
+ *  churn-telemetry signal); the halt threshold needs 8, so the
+ *  window has to hold at least 8. Set to 10 for headroom — handles
+ *  slightly noisier patterns without dropping older entries. */
+const CHURN_WINDOW = 10
 
 /** Minimum number of recent ticks that must alternate before we call
  *  it churn. Below this, the signature variety is just normal cursor
@@ -66,6 +68,31 @@ const CHURN_MIN_TICKS = 4
  *  classic A/B alternation; 3 would catch A/B/C cycles too but
  *  raises the false-positive risk. */
 const CHURN_MAX_DISTINCT = 2
+
+/** Hard halt threshold. After this many consecutive identical
+ *  signatures (i.e. the SAME action emitted and re-dispatched and re-
+ *  emitted with no on-disk progress in between), the next tick HALTS
+ *  with a `loop_halted` action instead of returning the same payload
+ *  yet again. The agent gets a clear directive to stop re-ticking and
+ *  surface the loop to the user.
+ *
+ *  Set higher than `SUSPECTED_THRESHOLD`: telemetry fires at the first
+ *  suspicion (2 ticks) so dashboards see early signal; the hard halt
+ *  only fires after the wedge has continued past that signal (4 ticks
+ *  total). The gap is intentional — operators who instrument the
+ *  telemetry can intervene before the engine forcibly halts.
+ *
+ *  Per goal "ensure nothing in our engine can put us in an infinite
+ *  loop": this is the architectural floor. Even if every other
+ *  protection misses (drift dedup, bolt cap, migration idempotency),
+ *  the same action cannot be returned MORE than `HALT_THRESHOLD`
+ *  consecutive times. */
+const HALT_THRESHOLD = 4
+
+/** Same idea for the churn (alternating-signatures) wedge. 8 ticks of
+ *  A↔B alternation = 4 round-trips that produced no on-disk progress.
+ *  Halt instead of letting the agent burn another tick. */
+const CHURN_HALT_MIN_TICKS = 8
 
 /** Drop tracking older than this — keeps the map bounded across long-
  *  running MCP processes. */
@@ -187,6 +214,81 @@ export function recordTickResult(
 
 	tickHistory.set(slug, entry)
 	pruneStale()
+}
+
+/** Inspect the prospective NEXT tick result for an intent and decide
+ *  whether the engine should HALT instead of returning the action.
+ *
+ *  Returns:
+ *    - `null` — no halt; the caller proceeds with the action.
+ *    - `{ kind: "repeat", count }` — the same signature has fired
+ *      `count` times in a row (≥ HALT_THRESHOLD). The engine MUST
+ *      replace the action with a halt directive.
+ *    - `{ kind: "churn", distinct, window }` — the recent window
+ *      cycles through ≤ CHURN_MAX_DISTINCT signatures over
+ *      ≥ CHURN_HALT_MIN_TICKS ticks. Same: engine MUST halt.
+ *
+ *  This is a PRE-emit check that runs before `recordTickResult`. The
+ *  caller passes the action it's ABOUT to return; if `wouldDeadlock`
+ *  fires, the caller swaps in the halt action and records THAT instead.
+ *  Per goal "ensure nothing in our engine can put us in an infinite
+ *  loop" (2026-05-15): the engine can detect AND stop. */
+export function wouldDeadlock(
+	slug: string,
+	action: Record<string, unknown> | null | undefined,
+):
+	| { kind: "repeat"; count: number; signature: string }
+	| { kind: "churn"; distinct: number; window: number }
+	| null {
+	const signature = actionSignatureForDeadlock(action)
+	const prev = tickHistory.get(slug)
+	if (!prev) return null
+	// Repeat-halt check: the next tick would make this the (count + 1)-th
+	// consecutive identical signature.
+	if (prev.signature === signature && prev.count + 1 >= HALT_THRESHOLD) {
+		return { kind: "repeat", count: prev.count + 1, signature }
+	}
+	// Churn-halt check: simulate appending the new signature to the
+	// window, then see if the resulting tail of the last
+	// CHURN_HALT_MIN_TICKS signatures cycles through ≤ 2 distinct values.
+	const projected = [...prev.recent, signature].slice(-CHURN_WINDOW)
+	if (projected.length >= CHURN_HALT_MIN_TICKS) {
+		const tail = projected.slice(-CHURN_HALT_MIN_TICKS)
+		const distinct = new Set(tail)
+		if (distinct.size <= CHURN_MAX_DISTINCT && distinct.size > 1) {
+			return { kind: "churn", distinct: distinct.size, window: tail.length }
+		}
+	}
+	return null
+}
+
+/** Build the halt-action returned in place of the looping action. The
+ *  agent reads `action: "loop_halted"` and is expected to STOP
+ *  re-ticking — surface the halt to the user, do not auto-recover. The
+ *  message names the loop kind, the offending signature, and a
+ *  concrete next-step (file an FB or invoke /haiku:repair). */
+export function buildLoopHaltAction(
+	slug: string,
+	verdict: NonNullable<ReturnType<typeof wouldDeadlock>>,
+): { action: "loop_halted"; intent: string; message: string; loop: string } {
+	const detail =
+		verdict.kind === "repeat"
+			? `The engine emitted the SAME action signature ${verdict.count} consecutive times for intent '${slug}' with no on-disk progress between ticks. Signature: ${verdict.signature}.`
+			: `The engine cycled through ${verdict.distinct} alternating action signatures across ${verdict.window} consecutive ticks for intent '${slug}'. The classic A↔B churn wedge.`
+	const message =
+		`**Loop halted.** ${detail}\n\n` +
+		`The cursor was about to return the same action again. Repeating it would not produce progress — something downstream of the cursor (a fix-hat that doesn't change disk, a verifier that won't sign, a witness that won't refresh) is wedged. The engine is refusing to let the agent burn more ticks.\n\n` +
+		`**What to do:**\n` +
+		`1. Surface this halt to the user. Don't auto-recover.\n` +
+		`2. Identify what the cursor was waiting for (read the signature above).\n` +
+		`3. Either fix the underlying state (commit the missing artifact, sign the verifier, run \`/haiku:repair\`) or file a feedback explaining why the loop happened.\n` +
+		`4. Once the underlying state has changed, the next \`haiku_run_next\` tick will surface a different action and the loop guard will reset.`
+	return {
+		action: "loop_halted",
+		intent: slug,
+		message,
+		loop: verdict.kind,
+	}
 }
 
 /** Test-only: reset detector state between test runs. */

@@ -107,6 +107,13 @@ const DEPRECATED_INTENT_FIELDS = new Set([
 	"gate_review_next_stage",
 	"gate_review_next_phase",
 	"autopilot",
+	// `intent_completion_review` was an opt-out boolean (v3) for the
+	// studio-level completion review. v4's gate handler routes purely
+	// on whether the studio declares review-agents — the boolean is
+	// dead frontmatter. Strip it on (re-)migration so a previously
+	// stamped intent doesn't carry a false sense of "I opted out" when
+	// the gate now ignores it. Per claude-bot review on PR #363.
+	"intent_completion_review",
 ])
 
 const DEPRECATED_UNIT_FIELDS = new Set([

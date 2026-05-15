@@ -35,6 +35,7 @@ import matter from "gray-matter"
 import { applyFeedbackInvalidations } from "./orchestrator/workflow/dispatch-stamps.js"
 import {
 	buildApprovalRecord,
+	buildOutputWitnesses,
 	buildReviewRecord,
 } from "./orchestrator/workflow/sign-slot.js"
 import { intentDir, setFrontmatterField } from "./state-tools.js"
@@ -112,8 +113,43 @@ export function closeFeedbackPostHook(args: CloseFeedbackPostHookArgs): void {
 					fm.approvals && typeof fm.approvals === "object"
 						? { ...(fm.approvals as Record<string, unknown>) }
 						: {}
+				// Per claude-bot review on PR #363: only refresh an
+				// approval slot when the witnessed outputs actually
+				// changed. A drift FB on the unit body alone shouldn't
+				// reset every approval's `at:` timestamp — the audit
+				// trail (when each role originally approved) needs to
+				// stay intact. Hash the current outputs once and compare
+				// each role's existing witnesses; rebuild only on
+				// mismatch.
+				const currentWitnesses = buildOutputWitnesses(
+					intentDir(args.slug),
+					outputs,
+				)
 				for (const role of Object.keys(approvals)) {
-					approvals[role] = buildApprovalRecord(intentDir(args.slug), outputs)
+					const existing = approvals[role]
+					const existingWitnesses =
+						existing &&
+						typeof existing === "object" &&
+						!Array.isArray(existing) &&
+						(existing as Record<string, unknown>).witnesses &&
+						typeof (existing as Record<string, unknown>).witnesses ===
+							"object"
+							? ((existing as Record<string, unknown>)
+									.witnesses as Record<string, string>)
+							: null
+					const witnessesUnchanged =
+						existingWitnesses !== null &&
+						Object.keys(currentWitnesses).length ===
+							Object.keys(existingWitnesses).length &&
+						Object.entries(currentWitnesses).every(
+							([k, v]) => existingWitnesses[k] === v,
+						)
+					if (!witnessesUnchanged) {
+						approvals[role] = buildApprovalRecord(
+							intentDir(args.slug),
+							outputs,
+						)
+					}
 				}
 				setFrontmatterField(unitPath, "reviews", reviews)
 				setFrontmatterField(unitPath, "approvals", approvals)

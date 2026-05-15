@@ -4734,6 +4734,29 @@ function deriveDefaultAuthor(origin: string): string {
 	return deriveAuthorType(origin) === "human" ? "user" : "agent"
 }
 
+/** Compute the FB's `targets.invalidates` value from explicit input
+ *  (preferred) or origin-based defaults (fallback). The role keys
+ *  apply to BOTH `reviews.<role>` AND `approvals.<role>` — see
+ *  `applyFeedbackInvalidations`. Defaults align with the
+ *  `HAIKU_FEEDBACK_INPUT_SCHEMA.target_invalidates` doc:
+ *
+ *    user-* origins → ["user"]   — the human re-asserted; clear their
+ *                                   prior approval so the gate re-routes.
+ *    drift          → ["user"]   — drift always escalates to user.
+ *    everything else → []        — agent FBs (adversarial, studio, etc.)
+ *                                   are informational; the close-feedback
+ *                                   hook still rebuilds witnesses on
+ *                                   drift FBs separately. */
+function deriveDefaultInvalidates(
+	explicit: string[] | undefined,
+	origin: string,
+): string[] {
+	if (Array.isArray(explicit)) return explicit
+	if (origin.startsWith("user-")) return ["user"]
+	if (origin === "drift") return ["user"]
+	return []
+}
+
 /** Slugify a title for use as a filename component. */
 export function slugifyTitle(title: string, maxLen = 60): string {
 	return title
@@ -5241,6 +5264,25 @@ export function writeFeedbackFile(
 		 *  engine-authored FBs (e.g. reject-loop escalation) so the SPA
 		 *  and HUMAN_ORIGINS check don't misclassify them. */
 		authorType?: "agent" | "human" | "system"
+		/** Unit slug this FB targets. `null` (or omitted) = intent-scope.
+		 *  Set at create time, immutable thereafter. Without this, the
+		 *  close-feedback hook has no targeted unit and step (1)
+		 *  (`applyFeedbackInvalidations`) silently no-ops — leaving the
+		 *  witnessed approval slot alive and the drift sweep re-firing
+		 *  on the same SHA forever. Reported 2026-05-15 on
+		 *  `admin-portal-reimagine` design after the FB-037 closure
+		 *  failed to clear `approvals.user`. */
+		targetUnit?: string | null
+		/** Approval/review role keys to delete from the targeted unit's
+		 *  FM when this FB closes. The role key applies to BOTH
+		 *  `reviews.<role>` AND `approvals.<role>` — see
+		 *  `applyFeedbackInvalidations`. When omitted, defaulted by
+		 *  `origin` per the schema doc on
+		 *  `HAIKU_FEEDBACK_INPUT_SCHEMA.target_invalidates`:
+		 *    - user-* origins → ["user"]
+		 *    - drift          → ["user"] (drift always escalates to user)
+		 *    - others         → []  (closure is informational only) */
+		targetInvalidates?: string[]
 	},
 ): { feedback_id: string; file: string; num: number } {
 	const dir = feedbackDir(slug, stage)
@@ -5341,6 +5383,19 @@ export function writeFeedbackFile(
 					: null,
 		resolution: normalizedResolution,
 		replies: [],
+		// Targets — the close-feedback hook reads `targets.invalidates`
+		// to decide which approval/review roles to clear when the
+		// terminal fix-hat closes the FB. Default `target_invalidates`
+		// from origin so an FB created without explicit targets still
+		// invalidates the right surface on closure (matches the schema
+		// doc on HAIKU_FEEDBACK_INPUT_SCHEMA.target_invalidates).
+		targets: {
+			unit:
+				opts.targetUnit === undefined || opts.targetUnit === null
+					? null
+					: opts.targetUnit,
+			invalidates: deriveDefaultInvalidates(opts.targetInvalidates, origin),
+		},
 		...(attachmentBasename ? { attachment: attachmentBasename } : {}),
 		...(opts.inlineAnchor
 			? {
@@ -10565,6 +10620,25 @@ export function handleStateTool(
 				}
 			}
 
+			// targets — accepted by the input schema and persisted on
+			// create. Reported 2026-05-15: this used to silently drop
+			// every `target_unit` / `target_invalidates` arg. The
+			// downstream close-feedback hook then had no targets to
+			// act on, leaving the witnessed approval slot alive and
+			// causing the drift sweep to re-fire forever on the same
+			// SHA. The schema accepted them; the handler ignored them.
+			// `writeFeedbackFile` defaults invalidates from origin when
+			// the arg is omitted (user-* / drift → ["user"], else []).
+			const targetUnitArg =
+				args.target_unit === undefined
+					? undefined
+					: args.target_unit === null
+						? null
+						: (args.target_unit as string)
+			const targetInvalidatesArg = Array.isArray(args.target_invalidates)
+				? (args.target_invalidates as string[])
+				: undefined
+
 			const result = writeFeedbackFile(intent, stage, {
 				title,
 				body,
@@ -10573,6 +10647,10 @@ export function handleStateTool(
 				source_ref: sourceRef ?? null,
 				resolution: resolution ?? null,
 				...(inlineAnchor ? { inlineAnchor } : {}),
+				...(targetUnitArg !== undefined ? { targetUnit: targetUnitArg } : {}),
+				...(targetInvalidatesArg !== undefined
+					? { targetInvalidates: targetInvalidatesArg }
+					: {}),
 			})
 
 			const gitResult = gitCommitState(

@@ -30,6 +30,7 @@ import { migrateIntent } from "../migrate-registry.js"
 // v4-to-v5.ts for the why).
 import "../migrations/v0-to-v4.js"
 import "../migrations/v4-to-v5.js"
+import "../migrations/v5-to-v6.js"
 import { hasV3CruftInIntent } from "../migrations/v0-to-v4.js"
 import {
 	type CursorAction,

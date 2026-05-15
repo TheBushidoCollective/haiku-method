@@ -175,6 +175,10 @@ test("MCP create with target_unit + target_invalidates persists both", () => {
 		target_invalidates: ["user"],
 	})
 	assert.ok(!result.isError, `MCP create failed: ${JSON.stringify(result)}`)
+	assert.ok(
+		result.structuredContent,
+		`missing structuredContent in: ${JSON.stringify(result)}`,
+	)
 	const parsed = result.structuredContent
 	const fbFile = join(projDir, parsed.file)
 	const { data } = matter(readFileSync(fbFile, "utf8"))
@@ -194,6 +198,10 @@ test("MCP create with origin alone defaults invalidates from origin", () => {
 		origin: "user-chat",
 	})
 	assert.ok(!result.isError, `MCP create failed: ${JSON.stringify(result)}`)
+	assert.ok(
+		result.structuredContent,
+		`missing structuredContent in: ${JSON.stringify(result)}`,
+	)
 	const parsed = result.structuredContent
 	const { data } = matter(readFileSync(join(projDir, parsed.file), "utf8"))
 	assert.deepStrictEqual(data.targets.invalidates, ["user"])
@@ -210,6 +218,10 @@ test("MCP create with target_invalidates: [] respects explicit empty (overrides 
 		target_invalidates: [],
 	})
 	assert.ok(!result.isError, `MCP create failed: ${JSON.stringify(result)}`)
+	assert.ok(
+		result.structuredContent,
+		`missing structuredContent in: ${JSON.stringify(result)}`,
+	)
 	const parsed = result.structuredContent
 	const { data } = matter(readFileSync(join(projDir, parsed.file), "utf8"))
 	assert.deepStrictEqual(data.targets.invalidates, [])

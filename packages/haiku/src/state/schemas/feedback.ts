@@ -220,9 +220,11 @@ export const HAIKU_FEEDBACK_INPUT_SCHEMA = Type.Object(
 		//   the call comes from a review-agent subagent dispatched
 		//   against unit-N) or null (intent-scope).
 		// - target_invalidates: defaults to the role implied by origin —
-		//   user-* origins → ["user"], adversarial-review → [filer
-		//   agent name], drift → ["user"] (drift always escalates to
-		//   user attention), agent / studio-review → [].
+		//   user-* origins → ["user"], drift → ["user"] (drift always
+		//   escalates to user attention), agent / adversarial-review /
+		//   studio-review → [] (these drive the fix-hat chain without
+		//   needing user re-approval; leaving the approval slot intact
+		//   keeps the existing audit trail).
 		target_unit: Type.Optional(
 			Type.Unsafe<string | null>({
 				type: ["string", "null"],

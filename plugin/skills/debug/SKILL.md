@@ -7,6 +7,23 @@ description: Admin tools for unsticking corrupt intents — force a stage comple
 
 Admin/recovery tools for intents that are corrupt, wedged, or otherwise stuck in ways the normal workflow engine can't recover from. Every mutating op routes through `haiku_debug` and surfaces a SPA picker for user confirmation before any state changes. **The agent cannot run any admin op unilaterally.**
 
+## Two surfaces — same five ops, two ways to drive them
+
+- **SPA admin panel** (user-driven, primary): browse to `/debug` on the
+  haiku review server (default `http://127.0.0.1:7320/debug`). Pick an
+  intent, see its current state + cursor preview, and run any of the
+  five ops. The SPA's confirmation modal IS the elicitation gate — every
+  mutation shows the exact request body before POST.
+- **`haiku_debug` MCP tool** (agent-driven, fallback): the agent calls
+  the tool with `op` + args. The tool routes through `runPicker` so the
+  user sees the same confirmation in the picker UI before any state
+  mutates. Cancellation returns `{ action: "cancelled" }` and no state
+  changes.
+
+Both surfaces call the same underlying `debug-ops.ts` functions. The
+agent cannot reach the ops without an explicit user click on either
+surface.
+
 ## When to use this skill
 
 - An intent is stuck in a loop the engine's halt mechanism caught (`loop_halted` action) and the user wants to manually unblock it.

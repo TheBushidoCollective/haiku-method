@@ -20,6 +20,7 @@ import { review } from "./config.js"
 import { registerAssessmentsRoutes } from "./http/assessments-routes.js"
 import { registerBaselineContentRoutes } from "./http/baseline-content-routes.js"
 import { registerCsrfRoutes } from "./http/csrf.js"
+import { registerDebugRoutes } from "./http/debug-routes.js"
 import { registerDefaultRoutes } from "./http/default-routes.js"
 import { e2eOnSend, extractSessionIdFromPath } from "./http/e2e.js"
 import { registerFeedbackRoutes } from "./http/feedback-api.js"
@@ -303,6 +304,9 @@ async function buildApp(): Promise<FastifyInstance> {
 	// ── Drift-assessment read endpoints ───────────────────────────────
 	registerAssessmentsRoutes(instance)
 	registerBaselineContentRoutes(instance)
+
+	// ── /haiku:debug admin SPA + admin op endpoints ──────────────────
+	registerDebugRoutes(instance)
 
 	// ── WebSocket upgrade ──────────────────────────────────────────────
 	registerWsUpgrade(instance)

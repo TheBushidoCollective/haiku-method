@@ -24,7 +24,7 @@ import {
 	setIntentField,
 } from "../orchestrator/workflow/debug-ops.js"
 import { findHaikuRoot, intentDir, parseFrontmatter } from "../state-tools.js"
-import { requireTunnelAuth } from "./auth.js"
+import { requireTunnelAuth, verifyIntentMutationAuth } from "./auth.js"
 import { isValidSlug } from "./validation.js"
 
 interface IntentSummary {
@@ -180,13 +180,18 @@ export function registerDebugRoutes(instance: FastifyInstance): void {
 		Params: { intent: string; op: string }
 		Body: Record<string, unknown>
 	}>("/api/debug/intents/:intent/ops/:op", async (req, reply) => {
-		if (!requireTunnelAuth(req, reply, null)) return
 		const slug = req.params.intent
 		const op = req.params.op
 		if (!isValidSlug(slug)) {
 			reply.status(400).send({ error: "invalid_slug" })
 			return
 		}
+		// `verifyIntentMutationAuth` (not bare `requireTunnelAuth`) — binds
+		// the JWT's `sid` claim to the URL's intent slug. Without this, a
+		// reviewer with a valid JWT for session S1 (intent A) could POST
+		// to /api/debug/intents/B/ops/<anything> and corrupt intent B
+		// (R-01 cross-session bypass — see auth.ts:62–68).
+		if (!verifyIntentMutationAuth(req, reply, slug)) return
 		if (!SUPPORTED_OPS.has(op)) {
 			reply.status(400).send({
 				error: "unsupported_op",
@@ -202,6 +207,10 @@ export function registerDebugRoutes(instance: FastifyInstance): void {
 					const stage = typeof body.stage === "string" ? body.stage : ""
 					if (!stage) {
 						reply.status(400).send({ error: "missing_stage" })
+						return
+					}
+					if (!isValidSlug(stage)) {
+						reply.status(400).send({ error: "invalid_stage" })
 						return
 					}
 					result = forceStageComplete({ slug, targetStage: stage })
@@ -229,6 +238,10 @@ export function registerDebugRoutes(instance: FastifyInstance): void {
 					}
 					const stage =
 						typeof body.stage === "string" && body.stage ? body.stage : null
+					if (stage && !isValidSlug(stage)) {
+						reply.status(400).send({ error: "invalid_stage" })
+						return
+					}
 					const patch =
 						body.patch && typeof body.patch === "object"
 							? (body.patch as Record<string, unknown>)

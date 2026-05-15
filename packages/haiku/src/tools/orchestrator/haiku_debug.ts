@@ -18,7 +18,7 @@ import {
 	setIntentField,
 } from "../../orchestrator/workflow/debug-ops.js"
 import { runPicker } from "../../server/picker.js"
-import { defineTool } from "../define.js"
+import { defineTool, validateSlugArgs } from "../define.js"
 import { text } from "./_text.js"
 
 const SUPPORTED_OPS = [
@@ -69,6 +69,17 @@ export default defineTool({
 		required: ["intent", "op"],
 	},
 	async handle(args, signal) {
+		// Path-traversal guard for every slug-shaped arg the dispatch
+		// touches. This MUST run before any debug-op is reached — debug-ops
+		// pass `intent` / `stage` / `feedback_id` straight into `intentDir()`
+		// + `join()`, so a crafted `"../../etc"` would otherwise resolve
+		// outside `.haiku/intents/`. Mirrors every other orchestrator tool.
+		const slugCheck = validateSlugArgs({
+			intent: args.intent,
+			stage: args.stage,
+			feedback_id: args.feedback_id,
+		})
+		if (slugCheck) return slugCheck
 		const slug = args.intent as string
 		const op = args.op as string
 
@@ -79,10 +90,20 @@ export default defineTool({
 			})
 		}
 
-		// Read-only path: no picker required.
+		// Read-only path: no picker required. Wrapped in its own try/catch
+		// because callers reach for this op precisely when an intent is
+		// corrupted enough that `derivePosition()` may throw — and the
+		// outer try/catch only wraps the post-picker dispatch.
 		if (op === "preview_cursor") {
-			const r = previewCursor({ slug })
-			return text(JSON.stringify(r))
+			try {
+				const r = previewCursor({ slug })
+				return text(JSON.stringify(r))
+			} catch (err) {
+				return errorResponse({
+					error: "preview_cursor_threw",
+					detail: err instanceof Error ? err.message : String(err),
+				})
+			}
 		}
 
 		// All mutating ops require SPA-picker confirmation.

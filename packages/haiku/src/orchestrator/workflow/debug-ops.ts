@@ -16,7 +16,6 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import matter from "gray-matter"
 import {
 	intentDir,
 	parseFrontmatter,
@@ -149,7 +148,13 @@ export function forceStageComplete(args: {
 			intentFm.approvals && typeof intentFm.approvals === "object"
 				? { ...(intentFm.approvals as Record<string, unknown>) }
 				: {}
-		for (const role of ["spec", "user", "intent_quality_gates"]) {
+		// Roles must match the cursor's intent-completion gate at
+		// cursor.ts:1354–1355: it requires `["spec", "continuity"]`
+		// (autopilot) or `["spec", "continuity", "user"]` (non-autopilot)
+		// BEFORE it reaches the `intent_quality_gates` check. Omitting
+		// `continuity` means the cursor re-emits intent_review on the
+		// next tick and the wedge persists.
+		for (const role of ["spec", "continuity", "user", "intent_quality_gates"]) {
 			if (!intentApprovals[role]) {
 				intentApprovals[role] = { at: new Date().toISOString() }
 			}
@@ -256,12 +261,13 @@ export function mutateFeedback(args: {
 		: join(dir, "feedback")
 	if (!existsSync(fbDir)) return { ok: false, error: "feedback_dir_not_found" }
 	// Find the FB file by ID prefix (FB-NN-slug.md → match on numeric prefix).
-	const numMatch = args.feedbackId.match(/^(?:FB-)?(\d+)/)
+	// `$` anchor matters: without it `"FB-037-anything"` silently matches.
+	// FB files on disk are `NNN-slug.md`, never `FB-NNN-slug.md`, so a
+	// single startsWith on the zero-padded numeric prefix is enough.
+	const numMatch = args.feedbackId.match(/^(?:FB-)?(\d+)$/)
 	if (!numMatch) return { ok: false, error: "invalid_feedback_id_shape" }
 	const nn = numMatch[1].padStart(3, "0")
-	const found = readdirSync(fbDir).find(
-		(f) => f.startsWith(`${nn}-`) || f.startsWith(`${args.feedbackId}-`),
-	)
+	const found = readdirSync(fbDir).find((f) => f.startsWith(`${nn}-`))
 	if (!found) return { ok: false, error: "feedback_not_found" }
 	const fbPath = join(fbDir, found)
 	const writtenKeys: string[] = []
@@ -282,7 +288,10 @@ export function previewCursor(args: {
 	const dir = intentDir(args.slug)
 	const intentMdPath = join(dir, "intent.md")
 	if (!existsSync(intentMdPath)) return { ok: false, error: "intent_not_found" }
-	const fm = matter(readFileSync(intentMdPath, "utf8")).data
+	// `parseFrontmatter` (not raw `matter`) recovers from duplicate YAML
+	// keys via `dedupeFrontmatterKeys` — exactly the corrupted-FM scenario
+	// callers reach for this op to diagnose.
+	const fm = parseFrontmatter(readFileSync(intentMdPath, "utf8")).data
 	const studio = (fm.studio as string) || ""
 	if (!studio) return { ok: false, error: "intent_missing_studio" }
 	const position = derivePosition({

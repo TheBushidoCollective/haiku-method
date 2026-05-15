@@ -202,6 +202,38 @@ await test("POST .../ops/mutate_feedback missing feedback_id returns 400", async
 	assert.strictEqual(data.error, "missing_feedback_id")
 })
 
+await test("POST .../ops/force_stage_complete rejects path-traversal stage with 400", async () => {
+	const res = await fetch(
+		`${baseUrl}/api/debug/intents/${intentSlug}/ops/force_stage_complete`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ stage: "../../etc" }),
+		},
+	)
+	assert.strictEqual(res.status, 400)
+	const data = await res.json()
+	assert.strictEqual(data.error, "invalid_stage")
+})
+
+await test("POST .../ops/mutate_feedback rejects path-traversal stage with 400", async () => {
+	const res = await fetch(
+		`${baseUrl}/api/debug/intents/${intentSlug}/ops/mutate_feedback`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				stage: "../../etc",
+				feedback_id: "FB-001",
+				patch: { status: "closed" },
+			}),
+		},
+	)
+	assert.strictEqual(res.status, 400)
+	const data = await res.json()
+	assert.strictEqual(data.error, "invalid_stage")
+})
+
 await test("GET /debug serves the SPA shell HTML", async () => {
 	const res = await fetch(`${baseUrl}/debug`)
 	assert.strictEqual(res.status, 200)

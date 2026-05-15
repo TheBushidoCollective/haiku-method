@@ -18,56 +18,21 @@ import {
 	setIntentField,
 } from "../../orchestrator/workflow/debug-ops.js"
 import { runPicker } from "../../server/picker.js"
+import {
+	HAIKU_DEBUG_INPUT_SCHEMA,
+	HAIKU_DEBUG_SUPPORTED_OPS,
+} from "../../state/schemas/index.js"
+import { jsonSchemaOf } from "../../state/schemas/inputs/_validate.js"
 import { defineTool, validateSlugArgs } from "../define.js"
 import { text } from "./_text.js"
-
-const SUPPORTED_OPS = [
-	"force_stage_complete",
-	"set_intent_field",
-	"reset_drift",
-	"mutate_feedback",
-	"preview_cursor",
-] as const
 
 export default defineTool({
 	name: "haiku_debug",
 	description:
 		"ADMIN: bypass-the-FSM tools to unstick corrupt intents. Force a stage complete (signs all reviews/approvals/QGs for units that have moved through every hat), set an intent field (mode, etc.), reset drift (re-stamp witnesses), mutate any feedback frontmatter, or preview the next cursor head after edits. Every mutation requires SPA-picker confirmation — the agent cannot act unilaterally. Use only when the normal workflow can't recover (corrupt FM, stuck loop, lost stamps).",
-	inputSchema: {
-		type: "object" as const,
-		properties: {
-			intent: { type: "string", description: "Intent slug" },
-			op: {
-				type: "string",
-				enum: [...SUPPORTED_OPS],
-				description:
-					"Which admin op to run: force_stage_complete, set_intent_field, reset_drift, mutate_feedback, preview_cursor.",
-			},
-			// op-specific args. Loose schema — the dispatch below validates per-op.
-			stage: {
-				type: "string",
-				description: "Target stage (force_stage_complete, mutate_feedback).",
-			},
-			field: {
-				type: "string",
-				description: "intent.md FM key (set_intent_field).",
-			},
-			value: {
-				type: ["string", "array", "number", "boolean", "null", "object"],
-				description: "intent.md FM value (set_intent_field).",
-			},
-			feedback_id: {
-				type: "string",
-				description: "Feedback ID to mutate (mutate_feedback).",
-			},
-			patch: {
-				type: "object",
-				description:
-					"FB FM keys to set (mutate_feedback). Example: { status: 'closed', closed_at: '2026-...' }.",
-			},
-		},
-		required: ["intent", "op"],
-	},
+	// Single source of truth for both the MCP advertisement (re-imported
+	// in `tool-defs.ts`) and the per-op dispatch below.
+	inputSchema: jsonSchemaOf(HAIKU_DEBUG_INPUT_SCHEMA),
 	async handle(args, signal) {
 		// Path-traversal guard for every slug-shaped arg the dispatch
 		// touches. This MUST run before any debug-op is reached — debug-ops
@@ -83,10 +48,14 @@ export default defineTool({
 		const slug = args.intent as string
 		const op = args.op as string
 
-		if (!SUPPORTED_OPS.includes(op as (typeof SUPPORTED_OPS)[number])) {
+		if (
+			!HAIKU_DEBUG_SUPPORTED_OPS.includes(
+				op as (typeof HAIKU_DEBUG_SUPPORTED_OPS)[number],
+			)
+		) {
 			return errorResponse({
 				error: "unsupported_op",
-				message: `Unknown op '${op}'. Supported: ${SUPPORTED_OPS.join(", ")}.`,
+				message: `Unknown op '${op}'. Supported: ${HAIKU_DEBUG_SUPPORTED_OPS.join(", ")}.`,
 			})
 		}
 

@@ -160,12 +160,24 @@ export function registerDebugRoutes(instance: FastifyInstance): void {
 				reply.status(400).send({ error: "invalid_slug" })
 				return
 			}
-			const r = previewCursor({ slug })
-			if (!("ok" in r) || !r.ok) {
-				reply.status(404).send(r)
-				return
+			// `derivePosition()` may throw on a truly corrupted intent —
+			// exactly what callers reach for the debug surface to diagnose.
+			// Catch + return a structured 500 so the SPA renders an error
+			// message instead of a Fastify-default crash response.
+			try {
+				const r = previewCursor({ slug })
+				if (!("ok" in r) || !r.ok) {
+					reply.status(404).send(r)
+					return
+				}
+				reply.send(r)
+			} catch (err) {
+				reply.status(500).send({
+					ok: false,
+					error: "preview_cursor_threw",
+					detail: err instanceof Error ? err.message : String(err),
+				})
 			}
-			reply.send(r)
 		},
 	)
 

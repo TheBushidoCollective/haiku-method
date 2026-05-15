@@ -66,6 +66,12 @@ export {
 	validateHaikuAwaitGateInputSchema,
 	validateHaikuAwaitVisualAnswerInputSchema,
 } from "./inputs/await-tools.js"
+export type { HaikuDebugInput } from "./inputs/debug.js"
+export {
+	HAIKU_DEBUG_INPUT_SCHEMA,
+	HAIKU_DEBUG_SUPPORTED_OPS,
+	validateHaikuDebugInputSchema,
+} from "./inputs/debug.js"
 export type { HaikuDiscoveryCompleteInput } from "./inputs/discovery.js"
 export {
 	HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA,

@@ -76,17 +76,25 @@ export function forceStageComplete(args: {
 	const targetIdx = stages.indexOf(args.targetStage)
 	const stagesToProcess = stages.slice(0, targetIdx + 1)
 
-	const stagesProcessed: string[] = []
-	let unitsSigned = 0
+	// Two-pass design for atomicity. Pass 1 walks every unit on every
+	// stage and collects refusals WITHOUT writing anything; if any unit
+	// hasn't reached terminal advance the op aborts with a clean error.
+	// Pass 2 only runs when the whole set passes — so the on-disk state
+	// transitions all-or-nothing per call. Earlier versions wrote partial
+	// signatures before the refusal check fired and reported the
+	// half-signed stages as "processed", which overstated success.
 	const refusedUnits: Array<{ stage: string; unit: string; reason: string }> =
 		[]
-
+	const planned: Array<{
+		stage: string
+		unitPath: string
+		reviewRoles: readonly string[]
+		approvalRoles: readonly string[]
+		fm: Record<string, unknown>
+	}> = []
 	for (const stage of stagesToProcess) {
 		const unitsDir = join(dir, "stages", stage, "units")
-		if (!existsSync(unitsDir)) {
-			stagesProcessed.push(stage)
-			continue
-		}
+		if (!existsSync(unitsDir)) continue
 		const reviewRoles = reviewRolesFor(studio, stage, intentMode)
 		const approvalRoles = approvalRolesFor(studio, stage, intentMode)
 		for (const unitFile of readdirSync(unitsDir).filter((f) =>
@@ -107,36 +115,45 @@ export function forceStageComplete(args: {
 				})
 				continue
 			}
-			const outputs = Array.isArray(fm.outputs) ? (fm.outputs as string[]) : []
-			const reviews =
-				fm.reviews && typeof fm.reviews === "object"
-					? { ...(fm.reviews as Record<string, unknown>) }
-					: {}
-			for (const role of reviewRoles) {
-				if (!reviews[role]) reviews[role] = buildReviewRecord(unitPath)
-			}
-			const approvals =
-				fm.approvals && typeof fm.approvals === "object"
-					? { ...(fm.approvals as Record<string, unknown>) }
-					: {}
-			for (const role of approvalRoles) {
-				if (!approvals[role])
-					approvals[role] = buildApprovalRecord(dir, outputs)
-			}
-			setFrontmatterField(unitPath, "reviews", reviews)
-			setFrontmatterField(unitPath, "approvals", approvals)
-			unitsSigned++
+			planned.push({ stage, unitPath, reviewRoles, approvalRoles, fm })
 		}
-		stagesProcessed.push(stage)
 	}
 
 	if (refusedUnits.length > 0) {
 		return {
 			ok: false,
 			error: "units_not_terminal_advance",
-			details: { refusedUnits, partial_signed: unitsSigned },
+			details: { refusedUnits, signed: 0 },
 		}
 	}
+
+	// Pass 2: every unit cleared the gate; sign and persist.
+	const stagesSigned = new Set<string>()
+	let unitsSigned = 0
+	for (const plan of planned) {
+		const outputs = Array.isArray(plan.fm.outputs)
+			? (plan.fm.outputs as string[])
+			: []
+		const reviews =
+			plan.fm.reviews && typeof plan.fm.reviews === "object"
+				? { ...(plan.fm.reviews as Record<string, unknown>) }
+				: {}
+		for (const role of plan.reviewRoles) {
+			if (!reviews[role]) reviews[role] = buildReviewRecord(plan.unitPath)
+		}
+		const approvals =
+			plan.fm.approvals && typeof plan.fm.approvals === "object"
+				? { ...(plan.fm.approvals as Record<string, unknown>) }
+				: {}
+		for (const role of plan.approvalRoles) {
+			if (!approvals[role]) approvals[role] = buildApprovalRecord(dir, outputs)
+		}
+		setFrontmatterField(plan.unitPath, "reviews", reviews)
+		setFrontmatterField(plan.unitPath, "approvals", approvals)
+		stagesSigned.add(plan.stage)
+		unitsSigned++
+	}
+	const stagesProcessed = stagesToProcess.filter((s) => stagesSigned.has(s))
 
 	// Intent-scope quality_gates — the cursor's intent-completion gate
 	// also signs `intent.md.approvals.intent_quality_gates`. For the

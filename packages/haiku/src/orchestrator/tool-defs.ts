@@ -19,6 +19,7 @@
 
 import {
 	HAIKU_AWAIT_GATE_INPUT_SCHEMA,
+	HAIKU_DEBUG_INPUT_SCHEMA,
 	HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA,
 	HAIKU_INTENT_SEAL_INPUT_SCHEMA,
 	HAIKU_SELECT_MODE_INPUT_SCHEMA,
@@ -219,46 +220,10 @@ export const orchestratorToolDefs = [
 		name: "haiku_debug",
 		description:
 			"ADMIN: bypass-the-FSM tools to unstick corrupt intents. Force a stage complete (signs all reviews/approvals/QGs for units that have moved through every hat), set an intent field (mode, etc.), reset drift (re-stamp witnesses), mutate any feedback frontmatter, or preview the next cursor head after edits. Every mutation requires SPA-picker confirmation — the agent cannot act unilaterally. Use only when the normal workflow can't recover (corrupt FM, stuck loop, lost stamps).",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent: { type: "string", description: "Intent slug" },
-				op: {
-					type: "string",
-					enum: [
-						"force_stage_complete",
-						"set_intent_field",
-						"reset_drift",
-						"mutate_feedback",
-						"preview_cursor",
-					],
-					description:
-						"Which admin op to run: force_stage_complete, set_intent_field, reset_drift, mutate_feedback, preview_cursor.",
-				},
-				stage: {
-					type: "string",
-					description: "Target stage (force_stage_complete, mutate_feedback).",
-				},
-				field: {
-					type: "string",
-					description: "intent.md FM key (set_intent_field).",
-				},
-				value: {
-					type: ["string", "array", "number", "boolean", "null", "object"],
-					description: "intent.md FM value (set_intent_field).",
-				},
-				feedback_id: {
-					type: "string",
-					description: "Feedback ID to mutate (mutate_feedback).",
-				},
-				patch: {
-					type: "object",
-					description:
-						"FB FM keys to set (mutate_feedback). Example: { status: 'closed', closed_at: '2026-...' }.",
-				},
-			},
-			required: ["intent", "op"],
-		},
+		// Shared schema with the handler — both sides import it from
+		// `state/schemas/inputs/debug.ts` so adding a field can never leave
+		// the MCP advertisement and the dispatcher out of sync.
+		inputSchema: jsonSchemaOf(HAIKU_DEBUG_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_dispatch_quality_gates",

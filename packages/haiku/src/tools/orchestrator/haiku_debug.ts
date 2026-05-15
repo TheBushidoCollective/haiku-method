@@ -21,8 +21,12 @@ import { runPicker } from "../../server/picker.js"
 import {
 	HAIKU_DEBUG_INPUT_SCHEMA,
 	HAIKU_DEBUG_SUPPORTED_OPS,
+	validateHaikuDebugInputSchema,
 } from "../../state/schemas/index.js"
-import { jsonSchemaOf } from "../../state/schemas/inputs/_validate.js"
+import {
+	jsonSchemaOf,
+	validateToolInput,
+} from "../../state/schemas/inputs/_validate.js"
 import { defineTool, validateSlugArgs } from "../define.js"
 import { text } from "./_text.js"
 
@@ -34,6 +38,16 @@ export default defineTool({
 	// in `tool-defs.ts`) and the per-op dispatch below.
 	inputSchema: jsonSchemaOf(HAIKU_DEBUG_INPUT_SCHEMA),
 	async handle(args, signal) {
+		// Shape gate first — yields the stable named code
+		// `haiku_debug_input_invalid` with structured `errors[]` instead of
+		// the MCP runtime's generic shape error. Same pattern as
+		// `haiku_select_mode` and the rest of the validated state-tools.
+		const inputErr = validateToolInput(
+			args,
+			validateHaikuDebugInputSchema,
+			"haiku_debug",
+		)
+		if (inputErr) return inputErr
 		// Path-traversal guard for every slug-shaped arg the dispatch
 		// touches. This MUST run before any debug-op is reached — debug-ops
 		// pass `intent` / `stage` / `feedback_id` straight into `intentDir()`

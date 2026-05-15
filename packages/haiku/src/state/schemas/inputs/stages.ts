@@ -35,26 +35,28 @@ export const validateHaikuStageElaborationRecordInputSchema = stateAjv.compile(
 
 // ── haiku_stage_elaboration_seal ────────────────────────────────────
 //
-// Verifier-only by convention. Stamps `verified_at: <ISO timestamp>`
-// on the elaboration artifact's frontmatter, signaling to the cursor
-// that the conversation passed substance review.
+// Verifier-only. Stamps `verified_at: <ISO timestamp>` on the
+// elaboration artifact's frontmatter, signaling to the cursor that
+// the conversation passed substance review.
 //
-// IMPORTANT: enforcement is INSTRUCTION-LEVEL ONLY. The handler does
-// NOT verify caller context — there's no token, no nonce, no field
-// distinguishing the verifier subagent from the main agent. The
-// `elaborate_review` prompt instructs the agent to dispatch a
-// verifier subagent that calls this tool, and the tool description
-// says "the agent must NOT call it directly," but a determined or
-// confused agent could self-certify by calling record + seal in the
-// same turn. This matches every other "verifier-only" tool in the
-// codebase (the seal-tool family is uniformly instruction-gated, not
-// runtime-gated). A future hardening pass could add a verifier
-// nonce; for now the protection is the prompt contract.
+// Enforcement: the seal tool requires a `nonce` minted by the cursor
+// when it emitted the `elaborate_review` action that dispatched the
+// verifier. The nonce lives in `.haiku/intents/<slug>/.verifier-nonces.json`
+// and is consumed (deleted) on a successful seal. A confused or
+// adversarial agent that calls this tool without the nonce — or with
+// the wrong nonce — gets `verifier_nonce_invalid` back. The nonce is
+// tied to the elaboration artifact's `recorded_at`, so re-recording
+// invalidates an in-flight verifier's stale nonce.
 
 export const HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA = Type.Object(
 	{
 		intent: Type.String({ minLength: 1, description: "Intent slug" }),
 		stage: Type.String({ minLength: 1, description: "Stage name" }),
+		nonce: Type.String({
+			minLength: 1,
+			description:
+				"Verifier nonce minted by the cursor when emitting the `elaborate_review` action. Surfaced on the action payload as `verifier_nonce`. Single-use: consumed by the seal tool on success.",
+		}),
 		notes: Type.Optional(
 			Type.String({
 				description:
@@ -69,6 +71,42 @@ export type HaikuStageElaborationSealInput = Static<
 >
 export const validateHaikuStageElaborationSealInputSchema = stateAjv.compile(
 	HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA,
+)
+
+// ── haiku_stage_decompose_seal ──────────────────────────────────────
+//
+// Verifier-only stamp for the 4th elaborate-loop completion signal
+// (per GOALS.md). Mirrors haiku_stage_elaboration_seal but writes
+// `decompose_verified_at` on the elaboration artifact, signaling that
+// the drafted units cover the captured conversation transcript.
+//
+// Same nonce contract as haiku_stage_elaboration_seal — the cursor
+// mints a fresh nonce when it emits `decompose_review` and the seal
+// refuses without it.
+
+export const HAIKU_STAGE_DECOMPOSE_SEAL_INPUT_SCHEMA = Type.Object(
+	{
+		intent: Type.String({ minLength: 1, description: "Intent slug" }),
+		stage: Type.String({ minLength: 1, description: "Stage name" }),
+		nonce: Type.String({
+			minLength: 1,
+			description:
+				"Verifier nonce minted by the cursor when emitting the `decompose_review` action. Surfaced on the action payload as `verifier_nonce`. Single-use: consumed by the seal tool on success.",
+		}),
+		notes: Type.Optional(
+			Type.String({
+				description:
+					"Optional verifier notes recorded as the seal's rationale. Stored on FM as `decompose_verified_notes`.",
+			}),
+		),
+	},
+	{ additionalProperties: false },
+)
+export type HaikuStageDecomposeSealInput = Static<
+	typeof HAIKU_STAGE_DECOMPOSE_SEAL_INPUT_SCHEMA
+>
+export const validateHaikuStageDecomposeSealInputSchema = stateAjv.compile(
+	HAIKU_STAGE_DECOMPOSE_SEAL_INPUT_SCHEMA,
 )
 
 // ── haiku_stage_get ───────────────────────────────────────────────
@@ -118,10 +156,17 @@ export const validateHaikuStageSetInputSchema = stateAjv.compile(
 // after the pre-intent elaboration substance check passes. Fired by
 // the verifier subagent dispatched via the pre-intent
 // `elaborate_review` cursor action (no `stage` field).
+//
+// Same nonce contract as the per-stage seal tools.
 
 export const HAIKU_INTENT_SEAL_INPUT_SCHEMA = Type.Object(
 	{
 		intent: Type.String({ minLength: 1, description: "Intent slug" }),
+		nonce: Type.String({
+			minLength: 1,
+			description:
+				"Verifier nonce minted by the cursor when emitting the pre-intent `elaborate_review` action. Surfaced on the action payload as `verifier_nonce`. Single-use: consumed by the seal tool on success.",
+		}),
 		notes: Type.Optional(
 			Type.String({
 				description:

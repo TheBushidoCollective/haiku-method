@@ -305,13 +305,13 @@
     "revisions": [
       {
         "version": "2",
-        "date": "2026-04-20",
-        "commitHash": "da3416e",
-        "fullCommitHash": "da3416e03832368157ce28907e5253bd0987b3b3",
-        "commitMessage": "haiku: snapshot design-stage WIP before product switch",
+        "date": "2026-05-14",
+        "commitHash": "9a78e9b",
+        "fullCommitHash": "9a78e9bdb02c503135ee6d3631e82b89d44564c9",
+        "commitMessage": "refactor(prompts): scope/phase reorg + ETA templates + revisit-skill removal + audit fixes",
         "stats": {
-          "linesAdded": 307,
-          "linesRemoved": 995
+          "linesAdded": 354,
+          "linesRemoved": 1000
         },
         "sectionChanges": [
           {
@@ -346,7 +346,7 @@
             "section": "Glossary",
             "originalSection": "Glossary",
             "isNew": false,
-            "linesAdded": 19,
+            "linesAdded": 24,
             "linesRemoved": 22
           },
           {
@@ -427,10 +427,17 @@
             "linesRemoved": 0
           },
           {
+            "section": "Pre-Stage Selection Chain",
+            "originalSection": "Pre-Stage Selection Chain",
+            "isNew": true,
+            "linesAdded": 10,
+            "linesRemoved": 0
+          },
+          {
             "section": "The Stage Loop",
             "originalSection": "The Stage Loop",
             "isNew": true,
-            "linesAdded": 22,
+            "linesAdded": 23,
             "linesRemoved": 0
           },
           {
@@ -466,7 +473,7 @@
             "section": "Completion Criteria",
             "originalSection": "Completion Criteria",
             "isNew": true,
-            "linesAdded": 17,
+            "linesAdded": 19,
             "linesRemoved": 0
           },
           {
@@ -480,7 +487,14 @@
             "section": "Bolts",
             "originalSection": "Bolts",
             "isNew": true,
-            "linesAdded": 14,
+            "linesAdded": 12,
+            "linesRemoved": 0
+          },
+          {
+            "section": "Drift Detection",
+            "originalSection": "Drift Detection",
+            "isNew": true,
+            "linesAdded": 17,
             "linesRemoved": 0
           },
           {
@@ -515,7 +529,7 @@
             "section": "Modes of Operation",
             "originalSection": "7. Modes of Operation",
             "isNew": true,
-            "linesAdded": 1,
+            "linesAdded": 3,
             "linesRemoved": 0
           },
           {
@@ -533,10 +547,31 @@
             "linesRemoved": 0
           },
           {
+            "section": "Discrete-Hybrid Mode",
+            "originalSection": "Discrete-Hybrid Mode",
+            "isNew": true,
+            "linesAdded": 1,
+            "linesRemoved": 0
+          },
+          {
+            "section": "Autopilot Mode",
+            "originalSection": "Autopilot Mode",
+            "isNew": true,
+            "linesAdded": 1,
+            "linesRemoved": 0
+          },
+          {
+            "section": "Quick Mode",
+            "originalSection": "Quick Mode",
+            "isNew": true,
+            "linesAdded": 1,
+            "linesRemoved": 0
+          },
+          {
             "section": "Planning Levels",
             "originalSection": "Planning Levels",
             "isNew": true,
-            "linesAdded": 9,
+            "linesAdded": 11,
             "linesRemoved": 0
           },
           {
@@ -547,10 +582,10 @@
             "linesRemoved": 0
           },
           {
-            "section": "Two Commands",
-            "originalSection": "Two Commands",
+            "section": "Commands and the Workflow Tool",
+            "originalSection": "Commands and the Workflow Tool",
             "isNew": true,
-            "linesAdded": 3,
+            "linesAdded": 9,
             "linesRemoved": 0
           },
           {
@@ -575,8 +610,8 @@
             "linesRemoved": 0
           },
           {
-            "section": "Fifteen Studios in Practice",
-            "originalSection": "Fifteen Studios in Practice",
+            "section": "Studios in Practice",
+            "originalSection": "Studios in Practice",
             "isNew": true,
             "linesAdded": 9,
             "linesRemoved": 0
@@ -607,6 +642,13 @@
             "originalSection": "10. Conclusion",
             "isNew": true,
             "linesAdded": 11,
+            "linesRemoved": 0
+          },
+          {
+            "section": "Implementation Contract Reference",
+            "originalSection": "Implementation Contract Reference",
+            "isNew": true,
+            "linesAdded": 7,
             "linesRemoved": 0
           },
           {
@@ -1511,6 +1553,7 @@
       "Custom Studios",
       "4. Stages: The Implementation Layer",
       "What a Stage Defines",
+      "Pre-Stage Selection Chain",
       "The Stage Loop",
       "Hat Isolation",
       "Output Scoping",
@@ -1519,6 +1562,7 @@
       "Completion Criteria",
       "Backpressure",
       "Bolts",
+      "Drift Detection",
       "6. Persistence",
       "The Abstraction",
       "Adapters",
@@ -1526,17 +1570,21 @@
       "7. Modes of Operation",
       "Continuous Mode",
       "Discrete Mode",
+      "Discrete-Hybrid Mode",
+      "Autopilot Mode",
+      "Quick Mode",
       "Planning Levels",
       "8. The Reference Implementation",
-      "Two Commands",
+      "Commands and the Workflow Tool",
       "Enforcement Through Hooks",
       "Configuration",
       "9. Beyond Software",
-      "Fifteen Studios in Practice",
+      "Studios in Practice",
       "What Changes Across Domains",
       "What Stays the Same",
       "Creating a Custom Studio",
-      "10. Conclusion"
+      "10. Conclusion",
+      "Implementation Contract Reference"
     ]
   }
 }

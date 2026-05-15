@@ -34,8 +34,8 @@
 //
 // What gets preserved as-is:
 //   - intent  : title, description, mode, studio, granularity,
-//               skip_stages, intent_completion_review, follows,
-//               archived, archived_at, started_at (if present)
+//               skip_stages, follows, archived, archived_at,
+//               started_at (if present)
 //   - unit    : title, inputs, outputs, depends_on, quality_gates,
 //               model, closes, applicable_skills, started_at (if
 //               present), iterations[] (if present)

@@ -8,21 +8,44 @@
 // entry below describes a visual position in the map and what the
 // cursor would emit at that point — one of the v4 CursorAction kinds:
 // `select_studio` / `select_mode` / `select_stage` / `drift_detected` /
-// `discovery_required` / `elaborate` / `elaborate_review` /
-// `decompose` / `start_unit_hat` / `start_feedback_hat` /
-// `close_feedback` / `dispatch_review` / `dispatch_quality_gates` /
-// `dispatch_approval` / `user_gate` / `complete_stage` / `intent_review` /
-// `seal_intent` / `sealed`.
+// `elaborate_loop` / `start_unit_hat` /
+// `start_feedback_hat` / `feedback_question` / `close_feedback` /
+// `dispatch_review` / `dispatch_quality_gates` / `dispatch_approval` /
+// `user_gate` / `complete_stage` / `intent_review` / `seal_intent` /
+// `sealed`.
+//
+// 2026-05-14 (Option A, GAPS § 1a): the elaborate state is a single
+// `elaborate_loop` cursor kind whose payload `signals_unmet[]`
+// enumerates every currently-unmet completion signal —
+// `conversation` / `verify_conversation` / `discovery` (one entry per
+// missing template, carries `agent` + representative `units`) /
+// `decompose` / `verify_decompose`. The agent may make progress on
+// any subset of them in one tick; the cursor recomputes on the next
+// tick and either returns the still-unmet subset or falls through
+// past the loop into the pre-execution review track.
+//
+// Verifier signals (`verify_conversation` / `verify_decompose`)
+// surface a one-time `verifier_nonce` on the action payload at
+// `verifier_nonces.<signal>`. The verifier subagent threads the
+// nonce through to the matching seal tool
+// (`haiku_intent_seal` / `haiku_stage_elaboration_seal` /
+// `haiku_stage_decompose_seal`); without a valid nonce the seal
+// returns `verifier_nonce_invalid` (the runtime gate that replaces
+// the old "instruction-gated" trust contract — GAPS § 3).
+//
+// The drafting → pending transition is stage-scope: while
+// `decompose_verified_at` is absent, the loop carries
+// `verify_decompose` and blocks wave dispatch from the stage; once
+// the seal stamps, the next tick walks past `elaborate_loop` into the
+// pre-execution review track.
 //
 // 2026-05-08: `design_direction_required` / `_complete` / `_uploaded`
 // and `clarify_required` were collapsed into the discovery-agent
-// model — studios now declare a discovery template with `tool:` and
-// the cursor's existence check on the artifact's `location:` is the
-// gate. Per-stage `elaborate` was split into the conversation gate
-// (new `elaborate`) + unit-spec writing (renamed `decompose`). Pre-
-// intent verifier fires `elaborate_review` (no stage) before any
-// stage walk on non-autopilot intents that lack `verified_at` on
-// intent.md.
+// model — studios declare a discovery template with `tool:` and the
+// cursor's existence check on the artifact's `location:` is the
+// gate. The pre-intent verifier is the same `elaborate_loop` shape
+// with no `stage` field and a single `verify_conversation` entry in
+// `signals_unmet[]`.
 //
 // The TransitionKey enum is the map's visual vocabulary; it does NOT
 // match cursor `kind` values 1:1. Each visual position chooses the
@@ -93,8 +116,8 @@ export function payloadFor(
 					what: "once orientation is complete and the cursor walks Track A on the first stage, `start_stage` inlines the studio body + STAGE.md body so the agent has the full mandate up front.",
 				},
 			],
-			action: "select_studio → select_mode → (quick? select_stage) → elaborate",
-			summary: `pre-cursor selection chain → first stage (${stage.name}) elaborate`,
+			action: "select_studio → select_mode → (quick? select_stage) → elaborate_loop",
+			summary: `pre-cursor selection chain → first stage (${stage.name}) elaborate_loop`,
 			payload: {
 				action: "select_studio",
 				intent: "{slug}",
@@ -102,7 +125,9 @@ export function payloadFor(
 				next_actions_after_orientation: [
 					"select_mode (continuous | discrete | discrete-hybrid | autopilot | quick)",
 					"select_stage (only when mode='quick' and intent.stages[] is empty)",
-					"elaborate { stage: '" + stageLower + "' }",
+					"elaborate_loop { stage: '" +
+						stageLower +
+						"', signals_unmet: [{ signal: 'conversation' }] }",
 				],
 			},
 			validations: [
@@ -119,7 +144,7 @@ export function payloadFor(
 						"frontmatter: `studio`, `mode`, optionally `stages[]` written by engine after each picker resolves; `plugin_version: \"4.0.0\"` stamped by the migrator on first v4 read.",
 				},
 			],
-			instructions: `The pre-cursor gates in \`run-tick.ts\` emit one \`select_*\` action at a time when the corresponding \`intent.md\` field is missing. \`haiku_run_next\` intercepts each, blocks on the SPA picker, writes the chosen value, and re-ticks. Once orientation is complete, the cursor walks Track A on the first stage (\`${stage.name}\`) — initially the stage has no units, so the cursor returns \`elaborate { stage: "${stageLower}" }\` and the agent begins collaborative drafting.`,
+			instructions: `The pre-cursor gates in \`run-tick.ts\` emit one \`select_*\` action at a time when the corresponding \`intent.md\` field is missing. \`haiku_run_next\` intercepts each, blocks on the SPA picker, writes the chosen value, and re-ticks. Once orientation is complete, the cursor walks Track A on the first stage (\`${stage.name}\`) — initially the stage has no units, so the cursor returns \`elaborate_loop { stage: "${stageLower}", signals_unmet: [{signal: "conversation"}] }\` and the agent begins collaborative drafting. As the agent makes progress (records the elaboration, dispatches discovery subagents, drafts units), subsequent ticks return \`elaborate_loop\` with whichever signals remain unmet until the loop falls through to execute.`,
 		},
 		"elab-to-prereview": {
 			injection: [

@@ -18,6 +18,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { ensureOnStageBranch } from "../../git-worktree.js"
+import { consumeNonce } from "../../orchestrator/workflow/verifier-nonce.js"
 import {
 	HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA,
 	validateHaikuStageElaborationSealInputSchema,
@@ -45,7 +46,36 @@ export default defineTool({
 
 		const slug = args.intent as string
 		const stage = args.stage as string
+		const nonce = args.nonce as string
 		const notes = (args.notes as string | undefined) ?? ""
+
+		const nonceCheck = consumeNonce(
+			{ kind: "stage_elaborate", slug, stage },
+			nonce,
+		)
+		if (!nonceCheck.ok) {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: JSON.stringify(
+							{
+								error: "verifier_nonce_invalid",
+								tool: "haiku_stage_elaboration_seal",
+								reason: nonceCheck.reason,
+								message:
+									nonceCheck.reason === "missing"
+										? `No pending verifier nonce for '${slug}/${stage}'. The cursor only mints a nonce when emitting the elaborate_review action — call haiku_run_next first, dispatch the verifier subagent with the nonce on the action payload, then have the subagent call this tool with that nonce.`
+										: `Verifier nonce for '${slug}/${stage}' does not match the cursor's pending value. If the elaboration was re-recorded since the verifier was dispatched, the nonce was rotated — re-tick to get the new value.`,
+							},
+							null,
+							2,
+						),
+					},
+				],
+				isError: true,
+			}
+		}
 
 		const root = findHaikuRoot()
 		const intentDir = join(root, "intents", slug)

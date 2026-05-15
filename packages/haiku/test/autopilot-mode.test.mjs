@@ -166,7 +166,7 @@ function fixture(slug, intentFm, stages = {}, studioOverrideDir = null) {
 // Test: mode=autopilot with a completed gate-phase stage advances to intent review.
 // The gate handler sees reviewType=auto (from autopilot promotion) and
 // since there's no next stage, calls completeOrReviewIntent → advance_phase
-// (enters completion review because intent_completion_review is default true).
+// (completion review is universal — every intent enters it after the final stage).
 //
 // `process.chdir` into the temp root so that `findHaikuRoot()` inside
 // workflowAdvanceStage / sealIntentState resolves to the test's temp

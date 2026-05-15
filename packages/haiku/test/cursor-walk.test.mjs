@@ -22,6 +22,11 @@ import { join } from "node:path"
 import { test } from "node:test"
 import matter from "gray-matter"
 import {
+	assertLoopSignal,
+	assertNotLoopSignal,
+	pickLoopSignal,
+} from "./_elaborate-loop-helpers.mjs"
+import {
 	initTestRepo,
 	makeFeedback,
 	makeIntent,
@@ -121,9 +126,12 @@ test("cursor: empty stage → elaborate", async () => {
 			makeStudio({ repoRoot, studio: "test" })
 			makeIntent({ intentDir, slug, studio: "test" })
 			const action = await runTick(repoRoot, slug)
+			const isLoopWithConversation =
+				action.action === "elaborate_loop" &&
+				(action.signals_unmet ?? []).some((s) => s.signal === "conversation")
 			assert.ok(
-				action.action === "elaborate" || action.action === "noop",
-				`expected elaborate or noop, got: ${action.action} — ${action.message}`,
+				isLoopWithConversation || action.action === "noop",
+				`expected elaborate_loop[conversation] or noop, got: ${action.action} — ${action.message}`,
 			)
 		},
 	)
@@ -1017,13 +1025,13 @@ test("cursor: stage with discovery template + unit missing record → discovery_
 				discovery: {},
 			})
 			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(
-				action.action,
-				"discovery_required",
-				`expected discovery_required; got: ${action.action}`,
+			const entry = assertLoopSignal(
+				action,
+				"discovery",
+				`expected elaborate_loop[discovery]; got: ${action.action} `,
 			)
-			assert.strictEqual(action.agent, "tokens")
-			assert.deepStrictEqual(action.units, ["unit-01"])
+			assert.strictEqual(entry.agent, "tokens")
+			assert.deepStrictEqual(entry.units, ["unit-01"])
 		},
 	)
 })
@@ -1065,7 +1073,7 @@ test("cursor: discovery_required cleared once the artifact is on disk", async ()
 			writeFileSync(join(knowledgeDir, "TOKENS.md"), "design tokens\n")
 
 			const action = await runTick(repoRoot, slug)
-			assert.notStrictEqual(action.action, "discovery_required")
+			assertNotLoopSignal(action, "discovery")
 		},
 	)
 })
@@ -1133,7 +1141,7 @@ test("cursor: design + clarify recorded → discovery fires next", async () => {
 				discovery: {},
 			})
 			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(action.action, "discovery_required")
+			assertLoopSignal(action, "discovery")
 		},
 	)
 })
@@ -1151,10 +1159,10 @@ test("cursor: brand-new intent (no stages dir at all) → elaborate on first dec
 			// just landed, agent's first run_next" state.
 			makeIntent({ intentDir, slug, studio: "test" })
 			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(
-				action.action,
-				"elaborate",
-				`brand-new intent should emit elaborate; got ${action.action}`,
+			assertLoopSignal(
+				action,
+				"conversation",
+				`brand-new intent should emit elaborate_loop[conversation]; got ${action.action} `,
 			)
 			assert.strictEqual(action.stage, "design")
 		},
@@ -1207,10 +1215,11 @@ test("cursor: intent with FB on a stage that hasn't started yet → start_feedba
 				closed: false,
 			})
 			const action = await runTick(repoRoot, slug)
-			// Cursor must NOT silently emit elaborate when an open FB exists;
-			// FB triage takes priority. Either start_feedback_hat or another
-			// FB-related action is acceptable.
-			assert.notStrictEqual(action.action, "elaborate")
+			// Cursor must NOT silently emit the elaborate_loop with a
+			// conversation signal when an open FB exists; FB triage takes
+			// priority. Either start_feedback_hat or another FB-related
+			// action is acceptable.
+			assertNotLoopSignal(action, "conversation")
 		},
 	)
 })
@@ -1273,10 +1282,10 @@ test("cursor: intent restricted to subset of studio stages does NOT surface unsc
 			// declared stages done" — intent-level review, merge_intent,
 			// noop, sealed, or similar. Not `elaborate` on an unscoped
 			// stage.
-			assert.notStrictEqual(
-				action.action,
-				"elaborate",
-				`cursor should not be elaborating an unscoped stage: ${action.action}/${action.stage}`,
+			assertNotLoopSignal(
+				action,
+				"conversation",
+				`cursor should not be elaborating an unscoped stage: ${action.action}/${action.stage} `,
 			)
 		},
 	)

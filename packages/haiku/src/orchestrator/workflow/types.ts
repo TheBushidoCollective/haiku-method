@@ -39,6 +39,7 @@ export type StateName =
 	| "elaborate"
 	| "elaborate_review"
 	| "decompose"
+	| "decompose_review"
 	| "advance_phase"
 	| "execute"
 	| "advance_stage"

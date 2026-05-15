@@ -24,6 +24,7 @@ import {
 	HAIKU_SELECT_MODE_INPUT_SCHEMA,
 	HAIKU_SELECT_STAGE_INPUT_SCHEMA,
 	HAIKU_SELECT_STUDIO_INPUT_SCHEMA,
+	HAIKU_STAGE_DECOMPOSE_SEAL_INPUT_SCHEMA,
 	HAIKU_STAGE_ELABORATION_RECORD_INPUT_SCHEMA,
 	HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA,
 	HAIKU_STAGE_RESET_INPUT_SCHEMA,
@@ -309,6 +310,12 @@ export const orchestratorToolDefs = [
 		description:
 			"Stamp `verified_at` on the per-stage elaboration artifact's frontmatter. The verifier subagent (dispatched via the cursor's `elaborate_review` action) calls this on a pass; the outer agent must NOT call it directly. Stamps the verification timestamp and optional notes, freeing the cursor to advance past `elaborate_review`. Idempotent (no-op when already verified).",
 		inputSchema: jsonSchemaOf(HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_stage_decompose_seal",
+		description:
+			"Stamp `decompose_verified_at` on the per-stage elaboration artifact's frontmatter (the 4th elaborate-loop completion signal per GOALS.md). The decompose-verifier subagent (dispatched via the cursor's `decompose_review` action) calls this on a pass; the outer agent must NOT call it directly. Stamps the verification timestamp and optional notes, freeing the cursor to advance past `decompose_review` into the execute phase. Idempotent (no-op when already verified).",
+		inputSchema: jsonSchemaOf(HAIKU_STAGE_DECOMPOSE_SEAL_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_discovery_complete",

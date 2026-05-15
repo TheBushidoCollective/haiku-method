@@ -11,11 +11,20 @@
 //
 // What's preserved in the diagram:
 // - Top-level state nodes (one per stage + setup + terminals)
-// - Per-stage phase progression (start_stage → elaborate →
-//   elaborate_review → decompose → execute → review → review_fix →
-//   gate). The 2026-05-08 elaborate split shows up here as two new
-//   states (elaborate = conversation gate; decompose = unit-spec
-//   writing) plus the verifier dispatch.
+// - Per-stage phase progression (start_stage → elaborate_loop →
+//   execute → review → review_fix → gate). The elaborate_loop state
+//   is the post-Option-A collapse of the per-signal kinds (GAPS.md
+//   § 1a, 2026-05-14): five elaborate-loop completion signals
+//   (`conversation`, `verify_conversation`, `discovery`, `decompose`,
+//   `verify_decompose`) coexist inside a single cursor state and the
+//   agent makes progress on any subset per tick. The diagram shows
+//   the loop as a single state with a self-loop transition that
+//   re-evaluates the unmet-signal set; exit on `signals.all_met`.
+// - Original 2026-05-08 note retained below for context:
+//   (elaborate = conversation gate; decompose = unit-spec
+//   writing) plus the verifier dispatch — those distinctions still
+//   exist as per-signal sub-instructions inside the elaborate_loop
+//   state, just not as separate cursor kinds.
 // - Per-hat sub-states inside execute (the studio's actual hat
 //   sequence)
 // - Per-bolt × per-fix-hat sub-states inside review_fix
@@ -49,14 +58,26 @@ function renderStageBlock(
 	const lines: string[] = []
 	lines.push(`  state ${sid} {`)
 	lines.push(`    [*] --> ${sid}_start_stage`)
-	lines.push(`    ${sid}_start_stage --> ${sid}_elaborate : tick`)
+	lines.push(`    ${sid}_start_stage --> ${sid}_elaborate_loop : tick`)
+	// Elaborate loop — single cursor state with multi-signal payload
+	// (GAPS.md § 1a → Option A, 2026-05-14). The loop self-cycles as
+	// the agent makes progress on any of the unmet signals
+	// (conversation / verify_conversation / discovery / decompose /
+	// verify_decompose). It exits to execute when every signal flips
+	// on disk; it routes to review_fix if the decompose verifier
+	// rejects coverage and files invalidating feedback.
 	lines.push(
-		`    ${sid}_elaborate --> ${sid}_elaborate_review : record.advance`,
+		`    ${sid}_elaborate_loop --> ${sid}_elaborate_loop : signals.partial`,
 	)
-	lines.push(`    ${sid}_elaborate_review --> ${sid}_decompose : verifier.pass`)
-	lines.push(`    ${sid}_elaborate_review --> ${sid}_elaborate : verifier.fail`)
-	lines.push(`    ${sid}_decompose --> ${sid}_execute : decompose.advance`)
-	lines.push(`    ${sid}_decompose --> ${sid}_review_fix : feedback.pending`)
+	lines.push(
+		`    ${sid}_elaborate_loop --> ${sid}_execute : signals.all_met`,
+	)
+	lines.push(
+		`    ${sid}_elaborate_loop --> ${sid}_review_fix : verifier.fail`,
+	)
+	lines.push(
+		`    ${sid}_elaborate_loop --> ${sid}_review_fix : feedback.pending`,
+	)
 
 	// Execute sub-machine — hat enumeration.
 	if (hats.length > 0) {

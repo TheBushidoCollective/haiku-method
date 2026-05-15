@@ -18,6 +18,7 @@ import {
 } from "../orchestrator/studio.js"
 import { getSession, type ReviewSession } from "../sessions.js"
 import { intentDir, parseFrontmatter } from "../state-tools.js"
+import { readStudioReviewAgentPaths } from "../studio-reader.js"
 
 function titleCase(s: string): string {
 	return s
@@ -81,9 +82,10 @@ function scrubUnitsForWire<T extends ParsedUnitLike>(units: T[]): T[] {
 
 /** Read intent.md frontmatter fresh from disk. Mirrors getCurrentState's
  *  philosophy — the cached `session.parsedIntent.frontmatter` was captured
- *  at session creation, and fields like `intent_completion_review` could
- *  in principle be edited mid-flow. Returns an empty object when the
- *  file or slug is missing so callers can read fields with `||` fallbacks. */
+ *  at session creation, and a few user-authorable fields (title,
+ *  description, mode) can be edited mid-flow. Returns an empty object
+ *  when the file or slug is missing so callers can read fields with `||`
+ *  fallbacks. */
 function readIntentFrontmatterFresh(
 	slug: string | undefined,
 ): Record<string, unknown> {
@@ -191,8 +193,16 @@ function computeApproveAction(
 		}
 	}
 	if (isLastStage) {
-		const completionReviewEnabled = intentFm.intent_completion_review !== false
-		if (completionReviewEnabled) {
+		// Intent completion review is universal — every intent runs the
+		// studio's review-agents after the final stage gate. The only
+		// "skip" path is a studio shipping zero review-agents, in which
+		// case the dispatch is a no-op and we go straight to completion.
+		const studioName =
+			(current?.studio as string) || (intentFm.studio as string) || ""
+		const hasReviewAgents =
+			!!studioName &&
+			Object.keys(readStudioReviewAgentPaths(studioName)).length > 0
+		if (hasReviewAgents) {
 			return {
 				label: "Submit Intent for Final Review",
 				kind: "submit_intent_review",

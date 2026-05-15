@@ -246,6 +246,7 @@ export function makeFeedback({
 	author = "user",
 	target_unit = null,
 	target_invalidates = [],
+	resolution = null, // "question" | "inline_fix" | "stage_revisit" | null
 	closed = false,
 }) {
 	const fbDir = stage
@@ -260,6 +261,7 @@ export function makeFeedback({
 		author_type: author === "user" ? "human" : "agent",
 		created_at: at,
 		source_ref: null,
+		resolution,
 		targets: { unit: target_unit, invalidates: target_invalidates },
 		iterations: closed
 			? [
@@ -347,6 +349,13 @@ export function seedVerifiedElaboration({
 		stage,
 		verified_at: at,
 		verified_notes: "test fixture — bypasses gate",
+		// GOALS.md spec, 4th elaborate-loop completion signal: the
+		// decompose-verifier stamp. Tests exercising downstream
+		// behavior (waves, reviews, gates) need this pre-stamped so
+		// the cursor doesn't trip the new `decompose_review` action
+		// before reaching the action under test.
+		decompose_verified_at: at,
+		decompose_verified_notes: "test fixture — bypasses gate",
 	}
 	const path = join(intentDir, "stages", stage, "elaboration.md")
 	// Stage-scoped artifact: lives on the stage branch, not intent main.

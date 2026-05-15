@@ -319,16 +319,17 @@ test("rejects engine-only set on mode (mode is FSM-driven)", () => {
 	rmSync(root, { recursive: true, force: true })
 })
 
-test("rejects type mismatch on intent_completion_review", () => {
+test("rejects type mismatch on skip_stages", () => {
 	// A non-engine-only field still goes through the type-mismatch
-	// check. Picking a stable, unmanaged boolean field for coverage.
+	// check. skip_stages is a stable agent-authorable array field —
+	// passing a string triggers the array-shape mismatch.
 	const { root, haiku } = projectRoot()
 	makeIntent(haiku, "x")
 	withCwd(root, () => {
 		const r = call("haiku_intent_set", {
 			intent: "x",
-			field: "intent_completion_review",
-			value: "not-a-boolean",
+			field: "skip_stages",
+			value: "not-an-array",
 		})
 		assert.strictEqual(r.isError, true)
 		assert.strictEqual(r.parsed.error, "intent_field_type_mismatch")

@@ -27,6 +27,7 @@ import haiku_run_next from "./haiku_run_next.js"
 import haiku_select_mode from "./haiku_select_mode.js"
 import haiku_select_stage from "./haiku_select_stage.js"
 import haiku_select_studio from "./haiku_select_studio.js"
+import haiku_stage_decompose_seal from "./haiku_stage_decompose_seal.js"
 import haiku_stage_elaboration_record from "./haiku_stage_elaboration_record.js"
 import haiku_stage_elaboration_seal from "./haiku_stage_elaboration_seal.js"
 import haiku_stage_reset from "./haiku_stage_reset.js"
@@ -50,6 +51,7 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 			haiku_select_mode,
 			haiku_select_stage,
 			haiku_select_studio,
+			haiku_stage_decompose_seal,
 			haiku_stage_elaboration_record,
 			haiku_stage_elaboration_seal,
 			haiku_stage_reset,

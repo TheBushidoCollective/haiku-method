@@ -17,6 +17,11 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import matter from "gray-matter"
+import {
+	assertLoopSignal,
+	assertNotLoopSignal,
+	pickLoopSignal,
+} from "./_elaborate-loop-helpers.mjs"
 import { initTestRepo, makeIntent, makeStudio } from "./_v4-fixtures.mjs"
 
 const HAS_GIT = (() => {
@@ -86,7 +91,7 @@ test("elaborate gate: fires on fresh stage when mode is continuous", async () =>
 			makeStudio({ repoRoot, studio: "test" })
 			makeIntent({ intentDir, slug, studio: "test", mode: "continuous" })
 			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(action.action, "elaborate")
+			assertLoopSignal(action, "conversation")
 			assert.strictEqual(action.stage, "design")
 		},
 	)
@@ -105,10 +110,11 @@ test("elaborate gate: bypassed in autopilot mode", async () => {
 				mode: "autopilot",
 			})
 			const action = await runTick(repoRoot, slug)
-			// Autopilot skips the conversation gate. Cursor walks straight
-			// to decompose (or noop if other clauses don't reach there).
-			assert.notStrictEqual(action.action, "elaborate")
-			assert.notStrictEqual(action.action, "elaborate_review")
+			// Autopilot skips the conversation gate AND the verify_conversation
+			// gate. The elaborate_loop may still fire for decompose if no
+			// units exist, but neither human-conversation signal appears.
+			assertNotLoopSignal(action, "conversation")
+			assertNotLoopSignal(action, "verify_conversation")
 		},
 	)
 })
@@ -122,7 +128,7 @@ test("elaborate_review: fires when artifact exists but unverified", async () => 
 			makeIntent({ intentDir, slug, studio: "test", mode: "continuous" })
 			writeElaboration(intentDir, "design", { verified: false })
 			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(action.action, "elaborate_review")
+			assertLoopSignal(action, "verify_conversation")
 			assert.strictEqual(action.stage, "design")
 		},
 	)
@@ -138,8 +144,9 @@ test("elaborate gate: clears when artifact is verified", async () => {
 			writeElaboration(intentDir, "design", { verified: true })
 			const action = await runTick(repoRoot, slug)
 			// Artifact verified — cursor advances. With no units and no
-			// tool-driven discovery, decompose fires next.
-			assert.strictEqual(action.action, "decompose")
+			// tool-driven discovery, the loop now carries only `decompose`.
+			assertLoopSignal(action, "decompose")
+			assertNotLoopSignal(action, "verify_conversation")
 		},
 	)
 })
@@ -167,9 +174,11 @@ test("elaborate gate: grandfathered when units already exist", async () => {
 				}),
 			)
 			const action = await runTick(repoRoot, slug)
-			// Gate skipped — cursor proceeds to wave logic.
-			assert.notStrictEqual(action.action, "elaborate")
-			assert.notStrictEqual(action.action, "elaborate_review")
+			// Gate skipped — neither conversation nor verify_conversation
+			// signal appears on the loop (the cursor falls through past
+			// elaborate_loop entirely once the grandfather rule applies).
+			assertNotLoopSignal(action, "conversation")
+			assertNotLoopSignal(action, "verify_conversation")
 		},
 	)
 })
@@ -192,8 +201,9 @@ test("pre-intent verifier: fires when intent.md lacks verified_at", async () => 
 				verifyOnCreate: false,
 			})
 			const action = await runTick(repoRoot, slug)
-			// elaborate_review with NO stage = pre-intent scope.
-			assert.strictEqual(action.action, "elaborate_review")
+			// elaborate_loop with NO stage = pre-intent scope, carrying a
+			// single verify_conversation signal.
+			assertLoopSignal(action, "verify_conversation")
 			assert.strictEqual(action.stage, undefined)
 		},
 	)
@@ -214,7 +224,7 @@ test("pre-intent verifier: bypassed in autopilot mode", async () => {
 			})
 			const action = await runTick(repoRoot, slug)
 			// Autopilot skips both pre-intent verifier AND per-stage gate.
-			assert.notStrictEqual(action.action, "elaborate_review")
+			assertNotLoopSignal(action, "verify_conversation")
 		},
 	)
 })
@@ -234,8 +244,8 @@ test("pre-intent verifier: clears when verified_at is stamped", async () => {
 			})
 			const action = await runTick(repoRoot, slug)
 			// Pre-intent verified — cursor walks into the first stage's
-			// elaborate gate.
-			assert.strictEqual(action.action, "elaborate")
+			// elaborate gate (conversation signal).
+			assertLoopSignal(action, "conversation")
 			assert.strictEqual(action.stage, "design")
 		},
 	)
@@ -275,7 +285,7 @@ test("pre-intent verifier: grandfathered when first stage already has units", as
 			// Pre-intent gate is grandfathered. Cursor walks straight into
 			// the per-stage flow (which itself is grandfathered too because
 			// elaboration.md is missing AND units exist).
-			assert.notStrictEqual(action.action, "elaborate_review")
+			assertNotLoopSignal(action, "verify_conversation")
 		},
 	)
 })
@@ -308,9 +318,9 @@ test("tool-driven discovery: fires pre-units when template declares tool:", asyn
 			const action = await runTick(repoRoot, slug)
 			// Discovery fires before decompose — units don't exist yet, but
 			// the tool-driven discovery clause unblocks pre-units dispatch.
-			assert.strictEqual(action.action, "discovery_required")
-			assert.strictEqual(action.agent, "design-direction")
-			assert.deepStrictEqual(action.units, [])
+			const entry = assertLoopSignal(action, "discovery")
+			assert.strictEqual(entry.agent, "design-direction")
+			assert.deepStrictEqual(entry.units, [])
 		},
 	)
 })
@@ -345,8 +355,10 @@ test("tool-driven discovery: clears when artifact lands at location:", async () 
 				"---\nintent: test\nstage: design\n---\n\n# Direction picked\n",
 			)
 			const action = await runTick(repoRoot, slug)
-			// Artifact present — cursor walks past discovery to decompose.
-			assert.notStrictEqual(action.action, "discovery_required")
+			// Artifact present — cursor walks past discovery. The loop may
+			// still carry `decompose` (no units exist) but `discovery`
+			// should be absent.
+			assertNotLoopSignal(action, "discovery")
 		},
 	)
 })
@@ -377,7 +389,8 @@ test("non-tool discovery: still gates on units > 0", async () => {
 			// No units yet — non-tool discovery should NOT fire.
 			const action = await runTick(repoRoot, slug)
 			// Cursor falls through to decompose (units don't exist).
-			assert.strictEqual(action.action, "decompose")
+			assertLoopSignal(action, "decompose")
+			assertNotLoopSignal(action, "discovery")
 		},
 	)
 })

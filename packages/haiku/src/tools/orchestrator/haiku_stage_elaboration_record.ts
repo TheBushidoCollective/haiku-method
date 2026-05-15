@@ -24,6 +24,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { ensureOnStageBranch } from "../../git-worktree.js"
+import { clearNonce } from "../../orchestrator/workflow/verifier-nonce.js"
 import {
 	HAIKU_STAGE_ELABORATION_RECORD_INPUT_SCHEMA,
 	validateHaikuStageElaborationRecordInputSchema,
@@ -113,6 +114,14 @@ export default defineTool({
 			stage,
 		}
 		writeFileSync(elabPath, matter.stringify(body, fm))
+
+		// Overwriting the artifact wholesale invalidates any in-flight
+		// verifier that was dispatched against the prior body. Clear the
+		// stale nonces so a stale verifier subagent can't seal the new
+		// body — the next tick mints fresh nonces tied to the new
+		// `recorded_at`.
+		clearNonce({ kind: "stage_elaborate", slug, stage })
+		clearNonce({ kind: "stage_decompose", slug, stage })
 
 		gitCommitState(`haiku: record elaboration for ${slug}/${stage}`)
 

@@ -14,8 +14,12 @@
 // Agent-authorable fields (creation + select_mode/select_studio):
 //   - title, description, slug, mode, studio, granularity
 //   - skip_stages (mode config)
-//   - intent_completion_review (config flag)
 //   - follows (parent-link, creation-time only)
+//
+// Intent-completion review is universal: every intent runs the studio's
+// review-agents after the final stage gate. The only knob is a studio
+// shipping zero review-agents in `studios/<studio>/review-agents/`.
+// No per-intent opt-out flag.
 //
 // `studio` is immutable post-create — accepted by AJV (so test
 // fixtures still build) but rejected by the haiku_intent_set handler
@@ -101,7 +105,6 @@ export const INTENT_FRONTMATTER_SCHEMA = Type.Object(
 		// but engine-only at write time — see FSM list.
 		mode: Type.Optional(Type.String({ enum: [...INTENT_MODES] })),
 		skip_stages: Type.Optional(Type.Array(Type.String())),
-		intent_completion_review: Type.Optional(Type.Boolean()),
 		studio: Type.Optional(Type.String()),
 		granularity: Type.Optional(Type.String()),
 		// Parent-link (creation-time only). Stores a slug reference.

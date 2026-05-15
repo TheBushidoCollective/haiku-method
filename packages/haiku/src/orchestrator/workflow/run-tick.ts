@@ -38,6 +38,7 @@ import {
 } from "./cursor.js"
 import { recordTickResult } from "./deadlock-detector.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
+import { ensureNonce } from "./verifier-nonce.js"
 
 /** Result of a single workflow tick. */
 export interface WorkflowTickResult {
@@ -391,16 +392,87 @@ function parseIntentFm(path: string): Record<string, unknown> {
  * Map a CursorAction to the OrchestratorAction shape every legacy
  * caller expects. The `action` field is the cursor's `kind`; the rest
  * of the discriminated union spreads as-is.
+ *
+ * For `elaborate_loop` actions with verifier signals
+ * (`verify_conversation` / `verify_decompose` in `signals_unmet[]`),
+ * verifier nonces are minted here and attached to the payload as
+ * `verifier_nonces: { <signal>: <nonce> }`. The matching seal tool
+ * consumes the nonce before stamping; without a valid value the seal
+ * returns `verifier_nonce_invalid`. The nonce sidecar lives under the
+ * intent dir at `.verifier-nonces.json` — see `verifier-nonce.ts` for
+ * the storage contract.
  */
 function cursorActionToOrchestratorAction(
 	slug: string,
 	cursor: CursorAction,
 ): OrchestratorAction {
-	return {
+	const base = {
 		...cursor,
 		action: cursor.kind,
 		intent: slug,
 	} as OrchestratorAction
+	if (cursor.kind === "elaborate_loop") {
+		const nonces = mintVerifierNoncesForLoop(slug, cursor)
+		if (Object.keys(nonces).length > 0) {
+			base.verifier_nonces = nonces
+		}
+	}
+	return base
+}
+
+/**
+ * Mint (or reuse) verifier nonces for every verifier signal in an
+ * elaborate_loop action. Returns a map keyed by signal name. Empty
+ * object when no verifier signals are present.
+ *
+ * The nonce is tied to the underlying artifact's `recorded_at` for
+ * per-stage reviews so that re-recording an elaboration artifact
+ * rotates the nonce automatically. Pre-intent elaborate review ties
+ * to `null` because intent.md isn't overwritten wholesale.
+ */
+function mintVerifierNoncesForLoop(
+	slug: string,
+	cursor: Extract<CursorAction, { kind: "elaborate_loop" }>,
+): Record<string, string> {
+	const out: Record<string, string> = {}
+	for (const entry of cursor.signals_unmet) {
+		if (entry.signal === "verify_conversation") {
+			if (cursor.stage) {
+				const tiedTo = readElaborationRecordedAt(slug, cursor.stage)
+				out.verify_conversation = ensureNonce(
+					{ kind: "stage_elaborate", slug, stage: cursor.stage },
+					tiedTo,
+				)
+			} else {
+				out.verify_conversation = ensureNonce(
+					{ kind: "intent_elaborate", slug },
+					null,
+				)
+			}
+		} else if (entry.signal === "verify_decompose" && cursor.stage) {
+			const tiedTo = readElaborationRecordedAt(slug, cursor.stage)
+			out.verify_decompose = ensureNonce(
+				{ kind: "stage_decompose", slug, stage: cursor.stage },
+				tiedTo,
+			)
+		}
+	}
+	return out
+}
+
+function readElaborationRecordedAt(slug: string, stage: string): string | null {
+	const path = join(intentDir(slug), "stages", stage, "elaboration.md")
+	if (!existsSync(path)) return null
+	try {
+		const raw = readFileSync(path, "utf8")
+		const parsed = matter(raw)
+		const recordedAt = (parsed.data as { recorded_at?: unknown }).recorded_at
+		return typeof recordedAt === "string" && recordedAt.length > 0
+			? recordedAt
+			: null
+	} catch {
+		return null
+	}
 }
 
 /** Wrap a tick result with a broadcast to the per-intent live-state

@@ -36,6 +36,7 @@ const FEEDBACK_ORIGINS = [
 	"adversarial-review",
 	"studio-review",
 	"drift",
+	"discovery",
 	"external-pr",
 	"external-mr",
 	"user-visual",

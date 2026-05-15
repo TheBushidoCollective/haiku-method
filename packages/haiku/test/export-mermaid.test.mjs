@@ -122,12 +122,18 @@ test("review_fix has done + escalated terminals", () => {
 	)
 })
 
-test("phase progression: start_stage → elaborate → elaborate_review → decompose → execute → review → gate", () => {
+test("phase progression: start_stage → elaborate_loop → execute → review → gate", () => {
+	// Post-Option-A (GAPS.md § 1a, 2026-05-14): the per-signal kinds
+	// (`elaborate`, `elaborate_review`, `decompose`, `decompose_review`)
+	// collapsed into a single `elaborate_loop` state. The Mermaid
+	// generator renders that state with a self-loop for partial signal
+	// progress, an `all_met` transition to execute, and `verifier.fail`
+	// / `feedback.pending` routes to review_fix.
 	for (const phase of [
-		"development_start_stage --> development_elaborate",
-		"development_elaborate --> development_elaborate_review",
-		"development_elaborate_review --> development_decompose",
-		"development_decompose --> development_execute",
+		"development_start_stage --> development_elaborate_loop",
+		"development_elaborate_loop --> development_elaborate_loop",
+		"development_elaborate_loop --> development_execute",
+		"development_elaborate_loop --> development_review_fix",
 		"development_review --> development_gate",
 	]) {
 		assert.ok(mermaid.includes(phase), `transition '${phase}' missing`)

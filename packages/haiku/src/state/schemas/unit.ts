@@ -28,6 +28,14 @@
 //   - closes[]   : FB IDs this unit addresses on revisit iterations
 //   - applicable_skills[]: slash-command slugs surfaced to hat subagents
 //
+// GOALS.md "drafting" lifecycle is handled stage-scope via the
+// `decompose_verified_at` stamp on elaboration.md, not per-unit.
+// While the stamp is absent, the cursor's `decompose_review` action
+// blocks all wave dispatch from the stage — every unit is implicitly
+// drafting until the decompose-verifier seals. Once stamped, the
+// architecture §1.3 forward-only rule kicks in at first hat dispatch
+// (when `started_at` is non-null).
+//
 // Tool-level invalidation contract (enforced in haiku_unit_write and
 // haiku_unit_set, not in this schema): any write that mutates a unit's
 // spec body or any agent-authorable FM field MUST clear `reviews.*`

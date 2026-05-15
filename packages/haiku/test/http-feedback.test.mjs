@@ -633,7 +633,11 @@ async function run() {
 		try {
 			res = await fetch(`${baseUrl}/api/feedback/${intentSlug}/${stageName}`, {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
+				// `Connection: close` forces the socket to close after this
+				// request even on the 413-and-cut-write path. Without it,
+				// undici keeps the half-aborted socket in its keep-alive
+				// pool and the next test's fetch picks it up and hangs.
+				headers: { "Content-Type": "application/json", Connection: "close" },
 				body: JSON.stringify({ title: "big", body: huge }),
 			})
 		} catch (e) {

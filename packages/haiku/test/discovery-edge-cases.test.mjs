@@ -33,12 +33,26 @@ import { dirname, join } from "node:path"
 import { test } from "node:test"
 import matter from "gray-matter"
 import {
+	assertLoopSignal,
+	assertNotLoopSignal,
+	pickLoopSignal,
+} from "./_elaborate-loop-helpers.mjs"
+import {
 	initTestRepo,
 	makeIntent,
 	makeStudio,
 	onStageBranch,
 	runTickWithBranchAlignment,
 } from "./_v4-fixtures.mjs"
+
+// Post-Option-A (GAPS § 1a, 2026-05-14): the cursor now collects ALL
+// missing discovery templates into the elaborate_loop's signals_unmet
+// in a single tick, not one-at-a-time. Tests are rewritten to assert
+// on the per-signal list rather than the previously-singular emission.
+function discoveryEntries(action) {
+	if (action?.action !== "elaborate_loop") return []
+	return (action.signals_unmet ?? []).filter((s) => s.signal === "discovery")
+}
 
 const HAS_GIT = (() => {
 	try {
@@ -158,45 +172,48 @@ test("discovery: 2+ required agents on one stage — cursor walks each, none ski
 				depends_on: [],
 			})
 
-			// Tick 1 — cursor emits discovery_required for the FIRST missing
-			// agent. We don't pin which agent comes first (readdir order on
-			// the discovery dir is filesystem-dependent), but it MUST be one
-			// of the two declared agents.
+			// Tick 1 — cursor emits elaborate_loop with BOTH missing agents
+			// as concurrent discovery signals. Post-Option-A the agent can
+			// dispatch all missing discovery templates in one response.
 			const a1 = await runTick(repoRoot, slug)
+			const entries1 = discoveryEntries(a1)
 			assert.strictEqual(
-				a1.action,
-				"discovery_required",
-				`tick 1: expected discovery_required, got ${a1.action} — ${a1.message}`,
+				entries1.length,
+				2,
+				`tick 1: expected both missing discovery templates in signals_unmet, got ${entries1.length}: ${JSON.stringify(a1)}`,
 			)
+			const agents1 = new Set(entries1.map((e) => e.agent))
 			assert.ok(
-				a1.agent === "research-agent" || a1.agent === "risk-agent",
-				`tick 1: agent must be one of the two declared, got '${a1.agent}'`,
+				agents1.has("research-agent") && agents1.has("risk-agent"),
+				`tick 1: signals_unmet must include both declared agents; got ${[...agents1].join(", ")}`,
 			)
-			assert.deepStrictEqual(a1.units, ["unit-01"])
+			for (const e of entries1) assert.deepStrictEqual(e.units, ["unit-01"])
 
-			// Write the first artifact. Cursor must NOT skip — tick 2 emits
-			// discovery_required for the OTHER agent.
-			writeDiscoveryArtifact(repoRoot, slug, locByAgent[a1.agent])
+			// Write the first artifact. Cursor must surface only the OTHER
+			// agent in signals_unmet now.
+			const firstAgent = entries1[0].agent
+			writeDiscoveryArtifact(repoRoot, slug, locByAgent[firstAgent])
 			const a2 = await runTick(repoRoot, slug)
+			const entries2 = discoveryEntries(a2)
 			assert.strictEqual(
-				a2.action,
-				"discovery_required",
-				`tick 2: expected discovery_required for second agent, got ${a2.action} — ${a2.message}`,
+				entries2.length,
+				1,
+				`tick 2: expected one remaining discovery signal, got ${entries2.length}: ${JSON.stringify(a2)}`,
 			)
 			assert.notStrictEqual(
-				a2.agent,
-				a1.agent,
-				`tick 2: cursor must walk to the second agent, not re-emit '${a1.agent}'`,
+				entries2[0].agent,
+				firstAgent,
+				`tick 2: cursor must walk to the second agent, not re-emit '${firstAgent}'`,
 			)
 
-			// Write the second artifact. Both files present — cursor moves on
-			// (start_unit_hat / elaborate / similar), NOT discovery_required.
-			writeDiscoveryArtifact(repoRoot, slug, locByAgent[a2.agent])
+			// Write the second artifact. Both files present — cursor moves
+			// past discovery; the loop no longer carries a discovery signal.
+			writeDiscoveryArtifact(repoRoot, slug, locByAgent[entries2[0].agent])
 			const a3 = await runTick(repoRoot, slug)
-			assert.notStrictEqual(
-				a3.action,
-				"discovery_required",
-				`tick 3: with both artifacts on disk, cursor must advance, got: ${a3.action}`,
+			assertNotLoopSignal(
+				a3,
+				"discovery",
+				`tick 3: with both artifacts on disk, cursor must advance past discovery; got: ${a3.action} `,
 			)
 		},
 	)
@@ -224,15 +241,16 @@ test("discovery: partial state — only the missing agent triggers discovery_req
 		})
 
 		const action = await runTick(repoRoot, slug)
+		const entries = discoveryEntries(action)
 		assert.strictEqual(
-			action.action,
-			"discovery_required",
-			`expected discovery_required for the unwritten agent, got ${action.action} — ${action.message}`,
+			entries.length,
+			1,
+			`expected exactly one discovery signal for the unwritten agent, got ${entries.length}: ${JSON.stringify(action)}`,
 		)
 		assert.strictEqual(
-			action.agent,
+			entries[0].agent,
 			"risk-agent",
-			`cursor must dispatch the OTHER agent (risk-agent), got '${action.agent}'`,
+			`cursor must dispatch the OTHER agent (risk-agent), got '${entries[0].agent}'`,
 		)
 	})
 })
@@ -253,10 +271,10 @@ test("discovery: optional template (required: false) does not block the cursor",
 		})
 
 		const action = await runTick(repoRoot, slug)
-		assert.notStrictEqual(
-			action.action,
-			"discovery_required",
-			`optional discovery must NOT block; got ${action.action} — ${action.message}`,
+		assertNotLoopSignal(
+			action,
+			"discovery",
+			`optional discovery must NOT block; got ${action.action} `,
 		)
 		// Sanity: with no other gate in the way, cursor advances to
 		// start_unit_hat (the wave-ready unit's first hat dispatches).
@@ -284,15 +302,16 @@ test("discovery: optional + required mix — cursor blocks on required, ignores 
 		})
 
 		const action = await runTick(repoRoot, slug)
+		const entries = discoveryEntries(action)
 		assert.strictEqual(
-			action.action,
-			"discovery_required",
-			`expected discovery_required for the required agent, got ${action.action}`,
+			entries.length,
+			1,
+			`expected exactly one discovery signal for the required agent, got ${entries.length}: ${JSON.stringify(action)}`,
 		)
 		assert.strictEqual(
-			action.agent,
+			entries[0].agent,
 			"risk-agent",
-			`cursor must dispatch the REQUIRED agent only, got '${action.agent}'`,
+			`cursor must dispatch the REQUIRED agent only, got '${entries[0].agent}'`,
 		)
 	})
 })
@@ -320,26 +339,27 @@ test("discovery: multi-unit stage — one artifact write satisfies the gate for 
 			// representative unit (alphabetically first) — units[0] is for
 			// prompt context, not per-unit isolation.
 			const a1 = await runTick(repoRoot, slug)
+			const entries1 = discoveryEntries(a1)
 			assert.strictEqual(
-				a1.action,
-				"discovery_required",
-				`tick 1: expected discovery_required, got ${a1.action} — ${a1.message}`,
+				entries1.length,
+				1,
+				`tick 1: expected one discovery signal, got ${entries1.length}: ${JSON.stringify(a1)}`,
 			)
-			assert.strictEqual(a1.agent, "research-agent")
+			assert.strictEqual(entries1[0].agent, "research-agent")
 			assert.deepStrictEqual(
-				a1.units,
+				entries1[0].units,
 				["unit-01"],
-				`representative unit should be alphabetically first, got ${JSON.stringify(a1.units)}`,
+				`representative unit should be alphabetically first, got ${JSON.stringify(entries1[0].units)}`,
 			)
 
 			// Write the artifact. Single file write satisfies both units;
 			// cursor advances past discovery to the next gate.
 			writeDiscoveryArtifact(repoRoot, slug, loc)
 			const a2 = await runTick(repoRoot, slug)
-			assert.notStrictEqual(
-				a2.action,
-				"discovery_required",
-				`tick 2: with the artifact on disk, cursor must advance for every wave-ready unit, got ${a2.action}`,
+			assertNotLoopSignal(
+				a2,
+				"discovery",
+				`tick 2: with the artifact on disk, cursor must advance for every wave-ready unit, got ${a2.action} `,
 			)
 		},
 	)

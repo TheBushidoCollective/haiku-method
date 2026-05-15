@@ -63,10 +63,16 @@ export const GIT_NONINTERACTIVE_ENV: NodeJS.ProcessEnv = {
 }
 
 function run(args: string[], cwd?: string): string {
+	// Pass `env: process.env` explicitly. Under Node this is a no-op (default
+	// env is process.env). Under Bun the default is a startup snapshot, so any
+	// runtime mutation to process.env (e.g. PATH stubbing in test fixtures)
+	// doesn't reach the child. Explicit env makes both runtimes behave the
+	// same; in production where PATH is stable, the effect is zero.
 	return execFileSync(args[0], args.slice(1), {
 		encoding: "utf8",
 		stdio: "pipe",
 		cwd,
+		env: process.env,
 	}).trim()
 }
 

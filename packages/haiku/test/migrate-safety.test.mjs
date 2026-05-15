@@ -13,6 +13,7 @@
 //   5. Dirty git tree refuses to apply unless --allow-dirty.
 
 import assert from "node:assert"
+import { execFileSync } from "node:child_process"
 import {
 	chmodSync,
 	existsSync,
@@ -68,19 +69,25 @@ function makeAiDlc(projName, intents) {
 	return projDir
 }
 
-/** Stub git so the dirty-check path can be exercised deterministically.
- *  `mode: "clean"` exits 0 with empty output; `"dirty"` exits 0 with
- *  a `M file` line. */
+/** Initialize a real git repo in `projDir` so the dirty-check path runs
+ *  against actual `git status --porcelain`. `mode: "clean"` leaves a
+ *  fully-committed tree; `"dirty"` adds an untracked file so porcelain
+ *  output is non-empty. Used to replace an earlier PATH-stubbed approach
+ *  that didn't survive Bun's startup-snapshot env behavior in execSync. */
 function stubGit(projDir, mode) {
-	const binDir = join(projDir, "fake-bin")
-	mkdirSync(binDir, { recursive: true })
-	const script =
-		mode === "dirty"
-			? "#!/bin/sh\nif [ \"$1\" = status ]; then echo ' M fake.txt'; fi\nexit 0\n"
-			: "#!/bin/sh\nexit 0\n"
-	writeFileSync(join(binDir, "git"), script)
-	chmodSync(join(binDir, "git"), 0o755)
-	process.env.PATH = `${binDir}:${process.env.PATH}`
+	const g = (args) =>
+		execFileSync("git", args, { cwd: projDir, stdio: "pipe", encoding: "utf8" })
+	g(["init", "-q", "-b", "main"])
+	g(["config", "user.email", "test@example.com"])
+	g(["config", "user.name", "Test"])
+	g(["config", "commit.gpgsign", "false"])
+	// The .ai-dlc tree was created by makeAiDlc(); commit it so the working
+	// tree starts clean. After this, the only diff is whatever the test adds.
+	g(["add", "-A"])
+	g(["commit", "-q", "--allow-empty", "-m", "initial"])
+	if (mode === "dirty") {
+		writeFileSync(join(projDir, "fake.txt"), "dirty\n")
+	}
 }
 
 async function expectThrows(fn, matcher) {

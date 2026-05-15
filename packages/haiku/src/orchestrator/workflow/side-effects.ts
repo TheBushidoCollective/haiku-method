@@ -471,9 +471,11 @@ export function rewindFromCompletionReview(slug: string, root?: string): void {
 
 /** Shared completion path used by every gate-pass site that used to
  *  call workflowIntentComplete + return intent_complete directly.
- *  Returns the correct action for the current opt-in/opt-out state:
- *    - intent_completion_review = false → fire intent_complete
- *    - otherwise → enter completion-review phase, open a gate_review
+ *  Always enters completion review — every intent runs the studio's
+ *  review-agents after the final stage gate. A studio that wants no
+ *  completion review ships zero review-agents in
+ *  `studios/<studio>/review-agents/`; the dispatch is a no-op and the
+ *  gate immediately advances.
  *
  *  Pre-seals guard: verifies that every stage declared in
  *  `resolveIntentStages(intent, studio)` has a completed `state.json`.
@@ -519,9 +521,6 @@ export function completeOrReviewIntent(
 
 	const intentFile = join(intentDir(slug), "intent.md")
 	const intent = existsSync(intentFile) ? readFrontmatter(intentFile) : {}
-	// Opt-OUT default: studio-level intent-completion review is on.
-	// Authors disable per-intent with intent_completion_review: false.
-	const reviewOnCompletion = intent.intent_completion_review !== false
 
 	// v4: derive the final stage from the studio topology, not from the
 	// `intent.active_stage` FM field (which is no longer written by any
@@ -534,15 +533,9 @@ export function completeOrReviewIntent(
 		workflowFinalizeStageIntoIntentMain(slug, finalStage)
 	}
 
-	if (!reviewOnCompletion) {
-		workflowIntentComplete(slug)
-		return {
-			action: "intent_complete",
-			intent: slug,
-			studio,
-			message: sourceMessage,
-		}
-	}
+	// Universal: every intent enters completion review. Studios with
+	// zero review-agents naturally no-op through the dispatch and land
+	// on the terminal gate immediately on the next tick.
 	workflowEnterIntentCompletionReview(slug)
 	return {
 		action: "advance_phase",

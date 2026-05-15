@@ -21,6 +21,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { ensureOnStageBranch } from "../../git-worktree.js"
+import { consumeNonce } from "../../orchestrator/workflow/verifier-nonce.js"
 import {
 	HAIKU_INTENT_SEAL_INPUT_SCHEMA,
 	validateHaikuIntentSealInputSchema,
@@ -47,7 +48,33 @@ export default defineTool({
 		if (validation) return validation
 
 		const slug = args.intent as string
+		const nonce = args.nonce as string
 		const notes = (args.notes as string | undefined) ?? ""
+
+		const nonceCheck = consumeNonce({ kind: "intent_elaborate", slug }, nonce)
+		if (!nonceCheck.ok) {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: JSON.stringify(
+							{
+								error: "verifier_nonce_invalid",
+								tool: "haiku_intent_seal",
+								reason: nonceCheck.reason,
+								message:
+									nonceCheck.reason === "missing"
+										? `No pending intent-elaboration verifier nonce for '${slug}'. The cursor only mints a nonce when emitting the pre-intent elaborate_review action — call haiku_run_next first, dispatch the verifier subagent with the nonce on the action payload, then have the subagent call this tool with that nonce.`
+										: `Intent-elaboration verifier nonce for '${slug}' does not match the cursor's pending value.`,
+							},
+							null,
+							2,
+						),
+					},
+				],
+				isError: true,
+			}
+		}
 
 		const root = findHaikuRoot()
 		const intentMdPath = join(root, "intents", slug, "intent.md")

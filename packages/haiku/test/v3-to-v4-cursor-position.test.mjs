@@ -312,16 +312,22 @@ test("v3→v4 cursor: fresh v3 intent with no verified_at returns elaborate_revi
 		const action = pos.action
 		// Pre-intent verifier kicks in when verified_at is unset AND
 		// mode != autopilot AND it's a truly-fresh intent (first stage
-		// not started + no units).
+		// not started + no units). Post-Option-A the cursor emits a
+		// single elaborate_loop carrying verify_conversation.
 		assert.strictEqual(
 			action.kind,
-			"elaborate_review",
-			`expected elaborate_review (pre-intent gate); got: ${JSON.stringify(action)}`,
+			"elaborate_loop",
+			`expected elaborate_loop (pre-intent gate); got: ${JSON.stringify(action)}`,
+		)
+		const signals = action.signals_unmet ?? []
+		assert.ok(
+			signals.some((s) => s.signal === "verify_conversation"),
+			`pre-intent elaborate_loop must carry verify_conversation; got: ${JSON.stringify(signals)}`,
 		)
 		// No `stage` field on the pre-intent variant (it's intent-scope).
 		assert.ok(
 			!("stage" in action) || !action.stage,
-			"pre-intent elaborate_review should not name a stage",
+			"pre-intent elaborate_loop should not name a stage",
 		)
 	})
 })

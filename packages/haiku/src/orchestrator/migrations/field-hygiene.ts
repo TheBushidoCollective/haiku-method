@@ -35,7 +35,6 @@ const KNOWN_INTENT_KEYS = new Set([
 	"slug",
 	"granularity",
 	"skip_stages",
-	"intent_completion_review",
 	"follows",
 	"archived",
 	"archived_at",

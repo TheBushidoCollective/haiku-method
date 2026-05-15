@@ -153,6 +153,11 @@ try {
 	test("agent origins return agent", () => {
 		assert.strictEqual(deriveAuthorType("agent"), "agent")
 		assert.strictEqual(deriveAuthorType("adversarial-review"), "agent")
+		// GOALS.md: discovery origin is agent-spawned (subagent
+		// surfacing a question to the user). Must classify as agent
+		// so triaged_at auto-stamps at creation and the FB enters
+		// resolution routing immediately without a triage tick.
+		assert.strictEqual(deriveAuthorType("discovery"), "agent")
 	})
 
 	test("human origins return human", () => {

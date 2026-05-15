@@ -283,6 +283,19 @@ export function parseFeedback(
 		authorTypeRaw === "system"
 			? authorTypeRaw
 			: null
+	// Resolution drives the cursor's routing. Surfaced here so the SPA
+	// can label each FB with how the engine will act on it next tick.
+	const resolutionRaw = data.resolution
+	const resolution:
+		| "question"
+		| "inline_fix"
+		| "stage_revisit"
+		| null =
+		resolutionRaw === "question" ||
+		resolutionRaw === "inline_fix" ||
+		resolutionRaw === "stage_revisit"
+			? resolutionRaw
+			: null
 	// stage scope unused here but kept in the signature so providers can
 	// disambiguate intent vs stage scope when constructing the path —
 	// the field is reserved for future per-scope rendering.
@@ -304,9 +317,41 @@ export function parseFeedback(
 		createdAt: typeof data.created_at === "string" ? data.created_at : null,
 		closureReply,
 		closureReplyUnread: data.closure_reply_unread === true,
+		resolution,
 		path,
 		raw: data,
 	}
+}
+
+/** Read intent-scope approval roles from `intent.md` frontmatter. The
+ *  engine writes `approvals.<role>` slots when the corresponding
+ *  intent-completion gate fires (see
+ *  `packages/haiku/src/orchestrator/workflow/handlers/intent-completion.ts`).
+ *  Role keys observed in production: `spec`, `continuity`, `user`,
+ *  `intent_quality_gates`, plus any studio-defined intent-review
+ *  agents. We surface the role list with a `signed: boolean` so the
+ *  browse UI can render the "X of Y signed" line and mark
+ *  `intent_quality_gates` as derived. */
+export function parseIntentApprovals(
+	raw: Record<string, unknown>,
+): Array<{ role: string; signed: boolean; at: string | null }> {
+	const approvals = raw.approvals
+	if (!approvals || typeof approvals !== "object" || Array.isArray(approvals)) {
+		return []
+	}
+	const out: Array<{ role: string; signed: boolean; at: string | null }> = []
+	for (const [role, record] of Object.entries(
+		approvals as Record<string, unknown>,
+	)) {
+		if (record && typeof record === "object" && !Array.isArray(record)) {
+			const r = record as Record<string, unknown>
+			const at = typeof r.at === "string" ? r.at : null
+			out.push({ role, signed: at !== null, at })
+		} else {
+			out.push({ role, signed: false, at: null })
+		}
+	}
+	return out
 }
 
 /**
@@ -332,19 +377,99 @@ export function deriveActiveStageFromStageTree(
 	return last ?? stages[0] ?? ""
 }
 
-export function deriveStageStatusFromUnits(
+/** Derive a stage's `{ status, phase }` pair from per-unit FM. Single
+ *  call so callers can keep the engine's status + phase coherent (the
+ *  pure derivation enforces "phase is null when status is completed",
+ *  for example).
+ *
+ *  `intentMode` defaults to `"continuous"` only as a safety net for
+ *  pre-2026-05-14 callers that hadn't started threading mode through
+ *  yet — production callers should always pass the actual intent mode
+ *  read from intent.md so autopilot intents derive the correct phase
+ *  (autopilot bypasses elaborate-verifier signals).
+ *
+ *  `elaborationVerified` is the tri-state from
+ *  `parseElaborationVerified` — pass `null` when the elaboration.md
+ *  file wasn't fetched (the cursor's grandfather case applies and the
+ *  derivation falls through to decompose / execute logic).
+ *
+ *  Status remap: the pure function returns the v4 vocabulary
+ *  (`completed`); the website's wire shape uses `complete`. We map
+ *  here so callers keep the existing string. */
+export function deriveStageStateFromUnits(
 	units: ReadonlyArray<{ raw: Record<string, unknown> }>,
-	stage = "",
-): "pending" | "active" | "complete" {
+	options: {
+		stage?: string
+		intentMode?: string
+		elaborationVerified?: boolean | null
+	} = {},
+): {
+	status: "pending" | "active" | "complete"
+	phase: "elaborate" | "execute" | "review" | "approve" | "complete" | ""
+} {
 	const unitViews: DerivedUnitView[] = units.map((u, i) => ({
 		name: `u${i}`,
 		fm: u.raw,
 	}))
 	const derived = deriveStageStatePure({
-		stage,
+		stage: options.stage ?? "",
 		units: unitViews,
-		intentMode: "continuous",
+		intentMode: options.intentMode ?? "continuous",
 		approvalRoles: ["user"],
+		elaborationVerified: options.elaborationVerified ?? null,
 	})
-	return derived.status === "completed" ? "complete" : derived.status
+	const status: "pending" | "active" | "complete" =
+		derived.status === "completed" ? "complete" : derived.status
+	// Map the derivation's per-stage phase to the canonical 5-phase
+	// model the engine emits (ARCHITECTURE.md §2.1). The pure function
+	// still returns the legacy "gate" name for the post-review,
+	// pre-merge slot; rename it to "approve" so the website matches the
+	// SPA's canonical pill set. A `null` phase from `deriveStageStatePure`
+	// means the stage is past every approval — that's `complete`.
+	let phase: "elaborate" | "execute" | "review" | "approve" | "complete" | "" =
+		""
+	if (status === "complete") {
+		phase = "complete"
+	} else if (derived.phase === "gate") {
+		phase = "approve"
+	} else if (derived.phase) {
+		phase = derived.phase
+	}
+	return { status, phase }
+}
+
+/** Back-compat wrapper for the historical signature — returns just the
+ *  status. New callers should use `deriveStageStateFromUnits` so the
+ *  phase is also surfaced. Kept for the test suite + any not-yet-
+ *  migrated caller; remove once the migration is complete. */
+export function deriveStageStatusFromUnits(
+	units: ReadonlyArray<{ raw: Record<string, unknown> }>,
+	stage = "",
+): "pending" | "active" | "complete" {
+	return deriveStageStateFromUnits(units, { stage }).status
+}
+
+/** Read `verified_at` off an `elaboration.md` raw text. Returns:
+ *    - `true`  when the file exists AND `verified_at` is non-empty
+ *    - `false` when the file exists but `verified_at` is missing/empty
+ *    - `null`  when the file is missing entirely
+ *
+ *  The tri-state matches `deriveStageStatePure`'s `elaborationVerified`
+ *  contract — the cursor uses the same shape to decide whether the
+ *  elaborate gate fires. */
+export function parseElaborationVerified(
+	rawText: string | null | undefined,
+): boolean | null {
+	if (!rawText) return null
+	try {
+		const { data } = parseFrontmatter(rawText, {
+			provider: "github",
+			path: "elaboration.md",
+			slug: "",
+		})
+		const verified = data.verified_at
+		return typeof verified === "string" && verified.length > 0
+	} catch {
+		return null
+	}
 }

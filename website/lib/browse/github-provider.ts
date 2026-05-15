@@ -12,9 +12,11 @@ import ReadFileQuery from "./graphql/github/__generated__/operationsReadFileQuer
 import {
 	classifyArtifact,
 	deriveActiveStageFromStageTree,
-	deriveStageStatusFromUnits,
+	deriveStageStateFromUnits,
 	mergeKnowledge as mergeKnowledgeShared,
+	parseElaborationVerified,
 	parseFeedback,
+	parseIntentApprovals,
 	parseIntentFromRaw as parseIntentFromRawShared,
 	parseStageStateJson,
 } from "./intent-parsing"
@@ -493,7 +495,12 @@ export class GitHubProvider implements BrowseProvider {
 		)
 	}
 
-	/** Parse a single stage directory from the stagesTree entries. */
+	/** Parse a single stage directory from the stagesTree entries.
+	 *
+	 *  `intentMode` is the value from intent.md (`continuous` /
+	 *  `discrete` / `discrete-hybrid` / `autopilot`). Threaded through
+	 *  to the derivation so autopilot intents skip the elaborate-verifier
+	 *  signals — same shape the cursor uses. */
 	private parseStageFromTree(
 		slug: string,
 		stageName: string,
@@ -503,6 +510,7 @@ export class GitHubProvider implements BrowseProvider {
 		activeStage: string,
 		stageNames: string[],
 		ref: string,
+		intentMode: string,
 	): HaikuStageState | null {
 		const entries = stageEntries ?? []
 		const stageEntry = entries.find(
@@ -580,18 +588,40 @@ export class GitHubProvider implements BrowseProvider {
 		const stateEntry = stageChildren.find(
 			(e) => e.name === "state.json" && e.type === "blob",
 		)
-		const { phase, startedAt, completedAt, gateOutcome, stateStatus } =
+		const { phase: v3Phase, startedAt, completedAt, gateOutcome, stateStatus } =
 			parseStageStateJson(stateEntry?.object?.text)
 
-		// Status resolution priority:
+		// elaboration.md verification — load the file's frontmatter so the
+		// derivation can tell whether the elaborate gate has cleared. v4
+		// stamps `verified_at` on the file when the verify-conversation
+		// hat signs off; without that the cursor reports phase
+		// `elaborate`. Pass `null` (grandfather) when the file is absent.
+		const elaborationEntry = stageChildren.find(
+			(e) => e.name === "elaboration.md" && e.type === "blob",
+		)
+		const elaborationVerified = parseElaborationVerified(
+			elaborationEntry?.object?.text ?? null,
+		)
+
+		// Status + phase resolution priority:
 		//   1. v3 state.json.status (authoritative when present)
-		//   2. v4 derived from per-unit iterations[] + approvals
+		//   2. v4 derived from per-unit iterations[] + approvals + mode +
+		//      elaboration verification, via the shared pure helper. This
+		//      is the engine's own derivation; the website cannot drift
+		//      from the cursor here.
 		//   3. v3 active_stage / stage-order fallback
 		let status: "pending" | "active" | "complete" = "pending"
+		let phase: HaikuStageState["phase"] = v3Phase
 		if (stateStatus === "active") status = "active"
 		else if (stateStatus === "completed") status = "complete"
 		else if (units.length > 0 || stateEntry == null) {
-			status = deriveStageStatusFromUnits(units)
+			const derived = deriveStageStateFromUnits(units, {
+				stage: stageName,
+				intentMode,
+				elaborationVerified,
+			})
+			status = derived.status
+			phase = derived.phase
 		} else if (stageName === activeStage) status = "active"
 		else if (stageNames.indexOf(stageName) < stageNames.indexOf(activeStage))
 			status = "complete"
@@ -754,6 +784,7 @@ export class GitHubProvider implements BrowseProvider {
 		const studio = (frontmatter.studio as string) || "ideation"
 		const stageNames = (frontmatter.stages as string[]) || []
 		const activeStage = (frontmatter.active_stage as string) || ""
+		const intentMode = (frontmatter.mode as string) || "continuous"
 
 		// Determine ordered stage list from frontmatter or directory listing
 		const fallbackDirNames =
@@ -789,6 +820,7 @@ export class GitHubProvider implements BrowseProvider {
 					activeStage,
 					stageNames,
 					stageBranchRef.branch,
+					intentMode,
 				)
 			}
 
@@ -801,6 +833,7 @@ export class GitHubProvider implements BrowseProvider {
 					activeStage,
 					stageNames,
 					intentBranch ?? "HEAD",
+					intentMode,
 				)
 			}
 
@@ -813,6 +846,7 @@ export class GitHubProvider implements BrowseProvider {
 					activeStage,
 					stageNames,
 					"HEAD",
+					intentMode,
 				)
 			}
 
@@ -912,6 +946,7 @@ export class GitHubProvider implements BrowseProvider {
 			content,
 			assets: [],
 			intentFeedback,
+			intentApprovals: parseIntentApprovals(frontmatter),
 			...(this.intentMetaMap.get(slug) || {}),
 		}
 	}
@@ -999,6 +1034,7 @@ export class GitHubProvider implements BrowseProvider {
 		const studio = (frontmatter.studio as string) || "ideation"
 		const stageNames = (frontmatter.stages as string[]) || []
 		const activeStage = (frontmatter.active_stage as string) || ""
+		const intentMode = (frontmatter.mode as string) || "continuous"
 		const ref = this.branch || "HEAD"
 
 		const fallbackDirNames =
@@ -1018,6 +1054,7 @@ export class GitHubProvider implements BrowseProvider {
 				activeStage,
 				stageNames,
 				ref,
+				intentMode,
 			)
 			if (parsed) stages.push(parsed)
 		}
@@ -1069,6 +1106,7 @@ export class GitHubProvider implements BrowseProvider {
 			content,
 			assets: [],
 			intentFeedback,
+			intentApprovals: parseIntentApprovals(frontmatter),
 			branch: this.branch,
 		}
 	}

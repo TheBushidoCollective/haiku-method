@@ -109,6 +109,14 @@ export interface HaikuFeedback {
 	closureReply: { text: string; at: string } | null
 	/** Has the closure reply been acknowledged by the requester? */
 	closureReplyUnread: boolean
+	/** Cursor routing rule for this finding:
+	 *    - `question`      → Track-B preempt; agent answers, no fix chain.
+	 *    - `inline_fix`    → fix-hat chain runs in place against the FB body.
+	 *    - `stage_revisit` → cursor walks back to the FB's stage and
+	 *                        reopens its elaborate phase.
+	 *  `null` when the FM hasn't declared a resolution yet (e.g. fresh
+	 *  human-authored FB pre-triage). */
+	resolution: "question" | "inline_fix" | "stage_revisit" | null
 	/** Path on disk for reference / debugging. */
 	path: string
 	/** Raw FM dict for downstream consumers. */
@@ -131,6 +139,12 @@ export interface HaikuIntentDetail extends HaikuIntent {
 	/** Intent-scope feedback (files at `.haiku/intents/<slug>/feedback/*.md`).
 	 *  Distinct from stage-scoped feedback under `stages/<stage>/feedback/`. */
 	intentFeedback: HaikuFeedback[]
+	/** Intent-scope approvals derived from `intent.md.approvals.*`. The
+	 *  engine writes these on intent-completion gate fires; the browse
+	 *  UI surfaces them so a viewer can see which roles have signed
+	 *  off (spec / continuity / user / intent_quality_gates plus any
+	 *  studio-defined intent-review agents). */
+	intentApprovals: Array<{ role: string; signed: boolean; at: string | null }>
 }
 
 export interface CriterionItem {

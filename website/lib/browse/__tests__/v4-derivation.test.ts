@@ -11,9 +11,12 @@
 import assert from "node:assert"
 import {
 	deriveActiveStageFromStageTree,
+	deriveStageStateFromUnits,
 	deriveStageStatusFromUnits,
 	deriveV4ActiveStage,
+	parseElaborationVerified,
 	parseFeedback,
+	parseIntentApprovals,
 	parseIntentFromRaw,
 } from "../intent-parsing"
 import { deriveUnitStatus } from "../types"
@@ -383,6 +386,127 @@ body text
 	)
 	assert.strictEqual(fb.unit, null)
 	assert.deepStrictEqual(fb.invalidates, [])
+})
+
+console.log("\n── deriveStageStateFromUnits ──────────────────────────────")
+
+test("returns canonical 5-phase names — no 'gate' leak", () => {
+	// All hats advanced, but no approvals signed → engine pure derivation
+	// returns "gate"; the website wrapper must remap that to "approve".
+	const u = {
+		raw: {
+			started_at: "2026-05-14T00:00:00Z",
+			iterations: [
+				{
+					hat: "implementer",
+					started_at: "2026-05-14T00:00:00Z",
+					completed_at: "2026-05-14T00:01:00Z",
+					result: "advance",
+				},
+			],
+			reviews: { user: { at: "2026-05-14T00:02:00Z" } },
+			approvals: {},
+		},
+	}
+	const r = deriveStageStateFromUnits([u], { intentMode: "continuous" })
+	assert.strictEqual(r.phase, "approve")
+})
+
+test("autopilot mode bypasses elaborate-verifier signal", () => {
+	// Empty units + missing elaboration = "decompose" pending → phase
+	// "elaborate" under continuous, also "elaborate" under autopilot
+	// (since decompose still applies). Autopilot's bypass kicks in for
+	// verify_conversation / verify_decompose specifically; with no units
+	// the phase is the same. The mode threading still has to be correct
+	// — assert it doesn't crash and returns sensibly.
+	const r = deriveStageStateFromUnits([], { intentMode: "autopilot" })
+	assert.strictEqual(r.phase, "elaborate")
+})
+
+console.log("\n── parseElaborationVerified ───────────────────────────────")
+
+test("null when no text", () => {
+	assert.strictEqual(parseElaborationVerified(null), null)
+	assert.strictEqual(parseElaborationVerified(undefined), null)
+	assert.strictEqual(parseElaborationVerified(""), null)
+})
+
+test("false when verified_at missing", () => {
+	const raw = `---
+title: "elaboration"
+---
+
+body
+`
+	assert.strictEqual(parseElaborationVerified(raw), false)
+})
+
+test("true when verified_at stamped", () => {
+	const raw = `---
+verified_at: "2026-05-14T00:00:00Z"
+---
+
+body
+`
+	assert.strictEqual(parseElaborationVerified(raw), true)
+})
+
+console.log("\n── parseIntentApprovals ───────────────────────────────────")
+
+test("empty when intent.md has no approvals", () => {
+	assert.deepStrictEqual(parseIntentApprovals({}), [])
+})
+
+test("surfaces signed and pending roles with timestamps", () => {
+	const fm = {
+		approvals: {
+			spec: { at: "2026-05-14T00:00:00Z" },
+			intent_quality_gates: { at: "2026-05-14T00:01:00Z" },
+			user: null,
+		},
+	}
+	const r = parseIntentApprovals(fm)
+	assert.deepStrictEqual(
+		r.find((a) => a.role === "spec"),
+		{ role: "spec", signed: true, at: "2026-05-14T00:00:00Z" },
+	)
+	assert.deepStrictEqual(
+		r.find((a) => a.role === "user"),
+		{ role: "user", signed: false, at: null },
+	)
+	const iqg = r.find((a) => a.role === "intent_quality_gates")
+	assert.ok(iqg && iqg.signed)
+})
+
+test("parseFeedback surfaces resolution when present", () => {
+	const raw = `---
+title: "Question for the user"
+origin: discovery
+author_type: agent
+resolution: question
+---
+
+Need a decision on the auth flow.
+`
+	const fb = parseFeedback(
+		"local",
+		"slug",
+		"design",
+		"FB-04-question.md",
+		raw,
+		".haiku/intents/slug/stages/design/feedback/FB-04-question.md",
+	)
+	assert.strictEqual(fb.resolution, "question")
+})
+
+test("parseFeedback resolution is null when FM omits it", () => {
+	const raw = `---
+title: "Generic finding"
+---
+body
+`
+	const fb = parseFeedback("local", "s", "x", "FB-01.md", raw, "p")
+	assert.strictEqual(fb.resolution, null)
 })
 
 console.log(`\n── Result: ${passed} passed, ${failed} failed ──────────────`)

@@ -439,6 +439,21 @@ export function IntentDetailView({
 				</>
 			)}
 
+			{/* Intent-scope Approvals — surfaces the engine's
+			    intent-completion approval roles so a viewer can see
+			    which gates have signed (spec / continuity / user /
+			    intent_quality_gates plus any studio-defined intent-review
+			    roles). The engine writes these to intent.md.approvals
+			    when each completion gate fires. */}
+			{intent.intentApprovals && intent.intentApprovals.length > 0 && (
+				<section className="mb-8">
+					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+						Intent Approvals
+					</h2>
+					<IntentApprovalsCard approvals={intent.intentApprovals} />
+				</section>
+			)}
+
 			{/* Intent-scope Feedback */}
 			{intent.intentFeedback && intent.intentFeedback.length > 0 && (
 				<section className="mb-8">
@@ -1099,6 +1114,144 @@ function OtherArtifactCard({ artifact }: { artifact: HaikuArtifact }) {
 	)
 }
 
+/** Surfaces the engine's intent-completion approval roles. Each entry
+ *  is a `{ role, signed, at }` triple read off `intent.md.approvals.*`.
+ *  We label `intent_quality_gates` as derived (it's the union of every
+ *  unit's `quality_gates:` declarations, never declared on intent.md).
+ *  Studio-specific roles render with their raw key; viewers can hover
+ *  for a tooltip explaining the role exists in the studio's
+ *  `review-agents/` directory. */
+function IntentApprovalsCard({
+	approvals,
+}: {
+	approvals: ReadonlyArray<{ role: string; signed: boolean; at: string | null }>
+}) {
+	const ENGINE_ROLES: Record<string, { label: string; tooltip: string }> = {
+		spec: {
+			label: "Spec",
+			tooltip:
+				"Intent-completion spec review — engine-built, mirrors the per-stage spec gate.",
+		},
+		continuity: {
+			label: "Continuity",
+			tooltip:
+				"Cross-stage continuity check — verifies that promises declared in earlier stages were honored.",
+		},
+		user: {
+			label: "User",
+			tooltip:
+				"User approval — the human signs off on the intent as a whole.",
+		},
+		intent_quality_gates: {
+			label: "Intent quality gates",
+			tooltip:
+				"Derived role — the engine runs the union of every unit's `quality_gates:` declarations once at intent scope. Not declared on intent.md.",
+		},
+	}
+	return (
+		<div className="rounded-lg border border-stone-200 dark:border-stone-700 px-4 py-3 space-y-2">
+			{approvals.map((a) => {
+				const meta = ENGINE_ROLES[a.role]
+				const isDerived = a.role === "intent_quality_gates"
+				return (
+					<div
+						key={a.role}
+						className="flex items-center justify-between gap-3"
+					>
+						<div className="flex items-center gap-2">
+							<span
+								className={`rounded-full w-2 h-2 ${
+									a.signed
+										? "bg-green-500 dark:bg-green-400"
+										: "bg-stone-300 dark:bg-stone-600"
+								}`}
+								aria-hidden="true"
+							/>
+							<span
+								className="text-sm font-medium text-stone-800 dark:text-stone-200"
+								title={meta?.tooltip ?? `Studio-defined role: ${a.role}`}
+							>
+								{meta?.label ?? a.role}
+							</span>
+							{isDerived && (
+								<span className="rounded bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wider text-stone-500 dark:text-stone-400">
+									derived
+								</span>
+							)}
+						</div>
+						<div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+							{a.signed ? (
+								<>
+									<span className="rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 text-[10px] font-medium">
+										signed
+									</span>
+									{a.at && (
+										<time dateTime={a.at} className="font-mono">
+											{a.at.slice(0, 10)}
+										</time>
+									)}
+								</>
+							) : (
+								<span className="rounded bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400 px-1.5 py-0.5 text-[10px] font-medium">
+									pending
+								</span>
+							)}
+						</div>
+					</div>
+				)
+			})}
+		</div>
+	)
+}
+
+/** Engine phase taxonomy per ARCHITECTURE.md §2.1. The browse UI uses
+ *  the same canonical names the SPA + cursor emit so a viewer reading
+ *  the website sees identical pills to a reviewer running the SPA. */
+function phaseChipLabel(phase: string): string {
+	if (phase === "approve") return "Phase: Awaiting Approval"
+	if (phase === "complete") return "Phase: Complete"
+	if (phase === "elaborate") return "Phase: Elaborate"
+	if (phase === "execute") return "Phase: Execute"
+	if (phase === "review") return "Phase: Review"
+	// Legacy "gate" arrives only from un-migrated v3 state.json files —
+	// surface it as the v4-equivalent so the viewer's mental model stays
+	// consistent.
+	if (phase === "gate") return "Phase: Awaiting Approval"
+	return `Phase: ${phase}`
+}
+
+function phaseChipTooltip(phase: string): string {
+	switch (phase) {
+		case "elaborate":
+			return "Cursor is in the elaborate loop — agent is capturing the per-stage conversation, fanning out discovery, drafting units, and waiting for verifier sign-offs."
+		case "execute":
+			return "Cursor is dispatching units through the stage's hat sequence."
+		case "review":
+			return "Spec + studio adversarial reviews are signing per-unit reviews; the user gate is next."
+		case "approve":
+		case "gate":
+			return "All reviews signed. Stage is waiting on its approval gate before merging into intent main."
+		case "complete":
+			return "Stage merged into intent main. Cursor has moved on."
+		default:
+			return phase
+	}
+}
+
+function phaseChipClass(phase: string): string {
+	if (phase === "elaborate")
+		return "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
+	if (phase === "execute")
+		return "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+	if (phase === "review")
+		return "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400"
+	if (phase === "approve" || phase === "gate")
+		return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+	if (phase === "complete")
+		return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+	return "bg-stone-100 text-stone-700 dark:bg-stone-900/30 dark:text-stone-400"
+}
+
 function StageDetail({
 	stage,
 	providerName,
@@ -1207,7 +1360,15 @@ function StageDetail({
 						{stage.branch.replace(/^haiku\//, "")}
 					</a>
 				)}
-				{stage.phase === "gate" && (
+				{stage.phase && stage.phase !== "complete" && (
+					<span
+						className={`rounded px-2 py-0.5 text-xs font-medium ${phaseChipClass(stage.phase)}`}
+						title={phaseChipTooltip(stage.phase)}
+					>
+						{phaseChipLabel(stage.phase)}
+					</span>
+				)}
+				{stage.phase === "approve" && (
 					<span
 						className={`rounded px-2 py-0.5 text-xs font-medium ${
 							stage.gateOutcome === "advanced"
@@ -1364,6 +1525,44 @@ function FeedbackList({
 	)
 }
 
+/** Resolution chip metadata. The `tooltip` field surfaces the engine's
+ *  routing rule for each kind so viewers know what will happen on the
+ *  next `run_next`:
+ *    - question   → cursor preempts as `feedback_question` (Track-B);
+ *                   the agent reads the body and answers, no fix-hat
+ *                   chain runs.
+ *    - inline_fix → cursor dispatches the stage's `fix_hats:` chain
+ *                   against the FB body in place; resolution-of-record
+ *                   is the closure_reply written by the terminal hat.
+ *    - stage_revisit → cursor walks back to the FB's stage and reopens
+ *                      its elaborate phase; corrective units land in the
+ *                      next bolt rather than mutating completed work. */
+const RESOLUTION_BADGES: Record<
+	"question" | "inline_fix" | "stage_revisit",
+	{ label: string; classes: string; tooltip: string }
+> = {
+	question: {
+		label: "Question",
+		classes:
+			"bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
+		tooltip:
+			"Question — the cursor pauses on this finding (feedback_question) and asks the agent to answer the body. No fix-hat chain runs.",
+	},
+	inline_fix: {
+		label: "Inline fix",
+		classes: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",
+		tooltip:
+			"Inline fix — the engine dispatches the stage's fix-hat chain against this finding in place. The terminal hat's closure reply is the resolution-of-record.",
+	},
+	stage_revisit: {
+		label: "Stage revisit",
+		classes:
+			"bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+		tooltip:
+			"Stage revisit — the cursor walks back to this finding's stage and reopens its elaborate phase. Corrective units land in the next bolt; completed work isn't mutated.",
+	},
+}
+
 function FeedbackCard({
 	fb,
 	scope,
@@ -1381,6 +1580,9 @@ function FeedbackCard({
 	const statusClass = isClosed
 		? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
 		: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+	const resolutionBadge = fb.resolution
+		? RESOLUTION_BADGES[fb.resolution]
+		: null
 	return (
 		<div
 			className={`rounded-lg border ${
@@ -1405,6 +1607,14 @@ function FeedbackCard({
 					>
 						{statusLabel}
 					</span>
+					{resolutionBadge && (
+						<span
+							className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${resolutionBadge.classes}`}
+							title={resolutionBadge.tooltip}
+						>
+							{resolutionBadge.label}
+						</span>
+					)}
 					{fb.origin && (
 						<span className="rounded bg-stone-50 dark:bg-stone-900 px-1.5 py-0.5 text-[10px] font-mono text-stone-500 dark:text-stone-400">
 							{fb.origin}

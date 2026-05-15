@@ -1,8 +1,10 @@
 import {
 	deriveActiveStageFromStageTree,
-	deriveStageStatusFromUnits,
+	deriveStageStateFromUnits,
 	deriveV4ActiveStage,
+	parseElaborationVerified,
 	parseFeedback,
+	parseIntentApprovals,
 	parseIntentFromRaw,
 	parseStageStateJson,
 } from "./intent-parsing"
@@ -149,6 +151,7 @@ export class LocalProvider implements BrowseProvider {
 		const studio = (data.studio as string) || "ideation"
 		const stageNames = (data.stages as string[]) || []
 		const activeStage = (data.active_stage as string) || ""
+		const intentMode = (data.mode as string) || "continuous"
 
 		// Load stages
 		const stageDirs = await this.listDirs(`.haiku/intents/${slug}/stages`)
@@ -180,25 +183,40 @@ export class LocalProvider implements BrowseProvider {
 				`.haiku/intents/${slug}/stages/${stageName}/state.json`,
 			)
 			const {
-				phase: stagePhase,
+				phase: v3Phase,
 				startedAt: stageStartedAt,
 				completedAt: stageCompletedAt,
 				gateOutcome,
 				stateStatus,
 			} = parseStageStateJson(stateRaw)
 
-			// Status resolution priority:
+			// elaboration.md verification — same tri-state the cursor
+			// reads to decide whether the elaborate gate has cleared.
+			const elaborationRaw = await this.readFile(
+				`.haiku/intents/${slug}/stages/${stageName}/elaboration.md`,
+			)
+			const elaborationVerified = parseElaborationVerified(elaborationRaw)
+
+			// Status + phase resolution priority:
 			//   1. v3 state.json.status (when present, authoritative)
-			//   2. v4 derived from per-unit iterations[] + approvals
+			//   2. v4 derived from per-unit iterations[] + approvals + mode
+			//      + elaboration verification, via the shared pure helper.
 			//   3. v3 active_stage / stage-order fallback (un-migrated
 			//      intents where state.json is missing for whatever reason)
 			let status: "pending" | "active" | "complete" = "pending"
+			let stagePhase: HaikuStageState["phase"] = v3Phase
 			if (stateStatus === "active") status = "active"
 			else if (stateStatus === "completed") status = "complete"
 			else if (units.length > 0 || stateRaw == null) {
 				// v4 path: state.json was missing AND we have units to
-				// inspect. Fold per-unit FMs into a single status.
-				status = deriveStageStatusFromUnits(units)
+				// inspect. Fold per-unit FMs into a single derivation.
+				const derived = deriveStageStateFromUnits(units, {
+					stage: stageName,
+					intentMode,
+					elaborationVerified,
+				})
+				status = derived.status
+				stagePhase = derived.phase
 			} else if (stageName === activeStage) status = "active"
 			else if (stageNames.indexOf(stageName) < stageNames.indexOf(activeStage))
 				status = "complete"
@@ -337,6 +355,7 @@ export class LocalProvider implements BrowseProvider {
 			content,
 			assets: [],
 			intentFeedback,
+			intentApprovals: parseIntentApprovals(data),
 		}
 	}
 }

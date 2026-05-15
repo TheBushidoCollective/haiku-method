@@ -600,6 +600,16 @@ export function ReviewPage({
 									stagePhase={stageStates[selectedStage ?? ""]?.phase ?? null}
 									gateBadges={gateBadges}
 									adHoc={isAdHoc}
+									pendingSignals={
+										// Only show when the banner is rendering the
+										// engine's current stage — pending_signals
+										// is a per-cursor-emission live snapshot,
+										// meaningless for stages the user is just
+										// browsing.
+										selectedStage === activeStage
+											? (session.current_state?.pending_signals ?? null)
+											: null
+									}
 								/>
 
 								{/* Drift banner — sticky strip between StageBanner and
@@ -656,6 +666,7 @@ function StageBanner({
 	stagePhase,
 	gateBadges,
 	adHoc,
+	pendingSignals,
 }: {
 	stageName: string
 	stageStatus: string
@@ -665,6 +676,13 @@ function StageBanner({
 	 *  badges and render an "Ad-hoc" pill instead so the user can see
 	 *  at a glance that this surface won't advance the workflow. */
 	adHoc?: boolean
+	/** Cursor's `signals_unmet[]` for the current stage when `phase ===
+	 *  "elaborate"`. Rendered as small chips beneath the phase pill so
+	 *  the reviewer can see which sub-signal (conversation /
+	 *  verify_conversation / discovery / decompose / verify_decompose)
+	 *  is currently keeping the loop from advancing. Null when the
+	 *  caller is browsing a non-current stage. */
+	pendingSignals?: ReadonlyArray<string> | null
 }): React.ReactElement {
 	const statusPill =
 		stageStatus === "current" || stageStatus === "active"
@@ -737,10 +755,75 @@ function StageBanner({
 							))
 						)}
 					</div>
+					{pendingSignals && pendingSignals.length > 0 && (
+						<div
+							className="flex items-center gap-1.5 mt-2 flex-wrap"
+							data-testid="elaborate-pending-signals"
+							aria-label="Elaborate-loop signals waiting on the agent"
+						>
+							<span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 leading-none">
+								Pending:
+							</span>
+							{pendingSignals.map((sig) => (
+								<span
+									key={sig}
+									className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold leading-none bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+									title={pendingSignalTooltip(sig)}
+								>
+									{pendingSignalLabel(sig)}
+								</span>
+							))}
+						</div>
+					)}
 				</div>
 			</div>
 		</div>
 	)
+}
+
+/** Friendly label for a serialized elaborate-loop signal name. Mirrors
+ *  `serializeElaborateSignals` in the engine: discovery entries arrive
+ *  as `discovery:<agent>` and we want to show just the agent name as a
+ *  chip; everything else gets a short prose label. */
+function pendingSignalLabel(sig: string): string {
+	if (sig.startsWith("discovery:")) {
+		const agent = sig.slice("discovery:".length)
+		return `discovery · ${agent}`
+	}
+	switch (sig) {
+		case "conversation":
+			return "conversation"
+		case "verify_conversation":
+			return "verify conversation"
+		case "decompose":
+			return "decompose"
+		case "verify_decompose":
+			return "verify decompose"
+		default:
+			return sig
+	}
+}
+
+/** Tooltip text — explains what the engine is waiting for, in
+ *  reviewer-facing language. Mirrors the cursor's signal definitions
+ *  without exposing FM field names. */
+function pendingSignalTooltip(sig: string): string {
+	if (sig.startsWith("discovery:")) {
+		const agent = sig.slice("discovery:".length)
+		return `Discovery template "${agent}" hasn't produced its required artifact yet.`
+	}
+	switch (sig) {
+		case "conversation":
+			return "elaboration.md hasn't been authored yet — the engine is waiting for the elaborate hat to capture the per-stage conversation."
+		case "verify_conversation":
+			return "elaboration.md exists but hasn't been signed by the verifier hat yet."
+		case "decompose":
+			return "No units drafted yet — the engine is waiting for decomposition into work units."
+		case "verify_decompose":
+			return "Units exist but the decompose-verifier hasn't signed off that they cover the conversation."
+		default:
+			return sig
+	}
 }
 
 /**

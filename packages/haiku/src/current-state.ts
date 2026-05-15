@@ -27,13 +27,17 @@
 // for legacy shell tooling. Reading it would re-introduce the
 // divergence this function exists to eliminate.
 
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { branchExists, isBranchMerged } from "./git-worktree.js"
 import {
 	resolveIntentStages,
 	resolveStudioStages,
 } from "./orchestrator/studio.js"
+import {
+	computeElaborateSignals,
+	serializeElaborateSignals,
+} from "./orchestrator/workflow/cursor.js"
 import { deriveStageState } from "./orchestrator/workflow/derived-stage-state.js"
 import { isGitRepo } from "./state/shared.js"
 import { intentDir, parseFrontmatter } from "./state-tools.js"
@@ -151,9 +155,35 @@ export function getCurrentState(
 		? (rawPhase as IntentPhase)
 		: ""
 
+	// When the stage is in the elaborate phase, surface the same
+	// `signals_unmet[]` list the cursor would emit so the SPA can show
+	// the reviewer which sub-signal (conversation / verify_conversation /
+	// discovery / decompose / verify_decompose) is currently blocking
+	// loop progress.
+	let pending_signals: string[] | undefined
+	if (phase === "elaborate") {
+		const stageDir = join(resolveIntentDir(slug, root), "stages", current)
+		const unitsDir = join(stageDir, "units")
+		const unitNames = existsSync(unitsDir)
+			? readdirSync(unitsDir)
+					.filter((n) => n.endsWith(".md"))
+					.map((n) => n.replace(/\.md$/, ""))
+			: []
+		const signals = computeElaborateSignals({
+			slug,
+			studio,
+			stage: current,
+			stageDir,
+			unitNames,
+			mode: intentMode,
+		})
+		if (signals.length > 0) pending_signals = serializeElaborateSignals(signals)
+	}
+
 	return {
 		studio,
 		stage: current,
 		phase,
+		...(pending_signals ? { pending_signals } : {}),
 	}
 }

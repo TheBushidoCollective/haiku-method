@@ -286,6 +286,59 @@ test("returns last stage when every stage is done", () => {
 //    v4 derives phase from per-unit FM, never reads a free-form phase
 //    string. Invalid-phase normalization is moot.
 
+test("surfaces pending_signals when phase is elaborate (no elaboration.md, no units)", () => {
+	// Fresh stage: elaboration.md is missing AND no units exist. The
+	// cursor would emit `signals_unmet: ["conversation", "decompose"]`
+	// (autopilot bypass off). The SPA-facing current_state must mirror
+	// that list under `pending_signals` so the reviewer sees what the
+	// engine is waiting on.
+	const root = mkdtempSync(join(tmpdir(), "haiku-pending-signals-"))
+	const haikuRoot = join(root, ".haiku")
+	const slug = "fresh-elaborate"
+	const iDir = join(haikuRoot, "intents", slug, "stages", "inception", "units")
+	mkdirSync(iDir, { recursive: true })
+	writeFileSync(
+		join(haikuRoot, "intents", slug, "intent.md"),
+		matter.stringify("# fresh\n", { studio: "software", mode: "continuous" }),
+	)
+	try {
+		const r = getCurrentState(slug, haikuRoot)
+		assert.ok(r)
+		assert.strictEqual(r.phase, "elaborate")
+		assert.ok(Array.isArray(r.pending_signals))
+		// conversation fires (no elab, no units), decompose fires (no
+		// units). verify_* require elab/units to exist first.
+		assert.ok(
+			r.pending_signals.includes("conversation"),
+			`expected "conversation" in ${JSON.stringify(r.pending_signals)}`,
+		)
+		assert.ok(
+			r.pending_signals.includes("decompose"),
+			`expected "decompose" in ${JSON.stringify(r.pending_signals)}`,
+		)
+	} finally {
+		rmSync(root, { recursive: true, force: true })
+	}
+})
+
+test("omits pending_signals on non-elaborate phases", () => {
+	const { haikuRoot, cleanup } = fixture(
+		"in-execute",
+		{ studio: "software" },
+		{
+			inception: { stage: "inception", status: "active", phase: "execute" },
+		},
+	)
+	try {
+		const r = getCurrentState("in-execute", haikuRoot)
+		assert.ok(r)
+		assert.strictEqual(r.phase, "execute")
+		assert.strictEqual(r.pending_signals, undefined)
+	} finally {
+		cleanup()
+	}
+})
+
 test("ignores intent.md.active_stage — derives from per-unit FM only", () => {
 	// intent.md says active_stage=design but per-unit FM shows inception
 	// still has work in flight (units exist + not fully signed). The

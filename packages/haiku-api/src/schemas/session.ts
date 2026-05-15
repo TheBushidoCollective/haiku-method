@@ -171,6 +171,13 @@ export const IntentCurrentStateSchema = z
 			})
 			.nullable()
 			.optional(),
+		/** When `phase === "elaborate"`, the names of the elaborate-loop
+		 *  signals that haven't been satisfied yet — one of
+		 *  `conversation`, `verify_conversation`, `discovery:<agent>`,
+		 *  `decompose`, `verify_decompose`. Mirrors the cursor's
+		 *  `signals_unmet[]` so the SPA can show why the loop hasn't
+		 *  advanced. Empty / omitted on other phases. */
+		pending_signals: z.array(z.string()).optional(),
 	})
 	.describe(
 		"Unified current-state snapshot — derived fresh per request from per-stage state.json. The single source of truth for 'where is this intent right now?'.",

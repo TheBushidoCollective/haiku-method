@@ -924,84 +924,17 @@ function walkIntentTrack(args: {
 	// whose `signals_unmet[]` lists every currently-unmet completion
 	// signal. The agent may make progress on any subset in one tick.
 	//
-	// Mode bypass: autopilot skips the conversation + verifier signals
-	// entirely (there's no human to converse with), but discovery and
-	// decompose still apply because they're knowledge gathering and
-	// work-breakdown — orthogonal to whether a human is in the loop.
-	const signalsUnmet: ElaborateLoopSignal[] = []
-	const elabPath = join(stageDir, "elaboration.md")
-	const elabFm = existsSync(elabPath) ? (readFm(elabPath)?.data ?? {}) : null
-	const isAutopilotMode = mode === "autopilot"
-
-	// Signal 3a — conversation (per-stage human conversation gate).
-	// Fires when (a) non-autopilot, (b) elaboration.md missing, AND
-	// (c) units.length === 0. Units-with-no-elaboration is the
-	// grandfather case (legacy intent pre-dating this gate); we don't
-	// retroactively rewind work that already shipped.
-	if (!isAutopilotMode && elabFm === null && units.length === 0) {
-		signalsUnmet.push({ signal: "conversation" })
-	}
-
-	// Signal 3b — verify_conversation. Fires when elaboration.md exists
-	// but is unverified. Autopilot bypasses.
-	if (!isAutopilotMode && elabFm !== null) {
-		const verifiedAt =
-			typeof elabFm.verified_at === "string" ? elabFm.verified_at : ""
-		if (!verifiedAt) {
-			signalsUnmet.push({ signal: "verify_conversation" })
-		}
-	}
-
-	// Signal 1 — discovery (per template; can fan out multiple entries).
-	// Defs are sorted by `name` so dispatch order is deterministic.
-	// Tool-driven templates fire pre-units; research templates need a
-	// representative unit. Studio misconfiguration (required+no
-	// location) is logged and skipped — fixing the template is the
-	// remedy, not silently passing.
-	const discoveryDefs = readStageArtifactDefs(studio, stage)
-		.filter((d) => d.kind === "discovery")
-		.sort((a, b) => a.name.localeCompare(b.name))
-	for (const def of discoveryDefs) {
-		if (units.length === 0 && !def.tool) continue
-		if (!def.required) continue
-		if (!def.location) {
-			console.error(
-				`[haiku] Studio configuration error: discovery template '${def.name}' in stage '${stage}' is required but declares no 'location:' field. The gate is being skipped — fix the template.`,
-			)
-			continue
-		}
-		const resolved = def.location.replace(/\{intent-slug\}/g, slug)
-		const absPath = join(process.cwd(), resolved)
-		const exists = resolved.endsWith("/")
-			? existsSync(absPath) &&
-				readdirSync(absPath).filter((e) => e !== ".gitkeep").length > 0
-			: existsSync(absPath)
-		if (!exists) {
-			signalsUnmet.push({
-				signal: "discovery",
-				agent: def.name,
-				units: units.length > 0 ? [units[0].name] : [],
-			})
-		}
-	}
-
-	// Signal 4a — decompose. Fires when no units exist yet.
-	if (units.length === 0) {
-		signalsUnmet.push({ signal: "decompose" })
-	}
-
-	// Signal 4b — verify_decompose. Fires when units exist and the
-	// elaboration artifact is missing the decompose_verified_at stamp.
-	// Autopilot bypasses (mirrors verify_conversation bypass).
-	if (!isAutopilotMode && units.length > 0 && elabFm !== null) {
-		const decomposeVerifiedAt =
-			typeof elabFm.decompose_verified_at === "string"
-				? elabFm.decompose_verified_at
-				: ""
-		if (!decomposeVerifiedAt) {
-			signalsUnmet.push({ signal: "verify_decompose" })
-		}
-	}
+	// Computation lives in `computeElaborateSignals` so the HTTP API's
+	// `getCurrentState` can surface the same signal list to the SPA
+	// without duplicating the on-disk derivation.
+	const signalsUnmet = computeElaborateSignals({
+		slug,
+		studio,
+		stage,
+		stageDir,
+		unitNames: units.map((u) => u.name),
+		mode,
+	})
 
 	if (signalsUnmet.length > 0) {
 		return { kind: "elaborate_loop", stage, signals_unmet: signalsUnmet }
@@ -1455,6 +1388,102 @@ export function derivePosition(args: {
 	}
 
 	return { track: "sealed", action: { kind: "sealed" } }
+}
+
+/** Compute the elaborate-loop's `signals_unmet[]` for a given stage from
+ *  on-disk state. Pulled out of `walkIntentTrack` so the HTTP API
+ *  (`getCurrentState`) can surface the same list to the SPA without
+ *  re-implementing the cursor's signal logic and silently drifting.
+ *
+ *  Inputs are deliberately lightweight: callers pass the unit name list
+ *  (so this helper doesn't reach back into per-unit FM) and the resolved
+ *  stage directory. Mode bypass for autopilot mirrors the original
+ *  cursor block exactly. */
+export function computeElaborateSignals(args: {
+	slug: string
+	studio: string
+	stage: string
+	stageDir: string
+	unitNames: ReadonlyArray<string>
+	mode: string
+}): ElaborateLoopSignal[] {
+	const { slug, studio, stage, stageDir, unitNames, mode } = args
+	const signalsUnmet: ElaborateLoopSignal[] = []
+	const elabPath = join(stageDir, "elaboration.md")
+	const elabFm = existsSync(elabPath) ? (readFm(elabPath)?.data ?? {}) : null
+	const isAutopilotMode = mode === "autopilot"
+
+	// Signal 3a — conversation (per-stage human conversation gate).
+	if (!isAutopilotMode && elabFm === null && unitNames.length === 0) {
+		signalsUnmet.push({ signal: "conversation" })
+	}
+
+	// Signal 3b — verify_conversation.
+	if (!isAutopilotMode && elabFm !== null) {
+		const verifiedAt =
+			typeof elabFm.verified_at === "string" ? elabFm.verified_at : ""
+		if (!verifiedAt) {
+			signalsUnmet.push({ signal: "verify_conversation" })
+		}
+	}
+
+	// Signal 1 — discovery (per template).
+	const discoveryDefs = readStageArtifactDefs(studio, stage)
+		.filter((d) => d.kind === "discovery")
+		.sort((a, b) => a.name.localeCompare(b.name))
+	for (const def of discoveryDefs) {
+		if (unitNames.length === 0 && !def.tool) continue
+		if (!def.required) continue
+		if (!def.location) {
+			console.error(
+				`[haiku] Studio configuration error: discovery template '${def.name}' in stage '${stage}' is required but declares no 'location:' field. The gate is being skipped — fix the template.`,
+			)
+			continue
+		}
+		const resolved = def.location.replace(/\{intent-slug\}/g, slug)
+		const absPath = join(process.cwd(), resolved)
+		const exists = resolved.endsWith("/")
+			? existsSync(absPath) &&
+				readdirSync(absPath).filter((e) => e !== ".gitkeep").length > 0
+			: existsSync(absPath)
+		if (!exists) {
+			signalsUnmet.push({
+				signal: "discovery",
+				agent: def.name,
+				units: unitNames.length > 0 ? [unitNames[0]] : [],
+			})
+		}
+	}
+
+	// Signal 4a — decompose.
+	if (unitNames.length === 0) {
+		signalsUnmet.push({ signal: "decompose" })
+	}
+
+	// Signal 4b — verify_decompose.
+	if (!isAutopilotMode && unitNames.length > 0 && elabFm !== null) {
+		const decomposeVerifiedAt =
+			typeof elabFm.decompose_verified_at === "string"
+				? elabFm.decompose_verified_at
+				: ""
+		if (!decomposeVerifiedAt) {
+			signalsUnmet.push({ signal: "verify_decompose" })
+		}
+	}
+
+	return signalsUnmet
+}
+
+/** Stable string serialization of an `ElaborateLoopSignal[]` for wire /
+ *  display use. `discovery` entries carry their `agent` name; everything
+ *  else is just the signal kind. Order is preserved (cursor's emit order
+ *  is the natural workflow order). */
+export function serializeElaborateSignals(
+	signals: ReadonlyArray<ElaborateLoopSignal>,
+): string[] {
+	return signals.map((s) =>
+		s.signal === "discovery" ? `discovery:${s.agent}` : s.signal,
+	)
 }
 
 // Test-only escape hatch.

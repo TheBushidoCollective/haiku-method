@@ -52,23 +52,41 @@ import { FeedbackExpandedPanel } from "./FeedbackExpandedPanel"
  *  the user in wall-of-text. */
 const INLINE_PREVIEW_BUDGET = 280
 
+/** Resolution chip metadata. The `tooltip` field surfaces the engine's
+ *  routing rule for each kind so reviewers know what will happen on the
+ *  next `run_next`:
+ *    - question   → cursor preempts as `feedback_question` (Track-B);
+ *                   the agent reads the body and answers, no fix-hat
+ *                   chain runs.
+ *    - inline_fix → cursor dispatches the stage's `fix_hats:` chain
+ *                   against the FB body in place; resolution-of-record
+ *                   is the closure_reply written by the terminal hat.
+ *    - stage_revisit → cursor walks back to the FB's stage and reopens
+ *                      its elaborate phase; corrective units land in the
+ *                      next bolt rather than mutating completed work. */
 const RESOLUTION_LABELS: Record<
 	"question" | "inline_fix" | "stage_revisit",
-	{ label: string; classes: string }
+	{ label: string; classes: string; tooltip: string }
 > = {
 	question: {
 		label: "Question",
 		classes:
 			"bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
+		tooltip:
+			"Question — the cursor pauses on this finding (feedback_question) and asks the agent to answer the body. No fix-hat chain runs; the agent only resolves it after a user-decidable answer lands.",
 	},
 	inline_fix: {
 		label: "Inline fix",
 		classes: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",
+		tooltip:
+			"Inline fix — the engine dispatches the stage's fix-hat chain against this finding in place. The terminal hat's closure_reply is the resolution-of-record. No earlier stage rewinds.",
 	},
 	stage_revisit: {
 		label: "Stage revisit",
 		classes:
 			"bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+		tooltip:
+			"Stage revisit — the cursor walks back to this finding's stage and reopens its elaborate phase. Corrective units land in the next bolt; completed work isn't mutated.",
 	},
 }
 
@@ -416,7 +434,8 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 							<span
 								className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-semibold leading-none ${resolutionBadge.classes}`}
 								role="status"
-								aria-label={`Resolution: ${resolutionBadge.label}`}
+								aria-label={`Resolution: ${resolutionBadge.label}. ${resolutionBadge.tooltip}`}
+								title={resolutionBadge.tooltip}
 							>
 								{resolutionBadge.label}
 							</span>

@@ -101,6 +101,13 @@ export interface IntentCurrentState {
 	phase: IntentPhase | ""
 	step?: string
 	nextState?: IntentNextStateHint | null
+	/** When `phase === "elaborate"`, the names of the elaborate-loop
+	 *  signals that haven't been satisfied yet (a subset of
+	 *  `conversation`, `verify_conversation`, `discovery:<agent>`,
+	 *  `decompose`, `verify_decompose`). Empty / omitted on other phases.
+	 *  Mirrors the cursor's `signals_unmet[]` so the SPA can show the
+	 *  reviewer why the loop hasn't advanced yet. */
+	pending_signals?: string[]
 }
 
 export interface DiscoveryFrontmatter {

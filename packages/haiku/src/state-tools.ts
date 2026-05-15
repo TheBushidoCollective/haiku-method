@@ -4647,6 +4647,165 @@ export const FEEDBACK_STATUSES = [
 ] as const
 
 /**
+ * Derive a unit's lifecycle status from its on-disk signals. v4 schemas
+ * removed the stored `status` field (unit.ts:5); v7→v8 migrates legacy
+ * data away from it. Every consumer that wants a status string MUST go
+ * through this — reading `fm.status` directly is a stale-data trap.
+ *
+ * Signal precedence (first match wins):
+ *   1. last `iterations[]` entry has `result === "advance"` AND
+ *      `approvals` non-empty               → "completed"
+ *   2. `iterations[]` non-empty            → "active"
+ *   3. otherwise                            → "pending"
+ */
+export function deriveUnitStatus(
+	fm: Record<string, unknown>,
+): "pending" | "active" | "completed" {
+	const iterations = fm.iterations
+	if (Array.isArray(iterations) && iterations.length > 0) {
+		const last = iterations[iterations.length - 1] as
+			| { result?: unknown }
+			| undefined
+		const approvals = fm.approvals
+		const hasApprovals =
+			approvals !== null &&
+			typeof approvals === "object" &&
+			Object.keys(approvals as Record<string, unknown>).length > 0
+		if (last && last.result === "advance" && hasApprovals) return "completed"
+		return "active"
+	}
+	// Legacy `status:` field fallback — same belt-and-suspenders pattern
+	// as deriveFeedbackStatus. Un-migrated unit FM with `status: active` /
+	// `completed` returns the same value derivation would compute after
+	// migration, so v3/v4-on-disk fixtures keep working in flight.
+	const legacyStatus = fm.status
+	if (typeof legacyStatus === "string") {
+		const s = legacyStatus.trim().toLowerCase()
+		if (s === "completed" || s === "complete") return "completed"
+		if (s === "active") return "active"
+	}
+	return "pending"
+}
+
+/**
+ * Derive a feedback's status from its on-disk signals. v4 schemas removed
+ * the stored `status` field (feedback.ts:8); v7→v8 migrates legacy data
+ * to the same shape. Every consumer that wants a status string MUST go
+ * through this — reading `fm.status` directly is a stale-data trap.
+ *
+ * Signal precedence (first match wins):
+ *   1. `rejected_at` set                       → "rejected"
+ *   2. `closed_by` === "feedback-assessor"     → "addressed" (auto-verified by fix loop)
+ *   3. `resolution` === "answered"             → "answered"  (replied with no code delta)
+ *   4. `closed_at` set OR `closed_by` non-empty → "closed"   (any other resolved state)
+ *   5. `iterations[]` non-empty                → "fixing"    (mid fix loop)
+ *   6. otherwise                               → "pending"   (fresh open finding)
+ *
+ * The 6-value return preserves the long-standing API surface (Zod
+ * `FeedbackStatusSchema`, `?status=` query filters, SPA badges) so
+ * derivation is a drop-in replacement on the read path.
+ */
+export function deriveFeedbackStatus(
+	fm: Record<string, unknown>,
+): (typeof FEEDBACK_STATUSES)[number] {
+	const rejectedAt = fm.rejected_at
+	if (typeof rejectedAt === "string" && rejectedAt.length > 0) return "rejected"
+	const closedBy = fm.closed_by
+	if (typeof closedBy === "string") {
+		if (closedBy === "feedback-assessor") return "addressed"
+	}
+	const resolution = fm.resolution
+	if (typeof resolution === "string" && resolution === "answered") {
+		return "answered"
+	}
+	const closedAt = fm.closed_at
+	if (typeof closedAt === "string" && closedAt.length > 0) return "closed"
+	if (typeof closedBy === "string" && closedBy.length > 0) return "closed"
+	// Legacy `status:` field fallback. v7→v8 migrates it away on write,
+	// but un-migrated FBs (loaded before the engine reaches them) get the
+	// same derivation a migrator would synthesize. The fallback is the
+	// belt-and-suspenders so a legacy file in flight never appears wrongly
+	// "pending" just because it hasn't been touched yet.
+	const legacyStatus = fm.status
+	if (typeof legacyStatus === "string") {
+		const s = legacyStatus.trim().toLowerCase()
+		if (s === "rejected") return "rejected"
+		if (s === "addressed") return "addressed"
+		if (s === "answered") return "answered"
+		if (s === "closed") return "closed"
+		if (s === "fixing") return "fixing"
+	}
+	const iterations = fm.iterations
+	if (Array.isArray(iterations) && iterations.length > 0) return "fixing"
+	return "pending"
+}
+
+/**
+ * Normalize a frontmatter object by translating any legacy `status:` field
+ * into the v8 derived signals (`closed_at`, `closed_by`, `resolution`,
+ * `rejected_at`) and removing the `status` key. Mutates `fm` in place and
+ * returns it for chaining.
+ *
+ * Use on every FB write site so legacy `status: closed` writes (still
+ * accepted at the tool input layer for back-compat) get persisted as
+ * `closed_at: <now>` instead — the engine never writes `status` to disk.
+ *
+ * `now` is injectable for deterministic tests.
+ */
+export function normalizeLegacyFeedbackStatus(
+	fm: Record<string, unknown>,
+	now: () => string = () => new Date().toISOString(),
+): Record<string, unknown> {
+	const raw = fm.status
+	// `status` not present → nothing to do.
+	if (raw === undefined) return fm
+	// `status: null` (or any non-string value) → drop the legacy key, no
+	// signal synthesis needed. The derivation falls back to iterations[]
+	// + closed_at / rejected_at which are the v8 source of truth.
+	if (typeof raw !== "string") {
+		delete fm.status
+		return fm
+	}
+	const s = raw.trim().toLowerCase()
+	// Empty string treated the same as null: drop, no synthesis.
+	if (s === "") {
+		delete fm.status
+		return fm
+	}
+	switch (s) {
+		case "rejected":
+			if (!fm.rejected_at) fm.rejected_at = now()
+			break
+		case "addressed":
+			if (!fm.closed_at) fm.closed_at = now()
+			if (!fm.closed_by) fm.closed_by = "feedback-assessor"
+			break
+		case "answered":
+			if (!fm.closed_at) fm.closed_at = now()
+			if (!fm.resolution) fm.resolution = "answered"
+			break
+		case "closed":
+			if (!fm.closed_at) fm.closed_at = now()
+			break
+		case "fixing":
+		case "pending":
+			// Non-terminal status carries no closure information — just drop
+			// the legacy field. Closure signals (closed_at / rejected_at)
+			// stay intact: they're the v8 source of truth, and the caller
+			// can clear them explicitly via `mutate_feedback` if they want
+			// to re-open a closed item.
+			break
+		default:
+			// Unknown status: leave the closure signals alone and drop the
+			// field. The derivation will compute "pending" if there's
+			// nothing else, which is the safest fallback.
+			break
+	}
+	delete fm.status
+	return fm
+}
+
+/**
  * Maximum number of fix-loop bolts we will run against a single feedback
  * item before escalating to the human. Each bolt is one full dispatch of the
  * stage's `fix_hats` sequence with the feedback file as scope. Three attempts
@@ -5477,7 +5636,9 @@ export function readFeedbackFiles(slug: string, stage: string): FeedbackItem[] {
 				: `.haiku/intents/${slug}/feedback/${f}`,
 			title: (data.title as string) || "",
 			body,
-			status: (data.status as string) || "pending",
+			// v8: status is derived from on-disk signals, never read from
+			// stored FM. The legacy `status:` field was migrated away in v8.
+			status: deriveFeedbackStatus(data),
 			origin: (data.origin as string) || "agent",
 			author: (data.author as string) || "agent",
 			author_type: (data.author_type as string) || "agent",
@@ -5646,22 +5807,13 @@ function parseInlineAnchor(
  * `closed_by` is the source of truth.
  */
 export function countPendingFeedback(slug: string, stage: string): number {
-	return readFeedbackFiles(slug, stage).filter((item) => {
-		// An item blocks the gate when it is not yet resolved. Resolved means:
-		//   - `closed_by` set (any unit closed it), OR
-		//   - status is one of "closed" / "addressed" / "rejected"
-		// Everything else (status "pending", regardless of other fields) blocks.
-		const closedBy = (item as { closed_by?: unknown }).closed_by
-		if (typeof closedBy === "string" && closedBy.length > 0) return false
-		if (
-			item.status === "closed" ||
-			item.status === "addressed" ||
-			item.status === "answered" ||
-			item.status === "rejected"
-		)
-			return false
-		return true
-	}).length
+	// v8: status is derived. Items in {pending, fixing} block the stage
+	// gate; {addressed, answered, closed, rejected} are all resolved.
+	// `readFeedbackFiles` already routes through `deriveFeedbackStatus`
+	// so checking item.status here uses the derived value, not stale FM.
+	return readFeedbackFiles(slug, stage).filter(
+		(item) => item.status === "pending" || item.status === "fixing",
+	).length
 }
 
 /**
@@ -5742,6 +5894,7 @@ export function moveFeedbackFile(
 
 	// No-op move: same source + target. Just stamp triaged_at.
 	if (fromStage === toStage) {
+		normalizeLegacyFeedbackStatus(data)
 		const content = matter.stringify(`\n${found.body.trim()}\n`, data)
 		writeFileSync(found.path, content)
 		const relPath = fromStage
@@ -5993,7 +6146,11 @@ export function updateFeedbackFile(
 	}
 	if (fields.closed_by !== undefined) {
 		if (fields.closed_by === null) {
-			newData.closed_by = undefined
+			// Clear the field — js-yaml chokes on `undefined`, so delete the
+			// key outright. Caller's intent ("clear closed_by") matches the
+			// v8 model: closure flows through signal presence/absence, so
+			// removing the key removes the signal.
+			delete newData.closed_by
 		} else {
 			newData.closed_by = fields.closed_by
 		}
@@ -6004,6 +6161,11 @@ export function updateFeedbackFile(
 		updated.push("resolution")
 	}
 
+	// v8: legacy `status` writes get translated into the canonical signals
+	// (closed_at / closed_by / rejected_at / resolution) and the `status`
+	// key is dropped from disk. The engine never persists `status` —
+	// derivation is the single source of truth.
+	normalizeLegacyFeedbackStatus(newData)
 	writeFileSync(found.path, matter.stringify(`\n${found.body}\n`, newData))
 	return { ok: true, updated_fields: updated }
 }
@@ -6053,13 +6215,18 @@ export function appendFeedbackReply(
 		: []
 	const replies = [...existingReplies, newReply]
 	const newData: Record<string, unknown> = { ...found.data, replies }
-	if (opts.close_as_answered) newData.status = "answered"
+	if (opts.close_as_answered) {
+		// v8 closure model — stamp the signals, never the legacy status field.
+		// `deriveFeedbackStatus` returns "answered" when closed_at is set AND
+		// resolution === "answered".
+		if (!newData.closed_at) newData.closed_at = new Date().toISOString()
+		if (!newData.resolution) newData.resolution = "answered"
+	}
 	writeFileSync(found.path, matter.stringify(`\n${found.body}\n`, newData))
 	return {
 		ok: true,
 		reply_index: replies.length - 1,
-		status:
-			(newData.status as string) || (found.data.status as string) || "pending",
+		status: deriveFeedbackStatus(newData),
 	}
 }
 
@@ -6145,18 +6312,15 @@ export function deleteFeedbackFile(
 		}
 	}
 
-	// v4 open guard: an FB is "open" when closed_at is null. Pre-v4
-	// FBs migrated via the v0→v4 soft-scrub get closed_at synthesized
-	// from terminal status. Legacy fixtures with status: pending/fixing
-	// are also treated as open for backward compat.
+	// v8 open guard: derive status from on-disk signals. An FB blocks
+	// deletion when its derived status is "pending" or "fixing"; once
+	// it's resolved (closed/addressed/answered/rejected) it can be
+	// deleted as historical record.
+	const derivedStatus = deriveFeedbackStatus(
+		found.data as Record<string, unknown>,
+	)
 	const isOpenForDelete =
-		!(
-			typeof found.data.closed_at === "string" &&
-			found.data.closed_at.length > 0
-		) &&
-		(found.data.status === "pending" ||
-			found.data.status === "fixing" ||
-			!found.data.status)
+		derivedStatus === "pending" || derivedStatus === "fixing"
 	if (isOpenForDelete) {
 		return {
 			ok: false,
@@ -7410,7 +7574,11 @@ export function handleStateTool(
 			)
 			if (existsSync(path)) {
 				const { data: currentFm } = parseFrontmatter(readFileSync(path, "utf8"))
-				const currentStatus = (currentFm.status as string) || "pending"
+				// v8: unit status is derived from iterations + approvals,
+				// never read from a stored `status` field.
+				const currentStatus = deriveUnitStatus(
+					currentFm as Record<string, unknown>,
+				)
 				// Lifecycle exemptions — narrow set of fields that remain
 				// editable after a unit completes:
 				//   - `outputs`: advance_hat's own autoPopulateOutputs writes it
@@ -8840,7 +9008,8 @@ export function handleStateTool(
 				)
 			}
 			const { data } = parseFrontmatter(readFileSync(path, "utf8"))
-			const status = (data.status as string) || "pending"
+			// v8: unit status is derived from iterations + approvals.
+			const status = deriveUnitStatus(data as Record<string, unknown>)
 			if (status !== "pending") {
 				return reply(
 					{
@@ -8908,7 +9077,10 @@ export function handleStateTool(
 				const { data: existingFm } = parseFrontmatter(
 					readFileSync(path, "utf8"),
 				)
-				const currentStatus = (existingFm.status as string) || "pending"
+				// v8: unit status is derived from iterations + approvals.
+				const currentStatus = deriveUnitStatus(
+					existingFm as Record<string, unknown>,
+				)
 				if (currentStatus !== "pending") {
 					return reply(
 						{
@@ -10818,7 +10990,10 @@ export function handleStateTool(
 					isError: true,
 				}
 			}
-			const moveStatus = (moveFound.data.status as string) || "pending"
+			// v8: derive status from on-disk signals.
+			const moveStatus = deriveFeedbackStatus(
+				moveFound.data as Record<string, unknown>,
+			)
 			if (moveStatus === "closed" || moveStatus === "rejected") {
 				return reply(
 					{
@@ -10940,8 +11115,11 @@ export function handleStateTool(
 				}
 			}
 
-			// Guard: cannot reject already closed or rejected items
-			const currentStatus = rejectFound.data.status as string
+			// Guard: cannot reject already closed or rejected items.
+			// v8: status is derived from on-disk signals.
+			const currentStatus = deriveFeedbackStatus(
+				rejectFound.data as Record<string, unknown>,
+			)
 			if (currentStatus === "closed" || currentStatus === "rejected") {
 				return {
 					content: [
@@ -10954,8 +11132,17 @@ export function handleStateTool(
 				}
 			}
 
-			// Apply rejection: set status to rejected and append reason to body
-			const rejectData = { ...rejectFound.data, status: "rejected" }
+			// Apply rejection: stamp `rejected_at` (v8 derived-status signal).
+			// We deliberately do NOT write `status: rejected` — the status
+			// field was removed in v8; deriveFeedbackStatus reads rejected_at
+			// and returns "rejected". `normalizeLegacyFeedbackStatus` strips
+			// any pre-existing legacy `status` key from the spread of
+			// `rejectFound.data` so it doesn't get re-persisted to disk.
+			const rejectData = {
+				...rejectFound.data,
+				rejected_at: new Date().toISOString(),
+			}
+			normalizeLegacyFeedbackStatus(rejectData)
 			const rejectBody = `${rejectFound.body}\n\n---\n\n**Rejection reason:** ${reason}`
 
 			writeFileSync(
@@ -11051,23 +11238,15 @@ export function handleStateTool(
 				}
 			}
 
-			// v4: derive closed-state from frontmatter. An FB is "closed"
-			// when its `closed_at` field is a non-empty string. Pre-v4
-			// FBs migrated via the v0→v4 soft-scrub get closed_at
-			// synthesized from terminal status; a few legacy fixtures
-			// may still carry `status: closed/addressed/rejected`, so
-			// honor those as fallback.
-			const isClosed = (item: FeedbackItem): boolean => {
-				if (typeof item.closed_at === "string" && item.closed_at.length > 0)
-					return true
-				if (
-					item.status === "closed" ||
-					item.status === "rejected" ||
-					item.status === "addressed"
-				)
-					return true
-				return false
-			}
+			// v8: status is derived. `item.status` is already the derived
+			// value (set by readFeedbackFiles → deriveFeedbackStatus).
+			// {closed, addressed, answered, rejected} all count as "not
+			// open"; pending/fixing block.
+			const isClosed = (item: FeedbackItem): boolean =>
+				item.status === "closed" ||
+				item.status === "rejected" ||
+				item.status === "addressed" ||
+				item.status === "answered"
 
 			// Collect feedback items across stages
 			const allItems: Array<Record<string, unknown>> = []

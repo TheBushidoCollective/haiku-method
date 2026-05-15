@@ -355,7 +355,10 @@ try {
 
 	console.log("\n=== updateFeedbackFile ===")
 
-	test("updates status field", () => {
+	test("updates status field — translated to v8 signals on disk", () => {
+		// v8: writing `status: "addressed"` is normalized into `closed_at` +
+		// `closed_by: "feedback-assessor"` (the canonical addressed signals).
+		// The legacy `status` field is dropped from disk.
 		const result = updateFeedbackFile(intentSlug, stageName, "FB-001", {
 			status: "addressed",
 		})
@@ -365,7 +368,17 @@ try {
 		}
 
 		const found = findFeedbackFile(intentSlug, stageName, "FB-001")
-		assert.strictEqual(found.data.status, "addressed")
+		assert.strictEqual(
+			found.data.status,
+			undefined,
+			"v8: legacy status field must be dropped from disk",
+		)
+		assert.ok(
+			typeof found.data.closed_at === "string" &&
+				found.data.closed_at.length > 0,
+			"v8: addressed translates to closed_at",
+		)
+		assert.strictEqual(found.data.closed_by, "feedback-assessor")
 	})
 
 	test("updates closed_by field", () => {
@@ -482,9 +495,14 @@ try {
 	console.log("\n=== deleteFeedbackFile ===")
 
 	test("cannot delete pending feedback", () => {
-		// FB-002 was updated to have closed_by but its status is still pending
-		// Let's make sure FB-002 is pending first
-		updateFeedbackFile(intentSlug, stageName, "FB-002", { status: "pending" })
+		// v8: "pending" is derived — no closed_at, no closed_by, no
+		// rejected_at, no iterations. Setting status:pending alone no
+		// longer clears closure signals (the v8 model treats closure as
+		// signal-driven, not enum-driven). To make FB-002 truly pending,
+		// explicitly null out the closure signals first.
+		updateFeedbackFile(intentSlug, stageName, "FB-002", {
+			closed_by: null,
+		})
 		const result = deleteFeedbackFile(intentSlug, stageName, "FB-002")
 		assert.ok(!result.ok)
 		if (!result.ok) {
@@ -533,11 +551,13 @@ try {
 	console.log("\n=== countPendingFeedback after mutations ===")
 
 	test("count reflects deletions and status changes", () => {
-		// FB-001: deleted. FB-002: status=pending but closed_by set → counted
-		// resolved because any closed_by signals closure. FB-003: status=addressed
-		// (also resolved). FB-004: deleted. No pending items remain.
+		// FB-001: deleted. FB-002: closed_by was nulled in the
+		// "cannot delete pending feedback" test → derived pending → counted.
+		// FB-003: closed_at + closed_by:feedback-assessor → derived addressed → resolved.
+		// FB-004: rejected_at stamped → derived rejected → resolved.
+		// One pending FB remaining (FB-002).
 		const count = countPendingFeedback(intentSlug, stageName)
-		assert.strictEqual(count, 0)
+		assert.strictEqual(count, 1)
 	})
 
 	// ── haiku_feedback MCP tool (end-to-end) ─────────────────────────────────
@@ -919,9 +939,18 @@ try {
 		assert.ok(parsed.message.includes("FB-004 rejected"))
 		assert.ok(parsed.message.includes("False positive"))
 
-		// Verify on disk
+		// Verify on disk — v8 stamps rejected_at instead of status:rejected.
 		const found = findFeedbackFile(intentSlug, stageName, "FB-004")
-		assert.strictEqual(found.data.status, "rejected")
+		assert.strictEqual(
+			found.data.status,
+			undefined,
+			"v8: rejection writes rejected_at, never the legacy status field",
+		)
+		assert.ok(
+			typeof found.data.rejected_at === "string" &&
+				found.data.rejected_at.length > 0,
+			"v8: rejected_at must be stamped on the FB",
+		)
 		assert.ok(
 			found.body.includes(
 				"**Rejection reason:** False positive -- already handled",

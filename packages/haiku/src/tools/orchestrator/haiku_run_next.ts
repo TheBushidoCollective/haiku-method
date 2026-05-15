@@ -95,6 +95,8 @@ import {
 	actionSignature,
 	loopAbortResponse,
 	RUN_NEXT_LOOP_CAP,
+	wallDeadlineAbortResponse,
+	wallDeadlineExceeded,
 } from "./_loop_guard.js"
 
 /**
@@ -251,6 +253,19 @@ export default defineTool({
 		},
 	},
 	async handle(args, signal) {
+		// Wall-clock deadline. Per the user goal (2026-05-15) "no matter
+		// what circumstance, the run_next call should never get stuck in
+		// a loop." The iteration cap (RUN_NEXT_LOOP_CAP) bounds how many
+		// loop bodies we can run in this call; the wall deadline bounds
+		// how long the WHOLE call can take. Either bound triggers the
+		// same loop_aborted error path. Captured ONCE at handler entry
+		// so every loop body shares the same deadline and we don't
+		// silently allow one `await_gate` long-poll inside a re-dispatch
+		// loop to push the call over budget. (Note: `await_gate` itself
+		// has its own long-poll; that's the SPA-pop blocking path the
+		// user explicitly carved out as exempt. The deadline check here
+		// only fires inside the FOUR re-dispatch while-loops below.)
+		const startedAt = Date.now()
 		// Auto-resolve `intent` when omitted. The contract: the engine
 		// only touches an intent when we're explicitly working with it.
 		// Two signals count as "explicitly":
@@ -912,6 +927,14 @@ export default defineTool({
 				if (++iterations > RUN_NEXT_LOOP_CAP) {
 					return loopAbortResponse("select_*", iterations, result, "cap")
 				}
+				if (wallDeadlineExceeded(startedAt)) {
+					return wallDeadlineAbortResponse(
+						"select_*",
+						iterations,
+						startedAt,
+						result,
+					)
+				}
 				const pickerResult = await runSelectionPicker(
 					result.action,
 					slug,
@@ -1025,6 +1048,14 @@ export default defineTool({
 					closeFbIterations,
 					result,
 					"cap",
+				)
+			}
+			if (wallDeadlineExceeded(startedAt)) {
+				return wallDeadlineAbortResponse(
+					"close_feedback",
+					closeFbIterations,
+					startedAt,
+					result,
 				)
 			}
 			if (sig === closeFbLastSig) {
@@ -1177,6 +1208,14 @@ export default defineTool({
 					completeStageIterations,
 					result,
 					"cap",
+				)
+			}
+			if (wallDeadlineExceeded(startedAt)) {
+				return wallDeadlineAbortResponse(
+					"complete_stage",
+					completeStageIterations,
+					startedAt,
+					result,
 				)
 			}
 			if (sig === completeStageLastSig) {
@@ -1447,6 +1486,16 @@ export default defineTool({
 					"cap",
 				)
 			}
+			// NOTE: this loop deliberately does NOT check
+			// `wallDeadlineExceeded`. The body calls `await_gate`, which
+			// is the SPA-pop blocking primitive the user explicitly
+			// exempted (2026-05-15: "It can block via a SPA pop, but it
+			// CANNOT hang for infinite recursion or stuck while loops").
+			// A real human-in-the-loop decision can take minutes, which
+			// would falsely trip a 90s deadline. The iteration cap + the
+			// no-progress signature check below are what bound this
+			// loop. await_gate has its own presence-loss timeout
+			// (~120s) for the "SPA never opened" path.
 			if (sig === gateReviewLastSig) {
 				return loopAbortResponse(
 					"gate_review",

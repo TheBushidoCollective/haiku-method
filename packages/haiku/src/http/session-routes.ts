@@ -532,6 +532,14 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 						`haiku: user advance with no pending feedback on ${targetStage} — stamp user slots`,
 					)
 				} catch (err) {
+					// Per claude-bot review on PR #363: when user-slot
+					// stamping fails the previous code fell through to the
+					// pending-decision broadcast, waking the gate
+					// immediately. The cursor would then tick into a stage
+					// whose units have neither `reviews.user` nor
+					// `approvals.user` and block at the user gate again —
+					// tight tick loop until the disk recovers. Surface as
+					// 500 instead so the SPA can retry deliberately.
 					logFeedbackAction({
 						reqId: req.id,
 						action: "advance",
@@ -540,6 +548,11 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 						stage: targetStage,
 						detail: `user_slot_stamp_failed: ${err instanceof Error ? err.message : String(err)}`,
 					})
+					reply.status(500).send({
+						error: "user_slot_stamp_failed",
+						detail: err instanceof Error ? err.message : String(err),
+					})
+					return
 				}
 			}
 

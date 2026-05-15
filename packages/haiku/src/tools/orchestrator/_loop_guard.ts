@@ -18,6 +18,53 @@ import { sessionLogPath } from "../../subagent-prompt-file.js"
 /** Hard cap on per-tick re-dispatch loop iterations. */
 export const RUN_NEXT_LOOP_CAP = 16
 
+/** Wall-clock deadline for a single haiku_run_next call. The
+ *  iteration cap above prevents the engine from emitting > 16 loop
+ *  bodies per call; the deadline is the belt-and-suspenders check
+ *  for "those 16 iterations took unreasonably long." Any single call
+ *  that crosses this threshold is treated as a wedge — return the
+ *  loop_aborted error and surface the diagnostic.
+ *
+ *  Per the user goal (2026-05-15): "no matter what circumstance, the
+ *  run_next call should never get stuck in a loop. It can block via
+ *  a SPA pop, but it CANNOT hang for infinite recursion or stuck
+ *  while loops." `await_gate` blocks on user input via its own
+ *  long-poll mechanism — that's the SPA pop path and it's exempt.
+ *  Everything else inside `haiku_run_next` (file walks, cursor
+ *  derivation, dispatch loop bodies) must terminate fast.
+ *
+ *  90 seconds is generous: a real disk-walk + cursor derivation +
+ *  4-loop redispatch should finish in milliseconds; if we're hitting
+ *  90s the engine is genuinely stuck and the agent needs to surface
+ *  it. */
+export const RUN_NEXT_WALL_DEADLINE_MS = 90_000
+
+/** Predicate for the wall-clock check. Returns `true` when the
+ *  caller should bail out. Capture `startedAt` once at the top of
+ *  the handler (`Date.now()`) and pass it to every loop body's
+ *  iteration entry. */
+export function wallDeadlineExceeded(startedAt: number): boolean {
+	return Date.now() - startedAt > RUN_NEXT_WALL_DEADLINE_MS
+}
+
+/** Build the abort response for a wall-clock timeout. Same shape as
+ *  `loopAbortResponse` so callers can return it interchangeably from
+ *  loop bodies. */
+export function wallDeadlineAbortResponse(
+	loopName: string,
+	iterations: number,
+	startedAt: number,
+	result: OrchestratorAction,
+): { content: Array<{ type: "text"; text: string }>; isError: true } {
+	const elapsed = Date.now() - startedAt
+	return loopAbortResponse(
+		`${loopName} (wall-deadline ${RUN_NEXT_WALL_DEADLINE_MS}ms exceeded; elapsed=${elapsed}ms)`,
+		iterations,
+		result,
+		"no_progress",
+	)
+}
+
 /** Signature of an OrchestratorAction for same-action progress detection.
  *  Two consecutive ticks producing identical signatures means the
  *  side-effect-running loop body didn't advance cursor state. */

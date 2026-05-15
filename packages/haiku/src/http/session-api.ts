@@ -109,10 +109,7 @@ function readIntentFrontmatterFresh(
  *  poll cadence so the displayed banner stays fresh, but enough to
  *  collapse a heartbeat burst into a single sweep. Per claude-bot
  *  review on PR #363. */
-const driftCache = new Map<
-	string,
-	{ events: DriftEvent[]; at: number }
->()
+const driftCache = new Map<string, { events: DriftEvent[]; at: number }>()
 const DRIFT_TTL_MS = 2000
 
 function getDriftEventsCached(args: {

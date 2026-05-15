@@ -132,10 +132,11 @@ export function closeFeedbackPostHook(args: CloseFeedbackPostHookArgs): void {
 						typeof existing === "object" &&
 						!Array.isArray(existing) &&
 						(existing as Record<string, unknown>).witnesses &&
-						typeof (existing as Record<string, unknown>).witnesses ===
-							"object"
-							? ((existing as Record<string, unknown>)
-									.witnesses as Record<string, string>)
+						typeof (existing as Record<string, unknown>).witnesses === "object"
+							? ((existing as Record<string, unknown>).witnesses as Record<
+									string,
+									string
+								>)
 							: null
 					const witnessesUnchanged =
 						existingWitnesses !== null &&
@@ -145,10 +146,7 @@ export function closeFeedbackPostHook(args: CloseFeedbackPostHookArgs): void {
 							([k, v]) => existingWitnesses[k] === v,
 						)
 					if (!witnessesUnchanged) {
-						approvals[role] = buildApprovalRecord(
-							intentDir(args.slug),
-							outputs,
-						)
+						approvals[role] = buildApprovalRecord(intentDir(args.slug), outputs)
 					}
 				}
 				setFrontmatterField(unitPath, "reviews", reviews)

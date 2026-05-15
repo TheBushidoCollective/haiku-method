@@ -301,6 +301,29 @@ test("already-closed FB (closed_at) is NOT touched", () => {
 	)
 })
 
+test("elaboration.md synthesized when missing — cursor walks past elaborate", () => {
+	// The atomicity-test fixture never wrote elaboration.md. After the
+	// successful close run above (units_signed === 2), the debug op should
+	// have synthesized stages/design/elaboration.md with both verified_at
+	// and decompose_verified_at stamps so the cursor doesn't sit at
+	// `elaborate` waiting for the verifier subagent that's never coming
+	// in a recovery scenario.
+	assert.strictEqual(closeRes.ok, true)
+	if (closeRes.ok === true) {
+		assert.strictEqual(
+			closeRes.result.elaborations_sealed,
+			1,
+			"design stage should have its elaboration synthesized",
+		)
+	}
+	const elabPath = join(intentDirPath, "stages", "design", "elaboration.md")
+	const elabContent = readFileSync(elabPath, "utf8")
+	assert.match(elabContent, /^recorded_at: /m)
+	assert.match(elabContent, /^verified_at: /m)
+	assert.match(elabContent, /^decompose_verified_at: /m)
+	assert.match(elabContent, /synthesized_by: force_complete/)
+})
+
 test("already-closed FB (closed_by) IS stamped with closed_at — closed_by alone is not closure", () => {
 	// Regression: earlier versions skipped FBs that had closed_by but no
 	// closed_at, treating closed_by-alone as "already closed". The cursor

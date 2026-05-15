@@ -114,9 +114,7 @@ await test("GET /api/debug/intents/:intent 404 on unknown slug", async () => {
 })
 
 await test("GET /api/debug/intents/:intent/cursor returns derivePosition shape", async () => {
-	const res = await fetch(
-		`${baseUrl}/api/debug/intents/${intentSlug}/cursor`,
-	)
+	const res = await fetch(`${baseUrl}/api/debug/intents/${intentSlug}/cursor`)
 	// derivePosition may return ok:true with a position, or a structured
 	// error if the intent isn't drivable yet. Either way we expect JSON
 	// with `ok` field — not an HTML 500 page.
@@ -186,6 +184,58 @@ await test("POST .../ops/force_stage_complete missing stage returns 400", async 
 	assert.strictEqual(res.status, 400)
 	const data = await res.json()
 	assert.strictEqual(data.error, "missing_stage")
+})
+
+// Bug-report §3 + §4 — FB lookup must accept legacy 2-digit padding AND
+// filename-stem form, mirroring `findFeedbackFile` in state-tools.ts.
+await test("mutate_feedback: lookup accepts 2-digit-padded legacy filenames", async () => {
+	// Set up a 2-digit-padded FB on the test intent (legacy shape).
+	const fbDir = join(intentDirPath, "stages", "design", "feedback")
+	mkdirSync(fbDir, { recursive: true })
+	writeFileSync(
+		join(fbDir, "07-legacy-padded.md"),
+		`---
+title: Legacy padded
+origin: agent
+created_at: 2026-04-01T10:00:00Z
+---
+body
+`,
+	)
+	const res = await fetch(
+		`${baseUrl}/api/debug/intents/${intentSlug}/ops/mutate_feedback`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				stage: "design",
+				feedback_id: "FB-007",
+				patch: { closed_at: "2026-05-15T12:00:00Z" },
+			}),
+		},
+	)
+	assert.strictEqual(res.status, 200)
+	const data = await res.json()
+	assert.strictEqual(data.result.ok, true)
+	assert.deepStrictEqual(data.result.written_keys, ["closed_at"])
+})
+
+await test("mutate_feedback: lookup accepts filename-stem form (07-legacy-padded)", async () => {
+	const res = await fetch(
+		`${baseUrl}/api/debug/intents/${intentSlug}/ops/mutate_feedback`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				stage: "design",
+				feedback_id: "07-legacy-padded",
+				patch: { closed_by: "force_complete" },
+			}),
+		},
+	)
+	assert.strictEqual(res.status, 200)
+	const data = await res.json()
+	assert.strictEqual(data.result.ok, true)
 })
 
 await test("POST .../ops/mutate_feedback missing feedback_id returns 400", async () => {

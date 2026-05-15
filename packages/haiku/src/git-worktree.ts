@@ -2471,6 +2471,45 @@ export function ensureOnStageBranch(
 		}
 	}
 
+	// Reachability short-circuit — DOWNSTREAM-MONOREPO CASE ONLY.
+	//
+	// When the user's checkout is on a non-haiku-managed branch (e.g.
+	// `dev`/`main` in a downstream monorepo) AND the target stage branch
+	// has been merged INTO that branch (HEAD strictly ahead of stage),
+	// the working tree already has every file the engine wants to read.
+	// Forcing a checkout off `dev` to `haiku/<intent>/<stage>` would
+	// drag the user off their branch and auto-commit unrelated WIP onto
+	// a stale snapshot — the trap in haiku-mcp-bug-report.md §1.
+	//
+	// Three guards together prevent the short-circuit from firing in
+	// normal-engine cases:
+	//   1. Current branch is NOT a haiku-managed branch for this intent.
+	//      The engine's pipeline lives on `haiku/<slug>/main` and
+	//      `haiku/<slug>/<stage>`; it actively needs the checkout to keep
+	//      stage trees branch-isolated even when their tips converge.
+	//   2. Target is a STRICT ancestor of HEAD (HEAD has commits the
+	//      target doesn't). A freshly-forked stage branch shares the
+	//      same tip as intent main — `isAncestor` returns true there
+	//      too, but the engine still needs the actual checkout. Strict
+	//      ancestry rules out the same-SHA case.
+	//   3. Target is not equal to HEAD's tip (covered by guard 2 but
+	//      kept explicit for clarity).
+	const haikuPrefix = `haiku/${slug}/`
+	const currentIsHaikuManagedForThisIntent = current.startsWith(haikuPrefix)
+	if (!currentIsHaikuManagedForThisIntent) {
+		const targetReachable = isAncestor(targetBranch, "HEAD")
+		const headStrictlyAhead =
+			targetReachable && !isAncestor("HEAD", targetBranch)
+		if (headStrictlyAhead) {
+			return {
+				ok: true,
+				branch: current,
+				message: `target branch '${targetBranch}' has been merged into HEAD ('${current}') — no checkout needed`,
+				switched: false,
+			}
+		}
+	}
+
 	// Detect an in-progress merge/rebase/cherry-pick BEFORE the
 	// auto-commit below. git's error messages are cryptic; surface the
 	// state clearly so the agent knows to finish the in-progress

@@ -14,8 +14,9 @@
 // definition here is just the operations; the user-confirmation
 // gate is in `tools/orchestrator/haiku_debug.ts`.
 
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import matter from "gray-matter"
 import {
 	intentDir,
 	parseFrontmatter,
@@ -31,6 +32,7 @@ export interface DebugForceStageResult {
 	units_signed: number
 	intent_quality_gates_signed: boolean
 	feedback_closed: number
+	elaborations_sealed: number
 }
 
 /** Force a stage and every prior stage to "complete" by signing all
@@ -164,6 +166,50 @@ export function forceStageComplete(args: {
 	}
 	const stagesProcessed = stagesToProcess.filter((s) => stagesSigned.has(s))
 
+	// Elaboration seal — the cursor blocks at `elaborate` / `elaborate_review`
+	// / `decompose_review` until elaboration.md exists with both
+	// `verified_at` and `decompose_verified_at` stamps. When every unit
+	// on a stage has terminal-advanced (the precondition that just got
+	// us through pass 1+2 above), the elaboration round-trip is moot for
+	// recovery — the units exist and are signed. Synthesize the artifact
+	// + stamps so the cursor walks past the elaborate phase too.
+	//
+	// IMPORTANT: this fires only inside the debug op (which requires user
+	// confirmation via picker/SPA modal). The normal workflow engine still
+	// requires the verifier subagent to seal — this synth path is the
+	// recovery escape hatch the user explicitly invoked.
+	let elaborationsSealed = 0
+	for (const stage of stagesProcessed) {
+		const stageDir = join(dir, "stages", stage)
+		const elabPath = join(stageDir, "elaboration.md")
+		const nowIso = new Date().toISOString()
+		if (!existsSync(elabPath)) {
+			const synthesizedBody = `# Elaboration (synthesized by /haiku:debug)\n\nThis stage's units terminal-advanced through every hat without an elaboration.md being recorded. The debug recovery op synthesized this artifact so the cursor can walk past the elaborate phase.\n`
+			const fm: Record<string, unknown> = {
+				recorded_at: nowIso,
+				verified_at: nowIso,
+				decompose_verified_at: nowIso,
+				intent: args.slug,
+				stage,
+				synthesized_by: "force_complete",
+			}
+			writeFileSync(elabPath, matter.stringify(synthesizedBody, fm))
+			elaborationsSealed++
+		} else {
+			const elabFm = parseFrontmatter(readFileSync(elabPath, "utf8")).data
+			let touched = false
+			if (!elabFm.verified_at) {
+				setFrontmatterField(elabPath, "verified_at", nowIso)
+				touched = true
+			}
+			if (!elabFm.decompose_verified_at) {
+				setFrontmatterField(elabPath, "decompose_verified_at", nowIso)
+				touched = true
+			}
+			if (touched) elaborationsSealed++
+		}
+	}
+
 	// Intent-scope quality_gates — the cursor's intent-completion gate
 	// also signs `intent.md.approvals.intent_quality_gates`. For the
 	// final stage, force that too so the cursor doesn't re-emit the
@@ -241,6 +287,7 @@ export function forceStageComplete(args: {
 			units_signed: unitsSigned,
 			intent_quality_gates_signed: igsSigned,
 			feedback_closed: feedbackClosed,
+			elaborations_sealed: elaborationsSealed,
 		},
 	}
 }
@@ -332,14 +379,21 @@ export function mutateFeedback(args: {
 		? join(dir, "stages", args.stage, "feedback")
 		: join(dir, "feedback")
 	if (!existsSync(fbDir)) return { ok: false, error: "feedback_dir_not_found" }
-	// Find the FB file by ID prefix (FB-NN-slug.md → match on numeric prefix).
-	// `$` anchor matters: without it `"FB-037-anything"` silently matches.
-	// FB files on disk are `NNN-slug.md`, never `FB-NNN-slug.md`, so a
-	// single startsWith on the zero-padded numeric prefix is enough.
-	const numMatch = args.feedbackId.match(/^(?:FB-)?(\d+)$/)
-	if (!numMatch) return { ok: false, error: "invalid_feedback_id_shape" }
-	const nn = numMatch[1].padStart(3, "0")
-	const found = readdirSync(fbDir).find((f) => f.startsWith(`${nn}-`))
+	// Lookup mirrors `findFeedbackFile` in state-tools.ts so we accept the
+	// same input shapes the rest of the engine does:
+	//   - "FB-001" / "FB-1" / "001" / "1"  — canonical IDs
+	//   - "001-some-slug" / "01-some-slug" — filename stems (legacy + current)
+	// Files on disk may be 2-digit (pre-2026-05-07) or 3-digit padded.
+	// Match by parsed integer regardless of width on either side.
+	const idMatch = args.feedbackId.match(/^(?:FB-)?(\d+)/i)
+	if (!idMatch) return { ok: false, error: "invalid_feedback_id_shape" }
+	const targetNum = Number.parseInt(idMatch[1], 10)
+	const found = readdirSync(fbDir)
+		.filter((f) => f.endsWith(".md"))
+		.find((f) => {
+			const fileNumMatch = f.match(/^(\d+)-/)
+			return fileNumMatch && Number.parseInt(fileNumMatch[1], 10) === targetNum
+		})
 	if (!found) return { ok: false, error: "feedback_not_found" }
 	const fbPath = join(fbDir, found)
 	const writtenKeys: string[] = []

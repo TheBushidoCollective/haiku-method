@@ -146,10 +146,14 @@ function applyResponse(intentDir, action, root, slug) {
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
 			writeFm(intentMd, { ...fm, sealed_at: at })
-		} else if (action.action === "elaborate_review") {
-			// Pre-intent elaborate_review (no stage). Stamp verified_at on
-			// intent.md to clear the gate. Tests don't simulate the
-			// verifier subagent.
+		} else if (
+			action.action === "elaborate_loop" &&
+			(action.signals_unmet ?? []).some(
+				(s) => s.signal === "verify_conversation",
+			)
+		) {
+			// Pre-intent elaborate_review now folds into the loop. Stamp
+			// verified_at on intent.md.
 			const intentMd = join(intentDir, "intent.md")
 			const fm = readFm(intentMd)
 			writeFm(intentMd, {
@@ -157,6 +161,20 @@ function applyResponse(intentDir, action, root, slug) {
 				verified_at: at,
 				verified_notes: "test fixture — gate simulated",
 			})
+		} else if (
+			action.action === "dispatch_quality_gates" &&
+			(action.scope === "intent" || stage === "")
+		) {
+			// Intent-scope QG re-run: cursor emits with stage="" + scope="intent"
+			// after every intent_review role signs and before seal_intent.
+			// The engine handler walks all stages' unit gates and runs
+			// them deduped; the test fixture short-circuits with a stamp.
+			const intentMd = join(intentDir, "intent.md")
+			const fm = readFm(intentMd)
+			const apps =
+				fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
+			apps.intent_quality_gates = { at }
+			writeFm(intentMd, { ...fm, approvals: apps })
 		}
 		return
 	}
@@ -165,52 +183,64 @@ function applyResponse(intentDir, action, root, slug) {
 	const unitsDir = join(stageDir, "units")
 
 	switch (action.action) {
-		case "elaborate": {
-			mkdirSync(stageDir, { recursive: true })
-			const elabPath = join(stageDir, "elaboration.md")
-			writeFm(
-				elabPath,
-				{
-					recorded_at: at,
-					intent: action.intent ?? "",
-					stage,
-					verified_at: at,
-					verified_notes: "test fixture — gate simulated",
-				},
-				"Test elaboration body.",
-			)
-			break
-		}
-		case "elaborate_review": {
-			const elabPath = join(stageDir, "elaboration.md")
-			if (existsSync(elabPath)) {
-				const fm = readFm(elabPath)
-				writeFm(elabPath, { ...fm, verified_at: at })
+		case "elaborate_loop": {
+			// Post-Option-A: walk signals_unmet and react in order.
+			for (const entry of action.signals_unmet ?? []) {
+				switch (entry.signal) {
+					case "conversation": {
+						mkdirSync(stageDir, { recursive: true })
+						const elabPath = join(stageDir, "elaboration.md")
+						writeFm(
+							elabPath,
+							{
+								recorded_at: at,
+								intent: action.intent ?? "",
+								stage,
+								verified_at: at,
+								verified_notes: "test fixture — gate simulated",
+							},
+							"Test elaboration body.",
+						)
+						break
+					}
+					case "verify_conversation": {
+						const elabPath = join(stageDir, "elaboration.md")
+						if (existsSync(elabPath)) {
+							const fm = readFm(elabPath)
+							writeFm(elabPath, { ...fm, verified_at: at })
+						}
+						break
+					}
+					case "verify_decompose": {
+						const elabPath = join(stageDir, "elaboration.md")
+						if (existsSync(elabPath)) {
+							const fm = readFm(elabPath)
+							writeFm(elabPath, { ...fm, decompose_verified_at: at })
+						}
+						break
+					}
+					case "decompose": {
+						mkdirSync(unitsDir, { recursive: true })
+						const path = join(unitsDir, "unit-01.md")
+						if (!existsSync(path)) {
+							writeFm(path, {
+								title: "u1",
+								depends_on: [],
+								inputs: [],
+								started_at: null,
+								iterations: [],
+								reviews: {},
+								approvals: {},
+							})
+						}
+						break
+					}
+					case "discovery": {
+						writeDiscoveryStub(action.stage, entry.agent, root, slug)
+						break
+					}
+				}
 			}
-			break
-		}
-		case "decompose": {
-			mkdirSync(unitsDir, { recursive: true })
-			const path = join(unitsDir, "unit-01.md")
-			if (!existsSync(path)) {
-				writeFm(path, {
-					title: "u1",
-					depends_on: [],
-					// `inputs: []` is required — v4's pre-dispatch gate (task #25)
-					// refuses to advance units whose FM lacks the field entirely.
-					inputs: [],
-					started_at: null,
-					iterations: [],
-					reviews: {},
-					approvals: {},
-				})
-			}
-			break
-		}
-		case "discovery_required": {
-			// Write a stub artifact at the studio template's `location:`
-			// — file existence IS the cursor's "discovery ran" signal.
-			writeDiscoveryStub(action.stage, action.agent, root, slug)
 			break
 		}
 		case "clarify_required": {

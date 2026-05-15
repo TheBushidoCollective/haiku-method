@@ -65,53 +65,77 @@ import { type DriftEvent, runDriftSweep } from "./drift-sweep.js"
 
 // ── CursorAction discriminated union ─────────────────────────────────
 
+/**
+ * The elaborate-loop's per-signal payload. Each entry in
+ * `CursorAction.signals_unmet[]` represents one unmet completion
+ * signal the agent should make progress on. The agent may address any
+ * subset in one tick — they aren't ordered or mutually exclusive.
+ *
+ * `discovery` carries per-template fan-out info (which agent template
+ * is missing its artifact, plus a representative unit when one exists).
+ *
+ * Verifier nonces for `verify_conversation` / `verify_decompose` live
+ * on the wire payload at `OrchestratorAction.verifier_nonces`, keyed
+ * by signal name — not on the signal entries themselves — because the
+ * cursor walk is pure (nonce minting is a side effect performed by
+ * `run-tick.ts` after the walk returns).
+ */
+export type ElaborateLoopSignal =
+	| { signal: "conversation" }
+	| { signal: "verify_conversation" }
+	| { signal: "discovery"; agent: string; units: string[] }
+	| { signal: "decompose" }
+	| { signal: "verify_decompose" }
+
 export type CursorAction =
 	| { kind: "drift_detected"; events: DriftEvent[] }
-	| {
-			kind: "discovery_required"
-			stage: string
-			agent: string
-			units: string[]
-	  }
 	// design_direction_* and clarify_required cursor actions deleted
 	// 2026-05-08: collapsed into the discovery-agent model. Studios
 	// now declare a discovery template with `tool:` (e.g., the
 	// software studio's `discovery/DESIGN-DIRECTION.md` declares
 	// `tool: pick_design_direction`) and the cursor's existence
 	// check on the artifact location passes the gate. See
-	// `prompts/discovery_required.ts` for the tool-driven branch.
-	// `elaborate` is the per-stage human-conversation gate. Fires
-	// whenever (a) `intent.mode !== "autopilot"` and
-	// (b) `stages/<stage>/elaboration.md` is missing on a fresh stage
-	// (units.length === 0). The agent's job during this action is the
-	// conversation: read intent + STAGE.md + prior outputs, surface
-	// informed questions to the user, and capture the agreement via
-	// `haiku_stage_elaboration_record`. The artifact-present-but-
-	// unverified case emits `elaborate_review` instead, NOT this
-	// action — so this action's payload doesn't need to convey
-	// "where in the gate cycle we are." Just `stage` is enough.
-	// Autopilot bypasses this clause entirely.
-	| { kind: "elaborate"; stage: string }
-	// `elaborate_review` dispatches the substance verifier on a captured
-	// elaboration artifact. Two scopes:
-	//   - per-stage (stage field present): reads
-	//     `stages/<stage>/elaboration.md` + intent.md + STAGE.md.
-	//     Pass stamps `verified_at` via `haiku_stage_elaboration_seal`.
-	//   - pre-intent (no stage): reads intent.md and grades whether
-	//     the body reflects a meaningful conversation about what the
-	//     user wants. Pass stamps `verified_at` via
-	//     `haiku_intent_seal`. Fires immediately after intent_create
-	//     (before any stage walk) when mode != autopilot.
-	// Fail returns gaps so the agent re-engages the user and re-records.
-	| { kind: "elaborate_review"; stage?: string }
-	// `decompose` is the unit-spec writing phase. Fires when (a) the
-	// elaborate gate has passed (or autopilot bypassed it) and
-	// (b) `units.length === 0`. The agent dispatches stage-scoped
-	// discovery subagents and writes unit specs informed by the
-	// captured conversation + discovery output. Renamed from the legacy
-	// `elaborate` cursor action; the old name is reserved for the
-	// conversation gate above.
-	| { kind: "decompose"; stage: string }
+	// `prompts/elaborate_loop.ts` for the tool-driven branch.
+	//
+	// ── ELABORATE LOOP — single cursor state, multi-signal payload ─────
+	//
+	// Per GOALS.md (collapsed 2026-05-14, GAPS § 1a → Option A), the
+	// elaborate state is ONE cursor kind. A single emission lists every
+	// currently-unmet completion signal in `signals_unmet[]`. The agent
+	// may make progress on any/all of them in the same response (the
+	// spec's "agent calls several tools per tick" — concurrent activity
+	// is invited at the action shape, not just the prompt copy).
+	//
+	// Signals (per GOALS.md):
+	//
+	//   Signal 1 — discovery artifacts exist on disk
+	//     → `signals_unmet[]` includes one `{ signal: "discovery", … }`
+	//       per missing template (carries `agent`, `units`).
+	//   Signal 2 — no open `origin: discovery, resolution: question` FBs
+	//     → handled by Track B's feedback flow (any open FB preempts
+	//       Track A, so a discovery question routes as `feedback_question`).
+	//   Signal 3a — conversation captured at stages/<stage>/elaboration.md
+	//     → `{ signal: "conversation" }`.
+	//   Signal 3b — conversation verified (`verified_at` stamped)
+	//     → `{ signal: "verify_conversation", verifier_nonce }`.
+	//   Signal 4a — at least one unit drafted
+	//     → `{ signal: "decompose" }`.
+	//   Signal 4b — units cover the conversation
+	//                (`decompose_verified_at` stamped via decompose-verifier)
+	//     → `{ signal: "verify_decompose", verifier_nonce }`.
+	//
+	// (Drafting → pending is stage-scope, not per-unit: while
+	// `decompose_verified_at` is absent, the cursor's wave dispatch is
+	// blocked, so every unit is implicitly drafting. Once the seal
+	// stamps, the next tick walks past elaborate_loop into execute.)
+	//
+	// `stage` is absent for the pre-intent emission (intent.md substance
+	// verifier, before any stage walk).
+	| {
+			kind: "elaborate_loop"
+			stage?: string
+			signals_unmet: ReadonlyArray<ElaborateLoopSignal>
+	  }
 	| {
 			kind: "start_unit_hat"
 			stage: string
@@ -125,6 +149,24 @@ export type CursorAction =
 			hat: string
 			feedback_ids: string[]
 			terminal: boolean
+	  }
+	// `feedback_question` is a Track-B preempt for open FBs that carry
+	// `resolution: "question"`. These FBs are user-decidable forks the
+	// agent can't resolve on its own (most commonly filed by discovery
+	// subagents when an artifact's required choice isn't derivable from
+	// the codebase). Routing them through `start_feedback_hat` is wrong
+	// — the fix-hat chain is for findings, not questions. Instead the
+	// engine emits this action so the main agent reads the FB body,
+	// asks the user inline via `ask_user_chat`, writes the answer back
+	// on the FB body via `haiku_feedback_write`, and closes the FB via
+	// `haiku_feedback_update { status: "closed" }`. Closing the FB
+	// flips the elaborate-loop's discovery-question completion signal
+	// and the cursor falls through to the next signal on the next tick.
+	| {
+			kind: "feedback_question"
+			stage: string
+			feedback_id: string
+			feedback_path: string
 	  }
 	| {
 			kind: "dispatch_review"
@@ -140,8 +182,16 @@ export type CursorAction =
 	  }
 	| {
 			kind: "dispatch_quality_gates"
+			// `stage` is empty for intent-scope dispatches.
 			stage: string
+			// Empty for intent-scope; the handler walks every stage's
+			// units, dedupes by command, runs once.
 			units: string[]
+			// `"intent"` after the studio's intent-completion review
+			// stamps clean; `undefined` (defaults to `"stage"`) for the
+			// post-execute approval track. Per GOALS § "Quality gates
+			// are one handler at three scopes."
+			scope?: "intent"
 	  }
 	| {
 			kind: "user_gate"
@@ -716,6 +766,21 @@ function nextActionForFeedback(
 		// parseFbIdFromFilename's docstring for why this matters.
 		return null
 	}
+	// `resolution: "question"` preempts the fix-hat chain. Question
+	// FBs are user-decidable forks the agent can't resolve via a fix
+	// loop; the cursor surfaces them as `feedback_question` so the
+	// main agent answers them inline rather than dispatching fix-hat
+	// subagents against a body that's a question, not a finding.
+	// Discovery subagents are the canonical source of these FBs (see
+	// prompts/discovery_required.ts), but any code path may file one.
+	if ((fm.resolution as string) === "question") {
+		return {
+			kind: "feedback_question",
+			stage,
+			feedback_id: fbId,
+			feedback_path: fbPath,
+		}
+	}
 	// Bolt-cap escalation guard. Each iteration carries a `bolt` number;
 	// one bolt = one full pass through the stage's `fix_hats` chain. When
 	// the FB has consumed its full MAX_FIX_LOOP_BOLTS budget without
@@ -852,130 +917,97 @@ function walkIntentTrack(args: {
 		? ["spec", "quality_gates"]
 		: ["spec", "quality_gates", ...reviewAgents, "user"]
 
-	// Gate priority chain (collaboration before computation):
-	//   1. elaborate (conversation gate, mode-aware) — the human
-	//      conversation that orbits the rest of the stage.
-	//   2. discovery_required — agents run to gather knowledge,
-	//      including user-input-driven discovery templates
-	//      (e.g., the reframed design-direction picker) that
-	//      replace the bespoke design_direction_required and
-	//      clarify_required gates retired on 2026-05-08.
-	//   3. decompose / wave logic.
+	// Elaborate loop — single cursor state, multi-signal payload.
+	//
+	// Per GOALS.md (collapsed 2026-05-14, GAPS § 1a → Option A), the
+	// per-stage elaborate phase emits a single `elaborate_loop` action
+	// whose `signals_unmet[]` lists every currently-unmet completion
+	// signal. The agent may make progress on any subset in one tick.
+	//
+	// Mode bypass: autopilot skips the conversation + verifier signals
+	// entirely (there's no human to converse with), but discovery and
+	// decompose still apply because they're knowledge gathering and
+	// work-breakdown — orthogonal to whether a human is in the loop.
+	const signalsUnmet: ElaborateLoopSignal[] = []
+	const elabPath = join(stageDir, "elaboration.md")
+	const elabFm = existsSync(elabPath) ? (readFm(elabPath)?.data ?? {}) : null
+	const isAutopilotMode = mode === "autopilot"
 
-	// 2.5. Elaborate gate (mode-aware). Every non-autopilot intent gets a
-	//      per-stage human conversation gate. The agent reads intent +
-	//      STAGE.md + prior outputs, surfaces informed questions, and
-	//      captures the agreement at `stages/<stage>/elaboration.md`.
-	//      The cursor blocks until the artifact exists AND a verifier
-	//      has stamped `verified_at` on its frontmatter (substance check
-	//      — the agent can't self-certify a one-line "user said go").
-	//
-	//      Grandfather rule: if the artifact is missing AND the stage
-	//      already has units, treat the stage as legacy work that
-	//      pre-dates this gate. Don't retroactively rewind the user to
-	//      do a conversation about work already shipped. Once an
-	//      artifact exists (even unverified), it's tracked normally —
-	//      the verifier still has to seal it before advancement.
-	//
-	//      Concurrent-work case: when units exist alongside a missing
-	//      artifact, the cursor can't tell "legacy intent" from "agent
-	//      drafted units before recording elaboration." We err toward
-	//      grandfathering (fall through) because (a) re-running on a
-	//      legacy intent that was already happy is the worse failure
-	//      mode and (b) the elaborate prompt explicitly tells fresh
-	//      agents to record before writing units, so the concurrent
-	//      pattern is rare in practice.
-	//
-	//      Autopilot bypasses this gate entirely — there's no human
-	//      conversation to capture. Pre-intent elaborate (intent.md
-	//      creation) still applies in autopilot; only the per-stage gate
-	//      is mode-skipped here.
-	if (mode !== "autopilot") {
-		const elabPath = join(stageDir, "elaboration.md")
-		if (existsSync(elabPath)) {
-			const elabFm = readFm(elabPath)?.data ?? {}
-			const verifiedAt =
-				typeof elabFm.verified_at === "string" ? elabFm.verified_at : ""
-			if (!verifiedAt) {
-				return { kind: "elaborate_review", stage }
-			}
-			// verified — fall through to discovery / decompose / waves
-		} else if (units.length === 0) {
-			// Fresh stage, no artifact, no units — fire the gate.
-			return { kind: "elaborate", stage }
-		}
-		// Else: artifact missing but units exist → grandfathered.
-		// Falls through past the gate without firing.
+	// Signal 3a — conversation (per-stage human conversation gate).
+	// Fires when (a) non-autopilot, (b) elaboration.md missing, AND
+	// (c) units.length === 0. Units-with-no-elaboration is the
+	// grandfather case (legacy intent pre-dating this gate); we don't
+	// retroactively rewind work that already shipped.
+	if (!isAutopilotMode && elabFm === null && units.length === 0) {
+		signalsUnmet.push({ signal: "conversation" })
 	}
 
-	// 3. Discovery (P7). When the studio declares discovery artifacts
-	//    for the stage, the cursor checks the artifact's `location` on
-	//    disk. Missing file → `discovery_required`. The output IS the
-	//    signal — no FM bookkeeping. (FM state is reserved for actions
-	//    that DON'T produce a file: review approvals, user gates.)
-	//
-	// 2026-05-08: discovery now fires when units.length === 0 too IF the
-	// template declares a `tool:` field (tool-driven discovery — the
-	// reframed design_direction picker is the canonical case). Without
-	// `tool:`, discovery still gates on `units.length > 0` because
-	// research-style discovery agents need a representative unit for
-	// prompt context. The `units` field on the action is empty when
-	// units don't yet exist; empty array is fine because the tool's
-	// output is stage-scoped.
-	//
-	// Defs are sorted by `name` so dispatch order is deterministic
-	// across filesystems — `readdirSync` returns templates in
-	// platform-dependent order, which makes idempotent retries surface
-	// the gaps in different sequences and complicates debugging.
+	// Signal 3b — verify_conversation. Fires when elaboration.md exists
+	// but is unverified. Autopilot bypasses.
+	if (!isAutopilotMode && elabFm !== null) {
+		const verifiedAt =
+			typeof elabFm.verified_at === "string" ? elabFm.verified_at : ""
+		if (!verifiedAt) {
+			signalsUnmet.push({ signal: "verify_conversation" })
+		}
+	}
+
+	// Signal 1 — discovery (per template; can fan out multiple entries).
+	// Defs are sorted by `name` so dispatch order is deterministic.
+	// Tool-driven templates fire pre-units; research templates need a
+	// representative unit. Studio misconfiguration (required+no
+	// location) is logged and skipped — fixing the template is the
+	// remedy, not silently passing.
 	const discoveryDefs = readStageArtifactDefs(studio, stage)
 		.filter((d) => d.kind === "discovery")
 		.sort((a, b) => a.name.localeCompare(b.name))
-	if (discoveryDefs.length > 0) {
-		for (const def of discoveryDefs) {
-			// Skip non-tool discovery agents when units don't exist —
-			// they need a representative unit for prompt context.
-			if (units.length === 0 && !def.tool) continue
-			if (!def.required) continue
-			if (!def.location) {
-				// `required: true` with no `location:` is a studio
-				// configuration error — the gate cannot fire because
-				// there's no path to check. Surface the misconfiguration
-				// rather than silently letting the intent skip discovery.
-				console.error(
-					`[haiku] Studio configuration error: discovery template '${def.name}' in stage '${stage}' is required but declares no 'location:' field. The gate is being skipped — fix the template.`,
-				)
-				continue
-			}
-			const resolved = def.location.replace(/\{intent-slug\}/g, slug)
-			const absPath = join(process.cwd(), resolved)
-			const exists = resolved.endsWith("/")
-				? existsSync(absPath) &&
-					readdirSync(absPath).filter((e) => e !== ".gitkeep").length > 0
-				: existsSync(absPath)
-			if (!exists) {
-				// Discovery artifacts are stage- or intent-scoped.
-				// `units` is a representative unit for prompt context
-				// when units exist; empty array when the stage hasn't
-				// been decomposed yet (the discovery output informs
-				// decomposition).
-				return {
-					kind: "discovery_required",
-					stage,
-					agent: def.name,
-					units: units.length > 0 ? [units[0].name] : [],
-				}
-			}
+	for (const def of discoveryDefs) {
+		if (units.length === 0 && !def.tool) continue
+		if (!def.required) continue
+		if (!def.location) {
+			console.error(
+				`[haiku] Studio configuration error: discovery template '${def.name}' in stage '${stage}' is required but declares no 'location:' field. The gate is being skipped — fix the template.`,
+			)
+			continue
+		}
+		const resolved = def.location.replace(/\{intent-slug\}/g, slug)
+		const absPath = join(process.cwd(), resolved)
+		const exists = resolved.endsWith("/")
+			? existsSync(absPath) &&
+				readdirSync(absPath).filter((e) => e !== ".gitkeep").length > 0
+			: existsSync(absPath)
+		if (!exists) {
+			signalsUnmet.push({
+				signal: "discovery",
+				agent: def.name,
+				units: units.length > 0 ? [units[0].name] : [],
+			})
 		}
 	}
 
-	// 4. No units → decompose. Agent dispatches stage-scoped discovery
-	//    subagents (when configured) and writes unit specs informed by
-	//    the captured elaboration + discovery output. The cursor only
-	//    reaches this clause once the elaborate gate has passed (or
-	//    autopilot bypassed it).
+	// Signal 4a — decompose. Fires when no units exist yet.
 	if (units.length === 0) {
-		return { kind: "decompose", stage }
+		signalsUnmet.push({ signal: "decompose" })
 	}
+
+	// Signal 4b — verify_decompose. Fires when units exist and the
+	// elaboration artifact is missing the decompose_verified_at stamp.
+	// Autopilot bypasses (mirrors verify_conversation bypass).
+	if (!isAutopilotMode && units.length > 0 && elabFm !== null) {
+		const decomposeVerifiedAt =
+			typeof elabFm.decompose_verified_at === "string"
+				? elabFm.decompose_verified_at
+				: ""
+		if (!decomposeVerifiedAt) {
+			signalsUnmet.push({ signal: "verify_decompose" })
+		}
+	}
+
+	if (signalsUnmet.length > 0) {
+		return { kind: "elaborate_loop", stage, signals_unmet: signalsUnmet }
+	}
+	// Every elaborate-loop signal is met → fall through to the
+	// pre-execution review track.
 
 	// 5. Wave logic removed 2026-05-13.
 	//
@@ -1295,7 +1327,10 @@ export function derivePosition(args: {
 			if (isTrulyFresh) {
 				return {
 					track: "intent",
-					action: { kind: "elaborate_review" },
+					action: {
+						kind: "elaborate_loop",
+						signals_unmet: [{ signal: "verify_conversation" }],
+					},
 				}
 			}
 			// Grandfathered — fall through.
@@ -1391,6 +1426,23 @@ export function derivePosition(args: {
 					track: "intent",
 					action: { kind: "intent_review", role },
 				}
+			}
+		}
+		// Intent-scope quality_gates re-run. Per GOALS § "Quality gates
+		// are one handler at three scopes," the intent-scope set is
+		// **derived** from the union of every unit's quality_gates[]
+		// across every stage, deduped by command. Fires after every
+		// agent + user review approval is signed and before the seal.
+		// Stamp lives at intent FM under `approvals.intent_quality_gates`.
+		if (!intentApprovals.intent_quality_gates) {
+			return {
+				track: "intent",
+				action: {
+					kind: "dispatch_quality_gates",
+					stage: "",
+					units: [],
+					scope: "intent",
+				},
 			}
 		}
 		// All intent-level approvals signed → seal.

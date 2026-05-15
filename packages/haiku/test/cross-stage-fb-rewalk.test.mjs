@@ -96,6 +96,20 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 				fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
 			apps[action.role] = { at }
 			writeFm(intentMd, { ...fm, approvals: apps })
+		} else if (
+			action.action === "dispatch_quality_gates" &&
+			(action.scope === "intent" || stage === "")
+		) {
+			// Intent-scope QG re-run: cursor emits with stage="" + scope="intent"
+			// after every intent_review role signs and before seal_intent.
+			// The engine handler walks all stages' unit gates and runs
+			// them deduped; the test fixture short-circuits with a stamp.
+			const intentMd = join(intentDir, "intent.md")
+			const fm = readFm(intentMd)
+			const apps =
+				fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
+			apps.intent_quality_gates = { at }
+			writeFm(intentMd, { ...fm, approvals: apps })
 		}
 		return
 	}
@@ -103,22 +117,60 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 	const unitsDir = join(stageDir, "units")
 	const fbDir = join(stageDir, "feedback")
 	switch (action.action) {
-		case "elaborate":
-		case "decompose": {
-			mkdirSync(unitsDir, { recursive: true })
-			const path = join(unitsDir, "unit-01.md")
-			if (!existsSync(path)) {
-				writeFm(path, {
-					title: "u1",
-					depends_on: [],
-					// `inputs: []` is required — v4 pre-dispatch gate (#25).
-					inputs: [],
-					started_at: null,
-					iterations: [],
-					reviews: {},
-					approvals: {},
-					discovery: {},
-				})
+		case "elaborate_loop": {
+			// Post-Option-A: react to each unmet signal in turn.
+			for (const entry of action.signals_unmet ?? []) {
+				switch (entry.signal) {
+					case "conversation": {
+						mkdirSync(stageDir, { recursive: true })
+						const elabPath = join(stageDir, "elaboration.md")
+						writeFm(
+							elabPath,
+							{
+								recorded_at: at,
+								intent: action.intent ?? "",
+								stage,
+								verified_at: at,
+								verified_notes: "fixture",
+							},
+							"body",
+						)
+						break
+					}
+					case "verify_conversation": {
+						const elabPath = join(stageDir, "elaboration.md")
+						if (existsSync(elabPath)) {
+							const fm = readFm(elabPath)
+							writeFm(elabPath, { ...fm, verified_at: at })
+						}
+						break
+					}
+					case "verify_decompose": {
+						const elabPath = join(stageDir, "elaboration.md")
+						if (existsSync(elabPath)) {
+							const fm = readFm(elabPath)
+							writeFm(elabPath, { ...fm, decompose_verified_at: at })
+						}
+						break
+					}
+					case "decompose": {
+						mkdirSync(unitsDir, { recursive: true })
+						const path = join(unitsDir, "unit-01.md")
+						if (!existsSync(path)) {
+							writeFm(path, {
+								title: "u1",
+								depends_on: [],
+								inputs: [],
+								started_at: null,
+								iterations: [],
+								reviews: {},
+								approvals: {},
+								discovery: {},
+							})
+						}
+						break
+					}
+				}
 			}
 			break
 		}

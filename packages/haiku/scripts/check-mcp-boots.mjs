@@ -72,40 +72,25 @@ if (!existsSync(bundlePath)) {
 
 step("Verify zero residual loadTemplate(import.meta.url ...) runtime calls")
 const bundle = readFileSync(bundlePath, "utf8")
-// Two-pattern check covering both loadTemplate call shapes:
+// Anchor on the comma-then-`.md`-literal shape:
+// `<minified>(import.meta.url, "name.md")`. The historically-failing
+// form (the 7.0.0 outage) was the explicit-name shape; that's the
+// one this regex catches. Other utilities that take `import.meta.url`
+// alone (createRequire, fileURLToPath, dirname, pathToFileURL, etc.)
+// never pair it with a sibling-relative string, so the filter is
+// precise.
 //
-//   (a) Explicit-name form — `loadTemplate(import.meta.url, "name.md")`.
-//       In the bundle this serializes as `<minified>(import.meta.url,
-//       "name.md")`. We anchor on the comma-then-string-literal shape;
-//       other utilities that take `import.meta.url` alone (createRequire,
-//       fileURLToPath, dirname, pathToFileURL, etc.) never pair it with
-//       a sibling-relative string, so this is precise.
-//
-//   (b) Default-arg form — `loadTemplate(import.meta.url)` with no
-//       second arg, which the runtime resolves to `template.eta.md`.
-//       The bundle shape is `<minified>(import.meta.url)`. We can't
-//       distinguish loadTemplate from createRequire by name (esbuild
-//       minified both), so we use the source AST for this one — read
-//       the helper's name from `_load-template.ts`'s exported symbol
-//       and look for any source-level surviving call. If the inliner
-//       did its job, the helper itself is tree-shaken out of the
-//       bundle entirely — so the safest gate is "no `loadTemplate`
-//       identifier survives in the bundle source." Bundle is minified
-//       so the function name `loadTemplate` would only appear if a
-//       call site was preserved verbatim (which esbuild won't do
-//       because the helper is renamed). If the symbol DOES appear,
-//       it's because the inliner left a runtime call site in.
+// Known gap: the default-arg form `loadTemplate(import.meta.url)`
+// (no second arg, runtime resolves to `template.eta.md`) is NOT
+// flagged here. The minifier renames `loadTemplate` to a 1–3 char
+// identifier (`gv`, `np`, etc.), so a source-name literal-string
+// check (`bundle.includes("loadTemplate(...)")`) can never fire on
+// a minified bundle and would be dead code. The boot-spawn step
+// below is the catch-all: any surviving runtime call would ENOENT
+// at startup and the spawn step would fail, even when the regex
+// missed it.
 const tplStringRegex = /\bimport\.meta\.url\s*,\s*("[^"]+\.md"|'[^']+\.md')/g
 const matches = Array.from(bundle.matchAll(tplStringRegex), (m) => m[0])
-// The minifier rewrites the helper's identifier, but the SOURCE
-// identifier `loadTemplate` would only survive in the bundled output
-// if a call site was preserved verbatim (the inliner missed it).
-// Both the named-arg sweep above AND this bare-form check feed into
-// the same `matches` array, so EITHER pattern matching causes the
-// gate to fail — they're hard checks, not soft signals.
-if (bundle.includes("loadTemplate(import.meta.url)")) {
-	matches.push("loadTemplate(import.meta.url)")
-}
 if (matches.length > 0) {
 	const samples = Array.from(new Set(matches)).slice(0, 5).join("\n  ")
 	fail(

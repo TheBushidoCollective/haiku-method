@@ -71,3 +71,15 @@ jobs:
       - name: Run MCP test suite (packages/haiku npm test)
         run: npm test --workspace packages/haiku
 
+      # Boot smoke test: build the production MCP bundle and confirm it
+      # actually launches. PR #363/#364 rollups silently shipped a 7.0.0
+      # bundle with the inline-prompt-templates plugin half-broken — the
+      # binary threw ENOENT at startup on the first prompt template
+      # lookup. We never want to publish another binary that can't even
+      # boot. The script also greps the bundle for any remaining
+      # `loadTemplate(import.meta.url ...)` runtime calls (zero is
+      # mandatory — every call must be inlined at build time).
+      - name: MCP boot smoke test
+        run: node scripts/check-mcp-boots.mjs
+        working-directory: packages/haiku
+

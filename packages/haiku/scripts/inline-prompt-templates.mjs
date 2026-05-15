@@ -31,21 +31,33 @@ export const inlinePromptTemplatesPlugin = {
 			{ filter: /[\\/]orchestrator[\\/]prompts[\\/].+\.ts$/ },
 			(args) => {
 				const source = readFileSync(args.path, "utf8")
-				if (!source.includes("loadTemplate(import.meta.url")) return null
+				// Cheap early-exit: skip files that don't even mention
+				// `loadTemplate`. Use the loose substring (just the function
+				// name) — call sites may format with newlines between the
+				// open-paren and `import.meta.url`, e.g.
+				//
+				//   loadTemplate(
+				//     import.meta.url,
+				//     "name.md",
+				//   )
+				//
+				// — which a tighter `loadTemplate(import.meta.url` substring
+				// would miss, leaving those files with runtime fs lookups in
+				// the bundle. Reported 2026-05-15 — `_shared/index.ts` was
+				// silently un-inlined in production, causing the published
+				// 7.0.0 binary to throw ENOENT on `announcement.md` at
+				// startup.
+				if (!source.includes("loadTemplate(")) return null
 				// Strip line + block comments before scanning so example
 				// loadTemplate calls in docstrings don't get treated as real
 				// call sites. Replacement preserves length / line numbers so
 				// any error positions still point at the right spot.
 				// Strip BOTH leading-of-line and trailing-of-line `//`
-				// comments. The previous `(^|\n)\s*` prefix only matched
-				// leading-of-line comments; a trailing inline comment like
-				// `const X = expr // loadTemplate(import.meta.url, "x.md")`
-				// would slip through and the inliner would try to resolve a
-				// non-existent template. Per claude-bot review on PR #363.
+				// comments. Per claude-bot review on PR #363.
 				const codeOnly = source
 					.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
 					.replace(/\/\/[^\n]*/g, (m) => m.replace(/[^\n]/g, " "))
-				if (!codeOnly.includes("loadTemplate(import.meta.url")) return null
+				if (!codeOnly.includes("loadTemplate(")) return null
 				const dir = dirname(args.path)
 				const inlined = source.replaceAll(
 					CALL_PATTERN,

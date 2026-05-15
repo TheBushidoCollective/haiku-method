@@ -233,6 +233,20 @@ export function registerDebugRoutes(instance: FastifyInstance): void {
 					break
 				}
 				case "set_intent_field": {
+					// Batch form — `fields` object applies multiple keys in
+					// one call (one SPA confirm covers the whole set).
+					if (body.fields && typeof body.fields === "object") {
+						const fields = body.fields as Record<string, unknown>
+						const results: Array<{ field: string; result: unknown }> = []
+						for (const [k, v] of Object.entries(fields)) {
+							results.push({
+								field: k,
+								result: setIntentField({ slug, field: k, value: v }),
+							})
+						}
+						result = { batch: true, count: results.length, results }
+						break
+					}
 					const field = typeof body.field === "string" ? body.field : ""
 					if (!field) {
 						reply.status(400).send({ error: "missing_field" })
@@ -246,12 +260,6 @@ export function registerDebugRoutes(instance: FastifyInstance): void {
 					break
 				}
 				case "mutate_feedback": {
-					const feedbackId =
-						typeof body.feedback_id === "string" ? body.feedback_id : ""
-					if (!feedbackId) {
-						reply.status(400).send({ error: "missing_feedback_id" })
-						return
-					}
 					const stage =
 						typeof body.stage === "string" && body.stage ? body.stage : null
 					if (stage && !isValidSlug(stage)) {
@@ -262,6 +270,35 @@ export function registerDebugRoutes(instance: FastifyInstance): void {
 						body.patch && typeof body.patch === "object"
 							? (body.patch as Record<string, unknown>)
 							: {}
+					// Batch form — apply same patch to every FB in feedback_ids.
+					if (
+						Array.isArray(body.feedback_ids) &&
+						body.feedback_ids.length > 0
+					) {
+						const ids = body.feedback_ids as unknown[]
+						const results: Array<{ feedback_id: string; result: unknown }> = []
+						for (const fid of ids) {
+							if (typeof fid !== "string" || !fid) {
+								reply.status(400).send({
+									error: "invalid_feedback_id",
+									message: "feedback_ids entries must be non-empty strings",
+								})
+								return
+							}
+							results.push({
+								feedback_id: fid,
+								result: mutateFeedback({ slug, stage, feedbackId: fid, patch }),
+							})
+						}
+						result = { batch: true, count: results.length, results }
+						break
+					}
+					const feedbackId =
+						typeof body.feedback_id === "string" ? body.feedback_id : ""
+					if (!feedbackId) {
+						reply.status(400).send({ error: "missing_feedback_id" })
+						return
+					}
 					result = mutateFeedback({ slug, stage, feedbackId, patch })
 					break
 				}

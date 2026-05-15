@@ -59,6 +59,14 @@ export default defineTool({
 			feedback_id: args.feedback_id,
 		})
 		if (slugCheck) return slugCheck
+		// Batch path: check each feedback_id in the array against the same
+		// path-traversal rules.
+		if (Array.isArray(args.feedback_ids)) {
+			for (const fid of args.feedback_ids as unknown[]) {
+				const batchCheck = validateSlugArgs({ feedback_id: fid })
+				if (batchCheck) return batchCheck
+			}
+		}
 		const slug = args.intent as string
 		const op = args.op as string
 
@@ -143,12 +151,28 @@ export default defineTool({
 					return text(JSON.stringify(r))
 				}
 				case "set_intent_field": {
+					// Batch form: caller passed `fields: { key: value, ... }` —
+					// apply all in one call so the picker confirms the whole set
+					// once.
+					if (args.fields && typeof args.fields === "object") {
+						const fields = args.fields as Record<string, unknown>
+						const results: Array<{ field: string; result: unknown }> = []
+						for (const [field, value] of Object.entries(fields)) {
+							results.push({
+								field,
+								result: setIntentField({ slug, field, value }),
+							})
+						}
+						return text(
+							JSON.stringify({ batch: true, count: results.length, results }),
+						)
+					}
 					const field = args.field as string
 					const value = args.value
 					if (!field) {
 						return errorResponse({
 							error: "missing_field",
-							message: "set_intent_field requires `field`",
+							message: "set_intent_field requires `field` or `fields`",
 						})
 					}
 					const r = setIntentField({ slug, field, value })
@@ -159,13 +183,38 @@ export default defineTool({
 					return text(JSON.stringify(r))
 				}
 				case "mutate_feedback": {
-					const feedback_id = args.feedback_id as string
 					const patch = (args.patch as Record<string, unknown>) ?? {}
 					const stage = (args.stage as string) || null
+					// Batch form: caller passed `feedback_ids: [...]` — apply the
+					// same patch to every FB in one call so the picker confirms
+					// the whole set once.
+					if (
+						Array.isArray(args.feedback_ids) &&
+						args.feedback_ids.length > 0
+					) {
+						const ids = args.feedback_ids as string[]
+						const results: Array<{ feedback_id: string; result: unknown }> = []
+						for (const fid of ids) {
+							results.push({
+								feedback_id: fid,
+								result: mutateFeedback({
+									slug,
+									stage,
+									feedbackId: fid,
+									patch,
+								}),
+							})
+						}
+						return text(
+							JSON.stringify({ batch: true, count: results.length, results }),
+						)
+					}
+					const feedback_id = args.feedback_id as string
 					if (!feedback_id) {
 						return errorResponse({
 							error: "missing_feedback_id",
-							message: "mutate_feedback requires `feedback_id`",
+							message:
+								"mutate_feedback requires `feedback_id` or `feedback_ids`",
 						})
 					}
 					const r = mutateFeedback({
@@ -201,10 +250,16 @@ function describeOp(op: string, args: Record<string, unknown>): string {
 		case "force_stage_complete":
 			return `Sign every review + approval + intent_quality_gates for every unit in stages up to and including '${args.stage}'. Refuses units that haven't reached terminal hat advance.`
 		case "set_intent_field":
+			if (args.fields && typeof args.fields === "object") {
+				return `Set ${Object.keys(args.fields as Record<string, unknown>).length} intent.md frontmatter fields in one call: ${JSON.stringify(args.fields)}.`
+			}
 			return `Set intent.md frontmatter field '${args.field}' to ${JSON.stringify(args.value)}.`
 		case "reset_drift":
 			return `Re-stamp every witnessed slot (reviews + approvals on every unit) with the CURRENT on-disk SHA. Drift sweep will stop firing on the same SHA mismatch.`
 		case "mutate_feedback":
+			if (Array.isArray(args.feedback_ids) && args.feedback_ids.length > 0) {
+				return `Apply FM patch to ${(args.feedback_ids as string[]).length} feedback records (${(args.feedback_ids as string[]).join(", ")}): ${JSON.stringify(args.patch)}. Bypasses lifecycle guards.`
+			}
 			return `Apply FM patch to feedback ${args.feedback_id}: ${JSON.stringify(args.patch)}. Bypasses lifecycle guards.`
 		default:
 			return op

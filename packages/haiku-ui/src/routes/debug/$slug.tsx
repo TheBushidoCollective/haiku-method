@@ -299,40 +299,84 @@ function SetIntentFieldForm({
 }: {
 	onPrepare: (op: PendingOp) => void
 }) {
-	const [field, setField] = useState("mode")
-	const [valueStr, setValueStr] = useState("")
+	// Multi-row form so the user can stage several FM edits and confirm
+	// them all in one picker round-trip. Single row → single-mutate path;
+	// multiple rows → batch path.
+	const [rows, setRows] = useState<Array<{ field: string; value: string }>>([
+		{ field: "mode", value: "" },
+	])
+	const update = (i: number, patch: { field?: string; value?: string }) => {
+		setRows((prev) =>
+			prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)),
+		)
+	}
+	const filledRows = rows.filter((r) => r.field.trim())
 	return (
 		<AdminCard
-			title="Set intent field"
-			description="Bypass FSM-protected intent.md frontmatter (mode, etc.). Value is JSON-parsed if it starts with [, {, true, false, null, or a digit; otherwise treated as a string."
+			title="Set intent fields"
+			description="Bypass FSM-protected intent.md frontmatter. Add more rows to set multiple keys in a single confirm. Each value is JSON-parsed if it starts with [, {, true, false, null, or a digit; otherwise treated as a string."
 		>
-			<label className="block text-xs font-medium text-stone-600 dark:text-stone-400">
-				Field
-				<input
-					value={field}
-					onChange={(e) => setField(e.target.value)}
-					className="mt-1 block w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-sm font-mono dark:border-stone-700 dark:bg-stone-900"
-				/>
-			</label>
-			<label className="mt-2 block text-xs font-medium text-stone-600 dark:text-stone-400">
-				Value
-				<input
-					value={valueStr}
-					onChange={(e) => setValueStr(e.target.value)}
-					placeholder="autopilot"
-					className="mt-1 block w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-sm font-mono dark:border-stone-700 dark:bg-stone-900"
-				/>
-			</label>
+			{rows.map((row, i) => (
+				<div
+					// biome-ignore lint/suspicious/noArrayIndexKey: row order is the identity here — entries are positional, not keyed by field name.
+					key={i}
+					className="mt-2 grid grid-cols-2 gap-2"
+				>
+					<input
+						value={row.field}
+						onChange={(e) => update(i, { field: e.target.value })}
+						placeholder="field"
+						className="rounded border border-stone-300 bg-white px-2 py-1.5 text-sm font-mono dark:border-stone-700 dark:bg-stone-900"
+					/>
+					<input
+						value={row.value}
+						onChange={(e) => update(i, { value: e.target.value })}
+						placeholder="value"
+						className="rounded border border-stone-300 bg-white px-2 py-1.5 text-sm font-mono dark:border-stone-700 dark:bg-stone-900"
+					/>
+				</div>
+			))}
+			<div className="mt-2 flex items-center gap-2">
+				<button
+					type="button"
+					onClick={() => setRows((prev) => [...prev, { field: "", value: "" }])}
+					className="rounded border border-stone-300 px-2 py-1 text-xs text-stone-700 hover:bg-stone-100 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+				>
+					+ Add row
+				</button>
+				{rows.length > 1 && (
+					<button
+						type="button"
+						onClick={() => setRows((prev) => prev.slice(0, -1))}
+						className="rounded border border-stone-300 px-2 py-1 text-xs text-stone-700 hover:bg-stone-100 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+					>
+						− Remove last
+					</button>
+				)}
+			</div>
 			<button
 				type="button"
-				disabled={!field}
+				disabled={filledRows.length === 0}
 				onClick={() => {
-					const parsed = parseLooseJsonValue(valueStr)
-					onPrepare({
-						op: "set_intent_field",
-						body: { field, value: parsed },
-						summary: `Set intent.md.${field} = ${JSON.stringify(parsed)}`,
-					})
+					if (filledRows.length === 1) {
+						const r = filledRows[0]
+						const parsed = parseLooseJsonValue(r.value)
+						onPrepare({
+							op: "set_intent_field",
+							body: { field: r.field, value: parsed },
+							summary: `Set intent.md.${r.field} = ${JSON.stringify(parsed)}`,
+						})
+					} else {
+						const fields: Record<string, unknown> = {}
+						for (const r of filledRows) {
+							fields[r.field] = parseLooseJsonValue(r.value)
+						}
+						onPrepare({
+							op: "set_intent_field",
+							body: { fields },
+							summary: `BATCH: set ${filledRows.length} intent.md fields in one call: ${JSON.stringify(fields)}`,
+						})
+					}
 				}}
 				className="mt-3 rounded bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
 			>
@@ -374,13 +418,18 @@ function MutateFeedbackForm({
 	onPrepare: (op: PendingOp) => void
 }) {
 	const [stage, setStage] = useState("")
-	const [feedbackId, setFeedbackId] = useState("")
-	const [patchJson, setPatchJson] = useState('{\n  "status": "closed"\n}')
+	// One textarea for IDs — one per line. A single ID means single-mutate;
+	// multiple lines fan out to the batch path so the picker confirms once
+	// for the whole set.
+	const [feedbackIds, setFeedbackIds] = useState("")
+	const [patchJson, setPatchJson] = useState(
+		'{\n  "closed_at": null,\n  "closed_by": "force_complete"\n}',
+	)
 	const [patchError, setPatchError] = useState<string | null>(null)
 	return (
 		<AdminCard
 			title="Mutate feedback"
-			description="Apply a JSON FM patch to a feedback record. No lifecycle guards — set any FM field. Stage blank means intent-scope feedback (.haiku/intents/<slug>/feedback/)."
+			description="Apply a JSON FM patch to one or more feedback records. No lifecycle guards. Stage blank means intent-scope feedback. Enter one FB ID per line — multiple lines batch into a single confirmation."
 		>
 			<label className="block text-xs font-medium text-stone-600 dark:text-stone-400">
 				Stage (blank = intent scope)
@@ -398,11 +447,12 @@ function MutateFeedbackForm({
 				</select>
 			</label>
 			<label className="mt-2 block text-xs font-medium text-stone-600 dark:text-stone-400">
-				Feedback ID
-				<input
-					value={feedbackId}
-					onChange={(e) => setFeedbackId(e.target.value)}
-					placeholder="FB-037"
+				Feedback IDs (one per line for batch)
+				<textarea
+					value={feedbackIds}
+					onChange={(e) => setFeedbackIds(e.target.value)}
+					placeholder={"FB-037\nFB-041\nFB-052"}
+					rows={3}
 					className="mt-1 block w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-sm font-mono dark:border-stone-700 dark:bg-stone-900"
 				/>
 			</label>
@@ -425,7 +475,7 @@ function MutateFeedbackForm({
 			)}
 			<button
 				type="button"
-				disabled={!feedbackId}
+				disabled={!feedbackIds.trim()}
 				onClick={() => {
 					let parsed: Record<string, unknown>
 					try {
@@ -441,15 +491,32 @@ function MutateFeedbackForm({
 						)
 						return
 					}
-					onPrepare({
-						op: "mutate_feedback",
-						body: {
-							stage: stage || undefined,
-							feedback_id: feedbackId,
-							patch: parsed,
-						},
-						summary: `Apply FM patch to ${feedbackId} (${stage || "intent scope"}): ${JSON.stringify(parsed)}`,
-					})
+					const ids = feedbackIds
+						.split(/\r?\n/)
+						.map((s) => s.trim())
+						.filter(Boolean)
+					if (ids.length === 0) return
+					if (ids.length === 1) {
+						onPrepare({
+							op: "mutate_feedback",
+							body: {
+								stage: stage || undefined,
+								feedback_id: ids[0],
+								patch: parsed,
+							},
+							summary: `Apply FM patch to ${ids[0]} (${stage || "intent scope"}): ${JSON.stringify(parsed)}`,
+						})
+					} else {
+						onPrepare({
+							op: "mutate_feedback",
+							body: {
+								stage: stage || undefined,
+								feedback_ids: ids,
+								patch: parsed,
+							},
+							summary: `BATCH: apply FM patch to ${ids.length} feedback records (${ids.join(", ")}) on ${stage || "intent scope"}: ${JSON.stringify(parsed)}`,
+						})
+					}
 				}}
 				className="mt-3 rounded bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
 			>

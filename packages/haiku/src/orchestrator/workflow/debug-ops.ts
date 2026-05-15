@@ -211,14 +211,24 @@ export function forceStageComplete(args: {
 				const fbPath = join(fbDir, fbFile)
 				const fbFm = parseFrontmatter(readFileSync(fbPath, "utf8")).data
 				const closedAt = (fbFm as { closed_at?: unknown }).closed_at
-				const closedBy = (fbFm as { closed_by?: unknown }).closed_by
-				// Already-closed FBs (closed_at stamped or closed_by present) are
-				// no-ops. v4 derives status from these signals; we deliberately
-				// do NOT touch the legacy `status` field here.
+				const rejectedAt = (fbFm as { rejected_at?: unknown }).rejected_at
+				// closed_at is the cursor's source-of-truth for closure (per
+				// the v4 lifecycle doc — `closed_by` alone is "a unit
+				// claimed it, the assessor hasn't verified yet" which still
+				// blocks the gate). Skip FBs that already have closed_at OR
+				// rejected_at stamped; otherwise stamp closed_at and
+				// preserve any existing closed_by (don't overwrite the
+				// claimer's provenance — just add the verification timestamp
+				// the cursor needs).
 				if (typeof closedAt === "string" && closedAt.length > 0) continue
-				if (typeof closedBy === "string" && closedBy.length > 0) continue
+				if (typeof rejectedAt === "string" && rejectedAt.length > 0) continue
 				setFrontmatterField(fbPath, "closed_at", nowIso)
-				setFrontmatterField(fbPath, "closed_by", "force_complete")
+				const existingClosedBy = (fbFm as { closed_by?: unknown }).closed_by
+				if (
+					!(typeof existingClosedBy === "string" && existingClosedBy.length > 0)
+				) {
+					setFrontmatterField(fbPath, "closed_by", "force_complete")
+				}
 				feedbackClosed++
 			}
 		}

@@ -47,7 +47,14 @@ export const HAIKU_DEBUG_INPUT_SCHEMA = Type.Object(
 		),
 		feedback_id: Type.Optional(
 			Type.String({
-				description: "Feedback ID to mutate (mutate_feedback).",
+				description:
+					"Feedback ID to mutate (mutate_feedback). For batch mutations, use feedback_ids instead.",
+			}),
+		),
+		feedback_ids: Type.Optional(
+			Type.Array(Type.String(), {
+				description:
+					"Batch form of feedback_id — array of FB IDs to mutate in a single call (mutate_feedback). The same `patch` is applied to every FB in the list. Use this instead of firing the picker confirmation per-FB.",
 			}),
 		),
 		patch: Type.Optional(
@@ -57,6 +64,16 @@ export const HAIKU_DEBUG_INPUT_SCHEMA = Type.Object(
 					additionalProperties: true,
 					description:
 						"FB FM keys to set (mutate_feedback). Example: { closed_at: '2026-...', closed_by: 'manual_review' }.",
+				},
+			),
+		),
+		fields: Type.Optional(
+			Type.Object(
+				{},
+				{
+					additionalProperties: true,
+					description:
+						"Batch form of field/value — object of intent.md FM keys to set in a single call (set_intent_field). Example: { mode: 'autopilot', archived: false }.",
 				},
 			),
 		),

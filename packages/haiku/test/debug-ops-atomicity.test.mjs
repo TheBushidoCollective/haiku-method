@@ -48,7 +48,14 @@ Test studio.
 `,
 )
 writeFileSync(
-	join(haikuRoot, "studios", "atomicity-studio", "stages", "design", "STAGE.md"),
+	join(
+		haikuRoot,
+		"studios",
+		"atomicity-studio",
+		"stages",
+		"design",
+		"STAGE.md",
+	),
 	`---
 name: design
 hats: [planner, implementer, verifier]
@@ -249,10 +256,14 @@ const closeRes = forceStageComplete({
 	closeOpenFeedback: true,
 })
 
-test("returns ok:true with feedback_closed === 1", () => {
+test("returns ok:true with feedback_closed === 2 (open + closed_by-only)", () => {
+	// FB-001 (truly open) and FB-003 (closed_by but no closed_at — still
+	// open from the cursor's POV) both get closed_at stamped. FB-002
+	// (closed_at already set) is skipped. Earlier versions counted only
+	// FB-001 because they treated closed_by alone as closed.
 	assert.strictEqual(closeRes.ok, true)
 	if (closeRes.ok === true) {
-		assert.strictEqual(closeRes.result.feedback_closed, 1)
+		assert.strictEqual(closeRes.result.feedback_closed, 2)
 		assert.strictEqual(closeRes.result.units_signed, 2)
 	}
 })
@@ -273,7 +284,13 @@ test("open FB now has closed_at + closed_by: force_complete (NO status write)", 
 
 test("already-closed FB (closed_at) is NOT touched", () => {
 	const fbAfter = readFileSync(
-		join(intentDirPath, "stages", "design", "feedback", "002-already-closed.md"),
+		join(
+			intentDirPath,
+			"stages",
+			"design",
+			"feedback",
+			"002-already-closed.md",
+		),
 		"utf8",
 	)
 	// Original closed_at value must be preserved (not overwritten with now()).
@@ -284,15 +301,25 @@ test("already-closed FB (closed_at) is NOT touched", () => {
 	)
 })
 
-test("already-closed FB (closed_by) is NOT touched", () => {
+test("already-closed FB (closed_by) IS stamped with closed_at — closed_by alone is not closure", () => {
+	// Regression: earlier versions skipped FBs that had closed_by but no
+	// closed_at, treating closed_by-alone as "already closed". The cursor
+	// truth is closed_at — closed_by alone is "claimed but unverified",
+	// which still blocks the gate. force_complete now stamps closed_at on
+	// these FBs while preserving the existing closed_by provenance.
 	const fbAfter = readFileSync(
 		join(intentDirPath, "stages", "design", "feedback", "003-closed-by.md"),
 		"utf8",
 	)
-	assert.match(fbAfter, /^closed_by: feedback-assessor$/m)
-	assert.ok(
-		!/closed_at:/.test(fbAfter),
-		"FB closed via closed_by alone must not get a synthetic closed_at",
+	assert.match(
+		fbAfter,
+		/^closed_by: feedback-assessor$/m,
+		"existing closed_by provenance must be preserved (no overwrite with force_complete)",
+	)
+	assert.match(
+		fbAfter,
+		/^closed_at: /m,
+		"closed_at must be stamped — closed_by alone wasn't enough",
 	)
 })
 

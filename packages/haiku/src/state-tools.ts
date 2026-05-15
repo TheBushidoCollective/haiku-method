@@ -4710,17 +4710,25 @@ export function deriveFeedbackStatus(
 ): (typeof FEEDBACK_STATUSES)[number] {
 	const rejectedAt = fm.rejected_at
 	if (typeof rejectedAt === "string" && rejectedAt.length > 0) return "rejected"
-	const closedBy = fm.closed_by
-	if (typeof closedBy === "string") {
-		if (closedBy === "feedback-assessor") return "addressed"
-	}
-	const resolution = fm.resolution
-	if (typeof resolution === "string" && resolution === "answered") {
-		return "answered"
-	}
+	// CLOSURE = closed_at. The cursor's source of truth — without it the
+	// gate stays blocked. `closed_by` alone is "a unit claimed it, the
+	// feedback-assessor hasn't verified yet" (v4 schema doc) which is
+	// still mid-fix-loop, NOT closed. Earlier versions of this function
+	// returned "closed" for closed_by-alone, which lied to consumers.
 	const closedAt = fm.closed_at
-	if (typeof closedAt === "string" && closedAt.length > 0) return "closed"
-	if (typeof closedBy === "string" && closedBy.length > 0) return "closed"
+	const closedAtStr =
+		typeof closedAt === "string" && closedAt.length > 0 ? closedAt : null
+	const closedBy = fm.closed_by
+	const closedByStr =
+		typeof closedBy === "string" && closedBy.length > 0 ? closedBy : null
+	if (closedAtStr) {
+		if (closedByStr === "feedback-assessor") return "addressed"
+		const resolution = fm.resolution
+		if (typeof resolution === "string" && resolution === "answered") {
+			return "answered"
+		}
+		return "closed"
+	}
 	// Legacy `status:` field fallback. v7→v8 migrates it away on write,
 	// but un-migrated FBs (loaded before the engine reaches them) get the
 	// same derivation a migrator would synthesize. The fallback is the
@@ -4735,6 +4743,9 @@ export function deriveFeedbackStatus(
 		if (s === "closed") return "closed"
 		if (s === "fixing") return "fixing"
 	}
+	// closed_by without closed_at OR iterations[] non-empty → fixing
+	// (claimed/in-progress). Otherwise pending.
+	if (closedByStr) return "fixing"
 	const iterations = fm.iterations
 	if (Array.isArray(iterations) && iterations.length > 0) return "fixing"
 	return "pending"

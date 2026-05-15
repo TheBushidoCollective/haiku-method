@@ -178,5 +178,123 @@ test("stalled unit was NOT touched", () => {
 	assert.strictEqual(stalled_after, stalled_before)
 })
 
+// ── close_open_feedback option ────────────────────────────────────────
+//
+// Open FBs continue blocking the cursor even after every approval is
+// signed. The opt-in option stamps closed_at + closed_by: "force_complete"
+// on every open FB on the targeted stages — no `status: closed` write
+// (v4 derives status from closed_at / closed_by).
+
+console.log("\n=== forceStageComplete close_open_feedback ===")
+
+// Make unit-02 also terminal-advance so the "all units terminal" pass
+// check succeeds and we exercise the post-sign FB closure path.
+writeFileSync(
+	join(intentDirPath, "stages", "design", "units", "unit-02-stalled.md"),
+	`---
+unit_id: unit-02
+iterations:
+  - hat: planner
+    result: advance
+  - hat: implementer
+    result: advance
+  - hat: verifier
+    result: advance
+---
+now-ready unit body
+`,
+)
+
+// Add three FBs — one open, one already closed (closed_at), one already
+// closed via closed_by. Only the open one should be touched.
+mkdirSync(join(intentDirPath, "stages", "design", "feedback"), {
+	recursive: true,
+})
+writeFileSync(
+	join(intentDirPath, "stages", "design", "feedback", "001-open-fb.md"),
+	`---
+title: Open finding
+origin: agent
+created_at: 2026-05-15T10:00:00Z
+---
+Body of the open finding.
+`,
+)
+writeFileSync(
+	join(intentDirPath, "stages", "design", "feedback", "002-already-closed.md"),
+	`---
+title: Already-closed finding
+origin: agent
+created_at: 2026-05-15T10:00:00Z
+closed_at: 2026-05-15T11:00:00Z
+---
+Body of the already-closed finding.
+`,
+)
+writeFileSync(
+	join(intentDirPath, "stages", "design", "feedback", "003-closed-by.md"),
+	`---
+title: Closed-by-someone finding
+origin: agent
+created_at: 2026-05-15T10:00:00Z
+closed_by: feedback-assessor
+---
+Body.
+`,
+)
+
+const closeRes = forceStageComplete({
+	slug: intentSlug,
+	targetStage: "design",
+	closeOpenFeedback: true,
+})
+
+test("returns ok:true with feedback_closed === 1", () => {
+	assert.strictEqual(closeRes.ok, true)
+	if (closeRes.ok === true) {
+		assert.strictEqual(closeRes.result.feedback_closed, 1)
+		assert.strictEqual(closeRes.result.units_signed, 2)
+	}
+})
+
+test("open FB now has closed_at + closed_by: force_complete (NO status write)", () => {
+	const openFbAfter = readFileSync(
+		join(intentDirPath, "stages", "design", "feedback", "001-open-fb.md"),
+		"utf8",
+	)
+	assert.match(openFbAfter, /^closed_at: /m)
+	assert.match(openFbAfter, /^closed_by: force_complete$/m)
+	// Status field MUST NOT be written — v4 derives it.
+	assert.ok(
+		!/^status:/m.test(openFbAfter),
+		"force_complete must not write a status field — v4 derives status from closed_at / closed_by",
+	)
+})
+
+test("already-closed FB (closed_at) is NOT touched", () => {
+	const fbAfter = readFileSync(
+		join(intentDirPath, "stages", "design", "feedback", "002-already-closed.md"),
+		"utf8",
+	)
+	// Original closed_at value must be preserved (not overwritten with now()).
+	assert.match(fbAfter, /^closed_at: 2026-05-15T11:00:00Z$/m)
+	assert.ok(
+		!/closed_by: force_complete/.test(fbAfter),
+		"already-closed FB must not get force_complete provenance",
+	)
+})
+
+test("already-closed FB (closed_by) is NOT touched", () => {
+	const fbAfter = readFileSync(
+		join(intentDirPath, "stages", "design", "feedback", "003-closed-by.md"),
+		"utf8",
+	)
+	assert.match(fbAfter, /^closed_by: feedback-assessor$/m)
+	assert.ok(
+		!/closed_at:/.test(fbAfter),
+		"FB closed via closed_by alone must not get a synthetic closed_at",
+	)
+})
+
 console.log(`\n${passed} passed, ${failed} failed\n`)
 process.exit(failed > 0 ? 1 : 0)

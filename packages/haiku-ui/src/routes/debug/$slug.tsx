@@ -241,13 +241,14 @@ function ForceStageCompleteForm({
 	onPrepare: (op: PendingOp) => void
 }) {
 	const [stage, setStage] = useState("")
+	const [closeFb, setCloseFb] = useState(false)
 	useEffect(() => {
 		if (!stage && stages.length > 0) setStage(stages[0])
 	}, [stage, stages])
 	return (
 		<AdminCard
 			title="Force stage complete"
-			description="Sign reviews + approvals + intent_quality_gates for every unit in stages up to and including the target. Refuses units that haven't reached terminal advance."
+			description="Sign reviews + approvals + intent_quality_gates for every unit in stages up to and including the target. Refuses units that haven't reached terminal advance. Optionally also closes every open feedback on those stages (open FBs continue blocking the cursor even after every approval is signed)."
 		>
 			<label className="block text-xs font-medium text-stone-600 dark:text-stone-400">
 				Target stage
@@ -264,14 +265,25 @@ function ForceStageCompleteForm({
 					))}
 				</select>
 			</label>
+			<label className="mt-2 flex items-center gap-2 text-xs text-stone-700 dark:text-stone-300">
+				<input
+					type="checkbox"
+					checked={closeFb}
+					onChange={(e) => setCloseFb(e.target.checked)}
+					className="rounded border-stone-300 dark:border-stone-700"
+				/>
+				Also close every open feedback on these stages (stamps
+				<span className="font-mono">closed_at</span> +
+				<span className="font-mono">closed_by: "force_complete"</span>)
+			</label>
 			<button
 				type="button"
 				disabled={!stage}
 				onClick={() =>
 					onPrepare({
 						op: "force_stage_complete",
-						body: { stage },
-						summary: `Force stages 0..${stage} complete (sign all reviews/approvals/QGs).`,
+						body: { stage, close_open_feedback: closeFb },
+						summary: `Force stages 0..${stage} complete (sign all reviews/approvals/QGs)${closeFb ? " AND close every open feedback on those stages" : ""}.`,
 					})
 				}
 				className="mt-3 rounded bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"

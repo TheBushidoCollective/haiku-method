@@ -30,6 +30,7 @@ export interface DebugForceStageResult {
 	stages_processed: string[]
 	units_signed: number
 	intent_quality_gates_signed: boolean
+	feedback_closed: number
 }
 
 /** Force a stage and every prior stage to "complete" by signing all
@@ -46,6 +47,14 @@ export interface DebugForceStageResult {
 export function forceStageComplete(args: {
 	slug: string
 	targetStage: string
+	/** When true, also stamps `closed_at` + `closed_by: "force_complete"`
+	 *  on every open feedback record on the targeted stages (and on the
+	 *  intent scope when the target is the final stage). Without this,
+	 *  open FBs continue to block the cursor even after every approval is
+	 *  signed. The v4 closure model derives "closed" from `closed_at` /
+	 *  `closed_by` — we deliberately don't write `status: closed` here
+	 *  (the legacy `status` field is being phased out). */
+	closeOpenFeedback?: boolean
 }):
 	| { ok: true; result: DebugForceStageResult }
 	| { ok: false; error: string; details?: unknown } {
@@ -180,12 +189,48 @@ export function forceStageComplete(args: {
 		igsSigned = true
 	}
 
+	// Open feedback also blocks the cursor — even after every approval is
+	// signed, the next tick will return feedback_dispatch / review_fix as
+	// long as any FB lacks closure. When the caller asks, force-close
+	// every open FB on the processed stages (and on the intent scope when
+	// the final stage was the target).
+	let feedbackClosed = 0
+	if (args.closeOpenFeedback) {
+		const fbScopes = stagesProcessed.map((s) =>
+			join(dir, "stages", s, "feedback"),
+		)
+		if (targetIdx === stages.length - 1) {
+			fbScopes.push(join(dir, "feedback"))
+		}
+		const nowIso = new Date().toISOString()
+		for (const fbDir of fbScopes) {
+			if (!existsSync(fbDir)) continue
+			for (const fbFile of readdirSync(fbDir).filter((f) =>
+				f.endsWith(".md"),
+			)) {
+				const fbPath = join(fbDir, fbFile)
+				const fbFm = parseFrontmatter(readFileSync(fbPath, "utf8")).data
+				const closedAt = (fbFm as { closed_at?: unknown }).closed_at
+				const closedBy = (fbFm as { closed_by?: unknown }).closed_by
+				// Already-closed FBs (closed_at stamped or closed_by present) are
+				// no-ops. v4 derives status from these signals; we deliberately
+				// do NOT touch the legacy `status` field here.
+				if (typeof closedAt === "string" && closedAt.length > 0) continue
+				if (typeof closedBy === "string" && closedBy.length > 0) continue
+				setFrontmatterField(fbPath, "closed_at", nowIso)
+				setFrontmatterField(fbPath, "closed_by", "force_complete")
+				feedbackClosed++
+			}
+		}
+	}
+
 	return {
 		ok: true,
 		result: {
 			stages_processed: stagesProcessed,
 			units_signed: unitsSigned,
 			intent_quality_gates_signed: igsSigned,
+			feedback_closed: feedbackClosed,
 		},
 	}
 }

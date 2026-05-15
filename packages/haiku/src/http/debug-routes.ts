@@ -225,7 +225,11 @@ export function registerDebugRoutes(instance: FastifyInstance): void {
 						reply.status(400).send({ error: "invalid_stage" })
 						return
 					}
-					result = forceStageComplete({ slug, targetStage: stage })
+					result = forceStageComplete({
+						slug,
+						targetStage: stage,
+						closeOpenFeedback: body.close_open_feedback === true,
+					})
 					break
 				}
 				case "set_intent_field": {

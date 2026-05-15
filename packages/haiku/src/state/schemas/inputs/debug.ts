@@ -56,9 +56,15 @@ export const HAIKU_DEBUG_INPUT_SCHEMA = Type.Object(
 				{
 					additionalProperties: true,
 					description:
-						"FB FM keys to set (mutate_feedback). Example: { status: 'closed', closed_at: '2026-...' }.",
+						"FB FM keys to set (mutate_feedback). Example: { closed_at: '2026-...', closed_by: 'manual_review' }.",
 				},
 			),
+		),
+		close_open_feedback: Type.Optional(
+			Type.Boolean({
+				description:
+					'force_stage_complete only. When true, also stamps `closed_at` + `closed_by: "force_complete"` on every open FB on the targeted stages (and on intent scope when the final stage is the target). Open FBs otherwise continue blocking the cursor even after every approval is signed.',
+			}),
 		),
 	},
 	{ additionalProperties: false },

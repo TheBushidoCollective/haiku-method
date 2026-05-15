@@ -135,7 +135,11 @@ export default defineTool({
 							message: "force_stage_complete requires `stage`",
 						})
 					}
-					const r = forceStageComplete({ slug, targetStage: stage })
+					const r = forceStageComplete({
+						slug,
+						targetStage: stage,
+						closeOpenFeedback: args.close_open_feedback === true,
+					})
 					return text(JSON.stringify(r))
 				}
 				case "set_intent_field": {

@@ -84,8 +84,7 @@ const bundle = readFileSync(bundlePath, "utf8")
 // shape via the source-readable symbol prefix `gv`/`np`-style minified
 // idents — but the sibling-string heuristic alone has caught every
 // real production failure to date.
-const tplStringRegex =
-	/\bimport\.meta\.url\s*,\s*("[^"]+\.md"|'[^']+\.md')/g
+const tplStringRegex = /\bimport\.meta\.url\s*,\s*("[^"]+\.md"|'[^']+\.md')/g
 const matches = Array.from(bundle.matchAll(tplStringRegex), (m) => m[0])
 if (matches.length > 0) {
 	const samples = Array.from(new Set(matches)).slice(0, 5).join("\n  ")

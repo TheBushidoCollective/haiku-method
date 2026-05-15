@@ -50,8 +50,8 @@ function DebugIndex(): React.ReactElement {
 					H·AI·K·U Debug — Intent Index
 				</h1>
 				<p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
-					Every mutation on the per-intent panel requires explicit
-					confirmation. The SPA confirmation modal IS the elicitation gate.
+					Every mutation on the per-intent panel requires explicit confirmation.
+					The SPA confirmation modal IS the elicitation gate.
 				</p>
 			</HeaderLandmark>
 			<Main className="px-6 py-6">
@@ -63,9 +63,7 @@ function DebugIndex(): React.ReactElement {
 						Failed to load intents: {error}
 					</div>
 				) : intents === null ? (
-					<p className="text-sm text-stone-600 dark:text-stone-400">
-						Loading…
-					</p>
+					<p className="text-sm text-stone-600 dark:text-stone-400">Loading…</p>
 				) : intents.length === 0 ? (
 					<p className="text-sm text-stone-600 dark:text-stone-400">
 						No intents found. Nothing to debug.

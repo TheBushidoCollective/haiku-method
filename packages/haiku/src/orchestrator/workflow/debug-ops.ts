@@ -14,23 +14,18 @@
 // definition here is just the operations; the user-confirmation
 // gate is in `tools/orchestrator/haiku_debug.ts`.
 
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import {
-	derivePosition,
-	type CursorPosition,
-} from "./cursor.js"
-import {
-	approvalRolesFor,
-	reviewRolesFor,
-} from "./derived-stage-state.js"
+	intentDir,
+	parseFrontmatter,
+	setFrontmatterField,
+} from "../../state-tools.js"
 import { resolveStudioStages } from "../studio.js"
-import { intentDir, parseFrontmatter, setFrontmatterField } from "../../state-tools.js"
-import {
-	buildApprovalRecord,
-	buildReviewRecord,
-} from "./sign-slot.js"
+import { type CursorPosition, derivePosition } from "./cursor.js"
+import { approvalRolesFor, reviewRolesFor } from "./derived-stage-state.js"
+import { buildApprovalRecord, buildReviewRecord } from "./sign-slot.js"
 
 export interface DebugForceStageResult {
 	stages_processed: string[]
@@ -52,11 +47,17 @@ export interface DebugForceStageResult {
 export function forceStageComplete(args: {
 	slug: string
 	targetStage: string
-}): { ok: true; result: DebugForceStageResult } | { ok: false; error: string; details?: unknown } {
+}):
+	| { ok: true; result: DebugForceStageResult }
+	| { ok: false; error: string; details?: unknown } {
 	const dir = intentDir(args.slug)
 	const intentMdPath = join(dir, "intent.md")
 	if (!existsSync(intentMdPath)) {
-		return { ok: false, error: "intent_not_found", details: { slug: args.slug } }
+		return {
+			ok: false,
+			error: "intent_not_found",
+			details: { slug: args.slug },
+		}
 	}
 	const intentFm = parseFrontmatter(readFileSync(intentMdPath, "utf8")).data
 	const studio = (intentFm.studio as string) || ""
@@ -191,8 +192,9 @@ export function setIntentField(args: {
  *  Walks every stage, every unit, every review/approval slot. */
 export function resetDrift(args: {
 	slug: string
-}): { ok: true; reviews_refreshed: number; approvals_refreshed: number } |
-	{ ok: false; error: string } {
+}):
+	| { ok: true; reviews_refreshed: number; approvals_refreshed: number }
+	| { ok: false; error: string } {
 	const dir = intentDir(args.slug)
 	const stagesDir = join(dir, "stages")
 	if (!existsSync(stagesDir)) {
@@ -232,7 +234,11 @@ export function resetDrift(args: {
 				setFrontmatterField(unitPath, "approvals", approvals)
 		}
 	}
-	return { ok: true, reviews_refreshed: reviewsRefreshed, approvals_refreshed: approvalsRefreshed }
+	return {
+		ok: true,
+		reviews_refreshed: reviewsRefreshed,
+		approvals_refreshed: approvalsRefreshed,
+	}
 }
 
 /** Mutate any feedback FM field set. Caller passes the FB ID + a
@@ -270,9 +276,9 @@ export function mutateFeedback(args: {
  *  Used by the SPA debug screen to preview "after my edits, this is
  *  what the next tick will produce." No mutation; safe to call as
  *  often as the SPA wants. */
-export function previewCursor(args: { slug: string }):
-	| { ok: true; position: CursorPosition }
-	| { ok: false; error: string } {
+export function previewCursor(args: {
+	slug: string
+}): { ok: true; position: CursorPosition } | { ok: false; error: string } {
 	const dir = intentDir(args.slug)
 	const intentMdPath = join(dir, "intent.md")
 	if (!existsSync(intentMdPath)) return { ok: false, error: "intent_not_found" }

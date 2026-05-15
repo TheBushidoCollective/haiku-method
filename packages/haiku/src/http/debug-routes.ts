@@ -15,6 +15,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { FastifyInstance } from "fastify"
+import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
 import {
 	forceStageComplete,
 	mutateFeedback,
@@ -23,7 +24,6 @@ import {
 	setIntentField,
 } from "../orchestrator/workflow/debug-ops.js"
 import { findHaikuRoot, intentDir, parseFrontmatter } from "../state-tools.js"
-import { HAIKU_UI_HTML } from "../haiku-ui-html.js"
 import { requireTunnelAuth } from "./auth.js"
 import { isValidSlug } from "./validation.js"
 
@@ -71,13 +71,15 @@ function listIntentSummaries(): IntentSummary[] {
 	return out.sort((a, b) => a.slug.localeCompare(b.slug))
 }
 
-function readIntentDetail(slug: string): {
-	ok: true
-	intent: IntentSummary & {
-		frontmatter: Record<string, unknown>
-		stages_present: string[]
-	}
-} | { ok: false; error: string } {
+function readIntentDetail(slug: string):
+	| {
+			ok: true
+			intent: IntentSummary & {
+				frontmatter: Record<string, unknown>
+				stages_present: string[]
+			}
+	  }
+	| { ok: false; error: string } {
 	if (!isValidSlug(slug)) return { ok: false, error: "invalid_slug" }
 	const dir = intentDir(slug)
 	const intentMd = join(dir, "intent.md")

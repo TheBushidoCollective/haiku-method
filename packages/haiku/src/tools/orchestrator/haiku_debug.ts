@@ -160,7 +160,12 @@ export default defineTool({
 							message: "mutate_feedback requires `feedback_id`",
 						})
 					}
-					const r = mutateFeedback({ slug, stage, feedbackId: feedback_id, patch })
+					const r = mutateFeedback({
+						slug,
+						stage,
+						feedbackId: feedback_id,
+						patch,
+					})
 					return text(JSON.stringify(r))
 				}
 				default:

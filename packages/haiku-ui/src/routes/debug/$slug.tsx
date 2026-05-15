@@ -58,6 +58,11 @@ function DebugAdminPanel(): React.ReactElement {
 	useEffect(() => {
 		let cancelled = false
 		setError(null)
+		// Reading refreshTick here (even just into a void-discarded local)
+		// makes biome happy that it's a real dependency. Functionally it
+		// IS the trigger — incrementing it after every successful op is how
+		// the read panes refresh.
+		void refreshTick
 		Promise.all([
 			fetch(`/api/debug/intents/${encodeURIComponent(slug)}`).then((r) =>
 				r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)),
@@ -179,9 +184,7 @@ function DebugAdminPanel(): React.ReactElement {
 							Cursor preview (next tick)
 						</h2>
 						<pre className="mt-3 overflow-x-auto text-xs text-stone-700 dark:text-stone-300">
-							{cursor
-								? JSON.stringify(cursor, null, 2)
-								: "Loading…"}
+							{cursor ? JSON.stringify(cursor, null, 2) : "Loading…"}
 						</pre>
 					</section>
 				</div>
@@ -327,11 +330,7 @@ function SetIntentFieldForm({
 	)
 }
 
-function ResetDriftForm({
-	onPrepare,
-}: {
-	onPrepare: (op: PendingOp) => void
-}) {
+function ResetDriftForm({ onPrepare }: { onPrepare: (op: PendingOp) => void }) {
 	return (
 		<AdminCard
 			title="Reset drift"

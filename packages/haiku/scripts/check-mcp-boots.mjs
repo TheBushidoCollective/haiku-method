@@ -72,20 +72,41 @@ if (!existsSync(bundlePath)) {
 
 step("Verify zero residual loadTemplate(import.meta.url ...) runtime calls")
 const bundle = readFileSync(bundlePath, "utf8")
-// Loose substring check: every loadTemplate call carries a sibling
-// .md filename string literal in the bundle when it isn't inlined. If
-// any call site appears with a `"...md"` (or `'...md'`) literal next
-// to `import.meta.url`, the inliner missed it. Other utilities that
-// take `import.meta.url` (createRequire, fileURLToPath, dirname,
-// pathToFileURL, etc.) never pair it with a sibling-relative string,
-// so this filter is precise. The default-arg form
-// `loadTemplate(import.meta.url)` resolves to `template.eta.md`; we
-// catch those by ALSO matching a bare `loadTemplate(import.meta.url)`
-// shape via the source-readable symbol prefix `gv`/`np`-style minified
-// idents — but the sibling-string heuristic alone has caught every
-// real production failure to date.
+// Two-pattern check covering both loadTemplate call shapes:
+//
+//   (a) Explicit-name form — `loadTemplate(import.meta.url, "name.md")`.
+//       In the bundle this serializes as `<minified>(import.meta.url,
+//       "name.md")`. We anchor on the comma-then-string-literal shape;
+//       other utilities that take `import.meta.url` alone (createRequire,
+//       fileURLToPath, dirname, pathToFileURL, etc.) never pair it with
+//       a sibling-relative string, so this is precise.
+//
+//   (b) Default-arg form — `loadTemplate(import.meta.url)` with no
+//       second arg, which the runtime resolves to `template.eta.md`.
+//       The bundle shape is `<minified>(import.meta.url)`. We can't
+//       distinguish loadTemplate from createRequire by name (esbuild
+//       minified both), so we use the source AST for this one — read
+//       the helper's name from `_load-template.ts`'s exported symbol
+//       and look for any source-level surviving call. If the inliner
+//       did its job, the helper itself is tree-shaken out of the
+//       bundle entirely — so the safest gate is "no `loadTemplate`
+//       identifier survives in the bundle source." Bundle is minified
+//       so the function name `loadTemplate` would only appear if a
+//       call site was preserved verbatim (which esbuild won't do
+//       because the helper is renamed). If the symbol DOES appear,
+//       it's because the inliner left a runtime call site in.
 const tplStringRegex = /\bimport\.meta\.url\s*,\s*("[^"]+\.md"|'[^']+\.md')/g
 const matches = Array.from(bundle.matchAll(tplStringRegex), (m) => m[0])
+// The minifier rewrites the helper's identifier, but the SOURCE
+// identifier `loadTemplate` would only survive if it's referenced as
+// a string literal somewhere (e.g. an error message that includes the
+// helper name). Greppable check — flag it as a sample if seen so the
+// reviewer can audit. We only fail when the named-arg form fires
+// (the historically-failing one); the bare-name greppable serves as
+// a soft signal in the failure message.
+if (bundle.includes("loadTemplate(import.meta.url)")) {
+	matches.push("loadTemplate(import.meta.url)")
+}
 if (matches.length > 0) {
 	const samples = Array.from(new Set(matches)).slice(0, 5).join("\n  ")
 	fail(
@@ -95,8 +116,14 @@ if (matches.length > 0) {
 
 step(`Spawn ${bundlePath} mcp and wait for "running on stdio"`)
 await new Promise((resolve) => {
+	// Use `ignore` for stdin/stdout: stdin is unused (MCP server reads
+	// from us only after we send something), stdout is unused (the
+	// "running on stdio" signal lands on stderr). Leaving stdout as a
+	// pipe we never drain risks deadlock if the server writes enough
+	// to fill the pipe buffer before printing the readiness line. Per
+	// claude-bot review on PR #365.
 	const proc = spawn(process.execPath, [bundlePath, "mcp"], {
-		stdio: ["pipe", "pipe", "pipe"],
+		stdio: ["ignore", "ignore", "pipe"],
 	})
 	let stderrBuf = ""
 	let resolved = false

@@ -83,6 +83,15 @@ export const inlinePromptTemplatesPlugin = {
 						return JSON.stringify(readFileSync(tplPath, "utf8"))
 					},
 				)
+				// Skip the rewritten-source handoff when no actual call
+				// site changed. A file may pass both substring checks
+				// (e.g. it imports a util named `loadTemplateHelper` that
+				// survives comment stripping) without `CALL_PATTERN`
+				// matching anything; in that case esbuild gets back the
+				// same source it would read on its own. Returning null
+				// avoids the unnecessary contents handoff. Per
+				// claude-bot review on PR #365.
+				if (inlined === source) return null
 				return { contents: inlined, loader: "ts" }
 			},
 		)

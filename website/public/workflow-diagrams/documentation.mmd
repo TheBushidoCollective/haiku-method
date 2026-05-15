@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state audit {
     [*] --> audit_start_stage
-    audit_start_stage --> audit_elaborate : tick
-    audit_elaborate --> audit_elaborate_review : record.advance
-    audit_elaborate_review --> audit_decompose : verifier.pass
-    audit_elaborate_review --> audit_elaborate : verifier.fail
-    audit_decompose --> audit_execute : decompose.advance
-    audit_decompose --> audit_review_fix : feedback.pending
+    audit_start_stage --> audit_elaborate_loop : tick
+    audit_elaborate_loop --> audit_elaborate_loop : signals.partial
+    audit_elaborate_loop --> audit_execute : signals.all_met
+    audit_elaborate_loop --> audit_review_fix : verifier.fail
+    audit_elaborate_loop --> audit_review_fix : feedback.pending
     state audit_execute {
       [*] --> audit_execute_auditor
       audit_execute_auditor --> audit_execute_gap_analyst : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state outline {
     [*] --> outline_start_stage
-    outline_start_stage --> outline_elaborate : tick
-    outline_elaborate --> outline_elaborate_review : record.advance
-    outline_elaborate_review --> outline_decompose : verifier.pass
-    outline_elaborate_review --> outline_elaborate : verifier.fail
-    outline_decompose --> outline_execute : decompose.advance
-    outline_decompose --> outline_review_fix : feedback.pending
+    outline_start_stage --> outline_elaborate_loop : tick
+    outline_elaborate_loop --> outline_elaborate_loop : signals.partial
+    outline_elaborate_loop --> outline_execute : signals.all_met
+    outline_elaborate_loop --> outline_review_fix : verifier.fail
+    outline_elaborate_loop --> outline_review_fix : feedback.pending
     state outline_execute {
       [*] --> outline_execute_architect
       outline_execute_architect --> outline_execute_outline_reviewer : hat.advance
@@ -128,12 +126,11 @@ stateDiagram-v2
 
   state draft {
     [*] --> draft_start_stage
-    draft_start_stage --> draft_elaborate : tick
-    draft_elaborate --> draft_elaborate_review : record.advance
-    draft_elaborate_review --> draft_decompose : verifier.pass
-    draft_elaborate_review --> draft_elaborate : verifier.fail
-    draft_decompose --> draft_execute : decompose.advance
-    draft_decompose --> draft_review_fix : feedback.pending
+    draft_start_stage --> draft_elaborate_loop : tick
+    draft_elaborate_loop --> draft_elaborate_loop : signals.partial
+    draft_elaborate_loop --> draft_execute : signals.all_met
+    draft_elaborate_loop --> draft_review_fix : verifier.fail
+    draft_elaborate_loop --> draft_review_fix : feedback.pending
     state draft_execute {
       [*] --> draft_execute_writer
       draft_execute_writer --> draft_execute_technical_reviewer : hat.advance
@@ -182,12 +179,11 @@ stateDiagram-v2
 
   state review {
     [*] --> review_start_stage
-    review_start_stage --> review_elaborate : tick
-    review_elaborate --> review_elaborate_review : record.advance
-    review_elaborate_review --> review_decompose : verifier.pass
-    review_elaborate_review --> review_elaborate : verifier.fail
-    review_decompose --> review_execute : decompose.advance
-    review_decompose --> review_review_fix : feedback.pending
+    review_start_stage --> review_elaborate_loop : tick
+    review_elaborate_loop --> review_elaborate_loop : signals.partial
+    review_elaborate_loop --> review_execute : signals.all_met
+    review_elaborate_loop --> review_review_fix : verifier.fail
+    review_elaborate_loop --> review_review_fix : feedback.pending
     state review_execute {
       [*] --> review_execute_editor
       review_execute_editor --> review_execute_subject_matter_expert : hat.advance
@@ -238,12 +234,11 @@ stateDiagram-v2
 
   state publish {
     [*] --> publish_start_stage
-    publish_start_stage --> publish_elaborate : tick
-    publish_elaborate --> publish_elaborate_review : record.advance
-    publish_elaborate_review --> publish_decompose : verifier.pass
-    publish_elaborate_review --> publish_elaborate : verifier.fail
-    publish_decompose --> publish_execute : decompose.advance
-    publish_decompose --> publish_review_fix : feedback.pending
+    publish_start_stage --> publish_elaborate_loop : tick
+    publish_elaborate_loop --> publish_elaborate_loop : signals.partial
+    publish_elaborate_loop --> publish_execute : signals.all_met
+    publish_elaborate_loop --> publish_review_fix : verifier.fail
+    publish_elaborate_loop --> publish_review_fix : feedback.pending
     state publish_execute {
       [*] --> publish_execute_publisher
       publish_execute_publisher --> publish_execute_verifier : hat.advance

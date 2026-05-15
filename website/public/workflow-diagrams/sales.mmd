@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state research {
     [*] --> research_start_stage
-    research_start_stage --> research_elaborate : tick
-    research_elaborate --> research_elaborate_review : record.advance
-    research_elaborate_review --> research_decompose : verifier.pass
-    research_elaborate_review --> research_elaborate : verifier.fail
-    research_decompose --> research_execute : decompose.advance
-    research_decompose --> research_review_fix : feedback.pending
+    research_start_stage --> research_elaborate_loop : tick
+    research_elaborate_loop --> research_elaborate_loop : signals.partial
+    research_elaborate_loop --> research_execute : signals.all_met
+    research_elaborate_loop --> research_review_fix : verifier.fail
+    research_elaborate_loop --> research_review_fix : feedback.pending
     state research_execute {
       [*] --> research_execute_prospect_researcher
       research_execute_prospect_researcher --> research_execute_industry_analyst : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state qualification {
     [*] --> qualification_start_stage
-    qualification_start_stage --> qualification_elaborate : tick
-    qualification_elaborate --> qualification_elaborate_review : record.advance
-    qualification_elaborate_review --> qualification_decompose : verifier.pass
-    qualification_elaborate_review --> qualification_elaborate : verifier.fail
-    qualification_decompose --> qualification_execute : decompose.advance
-    qualification_decompose --> qualification_review_fix : feedback.pending
+    qualification_start_stage --> qualification_elaborate_loop : tick
+    qualification_elaborate_loop --> qualification_elaborate_loop : signals.partial
+    qualification_elaborate_loop --> qualification_execute : signals.all_met
+    qualification_elaborate_loop --> qualification_review_fix : verifier.fail
+    qualification_elaborate_loop --> qualification_review_fix : feedback.pending
     state qualification_execute {
       [*] --> qualification_execute_qualifier
       qualification_execute_qualifier --> qualification_execute_deal_strategist : hat.advance
@@ -130,12 +128,11 @@ stateDiagram-v2
 
   state proposal {
     [*] --> proposal_start_stage
-    proposal_start_stage --> proposal_elaborate : tick
-    proposal_elaborate --> proposal_elaborate_review : record.advance
-    proposal_elaborate_review --> proposal_decompose : verifier.pass
-    proposal_elaborate_review --> proposal_elaborate : verifier.fail
-    proposal_decompose --> proposal_execute : decompose.advance
-    proposal_decompose --> proposal_review_fix : feedback.pending
+    proposal_start_stage --> proposal_elaborate_loop : tick
+    proposal_elaborate_loop --> proposal_elaborate_loop : signals.partial
+    proposal_elaborate_loop --> proposal_execute : signals.all_met
+    proposal_elaborate_loop --> proposal_review_fix : verifier.fail
+    proposal_elaborate_loop --> proposal_review_fix : feedback.pending
     state proposal_execute {
       [*] --> proposal_execute_proposal_writer
       proposal_execute_proposal_writer --> proposal_execute_solution_architect : hat.advance
@@ -186,12 +183,11 @@ stateDiagram-v2
 
   state negotiation {
     [*] --> negotiation_start_stage
-    negotiation_start_stage --> negotiation_elaborate : tick
-    negotiation_elaborate --> negotiation_elaborate_review : record.advance
-    negotiation_elaborate_review --> negotiation_decompose : verifier.pass
-    negotiation_elaborate_review --> negotiation_elaborate : verifier.fail
-    negotiation_decompose --> negotiation_execute : decompose.advance
-    negotiation_decompose --> negotiation_review_fix : feedback.pending
+    negotiation_start_stage --> negotiation_elaborate_loop : tick
+    negotiation_elaborate_loop --> negotiation_elaborate_loop : signals.partial
+    negotiation_elaborate_loop --> negotiation_execute : signals.all_met
+    negotiation_elaborate_loop --> negotiation_review_fix : verifier.fail
+    negotiation_elaborate_loop --> negotiation_review_fix : feedback.pending
     state negotiation_execute {
       [*] --> negotiation_execute_negotiator
       negotiation_execute_negotiator --> negotiation_execute_legal_reviewer : hat.advance
@@ -240,12 +236,11 @@ stateDiagram-v2
 
   state close {
     [*] --> close_start_stage
-    close_start_stage --> close_elaborate : tick
-    close_elaborate --> close_elaborate_review : record.advance
-    close_elaborate_review --> close_decompose : verifier.pass
-    close_elaborate_review --> close_elaborate : verifier.fail
-    close_decompose --> close_execute : decompose.advance
-    close_decompose --> close_review_fix : feedback.pending
+    close_start_stage --> close_elaborate_loop : tick
+    close_elaborate_loop --> close_elaborate_loop : signals.partial
+    close_elaborate_loop --> close_execute : signals.all_met
+    close_elaborate_loop --> close_review_fix : verifier.fail
+    close_elaborate_loop --> close_review_fix : feedback.pending
     state close_execute {
       [*] --> close_execute_closer
       close_execute_closer --> close_execute_handoff_coordinator : hat.advance

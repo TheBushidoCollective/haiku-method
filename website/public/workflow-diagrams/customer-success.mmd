@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state onboarding {
     [*] --> onboarding_start_stage
-    onboarding_start_stage --> onboarding_elaborate : tick
-    onboarding_elaborate --> onboarding_elaborate_review : record.advance
-    onboarding_elaborate_review --> onboarding_decompose : verifier.pass
-    onboarding_elaborate_review --> onboarding_elaborate : verifier.fail
-    onboarding_decompose --> onboarding_execute : decompose.advance
-    onboarding_decompose --> onboarding_review_fix : feedback.pending
+    onboarding_start_stage --> onboarding_elaborate_loop : tick
+    onboarding_elaborate_loop --> onboarding_elaborate_loop : signals.partial
+    onboarding_elaborate_loop --> onboarding_execute : signals.all_met
+    onboarding_elaborate_loop --> onboarding_review_fix : verifier.fail
+    onboarding_elaborate_loop --> onboarding_review_fix : feedback.pending
     state onboarding_execute {
       [*] --> onboarding_execute_onboarding_lead
       onboarding_execute_onboarding_lead --> onboarding_execute_technical_enabler : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state adoption {
     [*] --> adoption_start_stage
-    adoption_start_stage --> adoption_elaborate : tick
-    adoption_elaborate --> adoption_elaborate_review : record.advance
-    adoption_elaborate_review --> adoption_decompose : verifier.pass
-    adoption_elaborate_review --> adoption_elaborate : verifier.fail
-    adoption_decompose --> adoption_execute : decompose.advance
-    adoption_decompose --> adoption_review_fix : feedback.pending
+    adoption_start_stage --> adoption_elaborate_loop : tick
+    adoption_elaborate_loop --> adoption_elaborate_loop : signals.partial
+    adoption_elaborate_loop --> adoption_execute : signals.all_met
+    adoption_elaborate_loop --> adoption_review_fix : verifier.fail
+    adoption_elaborate_loop --> adoption_review_fix : feedback.pending
     state adoption_execute {
       [*] --> adoption_execute_adoption_coach
       adoption_execute_adoption_coach --> adoption_execute_usage_analyst : hat.advance
@@ -130,12 +128,11 @@ stateDiagram-v2
 
   state health_check {
     [*] --> health_check_start_stage
-    health_check_start_stage --> health_check_elaborate : tick
-    health_check_elaborate --> health_check_elaborate_review : record.advance
-    health_check_elaborate_review --> health_check_decompose : verifier.pass
-    health_check_elaborate_review --> health_check_elaborate : verifier.fail
-    health_check_decompose --> health_check_execute : decompose.advance
-    health_check_decompose --> health_check_review_fix : feedback.pending
+    health_check_start_stage --> health_check_elaborate_loop : tick
+    health_check_elaborate_loop --> health_check_elaborate_loop : signals.partial
+    health_check_elaborate_loop --> health_check_execute : signals.all_met
+    health_check_elaborate_loop --> health_check_review_fix : verifier.fail
+    health_check_elaborate_loop --> health_check_review_fix : feedback.pending
     state health_check_execute {
       [*] --> health_check_execute_health_monitor
       health_check_execute_health_monitor --> health_check_execute_risk_analyst : hat.advance
@@ -186,12 +183,11 @@ stateDiagram-v2
 
   state expansion {
     [*] --> expansion_start_stage
-    expansion_start_stage --> expansion_elaborate : tick
-    expansion_elaborate --> expansion_elaborate_review : record.advance
-    expansion_elaborate_review --> expansion_decompose : verifier.pass
-    expansion_elaborate_review --> expansion_elaborate : verifier.fail
-    expansion_decompose --> expansion_execute : decompose.advance
-    expansion_decompose --> expansion_review_fix : feedback.pending
+    expansion_start_stage --> expansion_elaborate_loop : tick
+    expansion_elaborate_loop --> expansion_elaborate_loop : signals.partial
+    expansion_elaborate_loop --> expansion_execute : signals.all_met
+    expansion_elaborate_loop --> expansion_review_fix : verifier.fail
+    expansion_elaborate_loop --> expansion_review_fix : feedback.pending
     state expansion_execute {
       [*] --> expansion_execute_growth_strategist
       expansion_execute_growth_strategist --> expansion_execute_value_consultant : hat.advance
@@ -242,12 +238,11 @@ stateDiagram-v2
 
   state renewal {
     [*] --> renewal_start_stage
-    renewal_start_stage --> renewal_elaborate : tick
-    renewal_elaborate --> renewal_elaborate_review : record.advance
-    renewal_elaborate_review --> renewal_decompose : verifier.pass
-    renewal_elaborate_review --> renewal_elaborate : verifier.fail
-    renewal_decompose --> renewal_execute : decompose.advance
-    renewal_decompose --> renewal_review_fix : feedback.pending
+    renewal_start_stage --> renewal_elaborate_loop : tick
+    renewal_elaborate_loop --> renewal_elaborate_loop : signals.partial
+    renewal_elaborate_loop --> renewal_execute : signals.all_met
+    renewal_elaborate_loop --> renewal_review_fix : verifier.fail
+    renewal_elaborate_loop --> renewal_review_fix : feedback.pending
     state renewal_execute {
       [*] --> renewal_execute_renewal_manager
       renewal_execute_renewal_manager --> renewal_execute_executive_sponsor : hat.advance

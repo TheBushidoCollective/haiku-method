@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state requirements {
     [*] --> requirements_start_stage
-    requirements_start_stage --> requirements_elaborate : tick
-    requirements_elaborate --> requirements_elaborate_review : record.advance
-    requirements_elaborate_review --> requirements_decompose : verifier.pass
-    requirements_elaborate_review --> requirements_elaborate : verifier.fail
-    requirements_decompose --> requirements_execute : decompose.advance
-    requirements_decompose --> requirements_review_fix : feedback.pending
+    requirements_start_stage --> requirements_elaborate_loop : tick
+    requirements_elaborate_loop --> requirements_elaborate_loop : signals.partial
+    requirements_elaborate_loop --> requirements_execute : signals.all_met
+    requirements_elaborate_loop --> requirements_review_fix : verifier.fail
+    requirements_elaborate_loop --> requirements_review_fix : feedback.pending
     state requirements_execute {
       [*] --> requirements_execute_analyst
       requirements_execute_analyst --> requirements_execute_specifier : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state evaluate {
     [*] --> evaluate_start_stage
-    evaluate_start_stage --> evaluate_elaborate : tick
-    evaluate_elaborate --> evaluate_elaborate_review : record.advance
-    evaluate_elaborate_review --> evaluate_decompose : verifier.pass
-    evaluate_elaborate_review --> evaluate_elaborate : verifier.fail
-    evaluate_decompose --> evaluate_execute : decompose.advance
-    evaluate_decompose --> evaluate_review_fix : feedback.pending
+    evaluate_start_stage --> evaluate_elaborate_loop : tick
+    evaluate_elaborate_loop --> evaluate_elaborate_loop : signals.partial
+    evaluate_elaborate_loop --> evaluate_execute : signals.all_met
+    evaluate_elaborate_loop --> evaluate_review_fix : verifier.fail
+    evaluate_elaborate_loop --> evaluate_review_fix : feedback.pending
     state evaluate_execute {
       [*] --> evaluate_execute_evaluator
       evaluate_execute_evaluator --> evaluate_execute_technical_reviewer : hat.advance
@@ -128,12 +126,11 @@ stateDiagram-v2
 
   state negotiate {
     [*] --> negotiate_start_stage
-    negotiate_start_stage --> negotiate_elaborate : tick
-    negotiate_elaborate --> negotiate_elaborate_review : record.advance
-    negotiate_elaborate_review --> negotiate_decompose : verifier.pass
-    negotiate_elaborate_review --> negotiate_elaborate : verifier.fail
-    negotiate_decompose --> negotiate_execute : decompose.advance
-    negotiate_decompose --> negotiate_review_fix : feedback.pending
+    negotiate_start_stage --> negotiate_elaborate_loop : tick
+    negotiate_elaborate_loop --> negotiate_elaborate_loop : signals.partial
+    negotiate_elaborate_loop --> negotiate_execute : signals.all_met
+    negotiate_elaborate_loop --> negotiate_review_fix : verifier.fail
+    negotiate_elaborate_loop --> negotiate_review_fix : feedback.pending
     state negotiate_execute {
       [*] --> negotiate_execute_negotiator
       negotiate_execute_negotiator --> negotiate_execute_legal_reviewer : hat.advance
@@ -182,12 +179,11 @@ stateDiagram-v2
 
   state onboard {
     [*] --> onboard_start_stage
-    onboard_start_stage --> onboard_elaborate : tick
-    onboard_elaborate --> onboard_elaborate_review : record.advance
-    onboard_elaborate_review --> onboard_decompose : verifier.pass
-    onboard_elaborate_review --> onboard_elaborate : verifier.fail
-    onboard_decompose --> onboard_execute : decompose.advance
-    onboard_decompose --> onboard_review_fix : feedback.pending
+    onboard_start_stage --> onboard_elaborate_loop : tick
+    onboard_elaborate_loop --> onboard_elaborate_loop : signals.partial
+    onboard_elaborate_loop --> onboard_execute : signals.all_met
+    onboard_elaborate_loop --> onboard_review_fix : verifier.fail
+    onboard_elaborate_loop --> onboard_review_fix : feedback.pending
     state onboard_execute {
       [*] --> onboard_execute_integrator
       onboard_execute_integrator --> onboard_execute_coordinator : hat.advance
@@ -238,12 +234,11 @@ stateDiagram-v2
 
   state monitor {
     [*] --> monitor_start_stage
-    monitor_start_stage --> monitor_elaborate : tick
-    monitor_elaborate --> monitor_elaborate_review : record.advance
-    monitor_elaborate_review --> monitor_decompose : verifier.pass
-    monitor_elaborate_review --> monitor_elaborate : verifier.fail
-    monitor_decompose --> monitor_execute : decompose.advance
-    monitor_decompose --> monitor_review_fix : feedback.pending
+    monitor_start_stage --> monitor_elaborate_loop : tick
+    monitor_elaborate_loop --> monitor_elaborate_loop : signals.partial
+    monitor_elaborate_loop --> monitor_execute : signals.all_met
+    monitor_elaborate_loop --> monitor_review_fix : verifier.fail
+    monitor_elaborate_loop --> monitor_review_fix : feedback.pending
     state monitor_execute {
       [*] --> monitor_execute_monitor
       monitor_execute_monitor --> monitor_execute_relationship_manager : hat.advance

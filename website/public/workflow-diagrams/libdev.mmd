@@ -17,12 +17,11 @@ stateDiagram-v2
 
   state inception {
     [*] --> inception_start_stage
-    inception_start_stage --> inception_elaborate : tick
-    inception_elaborate --> inception_elaborate_review : record.advance
-    inception_elaborate_review --> inception_decompose : verifier.pass
-    inception_elaborate_review --> inception_elaborate : verifier.fail
-    inception_decompose --> inception_execute : decompose.advance
-    inception_decompose --> inception_review_fix : feedback.pending
+    inception_start_stage --> inception_elaborate_loop : tick
+    inception_elaborate_loop --> inception_elaborate_loop : signals.partial
+    inception_elaborate_loop --> inception_execute : signals.all_met
+    inception_elaborate_loop --> inception_review_fix : verifier.fail
+    inception_elaborate_loop --> inception_review_fix : feedback.pending
     state inception_execute {
       [*] --> inception_execute_researcher
       inception_execute_researcher --> inception_execute_api_architect : hat.advance
@@ -75,12 +74,11 @@ stateDiagram-v2
 
   state development {
     [*] --> development_start_stage
-    development_start_stage --> development_elaborate : tick
-    development_elaborate --> development_elaborate_review : record.advance
-    development_elaborate_review --> development_decompose : verifier.pass
-    development_elaborate_review --> development_elaborate : verifier.fail
-    development_decompose --> development_execute : decompose.advance
-    development_decompose --> development_review_fix : feedback.pending
+    development_start_stage --> development_elaborate_loop : tick
+    development_elaborate_loop --> development_elaborate_loop : signals.partial
+    development_elaborate_loop --> development_execute : signals.all_met
+    development_elaborate_loop --> development_review_fix : verifier.fail
+    development_elaborate_loop --> development_review_fix : feedback.pending
     state development_execute {
       [*] --> development_execute_planner
       development_execute_planner --> development_execute_builder : hat.advance
@@ -131,12 +129,11 @@ stateDiagram-v2
 
   state security {
     [*] --> security_start_stage
-    security_start_stage --> security_elaborate : tick
-    security_elaborate --> security_elaborate_review : record.advance
-    security_elaborate_review --> security_decompose : verifier.pass
-    security_elaborate_review --> security_elaborate : verifier.fail
-    security_decompose --> security_execute : decompose.advance
-    security_decompose --> security_review_fix : feedback.pending
+    security_start_stage --> security_elaborate_loop : tick
+    security_elaborate_loop --> security_elaborate_loop : signals.partial
+    security_elaborate_loop --> security_execute : signals.all_met
+    security_elaborate_loop --> security_review_fix : verifier.fail
+    security_elaborate_loop --> security_review_fix : feedback.pending
     state security_execute {
       [*] --> security_execute_threat_modeler
       security_execute_threat_modeler --> security_execute_security_reviewer : hat.advance
@@ -185,12 +182,11 @@ stateDiagram-v2
 
   state release {
     [*] --> release_start_stage
-    release_start_stage --> release_elaborate : tick
-    release_elaborate --> release_elaborate_review : record.advance
-    release_elaborate_review --> release_decompose : verifier.pass
-    release_elaborate_review --> release_elaborate : verifier.fail
-    release_decompose --> release_execute : decompose.advance
-    release_decompose --> release_review_fix : feedback.pending
+    release_start_stage --> release_elaborate_loop : tick
+    release_elaborate_loop --> release_elaborate_loop : signals.partial
+    release_elaborate_loop --> release_execute : signals.all_met
+    release_elaborate_loop --> release_review_fix : verifier.fail
+    release_elaborate_loop --> release_review_fix : feedback.pending
     state release_execute {
       [*] --> release_execute_release_engineer
       release_execute_release_engineer --> release_execute_doc_writer : hat.advance

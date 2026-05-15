@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state landscape {
     [*] --> landscape_start_stage
-    landscape_start_stage --> landscape_elaborate : tick
-    landscape_elaborate --> landscape_elaborate_review : record.advance
-    landscape_elaborate_review --> landscape_decompose : verifier.pass
-    landscape_elaborate_review --> landscape_elaborate : verifier.fail
-    landscape_decompose --> landscape_execute : decompose.advance
-    landscape_decompose --> landscape_review_fix : feedback.pending
+    landscape_start_stage --> landscape_elaborate_loop : tick
+    landscape_elaborate_loop --> landscape_elaborate_loop : signals.partial
+    landscape_elaborate_loop --> landscape_execute : signals.all_met
+    landscape_elaborate_loop --> landscape_review_fix : verifier.fail
+    landscape_elaborate_loop --> landscape_review_fix : feedback.pending
     state landscape_execute {
       [*] --> landscape_execute_strategist
       landscape_execute_strategist --> landscape_execute_analyst : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state options {
     [*] --> options_start_stage
-    options_start_stage --> options_elaborate : tick
-    options_elaborate --> options_elaborate_review : record.advance
-    options_elaborate_review --> options_decompose : verifier.pass
-    options_elaborate_review --> options_elaborate : verifier.fail
-    options_decompose --> options_execute : decompose.advance
-    options_decompose --> options_review_fix : feedback.pending
+    options_start_stage --> options_elaborate_loop : tick
+    options_elaborate_loop --> options_elaborate_loop : signals.partial
+    options_elaborate_loop --> options_execute : signals.all_met
+    options_elaborate_loop --> options_review_fix : verifier.fail
+    options_elaborate_loop --> options_review_fix : feedback.pending
     state options_execute {
       [*] --> options_execute_ideator
       options_execute_ideator --> options_execute_modeler : hat.advance
@@ -130,12 +128,11 @@ stateDiagram-v2
 
   state evaluate {
     [*] --> evaluate_start_stage
-    evaluate_start_stage --> evaluate_elaborate : tick
-    evaluate_elaborate --> evaluate_elaborate_review : record.advance
-    evaluate_elaborate_review --> evaluate_decompose : verifier.pass
-    evaluate_elaborate_review --> evaluate_elaborate : verifier.fail
-    evaluate_decompose --> evaluate_execute : decompose.advance
-    evaluate_decompose --> evaluate_review_fix : feedback.pending
+    evaluate_start_stage --> evaluate_elaborate_loop : tick
+    evaluate_elaborate_loop --> evaluate_elaborate_loop : signals.partial
+    evaluate_elaborate_loop --> evaluate_execute : signals.all_met
+    evaluate_elaborate_loop --> evaluate_review_fix : verifier.fail
+    evaluate_elaborate_loop --> evaluate_review_fix : feedback.pending
     state evaluate_execute {
       [*] --> evaluate_execute_evaluator
       evaluate_execute_evaluator --> evaluate_execute_risk_analyst : hat.advance
@@ -186,12 +183,11 @@ stateDiagram-v2
 
   state decide {
     [*] --> decide_start_stage
-    decide_start_stage --> decide_elaborate : tick
-    decide_elaborate --> decide_elaborate_review : record.advance
-    decide_elaborate_review --> decide_decompose : verifier.pass
-    decide_elaborate_review --> decide_elaborate : verifier.fail
-    decide_decompose --> decide_execute : decompose.advance
-    decide_decompose --> decide_review_fix : feedback.pending
+    decide_start_stage --> decide_elaborate_loop : tick
+    decide_elaborate_loop --> decide_elaborate_loop : signals.partial
+    decide_elaborate_loop --> decide_execute : signals.all_met
+    decide_elaborate_loop --> decide_review_fix : verifier.fail
+    decide_elaborate_loop --> decide_review_fix : feedback.pending
     state decide_execute {
       [*] --> decide_execute_advisor
       decide_execute_advisor --> decide_execute_facilitator : hat.advance
@@ -242,12 +238,11 @@ stateDiagram-v2
 
   state communicate {
     [*] --> communicate_start_stage
-    communicate_start_stage --> communicate_elaborate : tick
-    communicate_elaborate --> communicate_elaborate_review : record.advance
-    communicate_elaborate_review --> communicate_decompose : verifier.pass
-    communicate_elaborate_review --> communicate_elaborate : verifier.fail
-    communicate_decompose --> communicate_execute : decompose.advance
-    communicate_decompose --> communicate_review_fix : feedback.pending
+    communicate_start_stage --> communicate_elaborate_loop : tick
+    communicate_elaborate_loop --> communicate_elaborate_loop : signals.partial
+    communicate_elaborate_loop --> communicate_execute : signals.all_met
+    communicate_elaborate_loop --> communicate_review_fix : verifier.fail
+    communicate_elaborate_loop --> communicate_review_fix : feedback.pending
     state communicate_execute {
       [*] --> communicate_execute_communicator
       communicate_execute_communicator --> communicate_execute_planner : hat.advance

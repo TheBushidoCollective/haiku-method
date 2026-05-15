@@ -167,7 +167,7 @@ function listUnitsFromGitRef(
 /** Reviewer roles for a stage. Mirrors `walkIntentTrack` in cursor.ts.
  *  Autopilot trims to the engine-built minimum (no agents, no user
  *  gate); other modes get the full chain. */
-function reviewRolesFor(
+export function reviewRolesFor(
 	studio: string,
 	stage: string,
 	intentMode: string,
@@ -180,7 +180,7 @@ function reviewRolesFor(
 /** Approval roles for a stage. Differs from review roles by the
  *  inclusion of `quality_gates` (engine-run, not subagent-dispatched).
  *  Mirrors `walkIntentTrack` in cursor.ts. */
-function approvalRolesFor(
+export function approvalRolesFor(
 	studio: string,
 	stage: string,
 	intentMode: string,

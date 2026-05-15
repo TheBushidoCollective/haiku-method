@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state scope {
     [*] --> scope_start_stage
-    scope_start_stage --> scope_elaborate : tick
-    scope_elaborate --> scope_elaborate_review : record.advance
-    scope_elaborate_review --> scope_decompose : verifier.pass
-    scope_elaborate_review --> scope_elaborate : verifier.fail
-    scope_decompose --> scope_execute : decompose.advance
-    scope_decompose --> scope_review_fix : feedback.pending
+    scope_start_stage --> scope_elaborate_loop : tick
+    scope_elaborate_loop --> scope_elaborate_loop : signals.partial
+    scope_elaborate_loop --> scope_execute : signals.all_met
+    scope_elaborate_loop --> scope_review_fix : verifier.fail
+    scope_elaborate_loop --> scope_review_fix : feedback.pending
     state scope_execute {
       [*] --> scope_execute_compliance_analyst
       scope_execute_compliance_analyst --> scope_execute_scope_definer : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state assess {
     [*] --> assess_start_stage
-    assess_start_stage --> assess_elaborate : tick
-    assess_elaborate --> assess_elaborate_review : record.advance
-    assess_elaborate_review --> assess_decompose : verifier.pass
-    assess_elaborate_review --> assess_elaborate : verifier.fail
-    assess_decompose --> assess_execute : decompose.advance
-    assess_decompose --> assess_review_fix : feedback.pending
+    assess_start_stage --> assess_elaborate_loop : tick
+    assess_elaborate_loop --> assess_elaborate_loop : signals.partial
+    assess_elaborate_loop --> assess_execute : signals.all_met
+    assess_elaborate_loop --> assess_review_fix : verifier.fail
+    assess_elaborate_loop --> assess_review_fix : feedback.pending
     state assess_execute {
       [*] --> assess_execute_auditor
       assess_execute_auditor --> assess_execute_risk_assessor : hat.advance
@@ -128,12 +126,11 @@ stateDiagram-v2
 
   state remediate {
     [*] --> remediate_start_stage
-    remediate_start_stage --> remediate_elaborate : tick
-    remediate_elaborate --> remediate_elaborate_review : record.advance
-    remediate_elaborate_review --> remediate_decompose : verifier.pass
-    remediate_elaborate_review --> remediate_elaborate : verifier.fail
-    remediate_decompose --> remediate_execute : decompose.advance
-    remediate_decompose --> remediate_review_fix : feedback.pending
+    remediate_start_stage --> remediate_elaborate_loop : tick
+    remediate_elaborate_loop --> remediate_elaborate_loop : signals.partial
+    remediate_elaborate_loop --> remediate_execute : signals.all_met
+    remediate_elaborate_loop --> remediate_review_fix : verifier.fail
+    remediate_elaborate_loop --> remediate_review_fix : feedback.pending
     state remediate_execute {
       [*] --> remediate_execute_remediation_engineer
       remediate_execute_remediation_engineer --> remediate_execute_policy_writer : hat.advance
@@ -184,12 +181,11 @@ stateDiagram-v2
 
   state document {
     [*] --> document_start_stage
-    document_start_stage --> document_elaborate : tick
-    document_elaborate --> document_elaborate_review : record.advance
-    document_elaborate_review --> document_decompose : verifier.pass
-    document_elaborate_review --> document_elaborate : verifier.fail
-    document_decompose --> document_execute : decompose.advance
-    document_decompose --> document_review_fix : feedback.pending
+    document_start_stage --> document_elaborate_loop : tick
+    document_elaborate_loop --> document_elaborate_loop : signals.partial
+    document_elaborate_loop --> document_execute : signals.all_met
+    document_elaborate_loop --> document_review_fix : verifier.fail
+    document_elaborate_loop --> document_review_fix : feedback.pending
     state document_execute {
       [*] --> document_execute_evidence_collector
       document_execute_evidence_collector --> document_execute_documentation_writer : hat.advance
@@ -240,12 +236,11 @@ stateDiagram-v2
 
   state certify {
     [*] --> certify_start_stage
-    certify_start_stage --> certify_elaborate : tick
-    certify_elaborate --> certify_elaborate_review : record.advance
-    certify_elaborate_review --> certify_decompose : verifier.pass
-    certify_elaborate_review --> certify_elaborate : verifier.fail
-    certify_decompose --> certify_execute : decompose.advance
-    certify_decompose --> certify_review_fix : feedback.pending
+    certify_start_stage --> certify_elaborate_loop : tick
+    certify_elaborate_loop --> certify_elaborate_loop : signals.partial
+    certify_elaborate_loop --> certify_execute : signals.all_met
+    certify_elaborate_loop --> certify_review_fix : verifier.fail
+    certify_elaborate_loop --> certify_review_fix : feedback.pending
     state certify_execute {
       [*] --> certify_execute_audit_liaison
       certify_execute_audit_liaison --> certify_execute_finding_resolver : hat.advance

@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state charter {
     [*] --> charter_start_stage
-    charter_start_stage --> charter_elaborate : tick
-    charter_elaborate --> charter_elaborate_review : record.advance
-    charter_elaborate_review --> charter_decompose : verifier.pass
-    charter_elaborate_review --> charter_elaborate : verifier.fail
-    charter_decompose --> charter_execute : decompose.advance
-    charter_decompose --> charter_review_fix : feedback.pending
+    charter_start_stage --> charter_elaborate_loop : tick
+    charter_elaborate_loop --> charter_elaborate_loop : signals.partial
+    charter_elaborate_loop --> charter_execute : signals.all_met
+    charter_elaborate_loop --> charter_review_fix : verifier.fail
+    charter_elaborate_loop --> charter_review_fix : feedback.pending
     state charter_execute {
       [*] --> charter_execute_sponsor
       charter_execute_sponsor --> charter_execute_scoper : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state plan {
     [*] --> plan_start_stage
-    plan_start_stage --> plan_elaborate : tick
-    plan_elaborate --> plan_elaborate_review : record.advance
-    plan_elaborate_review --> plan_decompose : verifier.pass
-    plan_elaborate_review --> plan_elaborate : verifier.fail
-    plan_decompose --> plan_execute : decompose.advance
-    plan_decompose --> plan_review_fix : feedback.pending
+    plan_start_stage --> plan_elaborate_loop : tick
+    plan_elaborate_loop --> plan_elaborate_loop : signals.partial
+    plan_elaborate_loop --> plan_execute : signals.all_met
+    plan_elaborate_loop --> plan_review_fix : verifier.fail
+    plan_elaborate_loop --> plan_review_fix : feedback.pending
     state plan_execute {
       [*] --> plan_execute_planner
       plan_execute_planner --> plan_execute_estimator : hat.advance
@@ -130,12 +128,11 @@ stateDiagram-v2
 
   state track {
     [*] --> track_start_stage
-    track_start_stage --> track_elaborate : tick
-    track_elaborate --> track_elaborate_review : record.advance
-    track_elaborate_review --> track_decompose : verifier.pass
-    track_elaborate_review --> track_elaborate : verifier.fail
-    track_decompose --> track_execute : decompose.advance
-    track_decompose --> track_review_fix : feedback.pending
+    track_start_stage --> track_elaborate_loop : tick
+    track_elaborate_loop --> track_elaborate_loop : signals.partial
+    track_elaborate_loop --> track_execute : signals.all_met
+    track_elaborate_loop --> track_review_fix : verifier.fail
+    track_elaborate_loop --> track_review_fix : feedback.pending
     state track_execute {
       [*] --> track_execute_tracker
       track_execute_tracker --> track_execute_risk_monitor : hat.advance
@@ -186,12 +183,11 @@ stateDiagram-v2
 
   state report {
     [*] --> report_start_stage
-    report_start_stage --> report_elaborate : tick
-    report_elaborate --> report_elaborate_review : record.advance
-    report_elaborate_review --> report_decompose : verifier.pass
-    report_elaborate_review --> report_elaborate : verifier.fail
-    report_decompose --> report_execute : decompose.advance
-    report_decompose --> report_review_fix : feedback.pending
+    report_start_stage --> report_elaborate_loop : tick
+    report_elaborate_loop --> report_elaborate_loop : signals.partial
+    report_elaborate_loop --> report_execute : signals.all_met
+    report_elaborate_loop --> report_review_fix : verifier.fail
+    report_elaborate_loop --> report_review_fix : feedback.pending
     state report_execute {
       [*] --> report_execute_reporter
       report_execute_reporter --> report_execute_communicator : hat.advance
@@ -242,12 +238,11 @@ stateDiagram-v2
 
   state close {
     [*] --> close_start_stage
-    close_start_stage --> close_elaborate : tick
-    close_elaborate --> close_elaborate_review : record.advance
-    close_elaborate_review --> close_decompose : verifier.pass
-    close_elaborate_review --> close_elaborate : verifier.fail
-    close_decompose --> close_execute : decompose.advance
-    close_decompose --> close_review_fix : feedback.pending
+    close_start_stage --> close_elaborate_loop : tick
+    close_elaborate_loop --> close_elaborate_loop : signals.partial
+    close_elaborate_loop --> close_execute : signals.all_met
+    close_elaborate_loop --> close_review_fix : verifier.fail
+    close_elaborate_loop --> close_review_fix : feedback.pending
     state close_execute {
       [*] --> close_execute_closer
       close_execute_closer --> close_execute_archivist : hat.advance

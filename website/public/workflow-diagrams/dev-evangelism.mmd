@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state research {
     [*] --> research_start_stage
-    research_start_stage --> research_elaborate : tick
-    research_elaborate --> research_elaborate_review : record.advance
-    research_elaborate_review --> research_decompose : verifier.pass
-    research_elaborate_review --> research_elaborate : verifier.fail
-    research_decompose --> research_execute : decompose.advance
-    research_decompose --> research_review_fix : feedback.pending
+    research_start_stage --> research_elaborate_loop : tick
+    research_elaborate_loop --> research_elaborate_loop : signals.partial
+    research_elaborate_loop --> research_execute : signals.all_met
+    research_elaborate_loop --> research_review_fix : verifier.fail
+    research_elaborate_loop --> research_review_fix : feedback.pending
     state research_execute {
       [*] --> research_execute_audience_analyst
       research_execute_audience_analyst --> research_execute_topic_scout : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state narrative {
     [*] --> narrative_start_stage
-    narrative_start_stage --> narrative_elaborate : tick
-    narrative_elaborate --> narrative_elaborate_review : record.advance
-    narrative_elaborate_review --> narrative_decompose : verifier.pass
-    narrative_elaborate_review --> narrative_elaborate : verifier.fail
-    narrative_decompose --> narrative_execute : decompose.advance
-    narrative_decompose --> narrative_review_fix : feedback.pending
+    narrative_start_stage --> narrative_elaborate_loop : tick
+    narrative_elaborate_loop --> narrative_elaborate_loop : signals.partial
+    narrative_elaborate_loop --> narrative_execute : signals.all_met
+    narrative_elaborate_loop --> narrative_review_fix : verifier.fail
+    narrative_elaborate_loop --> narrative_review_fix : feedback.pending
     state narrative_execute {
       [*] --> narrative_execute_storyteller
       narrative_execute_storyteller --> narrative_execute_editor : hat.advance
@@ -130,12 +128,11 @@ stateDiagram-v2
 
   state create {
     [*] --> create_start_stage
-    create_start_stage --> create_elaborate : tick
-    create_elaborate --> create_elaborate_review : record.advance
-    create_elaborate_review --> create_decompose : verifier.pass
-    create_elaborate_review --> create_elaborate : verifier.fail
-    create_decompose --> create_execute : decompose.advance
-    create_decompose --> create_review_fix : feedback.pending
+    create_start_stage --> create_elaborate_loop : tick
+    create_elaborate_loop --> create_elaborate_loop : signals.partial
+    create_elaborate_loop --> create_execute : signals.all_met
+    create_elaborate_loop --> create_review_fix : verifier.fail
+    create_elaborate_loop --> create_review_fix : feedback.pending
     state create_execute {
       [*] --> create_execute_content_creator
       create_execute_content_creator --> create_execute_demo_builder : hat.advance
@@ -186,12 +183,11 @@ stateDiagram-v2
 
   state publish {
     [*] --> publish_start_stage
-    publish_start_stage --> publish_elaborate : tick
-    publish_elaborate --> publish_elaborate_review : record.advance
-    publish_elaborate_review --> publish_decompose : verifier.pass
-    publish_elaborate_review --> publish_elaborate : verifier.fail
-    publish_decompose --> publish_execute : decompose.advance
-    publish_decompose --> publish_review_fix : feedback.pending
+    publish_start_stage --> publish_elaborate_loop : tick
+    publish_elaborate_loop --> publish_elaborate_loop : signals.partial
+    publish_elaborate_loop --> publish_execute : signals.all_met
+    publish_elaborate_loop --> publish_review_fix : verifier.fail
+    publish_elaborate_loop --> publish_review_fix : feedback.pending
     state publish_execute {
       [*] --> publish_execute_distributor
       publish_execute_distributor --> publish_execute_community_manager : hat.advance
@@ -242,12 +238,11 @@ stateDiagram-v2
 
   state measure {
     [*] --> measure_start_stage
-    measure_start_stage --> measure_elaborate : tick
-    measure_elaborate --> measure_elaborate_review : record.advance
-    measure_elaborate_review --> measure_decompose : verifier.pass
-    measure_elaborate_review --> measure_elaborate : verifier.fail
-    measure_decompose --> measure_execute : decompose.advance
-    measure_decompose --> measure_review_fix : feedback.pending
+    measure_start_stage --> measure_elaborate_loop : tick
+    measure_elaborate_loop --> measure_elaborate_loop : signals.partial
+    measure_elaborate_loop --> measure_execute : signals.all_met
+    measure_elaborate_loop --> measure_review_fix : verifier.fail
+    measure_elaborate_loop --> measure_review_fix : feedback.pending
     state measure_execute {
       [*] --> measure_execute_analyst
       measure_execute_analyst --> measure_execute_feedback_synthesizer : hat.advance

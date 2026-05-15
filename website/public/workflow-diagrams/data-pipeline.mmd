@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state discovery {
     [*] --> discovery_start_stage
-    discovery_start_stage --> discovery_elaborate : tick
-    discovery_elaborate --> discovery_elaborate_review : record.advance
-    discovery_elaborate_review --> discovery_decompose : verifier.pass
-    discovery_elaborate_review --> discovery_elaborate : verifier.fail
-    discovery_decompose --> discovery_execute : decompose.advance
-    discovery_decompose --> discovery_review_fix : feedback.pending
+    discovery_start_stage --> discovery_elaborate_loop : tick
+    discovery_elaborate_loop --> discovery_elaborate_loop : signals.partial
+    discovery_elaborate_loop --> discovery_execute : signals.all_met
+    discovery_elaborate_loop --> discovery_review_fix : verifier.fail
+    discovery_elaborate_loop --> discovery_review_fix : feedback.pending
     state discovery_execute {
       [*] --> discovery_execute_data_architect
       discovery_execute_data_architect --> discovery_execute_schema_analyst : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state extraction {
     [*] --> extraction_start_stage
-    extraction_start_stage --> extraction_elaborate : tick
-    extraction_elaborate --> extraction_elaborate_review : record.advance
-    extraction_elaborate_review --> extraction_decompose : verifier.pass
-    extraction_elaborate_review --> extraction_elaborate : verifier.fail
-    extraction_decompose --> extraction_execute : decompose.advance
-    extraction_decompose --> extraction_review_fix : feedback.pending
+    extraction_start_stage --> extraction_elaborate_loop : tick
+    extraction_elaborate_loop --> extraction_elaborate_loop : signals.partial
+    extraction_elaborate_loop --> extraction_execute : signals.all_met
+    extraction_elaborate_loop --> extraction_review_fix : verifier.fail
+    extraction_elaborate_loop --> extraction_review_fix : feedback.pending
     state extraction_execute {
       [*] --> extraction_execute_extractor
       extraction_execute_extractor --> extraction_execute_connector_reviewer : hat.advance
@@ -128,12 +126,11 @@ stateDiagram-v2
 
   state transformation {
     [*] --> transformation_start_stage
-    transformation_start_stage --> transformation_elaborate : tick
-    transformation_elaborate --> transformation_elaborate_review : record.advance
-    transformation_elaborate_review --> transformation_decompose : verifier.pass
-    transformation_elaborate_review --> transformation_elaborate : verifier.fail
-    transformation_decompose --> transformation_execute : decompose.advance
-    transformation_decompose --> transformation_review_fix : feedback.pending
+    transformation_start_stage --> transformation_elaborate_loop : tick
+    transformation_elaborate_loop --> transformation_elaborate_loop : signals.partial
+    transformation_elaborate_loop --> transformation_execute : signals.all_met
+    transformation_elaborate_loop --> transformation_review_fix : verifier.fail
+    transformation_elaborate_loop --> transformation_review_fix : feedback.pending
     state transformation_execute {
       [*] --> transformation_execute_transformer
       transformation_execute_transformer --> transformation_execute_data_modeler : hat.advance
@@ -184,12 +181,11 @@ stateDiagram-v2
 
   state validation {
     [*] --> validation_start_stage
-    validation_start_stage --> validation_elaborate : tick
-    validation_elaborate --> validation_elaborate_review : record.advance
-    validation_elaborate_review --> validation_decompose : verifier.pass
-    validation_elaborate_review --> validation_elaborate : verifier.fail
-    validation_decompose --> validation_execute : decompose.advance
-    validation_decompose --> validation_review_fix : feedback.pending
+    validation_start_stage --> validation_elaborate_loop : tick
+    validation_elaborate_loop --> validation_elaborate_loop : signals.partial
+    validation_elaborate_loop --> validation_execute : signals.all_met
+    validation_elaborate_loop --> validation_review_fix : verifier.fail
+    validation_elaborate_loop --> validation_review_fix : feedback.pending
     state validation_execute {
       [*] --> validation_execute_validator
       validation_execute_validator --> validation_execute_data_quality_reviewer : hat.advance
@@ -238,12 +234,11 @@ stateDiagram-v2
 
   state deployment {
     [*] --> deployment_start_stage
-    deployment_start_stage --> deployment_elaborate : tick
-    deployment_elaborate --> deployment_elaborate_review : record.advance
-    deployment_elaborate_review --> deployment_decompose : verifier.pass
-    deployment_elaborate_review --> deployment_elaborate : verifier.fail
-    deployment_decompose --> deployment_execute : decompose.advance
-    deployment_decompose --> deployment_review_fix : feedback.pending
+    deployment_start_stage --> deployment_elaborate_loop : tick
+    deployment_elaborate_loop --> deployment_elaborate_loop : signals.partial
+    deployment_elaborate_loop --> deployment_execute : signals.all_met
+    deployment_elaborate_loop --> deployment_review_fix : verifier.fail
+    deployment_elaborate_loop --> deployment_review_fix : feedback.pending
     state deployment_execute {
       [*] --> deployment_execute_pipeline_engineer
       deployment_execute_pipeline_engineer --> deployment_execute_sre : hat.advance

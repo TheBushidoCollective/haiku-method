@@ -216,6 +216,51 @@ export const orchestratorToolDefs = [
 	// v4: haiku_classify_drift removed. Drift sweep auto-files FBs;
 	// the feedback track handles assessment.
 	{
+		name: "haiku_debug",
+		description:
+			"ADMIN: bypass-the-FSM tools to unstick corrupt intents. Force a stage complete (signs all reviews/approvals/QGs for units that have moved through every hat), set an intent field (mode, etc.), reset drift (re-stamp witnesses), mutate any feedback frontmatter, or preview the next cursor head after edits. Every mutation requires SPA-picker confirmation — the agent cannot act unilaterally. Use only when the normal workflow can't recover (corrupt FM, stuck loop, lost stamps).",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				intent: { type: "string", description: "Intent slug" },
+				op: {
+					type: "string",
+					enum: [
+						"force_stage_complete",
+						"set_intent_field",
+						"reset_drift",
+						"mutate_feedback",
+						"preview_cursor",
+					],
+					description:
+						"Which admin op to run: force_stage_complete, set_intent_field, reset_drift, mutate_feedback, preview_cursor.",
+				},
+				stage: {
+					type: "string",
+					description: "Target stage (force_stage_complete, mutate_feedback).",
+				},
+				field: {
+					type: "string",
+					description: "intent.md FM key (set_intent_field).",
+				},
+				value: {
+					type: ["string", "array", "number", "boolean", "null", "object"],
+					description: "intent.md FM value (set_intent_field).",
+				},
+				feedback_id: {
+					type: "string",
+					description: "Feedback ID to mutate (mutate_feedback).",
+				},
+				patch: {
+					type: "object",
+					description:
+						"FB FM keys to set (mutate_feedback). Example: { status: 'closed', closed_at: '2026-...' }.",
+				},
+			},
+			required: ["intent", "op"],
+		},
+	},
+	{
 		name: "haiku_dispatch_quality_gates",
 		description:
 			"Run a unit's declared quality_gates as the post-execute approval-track actor. On all-pass, stamps approvals.quality_gates on each unit. On failure, files an FB targeting the unit (origin: agent, target_invalidates: [quality_gates]). Engine-callable from the cursor's dispatch_quality_gates action.",

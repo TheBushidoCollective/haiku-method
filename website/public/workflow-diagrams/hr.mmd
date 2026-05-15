@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state requisition {
     [*] --> requisition_start_stage
-    requisition_start_stage --> requisition_elaborate : tick
-    requisition_elaborate --> requisition_elaborate_review : record.advance
-    requisition_elaborate_review --> requisition_decompose : verifier.pass
-    requisition_elaborate_review --> requisition_elaborate : verifier.fail
-    requisition_decompose --> requisition_execute : decompose.advance
-    requisition_decompose --> requisition_review_fix : feedback.pending
+    requisition_start_stage --> requisition_elaborate_loop : tick
+    requisition_elaborate_loop --> requisition_elaborate_loop : signals.partial
+    requisition_elaborate_loop --> requisition_execute : signals.all_met
+    requisition_elaborate_loop --> requisition_review_fix : verifier.fail
+    requisition_elaborate_loop --> requisition_review_fix : feedback.pending
     state requisition_execute {
       [*] --> requisition_execute_hiring_manager
       requisition_execute_hiring_manager --> requisition_execute_recruiter : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state sourcing {
     [*] --> sourcing_start_stage
-    sourcing_start_stage --> sourcing_elaborate : tick
-    sourcing_elaborate --> sourcing_elaborate_review : record.advance
-    sourcing_elaborate_review --> sourcing_decompose : verifier.pass
-    sourcing_elaborate_review --> sourcing_elaborate : verifier.fail
-    sourcing_decompose --> sourcing_execute : decompose.advance
-    sourcing_decompose --> sourcing_review_fix : feedback.pending
+    sourcing_start_stage --> sourcing_elaborate_loop : tick
+    sourcing_elaborate_loop --> sourcing_elaborate_loop : signals.partial
+    sourcing_elaborate_loop --> sourcing_execute : signals.all_met
+    sourcing_elaborate_loop --> sourcing_review_fix : verifier.fail
+    sourcing_elaborate_loop --> sourcing_review_fix : feedback.pending
     state sourcing_execute {
       [*] --> sourcing_execute_sourcer
       sourcing_execute_sourcer --> sourcing_execute_recruiter : hat.advance
@@ -130,12 +128,11 @@ stateDiagram-v2
 
   state screening {
     [*] --> screening_start_stage
-    screening_start_stage --> screening_elaborate : tick
-    screening_elaborate --> screening_elaborate_review : record.advance
-    screening_elaborate_review --> screening_decompose : verifier.pass
-    screening_elaborate_review --> screening_elaborate : verifier.fail
-    screening_decompose --> screening_execute : decompose.advance
-    screening_decompose --> screening_review_fix : feedback.pending
+    screening_start_stage --> screening_elaborate_loop : tick
+    screening_elaborate_loop --> screening_elaborate_loop : signals.partial
+    screening_elaborate_loop --> screening_execute : signals.all_met
+    screening_elaborate_loop --> screening_review_fix : verifier.fail
+    screening_elaborate_loop --> screening_review_fix : feedback.pending
     state screening_execute {
       [*] --> screening_execute_screener
       screening_execute_screener --> screening_execute_assessor : hat.advance
@@ -184,12 +181,11 @@ stateDiagram-v2
 
   state interview {
     [*] --> interview_start_stage
-    interview_start_stage --> interview_elaborate : tick
-    interview_elaborate --> interview_elaborate_review : record.advance
-    interview_elaborate_review --> interview_decompose : verifier.pass
-    interview_elaborate_review --> interview_elaborate : verifier.fail
-    interview_decompose --> interview_execute : decompose.advance
-    interview_decompose --> interview_review_fix : feedback.pending
+    interview_start_stage --> interview_elaborate_loop : tick
+    interview_elaborate_loop --> interview_elaborate_loop : signals.partial
+    interview_elaborate_loop --> interview_execute : signals.all_met
+    interview_elaborate_loop --> interview_review_fix : verifier.fail
+    interview_elaborate_loop --> interview_review_fix : feedback.pending
     state interview_execute {
       [*] --> interview_execute_interviewer
       interview_execute_interviewer --> interview_execute_evaluator : hat.advance
@@ -240,12 +236,11 @@ stateDiagram-v2
 
   state offer {
     [*] --> offer_start_stage
-    offer_start_stage --> offer_elaborate : tick
-    offer_elaborate --> offer_elaborate_review : record.advance
-    offer_elaborate_review --> offer_decompose : verifier.pass
-    offer_elaborate_review --> offer_elaborate : verifier.fail
-    offer_decompose --> offer_execute : decompose.advance
-    offer_decompose --> offer_review_fix : feedback.pending
+    offer_start_stage --> offer_elaborate_loop : tick
+    offer_elaborate_loop --> offer_elaborate_loop : signals.partial
+    offer_elaborate_loop --> offer_execute : signals.all_met
+    offer_elaborate_loop --> offer_review_fix : verifier.fail
+    offer_elaborate_loop --> offer_review_fix : feedback.pending
     state offer_execute {
       [*] --> offer_execute_compensator
       offer_execute_compensator --> offer_execute_closer : hat.advance

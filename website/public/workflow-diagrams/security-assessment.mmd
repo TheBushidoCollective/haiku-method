@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state reconnaissance {
     [*] --> reconnaissance_start_stage
-    reconnaissance_start_stage --> reconnaissance_elaborate : tick
-    reconnaissance_elaborate --> reconnaissance_elaborate_review : record.advance
-    reconnaissance_elaborate_review --> reconnaissance_decompose : verifier.pass
-    reconnaissance_elaborate_review --> reconnaissance_elaborate : verifier.fail
-    reconnaissance_decompose --> reconnaissance_execute : decompose.advance
-    reconnaissance_decompose --> reconnaissance_review_fix : feedback.pending
+    reconnaissance_start_stage --> reconnaissance_elaborate_loop : tick
+    reconnaissance_elaborate_loop --> reconnaissance_elaborate_loop : signals.partial
+    reconnaissance_elaborate_loop --> reconnaissance_execute : signals.all_met
+    reconnaissance_elaborate_loop --> reconnaissance_review_fix : verifier.fail
+    reconnaissance_elaborate_loop --> reconnaissance_review_fix : feedback.pending
     state reconnaissance_execute {
       [*] --> reconnaissance_execute_osint_analyst
       reconnaissance_execute_osint_analyst --> reconnaissance_execute_network_mapper : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state enumeration {
     [*] --> enumeration_start_stage
-    enumeration_start_stage --> enumeration_elaborate : tick
-    enumeration_elaborate --> enumeration_elaborate_review : record.advance
-    enumeration_elaborate_review --> enumeration_decompose : verifier.pass
-    enumeration_elaborate_review --> enumeration_elaborate : verifier.fail
-    enumeration_decompose --> enumeration_execute : decompose.advance
-    enumeration_decompose --> enumeration_review_fix : feedback.pending
+    enumeration_start_stage --> enumeration_elaborate_loop : tick
+    enumeration_elaborate_loop --> enumeration_elaborate_loop : signals.partial
+    enumeration_elaborate_loop --> enumeration_execute : signals.all_met
+    enumeration_elaborate_loop --> enumeration_review_fix : verifier.fail
+    enumeration_elaborate_loop --> enumeration_review_fix : feedback.pending
     state enumeration_execute {
       [*] --> enumeration_execute_enumerator
       enumeration_execute_enumerator --> enumeration_execute_vulnerability_scanner : hat.advance
@@ -130,12 +128,11 @@ stateDiagram-v2
 
   state exploitation {
     [*] --> exploitation_start_stage
-    exploitation_start_stage --> exploitation_elaborate : tick
-    exploitation_elaborate --> exploitation_elaborate_review : record.advance
-    exploitation_elaborate_review --> exploitation_decompose : verifier.pass
-    exploitation_elaborate_review --> exploitation_elaborate : verifier.fail
-    exploitation_decompose --> exploitation_execute : decompose.advance
-    exploitation_decompose --> exploitation_review_fix : feedback.pending
+    exploitation_start_stage --> exploitation_elaborate_loop : tick
+    exploitation_elaborate_loop --> exploitation_elaborate_loop : signals.partial
+    exploitation_elaborate_loop --> exploitation_execute : signals.all_met
+    exploitation_elaborate_loop --> exploitation_review_fix : verifier.fail
+    exploitation_elaborate_loop --> exploitation_review_fix : feedback.pending
     state exploitation_execute {
       [*] --> exploitation_execute_attack_strategist
       exploitation_execute_attack_strategist --> exploitation_execute_exploit_developer : hat.advance
@@ -190,12 +187,11 @@ stateDiagram-v2
 
   state post_exploitation {
     [*] --> post_exploitation_start_stage
-    post_exploitation_start_stage --> post_exploitation_elaborate : tick
-    post_exploitation_elaborate --> post_exploitation_elaborate_review : record.advance
-    post_exploitation_elaborate_review --> post_exploitation_decompose : verifier.pass
-    post_exploitation_elaborate_review --> post_exploitation_elaborate : verifier.fail
-    post_exploitation_decompose --> post_exploitation_execute : decompose.advance
-    post_exploitation_decompose --> post_exploitation_review_fix : feedback.pending
+    post_exploitation_start_stage --> post_exploitation_elaborate_loop : tick
+    post_exploitation_elaborate_loop --> post_exploitation_elaborate_loop : signals.partial
+    post_exploitation_elaborate_loop --> post_exploitation_execute : signals.all_met
+    post_exploitation_elaborate_loop --> post_exploitation_review_fix : verifier.fail
+    post_exploitation_elaborate_loop --> post_exploitation_review_fix : feedback.pending
     state post_exploitation_execute {
       [*] --> post_exploitation_execute_post_exploit_analyst
       post_exploitation_execute_post_exploit_analyst --> post_exploitation_execute_impact_assessor : hat.advance
@@ -246,12 +242,11 @@ stateDiagram-v2
 
   state reporting {
     [*] --> reporting_start_stage
-    reporting_start_stage --> reporting_elaborate : tick
-    reporting_elaborate --> reporting_elaborate_review : record.advance
-    reporting_elaborate_review --> reporting_decompose : verifier.pass
-    reporting_elaborate_review --> reporting_elaborate : verifier.fail
-    reporting_decompose --> reporting_execute : decompose.advance
-    reporting_decompose --> reporting_review_fix : feedback.pending
+    reporting_start_stage --> reporting_elaborate_loop : tick
+    reporting_elaborate_loop --> reporting_elaborate_loop : signals.partial
+    reporting_elaborate_loop --> reporting_execute : signals.all_met
+    reporting_elaborate_loop --> reporting_review_fix : verifier.fail
+    reporting_elaborate_loop --> reporting_review_fix : feedback.pending
     state reporting_execute {
       [*] --> reporting_execute_report_writer
       reporting_execute_report_writer --> reporting_execute_remediation_advisor : hat.advance

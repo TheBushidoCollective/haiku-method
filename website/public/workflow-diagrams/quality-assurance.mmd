@@ -18,12 +18,11 @@ stateDiagram-v2
 
   state plan {
     [*] --> plan_start_stage
-    plan_start_stage --> plan_elaborate : tick
-    plan_elaborate --> plan_elaborate_review : record.advance
-    plan_elaborate_review --> plan_decompose : verifier.pass
-    plan_elaborate_review --> plan_elaborate : verifier.fail
-    plan_decompose --> plan_execute : decompose.advance
-    plan_decompose --> plan_review_fix : feedback.pending
+    plan_start_stage --> plan_elaborate_loop : tick
+    plan_elaborate_loop --> plan_elaborate_loop : signals.partial
+    plan_elaborate_loop --> plan_execute : signals.all_met
+    plan_elaborate_loop --> plan_review_fix : verifier.fail
+    plan_elaborate_loop --> plan_review_fix : feedback.pending
     state plan_execute {
       [*] --> plan_execute_strategist
       plan_execute_strategist --> plan_execute_planner : hat.advance
@@ -74,12 +73,11 @@ stateDiagram-v2
 
   state design_tests {
     [*] --> design_tests_start_stage
-    design_tests_start_stage --> design_tests_elaborate : tick
-    design_tests_elaborate --> design_tests_elaborate_review : record.advance
-    design_tests_elaborate_review --> design_tests_decompose : verifier.pass
-    design_tests_elaborate_review --> design_tests_elaborate : verifier.fail
-    design_tests_decompose --> design_tests_execute : decompose.advance
-    design_tests_decompose --> design_tests_review_fix : feedback.pending
+    design_tests_start_stage --> design_tests_elaborate_loop : tick
+    design_tests_elaborate_loop --> design_tests_elaborate_loop : signals.partial
+    design_tests_elaborate_loop --> design_tests_execute : signals.all_met
+    design_tests_elaborate_loop --> design_tests_review_fix : verifier.fail
+    design_tests_elaborate_loop --> design_tests_review_fix : feedback.pending
     state design_tests_execute {
       [*] --> design_tests_execute_designer
       design_tests_execute_designer --> design_tests_execute_automator : hat.advance
@@ -130,12 +128,11 @@ stateDiagram-v2
 
   state execute_tests {
     [*] --> execute_tests_start_stage
-    execute_tests_start_stage --> execute_tests_elaborate : tick
-    execute_tests_elaborate --> execute_tests_elaborate_review : record.advance
-    execute_tests_elaborate_review --> execute_tests_decompose : verifier.pass
-    execute_tests_elaborate_review --> execute_tests_elaborate : verifier.fail
-    execute_tests_decompose --> execute_tests_execute : decompose.advance
-    execute_tests_decompose --> execute_tests_review_fix : feedback.pending
+    execute_tests_start_stage --> execute_tests_elaborate_loop : tick
+    execute_tests_elaborate_loop --> execute_tests_elaborate_loop : signals.partial
+    execute_tests_elaborate_loop --> execute_tests_execute : signals.all_met
+    execute_tests_elaborate_loop --> execute_tests_review_fix : verifier.fail
+    execute_tests_elaborate_loop --> execute_tests_review_fix : feedback.pending
     state execute_tests_execute {
       [*] --> execute_tests_execute_tester
       execute_tests_execute_tester --> execute_tests_execute_reporter : hat.advance
@@ -186,12 +183,11 @@ stateDiagram-v2
 
   state analyze {
     [*] --> analyze_start_stage
-    analyze_start_stage --> analyze_elaborate : tick
-    analyze_elaborate --> analyze_elaborate_review : record.advance
-    analyze_elaborate_review --> analyze_decompose : verifier.pass
-    analyze_elaborate_review --> analyze_elaborate : verifier.fail
-    analyze_decompose --> analyze_execute : decompose.advance
-    analyze_decompose --> analyze_review_fix : feedback.pending
+    analyze_start_stage --> analyze_elaborate_loop : tick
+    analyze_elaborate_loop --> analyze_elaborate_loop : signals.partial
+    analyze_elaborate_loop --> analyze_execute : signals.all_met
+    analyze_elaborate_loop --> analyze_review_fix : verifier.fail
+    analyze_elaborate_loop --> analyze_review_fix : feedback.pending
     state analyze_execute {
       [*] --> analyze_execute_analyst
       analyze_execute_analyst --> analyze_execute_statistician : hat.advance
@@ -242,12 +238,11 @@ stateDiagram-v2
 
   state certify {
     [*] --> certify_start_stage
-    certify_start_stage --> certify_elaborate : tick
-    certify_elaborate --> certify_elaborate_review : record.advance
-    certify_elaborate_review --> certify_decompose : verifier.pass
-    certify_elaborate_review --> certify_elaborate : verifier.fail
-    certify_decompose --> certify_execute : decompose.advance
-    certify_decompose --> certify_review_fix : feedback.pending
+    certify_start_stage --> certify_elaborate_loop : tick
+    certify_elaborate_loop --> certify_elaborate_loop : signals.partial
+    certify_elaborate_loop --> certify_execute : signals.all_met
+    certify_elaborate_loop --> certify_review_fix : verifier.fail
+    certify_elaborate_loop --> certify_review_fix : feedback.pending
     state certify_execute {
       [*] --> certify_execute_certifier
       certify_execute_certifier --> certify_execute_reviewer : hat.advance

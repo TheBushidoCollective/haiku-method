@@ -125,6 +125,35 @@ export const UnitOutputPreviewSchema = z.object({
 })
 export type UnitOutputPreview = z.infer<typeof UnitOutputPreviewSchema>
 
+/** Drift sweep entry — one witnessed-but-mutated artifact found by the
+ *  cursor's Track-C drift sweep (see
+ *  `packages/haiku/src/orchestrator/workflow/drift-sweep.ts`). The SPA's
+ *  `DriftBanner` consumes this shape directly: each entry becomes one
+ *  row showing path / stage / age / action.
+ *
+ *  `kind` mirrors the engine's `DriftKind` so the SPA can show whether
+ *  the drift is on a unit body (`spec`), a declared output (`output`),
+ *  or a discovery artifact (`discovery_output` / `discovery_mandate`).
+ *  All four kinds are surfaced as `action: "modified"` to the SPA — the
+ *  drift sweep doesn't track add/delete (those aren't witness mismatches). */
+export const DriftEntrySchema = z
+	.object({
+		path: z.string(),
+		stage: z.string(),
+		intent: z.string(),
+		action: z.enum(["modified", "added", "deleted"]),
+		age: z.string(),
+		kind: z
+			.enum(["spec", "output", "discovery_output", "discovery_mandate"])
+			.optional(),
+		unit: z.string().optional(),
+		role: z.string().optional(),
+	})
+	.describe(
+		"One drift-sweep entry: a witnessed unit/output/discovery artifact whose on-disk content no longer matches the stored hash. Surfaced in the SPA's DriftBanner.",
+	)
+export type DriftEntry = z.infer<typeof DriftEntrySchema>
+
 export const PreviousReviewSnapshotSchema = z
 	.object({
 		feedback: z.string(),
@@ -263,6 +292,13 @@ export const ReviewSessionPayloadSchema = z
 		 *  to the unit that owns each deliverable. */
 		output_declared_by: z.record(z.array(z.string())).optional(),
 		previous_review: PreviousReviewSnapshotSchema.optional(),
+		/** Cursor Track-C drift sweep results for the intent's currently
+		 *  active stage (plus intent-scope approvals). Empty / omitted
+		 *  when no drift is detected. The engine emits the same data via
+		 *  the `drift_detected` action; the SPA mirrors it as a sticky
+		 *  banner so a reviewer can see what's mutated under their feet
+		 *  before the next `run_next` fires. */
+		drift: z.array(DriftEntrySchema).optional(),
 		discovered_review_url: DiscoveredReviewUrlSchema.nullable().optional(),
 		/** Ad-hoc sessions are opened on demand via `haiku_review_open`
 		 *  (not a gate). The UI hides Approve and shows an "Ad-hoc

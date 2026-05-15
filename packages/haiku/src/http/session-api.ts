@@ -16,6 +16,7 @@ import {
 	resolveIntentStages,
 	resolveStudioStages,
 } from "../orchestrator/studio.js"
+import { runDriftSweep } from "../orchestrator/workflow/drift-sweep.js"
 import { getSession, type ReviewSession } from "../sessions.js"
 import { intentDir, parseFrontmatter } from "../state-tools.js"
 import { readStudioReviewAgentPaths } from "../studio-reader.js"
@@ -283,6 +284,40 @@ export function respondSessionApi(
 			? getCurrentState(session.intent_slug)
 			: null
 		if (current) data.current_state = current
+		// Track-C drift sweep — same call the cursor makes pre-tick.
+		// Surfaced under `drift` so the SPA's DriftBanner can render
+		// the same set of mutated artifacts the engine would react to
+		// on the next `run_next`. We only run the sweep when the intent
+		// has an active stage; the sweep folds in intent-scope approval
+		// drift on intent.md too.
+		const slugForDrift = session.intent_slug
+		if (slugForDrift && current && current.stage && current.studio) {
+			try {
+				const sweep = runDriftSweep({
+					intentDir: intentDir(slugForDrift),
+					stage: current.stage,
+					studio: current.studio,
+				})
+				if (sweep.events.length > 0) {
+					data.drift = sweep.events.map((e) => ({
+						path: e.file,
+						stage: e.unit === "(intent)" ? "" : current.stage,
+						intent: slugForDrift,
+						// Drift sweep only flags hash-mismatch on a
+						// witnessed file — always a modification.
+						// Add/delete are not surfaced.
+						action: "modified" as const,
+						age: e.since,
+						kind: e.kind,
+						unit: e.unit,
+						role: e.role,
+					}))
+				}
+			} catch {
+				// Drift sweep is best-effort — a worktree quirk or a
+				// transient FS read shouldn't fail the session payload.
+			}
+		}
 		// Best-effort PR/MR discovery via raw git plumbing
 		// (`git ls-remote origin 'refs/pull/*/head'` for GitHub,
 		// `refs/merge-requests/*/head` for GitLab). The engine never

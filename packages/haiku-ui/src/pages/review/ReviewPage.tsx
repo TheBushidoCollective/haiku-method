@@ -613,15 +613,13 @@ export function ReviewPage({
 								/>
 
 								{/* Drift banner — sticky strip between StageBanner and
-								    RereviewBanner per SPA-UI-SPECS §3. Renders nothing
-								    when `drift` is empty (DriftBanner returns null
-								    internally), so the integration is safe even before
-								    the WS plumbing that pushes drift entries lands. The
-								    drift entries themselves come from the existing
-								    `manual_change_assessment` action's findings via
-								    the WS bridge — wiring `drift` to that feed is the
-								    next iteration's work. */}
-								<DriftBanner drift={[] as DriftEntry[]} />
+								    RereviewBanner per SPA-UI-SPECS §3. Drift entries
+								    come from the cursor's Track-C sweep
+								    (`runDriftSweep`), surfaced fresh on every session
+								    payload by `session-api.ts`. DriftBanner returns
+								    null internally when the array is empty, so this
+								    integration is safe across drift / no-drift cycles. */}
+								<DriftBanner drift={(session.drift ?? []) as DriftEntry[]} />
 
 								<div className="px-6 lg:px-10 pb-6">
 									{session.previous_review && (

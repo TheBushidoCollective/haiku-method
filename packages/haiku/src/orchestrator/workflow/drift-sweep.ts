@@ -50,18 +50,108 @@
 // hash mismatch alone — and was a source of subtle path-resolution
 // bugs in worktrees. Filesystem-as-source-of-truth, applied here too.)
 
-import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 import matter from "gray-matter"
 import { primaryRepoRoot } from "../../state-tools.js"
 import { isDriftDetectionDisabled } from "./drift-baseline.js"
 import { bodySha256, fileSha256, outputSha256 } from "./sign-slot.js"
 
+/** Files inside a witnessed directory that the sweep ignores when
+ *  diffing inventory. Mirrors sign-slot.ts's DIR_INVENTORY_SKIP — must
+ *  stay in sync or sign-time and check-time disagree on what counts as
+ *  "in the inventory." */
+const DIR_INVENTORY_SKIP_SWEEP: ReadonlySet<string> = new Set([
+	".DS_Store",
+	"Thumbs.db",
+	".git",
+	".gitignore",
+	"action-log.jsonl",
+	"drift-markers.json",
+	"baseline.json",
+	"baseline-content",
+	".baseline-ack",
+	"baseline-thrash.json",
+])
+
+function listDirFiles(absDir: string): string[] {
+	if (!existsSync(absDir)) return []
+	let names: string[] = []
+	try {
+		names = readdirSync(absDir)
+	} catch {
+		return []
+	}
+	const out: string[] = []
+	for (const name of names) {
+		if (name.startsWith(".")) continue
+		if (DIR_INVENTORY_SKIP_SWEEP.has(name)) continue
+		try {
+			if (statSync(join(absDir, name)).isFile()) out.push(name)
+		} catch {
+			// non-fatal
+		}
+	}
+	return out
+}
+
+interface InputWitnessesRead {
+	files: Record<string, string>
+	dirs: Record<string, Record<string, string>>
+}
+
+function pickInputWitnesses(record: unknown): InputWitnessesRead | null {
+	if (record === null || typeof record !== "object") return null
+	const r = record as Record<string, unknown>
+	const block = r.input_witnesses
+	if (!block || typeof block !== "object" || Array.isArray(block)) return null
+	const b = block as Record<string, unknown>
+	const filesRaw = b.files
+	const dirsRaw = b.dirs
+	const files: Record<string, string> = {}
+	const dirs: Record<string, Record<string, string>> = {}
+	if (filesRaw && typeof filesRaw === "object" && !Array.isArray(filesRaw)) {
+		for (const [k, v] of Object.entries(filesRaw as Record<string, unknown>)) {
+			if (typeof v === "string" && v.length === 64) files[k] = v
+		}
+	}
+	if (dirsRaw && typeof dirsRaw === "object" && !Array.isArray(dirsRaw)) {
+		for (const [dirPath, inv] of Object.entries(
+			dirsRaw as Record<string, unknown>,
+		)) {
+			if (!inv || typeof inv !== "object" || Array.isArray(inv)) continue
+			const inventory: Record<string, string> = {}
+			for (const [k, v] of Object.entries(inv as Record<string, unknown>)) {
+				if (typeof v === "string" && v.length === 64) inventory[k] = v
+			}
+			dirs[dirPath] = inventory
+		}
+	}
+	// Treat an entirely empty witnesses block as "no input drift
+	// coverage" rather than "no inputs declared" — avoid emitting
+	// addition drift for every file in the unit just because the
+	// block exists but is empty.
+	if (Object.keys(files).length === 0 && Object.keys(dirs).length === 0) {
+		return null
+	}
+	return { files, dirs }
+}
+
 export type DriftKind =
 	| "spec"
 	| "output"
 	| "discovery_output"
 	| "discovery_mandate"
+	/** A witnessed input file's SHA changed. The premise the slot was
+	 *  signed against shifted; re-evaluation may be needed. */
+	| "input_mutation"
+	/** A witnessed input directory has a new file inside that wasn't
+	 *  in the inventory at sign time. The premise set grew. */
+	| "input_addition"
+	/** A witnessed input file (or a file inside a witnessed dir) is
+	 *  gone. The slot was signed against a premise that's no longer
+	 *  available. */
+	| "input_deletion"
 
 export type DriftEvent = {
 	unit: string
@@ -234,16 +324,105 @@ export function runDriftSweep(args: {
 			const at = pickAt(record)
 			if (!at) continue
 			const stored = pickBodySha(record)
-			if (!stored) continue // legacy slot, no baseline yet
-			const current = bodySha256(unitPath)
-			if (current && current !== stored) {
-				events.push({
-					unit: unitName,
-					role,
-					kind: "spec",
-					file: unitRel,
-					since: at,
-				})
+			if (stored) {
+				const current = bodySha256(unitPath)
+				if (current && current !== stored) {
+					events.push({
+						unit: unitName,
+						role,
+						kind: "spec",
+						file: unitRel,
+						since: at,
+					})
+				}
+			}
+			// Input premise drift — files+dirs the slot witnessed at
+			// sign time. Resolves against intentDir (stages/...) or
+			// repoRoot (everything else), mirroring the sign-time
+			// resolution in resolveInputWitnesses().
+			const inputWitnesses = pickInputWitnesses(record)
+			if (inputWitnesses) {
+				for (const [path, storedSha] of Object.entries(
+					inputWitnesses.files,
+				)) {
+					const abs = path.startsWith("stages/")
+						? join(args.intentDir, path)
+						: path === "intent.md"
+							? join(args.intentDir, path)
+							: join(repoRoot, path)
+					if (!existsSync(abs)) {
+						events.push({
+							unit: unitName,
+							role,
+							kind: "input_deletion",
+							file: path,
+							since: at,
+						})
+						continue
+					}
+					// Files were stored with outputSha256 strategy
+					// (body-hash for md/text, full-file for binary).
+					// Same strategy here so sign-time and check-time
+					// hashes align per-extension.
+					const ext = abs.slice(abs.lastIndexOf(".")).toLowerCase()
+					const currentSha =
+						ext === ".md" || ext === ".markdown" || ext === ".mdx"
+							? bodySha256(abs)
+							: outputSha256(abs)
+					if (currentSha && currentSha !== storedSha) {
+						events.push({
+							unit: unitName,
+							role,
+							kind: "input_mutation",
+							file: path,
+							since: at,
+						})
+					}
+				}
+				for (const [dirRel, inventory] of Object.entries(
+					inputWitnesses.dirs,
+				)) {
+					const dirAbs = dirRel.startsWith("stages/")
+						? join(args.intentDir, dirRel)
+						: join(repoRoot, dirRel)
+					const currentNames = listDirFiles(dirAbs)
+					// Check stored entries: mutation or deletion.
+					for (const [filename, storedSha] of Object.entries(inventory)) {
+						const fileAbs = join(dirAbs, filename)
+						if (!existsSync(fileAbs)) {
+							events.push({
+								unit: unitName,
+								role,
+								kind: "input_deletion",
+								file: join(dirRel, filename),
+								since: at,
+							})
+							continue
+						}
+						const currentSha = fileSha256(fileAbs)
+						if (currentSha && currentSha !== storedSha) {
+							events.push({
+								unit: unitName,
+								role,
+								kind: "input_mutation",
+								file: join(dirRel, filename),
+								since: at,
+							})
+						}
+					}
+					// New files inside the dir = addition drift.
+					for (const name of currentNames) {
+						if (inventory[name] === undefined) {
+							events.push({
+								unit: unitName,
+								role,
+								kind: "input_addition",
+								file: join(dirRel, name),
+								since: at,
+							})
+						}
+					}
+				}
 			}
 		}
 

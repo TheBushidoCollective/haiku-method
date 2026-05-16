@@ -248,7 +248,16 @@ export function drainPendingDispatches(slug: string): boolean {
 							fm.reviews && typeof fm.reviews === "object"
 								? { ...(fm.reviews as Record<string, unknown>) }
 								: {}
-						reviews[role] = buildReviewRecord(unitPath)
+						// Pass intentDir + unitInputs so the signed record
+						// includes the input_witnesses block — the premise
+						// snapshot drift uses to detect input changes.
+						const unitInputs = Array.isArray(fm.inputs)
+							? (fm.inputs as string[])
+							: []
+						reviews[role] = buildReviewRecord(unitPath, {
+							intentDir,
+							unitInputs,
+						})
 						setFrontmatterField(unitPath, "reviews", reviews)
 					} else {
 						const outputs = Array.isArray(fm.outputs)

@@ -149,8 +149,15 @@ export function forceStageComplete(args: {
 			plan.fm.reviews && typeof plan.fm.reviews === "object"
 				? { ...(plan.fm.reviews as Record<string, unknown>) }
 				: {}
+		const unitInputs = Array.isArray(plan.fm.inputs)
+			? (plan.fm.inputs as string[])
+			: []
 		for (const role of plan.reviewRoles) {
-			if (!reviews[role]) reviews[role] = buildReviewRecord(plan.unitPath)
+			if (!reviews[role])
+				reviews[role] = buildReviewRecord(plan.unitPath, {
+					intentDir: dir,
+					unitInputs,
+				})
 		}
 		const approvals =
 			plan.fm.approvals && typeof plan.fm.approvals === "object"
@@ -340,8 +347,14 @@ export function resetDrift(args: {
 				fm.reviews && typeof fm.reviews === "object"
 					? { ...(fm.reviews as Record<string, unknown>) }
 					: {}
+			const unitInputs = Array.isArray(fm.inputs)
+				? (fm.inputs as string[])
+				: []
 			for (const role of Object.keys(reviews)) {
-				reviews[role] = buildReviewRecord(unitPath)
+				reviews[role] = buildReviewRecord(unitPath, {
+					intentDir: dir,
+					unitInputs,
+				})
 				reviewsRefreshed++
 			}
 			const approvals =

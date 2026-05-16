@@ -147,10 +147,17 @@ function stampGateApproval(
 			fm[targetField] && typeof fm[targetField] === "object"
 				? (fm[targetField] as Record<string, unknown>)
 				: {}
-		// Reviews witness the unit body; approvals witness the
-		// declared output paths.
+		// Reviews witness the unit body + input premises; approvals
+		// witness the declared output paths (legacy — to be dropped
+		// in Phase 6 of the drift cleanup).
 		if (isPreExecute) {
-			records.user = buildReviewRecord(unitPath)
+			const unitInputs = Array.isArray(fm.inputs)
+				? (fm.inputs as string[])
+				: []
+			records.user = buildReviewRecord(unitPath, {
+				intentDir: intentDirAbs,
+				unitInputs,
+			})
 		} else {
 			const outputs = Array.isArray(fm.outputs) ? (fm.outputs as string[]) : []
 			records.user = buildApprovalRecord(intentDirAbs, outputs)

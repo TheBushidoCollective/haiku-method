@@ -332,12 +332,16 @@ export function runDriftSweep(args: {
 				for (const [path, storedSha] of Object.entries(
 					inputWitnesses.files,
 				)) {
-					const abs = path.startsWith("stages/")
-						? join(args.intentDir, path)
-						: path === "intent.md"
-							? join(args.intentDir, path)
-							: join(repoRoot, path)
-					if (!existsSync(abs)) {
+					// Resolution rule mirrors sign-slot.ts's resolveInputWitnesses:
+					// try intent-relative first (covers `stages/`, `knowledge/`,
+					// `feedback/`, `intent.md`), fall back to repo-relative
+					// for paths that point outside the intent dir.
+					const intentRelative = join(args.intentDir, path)
+					const repoRelative = join(repoRoot, path)
+					let abs: string | null = null
+					if (existsSync(intentRelative)) abs = intentRelative
+					else if (existsSync(repoRelative)) abs = repoRelative
+					if (abs === null) {
 						events.push({
 							unit: unitName,
 							role,
@@ -369,9 +373,14 @@ export function runDriftSweep(args: {
 				for (const [dirRel, inventory] of Object.entries(
 					inputWitnesses.dirs,
 				)) {
-					const dirAbs = dirRel.startsWith("stages/")
-						? join(args.intentDir, dirRel)
-						: join(repoRoot, dirRel)
+					// Same intent-vs-repo resolution as for files.
+					const intentRelative = join(args.intentDir, dirRel)
+					const repoRelative = join(repoRoot, dirRel)
+					const dirAbs = existsSync(intentRelative)
+						? intentRelative
+						: existsSync(repoRelative)
+							? repoRelative
+							: intentRelative // fallback: report against intent-rel for deletion
 					const currentNames = listDirFiles(dirAbs)
 					// Check stored entries: mutation or deletion.
 					for (const [filename, storedSha] of Object.entries(inventory)) {

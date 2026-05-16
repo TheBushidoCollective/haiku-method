@@ -231,9 +231,13 @@ export function resolveInputWitnesses(args: {
 
 	for (const rel of args.unitInputs) {
 		if (rel === "intent.md") continue // already added implicitly
-		const abs = rel.startsWith("stages/")
-			? join(args.intentDir, rel)
-			: join(root, rel)
+		// Resolve intent-relative when the path exists there (covers
+		// `stages/...`, `knowledge/...`, `feedback/...`, and ad-hoc
+		// intent-scope files). Fall back to repo-relative for paths
+		// that point outside the intent dir (e.g. `terraform/...`
+		// configs the unit consumes).
+		const intentRelative = join(args.intentDir, rel)
+		const abs = existsSync(intentRelative) ? intentRelative : join(root, rel)
 		if (!existsSync(abs)) continue
 		let isDir = false
 		try {

@@ -122,8 +122,16 @@ export function buildOutputWitnesses(
 }
 
 /** Derive repo root from a given intent dir path. The on-disk layout is
- *  `<repoRoot>/.haiku/intents/<slug>/`, so peel off three segments. */
-function deriveRepoRootFromIntentDir(intentDir: string): string {
+ *  `<repoRoot>/.haiku/intents/<slug>/`, so peel off three segments.
+ *
+ *  Exported so the drift sweep can use the SAME resolution as sign-time.
+ *  When `intentDir` is a symlink (e.g. user has `monorepo` symlinked to
+ *  `monorepo-1`), this stays in symlink-space — matching what sign-time
+ *  hashed — instead of falling back to `git rev-parse --show-toplevel`
+ *  which resolves symlinks and points at a different on-disk repo. The
+ *  sign-side and check-side MUST resolve to the same root or every
+ *  output-witness hash drifts forever on the first tick. */
+export function deriveRepoRootFromIntentDir(intentDir: string): string {
 	// `dirname` walks up: <slug> → intents → .haiku → <repoRoot>
 	return join(intentDir, "..", "..", "..")
 }

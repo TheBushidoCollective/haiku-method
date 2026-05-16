@@ -53,9 +53,13 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join, relative } from "node:path"
 import matter from "gray-matter"
-import { primaryRepoRoot } from "../../state-tools.js"
 import { isDriftDetectionDisabled } from "./drift-baseline.js"
-import { bodySha256, fileSha256, outputSha256 } from "./sign-slot.js"
+import {
+	bodySha256,
+	deriveRepoRootFromIntentDir,
+	fileSha256,
+	outputSha256,
+} from "./sign-slot.js"
 
 export type DriftKind =
 	| "spec"
@@ -192,7 +196,18 @@ export function runDriftSweep(args: {
 	studio: string
 	repoRoot?: string
 }): DriftSweepResult {
-	const repoRoot = args.repoRoot ?? primaryRepoRoot()
+	// Use the SAME repo-root resolution as sign-time
+	// (`buildOutputWitnesses` in sign-slot.ts). Earlier this used
+	// `primaryRepoRoot()` (cwd-based `git rev-parse --show-toplevel`),
+	// which resolves symlinks — so when the user has the intent dir
+	// reached via a symlinked monorepo path (e.g. `monorepo` → `monorepo-1`),
+	// sign-time hashed the file under the symlinked path while
+	// check-time hashed it under the realpath. Different file in
+	// hash-space => permanent drift loop on the same file every tick
+	// (issue #370). Symlink-space matching is what sign-time chose, so
+	// the sweep follows.
+	const repoRoot =
+		args.repoRoot ?? deriveRepoRootFromIntentDir(args.intentDir)
 	const haikuRoot = join(repoRoot, ".haiku")
 	if (isDriftDetectionDisabled(haikuRoot)) {
 		return { events: [], scanned: 0, skipped: 0 }

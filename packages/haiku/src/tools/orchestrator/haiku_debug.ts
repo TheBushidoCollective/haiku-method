@@ -99,42 +99,62 @@ export default defineTool({
 			}
 		}
 
-		// All mutating ops require SPA-picker confirmation.
-		const description = describeOp(op, args)
-		const picker = await runPicker({
-			intentSlug: slug,
-			kind: "confirm",
-			title: `DEBUG: ${op} on ${slug}`,
-			prompt: `${description}\n\nThis is an ADMIN op that BYPASSES the normal workflow engine. It mutates state in ways the cursor would not. Confirm only if you understand the consequences.`,
-			options: [
-				{
-					id: "confirm",
-					label: `Yes, run ${op}`,
-					description:
-						"Proceed with the admin op. State will be mutated immediately.",
-				},
-				{
-					id: "cancel",
-					label: "Cancel",
-					description: "Abort. No state changes.",
-				},
-			],
-			signal,
-		})
-		if (
-			picker.timedOut ||
-			!picker.selection ||
-			picker.selection.id !== "confirm"
-		) {
-			return text(
-				JSON.stringify({
-					action: "cancelled",
-					message: `Debug op '${op}' cancelled — no state mutated.`,
-				}),
-			)
+		// All mutating ops require SPA-picker confirmation by default —
+		// the agent cannot drive a mutation unless the user clicked
+		// through the picker.
+		//
+		// Exception: when the env var HAIKU_DEBUG_AUTO_CONFIRM is set
+		// (case-insensitive "1" / "true" / "yes"), the picker is skipped
+		// and the op runs immediately. This is the escape hatch for
+		// sessions where no SPA is available — Claude Code CLI running
+		// in headless mode, recovery scripts, etc. The env var is
+		// process-level: the user sets it deliberately before launching
+		// the session, so the consent is real (just out-of-band).
+		// Issue #370 reported the picker as unreachable from CLI; this
+		// closes that gap without weakening the default agent-side gate.
+		const autoConfirmEnv =
+			(process.env.HAIKU_DEBUG_AUTO_CONFIRM || "").trim().toLowerCase()
+		const autoConfirm =
+			autoConfirmEnv === "1" ||
+			autoConfirmEnv === "true" ||
+			autoConfirmEnv === "yes"
+		if (!autoConfirm) {
+			const description = describeOp(op, args)
+			const picker = await runPicker({
+				intentSlug: slug,
+				kind: "confirm",
+				title: `DEBUG: ${op} on ${slug}`,
+				prompt: `${description}\n\nThis is an ADMIN op that BYPASSES the normal workflow engine. It mutates state in ways the cursor would not. Confirm only if you understand the consequences.`,
+				options: [
+					{
+						id: "confirm",
+						label: `Yes, run ${op}`,
+						description:
+							"Proceed with the admin op. State will be mutated immediately.",
+					},
+					{
+						id: "cancel",
+						label: "Cancel",
+						description: "Abort. No state changes.",
+					},
+				],
+				signal,
+			})
+			if (
+				picker.timedOut ||
+				!picker.selection ||
+				picker.selection.id !== "confirm"
+			) {
+				return text(
+					JSON.stringify({
+						action: "cancelled",
+						message: `Debug op '${op}' cancelled — no state mutated.`,
+					}),
+				)
+			}
 		}
 
-		// User confirmed. Dispatch.
+		// User confirmed (via picker or HAIKU_DEBUG_AUTO_CONFIRM). Dispatch.
 		try {
 			switch (op) {
 				case "force_stage_complete": {

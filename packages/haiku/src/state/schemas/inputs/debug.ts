@@ -98,7 +98,12 @@ export const HAIKU_DEBUG_INPUT_SCHEMA = Type.Object(
 						result: Type.String({ enum: ["advance", "reject"] }),
 						at: Type.Optional(Type.String()),
 					},
-					{ additionalProperties: true },
+					// Strict per the project schema-definitions rule. The
+					// dispatch path (`setUnitIterations`) only maps `hat`,
+					// `result`, and `at` to disk, so any extra fields would
+					// be silently dropped — better to fail at the gate
+					// with a clear `haiku_debug_input_invalid` error.
+					{ additionalProperties: false },
 				),
 				{
 					description:

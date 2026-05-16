@@ -4693,13 +4693,21 @@ export function deriveUnitStatus(
  * to the same shape. Every consumer that wants a status string MUST go
  * through this — reading `fm.status` directly is a stale-data trap.
  *
- * Signal precedence (first match wins):
- *   1. `rejected_at` set                       → "rejected"
- *   2. `closed_by` === "feedback-assessor"     → "addressed" (auto-verified by fix loop)
- *   3. `resolution` === "answered"             → "answered"  (replied with no code delta)
- *   4. `closed_at` set OR `closed_by` non-empty → "closed"   (any other resolved state)
- *   5. `iterations[]` non-empty                → "fixing"    (mid fix loop)
- *   6. otherwise                               → "pending"   (fresh open finding)
+ * Signal precedence (first match wins). CLOSURE = `closed_at`. The
+ * cursor's source-of-truth — `closed_by` alone (without `closed_at`) is
+ * "claimed but unverified" and still BLOCKS the gate.
+ *
+ *   1. `rejected_at` set                                → "rejected"
+ *   2. `closed_at` set + `closed_by` === "feedback-assessor"
+ *                                                       → "addressed" (auto-verified by fix loop)
+ *   3. `closed_at` set + `resolution` === "answered"    → "answered"  (replied with no code delta)
+ *   4. `closed_at` set (any other shape)                → "closed"    (terminal)
+ *   5. `closed_by` non-empty (without `closed_at`) OR `iterations[]` non-empty
+ *                                                       → "fixing"    (claimed / mid fix loop)
+ *   6. otherwise                                        → "pending"   (fresh open finding)
+ *
+ * A legacy `status:` field fallback runs between steps 4 and 5 for
+ * un-migrated FBs in flight — see the function body.
  *
  * The 6-value return preserves the long-standing API surface (Zod
  * `FeedbackStatusSchema`, `?status=` query filters, SPA badges) so

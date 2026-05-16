@@ -11,7 +11,7 @@
 
 import type { ToolDef } from "../types.js"
 import haiku_await_gate from "./haiku_await_gate.js"
-import haiku_baseline_init from "./haiku_baseline_init.js"
+// v9: haiku_baseline_init removed — premise-witness model has no baseline.json.
 // v4: haiku_classify_drift removed — drift sweep auto-files FBs.
 import haiku_coverage_acknowledge from "./haiku_coverage_acknowledge.js"
 import haiku_debug from "./haiku_debug.js"
@@ -37,7 +37,6 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 	(
 		[
 			haiku_await_gate,
-			haiku_baseline_init,
 			haiku_coverage_acknowledge,
 			haiku_debug,
 			haiku_discovery_complete,

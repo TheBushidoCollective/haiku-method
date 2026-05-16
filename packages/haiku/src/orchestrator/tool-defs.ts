@@ -167,33 +167,10 @@ export const orchestratorToolDefs = [
 			required: ["intent"],
 		},
 	},
-	{
-		name: "haiku_baseline_init",
-		description:
-			"Establish drift-detection baselines for an intent. Used by haiku_repair, the kill-switch re-arm flow, and the manual rollout path. 'establish-all' mode baselines every tracked file across all stages; 'establish-paths' mode baselines only the listed paths. Idempotent — files whose SHA already matches the stored baseline are skipped.",
-		inputSchema: {
-			type: "object" as const,
-			properties: {
-				intent_slug: {
-					type: "string",
-					description: "Slug of the intent to baseline.",
-				},
-				mode: {
-					type: "string",
-					enum: ["establish-all", "establish-paths"],
-					description:
-						"'establish-all': scan all tracked files for every stage. 'establish-paths': baseline only the listed paths.",
-				},
-				paths: {
-					type: "array",
-					items: { type: "string" },
-					description:
-						"Required when mode === 'establish-paths'. Paths relative to the intent directory to baseline.",
-				},
-			},
-			required: ["intent_slug", "mode"],
-		},
-	},
+	// v9: haiku_baseline_init removed. The premise-witness model has no
+	// baseline.json — witnesses live on the signed slot's FM, and there's
+	// nothing to "establish" out-of-band. The /haiku:repair flow loses
+	// its --confirm-baseline-reset path along with this tool.
 	{
 		name: "haiku_coverage_acknowledge",
 		description:

@@ -370,64 +370,8 @@ test("drift sweep re-arms after FB is closed", async () => {
 	})
 })
 
-// TODO(Phase 8 of DRIFT-CLEANUP): the haiku_baseline_init tool and its
-// underlying baseline.json system are scheduled for removal — under the
-// premise-witness model, output baselines are no longer relevant
-// (outputs aren't witnessed). This test depends on that machinery and
-// will be deleted alongside the tool. Marking it skipped here so the
-// suite stays green during the in-progress cleanup.
-test.skip("haiku_baseline_init establish-paths re-stamps witness hash [DELETE IN PHASE 8]", async () => {
-	if (!HAS_GIT) return
-	await withRepo("baseline-init-witness", async ({ root, intentDir, slug }) => {
-		const { runDriftSweep } = await import(
-			`${SRC}/orchestrator/workflow/drift-sweep.ts`
-		)
-		await seedUnitWithDriftedSpec({
-			intentDir,
-			root,
-			unitBasename: "unit-01",
-		})
-		// Pre-condition: sweep reports drift.
-		let result = runDriftSweep({
-			intentDir,
-			stage: "design",
-			studio: "test",
-			repoRoot: root,
-		})
-		assert.equal(result.events.length, 1, "expected drift before baseline-init")
-
-		// Call haiku_baseline_init with establish-paths.
-		const baseline_init = await import(
-			`${SRC}/tools/orchestrator/haiku_baseline_init.ts`
-		)
-		const handler = baseline_init.default
-		const res = await handler.handle({
-			intent_slug: slug,
-			mode: "establish-paths",
-			paths: ["stages/design/artifacts/SEMANTIC-TOKENS.md"],
-		})
-		// `text(...)` returns { content: [{ type, text }] }; the JSON
-		// payload is in content[0].text. We don't assert on the precise
-		// shape, just that it succeeded.
-		const payload = JSON.parse(res.content[0].text)
-		assert.equal(payload.ok, true)
-		// Witness restamp must have touched at least one slot.
-		assert.ok(
-			payload.witnesses_restamped >= 1,
-			`expected witnesses_restamped >= 1, got ${payload.witnesses_restamped}`,
-		)
-
-		// Post-condition: sweep no longer reports drift on that file.
-		result = runDriftSweep({
-			intentDir,
-			stage: "design",
-			studio: "test",
-			repoRoot: root,
-		})
-		assert.equal(
-			result.events.length,
-			0,
-			`baseline-init must clear witness drift; got events: ${JSON.stringify(result.events)}`,
-		)
-	})
-})
+// (v9 removed `haiku_baseline_init`. The premise-witness model has no
+// baseline.json — witnesses live on the signed slot's FM, and there's
+// no out-of-band "establish" path. The recovery role this tool used to
+// play is now covered by cosmetic-close re-stamp on a drift FB, which
+// is tested in drift-input-witnesses.test.mjs.)

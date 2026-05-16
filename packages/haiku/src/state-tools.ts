@@ -71,7 +71,6 @@ import {
 } from "./git-worktree.js"
 import { withStageLock } from "./locks.js"
 import { escalate } from "./model-selection.js"
-import { clearMarkersForFeedbackSync } from "./orchestrator/workflow/baseline-clear-marker.js"
 import { deriveStageState } from "./orchestrator/workflow/derived-stage-state.js"
 import { reportError } from "./sentry.js"
 import { logSessionEvent, writeHaikuMetadata } from "./session-metadata.js"
@@ -11161,21 +11160,8 @@ export function handleStateTool(
 				matter.stringify(`\n${rejectBody}\n`, rejectData),
 			)
 
-			// Drift-detection lifecycle hook (unit-09): rejection is a
-			// terminal state — clear any open drift-marker linked to this
-			// feedback id and update the baseline. Best-effort.
-			try {
-				clearMarkersForFeedbackSync(intentDir(intent), feedbackId, "rejected", {
-					intentSlug: intent,
-				})
-			} catch (err) {
-				emitTelemetry("haiku.drift.clear_marker_failed", {
-					intent,
-					feedback_id: feedbackId,
-					terminal_status: "rejected",
-					error: String((err as Error)?.message ?? err),
-				})
-			}
+			// (v9: marker store removed. Closure clears the FB-based
+			// dedup naturally — no separate clear step needed.)
 
 			const rejectGitResult = gitCommitState(
 				stage
@@ -11703,30 +11689,9 @@ export function handleStateTool(
 			writeFileSync(advPath, matter.stringify(`${advBody.trimEnd()}\n`, newFm))
 			sealIntentState(intentArg)
 
-			// Drift-detection lifecycle hook (unit-09): when the fix-loop
-			// terminal hat auto-closes the FB, walk drift-markers.json for
-			// any open marker linked to this feedback id and clear each.
-			// Best-effort: failures are surfaced via telemetry but do not
-			// block the advance.
+			// (v9: marker store removed — closure clears the FB-based
+			// dedup naturally.)
 			if (isLast) {
-				try {
-					clearMarkersForFeedbackSync(
-						intentDir(intentArg),
-						feedbackId,
-						"closed",
-						{
-							intentSlug: intentArg,
-						},
-					)
-				} catch (err) {
-					emitTelemetry("haiku.drift.clear_marker_failed", {
-						intent: intentArg,
-						feedback_id: feedbackId,
-						terminal_status: "closed",
-						error: String((err as Error)?.message ?? err),
-					})
-				}
-
 				// Apply `targets.invalidates` — delete the named review /
 				// approval roles from the targeted unit's FM so the cursor
 				// re-routes the gate. Mirrors the close_feedback handler

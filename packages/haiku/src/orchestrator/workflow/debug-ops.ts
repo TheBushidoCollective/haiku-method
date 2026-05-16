@@ -22,7 +22,7 @@ import {
 	parseFrontmatter,
 	setFrontmatterField,
 } from "../../state-tools.js"
-import { resolveStudioStages } from "../studio.js"
+import { resolveStageHats, resolveStudioStages } from "../studio.js"
 import { type CursorPosition, derivePosition } from "./cursor.js"
 import { approvalRolesFor, reviewRolesFor } from "./derived-stage-state.js"
 import { buildApprovalRecord, buildReviewRecord } from "./sign-slot.js"
@@ -362,6 +362,110 @@ export function resetDrift(args: {
 		ok: true,
 		reviews_refreshed: reviewsRefreshed,
 		approvals_refreshed: approvalsRefreshed,
+	}
+}
+
+/** Write the `iterations[]` array on a unit's frontmatter — the one
+ *  FSM-driven field agents normally cannot touch (the schema's
+ *  propertyNames deny-list rejects writes, and the handler at
+ *  state-tools.ts:7571 blocks them with a clear error). This debug
+ *  escape hatch exists because force_stage_complete refuses to sign
+ *  units whose iterations[] lacks a terminal `advance` entry — but
+ *  some legacy / partial-state units never had iterations recorded,
+ *  and their outputs already landed on disk.
+ *
+ *  When `iterations` is omitted, synthesizes one `{ hat, result:
+ *  "advance" }` entry per hat in the stage's `hats:` sequence — the
+ *  shape force_stage_complete needs to see to count the unit as
+ *  terminal-advance. When `iterations` is provided, writes it
+ *  verbatim (with no validation beyond the schema's per-entry
+ *  shape check).
+ *
+ *  Safe because: the debug op routes through `runPicker` confirmation
+ *  before any state mutation. The agent cannot reach this without an
+ *  explicit user click. */
+export function setUnitIterations(args: {
+	slug: string
+	stage: string
+	unit: string
+	iterations?: Array<{ hat: string; result: "advance" | "reject"; at?: string }>
+}):
+	| { ok: true; unit_file: string; iterations_written: number }
+	| { ok: false; error: string; details?: unknown } {
+	const dir = intentDir(args.slug)
+	const intentMdPath = join(dir, "intent.md")
+	if (!existsSync(intentMdPath)) {
+		return { ok: false, error: "intent_not_found" }
+	}
+	const intentFm = parseFrontmatter(readFileSync(intentMdPath, "utf8")).data
+	const studio = (intentFm.studio as string) || ""
+	if (!studio) return { ok: false, error: "intent_missing_studio" }
+
+	const unitsDir = join(dir, "stages", args.stage, "units")
+	if (!existsSync(unitsDir)) {
+		return {
+			ok: false,
+			error: "units_dir_not_found",
+			details: { stage: args.stage },
+		}
+	}
+	// Accept "unit-03-slug" exact, "unit-03" prefix, or just the digits.
+	const found = readdirSync(unitsDir)
+		.filter((f) => f.endsWith(".md"))
+		.find((f) => {
+			const stem = f.replace(/\.md$/, "")
+			if (stem === args.unit) return true
+			if (stem.startsWith(`${args.unit}-`)) return true
+			// Numeric-only input ("03" or "3") matches the unit-NN- prefix.
+			const numMatch = args.unit.match(/^(?:unit-)?(\d+)$/i)
+			if (numMatch) {
+				const n = Number.parseInt(numMatch[1], 10)
+				const fileNum = stem.match(/^unit-(\d+)-/)
+				if (fileNum && Number.parseInt(fileNum[1], 10) === n) return true
+			}
+			return false
+		})
+	if (!found) {
+		return {
+			ok: false,
+			error: "unit_not_found",
+			details: { stage: args.stage, unit: args.unit },
+		}
+	}
+	const unitPath = join(unitsDir, found)
+
+	let iterations: Array<{ hat: string; result: string; at: string }>
+	if (args.iterations && args.iterations.length > 0) {
+		const nowIso = new Date().toISOString()
+		iterations = args.iterations.map((it) => ({
+			hat: it.hat,
+			result: it.result,
+			at: it.at || nowIso,
+		}))
+	} else {
+		// Auto-synthesize from the stage's hats: sequence — one advance
+		// entry per hat. This is the "I have a finished unit with no
+		// recorded iterations" recovery shape.
+		const hats = resolveStageHats(studio, args.stage)
+		if (hats.length === 0) {
+			return {
+				ok: false,
+				error: "no_hats_defined_for_stage",
+				details: { studio, stage: args.stage },
+			}
+		}
+		const nowIso = new Date().toISOString()
+		iterations = hats.map((hat) => ({
+			hat,
+			result: "advance",
+			at: nowIso,
+		}))
+	}
+	setFrontmatterField(unitPath, "iterations", iterations)
+	return {
+		ok: true,
+		unit_file: found,
+		iterations_written: iterations.length,
 	}
 }
 

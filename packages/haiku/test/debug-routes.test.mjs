@@ -19,7 +19,13 @@
 // Run: npx tsx test/debug-routes.test.mjs
 
 import assert from "node:assert"
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import {
+	chmodSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -282,6 +288,75 @@ await test("POST .../ops/mutate_feedback rejects path-traversal stage with 400",
 	assert.strictEqual(res.status, 400)
 	const data = await res.json()
 	assert.strictEqual(data.error, "invalid_stage")
+})
+
+await test("set_unit_iterations auto-synthesizes one advance entry per hat", async () => {
+	// resolveStageHats walks the plugin's bundled studios; the test
+	// fixture lives in a temp dir, so we stand up a local studio with
+	// a known hats sequence to drive the auto-synthesis path.
+	mkdirSync(join(haikuRoot, "studios", "software", "stages", "design"), {
+		recursive: true,
+	})
+	writeFileSync(
+		join(haikuRoot, "studios", "software", "STUDIO.md"),
+		`---\nname: software\nslug: software\ndescription: test\nstages: [design, development]\ncategory: testing\ndefault_model: sonnet\n---\nTest studio.\n`,
+	)
+	writeFileSync(
+		join(haikuRoot, "studios", "software", "stages", "design", "STAGE.md"),
+		`---\nname: design\nhats: [planner, implementer, verifier]\n---\nTest stage.\n`,
+	)
+	// Set up a unit with NO iterations[] — the legacy-recovery scenario.
+	const unitsDir = join(intentDirPath, "stages", "design", "units")
+	const unitFile = join(unitsDir, "unit-99-legacy-no-iters.md")
+	writeFileSync(
+		unitFile,
+		`---
+unit_id: unit-99
+title: legacy-no-iters
+---
+body that exists on disk but no iterations were recorded
+`,
+	)
+	const res = await fetch(
+		`${baseUrl}/api/debug/intents/${intentSlug}/ops/set_unit_iterations`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				stage: "design",
+				unit: "unit-99-legacy-no-iters",
+			}),
+		},
+	)
+	assert.strictEqual(res.status, 200)
+	const data = await res.json()
+	assert.strictEqual(
+		data.result.ok,
+		true,
+		`expected ok:true, got ${JSON.stringify(data.result)}`,
+	)
+	assert.ok(
+		data.result.iterations_written >= 1,
+		"at least one iteration entry must be synthesized",
+	)
+	// Verify on disk: iterations[] now present.
+	const after = readFileSync(unitFile, "utf8")
+	assert.match(after, /^iterations:/m)
+	assert.match(after, /result: advance/)
+})
+
+await test("set_unit_iterations rejects missing stage_or_unit", async () => {
+	const res = await fetch(
+		`${baseUrl}/api/debug/intents/${intentSlug}/ops/set_unit_iterations`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ stage: "design" }),
+		},
+	)
+	assert.strictEqual(res.status, 400)
+	const data = await res.json()
+	assert.strictEqual(data.error, "missing_stage_or_unit")
 })
 
 await test("GET /debug serves the SPA shell HTML", async () => {

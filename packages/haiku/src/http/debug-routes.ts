@@ -22,6 +22,7 @@ import {
 	previewCursor,
 	resetDrift,
 	setIntentField,
+	setUnitIterations,
 } from "../orchestrator/workflow/debug-ops.js"
 import { findHaikuRoot, intentDir, parseFrontmatter } from "../state-tools.js"
 import { requireTunnelAuth, verifyIntentMutationAuth } from "./auth.js"
@@ -113,6 +114,7 @@ const SUPPORTED_OPS = new Set([
 	"set_intent_field",
 	"reset_drift",
 	"mutate_feedback",
+	"set_unit_iterations",
 ])
 
 export function registerDebugRoutes(instance: FastifyInstance): void {
@@ -257,6 +259,31 @@ export function registerDebugRoutes(instance: FastifyInstance): void {
 				}
 				case "reset_drift": {
 					result = resetDrift({ slug })
+					break
+				}
+				case "set_unit_iterations": {
+					const stage = typeof body.stage === "string" ? body.stage : ""
+					const unit = typeof body.unit === "string" ? body.unit : ""
+					if (!stage || !unit) {
+						reply.status(400).send({ error: "missing_stage_or_unit" })
+						return
+					}
+					if (!isValidSlug(stage)) {
+						reply.status(400).send({ error: "invalid_stage" })
+						return
+					}
+					if (!isValidSlug(unit)) {
+						reply.status(400).send({ error: "invalid_unit" })
+						return
+					}
+					const iterations = Array.isArray(body.iterations)
+						? (body.iterations as Array<{
+								hat: string
+								result: "advance" | "reject"
+								at?: string
+							}>)
+						: undefined
+					result = setUnitIterations({ slug, stage, unit, iterations })
 					break
 				}
 				case "mutate_feedback": {

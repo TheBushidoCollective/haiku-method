@@ -16,6 +16,7 @@ import {
 	previewCursor,
 	resetDrift,
 	setIntentField,
+	setUnitIterations,
 } from "../../orchestrator/workflow/debug-ops.js"
 import { runPicker } from "../../server/picker.js"
 import {
@@ -57,6 +58,7 @@ export default defineTool({
 			intent: args.intent,
 			stage: args.stage,
 			feedback_id: args.feedback_id,
+			unit: args.unit,
 		})
 		if (slugCheck) return slugCheck
 		// Batch path: check each feedback_id in the array against the same
@@ -182,6 +184,25 @@ export default defineTool({
 					const r = resetDrift({ slug })
 					return text(JSON.stringify(r))
 				}
+				case "set_unit_iterations": {
+					const stage = args.stage as string
+					const unit = args.unit as string
+					if (!stage || !unit) {
+						return errorResponse({
+							error: "missing_stage_or_unit",
+							message: "set_unit_iterations requires `stage` and `unit`",
+						})
+					}
+					const iterations = Array.isArray(args.iterations)
+						? (args.iterations as Array<{
+								hat: string
+								result: "advance" | "reject"
+								at?: string
+							}>)
+						: undefined
+					const r = setUnitIterations({ slug, stage, unit, iterations })
+					return text(JSON.stringify(r))
+				}
 				case "mutate_feedback": {
 					const patch = (args.patch as Record<string, unknown>) ?? {}
 					const stage = (args.stage as string) || null
@@ -256,6 +277,11 @@ function describeOp(op: string, args: Record<string, unknown>): string {
 			return `Set intent.md frontmatter field '${args.field}' to ${JSON.stringify(args.value)}.`
 		case "reset_drift":
 			return `Re-stamp every witnessed slot (reviews + approvals on every unit) with the CURRENT on-disk SHA. Drift sweep will stop firing on the same SHA mismatch.`
+		case "set_unit_iterations":
+			if (Array.isArray(args.iterations) && args.iterations.length > 0) {
+				return `Hand-write iterations[] on unit '${args.unit}' in stage '${args.stage}' (${(args.iterations as unknown[]).length} entries). This is the FSM-driven field agents normally cannot touch — the debug op bypasses the schema gate.`
+			}
+			return `Synthesize iterations[] on unit '${args.unit}' in stage '${args.stage}' — one 'advance' entry per hat in the stage's hats sequence. Use to mark a legacy/partial unit as "moved through every hat" so force_stage_complete will sign it.`
 		case "mutate_feedback":
 			if (Array.isArray(args.feedback_ids) && args.feedback_ids.length > 0) {
 				return `Apply FM patch to ${(args.feedback_ids as string[]).length} feedback records (${(args.feedback_ids as string[]).join(", ")}): ${JSON.stringify(args.patch)}. Bypasses lifecycle guards.`

@@ -14,6 +14,7 @@ export const HAIKU_DEBUG_SUPPORTED_OPS = [
 	"set_intent_field",
 	"reset_drift",
 	"mutate_feedback",
+	"set_unit_iterations",
 	"preview_cursor",
 ] as const
 
@@ -82,6 +83,28 @@ export const HAIKU_DEBUG_INPUT_SCHEMA = Type.Object(
 				description:
 					'force_stage_complete only. When true, also stamps `closed_at` + `closed_by: "force_complete"` on every open FB on the targeted stages (and on intent scope when the final stage is the target). Open FBs otherwise continue blocking the cursor even after every approval is signed.',
 			}),
+		),
+		unit: Type.Optional(
+			Type.String({
+				description:
+					"Unit slug or filename stem (set_unit_iterations). Example: 'unit-03-my-thing' or 'unit-03'.",
+			}),
+		),
+		iterations: Type.Optional(
+			Type.Array(
+				Type.Object(
+					{
+						hat: Type.String({ minLength: 1 }),
+						result: Type.String({ enum: ["advance", "reject"] }),
+						at: Type.Optional(Type.String()),
+					},
+					{ additionalProperties: true },
+				),
+				{
+					description:
+						"Explicit iterations[] array to write (set_unit_iterations). Omit to auto-synthesize one `advance` entry per hat in the stage's `hats:` sequence — the typical recovery shape when a legacy unit has no iterations but its outputs landed.",
+				},
+			),
 		),
 	},
 	{ additionalProperties: false },

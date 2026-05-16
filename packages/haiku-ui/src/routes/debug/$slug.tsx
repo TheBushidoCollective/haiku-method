@@ -36,6 +36,7 @@ type OpName =
 	| "set_intent_field"
 	| "reset_drift"
 	| "mutate_feedback"
+	| "set_unit_iterations"
 
 interface PendingOp {
 	op: OpName
@@ -197,6 +198,10 @@ function DebugAdminPanel(): React.ReactElement {
 					<SetIntentFieldForm onPrepare={setPending} />
 					<ResetDriftForm onPrepare={setPending} />
 					<MutateFeedbackForm
+						stages={detail?.stages_present ?? []}
+						onPrepare={setPending}
+					/>
+					<SetUnitIterationsForm
 						stages={detail?.stages_present ?? []}
 						onPrepare={setPending}
 					/>
@@ -517,6 +522,119 @@ function MutateFeedbackForm({
 							summary: `BATCH: apply FM patch to ${ids.length} feedback records (${ids.join(", ")}) on ${stage || "intent scope"}: ${JSON.stringify(parsed)}`,
 						})
 					}
+				}}
+				className="mt-3 rounded bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+			>
+				Prepare op
+			</button>
+		</AdminCard>
+	)
+}
+
+function SetUnitIterationsForm({
+	stages,
+	onPrepare,
+}: {
+	stages: string[]
+	onPrepare: (op: PendingOp) => void
+}) {
+	const [stage, setStage] = useState("")
+	const [unit, setUnit] = useState("")
+	const [useAuto, setUseAuto] = useState(true)
+	const [iterationsJson, setIterationsJson] = useState(
+		'[\n  { "hat": "planner", "result": "advance" },\n  { "hat": "implementer", "result": "advance" },\n  { "hat": "verifier", "result": "advance" }\n]',
+	)
+	const [parseError, setParseError] = useState<string | null>(null)
+	useEffect(() => {
+		if (!stage && stages.length > 0) setStage(stages[0])
+	}, [stage, stages])
+	return (
+		<AdminCard
+			title="Set unit iterations"
+			description="Hand-write the iterations[] array on a unit's frontmatter — the FSM field agents normally cannot touch. Use to mark a legacy/partial unit as 'moved through every hat' so force_stage_complete will sign it. Auto mode synthesizes one advance entry per hat in the stage's hats sequence."
+		>
+			<label className="block text-xs font-medium text-stone-600 dark:text-stone-400">
+				Stage
+				<select
+					value={stage}
+					onChange={(e) => setStage(e.target.value)}
+					className="mt-1 block w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-900"
+				>
+					<option value="">— pick stage —</option>
+					{stages.map((s) => (
+						<option key={s} value={s}>
+							{s}
+						</option>
+					))}
+				</select>
+			</label>
+			<label className="mt-2 block text-xs font-medium text-stone-600 dark:text-stone-400">
+				Unit (slug, filename stem, or "unit-NN")
+				<input
+					value={unit}
+					onChange={(e) => setUnit(e.target.value)}
+					placeholder="unit-03-my-thing"
+					className="mt-1 block w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-sm font-mono dark:border-stone-700 dark:bg-stone-900"
+				/>
+			</label>
+			<label className="mt-2 flex items-center gap-2 text-xs text-stone-700 dark:text-stone-300">
+				<input
+					type="checkbox"
+					checked={useAuto}
+					onChange={(e) => setUseAuto(e.target.checked)}
+					className="rounded border-stone-300 dark:border-stone-700"
+				/>
+				Auto-synthesize one "advance" entry per hat in the stage's hats:
+				sequence
+			</label>
+			{!useAuto && (
+				<label className="mt-2 block text-xs font-medium text-stone-600 dark:text-stone-400">
+					Explicit iterations (JSON array)
+					<textarea
+						value={iterationsJson}
+						onChange={(e) => {
+							setIterationsJson(e.target.value)
+							setParseError(null)
+						}}
+						rows={6}
+						className="mt-1 block w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-xs font-mono dark:border-stone-700 dark:bg-stone-900"
+					/>
+				</label>
+			)}
+			{parseError && (
+				<p className="mt-1 text-xs text-red-700 dark:text-red-400">
+					{parseError}
+				</p>
+			)}
+			<button
+				type="button"
+				disabled={!stage || !unit}
+				onClick={() => {
+					if (useAuto) {
+						onPrepare({
+							op: "set_unit_iterations",
+							body: { stage, unit },
+							summary: `Synthesize iterations[] on ${stage}/${unit} — one 'advance' per hat in the stage's hats sequence.`,
+						})
+						return
+					}
+					let parsed: unknown
+					try {
+						parsed = JSON.parse(iterationsJson)
+						if (!Array.isArray(parsed)) {
+							throw new Error("must be a JSON array")
+						}
+					} catch (err) {
+						setParseError(
+							err instanceof Error ? err.message : "must be a JSON array",
+						)
+						return
+					}
+					onPrepare({
+						op: "set_unit_iterations",
+						body: { stage, unit, iterations: parsed },
+						summary: `Hand-write iterations[] on ${stage}/${unit} (${(parsed as unknown[]).length} entries): ${JSON.stringify(parsed)}`,
+					})
 				}}
 				className="mt-3 rounded bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
 			>

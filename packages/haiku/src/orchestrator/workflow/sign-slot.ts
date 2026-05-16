@@ -285,17 +285,22 @@ export function buildReviewRecord(
 	}
 }
 
-/** Build a signed-approval record: stamps a witnesses map so any later
- *  edit to a declared output trips drift. */
+/** Build a signed-approval record. Approvals are bookkeeping-only
+ *  under the premise-witness model — they record that a role signed,
+ *  but they do not witness any file content. Output mutation is NOT
+ *  drift (see DRIFT-CLEANUP.md and Phase 6 of the cleanup).
+ *
+ *  The `intentDir` and `outputs` parameters are retained for caller
+ *  back-compat but ignored. They'll be removed once every call site
+ *  is updated (Phase 8).
+ */
 export function buildApprovalRecord(
-	intentDir: string,
-	outputs: string[],
+	_intentDir?: string,
+	_outputs?: string[],
 ): {
 	at: string
-	witnesses: Record<string, string>
 } {
 	return {
 		at: new Date().toISOString(),
-		witnesses: buildOutputWitnesses(intentDir, outputs),
 	}
 }

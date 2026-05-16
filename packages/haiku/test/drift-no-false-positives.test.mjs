@@ -487,9 +487,9 @@ test("legacy fileSha256 witness on markdown output validates without drift", asy
 // a dedicated migration pass) is more complexity than the case
 // warrants.
 
-test("real body change on markdown output IS detected as drift (regardless of witness vintage)", async () => {
+test("real body change on markdown output does NOT trip drift (premise-witness model: outputs aren't witnessed)", async () => {
 	if (!HAS_GIT) return
-	await withRepo("legacy-witness-real-drift", async ({ root, intentDir }) => {
+	await withRepo("output-mutation-no-drift", async ({ root, intentDir }) => {
 		const { fileSha256 } = await import(
 			`${SRC}/orchestrator/workflow/sign-slot.ts`
 		)
@@ -520,6 +520,9 @@ test("real body change on markdown output IS detected as drift (regardless of wi
 					},
 				],
 				reviews: {},
+				// Legacy v8-shape approval with output witnesses on disk.
+				// The sweep MUST ignore the witnesses field entirely — this
+				// is the regression guard for the V9 cleanup.
 				approvals: {
 					user: {
 						at: "2026-05-01T00:00:00Z",
@@ -530,16 +533,22 @@ test("real body change on markdown output IS detected as drift (regardless of wi
 			}),
 		)
 		git(root, "add", "-A")
-		git(root, "commit", "-q", "-m", "haiku: stamped")
+		git(root, "commit", "-q", "-m", "haiku: stamped (with legacy witnesses)")
 
-		// Real body drift — both strategies should disagree with the
-		// stored witness.
+		// Mutate the output. This is the case that USED to fire drift
+		// in v8 and earlier — pre-cleanup, the agent re-running an
+		// iteration and updating an output would invalidate every
+		// approval's witness and emit drift forever (the fnox.toml
+		// permanent-loop bug). Under the premise-witness model, this
+		// is normal output evolution and must produce zero drift.
 		writeFileSync(
 			outAbs,
-			matter.stringify("# Spec\n\nDRIFTED body content.\n", { title: "spec" }),
+			matter.stringify("# Spec\n\nMODIFIED body (agent iteration).\n", {
+				title: "spec",
+			}),
 		)
 		git(root, "add", "-A")
-		git(root, "commit", "-q", "-m", "out-of-band: real body drift")
+		git(root, "commit", "-q", "-m", "agent: output revised")
 
 		const result = runDriftSweep({
 			intentDir,
@@ -547,11 +556,10 @@ test("real body change on markdown output IS detected as drift (regardless of wi
 			studio: "test",
 			repoRoot: root,
 		})
-		const outputDrift = result.events.filter((e) => e.kind === "output")
-		assert.equal(
-			outputDrift.length,
-			1,
-			`expected exactly one output drift event; got: ${JSON.stringify(result.events)}`,
+		assert.strictEqual(
+			result.events.length,
+			0,
+			`output mutation must produce zero drift events under the premise-witness model; got: ${JSON.stringify(result.events)}`,
 		)
 	})
 })

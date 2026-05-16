@@ -139,7 +139,6 @@ function pickInputWitnesses(record: unknown): InputWitnessesRead | null {
 
 export type DriftKind =
 	| "spec"
-	| "output"
 	| "discovery_output"
 	| "discovery_mandate"
 	/** A witnessed input file's SHA changed. The premise the slot was
@@ -192,18 +191,6 @@ function pickBodySha(record: unknown): string | null {
 	return typeof r.body_sha256 === "string" && r.body_sha256.length === 64
 		? r.body_sha256
 		: null
-}
-
-function pickWitnesses(record: unknown): Record<string, string> | null {
-	if (record === null || typeof record !== "object") return null
-	const r = record as Record<string, unknown>
-	const w = r.witnesses
-	if (w === null || typeof w !== "object" || Array.isArray(w)) return null
-	const out: Record<string, string> = {}
-	for (const [k, v] of Object.entries(w as Record<string, unknown>)) {
-		if (typeof v === "string" && v.length === 64) out[k] = v
-	}
-	return out
 }
 
 /**
@@ -426,56 +413,11 @@ export function runDriftSweep(args: {
 			}
 		}
 
-		// approvals.<role> witnesses declared output paths. The slot
-		// stores a `witnesses: { <relPath>: <sha256> }` map. For each
-		// entry: hash the file now, compare to stored. Mismatch =
-		// drift on that specific output. Files declared in fm.outputs
-		// but absent from witnesses (e.g. created after sign) are
-		// ignored — they'll show up next time the slot is re-signed.
-		const approvals = (fm.approvals as Record<string, unknown>) ?? {}
-		for (const [role, record] of Object.entries(approvals)) {
-			scanned++
-			const at = pickAt(record)
-			if (!at) continue
-			const witnesses = pickWitnesses(record)
-			if (!witnesses) continue // legacy slot, no baseline yet
-			for (const [outRel, storedHash] of Object.entries(witnesses)) {
-				// Output paths come in two shapes:
-				//   - intent-relative: `stages/design/foo.md` — joined
-				//     against intentDir.
-				//   - repo-relative: `src/components/Button.tsx` — joined
-				//     against repoRoot.
-				// `join(intentDir, "src/components/Button.tsx")` resolves
-				// to `<intentDir>/src/components/Button.tsx`, which doesn't
-				// exist, so the file-not-found path was silently skipping
-				// drift detection for the most important artifact (real
-				// code). Distinguish by leading segment: anything starting
-				// with `stages/` is intent-relative; everything else is
-				// repo-relative.
-				// Repo-scoped paths (no leading `stages/`) live outside the
-				// intent dir — they're rooted at the intent's repo root,
-				// which is whatever git considers the toplevel here.
-				// `repoRoot` was reasonable in the primary repo and wrong
-				// in a linked worktree; the safer move is to keep the
-				// stored path verbatim in the event payload (it's already
-				// the agent's reference shape) and only resolve it to an
-				// absolute path for the hash compare.
-				const outAbs = outRel.startsWith("stages/")
-					? join(args.intentDir, outRel)
-					: join(repoRoot, outRel)
-				const cmp = outputMatchesAnyStrategy(outAbs, storedHash)
-				if (!cmp) continue // file deleted; not a drift signal here
-				if (!cmp.matches) {
-					events.push({
-						unit: unitName,
-						role,
-						kind: "output",
-						file: outRel,
-						since: at,
-					})
-				}
-			}
-		}
+		// approvals.<role> is bookkeeping-only under the premise-witness
+		// model — output mutation is NOT drift (outputs are downstream
+		// of the signature and allowed to evolve). Legacy `witnesses`
+		// maps on existing approvals are intentionally ignored here;
+		// the v8→v9 migration drops the field entirely.
 
 		// discovery.<agent> witnesses the discovery output file plus
 		// the studio mandate. Same hash-compare model. Both witnessed

@@ -33,11 +33,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { applyFeedbackInvalidations } from "./orchestrator/workflow/dispatch-stamps.js"
-import {
-	buildApprovalRecord,
-	buildOutputWitnesses,
-	buildReviewRecord,
-} from "./orchestrator/workflow/sign-slot.js"
+import { buildReviewRecord } from "./orchestrator/workflow/sign-slot.js"
 import { intentDir, setFrontmatterField } from "./state-tools.js"
 import { emitTelemetry } from "./telemetry.js"
 
@@ -99,9 +95,6 @@ export function closeFeedbackPostHook(args: CloseFeedbackPostHookArgs): void {
 				const raw = readFileSync(unitPath, "utf8")
 				const parsed = matter(raw)
 				const fm = parsed.data as Record<string, unknown>
-				const outputs = Array.isArray(fm.outputs)
-					? (fm.outputs as string[])
-					: []
 				const reviews =
 					fm.reviews && typeof fm.reviews === "object"
 						? { ...(fm.reviews as Record<string, unknown>) }
@@ -115,48 +108,13 @@ export function closeFeedbackPostHook(args: CloseFeedbackPostHookArgs): void {
 						unitInputs,
 					})
 				}
-				const approvals =
-					fm.approvals && typeof fm.approvals === "object"
-						? { ...(fm.approvals as Record<string, unknown>) }
-						: {}
-				// Per claude-bot review on PR #363: only refresh an
-				// approval slot when the witnessed outputs actually
-				// changed. A drift FB on the unit body alone shouldn't
-				// reset every approval's `at:` timestamp — the audit
-				// trail (when each role originally approved) needs to
-				// stay intact. Hash the current outputs once and compare
-				// each role's existing witnesses; rebuild only on
-				// mismatch.
-				const currentWitnesses = buildOutputWitnesses(
-					intentDir(args.slug),
-					outputs,
-				)
-				for (const role of Object.keys(approvals)) {
-					const existing = approvals[role]
-					const existingWitnesses =
-						existing &&
-						typeof existing === "object" &&
-						!Array.isArray(existing) &&
-						(existing as Record<string, unknown>).witnesses &&
-						typeof (existing as Record<string, unknown>).witnesses === "object"
-							? ((existing as Record<string, unknown>).witnesses as Record<
-									string,
-									string
-								>)
-							: null
-					const witnessesUnchanged =
-						existingWitnesses !== null &&
-						Object.keys(currentWitnesses).length ===
-							Object.keys(existingWitnesses).length &&
-						Object.entries(currentWitnesses).every(
-							([k, v]) => existingWitnesses[k] === v,
-						)
-					if (!witnessesUnchanged) {
-						approvals[role] = buildApprovalRecord(intentDir(args.slug), outputs)
-					}
-				}
+				// Approvals are bookkeeping-only under the premise-witness
+				// model — they record that a role signed, they don't
+				// witness any file content (output mutation isn't drift).
+				// Leave existing approval timestamps untouched on drift-FB
+				// close. The audit trail of "who approved when" stays
+				// intact; nothing to refresh.
 				setFrontmatterField(unitPath, "reviews", reviews)
-				setFrontmatterField(unitPath, "approvals", approvals)
 			}
 		} catch (err) {
 			emitTelemetry("haiku.feedback.drift_refresh_failed", {

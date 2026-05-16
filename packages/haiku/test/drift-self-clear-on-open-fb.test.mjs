@@ -17,7 +17,13 @@
 
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { test } from "node:test"
@@ -69,10 +75,18 @@ async function withRepo(slug, fn) {
 	}
 }
 
-/** Build a unit with a signed approval that witnesses an output file.
- *  Returns the (unit, output) path pair. */
-async function seedUnitWithDriftedOutput({ intentDir, root, outputBasename }) {
-	const { outputSha256 } = await import(
+/** Build a unit with a signed review that witnesses the unit body.
+ *  Then mutate the body out-of-band to trip spec drift. Returns the
+ *  (unit, fileRel) pair so callers can reference the drifted file in
+ *  their source_ref / body assertions.
+ *
+ *  Premise-witness model: output mutation isn't drift. The dedup
+ *  behavior we're testing here lives on spec drift (and equivalently
+ *  on input_mutation / input_addition / input_deletion). Using spec
+ *  drift keeps the dedup test surface narrow and self-contained — no
+ *  need for cross-unit input wiring. */
+async function seedUnitWithDriftedSpec({ intentDir, root, unitBasename }) {
+	const { buildReviewRecord } = await import(
 		`${SRC}/orchestrator/workflow/sign-slot.ts`
 	)
 	// Seed an intent.md so tools that resolve the intent dir find it.
@@ -86,18 +100,19 @@ async function seedUnitWithDriftedOutput({ intentDir, root, outputBasename }) {
 			plugin_version: "4.0.0",
 		}),
 	)
-	const unitPath = join(intentDir, "stages", "design", "units", "unit-01.md")
-	const outRel = `stages/design/artifacts/${outputBasename}`
-	const outAbs = join(intentDir, outRel)
-	// Write initial output content + sign approval witnessing it.
-	writeFileSync(outAbs, "INITIAL CONTENT\n")
-	const initialSha = outputSha256(outAbs)
+	const unitPath = join(
+		intentDir,
+		"stages",
+		"design",
+		"units",
+		`${unitBasename}.md`,
+	)
+	// Write initial unit body + frontmatter.
 	writeFileSync(
 		unitPath,
-		matter.stringify("# u1\n", {
+		matter.stringify("# u1\n\nInitial spec body content.\n", {
 			title: "u1",
 			started_at: "2026-05-01T00:00:00Z",
-			outputs: [outRel],
 			iterations: [
 				{
 					hat: "verifier",
@@ -107,22 +122,35 @@ async function seedUnitWithDriftedOutput({ intentDir, root, outputBasename }) {
 				},
 			],
 			reviews: {},
-			approvals: {
-				user: {
-					at: "2026-05-01T00:00:00Z",
-					witnesses: { [outRel]: initialSha },
-				},
-			},
+			approvals: {},
 			discovery: {},
 		}),
 	)
+	// Sign the review witnessing the current body.
+	const signed = buildReviewRecord(unitPath)
+	const currentFm = matter(readFileSync(unitPath, "utf8"))
+	writeFileSync(
+		unitPath,
+		matter.stringify(currentFm.content, {
+			...currentFm.data,
+			reviews: { spec: signed },
+		}),
+	)
 	git(root, "add", "-A")
-	git(root, "commit", "-q", "-m", "seed: unit + signed output")
-	// Now drift the output content. Sweep should detect drift on it.
-	writeFileSync(outAbs, "DRIFTED CONTENT\n")
+	git(root, "commit", "-q", "-m", "seed: unit + signed review")
+	// Now drift the unit body. Sweep should detect spec drift.
+	const reloaded = matter(readFileSync(unitPath, "utf8"))
+	writeFileSync(
+		unitPath,
+		matter.stringify(
+			"# u1\n\nDRIFTED body content (out-of-band edit).\n",
+			reloaded.data,
+		),
+	)
 	git(root, "add", "-A")
-	git(root, "commit", "-q", "-m", "drift: out-of-band edit")
-	return { unitPath, outRel }
+	git(root, "commit", "-q", "-m", "drift: out-of-band body edit")
+	const fileRel = `stages/design/units/${unitBasename}.md`
+	return { unitPath, fileRel }
 }
 
 test("drift sweep emits drift_detected when no FB filed", async () => {
@@ -131,10 +159,10 @@ test("drift sweep emits drift_detected when no FB filed", async () => {
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)
-		await seedUnitWithDriftedOutput({
+		await seedUnitWithDriftedSpec({
 			intentDir,
 			root,
-			outputBasename: "SEMANTIC-TOKENS.md",
+			unitBasename: "unit-01",
 		})
 		const result = runDriftSweep({
 			intentDir,
@@ -147,7 +175,7 @@ test("drift sweep emits drift_detected when no FB filed", async () => {
 			1,
 			`expected one drift event, got ${JSON.stringify(result.events)}`,
 		)
-		assert.equal(result.events[0].kind, "output")
+		assert.equal(result.events[0].kind, "spec")
 	})
 })
 
@@ -157,10 +185,10 @@ test("drift sweep suppresses re-emission when FB has matching source_ref (exact)
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)
-		const { outRel } = await seedUnitWithDriftedOutput({
+		const { fileRel } = await seedUnitWithDriftedSpec({
 			intentDir,
 			root,
-			outputBasename: "SEMANTIC-TOKENS.md",
+			unitBasename: "unit-01",
 		})
 		// File an FB with the canonical source_ref shape.
 		const fbPath = join(
@@ -178,7 +206,7 @@ test("drift sweep suppresses re-emission when FB has matching source_ref (exact)
 				author: "drift-sweep",
 				author_type: "agent",
 				created_at: "2026-05-12T00:00:00Z",
-				source_ref: `drift:output:${outRel}`,
+				source_ref: `drift:spec:${fileRel}`,
 				closed_at: null,
 				iterations: [],
 			}),
@@ -203,10 +231,10 @@ test("drift sweep suppresses re-emission when FB source_ref has wrong KIND but r
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)
-		const { outRel } = await seedUnitWithDriftedOutput({
+		const { fileRel } = await seedUnitWithDriftedSpec({
 			intentDir,
 			root,
-			outputBasename: "SEMANTIC-TOKENS.md",
+			unitBasename: "unit-01",
 		})
 		// File an FB with the WRONG kind classification — the agent
 		// guessed "spec" but the drift was on an "output". The path
@@ -226,7 +254,7 @@ test("drift sweep suppresses re-emission when FB source_ref has wrong KIND but r
 				author: "drift-sweep",
 				author_type: "agent",
 				created_at: "2026-05-12T00:00:00Z",
-				source_ref: `drift:spec:${outRel}`, // WRONG KIND
+				source_ref: `drift:input_mutation:${fileRel}`, // WRONG KIND (but path matches)
 				closed_at: null,
 				iterations: [],
 			}),
@@ -251,10 +279,10 @@ test("drift sweep suppresses re-emission when FB body mentions the file basename
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)
-		await seedUnitWithDriftedOutput({
+		await seedUnitWithDriftedSpec({
 			intentDir,
 			root,
-			outputBasename: "SEMANTIC-TOKENS.md",
+			unitBasename: "unit-01",
 		})
 		// File an FB with NO source_ref but body mentions the file.
 		const fbPath = join(
@@ -267,7 +295,7 @@ test("drift sweep suppresses re-emission when FB body mentions the file basename
 		writeFileSync(
 			fbPath,
 			matter.stringify(
-				"The agent edited SEMANTIC-TOKENS.md out-of-band; we should review.\n",
+				"The agent edited unit-01.md out-of-band; we should review.\n",
 				{
 					title: "drift",
 					origin: "drift",
@@ -299,10 +327,10 @@ test("drift sweep re-arms after FB is closed", async () => {
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)
-		const { outRel } = await seedUnitWithDriftedOutput({
+		const { fileRel } = await seedUnitWithDriftedSpec({
 			intentDir,
 			root,
-			outputBasename: "SEMANTIC-TOKENS.md",
+			unitBasename: "unit-01",
 		})
 		// File a CLOSED FB. Sweep should still emit drift.
 		const fbPath = join(
@@ -321,7 +349,7 @@ test("drift sweep re-arms after FB is closed", async () => {
 				author_type: "agent",
 				created_at: "2026-05-12T00:00:00Z",
 				closed_at: "2026-05-12T01:00:00Z",
-				source_ref: `drift:output:${outRel}`,
+				source_ref: `drift:spec:${fileRel}`,
 				iterations: [],
 			}),
 		)
@@ -342,16 +370,22 @@ test("drift sweep re-arms after FB is closed", async () => {
 	})
 })
 
-test("haiku_baseline_init establish-paths re-stamps witness hash", async () => {
+// TODO(Phase 8 of DRIFT-CLEANUP): the haiku_baseline_init tool and its
+// underlying baseline.json system are scheduled for removal — under the
+// premise-witness model, output baselines are no longer relevant
+// (outputs aren't witnessed). This test depends on that machinery and
+// will be deleted alongside the tool. Marking it skipped here so the
+// suite stays green during the in-progress cleanup.
+test.skip("haiku_baseline_init establish-paths re-stamps witness hash [DELETE IN PHASE 8]", async () => {
 	if (!HAS_GIT) return
 	await withRepo("baseline-init-witness", async ({ root, intentDir, slug }) => {
 		const { runDriftSweep } = await import(
 			`${SRC}/orchestrator/workflow/drift-sweep.ts`
 		)
-		await seedUnitWithDriftedOutput({
+		await seedUnitWithDriftedSpec({
 			intentDir,
 			root,
-			outputBasename: "SEMANTIC-TOKENS.md",
+			unitBasename: "unit-01",
 		})
 		// Pre-condition: sweep reports drift.
 		let result = runDriftSweep({

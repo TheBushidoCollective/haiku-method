@@ -295,7 +295,13 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 				const id = `FB-DRIFT-${String(i + 1).padStart(2, "0")}`
 				makeFeedback({
 					intentDir,
-					stage: e.kind === "spec" || e.kind === "output" ? stage || "a" : null,
+					stage:
+						e.kind === "spec" ||
+						e.kind === "input_mutation" ||
+						e.kind === "input_addition" ||
+						e.kind === "input_deletion"
+							? stage || "a"
+							: null,
 					id,
 					title: `drift on ${e.unit}/${e.role}`,
 					body: `Out-of-band edit detected on ${e.file} since ${e.since}`,

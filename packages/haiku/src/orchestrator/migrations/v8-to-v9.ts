@@ -141,7 +141,7 @@ function purgeDriftArtifacts(intentDir: string, outcome: V9Outcome): void {
 	// Intent-scope marker store.
 	deleteIfExists(join(intentDir, "drift-markers.json"), outcome)
 
-	// Per-stage baseline state.
+	// Per-stage baseline state + legacy gate-session sidecar.
 	const stagesDir = join(intentDir, "stages")
 	if (!existsSync(stagesDir)) return
 	for (const stageEntry of readdirSync(stagesDir, { withFileTypes: true })) {
@@ -151,6 +151,11 @@ function purgeDriftArtifacts(intentDir: string, outcome: V9Outcome): void {
 		deleteIfExists(join(stageDir, "baseline-content"), outcome)
 		deleteIfExists(join(stageDir, ".baseline-ack"), outcome)
 		deleteIfExists(join(stageDir, "baseline-thrash.json"), outcome)
+		// Pre-v9 user-gate path wrote a per-stage gate-session.json
+		// sidecar. It had no readers — gate session pointers actually
+		// live on intent.md frontmatter (gate_review_session_<stage>
+		// keys, written by haiku_run_next). Delete any leftover files.
+		deleteIfExists(join(stageDir, "gate-session.json"), outcome)
 	}
 }
 

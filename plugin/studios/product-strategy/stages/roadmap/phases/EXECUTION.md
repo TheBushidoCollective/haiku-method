@@ -10,14 +10,21 @@ Every roadmap unit walks the three hats in order. The baton across the rally rac
 
 The hat order is `plan → do → verify` because capacity is reality-checked against a complete sequence, not a partial one, and the verifier checks the combined artifact.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `feasibility` review agent fires alongside any studio-level review agents.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, roadmap-architect, feedback-assessor]` dispatches per finding. The classifier routes the FB; the roadmap-architect re-sequences against the gap; the assessor independently decides closure.
-4. **Gate** — `ask`. Roadmap commitments are visible to the rest of the org and the user owns the final shape before stakeholder-review presents it externally.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `feasibility` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `feasibility` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → roadmap-architect → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `roadmap-architect` is the implementer (re-sequences against the gap); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Roadmap commitments are visible to the rest of the org and the user owns the final shape before stakeholder-review presents it externally.
 
 ## Reviewer guidance specific to this stage
 

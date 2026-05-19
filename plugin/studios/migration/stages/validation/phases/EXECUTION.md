@@ -12,14 +12,21 @@ The baton: validator's quantitative evidence is the precondition for regression-
 
 This stage owns **rollback rehearsal**. At least one unit MUST exercise the rollback procedure end-to-end against a representative dataset and produce the rehearsal record (procedure, dataset, RTO observed). Cutover's `rollback-readiness` review agent will reject without it.
 
-## After execute completes
+## Stage walk
 
-When every validation unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. Confirms the validation report conforms to the intent's spec.
-2. **Quality review (parallel)** — `parity` and any studio-level review agents fire in parallel. The upstream `mapping/accuracy` review lens is also included via the stage's `review-agents-include`.
-3. **Fix loop (if any feedback opens)** — `fix_hats:` chain (`classifier → validator → feedback-assessor`) dispatches per finding. The classifier routes; `validator` re-runs or re-authors the affected reconciliation or parity test; `feedback-assessor` closes.
-4. **Gate** — The stage's gate is `ask` — local approval once the validation report is complete and review agents have signed off. Cutover depends on it.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → validator → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `validator` is the implementer (re-runs or re-authors the affected reconciliation or parity test); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Local approval once the validation report is complete and review agents have signed off. Cutover depends on it.
 
 ## Reviewer guidance specific to this stage
 

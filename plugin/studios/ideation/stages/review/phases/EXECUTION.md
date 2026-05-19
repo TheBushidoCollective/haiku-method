@@ -12,14 +12,21 @@ The review stage runs a plan-do-verify front loop followed by an adversarial loo
 
 The front loop must close before the adversarial loop runs — this is the difference between an adversarial pass and a half-finished review. Critic and fact-checker assume the front loop already covered the planner's aspects rigorously; their value is in extending the coverage.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — Stage review agents (`coherence`) and studio-level review agents fire in parallel.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, synthesizer, feedback-assessor]` dispatches per finding. `synthesizer` is the implementer because review-stage defects are usually missed observations against an aspect, not missed plans; if a finding's root cause is a missed aspect entirely, route it back to `review-planner` via the unit body and the next iteration re-plans.
-4. **Gate** — `ask`. A human typically arbitrates which findings the deliverable actually addresses before `deliver` runs — not every finding needs a fix; some are caveats the deliverable can ship with.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `coherence` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `coherence` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → synthesizer → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `synthesizer` is the implementer (review-stage defects are usually missed observations against an aspect, not missed plans); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. A human typically arbitrates which findings the deliverable actually addresses before `deliver` runs — not every finding needs a fix; some are caveats the deliverable can ship with.
 
 ## Reviewer guidance specific to this stage
 

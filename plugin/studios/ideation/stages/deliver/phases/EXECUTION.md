@@ -9,14 +9,21 @@ Each deliver unit walks two hats in order. The baton is the operational result a
 
 This stage uses a two-hat baton because planning for delivery happens during decompose — the elaborator-stage planner decides which operational steps are needed; per-unit replanning rarely adds value. Project overlays may insert a third hat (e.g., a `formatter` between `publisher` and `verifier`) when a complex delivery channel justifies it.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — Stage review agents (`completeness`) and studio-level review agents fire in parallel.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, publisher, feedback-assessor]` dispatches per finding. The classifier routes the FB; `publisher` is the implementer; the assessor independently decides closure. Substantive findings (claims that need to change rather than be repackaged) route back to `create` instead of being patched in `deliver`.
-4. **Gate** — `auto`. The human-decision points already happened in `create`'s `ask` gate and `review`'s `ask` gate. Anything still open at delivery is operational and the engine can advance the stage on its own.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `completeness` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `completeness` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → publisher → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `publisher` is the implementer (claims that need to change rather than be repackaged); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `auto`. The human-decision points already happened in `create`'s `ask` gate and `review`'s `ask` gate. Anything still open at delivery is operational and the engine can advance the stage on its own.
 
 ## Reviewer guidance specific to this stage
 

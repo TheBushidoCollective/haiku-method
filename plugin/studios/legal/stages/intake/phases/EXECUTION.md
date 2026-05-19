@@ -9,14 +9,21 @@ Every intake unit walks the two hats in order. The baton across the rally race i
 
 The hat order is `plan → do` because the fact record IS the plan — the risk-assessor's analysis derives from it. There is no separate verifier hat in this stage; the second hat carries both the do and verify responsibility for the unit's deliverable, which is why the rejection routing matters.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The built-in spec-conformance subagent confirms the stage's brief and risk inventory conform to the intent's spec.
-2. **Quality review (parallel)** — The stage's `completeness` review agent fires, checking party identification, jurisdictional coverage, fact sourcing, risk tagging, and attorney-escalation surfacing.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, paralegal, feedback-assessor]` dispatches per finding. Classifier routes the FB to the right unit; paralegal re-authors the affected section (or escalates if the gap is risk-side); assessor decides closure.
-4. **Gate** — The gate is `auto`. Intake findings are typically internal-record findings (a fact uncited, a jurisdiction omitted) that resolve without a separate human approval gate beyond verifier sign-off.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `completeness` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `completeness` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → paralegal → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `paralegal` is the implementer (re-authors the affected section — or escalates if the gap is risk-side); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `auto`. Intake findings are typically internal-record findings (a fact uncited, a jurisdiction omitted) that resolve without a separate human approval gate beyond verifier sign-off.
 
 ## Reviewer guidance specific to this stage
 

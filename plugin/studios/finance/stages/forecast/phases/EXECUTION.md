@@ -10,14 +10,21 @@ Every forecast unit walks the three hats in order. The baton across the rally ra
 
 The hat order is `plan → do → verify` because the analyst sets the inputs the forecaster projects against; verifier checks the result without redoing the projection.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The built-in spec-conformance subagent confirms the stage's artifacts conform to the intent's spec.
-2. **Quality review (parallel)** — The stage's `methodology` review agent and any studio-level review agents fire in parallel.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, analyst, feedback-assessor]` dispatches against each open finding. The classifier targets the affected projection slice; `analyst` re-grounds it in evidence; the assessor independently decides closure.
-4. **Gate** — `ask` — a local human reviews scenario plausibility and assumption defensibility before the budget stage consumes the model.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `methodology` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `methodology` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → analyst → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `analyst` is the implementer (re-grounds it in evidence); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. A local human reviews scenario plausibility and assumption defensibility before the budget stage consumes the model.
 
 ## Reviewer guidance specific to this stage
 

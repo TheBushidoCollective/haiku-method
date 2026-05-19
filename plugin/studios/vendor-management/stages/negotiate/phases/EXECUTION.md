@@ -9,14 +9,21 @@ Every negotiate unit walks the hat chain in order. The baton across the rally ra
 
 The hat order produces the legally reviewed terms — the negotiator commits to terms, the legal reviewer checks the terms against policy and compliance and routes findings back via feedback.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate; the built-in spec-conformance subagent confirms the negotiation terms conform to the intent's spec.
-2. **Quality review (parallel)** — The stage's review agents (`protection`) and any studio-level review agents fire in parallel.
-3. **Fix loop (if any feedback opens)** — The stage's `fix_hats:` chain (`classifier → negotiator → feedback-assessor`) dispatches against each open feedback. The classifier routes; the negotiator re-opens the affected terms with the vendor and updates the document; the assessor independently decides closure.
-4. **Gate** — The stage's gate is `external` — final signoff happens in the organization's external contracting / approval workflow (legal, finance, executive sponsor), and the engine waits for that signal before advancing.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `protection` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `protection` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → negotiator → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `negotiator` is the implementer (re-opens the affected terms with the vendor and updates the document); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `external`. Final signoff happens in the organization's external contracting / approval workflow (legal, finance, executive sponsor), and the engine waits for that signal before advancing.
 
 ## Reviewer guidance specific to this stage
 

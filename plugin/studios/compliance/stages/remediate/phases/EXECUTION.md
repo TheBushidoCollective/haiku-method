@@ -10,11 +10,18 @@ Every remediate unit walks the three hats in `plan → do → verify` order. Uni
 
 Units that need only technical work flow `remediation-engineer → verifier`; units that need only governance work flow `policy-writer → verifier`; units that need both walk all three.
 
-## After execute completes
+## Stage walk
 
-When every unit's chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — universal hard gate; the built-in spec-conformance subagent confirms the stage's artifacts conform to the intent's spec.
-2. **Quality review (parallel)** — the stage's `effectiveness` lens fires alongside any studio-level review agents. Note: `effectiveness` is also pulled into `certify` via `review-agents-include` so policy-vs-practice drift surfaces before external audit.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, remediation-engineer, feedback-assessor]` dispatches per finding; the classifier routes the FB, `remediation-engineer` re-implements technical fixes (or routes governance findings via classifier to `policy-writer`), the assessor independently decides closure.
-4. **Gate** — `ask`. Remediation often touches production systems and the cost of unreviewed change is high, so a human approves locally before document and certify consume the changes.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → remediation-engineer → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `remediation-engineer` is the implementer (re-implements technical fixes — or routes governance findings via classifier to `policy-writer`); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Remediation often touches production systems and the cost of unreviewed change is high, so a human approves locally before document and certify consume the changes.

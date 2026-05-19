@@ -10,14 +10,21 @@ Every measure unit walks the three hats in order. The baton is the measurement a
 
 The hat order is `plan → do → verify` because the analyst produces the evidence base, the report-writer synthesizes it into the stakeholder narrative, and the verifier confirms substance and traceability. The rally-race test (architecture §2.3) is met because the baton (raw segmented data → narrative report → validated report) is meaningfully transformed at each handoff.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `methodology` review agent fires, plus any studio-level review agents.
-3. **Fix loop** — `fix_hats: [classifier, analyst, feedback-assessor]` dispatches per finding. The report-writer is intentionally not in the fix loop because the analyst owns the underlying methodology; the writer's synthesis naturally re-applies on the next iteration.
-4. **Gate** — `auto`. The measurement artifact is a knowledge output, not a customer-facing publication; the reflection step is where humans engage with the conclusions and decide what carries into the next campaign.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `methodology` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `methodology` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → analyst → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `analyst` is the implementer (re-applies on the next iteration); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `auto`. The measurement artifact is a knowledge output, not a customer-facing publication; the reflection step is where humans engage with the conclusions and decide what carries into the next campaign.
 
 ## Reviewer guidance specific to this stage
 

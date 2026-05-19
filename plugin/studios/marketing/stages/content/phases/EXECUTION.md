@@ -10,14 +10,21 @@ Every content unit walks the three hats in order. The baton is the asset family 
 
 The hat order is `plan → do → verify` because the creator produces the framework-grounded draft, the copy-editor sharpens (do — refinement), and the verifier validates substance. The rally-race test (architecture §2.3) is met because each hat's output is meaningfully different from the prior hat's: the creator's draft is messaging adapted to channel; the editor's output is the same messaging tuned for clarity and CTA strength; the verifier's output is the validated artifact.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `brand-alignment` review agent fires, plus any studio-level review agents.
-3. **Fix loop** — `fix_hats: [classifier, content-creator, feedback-assessor]` dispatches per finding. The copy-editor is intentionally not in the fix loop because the creator owns the underlying messaging choices; the editor's sharpening pass naturally re-applies on the next iteration of the artifact.
-4. **Gate** — `ask`. The user approves assets locally before distribution, because live channel mistakes are expensive to retract.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `brand-alignment` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `brand-alignment` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → content-creator → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `content-creator` is the implementer (re-applies on the next iteration of the artifact); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. The user approves assets locally before distribution, because live channel mistakes are expensive to retract.
 
 ## Reviewer guidance specific to this stage
 

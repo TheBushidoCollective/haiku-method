@@ -9,14 +9,21 @@ Every firmware unit walks the two hats in order. The baton is the unit's accumul
 
 The hat order is `plan → do → verify`. The firmware-engineer hat does both plan and do because firmware planning is inseparable from coding decisions; the reviewer hat is the terminal verifier.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The engine-built spec-conformance subagent confirms the stage's artifacts conform to the intent's spec.
-2. **Quality review (parallel)** — The stage's review agents (`resource-budget`, `safety-path-coverage`) and any studio-level review agents fire in parallel. Each files feedback if its lens identifies a finding.
-3. **Fix loop (if any feedback opens)** — The stage's `fix_hats:` chain (`classifier → firmware-engineer → feedback-assessor`) dispatches against each open feedback. The classifier routes; the firmware-engineer lands the corrective edits and tests; the assessor independently decides closure.
-4. **Gate** — The stage's gate is `[external, ask]` — firmware shipping into a physical product typically wants peer-review signoff external to the agent loop (engineering peer review, safety review, or external code review through the team's chosen review surface).
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `resource-budget` and `safety-path-coverage` review agents and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `resource-budget` and `safety-path-coverage` review agents and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → firmware-engineer → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `firmware-engineer` is the implementer (re-engineer lands the corrective edits and tests); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `[external, ask]`. Firmware shipping into a physical product typically wants peer-review signoff external to the agent loop (engineering peer review, safety review, or external code review through the team's chosen review surface).
 
 ## Reviewer guidance specific to this stage
 

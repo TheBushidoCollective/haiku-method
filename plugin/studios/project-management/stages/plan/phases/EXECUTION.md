@@ -10,14 +10,21 @@ Every plan unit walks the three hats in order. The baton across the rally race i
 
 The hat order is `plan → do → verify` because the WBS and dependencies frame what gets estimated. Estimating before the decomposition is stable produces numbers that have to be redone every time the structure changes.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The built-in spec-conformance subagent confirms the stage's artifacts conform to the intent's spec.
-2. **Quality review (parallel)** — The stage's `completeness` review agent and any studio-level review agents fire in parallel. Each produces feedback if their lens identifies a finding.
-3. **Fix loop (if any feedback opens)** — The `fix_hats: [classifier, planner, feedback-assessor]` chain dispatches per finding. Classifier routes the FB; `planner` re-authors the affected WBS, dependency, or estimate; the assessor independently decides closure.
-4. **Gate** — The gate is `ask` — local approval of the plan baseline is sufficient for most teams. Project overlays can flip to `external` (formal plan-baseline sign-off in a portfolio tool) where governance requires it.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `completeness` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `completeness` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → planner → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `planner` is the implementer (re-authors the affected WBS, dependency, or estimate); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Local approval of the plan baseline is sufficient for most teams. Project overlays can flip to `external` (formal plan-baseline sign-off in a portfolio tool) where governance requires it.
 
 ## Reviewer guidance specific to this stage
 

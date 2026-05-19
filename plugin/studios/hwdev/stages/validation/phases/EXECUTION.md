@@ -11,14 +11,21 @@ Every validation unit walks the four hats in order. The baton is the unit's accu
 
 The hat order is `plan → do → verify`. The test-engineer and compliance-officer run in parallel where their surfaces are distinct (HIL test vs cert package); the validation-lead's coverage map cannot land until their evidence exists to cite; the verifier is the terminal validator on the body.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The engine-built spec-conformance subagent confirms the stage's artifacts conform to the intent's spec.
-2. **Quality review (parallel)** — The stage's review agents (`coverage`, `cert-completion`) and any studio-level review agents fire in parallel. Each files feedback if its lens identifies a finding.
-3. **Fix loop (if any feedback opens)** — The stage's `fix_hats:` chain (`classifier → test-engineer → feedback-assessor`) dispatches against each open feedback. The classifier routes; the test-engineer lands corrective test-plan edits, runs additional coverage, or sharpens evidence shape; the assessor independently decides closure. Findings that diagnose upstream defects (design, firmware, manufacturing) are raised against the responsible stage rather than papered over in validation.
-4. **Gate** — The stage's gate is `await` — validation completion typically blocks on an external event (certified-lab return, environmental-chamber slot finishing, third-party HALT lab result, field-trial cohort reporting) rather than a synchronous review. Discrete-mode intents pause here until the external event arrives.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `coverage` and `cert-completion` review agents and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `coverage` and `cert-completion` review agents and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → test-engineer → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `test-engineer` is the implementer (lands corrective test-plan edits); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `await`. Validation completion typically blocks on an external event (certified-lab return, environmental-chamber slot finishing, third-party HALT lab result, field-trial cohort reporting) rather than a synchronous review. Discrete-mode intents pause here until the external event arrives.
 
 ## Reviewer guidance specific to this stage
 

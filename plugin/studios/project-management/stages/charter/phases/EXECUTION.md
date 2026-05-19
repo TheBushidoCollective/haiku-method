@@ -10,14 +10,21 @@ Every charter unit walks the three hats in order. The baton across the rally rac
 
 The hat order is `plan → do → verify` because the business case and success criteria frame what scope and stakeholder engagement need to deliver against. Working scope before business case inverts the dependency.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The built-in spec-conformance subagent confirms the stage's artifacts conform to the intent's spec.
-2. **Quality review (parallel)** — The stage's `feasibility` review agent and any studio-level review agents fire in parallel. Each produces feedback if their lens identifies a finding.
-3. **Fix loop (if any feedback opens)** — The `fix_hats: [classifier, sponsor, feedback-assessor]` chain dispatches per finding. Classifier routes the FB; `sponsor` re-authors the relevant section (business case, criteria, governance, scope, constraints, assumptions, stakeholders depending on classification); the assessor independently decides closure.
-4. **Gate** — The gate is `external` — sponsor sign-off typically happens outside the plugin (a signed charter document, a kickoff approval recorded in the PM tool). The branch-merge signal advances the stage once external approval is recorded.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `feasibility` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `feasibility` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → sponsor → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `sponsor` is the implementer (re-authors the relevant section — business case, criteria, governance, scope, constraints, assumptions, stakeholders depending on classification); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `external`. Sponsor sign-off typically happens outside the plugin (a signed charter document, a kickoff approval recorded in the PM tool). The branch-merge signal advances the stage once external approval is recorded.
 
 ## Reviewer guidance specific to this stage
 

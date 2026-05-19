@@ -10,14 +10,21 @@ Every budget unit walks the three hats in order. The baton is the unit's own out
 
 The hat order is `plan → do → verify` because the budget-owner sets the rule the allocator implements; verifier checks against substance, not against the rule itself.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `alignment` review agent and any studio-level review agents fire.
-3. **Fix loop** — `fix_hats: [classifier, budget-owner, feedback-assessor]`. Classifier targets the affected allocation; `budget-owner` re-derives the framework slice; assessor decides closure.
-4. **Gate** — `external` — budget allocations typically require finance-leadership signoff outside this loop (budget committee, CFO, board). The engine waits for the external approval signal.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `alignment` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `alignment` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → budget-owner → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `budget-owner` is the implementer (re-derives the framework slice); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `external`. Budget allocations typically require finance-leadership signoff outside this loop (budget committee, CFO, board). The engine waits for the external approval signal.
 
 ## Reviewer guidance specific to this stage
 

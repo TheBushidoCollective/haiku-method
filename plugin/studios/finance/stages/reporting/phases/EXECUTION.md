@@ -10,12 +10,21 @@ Every reporting unit walks the three hats in `plan → do → verify` order:
 
 The hat order is `plan → do → verify` because the reporter's audience and structure decisions determine what the visualizer must support; verifier checks the result against substance criteria, not against the audience choice itself.
 
-## After execute completes
+## Stage walk
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `clarity` review agent and any studio-level review agents fire.
-3. **Fix loop** — `fix_hats: [classifier, reporter, feedback-assessor]`. Classifier targets the affected report or dashboard; `reporter` re-authors the affected section; assessor decides closure.
-4. **Gate** — `ask` — reports are stakeholder-facing; a local human reviews tone, accuracy, and disclosure completeness before close.
+The workflow engine runs every stage in lifecycle order:
+
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `clarity` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `clarity` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → reporter → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `reporter` is the implementer (re-authors the affected section); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Reports are stakeholder-facing; a local human reviews tone, accuracy, and disclosure completeness before close.
 
 ## Reviewer guidance specific to this stage
 

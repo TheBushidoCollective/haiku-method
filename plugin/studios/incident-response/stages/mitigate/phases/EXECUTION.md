@@ -9,14 +9,21 @@ Every mitigate unit walks the two hats in order. The baton across the rally race
 
 The hat order is `plan → do → verify` with the mitigator carrying plan-and-do because the planning and the action are tightly coupled and live in the same head during an active incident; a separate planner hat would add latency without adding rigor. The discipline that keeps mitigation safe (named hypothesis, exact change documented, rollback recorded, single-variable change) lives in the mitigator's process, not in a separate planner role.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The built-in spec-conformance subagent confirms the stage's artifacts conform to the intent's spec.
-2. **Quality review (parallel)** — The stage's review agents (`safety`) and any studio-level review agents fire in parallel. Each produces feedback if their lens identifies a finding.
-3. **Fix loop (if any feedback opens)** — The stage's `fix_hats:` chain (`classifier → mitigator → feedback-assessor`) dispatches against each open feedback. The mitigator re-owns the corrected action because mitigation choice and reversibility framing are mitigator-scope; the assessor independently decides closure.
-4. **Gate** — The stage's gate is `[ask, await]` — the user chooses between a fast local approval (signing off that user-facing impact has stopped) or `await` to block on an external event such as a status-page resolution post or a regulatory clock closure. Both paths require explicit acknowledgment that mitigation is effective; this is the canonical "incident over for users" moment.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `safety` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `safety` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → mitigator → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `mitigator` is the implementer (re-owns the corrected action because mitigation choice and reversibility framing are mitigator-scope); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `[ask, await]`. The user chooses between a fast local approval (signing off that user-facing impact has stopped) or `await` to block on an external event such as a status-page resolution post or a regulatory clock closure. Both paths require explicit acknowledgment that mitigation is effective; this is the canonical "incident over for users" moment.
 
 ## Reviewer guidance specific to this stage
 

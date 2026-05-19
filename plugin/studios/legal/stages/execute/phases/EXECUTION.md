@@ -10,14 +10,21 @@ Every execute unit walks the three hats in order. The baton across the rally rac
 
 The hat order is `plan → do → verify`: finalization produces the executable body, administration produces the retention record, and verification confirms the executed artifact is defensible.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `formality` review agent fires (`interpretation: strict`), checking that every review finding is resolved, the change log is complete, conditions precedent are confirmed, execution formalities are correct, and the retention record is properly indexed.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, closer, feedback-assessor]` dispatches per finding. Classifier routes; closer re-authors the affected section or audit-trail entry; assessor closes.
-4. **Gate** — The gate is `await`. The workflow blocks until the external signature event arrives (countersigned PDF, electronic-signature platform completion, attorney confirmation of execution). The agent does not self-advance this gate.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `formality` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `formality` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → closer → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `closer` is the implementer (re-authors the affected section or audit-trail entry); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `await`. The workflow blocks until the external signature event arrives (countersigned PDF, electronic-signature platform completion, attorney confirmation of execution). The agent does not self-advance this gate.
 
 ## Reviewer guidance specific to this stage
 

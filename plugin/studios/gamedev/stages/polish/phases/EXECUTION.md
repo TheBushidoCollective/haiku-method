@@ -11,14 +11,21 @@ Every polish unit walks the four hats in order. The baton is the unit body, accu
 
 The hat order is `plan + do-fix → do-feel → do-perf → verify` because fixes must land before tuning is meaningful (a buggy system can't be tuned reliably), tuning must land before performance optimization (perf work that breaks feel is regression), and verification is the gate before release.
 
-## After execute completes
+## Stage walk
 
-When every polish unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's review agents (`bug-readiness`, `performance-targets`) fire in parallel.
-3. **Fix loop (if any feedback opens)** — The `fix_hats:` chain (`classifier → gameplay-engineer → feedback-assessor`) dispatches against each open feedback. Polish-fix is re-tuning, re-fixing, or re-optimizing — never adding new content. The classifier routes the FB; `gameplay-engineer` is the implementer; the assessor decides closure.
-4. **Gate** — The stage's gate is `[external, ask]` — the user picks between external review (e.g., a publisher beta signoff, a platform pre-cert pass) or local approval.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `bug-readiness` and `performance-targets` review agents and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `bug-readiness` and `performance-targets` review agents and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → gameplay-engineer → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `gameplay-engineer` is the implementer (re-optimizing — never adding new content); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `[external, ask]`. The user picks between external review (e.g., a publisher beta signoff, a platform pre-cert pass) or local approval.
 
 ## Reviewer guidance specific to this stage
 

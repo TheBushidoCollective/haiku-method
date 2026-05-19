@@ -8,11 +8,18 @@ Every document unit walks the three hats in `plan → do → verify` order. The 
 2. **`documentation-writer` (do for narrative):** Reads the evidence inventory and the upstream artifacts. Picks the package structure (default: by control family), writes per-control narratives that cite specific evidence rows, builds the chronological audit-trail summary, and writes the management summary that honestly describes coverage including any acknowledged gaps. Hands off when every in-scope control has a narrative section and the audit-trail summary is continuous.
 3. **`verifier` (verify):** Reads the unit body. Validates substance, citation, internal consistency (narrative claims trace to evidence rows; cross-references resolve), decision-register alignment, open-question accounting. Either advances or rejects.
 
-## After execute completes
+## Stage walk
 
-When every unit's chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — universal hard gate; the built-in spec-conformance subagent confirms the stage's artifacts conform to the intent's spec.
-2. **Quality review (parallel)** — the stage's `evidence-quality` lens fires alongside any studio-level review agents.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, evidence-collector, feedback-assessor]` dispatches per finding; the classifier routes the FB, `evidence-collector` re-gathers missing evidence or fixes provenance gaps (routing narrative-only findings to `documentation-writer` via classifier), the assessor independently decides closure.
-4. **Gate** — `ask`. Evidence sufficiency is a judgment call the auditor will second-guess and the team needs to align before that conversation, so a human approves locally before certify consumes the package.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → evidence-collector → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `evidence-collector` is the implementer (re-gathers missing evidence or fixes provenance gaps — routing narrative-only findings to `documentation-writer` via classifier); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Evidence sufficiency is a judgment call the auditor will second-guess and the team needs to align before that conversation, so a human approves locally before certify consumes the package.

@@ -10,14 +10,21 @@ Every research unit walks the three hats in order. The baton is the unit body it
 
 The hat order is `plan → do → verify` because researcher produces the evidence the analyst distills: evidence is the plan, the structured audience artifact is the do, the substance check is the verify.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The built-in spec-conformance subagent confirms the stage's artifacts conform to the intent's spec.
-2. **Quality review (parallel)** — The stage's `rigor` review agent fires, plus any studio-level review agents. Findings open as feedback.
-3. **Fix loop** — `fix_hats: [classifier, market-researcher, feedback-assessor]` dispatches per finding. The classifier routes; market-researcher re-authors against the cited gap; the assessor decides closure independently.
-4. **Gate** — `auto`. Research findings advance without explicit human signoff; the strategy stage's collaborative elaboration is where humans engage with the conclusions.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `rigor` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `rigor` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → market-researcher → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `market-researcher` is the implementer (re-authors against the cited gap); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `auto`. Research findings advance without explicit human signoff; the strategy stage's collaborative elaboration is where humans engage with the conclusions.
 
 ## Reviewer guidance specific to this stage
 

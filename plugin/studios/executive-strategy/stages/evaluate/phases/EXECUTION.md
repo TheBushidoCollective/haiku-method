@@ -10,14 +10,21 @@ Every evaluate unit walks the three hats in order:
 
 The hat order is `plan → do → verify` because scoring criteria must be locked before scoring; reversing produces a fraudulent evaluation.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `objectivity` review agent fires alongside any studio-level review agents.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, evaluator, feedback-assessor]` dispatches per finding. The classifier routes the FB. `evaluator` is the implementer (re-scoring or re-documenting reasoning; weight changes require redoing the scoring with the new weights documented). The assessor independently decides closure.
-4. **Gate** — The stage's gate is `ask` — local human approval. Decision quality depends on evaluation transparency; the user must inspect criteria weighting and scenario assumptions before the decision stage locks in.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `objectivity` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `objectivity` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → evaluator → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `evaluator` is the implementer (re-scoring or re-documenting reasoning; weight changes require redoing the scoring with the new weights documented); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Local human approval. Decision quality depends on evaluation transparency; the user must inspect criteria weighting and scenario assumptions before the decision stage locks in.
 
 ## Reviewer guidance specific to this stage
 

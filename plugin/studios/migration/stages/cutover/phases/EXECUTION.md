@@ -10,14 +10,21 @@ Every cutover unit walks three hats in `plan → do → verify` order:
 
 The baton: the forward and reverse halves of the same step accumulate in one unit body. The verifier reads both and decides.
 
-## After execute completes
+## Stage walk
 
-When every cutover unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — `rollback-readiness` and any studio-level review agents fire in parallel. Upstream review lenses (`migrate/data-integrity`, `validation/parity`) are included via the stage's `review-agents-include`.
-3. **Fix loop (if any feedback opens)** — `fix_hats:` chain (`classifier → cutover-coordinator → feedback-assessor`) dispatches per finding. The classifier routes; `cutover-coordinator` re-authors the runbook step; `feedback-assessor` closes.
-4. **Gate** — The stage's gate is `external`. The runbook must be approved through the team's actual change-management surface (incident-management platform, change ticket, on-call lead signoff) before cutover proceeds. Project overlays MUST configure that surface; the plugin default doesn't assume a specific tool.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → cutover-coordinator → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `cutover-coordinator` is the implementer (re-authors the runbook step); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `external`. The runbook must be approved through the team's actual change-management surface (incident-management platform, change ticket, on-call lead signoff) before cutover proceeds. Project overlays MUST configure that surface; the plugin default doesn't assume a specific tool.
 
 ## Reviewer guidance specific to this stage
 

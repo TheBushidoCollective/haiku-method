@@ -12,14 +12,21 @@ Every evaluate unit walks the three hats in order. The baton is `EFFECTIVENESS-R
 
 The hat order is `plan → do → verify` because the evaluator's instruments and data are the spec the analyst interprets, and the interpretation is what the verifier validates.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The `rigor` review agent fires alongside any studio-level review agents.
-3. **Fix loop (if any feedback opens)** — The `fix_hats: [classifier, evaluator, feedback-assessor]` chain dispatches per finding.
-4. **Gate** — Gate is `ask`. The user approves the findings locally before they feed back into the next program iteration, because incorrect causal claims here distort every downstream decision.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → evaluator → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `evaluator` is the implementer (re-authors the work); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. The user approves the findings locally before they feed back into the next program iteration, because incorrect causal claims here distort every downstream decision.
 
 ## Reviewer guidance specific to this stage
 

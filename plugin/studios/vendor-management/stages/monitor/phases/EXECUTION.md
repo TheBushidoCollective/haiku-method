@@ -10,14 +10,21 @@ Every monitor unit walks the three hats in order. The baton across the rally rac
 
 The hat order produces a complete picture — performance numbers, relationship signal, verified observation. Each cycle yields a fresh performance report.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate; the built-in spec-conformance subagent confirms the performance report conforms to the intent's spec.
-2. **Quality review (parallel)** — The stage's review agents (`accountability`) and any studio-level review agents fire in parallel.
-3. **Fix loop (if any feedback opens)** — The stage's `fix_hats:` chain (`classifier → monitor → feedback-assessor`) dispatches against each open feedback. The classifier routes; the monitor re-runs the affected data collection or trend calculation; the assessor independently decides closure.
-4. **Gate** — The stage's gate is `auto` — the engine advances on its own once every observation unit has passed its post-condition check.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `accountability` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `accountability` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → monitor → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `monitor` is the implementer (re-runs the affected data collection or trend calculation); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `auto`. The engine advances on its own once every observation unit has passed its post-condition check.
 
 The monitor stage is recurring. Each iteration produces a new performance report against the same contract; corrective findings against negotiation terms flow upstream via feedback to the negotiate stage.
 

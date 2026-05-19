@@ -11,14 +11,21 @@ Every design unit walks the four hats in order. The baton across the rally race 
 
 The hat order is `plan → do → verify` because the electrical hat publishes the foundation, the mechanical and PCB hats build on it in parallel where the geometry allows but serially when the layout needs the mechanical envelope (and vice versa), and the design-reviewer integrates the artifact set as a whole.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The engine-built spec-conformance subagent confirms the stage's artifacts conform to the intent's spec.
-2. **Quality review (parallel)** — The stage's review agents (`compliance-mapping`, `manufacturability`) and any studio-level review agents fire in parallel. Each files feedback if its lens identifies a finding.
-3. **Fix loop (if any feedback opens)** — The stage's `fix_hats:` chain dispatches against each open feedback in order: the classifier routes the finding; the electrical-engineer or pcb-designer hat lands the corrective edits depending on whether the finding is schematic-scope or layout-scope; the assessor independently decides closure.
-4. **Gate** — The stage's gate is `[external, ask]` — the user may submit the design package for external review (engineering peer review, hardware review board, fab-house DFM signoff in the team's review surface) or approve locally. Approval signals the stage is done and the workflow moves on.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `compliance-mapping` and `manufacturability` review agents and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `compliance-mapping` and `manufacturability` review agents and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → electrical-engineer → pcb-designer → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; the electrical-engineer and pcb-designer hats land the corrective edits depending on whether the finding is schematic-scope or layout-scope; the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `[external, ask]`. The user may submit the design package for external review (engineering peer review, hardware review board, fab-house DFM signoff in the team's review surface) or approve locally. Approval signals the stage is done and the workflow moves on.
 
 ## Reviewer guidance specific to this stage
 

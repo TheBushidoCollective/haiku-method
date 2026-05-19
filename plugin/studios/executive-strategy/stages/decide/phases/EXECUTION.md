@@ -10,14 +10,21 @@ Every decide unit walks the three hats in order:
 
 The hat order is `plan → do → verify` because the recommendation must be coherent and risk-honest BEFORE the deliberation; otherwise the facilitator is running a conversation around a half-formed position.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `transparency` review agent fires alongside any studio-level review agents.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, advisor, feedback-assessor]` dispatches per finding. The classifier routes the FB. `advisor` is the implementer (re-drafting the recommendation, strengthening the counterargument response, or re-stating risks more prominently). The assessor independently decides closure.
-4. **Gate** — The stage's gate is `external` — the brief goes out for external ratification (board / investment committee / executive sign-off). The workflow blocks until the external decision system signals approval (typically branch merge in the project's tracking system, or explicit external acknowledgement).
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `transparency` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `transparency` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → advisor → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `advisor` is the implementer (re-drafting the recommendation, strengthening the counterargument response, or re-stating risks more prominently); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `external`. The brief goes out for external ratification (board / investment committee / executive sign-off). The workflow blocks until the external decision system signals approval (typically branch merge in the project's tracking system, or explicit external acknowledgement).
 
 ## Reviewer guidance specific to this stage
 

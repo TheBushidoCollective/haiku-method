@@ -10,14 +10,21 @@ Every draft unit walks the three hats in order. The baton across the rally race 
 
 The hat order is `plan → do → verify` because drafting produces the substantive deliverable, editing tightens it, and verification confirms the unit is ready for the review stage's adversarial lens.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `precision` review agent fires, checking defined-term discipline, cross-reference resolution, brief-to-clause and risk-to-clause traceability, and operative ambiguity.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, drafter, feedback-assessor]` dispatches per finding. Classifier routes; drafter re-authors the affected clause; assessor closes.
-4. **Gate** — The gate is `ask`. The licensed attorney approves the draft locally before the review stage opens. The attorney's approval at this gate signals "the draft is ready for substantive review," not "the draft is ready to execute."
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `precision` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `precision` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → drafter → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `drafter` is the implementer (re-authors the affected clause); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. The licensed attorney approves the draft locally before the review stage opens. The attorney's approval at this gate signals "the draft is ready for substantive review," not "the draft is ready to execute."
 
 ## Reviewer guidance specific to this stage
 

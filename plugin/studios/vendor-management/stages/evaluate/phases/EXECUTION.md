@@ -9,14 +9,21 @@ Every evaluate unit walks the hat chain in order. The baton across the rally rac
 
 The hat order produces the verified scorecard — the evaluator scores against the methodology, the technical reviewer verifies the scoring against reality. Disagreement routes via feedback, not rescoring.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate; the built-in spec-conformance subagent confirms the scorecard conforms to the intent's spec.
-2. **Quality review (parallel)** — The stage's review agents (`objectivity`) and any studio-level review agents fire in parallel.
-3. **Fix loop (if any feedback opens)** — The stage's `fix_hats:` chain (`classifier → evaluator → feedback-assessor`) dispatches against each open feedback. The classifier routes the FB; the evaluator re-runs the affected scoring or rationale; the assessor independently decides closure.
-4. **Gate** — The stage's gate is `ask` — a human stakeholder approves the shortlist locally before negotiation contact begins.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `objectivity` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `objectivity` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → evaluator → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `evaluator` is the implementer (re-runs the affected scoring or rationale); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. A human stakeholder approves the shortlist locally before negotiation contact begins.
 
 ## Reviewer guidance specific to this stage
 

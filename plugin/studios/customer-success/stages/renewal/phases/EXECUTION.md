@@ -10,14 +10,21 @@ Every renewal unit walks the three hats in order. The baton across the rally rac
 
 The hat order is `plan → do → verify` because the operational strategy must be in place before the executive narrative is layered on top. Inverting it produces executive engagement that's untethered from the motion and becomes the problem instead of the lever.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The built-in spec-conformance subagent reads the intent's spec and confirms the stage's artifacts conform.
-2. **Quality review (parallel)** — The stage's `risk-assessment` review agent and any studio-level review agents fire in parallel. Each produces feedback if their lens identifies a finding.
-3. **Fix loop (if any feedback opens)** — The stage's `fix_hats:` chain (`classifier → renewal-manager → feedback-assessor`) dispatches against each open feedback. The classifier routes the FB; `renewal-manager` is the implementer (re-framing the narrative or re-sequencing the negotiation); the assessor independently decides closure.
-4. **Gate** — The stage's gate is `[external, await]`. The strategy is submitted for external sign-off (commercial / legal approval inside the user's organization) and then waits for the customer-side renewal-event signal before the workflow finalizes.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `risk-assessment` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `risk-assessment` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → renewal-manager → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `renewal-manager` is the implementer (re-framing the narrative or re-sequencing the negotiation); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `[external, await]`. The strategy is submitted for external sign-off (commercial / legal approval inside the user's organization) and then waits for the customer-side renewal-event signal before the workflow finalizes.
 
 ## Reviewer guidance specific to this stage
 

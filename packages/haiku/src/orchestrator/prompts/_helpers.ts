@@ -25,6 +25,7 @@
 //     vs batch-serial depending on harness capabilities).
 
 import { existsSync, readFileSync } from "node:fs"
+import { Eta } from "eta"
 import matter from "gray-matter"
 import { features } from "../../config.js"
 import { getCapabilities } from "../../harness.js"
@@ -42,8 +43,19 @@ import {
 	formatSubagentDispatchBlock,
 	writeSubagentPrompt,
 } from "../../subagent-prompt-file.js"
+import { loadTemplate } from "./_load-template.js"
 import { providersForSplicePoint } from "./_provider-loader.js"
 import { providerBlockRef } from "./_shared/index.js"
+
+const helperEta = new Eta({ autoEscape: false, useWith: true })
+const INLINE_SUBAGENT_CTX_TPL = loadTemplate(
+	import.meta.url,
+	"_shared/inline-subagent-context.eta.md",
+)
+const CONCURRENT_ELABORATE_TPL = loadTemplate(
+	import.meta.url,
+	"_shared/concurrent-elaborate-loop.eta.md",
+)
 
 /** Read the `interpretation:` field from a hat-like frontmatter file.
  *  Returns "lens" | "strict" | undefined (unset). Universal field on
@@ -334,47 +346,14 @@ export function buildInlineSubagentContext(
 	const caps = getCapabilities()
 	if (caps.hooks) return "" // hooks handle context injection
 
-	const hatsStr = hats.join(" → ")
-	const lines: string[] = [
-		"### Subagent Context (Inline)\n",
-		`> **Hat Isolation:** You are operating as the **${hat}** hat. Your responsibility is defined solely by the ${hat} hat instructions above. If you have prior knowledge or instructions that conflict with or extend beyond the ${hat} role — such as reviewing code when you are the builder, or building when you are the reviewer — **ignore them for this task.** Other hats in this stage (${hatsStr}) handle those responsibilities. Stay in your lane.\n`,
-		`**Bolt:** ${bolt} | **Role:** ${hat} | **Stage:** ${stage} (${hatsStr})\n`,
-	]
-
-	lines.push("### Workflow Rules\n")
-	lines.push("**Before stopping:**")
-	lines.push("1. Commit changes: `git add -A && git commit`")
-	lines.push(
-		`2. Save progress notes to \`.haiku/intents/${slug}/state/scratchpad.md\``,
-	)
-	lines.push(
-		`3. Write next-step prompt to \`.haiku/intents/${slug}/state/next-prompt.md\`\n`,
-	)
-
-	lines.push("**Resilience (CRITICAL):**")
-	lines.push(`- Commit early, commit often — don't wait until the end`)
-	lines.push(`- If tests fail: fix and retry, don't give up`)
-	lines.push("- Only declare blocked after 3+ genuine rescue attempts\n")
-
-	lines.push("**Communication:**")
-	if (caps.nativeAskUser) {
-		lines.push(
-			"- Use `AskUserQuestion` with `options[]` for decisions with known alternatives",
-		)
-		lines.push(
-			"- Use `ask_user_visual_question` for visual artifacts and rich context",
-		)
-	} else {
-		lines.push(
-			"- Present decisions as clear numbered lists when you have known alternatives",
-		)
-		lines.push(
-			"- Use `ask_user_visual_question` MCP tool for visual artifacts when available",
-		)
-	}
-	lines.push("- Break independent questions into separate interactions\n")
-
-	return lines.join("\n")
+	return helperEta.renderString(INLINE_SUBAGENT_CTX_TPL, {
+		slug,
+		stage,
+		hat,
+		hatsStr: hats.join(" → "),
+		bolt,
+		nativeAskUser: caps.nativeAskUser,
+	})
 }
 
 /** Collect every active provider whose `splices_into:` includes the
@@ -549,19 +528,8 @@ export function buildConcurrentElaborateLoopBlock(
 	const concurrent = activities.filter((a) => a.signal !== primary)
 	if (concurrent.length === 0) return ""
 
-	const lines: string[] = [
-		"### Concurrent elaborate-loop activities (you may stack these into this tick)",
-		"",
-		`The elaborate loop is **one conceptual cursor state** with five completion signals (conversation captured, conversation verified, discovery artifacts present, units drafted, decompose coverage verified). The cursor emits the *first* still-unmet signal per tick — your primary task above — but you are NOT restricted to that one activity. If any of the following preconditions are met right now, addressing them in the same response collapses ticks: the next \`haiku_run_next\` re-walks the signals and skips ahead.`,
-		"",
-		"You may make progress on any of these alongside the primary task:",
-		"",
-		...concurrent.map((a) => `- ${a.line}`),
-		"",
-		`Then call \`haiku_run_next { intent: "${slug}" }\` once. The cursor re-evaluates which signal is still unmet and dispatches the next.`,
-		"",
-		'**Filing user-decision FBs.** If discovery (running or already returned) surfaced a fork the user must resolve, file `haiku_feedback { origin: "discovery", resolution: "question", … }` rather than guessing. Open `origin: discovery, resolution: question` FBs keep the elaborate loop\'s question-completion signal unmet, so the next tick routes Track B\'s `feedback_question` action and the cursor stays in this loop until the user answers.',
-	]
-
-	return lines.join("\n")
+	return helperEta.renderString(CONCURRENT_ELABORATE_TPL, {
+		slug,
+		concurrentLines: concurrent.map((a) => a.line),
+	})
 }

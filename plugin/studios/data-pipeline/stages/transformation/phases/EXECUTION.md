@@ -10,14 +10,21 @@ Every transformation unit walks the three hats. The baton is the model spec, the
 
 Note: the `hats:` order is declared as `transformer, data-modeler, verifier` for historical reasons, but the model is the logical plan and the transformation is the logical do. Treat the data-modeler's spec as the load-bearing handoff regardless of file order. A future revision may swap the declared order.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The `data-quality` review agent fires and files feedback for grain compliance, primary-key uniqueness, SCD correctness, type-conversion explicitness, null / sentinel handling, timezone handling, deduplication determinism, referential integrity, and business-logic centralization.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, transformer, feedback-assessor]` dispatches per finding. The classifier routes the FB; the transformer re-authors the affected transformation code; the assessor independently decides closure. If the finding is structural (model-level), the implementer flags the FB back to the modeler via classifier-routed feedback, not by mutating the model in transformer code.
-4. **Gate** — `review: ask` blocks for a human to sign off on the data model and the transformation logic before validation tests run against them.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → transformer → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `transformer` is the implementer (re-authors the affected transformation code); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Blocks for a human to sign off on the data model and the transformation logic before validation tests run against them.
 
 ## Reviewer guidance specific to this stage
 

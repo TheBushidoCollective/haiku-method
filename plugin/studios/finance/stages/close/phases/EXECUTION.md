@@ -10,12 +10,21 @@ Every close unit walks the three hats in `plan → do → verify` order:
 
 The hat order is `plan → do → verify` because close steps have hard dependencies that the controller orders before the reconciler runs them; verifier checks against the operational-unit substance criteria.
 
-## After execute completes
+## Stage walk
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `compliance` review agent and any studio-level review agents fire.
-3. **Fix loop** — `fix_hats: [classifier, controller, feedback-assessor]`. Classifier targets the affected step or account; `controller` revises the procedure (re-defines the reconciliation, re-issues the adjusting-entry plan); assessor decides closure.
-4. **Gate** — `external` — period close typically requires controller signoff plus external-auditor review or board attestation. The engine waits for the external approval signal before sealing.
+The workflow engine runs every stage in lifecycle order:
+
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `compliance` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `compliance` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → controller → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `controller` is the implementer (re-defines the reconciliation); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `external`. Period close typically requires controller signoff plus external-auditor review or board attestation. The engine waits for the external approval signal before sealing.
 
 ## Reviewer guidance specific to this stage
 

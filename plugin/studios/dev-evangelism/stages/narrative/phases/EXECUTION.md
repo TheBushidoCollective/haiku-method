@@ -10,14 +10,21 @@ Every narrative unit walks the three hats in order. Units here are story compone
 
 The baton is the story evolving on disk: audience landscape (input) → drafted arc with flagged claims (storyteller) → polished, audience-fit, format-tested arc (editor) → validated narrative artifact (verifier).
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate against the intent's spec.
-2. **Quality review (parallel)** — The stage's `coherence` review agent fires (plus any studio-level review agents).
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, storyteller, feedback-assessor]` dispatches against each open feedback. The classifier routes; `storyteller` is the implementer; the assessor decides closure.
-4. **Gate** — The stage's gate is `ask`. The narrative brief is the last load-bearing decision before content production starts, so a human reviews the arc and takeaways before the create stage spins up.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `coherence` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `coherence` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → storyteller → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `storyteller` is the implementer (re-authors the work); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. The narrative brief is the last load-bearing decision before content production starts, so a human reviews the arc and takeaways before the create stage spins up.
 
 ## Reviewer guidance specific to this stage
 

@@ -9,14 +9,21 @@ Every strategy unit walks two hats. The baton is the unit body — goals, messag
 
 The stage's hat list is two-deep rather than the canonical plan-do-verify triplet because the strategist's plan IS the output artifact — splitting plan from do would produce two passes on the same document with no meaningful baton between them. The rally-race test (architecture §2.3) is met by the strategist → brand-reviewer handoff: the strategist produces a defensible framework, the brand-reviewer's verdict either advances it or names a specific failure for re-authoring.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `consistency` review agent fires, plus any studio-level review agents.
-3. **Fix loop** — `fix_hats: [classifier, strategist, feedback-assessor]` dispatches per finding. The brand-reviewer is intentionally not in the fix loop because the strategist owns the underlying choices; brand-reviewer is the verify path on re-author too.
-4. **Gate** — `ask`. The user approves the strategy locally before content production begins, because strategy errors compound expensively downstream.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `consistency` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `consistency` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → strategist → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `strategist` is the implementer (re-author too); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. The user approves the strategy locally before content production begins, because strategy errors compound expensively downstream.
 
 ## Reviewer guidance specific to this stage
 

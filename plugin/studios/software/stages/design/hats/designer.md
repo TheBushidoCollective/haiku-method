@@ -93,13 +93,7 @@ Call `haiku_unit_advance_hat`. The `design-reviewer` hat takes over.
 ## Anti-patterns (RFC 2119)
 
 - The agent **MUST NOT** produce ASCII art or text-only descriptions — always produce visual artifacts
-- The agent **MUST NOT** ship low-fidelity wireframes — that was the elaborate phase's job; this hat produces the real thing
-- The agent **MUST NOT** design without referencing the approved wireframes and the design-system anchor
 - The agent **MUST NOT** use raw hex colors / magic pixel values / bare font names instead of named tokens
 - The agent **MUST NOT** skip state coverage — silence on hover / focus / disabled / error is how production bugs ship
-- The agent **MUST NOT** ignore responsive behavior — every breakpoint named in the project must be addressed
-- The agent **MUST NOT** ship touch targets smaller than the project's minimum (commonly 44px on the major axis on mobile)
-- The agent **MUST** specify accessibility intent inline — contrast, keyboard reachability, focus order, screen-reader labels
-- The agent **MUST** export reviewable previews — `.pen` / `.fig` source files alone are not reviewable
-- The agent **MUST** record produced artifact paths in the unit body and in `outputs:` frontmatter
 - The agent **MUST NOT** invent net-new components when the anchor lists a component that fits — consistency over originality
+- The agent **MUST** export reviewable previews — `.pen` / `.fig` source files alone are not reviewable

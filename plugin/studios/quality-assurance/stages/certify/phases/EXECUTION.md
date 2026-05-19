@@ -9,14 +9,21 @@ This stage uses a two-hat chain because the verify role is the independent revie
 
 The two-hat structure consolidates plan + do into `certifier` because evidence evaluation IS the planning AND the doing — they don't separate cleanly. `reviewer` is the verify role for the stage.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — `standards` review agent fires; surfaces exit-criterion gaps, evidence vagueness, risk-acceptance traceability issues, determination inconsistency, dimension drops, threshold relaxation, and audit-reference gaps.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, certifier, feedback-assessor]` dispatches per FB. The classifier routes; `certifier` re-evaluates affected criteria, sharpens rationale, or escalates a structural gap; the assessor decides closure.
-4. **Gate** — `external`. Certification is the artifact a real authority signs — product owner, release manager, compliance lead, audit body. The workflow waits on the external signal; project overlays handle the sign-off ladder, audit-trail location, and any regulatory submission specifics.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → certifier → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `certifier` is the implementer (re-evaluates affected criteria); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `external`. Certification is the artifact a real authority signs — product owner, release manager, compliance lead, audit body. The workflow waits on the external signal; project overlays handle the sign-off ladder, audit-trail location, and any regulatory submission specifics.
 
 ## Reviewer guidance specific to this stage
 

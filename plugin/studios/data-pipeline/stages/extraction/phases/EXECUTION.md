@@ -9,14 +9,21 @@ Every extraction unit walks two hats. The baton is the connector implementation,
 
 The plan role is implicit — the discovery stage's source catalog has already chosen the integration pattern, so the extractor reads that decision rather than re-planning it. A future revision may split a planner role back out if integration-pattern decisions start getting re-litigated mid-unit.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The `correctness` review agent fires and files feedback for any field-coverage, idempotency, error-handling, source-load-safety, schema-drift, or metadata gap.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, extractor, feedback-assessor]` dispatches per finding. The classifier routes the FB; the extractor re-authors the affected connector logic; the assessor independently decides closure.
-4. **Gate** — `review: ask` blocks for a human to review extraction logic before it lands in staging. The reviewer probes the same idempotency / failure / drift surfaces the verify hat probed.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → extractor → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `extractor` is the implementer (re-authors the affected connector logic); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Blocks for a human to review extraction logic before it lands in staging. The reviewer probes the same idempotency / failure / drift surfaces the verify hat probed.
 
 ## Reviewer guidance specific to this stage
 

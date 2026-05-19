@@ -10,14 +10,21 @@ Every close unit walks the three hats in order. The baton across the rally race 
 
 The hat order is `plan → do → verify` because formal acceptance, transfer, and disposition frame what gets reflected on in the retrospective. Running the retrospective before disposition is complete produces lessons decoupled from what actually shipped.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `closure` review agent and any studio-level review agents fire in parallel.
-3. **Fix loop (if any feedback opens)** — The `fix_hats: [classifier, closer, feedback-assessor]` chain dispatches per finding. Classifier routes; `closer` re-authors the affected acceptance, transfer, or disposition; the assessor independently decides closure.
-4. **Gate** — The gate is `ask` — sponsor and team review of closeout artifacts before formal sign-off. Project overlays may add organization-specific formal-closure workflow integration.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `closure` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `closure` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → closer → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `closer` is the implementer (re-authors the affected acceptance, transfer, or disposition); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Sponsor and team review of closeout artifacts before formal sign-off. Project overlays may add organization-specific formal-closure workflow integration.
 
 ## Reviewer guidance specific to this stage
 

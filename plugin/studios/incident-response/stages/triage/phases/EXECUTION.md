@@ -10,14 +10,21 @@ Every triage unit walks the three hats in order. The baton across the rally race
 
 The hat order is `plan → do → verify` because the IC sets the frame the first responder fills in: the IC names what severity, scope, and ownership look like, the first responder produces the evidence, and the verifier checks that the evidence supports the IC's frame.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The built-in spec-conformance subagent reads the intent's spec and confirms the stage's artifacts conform. Always runs.
-2. **Quality review (parallel)** — The stage's review agents (`severity-accuracy`) and any studio-level review agents fire in parallel. Each produces feedback if their lens identifies a finding.
-3. **Fix loop (if any feedback opens)** — The stage's `fix_hats:` chain (`classifier → incident-commander → feedback-assessor`) dispatches against each open feedback. The classifier hat routes the FB to the right unit or stage; the IC re-owns the corrected decision because severity / ownership / scope are IC-scope choices; the assessor independently decides closure.
-4. **Gate** — The stage's gate is `auto` because triage is time-critical. As soon as the workflow engine confirms reviews are signed off and fix loops are closed, the stage advances so investigation can start without waiting on a human approval round.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `severity-accuracy` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `severity-accuracy` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → incident-commander → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `incident-commander` is the implementer (re-owns the corrected decision because severity / ownership / scope are IC-scope choices); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `auto`. Because triage is time-critical. As soon as the workflow engine confirms reviews are signed off and fix loops are closed, the stage advances so investigation can start without waiting on a human approval round.
 
 ## Reviewer guidance specific to this stage
 

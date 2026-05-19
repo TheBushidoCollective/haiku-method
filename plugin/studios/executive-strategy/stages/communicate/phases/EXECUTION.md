@@ -10,14 +10,21 @@ Every communicate unit walks the three hats in order:
 
 The hat order is `plan → do → verify` because the messaging defines the audiences and timing; the rollout plan operationalizes them. Reversing makes the plan generic.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `consistency` review agent fires alongside any studio-level review agents.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, communicator, feedback-assessor]` dispatches per finding. The classifier routes the FB. `communicator` is the implementer (re-aligning messaging across audiences, strengthening a FAQ entry, or fixing a numerical inconsistency between materials). The assessor independently decides closure.
-4. **Gate** — The stage's gate is `ask` — local human approval. The communicator's words become the organization's words; the user reads what's about to go out.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `consistency` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `consistency` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → communicator → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `communicator` is the implementer (re-aligning messaging across audiences, strengthening a FAQ entry, or fixing a numerical inconsistency between materials); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Local human approval. The communicator's words become the organization's words; the user reads what's about to go out.
 
 ## Reviewer guidance specific to this stage
 

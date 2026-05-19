@@ -10,14 +10,21 @@ Every options unit walks the three hats in order. The baton is the unit's body �
 
 The hat order is `plan → do → verify` because differentiation is a planning decision; building a model around an option that's secretly the same as another option wastes the modeler's work and corrupts the comparison.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate confirming conformance to the intent's spec.
-2. **Quality review (parallel)** — The stage's `differentiation` review agent fires alongside any studio-level review agents. Findings file as feedback.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, ideator, feedback-assessor]` dispatches per finding. The classifier routes the FB. `ideator` is the implementer (re-thinking the option set when distinction or theory-of-change is the gap). The assessor independently decides closure.
-4. **Gate** — The stage's gate is `ask` — local human approval. The option set frames everything downstream; the user must confirm the decision space before the evaluate stage locks in on it.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `differentiation` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `differentiation` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → ideator → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `ideator` is the implementer (re-thinking the option set when distinction or theory-of-change is the gap); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Local human approval. The option set frames everything downstream; the user must confirm the decision space before the evaluate stage locks in on it.
 
 ## Reviewer guidance specific to this stage
 

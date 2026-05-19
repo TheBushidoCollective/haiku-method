@@ -9,14 +9,21 @@ Every assessment unit walks the two hats in order. The baton is the inventory it
 
 Assessment is a research-class stage, so there is no terminal verify hat in the per-unit chain — the engine's universal spec-verify gate at stage close plays that role, supplemented by the `risk-coverage` review agent.
 
-## After execute completes
+## Stage walk
 
-When every assessment unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate. The built-in spec-conformance subagent confirms the inventory and risk register conform to the intent's spec.
-2. **Quality review (parallel)** — `risk-coverage` and any studio-level review agents fire in parallel. Each files feedback if its lens identifies a gap.
-3. **Fix loop (if any feedback opens)** — The stage's `fix_hats:` chain (`classifier → migration-analyst → feedback-assessor`) dispatches per finding. The classifier routes the FB to the right unit; `migration-analyst` re-authors the affected inventory or risk section; `feedback-assessor` closes.
-4. **Gate** — The stage's gate is `auto`. Assessment passes when spec review, the review agents, and the engine's quality gates all sign off; no external doc review is required at this stage.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → migration-analyst → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `migration-analyst` is the implementer (re-authors the affected inventory or risk section); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `auto`. Assessment passes when spec review, the review agents, and the engine's quality gates all sign off; no external doc review is required at this stage.
 
 ## Reviewer guidance specific to this stage
 

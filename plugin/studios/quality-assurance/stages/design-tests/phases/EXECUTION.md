@@ -10,14 +10,21 @@ Every design-tests unit walks the three hats in order. The baton is the unit bod
 
 The hat order is `plan → do → verify` because cases are the plan, automation strategy is the do, validation is the verify.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — `traceability` review agent fires; produces feedback for orphan cases, uncovered requirements, technique drift, format gaps, severity inconsistency, pyramid misplacement, or rationaleless recommendations.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, designer, feedback-assessor]` dispatches per FB. The classifier routes; `designer` re-authors cases or trace; the assessor decides closure.
-4. **Gate** — `auto`. The verifier and review-agent lens are the certification here; the workflow engine advances on pass.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → designer → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `designer` is the implementer (re-authors cases or trace); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `auto`. The verifier and review-agent lens are the certification here; the workflow engine advances on pass.
 
 ## Reviewer guidance specific to this stage
 

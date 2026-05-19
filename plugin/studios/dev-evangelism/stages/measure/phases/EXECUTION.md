@@ -10,14 +10,21 @@ Every measure unit walks the three hats in order. Units here are measurement sur
 
 The baton is the impact analysis evolving on disk: distribution log + live analytics (inputs) → quantitative table with drivers (analyst) → qualitative themes with quotes and follow-up seeds (feedback-synthesizer) → validated impact report (verifier).
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate against the intent's spec.
-2. **Quality review (parallel)** — The stage's `roi` review agent fires (plus any studio-level review agents).
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, analyst, feedback-assessor]` dispatches against each open feedback. The classifier routes; `analyst` is the implementer; the assessor decides closure.
-4. **Gate** — The stage's gate is `auto`. Measure is the last stage, and the intent-completion review (if enabled) is the human-facing checkpoint, so the stage advances on its own once the verifier confirms the report is data-grounded.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `roi` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `roi` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → analyst → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `analyst` is the implementer (re-authors the work); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `auto`. Measure is the last stage, and the intent-completion review (if enabled) is the human-facing checkpoint, so the stage advances on its own once the verifier confirms the report is data-grounded.
 
 ## Reviewer guidance specific to this stage
 

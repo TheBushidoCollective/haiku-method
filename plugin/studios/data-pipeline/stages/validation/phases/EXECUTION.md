@@ -9,14 +9,21 @@ Every validation unit walks two hats. The baton is the test suite — its assert
 
 The plan role is implicit — the transformation stage's data model has already defined the entities and the business rules, so the validator reads those decisions rather than re-planning them.
 
-## After execute completes
+## Stage walk
 
-When every unit's hat chain has terminal-advanced, the workflow engine moves the stage from `execute` into `review`:
+The workflow engine runs every stage in lifecycle order:
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The `coverage` review agent fires; the imported `correctness` agent from extraction also fires (per `review-agents-include:`) so end-to-end faithfulness is reviewed in the same pass. Each files feedback for any gap.
-3. **Fix loop (if any feedback opens)** — `fix_hats: [classifier, validator, feedback-assessor]` dispatches per finding. The classifier routes the FB; the validator extends or tightens the suite; the assessor independently decides closure.
-4. **Gate** — `review: ask` blocks for a human to approve the validation suite before deployment. The suite is the runtime safety net for everything downstream; an unreviewed suite is a contract no one read.
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → validator → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `validator` is the implementer (extends or tightens the suite); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `ask`. Blocks for a human to approve the validation suite before deployment. The suite is the runtime safety net for everything downstream; an unreviewed suite is a contract no one read.
 
 ## Reviewer guidance specific to this stage
 

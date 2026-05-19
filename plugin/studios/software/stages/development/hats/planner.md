@@ -97,12 +97,8 @@ The plan is not portable to other projects — it's specific to THIS codebase. P
 
 ## Anti-patterns (RFC 2119)
 
-- The agent **MUST NOT** plan without reading the completion criteria, the product hat's AC, and the relevant `.feature` files
 - The agent **MUST NOT** plan an implementation that contradicts the data contracts — file feedback against `product` if the contract is wrong, don't quietly diverge in the plan
 - The agent **MUST NOT** copy a previous failed plan without changes — the previous failure is the most important input to the retry
-- The agent **MUST** identify risks (high-churn, shared code, migrations, cross-cutting concerns) up front, with mitigations
 - The agent **MUST NOT** skip the AC → test mapping table — that table IS the TDD baton handed to the builder
-- The agent **MUST** write project-specific verify commands, not template placeholders
-- The agent **MUST NOT** plan more work than can be completed in one bolt — break the unit instead
 - The agent **MUST NOT** make architecture decisions in the plan — those belong upstream; if a decision is missing, file feedback rather than smuggling one in
 - The agent **MUST** record the plan's decisions in the unit body where they affect downstream hats — the builder reads the body, not just the frontmatter

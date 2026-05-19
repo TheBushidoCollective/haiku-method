@@ -9,12 +9,21 @@ Every analysis unit walks the two hats in `plan+do → verify` order:
 
 This stage is plan-do-combined / verify because the analyst's planning (granularity, basis, materiality) and doing (calculation, classification, attribution, recommendation) are tightly coupled — separating them would split a single thought process. The auditor's independent verification preserves the rally-race semantics.
 
-## After execute completes
+## Stage walk
 
-1. **Spec review (engine phase)** — Universal hard gate.
-2. **Quality review (parallel)** — The stage's `accuracy` review agent and any studio-level review agents fire.
-3. **Fix loop** — `fix_hats: [classifier, analyst, feedback-assessor]`. Classifier targets the affected variance; `analyst` re-runs the calculation or re-attributes the root cause; assessor decides closure.
-4. **Gate** — `auto` — substantive human review happens at the next stage (`reporting`), where the variance report becomes stakeholder-facing.
+The workflow engine runs every stage in lifecycle order:
+
+1. **Pre-execute review** — Before any unit hat fires, engine-built review agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `accuracy` review agent and any studio-level review agents audit the SPEC the elaborate phase produced. Findings open feedback against the unit spec; closure routes through the fix loop before execute can begin.
+
+2. **Execute** — Every unit's hat chain runs per the baton above.
+
+3. **Quality gates** — Each unit's declared `quality_gates:` commands run; non-zero exit blocks the advance.
+
+4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `accuracy` review agent and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
+
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → analyst → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `analyst` is the implementer (re-runs the calculation or re-attributes the root cause); the assessor independently decides closure.
+
+6. **Gate** — The stage's gate is `auto`. Substantive human review happens at the next stage (`reporting`), where the variance report becomes stakeholder-facing.
 
 ## Reviewer guidance specific to this stage
 

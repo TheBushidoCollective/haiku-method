@@ -33,7 +33,10 @@ import {
 	readStageDef,
 	readStudio,
 } from "../../../../../studio-reader.js"
-import { batchDispatchDirective } from "../../../_helpers.js"
+import {
+	batchDispatchDirective,
+	providerSpliceBlock,
+} from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { sharedBlockRef } from "../../../_shared/index.js"
 import { definePromptBuilder } from "../../../define.js"

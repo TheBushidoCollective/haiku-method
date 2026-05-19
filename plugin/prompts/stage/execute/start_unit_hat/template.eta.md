@@ -36,4 +36,8 @@ Each subagent runs **one hat only**. After it terminates, this dispatch is compl
 After ALL <%= unitCount %> subagent(s) return, call `haiku_run_next { intent: "<%= slug %>" }` exactly once. The cursor will tell you what's next (more wave-ready units, the next wave, or the spec/output review track).
 
 <%~ executeContractsBlock %>
+
+<% if (providerBlock) { %>
+<%~ providerBlock %>
+<% } %>
 <% } %>

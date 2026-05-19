@@ -63,6 +63,7 @@ import {
 	buildConcurrentElaborateLoopBlock,
 	emitSubagentDispatchBlock,
 	inlineFile,
+	providerSpliceBlock,
 	readIntentMode,
 	resolveStudioMandateModel,
 } from "../../../_helpers.js"
@@ -331,6 +332,14 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	}
 
 	sections.push(sharedBlockRef("workflow-contracts-elaborate"))
+
+	// Provider splice: source providers (spec, knowledge, design) and
+	// always-on providers (git, ticketing if active) inject their
+	// behavior contracts for the elaborate phase.
+	const providerBlock = providerSpliceBlock("elaborate", dir)
+	if (providerBlock) sections.push(providerBlock)
+	const decomposeProviderBlock = providerSpliceBlock("decompose", dir)
+	if (decomposeProviderBlock) sections.push(decomposeProviderBlock)
 
 	const lenses = buildReviewAgentLensSection(studio, stage, dir)
 	if (lenses) sections.push(lenses)

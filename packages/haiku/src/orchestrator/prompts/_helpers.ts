@@ -42,6 +42,8 @@ import {
 	formatSubagentDispatchBlock,
 	writeSubagentPrompt,
 } from "../../subagent-prompt-file.js"
+import { providersForSplicePoint } from "./_provider-loader.js"
+import { providerBlockRef } from "./_shared/index.js"
 
 /** Read the `interpretation:` field from a hat-like frontmatter file.
  *  Returns "lens" | "strict" | undefined (unset). Universal field on

@@ -40,13 +40,7 @@ If the failure traces back to a missing input (e.g., the anchor itself is wrong 
 ## Anti-patterns (RFC 2119)
 
 - The agent **MUST NOT** read or interpret unit frontmatter for any mechanical purpose. workflow engine territory per architecture §1.1.
-- The agent **MUST NOT** validate against frontmatter schema, `depends_on:` resolution, status fields, or any other FM-driven rule.
-- The agent **MUST NOT** approve designs without checking state coverage for every interactive element
+- The agent **MUST NOT** approve designs without state coverage for every interactive element (hover / focus / disabled / error)
 - The agent **MUST NOT** approve raw hex / magic pixel values — named tokens from the anchor are required
-- The agent **MUST NOT** ignore accessibility — contrast, touch targets, keyboard reachability, and focus indicators are part of every verification
-- The agent **MUST** verify responsive behavior at every declared breakpoint
-- The agent **MUST** cross-reference every component against `DESIGN-SYSTEM-ANCHOR.md`
-- The agent **MUST NOT** reject for stylistic preferences. Substantive gaps only.
-- The agent **MUST** name a specific failed criterion in any rejection
 - The agent **MUST NOT** fix gaps — the verifier routes failures via reject, never authors corrective content
-- The agent **MUST NOT** invent rules beyond this mandate; stage scope is the contract
+- The agent **MUST** name a specific failed criterion in any rejection

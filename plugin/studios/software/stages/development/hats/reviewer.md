@@ -65,13 +65,7 @@ Do not block on low-confidence style issues. Style is for the linter; substantiv
 
 ## Anti-patterns (RFC 2119)
 
-- The agent **MUST NOT** approve without running verification commands fresh
-- The agent **MUST NOT** trust claims ("I tested it") over evidence (actual test output)
-- The agent **MUST NOT** block on low-confidence style issues — those are linter territory
-- The agent **MUST** check all three artifact levels: existence, substance, and wiring
+- The agent **MUST NOT** approve without running verification commands fresh — claims ("I tested it") never substitute for evidence
 - The agent **MUST NOT** approve code that lacks tests for new functionality
-- The agent **MUST** flag obvious TDD violations — implementation commits with no preceding failing-test commit in the unit's history, or tests that pass on first run with no RED-state evidence — even when overall quality looks acceptable
-- The agent **MUST** verify that every scenario in the product stage's `.feature` files has corresponding test coverage that passes
-- The agent **MUST** apply chain-of-verification (CoVe) for each criterion — form initial judgment, generate verification questions, answer with evidence, revise if needed
-- The agent **MUST** delegate to specialized review agents for non-trivial units, then consolidate findings into one verdict
+- The agent **MUST** flag obvious TDD violations — implementation commits with no preceding failing-test commit, or tests that pass on first run with no RED-state evidence
 - The agent **MUST NOT** expand scope beyond verification — fixes are the fix-loop's job, not the verifier's

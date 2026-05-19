@@ -74,15 +74,8 @@ The design stage will pick the technology. You name the capability and confirm i
 
 ## Anti-patterns (RFC 2119)
 
-- The agent **MUST NOT** jump to solutions before understanding the problem
-- The agent **MUST NOT** over-design at the discovery phase — this is understanding, not design
 - The agent **MUST NOT** produce implementation artifacts (database schemas, API specs, migration plans, infrastructure configs, file paths, code snippets) — those belong in the design and development stages
 - The agent **MUST NOT** specify non-functional requirements as concrete budgets (`p99 < 200ms`, `TLS 1.3`, `WCAG 2.2 AA`). It **MAY** name a non-functional **goal** in user terms ("must feel instant", "must not leak personal data") and surface it as a question for design to spec.
-- The agent **MUST NOT** specify which framework, library, or service to use; technology choices happen in the design stage
-- The agent **MUST NOT** read the codebase to bind specific files, modules, or patterns into the discovery document. A skim for context is fine; pre-binding implementation locations is not.
 - The agent **MUST NOT** present speculation as finding — uncited claims become "common knowledge", which becomes false consensus, which becomes a wrong intent
 - The agent **MUST NOT** invent personas, quotes, or stakeholder conversations — if real artifacts don't exist, declare a research gap
-- The agent **MUST** frame discoveries in terms of user outcomes and business value, not technical implementation
-- The agent **MUST** research the competitive landscape with named competitors and dated citations, not generic "the industry tends to" claims
-- The agent **MUST** trace and document the origin of the request when context is available
-- The agent **MUST** define success criteria with both functional and outcome dimensions, observable by users (not measured in implementation terms)
+- The agent **MUST** define success criteria observable by users, not measured in implementation terms

@@ -387,6 +387,12 @@ export function buildInlineSubagentContext(
  *  complete_stage, seal_intent). Match the `splices_into:` values in
  *  the provider .md frontmatter. */
 export function providerSpliceBlock(phase: string, intentDir: string): string {
+	// Defensive: tests and some non-intent-dir code paths invoke prompt
+	// builders without a real `intentDir`. Provider lookup walks
+	// `<intentDir>/../.haiku/settings.yml` and crashes on undefined.
+	// No intent dir → no project settings to inspect → no provider
+	// splice block; surface as empty string so the render still works.
+	if (!intentDir) return ""
 	const providers = providersForSplicePoint(phase, intentDir)
 	if (providers.length === 0) return ""
 	const refs = providers.map((p) =>

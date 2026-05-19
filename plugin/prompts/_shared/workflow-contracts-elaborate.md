@@ -3,111 +3,54 @@
 > ## ⟁ NO UNIT ADVANCES WITHOUT A VERIFICATION PATH.
 > Every acceptance criterion pairs with a command, condition, or review-agent mandate that proves it. No exceptions.
 
-These rules apply to **every studio and every stage**. They are enforced by the framework, not by prose. Re-stating them in per-studio files is forbidden (they would drift).
+These rules apply to **every studio and every stage**. They are framework-enforced — re-stating them in per-studio files is forbidden (they drift).
 
 #### Unit file naming
 
-- `stages/{stage}/units/unit-NNN-slug.md` — 3-digit zero-padded number (`001`, `002`, … `010`, `099`, `100`, max `999`); kebab-case slug; `.md` extension. Legacy 2-digit names (`unit-01-…`) still resolve via numeric-prefix matching, so existing intents keep working — but new files in fresh intents use 3 digits.
-- The number is monotonically increasing across the stage's lifetime, including revisits. Never reuse a number.
+- `stages/{stage}/units/unit-NNN-slug.md` — 3-digit zero-padded number, kebab-case slug, `.md` extension. Legacy 2-digit names still resolve via numeric-prefix matching.
+- Numbers are monotonically increasing across the stage's lifetime, including revisits. Never reuse a number.
 - The workflow engine validates naming at `haiku_run_next` — non-compliant files block the advance.
 
 #### Unit DAG (`depends_on:`)
 
-- Each unit's `depends_on:` frontmatter lists the names of units in the **same stage** that must complete before this unit starts. Omit the field (or empty list) for units with no dependencies.
-- The DAG MUST be acyclic. The workflow engine computes topological waves; a cycle blocks the advance.
-- Cross-stage dependencies go in the stage's `inputs:` (STAGE.md) and resolve to concrete output files from prior stages.
+- `depends_on:` lists same-stage unit names that must complete first. Omit or leave empty for no dependencies.
+- The DAG MUST be acyclic. Cycles block the advance.
+- Cross-stage dependencies go in STAGE.md `inputs:` and resolve to concrete output files from prior stages.
 
 #### Quality gates
 
-- `quality_gates:` frontmatter MUST be a list of **executable gate objects** — `{ name, command, dir? }` — not prose strings. The workflow engine runs each `command` at `haiku_unit_advance_hat` time; non-zero exit blocks the advance. Prose-only gates are silently skipped and give no enforcement.
-- Canonical shape:
-
-  ```yaml
-  quality_gates:
-    - name: no-banned-tokens
-      command: "! grep -rnE 'bg-gray-|text-gray-' .haiku/intents/{slug}/stages/{stage}/artifacts/"
-      dir: .            # optional; default repo root
-  ```
-
-- **Scope rule**: gate commands MUST audit the **full stage artifact directory** (e.g. `stages/{stage}/artifacts/`), not only the unit's declared `inputs:`. Enforcement scope must match rule scope — narrower enforcement lets regressions accumulate on files no unit audited.
-- Commands should be idempotent and fast (< 5s each). Negate banned-pattern greps (`! grep …`) so exit 0 means the gate passes.
+- `quality_gates:` MUST be a list of **executable gate objects** — `{ name, command, dir? }` — not prose strings. Non-zero exit at `haiku_unit_advance_hat` blocks the advance. Prose-only gates are silently skipped (no enforcement).
+- **Scope rule**: gate commands MUST audit the **full stage artifact directory** (e.g. `stages/{stage}/artifacts/`), not only the unit's declared `inputs:`. Enforcement scope must match rule scope.
+- Commands should be idempotent and fast (< 5s). Negate banned-pattern greps (`! grep …`) so exit 0 means pass.
 - Prose descriptions of what the gate *means* belong in the unit body under `## Completion criteria`, NOT in the frontmatter.
 
 #### Model selection (`model:` frontmatter on each unit)
 
-- Set `model:` on EVERY unit you create. The workflow engine reads this at hat-dispatch time and spawns the subagent with the matching tier.
-- Valid values: `haiku` (cheap/fast), `sonnet` (standard), `opus` (deep reasoning). No other values are honored — unknown strings fall through to the next cascade level.
-- **Calibrate per-unit to the work.** The entire point of per-unit model is that different units have different cognitive load; picking one tier for the whole intent wastes budget on the trivial units and starves the hard ones.
-  - `haiku` — mechanical edits, rename sweeps, formatter passes, simple CRUD additions, boilerplate scaffolding, small docs updates. Decisions are obvious from context; no architectural judgment needed.
-  - `sonnet` — most real work. Feature implementation, API design decisions within a known pattern, moderate refactors, UI flows, data transformations, test writing. Default when you're unsure.
-  - `opus` — novel design, deep debugging of distributed/timing issues, cross-cutting architecture changes, complex algorithm design, research-heavy tasks. Reserve for units where a cheaper tier is likely to produce the wrong answer.
-- The cascade (`unit > hat > stage > studio`) lets studio/stage defaults carry most units; unit-level overrides are for outliers on either end of the distribution.
-- Omitting `model:` on a unit is valid — the cascade will fall through to hat/stage/studio defaults. Omit ONLY when the default tier is the right pick; do not omit as a sidestep.
+- Set `model:` per unit. The cascade is `unit > hat > stage > studio` — omit only when the default tier is the right pick.
+- Valid values: `haiku` (mechanical edits, rename sweeps, boilerplate), `sonnet` (most real work — the default when unsure), `opus` (novel design, deep debugging, cross-cutting architecture). Unknown strings fall through.
+- Calibrate per-unit. Picking one tier for the whole intent wastes budget on trivial units and starves the hard ones.
 
 #### Revisit cycles — `closes:` frontmatter
 
-- On an iteration > 1 (feedback-revisit or post-execute rollback), new units MUST declare `closes: [FB-NN, FB-MM, …]` listing every feedback id they address.
-- Every pending feedback id MUST be referenced by at least one new unit's `closes:` — orphans block advancement.
-- Resolution paths: (a) draft new units that close findings (additive-elaboration), OR (b) fix existing unit specs and close the findings via `haiku_feedback_update status=closed` (pre-execute spec revisit), OR (c) reject stale/invalid findings via `haiku_feedback_reject` with a concrete reason.
+- On iteration > 1, new units MUST declare `closes: [FB-NN, …]` listing every feedback id they address.
+- Every pending FB MUST be referenced by at least one new unit's `closes:` — orphans block advancement.
+- Resolution paths: (a) draft new units that close findings (additive-elaboration), (b) fix existing unit specs and close via `haiku_feedback_update status=closed` (pre-execute spec revisit), or (c) reject stale/invalid findings via `haiku_feedback_reject` with a concrete reason.
 
-#### MCP tool contracts — what the agent calls during elaborate
+#### MCP tool contracts
 
-- `haiku_run_next { intent }` advances the lifecycle once you've drafted (or revised) unit specs. Never write `intent.md` frontmatter or unit workflow fields directly — the engine owns those.
-- `haiku_feedback` is how you surface a discovery-time question to the user (`origin: "discovery", resolution: "question"`). The next tick routes it; the elaborate loop's completion signal stays unmet until the FB closes.
+- `haiku_run_next { intent }` advances the lifecycle. Never write `intent.md` frontmatter or unit workflow fields directly — the engine owns those.
+- `haiku_feedback { origin: "discovery", resolution: "question" }` surfaces a discovery-time question. The elaborate loop's completion signal stays unmet until the FB closes.
 
 #### Unit content quality (validated at advance)
 
-- Placeholder strings are forbidden in unit specs and frontmatter. The workflow engine rejects unit advancement when any of these appear: `TBD`, `tbd`, `similar to`, `add error handling`, `etc.`, or a literal `...` placeholder. Either write the concrete value or surface it as a question.
-- Every acceptance criterion MUST be testable: include the command or condition that proves it. `tests pass` is rejected; the verify-command must be concrete and exit-code-driven (e.g. `pnpm test --run path/to/file` exits 0, or `pytest tests/foo.py` exits 0, or `cargo test --test bar` exits 0 — match the project's actual stack).
-- Criteria are drafted as **pairs**: the goal-prose lives in the unit body under `## Completion criteria`; the executable check lives in the unit's `quality_gates:` frontmatter. Two coupled fields, written together at elaboration time. Per-stage ELABORATION.md files supply domain-specific examples; this contract supplies the rule.
-- A criterion that cannot be expressed as a command/condition is a spec gap — surface it (`ask_user_visual_question` or reject the elaborate phase), do not paper over with prose.
-
-##### Specific-but-unverifiable criteria (a common failure mode)
-
-Criteria that *sound* concrete but have no executable check produce specs that look complete but the workflow engine cannot enforce. Watch for these shapes — they apply across every studio:
-
-- "X is well-organized" / "Output is clean" — no command proves "well-organized"
-- "Performance is acceptable" / "Process is fast" — needs a numeric threshold AND a measurement command (e.g. `p95 < 200ms`)
-- "X is user-friendly" / "Output is professional" — needs a review pass or a literal allow-list of acceptable phrasings
-- "Coverage is comprehensive" / "Treatment is thorough" — needs a structural check counting items, not a subjective judgment
-
-Per-studio ELABORATION.md files may add domain-specific bad-unverifiable examples (e.g. design's *Visual hierarchy is clear*, product's *Behavior is intuitive*). The ones above are universal; do not restate them in studio files.
-
-#### Authoring discipline (before drafting any unit)
-
-Three practices that prevent the spec-quality failures the workflow engine cannot catch on its own. All three are studio-agnostic — the *content* differs by domain, the *gesture* does not.
-
-**1. Surface your assumptions explicitly.** When the request leaves anything ambiguous, name your assumptions in a single block BEFORE drafting units, and pause for confirmation. Silent assumptions become invisible regressions; explicit ones get corrected before code (or copy, or contracts) ship.
-
-```
-ASSUMPTIONS I'M MAKING:
-1. <domain framing — stack/architecture for software, jurisdiction/counterparty for legal, deal-size/decision-maker for sales, blast-radius/severity for incident-response, audience/tone for content, etc.>
-2. <scope / boundaries / out-of-scope assumption>
-3. <stakeholder / counterparty / audience assumption>
-→ Correct me now or I'll proceed with these.
-```
-
-What gets surfaced shifts by studio: stack and schema in software; deal size, decision-maker, and contract terms in sales; blast radius and severity in incident-response; jurisdiction and counterparty in legal; audience and tone in content. Same gesture every time: name what you're filling in, get confirmation, then draft.
-
-**2. Reframe vague directives as testable success criteria.** When a request arrives with words like *better, faster, cleaner, professional, comprehensive, thorough*, translate them to measurable outcomes BEFORE writing `quality_gates:`. The reframed prose becomes `## Completion criteria` in the unit body; the executable check becomes the frontmatter gate.
-
-```
-REQUEST: "Make the dashboard faster"
-→ REFRAMED:
-  - LCP < 2.5s on 4G connection (verify: lighthouse mobile run exits 0 with score ≥ target)
-  - Initial data load < 500ms p95 (verify: parsed server log shows p95 below threshold)
-  - CLS < 0.1 (verify: lighthouse mobile run)
-→ Are these the right targets?
-```
-
-If the user can't confirm the targets, the spec isn't ready — push back, don't paper over with prose. The reframe gives you something to loop and iterate on; vague directives leave you guessing what "done" means.
-
-**3. Manage confusion actively — don't pick an interpretation and run.** When you hit conflicting requirements or a spec that doesn't square with existing artifacts: STOP. Name the specific conflict, present the tradeoff, ask the question. Use `ask_user_visual_question` for structured options or surface the conflict in your assumptions block. Plowing ahead with a guess is the most common way intent specs go wrong silently.
+- Placeholder strings are forbidden in unit specs and frontmatter. The workflow engine rejects unit advancement when any of these appear: `TBD`, `tbd`, `similar to`, `add error handling`, `etc.`, or a literal `...`. Either write the concrete value or surface it as a question.
+- Every acceptance criterion MUST be testable — paired with a command or condition that proves it. `tests pass` is rejected; the verify-command must be concrete and exit-code-driven (e.g. `pnpm test --run path/to/file` exits 0).
+- Criteria are drafted as **pairs**: goal-prose lives in the unit body under `## Completion criteria`; the executable check lives in `quality_gates:`. Domain-specific examples are the stage-tier ELABORATION.md's job, not this contract's.
 
 #### Red flags (STOP and re-read this contract if you catch yourself thinking)
 
-- "I'll write `TBD` for the parts I'm unsure about" — placeholders block advancement; write the concrete value or surface it as a question.
-- "I'll add `similar to unit-XX` to save typing" — copy the relevant content explicitly; cross-references rot when the source changes.
-- "The criteria are obvious; I'll keep them prose" — every criterion needs a command or condition that proves it.
-- "This unit can be huge; the executor will figure it out" — units that take more than one bolt to scope are decomposition failures, not execution failures.
-- "I'll batch the missing info as assumptions in the spec" — assumptions become silent regressions; ask the user instead.
+- "I'll write `TBD` for the parts I'm unsure about" — placeholders block advancement.
+- "I'll add `similar to unit-XX` to save typing" — cross-references rot; copy the relevant content explicitly.
+- "The criteria are obvious; I'll keep them prose" — every criterion needs an executable check.
+- "This unit can be huge; the executor will figure it out" — multi-bolt-to-scope units are decomposition failures.
+- "I'll batch the missing info as assumptions in the spec" — silent assumptions become invisible regressions; ask the user.

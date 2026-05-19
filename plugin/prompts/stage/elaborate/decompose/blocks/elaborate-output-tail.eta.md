@@ -7,12 +7,4 @@
 3. Write unit files to `.haiku/intents/<%= slug %>/stages/<%= stage %>/units/`
 4. Call `haiku_run_next { intent: "<%= slug %>" }` — the orchestrator validates and opens the review gate
 
-**Unit file naming convention (REQUIRED):**
-Files MUST be named `unit-NNN-slug.md` where:
-- `NNN` is a 3-digit zero-padded sequence number (`001`, `002`, … `010`, `099`, `100`, max `999`)
-- `slug` is a kebab-case descriptor (e.g., `user-auth`, `data-model`)
-- Example: `unit-001-data-model.md`, `unit-002-api-endpoints.md`
-
-Legacy 2-digit names (`unit-01-foo.md`) still resolve via numeric-prefix matching, so existing intents keep working — but new files in fresh intents use 3 digits.
-
-Files that don't match this pattern will not appear in the review UI and will block advancement.
+File-naming + DAG + quality-gate + model-selection contracts are in the *Workflow Contracts (elaborate)* shared block already referenced above. Don't re-derive them here.

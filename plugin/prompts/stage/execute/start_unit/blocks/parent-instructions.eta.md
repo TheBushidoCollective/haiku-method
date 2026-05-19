@@ -14,6 +14,6 @@ Passing the `model` attribute is non-negotiable when it's present — the workfl
 **When the subagent returns, its final message will be one of:**
 - `Workflow Result: <path>` — read that JSON file and act on its `action` field. Valid actions: `continue_unit` (spawn next subagent for same unit), `start_units` (dispatch wave), `advance_phase`, `review`, `advance_stage`, `intent_complete`, `blocked`. For unit-level actions, call `haiku_run_next { intent: ... }` to get the workflow engine's canonical next step (the result file and run_next return the same data; run_next is the authoritative drive step).
 - Plaintext "job ends here" message — another subagent in the wave will produce the structured result; do not dispatch yet.
-- Anything else (subagent non-compliant) — fall back: call `haiku_run_next { intent: ... }`.
+- Anything else (subagent non-compliant — neither a `Workflow Result: <path>` line nor the "job ends here" handoff) — note the offending subagent's `type=` value in one sentence to the user (so we can see which mandate stopped following the contract), then fall back: call `haiku_run_next { intent: ... }`.
 
 Do NOT stop until run_next returns `gate_review`, `advance_stage → intent_complete`, `intent_complete`, or `error`.

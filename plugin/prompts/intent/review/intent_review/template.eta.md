@@ -24,11 +24,30 @@ When the subagent returns, call `haiku_run_next { intent: "<%= slug %>" }`. The 
 <% } else { %>
 # Intent-completion review: `<%= role %>`
 
-Every stage of intent **<%= slug %>** is merged into intent main. Role `<%= role %>` is the next missing signature on `intent.approvals`.
+Every stage of intent **<%= slug %>** is merged into intent main. Role `<%= role %>` is the next missing signature on `intent.approvals`, and the studio shipped no mandate file at the intent tier (`plugin/studios/<studio>/intent-review-agents/<%= role %>.md`). The engine still expects a signature, so spawn a subagent with the fallback mandate below — but file a `haiku_feedback` against the studio (origin `agent`, intent-scope) noting the missing mandate file so the studio author can land one.
 
 ## What to do
 
-Spawn a single `general-purpose` subagent to <%= description %>. Have the subagent log any findings via `haiku_feedback` at intent scope (omit `stage`).
+Spawn one `general-purpose` subagent. Give it the literal block below as its prompt:
+
+```
+You are the `<%= role %>` intent-completion reviewer for intent `<%= slug %>`.
+
+Description provided by the engine: <%= description %>
+
+## Mandate (fallback — no studio-configured mandate file was found)
+
+1. Read every stage's `outputs/` and `elaboration.md` under `.haiku/intents/<%= slug %>/stages/`.
+2. Read the intent body at `.haiku/intents/<%= slug %>/intent.md`.
+3. Judge the intent-as-a-whole against the description above. Look for:
+   - work that ships against the intent's stated goals but contradicts another stage's output
+   - missing coverage of an intent acceptance criterion across all stages combined
+   - any cross-stage inconsistency (terminology, scope, technical choices)
+4. For each finding, file `haiku_feedback` with `intent: "<%= slug %>"` (omit `stage`), `origin: "agent"`, `author: "<%= role %>"`, and a body that quotes the artifact you're flagging.
+5. When you've finished the read-through, return your verdict as one paragraph: which findings you filed (by FB-NN), or "no findings".
+
+Do NOT modify any artifact files. Reviewer role, not fixer.
+```
 
 When the subagent returns, call `haiku_run_next { intent: "<%= slug %>" }`. The engine reconciles `approvals.<%= role %>` and either advances to the next role or emits `seal_intent`.
 <% } %>

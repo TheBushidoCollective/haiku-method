@@ -23,12 +23,14 @@ import { chmodSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import * as esbuild from "esbuild"
-import { inlinePromptTemplatesPlugin } from "./inline-prompt-templates.mjs"
+import { canonicalizePromptTemplatesPlugin } from "./canonicalize-prompt-templates.mjs"
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 const root = join(__dir, "..")
 const repoRoot = join(root, "..", "..")
 const outfile = join(repoRoot, "plugin", "bin", "haiku.mjs")
+const srcPromptsRoot = join(root, "src", "orchestrator", "prompts")
+const pluginPromptsRoot = join(repoRoot, "plugin", "prompts")
 
 function runStep(name, cmd, args, skipEnv) {
 	if (skipEnv && process.env[skipEnv] === "1") {
@@ -72,11 +74,23 @@ const pluginJson = JSON.parse(
 const mcpVersion = pluginJson.version
 
 // Switched from the esbuild CLI (npx esbuild …) to the JS API so the
-// `inline-prompt-templates` plugin can run. The plugin rewrites every
-// `loadTemplate(import.meta.url)` call in
-// `src/orchestrator/prompts/<action>/index.ts` to a literal string of
-// the sibling `template.eta.md`, so the bundled binary never has to
-// fs-read template files at runtime.
+// `canonicalize-prompt-templates` plugin can run. The plugin rewrites
+// every `loadTemplate(import.meta.url, …)` call in
+// `src/orchestrator/prompts/<…>/index.ts` to a sentinel-bearing
+// `loadTemplate("@canon:<rel-dir>", …)` form so the bundled binary
+// doesn't try to read its own `import.meta.url` at runtime. Template
+// bodies live at `plugin/prompts/<rel-dir>/<name>` (single source of
+// truth, shipped with the plugin) and the runtime cascade in
+// `_load-template.ts` resolves them with project overlays at
+// `.haiku/prompts/<rel>` winning. No copy step — the build-time
+// check just verifies every referenced template is present so a
+// missing file fails fast here instead of at first tick.
+//
+// Templates on disk (vs inlined as string constants) is what makes
+// the reflection project-overlay loop possible — a team can drop a
+// revised mandate at `.haiku/prompts/…/template.eta.md` and the
+// loader picks it up on the next render, no rebuild required.
+
 try {
 	await esbuild.build({
 		absWorkingDir: root,
@@ -95,7 +109,12 @@ try {
 			"process.env.HAIKU_SENTRY_DSN_MCP": JSON.stringify(sentryDsn),
 			"process.env.HAIKU_MCP_VERSION": JSON.stringify(mcpVersion),
 		},
-		plugins: [inlinePromptTemplatesPlugin],
+		plugins: [
+			canonicalizePromptTemplatesPlugin({
+				srcPromptsRoot,
+				pluginPromptsRoot,
+			}),
+		],
 		logLevel: "info",
 	})
 } catch {

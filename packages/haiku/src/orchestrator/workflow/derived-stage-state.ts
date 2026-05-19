@@ -164,9 +164,17 @@ function listUnitsFromGitRef(
 	})
 }
 
-/** Reviewer roles for a stage. Mirrors `walkIntentTrack` in cursor.ts.
- *  Autopilot trims to the engine-built minimum (no agents, no user
- *  gate); other modes get the full chain. */
+/** Reviewer roles for a stage. Used by diagnostic / derived-state
+ *  callers (debug-ops, parser) — *not* the cursor's dispatch loop.
+ *  walkIntentTrack in cursor.ts builds its own list inline so it can
+ *  include the engine-built `continuity` and `cross-stage-consistency`
+ *  roles. Those don't appear here because this helper answers a
+ *  narrower question: "what's the minimum set a caller can use to
+ *  reason about review completion?" — the engine roles are auto-
+ *  managed by the cursor and shouldn't gate diagnostic surfaces.
+ *  Autopilot trims to spec only; other modes get spec + configured
+ *  agents + user.
+ */
 export function reviewRolesFor(
 	studio: string,
 	stage: string,
@@ -179,7 +187,8 @@ export function reviewRolesFor(
 
 /** Approval roles for a stage. Differs from review roles by the
  *  inclusion of `quality_gates` (engine-run, not subagent-dispatched).
- *  Mirrors `walkIntentTrack` in cursor.ts. */
+ *  Same scope as `reviewRolesFor` — used by diagnostic callers, not by
+ *  the cursor's dispatch loop. The cursor builds its own list inline. */
 export function approvalRolesFor(
 	studio: string,
 	stage: string,

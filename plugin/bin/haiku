@@ -22,7 +22,7 @@
 # bundle behavior in a dev checkout). HAIKU_DEV=1 forces source mode
 # (custom plugin install paths that should still hot-reload).
 set -euo pipefail
-HERE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUNDLE="$HERE/haiku.mjs"
 SOURCE_ENTRY="$HERE/../../packages/haiku/src/main.ts"
 
@@ -30,43 +30,45 @@ SOURCE_ENTRY="$HERE/../../packages/haiku/src/main.ts"
 # marketplaces dir too — `*` in bash `case` patterns matches `/`.
 IS_PROD=""
 case "$HERE" in
-  */.claude/plugins/*|*/.claude/mcpb/*)
-    IS_PROD=1
-    ;;
+*/.claude/plugins/* | */.claude/mcpb/*)
+	IS_PROD=1
+	;;
 esac
 [ "${HAIKU_PROD:-}" = "1" ] && IS_PROD=1
 [ "${HAIKU_DEV:-}" = "1" ] && IS_PROD=""
 
 # Dev path: source via bun/tsx.
 if [ -z "$IS_PROD" ] && [ -f "$SOURCE_ENTRY" ]; then
-  if command -v bun >/dev/null 2>&1; then
-    exec bun "$SOURCE_ENTRY" "$@"
-  fi
-  if command -v npx >/dev/null 2>&1; then
-    exec npx tsx "$SOURCE_ENTRY" "$@"
-  fi
-  echo "haiku: dev checkout at $SOURCE_ENTRY but neither 'bun' nor 'npx' is on PATH." >&2
-  echo "Install bun (https://bun.sh) or node, or set HAIKU_PROD=1 to use the bundle." >&2
-  exit 1
+	if command -v bun >/dev/null 2>&1; then
+		echo "haiku running with bun in dev" >&2
+		exec bun "$SOURCE_ENTRY" "$@"
+	fi
+	if command -v npx >/dev/null 2>&1; then
+		echo "haiku running with npx in dev" >&2
+		exec npx tsx "$SOURCE_ENTRY" "$@"
+	fi
+	echo "haiku: dev checkout at $SOURCE_ENTRY but neither 'bun' nor 'npx' is on PATH." >&2
+	echo "Install bun (https://bun.sh) or node, or set HAIKU_PROD=1 to use the bundle." >&2
+	exit 1
 fi
 
 # Production path: bundle under node.
 if [ -f "$BUNDLE" ]; then
-  exec node "$BUNDLE" "$@"
+	exec node "$BUNDLE" "$@"
 fi
 
 # Last-resort fallback for an unbuilt dev checkout that ended up flagged
 # as production (e.g. someone symlinked it into ~/.claude/plugins/).
 if [ -f "$SOURCE_ENTRY" ]; then
-  echo "haiku: bundle missing at $BUNDLE — falling back to source. Run 'npm run build -w @haiku/haiku' or unset HAIKU_PROD." >&2
-  if command -v bun >/dev/null 2>&1; then
-    exec bun "$SOURCE_ENTRY" "$@"
-  fi
-  if command -v npx >/dev/null 2>&1; then
-    exec npx tsx "$SOURCE_ENTRY" "$@"
-  fi
-  echo "haiku: bundle missing and neither 'bun' nor 'npx' is available for source fallback." >&2
-  exit 1
+	echo "haiku: bundle missing at $BUNDLE — falling back to source. Run 'npm run build -w @haiku/haiku' or unset HAIKU_PROD." >&2
+	if command -v bun >/dev/null 2>&1; then
+		exec bun "$SOURCE_ENTRY" "$@"
+	fi
+	if command -v npx >/dev/null 2>&1; then
+		exec npx tsx "$SOURCE_ENTRY" "$@"
+	fi
+	echo "haiku: bundle missing and neither 'bun' nor 'npx' is available for source fallback." >&2
+	exit 1
 fi
 
 echo "haiku: cannot locate bundle ($BUNDLE) or source ($SOURCE_ENTRY)." >&2

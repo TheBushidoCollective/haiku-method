@@ -16,9 +16,12 @@ import type { OrchestratorAction } from "../orchestrator.js"
 import { MAX_STAGE_ITERATIONS } from "../state-tools.js"
 import { emitTelemetry } from "../telemetry.js"
 
-// v4: manual_change_assessment removed. Drift detection runs in
-// the cursor's Track C and surfaces as drift_detected → FB; the
-// feedback track handles assessment. No separate handler needed.
+// v4: manual_change_assessment removed. v9 (2026-05-17): drift
+// handling went engine-internal. The cursor's Track C still runs the
+// sweep, but no agent-facing action surfaces — see
+// `orchestrator/workflow/drift-handle-events.ts`. Drift events
+// produce engine-emitted FBs that flow through the standard
+// `fix_hats:` chain like any other FB.
 
 /** Compact feedback summary for orchestrator action responses.
  *  Returns id/title/origin/author/status + file path — NO body.

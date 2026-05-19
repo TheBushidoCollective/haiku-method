@@ -11,9 +11,10 @@
 // visually consistent.
 
 import { spawn } from "node:child_process"
-import { appendFileSync, existsSync } from "node:fs"
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
+import matter from "gray-matter"
 import { z } from "zod"
 import { ensureOnStageBranch } from "../git-worktree.js"
 import { closeSessionConnection, startHttpServer } from "../http.js"
@@ -43,6 +44,7 @@ import {
 	createDesignDirectionSession,
 	createQuestionSession,
 	createSession,
+	createViewSession,
 	deleteSession,
 	findLiveReviewSessionForIntent,
 	getPreviousReviewSnapshot,
@@ -50,15 +52,25 @@ import {
 	hasPresenceLost,
 	isBrowserAttached,
 	updateSession,
+	updateViewSession,
 	waitForSession,
 } from "../sessions.js"
 import { buildStageArtifactUrl } from "../stage-artifact-url.js"
 import {
+	detectBootTarget,
+	killBootSession,
+	spawnBoot,
+} from "../view-boot.js"
+import {
 	type HaikuAwaitDesignDirectionInput,
 	type HaikuAwaitVisualAnswerInput,
+	type HaikuViewCloseInput,
+	type HaikuViewInput,
 	validateHaikuAwaitDesignDirectionInputSchema,
 	validateHaikuAwaitVisualAnswerInputSchema,
 	validateHaikuReviewOpenInputSchema,
+	validateHaikuViewCloseInputSchema,
+	validateHaikuViewInputSchema,
 } from "../state/schemas/index.js"
 import { validateToolInput } from "../state/schemas/inputs/_validate.js"
 import {
@@ -69,6 +81,7 @@ import {
 	listVisibleIntents,
 	parseFrontmatter,
 } from "../state-tools.js"
+import { readStageArtifactDefs } from "../studio-reader.js"
 import { withAnnouncement } from "../tools/orchestrator/_announce.js"
 import { orchestratorToolHandlers } from "../tools/orchestrator/index.js"
 import {
@@ -703,6 +716,245 @@ export async function handleToolCall(
 		})
 	}
 
+	// View session — open a tunnelled URL that points at the SPA's
+	// artifact-browser route (viewer mode) or a spawned project dev
+	// server (boot mode). Does NOT block on a decision; the caller
+	// (typically a runtime-verifier review-agent) hands the URL to the
+	// bundled playwright MCP, drives the page, then calls
+	// `haiku_view_close` when done. Boot-mode subprocess management
+	// lives in a follow-up commit — this first slice ships viewer mode
+	// only and rejects `mode: "boot"` with a not-yet-implemented note.
+	if (name === "haiku_view") {
+		const a = (args ?? {}) as Record<string, unknown>
+		const viewInputErr = validateToolInput(
+			a,
+			validateHaikuViewInputSchema,
+			"haiku_view",
+		)
+		if (viewInputErr) return viewInputErr
+		const validated = a as HaikuViewInput
+		const requestedMode = validated.mode ?? "auto"
+
+		// Resolve intent slug. Same auto-resolution pattern as
+		// haiku_review_open — explicit arg wins, else branch match,
+		// else single-active-intent fallback.
+		let slug = validated.intent
+		if (!slug) {
+			const branchMatch = intentFromCurrentBranch()
+			if (branchMatch) {
+				slug = branchMatch.slug
+			} else {
+				const root = findHaikuRoot()
+				const intentsDir = join(root, "intents")
+				const active = listVisibleIntents(intentsDir).filter(
+					(i) => (i.data.status as string) !== "completed",
+				)
+				if (active.length === 1) {
+					slug = active[0].slug
+				} else {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: JSON.stringify({
+									error: "haiku_view_intent_unresolved",
+									message:
+										active.length === 0
+											? "No active intents found. Pass `intent` explicitly."
+											: `Multiple active intents (${active.map((i) => i.slug).join(", ")}). Pass \`intent\` explicitly.`,
+								}),
+							},
+						],
+						isError: true,
+					}
+				}
+			}
+		}
+
+		const intentDirAbs = intentDir(slug)
+		if (!existsSync(intentDirAbs)) {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: JSON.stringify({
+							error: "haiku_view_intent_not_found",
+							message: `Intent "${slug}" not found at ${intentDirAbs}.`,
+						}),
+					},
+				],
+				isError: true,
+			}
+		}
+
+		// Boot detection — tried for `auto` and `boot`. Looks at the
+		// project's own package.json for a `dev` / `start` script.
+		const wantsBoot = requestedMode === "boot" || requestedMode === "auto"
+		const detection = wantsBoot ? detectBootTarget(intentDirAbs) : null
+
+		// `mode: "boot"` is a hard request — fail loud if nothing
+		// runnable was detected. `auto` falls through to viewer.
+		if (requestedMode === "boot" && !detection) {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: JSON.stringify({
+							error: "haiku_view_no_boot_target",
+							message: `No dev/start script found in ${intentDirAbs}/package.json. Either add one, or call again with mode: "viewer".`,
+						}),
+					},
+				],
+				isError: true,
+			}
+		}
+
+		// Resolve studio for studio-app contribution dispatch in the
+		// SPA. Best-effort: parse intent.md FM and read `studio`. A
+		// missing or unparseable intent yields no studio, which just
+		// disables studio-app contribution for this session — the
+		// default mime dispatch still works.
+		let studio: string | undefined
+		try {
+			const parsed = await parseIntent(intentDirAbs)
+			const fm = parsed?.frontmatter as
+				| { studio?: unknown }
+				| undefined
+			if (fm && typeof fm.studio === "string" && fm.studio) {
+				studio = fm.studio
+			}
+		} catch {
+			// Best-effort — studio routing is a UI niceity, not a hard
+			// dependency of the view session.
+		}
+
+		const effectiveMode: "viewer" | "boot" = detection ? "boot" : "viewer"
+		const session = createViewSession({
+			intent_dir: intentDirAbs,
+			intent_slug: slug,
+			studio,
+			stage: validated.stage,
+			artifact: validated.artifact,
+			mode: effectiveMode,
+		})
+
+		if (effectiveMode === "boot" && detection) {
+			// Boot mode: spawn the dev server, return a direct
+			// localhost URL pointing at it. Skip the SPA tunnel
+			// entirely — Playwright drives the project's real app,
+			// not an embedded preview.
+			try {
+				const spawned = await spawnBoot(session.session_id, detection)
+				updateViewSession(session.session_id, {
+					boot_port: spawned.port,
+					boot_pid: spawned.pid,
+					boot_command: spawned.command,
+				})
+				const bootUrl = `http://127.0.0.1:${spawned.port}/`
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								session_id: session.session_id,
+								url: bootUrl,
+								mode: "boot",
+								intent: slug,
+								stage: validated.stage ?? null,
+								artifact: validated.artifact ?? null,
+								boot_command: spawned.command,
+								note: "Hand the `url` to the bundled `playwright` MCP. The dev server stays up until `haiku_view_close` (or the 30min TTL). Call `haiku_view_close` with the `session_id` when done.",
+							}),
+						},
+					],
+				}
+			} catch (err) {
+				// Spawn or port-bind failed — close the session and
+				// surface the failure.
+				deleteSession(session.session_id)
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								error: "haiku_view_boot_failed",
+								message: err instanceof Error ? err.message : String(err),
+								boot_command: detection.description,
+							}),
+						},
+					],
+					isError: true,
+				}
+			}
+		}
+
+		// Viewer mode: tunnel a URL pointing at the SPA's
+		// artifact-browser route.
+		const port = await startHttpServer()
+		const base = isRemoteReviewEnabled()
+			? buildReviewUrl(session.session_id, await openTunnel(port), "view")
+			: `http://127.0.0.1:${port}/view/${session.session_id}`
+		const params = new URLSearchParams()
+		if (validated.stage) params.set("stage", validated.stage)
+		if (validated.artifact) params.set("artifact", validated.artifact)
+		const query = params.toString()
+		const viewUrl = query ? `${base}${base.includes("?") ? "&" : "?"}${query}` : base
+
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: JSON.stringify({
+						session_id: session.session_id,
+						url: viewUrl,
+						mode: "viewer",
+						intent: slug,
+						stage: validated.stage ?? null,
+						artifact: validated.artifact ?? null,
+						note: "Hand the `url` to the bundled `playwright` MCP. When done, call `haiku_view_close` with the `session_id`.",
+					}),
+				},
+			],
+		}
+	}
+
+	if (name === "haiku_view_close") {
+		const a = (args ?? {}) as Record<string, unknown>
+		const closeInputErr = validateToolInput(
+			a,
+			validateHaikuViewCloseInputSchema,
+			"haiku_view_close",
+		)
+		if (closeInputErr) return closeInputErr
+		const validated = a as HaikuViewCloseInput
+		const session = getSession(validated.session_id)
+		const wasView = session?.session_type === "view"
+		const wasBootMode = wasView && session.mode === "boot"
+
+		// Boot-mode cleanup first — kill the spawned dev server
+		// before deleting the session record so the supervisor's
+		// killAllOrphanedBootSessions sweep does not have to clean
+		// up after us on the next tick.
+		const killedBoot = wasBootMode
+			? killBootSession(validated.session_id)
+			: false
+		const hadSession = deleteSession(validated.session_id)
+
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: JSON.stringify({
+						closed: hadSession,
+						session_id: validated.session_id,
+						was_view_session: wasView,
+						killed_boot_process: killedBoot,
+					}),
+				},
+			],
+		}
+	}
+
 	if (name === "haiku_await_visual_answer") {
 		// Resume / recovery entry point. Canonical flow inlines the
 		// await into ask_user_visual_question itself — this tool exists
@@ -740,6 +992,84 @@ export async function handleToolCall(
 	if (name === "pick_design_direction") {
 		const input = PickDesignDirectionInput.parse(args)
 		const _title = input.title ?? "Design Direction"
+
+		// Autopilot short-circuit (2026-05-18). When the intent is in
+		// autopilot mode the design phase has no human in the loop, so
+		// the SPA picker would block forever. Auto-write the manifest
+		// using a sensible default — pick the first archetype if
+		// archetypes were generated upstream, otherwise stamp an
+		// "auto-selected (no archetypes)" manifest that records the
+		// agent is proceeding without a chosen direction. Either way the
+		// cursor's existence check on the next tick passes the gate and
+		// the workflow keeps advancing without waiting on a user click
+		// that's never going to come.
+		try {
+			const intentMdPath = join(
+				findHaikuRoot(),
+				"intents",
+				input.intent_slug,
+				"intent.md",
+			)
+			if (existsSync(intentMdPath)) {
+				const intentRaw = await readFile(intentMdPath, "utf-8")
+				const intentMode = (parseFrontmatter(intentRaw).data.mode as string) || ""
+				if (intentMode === "autopilot") {
+					const manifest = await resolveDesignDirectionManifestLocation(
+						input.intent_slug,
+					)
+					if (!manifest) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Autopilot short-circuit for pick_design_direction failed: no discovery template with tool=pick_design_direction found for intent '${input.intent_slug}'. The cursor's discovery gate will not clear automatically — file a bug or fall back to manual handling.`,
+								},
+							],
+							isError: true,
+						}
+					}
+					let archetypes: DesignArchetypeData[] = []
+					if (input.archetypes) {
+						archetypes = input.archetypes
+					} else if (input.archetypes_file) {
+						const raw = await readFile(
+							resolve(input.archetypes_file),
+							"utf-8",
+						)
+						archetypes = z.array(DesignArchetypeSchema).parse(JSON.parse(raw))
+					}
+					const chosen = archetypes[0]
+					writeDesignDirectionManifest({
+						absPath: manifest.absPath,
+						stage: manifest.stage,
+						mode: chosen ? "select" : "auto",
+						archetype: chosen?.name,
+						comments: chosen
+							? `Autopilot auto-selected the first archetype ("${chosen.name}") — no SPA picker shown because intent.mode === "autopilot".`
+							: "Autopilot proceeded with no archetype — intake mode with no candidates. The agent will drive the rest of the design phase from the unit specs.",
+						source: "autopilot",
+					})
+					const announcement = chosen
+						? `Autopilot auto-selected the **${chosen.name}** direction (intent.mode === "autopilot" — no SPA picker shown). Manifest written at \`${manifest.absPath}\`.`
+						: `Autopilot proceeded with no archetype selection (intent.mode === "autopilot", no candidates supplied). Manifest written at \`${manifest.absPath}\`.`
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: withAnnouncement(
+									announcement,
+									"Call `haiku_run_next` to continue — the cursor's discovery gate is now cleared.",
+								),
+							},
+						],
+					}
+				}
+			}
+		} catch (err) {
+			console.error(
+				`[pick_design_direction] autopilot check failed: ${err instanceof Error ? err.message : String(err)}. Falling through to the SPA picker.`,
+			)
+		}
 
 		// Resolve archetypes: inline, from file, or empty (intake mode).
 		// Empty is the intake-first path: the agent calls this tool with
@@ -1193,6 +1523,107 @@ export async function awaitGateReviewSession(
 }
 
 /**
+ * Find the discovery template that declares `tool: pick_design_direction`
+ * for the active stage. Returns the resolved manifest location (with
+ * `{intent-slug}` substituted) plus the discovery template's `body` for
+ * context, or `null` when no such template exists.
+ *
+ * The cursor reads file existence at this location as the discovery
+ * signal (see prompts/stage/elaborate/discovery_required/template.eta.md).
+ * The tool MUST write the manifest there or the gate never clears.
+ *
+ * Resolves the active stage via `findCurrentStage` (disk-derived) rather
+ * than reading any FM cache; the design-direction tool fires from the
+ * elaborate-loop, so the cursor's view of "which stage is active" is
+ * the authoritative one.
+ */
+async function resolveDesignDirectionManifestLocation(
+	intentSlug: string,
+): Promise<{ absPath: string; stage: string; templateBody: string } | null> {
+	const intentMdPath = join(findHaikuRoot(), "intents", intentSlug, "intent.md")
+	if (!existsSync(intentMdPath)) return null
+	const intentRaw = await readFile(intentMdPath, "utf-8")
+	const studio = (parseFrontmatter(intentRaw).data.studio as string) || ""
+	if (!studio) return null
+	const { findCurrentStage } = await import(
+		"../orchestrator/workflow/cursor.js"
+	)
+	const stage = findCurrentStage(intentSlug, studio)
+	if (!stage) return null
+	const defs = readStageArtifactDefs(studio, stage)
+	const dd = defs.find(
+		(d) => d.kind === "discovery" && d.tool === "pick_design_direction",
+	)
+	if (!dd || !dd.location) return null
+	const resolvedRel = dd.location.replace(/\{intent-slug\}/g, intentSlug)
+	// Discovery template locations are repo-root-relative (start with
+	// `.haiku/intents/...`); join from the haiku root's parent so the
+	// `.haiku/` prefix lands at the intended on-disk spot.
+	const absPath = join(findHaikuRoot(), "..", resolvedRel)
+	return { absPath, stage, templateBody: dd.body }
+}
+
+/**
+ * Write the design-direction manifest at the discovery template's
+ * `location` so the cursor's existence check passes the gate. Called
+ * (a) when the SPA picker resolves a `select` or `upload` mode, and
+ * (b) when autopilot mode short-circuits the picker entirely.
+ *
+ * The manifest is a markdown file with the user's (or autopilot's)
+ * selection in frontmatter plus a brief human-readable body. The
+ * agent's next pass reads this file as input to the elaborate-loop's
+ * remaining signals (decompose, verify_decompose).
+ */
+function writeDesignDirectionManifest(args: {
+	absPath: string
+	stage: string
+	mode: "select" | "upload" | "auto"
+	archetype?: string
+	files?: Array<{ path: string; caption?: string }>
+	comments?: string
+	annotations?: unknown
+	source: "spa-picker" | "autopilot"
+}): void {
+	mkdirSync(dirname(args.absPath), { recursive: true })
+	const fm: Record<string, unknown> = {
+		mode: args.mode,
+		stage: args.stage,
+		source: args.source,
+		recorded_at: new Date().toISOString(),
+	}
+	if (args.archetype) fm.archetype = args.archetype
+	if (args.files && args.files.length > 0) fm.files = args.files
+	if (args.comments) fm.comments = args.comments
+	if (args.annotations) fm.annotations = args.annotations
+	const bodyLines: string[] = []
+	if (args.source === "autopilot") {
+		bodyLines.push(
+			"# Design Direction (autopilot)",
+			"",
+			"Auto-selected by the workflow engine because `intent.mode === \"autopilot\"`. No SPA picker was shown; the agent drives the rest of the design phase from this anchor.",
+		)
+	} else {
+		bodyLines.push("# Design Direction", "")
+	}
+	if (args.mode === "select" && args.archetype) {
+		bodyLines.push("", `**Chosen archetype:** ${args.archetype}`)
+	}
+	if (args.mode === "upload" && args.files && args.files.length > 0) {
+		bodyLines.push("", `**Uploaded ${args.files.length} reference file(s):**`)
+		for (const f of args.files) {
+			bodyLines.push(`- \`${f.path}\`${f.caption ? ` — ${f.caption}` : ""}`)
+		}
+	}
+	if (args.comments) {
+		bodyLines.push("", `**Comments:** ${args.comments}`)
+	}
+	writeFileSync(
+		args.absPath,
+		matter.stringify(`${bodyLines.join("\n")}\n`, fm),
+	)
+}
+
+/**
  * Block on a design-direction session until the user submits, then
  * build the MCP response based on which mode they picked
  * (select / regenerate / generate / upload). Used by both the
@@ -1203,6 +1634,16 @@ export async function awaitGateReviewSession(
  * + PNG sidecars + uploaded files) lands on the HTTP submit route in
  * session-routes.ts before this function wakes; the response here is
  * just the agent-facing description of what happened.
+ *
+ * Manifest write (2026-05-18 fix for haiku-pick-design-direction-bug):
+ * the cursor reads file existence at the discovery template's
+ * `location:` as the discovery signal. For `select` / `upload` modes
+ * — both of which represent a final answer from the user — we write
+ * that manifest here before returning, honoring the contract the
+ * elaborate-loop prompt promises ("the tool produces the artifact at
+ * `<location>` as a side effect"). `regenerate` and `generate` are NOT
+ * terminal (the agent has more work to do before the picker re-opens),
+ * so they don't write a manifest.
  */
 export async function awaitDesignDirectionSession(
 	sessionId: string,
@@ -1335,6 +1776,14 @@ export async function awaitDesignDirectionSession(
 		}
 	}
 
+	// Resolve manifest target ONCE so both branches share the same
+	// lookup. Resolved lazily and only when we have a final-answer mode
+	// — regenerate/generate already returned above without needing it.
+	const manifest =
+		intentSlug && (sel.mode === "upload" || sel.mode === "select")
+			? await resolveDesignDirectionManifestLocation(intentSlug)
+			: null
+
 	if (sel.mode === "upload") {
 		const fileLines = sel.files
 			.map(
@@ -1342,6 +1791,27 @@ export async function awaitDesignDirectionSession(
 					`  ${i + 1}. \`${f.path}\`${f.caption ? ` — ${f.caption}` : ""}`,
 			)
 			.join("\n")
+		// Write the manifest BEFORE building the announcement so the
+		// cursor's existence check on the next tick passes the gate.
+		// Failure to write is non-fatal — the agent sees the
+		// announcement and can repro / report — but log loudly so the
+		// regression doesn't sneak back.
+		if (manifest) {
+			try {
+				writeDesignDirectionManifest({
+					absPath: manifest.absPath,
+					stage: manifest.stage,
+					mode: "upload",
+					files: sel.files,
+					comments: sel.comments,
+					source: "spa-picker",
+				})
+			} catch (err) {
+				console.error(
+					`[awaitDesignDirectionSession] manifest write failed (upload): ${err instanceof Error ? err.message : String(err)}. The discovery gate will NOT clear — file a bug.`,
+				)
+			}
+		}
 		const announceParts = [
 			`The user uploaded ${sel.files.length} design file${
 				sel.files.length === 1 ? "" : "s"
@@ -1362,7 +1832,24 @@ export async function awaitDesignDirectionSession(
 		}
 	}
 
-	// select mode
+	// select mode — write manifest, then announce.
+	if (manifest) {
+		try {
+			writeDesignDirectionManifest({
+				absPath: manifest.absPath,
+				stage: manifest.stage,
+				mode: "select",
+				archetype: sel.archetype,
+				comments: sel.comments,
+				annotations: sel.annotations,
+				source: "spa-picker",
+			})
+		} catch (err) {
+			console.error(
+				`[awaitDesignDirectionSession] manifest write failed (select): ${err instanceof Error ? err.message : String(err)}. The discovery gate will NOT clear — file a bug.`,
+			)
+		}
+	}
 	const announceParts: string[] = [
 		`The user selected the **${sel.archetype}** direction.`,
 	]

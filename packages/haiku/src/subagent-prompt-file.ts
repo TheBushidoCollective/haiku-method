@@ -1,18 +1,34 @@
-// subagent-prompt-file — Write subagent prompts to tmpfiles
+// subagent-prompt-file — Persist generated prompts to a per-intent
+// directory under the user's home so they outlive the process and can
+// be inspected by the user or re-read by agents.
 //
-// Instead of embedding the full prompt inline in the `haiku_run_next` response
-// (which forces the parent to copy N kb of text verbatim into the Agent tool
-// call, and leaks prompt specifics into parent context), the workflow engine writes the
-// complete prompt to a tmpfile and the parent only tells the subagent to read
-// that file.
+// Layout (mirrors Claude's `~/.claude/projects/<key>/` convention —
+// `<key>` is the absolute project root with `/` replaced by `-`):
 //
-// File layout:
-//   $TMPDIR/haiku-prompts/{session_id}/{unit}-{hat}-{bolt}.prompt.md
-//   $TMPDIR/haiku-prompts/{session_id}/{unit}-{hat}-{bolt}.result.json
+//   ~/.haiku/projects/<project-key>/
+//     intents/<intent-slug>/
+//       prompts/
+//         intent/                            ← intent-scoped dispatches
+//           action-<actionName>.prompt.md
+//           intent-review-<slug>-<role>.prompt.md
+//           intent-fix-<fbId>-<hat>-<bolt>.prompt.md
+//         stages/<stage>/                    ← per-stage dispatches
+//           action-<actionName>.prompt.md
+//           discovery-<agent>.prompt.md
+//           <unit>-<hat>-<bolt>.prompt.md
+//           <unit>-<hat>-<bolt>.next-relay.md
+//           <unit>-<hat>-<bolt>.result.json
+//     sessions/<session_id>/
+//       loop-guards.log
 //
-// Cleanup policy (all best-effort, never blocks):
-//   - First write per MCP process: sweep cross-session dirs older than 24h.
-//   - Every Nth write: sweep own-session files older than 1h.
+// Filenames are deterministic and overwrite on rerun — a single slot
+// per logical prompt, so the user (or an agent) can point at a known
+// path and trust it reflects the engine's current decision for that
+// slot. Tick history is intentionally not kept; if you need it, copy
+// the file before re-ticking.
+//
+// Project key matches Claude's `~/.claude/projects/<key>/` convention
+// so the two trees line up side-by-side on disk.
 
 import {
 	mkdirSync,
@@ -22,8 +38,9 @@ import {
 	statSync,
 	writeFileSync,
 } from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { homedir } from "node:os"
+import { dirname, join } from "node:path"
+import { findHaikuRoot } from "./state/shared.js"
 
 /** Explicit session identity, set at MCP bootstrap when available. */
 let explicitSessionId: string | null = null
@@ -49,60 +66,61 @@ function sessionIdOrFallback(): string {
 	)
 }
 
-// Cross-session cleanup: one-shot per MCP process.
-let crossSessionCleanupAttempted = false
-
-// Own-session cleanup: periodic sweep every N writes.
-const PERIODIC_CLEANUP_EVERY_N_WRITES = 100
-const OWN_SESSION_MAX_AGE_MS = 60 * 60 * 1000 // 1h
-let writesSinceCleanup = 0
-
-function promptDir(): string {
-	if (!crossSessionCleanupAttempted) {
-		crossSessionCleanupAttempted = true
-		try {
-			cleanupStaleTmpfiles(24)
-		} catch {
-			/* best-effort */
-		}
+/** Claude-style key for the current project — the absolute path to the
+ *  repo root with `/` replaced by `-`. Mirrors `~/.claude/projects/`'s
+ *  naming so haiku's tree sits next to Claude's on disk. Falls back to
+ *  the process cwd when `.haiku/` isn't reachable (early bootstrap,
+ *  tests not seeded with an intent). */
+function projectKey(): string {
+	let projectRoot: string
+	try {
+		projectRoot = dirname(findHaikuRoot())
+	} catch {
+		projectRoot = process.cwd()
 	}
-	const dir = join(tmpdir(), "haiku-prompts", sessionIdOrFallback())
+	return projectRoot.replace(/\//g, "-")
+}
+
+function projectRootDir(): string {
+	return join(homedir(), ".haiku", "projects", projectKey())
+}
+
+/** Scope-resolved prompts directory under the per-intent tree. Stage
+ *  prompts land in `prompts/stages/<stage>/`; intent-scope dispatches
+ *  (intent-completion review/fix, intent-level seal/complete actions)
+ *  land in `prompts/intent/`. Both trees are user-inspectable and
+ *  overwrite-on-rerun. */
+function promptsScopeDir(intentSlug: string, stage?: string): string {
+	const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, "-")
+	const intentSafe = safe(intentSlug)
+	const tail = stage ? join("stages", safe(stage)) : "intent"
+	const dir = join(
+		projectRootDir(),
+		"intents",
+		intentSafe,
+		"prompts",
+		tail,
+	)
 	mkdirSync(dir, { recursive: true })
 	return dir
 }
 
-function maybePeriodicOwnSessionCleanup(dir: string): void {
-	writesSinceCleanup++
-	if (writesSinceCleanup < PERIODIC_CLEANUP_EVERY_N_WRITES) return
-	writesSinceCleanup = 0
-	try {
-		const now = Date.now()
-		for (const f of readdirSync(dir)) {
-			const p = join(dir, f)
-			try {
-				const st = statSync(p)
-				if (now - st.mtimeMs > OWN_SESSION_MAX_AGE_MS) {
-					rmSync(p, { force: true })
-				}
-			} catch {
-				/* ignore */
-			}
-		}
-	} catch {
-		/* best-effort */
-	}
+/** Per-session logs directory. Session-scoped because sessions can
+ *  span multiple intents; loop-guard traces and similar live here. */
+function sessionLogsDir(): string {
+	const dir = join(projectRootDir(), "sessions", sessionIdOrFallback())
+	mkdirSync(dir, { recursive: true })
+	return dir
 }
 
 /**
- * Resolve a path inside the current MCP session's prompt-files directory
- * (`$TMPDIR/haiku-prompts/{session_id}/{filename}`). Same directory the
- * subagent prompts live in, so per-session diagnostics (e.g. loop-guard
- * logs) sit next to the subagent traces a user already knows to look at.
- * Creates the directory if needed; best-effort cleanup on first call per
- * MCP process (`promptDir`).
+ * Resolve a path inside the current session's logs directory
+ * (`~/.haiku/projects/<key>/sessions/<session_id>/<filename>`).
+ * Session-scoped because the log spans intents within one driver
+ * session. Creates the directory if needed.
  */
 export function sessionLogPath(filename: string): string {
-	return join(promptDir(), filename)
+	return join(sessionLogsDir(), filename)
 }
 
 /** Result type for action-prompt writes (e.g. elaborate). Only `path` is
@@ -122,22 +140,36 @@ export interface SubagentPromptFile extends ActionPromptFile {
 }
 
 /**
- * Write a subagent prompt to a tmpfile and return the path + parent-facing
- * instruction. The parent's Agent tool call only needs to include the
- * parentInstruction as the prompt; the subagent reads the file itself.
+ * Write a subagent prompt to the per-intent prompts directory and return
+ * the path + parent-facing instruction. Deterministic name keyed by
+ * `<unit>-<hat>-<bolt>` (or `<unit>-<hat>` when `omitBolt: true` —
+ * used by discovery, which never iterates). Rerunning the same dispatch
+ * slot overwrites. The parent's Agent tool call only needs to include
+ * the parentInstruction as the prompt; the subagent reads the file
+ * itself.
  */
 export function writeSubagentPrompt(opts: {
 	unit: string
 	hat: string
 	bolt: number
 	content: string
+	/** Intent slug — selects the per-intent prompts directory. Required
+	 *  for the persistent layout. */
+	intent: string
+	/** Stage name. When present the prompt goes under
+	 *  `prompts/stages/<stage>/`; when absent it goes under
+	 *  `prompts/intent/` (intent-completion review/fix). */
+	stage?: string
+	/** Discovery dispatches don't iterate (bolt is always 1), so the
+	 *  trailing `-1` on the filename is noise. Set true to drop it. */
+	omitBolt?: boolean
 }): SubagentPromptFile {
-	const { unit, hat, bolt, content } = opts
-	const slug = `${unit.replace(/\.md$/, "")}-${hat}-${bolt}`
-	const dir = promptDir()
+	const { unit, hat, bolt, content, intent, stage, omitBolt } = opts
+	const boltPart = omitBolt ? "" : `-${bolt}`
+	const slug = `${unit.replace(/\.md$/, "")}-${hat}${boltPart}`
+	const dir = promptsScopeDir(intent, stage)
 	const path = join(dir, `${slug}.prompt.md`)
 	atomicWrite(path, content)
-	maybePeriodicOwnSessionCleanup(dir)
 
 	const parentInstruction = `Read the file at \`${path}\` and execute its instructions exactly. The file is the complete, canonical subagent prompt authored by the workflow engine — do not paraphrase or skip any of it.`
 
@@ -145,13 +177,18 @@ export function writeSubagentPrompt(opts: {
 }
 
 /**
- * Write a per-action prompt body to a tmpfile and return `{ path }`. Mirrors
- * `writeSubagentPrompt` but is keyed by action+intent+stage instead of
- * unit+hat+bolt — used when an orchestrator action emission carries an
- * authoritative prompt body too large to inline in the tool response (e.g.
- * `elaborate`). Callers set their own `message` field on the action object
- * and never need the pre-built instruction string, so only `path` is
- * returned (see `ActionPromptFile`).
+ * Write a per-action prompt body to the per-intent prompts directory.
+ * Mirrors `writeSubagentPrompt` but is keyed by action+stage instead
+ * of unit+hat+bolt — used when an orchestrator action emission carries
+ * an authoritative prompt body too large to inline in the tool
+ * response (e.g. `elaborate_loop`). Deterministic name: a given
+ * (action, stage) slot resolves to the same file on every tick;
+ * subsequent ticks overwrite. Callers set their own `message` field on
+ * the action object and never need the pre-built instruction string,
+ * so only `path` is returned (see `ActionPromptFile`).
+ *
+ * Note: `tickHint` is accepted for ABI compatibility but is no longer
+ * embedded in the filename — overwrite-on-rerun is the design.
  */
 export function writeActionPromptFile(opts: {
 	action: string
@@ -161,34 +198,31 @@ export function writeActionPromptFile(opts: {
 	tickHint?: string | number
 }): ActionPromptFile {
 	const { action, intent, stage, content } = opts
-	const tickHint =
-		opts.tickHint !== undefined && opts.tickHint !== null
-			? String(opts.tickHint)
-			: String(Date.now())
 	const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, "-")
-	const stagePart = stage ? `-${safe(stage)}` : ""
-	const slug = `action-${safe(action)}-${safe(intent)}${stagePart}-${safe(tickHint)}`
-	const dir = promptDir()
+	const slug = `action-${safe(action)}`
+	const dir = promptsScopeDir(intent, stage)
 	const path = join(dir, `${slug}.prompt.md`)
 	atomicWrite(path, content)
-	maybePeriodicOwnSessionCleanup(dir)
 
 	return { path }
 }
 
 /**
- * Result path for the workflow response tmpfile. advance_hat/reject_hat write
- * their JSON response here; the subagent's final message is just a path line.
- * The parent reads this file instead of parsing prose.
+ * Result path for the workflow response file. v3-era advance_hat/reject_hat
+ * wrote their JSON response here; v4 took a separate code path and no
+ * longer uses this. Kept exported for callers still on the legacy
+ * relay (none in-tree at time of writing).
  */
 export function resultPathFor(opts: {
 	unit: string
 	hat: string
 	bolt: number
+	intent: string
+	stage?: string
 }): string {
-	const { unit, hat, bolt } = opts
+	const { unit, hat, bolt, intent, stage } = opts
 	const slug = `${unit.replace(/\.md$/, "")}-${hat}-${bolt}`
-	return join(promptDir(), `${slug}.result.json`)
+	return join(promptsScopeDir(intent, stage), `${slug}.result.json`)
 }
 
 /**
@@ -252,10 +286,12 @@ export function nextRelayPath(opts: {
 	unit: string
 	hat: string
 	bolt: number
+	intent: string
+	stage?: string
 }): string {
-	const { unit, hat, bolt } = opts
+	const { unit, hat, bolt, intent, stage } = opts
 	const slug = `${unit.replace(/\.md$/, "")}-${hat}-${bolt}`
-	return join(promptDir(), `${slug}.next-relay.md`)
+	return join(promptsScopeDir(intent, stage), `${slug}.next-relay.md`)
 }
 
 /**
@@ -264,7 +300,13 @@ export function nextRelayPath(opts: {
  * just returning `next_dispatched_hat` without the prebuilt block.
  */
 export function writeNextRelaySidecar(
-	opts: { unit: string; hat: string; bolt: number },
+	opts: {
+		unit: string
+		hat: string
+		bolt: number
+		intent: string
+		stage?: string
+	},
 	content: string,
 ): void {
 	atomicWrite(nextRelayPath(opts), content)
@@ -279,7 +321,7 @@ export function writeResultFile(resultPath: string, payload: unknown): void {
  * file if the writer is interrupted mid-write. The rename is atomic on
  * POSIX filesystems IF the temp path and final path share a filesystem —
  * enforced here by placing the temp next to the final path inside the
- * same promptDir.
+ * same per-intent prompts directory.
  */
 function atomicWrite(path: string, content: string): void {
 	const tmp = `${path}.${process.pid}.tmp`
@@ -299,10 +341,13 @@ function atomicWrite(path: string, content: string): void {
 }
 
 /**
- * Clean up stale session prompt/result tmpfiles older than `maxAgeHours`.
+ * Sweep stale per-session log dirs under the current project's tree
+ * (`~/.haiku/projects/<key>/sessions/<old_session>/`). Intent prompt
+ * dirs are NOT swept — they're the durable inspection surface, and
+ * the user manages retention by archiving / deleting intents.
  */
 export function cleanupStaleTmpfiles(maxAgeHours = 24): void {
-	const root = join(tmpdir(), "haiku-prompts")
+	const root = join(projectRootDir(), "sessions")
 	try {
 		const now = Date.now()
 		const maxMs = maxAgeHours * 60 * 60 * 1000

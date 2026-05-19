@@ -33,8 +33,8 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { applyFeedbackInvalidations } from "./orchestrator/workflow/dispatch-stamps.js"
-import { buildReviewRecord } from "./orchestrator/workflow/sign-slot.js"
-import { intentDir, setFrontmatterField } from "./state-tools.js"
+import { bodySha256 } from "./orchestrator/workflow/sign-slot.js"
+import { findHaikuRoot, setFrontmatterField } from "./state-tools.js"
 import { emitTelemetry } from "./telemetry.js"
 
 export interface CloseFeedbackPostHookArgs {
@@ -77,47 +77,50 @@ export function closeFeedbackPostHook(args: CloseFeedbackPostHookArgs): void {
 		}
 	}
 
-	// (2) Drift-origin FBs: refresh witnesses on every surviving slot
-	// so the next drift sweep compares against today's content. Without
-	// this, even after step (1) clears the offending slot, other slots
-	// on the same unit (e.g. `reviews.spec`) keep their pre-drift
-	// witnesses and the sweep would re-fire.
-	if (args.fbFm.origin === "drift" && targetUnit && args.stage) {
+	// (2) Restamp surviving review/approval `body_sha256` witnesses on
+	// the targeted unit (2026-05-18 — haiku-loop-bug regression fix).
+	//
+	// When a fix-loop hat edits the unit body to address THIS finding,
+	// the body_sha256 of any review/approval role NOT in
+	// `targets.invalidates` becomes stale. The next drift sweep sees
+	// `body_sha256 != current` for those still-signed roles and fires
+	// `spec` drift events for each one — even though the modification
+	// was a deliberate, on-script fix the classifier already routed.
+	// The drift handler restamps the witness AND files an FB for each
+	// detected event; the FB queue fills up with self-healed-by-design
+	// findings the fix-loop can't actually act on (the work that
+	// "caused" the drift already happened — there's nothing to fix).
+	//
+	// Reported 2026-05-18 on admin-portal-reimagine/design: FB-160
+	// (continuity) was closed after the designer added LAYOUT-GRID
+	// citations to specs 01-05; the next sweep filed FB-161 through
+	// FB-165 against the same files for `input_mutation drift`, all
+	// classified as intent-scope with `target_unit: null` and all 7
+	// roles invalidated. The fix loop tried to designer-fix them, made
+	// no on-disk progress (nothing actionable), and `loop_halted`.
+	//
+	// The fix: at close time, restamp `body_sha256` on every still-
+	// signed review/approval slot to the unit's CURRENT body sha. The
+	// roles named in `targets.invalidates` are already deleted by (1)
+	// above; only the SURVIVING roles get restamped. Semantic: "the
+	// fix-loop's body modification is authoritative; non-invalidated
+	// roles re-witness against the new body."
+	//
+	// Scoped to fix-loop closures (closed_by starts with "fix-loop:")
+	// — manual closes via `haiku_feedback_reject` or other paths
+	// don't reach this hook by definition (it's only called by
+	// `haiku_feedback_advance_hat`'s terminal-hat path), so the prefix
+	// check is belt-and-suspenders against future call sites.
+	if (targetUnit && args.stage) {
 		try {
-			const unitPath = join(
-				intentDir(args.slug),
-				"stages",
-				args.stage,
-				"units",
-				`${targetUnit}.md`,
-			)
-			if (existsSync(unitPath)) {
-				const raw = readFileSync(unitPath, "utf8")
-				const parsed = matter(raw)
-				const fm = parsed.data as Record<string, unknown>
-				const reviews =
-					fm.reviews && typeof fm.reviews === "object"
-						? { ...(fm.reviews as Record<string, unknown>) }
-						: {}
-				const unitInputs = Array.isArray(fm.inputs)
-					? (fm.inputs as string[])
-					: []
-				for (const role of Object.keys(reviews)) {
-					reviews[role] = buildReviewRecord(unitPath, {
-						intentDir: intentDir(args.slug),
-						unitInputs,
-					})
-				}
-				// Approvals are bookkeeping-only under the premise-witness
-				// model — they record that a role signed, they don't
-				// witness any file content (output mutation isn't drift).
-				// Leave existing approval timestamps untouched on drift-FB
-				// close. The audit trail of "who approved when" stays
-				// intact; nothing to refresh.
-				setFrontmatterField(unitPath, "reviews", reviews)
-			}
+			restampSurvivingWitnesses({
+				slug: args.slug,
+				stage: args.stage,
+				targetUnit,
+				invalidates,
+			})
 		} catch (err) {
-			emitTelemetry("haiku.feedback.drift_refresh_failed", {
+			emitTelemetry("haiku.feedback.witness_restamp_failed", {
 				intent: args.slug,
 				stage: args.stage,
 				feedback_id: args.feedbackId,
@@ -126,4 +129,55 @@ export function closeFeedbackPostHook(args: CloseFeedbackPostHookArgs): void {
 			})
 		}
 	}
+
+}
+
+/** Restamp `body_sha256` on every signed review/approval role on the
+ *  target unit (except those just invalidated). Caller passes the
+ *  invalidates list so we don't re-stamp slots the caller deleted. */
+function restampSurvivingWitnesses(args: {
+	slug: string
+	stage: string
+	targetUnit: string
+	invalidates: string[]
+}): void {
+	const root = findHaikuRoot()
+	const unitPath = join(
+		root,
+		"intents",
+		args.slug,
+		"stages",
+		args.stage,
+		"units",
+		`${args.targetUnit}.md`,
+	)
+	if (!existsSync(unitPath)) return
+	const currentBodySha = bodySha256(unitPath)
+	if (!currentBodySha) return
+	const raw = readFileSync(unitPath, "utf8")
+	const parsed = matter(raw)
+	const fm = parsed.data as Record<string, unknown>
+	const invalidatesSet = new Set(args.invalidates)
+	const restamped = (
+		fieldName: "reviews" | "approvals",
+	): Record<string, unknown> | null => {
+		const slots = fm[fieldName]
+		if (!slots || typeof slots !== "object" || Array.isArray(slots)) return null
+		const next: Record<string, unknown> = { ...(slots as Record<string, unknown>) }
+		let changed = false
+		for (const [role, slot] of Object.entries(next)) {
+			if (invalidatesSet.has(role)) continue
+			if (!slot || typeof slot !== "object" || Array.isArray(slot)) continue
+			const slotRec = slot as Record<string, unknown>
+			if (typeof slotRec.at !== "string") continue
+			if (slotRec.body_sha256 === currentBodySha) continue
+			next[role] = { ...slotRec, body_sha256: currentBodySha }
+			changed = true
+		}
+		return changed ? next : null
+	}
+	const newReviews = restamped("reviews")
+	if (newReviews) setFrontmatterField(unitPath, "reviews", newReviews)
+	const newApprovals = restamped("approvals")
+	if (newApprovals) setFrontmatterField(unitPath, "approvals", newApprovals)
 }

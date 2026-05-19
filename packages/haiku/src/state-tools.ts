@@ -3512,6 +3512,8 @@ import {
 	HAIKU_STAGE_SET_INPUT_SCHEMA,
 	HAIKU_STUDIO_GET_INPUT_SCHEMA,
 	HAIKU_STUDIO_STAGE_GET_INPUT_SCHEMA,
+	HAIKU_VIEW_CLOSE_INPUT_SCHEMA,
+	HAIKU_VIEW_INPUT_SCHEMA,
 	HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA,
 	HAIKU_UNIT_DELETE_INPUT_SCHEMA,
 	HAIKU_UNIT_LIST_INPUT_SCHEMA,
@@ -3797,7 +3799,13 @@ function normalizeDates(
 	const result = { ...data }
 	for (const key in result) {
 		if (result[key] instanceof Date) {
-			result[key] = (result[key] as Date).toISOString().split("T")[0]
+			// Preserve full ISO timestamp (date + time + ms). Previous
+			// behaviour `.split("T")[0]` stripped the time-of-day for
+			// every Date-typed field, silently corrupting timestamp
+			// fields like `closed_at`, `created_at`, `triaged_at`,
+			// `completed_at` — these need ms-precision ordering for
+			// the cursor's recency-sort to be deterministic.
+			result[key] = (result[key] as Date).toISOString()
 		}
 	}
 	return result
@@ -4911,18 +4919,29 @@ function deriveDefaultAuthor(origin: string): string {
  *
  *    user-* origins → ["user"]   — the human re-asserted; clear their
  *                                   prior approval so the gate re-routes.
- *    drift          → ["user"]   — drift always escalates to user.
+ *    drift          → []         — engine-emitted drift FBs default to
+ *                                   informational. The classifier hat in
+ *                                   the stage's fix_hats chain reads the
+ *                                   diff and sets `targets.invalidates`
+ *                                   explicitly when the shift is
+ *                                   material; cosmetic shifts close with
+ *                                   no invalidations. (Pre-2026-05-17
+ *                                   this defaulted to ["user"] to force
+ *                                   user-gate escalation, because the
+ *                                   close hook needed the invalidation
+ *                                   path to neutralize the drift signal.
+ *                                   Under engine-internal drift handling
+ *                                   the signal is already neutralized at
+ *                                   detect time, so escalation should be
+ *                                   the agent's call, not the default.)
  *    everything else → []        — agent FBs (adversarial, studio, etc.)
- *                                   are informational; the close-feedback
- *                                   hook still rebuilds witnesses on
- *                                   drift FBs separately. */
+ *                                   are informational by default. */
 function deriveDefaultInvalidates(
 	explicit: string[] | undefined,
 	origin: string,
 ): string[] {
 	if (Array.isArray(explicit)) return explicit
 	if (origin.startsWith("user-")) return ["user"]
-	if (origin === "drift") return ["user"]
 	return []
 }
 
@@ -7031,6 +7050,40 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		outputSchema: {
 			type: "object",
 			properties: { message: { type: "string" } },
+		},
+	},
+	{
+		name: "haiku_view",
+		description:
+			"Open a tunnelled URL pointing at the SPA's artifact-browser route (viewer mode) or a spawned project dev server (boot mode). Returns a URL the caller should hand to the bundled `playwright` MCP for runtime verification, visual inspection, or any browser-driven check. Non-blocking — closes via `haiku_view_close` or the standard session TTL. Boot mode is not yet implemented; this tool currently serves viewer mode only.",
+		inputSchema: jsonSchemaOf(HAIKU_VIEW_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				session_id: { type: "string" },
+				url: { type: "string" },
+				mode: { type: "string", enum: ["viewer", "boot"] },
+				intent: { type: "string" },
+				stage: { type: ["string", "null"] },
+				artifact: { type: ["string", "null"] },
+				note: { type: "string" },
+			},
+			required: ["session_id", "url", "mode", "intent"],
+		},
+	},
+	{
+		name: "haiku_view_close",
+		description:
+			"Explicitly close a view session opened by `haiku_view`. Idempotent — closing an unknown or already-closed session returns success. Boot-mode sessions (when supported) also terminate the spawned dev server. Use this when the verifier or browsing flow is complete so the session releases its tunnel slot promptly instead of waiting for the standard TTL eviction.",
+		inputSchema: jsonSchemaOf(HAIKU_VIEW_CLOSE_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				closed: { type: "boolean" },
+				session_id: { type: "string" },
+				was_view_session: { type: "boolean" },
+			},
+			required: ["closed", "session_id"],
 		},
 	},
 	{
@@ -11549,7 +11602,15 @@ export function handleStateTool(
 			const advBody = advFound.body
 
 			// Lifecycle: don't advance terminal FBs.
-			const advStatus = (advFm.status as string) || "pending"
+			//
+			// Derive from on-disk signals (closed_at, rejected_at, ...) via
+			// deriveFeedbackStatus rather than reading `fm.status` directly.
+			// The reject handler already uses this pattern; the advance
+			// handler was inconsistent (pre-v8 `fm.status` read). With the
+			// `closed_at` write fix above, status == "closed" only when
+			// closed_at is also stamped, so cursor and lifecycle-guard now
+			// agree on the closure signal.
+			const advStatus = deriveFeedbackStatus(advFm)
 			if (advStatus === "closed" || advStatus === "rejected") {
 				return reply(
 					{
@@ -11659,11 +11720,26 @@ export function handleStateTool(
 				result: isLast ? "closed" : "advanced",
 			})
 
-			let newStatus = advStatus
+			let newStatus: string = advStatus
 			let closedBy: string | undefined
+			let closedAt: string | undefined
 			if (isLast) {
 				newStatus = "closed"
 				closedBy = `fix-loop:${feedbackId}:bolt-${curBolt}`
+				// `closed_at` is the cursor's source-of-truth witness for
+				// FB closure (cursor.ts:864 + deriveFeedbackStatus
+				// state-tools.ts:4717). Writing `status: "closed"` alone
+				// leaves the cursor blind to the closure: on the next
+				// tick it sees `closed_at` unset, treats the FB as still
+				// open, re-emits start_feedback_hat → the new subagent
+				// calls advance_hat → the lifecycle guard rejects with
+				// `lifecycle_violation` because `status: "closed"` is
+				// terminal in the per-tool check → infinite loop.
+				// Reported 2026-05-18 on FB-001 of the
+				// admin-portal-reimagine session. Stamping `closed_at`
+				// here is what actually makes the closure visible to the
+				// cursor.
+				closedAt = timestamp()
 			} else {
 				newStatus = "addressed"
 			}
@@ -11678,6 +11754,7 @@ export function handleStateTool(
 				status: newStatus,
 			}
 			if (closedBy) newFm.closed_by = closedBy
+			if (closedAt) newFm.closed_at = closedAt
 			if (isLast && replyArg) {
 				// closure_reply is the user-facing record of what changed.
 				// closure_reply_unread starts true; the SPA flips it to false
@@ -11794,7 +11871,9 @@ export function handleStateTool(
 			const rejFm = rejFound.data
 			const rejBody = rejFound.body
 
-			const rejStatus = (rejFm.status as string) || "pending"
+			// Lifecycle guard — derive from on-disk signals, consistent
+			// with the advance_hat guard above.
+			const rejStatus = deriveFeedbackStatus(rejFm)
 			if (rejStatus === "closed" || rejStatus === "rejected") {
 				return reply(
 					{
@@ -11877,6 +11956,49 @@ export function handleStateTool(
 			const iterations = Array.isArray(rejFm.iterations)
 				? (rejFm.iterations as Array<Record<string, unknown>>).slice()
 				: []
+
+			// Bounce-loop convergence guard. If the calling hat has already
+			// rejected this FB in a prior bolt, the fix loop cannot make
+			// progress by re-running the prior hat — the rejecter has
+			// signaled twice that no acceptable output is achievable from
+			// upstream. Re-bouncing burns a full bolt of subagent compute
+			// (every hat in the chain re-runs) for a guaranteed-identical
+			// outcome, then again on the next bolt, capped only by
+			// MAX_FIX_LOOP_BOLTS. Refuse the bounce here and force the
+			// agent to terminally close via `haiku_feedback_reject` (the
+			// right tool for non-actionable findings — cosmetic drift, valid
+			// observations that need no fix) or to file an escalation FB.
+			// 2026-05-17: surfaced on cosmetic-drift FB-047 in the
+			// admin-portal-reimagine intent — 65 similar FBs would have
+			// burned ~585 subagent dispatches before the bolt cap caught
+			// them. The cap exists for non-convergent fixes, not for
+			// detectably-stuck loops the engine can fail fast on.
+			let priorRejectionsBySameHat = 0
+			for (const it of iterations) {
+				if (!it || typeof it !== "object") continue
+				const itRec = it as Record<string, unknown>
+				if (itRec.hat === callingHatRej && itRec.result === "rejected") {
+					priorRejectionsBySameHat++
+				}
+			}
+			if (priorRejectionsBySameHat >= 1) {
+				const stageNote = stageArg ? `stage: "${stageArg}", ` : ""
+				return reply(
+					{
+						error: "fix_loop_no_progress",
+						calling_hat: callingHatRej,
+						prior_rejections_by_same_hat: priorRejectionsBySameHat,
+						message:
+							`Hat '${callingHatRej}' has already rejected FB '${feedbackId}' ${priorRejectionsBySameHat} time(s) in prior bolt(s); this would be rejection #${priorRejectionsBySameHat + 1}. ` +
+							`Bouncing back to '${nextDispatchedHatRej}' to re-run cannot produce a different outcome — the rejecter has signaled the same impasse twice. ` +
+							`Two paths forward:\n` +
+							`  - If this finding has no actionable fix (cosmetic, valid observation that needs no code change, upstream-driven drift the engine will resolve on the next sign cycle): call \`haiku_feedback_reject { intent: "${intentArg}", ${stageNote}feedback_id: ${feedbackId}, reason: "<concrete reason no fix is needed>" }\` to terminally close. ` +
+							`  - If the finding is real but this hat chain cannot resolve it: file an upstream FB describing the impasse for human review.`,
+					},
+					{ isError: true },
+				)
+			}
+
 			iterations.push({
 				bolt: curBoltRej,
 				hat: callingHatRej,
@@ -12064,9 +12186,21 @@ export function handleStateTool(
 				"haiku_version_info",
 			)
 			if (versionInfoInputErr) return versionInfoInputErr
+			// `MCP_VERSION` is baked in by esbuild --define at bundle time
+			// (build-mcp.mjs passes HAIKU_MCP_VERSION from plugin.json).
+			// When running from source via `bun packages/haiku/src/server.ts`
+			// or `tsx`, the define never fires and the constant stays at
+			// its source-default "dev" sentinel. Use that as the build-kind
+			// discriminator so `/haiku:version` users can immediately tell
+			// whether they're hitting an in-flight working-tree change or
+			// the shipped bundle.
+			const isDev = MCP_VERSION === "dev"
 			const info: Record<string, string> = {
 				mcp_version: MCP_VERSION,
 				plugin_version: getPluginVersion(),
+				build_kind: isDev ? "dev (source via bun/tsx)" : "prod (compiled bundle)",
+				runtime: `${process.release?.name ?? "node"} ${process.version}`,
+				entry: process.argv[1] ?? "",
 			}
 			return reply(info)
 		}

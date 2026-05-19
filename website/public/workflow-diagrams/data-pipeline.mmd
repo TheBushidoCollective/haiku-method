@@ -8,13 +8,9 @@ stateDiagram-v2
   extraction --> transformation
   transformation --> validation
   validation --> deployment
-  deployment --> intent_completion_review
-  intent_completion_review --> intent_completion_gate : review.clean
-  intent_completion_review --> intent_completion_fix : review.findings
-  intent_completion_fix --> intent_completion_gate : feedback.closed
-  intent_completion_fix --> intent_completion_fix : feedback.open
-  intent_completion_gate --> complete : gate.approved
-  intent_completion_gate --> deployment : gate.changes_requested
+  deployment --> intent_review
+  intent_review --> seal_intent : approvals.signed
+  seal_intent --> complete
 
   state discovery {
     [*] --> discovery_start_stage

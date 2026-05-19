@@ -661,12 +661,15 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 										<div className="ng-head">
 											<span className="ng-caption" style={{ color: "#0f766e" }}>
 												↳ cursor walks reviewRoles → returns{" "}
-												<code>dispatch_review</code> per role
+												<code>dispatch_review</code> per role (PRE-execute)
 											</span>
 											<span className="ig-type" style={{ color: "#0f766e" }}>
-												spec-review track
+												PRE-execute spec review
 											</span>
-											<span className="ig-ctx">spec → studio agents → user</span>
+											<span className="ig-ctx">
+												spec → continuity → cross-stage-consistency → studio
+												agents → user
+											</span>
 										</div>
 										<div
 											style={{
@@ -676,13 +679,24 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 												lineHeight: 1.45,
 											}}
 										>
-											The cursor walks reviewRoles serially: <code>spec</code>{" "}
-											(engine-built) first, then each studio review-agent in
-											declared order, then <code>user</code>. Reviewers audit
-											the <em>plan</em> (unit specs); artifacts don't exist yet.
-											Findings file via <code>haiku_feedback</code> and route
-											through Track B on the next tick.{" "}
-											<strong>Autopilot trims to <code>[spec]</code> only</strong>
+											The cursor walks reviewRoles serially:{" "}
+											<code>spec</code>, <code>continuity</code>,{" "}
+											<code>cross-stage-consistency</code> (engine-built — render
+											from sibling{" "}
+											<code>
+												prompts/stage/review/dispatch_review/engine-bodies/
+											</code>{" "}
+											files) first, then each studio review-agent in declared
+											order (resolved via the project → stage → studio → global
+											cascade), then <code>user</code>. Reviewers audit the{" "}
+											<em>plan</em> (unit specs) before any code lands;
+											artifacts don't exist yet. Findings file via{" "}
+											<code>haiku_feedback</code> and route through Track B on
+											the next tick.{" "}
+											<strong>
+												Autopilot trims to{" "}
+												<code>[spec, continuity, cross-stage-consistency]</code>
+											</strong>{" "}
 											— no studio agents, no user role.
 										</div>
 									</div>
@@ -1632,12 +1646,19 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 							<div className="step-title">📋 intent_review per role</div>
 							<div className="step-desc">
 								Cursor emits <code>intent_review {"{ role }"}</code> for each
-								missing intent-scope approval. <code>spec</code> and{" "}
-								<code>continuity</code> are engine-built (subagent dispatch);
-								studio review-agents in{" "}
-								<code>plugin/studios/{"{studio}"}/review-agents/*.md</code>{" "}
-								add to the role list (non-autopilot only); <code>user</code>{" "}
-								opens the SPA review.
+								missing intent-scope approval. <code>spec</code>,{" "}
+								<code>continuity</code>, and{" "}
+								<code>cross-stage-consistency</code> are engine-built (no
+								per-studio mandate, render from{" "}
+								<code>prompts/intent/review/intent_review/engine-bodies/</code>);
+								studio intent-completion review-agents in{" "}
+								<code>
+									plugin/studios/{"{studio}"}/intent-review-agents/*.md
+								</code>{" "}
+								(renamed from <code>review-agents/</code> on 2026-05-17 to
+								free the studio tier for stage-scope agents) add to the role
+								list (non-autopilot only); <code>user</code> opens the SPA
+								review.
 							</div>
 						</div>
 						<div className="step-arrow">→</div>

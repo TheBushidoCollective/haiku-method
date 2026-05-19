@@ -179,147 +179,26 @@ test("drift sweep emits drift_detected when no FB filed", async () => {
 	})
 })
 
-test("drift sweep suppresses re-emission when FB has matching source_ref (exact)", async () => {
-	if (!HAS_GIT) return
-	await withRepo("exact-match", async ({ root, intentDir }) => {
-		const { runDriftSweep } = await import(
-			`${SRC}/orchestrator/workflow/drift-sweep.ts`
-		)
-		const { fileRel } = await seedUnitWithDriftedSpec({
-			intentDir,
-			root,
-			unitBasename: "unit-01",
-		})
-		// File an FB with the canonical source_ref shape.
-		const fbPath = join(
-			intentDir,
-			"stages",
-			"design",
-			"feedback",
-			"01-drift.md",
-		)
-		writeFileSync(
-			fbPath,
-			matter.stringify("Out-of-band edit on the design tokens.\n", {
-				title: "drift on SEMANTIC-TOKENS",
-				origin: "drift",
-				author: "drift-sweep",
-				author_type: "agent",
-				created_at: "2026-05-12T00:00:00Z",
-				source_ref: `drift:spec:${fileRel}`,
-				closed_at: null,
-				iterations: [],
-			}),
-		)
-		const result = runDriftSweep({
-			intentDir,
-			stage: "design",
-			studio: "test",
-			repoRoot: root,
-		})
-		assert.equal(
-			result.events.length,
-			0,
-			`expected dedup to suppress drift, got events: ${JSON.stringify(result.events)}`,
-		)
-	})
-})
-
-test("drift sweep suppresses re-emission when FB source_ref has wrong KIND but right file (path fallback)", async () => {
-	if (!HAS_GIT) return
-	await withRepo("wrong-kind", async ({ root, intentDir }) => {
-		const { runDriftSweep } = await import(
-			`${SRC}/orchestrator/workflow/drift-sweep.ts`
-		)
-		const { fileRel } = await seedUnitWithDriftedSpec({
-			intentDir,
-			root,
-			unitBasename: "unit-01",
-		})
-		// File an FB with the WRONG kind classification — the agent
-		// guessed "spec" but the drift was on an "output". The path
-		// fallback should still suppress.
-		const fbPath = join(
-			intentDir,
-			"stages",
-			"design",
-			"feedback",
-			"01-drift.md",
-		)
-		writeFileSync(
-			fbPath,
-			matter.stringify("Out-of-band edit.\n", {
-				title: "drift on SEMANTIC-TOKENS",
-				origin: "drift",
-				author: "drift-sweep",
-				author_type: "agent",
-				created_at: "2026-05-12T00:00:00Z",
-				source_ref: `drift:input_mutation:${fileRel}`, // WRONG KIND (but path matches)
-				closed_at: null,
-				iterations: [],
-			}),
-		)
-		const result = runDriftSweep({
-			intentDir,
-			stage: "design",
-			studio: "test",
-			repoRoot: root,
-		})
-		assert.equal(
-			result.events.length,
-			0,
-			`path-based dedup must suppress drift even when kind mismatches, got events: ${JSON.stringify(result.events)}`,
-		)
-	})
-})
-
-test("drift sweep suppresses re-emission when FB body mentions the file basename (body fallback)", async () => {
-	if (!HAS_GIT) return
-	await withRepo("body-mention", async ({ root, intentDir }) => {
-		const { runDriftSweep } = await import(
-			`${SRC}/orchestrator/workflow/drift-sweep.ts`
-		)
-		await seedUnitWithDriftedSpec({
-			intentDir,
-			root,
-			unitBasename: "unit-01",
-		})
-		// File an FB with NO source_ref but body mentions the file.
-		const fbPath = join(
-			intentDir,
-			"stages",
-			"design",
-			"feedback",
-			"01-drift.md",
-		)
-		writeFileSync(
-			fbPath,
-			matter.stringify(
-				"The agent edited unit-01.md out-of-band; we should review.\n",
-				{
-					title: "drift",
-					origin: "drift",
-					author: "drift-sweep",
-					author_type: "agent",
-					created_at: "2026-05-12T00:00:00Z",
-					closed_at: null,
-					iterations: [],
-				},
-			),
-		)
-		const result = runDriftSweep({
-			intentDir,
-			stage: "design",
-			studio: "test",
-			repoRoot: root,
-		})
-		assert.equal(
-			result.events.length,
-			0,
-			`body-based dedup must suppress drift when basename appears in body, got events: ${JSON.stringify(result.events)}`,
-		)
-	})
-})
+// The three "sweep suppresses re-emission when FB has matching
+// source_ref / path / body" tests were retired 2026-05-17. They pinned
+// in-sweep FB dedup behavior that's now gone — under engine-internal
+// drift handling, `runDriftSweep` returns ALL events unconditionally,
+// and dedup happens in `engineHandleDriftEvents` at FB-emit time.
+//
+// The equivalent dedup guarantees under the new model are pinned by:
+//   - drift-engine-handle-events.test.mjs::"same (file, kind) across N
+//     roles → 1 FB" (within-batch dedup)
+//   - drift-engine-handle-events.test.mjs::"cross-sweep dedup — open
+//     FB for (file, kind) suppresses new FB on next tick" (cross-sweep)
+//
+// The pre-2026-05-17 expectation that the sweep itself was the dedup
+// chokepoint was load-bearing for the agent-files-FB model: the agent
+// would file an FB with whatever source_ref shape it produced, and
+// the sweep had to recognize ANY of refs/paths/basenames to suppress
+// the next emission. That fallback ladder is gone — the engine emits
+// FBs with a canonical source_ref shape (`drift:<kind>:<file>:<sha>`),
+// and the engine-handler dedup keys on exact (file, kind) match, no
+// fuzzy fallback needed.
 
 test("drift sweep re-arms after FB is closed", async () => {
 	if (!HAS_GIT) return

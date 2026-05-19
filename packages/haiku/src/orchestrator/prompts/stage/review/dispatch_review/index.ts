@@ -19,9 +19,8 @@
 // review and intent_review: review-agent mandate `model:` →
 // stage `default_model:` → studio `default_model:`.
 
-import { join } from "node:path"
 import { Eta } from "eta"
-import { resolvePluginRoot } from "../../../../../config.js"
+import { resolveReviewAgentPath } from "../../../../../studio-reader.js"
 import { resolveStudioMandateModel } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
@@ -29,21 +28,48 @@ import { definePromptBuilder } from "../../../define.js"
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
 
+// Engine-built-in stage-review roles. Each role's mandate body lives
+// as a sibling `.eta.md` under `engine-bodies/`. When the dispatched
+// role is one of these, the template renders the engine body inline
+// instead of pointing the subagent at a (nonexistent) studio mandate
+// file. Configured studio review-agents fall through to the cascade
+// resolver and the inlineFile path.
+const ENGINE_REVIEW_BODIES: Record<string, string> = {
+	spec: loadTemplate(import.meta.url, "engine-bodies/spec.eta.md"),
+	continuity: loadTemplate(
+		import.meta.url,
+		"engine-bodies/continuity.eta.md",
+	),
+	"cross-stage-consistency": loadTemplate(
+		import.meta.url,
+		"engine-bodies/cross_stage_consistency.eta.md",
+	),
+}
+
 export default definePromptBuilder(({ slug, studio, action }) => {
 	const stage = (action.stage as string) || ""
 	const role = (action.role as string) || ""
 	const units = (action.units as string[]) || []
 
-	const mandatePath = join(
-		resolvePluginRoot(),
-		"studios",
-		studio,
-		"stages",
-		stage,
-		"review-agents",
-		`${role}.md`,
-	)
-	const modelTier = resolveStudioMandateModel({ mandatePath, studio, stage })
+	const engineBodyTpl = ENGINE_REVIEW_BODIES[role]
+	let engineBody: string | null = null
+	let mandatePath: string | null = null
+	let modelTier: string | undefined
+
+	if (engineBodyTpl) {
+		// Engine-built-in role: inline the mandate body, no studio file.
+		engineBody = eta.renderString(engineBodyTpl, { slug, stage }).trim()
+	} else {
+		// Configured studio review agent: resolve via the 3-tier cascade
+		// (global → studio → stage), then surface the absolute path so the
+		// subagent's prompt can Read it directly. Pre-cascade the template
+		// hardcoded `plugin/studios/<studio>/...` which broke for project
+		// overrides AND for installed-plugin paths.
+		mandatePath = resolveReviewAgentPath(studio, stage, role)
+		modelTier = mandatePath
+			? resolveStudioMandateModel({ mandatePath, studio, stage })
+			: undefined
+	}
 
 	return eta.renderString(TEMPLATE, {
 		slug,
@@ -53,5 +79,8 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		unitCount: units.length,
 		unitsList: units.join(", "),
 		modelTier,
+		mandatePath: mandatePath ?? "",
+		engineBody: engineBody ?? "",
+		isEngineRole: engineBody !== null,
 	})
 })

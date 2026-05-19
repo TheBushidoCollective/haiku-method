@@ -135,6 +135,14 @@ export const INTENT_FRONTMATTER_SCHEMA = Type.Object(
 		// time per the FSM list above.
 		verified_at: Type.Optional(Type.String()),
 		verified_notes: Type.Optional(Type.String()),
+		// External-system references, keyed by provider-kind or
+		// provider-kind-suffix (e.g. `ticket_epic`, `spec_prd`,
+		// `design_brief`). Populated by the agent when a provider is
+		// active and a sync is performed. Values are opaque strings —
+		// ticket keys, URLs, file refs. Engine doesn't interpret them;
+		// agents use them as the durable handle between H·AI·K·U state
+		// and the external system. (2026-05-19, provider-injection wave.)
+		external_refs: Type.Optional(Type.Record(Type.String(), Type.String())),
 	},
 	{
 		propertyNames: { not: { enum: [...FSM_DRIVEN_INTENT_FIELDS_LIST] } },

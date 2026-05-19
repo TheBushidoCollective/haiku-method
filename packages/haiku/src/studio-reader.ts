@@ -75,6 +75,36 @@ export interface HatDef {
 	raw: string // full file content
 }
 
+/**
+ * Three-tier hat resolution cascade. Load order (least-specific first; later
+ * entries overwrite earlier ones, so more-specific wins):
+ *
+ *   1. `{plugin}/hats/`                                    ── global tier (engine defaults)
+ *   2. `{project}/.haiku/hats/`                            ── global project overrides
+ *   3. `{plugin}/studios/{studio}/hats/`                   ── studio tier
+ *   4. `{project}/.haiku/studios/{studio}/hats/`           ── studio project overrides
+ *   5. `{plugin}/studios/{studio}/stages/{stage}/hats/`    ── stage tier
+ *   6. `{project}/.haiku/studios/{studio}/stages/{stage}/hats/` ── stage project overrides
+ *
+ * Hats that don't vary per-studio (classifier, feedback-assessor) live at
+ * the global tier — one file, every stage in every studio inherits. A
+ * studio that genuinely needs a custom classifier drops one at the studio
+ * tier; a stage that needs an even-more-specific variant drops one at
+ * stage tier. Project `.haiku/` overrides the plugin underlay at every tier.
+ */
+function hatDirCascade(studio: string, stage: string): string[] {
+	const project = join(process.cwd(), ".haiku")
+	const plugin = resolvePluginRoot()
+	return [
+		join(plugin, "hats"),
+		join(project, "hats"),
+		join(plugin, "studios", studio, "hats"),
+		join(project, "studios", studio, "hats"),
+		join(plugin, "studios", studio, "stages", stage, "hats"),
+		join(project, "studios", studio, "stages", stage, "hats"),
+	]
+}
+
 export function readHatDefs(
 	studio: string,
 	stage: string,
@@ -82,10 +112,7 @@ export function readHatDefs(
 	validateIdentifier(studio, "studio")
 	validateIdentifier(stage, "stage")
 	const hats: Record<string, HatDef> = {}
-	const paths = studioSearchPaths()
-	// Reverse so plugin loads first, then project overwrites
-	for (const base of [...paths].reverse()) {
-		const hatsDir = join(base, studio, "stages", stage, "hats")
+	for (const hatsDir of hatDirCascade(studio, stage)) {
 		if (!existsSync(hatsDir)) continue
 		for (const f of readdirSync(hatsDir).filter((f) => f.endsWith(".md"))) {
 			const raw = readFileSync(join(hatsDir, f), "utf8")
@@ -102,7 +129,62 @@ export function readHatDefs(
 	return hats
 }
 
-/** Read review agent definitions for a stage (project overrides plugin for same-named agents) */
+/**
+ * Resolve the absolute on-disk path for a single hat mandate file, walking
+ * the same cascade as `readHatDefs` and returning the most-specific match.
+ * Used by FB / unit dispatch sites that need to tell a subagent the exact
+ * file to Read. Returns null if no tier defines the hat.
+ */
+export function resolveHatPath(
+	studio: string,
+	stage: string,
+	hat: string,
+): string | null {
+	validateIdentifier(studio, "studio")
+	validateIdentifier(stage, "stage")
+	validateIdentifier(hat, "hat")
+	let found: string | null = null
+	for (const hatsDir of hatDirCascade(studio, stage)) {
+		const candidate = join(hatsDir, `${hat}.md`)
+		if (existsSync(candidate)) found = candidate
+	}
+	return found
+}
+
+/**
+ * Three-tier stage-review-agent resolution cascade (mirrors the hat
+ * cascade). Load order (least-specific first, more-specific overrides):
+ *
+ *   1. `{plugin}/review-agents/`                                ── global
+ *   2. `{project}/.haiku/review-agents/`                        ── global project override
+ *   3. `{plugin}/studios/{studio}/review-agents/`               ── studio
+ *   4. `{project}/.haiku/studios/{studio}/review-agents/`       ── studio project override
+ *   5. `{plugin}/studios/{studio}/stages/{stage}/review-agents/`── stage
+ *   6. `{project}/.haiku/studios/{studio}/stages/{stage}/review-agents/`── stage project override
+ *
+ * Intent-completion review agents (studio-scope, runs once at intent
+ * close) live in a separate directory — `intent-review-agents/` — so
+ * the studio tier above is safe to use for cross-stage defaults
+ * without double-dispatching.
+ *
+ * Same principle as the hat cascade: project `.haiku/` always beats the
+ * plugin underlay at each tier, more-specific beats less-specific.
+ */
+function reviewAgentDirCascade(studio: string, stage: string): string[] {
+	const project = join(process.cwd(), ".haiku")
+	const plugin = resolvePluginRoot()
+	return [
+		join(plugin, "review-agents"),
+		join(project, "review-agents"),
+		join(plugin, "studios", studio, "review-agents"),
+		join(project, "studios", studio, "review-agents"),
+		join(plugin, "studios", studio, "stages", stage, "review-agents"),
+		join(project, "studios", studio, "stages", stage, "review-agents"),
+	]
+}
+
+/** Read review agent definitions for a stage (cascade: global → studio → stage,
+ *  with project/.haiku override at each tier). */
 export function readReviewAgentDefs(
 	studio: string,
 	stage: string,
@@ -110,10 +192,7 @@ export function readReviewAgentDefs(
 	validateIdentifier(studio, "studio")
 	validateIdentifier(stage, "stage")
 	const agents: Record<string, string> = {}
-	const paths = studioSearchPaths()
-	// Reverse so plugin loads first, then project overwrites
-	for (const base of [...paths].reverse()) {
-		const agentsDir = join(base, studio, "stages", stage, "review-agents")
+	for (const agentsDir of reviewAgentDirCascade(studio, stage)) {
 		if (!existsSync(agentsDir)) continue
 		for (const f of readdirSync(agentsDir).filter((f) => f.endsWith(".md"))) {
 			agents[f.replace(/\.md$/, "")] = readFileSync(join(agentsDir, f), "utf8")
@@ -122,7 +201,8 @@ export function readReviewAgentDefs(
 	return agents
 }
 
-/** Return review agent NAME → FILE PATH mapping (project overrides plugin). Subagent reads the file itself. */
+/** Return review agent NAME → FILE PATH mapping (same cascade as
+ *  `readReviewAgentDefs`). Subagent reads the file itself. */
 export function readReviewAgentPaths(
 	studio: string,
 	stage: string,
@@ -130,8 +210,7 @@ export function readReviewAgentPaths(
 	validateIdentifier(studio, "studio")
 	validateIdentifier(stage, "stage")
 	const agents: Record<string, string> = {}
-	for (const base of [...studioSearchPaths()].reverse()) {
-		const agentsDir = join(base, studio, "stages", stage, "review-agents")
+	for (const agentsDir of reviewAgentDirCascade(studio, stage)) {
 		if (!existsSync(agentsDir)) continue
 		for (const f of readdirSync(agentsDir).filter((f) => f.endsWith(".md"))) {
 			agents[f.replace(/\.md$/, "")] = join(agentsDir, f)
@@ -141,11 +220,41 @@ export function readReviewAgentPaths(
 }
 
 /**
- * Studio-level review agents live at `plugin/studios/{studio}/review-agents/*.md`
- * (NOT per-stage). They run once at intent completion, after the final
- * stage gate passes but before `intent_complete`. Their scope is the whole
- * intent, not a single stage. Project overrides plugin. Subagent reads
- * each file. Returns name → absolute path.
+ * Resolve the absolute on-disk path for a single stage-review-agent
+ * mandate file, walking the same cascade as `readReviewAgentDefs` /
+ * `readReviewAgentPaths`. Returns the most-specific match (more-specific
+ * tier wins), or null if no tier defines the agent. Mirrors
+ * `resolveHatPath` for the review-agent cascade.
+ */
+export function resolveReviewAgentPath(
+	studio: string,
+	stage: string,
+	agent: string,
+): string | null {
+	validateIdentifier(studio, "studio")
+	validateIdentifier(stage, "stage")
+	validateIdentifier(agent, "agent")
+	let found: string | null = null
+	for (const agentsDir of reviewAgentDirCascade(studio, stage)) {
+		const candidate = join(agentsDir, `${agent}.md`)
+		if (existsSync(candidate)) found = candidate
+	}
+	return found
+}
+
+/**
+ * Studio-level intent-completion review agents live at
+ * `plugin/studios/{studio}/intent-review-agents/*.md` (NOT per-stage).
+ * They run once at intent completion, after the final stage gate passes
+ * but before `intent_complete`. Their scope is the whole intent, not a
+ * single stage. Project overrides plugin. Subagent reads each file.
+ * Returns name → absolute path.
+ *
+ * The directory was renamed from `review-agents/` to `intent-review-agents/`
+ * (2026-05-18) to free the studio-level `review-agents/` slot for the
+ * stage-review cascade — without the rename, every stage's review would
+ * inherit the studio-level intent-completion agents as defaults, which
+ * is exactly the double-dispatch we needed to avoid.
  */
 export function readStudioReviewAgentPaths(
 	studio: string,
@@ -153,7 +262,7 @@ export function readStudioReviewAgentPaths(
 	validateIdentifier(studio, "studio")
 	const agents: Record<string, string> = {}
 	for (const base of [...studioSearchPaths()].reverse()) {
-		const agentsDir = join(base, studio, "review-agents")
+		const agentsDir = join(base, studio, "intent-review-agents")
 		if (!existsSync(agentsDir)) continue
 		for (const f of readdirSync(agentsDir).filter((f) => f.endsWith(".md"))) {
 			agents[f.replace(/\.md$/, "")] = join(agentsDir, f)

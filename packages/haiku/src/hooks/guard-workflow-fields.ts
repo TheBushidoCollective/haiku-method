@@ -27,6 +27,7 @@
 import { execFileSync } from "node:child_process"
 import { existsSync } from "node:fs"
 import { join, resolve } from "node:path"
+import { isHaikuProject } from "./utils.js"
 
 function out(s: string): void {
 	process.stderr.write(s)
@@ -246,6 +247,9 @@ function redirectMessage(
 export async function guardWorkflowFields(
 	input: Record<string, unknown>,
 ): Promise<void> {
+	// Project-scope gate: no .haiku/ → not a haiku project, nothing to guard.
+	if (!isHaikuProject()) return
+
 	const toolName = (input.tool_name as string) || ""
 	if (
 		toolName !== "Read" &&

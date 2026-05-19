@@ -8,13 +8,9 @@ stateDiagram-v2
   research --> draft
   draft --> review
   review --> execute
-  execute --> intent_completion_review
-  intent_completion_review --> intent_completion_gate : review.clean
-  intent_completion_review --> intent_completion_fix : review.findings
-  intent_completion_fix --> intent_completion_gate : feedback.closed
-  intent_completion_fix --> intent_completion_fix : feedback.open
-  intent_completion_gate --> complete : gate.approved
-  intent_completion_gate --> execute : gate.changes_requested
+  execute --> intent_review
+  intent_review --> seal_intent : approvals.signed
+  seal_intent --> complete
 
   state intake {
     [*] --> intake_start_stage

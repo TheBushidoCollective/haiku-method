@@ -173,43 +173,21 @@ export function exportStudioMermaid(
 		)
 	}
 
-	// Per-stage advancement.
+	// Per-stage advancement. After the last stage the cursor walks
+	// intent_review per-role (engine roles: spec, continuity,
+	// cross-stage-consistency + user gate non-autopilot), then
+	// `seal_intent`. The orphan `intent_completion_review` aggregate
+	// action that this exporter used to chain to was removed
+	// 2026-05-18 — it was never emitted by the cursor.
 	for (let i = 0; i < studio.defaultStages.length; i++) {
 		const cur = studio.defaultStages[i]
 		const isLast = i === studio.defaultStages.length - 1
-		const next = isLast
-			? studio.studioReviewAgents.length > 0
-				? "intent_completion_review"
-				: "complete"
-			: studio.defaultStages[i + 1]
+		const next = isLast ? "intent_review" : studio.defaultStages[i + 1]
 		lines.push(`  ${sanitizeId(cur)} --> ${sanitizeId(next)}`)
 	}
-
-	// Intent-completion review/fix layer.
-	if (studio.studioReviewAgents.length > 0) {
-		lines.push(
-			`  intent_completion_review --> intent_completion_gate : review.clean`,
-		)
-		lines.push(
-			`  intent_completion_review --> intent_completion_fix : review.findings`,
-		)
-	}
-	if (studio.studioFixHats.length > 0) {
-		lines.push(
-			`  intent_completion_fix --> intent_completion_gate : feedback.closed`,
-		)
-		lines.push(
-			`  intent_completion_fix --> intent_completion_fix : feedback.open`,
-		)
-	}
-	if (studio.studioReviewAgents.length > 0) {
-		lines.push(`  intent_completion_gate --> complete : gate.approved`)
-		const lastStage = studio.defaultStages[studio.defaultStages.length - 1]
-		if (lastStage) {
-			lines.push(
-				`  intent_completion_gate --> ${sanitizeId(lastStage)} : gate.changes_requested`,
-			)
-		}
+	if (studio.defaultStages.length > 0) {
+		lines.push(`  intent_review --> seal_intent : approvals.signed`)
+		lines.push(`  seal_intent --> complete`)
 	}
 
 	// Per-stage sub-machine bodies.

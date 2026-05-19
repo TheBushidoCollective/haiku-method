@@ -14,6 +14,18 @@
 // `user_gate` / `complete_stage` / `intent_review` / `seal_intent` /
 // `sealed`.
 //
+// 2026-05-17 — pre/post review/approve split. `dispatch_review` is now
+// PRE-execute (audits the SPEC before any code lands); fires between
+// elaborate_loop completion and wave-ready hat dispatch. `dispatch_approval`
+// stayed POST-execute (audits the WORK against the already-approved spec);
+// fires after every unit's hat sequence completes. Engine-built roles
+// (`spec`, `continuity`, `cross-stage-consistency`) fire in BOTH walks
+// with phase-appropriate mandate bodies, rendered from
+// `prompts/stage/{review,approve}/{dispatch_review,dispatch_approval}/engine-bodies/<role>.eta.md`.
+// Studio review-agent, hat, and fix-hat mandates resolve via the three-tier
+// cascade: `project/.haiku/.../<role>.md` → `plugin/studios/<studio>/stages/<stage>/.../<role>.md`
+// → `plugin/studios/<studio>/.../<role>.md` → `plugin/.../<role>.md`. First hit wins.
+//
 // 2026-05-14 (Option A, GAPS § 1a): the elaborate state is a single
 // `elaborate_loop` cursor kind whose payload `signals_unmet[]`
 // enumerates every currently-unmet completion signal —
@@ -151,17 +163,17 @@ export function payloadFor(
 				{
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
-					what: "`action: dispatch_review` — once the stage has units and every hat sequence has terminal-advanced, the cursor walks the spec-review track. One action per missing role per tick — engine-built `spec` first, then each studio-declared review-agent in sequence.",
+					what: "`action: dispatch_review` — once `elaborate_loop` falls through (all signals met, decompose verified), the cursor walks the PRE-execute review track. One action per missing role per tick — engine-built `spec` → `continuity` → `cross-stage-consistency` first, then each studio-declared review-agent in sequence, then `user`. Reviewers audit the SPEC; no code exists yet.",
 				},
 				{
-					hook: "readReviewAgentPaths()",
+					hook: "readReviewAgentPaths() — three-tier cascade",
 					target: "subagent prompt",
-					what: "the dispatched review agent's mandate (`plugin/studios/<studio>/stages/<stage>/review-agents/<role>.md`) is inlined into the dispatch block.",
+					what: "engine roles render mandate prose from sibling `prompts/stage/review/dispatch_review/engine-bodies/<role>.eta.md`. Studio roles resolve via the cascade: `project/.haiku/studios/<studio>/stages/<stage>/review-agents/<role>.md` → `plugin/studios/<studio>/stages/<stage>/review-agents/<role>.md` → `plugin/studios/<studio>/review-agents/<role>.md` → `plugin/review-agents/<role>.md`. First hit wins.",
 				},
 			],
 			action: "dispatch_review",
 			summary:
-				"unit hats done — cursor walks the spec-review track per role (one tick = one role)",
+				"elaborate done — cursor walks the PRE-execute review track per role (one tick = one role); audits the SPEC before any code lands",
 			payload: {
 				action: "dispatch_review",
 				intent: "{slug}",
@@ -170,10 +182,11 @@ export function payloadFor(
 				units: ["<units-where-reviews.<role>-is-missing>"],
 			},
 			validations: [
-				"Every unit's hat sequence has terminal-advanced (last `iterations[].result === 'advance'` on the last configured hat)",
+				"`elaborate_loop` has fallen through (all completion signals met, decompose verified)",
+				"Units exist with valid DAG (validated at `haiku_unit_write` time)",
 				"Some unit has `reviews.<role>` missing for the next role in the cursor's reviewRoles list",
-				"reviewRoles order: `spec` (engine-built) → studio review-agents → `user`",
-				`Mode shaping: ${isAutopilot ? "autopilot trims to `[spec]` only — no studio agents, no user role" : "full role list applies"}`,
+				"reviewRoles order: `spec` → `continuity` → `cross-stage-consistency` (engine-built, render from engine-bodies/) → studio review-agents (resolved via 3-tier cascade) → `user`",
+				`Mode shaping: ${isAutopilot ? "autopilot trims to `[spec, continuity, cross-stage-consistency]` only — no studio agents, no user role" : "full role list applies"}`,
 			],
 			writes: [
 				{
@@ -183,7 +196,7 @@ export function payloadFor(
 				},
 			],
 			instructions:
-				"Cursor's spec-review track. Each tick returns `dispatch_review { role, units }` for the next missing role. Agent dispatches the review-agent subagent with a tool whitelist of `haiku_unit_read` + `haiku_feedback`. The subagent files findings (which Track B picks up on the next tick via `start_feedback_hat`); when the subagent terminates clean, the engine stamps `reviews.<role>` on each listed unit. Once every non-user role is signed, the cursor advances to `user_gate { gate_kind: \"spec\" }` (skipped under autopilot).",
+				"Cursor's PRE-execute review track (audits SPEC before any code lands). Each tick returns `dispatch_review { role, units }` for the next missing role. Agent dispatches the review-agent subagent with a tool whitelist of `haiku_unit_read` + `haiku_feedback`. The subagent files findings (which Track B picks up on the next tick via `start_feedback_hat`); when the subagent terminates clean, the engine stamps `reviews.<role>` on each listed unit. Once every non-user role is signed, the cursor advances to `user_gate { gate_kind: \"spec\" }` (skipped under autopilot). Only after this whole walk completes does the cursor advance to `start_unit_hat` for wave dispatch.",
 		},
 		"prereview-to-gate": {
 			injection: [
@@ -191,7 +204,7 @@ export function payloadFor(
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
 					what: isAutopilot
-						? "autopilot mode: spec gate is auto. Reviews collapse to `[spec]`; once `spec` is signed the cursor advances directly to `start_unit_hat` for the first wave."
+						? "autopilot mode: spec gate is auto. Reviews collapse to engine roles `[spec, continuity, cross-stage-consistency]`; once all three are signed the cursor advances directly to `start_unit_hat` for the first wave."
 						: "non-autopilot: `dispatch_review` for the next missing role until every studio agent signs, then the cursor emits `user_gate { gate_kind: \"spec\" }` and the engine opens the SPA review session inline.",
 				},
 			],
@@ -218,8 +231,8 @@ export function payloadFor(
 			validations: [
 				"Every unit's hat sequence has terminal-advanced",
 				isAutopilot
-					? "autopilot trimmed reviewRoles to `[spec]`; once `spec` is signed, no further review track work"
-					: "Every studio-declared review agent has signed `reviews.<role>` on every listed unit",
+					? "autopilot trimmed reviewRoles to `[spec, continuity, cross-stage-consistency]`; once all three engine roles sign, no further review track work"
+					: "Every engine role and studio-declared review agent has signed `reviews.<role>` on every listed unit",
 			],
 			writes: [
 				{
@@ -230,7 +243,7 @@ export function payloadFor(
 				},
 			],
 			instructions: isAutopilot
-				? "Autopilot mode: the cursor's reviewRoles list is `[spec]`, so once the spec subagent signs there's no more spec-review work. The next tick returns `start_unit_hat` for the first wave-ready batch."
+				? "Autopilot mode: the cursor's reviewRoles list is `[spec, continuity, cross-stage-consistency]`, so once all three engine subagents sign there's no more PRE-execute spec-review work. The next tick returns `start_unit_hat` for the first wave-ready batch."
 				: "The cursor returns `user_gate { gate_kind: \"spec\" }` and `haiku_run_next` opens the review SPA session inline (via `haiku_review_open`), then blocks on `haiku_await_gate`. On approve, the engine stamps `reviews.user` on every unit; on request_changes, the engine writes the annotations as feedback files and Track B walks them on the next tick.",
 		},
 		"elab-to-gate": {
@@ -384,10 +397,10 @@ export function payloadFor(
 				units: ["<units-where-approvals.quality_gates-is-missing>"],
 			},
 			validations: [
-				"Every unit's hat sequence terminal-advanced",
-				"Every reviewRole has signed `reviews.<role>` on every unit",
+				"Every unit's hat sequence terminal-advanced (all post-execute work is done)",
+				"Every reviewRole has signed `reviews.<role>` on every unit (PRE-execute spec review walk completed before this point)",
 				"`approvals.quality_gates` is missing on at least one unit",
-				"approvalRoles order: `spec` → `quality_gates` (engine-built) → studio agents → `user`",
+				"approvalRoles order: `spec` → `continuity` → `cross-stage-consistency` (engine-built, render from `prompts/stage/approve/dispatch_approval/engine-bodies/`) → `quality_gates` (engine-run) → studio approval agents (resolved via 3-tier cascade) → `user`",
 			],
 			writes: [
 				{
@@ -397,19 +410,19 @@ export function payloadFor(
 				},
 			],
 			instructions:
-				"The cursor walks the approval track per role. `spec` (engine-built) and `quality_gates` (engine-run) come before any studio agent. On quality-gate failure the agent fixes the code in place and re-runs — failures don't roll the workflow back, they stay on the approval track until the gates pass. After `quality_gates` is signed, the cursor returns `dispatch_approval { role: <next> }` for each studio approval agent in turn, then `user_gate { gate_kind: \"approval\" }` (skipped under autopilot).",
+				"The cursor walks the POST-execute approval track per role (audits the WORK against the SPEC the pre-execute review already approved). Engine-built `spec`, `continuity`, `cross-stage-consistency` and engine-run `quality_gates` come before any studio agent. On quality-gate failure the agent fixes the code in place and re-runs — failures don't roll the workflow back, they stay on the approval track until the gates pass. After `quality_gates` is signed, the cursor returns `dispatch_approval { role: <next> }` for each studio approval agent in turn, then `user_gate { gate_kind: \"approval\" }` (skipped under autopilot).",
 		},
 		"review-spec-to-agents": {
 			injection: [
 				{
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
-					what: "`dispatch_review { role: \"spec\" }` — every stage's spec-review track always starts with the engine-built `spec` role (cross-unit acceptance criteria coverage, scope creep, cross-unit drift). One subagent, runs first.",
+					what: "`dispatch_review { role: \"spec\" }` — every stage's PRE-execute review track always starts with the engine-built `spec` role (cross-unit acceptance criteria coverage, scope creep, cross-unit drift on the planned spec). Then `continuity`, then `cross-stage-consistency`. All three render from sibling `engine-bodies/<role>.eta.md` files; no per-studio mandate, no opt-out.",
 				},
 			],
 			action: "dispatch_review",
 			summary:
-				"spec-conformance is the first role in every stage's review track (engine-built, no per-studio mandate)",
+				"engine-built `spec` → `continuity` → `cross-stage-consistency` lead every stage's PRE-execute review walk (no per-studio mandate)",
 			payload: {
 				action: "dispatch_review",
 				intent: "{slug}",
@@ -419,29 +432,29 @@ export function payloadFor(
 			},
 			validations: [
 				"`reviews.spec` is missing on at least one unit",
-				"reviewRoles list (from cursor) puts `spec` first; even autopilot mode keeps `spec` (autopilot trims OUT the studio agents and user, not spec)",
+				"reviewRoles list (from cursor) puts engine roles first; even autopilot mode keeps `[spec, continuity, cross-stage-consistency]` (autopilot trims OUT studio agents and user, not engine roles)",
 			],
 			writes: [
 				{
 					path: ".haiku/intents/{slug}/stages/{stage}/units/<unit>.md",
 					change:
-						"after the spec-conformance subagent terminates clean, the engine signs `reviews.spec: { at, body_sha256, ... }` on each listed unit. Findings flow through `haiku_feedback` (origin: `adversarial-review`).",
+						"after the engine-role subagent terminates clean, the engine signs `reviews.<role>: { at, body_sha256, ... }` on each listed unit. Findings flow through `haiku_feedback` (origin: `adversarial-review`).",
 				},
 			],
 			instructions:
-				"A perfect implementation of the wrong thing is still wrong — the engine's spec-conformance subagent runs first on every stage. There's no per-studio mandate file, no opt-out. Findings flow through Track B (next tick → `start_feedback_hat`); a clean run signs `reviews.spec` on every listed unit and the cursor advances to the next review role.",
+				"A perfect implementation of the wrong thing is still wrong — the engine's spec / continuity / cross-stage-consistency subagents run first on every stage, in that order, on the planned SPEC before any code lands. No per-studio mandate file, no opt-out. Findings flow through Track B (next tick → `start_feedback_hat`); a clean run signs `reviews.<role>` on every listed unit and the cursor advances to the next role.",
 		},
 		"gate-spec-reset-to-review": {
 			injection: [
 				{
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
-					what: "v4 has no spec-vs-quality phase split — the cursor walks reviewRoles serially. After `reviews.spec` is signed the next tick returns `dispatch_review` for the next missing studio review-agent role.",
+					what: "after engine roles all sign, the cursor advances to studio review-agents (resolved via 3-tier cascade), one role per tick.",
 				},
 			],
 			action: "dispatch_review",
 			summary:
-				"v4: no separate spec→quality reset. The cursor advances to the next reviewRole (`spec` → studio agents → `user`).",
+				"engine roles signed → cursor advances to the next studio review-agent (cascade-resolved); same PRE-execute review track.",
 			payload: {
 				action: "dispatch_review",
 				intent: "{slug}",
@@ -450,7 +463,7 @@ export function payloadFor(
 				units: ["<units-where-reviews.<role>-is-missing>"],
 			},
 			validations: [
-				"`reviews.spec === { at, ... }` on every unit",
+				"`reviews.spec`, `reviews.continuity`, `reviews.cross-stage-consistency` all signed on every unit",
 				"At least one unit is missing `reviews.<next-role>`",
 				"reviewRoles list is the cursor's source of role order",
 			],
@@ -458,28 +471,28 @@ export function payloadFor(
 				{
 					path: ".haiku/intents/{slug}/stages/{stage}/units/<unit>.md",
 					change:
-						"after each review-agent terminates clean, `reviews.<role>` is signed by the engine. Findings file via `haiku_feedback` and route through Track B on the next tick.",
+						"after each studio review-agent terminates clean, `reviews.<role>` is signed by the engine. Findings file via `haiku_feedback` and route through Track B on the next tick.",
 				},
 			],
 			instructions:
-				"v3's spec-vs-quality two-phase model is gone. v4's cursor walks one reviewRole per tick — `spec` (engine-built) first, then each studio review-agent in declared order, then `user`. Mode-shaped: autopilot trims to `[spec]` only. After every non-user role signs, the cursor returns `user_gate { gate_kind: \"spec\" }` (skipped under autopilot).",
+				"v4's cursor walks one reviewRole per tick — engine roles (`spec`, `continuity`, `cross-stage-consistency`) first, then each studio review-agent in declared order (resolved via the project → stage → studio → global cascade), then `user`. Mode-shaped: autopilot trims to engine roles only. After every non-user role signs, the cursor returns `user_gate { gate_kind: \"spec\" }` (skipped under autopilot); only after that does the cursor advance to `start_unit_hat` for wave dispatch.",
 		},
 		"review-quality-to-agents": {
 			injection: [
 				{
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
-					what: "`dispatch_approval { role }` — quality_gates is signed; the cursor walks approvalRoles for each remaining studio approval agent. One role per tick.",
+					what: "`dispatch_approval { role }` — engine roles (`spec`, `continuity`, `cross-stage-consistency`) and `quality_gates` are signed; the cursor walks approvalRoles for each remaining studio approval agent. One role per tick.",
 				},
 				{
-					hook: "readReviewAgentPaths()",
+					hook: "readReviewAgentPaths() — three-tier cascade",
 					target: "subagent prompt",
-					what: "each studio approval agent's mandate (from `plugin/studios/<studio>/stages/<stage>/review-agents/<role>.md`) is inlined into the dispatch block.",
+					what: "engine roles render mandate prose from sibling `prompts/stage/approve/dispatch_approval/engine-bodies/<role>.eta.md` (POST-execute prose: audit the built work). Studio roles resolve via the cascade: `project/.haiku/.../<role>.md` → `plugin/studios/<studio>/stages/<stage>/.../<role>.md` → `plugin/studios/<studio>/.../<role>.md` → `plugin/review-agents/<role>.md`.",
 				},
 			],
 			action: "dispatch_approval",
 			summary:
-				"quality_gates signed → cursor walks the approval track per studio role (one tick per role)",
+				"engine roles + quality_gates signed → cursor walks the POST-execute approval track per studio role (one tick per role)",
 			payload: {
 				action: "dispatch_approval",
 				intent: "{slug}",
@@ -488,9 +501,9 @@ export function payloadFor(
 				units: ["<units-where-approvals.<role>-is-missing>"],
 			},
 			validations: [
-				"`approvals.spec` and `approvals.quality_gates` are signed on every unit",
+				"`approvals.spec`, `approvals.continuity`, `approvals.cross-stage-consistency`, `approvals.quality_gates` all signed on every unit",
 				"Some unit has `approvals.<role>` missing for the next role in approvalRoles",
-				`Mode shaping: ${isAutopilot ? "autopilot trims approvalRoles to `[spec, quality_gates]` — no studio agents, no user role" : "full role list applies"}`,
+				`Mode shaping: ${isAutopilot ? "autopilot trims approvalRoles to `[spec, continuity, cross-stage-consistency, quality_gates]` — no studio agents, no user role" : "full role list applies"}`,
 			],
 			writes: [
 				{
@@ -500,7 +513,7 @@ export function payloadFor(
 				},
 			],
 			instructions:
-				"Approval agents focus on built artifacts (architecture, performance, security, test coverage). Each role gets its own tick. After every studio approval signs, the cursor returns `user_gate { gate_kind: \"approval\" }` (skipped under autopilot, where `complete_stage` auto-fires once `quality_gates` is signed).",
+				"Approval agents focus on built artifacts (architecture, performance, security, test coverage) — they audit the WORK, not the spec (the pre-execute review walk already approved the spec). Each role gets its own tick. After every studio approval signs, the cursor returns `user_gate { gate_kind: \"approval\" }` (skipped under autopilot, where `complete_stage` auto-fires once the engine-role and quality_gates set is signed).",
 		},
 		"review-to-gate": {
 			injection: [
@@ -508,7 +521,7 @@ export function payloadFor(
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
 					what: isAutopilot
-						? "autopilot: approvalRoles trimmed to `[spec, quality_gates]`. Once both are signed the cursor returns `complete_stage` directly — no user gate, no studio agents."
+						? "autopilot: approvalRoles trimmed to `[spec, continuity, cross-stage-consistency, quality_gates]`. Once all four engine entries sign the cursor returns `complete_stage` directly — no user gate, no studio agents."
 						: "every studio approval agent has signed → `user_gate { gate_kind: \"approval\" }`. `haiku_run_next` opens the review SPA inline and blocks on `haiku_await_gate`.",
 				},
 			],
@@ -532,7 +545,7 @@ export function payloadFor(
 			validations: [
 				"`approvals.<role>` signed on every unit for every approvalRole except the next one",
 				isAutopilot
-					? "autopilot: `quality_gates` signed → no further approval work; cursor returns `complete_stage`"
+					? "autopilot: engine roles + `quality_gates` signed → no further approval work; cursor returns `complete_stage`"
 					: "non-autopilot: every studio approval agent has signed; cursor returns `user_gate { gate_kind: \"approval\" }`",
 			],
 			writes: [
@@ -598,7 +611,7 @@ export function payloadFor(
 						},
 					],
 			instructions: opts.isLast
-				? "Final stage's branch is merged. The cursor now walks intent-scope approvals from `intent.md.approvals`: `spec` and `continuity` (engine-built) and `user` (gated through SPA). Mode-shaped: autopilot trims to `[spec, continuity]` only. Each missing role → `intent_review { role }` (one tick per role). Once every intent-scope approval signs → `seal_intent` (engine performs final rebase + stamps `sealed_at`) → `sealed`."
+				? "Final stage's branch is merged. The cursor now walks intent-scope approvals from `intent.md.approvals`: `spec`, `continuity`, `cross-stage-consistency` (engine-built), studio intent-completion review agents (from `plugin/studios/<studio>/intent-review-agents/`, renamed 2026-05-17), and `user` (gated through SPA). Mode-shaped: autopilot trims to engine roles only. Each missing role → `intent_review { role }` (one tick per role). Once every intent-scope approval signs → `seal_intent` (engine performs final rebase + stamps `sealed_at`) → `sealed`."
 				: `Cursor returns \`complete_stage { stage: "${stageLower}" }\`. Semantic action ("stage is done") — under a git-backed portfolio the engine merges the stage branch into intent main under \`withIntentMainLock\` as an implementation detail; under filesystem-only backings it transitions stage state. The next instruction is most commonly the next stage's first action (e.g. \`elaborate\` for the conversation gate, or \`discovery_required\` if the next stage declares a tool-driven discovery template). Renamed 2026-05-12 from \`merge_stage\` per the principle "no engine action reflects a git or VCS operation."`,
 		},
 		"feedback-dispatch": {

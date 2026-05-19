@@ -27,10 +27,7 @@ import {
 	resolveStudioMandateModel,
 } from "../../_helpers.js"
 import { loadTemplate } from "../../_load-template.js"
-import {
-	WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK,
-	WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK,
-} from "../../_shared/index.js"
+import { sharedBlockRef } from "../../_shared/index.js"
 import { definePromptBuilder } from "../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
@@ -185,9 +182,10 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 					? resolveStudioMandateModel({ mandatePath: hatPath, studio })
 					: undefined
 				const dispatchBlock = emitSubagentDispatchBlock({
-					unit: `intent-fix-${fbId}`,
+					unit: `fix-${fbId}`,
 					hat,
 					bolt: fixBolt,
+					intent: slug,
 					agentType: "general-purpose",
 					model: fixHatModel,
 					promptBody: promptLines.join("\n"),
@@ -197,7 +195,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 				if (!isLast && nextHatRelayBlock) {
 					try {
 						writeNextRelaySidecar(
-							{ unit: `intent-fix-${fbId}`, hat, bolt: fixBolt },
+							{ unit: `fix-${fbId}`, hat, bolt: fixBolt, intent: slug },
 							nextHatRelayBlock,
 						)
 					} catch {
@@ -234,8 +232,8 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		totalPending,
 		showTotalsLine: totalPending !== items.length + escalatedCount,
 		showAnnouncement: items.length > 1,
-		announcementBlock: WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK,
-		workflowContractsBlock: WORKFLOW_CONTRACTS_FIX_LOOP_BLOCK,
+		announcementBlock: sharedBlockRef("workflow-contracts-announcement"),
+		workflowContractsBlock: sharedBlockRef("workflow-contracts-fix-loop"),
 		findings,
 		bgClause,
 	})

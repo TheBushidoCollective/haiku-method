@@ -317,3 +317,149 @@ test("intent.md is an IMPLICIT witnessed input on every unit review", async () =
 		)
 	})
 })
+
+test("witness key normalization: sign-time strips `.haiku/intents/<slug>/` prefix", async () => {
+		// Regression for the 2026-05-17 runaway loop on
+		// admin-portal-reimagine: units' `inputs:` had been authored (by
+		// older code paths) with repo-rooted paths like
+		// `.haiku/intents/<slug>/stages/design/artifacts/X.md`. The witness
+		// keys were stored verbatim. The drift sweep then tried
+		// `join(intentDir, badKey)` (double-nests) and `join(repoRoot,
+		// badKey)` (wrong root when the intent lives in a linked worktree),
+		// producing `input_deletion` on every (unit, role, file) every
+		// tick. New witnesses must store the canonical intent-relative
+		// path so the next sweep resolves cleanly.
+		await withTempIntent("witness-key-normalize", async ({ intentDir }) => {
+			const artifactDir = join(intentDir, "stages", "design", "artifacts")
+			mkdirSync(artifactDir, { recursive: true })
+			const artifactPath = join(artifactDir, "SEMANTIC-TOKENS.md")
+			writeFileSync(
+				artifactPath,
+				matter.stringify("Token definitions.\n", { title: "tokens" }),
+			)
+			// Author the unit with a repo-rooted input path (the bad shape
+			// produced by older code paths).
+			const badShapeInput =
+				".haiku/intents/witness-key-normalize/stages/design/artifacts/SEMANTIC-TOKENS.md"
+			await signUnitWithInputs({
+				intentDir,
+				unitName: "unit-norm",
+				inputs: [badShapeInput],
+			})
+
+			// Read the signed unit and confirm the witness key was
+			// canonicalized to the intent-relative shape.
+			const unitPath = join(
+				intentDir,
+				"stages",
+				"design",
+				"units",
+				"unit-norm.md",
+			)
+			const fm = matter(readFileSync(unitPath, "utf8"))
+			const witnesses =
+				fm.data.reviews?.spec?.input_witnesses?.files ?? {}
+			const expectedKey = "stages/design/artifacts/SEMANTIC-TOKENS.md"
+			assert.ok(
+				Object.hasOwn(witnesses, expectedKey),
+				`witness MUST be stored under canonical intent-relative key. Got keys: ${Object.keys(witnesses).join(", ")}`,
+			)
+			assert.ok(
+				!Object.hasOwn(witnesses, badShapeInput),
+				`witness MUST NOT be stored under the repo-rooted bad-shape key. Got: ${badShapeInput} in ${Object.keys(witnesses).join(", ")}`,
+			)
+		})
+	})
+
+test("legacy witness with `.haiku/intents/<slug>/` prefix resolves at check time → no false input_deletion", async () => {
+		// Backward-compat: in-flight intents have witnesses stamped with
+		// the bad-shape key. The sweep must fall back to stripping the
+		// prefix and resolving against intentDir so the file is found
+		// and drift is NOT fired. Without this fallback, the 2026-05-17
+		// runaway loop would persist for every pre-fix intent across
+		// every user even after the sign-time fix lands.
+		await withTempIntent("legacy-witness-prefix", async ({ intentDir }) => {
+			const { bodySha256 } = await import(
+				`${SRC}/orchestrator/workflow/sign-slot.ts`
+			)
+			const artifactDir = join(intentDir, "stages", "design", "artifacts")
+			mkdirSync(artifactDir, { recursive: true })
+			const artifactPath = join(artifactDir, "ACCESSIBILITY.md")
+			writeFileSync(
+				artifactPath,
+				matter.stringify("A11y body.\n", { title: "a11y" }),
+			)
+			// Hand-author a unit whose witness key has the bad shape
+			// (simulating an in-flight intent's stale state).
+			const unitPath = join(
+				intentDir,
+				"stages",
+				"design",
+				"units",
+				"unit-legacy.md",
+			)
+			const badShapeKey =
+				".haiku/intents/legacy-witness-prefix/stages/design/artifacts/ACCESSIBILITY.md"
+			const fileHash = bodySha256(artifactPath)
+			writeFileSync(
+				unitPath,
+				matter.stringify("Spec body.\n", {
+					title: "unit-legacy",
+					started_at: "2026-05-01T00:00:00Z",
+					inputs: [badShapeKey],
+					iterations: [
+						{
+							hat: "verifier",
+							started_at: "2026-05-01T00:00:00Z",
+							completed_at: "2026-05-01T00:00:00Z",
+							result: "advance",
+						},
+					],
+					reviews: {
+						spec: {
+							at: "2026-05-01T00:00:00Z",
+							body_sha256: bodySha256(unitPath),
+							input_witnesses: {
+								files: { [badShapeKey]: fileHash },
+								dirs: {},
+							},
+						},
+					},
+					approvals: {},
+					discovery: {},
+				}),
+			)
+
+			const { runDriftSweep } = await import(
+				`${SRC}/orchestrator/workflow/drift-sweep.ts`
+			)
+			// Simulate the worktree-vs-primary mismatch: in production the
+			// intent lives in a linked worktree but primaryRepoRoot() returns
+			// the primary repo (where the intent files are NOT checked out).
+			// Passing a repoRoot that doesn't contain the intent dir
+			// exercises the exact path-resolution failure the runaway loop
+			// hit. The prefix-strip fallback in the sweep must still find
+			// the file inside intentDir for drift NOT to fire.
+			const fakePrimaryRepoRoot = mkdtempSync(
+				join(tmpdir(), "fake-primary-"),
+			)
+			try {
+				const result = runDriftSweep({
+					intentDir,
+					stage: "design",
+					studio: "test",
+					repoRoot: fakePrimaryRepoRoot,
+				})
+				const deletionEvents = result.events.filter(
+					(e) => e.kind === "input_deletion",
+				)
+				assert.equal(
+					deletionEvents.length,
+					0,
+					`legacy bad-shape witness MUST resolve via prefix-strip fallback (file is present on disk inside intentDir); got false input_deletion events: ${JSON.stringify(deletionEvents)}`,
+				)
+			} finally {
+				rmSync(fakePrimaryRepoRoot, { recursive: true, force: true })
+			}
+		})
+	})

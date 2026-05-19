@@ -88,6 +88,7 @@ export const paths = {
 	stageArtifact: (id: string, path: string) => `/stage-artifacts/${id}/${path}`,
 	directionPage: (id: string) => `/direction/${id}`,
 	directionSelect: (id: string) => `/direction/${id}/select`,
+	viewPage: (id: string) => `/view/${id}`,
 	pickerPage: (id: string) => `/picker/${id}`,
 	pickerSelect: (id: string) => `/picker/${id}/select`,
 	questionImage: (id: string, index: number) =>
@@ -210,6 +211,19 @@ export const routes: readonly RouteSpec[] = [
 		response: null,
 		summary: "Serve the design-direction selection page (HTML SPA entry).",
 		tag: "direction",
+		transport: "loopback",
+	},
+
+	// View session — artifact browser ────────────────────────────────────
+	{
+		method: "GET",
+		pathTemplate: "/view/{sessionId}",
+		operationId: "getViewPage",
+		request: null,
+		response: null,
+		summary:
+			"Serve the artifact-browser SPA shell for a view session (haiku_view). Reads stage + artifact deep-link from query params at mount.",
+		tag: "files",
 		transport: "loopback",
 	},
 	{

@@ -8,13 +8,9 @@ stateDiagram-v2
   sourcing --> screening
   screening --> interview
   interview --> offer
-  offer --> intent_completion_review
-  intent_completion_review --> intent_completion_gate : review.clean
-  intent_completion_review --> intent_completion_fix : review.findings
-  intent_completion_fix --> intent_completion_gate : feedback.closed
-  intent_completion_fix --> intent_completion_fix : feedback.open
-  intent_completion_gate --> complete : gate.approved
-  intent_completion_gate --> offer : gate.changes_requested
+  offer --> intent_review
+  intent_review --> seal_intent : approvals.signed
+  seal_intent --> complete
 
   state requisition {
     [*] --> requisition_start_stage

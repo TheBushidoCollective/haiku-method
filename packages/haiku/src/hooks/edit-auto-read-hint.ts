@@ -25,6 +25,7 @@
 // tightens the pattern to two known Claude Code phrasings.
 
 import { defineHook } from "./define.js"
+import { isHaikuProject } from "./utils.js"
 
 // Two literal phrasings Claude Code emits when an Edit hits an
 // unread file. Anchored on enough surrounding tokens that random
@@ -87,6 +88,12 @@ export default defineHook({
 	description:
 		"PostToolUse: when Edit/MultiEdit fails with 'file not read yet', surface a Read-first hint so the agent recovers in one turn instead of retrying blindly.",
 	async handle(input, _ctx) {
+		// Project-scope gate — this is a haiku-branded UX nudge, not a
+		// universal Edit-failure hint. Outside a haiku project, leave
+		// the agent's recovery path to whatever the harness or other
+		// plugins surface.
+		if (!isHaikuProject()) return
+
 		const inputAny = (input ?? {}) as Record<string, unknown>
 		// Only inspect the tool_response — the tool_input contains
 		// agent-supplied strings (old_string / new_string) which

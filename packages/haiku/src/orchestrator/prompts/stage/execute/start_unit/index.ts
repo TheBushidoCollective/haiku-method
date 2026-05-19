@@ -52,7 +52,7 @@ import {
 	readInterpretation,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
-import { SUBAGENT_ERROR_RECOVERY } from "../../../_shared/index.js"
+import { sharedBlockRef } from "../../../_shared/index.js"
 import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
@@ -272,6 +272,8 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 					unit,
 					hat,
 					bolt,
+					intent: slug,
+					stage,
 					agentType: hatAgentType,
 					model: resolvedModel,
 					promptBody: assessorBody,
@@ -380,7 +382,7 @@ ${WORKTREE_AND_TIMEOUTS}`,
 		"",
 		AUTONOMY_NOTE,
 		"",
-		SUBAGENT_ERROR_RECOVERY,
+		sharedBlockRef("subagent-error-recovery"),
 	)
 
 	if (unitCaps.subagents.supported) {
@@ -392,6 +394,8 @@ ${WORKTREE_AND_TIMEOUTS}`,
 				unit,
 				hat,
 				bolt,
+				intent: slug,
+				stage,
 				agentType: hatAgentType,
 				model: resolvedModel,
 				promptBody,

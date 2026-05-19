@@ -35,6 +35,7 @@ import "../migrations/v6-to-v7.js"
 import "../migrations/v7-to-v8.js"
 import "../migrations/v8-to-v9.js"
 import { purgeDeadSidecars } from "./purge-dead-sidecars.js"
+import { killAllOrphanedBootSessions } from "../../view-boot.js"
 import { hasV3CruftInIntent } from "../migrations/v0-to-v4.js"
 import {
 	type CursorAction,
@@ -282,6 +283,13 @@ export function runWorkflowTick(
 	// gate-session.json or baseline.json that appeared via a downgrade-
 	// upgrade cycle or a stage merge from a pre-v9 branch).
 	purgeDeadSidecars(iDir)
+
+	// Reap orphaned `haiku_view` boot-mode subprocesses. Any spawned
+	// dev server whose owning view-session no longer exists in the
+	// in-memory registry (because the SPA evicted it, the agent crashed
+	// before calling haiku_view_close, etc.) gets SIGTERMed here so
+	// stale dev servers don't accumulate across ticks.
+	killAllOrphanedBootSessions()
 
 	// Pre-cursor selection gates. Each emits a structured `select_*`
 	// action when the corresponding field is missing on intent.md.

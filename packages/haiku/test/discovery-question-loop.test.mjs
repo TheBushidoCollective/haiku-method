@@ -108,6 +108,18 @@ test("discovery → question FB → feedback_question → close → cursor falls
 					inputs: ["intent.md"],
 					outputs: ["stages/design/artifacts/model.md"],
 					depends_on: [],
+					// Pre-execute reviews signed so the cursor walks past
+					// the PRE-execute review track after the FB closes
+					// (2026-05-17 split). Without these, the post-close
+					// tick lands on dispatch_review for spec, not the
+					// start_unit_hat the test expects.
+					reviews: {
+						spec: { at: "t" },
+						continuity: { at: "t" },
+						"cross-stage-consistency": { at: "t" },
+						"code-reviewer": { at: "t" },
+						user: { at: "t" },
+					},
 				}),
 			)
 			execFileSync("git", ["-C", repoRoot, "add", unitPath])

@@ -26,6 +26,22 @@ import {
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
 
+// Engine-built-in intent-completion review roles. Each role's mandate
+// body lives as a sibling `.eta.md` under `engine-bodies/`. The role
+// list is the canonical set: the cursor's `intentRoles` walk must stay
+// in sync (a test locks this).
+const ENGINE_REVIEW_BODIES: Record<string, string> = {
+	spec: loadTemplate(import.meta.url, "engine-bodies/spec.eta.md"),
+	continuity: loadTemplate(
+		import.meta.url,
+		"engine-bodies/continuity.eta.md",
+	),
+	"cross-stage-consistency": loadTemplate(
+		import.meta.url,
+		"engine-bodies/cross_stage_consistency.eta.md",
+	),
+}
+
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
 
@@ -34,6 +50,24 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 
 	if (role === "user") {
 		return eta.renderString(TEMPLATE, { slug, role })
+	}
+
+	// Engine-built-in roles render the mandate body from the sibling
+	// engine-bodies/<role>.eta.md template. Renders BEFORE the studio
+	// mandate lookup so an engine role can never be shadowed by a
+	// same-name studio file. The cursor's `intentRoles` walk is the
+	// canonical source for which roles are engine-built — a test locks
+	// that against this map.
+	const engineBodyTpl = ENGINE_REVIEW_BODIES[role]
+	if (engineBodyTpl) {
+		const engineBody = eta.renderString(engineBodyTpl, { slug }).trim()
+		return eta.renderString(TEMPLATE, {
+			slug,
+			role,
+			mandatePath: "",
+			dispatchBlock: "",
+			description: engineBody,
+		})
 	}
 
 	const mandates = readStudioReviewAgentPaths(studio)
@@ -61,13 +95,15 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		].join("\n")
 
 		const dispatchBlock = emitSubagentDispatchBlock({
-			unit: `intent-review-${slug}`,
+			unit: "review",
 			hat: role,
 			bolt: 1,
+			intent: slug,
 			agentType: "general-purpose",
 			model: mandateModel,
 			promptBody: reviewPrompt,
 			heading: `### Subagent: \`${role}\``,
+			omitBolt: true,
 		})
 		return eta.renderString(TEMPLATE, {
 			slug,
@@ -78,20 +114,15 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		})
 	}
 
-	// Engine-built-in roles (spec, continuity) with no studio mandate
-	// file. Frame as "agent runs the inline check, then re-tick".
-	const description =
-		role === "spec"
-			? "verify the intent's intent.md goals are reflected in the merged stage outputs (spec conformance)"
-			: role === "continuity"
-				? "verify cross-stage continuity: every produced output declared in stage A is referenced or consumed downstream where the stage graph requires it; every named asset that should render does render; no orphaned artifacts"
-				: `audit the intent for the \`${role}\` standard`
-
+	// Fallback: role is neither engine-built-in nor a configured studio
+	// agent. This is the legacy "audit for the unknown role" stub —
+	// reached only if the cursor's `intentRoles` list and the engine
+	// review registry drift apart, which a test locks against.
 	return eta.renderString(TEMPLATE, {
 		slug,
 		role,
 		mandatePath: "",
 		dispatchBlock: "",
-		description,
+		description: `audit the intent for the \`${role}\` standard`,
 	})
 })

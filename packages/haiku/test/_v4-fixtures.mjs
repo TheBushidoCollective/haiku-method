@@ -207,6 +207,12 @@ export function makeIntent({
 		started_at: at,
 		approvals,
 		sealed_at: sealed ? at : null,
+		// Autotune (2026-05-18) is default-on for real intents. Test
+		// fixtures default OFF so e2e suites whose intent shape
+		// predates the autotune cursor walk continue to exercise the
+		// pre-autotune action sequence. Tests that ARE exercising the
+		// autotune flow override via `extraFm: { autotune: true }`.
+		autotune: false,
 		...(verifyOnCreate
 			? { verified_at: at, verified_notes: "test fixture" }
 			: {}),

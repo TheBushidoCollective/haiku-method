@@ -22,8 +22,12 @@
 // imported by `stage/elaborate/elaborate_loop/index.ts` (the router)
 // but are NOT registered as top-level dispatch entries.
 
-// ── drift/ (Track C — filesystem reconciliation) ─────────────────
-import drift_detected from "./drift/drift_detected/index.js"
+// ── drift/ — engine-internal as of 2026-05-17. No agent-facing prompt.
+// runDriftSweep + engineHandleDriftEvents handle drift entirely
+// inside the engine: witnesses restamp at detect time, and the engine
+// files a single deduped FB per (file, kind) tuple that flows through
+// the normal stage `fix_hats:` chain. The prior `drift_detected`
+// action/prompt is gone — there's no agent surface to register here.
 // ── feedback/ (Track B — single-track per GOALS § "Two loop primitives") ─
 // Fix loops are not a separate phase; they're feedback dispatch
 // against the stage's `fix_hats:` (or studio's `fix-hats:` for
@@ -42,7 +46,6 @@ import loop_halted from "./global/loop_halted/index.js"
 import external_review_requested from "./intent/repair/external_review_requested/index.js"
 import revise_unit_specs from "./intent/repair/revise_unit_specs/index.js"
 import safe_intent_repair from "./intent/repair/safe_intent_repair/index.js"
-import intent_completion_review from "./intent/review/intent_completion_review/index.js"
 import intent_review from "./intent/review/intent_review/index.js"
 import intent_approved from "./intent/seal/intent_approved/index.js"
 import intent_complete from "./intent/seal/intent_complete/index.js"
@@ -55,6 +58,8 @@ import dispatch_quality_gates from "./stage/approve/dispatch_quality_gates/index
 import advance_phase from "./stage/complete/advance_phase/index.js"
 import advance_stage from "./stage/complete/advance_stage/index.js"
 import complete_stage from "./stage/complete/complete_stage/index.js"
+import record_observations from "./stage/complete/record_observations/index.js"
+import record_reflection from "./intent/reflection/record_reflection/index.js"
 // ── stage/ ────────────────────────────────────────────────────────
 import elaborate_loop from "./stage/elaborate/elaborate_loop/index.js"
 import blocked from "./stage/error/blocked/index.js"
@@ -76,7 +81,6 @@ import start_unit from "./stage/execute/start_unit/index.js"
 import start_unit_hat from "./stage/execute/start_unit_hat/index.js"
 import user_gate from "./stage/gate/user_gate/index.js"
 import dispatch_review from "./stage/review/dispatch_review/index.js"
-import review from "./stage/review/review/index.js"
 import start_stage from "./stage/start_stage/index.js"
 
 import type { PromptBuilder } from "./types.js"
@@ -94,13 +98,14 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["start_unit", start_unit],
 	["start_unit_hat", start_unit_hat],
 	["dispatch_review", dispatch_review],
-	["review", review],
 	["dispatch_approval", dispatch_approval],
 	["dispatch_quality_gates", dispatch_quality_gates],
 	["user_gate", user_gate],
 	["advance_phase", advance_phase],
 	["advance_stage", advance_stage],
 	["complete_stage", complete_stage],
+	["record_observations", record_observations],
+	["record_reflection", record_reflection],
 	["blocked", blocked],
 	["coverage_review_required", coverage_review_required],
 	["dag_cycle_detected", dag_cycle_detected],
@@ -119,7 +124,6 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	// intent/
 	["migrated", migrated],
 	["select_studio", select_studio],
-	["intent_completion_review", intent_completion_review],
 	["intent_review", intent_review],
 	["intent_approved", intent_approved],
 	["intent_complete", intent_complete],
@@ -135,8 +139,7 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["intent_completion_fix", intent_completion_fix],
 	["review_fix", review_fix],
 	["start_feedback_hat", start_feedback_hat],
-	// drift/ (Track C)
-	["drift_detected", drift_detected],
+	// drift/ — engine-internal (see comment at top), no registration.
 	// global/
 	["complete", complete],
 	["error", error],

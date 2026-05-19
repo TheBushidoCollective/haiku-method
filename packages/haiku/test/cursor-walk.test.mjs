@@ -45,6 +45,27 @@ const HAS_GIT = (() => {
 	}
 })()
 
+/** Engine pre-execute review roles (2026-05-17 split). The cursor's
+ *  reviewRoles walk fires BEFORE wave-ready hat dispatch, so any test
+ *  that wants to advance past the pre-execute review track must
+ *  pre-sign all three engine roles in the unit's `reviews:` block.
+ *  Spread this into `reviews: { ...ENGINE_REVIEWS_SIGNED }` and add
+ *  any studio agents (and `user`) the test needs signed beyond that. */
+const ENGINE_REVIEWS_SIGNED = {
+	spec: { at: "t" },
+	continuity: { at: "t" },
+	"cross-stage-consistency": { at: "t" },
+}
+
+/** Post-execute engine approval roles (same three engine roles fire in
+ *  the approval walk after every hat sequence completes). Tests that
+ *  want to skip past the post-execute approval track include this. */
+const ENGINE_APPROVALS_SIGNED = {
+	spec: { at: "t" },
+	continuity: { at: "t" },
+	"cross-stage-consistency": { at: "t" },
+}
+
 async function withTmpRepo(slug, fn) {
 	const dir = mkdtempSync(join(tmpdir(), "haiku-cursor-walk-"))
 	const stableCwd = tmpdir() // anchor cwd somewhere that won't be deleted
@@ -149,7 +170,13 @@ test("cursor: wave-ready unit (started_at null) → start_unit_hat", async () =>
 				depends_on: [],
 				started_at: null,
 				iterations: [],
-				reviews: {},
+				// Pre-execute reviews + user gate signed so cursor walks
+				// past the PRE-execute review track and reaches wave dispatch.
+				reviews: {
+					...ENGINE_REVIEWS_SIGNED,
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})
@@ -197,7 +224,13 @@ test("cursor: open iter on a started unit → re-emit start_unit_hat for the ope
 						result: null,
 					},
 				],
-				reviews: {},
+				// Pre-execute review track must be signed before the
+				// cursor reaches start_unit_hat (2026-05-17 split).
+				reviews: {
+					...ENGINE_REVIEWS_SIGNED,
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})
@@ -233,7 +266,12 @@ test("cursor: hat advanced → next start_unit_hat", async () => {
 						result: "advance",
 					},
 				],
-				reviews: {},
+				// Pre-execute review track must be signed (2026-05-17 split).
+				reviews: {
+					...ENGINE_REVIEWS_SIGNED,
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})
@@ -327,7 +365,9 @@ test("cursor: spec review signed → dispatch_review for configured agent", asyn
 						result: "advance",
 					},
 				],
-				reviews: { spec: { at: "t" } },
+				// All three engine roles signed; cursor advances to the
+				// next reviewRole (the configured studio agent).
+				reviews: { ...ENGINE_REVIEWS_SIGNED },
 				approvals: {},
 				discovery: {},
 			})
@@ -336,7 +376,7 @@ test("cursor: spec review signed → dispatch_review for configured agent", asyn
 			assert.strictEqual(
 				action.role,
 				"code-reviewer",
-				"second review role is the configured agent",
+				"after engine roles (spec, continuity, cross-stage-consistency), the next reviewRole is the configured studio agent",
 			)
 		},
 	)
@@ -375,7 +415,7 @@ test("cursor: all reviews signed → user_gate spec", async () => {
 					},
 				],
 				reviews: {
-					spec: { at: "t" },
+					...ENGINE_REVIEWS_SIGNED,
 					"code-reviewer": { at: "t" },
 				},
 				approvals: {},
@@ -421,7 +461,7 @@ test("cursor: all reviews + user signed → dispatch_approval spec (post-execute
 					},
 				],
 				reviews: {
-					spec: { at: "t" },
+					...ENGINE_REVIEWS_SIGNED,
 					"code-reviewer": { at: "t" },
 					user: { at: "t" },
 				},
@@ -472,12 +512,12 @@ test("cursor: spec approval signed → dispatch_quality_gates (engine actor)", a
 				},
 			],
 			reviews: {
-				spec: { at: "t" },
+				...ENGINE_REVIEWS_SIGNED,
 				"code-reviewer": { at: "t" },
 				user: { at: "t" },
 			},
 			approvals: {
-				spec: { at: "t" },
+				...ENGINE_APPROVALS_SIGNED,
 			},
 			discovery: {},
 		})
@@ -542,7 +582,13 @@ test("cursor: closed FB does NOT preempt → cursor walks Track A", async () => 
 				depends_on: [],
 				started_at: null,
 				iterations: [],
-				reviews: {},
+				// Pre-execute reviews signed so cursor reaches start_unit_hat
+				// after correctly skipping the closed FB (2026-05-17 split).
+				reviews: {
+					...ENGINE_REVIEWS_SIGNED,
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})
@@ -714,6 +760,15 @@ test("cursor: one open-iter unit + one wave-ready sibling → wave-ready dispatc
 		makeIntent({ intentDir, slug, studio: "test" })
 		seedVerifiedElaboration({ intentDir, stage: "design" })
 
+		// Both units need pre-execute reviews signed so the cursor
+		// reaches the wave dispatch (2026-05-17 split). Per-unit because
+		// reviewRoles is signed on each unit's FM, not stage-level.
+		const preExecuteSigned = {
+			...ENGINE_REVIEWS_SIGNED,
+			"code-reviewer": { at: "t" },
+			user: { at: "t" },
+		}
+
 		// Unit 1: open-iter on planner (engine pre-opened or orphaned).
 		writeUnit(intentDir, "design", "unit-01-open-iter", {
 			title: "u1",
@@ -727,7 +782,7 @@ test("cursor: one open-iter unit + one wave-ready sibling → wave-ready dispatc
 					result: null,
 				},
 			],
-			reviews: {},
+			reviews: { ...preExecuteSigned },
 			approvals: {},
 			discovery: {},
 		})
@@ -738,7 +793,7 @@ test("cursor: one open-iter unit + one wave-ready sibling → wave-ready dispatc
 			depends_on: [],
 			started_at: null,
 			iterations: [],
-			reviews: {},
+			reviews: { ...preExecuteSigned },
 			approvals: {},
 			discovery: {},
 		})
@@ -941,7 +996,13 @@ test("cursor: reject_hat re-entry routes back to prior hat", async () => {
 						reason: "Spec mismatch",
 					},
 				],
-				reviews: {},
+				// Pre-execute reviews signed so cursor reaches the unit
+				// reject-rewind path (2026-05-17 split).
+				reviews: {
+					...ENGINE_REVIEWS_SIGNED,
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+				},
 				approvals: {},
 				discovery: {},
 			})

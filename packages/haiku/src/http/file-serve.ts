@@ -111,7 +111,15 @@ export function registerFileServeRoutes(instance: FastifyInstance): void {
 			if (!requireTunnelAuth(req, reply, sessionId)) return
 			if (rejectUnsafePathParam(reply, sessionId, filePath)) return
 			const session = getSession(sessionId)
-			if (!session || session.session_type !== "review") {
+			// Review AND view sessions are both rooted at intent_dir and
+			// both expose stage artifacts; `haiku_view` sessions piggyback
+			// on this route so the SPA's artifact-browser can serve files
+			// through the same path-safety + tunnel-auth chain the review
+			// pane already uses.
+			if (
+				!session ||
+				(session.session_type !== "review" && session.session_type !== "view")
+			) {
 				reply.status(404).send("Session not found")
 				return
 			}

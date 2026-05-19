@@ -405,3 +405,64 @@ export type HaikuRepairInput = Static<typeof HAIKU_REPAIR_INPUT_SCHEMA>
 export const validateHaikuRepairInputSchema = stateAjv.compile(
 	HAIKU_REPAIR_INPUT_SCHEMA,
 )
+
+// ── haiku_view ───────────────────────────────────────────────────
+// Opens a tunnelled URL pointing at the SPA's artifact-browser route
+// (viewer mode) or a spawned project dev server (boot mode). Returns
+// the URL for the agent to hand to the playwright MCP. Lifecycle is
+// managed via `haiku_view_close` + the standard session TTL.
+
+export const HAIKU_VIEW_INPUT_SCHEMA = Type.Object(
+	{
+		intent: Type.String({
+			minLength: 1,
+			description:
+				"Intent slug to scope the view session. The SPA will only serve files under this intent's directory.",
+		}),
+		stage: Type.Optional(
+			Type.String({
+				description:
+					"Optional stage name to narrow the artifact list. Defaults to the intent's active_stage when omitted.",
+			}),
+		),
+		artifact: Type.Optional(
+			Type.String({
+				description:
+					"Optional intent-relative path to deep-link the SPA to a single artifact file (e.g. `stages/design/artifacts/wireframe.svg`). When omitted the SPA lists every artifact in scope.",
+			}),
+		),
+		mode: Type.Optional(
+			Type.String({
+				enum: ["auto", "viewer", "boot"],
+				description:
+					"Mode preference. `auto` (default) tries boot first and falls back to viewer. `boot` forces a spawned dev server and hard-fails when no preview/dev command is detectable. `viewer` forces the SPA artifact-browser route.",
+			}),
+		),
+		state_file: stateFile,
+	},
+	{ additionalProperties: false },
+)
+export type HaikuViewInput = Static<typeof HAIKU_VIEW_INPUT_SCHEMA>
+export const validateHaikuViewInputSchema = stateAjv.compile(
+	HAIKU_VIEW_INPUT_SCHEMA,
+)
+
+// ── haiku_view_close ─────────────────────────────────────────────
+// Explicit shutdown for a view session. Boot-mode sessions also
+// terminate the spawned dev server. Idempotent — closing an unknown
+// or already-closed session returns success.
+
+export const HAIKU_VIEW_CLOSE_INPUT_SCHEMA = Type.Object(
+	{
+		session_id: Type.String({
+			minLength: 1,
+			description: "Session ID returned by `haiku_view`.",
+		}),
+		state_file: stateFile,
+	},
+	{ additionalProperties: false },
+)
+export type HaikuViewCloseInput = Static<typeof HAIKU_VIEW_CLOSE_INPUT_SCHEMA>
+export const validateHaikuViewCloseInputSchema = stateAjv.compile(
+	HAIKU_VIEW_CLOSE_INPUT_SCHEMA,
+)

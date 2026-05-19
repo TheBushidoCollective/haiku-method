@@ -33,8 +33,9 @@ import {
 	readStageDef,
 	readStudio,
 } from "../../../../../studio-reader.js"
+import { batchDispatchDirective } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
-import { WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK } from "../../../_shared/index.js"
+import { sharedBlockRef } from "../../../_shared/index.js"
 import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
@@ -106,6 +107,14 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		unitLines,
 		someResolved,
 		showAnnouncement: units.length > 1,
-		announcementBlock: WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK,
+		announcementBlock: sharedBlockRef("workflow-contracts-announcement"),
+		// Unconditional fix-loop / execute workflow contract block.
+		// Pre-2026-05-18 this was tied to `units.length > 1`, leaving
+		// single-unit dispatches without the closure reminder. Now
+		// always emitted so the subagent sees the contract every time
+		// regardless of wave size.
+		executeContractsBlock: sharedBlockRef("workflow-contracts-execute"),
+		batchDirective:
+			units.length > 0 ? batchDispatchDirective(units.length, "subagents") : "",
 	})
 })

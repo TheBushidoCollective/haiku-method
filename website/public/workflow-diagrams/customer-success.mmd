@@ -8,13 +8,9 @@ stateDiagram-v2
   adoption --> health_check
   health_check --> expansion
   expansion --> renewal
-  renewal --> intent_completion_review
-  intent_completion_review --> intent_completion_gate : review.clean
-  intent_completion_review --> intent_completion_fix : review.findings
-  intent_completion_fix --> intent_completion_gate : feedback.closed
-  intent_completion_fix --> intent_completion_fix : feedback.open
-  intent_completion_gate --> complete : gate.approved
-  intent_completion_gate --> renewal : gate.changes_requested
+  renewal --> intent_review
+  intent_review --> seal_intent : approvals.signed
+  seal_intent --> complete
 
   state onboarding {
     [*] --> onboarding_start_stage

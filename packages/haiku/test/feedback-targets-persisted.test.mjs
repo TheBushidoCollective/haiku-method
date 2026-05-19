@@ -128,7 +128,16 @@ test("user-visual default invalidates user", () => {
 	assert.deepStrictEqual(data.targets.invalidates, ["user"])
 })
 
-test("drift default invalidates user", () => {
+test("drift default invalidates = [] (engine restamps at detect, classifier sets material explicitly)", () => {
+	// Pre-2026-05-17 this defaulted to ["user"] to force user-gate
+	// escalation, because the close hook needed the invalidation path
+	// to neutralize the drift signal (and the agent was the one filing
+	// the FB). Under engine-internal drift handling, the engine
+	// restamps witnesses at DETECT time (so the signal is already
+	// neutralized when the FB is filed) and the classifier hat in the
+	// stage's fix_hats chain decides cosmetic vs material — setting
+	// `targets.invalidates: [role]` ONLY when the shift is material.
+	// Default is empty: cosmetic-by-default, agent escalates.
 	freshIntent()
 	const r = writeFeedbackFile(intentSlug, stage, {
 		title: "drift on artifact",
@@ -136,7 +145,7 @@ test("drift default invalidates user", () => {
 		origin: "drift",
 	})
 	const { data } = matter(readFileSync(join(projDir, r.file), "utf8"))
-	assert.deepStrictEqual(data.targets.invalidates, ["user"])
+	assert.deepStrictEqual(data.targets.invalidates, [])
 })
 
 test("agent default = [] (informational)", () => {

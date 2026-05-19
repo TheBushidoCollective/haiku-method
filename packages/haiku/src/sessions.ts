@@ -50,13 +50,18 @@ function sweepPresence(): void {
 			presenceLost.delete(id)
 			continue
 		}
-		// Only interesting while a handler is still blocking on the session
+		// Only interesting while a handler is still blocking on the session.
+		// View sessions are non-blocking by design (the agent fires-and-
+		// forgets a URL at Playwright, then closes the session explicitly
+		// or lets the TTL evict) — always skip them so the watchdog doesn't
+		// spam presence-lost noise for sessions nobody is waiting on.
 		if (
 			(session.session_type === "review" && session.status !== "pending") ||
 			(session.session_type === "question" && session.status !== "pending") ||
 			(session.session_type === "design_direction" &&
 				session.status !== "pending") ||
-			(session.session_type === "picker" && session.status !== "pending")
+			(session.session_type === "picker" && session.status !== "pending") ||
+			session.session_type === "view"
 		) {
 			continue
 		}
@@ -416,9 +421,53 @@ export interface PickerSession {
 	selection: PickerSelection | null
 }
 
+/**
+ * View session — opened by the `haiku_view` MCP tool. Scopes the
+ * tunnelled artifact-browser route to a single intent (optionally
+ * narrowed to a stage or specific artifact). Distinct from a review
+ * session in that there is no decision flow, no annotations, no
+ * heartbeat gating — just an authenticated window through the tunnel
+ * for the runtime-verifier review-agent (or any other consumer) to
+ * point Playwright at.
+ *
+ * Lifecycle: opened by `haiku_view`, closed by `haiku_view_close` or
+ * evicted by the standard session TTL. Boot-mode (subprocess) state
+ * lives on the session so cleanup happens in one place.
+ */
+export interface ViewSession {
+	session_type: "view"
+	session_id: string
+	intent_dir: string
+	intent_slug: string
+	/** The studio this intent belongs to. Populated at session
+	 *  creation by reading the intent's FM. The SPA reads this to
+	 *  decide whether a studio-contributed app should handle the
+	 *  artifact instead of the default mime dispatch. */
+	studio?: string
+	/** Stage scope when narrower than the whole intent. */
+	stage?: string
+	/** Specific artifact path (relative to the intent dir) when the
+	 *  caller wants the SPA to deep-link to a single file rather than
+	 *  the stage's artifact list. */
+	artifact?: string
+	/** "viewer" → SPA artifact-browser; "boot" → spawned dev server. */
+	mode: "viewer" | "boot"
+	status: "open" | "closed"
+	/** Boot-mode only: ephemeral port the spawned process bound to. */
+	boot_port?: number
+	/** Boot-mode only: PID of the spawned dev server. */
+	boot_pid?: number
+	/** Boot-mode only: the command that was spawned (for diagnostics). */
+	boot_command?: string
+}
+
 const sessions = new Map<
 	string,
-	ReviewSession | QuestionSession | DesignDirectionSession | PickerSession
+	| ReviewSession
+	| QuestionSession
+	| DesignDirectionSession
+	| PickerSession
+	| ViewSession
 >()
 
 // ─── Previous-review snapshots (for re-review delta) ────────────────
@@ -588,6 +637,35 @@ export function updatePickerSession(
 	return session
 }
 
+export function createViewSession(
+	params: Omit<ViewSession, "session_type" | "session_id" | "status">,
+): ViewSession {
+	evictSessions()
+	const session_id = newSessionId()
+	const session: ViewSession = {
+		...params,
+		session_type: "view",
+		session_id,
+		status: "open",
+	}
+	sessions.set(session_id, session)
+	sessionCreatedAt.set(session_id, Date.now())
+	return session
+}
+
+export function updateViewSession(
+	sessionId: string,
+	updates: Partial<
+		Pick<ViewSession, "status" | "boot_port" | "boot_pid" | "boot_command">
+	>,
+): ViewSession | undefined {
+	const session = sessions.get(sessionId)
+	if (!session || session.session_type !== "view") return undefined
+	Object.assign(session, updates)
+	notifySessionUpdate(sessionId)
+	return session
+}
+
 export function getSession(
 	sessionId: string,
 ):
@@ -595,6 +673,7 @@ export function getSession(
 	| QuestionSession
 	| DesignDirectionSession
 	| PickerSession
+	| ViewSession
 	| undefined {
 	return sessions.get(sessionId)
 }

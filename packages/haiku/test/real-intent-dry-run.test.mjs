@@ -423,6 +423,9 @@ test("real-intent: drive software studio to sealed via run_next handler", {
 				started_at: now,
 				approvals: {},
 				sealed_at: null,
+				// e2e fixture predates the autotune cursor walk; keep
+				// off for legacy action-sequence assertions.
+				autotune: false,
 				design_directions: {
 					design: { archetype: "modular-cards", at: now },
 				},

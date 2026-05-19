@@ -4,6 +4,22 @@ The interactive runtime-architecture map lives at `/studios/<slug>/architecture`
 
 **Whenever the architecture changes, update this map.** It is part of the sync surface, not a one-off.
 
+## Sync surface — files that must move together
+
+Any change to the cursor's per-stage walk or the per-action prompt structure has to be reflected across all of these. They are the canonical reference for "what does the engine actually do" and they drift away from each other silently if not kept in sync.
+
+| File | What it owns | When to update |
+|---|---|---|
+| `packages/haiku/src/orchestrator/workflow/cursor.ts` | The authoritative per-stage walk + role-list ordering | Any change to phase order, role lists, or what action fires when |
+| `packages/haiku/src/orchestrator/prompts/PROMPTS.md` | The prompt-folder layout taxonomy + the "where does a new prompt go" decision tree | Any change to phase order, action lifecycle, or scope/phase taxonomy. **Folder layout block under `## Scope / phase taxonomy` must reflect the same lifecycle order as `cursor.ts`** — `cursor.ts` is the source of truth; PROMPTS.md is the human-readable cross-reference |
+| `website/app/studios/[slug]/architecture/_data/actors.ts` | Orchestrator's `notes` field — the prose cursor description | Any per-stage walk reorder, any role-list change, any cascade or engine-built-role change |
+| `website/app/studios/[slug]/architecture/_data/payload-for.ts` | Per-transition action payloads, validations, writes, instructions | Any new/changed cursor action; any role-list reorder; any mandate-resolution path change |
+| `website/app/studios/[slug]/architecture/_components/ArchitectureMap.tsx` | The visual flow (phase order, gate captions, role nameplates) | Phase reorder, new gate kinds, new pills, post-intent role changes |
+| `CLAUDE.md` (project root) | "Concept-to-Implementation Mapping" table | Any new concept/component, terminology change, or cross-component contract |
+| `plugin/studios/ARCHITECTURE.md` | The structural reference for studio/stage/unit/hat/feedback boundaries | Any structural change to that boundary surface |
+
+The general principle: **`cursor.ts` is the source of truth**, and PROMPTS.md + the architecture map + CLAUDE.md are all secondary projections of it. When they disagree, fix the projection, not the engine.
+
 ## Auto-generated workflow diagrams (per studio)
 
 The per-studio Mermaid `stateDiagram-v2` files at `website/public/workflow-diagrams/<studio>.mmd` are derived from the workflow engine in `packages/haiku/src/orchestrator/workflow/` and the StudioConfig built from `plugin/studios/<studio>/`. They show every stage's full phase progression, every hat sequence enumerated inside `execute`, and every (bolt × fix-hat) combination inside `review_fix`.
@@ -66,6 +82,26 @@ Any change to one of the following requires verifying or updating the architectu
 ## Ground truth
 
 The map claims to be canonical. If it diverges from the orchestrator code, **the orchestrator is right and the map is wrong** — fix the map, do not fix the orchestrator to match.
+
+## 2026-05-17 — pre/post review/approve split + three-tier cascade
+
+`dispatch_review` moved from post-execute to **PRE-execute** — it now fires between `elaborate_loop` completion and wave-ready hat dispatch, auditing the planned SPEC before any code lands. `dispatch_approval` stayed POST-execute, auditing the WORK against the SPEC the pre-execute walk already approved. The same engine-built roles (`spec`, `continuity`, `cross-stage-consistency`) fire in BOTH walks; each renders phase-appropriate mandate prose from sibling files:
+
+- `packages/haiku/src/orchestrator/prompts/stage/review/dispatch_review/engine-bodies/<role>.eta.md` (pre-execute prose: "audit the planned spec")
+- `packages/haiku/src/orchestrator/prompts/stage/approve/dispatch_approval/engine-bodies/<role>.eta.md` (post-execute prose: "audit the built work")
+- `packages/haiku/src/orchestrator/prompts/intent/review/intent_review/engine-bodies/<role>.eta.md` (intent-completion prose)
+
+Studio review-agent, hat, and fix-hat mandates resolve via a three-tier cascade: `project/.haiku/studios/<studio>/stages/<stage>/<kind>/<role>.md` → `plugin/studios/<studio>/stages/<stage>/<kind>/<role>.md` → `plugin/studios/<studio>/<kind>/<role>.md` → `plugin/<kind>/<role>.md`. First hit wins.
+
+Studio-level intent-completion review agents were renamed from `plugin/studios/<studio>/review-agents/` to `plugin/studios/<studio>/intent-review-agents/` to free the studio tier in the cascade for stage-scope agents.
+
+Orphan cursor actions removed: `review` and `intent_completion_review` (both had prompt builders but no emit clauses).
+
+Map reflects these in:
+- `_data/actors.ts` — orchestrator's cursor walk description shows the pre/post ordering and lists the engine roles + the cascade.
+- `_data/payload-for.ts` — header comment + every review/approval entry document the new role list, engine-bodies path, and cascade.
+- `_components/ArchitectureMap.tsx` — pre-execute review block (`elab-to-prereview`) sits BEFORE the execute phase visually; nested-gate caption names all three engine roles + the cascade; post-intent card names `intent-review-agents/` instead of `review-agents/`.
+- `packages/haiku/src/orchestrator/prompts/PROMPTS.md` — folder layout block under `## Scope / phase taxonomy` lists phases in lifecycle order (elaborate → review (PRE-execute) → execute → approve (POST-execute) → complete).
 
 ## 2026-04-27 — `feedback_dispatch` route
 

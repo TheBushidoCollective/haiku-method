@@ -149,6 +149,127 @@ test("engine FM mutation does NOT trip drift on previously signed review", async
 	})
 })
 
+test("engine FM mutation on body lacking trailing \\n does NOT trip drift", async () => {
+	// Regression for the v9 "drift can't clear" loop: bodySha256 used
+	// to hash the raw matter().content bytes, but matter.stringify
+	// appends a trailing newline to bodies that don't already have one.
+	// So a witness stamped against a body WITHOUT a trailing newline
+	// drifted the moment any engine FM write ran through stringify,
+	// even though the human/agent body was unchanged. The migration
+	// step that wrote intent.md to bump plugin_version planted exactly
+	// this footgun, and every drift FB close hook hit it.
+	if (!HAS_GIT) return
+	await withRepo("no-trailing-newline", async ({ root, intentDir }) => {
+		const { bodySha256 } = await import(
+			`${SRC}/orchestrator/workflow/sign-slot.ts`
+		)
+		const { runDriftSweep } = await import(
+			`${SRC}/orchestrator/workflow/drift-sweep.ts`
+		)
+		const unitPath = join(intentDir, "stages", "design", "units", "unit-01.md")
+		// Write the file with a body that does NOT end in \n. We bypass
+		// matter.stringify here because stringify is the very thing that
+		// appends the newline and we need to repro the pre-normalization
+		// case the migration produced.
+		const bodyNoNewline = "# u1\n\nbody without trailing newline"
+		const fmRaw =
+			"---\ntitle: u1\nstarted_at: 2026-05-01T00:00:00Z\niterations:\n  - hat: verifier\n    started_at: 2026-05-01T00:00:00Z\n    completed_at: 2026-05-01T00:00:00Z\n    result: advance\nreviews: {}\napprovals: {}\noutputs: []\n---\n"
+		writeFileSync(unitPath, `${fmRaw}${bodyNoNewline}`)
+		// Stamp the witness against the current bytes — this is what
+		// the migration / signSlot does at sign time.
+		const preHash = bodySha256(unitPath)
+		const parsed = matter(readFileSync(unitPath, "utf8"))
+		parsed.data.reviews = {
+			spec: { at: "2026-05-01T00:00:00Z", body_sha256: preHash },
+		}
+		writeFileSync(unitPath, matter.stringify(parsed.content, parsed.data))
+		// Engine FM mutation runs through matter.stringify — same shape
+		// the v8→v9 migration uses to bump plugin_version. With the bug,
+		// this normalizes the body (adds the trailing \n) and the next
+		// sweep trips drift. With the fix, the canonicalized hash is
+		// stable.
+		const raw2 = readFileSync(unitPath, "utf8")
+		const parsed2 = matter(raw2)
+		parsed2.data.plugin_version = "9.0.0"
+		writeFileSync(unitPath, matter.stringify(parsed2.content, parsed2.data))
+		git(root, "add", "-A")
+		git(root, "commit", "-q", "-m", "engine: bumped plugin_version")
+
+		const result = runDriftSweep({
+			intentDir,
+			stage: "design",
+			studio: "test",
+			repoRoot: root,
+		})
+		assert.equal(
+			result.events.length,
+			0,
+			`engine FM write normalized body and tripped drift: ${JSON.stringify(result.events)}`,
+		)
+	})
+})
+
+test("legacy pre-canonicalization witness does NOT false-drift after FM write", async () => {
+	// Backward-compat: every in-flight intent across every user has
+	// witnesses stamped with the legacy raw-body hash (no trailing-\n
+	// canonicalization). The sweep MUST accept either strategy at check
+	// time so the canonicalization fix doesn't force a fleet-wide
+	// reset_drift on upgrade. Next sign cycle restamps with the
+	// canonical hash and legacy witnesses age out naturally.
+	if (!HAS_GIT) return
+	await withRepo("legacy-witness-compat", async ({ root, intentDir }) => {
+		const { runDriftSweep } = await import(
+			`${SRC}/orchestrator/workflow/drift-sweep.ts`
+		)
+		const crypto = await import("node:crypto")
+		const unitPath = join(intentDir, "stages", "design", "units", "unit-01.md")
+		// Body without trailing newline (the pre-fix problem shape).
+		const bodyNoNewline = "# u1\n\nbody without trailing newline"
+		// Stamp a LEGACY witness — sha of raw body bytes, NO canonicalization.
+		// This is what every pre-fix sign call produced.
+		const legacyHash = crypto
+			.createHash("sha256")
+			.update(bodyNoNewline, "utf8")
+			.digest("hex")
+		writeFileSync(
+			unitPath,
+			matter.stringify(bodyNoNewline, {
+				title: "u1",
+				started_at: "2026-05-01T00:00:00Z",
+				iterations: [
+					{
+						hat: "verifier",
+						started_at: "2026-05-01T00:00:00Z",
+						completed_at: "2026-05-01T00:00:00Z",
+						result: "advance",
+					},
+				],
+				reviews: {
+					spec: { at: "2026-05-01T00:00:00Z", body_sha256: legacyHash },
+				},
+				approvals: {},
+				outputs: [],
+			}),
+		)
+		// matter.stringify just appended \n to the body. Sweep must
+		// not flag drift — the legacy hash still matches the
+		// no-trailing-\n view of the on-disk body.
+		git(root, "add", "-A")
+		git(root, "commit", "-q", "-m", "intent: legacy witness on disk")
+		const result = runDriftSweep({
+			intentDir,
+			stage: "design",
+			studio: "test",
+			repoRoot: root,
+		})
+		assert.equal(
+			result.events.length,
+			0,
+			`legacy witness false-drifted post-canonicalization: ${JSON.stringify(result.events)}`,
+		)
+	})
+})
+
 test("file read does NOT trip drift", async () => {
 	if (!HAS_GIT) return
 	await withRepo("no-trip-read", async ({ root, intentDir }) => {

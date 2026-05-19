@@ -173,18 +173,29 @@ test("simple-gate stages parse to single string", () => {
 
 console.log("\n=== StudioConfig: studio-level extras ===")
 
-test("studio has at least one studio-level review agent", () => {
+// Studio-level intent-completion review agents were renamed from
+// `plugin/studios/<studio>/review-agents/` to
+// `plugin/studios/<studio>/intent-review-agents/` on 2026-05-17 so the
+// studio tier in the stage-review cascade could be repurposed for
+// stage-scope agents. The software studio's lone pre-rename entry was
+// `cross-stage-consistency.md`, which got promoted to an ENGINE role
+// the same day (renders mandate prose from
+// `prompts/intent/review/intent_review/engine-bodies/cross-stage-consistency.eta.md`
+// instead of a per-studio file). As of that change software ships zero
+// studio-level intent-completion review agents — every check that role
+// would have performed is now engine-built. The test below pins that
+// contract: studioReviewAgents is the list the StudioConfig builder
+// surfaces from disk, and an empty list is the EXPECTED state until a
+// studio explicitly adds an `intent-review-agents/` dir.
+test("studioReviewAgents is read from intent-review-agents/ (currently empty for software — cross-stage-consistency is engine-built)", () => {
 	assert.ok(
-		software.studioReviewAgents.length > 0,
-		"software studio ships studio-level review agents",
+		Array.isArray(software.studioReviewAgents),
+		"studioReviewAgents must be an array even when no intent-review-agents/ dir exists",
 	)
-})
-
-test("studio-level review-agent paths exist on disk", () => {
 	for (const agent of software.studioReviewAgents) {
 		assert.ok(
 			existsSync(agent.mandatePath),
-			`studio review-agent '${agent.name}' path must exist`,
+			`studio intent-review-agent '${agent.name}' path must exist on disk`,
 		)
 	}
 })

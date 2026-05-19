@@ -3,6 +3,10 @@
 		"haiku": {
 			"command": "${CLAUDE_PLUGIN_ROOT}/bin/haiku",
 			"args": ["mcp"]
+		},
+		"playwright": {
+			"command": "npx",
+			"args": ["-y", "@playwright/mcp@latest", "--headless"]
 		}
 	}
 }

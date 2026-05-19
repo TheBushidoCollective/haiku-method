@@ -4,8 +4,8 @@
  * Both helpers are load-bearing for the SPA's terminal-intent guard
  * (deep links to `/stages/<X>` redirect to `/intent` only when this
  * fires) and the per-stage status display (the chrome shows
- * "completed" when v4 stages merge into intent main, even though v4
- * never writes `status: completed` to per-stage state.json).
+ * "completed" when v4 stages merge into intent main; v4 derives stage
+ * status from per-unit frontmatter and branch-merge state).
  */
 
 import { describe, expect, it } from "vitest"

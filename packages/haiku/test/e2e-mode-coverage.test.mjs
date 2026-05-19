@@ -436,6 +436,8 @@ test("e2e: continuous mode drives intent to sealed (full role list, user gates f
 					started_at: now,
 					approvals: {},
 					sealed_at: null,
+					// e2e fixture predates the autotune cursor walk.
+					autotune: false,
 					design_directions: {
 						design: { archetype: "modular-cards", at: now },
 					},
@@ -487,6 +489,8 @@ test("e2e: autopilot mode drives intent to sealed (no user_gate)", {
 					started_at: now,
 					approvals: {},
 					sealed_at: null,
+					// e2e fixture predates the autotune cursor walk.
+					autotune: false,
 					design_directions: {
 						design: { archetype: "modular-cards", at: now },
 					},
@@ -535,6 +539,8 @@ test("e2e: discrete mode drives intent to sealed (same role list; differs on gat
 					started_at: now,
 					approvals: {},
 					sealed_at: null,
+					// e2e fixture predates the autotune cursor walk.
+					autotune: false,
 					design_directions: {
 						design: { archetype: "modular-cards", at: now },
 					},
@@ -579,6 +585,8 @@ test("e2e: discrete-hybrid mode drives intent to sealed", {
 				started_at: now,
 				approvals: {},
 				sealed_at: null,
+				// e2e fixture predates the autotune cursor walk.
+				autotune: false,
 				design_directions: { design: { archetype: "modular-cards", at: now } },
 			},
 			"# e2e-hybrid\n",
@@ -620,6 +628,8 @@ test("e2e: quick mode drives single-stage intent to sealed", {
 				started_at: now,
 				approvals: {},
 				sealed_at: null,
+				// e2e fixture predates the autotune cursor walk.
+				autotune: false,
 			},
 			"# e2e-quick\n",
 		)

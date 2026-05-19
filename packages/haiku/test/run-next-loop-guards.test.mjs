@@ -79,9 +79,9 @@ test("loopAbortResponse(cap) returns isError and surfaces the diagnostic for use
 	// they can't reach from disk). Without it, a real wedged user
 	// reported they couldn't tell which loop fired. The diagnostic is
 	// ALSO written to the per-session log file at
-	// `$TMPDIR/haiku-prompts/{session_id}/loop-guards.log` (same dir
-	// the subagent prompts live in, so the user has one place to look
-	// for everything the engine wrote in their session).
+	// `~/.haiku/projects/{project-key}/sessions/{session_id}/loop-guards.log`
+	// (the user-inspectable, persistent location alongside the
+	// per-intent prompts/ trees).
 	const r = loopAbortResponse(
 		"complete_stage",
 		17,
@@ -101,9 +101,10 @@ test("loopAbortResponse(cap) returns isError and surfaces the diagnostic for use
 	assert.match(text, /iterations=17/)
 	assert.match(text, /action=complete_stage/)
 	assert.match(text, /stage=design/)
-	// Path to the per-session log file ($TMPDIR/haiku-prompts/{session_id}/...).
+	// Path to the per-session log file
+	// (~/.haiku/projects/<key>/sessions/<session>/loop-guards.log).
 	assert.match(text, /log: /)
-	assert.match(text, /haiku-prompts/)
+	assert.match(text, /\.haiku\/projects\//)
 	assert.match(text, /loop-guards\.log/)
 })
 

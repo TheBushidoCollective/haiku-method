@@ -50,7 +50,7 @@ export function useSession(sessionId: string) {
 	 *  rather than reduce events into the existing object we just
 	 *  pull a fresh copy from /api/session/:id. Cheap; the API
 	 *  response is already projected from the in-memory session record
-	 *  and disk-fresh state.json. */
+	 *  and disk-fresh per-unit frontmatter. */
 	const refetch = useCallback(() => {
 		void fetchSession()
 	}, [fetchSession])

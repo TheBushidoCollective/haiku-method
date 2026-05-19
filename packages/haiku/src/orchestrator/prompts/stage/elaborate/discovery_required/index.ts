@@ -93,13 +93,16 @@ export default definePromptBuilder((ctx) => {
 			stage,
 		})
 		dispatchBlock = emitSubagentDispatchBlock({
-			unit,
+			unit: "discovery",
 			hat: agent,
 			bolt: 1,
+			intent: slug,
+			stage,
 			agentType: "general-purpose",
 			model: discoveryModel,
 			promptBody,
 			heading: `### Subagent: \`${agent}\``,
+			omitBolt: true,
 		})
 	}
 

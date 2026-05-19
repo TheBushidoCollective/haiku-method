@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Two harnesses, one shape — H·AI·K·U vs Anthropic's harness post</title>
+<style>
+  :root {
+    --bg: #0e0f12;
+    --panel: #15171c;
+    --ink: #e8e6df;
+    --muted: #8c8a82;
+    --rule: #2a2d34;
+    --accent: #ffb454;
+    --accent-2: #7dd3fc;
+    --warn: #f87171;
+    --good: #a3e635;
+    --serif: ui-serif, "Iowan Old Style", "Charter", "Palatino", Georgia, serif;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 80px 28px 160px;
+  }
+
+  /* Hero */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 24px;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 44px;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    margin: 0 0 24px;
+  }
+
+  .lede {
+    font-size: 22px;
+    line-height: 1.5;
+    color: var(--ink);
+    margin: 0 0 12px;
+  }
+
+  .byline {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .byline a { color: var(--accent-2); }
+
+  /* Sections */
+  h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 28px;
+    line-height: 1.2;
+    margin: 72px 0 16px;
+    letter-spacing: -0.01em;
+  }
+
+  h2 .num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    display: block;
+    letter-spacing: 0.14em;
+    margin-bottom: 8px;
+    font-weight: 400;
+  }
+
+  h3 {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 17px;
+    margin: 36px 0 8px;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+  }
+
+  p { margin: 0 0 18px; }
+
+  a { color: var(--accent-2); text-decoration: none; border-bottom: 1px solid rgba(125, 211, 252, 0.3); }
+  a:hover { border-bottom-color: var(--accent-2); }
+
+  code, .mono {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    background: var(--panel);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+
+  .pull {
+    font-family: var(--serif);
+    font-size: 24px;
+    line-height: 1.4;
+    color: var(--ink);
+    border-left: 3px solid var(--accent);
+    padding: 4px 0 4px 24px;
+    margin: 32px 0;
+    font-style: italic;
+  }
+
+  /* Side-by-side row */
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    margin: 24px 0;
+    overflow: hidden;
+    background: var(--panel);
+  }
+  .row > div { padding: 18px 20px; }
+  .row > div + div { border-left: 1px solid var(--rule); }
+  .row .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .row .body {
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+  .row .body code { font-size: 0.85em; }
+
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 1fr; }
+    .row > div + div { border-left: none; border-top: 1px solid var(--rule); }
+    h1 { font-size: 34px; }
+    .lede { font-size: 19px; }
+  }
+
+  /* Status pills */
+  .pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-right: 6px;
+  }
+  .pill.match { background: rgba(163, 230, 53, 0.12); color: var(--good); border: 1px solid rgba(163, 230, 53, 0.3); }
+  .pill.diverge { background: rgba(255, 180, 84, 0.12); color: var(--accent); border: 1px solid rgba(255, 180, 84, 0.3); }
+  .pill.gap { background: rgba(248, 113, 113, 0.12); color: var(--warn); border: 1px solid rgba(248, 113, 113, 0.3); }
+  .pill.win { background: rgba(125, 211, 252, 0.12); color: var(--accent-2); border: 1px solid rgba(125, 211, 252, 0.3); }
+
+  /* Suggestion cards */
+  .sugg {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 22px 24px;
+    margin: 16px 0;
+    background: var(--panel);
+  }
+  .sugg h4 {
+    font-family: var(--sans);
+    font-size: 16px;
+    margin: 0 0 8px;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .sugg .why {
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--muted);
+    margin: 0;
+  }
+  .sugg .why strong { color: var(--ink); font-weight: 600; }
+
+  /* Closer */
+  .closer {
+    margin-top: 80px;
+    padding-top: 32px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--serif);
+    font-size: 20px;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+  .closer .signoff {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 24px;
+    letter-spacing: 0.08em;
+  }
+
+  hr.soft { border: 0; border-top: 1px dashed var(--rule); margin: 40px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="eyebrow">Field notes · 2026-05-18</div>
+
+<h1>Two harnesses, one shape.</h1>
+
+<p class="lede">Anthropic published <a href="https://www.anthropic.com/engineering/harness-design-long-running-apps">a post on harness design for long-running agent apps</a>. We've been building one for about a month. Most of it is the same picture. The places we diverge are the interesting part.</p>
+
+<p>The eerie thing about reading it was how much of the architecture we'd already converged on independently, in a different vocabulary. They say <em>planner / generator / evaluator</em>; we say <em>hats</em> in a plan&nbsp;→&nbsp;do&nbsp;→&nbsp;verify sequence. They say <em>agents communicate via files</em>; our whole substrate is files. They say <em>contract negotiation before implementation</em>; we shipped a pre-execute spec review walk yesterday.</p>
+
+<p>Different teams, same problems, similar answers. That's the useful read.</p>
+
+<div class="byline">A side-by-side of <a href="https://www.anthropic.com/engineering/harness-design-long-running-apps">Anthropic's harness design</a> and the H·AI·K·U engine, with two concrete suggestions for what we should do next.</div>
+
+<h2><span class="num">§ 1 — The convergence</span>Where we landed in the same place</h2>
+
+<p>Seven patterns from their post that map cleanly onto something we already have:</p>
+
+<h3><span class="pill match">Match</span> Multi-agent specialization</h3>
+<div class="row">
+  <div>
+    <div class="label">Anthropic</div>
+    <div class="body">Distinct personas: planner, generator, evaluator. Each addresses a specific failure mode, and the separation enables better error detection.</div>
+  </div>
+  <div>
+    <div class="label">H·AI·K·U</div>
+    <div class="body">Hats in a plan&nbsp;→&nbsp;do&nbsp;→&nbsp;verify sequence (<code>ARCHITECTURE.md</code> §3). Every stage ends in a verifier; adversarial review agents fire externally. Same shape, different vocabulary.</div>
+  </div>
+</div>
+
+<h3><span class="pill match">Match</span> State handoff through files</h3>
+<div class="row">
+  <div>
+    <div class="label">Anthropic</div>
+    <div class="body">"One agent would write a file, another agent would read it and respond either within that file or with a new file." Decouples agents, enables clean session boundaries.</div>
+  </div>
+  <div>
+    <div class="label">H·AI·K·U</div>
+    <div class="body">This is our whole substrate. <code>.haiku/intents/&lt;slug&gt;/units/*.md</code>, <code>feedback/FB-NN.md</code>, <code>intent.md</code>. We went further: v4 dropped <code>state.json</code> and made outputs-on-disk the only signal the cursor reads.</div>
+  </div>
+</div>
+
+<h3><span class="pill match">Match</span> Context reset over compaction</h3>
+<div class="row">
+  <div>
+    <div class="label">Anthropic</div>
+    <div class="body">"Context resets — clearing the context window entirely and starting a fresh agent, combined with a structured handoff — address both compaction's drift and context anxiety."</div>
+  </div>
+  <div>
+    <div class="label">H·AI·K·U</div>
+    <div class="body">Every hat fires as a fresh subagent through <code>Task</code> with a structured mandate. The orchestrator is the persistent thread; each hat starts cold with only the artifacts it needs.</div>
+  </div>
+</div>
+
+<h3><span class="pill match">Match</span> External evaluation, not self-eval</h3>
+<div class="row">
+  <div>
+    <div class="label">Anthropic</div>
+    <div class="body">"When asked to evaluate work they've produced, agents tend to respond by confidently praising the work — even when, to a human observer, the quality is obviously mediocre."</div>
+  </div>
+  <div>
+    <div class="label">H·AI·K·U</div>
+    <div class="body">Adversarial review agents, spec-conformance gate, intent-completion review agents. The <code>feedback-assessor</code> is a terminal hat that independently decides closure. Verifier ≠ author by construction.</div>
+  </div>
+</div>
+
+<h3><span class="pill match">Match</span> Contract negotiation before implementation</h3>
+<div class="row">
+  <div>
+    <div class="label">Anthropic</div>
+    <div class="body">"The generator proposed what it would build and how success would be verified, and the evaluator reviewed that proposal to make sure the generator was building the right thing."</div>
+  </div>
+  <div>
+    <div class="label">H·AI·K·U</div>
+    <div class="body">Our pre-execute <code>dispatch_review</code> walk. Engine roles (<code>spec</code>, <code>continuity</code>, <code>cross-stage-consistency</code>) audit the planned spec <em>before</em> any wave-ready hat dispatch. Independent convergence on the same idea.</div>
+  </div>
+</div>
+
+<h3><span class="pill match">Match</span> Active runtime validation</h3>
+<div class="row">
+  <div>
+    <div class="label">Anthropic</div>
+    <div class="body">Evaluator drives the live app through Playwright MCP — navigates, screenshots, asserts. Catches runtime issues invisible in static review.</div>
+  </div>
+  <div>
+    <div class="label">H·AI·K·U</div>
+    <div class="body">The <code>haiku_view</code> MCP tool returns a URL (boot mode for runnable apps via the project's <code>dev</code> script on an ephemeral port; viewer mode for static artifacts via the SPA artifact-browser with mime dispatch + specialized viewers for KiCanvas, Tracespace, <code>&lt;model-viewer&gt;</code>, tscircuit). Per-studio <code>runtime-verifier.md</code> review-agent mandates hand the URL to the bundled headless Playwright MCP, drive the declared flows, save proof PNGs to <code>[intent]/[stages/&lt;stage&gt;/]proof/*.png</code>. Studios can ship their own contributed React app for richer rendering — <code>hwdev</code>'s multi-pane Board Explorer is the canonical example.</div>
+  </div>
+</div>
+
+<h3><span class="pill match">Match</span> Log-driven prompt tuning</h3>
+<div class="row">
+  <div>
+    <div class="label">Anthropic</div>
+    <div class="body">Methodology is "read logs, identify divergence from expectation, adjust the agent's prompt, run again." Sustained signal turns into structured revisions.</div>
+  </div>
+  <div>
+    <div class="label">H·AI·K·U</div>
+    <div class="body">Default-on autotune loop. At each stage close the agent writes <code>stages/&lt;stage&gt;/observations.md</code> capturing out-of-band churn (mandate ambiguity, engine friction, surprise) that artifacts on disk don't already show. At intent close the agent runs an autotune reflection over every observation + the full FB stream + iterations/outputs, writes <code>autotune.md</code>, and files <code>origin: autotune</code> FBs classified as <code>target_class: override</code> (cascade-overlay path: <code>.haiku/...</code> wins over plugin defaults; user accept routes through the existing fix loop and lands the overlay) or <code>target_class: engine</code> (informational; user accept fires a scrubbed Sentry feedback so the H·AI·K·U team sees the pattern). Engine prompts are loaded from disk via a two-tier cascade (<code>.haiku/prompts/</code> wins over <code>plugin/templates/</code>) so revisions land without rebuild. Opt-out via <code>autotune: false</code> on intent FM.</div>
+  </div>
+</div>
+
+<p class="pull">Seven for seven on the load-bearing patterns. Different vocabularies, same shapes. That's the validation.</p>
+
+<h2><span class="num">§ 2 — The divergence</span>Where we go different directions</h2>
+
+<h3><span class="pill diverge">Diverge</span> How much to decompose</h3>
+<p>Their warning: don't over-specify at planning, because lock-in errors cascade. Their evaluator stays "focused on product context and high-level technical design rather than detailed technical implementation."</p>
+
+<p>We go the other way. The elaborate phase fans out subagents per discovery template, produces unit specs with <code>depends_on</code> DAGs, executable <code>quality_gates</code>, criteria-with-verify-commands. We've been burned by both modes — drift when specs are too loose, lock-in when they're too tight. Worth a real conversation about whether some of our elaborate-phase rigor is scaffolding the model no longer needs.</p>
+
+<h3><span class="pill diverge">Diverge</span> Removing scaffolding as models improve</h3>
+<p>Their Opus 4.5&nbsp;→&nbsp;4.6 lesson: "Every component encodes an assumption about what the model can't do on its own. Stress-test those assumptions, because they may be incorrect and they can quickly go stale as models improve."</p>
+
+<p>The lesson is real for us, but the wrong place to apply it is the hat list. Our per-stage and per-intent loops are minimal — distill, review-against-knowledge, execute (plan&nbsp;→&nbsp;do&nbsp;→&nbsp;verify), review-units-as-whole, human-review, advance. Each layer is structurally distinct work; none is removable without losing coverage. Where scaffolding actually accumulates is <em>inside</em> the hats — verbose anti-pattern lists in mandate md files, defensive engine-side validators against failure modes that no longer happen on current models, overlapping review-agent lenses, fanned-out discovery templates that could be one pass. The autotune loop now surfaces the signal automatically when it fires (override-class FBs against the relevant mandate paths), but no one has yet driven that signal into an actual cohort of trim PRs. The pipe exists; nobody's pulled water through it.</p>
+
+<h2><span class="num">§ 3 — Our edges</span>What we have that their post doesn't address</h2>
+
+<h3><span class="pill win">Ours</span> Drift gate / premise-witness model</h3>
+<p>A runtime check that the agent's premise still matches reality before each tick. They don't discuss this at all. Long-running agents drift; ours notice.</p>
+
+<h3><span class="pill win">Ours</span> Forward-only lifecycle</h3>
+<p>Completed units are never re-edited. Corrective work goes through new units authored from upstream elaborate — the FB-as-unit fix loop. They describe agents revising files; we treat units as immutable once verified, with feedback as the only way back. Different stance, deliberately.</p>
+
+<h3><span class="pill win">Ours</span> MCP-as-contract boundary</h3>
+<p>Workflow-managed files are guarded by a PreToolUse hook — agents go through MCP tools or get rejected with a redirect message. Their agents communicate through files but they don't describe a hard enforcement layer around who can edit what. We do, and the engine relies on it for invariants like "stage branch is always ahead of main."</p>
+
+<h3><span class="pill win">Ours</span> Cascade resolution for mandates</h3>
+<p>Hats and review agents resolve through a three-tier cascade: stage&nbsp;→&nbsp;studio&nbsp;→&nbsp;global, first hit wins, with project <code>.haiku/</code> overriding plugin at each tier. Lets us share defaults and override locally without forking. Their setup looks flat per-task.</p>
+
+<h2><span class="num">§ 4 — What we should do</span>Two suggestions, dependency-ordered</h2>
+
+<p>Reading their post against ours, two open work items stand out. Listed in priority order, not time order.</p>
+
+<div class="sugg">
+  <h4>1. Drive the autotune signal into an actual cohort of trim PRs</h4>
+  <p class="why"><strong>Why:</strong> The autotune loop now surfaces mandate-divergence findings as override-class FBs against the relevant mandate paths whenever an intent closes. Having the signal isn't the same as acting on it. Without a deliberate first cohort that takes the loop's findings and lands real trims, the loop produces an FB graveyard rather than a leaner system. <strong>How:</strong> run autotune on the next five real intents, harvest the override-class FBs, batch-review them, accept the ones that propose mandate trims, reject the ones that propose additions (additions are easy; the discipline is in deletions). Target inside-the-hat layers in cost-impact order: (a) verbose "MUST / MUST NOT" anti-pattern walls in mandate md files that may be belt-and-suspenders on Opus 4.7; (b) engine-side validators (PreToolUse hooks, frontmatter validators, structured-output gates) defending against failures that don't happen anymore; (c) overlapping review-agent lenses where two agents catch the same class of issue from different angles; (d) discovery-template fan-out where two templates could reasonably be one pass. The pipe exists; this is about pulling water through it.</p>
+</div>
+
+<div class="sugg">
+  <h4>2. Loosen elaborate-phase specs and let the verifier carry more weight</h4>
+  <p class="why"><strong>Why:</strong> Their over-specification warning matches our experience — when elaborate gets too prescriptive, the build phase produces brittle code that matches the spec letter and misses the intent. The spec review walk we have is the right idea, but it currently audits a maximally-detailed spec. We could let elaborate produce <em>less</em>, lean on the pre-execute spec review to catch missing-but-required pieces, and lean on verifiers to catch wrong-output. <strong>How:</strong> pick one studio, halve the discovery-template count, run a few intents, see what breaks. If nothing important breaks, the scaffolding was over-built. Worth noting: this is a deliberate stance change, not a deficit — both Anthropic and we have been burned by our respective stances, and the right answer probably differs by studio. Software vs hwdev have very different tolerance for under-specified plans.</p>
+</div>
+
+<hr class="soft" />
+
+<div class="closer">
+  <p>The convergence is reassuring — two teams chasing the same problem landed on the same shape, seven patterns over. We're ahead on state persistence, contract boundaries, lifecycle discipline, and on having a feedback loop that writes itself into the project rather than reporting telemetry up. The remaining divergences are stance, not deficit — the decomposition question genuinely admits different answers per domain, and the inside-the-hat staleness audit is now a question of follow-through rather than of capability.</p>
+  <p>The pipe exists. The harder thing is pulling water through it.</p>
+  <div class="signoff">— J, on the train tracks</div>
+</div>
+
+</div>
+</body>
+</html>

@@ -7,6 +7,7 @@ import {
 	chmodSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
 	unlinkSync,
@@ -2197,6 +2198,27 @@ Test stage.
 			true,
 			"2-hat sequence MUST close on assessor's advance — this is the B4 off-by-one regression",
 		)
+
+		// Regression for the 2026-05-18 "cursor blind to FB closure" loop:
+		// terminal advance MUST stamp `closed_at` so the cursor (which
+		// reads `fm.closed_at` as the canonical closure witness) skips
+		// the FB on subsequent ticks. Without this, every tick re-emits
+		// start_feedback_hat → subagent calls advance_hat → handler
+		// rejects with lifecycle_violation → infinite loop.
+		const fbFile = readdirSync(fbDir).find((f) => /^0*3-/.test(f))
+		assert.ok(fbFile, "expected FB-003 file on disk")
+		const fbFm = parseFrontmatter(
+			readFileSync(join(fbDir, fbFile), "utf8"),
+		).data
+		assert.ok(
+			typeof fbFm.closed_at === "string" && fbFm.closed_at.length > 0,
+			`terminal advance MUST stamp closed_at; got: ${JSON.stringify(fbFm.closed_at)}`,
+		)
+		assert.strictEqual(
+			fbFm.status,
+			"closed",
+			"terminal advance must also keep status: closed for legacy readers",
+		)
 	})
 
 	test("haiku_feedback_advance_hat: response message must NOT promise next_subagent_dispatch_block when the field is absent (engine-bug-30 regression)", () => {
@@ -2302,6 +2324,56 @@ Body for no-relay-promise regression test.
 		})
 		const parsed = JSON.parse(getTextResult(result))
 		assert.strictEqual(parsed.error, "lifecycle_violation")
+	})
+
+	test("haiku_feedback_reject_hat: bounce-loop guard fires on 2nd rejection by same hat", () => {
+		// Regression for the cosmetic-drift FB bounce loop (surfaced
+		// 2026-05-17 on admin-portal-reimagine/design FB-047). When a
+		// fix-loop hat (e.g. feedback-assessor) rejects an FB and the
+		// engine bounces back to the prior hat (e.g. fixer), the prior
+		// hat re-runs and the rejecter re-rejects with the same impasse.
+		// Without a guard, this burns up to MAX_FIX_LOOP_BOLTS × |fix_hats|
+		// subagent dispatches per FB before the bolt cap notices. Engine
+		// fix: short-circuit on the 2nd rejection by the same hat with a
+		// stable named error pointing the agent at `haiku_feedback_reject`
+		// (terminal close, the right tool for non-actionable findings).
+		writeFileSync(
+			join(fbDir, "06-bounce-loop-guard.md"),
+			`---
+title: Bounce-loop-guard regression FB
+status: pending
+hat: fixer
+bolt: 2
+origin: adversarial-review
+author: completeness
+author_type: agent
+created_at: 2026-05-17T00:00:00Z
+iterations:
+  - bolt: 1
+    hat: feedback-assessor
+    completed_at: 2026-05-17T00:00:01Z
+    result: rejected
+    reason: "no actionable work — finding describes correct behavior"
+---
+
+Body for bounce-loop guard test.
+`,
+		)
+		const result = handleStateTool("haiku_feedback_reject_hat", {
+			intent: intentSlug,
+			stage: "inception",
+			feedback_id: 6,
+			reason: "still no actionable work",
+		})
+		const parsed = JSON.parse(getTextResult(result))
+		assert.strictEqual(result.isError, true, "guard MUST return isError")
+		assert.strictEqual(parsed.error, "fix_loop_no_progress")
+		assert.strictEqual(parsed.calling_hat, "feedback-assessor")
+		assert.strictEqual(parsed.prior_rejections_by_same_hat, 1)
+		assert.ok(
+			/haiku_feedback_reject\b/.test(parsed.message),
+			`message MUST point the agent at haiku_feedback_reject (terminal). Got: ${parsed.message}`,
+		)
 	})
 
 	// ── V-06: shared isIntentLocked / isIntentArchived helpers ────────────────

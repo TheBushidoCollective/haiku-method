@@ -1402,6 +1402,27 @@ export default defineTool({
 		// Helper to enrich result with preview and append instructions.
 		const withInstructions = (resultObj: Record<string, unknown>): string => {
 			enrichActionWithPreview(resultObj as OrchestratorAction)
+			// Drift cascade alarm — surfaced in the response so the
+			// agent sees a "consider /haiku:repair" recommendation when
+			// the engine has detected a runaway-loop pattern. The flag
+			// is stamped on intent.md by the cursor's pre-tick drift
+			// handler (see `stampDriftCascadeAlarm` in cursor.ts) and
+			// self-heals once the open drift FB count drops below
+			// threshold. The alarm map is keyed by stage so per-stage
+			// noise doesn't leak across the intent.
+			const cascadeMap = intentMeta.drift_cascade_alarm
+			if (
+				cascadeMap &&
+				typeof cascadeMap === "object" &&
+				!Array.isArray(cascadeMap) &&
+				Object.keys(cascadeMap as Record<string, unknown>).length > 0
+			) {
+				resultObj.drift_cascade_alarm = {
+					stages: Object.keys(cascadeMap as Record<string, unknown>),
+					recommendation:
+						"Drift cascade detected — the engine is suppressing new drift FBs while the queue drains. If this recurs after the queue clears, run `/haiku:repair` to refresh the witness baseline; this typically happens after a plugin version migration.",
+				}
+			}
 			const instructions = buildRunInstructions(
 				slug,
 				intentStudio,

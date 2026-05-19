@@ -413,5 +413,14 @@ export function respondSessionApi(
 		data.options = session.options
 		data.selection = session.selection
 	}
+	if (session.session_type === "view") {
+		data.intent_slug = session.intent_slug
+		data.mode = session.mode
+		if (session.studio) data.studio = session.studio
+		if (session.stage) data.stage = session.stage
+		if (session.artifact) data.artifact = session.artifact
+		if (session.boot_port) data.boot_port = session.boot_port
+		if (session.boot_command) data.boot_command = session.boot_command
+	}
 	reply.send(data)
 }

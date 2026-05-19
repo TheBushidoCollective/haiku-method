@@ -439,9 +439,20 @@ test("autopilot mode: pipeline seals without user_gate or agent reviews", async 
 			0,
 			`autopilot must not emit agent dispatch_review; got: ${agentReviews.join(", ")}`,
 		)
-		// And spec review fires per stage.
-		const specReviews = seen.filter((t) => t === "dispatch_review/a/spec")
-		assert.ok(specReviews.length >= 1, "expected spec review on stage a")
+		// And engine-role review fires per stage on the post-execute
+		// approval walk (autopilot's pre-execute review walk is short-
+		// circuited by `selfRepairMissingApprovals` when stage N+1 has
+		// work — the engine treats already-built later stages as
+		// evidence the spec is fine, so the pre-execute spec audit is
+		// skipped. The post-execute dispatch_approval walk still fires
+		// the engine roles against the WORK, which is what we care
+		// about for autopilot's "the engine is auditing, even without
+		// agents or a human" contract).
+		const specApprovals = seen.filter((t) => t === "dispatch_approval/a/spec")
+		assert.ok(
+			specApprovals.length >= 1,
+			`expected spec approval on stage a; seen: ${seen.slice(0, 30).join(" → ")}`,
+		)
 		assert.equal(seen[seen.length - 1], "sealed//")
 	})
 })

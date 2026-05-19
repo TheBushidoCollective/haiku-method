@@ -56,6 +56,12 @@ const ctx = (action) => ({
 	dir: "/tmp",
 })
 
+// Marker that appears in the reference block that replaces the inline
+// announcement content (2026-05-19 token-optimization refactor). Both
+// the title and the filename are deterministic, so either is a stable
+// witness that the prompt builder included the announcement reference.
+const ANNOUNCEMENT_REF_MARKER = "workflow-contracts-announcement.md"
+
 test("multi-unit hat dispatch includes the announcement block", () => {
 	const out = startUnitHat(
 		ctx({
@@ -65,8 +71,8 @@ test("multi-unit hat dispatch includes the announcement block", () => {
 		}),
 	)
 	assert.ok(
-		out.includes(WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK),
-		"announcement block missing from multi-unit start_unit_hat output",
+		out.includes(ANNOUNCEMENT_REF_MARKER),
+		"announcement block reference missing from multi-unit start_unit_hat output",
 	)
 })
 
@@ -79,8 +85,8 @@ test("single-unit hat dispatch SKIPS the announcement block", () => {
 		}),
 	)
 	assert.ok(
-		!out.includes(WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK),
-		"announcement block should NOT appear for single-spawn dispatches (no panic risk)",
+		!out.includes(ANNOUNCEMENT_REF_MARKER),
+		"announcement block reference should NOT appear for single-spawn dispatches (no panic risk)",
 	)
 })
 

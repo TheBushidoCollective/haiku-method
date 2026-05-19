@@ -216,7 +216,7 @@ export const IntentCurrentStateSchema = z
 		pending_signals: z.array(z.string()).optional(),
 	})
 	.describe(
-		"Unified current-state snapshot — derived fresh per request from per-stage state.json. The single source of truth for 'where is this intent right now?'.",
+		"Unified current-state snapshot — derived fresh per request from per-unit frontmatter and branch-merge state. The single source of truth for 'where is this intent right now?'.",
 	)
 export type IntentCurrentState = z.infer<typeof IntentCurrentStateSchema>
 
@@ -514,6 +514,35 @@ export const PickerSelectResponseSchema = z
 	.describe("Success response from POST /picker/:sessionId/select")
 export type PickerSelectResponse = z.infer<typeof PickerSelectResponseSchema>
 
+// ─── View session ────────────────────────────────────────────────────────
+// Non-blocking session opened by the `haiku_view` MCP tool. Scopes the
+// tunnelled artifact-browser to a single intent (optionally narrowed to
+// a stage or specific artifact). The SPA reads the payload at mount and
+// renders the artifact-browser UI; there is no decision flow, no
+// annotations, no heartbeat gating.
+
+export const ViewSessionPayloadSchema = z
+	.object({
+		session_id: z.string(),
+		session_type: z.literal("view"),
+		status: z.enum(["open", "closed"]),
+		intent_slug: z.string(),
+		studio: z.string().optional(),
+		stage: z.string().optional(),
+		artifact: z.string().optional(),
+		mode: z.enum(["viewer", "boot"]),
+		/** Boot mode only — present when the session spawned a project
+		 *  dev server. The SPA may surface this for debugging but does
+		 *  not need to route to it (haiku_view returns the boot URL
+		 *  directly to the caller). */
+		boot_port: z.number().int().positive().optional(),
+		boot_command: z.string().optional(),
+	})
+	.describe(
+		"View session payload (GET /api/session/:id, session_type=view). Opened by haiku_view, closed by haiku_view_close.",
+	)
+export type ViewSessionPayload = z.infer<typeof ViewSessionPayloadSchema>
+
 // ─── Discriminated-union session payload ─────────────────────────────────
 
 export const SessionPayloadSchema = z
@@ -522,6 +551,7 @@ export const SessionPayloadSchema = z
 		QuestionSessionPayloadSchema,
 		DirectionSessionPayloadSchema,
 		PickerSessionPayloadSchema,
+		ViewSessionPayloadSchema,
 	])
 	.describe(
 		"GET /api/session/:id response body — discriminated on session_type",

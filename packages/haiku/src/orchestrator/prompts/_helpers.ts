@@ -220,19 +220,47 @@ export function emitSubagentDispatchBlock(opts: {
 	unit: string
 	hat: string
 	bolt: number
+	intent: string
+	/** Stage name. Present for stage-scoped dispatches (per-unit hats,
+	 *  discovery, stage fix-loops); absent for intent-scoped dispatches
+	 *  (intent-completion review/fix). Selects the subdirectory under
+	 *  `prompts/`. */
+	stage?: string
 	agentType: string
 	model?: string | null
 	promptBody: string
 	heading?: string
 	toolAttr?: boolean
+	/** When true, force foreground spawn even on harnesses that support
+	 *  backgroundSpawn. Used by autopilot dispatch paths where the parent
+	 *  MUST stay on the turn (no yield) to keep ticking the workflow. */
+	forceForeground?: boolean
+	/** Drop the trailing `-<bolt>` from the prompt filename. Used by
+	 *  discovery dispatches, which never iterate. */
+	omitBolt?: boolean
 }): string {
-	const { unit, hat, bolt, agentType, model, promptBody, heading, toolAttr } =
-		opts
+	const {
+		unit,
+		hat,
+		bolt,
+		intent,
+		stage,
+		agentType,
+		model,
+		promptBody,
+		heading,
+		toolAttr,
+		forceForeground,
+		omitBolt,
+	} = opts
 	const { path, parentInstruction } = writeSubagentPrompt({
 		unit,
 		hat,
 		bolt,
+		intent,
+		stage,
 		content: promptBody,
+		omitBolt,
 	})
 	return formatSubagentDispatchBlock({
 		path,
@@ -241,7 +269,10 @@ export function emitSubagentDispatchBlock(opts: {
 		model,
 		heading,
 		toolAttr,
-		background: getCapabilities().subagents.backgroundSpawn,
+		background:
+			forceForeground === true
+				? false
+				: getCapabilities().subagents.backgroundSpawn,
 	})
 }
 
@@ -344,14 +375,65 @@ export function buildInlineSubagentContext(
 	return lines.join("\n")
 }
 
+/** Collect every active provider whose `splices_into:` includes the
+ *  given phase, and return a concatenated reference block (or empty
+ *  string when no provider matches). Each provider materializes once
+ *  to `~/.haiku/projects/<key>/shared/providers/<kind>.md` and the
+ *  prompt carries a short Read pointer for each.
+ *
+ *  Phase names are semantic (elaborate, execute, decompose,
+ *  complete_stage, seal_intent). Match the `splices_into:` values in
+ *  the provider .md frontmatter. */
+export function providerSpliceBlock(phase: string, intentDir: string): string {
+	const providers = providersForSplicePoint(phase, intentDir)
+	if (providers.length === 0) return ""
+	const refs = providers.map((p) =>
+		providerBlockRef({
+			kind: p.kind,
+			category: p.category,
+			body: p.body,
+		}),
+	)
+	return [
+		`## Active providers for this phase`,
+		"",
+		`The following provider behavior contracts apply to this prompt. Read each one before drafting your response.`,
+		"",
+		refs.join("\n\n"),
+	].join("\n")
+}
+
+/** Read `mode:` from the intent's `intent.md` frontmatter. Returns the
+ *  raw mode string, or empty string when the file or field is missing.
+ *  Used to gate dispatch behavior (foreground vs background, "wait for
+ *  next tick" vs "tick now") in autopilot. */
+export function readIntentMode(intentDir: string): string {
+	const path = `${intentDir.replace(/\/$/, "")}/intent.md`
+	if (!existsSync(path)) return ""
+	try {
+		const { data } = parseFrontmatter(readFileSync(path, "utf8"))
+		const mode = typeof data.mode === "string" ? (data.mode as string) : ""
+		return mode
+	} catch {
+		return ""
+	}
+}
+
 /** Render the parent's concurrency-capped dispatch discipline for a
  *  parallel subagent wave. Slot pool when the harness has
- *  backgroundSpawn; batch-serial otherwise. */
+ *  backgroundSpawn; batch-serial otherwise. In autopilot the parent
+ *  cannot yield, so callers pass `forceForeground: true` to get the
+ *  foreground-only single-turn directive even when the harness supports
+ *  background spawning. */
 export function batchDispatchDirective(
 	count: number,
 	label = "subagents",
+	opts: { forceForeground?: boolean } = {},
 ): string {
-	const backgroundSpawn = getCapabilities().subagents.backgroundSpawn
+	const backgroundSpawn =
+		opts.forceForeground === true
+			? false
+			: getCapabilities().subagents.backgroundSpawn
 
 	if (count <= MAX_CONCURRENT_SUBAGENTS) {
 		if (backgroundSpawn) {

@@ -36,8 +36,8 @@ export function resolveActiveStage(
 	session: ReviewPageSessionData,
 ): string | null {
 	// Server is authoritative — it computed `current_state` fresh from
-	// per-stage state.json on this very request via getCurrentState(slug)
-	// in http/session-api.ts. Trust it and bail out.
+	// per-unit frontmatter and branch-merge state on this very request via
+	// getCurrentState(slug) in http/session-api.ts. Trust it and bail out.
 	const current = session.current_state?.stage
 	if (typeof current === "string" && current) return current
 	// Backwards-compat fallback (only fires if the server is older than

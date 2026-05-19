@@ -1,67 +1,47 @@
 ---
-category: spec
-description: Bidirectional spec provider — sync specifications and knowledge between H·AI·K·U and documentation platforms
+provider_kind: spec
+category: source
+always_on: false
+splices_into:
+  - elaborate
+  - decompose
+description: Spec source provider — read external PRDs, RFCs, design docs and align H·AI·K·U intent + units to them.
 ---
 
-# Spec Provider — Default Instructions
+# Spec Provider — Behavior Contract
 
-## Inbound: Provider → H·AI·K·U
+A spec provider is configured (Confluence, Notion, Google Docs, …) when `providers.spec.*` is set in `.haiku/settings.yml`. This is a **source** provider — read-only by default. H·AI·K·U intent and units align to what the spec says; you don't push back to the spec automatically.
 
-### During Elaboration
-- Search for existing specifications, PRDs, or design docs related to the intent
-- Pull content and distill into H·AI·K·U context (intent references, unit criteria)
-- Reference specific spec documents in intent.md Context section
+## What you, the agent, must do
 
-### During Stage Elaboration
-- Verify referenced specs haven't changed since the previous stage
-- Check for updated specs before elaborating units
-- Pull cross-studio knowledge: if this intent was triggered by another studio, read the source studio's outputs from the spec provider
+### At intent setup
+- If the user names an external spec document (PRD, RFC, design doc), pull its content using the available MCP tool and distill it into the intent's Context section. Record the source URL/ID as `external_refs.spec_*` on `intent.md`.
+- If no MCP tool is available, prompt the user to paste the relevant content into intent.md manually.
 
-### Translation (Provider → H·AI·K·U)
+### At elaborate (per stage)
+- Re-fetch the referenced spec documents and check they haven't materially changed since the last tick. If they have, surface the diff to the user before proceeding to decompose.
+- Pull any newly-linked specs (the user may have added refs during the conversation).
+- Distill the spec's requirements / constraints / decisions into the stage's elaboration record. Don't copy verbatim — translate.
 
-| Provider Concept | H·AI·K·U Concept | Translation |
-|---|---|---|
-| PRD / Requirements doc | Intent context + criteria | Distill requirements into verifiable completion criteria |
-| Design doc / RFC | Stage input reference | Link as input, extract technical constraints |
-| Meeting notes / decisions | Intent knowledge | Distill decisions into intent.md Context section |
-| Wiki page | Stage output (from another studio) | Read as cross-studio input if referenced |
+### At decompose (per unit)
+- Every unit cites the spec section it implements (`inputs:` should include the spec path or external ref).
+- Translate spec acceptance criteria into unit `quality_gates:` with executable commands. Spec prose like "the form should validate email" becomes `quality_gates: [{ name: email-validation, command: "..." }]`.
 
-**Key principle:** Provider documents are often verbose, unstructured, and full of context that isn't actionable. Claude distills to the minimum needed: what are the requirements, what are the constraints, what are the decisions. Not a copy — a translation.
+## When to push back
 
-## Outbound: H·AI·K·U → Provider
+Push back to the spec only when the user explicitly asks ("update the PRD with the decisions we made"). Default behavior is read-only. If you do push, translate H·AI·K·U's representation into the provider's native format (don't push raw markdown frontmatter to Confluence).
 
-### During Output Persistence
-- Stage outputs scoped as `project` or `intent` can be pushed to the spec provider
-- Write intent knowledge (discovery docs, design briefs, behavioral specs) to the provider in its native format
-- This enables cross-studio data flow: the software studio's design brief in Confluence is readable by the marketing studio's content stage
+## What NOT to do
 
-### During Reflection
-- Push reflection summaries to the spec provider for organizational visibility
-- Write settings recommendations as a decision record
+- Don't fabricate spec references. If a unit conceptually maps to a spec section but you can't find it, mark the unit's `inputs:` empty and surface the gap.
+- Don't write summary docs back to the provider without explicit user direction.
+- Don't load the entire spec into context if a section is enough — distill.
 
-### Translation (H·AI·K·U → Provider)
+## Translation map
 
-| H·AI·K·U Concept | Provider Concept | Translation |
-|---|---|---|
-| Discovery document | Wiki page / design doc | Restructure for the provider's format (headings, templates) |
-| Design brief | Linked design doc | Push as structured document with provider-native formatting |
-| Behavioral spec | PRD or spec doc | Format as the team's standard spec template |
-| Reflection summary | Decision record / retrospective | Distill into the team's retro format |
-
-**Key principle:** Don't push markdown frontmatter to Confluence. Push the *content* in the format the provider's audience expects. Claude translates H·AI·K·U's internal representation into whatever the provider needs.
-
-## Sync: Cross-Studio Knowledge
-
-The spec provider is the primary channel for cross-studio data flow:
-
-```
-Studio A (sales) completes → pushes deal context to Confluence
-Studio B (customer-success) starts → reads deal context from Confluence
-```
-
-Claude mediates both directions. The spec provider doesn't need to understand H·AI·K·U's schema — Claude reads the provider's content and produces H·AI·K·U artifacts, or reads H·AI·K·U artifacts and produces provider content.
-
-## Provider Config
-
-Provider-specific configuration lives under `providers.spec.config` in `.haiku/settings.yml`.
-Schema: `${CLAUDE_PLUGIN_ROOT}/schemas/providers/{type}.schema.json`
+| External concept | H·AI·K·U concept |
+|---|---|
+| PRD / Requirements doc | Intent context + criteria |
+| Design doc / RFC | Stage `inputs:` reference + technical constraint |
+| Acceptance criteria in spec | Unit `quality_gates:` + completion prose |
+| Decision in meeting notes | Intent Context entry |

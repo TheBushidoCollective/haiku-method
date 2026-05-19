@@ -96,6 +96,24 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 		},
 	)
 
+	// View session — SPA artifact-browser entry. Same single-page-app
+	// shell as /review and /question; the SPA's route resolver reads
+	// the session id from the URL path and `stage` / `artifact` query
+	// params (set by haiku_view) at mount. Runtime-verifier review
+	// agents (or any other consumer that wants to point Playwright at
+	// an intent's outputs) hit this URL after calling haiku_view.
+	instance.get<{ Params: { sessionId: string } }>(
+		"/view/:sessionId",
+		async (req, reply) => {
+			const session = getSession(req.params.sessionId)
+			if (!session || session.session_type !== "view") {
+				reply.status(404).send("Session not found")
+				return
+			}
+			reply.type("text/html; charset=utf-8").send(HAIKU_UI_HTML)
+		},
+	)
+
 	// ── Review decide / question answer / direction select ─────────────
 	instance.post<{
 		Params: { sessionId: string }

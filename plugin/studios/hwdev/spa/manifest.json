@@ -1,0 +1,5 @@
+{
+	"studio": "hwdev",
+	"display_name": "hwdev Board Explorer",
+	"contributes": ["kicad", "gerber", "model3d", "tscircuit"]
+}

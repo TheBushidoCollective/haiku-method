@@ -41,7 +41,18 @@ import matter from "gray-matter"
 /** sha256 of just the post-frontmatter body of a markdown file.
  *  Empty string when the file doesn't exist (rare edge case where the
  *  signing happens before the body is written; the sweep treats an
- *  empty hash as "no witness" and will not flag drift). */
+ *  empty hash as "no witness" and will not flag drift).
+ *
+ *  CRITICAL: the body is canonicalized to always end with a single `\n`
+ *  before hashing. `matter.stringify(content, data)` — used by every
+ *  engine FM write (setFrontmatterField, migrations, sign/stamp paths)
+ *  — appends a trailing newline to bodies that don't already have one.
+ *  Without this canonicalization, witnesses stamped on a body lacking
+ *  the trailing `\n` drift the moment ANY FM mutation runs through
+ *  matter.stringify, even though the human/agent body is unchanged.
+ *  This was the v9 "drift can't clear" loop: migration stamped
+ *  witnesses, then bumped plugin_version on the same file, normalizing
+ *  the body and orphaning every witness it had just stamped. */
 export function bodySha256(absolutePath: string): string {
 	if (!existsSync(absolutePath)) return ""
 	const raw = readFileSync(absolutePath, "utf8")
@@ -54,6 +65,7 @@ export function bodySha256(absolutePath: string): string {
 		// still detect drift, just less precisely.
 		body = raw
 	}
+	if (!body.endsWith("\n")) body = `${body}\n`
 	return createHash("sha256").update(body, "utf8").digest("hex")
 }
 
@@ -64,6 +76,65 @@ export function fileSha256(absolutePath: string): string {
 	if (!existsSync(absolutePath)) return ""
 	const buf = readFileSync(absolutePath)
 	return createHash("sha256").update(buf).digest("hex")
+}
+
+/** Check whether a markdown file's current body matches a stored
+ *  witness hash under EITHER hashing strategy:
+ *
+ *    - Canonicalized (post-fix): body ends with a single `\n` before
+ *      hashing. This is what `bodySha256` produces today and what every
+ *      future signed slot will witness.
+ *    - Legacy (pre-fix): raw `matter().content` bytes, no canonicalization.
+ *      Witnesses stamped before the canonicalization fix carry these
+ *      hashes. After any engine FM write the on-disk body acquires a
+ *      trailing `\n`, so naive comparison with the legacy hash would
+ *      drift even though no human/agent body change occurred.
+ *
+ *  Why the dual-check is necessary: every in-flight intent across every
+ *  user has witnesses stamped with the legacy hash. Without the legacy
+ *  fallback, the canonicalization fix would force a one-time
+ *  fleet-wide `reset_drift` on every upgrade. With the fallback, the
+ *  next sign cycle restamps with the canonicalized hash and the legacy
+ *  witnesses age out naturally.
+ *
+ *  Returns true when the file doesn't exist (caller treats deletion
+ *  as a separate signal — `input_deletion` — not as body drift). */
+export function bodyMatchesStoredHash(
+	absolutePath: string,
+	storedHash: string,
+): boolean {
+	if (!existsSync(absolutePath)) return true
+	const canonical = bodySha256(absolutePath)
+	if (canonical && canonical === storedHash) return true
+	// Recompute under the pre-fix strategy: raw `matter().content`,
+	// THEN strip any trailing \n that matter.stringify may have added
+	// after the witness was stamped. The legacy hash was taken before
+	// any FM write normalized the body; recovering the
+	// pre-normalization shape lets the dual-strategy compare match
+	// witnesses signed pre-fix on bodies that originally lacked a
+	// trailing newline.
+	//
+	// Cheap (one read + one hash) and only runs when the canonical
+	// hash missed — the common path stays single-hash.
+	const raw = readFileSync(absolutePath, "utf8")
+	let body = raw
+	try {
+		body = matter(raw).content
+	} catch {
+		body = raw
+	}
+	const legacyOnDisk = createHash("sha256")
+		.update(body, "utf8")
+		.digest("hex")
+	if (legacyOnDisk === storedHash) return true
+	// Strip a single trailing newline (matter.stringify always adds
+	// AT MOST one), then re-hash.
+	const stripped = body.endsWith("\n") ? body.slice(0, -1) : body
+	if (stripped === body) return false
+	const legacyPreStringify = createHash("sha256")
+		.update(stripped, "utf8")
+		.digest("hex")
+	return legacyPreStringify === storedHash
 }
 
 /** Extensions whose drift signal should ignore frontmatter — only the
@@ -140,6 +211,46 @@ export function buildOutputWitnesses(
 function deriveRepoRootFromIntentDir(intentDir: string): string {
 	// `dirname` walks up: <slug> → intents → .haiku → <repoRoot>
 	return join(intentDir, "..", "..", "..")
+}
+
+/** Canonicalize an input path against an intent dir. The witness key
+ *  format is "intent-relative when possible, repo-relative otherwise."
+ *  Three input shapes the engine has historically produced, all of
+ *  which must resolve to the same canonical key:
+ *
+ *    1. `stages/design/artifacts/X.md` — already intent-relative. Pass through.
+ *    2. `.haiku/intents/<slug>/stages/design/artifacts/X.md` — repo-rooted
+ *       path pointing back INTO the intent dir (the dominant shape on
+ *       in-flight intents pre-2026-05-17). Strip the prefix.
+ *    3. `libraries/atorasu/jest.config.js` — repo-relative, points OUTSIDE
+ *       the intent dir. Pass through (resolves against repoRoot at lookup).
+ *
+ *  Shape 2 was producing runaway `input_deletion` drift events because:
+ *    - `join(intentDir, shape2Path)` double-nests
+ *    - `join(primaryRepoRoot, shape2Path)` misses when the intent lives
+ *      in a linked worktree (primary HEAD doesn't carry the intent branch)
+ *  Normalizing to shape 1 makes the witness resolve against intentDir
+ *  regardless of worktree/primary repo discrepancies. */
+export function normalizeInputPath(
+	inputPath: string,
+	intentDir: string,
+): string {
+	// Derive slug from intentDir basename. `basename` of
+	// `<root>/.haiku/intents/<slug>` is `<slug>`.
+	const slug = intentDir.split("/").filter(Boolean).pop() ?? ""
+	if (!slug) return inputPath
+	const prefix = `.haiku/intents/${slug}/`
+	if (inputPath.startsWith(prefix)) {
+		return inputPath.slice(prefix.length)
+	}
+	// Also handle the absolute-path form (rare but produced by some
+	// legacy code paths that joined intentDir into the rel before
+	// passing it through).
+	const absPrefix = `${intentDir}/`
+	if (inputPath.startsWith(absPrefix)) {
+		return inputPath.slice(absPrefix.length)
+	}
+	return inputPath
 }
 
 /** Input-witness block on a signed review. `files` covers paths the
@@ -229,8 +340,15 @@ export function resolveInputWitnesses(args: {
 		if (sha) out.files["intent.md"] = sha
 	}
 
-	for (const rel of args.unitInputs) {
-		if (rel === "intent.md") continue // already added implicitly
+	for (const rawRel of args.unitInputs) {
+		if (rawRel === "intent.md") continue // already added implicitly
+		// Canonicalize the input path BEFORE storing it as a witness key
+		// — any `.haiku/intents/<slug>/` prefix collapses to a clean
+		// intent-relative shape. The witness key on disk should be the
+		// canonical form so the next sweep can resolve it without
+		// guesswork; see normalizeInputPath for the full path-shape table.
+		const rel = normalizeInputPath(rawRel, args.intentDir)
+		if (rel === "intent.md") continue // post-normalization re-check
 		// Resolve intent-relative when the path exists there (covers
 		// `stages/...`, `knowledge/...`, `feedback/...`, and ad-hoc
 		// intent-scope files). Fall back to repo-relative for paths

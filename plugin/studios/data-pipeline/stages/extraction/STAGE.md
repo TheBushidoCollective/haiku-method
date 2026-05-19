@@ -22,22 +22,15 @@ commit.
 ## Per-unit baton
 
 Each extraction unit is one **source connector** (one source system, one
-extraction pattern). The unit walks three hats in `do → lens-review → verify`
-order:
+extraction pattern).
 
-- **`extractor`** (do) implements the connector — incremental logic,
-  watermarks, retry / backoff, schema-drift detection, dead-letter
-  handling, and extraction metadata for auditability
-- **`connector-reviewer`** (lens-review) reviews the connector for
-  idempotency, partial-failure safety, and operational debugability —
-  domain lens, surfaces concerns from the operability angle
-- **`verifier`** (verify) walks the unit body for completeness, citation
-  consistency, and decision-register alignment — the structural body-only
-  check architecture §9 requires
+- `extractor` → `connector-reviewer`: implemented connector + `EXTRACTION-JOBS.md`
+  row (source, target staging, extraction pattern, watermark, schedule, retry policy).
+- `connector-reviewer` → `verifier`: lens-reviewed connector (operability concerns
+  confirmed or findings filed against idempotency / partial-failure / debugability).
 
 The plan role is implicit in the source-catalog input — discovery has already
-named the integration pattern per source, so the extractor reads that
-decision rather than re-planning it.
+named the integration pattern per source.
 
 ## Inputs and outputs
 

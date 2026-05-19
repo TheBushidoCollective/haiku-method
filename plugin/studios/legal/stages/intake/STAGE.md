@@ -17,11 +17,8 @@ Capture the matter before any drafting or research starts. Intake is a research-
 
 ## Per-unit baton
 
-Each unit walks three hats in `plan/do → assess → verify` order:
-
-- **`paralegal`** (plan / do for facts) — gathers and structures the matter's facts, parties, jurisdictions, governing law, and existing documents into the unit's slice of `LEGAL-BRIEF.md`
-- **`risk-assessor`** (assess) — reads the paralegal's fact pattern, identifies risk categories (regulatory, contractual, IP, dispute, reputational), and proposes mitigation options for the responsible attorney to evaluate
-- **`verifier`** (verify) — walks the unit body for substance, source citation, fact-to-risk traceability, and decision-register consistency — the body-only structural check architecture §9 requires
+- `paralegal` → `risk-assessor`: structured fact pattern slice of `LEGAL-BRIEF.md` (parties, jurisdictions, governing law, existing documents, sources cited).
+- `risk-assessor` → `verifier`: risk-classified brief (regulatory / contractual / IP / dispute / reputational categories with mitigation options).
 
 Process detail lives in each hat's md file — this stage enforces the chain, not the per-hat process.
 

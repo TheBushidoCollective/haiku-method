@@ -20,13 +20,8 @@ The stage produces one intent-scope artifact (`VARIANCE-REPORT.md` under `stages
 
 ## Per-unit baton
 
-Each unit walks three hats in `plan/do → audit → verify` order:
-
-- **`analyst`** (plan + do) reads the upstream budget plan and forecast model, pulls actuals, calculates variances at the appropriate granularity, classifies each material variance as structural / timing / operational, and writes the supporting evidence and recommended corrective action
-- **`auditor`** (audit) cross-checks the data sources, validates methodology consistency, confirms root-cause attributions are evidence-backed (not assumption-backed), and advances or rejects
-- **`verifier`** (verify) walks the unit body for completeness, classification consistency, and decision-register alignment — the structural body-only check architecture §9 requires
-
-Detailed process lives in each hat's md file.
+- `analyst` → `auditor`: variance table with classification (structural / timing / operational), evidence, and recommended corrective action per material variance.
+- `auditor` → `verifier`: data-source-confirmed variance table (methodology validated or findings filed against attributions).
 
 ## Inputs and outputs
 

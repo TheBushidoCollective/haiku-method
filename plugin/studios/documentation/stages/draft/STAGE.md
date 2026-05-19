@@ -16,13 +16,8 @@ Turn the approved outline into prose, code samples, and visuals. Drafting is the
 
 ## Per-unit baton
 
-Each draft unit walks three hats in `plan/do → lens-review → verify` order:
-
-- **`writer`** (plan / do) reads the assigned outline section, drafts the prose, examples, and code blocks for that section, and verifies claims against the source of truth as they write
-- **`technical-reviewer`** (lens-review) checks every technical claim against the system, tests every code sample, validates API signatures and configuration values, and advances or rejects with the responsible failure named
-- **`verifier`** (verify) walks the unit body's substance, citation, internal consistency, and decision-register consistency — the structural check the technical-reviewer's domain lens does not cover
-
-The baton: outline section + audit context → drafted prose with verified examples → lens-reviewed draft → substance-checked unit ready for editorial review.
+- `writer` → `technical-reviewer`: drafted prose, code samples, and visuals for the outline section, with source-of-truth citations.
+- `technical-reviewer` → `verifier`: lens-reviewed draft (technical claims confirmed or findings filed against specific claims).
 
 ## Inputs and outputs
 

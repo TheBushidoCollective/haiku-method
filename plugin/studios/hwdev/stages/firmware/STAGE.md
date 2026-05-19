@@ -25,18 +25,10 @@ physical product.
 
 ## Per-unit baton
 
-Each firmware unit walks three hats in `plan/do → lens-review → verify` order:
-
-- **`firmware-engineer`** (plan / do) reads the requirements + the
-  schematic (for peripherals, pin assignments, supply rails) and lands
-  the code, tests, and on-target measurements for this unit's scope.
-- **`reviewer`** (lens-review) checks the unit against functional
-  requirements, safety analysis, and memory / flash / power budgets;
-  surfaces concerns through the firmware-domain lens.
-- **`verifier`** (verify) walks the unit body's substance,
-  requirements-traceability, on-target measurement evidence, and
-  decision-register consistency — the body-only structural check
-  architecture §9 requires.
+- `firmware-engineer` → `reviewer`: implementation + tests + on-target
+  measurements for this unit's scope.
+- `reviewer` → `verifier`: lens-reviewed unit (requirements / safety /
+  resource-budget concerns confirmed or findings filed).
 
 ## Fix loop and gate
 

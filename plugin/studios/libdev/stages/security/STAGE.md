@@ -22,13 +22,8 @@ Unlike application security, library security must consider the library as a pot
 
 ## Per-unit baton
 
-Each unit walks three hats in `plan → adversarial-review → verify` order:
-
-- **`threat-modeler`** (plan) names the attack surface, threat actors, plausible attack vectors, exploitability assessment, and proposed mitigations
-- **`security-reviewer`** (adversarial-review) evaluates the unit against the threat model — confirms mitigations are real, consumer guidance lands in public docs, audit findings are addressed rather than acknowledged
-- **`verifier`** (verify) walks the unit body's substance, threat-to-mitigation traceability, and decision-register consistency — the body-only structural check architecture §9 requires
-
-Per architecture §3.5, the adversarial hats fire after plan-do; the verifier provides the body-only final check.
+- `threat-modeler` → `security-reviewer`: threat model slice (attack surface, threat actors, attack vectors, exploitability, proposed mitigations).
+- `security-reviewer` → `verifier`: adversarially-reviewed model (mitigations confirmed real and consumer guidance landed, or findings filed).
 
 ## Inputs and outputs
 

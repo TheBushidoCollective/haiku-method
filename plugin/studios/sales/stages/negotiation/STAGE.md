@@ -16,11 +16,8 @@ Negotiation is where a proposal becomes a signable agreement. The stage takes th
 
 ## Per-unit baton
 
-Each unit walks three hats in `plan/do → legal-review → verify` order:
-
-- **`negotiator`** (plan/do) handles objection responses and concession strategy. Every concession is traded, not given; every objection has an evidence-based reframe and a fallback position; the walk-away point is documented before negotiation opens.
-- **`legal-reviewer`** (legal-review) reviews contract redlines, categorizes by legal vs commercial risk, recommends accept / counter / reject per item, and flags issues that need to escalate beyond field authority.
-- **`verifier`** (verify) walks the unit body for completeness, objection-to-response traceability, walk-away documentation, and decision-register consistency — the body-only structural check architecture §9 requires. The legal-reviewer's redline opinion is the legal substance-check; the verifier confirms the body actually captured it.
+- `negotiator` → `legal-reviewer`: objection log with evidence-based reframes + fallback positions + walk-away threshold + concession strategy.
+- `legal-reviewer` → `verifier`: legal-reviewed terms (redlines categorized by legal vs commercial risk, accept / counter / reject recommendations per clause).
 
 ## Inputs and outputs
 

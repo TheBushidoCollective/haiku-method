@@ -25,19 +25,13 @@ silently — and the consumers find out before the on-call does.
 ## Per-unit baton
 
 Each validation unit is one **verification surface** — typically one target
-table or one business-rule family — with the tests that cover it. The unit
-walks three hats in `do → lens-review → verify` order:
+table or one business-rule family.
 
-- **`validator`** (do) writes the data-quality checks: schema compliance,
-  uniqueness, not-null, referential integrity, accepted value ranges, row-
-  count reconciliation, and business-rule assertions, each with explicit
-  pass / fail / warning semantics
-- **`data-quality-reviewer`** (lens-review) reviews the suite for coverage
-  gaps and assertion quality — does every critical path have tests, are
-  thresholds tight, do failures emit enough context to debug
-- **`verifier`** (verify) walks the unit body's substance — completeness,
-  test-to-criterion traceability, decision-register consistency — the
-  structural check architecture §9 requires
+- `validator` → `data-quality-reviewer`: executable checks (schema compliance,
+  uniqueness, not-null, referential integrity, value ranges, row-count
+  reconciliation, business-rule assertions) with pass / fail / warning semantics.
+- `data-quality-reviewer` → `verifier`: coverage-reviewed suite (assertion
+  quality confirmed or findings filed against gaps / threshold / debug-context).
 
 The stage also imports the `correctness` review agent from `extraction` so
 end-to-end source-to-target faithfulness is reviewed in the same pass.

@@ -16,13 +16,10 @@ Translate research findings into a campaign strategy: measurable goals, a messag
 
 ## Per-unit baton
 
-Each strategy unit walks three hats in `plan/do → brand-review → verify` order:
+- `strategist` → `brand-reviewer`: strategy slice (goals, messaging framework, channel mix, KPIs) grounded in `research/market-brief`.
+- `brand-reviewer` → `verifier`: brand-reviewed strategy (alignment / voice / positioning confirmed or findings filed).
 
-- **`strategist`** (plan + do) — reads the research artifacts, defines goals / messaging / channels / KPIs for this slice of the campaign, writes the strategy artifact
-- **`brand-reviewer`** (brand-review) — checks the artifact for brand alignment, voice, and positioning fidelity; surfaces concerns through the brand lens
-- **`verifier`** (verify) — walks the unit body for substance, research traceability, goal-to-KPI consistency, and decision-register alignment — the body-only structural check architecture §9 requires
-
-The strategist's plan and execution land in the same artifact (the framework itself) because the "do" output IS the plan; the brand-reviewer and verifier then close out the loop.
+The strategist's "do" output IS the plan — the strategy framework itself — so plan and do land in the same artifact.
 
 ## Inputs and outputs
 

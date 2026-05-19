@@ -16,11 +16,8 @@ Take the scoping memo and produce a defensible picture of where the organization
 
 ## Per-unit baton
 
-Each assessment unit walks the hat chain in `plan → do/score → verify` order:
-
-- **`auditor`** (plan / do) reads the upstream `CONTROL-MAPPING.md`, evaluates each in-scope control against the current state of systems and processes, and records the determination (met / partial / unmet) with the specific evidence reviewed
-- **`risk-assessor`** (do / score) takes the auditor's findings and assigns likelihood + impact scores using a consistent methodology, then prioritizes the gap list
-- **`verifier`** (verify) walks the unit body for evidentiary completeness, citation quality, and decision-register consistency — the body-only structural check architecture §9 requires
+- `auditor` → `risk-assessor`: control determinations (met / partial / unmet) with cited evidence per control.
+- `risk-assessor` → `verifier`: prioritized gap list (likelihood + impact scores per finding, methodology-consistent).
 
 ## Inputs and outputs
 

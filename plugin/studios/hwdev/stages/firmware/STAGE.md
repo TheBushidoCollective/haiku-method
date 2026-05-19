@@ -1,7 +1,7 @@
 ---
 name: firmware
 description: Embedded software for the hardware platform
-hats: [firmware-engineer, reviewer]
+hats: [firmware-engineer, reviewer, verifier]
 fix_hats: [classifier, firmware-engineer, feedback-assessor]
 review: [external, ask]
 elaboration: collaborative
@@ -25,14 +25,18 @@ physical product.
 
 ## Per-unit baton
 
-Each firmware unit walks `plan → do → verify`:
+Each firmware unit walks three hats in `plan/do → lens-review → verify` order:
 
 - **`firmware-engineer`** (plan / do) reads the requirements + the
   schematic (for peripherals, pin assignments, supply rails) and lands
   the code, tests, and on-target measurements for this unit's scope.
-- **`reviewer`** (verify) checks the unit against functional
+- **`reviewer`** (lens-review) checks the unit against functional
   requirements, safety analysis, and memory / flash / power budgets;
-  advances or rejects with the failed criterion named.
+  surfaces concerns through the firmware-domain lens.
+- **`verifier`** (verify) walks the unit body's substance,
+  requirements-traceability, on-target measurement evidence, and
+  decision-register consistency — the body-only structural check
+  architecture §9 requires.
 
 ## Fix loop and gate
 

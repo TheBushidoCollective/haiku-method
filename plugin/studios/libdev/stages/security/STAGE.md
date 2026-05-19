@@ -1,7 +1,7 @@
 ---
 name: security
 description: Supply chain, dependency audit, and consumer-misuse threat model
-hats: [threat-modeler, security-reviewer]
+hats: [threat-modeler, security-reviewer, verifier]
 fix_hats: [classifier, threat-modeler, feedback-assessor]
 review: [external, ask]
 elaboration: autonomous
@@ -22,12 +22,13 @@ Unlike application security, library security must consider the library as a pot
 
 ## Per-unit baton
 
-Each unit walks the two adversarial hats:
+Each unit walks three hats in `plan → adversarial-review → verify` order:
 
 - **`threat-modeler`** (plan) names the attack surface, threat actors, plausible attack vectors, exploitability assessment, and proposed mitigations
-- **`security-reviewer`** (verify) evaluates the unit against the threat model — confirms mitigations are real, consumer guidance lands in public docs, audit findings are addressed rather than acknowledged
+- **`security-reviewer`** (adversarial-review) evaluates the unit against the threat model — confirms mitigations are real, consumer guidance lands in public docs, audit findings are addressed rather than acknowledged
+- **`verifier`** (verify) walks the unit body's substance, threat-to-mitigation traceability, and decision-register consistency — the body-only structural check architecture §9 requires
 
-Per architecture §3.5, adversarial hats are exempt from the body-only rule, but a stage that is *entirely* adversarial (no plan-do-verify front loop) is a known structural gap — see `phases/ELABORATION.md`.
+Per architecture §3.5, the adversarial hats fire after plan-do; the verifier provides the body-only final check.
 
 ## Inputs and outputs
 

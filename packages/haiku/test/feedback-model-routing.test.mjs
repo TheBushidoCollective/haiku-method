@@ -131,12 +131,8 @@ test("start_feedback_hat dispatch resolves model from studio default and emits i
 		)
 		const prompt = readPromptBody(wrapper)
 		assert.ok(
-			/model: "sonnet"/.test(prompt),
-			`expected the prompt to instruct \`model: "sonnet"\` from the studio default; got:\n${prompt.slice(0, 800)}`,
-		)
-		assert.ok(
-			/source: studio/.test(prompt),
-			`expected source: studio in the model annotation; got:\n${prompt.slice(0, 800)}`,
+			/model="sonnet"/.test(prompt),
+			`expected the dispatch block to carry \`model="sonnet"\` from the studio default; got:\n${prompt.slice(0, 800)}`,
 		)
 	})
 })
@@ -203,12 +199,8 @@ test("start_feedback_hat picks up FB-level model override at the top of the casc
 		)
 		const prompt = readPromptBody(wrapper)
 		assert.ok(
-			/model: "opus"/.test(prompt),
-			`expected the prompt to instruct \`model: "opus"\` from FB-level override; got:\n${prompt.slice(0, 800)}`,
-		)
-		assert.ok(
-			/source: unit/.test(prompt),
-			`expected source: unit (the FB-level slot of the cascade); got:\n${prompt.slice(0, 800)}`,
+			/model="opus"/.test(prompt),
+			`expected the dispatch block to carry \`model="opus"\` from FB-level override; got:\n${prompt.slice(0, 800)}`,
 		)
 	})
 })

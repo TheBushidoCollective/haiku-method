@@ -1,7 +1,7 @@
 ---
 name: strategy
 description: Define campaign goals, messaging framework, and channel strategy
-hats: [strategist, brand-reviewer]
+hats: [strategist, brand-reviewer, verifier]
 fix_hats: [classifier, strategist, feedback-assessor]
 review: ask
 elaboration: collaborative
@@ -16,12 +16,13 @@ Translate research findings into a campaign strategy: measurable goals, a messag
 
 ## Per-unit baton
 
-Each strategy unit walks two hats:
+Each strategy unit walks three hats in `plan/do → brand-review → verify` order:
 
 - **`strategist`** (plan + do) — reads the research artifacts, defines goals / messaging / channels / KPIs for this slice of the campaign, writes the strategy artifact
-- **`brand-reviewer`** (verify) — checks the artifact for internal consistency, brand alignment, and traceability back to research; advances or rejects
+- **`brand-reviewer`** (brand-review) — checks the artifact for brand alignment, voice, and positioning fidelity; surfaces concerns through the brand lens
+- **`verifier`** (verify) — walks the unit body for substance, research traceability, goal-to-KPI consistency, and decision-register alignment — the body-only structural check architecture §9 requires
 
-The two-hat shape reflects the role: a strategist's plan and execution are the same artifact (the framework itself), and the brand reviewer is the terminal validator. The shape diverges from the canonical plan-do-verify triplet because the "do" output IS the plan — splitting them produces two passes on the same document.
+The strategist's plan and execution land in the same artifact (the framework itself) because the "do" output IS the plan; the brand-reviewer and verifier then close out the loop.
 
 ## Inputs and outputs
 

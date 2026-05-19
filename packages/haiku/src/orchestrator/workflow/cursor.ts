@@ -63,6 +63,7 @@ import {
 	resolveIntentStages,
 	resolveStageFixHats,
 	resolveStageHats,
+	resolveStudioFixHats,
 } from "../studio.js"
 import { engineHandleDriftEvents } from "./drift-handle-events.js"
 import { runDriftSweep } from "./drift-sweep.js"
@@ -968,12 +969,17 @@ function walkFeedbackTrack(args: {
 	}
 	const intentFbPaths = listFbPaths(intentDir)
 	for (const fbPath of intentFbPaths) {
-		// For intent-scope FBs we still walk fix_hats from the
-		// originating stage if it's listed in targets.unit's path; for
-		// truly scope-less intent-FBs we'd need an intent-level
-		// fix_hats list. Defer; treat as the current stage's fix_hats
-		// for now.
-		const preempt = collect(currentStage, fbPath)
+		// Intent-scope FBs (originating from intent_review / studio-level
+		// reviewers like cross-stage-consistency) route through the
+		// studio's `fix_hats:` chain, NOT the current stage's. Pre-2026-
+		// 05-19 the cursor passed `currentStage` here, which made the
+		// classifier subagent read `{stage: currentStage, feedback_id: N}`
+		// — but the FB lives at intent scope, so the read returned
+		// not-found and the subagent terminated without closure → infinite
+		// re-dispatch loop. Pass empty stage so `nextActionForFeedback`
+		// resolves studio fix-hats and the prompt builder's
+		// `if (d.stage)` gate uses the intent-scope code paths.
+		const preempt = collect("", fbPath)
 		if (preempt) return preempt
 	}
 
@@ -998,10 +1004,48 @@ function walkFeedbackTrack(args: {
 		batch.push(d)
 	}
 
-	const first = batch[0]
+	// Final defensive re-check against the on-disk state, mirroring the
+	// prompt builder's filter in `start_feedback_hat/index.ts` so the
+	// action JSON and the agent-facing prompt agree about which FBs are
+	// being dispatched. Without this, a closed FB's dispatch entry can
+	// survive into the action JSON (e.g. the FB lives at intent scope
+	// but `d.stage` was assigned the current stage) while the prompt
+	// builder reads the matching stage-scope file and drops it, leaving
+	// the agent staring at "no FBs, retick" forever. Reported
+	// 2026-05-19 (haiku-bug-report-2026-05-19: stuck loop on closed
+	// FB-001 after uncommitted closure metadata + pre-cursor-sync
+	// conflict). Reading the FB file by both the dispatch's declared
+	// stage AND the intent-scope path so we catch the mismatched-scope
+	// case too.
+	const verifiedBatch: FbDispatch[] = []
+	for (const d of batch) {
+		const fbNum = d.feedback_id.replace(/^FB-/i, "")
+		const candidateDirs: string[] = []
+		if (d.stage) {
+			candidateDirs.push(join(intentDir, "stages", d.stage, "feedback"))
+		}
+		candidateDirs.push(join(intentDir, "feedback"))
+		let stillOpen = true
+		for (const dir of candidateDirs) {
+			if (!existsSync(dir)) continue
+			const matches = readdirSync(dir).filter(
+				(f) => f.startsWith(fbNum) && f.endsWith(".md"),
+			)
+			if (matches.length === 0) continue
+			const fbFm = readFm(join(dir, matches[0]))?.data
+			if (fbFm && isFbTerminal(fbFm)) {
+				stillOpen = false
+				break
+			}
+		}
+		if (stillOpen) verifiedBatch.push(d)
+	}
+	if (verifiedBatch.length === 0) return null
+
+	const first = verifiedBatch[0]
 	return {
 		kind: "start_feedback_hat",
-		dispatches: batch.map((d) => ({
+		dispatches: verifiedBatch.map((d) => ({
 			feedback_id: d.feedback_id,
 			stage: d.stage,
 			hat: d.hat,
@@ -1014,7 +1058,7 @@ function walkFeedbackTrack(args: {
 		// than the first entry.
 		stage: first?.stage ?? "",
 		hat: first?.hat ?? "",
-		feedback_ids: batch.map((d) => d.feedback_id),
+		feedback_ids: verifiedBatch.map((d) => d.feedback_id),
 		terminal: first?.terminal ?? false,
 	}
 }
@@ -1111,9 +1155,21 @@ function nextActionForFeedback(
 			}
 		}
 	}
-	const fixHats = resolveStageFixHats(studio, stage)
+	// Stage-scope FBs use the stage's `fix_hats:` chain. Intent-scope
+	// FBs (stage === "") use the studio-level `fix_hats:` chain from
+	// `STUDIO.md` frontmatter (or the alphabetical fallback over
+	// `studios/<studio>/fix-hats/`). Reported 2026-05-19: cross-stage-
+	// consistency intent-completion reviewer files FBs at intent scope;
+	// pre-fix the cursor was attributing them to the current stage's
+	// fix-hat chain, causing the dispatched classifier subagent to read
+	// the FB at stage-scope (where it doesn't exist) and bail without
+	// closure, looping forever.
+	const fixHats =
+		stage === ""
+			? resolveStudioFixHats(studio)
+			: resolveStageFixHats(studio, stage)
 	if (fixHats.length === 0) {
-		// Stage doesn't define a fix loop. The FB is unresolvable
+		// No fix-hat chain defined for this scope. The FB is unresolvable
 		// without manual intervention. Cursor surfaces it as a
 		// review-track signal so the user sees it.
 		return {

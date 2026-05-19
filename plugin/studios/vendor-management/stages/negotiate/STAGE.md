@@ -1,7 +1,7 @@
 ---
 name: negotiate
 description: Negotiate terms and review contract provisions
-hats: [negotiator, legal-reviewer]
+hats: [negotiator, legal-reviewer, verifier]
 fix_hats: [classifier, negotiator, feedback-assessor]
 review: external
 elaboration: collaborative
@@ -18,12 +18,8 @@ Convert the selected vendor's evaluated position into agreed contractual terms �
 
 ## Per-unit baton
 
-Each unit walks the hat chain in order:
-
-- **`negotiator`** (plan / do) negotiates commercial terms, defines SLA thresholds and remedies, and documents agreed pricing, payment, duration, renewal, and exit terms with comparison to the initial position
-- **`legal-reviewer`** (verify lens) reviews material risk clauses (liability, indemnification, IP ownership, data handling), verifies regulatory compliance (data privacy, industry-specific regulations), and either confirms terms or recommends specific contract language modifications
-
-The baton is the negotiated terms document. The legal reviewer either confirms the terms stand or files findings naming the exact clauses that need rework, with recommended language.
+- `negotiator` → `legal-reviewer`: negotiated terms doc (commercial terms, SLAs with thresholds, exit / IP / data clauses).
+- `legal-reviewer` → `verifier`: terms doc confirmed (or clause-level findings with recommended language).
 
 ## Inputs and outputs
 

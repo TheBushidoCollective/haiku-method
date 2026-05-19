@@ -1,7 +1,7 @@
 ---
 name: extraction
 description: Design and implement data extraction from sources
-hats: [extractor, connector-reviewer]
+hats: [extractor, connector-reviewer, verifier]
 fix_hats: [classifier, extractor, feedback-assessor]
 review: ask
 elaboration: autonomous
@@ -22,14 +22,18 @@ commit.
 ## Per-unit baton
 
 Each extraction unit is one **source connector** (one source system, one
-extraction pattern). The unit walks the two hats:
+extraction pattern). The unit walks three hats in `do → lens-review → verify`
+order:
 
 - **`extractor`** (do) implements the connector — incremental logic,
   watermarks, retry / backoff, schema-drift detection, dead-letter
   handling, and extraction metadata for auditability
-- **`connector-reviewer`** (verify) reviews the connector for idempotency,
-  partial-failure safety, and operational debugability — and either advances
-  or rejects to the implementer
+- **`connector-reviewer`** (lens-review) reviews the connector for
+  idempotency, partial-failure safety, and operational debugability —
+  domain lens, surfaces concerns from the operability angle
+- **`verifier`** (verify) walks the unit body for completeness, citation
+  consistency, and decision-register alignment — the structural body-only
+  check architecture §9 requires
 
 The plan role is implicit in the source-catalog input — discovery has already
 named the integration pattern per source, so the extractor reads that

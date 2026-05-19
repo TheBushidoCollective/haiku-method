@@ -77,8 +77,10 @@ stateDiagram-v2
     state outline_execute {
       [*] --> outline_execute_architect
       outline_execute_architect --> outline_execute_outline_reviewer : hat.advance
-      outline_execute_outline_reviewer --> outline_execute_done : hat.advance
+      outline_execute_outline_reviewer --> outline_execute_verifier : hat.advance
       outline_execute_outline_reviewer --> outline_execute_architect : hat.reject
+      outline_execute_verifier --> outline_execute_done : hat.advance
+      outline_execute_verifier --> outline_execute_outline_reviewer : hat.reject
       outline_execute_done --> [*]
     }
     outline_execute --> outline_review
@@ -130,8 +132,10 @@ stateDiagram-v2
     state draft_execute {
       [*] --> draft_execute_writer
       draft_execute_writer --> draft_execute_technical_reviewer : hat.advance
-      draft_execute_technical_reviewer --> draft_execute_done : hat.advance
+      draft_execute_technical_reviewer --> draft_execute_verifier : hat.advance
       draft_execute_technical_reviewer --> draft_execute_writer : hat.reject
+      draft_execute_verifier --> draft_execute_done : hat.advance
+      draft_execute_verifier --> draft_execute_technical_reviewer : hat.reject
       draft_execute_done --> [*]
     }
     draft_execute --> draft_review

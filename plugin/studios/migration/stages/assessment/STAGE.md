@@ -1,7 +1,7 @@
 ---
 name: assessment
 description: Inventory what's being migrated, identify risks and dependencies
-hats: [migration-analyst, risk-assessor]
+hats: [migration-analyst, risk-assessor, verifier]
 fix_hats: [classifier, migration-analyst, feedback-assessor]
 review: auto
 elaboration: collaborative
@@ -14,10 +14,11 @@ Inventory the migration scope and surface the risk register. This is the researc
 
 ## Per-unit baton
 
-Each assessment unit walks two hats in `plan → do` order, with the workflow engine's universal spec-verify gate acting as the verify role at stage close:
+Each assessment unit walks three hats in `plan → do → verify` order:
 
 - **`migration-analyst`** (plan) reads the migration brief, scopes the unit's slice of the source system, and produces the inventory rows for that slice (artifacts, owners, volumes, dependencies, runtime touchpoints).
 - **`risk-assessor`** (do) consumes the inventory rows and produces the risk register entries that flow from them — data-loss vectors, downtime windows, blast radius, ordering constraints, mitigations.
+- **`verifier`** (verify) walks the unit body for inventory completeness, risk-to-inventory traceability, source citation, and decision-register consistency — the body-only structural check architecture §9 requires.
 
 The baton is the inventory itself: every risk entry MUST cite the inventory row(s) it derives from. A risk with no source row is a sign the inventory missed something.
 

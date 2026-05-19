@@ -195,8 +195,10 @@ stateDiagram-v2
     state firmware_execute {
       [*] --> firmware_execute_firmware_engineer
       firmware_execute_firmware_engineer --> firmware_execute_reviewer : hat.advance
-      firmware_execute_reviewer --> firmware_execute_done : hat.advance
+      firmware_execute_reviewer --> firmware_execute_verifier : hat.advance
       firmware_execute_reviewer --> firmware_execute_firmware_engineer : hat.reject
+      firmware_execute_verifier --> firmware_execute_done : hat.advance
+      firmware_execute_verifier --> firmware_execute_reviewer : hat.reject
       firmware_execute_done --> [*]
     }
     firmware_execute --> firmware_review

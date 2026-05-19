@@ -1,7 +1,7 @@
 ---
 name: screening
 description: Resume review and initial candidate qualification
-hats: [screener, assessor]
+hats: [screener, assessor, verifier]
 fix_hats: [classifier, screener, feedback-assessor]
 review: auto
 elaboration: autonomous
@@ -18,12 +18,11 @@ Apply the requisition's must-have bar consistently across the sourced pipeline, 
 
 ## Per-unit baton
 
-Each unit (a candidate batch from the sourcing pipeline) walks two hats:
+Each unit (a candidate batch from the sourcing pipeline) walks three hats in `do → synthesize → verify` order:
 
 - **`screener`** (do) applies must-have / nice-to-have criteria per candidate, documents pass/fail with specific evidence, flags edge cases
-- **`assessor`** (verify + synthesize) reviews screener decisions for calibration consistency, scores candidates on a composite metric, produces the ranked shortlist, and identifies pool-composition patterns
-
-The assessor doubles as the verify role for this stage — calibrating the screener's decisions and either accepting or rejecting the shortlist for downstream use.
+- **`assessor`** (synthesize) reviews screener decisions for calibration consistency, scores candidates on a composite metric, produces the ranked shortlist, and identifies pool-composition patterns
+- **`verifier`** (verify) walks the unit body for completeness, evidence-citation, calibration-consistency artifacts, and decision-register consistency — the body-only structural check architecture §9 requires
 
 Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
 

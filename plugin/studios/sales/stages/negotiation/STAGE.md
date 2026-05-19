@@ -1,7 +1,7 @@
 ---
 name: negotiation
 description: Handle objections, negotiate terms, and align stakeholders
-hats: [negotiator, legal-reviewer]
+hats: [negotiator, legal-reviewer, verifier]
 fix_hats: [classifier, negotiator, feedback-assessor]
 review: [ask, await]
 elaboration: collaborative
@@ -16,10 +16,11 @@ Negotiation is where a proposal becomes a signable agreement. The stage takes th
 
 ## Per-unit baton
 
-- **`negotiator`** (plan/do) handles objection responses and concession strategy. Every concession is traded, not given; every objection has an evidence-based reframe and a fallback position; the walk-away point is documented before negotiation opens.
-- **`legal-reviewer`** (do/verify) reviews contract redlines, categorizes by legal vs commercial risk, recommends accept / counter / reject per item, and flags issues that need to escalate beyond field authority. Acts as the verify role for the chain because legal signoff is the substance-check for terms.
+Each unit walks three hats in `plan/do → legal-review → verify` order:
 
-Note: this stage has only two hats by design. The `legal-reviewer` plays the verify role for terms because a separate substance-check hat would be a less-qualified rubber stamp on top of legal review. The fix-loop chain still terminates with `feedback-assessor` for FB closure.
+- **`negotiator`** (plan/do) handles objection responses and concession strategy. Every concession is traded, not given; every objection has an evidence-based reframe and a fallback position; the walk-away point is documented before negotiation opens.
+- **`legal-reviewer`** (legal-review) reviews contract redlines, categorizes by legal vs commercial risk, recommends accept / counter / reject per item, and flags issues that need to escalate beyond field authority.
+- **`verifier`** (verify) walks the unit body for completeness, objection-to-response traceability, walk-away documentation, and decision-register consistency — the body-only structural check architecture §9 requires. The legal-reviewer's redline opinion is the legal substance-check; the verifier confirms the body actually captured it.
 
 ## Inputs and outputs
 

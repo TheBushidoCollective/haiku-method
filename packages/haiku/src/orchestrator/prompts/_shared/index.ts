@@ -18,9 +18,10 @@
 // needs the inline content (e.g. tests asserting on prose) still has
 // it; new callers should use `sharedBlockRef` instead.
 
+import { execFileSync } from "node:child_process"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { dirname, join } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import { Eta } from "eta"
 import { MAX_STAGE_ITERATIONS } from "../../../state-tools.js"
 import { findHaikuRoot } from "../../../state/shared.js"
@@ -119,23 +120,47 @@ const REGISTRY: Record<SharedBlockId, SharedBlockEntry> = {
 	},
 }
 
+// Tracks the last directory we wrote shared blocks into. Stays in sync
+// with sharedDir()'s current return; if the env-var redirect or cwd
+// changes (tests switching tmpdirs), the materialize gate re-fires for
+// the new location. Holding a `sharedDirCache` instead would silently
+// keep writing to the stale location.
 let materializedAt = ""
-let sharedDirCache = ""
 
-/** Resolve `~/.haiku/projects/<project-key>/shared/`. Project-scoped:
- *  the same rules apply across every intent in the project, so we
- *  write the files once and reference them from every prompt. */
-function sharedDir(): string {
-	if (sharedDirCache) return sharedDirCache
-	let projectRoot: string
+/** Resolve the canonical project root. Mirrors the helper in
+ *  `subagent-prompt-file.ts` so linked git worktrees collapse to the
+ *  MAIN worktree's path — all worktrees on the same repo share one
+ *  `<base>/<key>/shared/` tree. The work is a single git invocation +
+ *  a couple of fs checks; cheap enough to redo per call so tests that
+ *  change cwd / env vars get the new result immediately. */
+function resolveSharedProjectRoot(): string {
 	try {
-		projectRoot = dirname(findHaikuRoot())
+		const out = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		}).trim()
+		if (out) return dirname(resolve(out))
 	} catch {
-		projectRoot = process.cwd()
+		/* not a git repo */
 	}
-	const key = projectRoot.replace(/\//g, "-")
-	sharedDirCache = join(homedir(), ".haiku", "projects", key, "shared")
-	return sharedDirCache
+	try {
+		return dirname(findHaikuRoot())
+	} catch {
+		return process.cwd()
+	}
+}
+
+/** Resolve `<projects-root>/<project-key>/shared/`. Project-scoped:
+ *  the same rules apply across every intent in the project, so we
+ *  write the files once and reference them from every prompt. The
+ *  base path defaults to `~/.haiku/projects/`; set
+ *  `HAIKU_PROJECTS_ROOT` to redirect (tests point this at a tmpdir
+ *  to avoid polluting the user's real home). */
+function sharedDir(): string {
+	const key = resolveSharedProjectRoot().replace(/\//g, "-")
+	const base =
+		process.env.HAIKU_PROJECTS_ROOT ?? join(homedir(), ".haiku", "projects")
+	return join(base, key, "shared")
 }
 
 /** Write all shared blocks to disk. Re-runs on every cold start of
@@ -179,23 +204,27 @@ export function sharedBlockRef(id: SharedBlockId): string {
 // ── Provider-doc reference layer ─────────────────────────────────
 
 const providersDir = (): string => join(sharedDir(), "providers")
+// Keyed by `<path>:<kind>` so a test that switches tmpdirs between
+// runs (HAIKU_PROJECTS_ROOT redirect) re-materializes for the new
+// location instead of skipping the write.
 const materializedProviders = new Set<string>()
 
 /** Write a provider doc's body to the per-project shared/providers/
- *  directory once per process. Path is stable
- *  (`<key>/shared/providers/<kind>.md`), so the agent's earlier-read
- *  context stays valid across ticks. */
+ *  directory once per process per path. Path is stable
+ *  (`<projects-root>/<key>/shared/providers/<kind>.md`), so the
+ *  agent's earlier-read context stays valid across ticks. */
 function materializeProviderDoc(kind: string, body: string): string {
 	const dir = providersDir()
 	mkdirSync(dir, { recursive: true })
 	const path = join(dir, `${kind}.md`)
-	if (!materializedProviders.has(kind)) {
+	const cacheKey = `${path}:${kind}`
+	if (!materializedProviders.has(cacheKey)) {
 		try {
 			writeFileSync(path, body, "utf8")
 		} catch {
 			/* best-effort */
 		}
-		materializedProviders.add(kind)
+		materializedProviders.add(cacheKey)
 	}
 	return path
 }

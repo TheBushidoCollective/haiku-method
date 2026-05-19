@@ -132,8 +132,10 @@ stateDiagram-v2
     state analysis_execute {
       [*] --> analysis_execute_analyst
       analysis_execute_analyst --> analysis_execute_auditor : hat.advance
-      analysis_execute_auditor --> analysis_execute_done : hat.advance
+      analysis_execute_auditor --> analysis_execute_verifier : hat.advance
       analysis_execute_auditor --> analysis_execute_analyst : hat.reject
+      analysis_execute_verifier --> analysis_execute_done : hat.advance
+      analysis_execute_verifier --> analysis_execute_auditor : hat.reject
       analysis_execute_done --> [*]
     }
     analysis_execute --> analysis_review

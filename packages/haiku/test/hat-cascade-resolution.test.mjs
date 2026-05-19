@@ -220,8 +220,20 @@ test("start_feedback_hat prompt renders the resolved hat path (no literal <studi
 		!out.includes("<studio>"),
 		"FB dispatch must not contain the literal <studio> placeholder anymore",
 	)
+	// File-backed dispatch: parent prompt references a `<subagent prompt_file="...">`
+	// path; the resolved hat mandate is inlined inside that file. Verify
+	// the dispatch carries a real prompt_file ref (not a `<studio>` token)
+	// AND that the referenced subagent prompt embeds the classifier
+	// mandate body, which is the post-refactor cascade signal.
+	const promptFileMatch = out.match(/prompt_file="([^"]+)"/)
 	assert.ok(
-		/Read .*\/hats\/classifier\.md/.test(out),
-		`FB dispatch must Read the resolved classifier path. Got: ${out.slice(0, 600)}`,
+		promptFileMatch,
+		`FB dispatch must reference a subagent prompt_file. Got: ${out.slice(0, 600)}`,
+	)
+	const { readFileSync } = await import("node:fs")
+	const subagentPrompt = readFileSync(promptFileMatch[1], "utf8")
+	assert.ok(
+		/classifier/i.test(subagentPrompt),
+		`Subagent prompt must embed the classifier hat mandate. Got: ${subagentPrompt.slice(0, 600)}`,
 	)
 })

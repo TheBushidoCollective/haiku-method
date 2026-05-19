@@ -27,11 +27,13 @@ import { Eta } from "eta"
 import { features } from "../../../../../config.js"
 import { getCapabilities } from "../../../../../harness.js"
 import { type ModelTier, resolveModel } from "../../../../../model-selection.js"
-import {
-	buildFeedbackAssessorPrompt,
-	buildOutputRequirements,
-	resolveStudioFilePath,
-} from "../../../../../orchestrator.js"
+// Import directly from the source modules to avoid a circular dep
+// through `orchestrator.js`'s re-export barrel: orchestrator.js loads
+// `prompts/index.js` (the prompt-builder map), which loads this file.
+// Going through the barrel produces a TDZ on `start_unit` at the map
+// construction site.
+import { buildOutputRequirements } from "../../../../validators.js"
+import { resolveStudioFilePath } from "../../../../studio.js"
 import {
 	listInstalledSkills,
 	parseFrontmatter,
@@ -77,6 +79,14 @@ const PARENT_INSTRUCTIONS_TPL = loadTemplate(
 const PARENT_INSTRUCTIONS_ASSESSOR_TPL = loadTemplate(
 	import.meta.url,
 	"blocks/parent-instructions-assessor.eta.md",
+)
+const UNIT_SUBAGENT_TPL = loadTemplate(
+	import.meta.url,
+	"blocks/unit-subagent.eta.md",
+)
+const FEEDBACK_ASSESSOR_TPL = loadTemplate(
+	import.meta.url,
+	"blocks/feedback-assessor.eta.md",
 )
 
 export default definePromptBuilder(({ slug, studio, action, dir }) => {
@@ -249,18 +259,19 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 						: found.file,
 				})
 		}
-		const assessorPrompt = buildFeedbackAssessorPrompt({
+		const assessorPrompt = eta.renderString(FEEDBACK_ASSESSOR_TPL, {
 			slug,
-			studio,
 			stage,
 			unit,
 			bolt,
 			worktreePath,
 			intentRoot,
 			unitAbsPath,
-			closes,
-			feedbackFiles,
-			unitOutputs,
+			unitOutputPaths: unitOutputs.map((o) => join(intentRoot, o)),
+			feedbackEntries: feedbackFiles.map((f) => ({
+				id: f.id,
+				path: join(intentRoot, f.file),
+			})),
 		})
 		if (unitCaps.subagents.supported) {
 			const assessorBody = inlineCtx
@@ -293,101 +304,59 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 		return sections.join("\n\n")
 	}
 
-	const prompt: string[] = [
-		`You are executing unit **${unit}** as hat **${hat}** (bolt ${bolt}) in stage **${stage}** of studio **${studio}** for intent **${slug}**.`,
-		"",
-	]
-	if (worktreePath) {
-		prompt.push(
-			`**Unit worktree:** \`${worktreePath}\` (intent dir: \`${intentRoot}\`). Read and write the intent files at this path — it contains any prior-hat commits not yet merged to the parent branch. **Your FIRST Bash command MUST be \`cd <worktree path>\`.** Every git, npm, node, and shell command that follows must run from inside the worktree. Git commits land on the unit's branch only if you are inside the worktree's tree. Absolute paths below are for Read/Write tool references, but shell-layer work (install, build, test, commit) requires the cwd to be the worktree. Verify with \`pwd\` after \`cd\` if in doubt.
-
-${WORKTREE_AND_TIMEOUTS}`,
-			"",
-		)
-	}
-	prompt.push(REQUIRED_CONTEXT_PREAMBLE, "")
-	if (stagePath) prompt.push(inlineFile(stagePath, "Stage scope"))
-	if (executionPath)
-		prompt.push(inlineFile(executionPath, "Execute-phase focus"))
-	if (hatPath) {
-		prompt.push(inlineFile(hatPath, `Hat: ${hat}`))
-		const hatInterp = buildInterpretationBlock(readInterpretation(hatPath))
-		if (hatInterp) prompt.push("", hatInterp)
-	}
-	prompt.push(inlineFile(unitAbsPath, `Unit spec: ${unit}`))
-	if (outputsDir) prompt.push(`- Stage output templates — \`${outputsDir}/\``)
-
-	const priorRejectBlock = buildPriorRejectBlock(unitFile)
-	if (priorRejectBlock) prompt.push("", priorRejectBlock)
-
-	if (unitInputPaths.length > 0) {
-		prompt.push(
-			"",
-			"## Unit inputs (MUST read — scoped to this unit)",
-			"Inputs may be markdown, HTML, SVG, PNG/JPG, or PDF — fetch each with the appropriate tool.",
-			"",
-			...unitInputPaths.map((p) => `- \`${join(intentRoot, p)}\``),
-		)
-	}
-	if (upstreamPaths.length > 0) {
-		prompt.push(
-			"",
-			"## Available upstream artifacts (stage-wide — read what's relevant)",
-			"Not required reading — open only what your unit's scope needs.",
-			"",
-			...upstreamPaths.map(
-				(p) => `- **${p.label}** — \`${join(intentRoot, p.path)}\``,
-			),
-		)
-	}
-	if (outputReqs) {
-		prompt.push("", outputReqs)
-	}
-
-	// Applicable skills — annotated by the elaborator on the unit spec.
-	if (unitApplicableSkills.length > 0) {
-		const installedIndex = new Map(
-			listInstalledSkills().map((s) => [s.slug, s]),
-		)
-		const skillLines = unitApplicableSkills.map((slug) => {
-			const skill = installedIndex.get(slug)
-			const desc = skill?.description ? ` — ${skill.description}` : ""
-			return `- \`/${slug}\`${desc}`
-		})
-		prompt.push("", SKILLS_PREAMBLE, "", ...skillLines)
-	}
-
-	prompt.push("", "## Instructions", "")
-	let step = 1
-	if (action.action === "start_unit") {
-		prompt.push(
-			`${step++}. Call \`haiku_unit_start { intent: "${slug}", unit: "${unit}" }\``,
-		)
-	}
-	if (worktreePath) {
-		prompt.push(
-			`${step++}. Commit frequently inside the worktree: \`git add -A && git commit -m "..."\`. Do NOT push.`,
-		)
-	}
 	const isFirstHat = hat === (hats[0] || "")
-	prompt.push(
-		`${step++}. When done: call \`haiku_unit_advance_hat { intent: "${slug}", unit: "${unit}" }\``,
-		isFirstHat
-			? `${step++}. **If blocked**, you are the first hat in this stage's hat sequence — there is no previous hat to reject back to. Do NOT call \`haiku_unit_reject_hat\`. Instead: surface ambiguity via \`AskUserQuestion\` (or \`ask_user_visual_question\` for visual decisions); if upstream-stage outputs are missing, log a stage_revisit feedback at the upstream stage via \`haiku_feedback { intent: "${slug}", stage: "<earlier-stage>", title: "<upstream gap>", body: "<what's missing>", origin: "agent", resolution: "stage_revisit" }\` and call \`haiku_run_next\`; if you've found a real defect in the spec or upstream artifact, log it via \`haiku_feedback\`. The first hat escalates outward, not backward.`
-			: `${step++}. If blocked: call \`haiku_unit_reject_hat { intent: "${slug}", unit: "${unit}" }\``,
-		`${step++}. **CRITICAL — Relay the Workflow Result path.** When \`advance_hat\`${isFirstHat ? "" : " or `reject_hat`"} returns, its tool response contains a result-file path and instructs you to reply with exactly \`Workflow Result: <path>\`. Your FINAL MESSAGE to the parent MUST BE EXACTLY that one line — nothing before, nothing after. Do NOT summarize the work, do NOT describe what you did, do NOT paraphrase the result. The parent reads the file to drive the next workflow action. If the tool returned plaintext instead of a result path (e.g. "job ends here — parent will call haiku_run_next"), relay THAT plaintext verbatim as your final message.`,
-		`${step++}. Track outputs in unit frontmatter \`outputs:\` field`,
-		`${step++}. If outputs from a previous stage are missing: log a stage_revisit feedback at that stage via \`haiku_feedback { intent: "${slug}", stage: "<earlier-stage>", title: "<missing output>", body: "<what's needed>", origin: "agent", resolution: "stage_revisit" }\` and call \`haiku_run_next\` — the pre-tick gate routes the rewind.`,
-		"",
-		AUTONOMY_NOTE,
-		"",
-		sharedBlockRef("subagent-error-recovery"),
+	const installedIndex = new Map(
+		listInstalledSkills().map((s) => [s.slug, s]),
 	)
+	const skillLines =
+		unitApplicableSkills.length > 0
+			? unitApplicableSkills.map((s) => {
+					const skill = installedIndex.get(s)
+					const desc = skill?.description ? ` — ${skill.description}` : ""
+					return `- \`/${s}\`${desc}`
+				})
+			: []
+	const hatInterpBlock = hatPath
+		? buildInterpretationBlock(readInterpretation(hatPath))
+		: ""
+	const unitPromptBody = eta.renderString(UNIT_SUBAGENT_TPL, {
+		unit,
+		hat,
+		bolt,
+		stage,
+		studio,
+		slug,
+		worktreePath,
+		intentRoot,
+		worktreeAndTimeoutsBlock: WORKTREE_AND_TIMEOUTS,
+		requiredContextPreamble: REQUIRED_CONTEXT_PREAMBLE,
+		stageInline: stagePath ? inlineFile(stagePath, "Stage scope") : "",
+		executionInline: executionPath
+			? inlineFile(executionPath, "Execute-phase focus")
+			: "",
+		hatInline: hatPath ? inlineFile(hatPath, `Hat: ${hat}`) : "",
+		hatInterpBlock,
+		unitInline: inlineFile(unitAbsPath, `Unit spec: ${unit}`),
+		outputsDir: outputsDir || "",
+		priorRejectBlock: buildPriorRejectBlock(unitFile),
+		unitInputPaths: unitInputPaths.map((p) => join(intentRoot, p)),
+		upstreamPaths: upstreamPaths.map((p) => ({
+			label: p.label,
+			path: join(intentRoot, p.path),
+		})),
+		outputReqs: outputReqs || "",
+		skillLines,
+		skillsPreamble: SKILLS_PREAMBLE,
+		isStartUnit: action.action === "start_unit",
+		isFirstHat,
+		autonomyNote: AUTONOMY_NOTE,
+		subagentErrorRecovery: sharedBlockRef("subagent-error-recovery"),
+	})
 
 	if (unitCaps.subagents.supported) {
 		const promptBody = inlineCtx
-			? `${inlineCtx}\n\n${prompt.join("\n")}`
-			: prompt.join("\n")
+			? `${inlineCtx}\n\n${unitPromptBody}`
+			: unitPromptBody
 		sections.push(
 			emitSubagentDispatchBlock({
 				unit,
@@ -410,7 +379,7 @@ ${WORKTREE_AND_TIMEOUTS}`,
 		// Subagentless: direct execution in current context.
 		if (inlineCtx) sections.push(inlineCtx)
 		sections.push(
-			`### Mechanics (Direct Execution)\n\n**Execute the "${hat}" hat work directly** — your harness does not support subagents.\n\n${prompt.join("\n")}`,
+			`### Mechanics (Direct Execution)\n\n**Execute the "${hat}" hat work directly** — your harness does not support subagents.\n\n${unitPromptBody}`,
 		)
 	}
 

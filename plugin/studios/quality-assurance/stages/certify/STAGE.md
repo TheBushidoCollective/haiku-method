@@ -1,7 +1,7 @@
 ---
 name: certify
 description: Quality sign-off and release readiness assessment
-hats: [certifier, reviewer]
+hats: [certifier, reviewer, verifier]
 fix_hats: [classifier, certifier, feedback-assessor]
 review: external
 elaboration: autonomous
@@ -20,10 +20,11 @@ Sign off on quality and release readiness against the strategy's exit criteria. 
 
 ## Per-unit baton
 
-Units in this stage are **certification surfaces** — each surface evaluates a defined set of exit criteria (functional, performance, security smoke, accessibility, regression, compliance, etc.). Each unit walks two hats in order:
+Units in this stage are **certification surfaces** — each surface evaluates a defined set of exit criteria (functional, performance, security smoke, accessibility, regression, compliance, etc.). Each unit walks three hats in `plan/do → lens-review → verify` order:
 
 - **`certifier`** (plan + do) reads the strategy, the quality report, and the test results. Evaluates each exit criterion against its evidence. Compiles the known-issues list with risk-acceptance status. Writes the certification determination.
-- **`reviewer`** (verify) independently validates the certifier's evidence and determination. Challenges assumptions and gaps. Provides the independent release-readiness opinion that gates external sign-off.
+- **`reviewer`** (lens-review) independently validates the certifier's evidence and determination. Challenges assumptions and gaps. Provides the independent release-readiness opinion.
+- **`verifier`** (verify) walks the unit body for completeness, criterion-to-evidence traceability, known-issue accounting, and decision-register consistency — the body-only structural check architecture §9 requires.
 
 The baton is the certification surface: drafted determination → independently-validated determination ready for external sign-off.
 

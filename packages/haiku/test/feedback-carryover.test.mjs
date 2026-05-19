@@ -106,6 +106,11 @@ function buildThreeStageStudio(repoRoot) {
 			review: "ask",
 			review_agents: ["code-reviewer"],
 		})),
+		// Studio-level fix loop for intent-scope FBs (filed by
+		// intent-completion reviewers like cross-stage-consistency).
+		// Without this, intent-scope FBs surface as `user_gate` instead
+		// of dispatching a fix subagent — see 2026-05-19 bug report.
+		studio_fix_hats: ["reconciler", "validator"],
 	})
 }
 
@@ -390,12 +395,18 @@ test("intent-scope FB surfaces on current stage, not as a rewind", async () => {
 
 			const action = await runTick(slug)
 			// Track B walks intent-scope FBs after stage-scope ones, and
-			// dispatches them with `currentStage` (= active stage = C).
+			// dispatches them through the studio-level fix-hat chain with
+			// an empty stage (intent scope). Pre-2026-05-19 the cursor
+			// attributed them to the current stage's fix-hats — which is
+			// what `feedback-carryover.test.mjs` USED to assert — and the
+			// dispatched classifier subagent looked for the FB under the
+			// stage's feedback dir, didn't find it (the FB lives at intent
+			// scope), and bailed without closure → infinite loop.
 			assert.strictEqual(action.action, "start_feedback_hat")
 			assert.strictEqual(
 				action.stage,
-				"c",
-				`intent-scope FB must dispatch on current stage, not rewind to A; got '${action.stage}'`,
+				"",
+				`intent-scope FB must dispatch with empty stage (intent scope), not a stage rewind or current stage; got '${action.stage}'`,
 			)
 			assert.notStrictEqual(
 				action.stage,

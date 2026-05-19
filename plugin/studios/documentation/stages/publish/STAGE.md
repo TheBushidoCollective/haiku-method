@@ -1,7 +1,7 @@
 ---
 name: publish
 description: Format, validate links, and publish the documentation
-hats: [publisher, verifier]
+hats: [format-planner, publisher, verifier]
 fix_hats: [classifier, publisher, feedback-assessor]
 review: auto
 elaboration: autonomous
@@ -21,12 +21,8 @@ Take the reviewed draft and ship it to the docs platform — formatted to the pl
 
 ## Per-unit baton
 
-Each publish unit walks `publisher → verifier`:
-
-- **`publisher`** (plan + do) reads the reviewed draft, adapts it to the docs platform's conventions (Markdown dialect, code-fence syntax, embed shapes), validates every link / image / cross-reference resolves, and pushes the artifact through the platform's publish surface
-- **`verifier`** (verify) confirms the rendered output matches the draft's intent, every link still resolves at the published URL, navigation / sidebar updates landed, and search indexing is configured
-
-Detailed process lives in each hat's md file. The `develop` stage's plan role is implicit upstream — this stage is mostly mechanical execution against an already-approved draft.
+- `format-planner` → `publisher`: publish plan (platform conventions, embed shapes, anchor strategy, asset destinations).
+- `publisher` → `verifier`: published artifact + publish record (URL, version, indexed timestamp).
 
 ## Inputs and outputs
 

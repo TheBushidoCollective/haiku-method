@@ -30,6 +30,7 @@
 // Project key matches Claude's `~/.claude/projects/<key>/` convention
 // so the two trees line up side-by-side on disk.
 
+import { execFileSync } from "node:child_process"
 import {
 	mkdirSync,
 	readdirSync,
@@ -39,7 +40,7 @@ import {
 	writeFileSync,
 } from "node:fs"
 import { homedir } from "node:os"
-import { dirname, join } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import { findHaikuRoot } from "./state/shared.js"
 
 /** Explicit session identity, set at MCP bootstrap when available. */
@@ -66,23 +67,60 @@ function sessionIdOrFallback(): string {
 	)
 }
 
-/** Claude-style key for the current project — the absolute path to the
- *  repo root with `/` replaced by `-`. Mirrors `~/.claude/projects/`'s
- *  naming so haiku's tree sits next to Claude's on disk. Falls back to
- *  the process cwd when `.haiku/` isn't reachable (early bootstrap,
- *  tests not seeded with an intent). */
-function projectKey(): string {
-	let projectRoot: string
+/** Resolve the canonical project root for the running cwd. Walks git's
+ *  worktree topology so a linked worktree (e.g. `.claude/worktrees/X`)
+ *  resolves back to its MAIN worktree — all worktrees on the same repo
+ *  share one `~/.haiku/projects/<key>/` tree, so materialized
+ *  shared-blocks + provider docs aren't duplicated and the user has
+ *  one place to inspect prompts across all worktrees. Falls back to
+ *  `dirname(findHaikuRoot())` (the `.haiku/`-ancestor cwd) when git
+ *  isn't available; falls back to `process.cwd()` when even that fails.
+ *
+ *  Recomputed per call (microsecond git invocation + a couple of fs
+ *  checks) so tests that switch cwds between subtests get the new
+ *  result immediately without a manual cache reset. */
+function resolveProjectRoot(): string {
+	// Try git first — `git rev-parse --git-common-dir` returns the
+	// shared git directory across all worktrees of a repo. From a
+	// linked worktree it points at the main worktree's `.git` dir;
+	// from the main worktree it returns just `.git` (relative) or the
+	// absolute path. Either way, its parent IS the main worktree root.
 	try {
-		projectRoot = dirname(findHaikuRoot())
+		const out = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		}).trim()
+		if (out) return dirname(resolve(out))
 	} catch {
-		projectRoot = process.cwd()
+		/* not a git repo or git not on PATH — fall through */
 	}
-	return projectRoot.replace(/\//g, "-")
+	try {
+		return dirname(findHaikuRoot())
+	} catch {
+		return process.cwd()
+	}
+}
+
+/** Claude-style key for the current project — the absolute path to the
+ *  MAIN worktree's root (shared across linked worktrees) with `/`
+ *  replaced by `-`. Mirrors `~/.claude/projects/`'s naming so haiku's
+ *  tree sits next to Claude's on disk. */
+function projectKey(): string {
+	return resolveProjectRoot().replace(/\//g, "-")
+}
+
+/** Base directory under which all per-project trees live
+ *  (`<base>/<project-key>/...`). Defaults to `~/.haiku/projects/`. Set
+ *  `HAIKU_PROJECTS_ROOT` to redirect — tests use it to point at a
+ *  tmpdir so the suite doesn't pollute the user's real `~/.haiku/`. */
+function projectsBaseDir(): string {
+	const override = process.env.HAIKU_PROJECTS_ROOT
+	if (override) return override
+	return join(homedir(), ".haiku", "projects")
 }
 
 function projectRootDir(): string {
-	return join(homedir(), ".haiku", "projects", projectKey())
+	return join(projectsBaseDir(), projectKey())
 }
 
 /** Scope-resolved prompts directory under the per-intent tree. Stage
@@ -265,8 +303,19 @@ export function formatSubagentDispatchBlock(opts: {
 	const modelAttr = model ? ` model="${model}"` : ""
 	const bgAttr = background ? ` background="true"` : ""
 	const h = heading ?? "## Subagent Dispatch (MANDATORY — relay verbatim)"
+	// Parent-facing guardrail: the prompt file is FOR the subagent only.
+	// The whole point of the file-backed dispatch model is to keep that
+	// prompt body OUT of the parent's context — the parent spawns the
+	// subagent, the subagent reads its own file. If the parent reads
+	// the file too, every token saved by the file-backed scheme is
+	// wasted. This note is right above the `<subagent>` block so it's
+	// impossible to miss.
+	const parentGuard = [
+		`> **Parent: do NOT Read \`${path}\` yourself.** That file is the subagent's prompt — it is sized for the subagent's context, not yours. Reading it pollutes your context with content the subagent already gets via its own Read call when it executes. Pass the entire \`<subagent>\` block below to the Task tool verbatim and let the subagent do the work.`,
+		"",
+	].join("\n")
 	return (
-		`${h}\n\n<subagent${tool} type="${agentType}"${modelAttr}${bgAttr}` +
+		`${h}\n\n${parentGuard}<subagent${tool} type="${agentType}"${modelAttr}${bgAttr}` +
 		` prompt_file="${path}">\n${instruction}\n</subagent>`
 	)
 }

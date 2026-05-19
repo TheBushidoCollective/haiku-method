@@ -1,7 +1,7 @@
 ---
 name: draft
 description: Write the documentation content following the approved outline
-hats: [writer, technical-reviewer]
+hats: [writer, technical-reviewer, verifier]
 fix_hats: [classifier, writer, feedback-assessor]
 review: ask
 elaboration: autonomous
@@ -16,12 +16,13 @@ Turn the approved outline into prose, code samples, and visuals. Drafting is the
 
 ## Per-unit baton
 
-Each draft unit walks two hats in `plan/do → verify` order:
+Each draft unit walks three hats in `plan/do → lens-review → verify` order:
 
 - **`writer`** (plan / do) reads the assigned outline section, drafts the prose, examples, and code blocks for that section, and verifies claims against the source of truth as they write
-- **`technical-reviewer`** (verify) checks every technical claim against the system, tests every code sample, validates API signatures and configuration values, and advances or rejects with the responsible failure named
+- **`technical-reviewer`** (lens-review) checks every technical claim against the system, tests every code sample, validates API signatures and configuration values, and advances or rejects with the responsible failure named
+- **`verifier`** (verify) walks the unit body's substance, citation, internal consistency, and decision-register consistency — the structural check the technical-reviewer's domain lens does not cover
 
-The baton: outline section + audit context → drafted prose with verified examples → validated draft ready for editorial review.
+The baton: outline section + audit context → drafted prose with verified examples → lens-reviewed draft → substance-checked unit ready for editorial review.
 
 ## Inputs and outputs
 

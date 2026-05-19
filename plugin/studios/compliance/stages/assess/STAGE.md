@@ -1,7 +1,7 @@
 ---
 name: assess
 description: Evaluate current state against controls, identify gaps and risks
-hats: [auditor, risk-assessor]
+hats: [auditor, risk-assessor, verifier]
 fix_hats: [classifier, auditor, feedback-assessor]
 review: ask
 elaboration: collaborative
@@ -16,12 +16,11 @@ Take the scoping memo and produce a defensible picture of where the organization
 
 ## Per-unit baton
 
-Each assessment unit walks the hat chain in order:
+Each assessment unit walks the hat chain in `plan → do/score → verify` order:
 
 - **`auditor`** (plan / do) reads the upstream `CONTROL-MAPPING.md`, evaluates each in-scope control against the current state of systems and processes, and records the determination (met / partial / unmet) with the specific evidence reviewed
-- **`risk-assessor`** (do / verify) takes the auditor's findings and assigns likelihood + impact scores using a consistent methodology, then prioritizes the gap list
-
-Note: this stage runs without a dedicated `verifier` hat — both hats produce body content and the second hat's risk-scoring pass acts as the substantive check on the first hat's findings. (Uncertainty flagged: pure plan → do → verify per architecture §3 would add a verifier hat; the current shape diverges. Not changing structure here.)
+- **`risk-assessor`** (do / score) takes the auditor's findings and assigns likelihood + impact scores using a consistent methodology, then prioritizes the gap list
+- **`verifier`** (verify) walks the unit body for evidentiary completeness, citation quality, and decision-register consistency — the body-only structural check architecture §9 requires
 
 ## Inputs and outputs
 

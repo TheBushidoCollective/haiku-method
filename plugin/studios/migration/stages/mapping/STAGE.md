@@ -1,7 +1,7 @@
 ---
 name: mapping
 description: Map source schemas and systems to target, define transformation rules
-hats: [schema-mapper, compatibility-reviewer]
+hats: [schema-mapper, compatibility-reviewer, verifier]
 fix_hats: [classifier, schema-mapper, feedback-assessor]
 review: ask
 elaboration: collaborative
@@ -16,10 +16,11 @@ Translate the assessment inventory into an executable mapping spec — every sou
 
 ## Per-unit baton
 
-Each mapping unit walks two hats in `plan → do` order:
+Each mapping unit walks three hats in `plan/do → lens-review → verify` order:
 
 - **`schema-mapper`** (plan / do for the mapping rows) reads the inventory for this entity / surface and produces the field-level mapping table — source field, target field, transform rule (rename / cast / derive / default / drop), null behavior, encoding behavior.
-- **`compatibility-reviewer`** (do for the compatibility analysis) consumes the mapping rows and produces the compatibility findings — type mismatches with data loss, constraint conflicts, semantic gaps, downstream-consumer impact.
+- **`compatibility-reviewer`** (lens-review) consumes the mapping rows and produces the compatibility findings — type mismatches with data loss, constraint conflicts, semantic gaps, downstream-consumer impact.
+- **`verifier`** (verify) walks the unit body for table completeness, finding-to-row traceability, and decision-register consistency — the body-only structural check architecture §9 requires.
 
 The baton is the mapping rows: every compatibility finding MUST cite the row(s) it flags. A finding floating free of the table is a sign the table is missing a row.
 

@@ -16,10 +16,8 @@
 //   - resolveStageReview           — review-gate type ("auto" / "ask" /
 //                                    "external" / compound CSV)
 //   - resolveStageMetadata         — STAGE.md description + body
-//   - buildFeedbackAssessorPrompt  — prompt body for the auto-injected
-//                                    feedback-assessor hat
 
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { resolvePluginRoot } from "../config.js"
@@ -110,6 +108,49 @@ export function resolveStageHats(studio: string, stage: string): string[] {
 	return []
 }
 
+/** Read the ordered studio-level `fix_hats:` list (intent-scope fix
+ *  loop). Source order: explicit `fix_hats:` on STUDIO.md frontmatter
+ *  if present (so a studio can pin the chain), otherwise alphabetical
+ *  filename order from `studios/<studio>/fix-hats/`. Empty result
+ *  means the studio doesn't define an intent-scope fix loop and the
+ *  cursor cannot dispatch — it surfaces a `user_gate` instead so the
+ *  human resolves the finding. */
+export function resolveStudioFixHats(studio: string): string[] {
+	const info = resolveStudio(studio)
+	const dir = info ? info.dir : studio
+	const pluginRoot = resolvePluginRoot()
+	for (const base of [
+		join(process.cwd(), ".haiku", "studios"),
+		join(pluginRoot, "studios"),
+	]) {
+		const studioFile = join(base, dir, "STUDIO.md")
+		if (existsSync(studioFile)) {
+			const fm = readFrontmatter(studioFile)
+			const declared = fm.fix_hats
+			if (Array.isArray(declared) && declared.length > 0) {
+				return declared.filter((h): h is string => typeof h === "string")
+			}
+			break
+		}
+	}
+	// Fallback: enumerate the studio's fix-hats directory and return
+	// the names alphabetically. Same source-of-truth as
+	// `readStudioFixHatPaths` (the per-hat-mandate-file resolver).
+	const names: string[] = []
+	for (const base of [
+		join(process.cwd(), ".haiku", "studios"),
+		join(pluginRoot, "studios"),
+	]) {
+		const fixHatsDir = join(base, dir, "fix-hats")
+		if (!existsSync(fixHatsDir)) continue
+		for (const f of readdirSync(fixHatsDir).filter((f) => f.endsWith(".md"))) {
+			const name = f.replace(/\.md$/, "")
+			if (!names.includes(name)) names.push(name)
+		}
+	}
+	return names.sort()
+}
+
 /** Read the ordered `fix_hats:` list declared on a stage. When set,
  *  pending feedback findings are routed through this sequence
  *  instead of the legacy "draft new units that close feedback" path.
@@ -135,106 +176,6 @@ export function resolveStageFixHats(studio: string, stage: string): string[] {
 		}
 	}
 	return []
-}
-
-/** Build the subagent prompt for the auto-injected `feedback-assessor`
- *  hat. The assessor's job is independent verification of the unit's
- *  `closes:` claims — it reads every feedback body and every output
- *  the unit produced, then decides whether each claim actually
- *  resolves the finding. On approve: workflow engine promotes each
- *  FB item's status to `closed`/`addressed` and the unit completes.
- *  On reject: the unit bolts back to the first hat with a reason
- *  naming the specific unresolved items. */
-export function buildFeedbackAssessorPrompt(opts: {
-	slug: string
-	studio: string
-	stage: string
-	unit: string
-	bolt: number
-	worktreePath: string
-	intentRoot: string
-	unitAbsPath: string
-	closes: string[]
-	feedbackFiles: Array<{ id: string; file: string }>
-	unitOutputs: string[]
-}): string {
-	const {
-		slug,
-		stage,
-		unit,
-		bolt,
-		worktreePath,
-		intentRoot,
-		unitAbsPath,
-		closes,
-		feedbackFiles,
-		unitOutputs,
-	} = opts
-	const lines: string[] = []
-	lines.push(
-		`You are the **feedback-assessor** hat for unit **${unit}** (bolt ${bolt}) in stage **${stage}** of intent **${slug}**.`,
-		"",
-		"## Role",
-		"",
-		"You are the independent verifier. The prior hats produced work claiming to close specific feedback items. You decide — by reading the feedback bodies and the unit's actual outputs — whether each claimed closure is valid. The designer/reviewer cannot self-certify; that is why this hat exists.",
-		"",
-	)
-	if (worktreePath) {
-		lines.push(
-			`**Unit worktree:** \`${worktreePath}\` (intent dir: \`${intentRoot}\`). Read and write at this path — it contains prior-hat commits not yet merged. **Your FIRST Bash command MUST be \`cd <worktree path>\`.** Every git, npm, node, and shell command that follows must run from inside the worktree. Git commits land on the unit's branch only if you are inside the worktree's tree. Absolute paths below are for Read/Write tool references, but shell-layer work (install, build, test, commit) requires the cwd to be the worktree. Verify with \`pwd\` after \`cd\` if in doubt.
-
-**Bash timeouts are MANDATORY on long-running commands.** Never let a test, build, install, or lint hang the hat indefinitely. Every Bash call that runs \`npm test\`, \`vitest\`, \`npx tsc\`, \`npm run build\`, \`npm install\`, \`playwright\`, or any Node CLI must pass an explicit \`timeout\` parameter:
-
-- typecheck / lint: \`timeout: 120000\` (2 min)
-- test runs: \`timeout: 300000\` (5 min)
-- builds / install: \`timeout: 600000\` (10 min; the hard cap)
-
-If a command times out, do NOT retry blindly — diagnose why (hanging test, network fetch, infinite loop in a watcher) and fix the underlying cause. A command that legitimately needs more than 10 minutes is a spec problem, not a timeout problem; surface it via \`haiku_unit_reject_hat\` rather than hanging the bolt.`,
-			"",
-		)
-	}
-	lines.push(
-		"## Required reading",
-		"",
-		`- Unit spec (for \`closes:\` array + output list) — \`${unitAbsPath}\``,
-	)
-	for (const out of unitOutputs) {
-		lines.push(`- Unit output — \`${join(intentRoot, out)}\``)
-	}
-	lines.push("", "## Feedback items the unit claims to close", "")
-	for (const fb of feedbackFiles) {
-		lines.push(
-			`- **${fb.id}** — \`${join(intentRoot, fb.file)}\` (read the full body)`,
-		)
-	}
-	if (closes.length === 0) {
-		lines.push(
-			"- _(none — this assessor was spawned but the unit has no `closes:` references; advance immediately)_",
-		)
-	}
-	lines.push(
-		"",
-		"## Assessment procedure",
-		"",
-		"For each feedback item above:",
-		"1. Read the feedback body in full. Extract the concrete requirement(s) it is asserting must change.",
-		"2. Read the unit's outputs listed above (or glob the unit's artifacts dir if not listed).",
-		"3. Judge independently: does the output *demonstrably* resolve the finding? Be strict — a partial gesture is not a fix.",
-		"4. Record your verdict per feedback item: **closed** (resolved) or **still-pending** (not resolved, with a specific reason).",
-		"",
-		"## Outcome",
-		"",
-		`- **All items closed:** call \`haiku_unit_advance_hat { intent: "${slug}", unit: "${unit}" }\`. The workflow engine will promote each feedback item to \`closed\` (agent-authored) or \`addressed\` (human-authored) automatically.`,
-		`- **Any still-pending:** call \`haiku_unit_reject_hat { intent: "${slug}", unit: "${unit}", reason: "<which items aren't closed and why>" }\`. The unit bolts back to the first hat. The failing feedback items stay \`pending\` — they will be re-addressed on the next bolt.`,
-		"",
-		"## Guardrails",
-		"",
-		"- Do NOT edit any artifacts. You verify only.",
-		"- Do NOT call `haiku_feedback_update` yourself — advance_hat does the status promotion atomically.",
-		"- Be specific in reject reasons: name each feedback id (FB-NN) that isn't closed and one-line why.",
-		"- Trust the unit's output list but also scan the artifacts directory — if a claimed close hinges on an artifact the unit didn't list, flag it.",
-	)
-	return lines.join("\n")
 }
 
 /** Append `feedback-assessor` as the terminal hat when a unit

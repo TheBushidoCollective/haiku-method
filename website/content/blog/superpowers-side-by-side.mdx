@@ -1,0 +1,138 @@
+---
+title: "Superpowers and H·AI·K·U, Side by Side"
+description: "A tighter pass on the Superpowers comparison in the same side-by-side format as the rest of the series. We already wrote the long version; this one's for scanning."
+date: "2026-05-19T19:00:00Z"
+author: Jason Waldrip
+category: Architecture
+tags:
+  - superpowers
+  - skills-library
+  - cursor
+  - workflow-engine
+  - dark-factory
+---
+
+We already published [the long version of this comparison](/blog/superpowers-and-haiku) in April. This is the same comparison in the tighter side-by-side shape we've been using for [Anthropic's harness post](/blog/two-harnesses-one-shape), [GSD](/blog/gsd-and-haiku), and [GSTACK](/blog/gstack-and-haiku). One artifact you can scan; the long version is still the canonical writeup.
+
+Jesse Vincent's [Superpowers](https://github.com/obra/superpowers) shipped in October and continues to be the clearest public example of the skills-library approach done well. If you haven't read [Jesse's intro post](https://blog.fsck.com/2025/10/09/superpowers/), start there. The thinking is sharp and the craft is visible. We've learned from reading it.
+
+## Where we landed in the same place
+
+<Compare verdict="match" title="Plan separated from implementation">
+  <Side label="Superpowers">
+    Brainstorm and plan happen before any code lands. The plan is a distinct artifact the agent reads before executing tasks.
+  </Side>
+  <Side label="H·AI·K·U">
+    Discovery, elaborate, decompose all happen before the first hat fires `execute`. Unit specs are written, reviewed, and signed before any build hat sees them.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="Isolated workspaces for helpers">
+  <Side label="Superpowers">
+    Helper agents do focused work in isolated workspaces. They don't step on each other; each one owns a slice.
+  </Side>
+  <Side label="H·AI·K·U">
+    Wave dispatch fans out parallel subagents in isolated git worktrees. Each runs its hat against its unit, terminates, merges back.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="External review, not self-grading">
+  <Side label="Superpowers">
+    Explicit review checkpoints between tasks. The agent doesn't get to declare its own work done.
+  </Side>
+  <Side label="H·AI·K·U">
+    Verifier hat is structurally separate from the doer. Adversarial review agents fire as their own subagents. `feedback-assessor` decides closure independently.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="Automated gates beat AI opinions">
+  <Side label="Superpowers">
+    Tests must pass before work moves forward. The agent can't talk its way past a failing verification step.
+  </Side>
+  <Side label="H·AI·K·U">
+    `quality_gates:` on each unit spec are executable commands. Non-zero exit blocks the advance; the engine enforces it, not the agent.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="The harness should age out">
+  <Side label="Superpowers">
+    Jesse's framing: scaffolding for things the model can't yet do reliably on its own. Worth removing as models improve.
+  </Side>
+  <Side label="H·AI·K·U">
+    Same argument made at length in [H·AI·K·U Is a Harness](/blog/ai-dlc-is-a-harness). Every layer of the engine encodes an assumption about a current model limit; the reflection loop is wired to flag the ones that have gone stale.
+  </Side>
+</Compare>
+
+## Where we go different directions
+
+<Compare verdict="diverge" title="Where the plan lives at execute time">
+  <Side label="Superpowers">
+    Front-loaded. When a skill activates, the whole skill body lands in the agent's context — workflow, checklists, hard gates. The agent executes from context.
+  </Side>
+  <Side label="H·AI·K·U">
+    Drip-fed. The agent calls `haiku_run_next`, gets back one action, executes it, calls again. The plan lives on disk; the agent is stateless between calls.
+  </Side>
+</Compare>
+
+<Compare verdict="diverge" title="Who decides what's next">
+  <Side label="Superpowers">
+    The agent. It follows the skill's flowchart, picks up the next step, and proceeds. Hard gates and loud framing keep it on the rails.
+  </Side>
+  <Side label="H·AI·K·U">
+    The cursor. It reads on-disk state, walks a deterministic state machine, returns exactly one structured action. The agent never has the "what now?" decision.
+  </Side>
+</Compare>
+
+<Compare verdict="diverge" title="What recovery looks like">
+  <Side label="Superpowers">
+    Context compaction or `/clear` is fatal mid-run. Start over. Jesse's design keeps sessions short enough that this rarely bites.
+  </Side>
+  <Side label="H·AI·K·U">
+    Compaction, `/clear`, crash, machine swap — irrelevant. The next `haiku_run_next` reads disk and tells the agent what's next. Nothing was in the conversation to lose.
+  </Side>
+</Compare>
+
+<Compare verdict="diverge" title="The user's place in the loop">
+  <Side label="Superpowers">
+    Continuous partnership *is* the product. Brainstorm together, review per task, code-review between tasks. The human stays in the loop throughout execution.
+  </Side>
+  <Side label="H·AI·K·U">
+    Front-loaded into the spec. The human works hard upstream so execution can run as dark as the work calls for. Per-stage gates let you dial supervision back in where needed — dark factory is the ceiling, not the mandate.
+  </Side>
+</Compare>
+
+## What we have that Superpowers doesn't address
+
+<Compare verdict="win" title="Cross-domain studio library">
+  <Side>
+    Superpowers is software-focused by design. H·AI·K·U ships twenty-four studios — software, gamedev, hwdev, libdev, marketing, legal, finance, HR, sales, product-strategy, compliance, customer-success, incident-response, documentation, quality-assurance, vendor-management, security-assessment, training, dev-evangelism, migration, executive-strategy, data-pipeline, ideation, and project-management. Each carries its own stage sequence, hat library, and review-agent lineup. Different leverage point.
+  </Side>
+</Compare>
+
+<Compare verdict="win" title="Composite intents and human handoff">
+  <Side>
+    A product launch crosses marketing, engineering, and legal. H·AI·K·U treats that as first-class — multiple studios under one parent with sync points. State on disk means a researcher can start it, a designer can pick up design, a developer can take construction, a security reviewer can gate release. Each human opens a fresh session; the cursor reads state; next action is right there.
+  </Side>
+</Compare>
+
+<Compare verdict="win" title="Browseable portfolio">
+  <Side>
+    A public browsable catalog of in-flight work. Stakeholders can walk the history, read specs, inspect artifacts, and approve checkpoints without running an AI coding tool. The intent directory is a portfolio, not a log.
+  </Side>
+</Compare>
+
+## What we took from Superpowers
+
+Three concrete things, called out in the long version too:
+
+**Loud framing as load-bearing.** Jesse's `<EXTREMELY-IMPORTANT>` and `<HARD-GATE>` tags are there because calm guidance gets rationalized away. Reading Superpowers convinced us the loud version is load-bearing, not dramatic. Our engine wraps every action it hands back to the agent in similar framing — centralized at the orchestrator so every studio inherits it without restating.
+
+**Skill files as orientation aids.** Superpowers hand-draws flowcharts inside skills. The orchestrator already knows the workflow shape, so we render diagrams on demand instead of storing one per skill. Same benefit, different mechanism, the idea came from reading those skill files.
+
+**Easier install on non-Claude platforms.** Superpowers' six-platform install matrix (Claude Code, Cursor, Codex, OpenCode, Copilot CLI, Gemini CLI) is a reminder that packaging drives adoption. Our tooling already speaks MCP; the protocol work is done. What's missing is the one-click entry point for each platform.
+
+---
+
+Two projects. Same observation about raw agents being undirected. Different bets about what to build for that. Superpowers makes execution disciplined under a human in the loop. H·AI·K·U makes execution survive being unsupervised, while letting you dial supervision in stage-by-stage. The space is better for having both.
+
+[The long version](/blog/superpowers-and-haiku) is still the canonical writeup — read that for the full reasoning. This page exists so the side-by-side fits on a screen.

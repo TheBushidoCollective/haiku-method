@@ -1,7 +1,7 @@
 ---
 name: deliver
 description: Finalize and package the deliverable for its audience
-hats: [publisher, verifier]
+hats: [delivery-planner, publisher, verifier]
 fix_hats: [classifier, publisher, feedback-assessor]
 review: auto
 elaboration: autonomous
@@ -22,12 +22,8 @@ Each unit is a **delivery action** — one concrete operational step with precon
 
 ## Per-unit baton
 
-Units walk two hats in `do → verify` order. Planning was completed during decompose (the elaborator-stage planner decides which delivery actions are needed); execution then runs:
-
-- **`publisher`** (do) incorporates findings and finalizes formatting; produces the audience-ready version
-- **`verifier`** (verify) validates that preconditions / action / post-condition are all stated, the post-condition is verifiable, and rollback is named where applicable
-
-For most ideation intents two hats suffice — delivery is rarely complex enough to warrant a separate plan hat per unit. Project overlays may add a third hat (e.g., `formatter` between `publisher` and `verifier`) when the delivery channel justifies it.
+- `delivery-planner` → `publisher`: delivery plan (which findings to incorporate, target audience adaptations, packaging artifacts to produce).
+- `publisher` → `verifier`: audience-ready deliverable + operational record (preconditions, action, post-condition check, rollback).
 
 ## Inputs and outputs
 

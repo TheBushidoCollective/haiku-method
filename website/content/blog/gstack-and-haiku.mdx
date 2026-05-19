@@ -1,0 +1,97 @@
+---
+title: "GSTACK and H·AI·K·U"
+description: "GSTACK models a 23-person startup team with role-by-role instructions. H·AI·K·U models a workflow engine that emits one action at a time. Same intuition, different architectures."
+date: "2026-05-19T17:00:00Z"
+author: Jason Waldrip
+category: Architecture
+tags:
+  - gstack
+  - roles
+  - instruction-design
+  - cursor
+  - studios
+---
+
+[GSTACK](https://github.com/garrytan/gstack) is Garry Tan's open-source framework for organizing an AI coding agent across startup functions. Seventy-one thousand stars at the time of writing. The pitch is concrete: instead of disciplining one agent, model a 23-person team — CEO, product manager, engineering manager, QA lead, designer, security reviewer — each with its own slice of the problem and its own instruction set.
+
+The intuition is right. The agent in front of you is far more capable when it has a *role* than when it's asked to be a generalist. We had the same intuition. We arrived at a different architecture for it.
+
+## Where we landed in the same place
+
+<Compare verdict="match" title="Role-shaped constraints beat the generalist">
+  <Side label="GSTACK">
+    23 roles, each with its own responsibilities, constraints, and decision frames. Engineering covers architecture decisions and refactor-vs-ship judgment. Product covers spec-writing and feature prioritization. Each is legibly distinct so the agent doesn't blur them.
+  </Side>
+  <Side label="H·AI·K·U">
+    Hats. Every stage carries an ordered set — planner, builder, verifier, classifier, feedback-assessor — and each is a separate file with its own mandate. Hats fire as separate subagent invocations with fresh context. The same agent never wears two hats at once.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="Markdown as the operating instructions">
+  <Side label="GSTACK">
+    A structured collection of `CLAUDE.md`-style files the host harness reads at session start. The agent operates inside whichever role lens is active. No new interface, no new product — better instructions, organized.
+  </Side>
+  <Side label="H·AI·K·U">
+    `hats/<hat>.md`, `review-agents/<agent>.md`, `STAGE.md`, `STUDIO.md`. Each role is a markdown file with a defined shape. The engine resolves through a three-tier cascade (stage → studio → global) so the same role can be specialized per studio without forking.
+  </Side>
+</Compare>
+
+## Where we go different directions
+
+<Compare verdict="diverge" title="What layer the roles live in">
+  <Side label="GSTACK">
+    The prompt layer. Roles are instructions loaded at session start. The agent decides which role lens fits the current work and operates inside it.
+  </Side>
+  <Side label="H·AI·K·U">
+    The workflow layer. Roles are hats scoped to stages, dispatched by the engine. The cursor reads on-disk state and decides which hat fires next. The agent doesn't choose its role; the engine chose it before the subagent was spawned.
+  </Side>
+</Compare>
+
+<Compare verdict="diverge" title="Who picks the role">
+  <Side label="GSTACK">
+    The agent. Reads the situation, decides which role applies, acts. The framework gives it a sharper toolkit per role; the choice of role stays in the agent's loop.
+  </Side>
+  <Side label="H·AI·K·U">
+    The engine. Stages declare hat sequences; the cursor fires the planner, then the builder, then the verifier, in the order the stage encodes. The agent never has the "which hat now?" decision because it never had the "what step now?" decision. ([One Instruction at a Time](/blog/one-instruction-at-a-time).)
+  </Side>
+</Compare>
+
+<Compare verdict="diverge" title="What forces a context reset">
+  <Side label="GSTACK">
+    Whatever the host harness does for compaction or reset. Role instructions stay in context across role switches because they're loaded once and the agent carries them.
+  </Side>
+  <Side label="H·AI·K·U">
+    Every hat fires as a fresh subagent invocation. Context reset isn't a recovery move; it's the default state between hats. The planner finishes, returns, terminates. The builder spawns cold, with only the planner's artifacts and its own mandate.
+  </Side>
+</Compare>
+
+<Compare verdict="diverge" title="What 'the spec' is">
+  <Side label="GSTACK">
+    The collection of `CLAUDE.md` files plus whatever the user types in chat. The spec lives in prompts.
+  </Side>
+  <Side label="H·AI·K·U">
+    `intent.md` plus `units/*.md` plus stage outputs. All on disk, all artifact-shaped. Drift detection runs against the files; verifiers grade against the files; feedback anchors to the files.
+  </Side>
+</Compare>
+
+## What we have that GSTACK doesn't address
+
+<Compare verdict="win" title="Lifecycle gates between roles">
+  <Side>
+    GSTACK's roles operate inside a single agent loop — the agent moves between CEO, engineer, QA mode as the work requires. There's no hard gate between role transitions because there's no engine to enforce one. H·AI·K·U's hat transitions go through `haiku_unit_advance_hat` / `haiku_unit_reject_hat`; review and approval transitions go through gates with named reviewers; intent completion goes through user gates. The engine enforces "you can't skip the verifier" the same way TypeScript enforces "you can't pass a string where a number's expected."
+  </Side>
+</Compare>
+
+<Compare verdict="win" title="Cross-domain studio library">
+  <Side>
+    GSTACK's 23 roles are tuned for the solo-founder-running-a-startup shape. H·AI·K·U ships twenty-plus studios — software, security-assessment, legal, finance, incident-response, hwdev, marketing, sales, customer-success — each with its own stage sequence, hat library, and review-agent lineup. The role-as-lens intuition extends to "what counts as a stage in this domain" and "what handoffs the lifecycle enforces between stages." Different ceiling on how much domain shape you can encode.
+  </Side>
+</Compare>
+
+---
+
+The honest framing: if your shape of work is "I'm a solo dev or small team using an AI coding tool as a swiss-army-knife across functions," GSTACK is probably what you want. The role library is rich, the org-chart metaphor is immediately legible, and the instruction quality is strong enough to lift the agent's output across the board.
+
+If your shape is "this work runs as a multi-stage lifecycle with gates, reviews, and structured handoffs to humans at specific seams," H·AI·K·U gives you an engine that carries that shape so the agent doesn't have to remember it. Same role-as-lens intuition underneath, but the lens is selected by the engine from on-disk state, not by the agent from prompt context.
+
+GSTACK gives one agent the right role for the moment. H·AI·K·U gives the work a structure that decides which agent runs.

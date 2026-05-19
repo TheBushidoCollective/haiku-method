@@ -1,7 +1,7 @@
 ---
 name: outline
 description: Structure the documentation with clear information architecture
-hats: [architect, outline-reviewer]
+hats: [architect, outline-reviewer, verifier]
 fix_hats: [classifier, architect, feedback-assessor]
 review: ask
 elaboration: collaborative
@@ -16,12 +16,13 @@ Translate the audit's ranked gap list into a navigable information architecture.
 
 ## Per-unit baton
 
-Each outline unit walks two hats in `plan → do/verify` order:
+Each outline unit walks three hats in `plan → lens-review → verify` order:
 
 - **`architect`** (plan / do) designs the IA for the unit's scope — section hierarchy, doc-mode per piece, navigation paths, cross-references
-- **`outline-reviewer`** (verify) walks user journeys through the proposed structure and either advances or rejects with the responsible failure named
+- **`outline-reviewer`** (lens-review) walks user journeys through the proposed structure and surfaces journey gaps the architect missed
+- **`verifier`** (verify) checks the IA body for completeness, coverage of the audit's ranked gaps, and consistency between the structure and the named audience — substance not journey
 
-The baton: ranked gaps + named audience → drafted IA with per-section purpose statements and Diátaxis mode tags → validated IA ready for drafting.
+The baton: ranked gaps + named audience → drafted IA with per-section purpose statements and Diátaxis mode tags → journey-checked structure → substance-verified IA ready for drafting.
 
 ## Inputs and outputs
 

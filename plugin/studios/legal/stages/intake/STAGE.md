@@ -1,7 +1,7 @@
 ---
 name: intake
 description: Understand legal requirements and assess risk
-hats: [paralegal, risk-assessor]
+hats: [paralegal, risk-assessor, verifier]
 fix_hats: [classifier, paralegal, feedback-assessor]
 review: auto
 elaboration: collaborative
@@ -17,10 +17,11 @@ Capture the matter before any drafting or research starts. Intake is a research-
 
 ## Per-unit baton
 
-Each unit walks the hats in plan → do order, with the second hat carrying the verify responsibility for its own output:
+Each unit walks three hats in `plan/do → assess → verify` order:
 
 - **`paralegal`** (plan / do for facts) — gathers and structures the matter's facts, parties, jurisdictions, governing law, and existing documents into the unit's slice of `LEGAL-BRIEF.md`
-- **`risk-assessor`** (do / verify for risk) — reads the paralegal's fact pattern, identifies risk categories (regulatory, contractual, IP, dispute, reputational), and proposes mitigation options for the responsible attorney to evaluate; calls `haiku_unit_advance_hat` when the unit is internally consistent and substantive, `haiku_unit_reject_hat` if the fact pattern is too thin to assess
+- **`risk-assessor`** (assess) — reads the paralegal's fact pattern, identifies risk categories (regulatory, contractual, IP, dispute, reputational), and proposes mitigation options for the responsible attorney to evaluate
+- **`verifier`** (verify) — walks the unit body for substance, source citation, fact-to-risk traceability, and decision-register consistency — the body-only structural check architecture §9 requires
 
 Process detail lives in each hat's md file — this stage enforces the chain, not the per-hat process.
 

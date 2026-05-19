@@ -109,6 +109,7 @@ test("start_feedback_hat prompt embeds closure-reminder + workflow contracts (al
 	)
 	const builder = actionPromptBuilders.get("start_feedback_hat")
 	assert.ok(builder)
+	const { readFileSync } = await import("node:fs")
 	for (const count of [1, 3, 12]) {
 		const dispatches = Array.from({ length: count }, (_, i) => ({
 			feedback_id: `FB-${String(i + 1).padStart(3, "0")}`,
@@ -121,13 +122,26 @@ test("start_feedback_hat prompt embeds closure-reminder + workflow contracts (al
 			studio: "software",
 			action: { dispatches },
 		})
+		// Post-refactor: closure rules live in the materialized
+		// workflow-contracts-fix-loop.md shared file referenced by the
+		// parent prompt + inlined into each subagent prompt file. Verify
+		// both: the parent prompt references the fix-loop contracts block,
+		// AND the referenced file contains the closure obligation.
 		assert.ok(
-			/CLOSURE REQUIRED|Closure required|haiku_feedback_advance_hat/.test(out),
-			`FB dispatch (count=${count}) MUST embed an explicit closure reminder`,
+			/workflow contracts.*fix.loop/i.test(out),
+			`FB dispatch (count=${count}) MUST reference the fix-loop workflow contracts block`,
+		)
+		const sharedPathMatch = out.match(
+			/`([^`]+workflow-contracts-fix-loop\.md)`/,
 		)
 		assert.ok(
-			/workflow contracts/i.test(out),
-			`FB dispatch (count=${count}) MUST embed the workflow contracts block unconditionally`,
+			sharedPathMatch,
+			`FB dispatch (count=${count}) MUST point at workflow-contracts-fix-loop.md by path`,
+		)
+		const sharedBody = readFileSync(sharedPathMatch[1], "utf8")
+		assert.ok(
+			/haiku_feedback_advance_hat/.test(sharedBody),
+			`Referenced fix-loop contract file MUST contain the closure obligation (advance_hat)`,
 		)
 	}
 })

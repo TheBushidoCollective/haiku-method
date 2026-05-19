@@ -1,7 +1,7 @@
 ---
 name: resolve
 description: Implement permanent fix with proper testing and review
-hats: [engineer, reviewer]
+hats: [engineer, reviewer, verifier]
 fix_hats: [classifier, engineer, feedback-assessor]
 review: ask
 elaboration: autonomous
@@ -16,12 +16,13 @@ Build the permanent fix. The mitigate stage stopped the bleeding with a reversib
 
 ## Per-unit baton
 
-Each resolve unit walks `engineer → reviewer` in order. A unit here is one discrete fix — one code change, one schema migration, one config-system change, one infrastructure remediation:
+Each resolve unit walks three hats in `plan/do → lens-review → verify` order. A unit here is one discrete fix — one code change, one schema migration, one config-system change, one infrastructure remediation:
 
 - **`engineer`** (plan + do) writes the permanent fix targeted at the root cause from the investigate stage, writes the regression test that fails without the fix, plans the deployment (canary / staged rollout with rollback criteria), and plans the mitigation-cleanup step. The baton: a `RESOLUTION-SUMMARY.md` slice with the diff, the test, the deployment plan, and the mitigation-cleanup plan.
-- **`reviewer`** (verify) reads the diff with the root cause in hand, verifies the regression test actually fails without the fix applied, checks the deployment plan against the residual risk profile, confirms the mitigation cleanup is included or scheduled, and advances or rejects to the engineer.
+- **`reviewer`** (lens-review) reads the diff with the root cause in hand, verifies the regression test actually fails without the fix applied, checks the deployment plan against the residual risk profile, and confirms the mitigation cleanup is included or scheduled.
+- **`verifier`** (verify) walks the unit body's substance, root-cause traceability, deployment-plan completeness, and decision-register consistency — the body-only structural check architecture §9 requires.
 
-This stage runs `plan → do → verify` with the engineer carrying plan-and-do because the fix is the plan; separating them adds coordination cost without adding rigor for typical incident remediation. Larger architectural fixes that exceed one engineer's scope should be split into multiple resolve units rather than wedged into a single big unit.
+The engineer carries plan-and-do together because the fix IS the plan; separating them adds coordination cost without adding rigor for typical incident remediation. Larger architectural fixes that exceed one engineer's scope should be split into multiple resolve units rather than wedged into a single big unit.
 
 ## Inputs and outputs
 

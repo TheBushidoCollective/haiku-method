@@ -1,0 +1,99 @@
+---
+title: "GSD and H·AI·K·U"
+description: "GSD-2 and H·AI·K·U both attack context rot. GSD breaks work into atomic plans run in fresh windows. We never let the agent hold the plan in the first place. Same problem, opposite ends."
+date: "2026-05-19T16:00:00Z"
+author: Jason Waldrip
+category: Architecture
+tags:
+  - gsd
+  - context-rot
+  - subagents
+  - workflow-engine
+  - cursor
+---
+
+[GSD-2](https://github.com/gsd-build/gsd-2) is the meta-prompting / spec-driven framework Lex Christopherson built. Crossed 59K stars in early May. The thesis is sharp and the engineering is good. People keep asking us where H·AI·K·U fits relative to it, and the honest answer — same as for [Superpowers](/blog/superpowers-and-haiku) — is that we're solving the same problem with different bets about where the constraint lives.
+
+GSD's bet: keep the agent, give it a clean context window per atomic plan, manage the boundary tightly. Our bet: don't give the agent the loop at all.
+
+Both bets are reasonable. The difference matters once you see what each is optimizing for.
+
+## Where we landed in the same place
+
+<Compare verdict="match" title="Attacking context rot">
+  <Side label="GSD">
+    *"AI coding agents produce worse output as their context window fills up."* Work is broken into atomic plans, each executes in a fresh context window. Main session stays at 30–40% usage while subagents do the heavy lifting.
+  </Side>
+  <Side label="H·AI·K·U">
+    Same diagnosis from a year of running AI-DLC — the agent forgets the skill it loaded six steps ago. Every hat fires as a fresh subagent invocation with a structured mandate. The main agent's context never balloons because the main agent never holds the work.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="Spec lives on disk, not in chat">
+  <Side label="GSD">
+    The framework extracts a spec from the user's description and uses it as the source of truth for atomic plan dispatch. Subagents read the artifact they need; nothing material lives in chat.
+  </Side>
+  <Side label="H·AI·K·U">
+    `intent.md` plus `units/*.md` plus stage outputs are the source of truth. The agent reads what it needs per tick. Drift detection runs against the files; verifiers grade against the files.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="Stuck-loop / crash recovery">
+  <Side label="GSD">
+    GSD-2 detects stuck loops, recovers from crashes, auto-advances through milestones without human intervention. State is structured enough to resume.
+  </Side>
+  <Side label="H·AI·K·U">
+    Every state we track lives on disk. Crash, `/clear`, switch machines mid-intent — the next `haiku_run_next` reads disk and tells you what's next. Nothing was in the agent's head to lose.
+  </Side>
+</Compare>
+
+## Where we go different directions
+
+<Compare verdict="diverge" title="What the orchestrator is">
+  <Side label="GSD">
+    A smart partner — itself an agent, with a curated mandate and tighter tools, but an agent. It decomposes specs into atomic plans, chooses which subagent runs next, decides when to clear context, declares milestones complete.
+  </Side>
+  <Side label="H·AI·K·U">
+    A deterministic engine. `haiku_run_next` reads disk, walks a typed cursor through a state machine, returns *exactly one* structured action. The action is a data structure, not a prompt. No language model in the orchestrator's decision path. Same state always produces the same action.
+  </Side>
+</Compare>
+
+<Compare verdict="diverge" title="How the orchestrator can fail">
+  <Side label="GSD">
+    Can hallucinate like any agent — pick a wrong atomic plan, dispatch the wrong subagent, declare a milestone done when it isn't. Mitigation is craft: tighter mandates, better tools, careful guardrails.
+  </Side>
+  <Side label="H·AI·K·U">
+    Can't hallucinate because there's no model in the orchestrator. Can be buggy — but the bug is in TypeScript, reproducible, and gets fixed in code rather than re-prompted.
+  </Side>
+</Compare>
+
+<Compare verdict="diverge" title="Where the cost lives">
+  <Side label="GSD">
+    Dispersed across runs. The orchestrator agent burns tokens every cycle deciding what to dispatch and whether the milestone is done.
+  </Side>
+  <Side label="H·AI·K·U">
+    Concentrated upfront. The engine is harder to build than a prompt and has to be updated in code when the workflow shifts. It doesn't burn tokens — same state, same action, no inference cost on the orchestrator side.
+  </Side>
+</Compare>
+
+## What we have that GSD doesn't address
+
+<Compare verdict="win" title="Lifecycle as first-class shape">
+  <Side>
+    GSD's atomic-plan model is excellent for "spec → tasks → build artifacts → reap." Most coding work fits that shape. H·AI·K·U carries more workflow shape because we're addressing problems past the build: "build this feature, then have it security-reviewed, then opened as a PR that waits for human merge, then drift-checked against the rendered output." That's a multi-stage lifecycle with hard gates, named reviewers, and structured handoffs to humans at specific seams. Studios, stages, hats, gates, the forward-only lifecycle, the FB-as-unit fix loop — those are the lifecycle, not the task. ([The Scavenger Hunt](/blog/the-scavenger-hunt) for the long shape.)
+  </Side>
+</Compare>
+
+<Compare verdict="win" title="Cross-domain workflow library">
+  <Side>
+    Twenty-plus studios — software, security-assessment, legal, finance, incident-response, hwdev, marketing, sales — each carrying its own stage sequence, hat library, review-agent lineup, and operation templates. GSD scales by tightening its orchestrator's mandate per project; we scale by shipping more studios. Different leverage point. The studio is reusable; the orchestrator-mandate is per-project.
+  </Side>
+</Compare>
+
+---
+
+The honest framing: if you're a solo dev or small team shipping feature work and your main pain is "the agent forgets the plan halfway through," GSD is probably the right grab. The atomic-plan-per-fresh-window design is tuned exactly for that failure mode and the framework is mature.
+
+If you're shipping work that involves a real lifecycle — multi-stage gates, named reviewers, drift detection, structured handoff to humans at specific seams, work that has to survive `/clear` and machine switches — H·AI·K·U gives you an engine that holds the lifecycle so the agent doesn't have to. Same anti-context-rot bet underneath, different ceiling on how much workflow you can encode without the agent dropping it.
+
+The convergence is real. Both projects looked at context rot and reached for subagent fan-out plus on-disk state as the answer. The divergence is where the smarts live: GSD puts them in the orchestrator agent; we put them in the deterministic engine. Neither is wrong. They're built for different shapes of work.

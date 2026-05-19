@@ -1,7 +1,7 @@
 ---
 name: mitigate
 description: Apply immediate fixes to stop the bleeding — rollbacks, feature flags, scaling
-hats: [mitigator, verifier]
+hats: [mitigation-planner, mitigator, verifier]
 fix_hats: [classifier, mitigator, feedback-assessor]
 review: [ask, await]
 elaboration: collaborative
@@ -16,12 +16,8 @@ Stop user-facing impact as fast as safely possible. Mitigation is not the perman
 
 ## Per-unit baton
 
-Each mitigate unit walks `mitigator → verifier` in order. A unit here is one mitigation action — one rollback, one flag flip, one scaling operation, one traffic redirect:
-
-- **`mitigator`** (plan + do) chooses the fastest reversible action that addresses the hypothesized cause, names the exact commands or config changes, applies them, and documents what changed. The baton: a `MITIGATION-LOG.md` slice with the action, the exact change applied, the timestamp, and the rollback procedure for the mitigation itself.
-- **`verifier`** (verify) confirms the mitigation actually stopped user-facing impact by measuring the same signals that detected the incident, waits long enough for metrics to stabilize, and checks for side effects introduced by the mitigation. Advances or rejects to the responsible hat.
-
-This stage runs `plan → do → verify` with `mitigator` carrying the plan-and-do roles because a separate planner step adds latency during an active incident; the planning and the action are tightly coupled and live in the same head.
+- `mitigation-planner` → `mitigator`: chosen mitigation action + hypothesis it targets + verification signal + rollback procedure.
+- `mitigator` → `verifier`: `MITIGATION-LOG.md` slice (action, exact change, timestamp, rollback procedure).
 
 ## Inputs and outputs
 

@@ -44,6 +44,12 @@ function makeRepo(label, { git = true } = {}) {
 	}
 	const haikuDir = join(dir, ".haiku")
 	mkdirSync(join(haikuDir, "intents", "demo"), { recursive: true })
+	// Redirect the per-project prompts/shared-blocks tree to this
+	// tmpdir so the test doesn't write into the user's real
+	// ~/.haiku/projects/. The loader honors HAIKU_PROJECTS_ROOT.
+	const projectsRoot = join(haikuDir, "_projects-root")
+	mkdirSync(projectsRoot, { recursive: true })
+	process.env.HAIKU_PROJECTS_ROOT = projectsRoot
 	return { dir, haikuDir, intentDir: join(haikuDir, "intents", "demo") }
 }
 

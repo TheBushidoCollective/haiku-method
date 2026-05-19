@@ -1,0 +1,85 @@
+---
+title: "The Harness Series: What We Read, What We Took, What We're Trying to Do"
+description: "Four posts comparing H·AI·K·U to Anthropic's harness writeup, GSD, GSTACK, and Superpowers. This is the anchor — where we landed on the methodology, who we owe, and what we're actually going for."
+date: "2026-05-19T20:00:00Z"
+author: Jason Waldrip
+category: Architecture
+tags:
+  - harness
+  - methodology
+  - influences
+  - cursor
+  - workflow-engine
+---
+
+The last month was a lot of reading. Anthropic shipped [their harness-design post](https://www.anthropic.com/engineering/harness-design-long-running-apps). Lex Christopherson's [GSD-2](https://github.com/gsd-build/gsd-2) crossed 59K stars. Garry Tan's [GSTACK](https://github.com/garrytan/gstack) crossed 71K. Jesse Vincent's [Superpowers](https://github.com/obra/superpowers) kept being passed around. Brian Suh wrote [a piece on agents needing control flow](https://bsuh.bearblog.dev/agents-need-control-flow/). The Pulumi blog [compared three of the four](https://www.pulumi.com/blog/claude-code-orchestration-frameworks/) head-to-head.
+
+Reading all four in sequence does something useful to your head. You stop thinking about each project as "the right answer" and start thinking about them as bets — different teams looking at the same failure modes and choosing different layers to put the constraint.
+
+We wrote four side-by-side comparisons of H·AI·K·U against each:
+
+- [Two Harnesses, One Shape](/blog/two-harnesses-one-shape) — Anthropic's post.
+- [GSD and H·AI·K·U](/blog/gsd-and-haiku) — Lex Christopherson's spec-driven dispatch framework.
+- [GSTACK and H·AI·K·U](/blog/gstack-and-haiku) — Garry Tan's 23-role startup library.
+- [Superpowers, Side by Side](/blog/superpowers-side-by-side) — Jesse Vincent's skills library. ([Long-form version](/blog/superpowers-and-haiku) from April.)
+
+This post is the anchor — where we ended up on the methodology, what we took from whom, and what we're trying to do.
+
+## The methodology, named
+
+H·AI·K·U is a workflow engine that hands an agent one action at a time from a plan kept on disk. The agent is stateless between calls. The cursor is the persistent thread. The artifacts on disk are the memory. Every move the agent makes is a single tool call returning one structured action, which the agent then executes — and that's it for that turn. Next tick, fresh subagent, next action.
+
+The load-bearing claims:
+
+1. **The agent shouldn't decide what's next.** The cursor decides, deterministically, from on-disk state. There's no language model in the orchestrator's decision path. ([One Instruction at a Time](/blog/one-instruction-at-a-time).)
+2. **State lives on disk, not in context.** Unit specs, feedback, intent frontmatter, stage outputs — everything material is artifact-shaped. Compaction, `/clear`, crashes, machine swaps don't lose the plan. ([The Scavenger Hunt](/blog/the-scavenger-hunt).)
+3. **Plan → do → verify is the minimum hat sequence.** Every stage has at least three hats; the last is a verifier; the verifier is a separate subagent from the doer. The doer never grades its own output.
+4. **Specs are testable before any code lands.** Acceptance criteria pair with executable `quality_gates:`. Non-zero exit blocks the advance. The toolchain settles what the toolchain can settle; judgment is reserved for the parts that actually need judgment.
+5. **The lifecycle is forward-only.** Completed units don't get re-edited. Corrective work flows through new units authored from upstream elaborate. Feedback is the only way back.
+6. **Workflow shape is data, not prompts.** Studios, stages, hats, review agents, gates, output templates — all markdown files the engine resolves through a three-tier cascade (stage → studio → global, project overlay wins at each tier). New domains ship by adding a studio; new lenses ship by adding a review-agent file.
+7. **Drift gets noticed.** A pre-tick check verifies the agent's premise still matches reality (file hashes against the witness stamps on the unit FM). Long-running agents drift; ours notice before the next tick fires.
+8. **The engine, not the agent, holds the contracts.** A PreToolUse hook guards workflow-managed files — agents go through MCP tools or get rejected with a redirect message. Invariants like "stage branch is always ahead of main" aren't on the agent's checklist; they're hooked.
+
+That's the engine. The shape of work it runs is up to the studio.
+
+## What we're trying to do
+
+If we had to write the H·AI·K·U mission in one sentence, it would be the same one we wrote in April:
+
+<Callout tone="info" title="The mission, stated plainly">
+Deliver a spec that *can* execute as a **dark factory** — lights-out, one shot, minimal user turns after completion — and let the user dial down from there to whatever level of supervision the work calls for.
+</Callout>
+
+Dark factory is the ceiling, not the mandate. Per-stage gates let you keep a human in the loop as much as the work calls for — interactive discovery, auto-advancing build, external sign-off security gate, all in the same intent. The point isn't to remove the human; it's to put the human's effort where it pays back — in the spec, not in babysitting the build.
+
+Doing this across 24 domains — software, gamedev, hwdev, libdev, marketing, legal, finance, HR, sales, product-strategy, compliance, customer-success, data-pipeline, incident-response, documentation, quality-assurance, vendor-management, security-assessment, training, dev-evangelism, migration, executive-strategy, ideation, project-management — is the bet that the structural pattern holds across domains, not just software. The studios share the engine; only the domain shape differs.
+
+So far: we think it can do it all. The shape holds. The four comparison posts are us pressure-testing that belief against four serious projects working on the same problem with different bets. None of them broke the belief; some of them showed us where we have packaging work to do.
+
+## What we owe
+
+We didn't get here in a vacuum. Specific debts:
+
+**Anthropic's harness post.** Confirmed two things we'd already built (context resets, external evaluators) and named one structural gap we addressed differently. Their post is candid that "some problems remained persistent" — context drift on long tasks, self-evaluation bias — and that their patches add complexity and latency. Reading that paragraph and recognizing it as a downstream symptom of the open-loop the agent runs was the clearest articulation we'd seen of why our single-step design pays off. We didn't invent that framing in response to their post; we'd shipped the cursor model first. But their post is what let us name the difference.
+
+**Jesse Vincent's Superpowers.** Three concrete things. First: loud framing is load-bearing. `<EXTREMELY-IMPORTANT>` and `<HARD-GATE>` aren't theater; they're what survives the agent rationalizing past calm guidance. We adopted that defensive envelope at the orchestrator layer so every studio inherits it. Second: skill files as orientation aids — we don't ship flowchart files but the orchestrator renders the workflow shape on demand for the same reason. Third: the six-platform install matrix is a packaging discipline we don't yet match. The MCP protocol work is done; the one-click entry points for Cursor / Codex / Copilot CLI / Gemini / OpenCode are work-in-progress.
+
+**Lex Christopherson's GSD-2.** The atomic-plan-per-fresh-window pattern is the cleanest articulation we've read of context-rot mitigation. We solve the same problem by never giving the agent the loop in the first place, but reading GSD's design reinforced that the per-step boundary is where the structural answer lives. The crash-recovery + stuck-loop detection patterns are also worth studying — our on-disk state survives crashes by construction, but GSD's explicit recovery paths show what an orchestrator-agent has to do when state isn't all on disk.
+
+**Garry Tan's GSTACK.** The 23-role library is the strongest articulation of "roles as legibly distinct lenses" we've seen in the prompt-layer approach. Our hats embody the same intuition; reading GSTACK confirmed that the lens metaphor scales across domains, not just engineering. The next batch of studio cleanup we have queued (cross-stage consistency, FM-interpretation refactors) directly borrows the legibility discipline from GSTACK's role definitions.
+
+**Brian Suh's piece on agents needing control flow.** Already linked from [One Instruction at a Time](/blog/one-instruction-at-a-time). The line "if you've ever resorted to MANDATORY or DO NOT SKIP, you've hit the ceiling of prompting" is the clearest one-sentence justification for moving from prompts-as-runtime to engine-as-runtime that we've read.
+
+**AI-DLC**, our predecessor. We built it. We watched it walk over its own MUSTs in production. The decision to rewrite it as H·AI·K·U with the agent-as-tool model came directly from those failure logs. The credit there is to the seven of us who kept hitting the same context-drift wall and finally said "the agent can't hold the plan; stop making it." That was the foundational bet — everything since follows.
+
+## What we still don't know
+
+We think Haiku can do it all. The belief survived reading the four projects above. It hasn't survived running at scale yet — the reflection loop is wired but hasn't actually fired on a real intent. The studio audit we just commissioned found ~94 EXECUTION.md files describing a stale pre/post review model; that's drift we have to clean up. The "trim scaffolding as models improve" thesis from Anthropic and Superpowers lands on us too; we have hat-internal anti-pattern walls that we suspect are belt-and-suspenders on current frontier models.
+
+So: we think the shape is right. We're less sure each layer is sized correctly. The next quarter is mostly cleanup work — let the reflection loop fire on real intents, watch what it surfaces, accept the trims, push back on the additions.
+
+If you're choosing a harness today: read [the GSD comparison](/blog/gsd-and-haiku), [the GSTACK comparison](/blog/gstack-and-haiku), and [the Superpowers comparison](/blog/superpowers-side-by-side) before you choose us. We're not the right tool for every shape of work. We're built for work that has lifecycle structure the engine should hold, across domains where the structure varies. If your shape is "I'm a solo dev building features as fast as a coding agent will let me," GSD might be the right grab. If it's "I'm a founder running a startup with one AI coding tool," GSTACK might be. If it's "I want a disciplined human-in-the-loop coding partner," Superpowers might be.
+
+If it's "I want the work itself — across whatever domain — to run on a workflow my team can audit, hand off between humans, and dial supervision into," that's the shape we're building for.
+
+The harness conversation is bigger than any one of us. The space is better for having four well-argued options. Read the comparisons. Pick the bet that matches your work.

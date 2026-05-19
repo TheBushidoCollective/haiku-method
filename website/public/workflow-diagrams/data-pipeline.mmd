@@ -77,8 +77,10 @@ stateDiagram-v2
     state extraction_execute {
       [*] --> extraction_execute_extractor
       extraction_execute_extractor --> extraction_execute_connector_reviewer : hat.advance
-      extraction_execute_connector_reviewer --> extraction_execute_done : hat.advance
+      extraction_execute_connector_reviewer --> extraction_execute_verifier : hat.advance
       extraction_execute_connector_reviewer --> extraction_execute_extractor : hat.reject
+      extraction_execute_verifier --> extraction_execute_done : hat.advance
+      extraction_execute_verifier --> extraction_execute_connector_reviewer : hat.reject
       extraction_execute_done --> [*]
     }
     extraction_execute --> extraction_review
@@ -185,8 +187,10 @@ stateDiagram-v2
     state validation_execute {
       [*] --> validation_execute_validator
       validation_execute_validator --> validation_execute_data_quality_reviewer : hat.advance
-      validation_execute_data_quality_reviewer --> validation_execute_done : hat.advance
+      validation_execute_data_quality_reviewer --> validation_execute_verifier : hat.advance
       validation_execute_data_quality_reviewer --> validation_execute_validator : hat.reject
+      validation_execute_verifier --> validation_execute_done : hat.advance
+      validation_execute_verifier --> validation_execute_data_quality_reviewer : hat.reject
       validation_execute_done --> [*]
     }
     validation_execute --> validation_review

@@ -120,6 +120,18 @@ const FILE_BASED_POINTER_TPL = loadTemplate(
 	import.meta.url,
 	"blocks/file-based-pointer.eta.md",
 )
+const DISCOVERY_SUBAGENT_TPL = loadTemplate(
+	import.meta.url,
+	"blocks/discovery-subagent.eta.md",
+)
+const REVIEW_AGENT_LENS_TPL = loadTemplate(
+	import.meta.url,
+	"blocks/review-agent-lens-section.eta.md",
+)
+const SKILL_REGISTRY_TPL = loadTemplate(
+	import.meta.url,
+	"blocks/skill-registry-section.eta.md",
+)
 
 interface PendingFeedback {
 	feedback_id: string
@@ -166,29 +178,35 @@ function buildReviewAgentLensSection(
 	)
 	const names = Object.keys(agentPaths).sort()
 	if (names.length === 0) return null
-	const lines: string[] = [LENS_PREAMBLE, ""]
-	for (const name of names) {
-		const body = readReviewAgentBody(agentPaths[name])
-		if (!body) continue
-		const heading = name
-			.split(/[-_]/)
-			.map((p) => (p.length === 0 ? p : p[0].toUpperCase() + p.slice(1)))
-			.join(" ")
-		lines.push(`### ${heading} lens`, "", body, "")
-	}
-	return lines.join("\n").trimEnd()
+	const entries = names
+		.map((name) => {
+			const body = readReviewAgentBody(agentPaths[name])
+			if (!body) return null
+			const heading = name
+				.split(/[-_]/)
+				.map((p) => (p.length === 0 ? p : p[0].toUpperCase() + p.slice(1)))
+				.join(" ")
+			return { heading, body }
+		})
+		.filter((e): e is { heading: string; body: string } => e !== null)
+	if (entries.length === 0) return null
+	return eta
+		.renderString(REVIEW_AGENT_LENS_TPL, { preamble: LENS_PREAMBLE, entries })
+		.trimEnd()
 }
 
 /** Build the "## Available Skills" injection block. */
 function buildSkillRegistrySection(): string | null {
 	const skills = listInstalledSkills()
 	if (skills.length === 0) return null
-	const lines: string[] = [SKILL_REGISTRY_PREAMBLE, ""]
-	for (const skill of skills) {
+	const skillLines = skills.map((skill) => {
 		const desc = skill.description ? ` — ${skill.description}` : ""
-		lines.push(`- \`/${skill.slug}\`${desc}`)
-	}
-	return lines.join("\n")
+		return `- \`/${skill.slug}\`${desc}`
+	})
+	return eta.renderString(SKILL_REGISTRY_TPL, {
+		preamble: SKILL_REGISTRY_PREAMBLE,
+		skillLines,
+	})
 }
 
 // Exported so the workflow handler (`handlers/elaborate.ts`) can write
@@ -538,73 +556,21 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 							`${a.name.toUpperCase()}.md`,
 						)
 				: null
-			const lines: string[] = [
-				`You are researching and producing the "${a.name}" discovery artifact for intent "${slug}" in stage "${stage}" of studio "${studio}".`,
-				"",
-			]
-			if (wt) {
-				lines.push(
-					"## Isolation worktree (REQUIRED)",
-					`Do ALL work for this subagent inside the dedicated worktree at:`,
-					``,
-					`    ${wt}`,
-					``,
-					`This worktree is on branch \`${discoveryBranchName(slug, stage, a.name)}\`, forked from the stage branch at dispatch time.`,
-					"",
-				)
-				if (expectedArtifactPath) {
-					lines.push(
-						"## Required artifact path (EXACT)",
-						"",
-						`You MUST create exactly ONE file at this absolute path:`,
-						"",
-						`    ${expectedArtifactPath}`,
-						"",
-						`This is the path the engine's existence check reads. Writing the artifact anywhere else (a different filename, a different directory, intent main instead of the worktree) will cause \`haiku_discovery_complete\` to return \`discovery_artifact_missing\` and the cursor to keep flagging discovery as incomplete on every tick.`,
-						"",
-					)
-				}
-				lines.push(
-					`**Rules:**`,
-					`- Write the populated discovery artifact at the EXACT path above (inside the worktree, not on intent main).`,
-					`- Commit your work via \`git -C "${wt}" add -A && git -C "${wt}" commit -m "..."\` (no push).`,
-					`- When the artifact is complete and committed, call \`haiku_discovery_complete { intent: "${slug}", stage: "${stage}", template: "${a.name}" }\`. The engine verifies the file exists at the expected path, then takes a per-stage lock and merges your branch into the stage branch, then reaps the worktree + branch. On clean success the tool returns \`{ ok: true }\` and you're done. On \`discovery_artifact_missing\` you skipped or misplaced the write — the response carries the expected path; write the file there, commit, and re-call. On \`discovery_merge_conflict\` the response lists the conflict files — surface that to the parent agent so the integrator can resolve. On \`discovery_merge_failed\` the response carries the git error — surface it and stop.`,
-					`- Do NOT run \`git worktree remove\`, \`git branch -d\`, or \`git merge\` yourself — \`haiku_discovery_complete\` owns those.`,
-					"",
-				)
-			}
-			lines.push(
-				"## Required context (inlined below)",
-				"The intent goal, stage scope, and your discovery template are embedded below — no need to fan out Read tool calls for them.",
-				"",
-				inlineFile(intentPath, "Intent goal"),
-			)
-			if (stagePath) lines.push(inlineFile(stagePath, "Stage scope"))
-			lines.push(
-				inlineFile(
+			const promptBody = eta.renderString(DISCOVERY_SUBAGENT_TPL, {
+				artifactName: a.name,
+				slug,
+				stage,
+				studio,
+				worktree: wt,
+				branchName: wt ? discoveryBranchName(slug, stage, a.name) : "",
+				expectedArtifactPath,
+				intentInline: inlineFile(intentPath, "Intent goal"),
+				stageInline: stagePath ? inlineFile(stagePath, "Stage scope") : "",
+				templateInline: inlineFile(
 					a.templatePath,
 					`Discovery template: ${a.name} (content guide + quality signals + output location)`,
 				),
-			)
-			lines.push(
-				"",
-				"## Scope (STRICT)",
-				"",
-				`- You research **only** the axis defined by the "${a.name}" template. Other discovery artifacts in this stage are being researched by **sibling subagents in parallel** — do NOT investigate adjacent domains, do NOT pre-empt their work, do NOT leave notes for them.`,
-				"- If you encounter information that belongs primarily in a sibling artifact, do NOT write it to the sibling's file path — that creates merge conflicts at the integrator step. Note it briefly as a *context boundary* in your own artifact (e.g. *\"depends on auth model — see security artifact\"*) and let the sibling agent author the substance. Cross-cutting constraints that genuinely shape multiple axes (security boundaries, hard dependencies) should be noted in your artifact too, in the boundary section, so they're not lost if the sibling misses them.",
-				"- Your write path is ONE file at the template's `location:`. Any other file write — sibling artifacts, intent.md, unit specs, knowledge files outside your `location:` — is a scope violation.",
-				"- Do NOT attempt to summarize or synthesize across sibling artifacts. The elaborate phase does that on the next workflow tick, after all discovery merges back.",
-				"",
-				"## Instructions",
-				"",
-				"1. Research the problem space along the axis defined by your template.",
-				"2. Use the template's Content Guide as the document structure.",
-				"3. Meet the template's Quality Signals as your acceptance bar.",
-				"4. Write the populated document to the stage's discovery path as defined in the template's `location:` frontmatter above — **inside your isolation worktree** when one is allocated. **This is your ONLY write path** — any file written elsewhere is a scope violation.",
-				"5. Commit the artifact inside your worktree (see the Rules block above for the exact git invocation).",
-				`6. Call \`haiku_discovery_complete { intent: "${slug}", stage: "${stage}", template: "${a.name}" }\` to merge your work into the stage branch. The engine takes a per-stage lock so parallel siblings serialize. Surface any conflict / failure response to the parent agent.`,
-				"7. Be thorough on YOUR axis — this artifact informs all downstream work. Thoroughness within scope is the goal; thoroughness across scope is a violation.",
-			)
+			})
 			const discoveryModel = resolveStudioMandateModel({
 				mandatePath: a.templatePath,
 				studio,
@@ -618,7 +584,7 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 				stage,
 				agentType: "general-purpose",
 				model: discoveryModel,
-				promptBody: lines.join("\n"),
+				promptBody,
 				heading: `### Subagent: \`${a.name}\``,
 				forceForeground: isAutopilot,
 				omitBolt: true,

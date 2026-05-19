@@ -77,8 +77,10 @@ stateDiagram-v2
     state assess_execute {
       [*] --> assess_execute_auditor
       assess_execute_auditor --> assess_execute_risk_assessor : hat.advance
-      assess_execute_risk_assessor --> assess_execute_done : hat.advance
+      assess_execute_risk_assessor --> assess_execute_verifier : hat.advance
       assess_execute_risk_assessor --> assess_execute_auditor : hat.reject
+      assess_execute_verifier --> assess_execute_done : hat.advance
+      assess_execute_verifier --> assess_execute_risk_assessor : hat.reject
       assess_execute_done --> [*]
     }
     assess_execute --> assess_review

@@ -375,6 +375,13 @@ export function seedVerifiedElaboration({
 /**
  * Initialize a bare-bones git repo + intent dir layout for a test.
  * Returns { repoRoot, intentDir, slug }.
+ *
+ * Side effect: sets `HAIKU_PROJECTS_ROOT` to a tmpdir under `<repoRoot>/
+ * .haiku/_projects-root/` so any prompt-builder calls during the test
+ * write their materialized prompts/shared-blocks there instead of the
+ * user's real `~/.haiku/projects/`. The tmpdir is cleaned up when the
+ * test removes `repoRoot`. Idempotent — overwriting the env var across
+ * tests is fine since the path resolution is recomputed per call.
  */
 export function initTestRepo({ repoRoot, slug }) {
 	if (!existsSync(repoRoot)) mkdirSync(repoRoot, { recursive: true })
@@ -389,6 +396,9 @@ export function initTestRepo({ repoRoot, slug }) {
 	}
 	const intentDir = join(repoRoot, ".haiku", "intents", slug)
 	mkdirSync(intentDir, { recursive: true })
+	const projectsRoot = join(repoRoot, ".haiku", "_projects-root")
+	mkdirSync(projectsRoot, { recursive: true })
+	process.env.HAIKU_PROJECTS_ROOT = projectsRoot
 	return { repoRoot, intentDir, slug }
 }
 
@@ -418,19 +428,33 @@ export function makeStudio({
 			review_agents: ["code-reviewer"],
 		},
 	],
+	studio_fix_hats = [],
 }) {
 	const studioRoot = join(repoRoot, ".haiku", "studios", studio)
 	mkdirSync(studioRoot, { recursive: true })
 
-	// STUDIO.md — declare stage list
+	// STUDIO.md — declare stage list (+ optional intent-scope `fix_hats:`)
 	const studioFm = {
 		stages: stages.map((s) => s.name),
 		default_model: "sonnet",
+		...(studio_fix_hats.length > 0 ? { fix_hats: studio_fix_hats } : {}),
 	}
 	writeFileSync(
 		join(studioRoot, "STUDIO.md"),
 		matter.stringify(`# ${studio}\n`, studioFm),
 	)
+
+	// Studio-level fix-hat mandate files (intent-scope fix loop).
+	if (studio_fix_hats.length > 0) {
+		const studioFixHatsRoot = join(studioRoot, "fix-hats")
+		mkdirSync(studioFixHatsRoot, { recursive: true })
+		for (const hat of studio_fix_hats) {
+			writeFileSync(
+				join(studioFixHatsRoot, `${hat}.md`),
+				matter.stringify(`# ${hat}\n\nStudio fix-hat mandate for ${hat}.\n`, {}),
+			)
+		}
+	}
 
 	for (const stage of stages) {
 		const stageRoot = join(studioRoot, "stages", stage.name)

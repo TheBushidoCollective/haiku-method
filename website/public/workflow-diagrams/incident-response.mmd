@@ -185,8 +185,10 @@ stateDiagram-v2
     state resolve_execute {
       [*] --> resolve_execute_engineer
       resolve_execute_engineer --> resolve_execute_reviewer : hat.advance
-      resolve_execute_reviewer --> resolve_execute_done : hat.advance
+      resolve_execute_reviewer --> resolve_execute_verifier : hat.advance
       resolve_execute_reviewer --> resolve_execute_engineer : hat.reject
+      resolve_execute_verifier --> resolve_execute_done : hat.advance
+      resolve_execute_verifier --> resolve_execute_reviewer : hat.reject
       resolve_execute_done --> [*]
     }
     resolve_execute --> resolve_review

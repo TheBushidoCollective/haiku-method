@@ -1,7 +1,7 @@
 ---
 name: evaluate
 description: Assess vendors and score against criteria
-hats: [evaluator, technical-reviewer]
+hats: [evaluator, technical-reviewer, verifier]
 fix_hats: [classifier, evaluator, feedback-assessor]
 review: ask
 elaboration: collaborative
@@ -16,12 +16,8 @@ Score and shortlist vendor responses against the RFP's evaluation criteria. This
 
 ## Per-unit baton
 
-Each unit walks the hat chain in order:
-
-- **`evaluator`** (plan / do) applies the pre-defined scoring methodology to every vendor response, calculates total cost of ownership, and produces a comparative ranking with documented rationale per score
-- **`technical-reviewer`** (verify lens) validates the technical claims through proof-of-concept testing, reference checks with actual customers, and integration / architecture compatibility assessment — flags any vendor whose scored capabilities don't survive hands-on verification
-
-The baton between the two is the scorecard plus the score rationale. The technical reviewer either confirms scores stand or files findings against the entries the verification couldn't support.
+- `evaluator` → `technical-reviewer`: scorecard rows + score rationale per vendor.
+- `technical-reviewer` → `verifier`: scorecard rows confirmed (or findings filed against rows that didn't survive verification).
 
 ## Inputs and outputs
 

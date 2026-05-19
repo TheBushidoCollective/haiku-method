@@ -1,0 +1,148 @@
+---
+title: "Two Harnesses, One Shape"
+description: "Anthropic published a post on harness design for long-running agent apps. We've been building one for a month. Most of it is the same picture. The places we diverge are the interesting part."
+date: "2026-05-19T15:00:00Z"
+author: Jason Waldrip
+category: Architecture
+tags:
+  - harness
+  - cursor
+  - workflow-engine
+  - subagents
+  - context
+---
+
+Anthropic published [a post on harness design for long-running agent apps](https://www.anthropic.com/engineering/harness-design-long-running-apps). I read it on a train, and the eerie thing was how much of the architecture we'd already converged on independently, in a different vocabulary.
+
+Different teams, same problem, similar answers. That's the useful read. The places where we *don't* converge are the interesting part.
+
+## Where we landed in the same place
+
+Seven patterns from their post map cleanly onto something we already have.
+
+<Compare verdict="match" title="Multi-agent specialization">
+  <Side label="Anthropic">
+    Distinct personas — planner, generator, evaluator — each addressing a specific failure mode. The separation enables better error detection.
+  </Side>
+  <Side label="H·AI·K·U">
+    Hats in a plan → do → verify sequence (`plugin/studios/ARCHITECTURE.md` §3). Every stage ends in a verifier; adversarial review agents fire externally. Same shape, different vocabulary.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="State handoff through files">
+  <Side label="Anthropic">
+    "One agent would write a file, another agent would read it and respond either within that file or with a new file." Decouples agents, enables clean session boundaries.
+  </Side>
+  <Side label="H·AI·K·U">
+    Our whole substrate is files: `.haiku/intents/<slug>/units/*.md`, `feedback/FB-NN.md`, `intent.md`. v4 dropped `state.json` and made outputs-on-disk the only signal the cursor reads.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="Context reset over compaction">
+  <Side label="Anthropic">
+    "Context resets — clearing the context window entirely and starting a fresh agent, combined with a structured handoff — address both compaction's drift and context anxiety."
+  </Side>
+  <Side label="H·AI·K·U">
+    Every hat fires as a fresh subagent invocation with a structured mandate. The orchestrator is the persistent thread; each hat starts cold with only the artifacts it needs.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="External evaluation, not self-eval">
+  <Side label="Anthropic">
+    "When asked to evaluate work they've produced, agents tend to respond by confidently praising the work — even when, to a human observer, the quality is obviously mediocre."
+  </Side>
+  <Side label="H·AI·K·U">
+    Adversarial review agents, spec-conformance gate, intent-completion review agents. The `feedback-assessor` is a terminal hat that independently decides closure. Verifier ≠ author by construction.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="Contract negotiation before implementation">
+  <Side label="Anthropic">
+    "The generator proposed what it would build and how success would be verified, and the evaluator reviewed that proposal to make sure the generator was building the right thing."
+  </Side>
+  <Side label="H·AI·K·U">
+    Our pre-execute `dispatch_review` walk. Engine roles (`spec`, `continuity`, `cross-stage-consistency`) audit the planned spec *before* any wave-ready hat dispatch.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="Active runtime validation">
+  <Side label="Anthropic">
+    Evaluator drives the live app through Playwright MCP — navigates, screenshots, asserts. Catches runtime issues invisible in static review.
+  </Side>
+  <Side label="H·AI·K·U">
+    `haiku_view` returns a URL (boot mode for runnable apps; viewer mode for static artifacts via the SPA artifact-browser with specialized viewers for KiCanvas, Tracespace, model-viewer, tscircuit). Per-studio `runtime-verifier.md` mandates hand it to the bundled headless Playwright MCP and save proof PNGs to `[intent]/[stages/<stage>/]proof/*.png`.
+  </Side>
+</Compare>
+
+<Compare verdict="match" title="Log-driven prompt tuning">
+  <Side label="Anthropic">
+    "Read logs, identify divergence from expectation, adjust the agent's prompt, run again." Sustained signal turns into structured revisions.
+  </Side>
+  <Side label="H·AI·K·U">
+    Default-on reflection loop. `record_observations` fires at each stage close (free-form `observations.md` capturing out-of-band churn). `record_reflection` fires at intent close: writes a synthesized `reflection.md`, lands cascade-fixable findings as overlays directly under `.haiku/...`, and reports engine-class findings via `haiku_report` with the stable `[autotune engine-class]` prefix. All in one `autotune:`-prefixed commit; PR review is the human gate.
+  </Side>
+</Compare>
+
+Seven for seven on the load-bearing patterns. Different vocabularies, same shapes. That's the validation.
+
+## Where we go different directions
+
+<Compare verdict="diverge" title="How much to decompose">
+  <Side label="Anthropic">
+    Don't over-specify at planning, because lock-in errors cascade. Their evaluator stays "focused on product context and high-level technical design rather than detailed technical implementation."
+  </Side>
+  <Side label="H·AI·K·U">
+    The elaborate phase fans out subagents per discovery template, produces unit specs with `depends_on` DAGs, executable `quality_gates`, criteria-with-verify-commands. Different bet — the spec is the contract the verifier grades against.
+  </Side>
+</Compare>
+
+<Compare verdict="diverge" title="Removing scaffolding as models improve">
+  <Side label="Anthropic">
+    Opus 4.5 → 4.6 lesson: "Every component encodes an assumption about what the model can't do on its own. Stress-test those assumptions, because they may be incorrect and they can quickly go stale as models improve."
+  </Side>
+  <Side label="H·AI·K·U">
+    The lesson holds, but the place to apply it isn't the hat list — each layer is structurally distinct work. Scaffolding accumulates *inside* hats: verbose anti-pattern lists, defensive validators, overlapping review-agent lenses, fanned-out discovery templates. The reflection loop is wired to surface exactly this signal at intent close, but it has not yet fired on a real intent. A manual audit pass trimmed seven of the longest mandates with all 1,673 tests still green. The pipe exists; nobody's pulled water through it yet.
+  </Side>
+</Compare>
+
+## What we have that their post doesn't address
+
+<Compare verdict="win" title="One instruction at a time">
+  <Side>
+    Their post is candid: *"But some problems remained persistent. For more complex tasks, the agent still tends to go off the rails over time."* They name two failure modes — context-window fill plus context anxiety, and self-evaluation bias — and patch each. Context resets fix the first. Separating the evaluator from the generator fixes the second. Both patches add **"orchestration complexity, token overhead, and latency,"** and both leave the underlying shape intact: a single agent running an open-ended loop, deciding its own next move, sometimes for a very long time.
+
+    We never gave the agent that loop. `haiku_run_next` reads disk, walks the cursor, and returns *exactly one* structured action. The agent's job is to execute that one action and call `haiku_run_next` again. There is no "what should I do next?" question for the agent to answer; the cursor answers it from on-disk state every time.
+
+    This collapses both of their persistent failure modes structurally rather than as patches. Context fill can't compound because the agent doing the work has a one-turn horizon — there is no lengthy task *from the agent's perspective*, only from the cursor's. Self-evaluation drift can't happen because the verifier is a different hat in a different subagent. Their patches address the symptoms. Take away the open-ended loop and the symptoms don't arise. [Long version here.](/blog/one-instruction-at-a-time)
+  </Side>
+</Compare>
+
+<Compare verdict="win" title="Drift gate / premise-witness model">
+  <Side>
+    A runtime check that the agent's premise still matches reality before each tick. They don't discuss this at all. Long-running agents drift; ours notice.
+  </Side>
+</Compare>
+
+<Compare verdict="win" title="Forward-only lifecycle">
+  <Side>
+    Completed units are never re-edited. Corrective work goes through new units authored from upstream elaborate — the FB-as-unit fix loop. They describe agents revising files; we treat units as immutable once verified, with feedback as the only way back. Different stance, deliberately.
+  </Side>
+</Compare>
+
+<Compare verdict="win" title="MCP-as-contract boundary">
+  <Side>
+    Workflow-managed files are guarded by a PreToolUse hook — agents go through MCP tools or get rejected with a redirect message. Their agents communicate through files but they don't describe a hard enforcement layer around who can edit what. We do, and the engine relies on it for invariants like "stage branch is always ahead of main."
+  </Side>
+</Compare>
+
+<Compare verdict="win" title="Cascade resolution for mandates">
+  <Side>
+    Hats and review agents resolve through a three-tier cascade: stage → studio → global, first hit wins, with project `.haiku/` overriding plugin at each tier. Lets us share defaults and override locally without forking. Their setup looks flat per-task.
+  </Side>
+</Compare>
+
+---
+
+The convergence is reassuring — two teams chasing the same problem landed on the same shape, seven patterns over. The interesting gap isn't where we converged; it's where we made a different bet at the foundation. Anthropic's persistent failure modes — context drift on lengthy tasks, self-evaluation bias — are problems for any harness whose agent runs an open-ended loop. Patches help. But "the agent decides what to do next" is the seed those failure modes grow from, and we never planted it.
+
+The cursor decides; the agent executes one step. The drift gate, the forward-only lifecycle, the MCP-contract boundary, the cascade resolution — they each follow from that one choice.

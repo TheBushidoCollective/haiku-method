@@ -132,8 +132,10 @@ stateDiagram-v2
     state screening_execute {
       [*] --> screening_execute_screener
       screening_execute_screener --> screening_execute_assessor : hat.advance
-      screening_execute_assessor --> screening_execute_done : hat.advance
+      screening_execute_assessor --> screening_execute_verifier : hat.advance
       screening_execute_assessor --> screening_execute_screener : hat.reject
+      screening_execute_verifier --> screening_execute_done : hat.advance
+      screening_execute_verifier --> screening_execute_assessor : hat.reject
       screening_execute_done --> [*]
     }
     screening_execute --> screening_review

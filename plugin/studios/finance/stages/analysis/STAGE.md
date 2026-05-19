@@ -1,7 +1,7 @@
 ---
 name: analysis
 description: Perform variance analysis and track financial performance
-hats: [analyst, auditor]
+hats: [analyst, auditor, verifier]
 fix_hats: [classifier, analyst, feedback-assessor]
 review: auto
 elaboration: autonomous
@@ -20,10 +20,11 @@ The stage produces one intent-scope artifact (`VARIANCE-REPORT.md` under `stages
 
 ## Per-unit baton
 
-Each unit walks the two hats in `plan/do → verify` order:
+Each unit walks three hats in `plan/do → audit → verify` order:
 
 - **`analyst`** (plan + do) reads the upstream budget plan and forecast model, pulls actuals, calculates variances at the appropriate granularity, classifies each material variance as structural / timing / operational, and writes the supporting evidence and recommended corrective action
-- **`auditor`** (verify) cross-checks the data sources, validates methodology consistency, confirms root-cause attributions are evidence-backed (not assumption-backed), and advances or rejects
+- **`auditor`** (audit) cross-checks the data sources, validates methodology consistency, confirms root-cause attributions are evidence-backed (not assumption-backed), and advances or rejects
+- **`verifier`** (verify) walks the unit body for completeness, classification consistency, and decision-register alignment — the structural body-only check architecture §9 requires
 
 Detailed process lives in each hat's md file.
 

@@ -4,6 +4,7 @@ slug: appdev
 aliases: [software]
 description: Lifecycle for web, mobile, and desktop applications
 stages: [inception, design, product, development, operations, security]
+fix_hats: [reconciler, validator]
 category: engineering
 default_model: sonnet
 ---

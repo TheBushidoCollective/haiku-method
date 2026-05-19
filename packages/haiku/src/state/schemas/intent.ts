@@ -106,7 +106,6 @@ export const INTENT_FRONTMATTER_SCHEMA = Type.Object(
 		mode: Type.Optional(Type.String({ enum: [...INTENT_MODES] })),
 		skip_stages: Type.Optional(Type.Array(Type.String())),
 		studio: Type.Optional(Type.String()),
-		granularity: Type.Optional(Type.String()),
 		// Parent-link (creation-time only). Stores a slug reference.
 		// If the referenced intent is renamed (unsupported but possible
 		// out-of-band), the link breaks gracefully — `follows` is

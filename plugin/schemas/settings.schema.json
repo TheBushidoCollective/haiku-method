@@ -2,189 +2,69 @@
 	"$schema": "http://json-schema.org/draft-07/schema#",
 	"$id": "https://haiku.dev/schemas/haiku-settings.schema.json",
 	"title": "H·AI·K·U Settings",
-	"description": "Configuration schema for .haiku/settings.yml files that configure H·AI·K·U behavior including VCS strategy",
+	"description": "Configuration schema for .haiku/settings.yml. Two load-bearing fields: studio (lifecycle template selection) and providers (external system contracts injected into prompts). All other fields are intentionally absent — earlier drafts carried VCS-strategy, mockup-format, archetype defaults, announcement choices, hat-to-model maps, infrastructure-stack blocks, and review-agent toggles that no engine code ever consumed. The cleanup landed 2026-05-19.",
 	"type": "object",
-	"_override_pattern": {
-		"type": "string",
-		"description": "H·AI·K·U supports a Master + Overrides configuration pattern. Global settings in settings.yml apply to all intents. Per-intent overrides in .haiku/{intent}/settings.yml take precedence. Per-unit overrides in unit frontmatter take highest precedence. Precedence: unit frontmatter > intent settings > global settings."
-	},
 	"properties": {
-		"git": {
-			"$ref": "#/definitions/vcsConfig",
-			"description": "VCS configuration when using Git"
-		},
-		"jj": {
-			"$ref": "#/definitions/vcsConfig",
-			"description": "VCS configuration when using Jujutsu (jj)"
+		"studio": {
+			"type": "string",
+			"description": "The studio (lifecycle template) for this project. Studios define stage order, hats, review gates, and execution mode. Value must match a directory under plugin/studios/ or a project-overlay at .haiku/studios/. Examples: software, ideation."
 		},
 		"providers": {
 			"$ref": "#/definitions/providersConfig",
-			"description": "External system providers for spec, ticketing, design, and comms"
+			"description": "External-system provider configuration. Each provider's behavior contract is at plugin/providers/<kind>.md and is spliced into the relevant prompt phases when configured here. The git provider is always-on when in a git repo (no settings entry required)."
 		},
-		"granularity": {
-			"type": "string",
-			"enum": ["coarse", "standard", "fine"],
-			"default": "standard",
-			"description": "coarse: fewer, larger units with minimal process. standard: balanced unit elaboration. fine: many small units with detailed specs."
-		},
-		"studio": {
-			"type": "string",
-			"enum": ["ideation", "software"],
-			"default": "ideation",
-			"description": "The studio (lifecycle template) for this project. Studios define stage order and execution mode."
-		},
-		"mockup_format": {
-			"type": "string",
-			"enum": ["ascii", "html"],
-			"default": "ascii",
-			"description": "Format for UI mockups generated during elaboration. 'ascii' produces text-based wireframes in markdown code blocks. 'html' produces self-contained HTML files written to .haiku/{intent-slug}/mockups/."
-		},
-		"default_announcements": {
-			"type": "array",
-			"items": {
-				"type": "string",
-				"enum": ["changelog", "release-notes", "social-posts", "blog-draft"]
-			},
-			"default": ["changelog"],
-			"description": "Default announcement formats generated when an intent completes. Valid values: changelog, release-notes, social-posts, blog-draft. Set to empty array for no announcements."
-		},
-		"default_passes": {
-			"type": "array",
-			"items": {
-				"type": "string"
-			},
-			"default": [],
-			"description": "Default iteration passes for new intents. Each name must have a definition file in plugin/passes/ (built-in) or .haiku/passes/ (custom). Empty array means single dev pass (the default). Built-in passes: design, product, dev. Custom passes: create .haiku/passes/{name}.md."
-		},
-		"quality_gates": {
-			"$ref": "#/definitions/qualityGatesConfig",
-			"description": "Quality gates (backpressure checks) to run during execution. When configured, these replace the default backpressure behavior."
-		},
-		"review_agents": {
-			"type": "object",
-			"description": "Configure which specialized review agents run for this project",
-			"properties": {
-				"security": { "type": "boolean", "default": true },
-				"performance": { "type": "boolean", "default": true },
-				"architecture": { "type": "boolean", "default": true },
-				"correctness": { "type": "boolean", "default": true },
-				"test_quality": { "type": "boolean", "default": true },
-				"data_integrity": { "type": "boolean", "default": false },
-				"schema_drift": { "type": "boolean", "default": false },
-				"accessibility": { "type": "boolean", "default": false },
-				"api_contract": { "type": "boolean", "default": false },
-				"design_system": { "type": "boolean", "default": false },
-				"deployment_safety": { "type": "boolean", "default": false },
-				"observability_completeness": { "type": "boolean", "default": false },
-				"infrastructure_correctness": { "type": "boolean", "default": false }
-			},
-			"default": {}
-		},
-		"stack": {
-			"$ref": "#/definitions/stackConfig",
-			"description": "Infrastructure stack configuration describing the deployment and operations layers"
-		},
-		"visual_review": {
-			"type": "boolean",
-			"default": false,
-			"description": "Enable browser-based visual review for elaboration gates. Requires the haiku-review MCP server (bundled). When false, review gates use standard AskUserQuestion prompts."
-		},
-		"default_archetype": {
-			"type": "string",
-			"enum": ["brutalist", "editorial", "dense", "playful"],
-			"default": "editorial",
-			"description": "Default design archetype for autonomous mode elaboration when no design knowledge exists."
-		},
-		"knowledge_refresh": {
+		"drift_detection": {
 			"type": "boolean",
 			"default": true,
-			"description": "Re-synthesize knowledge artifacts after intent integration completes. Captures patterns established by the intent for use in subsequent intents. Set to false to skip the post-integrate refresh step."
+			"description": "Run the pre-tick drift sweep. Default true. Set to false to disable drift detection entirely (e.g., very-large repos where the sweep cost outweighs the safety benefit)."
 		},
-		"model_profiles": {
-			"type": "object",
-			"description": "Map hats to model tiers for cost optimization. Defaults to inheriting the session model for all hats.",
-			"properties": {
-				"planner": {
-					"type": "string",
-					"enum": ["opus", "sonnet", "haiku", "inherit"],
-					"default": "inherit",
-					"description": "Model for planning (benefits from deeper reasoning)"
-				},
-				"builder": {
-					"type": "string",
-					"enum": ["opus", "sonnet", "haiku", "inherit"],
-					"default": "inherit",
-					"description": "Model for implementation"
-				},
-				"reviewer": {
-					"type": "string",
-					"enum": ["opus", "sonnet", "haiku", "inherit"],
-					"default": "inherit",
-					"description": "Model for code review"
-				},
-				"designer": {
-					"type": "string",
-					"enum": ["opus", "sonnet", "haiku", "inherit"],
-					"default": "inherit",
-					"description": "Model for design work"
-				}
-			},
-			"additionalProperties": {
-				"type": "string",
-				"enum": ["opus", "sonnet", "haiku", "inherit"]
-			},
-			"default": {}
+		"human_write_require_rationale": {
+			"type": "boolean",
+			"default": false,
+			"description": "Require a `rationale:` field on every `haiku_human_write` call. Default false. Set to true to enforce that every human-authored write to engine-managed files carries a written justification for the audit log."
 		}
 	},
 	"additionalProperties": false,
 	"definitions": {
 		"providersConfig": {
 			"type": "object",
-			"description": "External system provider configuration",
+			"description": "External-system provider configuration. Workflow providers (ticketing) get full operational control if the matching MCP tool is available, otherwise degrade to read-only-with-external_refs. Source providers (spec, knowledge, design) align H·AI·K·U intent + units to external content; read-only by default.",
 			"properties": {
 				"spec": {
 					"$ref": "#/definitions/specProviderEntry",
-					"description": "Specification/documentation provider (Notion, Confluence, Google Docs)"
+					"description": "Source provider — PRDs, RFCs, design docs (Notion, Confluence, Google Docs)."
 				},
 				"ticketing": {
 					"$ref": "#/definitions/ticketingProviderEntry",
-					"description": "Ticketing/issue tracking provider (Jira, Linear, GitHub Issues, GitLab Issues)"
+					"description": "Workflow provider — issue trackers (Jira, Linear, GitHub Issues, GitLab Issues)."
 				},
 				"design": {
 					"$ref": "#/definitions/designProviderEntry",
-					"description": "Design tool provider (Canva, Figma, OpenPencil, Pencil, Penpot, Excalidraw)"
-				},
-				"comms": {
-					"$ref": "#/definitions/commsProviderEntry",
-					"description": "Communication provider (Slack, Teams, Discord)"
-				},
-				"crm": {
-					"$ref": "#/definitions/crmProviderEntry",
-					"description": "CRM provider (Salesforce, HubSpot)"
+					"description": "Source provider — design tools (Figma, Pencil, OpenPencil, Penpot, Excalidraw, Canva)."
 				},
 				"knowledge": {
 					"$ref": "#/definitions/knowledgeProviderEntry",
-					"description": "Knowledge/wiki provider for cross-studio context sharing (Notion, Confluence, Google Docs)"
+					"description": "Source provider — organizational memory (Notion, Confluence, Google Docs). Distinct from spec: knowledge spans intents; spec is per-intent."
 				}
 			},
 			"additionalProperties": false
 		},
 		"specProviderEntry": {
 			"type": "object",
-			"description": "A configured specification/documentation provider",
+			"description": "A configured spec source provider.",
 			"properties": {
 				"type": {
 					"type": "string",
 					"enum": ["notion", "confluence", "google-docs"],
-					"description": "Specification provider type"
+					"description": "Specification provider type."
 				},
 				"config": {
 					"type": "object",
-					"description": "Provider-specific configuration — schema determined by provider type"
+					"description": "Provider-specific configuration — schema determined by provider type."
 				},
 				"instructions": {
 					"type": "string",
-					"description": "Inline provider instructions (merged with built-in defaults and project overrides)"
+					"description": "Inline provider instructions (appended to the plugin default for this provider type)."
 				}
 			},
 			"required": ["type"],
@@ -218,20 +98,20 @@
 		},
 		"ticketingProviderEntry": {
 			"type": "object",
-			"description": "A configured ticketing/issue tracking provider",
+			"description": "A configured ticketing workflow provider.",
 			"properties": {
 				"type": {
 					"type": "string",
 					"enum": ["jira", "linear", "github-issues", "gitlab-issues"],
-					"description": "Ticketing provider type"
+					"description": "Ticketing provider type."
 				},
 				"config": {
 					"type": "object",
-					"description": "Provider-specific configuration — schema determined by provider type"
+					"description": "Provider-specific configuration — schema determined by provider type."
 				},
 				"instructions": {
 					"type": "string",
-					"description": "Inline provider instructions (merged with built-in defaults and project overrides)"
+					"description": "Inline provider instructions (appended to the plugin default for this provider type)."
 				}
 			},
 			"required": ["type"],
@@ -271,7 +151,7 @@
 		},
 		"designProviderEntry": {
 			"type": "object",
-			"description": "A configured design tool provider",
+			"description": "A configured design source provider.",
 			"properties": {
 				"type": {
 					"type": "string",
@@ -284,15 +164,15 @@
 						"figma",
 						"auto"
 					],
-					"description": "Design provider type"
+					"description": "Design provider type."
 				},
 				"config": {
 					"type": "object",
-					"description": "Provider-specific configuration — schema determined by provider type"
+					"description": "Provider-specific configuration — schema determined by provider type."
 				},
 				"instructions": {
 					"type": "string",
-					"description": "Inline provider instructions (merged with built-in defaults and project overrides)"
+					"description": "Inline provider instructions (appended to the plugin default for this provider type)."
 				}
 			},
 			"required": ["type"],
@@ -348,108 +228,22 @@
 				}
 			]
 		},
-		"commsProviderEntry": {
-			"type": "object",
-			"description": "A configured communication provider",
-			"properties": {
-				"type": {
-					"type": "string",
-					"enum": ["slack", "teams", "discord"],
-					"description": "Communication provider type"
-				},
-				"config": {
-					"type": "object",
-					"description": "Provider-specific configuration — schema determined by provider type"
-				},
-				"instructions": {
-					"type": "string",
-					"description": "Inline provider instructions (merged with built-in defaults and project overrides)"
-				}
-			},
-			"required": ["type"],
-			"additionalProperties": false,
-			"allOf": [
-				{
-					"if": { "properties": { "type": { "const": "slack" } } },
-					"then": {
-						"properties": {
-							"config": { "$ref": "providers/slack.schema.json" }
-						}
-					}
-				},
-				{
-					"if": { "properties": { "type": { "const": "teams" } } },
-					"then": {
-						"properties": {
-							"config": { "$ref": "providers/teams.schema.json" }
-						}
-					}
-				},
-				{
-					"if": { "properties": { "type": { "const": "discord" } } },
-					"then": {
-						"properties": {
-							"config": { "$ref": "providers/discord.schema.json" }
-						}
-					}
-				}
-			]
-		},
-		"crmProviderEntry": {
-			"type": "object",
-			"description": "A configured CRM provider",
-			"properties": {
-				"type": {
-					"type": "string",
-					"enum": ["salesforce", "hubspot"],
-					"description": "CRM provider type"
-				},
-				"config": {
-					"type": "object",
-					"description": "Provider-specific configuration — schema determined by provider type"
-				},
-				"instructions": {
-					"type": "string",
-					"description": "Inline provider instructions (merged with built-in defaults and project overrides)"
-				}
-			},
-			"required": ["type"],
-			"additionalProperties": false,
-			"allOf": [
-				{
-					"if": { "properties": { "type": { "const": "salesforce" } } },
-					"then": {
-						"properties": {
-							"config": { "$ref": "providers/salesforce.schema.json" }
-						}
-					}
-				},
-				{
-					"if": { "properties": { "type": { "const": "hubspot" } } },
-					"then": {
-						"properties": {
-							"config": { "$ref": "providers/hubspot.schema.json" }
-						}
-					}
-				}
-			]
-		},
 		"knowledgeProviderEntry": {
 			"type": "object",
-			"description": "A configured knowledge/wiki provider for organizational memory and cross-studio sharing",
+			"description": "A configured knowledge source provider — organizational memory and cross-intent context.",
 			"properties": {
 				"type": {
 					"type": "string",
 					"enum": ["notion", "confluence", "google-docs"],
-					"description": "Knowledge provider type (same tools as spec, different purpose)"
+					"description": "Knowledge provider type (same tools as spec, different purpose)."
 				},
 				"config": {
 					"type": "object",
-					"description": "Provider-specific configuration — schema determined by provider type"
+					"description": "Provider-specific configuration — schema determined by provider type."
 				},
 				"instructions": {
 					"type": "string",
-					"description": "Inline provider instructions (merged with built-in defaults and project overrides)"
+					"description": "Inline provider instructions (appended to the plugin default for this provider type)."
 				}
 			},
 			"required": ["type"],
@@ -480,160 +274,6 @@
 					}
 				}
 			]
-		},
-		"qualityGatesConfig": {
-			"type": "object",
-			"description": "Quality gate configuration for backpressure checks during execution",
-			"properties": {
-				"test": {
-					"$ref": "#/definitions/qualityGateEntry",
-					"description": "Test command to run (e.g., 'bun test', 'npm test', 'pytest')"
-				},
-				"lint": {
-					"$ref": "#/definitions/qualityGateEntry",
-					"description": "Lint command to run (e.g., 'biome check', 'eslint .', 'ruff check')"
-				},
-				"typecheck": {
-					"$ref": "#/definitions/qualityGateEntry",
-					"description": "Type checking command (e.g., 'tsc --noEmit', 'mypy .')"
-				},
-				"build": {
-					"$ref": "#/definitions/qualityGateEntry",
-					"description": "Build command (e.g., 'bun run build', 'cargo build')"
-				},
-				"deploy_validate": {
-					"$ref": "#/definitions/qualityGateEntry",
-					"description": "Deployment artifact validation command"
-				},
-				"container_build": {
-					"$ref": "#/definitions/qualityGateEntry",
-					"description": "Container image build command (e.g., 'docker build .')"
-				},
-				"manifest_validate": {
-					"$ref": "#/definitions/qualityGateEntry",
-					"description": "Deployment manifest validation command (e.g., 'kubectl --dry-run=client', 'helm template | kubeval')"
-				},
-				"observable_validate": {
-					"$ref": "#/definitions/qualityGateEntry",
-					"description": "Observability validation command (e.g., verify metric imports, validate dashboard JSON)"
-				},
-				"operations_validate": {
-					"$ref": "#/definitions/qualityGateEntry",
-					"description": "Operations validation command (e.g., run scripts with --dry-run, validate manifests)"
-				}
-			},
-			"additionalProperties": {
-				"$ref": "#/definitions/qualityGateEntry"
-			}
-		},
-		"qualityGateEntry": {
-			"type": "object",
-			"description": "A single quality gate check",
-			"properties": {
-				"command": {
-					"type": "string",
-					"description": "Shell command to execute for this quality gate"
-				},
-				"enabled": {
-					"type": "boolean",
-					"default": true,
-					"description": "Whether this gate is active"
-				}
-			},
-			"required": ["command"],
-			"additionalProperties": false
-		},
-		"vcsConfig": {
-			"type": "object",
-			"description": "Version control system configuration",
-			"properties": {
-				"change_strategy": {
-					"type": "string",
-					"default": "unit",
-					"oneOf": [
-						{
-							"const": "unit",
-							"title": "Review each unit individually",
-							"description": "Each unit opens its own PR/MR. Dependent units wait until their dependencies are merged."
-						},
-						{
-							"const": "intent",
-							"title": "Build everything, then open one MR",
-							"description": "Units merge into an intent branch as they complete. One final MR for the whole intent."
-						},
-						{
-							"const": "trunk",
-							"title": "Build everything on default branch",
-							"description": "All work happens directly on the default branch. No feature branches or MRs."
-						}
-					]
-				},
-				"elaboration_review": {
-					"type": "boolean",
-					"default": true,
-					"description": "Whether to create a pull request for elaborated intent review before planning"
-				},
-				"default_branch": {
-					"type": "string",
-					"default": "auto",
-					"description": "The default/main branch name. Set to 'auto' to detect from remote (origin/HEAD), or specify explicitly (e.g., 'main', 'master', 'develop')"
-				},
-				"auto_merge": {
-					"type": "boolean",
-					"description": "Whether to automatically merge completed unit branches into the intent branch. Only applies to 'intent' strategy. For 'unit' strategy, merging is the user's responsibility via PRs."
-				},
-				"auto_squash": {
-					"type": "boolean",
-					"description": "Whether to squash commits when merging. Only applies when auto_merge is enabled."
-				}
-			},
-			"additionalProperties": false
-		},
-		"stackConfig": {
-			"type": "object",
-			"description": "Infrastructure stack configuration. Each layer is optional. An empty stack ({}) is valid.",
-			"properties": {
-				"infrastructure": {
-					"type": "array",
-					"description": "Infrastructure-as-code providers (Terraform, CloudFormation, Pulumi)",
-					"items": { "$ref": "providers/stack-infrastructure.schema.json" }
-				},
-				"compute": {
-					"type": "array",
-					"description": "Compute platform providers (Kubernetes, ECS, Lambda, Docker Compose)",
-					"items": { "$ref": "providers/stack-compute.schema.json" }
-				},
-				"packaging": {
-					"type": "array",
-					"description": "Packaging/manifest providers (Helm, Kustomize, raw manifests)",
-					"items": { "$ref": "providers/stack-packaging.schema.json" }
-				},
-				"pipeline": {
-					"type": "array",
-					"description": "CI/CD pipeline providers (GitHub Actions, GitLab CI, Jenkins, CircleCI)",
-					"items": { "$ref": "providers/stack-pipeline.schema.json" }
-				},
-				"secrets": {
-					"type": "array",
-					"description": "Secrets management providers (Vault, AWS SM, GCP SM, env)",
-					"items": { "$ref": "providers/stack-secrets.schema.json" }
-				},
-				"monitoring": {
-					"type": "array",
-					"description": "Monitoring providers (Prometheus, Datadog, CloudWatch, New Relic, OTel)",
-					"items": { "$ref": "providers/stack-monitoring.schema.json" }
-				},
-				"alerting": {
-					"type": "array",
-					"description": "Alerting/on-call providers (PagerDuty, Opsgenie, Datadog, Alertmanager)",
-					"items": { "$ref": "providers/stack-alerting.schema.json" }
-				},
-				"operations": {
-					"$ref": "providers/stack-operations.schema.json",
-					"description": "Operations runtime configuration (runtime, scheduled tasks, reactive handlers)"
-				}
-			},
-			"additionalProperties": false
 		}
 	}
 }

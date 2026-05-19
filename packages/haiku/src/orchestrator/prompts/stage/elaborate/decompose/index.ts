@@ -116,7 +116,6 @@ const ELABORATE_OUTPUT_TAIL_TPL = loadTemplate(
 	"blocks/elaborate-output-tail.eta.md",
 )
 const SCOPE_HEADER = loadTemplate(import.meta.url, "blocks/scope-header.md")
-const TICKETING = loadTemplate(import.meta.url, "blocks/ticketing.md")
 const FILE_BASED_POINTER_TPL = loadTemplate(
 	import.meta.url,
 	"blocks/file-based-pointer.eta.md",
@@ -334,12 +333,10 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	sections.push(sharedBlockRef("workflow-contracts-elaborate"))
 
 	// Provider splice: source providers (spec, knowledge, design) and
-	// always-on providers (git, ticketing if active) inject their
-	// behavior contracts for the elaborate phase.
+	// always-on / workflow providers (git, ticketing if active) inject
+	// their behavior contracts for the elaborate phase.
 	const providerBlock = providerSpliceBlock("elaborate", dir)
 	if (providerBlock) sections.push(providerBlock)
-	const decomposeProviderBlock = providerSpliceBlock("decompose", dir)
-	if (decomposeProviderBlock) sections.push(decomposeProviderBlock)
 
 	const lenses = buildReviewAgentLensSection(studio, stage, dir)
 	if (lenses) sections.push(lenses)
@@ -680,18 +677,12 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	const tail = eta.renderString(ELABORATE_OUTPUT_TAIL_TPL, { slug, stage })
 	sections.push(`${SCOPE_HEADER}\n\n${mechanicsBlock}\n\n${tail}`)
 
-	// Check for ticketing provider.
-	try {
-		const settingsPath = join(process.cwd(), ".haiku", "settings.yml")
-		if (existsSync(settingsPath)) {
-			const settingsRaw = readFileSync(settingsPath, "utf8")
-			if (settingsRaw.includes("ticketing")) {
-				sections.push(TICKETING)
-			}
-		}
-	} catch {
-		/* non-fatal */
-	}
+	// Ticketing-provider guidance was previously injected here as an
+	// inline block when `.haiku/settings.yml` contained the string
+	// "ticketing". Replaced 2026-05-19 by the provider-injection layer
+	// — `providerSpliceBlock("elaborate", dir)` (called above) emits
+	// the full ticketing behavior contract from `plugin/providers/
+	// ticketing.md` via the per-project shared/providers/ tree.
 
 	if (!composed) {
 		sections.push(

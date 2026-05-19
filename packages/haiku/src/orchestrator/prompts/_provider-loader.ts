@@ -27,7 +27,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { resolvePluginRoot } from "../../config.js"
-import { findHaikuRoot } from "../../state/shared.js"
+import { findHaikuRoot, isGitRepo } from "../../state/shared.js"
 
 export type ProviderCategory = "source" | "workflow"
 
@@ -122,8 +122,20 @@ function parseProviderDoc(path: string): ProviderDoc | null {
 	}
 }
 
+/** Per-provider environmental precondition. `always_on: true` means
+ *  "on whenever the environment supports it" — git, specifically,
+ *  applies only when we're actually in a git repo. Other always-on
+ *  providers (none today) would declare their own predicate here.
+ *  Returns true when the provider's environment is satisfied. */
+function environmentApplies(kind: string): boolean {
+	if (kind === "git") return isGitRepo()
+	// No other always-on providers today.
+	return true
+}
+
 /** List every provider that is active for the current intent. Active =
- *  configured in settings.yml OR declared `always_on: true`. */
+ *  (configured in settings.yml) OR (`always_on: true` AND its
+ *  environmental precondition holds — e.g. git requires `.git/`). */
 export function listActiveProviders(intentDir: string): ProviderDoc[] {
 	const settings = readSettings(intentDir)
 	const providersBlock =
@@ -138,8 +150,13 @@ export function listActiveProviders(intentDir: string): ProviderDoc[] {
 		const doc = parseProviderDoc(path)
 		if (!doc) continue
 		const configured = providersBlock[kind] !== undefined
-		if (!configured && !doc.alwaysOn) continue
-		out.push(doc)
+		if (configured) {
+			out.push(doc)
+			continue
+		}
+		if (doc.alwaysOn && environmentApplies(kind)) {
+			out.push(doc)
+		}
 	}
 	return out
 }

@@ -4,7 +4,6 @@ category: source
 always_on: false
 splices_into:
   - elaborate
-  - decompose
 description: Spec source provider — read external PRDs, RFCs, design docs and align H·AI·K·U intent + units to them.
 ---
 

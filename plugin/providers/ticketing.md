@@ -3,8 +3,8 @@ provider_kind: ticketing
 category: workflow
 always_on: false
 splices_into:
-  - decompose
-  - start_unit_hat
+  - elaborate
+  - execute
   - complete_stage
   - seal_intent
 description: Ticketing workflow provider — bidirectional sync between H·AI·K·U units/intents and external issue trackers.

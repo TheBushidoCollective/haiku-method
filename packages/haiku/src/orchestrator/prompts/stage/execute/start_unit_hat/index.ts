@@ -72,7 +72,7 @@ function resolveUnitModel(opts: {
 	}).model
 }
 
-export default definePromptBuilder(({ slug, studio, action }) => {
+export default definePromptBuilder(({ slug, studio, action, dir }) => {
 	const stage = (action.stage as string) || ""
 	const hat = (action.hat as string) || ""
 	const units = (action.units as string[]) || []
@@ -117,6 +117,11 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		// always emitted so the subagent sees the contract every time
 		// regardless of wave size.
 		executeContractsBlock: sharedBlockRef("workflow-contracts-execute"),
+		// Provider splice: workflow providers (git, ticketing) inject
+		// their behavior contracts so hats know to commit/push, update
+		// ticket status, etc. Source providers don't splice here —
+		// they're a decompose-time concern.
+		providerBlock: providerSpliceBlock("execute", dir),
 		batchDirective:
 			units.length > 0 ? batchDispatchDirective(units.length, "subagents") : "",
 	})

@@ -170,7 +170,7 @@ export const HAIKU_SETTINGS_GET_INPUT_SCHEMA = Type.Object(
 		field: Type.String({
 			minLength: 1,
 			description:
-				"Dot-separated path (e.g. 'studio', 'stack.compute', 'review_agents')",
+				"Dot-separated path (e.g. 'studio', 'providers.ticketing.type', 'providers.spec.config.space')",
 		}),
 		state_file: stateFile,
 	},

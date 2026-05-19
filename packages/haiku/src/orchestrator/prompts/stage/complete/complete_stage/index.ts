@@ -15,13 +15,18 @@
 // concern.
 
 import { Eta } from "eta"
+import { providerSpliceBlock } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
 
-export default definePromptBuilder(({ slug, action }) => {
+export default definePromptBuilder(({ slug, action, dir }) => {
 	const stage = (action.stage as string) || ""
-	return eta.renderString(TEMPLATE, { slug, stage })
+	return eta.renderString(TEMPLATE, {
+		slug,
+		stage,
+		providerBlock: providerSpliceBlock("complete_stage", dir),
+	})
 })

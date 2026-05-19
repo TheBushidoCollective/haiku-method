@@ -15,12 +15,16 @@
 // reflects a git/VCS operation."
 
 import { Eta } from "eta"
+import { providerSpliceBlock } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
 
-export default definePromptBuilder(({ slug }) => {
-	return eta.renderString(TEMPLATE, { slug })
+export default definePromptBuilder(({ slug, dir }) => {
+	return eta.renderString(TEMPLATE, {
+		slug,
+		providerBlock: providerSpliceBlock("seal_intent", dir),
+	})
 })

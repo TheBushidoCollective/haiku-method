@@ -70,7 +70,6 @@ const SKILLS_PREAMBLE = loadTemplate(
 	"blocks/skills-preamble.md",
 )
 const AUTONOMY_NOTE = loadTemplate(import.meta.url, "blocks/autonomy-note.md")
-const TICKETING_NOTE = loadTemplate(import.meta.url, "blocks/ticketing-note.md")
 const PARENT_INSTRUCTIONS_TPL = loadTemplate(
 	import.meta.url,
 	"blocks/parent-instructions.eta.md",
@@ -415,20 +414,11 @@ ${WORKTREE_AND_TIMEOUTS}`,
 		)
 	}
 
-	// Check for ticketing provider — move ticket to "In Progress".
-	if (action.action === "start_unit") {
-		try {
-			const settingsPath = join(process.cwd(), ".haiku", "settings.yml")
-			if (existsSync(settingsPath)) {
-				const settingsRaw = readFileSync(settingsPath, "utf8")
-				if (settingsRaw.includes("ticketing")) {
-					sections.push(TICKETING_NOTE)
-				}
-			}
-		} catch {
-			/* non-fatal */
-		}
-	}
+	// Ticketing-provider "move to In Progress" hint used to inject
+	// here from a string match on settings.yml. Replaced 2026-05-19
+	// by the provider-injection layer — start_unit_hat carries the
+	// full ticketing contract via `providerSpliceBlock("execute", dir)`,
+	// which includes status-sync direction.
 
 	return sections.join("\n\n")
 })

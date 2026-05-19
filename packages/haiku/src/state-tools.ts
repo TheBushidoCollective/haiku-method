@@ -6926,7 +6926,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 	{
 		name: "haiku_settings_get",
 		description:
-			"Read a field from .haiku/settings.yml (e.g. studio, stack.compute, providers, workspace, default_announcements, review_agents, operations_runtime). Returns empty string if not set.",
+			"Read a field from .haiku/settings.yml. Two top-level fields are load-bearing: `studio` (the lifecycle template name) and `providers.*` (configured external-system providers). Dot-paths like `providers.ticketing.type` work. Returns empty string if not set.",
 		inputSchema: jsonSchemaOf(HAIKU_SETTINGS_GET_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
@@ -10389,27 +10389,12 @@ export function handleStateTool(
 				}
 			}
 
-			// Read review_agents from settings
-			let reviewAgents = ""
-			try {
-				const settingsPath = join(findHaikuRoot(), "settings.yml")
-				if (existsSync(settingsPath)) {
-					const settings = parseYaml(readFileSync(settingsPath, "utf8"))
-					const agents = getNestedField(settings, "review_agents")
-					if (agents)
-						reviewAgents = `\n### Review Agents Config\n\`\`\`json\n${JSON.stringify(agents, null, 2)}\n\`\`\`\n`
-				}
-			} catch {
-				/* no settings */
-			}
-
 			let out = "## Pre-Delivery Code Review\n"
 			out += `Diff base: ${base}\n\n`
 			out += `Changed files:\n\`\`\`\n${changedFiles || "none"}\`\`\`\n\n`
 			out += `Diff stats:\n\`\`\`\n${stat || "none"}\`\`\`\n`
 			if (reviewGuidelines)
 				out += `\n### Review Guidelines\n${reviewGuidelines}\n`
-			if (reviewAgents) out += reviewAgents
 			out += `\n### Full Diff\n\`\`\`diff\n${diff || "No changes detected."}\n\`\`\`\n`
 			out += "\n### Instructions\n"
 			out +=

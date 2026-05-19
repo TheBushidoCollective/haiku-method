@@ -4,7 +4,6 @@ category: source
 always_on: false
 splices_into:
   - elaborate
-  - decompose
 description: Knowledge source provider — organizational memory, patterns, decisions; pulled in to inform elaboration and decomposition.
 ---
 

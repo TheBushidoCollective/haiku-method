@@ -4,7 +4,6 @@ category: source
 always_on: false
 splices_into:
   - elaborate
-  - decompose
 description: Design source provider — pull existing designs, components, and tokens to align units to the design system.
 ---
 

@@ -35,7 +35,7 @@ surface.
 
 - Use `/haiku:haiku-repair` first for the supported v4 recovery paths (drift baseline, worktree relocation, mainline PR generation).
 - Use `/haiku:haiku-reset-stage` or `/haiku:haiku-reset-intent` for full destructive resets.
-- For day-to-day workflow questions (why didn't this stage advance? what's the cursor doing?), `/haiku:haiku-dashboard` and reading the prompt file are usually faster.
+- For day-to-day workflow questions (why didn't this stage advance? what's the cursor doing?), reading the prompt file or `haiku_intent_list` is usually faster.
 
 ## How to call
 

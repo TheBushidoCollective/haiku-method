@@ -5,7 +5,6 @@
 //   haiku_backlog              — read/write project backlog file
 //   haiku_capacity             — historical metrics (v4 dual-path)
 //   haiku_release_notes        — reads CHANGELOG.md
-//   haiku_dashboard            — multi-intent overview (v4 dual-path)
 //   haiku_review               — git-diff snapshot for pre-delivery review
 //   haiku_seed                 — long-term idea tracker
 //   haiku_version_info         — returns mcp + plugin version strings
@@ -138,33 +137,6 @@ try {
 		assert.ok(
 			typeof p.plugin_version === "string" && p.plugin_version.length > 0,
 		)
-	})
-
-	// ── haiku_dashboard ──────────────────────────────────────────────
-
-	test("haiku_dashboard renders v4 intent without crashing", () => {
-		const r = handleStateTool("haiku_dashboard", {})
-		const p = JSON.parse(getTextResult(r))
-		assert.match(p.markdown, /## smoke-intent/)
-	})
-
-	test("haiku_dashboard surfaces v4 schema indicator", () => {
-		const r = handleStateTool("haiku_dashboard", {})
-		const p = JSON.parse(getTextResult(r))
-		assert.match(p.markdown, /Schema:\s*v4/)
-	})
-
-	test("haiku_dashboard reports active status (sealed_at: null)", () => {
-		const r = handleStateTool("haiku_dashboard", {})
-		const p = JSON.parse(getTextResult(r))
-		assert.match(p.markdown, /Status:\s*active/)
-	})
-
-	test("haiku_dashboard derives stage status from per-unit iterations[]", () => {
-		const r = handleStateTool("haiku_dashboard", {})
-		const p = JSON.parse(getTextResult(r))
-		// design has 1 of 2 units complete → "active"
-		assert.match(p.markdown, /\|\s*design\s*\|\s*active/)
 	})
 
 	// ── haiku_capacity ──────────────────────────────────────────────

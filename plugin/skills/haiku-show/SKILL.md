@@ -47,5 +47,4 @@ Parse positionally. If the first token matches a known intent slug in `.haiku/in
 ## Don't confuse with
 
 - `/haiku:haiku-gate-review` — multi-agent code-review-of-the-diff workflow, not the SPA pane. Calls `haiku_review`, not `haiku_review_open`.
-- `/haiku:haiku-dashboard` — text-only summary of active intents, doesn't open the SPA.
 - `/haiku:haiku-pickup` — drives the workflow forward to the next gate; this skill is browse-only.

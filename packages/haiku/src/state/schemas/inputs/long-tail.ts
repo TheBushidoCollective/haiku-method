@@ -1,7 +1,7 @@
 // state/schemas/inputs/long-tail.ts — TypeBox input schemas for
 // the remaining state-tool family beyond unit / intent / stage /
-// feedback. Twenty tools total: registry reads, settings, decision
-// recording, dashboards / reports, repair / seed / backlog.
+// feedback. Nineteen tools total: registry reads, settings, decision
+// recording, reports, repair / seed / backlog.
 //
 // Most are read-mostly with one or two args. We keep them in one
 // file rather than fragmenting further — the surface is too small
@@ -121,10 +121,10 @@ export const validateHaikuKnowledgeReadInputSchema = stateAjv.compile(
 	HAIKU_KNOWLEDGE_READ_INPUT_SCHEMA,
 )
 
-// ── haiku_skill_list / haiku_studio_list / haiku_dashboard /
+// ── haiku_skill_list / haiku_studio_list /
 // haiku_version_info — empty inputs ──────────────────────────────
 //
-// All four are no-arg tools. Sharing one schema keeps the SSOT
+// All three are no-arg tools. Sharing one schema keeps the SSOT
 // honest (additionalProperties: false rejects accidental garbage
 // from any of them).
 

@@ -98,7 +98,6 @@ try {
 		const prompts = listPrompts()
 		const names = prompts.map((p) => p.name)
 		const simplePrompts = [
-			"haiku:dashboard",
 			"haiku:backlog",
 			"haiku:capacity",
 			"haiku:release-notes",

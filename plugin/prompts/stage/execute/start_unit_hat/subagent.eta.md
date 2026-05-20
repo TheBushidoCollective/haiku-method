@@ -14,7 +14,9 @@ The unit has already executed <%= priorHatsInline.length %> earlier hat(s) in th
 4. **Closure (REQUIRED).** End your turn with ONE of:
    - **Success:** `haiku_unit_advance_hat { intent: "<%= slug %>", unit: "<%= unit %>" }`. If iterations[] is empty on first call, prefix with `haiku_unit_start { intent: "<%= slug %>", unit: "<%= unit %>" }` so the engine stamps the in-flight iteration.
    - **Block:** `haiku_unit_reject_hat { intent: "<%= slug %>", unit: "<%= unit %>", reason: "<concrete blocker>" }`.
-5. **Relay the engine's breadcrumb.** Terminate with the tool's plain-text return VERBATIM. The engine appends a relay breadcrumb to that text — either the next `<subagent>` block your parent should spawn, or a one-line `haiku_run_next` directive. Do not paraphrase, summarize, or strip the trailing block; the parent reads it directly from your final message.
+5. **Report, then relay.** Your final message has two parts, in order:
+   1. **One line on what you did** — what you built / changed / verified this hat, concretely (e.g. `built LoginForm.tsx + client validation, 3 files` or `verified outputs, no issues found`). One line, and the only place you summarize. This is what the parent surfaces so the user sees real progress instead of silent spawns.
+   2. **The tool's plain-text return, VERBATIM.** It carries the pool snapshot (units done / in flight / pending, and which hats are running) plus the relay breadcrumb — either the next `<subagent>` block your parent should spawn, or a one-line `haiku_run_next` directive. Do NOT paraphrase, reorder, or strip it; the parent reads the breadcrumb straight from your final message.
 
 > ⟁ **CLOSURE REQUIRED.** Silence after the work is a contract violation — the cursor will re-dispatch the same hat indefinitely. If the work succeeded but felt trivial: still call `advance_hat`. If it failed: call `reject_hat` with a concrete reason. There is no third exit.
 

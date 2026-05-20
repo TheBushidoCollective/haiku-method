@@ -141,6 +141,7 @@ export type {
 	HaikuStudioStageGetInput,
 	HaikuViewCloseInput,
 	HaikuViewInput,
+	HaikuZapInput,
 } from "./inputs/long-tail.js"
 export {
 	HAIKU_BACKLOG_INPUT_SCHEMA,
@@ -163,6 +164,7 @@ export {
 	HAIKU_STUDIO_STAGE_GET_INPUT_SCHEMA,
 	HAIKU_VIEW_CLOSE_INPUT_SCHEMA,
 	HAIKU_VIEW_INPUT_SCHEMA,
+	HAIKU_ZAP_INPUT_SCHEMA,
 	validateHaikuBacklogInputSchema,
 	validateHaikuCapacityInputSchema,
 	validateHaikuDecisionRecordInputSchema,
@@ -183,6 +185,7 @@ export {
 	validateHaikuStudioStageGetInputSchema,
 	validateHaikuViewCloseInputSchema,
 	validateHaikuViewInputSchema,
+	validateHaikuZapInputSchema,
 } from "./inputs/long-tail.js"
 export type {
 	HaikuSelectModeInput,

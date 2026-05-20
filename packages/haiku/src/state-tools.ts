@@ -90,11 +90,13 @@ import { logSessionEvent, writeHaikuMetadata } from "./session-metadata.js"
 import { sealIntentState } from "./state-integrity.js"
 import {
 	listStudios,
+	readHatDefs,
 	readOperationDefs,
 	readReflectionDefs,
 	readStageArtifactDefs,
 	readStageDef,
 	readStudioFixHatPaths,
+	resolveHatPath,
 	resolveStudio,
 } from "./studio-reader.js"
 import { setSessionId } from "./subagent-prompt-file.js"
@@ -3527,6 +3529,7 @@ import {
 	HAIKU_STUDIO_STAGE_GET_INPUT_SCHEMA,
 	HAIKU_VIEW_CLOSE_INPUT_SCHEMA,
 	HAIKU_VIEW_INPUT_SCHEMA,
+	HAIKU_ZAP_INPUT_SCHEMA,
 	HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA,
 	HAIKU_UNIT_DELETE_INPUT_SCHEMA,
 	HAIKU_UNIT_GET_INPUT_SCHEMA,
@@ -3569,6 +3572,7 @@ import {
 	validateHaikuStageSetInputSchema,
 	validateHaikuStudioGetInputSchema,
 	validateHaikuStudioStageGetInputSchema,
+	validateHaikuZapInputSchema,
 	validateHaikuUnitAdvanceHatInputSchema,
 	validateHaikuUnitDeleteInputSchema,
 	validateHaikuUnitGetInputSchema,
@@ -7339,6 +7343,46 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		},
 	},
 	{
+		name: "haiku_zap",
+		description:
+			"Zero-ceremony single-task run through a stage's hat loop — stateless (no `.haiku/` files, no workflow tick). Resolves the studio + stage, reads STAGE.md + each hat body via the three-tier cascade, assigns plan/build/verify roles, and returns ready-to-run markdown: the resolved hat sequence, a ready-to-spawn subagent prompt per hat (stage scope + hat mandate + role instructions + the task), and the run/verify/commit procedure (preflight clean-tree check, sequential hat dispatch, PASS/FAIL verdict parsing, commit-only-on-PASS, retry cap of 2). On a bad studio/stage it returns `zap_studio_not_found` / `zap_stage_not_found` with the valid options. The agent follows the returned `message` verbatim and drives the sequential loop.",
+		inputSchema: jsonSchemaOf(HAIKU_ZAP_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				message: {
+					type: "string",
+					description:
+						"Markdown instructions the agent follows verbatim (resolved hats, per-hat subagent prompts, run/verify/commit procedure). Always present, including on error responses.",
+				},
+				error: {
+					type: "string",
+					description:
+						"Stable named error code (`zap_studio_not_found` / `zap_stage_not_found`) when resolution fails.",
+				},
+				studio: {
+					type: "string",
+					description: "Echoed resolved studio slug (success or stage error).",
+				},
+				stage: {
+					type: "string",
+					description: "Echoed resolved stage name on success.",
+				},
+				valid_studios: {
+					type: "array",
+					items: { type: "string" },
+					description: "Available studio slugs (zap_studio_not_found path).",
+				},
+				valid_stages: {
+					type: "array",
+					items: { type: "string" },
+					description: "The studio's stage list (zap_stage_not_found path).",
+				},
+			},
+			required: ["message"],
+		},
+	},
+	{
 		name: "haiku_reflect",
 		description:
 			"Returns detailed reflection data for an intent — per-stage summaries, unit completion counts, bolt counts, and analysis instructions.",
@@ -7715,6 +7759,345 @@ export function validateSlugArgs(
 		}
 	}
 	return null
+}
+
+// ── Zap (stateless single-task hat loop) ───────────────────────────────────
+//
+// `haiku_zap` is intentionally STATELESS: no `.haiku/` files, no workflow
+// tick, no prompt-file writes. The tool resolves studio/stage, reads the
+// REAL STAGE.md body + each hat body via the three-tier cascade, assigns
+// plan/build/verify roles, and assembles ready-to-run markdown the agent
+// follows verbatim. The agent remains the sequential loop driver — correct
+// for zap. All the orchestration prose that used to live in SKILL.md (role
+// rules, the subagent prompt template, per-role instructions, PASS/FAIL
+// parsing, the retry cap of 2, commit-only-on-PASS) is computed here from
+// real data instead of hand-taught in static prose.
+
+interface ZapArgs {
+	task: string
+	studio?: string
+	stage?: string
+}
+
+type ZapRole = "planner" | "builder" | "verifier"
+
+/** Assign a hat its zap role. Position is the default (first → planner,
+ *  last → verifier, middle → builder); name patterns override position
+ *  (verif/review/check/assess → verifier, plan/design → planner). Mirrors
+ *  the rules the old SKILL.md hand-taught, computed from the real hat list. */
+function zapRoleFor(hat: string, index: number, total: number): ZapRole {
+	const name = hat.toLowerCase()
+	if (/verif|review|check|assess/.test(name)) return "verifier"
+	if (/plan|design/.test(name)) return "planner"
+	if (index === 0) return "planner"
+	if (index === total - 1) return "verifier"
+	return "builder"
+}
+
+/** Role-specific instruction block appended to each hat's subagent prompt.
+ *  Ported verbatim from the old SKILL.md per-role instruction blocks. */
+function zapRoleInstructions(role: ZapRole): string {
+	if (role === "planner") {
+		return [
+			"1. Read the task and stage scope above.",
+			"2. Produce a concise implementation plan:",
+			"   - Files to inspect or modify (with reasoning)",
+			"   - Step-by-step approach (3–5 items)",
+			"   - Risks or edge cases to watch for",
+			"3. Return your plan as plain text. Do NOT implement — planning only.",
+		].join("\n")
+	}
+	if (role === "verifier") {
+		return [
+			"1. Read the task description and the prior hat outputs (especially the builder's summary).",
+			"2. Inspect the actual uncommitted changes with `git status --porcelain` and `git diff` to confirm they match the summary.",
+			"3. Verify the work meets the task's success criteria:",
+			"   - Does the change address exactly what was asked?",
+			"   - Is the code internally consistent and free of obvious regressions?",
+			"   - Are there edge cases the builder missed that the stage scope would flag?",
+			"4. Your final message MUST be structured exactly as one of these two formats:",
+			"",
+			"   On success (single line, then a Files block):",
+			"   ```",
+			"   PASS — <one-sentence summary of what was verified>",
+			"   Files:",
+			"   <path1>",
+			"   <path2>",
+			"   ...",
+			"   ```",
+			"",
+			"   On failure (single line, no files block):",
+			"   ```",
+			"   FAIL — <specific reason the task is not complete or correct>",
+			"   ```",
+			"",
+			"   The Files block on PASS lists the exact paths the parent should stage. Include only paths you confirmed via `git diff` are part of the task's intended change. Exclude any pre-existing dirty paths that were called out in the prompt.",
+			"",
+			"5. Do NOT run quality gates — that was the builder's job. Focus on correctness and fit.",
+			"6. Do NOT commit, amend, or otherwise mutate the git tree.",
+			"7. Do NOT call any haiku_* tools.",
+		].join("\n")
+	}
+	return [
+		"1. Read the prior hat's output above and the hat mandate.",
+		"2. Apply your hat's role to the task. If your mandate is \"build/implement,\" write the code. If your mandate is \"critique/refine prior output,\" critique it and emit a revised plan or revised work as appropriate.",
+		"3. If you wrote or modified files, run any project quality gates (tests, lint, typecheck) and fix failures.",
+		"4. Do NOT commit. Leave changes uncommitted in the working tree — the parent skill commits once at the end after the verifier passes.",
+		"5. Return a summary:",
+		"   - Files you created/modified (exact paths)",
+		"   - Quality gate results (commands run, pass/fail)",
+		"   - One-paragraph description of what changed and why",
+	].join("\n")
+}
+
+/** Pick the default execution/build stage for a studio when `stage` is
+ *  omitted. `development` wins when present (the canonical software build
+ *  stage); otherwise fall back to the last stage in the studio's `stages:`
+ *  list that isn't a research/design phase (the build-class heuristic). */
+function zapDefaultStage(stages: string[]): string | null {
+	if (stages.length === 0) return null
+	if (stages.includes("development")) return "development"
+	const nonBuild = /research|design|discovery|inception|ideation|plan/i
+	for (let i = stages.length - 1; i >= 0; i--) {
+		if (!nonBuild.test(stages[i])) return stages[i]
+	}
+	// Every stage looked research/design-ish — fall back to the last one.
+	return stages[stages.length - 1]
+}
+
+/** Build the zap instruction message from the real studio/stage/hat data.
+ *  Returns the `reply()` payload shape ({ message, ... } on success; the
+ *  same plus `error` + `valid_*` on a resolution miss). `message` is always
+ *  present so the output schema's single required field holds on every path. */
+function buildZapInstructions(args: ZapArgs): Record<string, unknown> {
+	const task = args.task
+	const all = listStudios()
+	// Surface slug + any aliases so a user who typed a known alias (e.g.
+	// `software` → the `appdev` studio) sees it's a valid handle to re-pick.
+	const validStudios = Array.from(
+		new Set(all.flatMap((s) => [s.slug, ...s.aliases])),
+	).sort()
+
+	// ── Resolve studio ──
+	// Default to the software studio. Resolve via the identifier resolver so
+	// the directory name / alias (`software`) maps to its canonical slug
+	// (`appdev`) rather than assuming slug === "software".
+	let studio = resolveStudio("software")
+	if (args.studio) {
+		const resolved = resolveStudio(args.studio)
+		if (!resolved) {
+			return {
+				error: "zap_studio_not_found",
+				valid_studios: validStudios,
+				message: `Studio '${args.studio}' not found. Valid studios: ${validStudios.join(", ")}. Ask the user to pick one and call haiku_zap again with that studio.`,
+			}
+		}
+		studio = resolved
+	}
+	if (!studio) {
+		return {
+			error: "zap_studio_not_found",
+			valid_studios: validStudios,
+			message: `No studio specified and no 'software' studio is available. Valid studios: ${validStudios.join(", ")}. Ask the user to pick one and call haiku_zap again with that studio.`,
+		}
+	}
+	const studioSlug = studio.slug
+	// Filesystem reads (STAGE.md, hats/) key off the on-disk directory name,
+	// which can differ from the canonical slug (dir `software` → slug
+	// `appdev`). Echo the slug to the agent; read by dir.
+	const studioDir = studio.dir
+
+	// ── Resolve stage ──
+	const stages = studio.stages
+	let stage: string
+	if (args.stage) {
+		if (!stages.includes(args.stage)) {
+			return {
+				error: "zap_stage_not_found",
+				studio: studioSlug,
+				valid_stages: stages,
+				message: `Stage '${args.stage}' not found in studio '${studioSlug}'. Valid stages: ${stages.join(", ")}. Ask the user to pick one and call haiku_zap again with that stage.`,
+			}
+		}
+		stage = args.stage
+	} else {
+		const def = zapDefaultStage(stages)
+		if (!def) {
+			return {
+				error: "zap_stage_not_found",
+				studio: studioSlug,
+				valid_stages: stages,
+				message: `Studio '${studioSlug}' declares no stages. Cannot zap. Pick a different studio.`,
+			}
+		}
+		stage = def
+	}
+
+	// ── Read STAGE.md + the hat sequence ──
+	const stageDef = readStageDef(studioDir, stage)
+	if (!stageDef) {
+		return {
+			error: "zap_stage_not_found",
+			studio: studioSlug,
+			valid_stages: stages,
+			message: `Stage '${stage}' is listed for studio '${studioSlug}' but its STAGE.md could not be read. Pick a different stage.`,
+		}
+	}
+	const stageBody = stageDef.body.trim()
+	const hats = Array.isArray(stageDef.data.hats)
+		? (stageDef.data.hats as string[])
+		: []
+	if (hats.length === 0) {
+		return {
+			error: "zap_stage_not_found",
+			studio: studioSlug,
+			valid_stages: stages,
+			message: `Stage '${stage}' in studio '${studioSlug}' declares no hats — nothing to run. Pick a different stage.`,
+		}
+	}
+
+	const hatDefs = readHatDefs(studioDir, stage)
+	const total = hats.length
+	const roleByHat: ZapRole[] = hats.map((h, i) => zapRoleFor(h, i, total))
+
+	// ── Assemble the message ──
+	const lines: string[] = []
+	lines.push("# Zap — stateless single-task hat loop")
+	lines.push("")
+	lines.push(
+		`Resolved studio **${studioSlug}**, stage **${stage}**. This is a zap run: no intent file, no unit decomposition, no workflow tick, no \`haiku_*\` tool calls inside the hats. Work directly on the repo. Follow this procedure verbatim — you are the sequential loop driver.`,
+	)
+	lines.push("")
+	lines.push("## Hat sequence (run in this order)")
+	lines.push("")
+	for (let i = 0; i < hats.length; i++) {
+		lines.push(`${i + 1}. **${hats[i]}** — ${roleByHat[i]} role`)
+	}
+	lines.push("")
+
+	lines.push("## Operating procedure")
+	lines.push("")
+	lines.push("### 0. Preflight — clean working tree")
+	lines.push("")
+	lines.push(
+		"Run `git status --porcelain`. If the working tree has uncommitted changes (staged or unstaged), STOP and ask the user via `AskUserQuestion` with options:",
+	)
+	lines.push(
+		'- `["Commit/stash my changes first, then re-run zap", "Proceed anyway (zap may sweep my unrelated changes into its commit)"]`',
+	)
+	lines.push("")
+	lines.push(
+		"If the user picks the first option: acknowledge and stop — don't commit/stash for them. If they pick the second: continue, but record the pre-existing dirty paths so each hat is told to leave them alone. If the tree is clean, continue.",
+	)
+	lines.push("")
+	lines.push("### 1. Scope check")
+	lines.push("")
+	lines.push(
+		"If the task spans multiple stages (e.g. \"redesign the auth flow AND implement the backend AND write the tests\"), recommend `/haiku:haiku-quick` or `/haiku:haiku-start` and explain why instead of zapping it through one stage's hat loop. If the task is vague (no clear action/target, under one sentence), ask ONE focused `AskUserQuestion` with pre-populated options — do NOT run a full elaboration.",
+	)
+	lines.push("")
+	lines.push("### 2. Run the hat loop")
+	lines.push("")
+	lines.push(
+		"Initialize a retry counter at 0. Spawn each hat below as a SEQUENTIAL subagent (Task tool) — wait for each to return before spawning the next. Pass each hat's returned output verbatim into the next hat's prompt where the template marks it. The per-hat subagent prompts are pre-assembled below.",
+	)
+	lines.push("")
+	lines.push("### 3. Handle the verifier verdict")
+	lines.push("")
+	lines.push(
+		"Parse the verifier's FIRST line for `PASS` or `FAIL` (anchored to the start, followed by ` — `).",
+	)
+	lines.push("")
+	lines.push(
+		"**On PASS:** read the `Files:` block, stage exactly those paths with `git add <path1> <path2> ...` (NEVER `git add -A`/`git add .` — that sweeps in pre-existing dirty paths), commit with a brief message derived from the task + verifier summary, then report files committed + commands run + the verifier's PASS line.",
+	)
+	lines.push("")
+	lines.push(
+		"**On FAIL:** surface the reason. If the retry counter is **< 2**, ask via `AskUserQuestion` (options `[\"Retry the hat loop with this failure as context\", \"Abandon — I'll fix it manually\"]`). On retry: increment the counter, leave the working tree untouched (prior uncommitted changes carry forward), and re-run from step 2 prepending a `## Prior failure context: <FAIL reason>` block to the task. If the counter is **2 or more**, do NOT offer retry — tell the user zap isn't converging (two retries used, 3 total attempts), suggest discarding via `git restore .` and bailing to `/haiku:haiku-start`, then stop. On abandon: leave changes in place and stop.",
+	)
+	lines.push("")
+	lines.push(
+		"**If a hat subagent errors out** (no output / throws / crashes): treat it as a `FAIL` with reason `\"<hat> subagent errored: <error>\"` and route through the FAIL path above. Don't silently retry.",
+	)
+	lines.push("")
+	lines.push("## Commit safety")
+	lines.push("")
+	lines.push(
+		"Only YOU (the parent) commit, only after verifier PASS, only the exact files the verifier listed. No hat commits. Stateless — no `.haiku/` files are written; if the user needs formal traceability, suggest `/haiku:haiku-quick`.",
+	)
+	lines.push("")
+
+	// ── Per-hat subagent prompts ──
+	lines.push("---")
+	lines.push("")
+	lines.push("## Per-hat subagent prompts")
+	lines.push("")
+	lines.push(
+		"Spawn each block below as its own subagent, in order. Fill the `<INPUT FROM PRIOR HAT>` slot with the prior hat's verbatim output (omit the section for the first hat). Prepend a `## Prior failure context` block to the task on a retry. Prepend a `## Pre-existing uncommitted changes (do NOT modify)` block listing the preflight dirty paths if the user opted to proceed dirty.",
+	)
+	lines.push("")
+	for (let i = 0; i < hats.length; i++) {
+		const hat = hats[i]
+		const role = roleByHat[i]
+		const def = hatDefs[hat]
+		const hatBody = def ? def.content.trim() : ""
+		const hatPath = resolveHatPath(studioDir, stage, hat)
+		lines.push(
+			`### Hat ${i + 1}/${total}: ${hat} (${role} role)`,
+		)
+		lines.push("")
+		if (!def) {
+			lines.push(
+				`> WARNING: no mandate file resolved for hat \`${hat}\` in \`${studioSlug}/${stage}\`. The hat is listed on STAGE.md but no \`hats/${hat}.md\` exists in any cascade tier. Run the hat with role instructions only, or fix the stage definition.`,
+			)
+			lines.push("")
+		}
+		lines.push("```")
+		lines.push(
+			`You are executing a zap task as the **${hat}** hat (${role} role) in stage **${stage}** of studio **${studioSlug}**.`,
+		)
+		lines.push("")
+		lines.push(
+			"This is a zap run — no workflow engine, no unit files, no haiku_* tool calls. Work directly on the repo.",
+		)
+		lines.push("")
+		lines.push("## Stage scope")
+		lines.push("")
+		lines.push(stageBody || "(STAGE.md body was empty)")
+		lines.push("")
+		lines.push(`## Your mandate: ${hat}`)
+		lines.push("")
+		lines.push(
+			hatBody ||
+				`(No mandate body for ${hat}${hatPath ? ` at ${hatPath}` : ""} — follow the role instructions below.)`,
+		)
+		lines.push("")
+		lines.push(
+			"Note: this mandate was written for the workflow-engine context. Where it references units, feedback files, or haiku_* tools, translate that as: work directly on the repo, return your output as plain text to the parent. Do NOT call any haiku_* tools.",
+		)
+		lines.push("")
+		lines.push("## Task")
+		lines.push("")
+		lines.push(task)
+		lines.push("")
+		if (i > 0) {
+			lines.push(`## Input from prior hat (${hats[i - 1]})`)
+			lines.push("")
+			lines.push("<INPUT FROM PRIOR HAT>")
+			lines.push("")
+		}
+		lines.push("## Instructions")
+		lines.push("")
+		lines.push(zapRoleInstructions(role))
+		lines.push("```")
+		lines.push("")
+	}
+
+	return {
+		message: lines.join("\n"),
+		studio: studioSlug,
+		stage,
+	}
 }
 
 // ── Tool handlers ──────────────────────────────────────────────────────────
@@ -10355,6 +10738,21 @@ export function handleStateTool(
 				}
 			}
 			return reply({ markdown: out, studio: studioField })
+		}
+
+		// ── Zap (stateless single-task hat loop) ──
+		case "haiku_zap": {
+			const zapInputErr = validateToolInput(
+				args,
+				validateHaikuZapInputSchema,
+				"haiku_zap",
+			)
+			if (zapInputErr) return zapInputErr
+			const zapResult = buildZapInstructions(args as unknown as ZapArgs)
+			return reply(
+				zapResult,
+				zapResult.error ? { isError: true } : undefined,
+			)
 		}
 
 		// ── Reflect ──

@@ -224,6 +224,45 @@ export const validateHaikuCapacityInputSchema = stateAjv.compile(
 	HAIKU_CAPACITY_INPUT_SCHEMA,
 )
 
+// ── haiku_zap ─────────────────────────────────────────────────────
+//
+// Stateless zero-ceremony single-task run through a stage's hat
+// loop. No `.haiku/` files, no workflow tick — the tool resolves
+// studio/stage, reads STAGE.md + each hat body via the cascade, and
+// returns ready-to-run markdown instructions (per-hat subagent
+// prompts + the run/verify/commit procedure). The agent drives the
+// sequential loop; the tool never writes prompt files or tracks
+// state. Studio/stage validation is handler-side (against the real
+// studio list + stage list), surfacing `zap_studio_not_found` /
+// `zap_stage_not_found` with the valid options the agent can re-pick.
+
+export const HAIKU_ZAP_INPUT_SCHEMA = Type.Object(
+	{
+		task: Type.String({
+			minLength: 1,
+			description: "The work to run through the stage's hat loop.",
+		}),
+		studio: Type.Optional(
+			Type.String({
+				description:
+					"Studio slug (e.g. `software`). Defaults to `software` when omitted and present.",
+			}),
+		),
+		stage: Type.Optional(
+			Type.String({
+				description:
+					"Stage within the studio (e.g. `development`). Defaults to the studio's build-class execution stage when omitted.",
+			}),
+		),
+		state_file: stateFile,
+	},
+	{ additionalProperties: false },
+)
+export type HaikuZapInput = Static<typeof HAIKU_ZAP_INPUT_SCHEMA>
+export const validateHaikuZapInputSchema = stateAjv.compile(
+	HAIKU_ZAP_INPUT_SCHEMA,
+)
+
 // ── haiku_reflect ─────────────────────────────────────────────────
 
 export const HAIKU_REFLECT_INPUT_SCHEMA = Type.Object(

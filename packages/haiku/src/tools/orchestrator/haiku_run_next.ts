@@ -43,6 +43,7 @@ import { adaptInstructions } from "../../harness-instructions.js"
 import {
 	findCurrentStage,
 	isStageComplete,
+	stageOwesObservations,
 } from "../../orchestrator/workflow/cursor.js"
 import { runWorkflowTick } from "../../orchestrator/workflow/run-tick.js"
 import type { OrchestratorAction as OrchestratorActionType } from "../../orchestrator.js"
@@ -1234,6 +1235,22 @@ export default defineTool({
 			}
 			completeStageLastSig = sig
 			const stageToComplete = result.stage
+			// Forward-only observations gate. A stage owes its free-form
+			// observations.md before it merges (reflection on). Instead of
+			// merging, hand the agent the record_observations instruction;
+			// once the file lands the next tick re-emits complete_stage and
+			// the merge proceeds (carrying observations.md). Fires ONLY for
+			// the frontier stage the cursor just produced complete_stage for
+			// — never for already-merged stages — so it can't rewind an
+			// intent. (2026-05-20.)
+			if (stageOwesObservations(intentDir(slug), stageToComplete)) {
+				result = {
+					action: "record_observations",
+					intent: slug,
+					stage: stageToComplete,
+				}
+				break
+			}
 			try {
 				const { isGitRepo } = await import("../../state-tools.js")
 				if (!isGitRepo()) {
@@ -1242,6 +1259,42 @@ export default defineTool({
 					// fully approved). Re-tick — findCurrentStage walks past.
 					result = dispatchOrchestratorAction(slug)
 					continue
+				}
+				// observations.md is a plain-Write artifact (the agent wrote
+				// it for record_observations) — uncommitted, it never reaches
+				// the stage branch, so the merge below can't carry it onto
+				// intent main where the intent-close reflection pass reads it.
+				// Commit it now, on the stage branch, before the merge.
+				// Targeted to this one file so it can never sweep stray
+				// working-tree changes into the merge.
+				try {
+					const obsStageBranch = `haiku/${slug}/${stageToComplete}`
+					if (_safeCurrentBranchHere() === obsStageBranch) {
+						const obsRel = `.haiku/intents/${slug}/stages/${stageToComplete}/observations.md`
+						const obsDirty = execFileSync(
+							"git",
+							["status", "--porcelain", "--", obsRel],
+							{ encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+						).trim()
+						if (obsDirty) {
+							execFileSync("git", ["add", "--", obsRel], {
+								stdio: "ignore",
+							})
+							execFileSync(
+								"git",
+								[
+									"commit",
+									"-m",
+									`haiku: observations for stage ${stageToComplete}`,
+								],
+								{ stdio: "ignore" },
+							)
+						}
+					}
+				} catch {
+					/* non-fatal — if the commit fails the merge still attempts;
+					   a genuinely blocked tree surfaces as the existing
+					   merge-blocked error path below. */
 				}
 				const { mergeStageBranchIntoMain } = await import(
 					"../../git-worktree.js"

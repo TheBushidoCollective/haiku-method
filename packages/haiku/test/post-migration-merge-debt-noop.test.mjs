@@ -90,6 +90,7 @@ test("post-walk merge_stage synthesis: no-op when previous stage's tree already 
 title: Admin portal reimagine
 studio: software
 mode: continuous
+autotune: false
 plugin_version: 4.0.0
 stages: [inception, design]
 verified_at: '2026-04-27T19:00:00Z'

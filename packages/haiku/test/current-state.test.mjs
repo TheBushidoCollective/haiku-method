@@ -59,6 +59,10 @@ function fixture(slug, frontmatter, stages = {}) {
 		else fmLines.push(`${k}: "${v}"`)
 	}
 	if (!("mode" in frontmatter)) fmLines.push(`mode: "continuous"`)
+	// Reflection (autotune) off by default in fixtures: these tests predate
+	// the observations gate and assert units-only stage completion. Tests
+	// exercising reflection set `autotune: true` explicitly.
+	if (!("autotune" in frontmatter)) fmLines.push(`autotune: false`)
 	fmLines.push("---", "", "# Intent body")
 	writeFileSync(join(iDir, "intent.md"), fmLines.join("\n"))
 

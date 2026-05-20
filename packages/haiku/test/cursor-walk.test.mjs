@@ -16,7 +16,7 @@
 
 import assert from "node:assert"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -676,6 +676,142 @@ test("cursor: fully signed unit (qg done) → complete_stage", async () => {
 				`expected complete_stage with all sigs in place; got: ${action.action} — ${action.message}`,
 			)
 			assert.strictEqual(action.stage, "design")
+		},
+	)
+})
+
+// Drives the REAL haiku_run_next handler (not just the cursor walk) so the
+// forward-only observations gate — which lives in run_next's complete_stage
+// path, not in derivePosition — is exercised. Bug 2026-05-20: observations.md
+// was never written at stage close. The fix hands the agent
+// record_observations the moment a stage is about to merge, and refuses to
+// merge until the file lands — WITHOUT a units-only-isStageComplete change
+// that would rewind every legacy intent.
+async function runNextOnce(slug) {
+	const { orchestratorToolHandlers } = await import(
+		"../src/tools/orchestrator/index.js"
+	)
+	const tool = orchestratorToolHandlers.get("haiku_run_next")
+	const resp = await tool.handle({ intent: slug })
+	const txt = resp.content?.[0]?.text ?? ""
+	const m = txt.match(/```json\s*([\s\S]*?)\s*```/)
+	if (m) {
+		try {
+			return JSON.parse(m[1])
+		} catch {
+			/* fall through */
+		}
+	}
+	// Selection/await responses may be bare JSON head before the "---".
+	const head = txt.split("\n\n---")[0].trim()
+	try {
+		return JSON.parse(head)
+	} catch {
+		return { action: "unparsed", raw: txt.slice(0, 200) }
+	}
+}
+
+test("run_next: reflection-on stage merges only after observations.md is recorded", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo(
+		"obs-gate",
+		async ({ repoRoot, intentDir, slug }) => {
+			// Two stages: design completes, build is next. With design done
+			// and build the cursor's stage, run_next synthesizes
+			// complete_stage(design) — the path the observations gate sits
+			// on. (The terminal stage routes to intent-completion instead, a
+			// separate path.)
+			makeStudio({
+				repoRoot,
+				studio: "test",
+				stages: [
+					{
+						name: "design",
+						hats: ["planner", "builder", "verifier"],
+						fix_hats: ["builder", "feedback-assessor"],
+						review: "ask",
+						review_agents: ["code-reviewer"],
+					},
+					{
+						name: "build",
+						hats: ["planner", "builder", "verifier"],
+						fix_hats: ["builder", "feedback-assessor"],
+						review: "ask",
+						review_agents: ["code-reviewer"],
+					},
+				],
+			})
+			// autotune:true => reflection enabled (the real default).
+			makeIntent({ intentDir, slug, studio: "test", extraFm: { autotune: true } })
+			seedVerifiedElaboration({ intentDir, stage: "design" })
+			// Fully-signed unit, COMMITTED to the design branch (writeUnit
+			// goes through onStageBranch), so design has real merge debt.
+			writeUnit(intentDir, "design", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				started_at: "t",
+				iterations: [
+					{ hat: "planner", started_at: "t", completed_at: "t", result: "advance" },
+					{ hat: "builder", started_at: "t", completed_at: "t", result: "advance" },
+					{ hat: "verifier", started_at: "t", completed_at: "t", result: "advance" },
+				],
+				reviews: { spec: { at: "t" }, "code-reviewer": { at: "t" }, user: { at: "t" } },
+				approvals: {
+					spec: { at: "t" },
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+					quality_gates: { at: "t" },
+				},
+				discovery: {},
+			})
+
+			// The raw handler resolves the project from process.cwd (the
+			// runTick helper chdirs internally; withTmpRepo does not), and
+			// reads the current branch's tree — so sit on the design branch
+			// where the signed unit lives, like a real run would.
+			process.chdir(repoRoot)
+			execFileSync("git", ["checkout", "-q", `haiku/${slug}/design`], {
+				cwd: repoRoot,
+				stdio: "ignore",
+			})
+
+			// design is signed and build is next, but design's
+			// observations.md is absent → run_next must hand back
+			// record_observations instead of merging design.
+			const first = await runNextOnce(slug)
+			assert.strictEqual(
+				first.action,
+				"record_observations",
+				`expected record_observations before merge; got: ${first.action} — ${JSON.stringify(first).slice(0, 200)}`,
+			)
+			assert.strictEqual(first.stage, "design")
+
+			// Agent writes observations.md (committed to the design branch,
+			// as the agent's Write + the engine's commit would leave it).
+			onStageBranch(repoRoot, slug, "design", () => {
+				writeFileSync(
+					join(intentDir, "stages", "design", "observations.md"),
+					"# design — Observations\n\nRan clean.\n",
+				)
+			})
+
+			// Now the gate passes — design merges and the cursor moves on;
+			// it must NOT loop back on record_observations for design.
+			const second = await runNextOnce(slug)
+			assert.notStrictEqual(
+				second.action === "record_observations" && second.stage === "design",
+				true,
+				`design should advance once its observations.md exists; still got record_observations/design`,
+			)
+			// observations.md must have landed on intent main with the merge.
+			execFileSync("git", ["checkout", "-q", `haiku/${slug}/main`], {
+				cwd: repoRoot,
+				stdio: "ignore",
+			})
+			assert.ok(
+				existsSync(join(intentDir, "stages", "design", "observations.md")),
+				"design observations.md must be on intent main after the stage merged",
+			)
 		},
 	)
 })

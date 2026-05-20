@@ -84,6 +84,9 @@ function writeIntent(root, slug, frontmatter) {
 		if (typeof v === "boolean") lines.push(`${k}: ${v}`)
 		else lines.push(`${k}: "${v}"`)
 	}
+	// Reflection off by default: these fixtures predate the observations
+	// gate and assert units-only stage completion.
+	if (!("autotune" in frontmatter)) lines.push(`autotune: false`)
 	lines.push("---", "", "# Body")
 	writeFileSync(join(iDir, "intent.md"), lines.join("\n"))
 }

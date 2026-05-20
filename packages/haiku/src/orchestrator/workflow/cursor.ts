@@ -818,6 +818,16 @@ function areStageUnitsComplete(
  * Is this stage complete? Currently equivalent to "all units complete";
  * elaboration / discovery / merge state are handled by the per-stage
  * walk (`walkIntentTrack`), not by the active-stage selector.
+ *
+ * Deliberately units-only. It must NOT factor in observations.md:
+ * `findCurrentStage` drives off this predicate, so any clause that read
+ * false for an already-completed stage would rewind the cursor to it —
+ * and for every legacy intent whose merged stages predate the
+ * observations file, that's a full-pipeline rewind. The observations
+ * milestone is instead enforced at the stage MERGE moment (see
+ * `stageOwesObservations`, consulted in run_next's complete_stage path),
+ * which fires only for the frontier stage that's actively completing —
+ * never retroactively. (2026-05-20.)
  */
 export function isStageComplete(
 	intentDir: string,
@@ -826,6 +836,25 @@ export function isStageComplete(
 	mode: string,
 ): boolean {
 	return areStageUnitsComplete(intentDir, studio, stage, mode)
+}
+
+/**
+ * Does this stage still owe its free-form `observations.md` before it can
+ * merge? True only when reflection is enabled and the file is absent.
+ *
+ * The forward-only observations gate. Callers consult it at the moment a
+ * stage is about to complete/merge — the cursor has already produced
+ * `complete_stage` for the frontier stage — so it can never pull an
+ * already-merged stage backwards. Keeping it OUT of `isStageComplete` is
+ * what prevents the whole-pipeline rewind a reflection-aware completeness
+ * predicate would cause on legacy intents.
+ */
+export function stageOwesObservations(
+	intentDir: string,
+	stage: string,
+): boolean {
+	if (!isReflectionEnabled(intentDir)) return false
+	return !existsSync(join(intentDir, "stages", stage, "observations.md"))
 }
 
 /**

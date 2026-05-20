@@ -105,6 +105,7 @@ function setupMalformedMigratedIntent(slug) {
 			title: "malformed iteration",
 			studio: "software",
 			mode: "continuous",
+			autotune: false,
 			plugin_version: "4.0.0",
 			verified_at: "2026-04-27T19:22:00Z",
 		}),

@@ -486,6 +486,7 @@ test("findCurrentStage: walks past stage whose approvals are stamped as bare tru
 title: Truthy-approval cursor test
 studio: software
 mode: continuous
+autotune: false
 plugin_version: 4.0.0
 stages: [inception, design]
 ---

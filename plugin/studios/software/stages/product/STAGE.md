@@ -2,7 +2,7 @@
 name: product
 description: Define behavioral specifications and acceptance criteria
 hats: [product, specification, validator]
-fix_hats: [classifier, product, feedback-assessor]
+fix_hats: [classifier, product, specification, feedback-assessor]
 review: [external, ask]
 elaboration: collaborative
 inputs:
@@ -43,4 +43,4 @@ The frontmatter above declares the canonical I/O contract. Upstream `inception/d
 
 ## Fix loop and gate
 
-When review feedback opens, `fix_hats: [classifier, product, feedback-assessor]` dispatches per finding. The gate is `[external, ask]` — the user picks between submitting the AC for external review (e.g., engineering signoff in a docs platform) or local approval. Project overlays at `.haiku/studios/software/stages/product/` may add house-style conventions (section numbering, design-system tokens, doc-platform headers) without modifying the plugin defaults.
+When review feedback opens, `fix_hats: [classifier, product, specification, feedback-assessor]` dispatches per finding. The classifier routes; `product` re-authors the AC for AC findings, and `specification` re-authors the `.feature` files / `DATA-CONTRACTS.md` for behavioral-spec and contract findings (those are the specification hat's artifacts) — both implementers are in the chain so a contract finding lands with the hat that owns the contract instead of thrashing against a hat that can't edit it. The gate is `[external, ask]` — the user picks between submitting the AC for external review (e.g., engineering signoff in a docs platform) or local approval. Project overlays at `.haiku/studios/software/stages/product/` may add house-style conventions (section numbering, design-system tokens, doc-platform headers) without modifying the plugin defaults.

@@ -2,7 +2,7 @@
 name: report
 description: Create stakeholder updates and project dashboards
 hats: [reporter, communicator, verifier]
-fix_hats: [classifier, reporter, feedback-assessor]
+fix_hats: [classifier, reporter, communicator, feedback-assessor]
 review: ask
 elaboration: autonomous
 inputs:
@@ -37,4 +37,4 @@ The report stage consumes `track/discovery/status-report` (the data), `plan/disc
 
 ## Fix loop and gate
 
-When review feedback opens, `fix_hats: [classifier, reporter, feedback-assessor]` dispatches per finding. The gate is `ask` — local approval before the report goes to stakeholders catches data inaccuracies and tone issues. Project overlays at `.haiku/studios/project-management/stages/report/` may add audience-specific templates, branded dashboard layouts, or integration with a specific reporting tool without modifying the plugin defaults.
+When review feedback opens, `fix_hats: [classifier, reporter, communicator, feedback-assessor]` dispatches per finding — `reporter` owns the data/forecast layer, `communicator` owns the audience-shaped report (the report is the communicator's artifact), so a finding lands with the hat that owns the flagged artifact. The gate is `ask` — local approval before the report goes to stakeholders catches data inaccuracies and tone issues. Project overlays at `.haiku/studios/project-management/stages/report/` may add audience-specific templates, branded dashboard layouts, or integration with a specific reporting tool without modifying the plugin defaults.

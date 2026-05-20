@@ -2,7 +2,7 @@
 name: enumeration
 description: Service discovery, version detection, vulnerability scanning, and attack surface mapping
 hats: [enumerator, vulnerability-scanner, verifier]
-fix_hats: [classifier, enumerator, feedback-assessor]
+fix_hats: [classifier, enumerator, vulnerability-scanner, feedback-assessor]
 review: ask
 elaboration: autonomous
 inputs:
@@ -33,4 +33,4 @@ Consumes `reconnaissance/target-profile`. Produces `VULNERABILITY-CATALOG.md` pe
 
 ## Fix loop and gate
 
-`fix_hats: [classifier, enumerator, feedback-assessor]` dispatches per finding — typical findings are false positives, missed services, or unconfirmed version detections. Gate is `ask` because human triage of "what's worth attempting to exploit" is the most expensive cost in pentest engagements; the catalog needs human sign-off before the next stage spends time building PoCs.
+`fix_hats: [classifier, enumerator, vulnerability-scanner, feedback-assessor]` dispatches per finding — typical findings are false positives, missed services, or unconfirmed version detections. `enumerator` owns the service inventory and `vulnerability-scanner` owns the vulnerability catalog (the catalog is the scanner's artifact), so a finding lands with the hat that owns the flagged artifact. Gate is `ask` because human triage of "what's worth attempting to exploit" is the most expensive cost in pentest engagements; the catalog needs human sign-off before the next stage spends time building PoCs.

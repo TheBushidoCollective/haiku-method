@@ -22,7 +22,7 @@ The workflow engine runs every stage in lifecycle order:
 
 4. **Post-execute approval** — Engine-built approval agents (`spec`, `continuity`, `cross-stage-consistency`) plus the stage's `completeness` and `feasibility` review agents and any studio-level review agents fire again, this time auditing the WORK against the spec the pre-execute walk already approved. Same role names, phase-appropriate mandate (post-execute prose lives in `engine-bodies/<role>.eta.md` under `dispatch_approval/`).
 
-5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → product → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage; `product` is the implementer (re-authoring the AC where the finding belongs); the assessor independently decides closure.
+5. **Fix loop (if any feedback opens)** — `fix_hats: classifier → product → specification → feedback-assessor` dispatches per finding. The classifier routes the FB to the right unit or stage. Both execution implementers are in the chain so a finding lands with the hat that owns the flagged artifact: `product` re-authors the AC for AC findings; `specification` re-authors the `.feature` files / `DATA-CONTRACTS.md` for behavioral-spec and contract findings. A hat that doesn't own the flagged artifact advances (passes the baton to the next hat), never rejects — reject is only for an invalid finding. The assessor independently decides closure.
 
 6. **Gate** — The stage's gate is `[external, ask]`. The user may choose to submit the AC for external review (e.g., a Notion / Confluence doc review with engineering) or approve locally. Approval signals the stage is done and the workflow moves on to `development`.
 

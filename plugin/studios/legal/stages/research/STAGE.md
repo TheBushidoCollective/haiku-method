@@ -2,7 +2,7 @@
 name: research
 description: Research precedent and review regulatory requirements
 hats: [researcher, analyst, verifier]
-fix_hats: [classifier, researcher, feedback-assessor]
+fix_hats: [classifier, researcher, analyst, feedback-assessor]
 review: auto
 elaboration: autonomous
 inputs:
@@ -33,4 +33,4 @@ Frontmatter declares `intake/legal-brief` as input and one output: `RESEARCH-MEM
 
 ## Fix loop and gate
 
-`fix_hats: [classifier, researcher, feedback-assessor]` dispatches per finding. Classifier routes; researcher re-authors the affected memo section (often with a corrected citation or an added jurisdictional consideration); assessor closes. The gate is `auto`. The licensed attorney is the gate for legal judgment — the workflow's `auto` advance only means the artifact is internally well-formed.
+`fix_hats: [classifier, researcher, analyst, feedback-assessor]` dispatches per finding. Classifier routes; `researcher` re-frames a finding about scope or direction, and `analyst` re-authors the affected memo section (the memo is the analyst's artifact — a corrected citation, an added jurisdictional consideration); assessor closes. Both implementers are in the chain so a finding lands with the hat that owns the flagged artifact. The gate is `auto`. The licensed attorney is the gate for legal judgment — the workflow's `auto` advance only means the artifact is internally well-formed.

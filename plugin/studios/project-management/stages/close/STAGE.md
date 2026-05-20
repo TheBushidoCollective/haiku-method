@@ -2,7 +2,7 @@
 name: close
 description: Conduct retrospective, capture lessons learned, and handoff
 hats: [closer, archivist, verifier]
-fix_hats: [classifier, closer, feedback-assessor]
+fix_hats: [classifier, closer, archivist, feedback-assessor]
 review: ask
 elaboration: autonomous
 inputs:
@@ -39,4 +39,4 @@ The close stage consumes `report/discovery/project-dashboard`, `track/discovery/
 
 ## Fix loop and gate
 
-When review feedback opens, `fix_hats: [classifier, closer, feedback-assessor]` dispatches per finding. The gate is `ask` — sponsor and team review of closeout artifacts before formal sign-off. Project overlays may add organization-specific lessons-learned repositories, archive-platform integration, or formal-closure workflow integration with a specific PM tool without modifying the plugin defaults.
+When review feedback opens, `fix_hats: [classifier, closer, archivist, feedback-assessor]` dispatches per finding — `closer` owns the retrospective / closeout disposition, `archivist` owns the archived record, so a finding lands with the hat that owns the flagged artifact. The gate is `ask` — sponsor and team review of closeout artifacts before formal sign-off. Project overlays may add organization-specific lessons-learned repositories, archive-platform integration, or formal-closure workflow integration with a specific PM tool without modifying the plugin defaults.

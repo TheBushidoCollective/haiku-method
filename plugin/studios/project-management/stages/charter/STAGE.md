@@ -2,7 +2,7 @@
 name: charter
 description: Define project scope, stakeholders, and success criteria
 hats: [sponsor, scoper, verifier]
-fix_hats: [classifier, sponsor, feedback-assessor]
+fix_hats: [classifier, sponsor, scoper, feedback-assessor]
 review: external
 elaboration: collaborative
 inputs: []
@@ -31,4 +31,4 @@ The charter stage has no upstream inputs — it's the first stage of the studio.
 
 ## Fix loop and gate
 
-When review feedback opens, `fix_hats: [classifier, sponsor, feedback-assessor]` dispatches per finding. The classifier routes the FB to the right charter element; `sponsor` re-authors the relevant section; the assessor independently decides closure. The gate is `external` — sponsor sign-off typically happens outside the plugin (signed charter document, kickoff approval). Project overlays at `.haiku/studios/project-management/stages/charter/` may add house-style numbering, doc-platform conventions, or specific PM-tool integration without modifying the plugin defaults.
+When review feedback opens, `fix_hats: [classifier, sponsor, scoper, feedback-assessor]` dispatches per finding. The classifier routes the FB to the right charter element; `sponsor` re-frames the business case / sponsorship intent, and `scoper` re-authors the charter element (the charter is the scoper's artifact); the assessor independently decides closure. Both implementers are in the chain so a finding lands with the hat that owns the flagged artifact. The gate is `external` — sponsor sign-off typically happens outside the plugin (signed charter document, kickoff approval). Project overlays at `.haiku/studios/project-management/stages/charter/` may add house-style numbering, doc-platform conventions, or specific PM-tool integration without modifying the plugin defaults.

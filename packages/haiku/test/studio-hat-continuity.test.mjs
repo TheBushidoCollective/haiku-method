@@ -83,11 +83,7 @@ test("every stage hat + stage fix_hat resolves to a mandate file", async () => {
 			}
 		}
 	}
-	assert.equal(
-		misses.length,
-		0,
-		`unbacked stage hats:\n${misses.join("\n")}`,
-	)
+	assert.equal(misses.length, 0, `unbacked stage hats:\n${misses.join("\n")}`)
 })
 
 test("every studio-level fix_hat resolves to a studio fix-hat mandate file", async () => {
@@ -208,6 +204,54 @@ test("every stage fix_hats chain contains an implementer hat", async () => {
 		misses.length,
 		0,
 		`stage fix_hats chains with no implementer:\n${misses.join("\n")}`,
+	)
+})
+
+// Stronger than "has AN implementer": EVERY hat that owns a stage output
+// must be reachable in the fix loop, EXCEPT the terminal verify hat (the
+// last entry in `hats:`), whose verify role is filled by the fix loop's
+// terminal `feedback-assessor`. Otherwise a review finding against an
+// artifact whose owning hat is absent from `fix_hats` has nowhere to land:
+// the present hats can't edit it, so it gets closed-without-fixing and the
+// next `dispatch_review` re-discovers it — the 2026-05-20 oscillation
+// (product stage: `specification` owned DATA-CONTRACTS.md but was missing
+// from `fix_hats`, so contract findings thrashed review↔fix forever). This
+// was a SYSTEMIC gap — every plan→do→verify stage shipped `fix_hats` with
+// only the plan hat, never the do hat that owns the substantive artifact.
+test("every output-owning hat (except the terminal verify hat) is in fix_hats", async () => {
+	const misses = []
+	for (const studio of studios) {
+		const stagesDir = join(STUDIOS_DIR, studio, "stages")
+		for (const stage of listDirs(stagesDir)) {
+			const stageMd = join(stagesDir, stage, "STAGE.md")
+			let fm
+			try {
+				fm = readFm(stageMd)
+			} catch {
+				continue
+			}
+			const fixHats = Array.isArray(fm.fix_hats) ? fm.fix_hats : []
+			if (fixHats.length === 0) continue // no fix loop → nothing to check
+			const hats = Array.isArray(fm.hats) ? fm.hats : []
+			// The terminal verify hat (last in `hats:`) is the one the fix
+			// loop's `feedback-assessor` stands in for — exempt it.
+			const verifyHat = hats[hats.length - 1]
+			const outputs = Array.isArray(fm.outputs) ? fm.outputs : []
+			const owners = [...new Set(outputs.map((o) => o?.hat).filter(Boolean))]
+			for (const owner of owners) {
+				if (owner === verifyHat) continue
+				if (!fixHats.includes(owner)) {
+					misses.push(
+						`${studio}/${stage}: output-owning hat '${owner}' is absent from fix_hats [${fixHats.join(", ")}] — findings against its artifact can never be fixed in the loop (they oscillate review↔fix). Add '${owner}' to fix_hats.`,
+					)
+				}
+			}
+		}
+	}
+	assert.equal(
+		misses.length,
+		0,
+		`fix_hats missing output owners:\n${misses.join("\n")}`,
 	)
 })
 

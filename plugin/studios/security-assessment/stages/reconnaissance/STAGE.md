@@ -2,7 +2,7 @@
 name: reconnaissance
 description: Passive and active information gathering about the target
 hats: [osint-analyst, network-mapper, verifier]
-fix_hats: [classifier, osint-analyst, feedback-assessor]
+fix_hats: [classifier, osint-analyst, network-mapper, feedback-assessor]
 review: auto
 elaboration: autonomous
 inputs: []
@@ -31,4 +31,4 @@ No upstream inputs — this is the first stage. Produces `TARGET-PROFILE.md` per
 
 ## Fix loop and gate
 
-`fix_hats: [classifier, osint-analyst, feedback-assessor]` — the classifier routes the FB to the right unit, `osint-analyst` re-investigates, and the assessor independently decides closure. Gate is `auto` because findings at this stage are knowledge artifacts an internal reviewer (review-agent) is sufficient to validate; downstream stages catch substantive errors when they consume the outputs.
+`fix_hats: [classifier, osint-analyst, network-mapper, feedback-assessor]` — the classifier routes the FB to the right unit, `osint-analyst` re-investigates open-source findings and `network-mapper` re-authors the target profile (the profile is the mapper's artifact), and the assessor independently decides closure. Both implementers are in the chain so a finding lands with the hat that owns the flagged artifact. Gate is `auto` because findings at this stage are knowledge artifacts an internal reviewer (review-agent) is sufficient to validate; downstream stages catch substantive errors when they consume the outputs.

@@ -86,11 +86,11 @@ Hybrid mode fixes that. You set a `continuous_from` stage. Before that stage, yo
 
 You get ceremony where ceremony helps and speed where speed helps. Same intent, two different gears.
 
-## How the dashboard sees across branches
+## How status crosses branches
 
-There's a subtle problem with per-stage branches: when you run `haiku_dashboard` from the development branch, how does it know the state of the product stage? That state lives on a *different* branch, and `git checkout` -ing five branches to read `state.json` from each would be obnoxious and slow.
+Per-stage branches create a subtle problem: each stage's state lives on its own branch. While you're sitting on the development branch, where does the engine learn what the product stage is doing? That work is on a *different* branch, and checking out five branches to read each one would be slow and would thrash your working tree.
 
-It doesn't checkout. It reads state from each stage branch without checking it out. The dashboard aggregates stage state across all the stage branches in one pass, and you see the whole intent's status regardless of which branch you happen to be sitting on.
+It doesn't check out. It reads what it needs straight from each stage branch, in place — no working-tree switch, no stash dance. Browse the intent, or kick off a repair, and the engine pulls the per-stage facts across all the branches in one pass. You see the whole intent regardless of which branch you happen to be standing on.
 
 It's the kind of thing that's invisible when it works. Which is what you want.
 

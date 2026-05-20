@@ -84,6 +84,16 @@ function tryRun(args: string[], cwd?: string): string {
 	}
 }
 
+/** Best-effort extraction of a failed git command's human-readable text.
+ *  `execFileSync` surfaces stderr on both `.message` ("Command failed: …")
+ *  and `.stderr`; join both so callers can pattern-match git's abort
+ *  reasons (e.g. "untracked working tree files would be overwritten"). */
+function gitErrText(err: unknown): string {
+	if (!(err instanceof Error)) return String(err)
+	const stderr = (err as { stderr?: Buffer | string }).stderr
+	return [err.message, stderr ? stderr.toString() : ""].join("\n")
+}
+
 /**
  * Are two refs pointing at identical tree contents?
  *
@@ -308,12 +318,8 @@ export function syncBranchDownstream(slug: string): PreCursorSyncResult {
 			originMainlineRef &&
 			localMainlineExists &&
 			isAncestor(mainlineBranch, originMainlineRef) &&
-			tryRun([
-				"git",
-				"rev-parse",
-				"--verify",
-				mainlineBranch,
-			]) !== tryRun(["git", "rev-parse", "--verify", originMainlineRef])
+			tryRun(["git", "rev-parse", "--verify", mainlineBranch]) !==
+				tryRun(["git", "rev-parse", "--verify", originMainlineRef])
 		const mainlineRef = localMainlineExists
 			? localBehindOrigin
 				? originMainlineRef
@@ -1862,6 +1868,13 @@ export function mergeStageBranchIntoMain(
 	const stageBranch = `haiku/${slug}/${stage}`
 	const mainBranch = `haiku/${slug}/main`
 	const mergeMessage = `haiku: merge stage ${stage} into main`
+	// Remember where HEAD started so a hard merge failure can restore it.
+	// The `current === stageBranch` path below checks out main BEFORE the
+	// merge; if that merge then fails, leaving HEAD stranded on a stale
+	// intent-main is what corrupts the cursor into derived state (bug
+	// 2026-05-20). On failure we put HEAD back on the stage branch, where
+	// the real work lives and the cursor reads it correctly.
+	const startBranch = getCurrentBranch()
 
 	try {
 		// Source-branch missing recovery. v3 merged-and-deleted stage
@@ -1916,7 +1929,11 @@ export function mergeStageBranchIntoMain(
 		// precise error message uniformly.
 		const mergeInTree = (cwd?: string): { conflictFiles: string[] } => {
 			const cwdArgs = cwd ? ["-C", cwd] : []
-			try {
+			const collectConflicts = (): string[] =>
+				tryRun(["git", ...cwdArgs, "diff", "--name-only", "--diff-filter=U"])
+					.split("\n")
+					.filter(Boolean)
+			const doMerge = (): void => {
 				run([
 					"git",
 					...cwdArgs,
@@ -1927,22 +1944,73 @@ export function mergeStageBranchIntoMain(
 					"-m",
 					mergeMessage,
 				])
+			}
+			try {
+				doMerge()
 				return { conflictFiles: [] }
 			} catch (mergeErr) {
-				const conflicts = tryRun([
-					"git",
-					...cwdArgs,
-					"diff",
-					"--name-only",
-					"--diff-filter=U",
-				])
-					.split("\n")
-					.filter(Boolean)
-				if (conflicts.length === 0) {
+				const conflicts = collectConflicts()
+				if (conflicts.length > 0) return { conflictFiles: conflicts }
+
+				// Not a content conflict. The classic blocker for an engine
+				// stage-close merge is untracked working-tree files the merge
+				// would overwrite (a stale `src/views/*` from a prior aborted
+				// run, a gate output the merge re-introduces, etc.). Git aborts
+				// the WHOLE merge rather than clobber them. Left unhandled the
+				// merge silently no-ops — orphaning the stage branch and
+				// rewinding the cursor to derived state (bug 2026-05-20,
+				// twelve-week-plan-accountability-app: security branch left 163
+				// commits ahead of intent-main, HEAD on stale main). Stash the
+				// offending untracked (+ dirty) files aside, retry the merge,
+				// then restore them. The merge must never be allowed to no-op.
+				const errText = gitErrText(mergeErr)
+				const untrackedClobber =
+					/untracked working tree files would be overwritten/i.test(errText) ||
+					/Please move or remove them before you merge/i.test(errText)
+				if (!untrackedClobber) {
 					tryRun(["git", ...cwdArgs, "merge", "--abort"])
 					throw mergeErr
 				}
-				return { conflictFiles: conflicts }
+
+				// The clobber-abort leaves no merge in progress, but abort
+				// defensively before stashing.
+				tryRun(["git", ...cwdArgs, "merge", "--abort"])
+				const stashOut = tryRun([
+					"git",
+					...cwdArgs,
+					"stash",
+					"push",
+					"-u",
+					"-m",
+					"haiku: pre-merge autostash (untracked clobber guard)",
+				])
+				if (!/Saved working directory/i.test(stashOut)) {
+					// Nothing was stashed (blocker is git-ignored, a submodule,
+					// or otherwise outside `stash -u`'s reach) — retrying would
+					// fail identically. Surface the original abort.
+					throw mergeErr
+				}
+				try {
+					doMerge()
+				} catch (retryErr) {
+					const retryConflicts = collectConflicts()
+					// Restore the stashed working tree regardless of outcome.
+					tryRun(["git", ...cwdArgs, "stash", "pop"])
+					if (retryConflicts.length > 0) {
+						return { conflictFiles: retryConflicts }
+					}
+					tryRun(["git", ...cwdArgs, "merge", "--abort"])
+					throw retryErr
+				}
+				// Merge succeeded. Restore the stashed files. If a stashed
+				// untracked file collides with content the merge just brought
+				// in at the same path, `git stash pop` refuses and KEEPS the
+				// stash: the merged (authoritative, completed-stage) content
+				// stands and the stashed leftovers stay recoverable via
+				// `git stash list`. Neither data loss nor a silent no-op — the
+				// merge happened, which is the whole point.
+				tryRun(["git", ...cwdArgs, "stash", "pop"])
+				return { conflictFiles: collectConflicts() }
 			}
 		}
 
@@ -2043,6 +2111,18 @@ export function mergeStageBranchIntoMain(
 			message: `merged ${stageBranch} → ${mainBranch}`,
 		}
 	} catch (err) {
+		// A hard merge failure must not strand HEAD on a half-switched
+		// branch (e.g. stale intent-main after the stage→main checkout).
+		// Restore HEAD to where it started so the cursor keeps reading the
+		// stage branch's real work instead of rewinding to derived state.
+		if (
+			startBranch &&
+			branchExists(startBranch) &&
+			getCurrentBranch() !== startBranch &&
+			!isMergeInProgress()
+		) {
+			tryRun(["git", "checkout", startBranch])
+		}
 		return {
 			success: false,
 			message: err instanceof Error ? err.message : String(err),

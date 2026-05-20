@@ -352,7 +352,13 @@ function workflowFinalizeStageIntoIntentMain(
 		}
 	}
 
-	if (branchExists(stageBranch)) {
+	// Only reap the stage branch once it's actually integrated into
+	// intent-main. `deleteStageBranch` uses `git branch -D` (force), so
+	// deleting here after a FAILED merge would destroy the stage's work
+	// outright — exactly the data-loss the recovery-path comment above
+	// frets about (bug 2026-05-20). Guard on real merged-state: if the
+	// merge didn't land, keep the branch so the operator can integrate it.
+	if (branchExists(stageBranch) && isBranchMerged(stageBranch, intentMain)) {
 		deleteStageBranch(slug, stage)
 		try {
 			// Bound the network op so an unresponsive remote / auth prompt

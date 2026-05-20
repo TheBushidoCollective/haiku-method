@@ -1262,7 +1262,24 @@ export default defineTool({
 							isError: true,
 						}
 					}
-					break
+					// Non-conflict merge failure (untracked-clobber the
+					// stash-retry couldn't recover, locked worktree, etc.).
+					// Previously this `break` fell through silently — the
+					// stage→intent-main merge never happened, the stage branch
+					// was orphaned, and the cursor rewound to derived state
+					// (bug 2026-05-20). Block loudly instead: the stage branch
+					// is preserved (never deleted on a failed merge), so no
+					// work is lost; the operator resolves the merge and
+					// re-runs.
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Stage '${stageToComplete}' completion blocked: its branch could not be merged into intent-main: ${outcome.message}\n\nThe stage branch \`haiku/${slug}/${stageToComplete}\` is intact (not deleted) — no work is lost. Resolve the merge on \`haiku/${slug}/main\` (commit/stash any blocking untracked files, then \`git merge haiku/${slug}/${stageToComplete}\`), then re-run.`,
+							},
+						],
+						isError: true,
+					}
 				}
 
 				// Downstream-invalidation on revisit re-completion.

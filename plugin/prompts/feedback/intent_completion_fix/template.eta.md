@@ -35,6 +35,4 @@ Each finding below launches ONE subagent (the first hat). That subagent calls `h
 
 Spawn each `<subagent>` block above using the Task tool: `type` → `subagent_type`; `model` → `model` (omit when absent); <%~ bgClause %>`prompt_file` → prompt body is literally `"Read <path> and execute its instructions exactly."`. Do not add anything beyond that one-line prompt body — the workflow engine owns the authoritative prompt at the file path.
 
-**Run all <%= itemCount %> in parallel.** When each subagent returns, follow its return instruction. A returned subagent's final message will either include a literal `<subagent>` relay block (sourced from the `next_subagent_dispatch_block` field of its `haiku_feedback_advance_hat` tool response) — spawn that immediately as the next hop in the same chain — or a one-line summary ending with `call haiku_run_next`. Spawn relayed blocks before pulling more work; chain completion (no more relay blocks) is what frees a slot for the next pending finding.
-
-When ALL chains complete, call `haiku_run_next { intent: "<%= slug %>" }` — the workflow engine decides what happens next.
+**Run all <%= itemCount %> in parallel.** When a subagent returns, do what its final message tells you — spawn the relayed `<subagent>` block it carries, call `haiku_run_next`, or just acknowledge. The engine threads the chain via the advance_hat return; you don't decide when to fire the next item.

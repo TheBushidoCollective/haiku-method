@@ -24,6 +24,10 @@ import {
 	resolveStudioMandateModel,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
+import {
+	RUNTIME_OBSERVATION_ROLES,
+	sharedBlockRef,
+} from "../../../_shared/index.js"
 import { definePromptBuilder } from "../../../define.js"
 
 // Engine-built-in intent-completion review roles. Each role's mandate
@@ -80,6 +84,9 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 			slug,
 			role,
 			mandateInline: inlineFile(mandatePath, `Mandate: ${role}`),
+			doctrineRef: RUNTIME_OBSERVATION_ROLES.has(role)
+				? sharedBlockRef("runtime-verification")
+				: "",
 		})
 
 		const dispatchBlock = emitSubagentDispatchBlock({

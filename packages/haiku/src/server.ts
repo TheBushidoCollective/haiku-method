@@ -141,6 +141,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 						type: "string",
 						description: "The intent slug this direction applies to",
 					},
+					context: {
+						type: "string",
+						description:
+							"Optional markdown preamble shown above the archetype cards (what this direction governs, what's already decided, the tradeoffs each option leans into)",
+					},
 					archetypes: {
 						type: "array",
 						items: {

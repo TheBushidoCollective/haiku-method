@@ -5,7 +5,7 @@ interpretation: lens
 
 ## Check
 
-Open a view session via `haiku_view({ stage: "design" })` and use the bundled `playwright` MCP to navigate to each design artifact. Call `browser_take_screenshot` for every artifact you assert on. **Save each screenshot** to disk under `.haiku/intents/<intent>/stages/design/proof/<artifact-slug>-<viewport-or-state>.png` using the `Write` tool (PNG is the format `playwright` produces; keep it). The `proof/` directory becomes the durable record a human verifier can scroll later. Attach the same screenshots to every finding — a visual finding without a screenshot is unactionable.
+Open a view session via `haiku_view({ stage: "design" })` and use the bundled `haiku-playwright` MCP to navigate to each design artifact. Call `browser_take_screenshot` for every artifact you assert on. **Save each screenshot** to disk under `.haiku/intents/<intent>/stages/design/proof/<artifact-slug>-<viewport-or-state>.png` using the `Write` tool (PNG is the format `playwright` produces; keep it). The `proof/` directory becomes the durable record a human verifier can scroll later. Attach the same screenshots to every finding — a visual finding without a screenshot is unactionable.
 
 Also verify per-unit claims: read every design unit body (`stages/design/units/<unit>.md`) — every wireframe the unit references, every component-state the unit promised, every layout the unit said it would deliver. Each is part of the contract for THIS stage even when it doesn't appear in a downstream `.feature` file. A unit that claims to ship the "empty state" but whose artifact only renders the populated state is a finding.
 

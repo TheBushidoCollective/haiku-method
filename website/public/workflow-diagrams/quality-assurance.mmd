@@ -242,8 +242,10 @@ stateDiagram-v2
     state certify_execute {
       [*] --> certify_execute_certifier
       certify_execute_certifier --> certify_execute_reviewer : hat.advance
-      certify_execute_reviewer --> certify_execute_done : hat.advance
+      certify_execute_reviewer --> certify_execute_verifier : hat.advance
       certify_execute_reviewer --> certify_execute_certifier : hat.reject
+      certify_execute_verifier --> certify_execute_done : hat.advance
+      certify_execute_verifier --> certify_execute_reviewer : hat.reject
       certify_execute_done --> [*]
     }
     certify_execute --> certify_review

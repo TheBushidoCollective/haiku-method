@@ -51,8 +51,9 @@
 // bugs in worktrees. Filesystem-as-source-of-truth, applied here too.)
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
-import { join, relative } from "node:path"
+import { basename, join, relative } from "node:path"
 import matter from "gray-matter"
+import { readStageArtifactDefs } from "../../studio-reader.js"
 import { isDriftDetectionDisabled } from "./drift-baseline.js"
 import {
 	bodyMatchesStoredHash,
@@ -244,6 +245,57 @@ function discoveryOutputPath(
 	return join(intentDir, "stages", stage, "discovery", `${agent}.md`)
 }
 
+/**
+ * Intent-relative paths the CURRENT stage itself produces: every
+ * discovery/output template's declared `location:` plus every current-
+ * stage unit's `outputs:`. A witnessed INPUT that matches one of these is
+ * the stage's OWN output evolving inside the loop — e.g. a shared baton
+ * (`knowledge/DESIGN-SYSTEM-ANCHOR.md`) that every `designer-prep` hat
+ * appends its per-unit section to, which is ALSO a drift-witnessed input
+ * for the pre-execute review slots. Firing `input_mutation` on it creates
+ * an input==output cycle: each hat append changes the hash, drift
+ * re-fires against every witnessing slot, the fix loop runs, the next
+ * prep appends again, and it never converges (2026-05-20
+ * drift-input-output-loop report — six findings on two baton files, one
+ * misclassified as a "material deletion" against a 393-insertion / 0-
+ * deletion append). The premise-witness model already exempts OUTPUT
+ * witnesses from drift ("outputs are downstream of the signature and
+ * allowed to evolve"); this extends the same logic to a file that is
+ * simultaneously an input-witness AND a current-stage output.
+ */
+function stageProducedRelPaths(
+	intentDir: string,
+	studio: string,
+	stage: string,
+	unitPaths: ReadonlyArray<string>,
+): Set<string> {
+	const slug = basename(intentDir)
+	const out = new Set<string>()
+	const toIntentRel = (loc: string): string => {
+		const resolved = loc.replace(/\{intent-slug\}/g, slug)
+		// Locations are repo-relative (`.haiku/intents/<slug>/...`); the
+		// witness keys are intent-relative. Strip the intent-dir prefix so
+		// the two compare directly.
+		const prefix = `.haiku/intents/${slug}/`
+		return resolved.startsWith(prefix) ? resolved.slice(prefix.length) : resolved
+	}
+	try {
+		for (const def of readStageArtifactDefs(studio, stage)) {
+			if (def.location) out.add(toIntentRel(def.location))
+		}
+	} catch {
+		/* studio/stage unreadable — produced set stays empty (no exemption) */
+	}
+	for (const unitPath of unitPaths) {
+		const ufm = readFm(unitPath)
+		const outputs = ufm && Array.isArray(ufm.outputs) ? ufm.outputs : []
+		for (const o of outputs) {
+			if (typeof o === "string" && o.length > 0) out.add(o)
+		}
+	}
+	return out
+}
+
 function discoveryMandatePath(
 	repoRoot: string,
 	studio: string,
@@ -297,6 +349,18 @@ export function runDriftSweep(args: {
 
 	const stageDir = join(args.intentDir, "stages", args.stage)
 	const unitPaths = listUnitsInStage(stageDir)
+
+	// Files the current stage produces (discovery/output `location:` +
+	// unit `outputs:`). A witnessed input matching one of these is an
+	// in-loop write (the stage's own output), not external/upstream
+	// drift — see `stageProducedRelPaths`. Excluded from `input_mutation`
+	// so an input==output baton can't re-fire drift on every hat append.
+	const stageProducedRel = stageProducedRelPaths(
+		args.intentDir,
+		args.studio,
+		args.stage,
+		unitPaths,
+	)
 
 	for (const unitPath of unitPaths) {
 		const fm = readFm(unitPath)
@@ -398,7 +462,7 @@ export function runDriftSweep(args: {
 								const cur = outputSha256(abs)
 								return Boolean(cur) && cur !== storedSha
 							})()
-					if (mismatched) {
+					if (mismatched && !stageProducedRel.has(path)) {
 						events.push({
 							unit: unitName,
 							role,

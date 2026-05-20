@@ -130,7 +130,7 @@ function extractActionFromAwaitResponse(response: {
  * Run the SPA picker for studio / mode / stage selection in response
  * to a tick that emitted `select_*`. Dispatches by name to the matching
  * orchestrator tool handler — same code path the user-explicit
- * `/haiku:change-mode` skill takes, but invoked engine-side so the
+ * `/haiku:haiku-change-mode` skill takes, but invoked engine-side so the
  * agent never sees the prompt-to-call. The handler does the picker +
  * frontmatter write + telemetry; we discard its rendered response and
  * just signal "ok / not ok" back to the dispatch loop.
@@ -248,7 +248,7 @@ export default defineTool({
 			pickup: {
 				type: "boolean" as const,
 				description:
-					"Set true when invoked from /haiku:pickup. The engine fetches origin and materializes the active stage branch locally so the user can `git switch` into in-flight work, then appends a pickup hint to the response.",
+					"Set true when invoked from /haiku:haiku-pickup. The engine fetches origin and materializes the active stage branch locally so the user can `git switch` into in-flight work, then appends a pickup hint to the response.",
 			},
 		},
 	},
@@ -315,7 +315,7 @@ export default defineTool({
 						content: [
 							{
 								type: "text" as const,
-								text: "No active intents found. Start one with /haiku:start.",
+								text: "No active intents found. Start one with /haiku:haiku-start.",
 							},
 						],
 						isError: true,
@@ -489,7 +489,7 @@ export default defineTool({
 			)
 		}
 
-		// Pickup auto-fetch: when /haiku:pickup hands off to a fresh user,
+		// Pickup auto-fetch: when /haiku:haiku-pickup hands off to a fresh user,
 		// they only have intent main locally. The cursor's state.json and
 		// any pending feedback live there, but the active stage branch's
 		// in-flight unit work doesn't. Fetch origin, materialize the
@@ -852,7 +852,7 @@ export default defineTool({
 		// and re-ticks. The agent NEVER sees these actions — it just
 		// experiences a blocking tick until the user picks. The select_*
 		// MCP tools still exist for explicit user-driven invocation
-		// (`/haiku:change-mode`, etc.) but the tick path drives them
+		// (`/haiku:haiku-change-mode`, etc.) but the tick path drives them
 		// engine-side here so the agent stays out of the loop.
 		//
 		// The cursor walks on a tree that pre-cursor sync has already
@@ -1403,7 +1403,7 @@ export default defineTool({
 		const withInstructions = (resultObj: Record<string, unknown>): string => {
 			enrichActionWithPreview(resultObj as OrchestratorAction)
 			// Drift cascade alarm — surfaced in the response so the
-			// agent sees a "consider /haiku:repair" recommendation when
+			// agent sees a "consider /haiku:haiku-repair" recommendation when
 			// the engine has detected a runaway-loop pattern. The flag
 			// is stamped on intent.md by the cursor's pre-tick drift
 			// handler (see `stampDriftCascadeAlarm` in cursor.ts) and
@@ -1420,7 +1420,7 @@ export default defineTool({
 				resultObj.drift_cascade_alarm = {
 					stages: Object.keys(cascadeMap as Record<string, unknown>),
 					recommendation:
-						"Drift cascade detected — the engine is suppressing new drift FBs while the queue drains. If this recurs after the queue clears, run `/haiku:repair` to refresh the witness baseline; this typically happens after a plugin version migration.",
+						"Drift cascade detected — the engine is suppressing new drift FBs while the queue drains. If this recurs after the queue clears, run `/haiku:haiku-repair` to refresh the witness baseline; this typically happens after a plugin version migration.",
 				}
 			}
 			const instructions = buildRunInstructions(
@@ -1469,7 +1469,7 @@ export default defineTool({
 					} catch {
 						/* non-fatal */
 					}
-					result.message = `${(result.message as string) || ""}\n\nThe engine opened the MR for you: ${opened.createdUrl} — base is \`haiku/${slug}/main\` so the workflow engine can detect the merge. Tell the user; they review and merge when ready, then run /haiku:pickup.`
+					result.message = `${(result.message as string) || ""}\n\nThe engine opened the MR for you: ${opened.createdUrl} — base is \`haiku/${slug}/main\` so the workflow engine can detect the merge. Tell the user; they review and merge when ready, then run /haiku:haiku-pickup.`
 				} else if (opened.compareUrl) {
 					result.message = `${(result.message as string) || ""}\n\nEngine couldn't open the MR via gh/glab (${opened.prError ?? opened.pushError ?? "no CLI found"}). Surface this URL to the user — clicking it opens the MR with base \`haiku/${slug}/main\` pre-filled: ${opened.compareUrl}. After the user pastes the resulting URL, call haiku_run_next { intent: "${slug}", external_review_url: "<url>" }.`
 				} else {

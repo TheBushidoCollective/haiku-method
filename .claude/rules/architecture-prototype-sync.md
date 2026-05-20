@@ -113,7 +113,7 @@ The per-stage gate handler at `packages/haiku/src/orchestrator/workflow/handlers
 
 ## Known terminology drift (followup work)
 
-The AI-DLC paper (`website/content/papers/ai-dlc-2026.md`) and several docs (`docs/concepts.md`, `docs/workflows.md`, `docs/example-*.md`) reference an **operating-mode taxonomy: HITL / OHOTL / AHOTL** that the implementation has moved past. Today the only mode field is `intent.mode` (`continuous` / `discrete` / `hybrid`); user involvement is determined by per-stage `gate` type in `STAGE.md` plus which skill the user invoked (`/haiku:start`, `/haiku:pickup`, `/haiku:autopilot`, `/haiku:revisit`).
+The AI-DLC paper (`website/content/papers/ai-dlc-2026.md`) and several docs (`docs/concepts.md`, `docs/workflows.md`, `docs/example-*.md`) reference an **operating-mode taxonomy: HITL / OHOTL / AHOTL** that the implementation has moved past. Today the only mode field is `intent.mode` (`continuous` / `discrete` / `hybrid`); user involvement is determined by per-stage `gate` type in `STAGE.md` plus which skill the user invoked (`/haiku:haiku-start`, `/haiku:haiku-pickup`, `/haiku:haiku-autopilot`, `/haiku:revisit`).
 
 The prototype reflects the **implementation**, not the legacy paper terminology. When the paper/docs are revised to align with the implementation, this note can be removed and the prototype's User-actor modal "terminology drift" callout can also be removed.
 

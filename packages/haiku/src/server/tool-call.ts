@@ -57,9 +57,13 @@ import {
 } from "../sessions.js"
 import { buildStageArtifactUrl } from "../stage-artifact-url.js"
 import {
+	type BootProcessSpec,
+	bootFromAgent,
 	detectBootTarget,
 	killBootSession,
+	readBootRecipe,
 	spawnBoot,
+	spawnBootGroup,
 } from "../view-boot.js"
 import {
 	type HaikuAwaitDesignDirectionInput,
@@ -170,6 +174,12 @@ const DesignArchetypeSchema = z.object({
 
 const PickDesignDirectionInput = z.object({
 	intent_slug: z.string().describe("The intent slug this direction applies to"),
+	context: z
+		.string()
+		.optional()
+		.describe(
+			"Optional markdown preamble shown above the archetype cards. Use it to give the user the context they need to choose well — what this direction governs, what's already been decided, what tradeoffs each option leans into. Mirrors `context` on ask_user_visual_question.",
+		),
 	archetypes: z
 		.array(DesignArchetypeSchema)
 		.optional()
@@ -392,7 +402,7 @@ export async function handleToolCall(
 						content: [
 							{
 								type: "text" as const,
-								text: "No active intents found. Start one with /haiku:start, or pass `intent` explicitly.",
+								text: "No active intents found. Start one with /haiku:haiku-start, or pass `intent` explicitly.",
 							},
 						],
 						isError: true,
@@ -787,21 +797,144 @@ export async function handleToolCall(
 			}
 		}
 
-		// Boot detection — tried for `auto` and `boot`. Looks at the
-		// project's own package.json for a `dev` / `start` script.
+		// Boot resolution — tried for `auto` and `boot`.
+		// Precedence:
+		//   1. Agent-supplied `processes` (full stack — api + frontend +
+		//      db + worker etc.). Mutually exclusive with `command`.
+		//   2. Agent-supplied `command` argv (single-process boot).
+		//   3. Fast-path `package.json` `dev`/`start` detection for the
+		//      JS-ecosystem common case (no per-language heuristics
+		//      beyond this — the agent supplies anything else).
 		const wantsBoot = requestedMode === "boot" || requestedMode === "auto"
-		const detection = wantsBoot ? detectBootTarget(intentDirAbs) : null
+		const bootCwd = validated.cwd
+			? join(intentDirAbs, validated.cwd)
+			: intentDirAbs
 
-		// `mode: "boot"` is a hard request — fail loud if nothing
-		// runnable was detected. `auto` falls through to viewer.
-		if (requestedMode === "boot" && !detection) {
+		// Group path — agent supplied a process graph.
+		let processGroup: BootProcessSpec[] | null = null
+		let primaryName: string | null = null
+		if (
+			wantsBoot &&
+			validated.processes &&
+			validated.processes.length > 0
+		) {
+			if (validated.command && validated.command.length > 0) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								error: "haiku_view_input_invalid",
+								message:
+									"`command` and `processes` are mutually exclusive. Use `command` for a one-process boot and `processes` for a stack.",
+							}),
+						},
+					],
+					isError: true,
+				}
+			}
+			processGroup = validated.processes.map((p) => ({
+				name: p.name,
+				command: p.command,
+				cwd: p.cwd ? join(intentDirAbs, p.cwd) : intentDirAbs,
+				port_env: p.port_env,
+				ready_url: p.ready_url,
+				depends_on: p.depends_on,
+				no_port: p.no_port,
+			}))
+			const portBound = processGroup.filter((p) => !p.no_port)
+			if (validated.primary) {
+				primaryName = validated.primary
+			} else if (portBound.length === 1) {
+				primaryName = portBound[0].name
+			} else {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								error: "haiku_view_primary_required",
+								message: `\`processes\` has ${portBound.length} port-bound entries (${portBound.map((p) => p.name).join(", ")}). Set \`primary: "<name>"\` to tell the engine which one's URL Playwright should drive.`,
+							}),
+						},
+					],
+					isError: true,
+				}
+			}
+			const named = new Set(processGroup.map((p) => p.name))
+			if (!named.has(primaryName)) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								error: "haiku_view_primary_not_in_group",
+								message: `\`primary: "${primaryName}"\` does not match any process name in the group (${[...named].join(", ")}).`,
+							}),
+						},
+					],
+					isError: true,
+				}
+			}
+		}
+
+		// Project boot recipe (`.haiku/boot.md`) — lower precedence than an
+		// explicit agent `command`/`processes`, higher than package.json
+		// auto-detect. The harness-agnostic analog of a committed run-skill:
+		// the project declares once how to boot/drive its app and every agent
+		// on every harness uses it. Recipes always normalize to a process
+		// group (a single `command:` becomes a one-process group), so they
+		// flow through the same supervisor as an agent-supplied stack.
+		if (
+			wantsBoot &&
+			!processGroup &&
+			!(validated.command && validated.command.length > 0)
+		) {
+			let recipe: ReturnType<typeof readBootRecipe> = null
+			try {
+				// `.haiku/boot.md` lives at the project root — `findHaikuRoot()`
+				// returns the `.haiku` dir, so its parent is the repo root.
+				recipe = readBootRecipe(dirname(findHaikuRoot()))
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: JSON.stringify({
+								error: "haiku_view_boot_recipe_invalid",
+								message: err instanceof Error ? err.message : String(err),
+							}),
+						},
+					],
+					isError: true,
+				}
+			}
+			if (recipe) {
+				processGroup = recipe.processes
+				primaryName = recipe.primary
+			}
+		}
+
+		// Single-process path (only when processes wasn't supplied).
+		let detection: ReturnType<typeof detectBootTarget> = null
+		if (wantsBoot && !processGroup) {
+			if (validated.command && validated.command.length > 0) {
+				detection = bootFromAgent(validated.command, bootCwd)
+			} else {
+				detection = detectBootTarget(bootCwd)
+			}
+		}
+
+		// `mode: "boot"` is a hard request — fail loud if no process group,
+		// no command, and the fast-path didn't match.
+		if (requestedMode === "boot" && !processGroup && !detection) {
 			return {
 				content: [
 					{
 						type: "text" as const,
 						text: JSON.stringify({
 							error: "haiku_view_no_boot_target",
-							message: `No dev/start script found in ${intentDirAbs}/package.json. Either add one, or call again with mode: "viewer".`,
+							message: `No boot target supplied, no \`.haiku/boot.md\` recipe, and no package.json dev/start script found in ${bootCwd}. Either: (a) retry haiku_view with \`command: [...]\` for a one-process app (e.g. \`["uvicorn", "app:main"]\`, \`["bin/dev"]\`, \`["go", "run", "./cmd/server"]\`) or \`processes: [...]\` with \`primary: "<name>"\` for a stack; or (b) commit a \`.haiku/boot.md\` recipe so every agent on every harness boots this app the same way without rediscovering it (frontmatter: \`command:\`/\`processes:\`, \`cwd:\`, \`env:\`, \`ready_url:\`). The engine sets PORT + HOST env vars before spawning each process and exposes \`<DEP_NAME>_PORT\` + \`<DEP_NAME>_URL\` for service discovery between dependents.`,
 						}),
 					},
 				],
@@ -828,7 +961,8 @@ export async function handleToolCall(
 			// dependency of the view session.
 		}
 
-		const effectiveMode: "viewer" | "boot" = detection ? "boot" : "viewer"
+		const effectiveMode: "viewer" | "boot" =
+			processGroup || detection ? "boot" : "viewer"
 		const session = createViewSession({
 			intent_dir: intentDirAbs,
 			intent_slug: slug,
@@ -838,19 +972,55 @@ export async function handleToolCall(
 			mode: effectiveMode,
 		})
 
-		if (effectiveMode === "boot" && detection) {
-			// Boot mode: spawn the dev server, return a direct
-			// localhost URL pointing at it. Skip the SPA tunnel
-			// entirely — Playwright drives the project's real app,
-			// not an embedded preview.
+		if (effectiveMode === "boot" && (processGroup || detection)) {
+			// Boot mode: spawn the dev process(es), return a direct
+			// localhost URL pointing at the primary. Skip the SPA tunnel
+			// entirely — Playwright drives the project's real app, not
+			// an embedded preview.
 			try {
-				const spawned = await spawnBoot(session.session_id, detection)
+				let primaryPort: number
+				let primaryDescription: string
+				let primaryPid: number
+				let processesPayload:
+					| Array<{
+						name: string
+						port: number | null
+						command: string
+						pid: number
+					}>
+					| undefined
+				if (processGroup && primaryName) {
+					const group = await spawnBootGroup(
+						session.session_id,
+						processGroup,
+						primaryName,
+					)
+					if (group.primary.port === null) {
+						throw new Error(
+							`primary process "${primaryName}" has no port — cannot return URL`,
+						)
+					}
+					primaryPort = group.primary.port
+					primaryDescription = group.primary.command
+					primaryPid = group.primary.pid
+					processesPayload = group.processes
+				} else if (detection) {
+					const spawned = await spawnBoot(session.session_id, detection)
+					if (spawned.port === null) {
+						throw new Error("single-process boot returned null port")
+					}
+					primaryPort = spawned.port
+					primaryDescription = spawned.command
+					primaryPid = spawned.pid
+				} else {
+					throw new Error("boot mode reached without group or detection")
+				}
 				updateViewSession(session.session_id, {
-					boot_port: spawned.port,
-					boot_pid: spawned.pid,
-					boot_command: spawned.command,
+					boot_port: primaryPort,
+					boot_pid: primaryPid,
+					boot_command: primaryDescription,
 				})
-				const bootUrl = `http://127.0.0.1:${spawned.port}/`
+				const bootUrl = `http://127.0.0.1:${primaryPort}/`
 				return {
 					content: [
 						{
@@ -862,8 +1032,9 @@ export async function handleToolCall(
 								intent: slug,
 								stage: validated.stage ?? null,
 								artifact: validated.artifact ?? null,
-								boot_command: spawned.command,
-								note: "Hand the `url` to the bundled `playwright` MCP. The dev server stays up until `haiku_view_close` (or the 30min TTL). Call `haiku_view_close` with the `session_id` when done.",
+								boot_command: primaryDescription,
+								processes: processesPayload,
+								note: "Hand the `url` to the bundled `haiku-playwright` MCP. The dev process(es) stay up until `haiku_view_close` (or the 30min TTL). Call `haiku_view_close` with the `session_id` when done — the engine kills the whole group.",
 							}),
 						},
 					],
@@ -879,7 +1050,9 @@ export async function handleToolCall(
 							text: JSON.stringify({
 								error: "haiku_view_boot_failed",
 								message: err instanceof Error ? err.message : String(err),
-								boot_command: detection.description,
+								boot_command: processGroup
+									? processGroup.map((p) => `${p.name}: ${p.command.join(" ")}`).join("; ")
+									: detection?.description,
 							}),
 						},
 					],
@@ -911,7 +1084,7 @@ export async function handleToolCall(
 						intent: slug,
 						stage: validated.stage ?? null,
 						artifact: validated.artifact ?? null,
-						note: "Hand the `url` to the bundled `playwright` MCP. When done, call `haiku_view_close` with the `session_id`.",
+						note: "Hand the `url` to the bundled `haiku-playwright` MCP. When done, call `haiku_view_close` with the `session_id`.",
 					}),
 				},
 			],
@@ -1100,6 +1273,7 @@ export async function handleToolCall(
 		const session = createDesignDirectionSession({
 			intent_slug: input.intent_slug,
 			archetypes,
+			context: input.context ?? "",
 		})
 
 		const port = await startHttpServer()

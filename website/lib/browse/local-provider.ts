@@ -45,6 +45,33 @@ export class LocalProvider implements BrowseProvider {
 		}
 	}
 
+	/**
+	 * Return a browser-scoped object URL for an artifact file. Used by
+	 * the specialized viewers (KiCad, Gerber, glTF, model-viewer, PDF)
+	 * which need a URL they can hand to a `<script type="module">`
+	 * viewer rather than raw text. The URL is only valid while the
+	 * page is open; reload re-creates it. We don't bother revoking —
+	 * the page is small and short-lived.
+	 */
+	async getObjectUrl(path: string): Promise<string | null> {
+		try {
+			const parts = path.split("/").filter(Boolean)
+			let dir: FSDirectoryHandle = this.root
+			for (const part of parts.slice(0, -1)) {
+				dir = await dir.getDirectoryHandle(part)
+			}
+			const fileHandle = await dir.getFileHandle(parts[parts.length - 1])
+			const file = await fileHandle.getFile()
+			return URL.createObjectURL(file)
+		} catch (err) {
+			const name = (err as Error).name ?? "Error"
+			if (name !== "NotFoundError") {
+				console.warn(`[browse] getObjectUrl("${path}") failed:`, err)
+			}
+			return null
+		}
+	}
+
 	async readFile(path: string): Promise<string | null> {
 		try {
 			const parts = path.split("/").filter(Boolean)
@@ -55,7 +82,15 @@ export class LocalProvider implements BrowseProvider {
 			const fileHandle = await dir.getFileHandle(parts[parts.length - 1])
 			const file = await fileHandle.getFile()
 			return await file.text()
-		} catch {
+		} catch (err) {
+			const name = (err as Error).name ?? "Error"
+			// NotFoundError is expected for opportunistic reads (e.g., a
+			// stage that has no state.json in v4). Surface anything else.
+			if (name !== "NotFoundError") {
+				console.warn(
+					`[browse] readFile("${path}") failed: ${name}: ${(err as Error).message ?? err}`,
+				)
+			}
 			return null
 		}
 	}
@@ -72,7 +107,14 @@ export class LocalProvider implements BrowseProvider {
 				if (entry.kind === "file") files.push(name)
 			}
 			return files.sort()
-		} catch {
+		} catch (err) {
+			// Most common: directory doesn't exist (NotFoundError) which is
+			// fine to swallow. Log everything else so the caller can debug
+			// why a directory that should be there came back empty.
+			const name = (err as Error).name ?? "Error"
+			if (name !== "NotFoundError") {
+				console.warn(`[browse] listFiles("${dir}") failed:`, err)
+			}
 			return []
 		}
 	}
@@ -89,7 +131,14 @@ export class LocalProvider implements BrowseProvider {
 				if (entry.kind === "directory") dirs.push(name)
 			}
 			return dirs.sort()
-		} catch {
+		} catch (err) {
+			// Most common: directory doesn't exist (NotFoundError) which is
+			// fine to swallow. Log everything else so the caller can debug
+			// why a directory that should be there came back empty.
+			const name = (err as Error).name ?? "Error"
+			if (name !== "NotFoundError") {
+				console.warn(`[browse] listDirs("${dir}") failed:`, err)
+			}
 			return []
 		}
 	}
@@ -100,23 +149,30 @@ export class LocalProvider implements BrowseProvider {
 		return parseSettingsYaml(raw)
 	}
 
-	async listIntents(): Promise<HaikuIntent[]> {
+	async listIntents(
+		onProgress?: (intent: HaikuIntent) => void,
+	): Promise<HaikuIntent[]> {
 		const intentDirs = await this.listDirs(".haiku/intents")
 		const intents: HaikuIntent[] = []
 
 		for (const slug of intentDirs) {
 			const raw = await this.readFile(`.haiku/intents/${slug}/intent.md`)
-			if (!raw) continue
+			if (!raw) {
+				continue
+			}
 			// Route through the shared parser so v3↔v4 dual-pathing
 			// (sealed_at-derived status, plugin_version detection,
 			// activeStage default) lands consistently across providers.
 			const intent = parseIntentFromRaw("local", slug, raw)
-			// v4 active-stage refinement — list-view-cheap, mirrors the
-			// VCS providers' probeStagesWithUnits behavior.
-			const isV4 =
-				typeof intent.raw.plugin_version === "string" &&
-				intent.raw.plugin_version.startsWith("4.")
-			if (isV4 && intent.studioStages.length > 0) {
+			// v4+ active-stage refinement — list-view-cheap, mirrors the
+			// VCS providers' probeStagesWithUnits behavior. Applies to
+			// every schema from v4 onward (v4 dropped `active_stage` from
+			// intent.md; later versions kept that contract).
+			const pv = intent.raw.plugin_version
+			const major =
+				typeof pv === "string" ? Number.parseInt(pv.split(".")[0], 10) : 0
+			const isV4Plus = Number.isFinite(major) && major >= 4
+			if (isV4Plus && intent.studioStages.length > 0) {
 				const stageDirs = await this.listDirs(`.haiku/intents/${slug}/stages`)
 				const stagesWithUnits = new Set<string>()
 				for (const stage of intent.studioStages) {
@@ -134,6 +190,11 @@ export class LocalProvider implements BrowseProvider {
 				)
 			}
 			intents.push(intent)
+			// Streaming callback contract — PortfolioView relies on this
+			// to incrementally append intents to component state as each
+			// one finishes parsing. Without it, the array returned at the
+			// end is discarded by the caller and the page renders empty.
+			if (onProgress) onProgress(intent)
 		}
 
 		return intents
@@ -235,14 +296,33 @@ export class LocalProvider implements BrowseProvider {
 						: /\.(png|jpe?g|gif|svg|webp|avif|bmp|ico)$/.test(lower)
 							? "image"
 							: "other"
-				// For local FS, read text content (images won't work inline — would need object URLs)
-				const artContent = await this.readFile(
-					`.haiku/intents/${slug}/stages/${stageName}/artifacts/${af}`,
-				)
-				if (artContent != null) {
-					stageArtifacts.push({ name: af, content: artContent, type: artType })
+				// For images / 3D models / PDFs / engineering binaries, the
+				// browse viewers need a URL, not raw text. Resolve those via
+				// `URL.createObjectURL` and stash in `rawUrl` so the
+				// dispatch in IntentDetailView's StageDetail can hand them
+				// to the right specialized viewer.
+				const needsObjectUrl =
+					artType === "image" ||
+					/\.(glb|gltf|pdf|kicad_sch|kicad_pcb|kicad_pro|gbr|drl)$/i.test(af)
+				const artifactPath = `.haiku/intents/${slug}/stages/${stageName}/artifacts/${af}`
+				if (needsObjectUrl) {
+					const url = await this.getObjectUrl(artifactPath)
+					stageArtifacts.push({
+						name: af,
+						type: artType,
+						rawUrl: url ?? undefined,
+					})
 				} else {
-					stageArtifacts.push({ name: af, type: artType })
+					const artContent = await this.readFile(artifactPath)
+					if (artContent != null) {
+						stageArtifacts.push({
+							name: af,
+							content: artContent,
+							type: artType,
+						})
+					} else {
+						stageArtifacts.push({ name: af, type: artType })
+					}
 				}
 			}
 

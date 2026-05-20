@@ -1,4 +1,4 @@
-// redirect-plan-mode — Intercept EnterPlanMode and redirect to /haiku:start
+// redirect-plan-mode — Intercept EnterPlanMode and redirect to /haiku:haiku-start
 //
 // Opt-in: only fires when HAIKU_REDIRECT_PLAN_MODE is set to a truthy
 // value ("1" or "true"). By default the hook is a no-op so users keep
@@ -34,7 +34,7 @@ export async function redirectPlanMode(
 
 	// If an intent is already active, leave plan mode alone — the user is
 	// likely planning a sideline (engine bug fix, doc tweak) and we'd rather
-	// not hijack their flow back into /haiku:start.
+	// not hijack their flow back into /haiku:haiku-start.
 	if (findActiveIntent()) return
 
 	// Outside a haiku-using project entirely, leave plan mode alone.
@@ -57,7 +57,7 @@ export async function redirectPlanMode(
 export default defineHook({
 	name: "redirect-plan-mode",
 	description:
-		"PreToolUse: when HAIKU_REDIRECT_PLAN_MODE is set and no intent is active, intercept EnterPlanMode (Claude Code) and redirect to /haiku:start.",
+		"PreToolUse: when HAIKU_REDIRECT_PLAN_MODE is set and no intent is active, intercept EnterPlanMode (Claude Code) and redirect to /haiku:haiku-start.",
 	async handle(input, ctx) {
 		await redirectPlanMode(input, ctx.pluginRoot)
 	},

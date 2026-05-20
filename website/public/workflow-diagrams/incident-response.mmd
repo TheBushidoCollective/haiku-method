@@ -130,8 +130,10 @@ stateDiagram-v2
     mitigate_elaborate_loop --> mitigate_review_fix : verifier.fail
     mitigate_elaborate_loop --> mitigate_review_fix : feedback.pending
     state mitigate_execute {
-      [*] --> mitigate_execute_mitigator
+      [*] --> mitigate_execute_mitigation_planner
+      mitigate_execute_mitigation_planner --> mitigate_execute_mitigator : hat.advance
       mitigate_execute_mitigator --> mitigate_execute_verifier : hat.advance
+      mitigate_execute_mitigator --> mitigate_execute_mitigation_planner : hat.reject
       mitigate_execute_verifier --> mitigate_execute_done : hat.advance
       mitigate_execute_verifier --> mitigate_execute_mitigator : hat.reject
       mitigate_execute_done --> [*]

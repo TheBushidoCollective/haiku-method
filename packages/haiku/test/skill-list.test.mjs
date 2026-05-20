@@ -141,14 +141,16 @@ try {
 	})
 
 	test("project-local skill shadows plugin-root skill with same slug", () => {
-		// `archive` is a real plugin-bundled skill. Drop a project-local
-		// override with the same slug and verify the project version wins.
-		const projectArchiveDir = join(skillsDir, "archive")
+		// `haiku-archive` is a real plugin-bundled skill (every skill is
+		// `haiku-`-prefixed so the bare names don't collide with built-in
+		// Claude Code skills). Drop a project-local override with the same
+		// slug and verify the project version wins.
+		const projectArchiveDir = join(skillsDir, "haiku-archive")
 		mkdirSync(projectArchiveDir, { recursive: true })
 		writeFileSync(
 			join(projectArchiveDir, "SKILL.md"),
 			`---
-name: archive
+name: haiku-archive
 description: Project-local archive override
 ---
 
@@ -157,7 +159,7 @@ Project override.
 		)
 		try {
 			const skills = listInstalledSkills()
-			const archiveEntries = skills.filter((s) => s.slug === "archive")
+			const archiveEntries = skills.filter((s) => s.slug === "haiku-archive")
 			assert.strictEqual(
 				archiveEntries.length,
 				1,
@@ -166,7 +168,7 @@ Project override.
 			assert.strictEqual(
 				archiveEntries[0].source,
 				"project",
-				`Expected project-local 'archive' to win over plugin-bundled, got source=${archiveEntries[0].source}`,
+				`Expected project-local 'haiku-archive' to win over plugin-bundled, got source=${archiveEntries[0].source}`,
 			)
 			assert.strictEqual(
 				archiveEntries[0].description,

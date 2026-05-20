@@ -435,7 +435,83 @@ export const HAIKU_VIEW_INPUT_SCHEMA = Type.Object(
 			Type.String({
 				enum: ["auto", "viewer", "boot"],
 				description:
-					"Mode preference. `auto` (default) tries boot first and falls back to viewer. `boot` forces a spawned dev server and hard-fails when no preview/dev command is detectable. `viewer` forces the SPA artifact-browser route.",
+					"Mode preference. `auto` (default) tries boot first and falls back to viewer. `boot` forces a spawned dev server and hard-fails when no `command` is supplied and no fast-path is detected. `viewer` forces the SPA artifact-browser route.",
+			}),
+		),
+		command: Type.Optional(
+			Type.Array(Type.String({ minLength: 1 }), {
+				minItems: 1,
+				description:
+					"Single-process boot — explicit command argv (e.g. `[\"uvicorn\", \"app:main\"]`, `[\"bin/dev\"]`, `[\"go\", \"run\", \"./cmd/server\"]`). Engine spawns with `PORT` + `HOST` env vars set so the dev server binds where the supervisor expects. Use this for one-process apps. For monorepos / stacks (api + frontend + db + worker), use `processes` instead.",
+			}),
+		),
+		cwd: Type.Optional(
+			Type.String({
+				description:
+					"Working directory for `command`, relative to the intent dir. Defaults to the intent dir when omitted. Ignored when `processes` is supplied (each process declares its own cwd).",
+			}),
+		),
+		processes: Type.Optional(
+			Type.Array(
+				Type.Object(
+					{
+						name: Type.String({
+							minLength: 1,
+							pattern: "^[a-zA-Z][a-zA-Z0-9_-]*$",
+							description:
+								"Identifier for this process. Used to build service-discovery env vars (`<NAME>_PORT`, `<NAME>_URL`) injected into dependents, and as the `primary` selector. Lowercase letters / digits / `-` / `_`; must start with a letter.",
+						}),
+						command: Type.Array(Type.String({ minLength: 1 }), {
+							minItems: 1,
+							description:
+								"Argv for this process (e.g. `[\"npm\", \"run\", \"api\"]`, `[\"redis-server\"]`, `[\"docker\", \"compose\", \"up\", \"postgres\"]`).",
+						}),
+						cwd: Type.Optional(
+							Type.String({
+								description:
+									"Working directory for this process, relative to the intent dir. Defaults to the intent dir when omitted (e.g. `\"backend\"` for `packages/backend/` in a monorepo).",
+							}),
+						),
+						port_env: Type.Optional(
+							Type.String({
+								minLength: 1,
+								description:
+									"Env-var name the engine assigns the allocated ephemeral port to. Defaults to `PORT`. Override when the process expects a different name (e.g. `\"RAILS_PORT\"`, `\"API_PORT\"`).",
+							}),
+						),
+						ready_url: Type.Optional(
+							Type.String({
+								description:
+									"Optional HTTP URL the supervisor polls to confirm this process is ready before starting dependents (e.g. `\"http://127.0.0.1:{port}/healthz\"`). Use `{port}` as the placeholder for the allocated port. Falls back to TCP port-bind detection when omitted.",
+							}),
+						),
+						depends_on: Type.Optional(
+							Type.Array(Type.String({ minLength: 1 }), {
+								description:
+									"Names of processes that must be ready before this one starts. The supervisor topologically sorts the graph and starts processes in dependency order. Each dependency's `<NAME>_PORT` and `<NAME>_URL` env vars are injected into this process's env so the runtime can do service discovery (e.g. an API depending on `db` sees `DB_PORT` + `DB_URL`).",
+							}),
+						),
+						no_port: Type.Optional(
+							Type.Boolean({
+								description:
+									"Set true for processes that don't listen on a TCP port (queue workers, background daemons, schedulers). The supervisor still tracks lifecycle but skips port allocation and readiness checking.",
+							}),
+						),
+					},
+					{ additionalProperties: false },
+				),
+				{
+					minItems: 1,
+					description:
+						"Process group — boot multiple coordinated processes (api + frontend + db + worker etc.). The supervisor allocates an ephemeral port per process (unless `no_port`), starts them in dependency order, waits for each to be ready, and exposes `<NAME>_PORT` + `<NAME>_URL` env vars to every dependent. Killing the session kills the whole group. Mutually exclusive with `command`.",
+				},
+			),
+		),
+		primary: Type.Optional(
+			Type.String({
+				minLength: 1,
+				description:
+					"Name of the process whose URL is returned as the top-level `url` field — i.e., the one Playwright drives. Required when `processes` has more than one port-bound entry. Ignored for single-process boots.",
 			}),
 		),
 		state_file: stateFile,

@@ -8,7 +8,7 @@ A **stage** is a phase of work within a studio's lifecycle. Each stage defines i
 
 ## How Stages Work
 
-When `/haiku:pickup` executes an intent, it progresses through stages in the order defined by the studio. Each stage runs a four-step cycle:
+When `/haiku:haiku-pickup` executes an intent, it progresses through stages in the order defined by the studio. Each stage runs a four-step cycle:
 
 1. **Elaborate** — Break the stage's work into units with completion criteria and a dependency DAG. Check input freshness; if an upstream output has a gap, run a stage-scoped refinement (targeted side-trip to the upstream stage)
 2. **Execute** — For each unit, run the bolt loop through the stage's hat sequence. Artifacts are committed to git automatically as they are produced.
@@ -60,14 +60,14 @@ Each gate type differs in *who decides*, *how the signal arrives*, and *what the
 |------|-------------|------------------|-------------------|
 | `auto` | The harness (quality gates only) | Quality gate exit codes | *(no review UI — advances automatically)* |
 | `ask` | The human, locally | MCP response from local review UI | **Approve** · **Request Changes** |
-| `external` | An external reviewer (GitHub, GitLab, manager, etc.) | Orchestrator probes the review URL on `/haiku:pickup` | **Submit for External Review** · **Request Changes** |
-| `await` | An external event (customer reply, contract, pipeline) | Orchestrator probes on `/haiku:pickup` (same mechanism as `external`) | **Submit for External Review** · **Request Changes** |
+| `external` | An external reviewer (GitHub, GitLab, manager, etc.) | Orchestrator probes the review URL on `/haiku:haiku-pickup` | **Submit for External Review** · **Request Changes** |
+| `await` | An external event (customer reply, contract, pipeline) | Orchestrator probes on `/haiku:haiku-pickup` (same mechanism as `external`) | **Submit for External Review** · **Request Changes** |
 
 **`auto`** — No human interaction. If quality gates (tests, lint, typecheck, build) pass, the stage advances. Use for stages where mechanical verification is sufficient.
 
 **`ask`** — The framework opens a review UI on your machine. You see the work, optionally leave inline comments, and click **Approve** or **Request Changes**. The decision is immediate — the MCP response tells the orchestrator to advance or loop back. Everything stays local.
 
-**`external`** — The framework blocks until an external review system approves. The typical flow: the agent creates a PR (or MR, or submits to another channel), records the URL in state, and the stage enters a "blocked" status. You cannot bypass this by approving locally — doing so would defeat the purpose of requiring third-party review. On your next `/haiku:pickup`, the orchestrator checks the review URL for approval (GitHub: checks merge state via `gh`; GitLab: checks state via `glab`). If approved, the stage advances automatically. If not yet approved, the orchestrator tells you the stage is still waiting.
+**`external`** — The framework blocks until an external review system approves. The typical flow: the agent creates a PR (or MR, or submits to another channel), records the URL in state, and the stage enters a "blocked" status. You cannot bypass this by approving locally — doing so would defeat the purpose of requiring third-party review. On your next `/haiku:haiku-pickup`, the orchestrator checks the review URL for approval (GitHub: checks merge state via `gh`; GitLab: checks state via `glab`). If approved, the stage advances automatically. If not yet approved, the orchestrator tells you the stage is still waiting.
 
 **`await`** — Same blocking mechanics as `external`, but the semantic intent is different. There is no review artifact — `await` represents situations where something must happen in the world before you can continue: a customer needs to respond, a contract needs a countersignature, a prototype needs to ship, a third-party pipeline needs to complete. The orchestrator treats it identically to `external` at the mechanical level (blocked state, probe on pickup).
 
@@ -138,7 +138,7 @@ gate-protocol:
 | `escalation` | string | Provider category to notify on timeout |
 | `conditions` | list | Pre-conditions that must be true before the gate can pass |
 
-The `/haiku:triggers` skill checks gate timeouts during each poll cycle.
+The `/haiku:haiku-triggers` skill checks gate timeouts during each poll cycle.
 
 ### Stage-Scoped Refinement
 
@@ -151,7 +151,7 @@ During elaboration, if the agent discovers an upstream stage's output has a smal
 
 This does NOT reset the current stage's progress. It's a scoped side-trip, not a full stage-back. The agent can invoke this autonomously for small gaps. Full stage-backs (resetting `active_stage` to a prior stage) are always human-initiated.
 
-Use `/haiku:refine stage:{upstream-stage}` to trigger this explicitly.
+Use `/haiku:haiku-refine stage:{upstream-stage}` to trigger this explicitly.
 
 ## Hats Within Stages
 

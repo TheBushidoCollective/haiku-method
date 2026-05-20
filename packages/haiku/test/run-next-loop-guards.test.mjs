@@ -102,10 +102,12 @@ test("loopAbortResponse(cap) returns isError and surfaces the diagnostic for use
 	assert.match(text, /action=complete_stage/)
 	assert.match(text, /stage=design/)
 	// Path to the per-session log file
-	// (~/.haiku/projects/<key>/sessions/<session>/loop-guards.log).
+	// (~/.haiku/projects/<key>/sessions/<session>/loop-guards.log under
+	// the default base; tests override HAIKU_PROJECTS_ROOT, so we pin on
+	// the invariant suffix `sessions/<id>/loop-guards.log` rather than
+	// the `.haiku/projects/` prefix that the override replaces).
 	assert.match(text, /log: /)
-	assert.match(text, /\.haiku\/projects\//)
-	assert.match(text, /loop-guards\.log/)
+	assert.match(text, /sessions\/[^/]+\/loop-guards\.log/)
 })
 
 test("loopAbortResponse(no_progress) also surfaces the diagnostic", () => {

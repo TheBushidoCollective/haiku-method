@@ -7,15 +7,22 @@ This is the **terminal** hat in the fix-loop chain — your `haiku_feedback_adva
 
 <% if (hatBody) { %><%= hatBody.trim() %><% } else { %>(no on-disk mandate file resolved for hat `<%= hat %>` — proceed from prior context, but flag this as an engine bug in your closure reply.)<% } %>
 
+<% if (fbInline) { %><%~ fbInline %><% } %>
+<% if (typeof priorRejectBlock !== "undefined" && priorRejectBlock) { %>
+<%~ priorRejectBlock %>
+<% } %>
+
 ## Procedure
 
-1. Call `haiku_feedback_read { intent: "<%= slug %>"<% if (stage) { %>, stage: "<%= stage %>"<% } %>, feedback_id: <%= fbInt %> }` to load the FB body.
-2. Execute the mandate above against the FB body. The FB body is the artifact you edit — NOT the unit spec the FB targets.
-3. Call ONE of:
+1. Execute the mandate above against the FB body inlined above. The FB body is the artifact you edit (via `haiku_feedback_write`) — NOT the unit spec the FB targets. The body is already in context; do NOT call `haiku_feedback_read` for the same file.
+2. Call ONE of:
    - **(A) Success — route to next hat**: `haiku_feedback_advance_hat { intent: "<%= slug %>"<% if (stage) { %>, stage: "<%= stage %>"<% } %>, feedback_id: <%= fbInt %><% if (terminal) { %>, reply: "<short plain-language explanation of what was done — surfaces in the SPA so the requester sees the resolution>"<% } %> }`
    - **(B) Hat-block — re-dispatch prior hat on a new bolt**: `haiku_feedback_reject_hat { intent: "<%= slug %>"<% if (stage) { %>, stage: "<%= stage %>"<% } %>, feedback_id: <%= fbInt %>, reason: "<why this hat physically can't complete its work>" }`
    - **(C) Invalid finding — terminal close**: `haiku_feedback_reject { intent: "<%= slug %>"<% if (stage) { %>, stage: "<%= stage %>"<% } %>, feedback_id: <%= fbInt %>, reason: "<why the finding itself is wrong — cosmetic drift, false-positive, already-addressed, etc.>" }`
-4. Terminate with the tool's plain-text return.
+3. **Relay the engine's breadcrumb** as your final message:
+   - On `advance_hat` success the tool response is JSON with a `next_subagent_dispatch_block` field. Copy that field's contents verbatim as your final message (after a one-line work summary). If the field is `null`, copy the `message` field verbatim instead — the engine will say either "call `haiku_run_next`" or "terminate; siblings still in flight".
+   - On `reject_hat` or `reject`: just return the tool's plain-text response. No relay applies (nothing for the parent to spawn).
+   - Don't paraphrase, summarize, or strip the relay block. The block is the engine's instruction to the parent, not yours.
 
 ## Closure required (CRITICAL)
 

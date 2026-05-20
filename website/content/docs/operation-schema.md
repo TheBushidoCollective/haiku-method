@@ -40,7 +40,7 @@ The Markdown body serves different purposes depending on ownership:
 
 **Agent-owned:** Describes what the companion script does — its logic, expected behavior, and any constraints. This serves as documentation and context for the AI when executing.
 
-**Human-owned:** Contains a checklist that `/haiku:operate` presents to the human. Use standard Markdown task list syntax:
+**Human-owned:** Contains a checklist that `/haiku:haiku-operate` presents to the human. Use standard Markdown task list syntax:
 
 ```markdown
 - [ ] Step one
@@ -163,7 +163,7 @@ frequency: quarterly
 - [ ] Document findings and file tickets for remediation
 ```
 
-When invoked with `/haiku:operate platform quarterly-security-review`, the checklist is presented for the human to work through. Progress is tracked in the status file.
+When invoked with `/haiku:haiku-operate platform quarterly-security-review`, the checklist is presented for the human to work through. Progress is tracked in the status file.
 
 ## Next Steps
 

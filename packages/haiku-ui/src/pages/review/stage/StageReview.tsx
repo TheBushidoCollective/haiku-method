@@ -40,6 +40,7 @@ import type { ParsedUnit } from "../../../parsed"
 import type { FeedbackItemData } from "../../../types"
 import { authedAssetUrl } from "../shared/asset-url"
 import { DeclaringUnitsBanner } from "../shared/DeclaringUnitsBanner"
+import { resolveEmbeddedAssetUrls } from "../shared/inline-asset-urls"
 import {
 	markdownToSimpleHtml,
 	stripFrontmatter,
@@ -2065,21 +2066,24 @@ function ArtifactBody({
 		)
 	}
 	if (artifact.mime === "html") {
-		// Sandbox intentionally omits `allow-same-origin`: wireframes
-		// authored as standalone pages read `window.location` and pull
-		// `allow-same-origin` on a `srcdoc` iframe gives html-to-image
+		// `allow-same-origin` on a `srcDoc` iframe gives html-to-image
 		// access to the inner DOM so annotation screenshots capture the
-		// mockup content instead of a blank rectangle. The document
-		// origin is inherited from the parent — URLs the wireframe
-		// references must therefore resolve against the SPA root (e.g.
-		// `/api/...` reaches our server); self-contained wireframes
-		// (Tailwind CDN + inline styles, which is the convention) aren't
-		// affected. Legacy wireframes that probed `window.location` for
-		// session state have been dropped; re-introducing one means
-		// writing it as fully self-contained HTML.
+		// mockup content instead of a blank rectangle. A `srcDoc` document
+		// has NO artifact base URL — relative `<link href>` / `<img src>`
+		// resolve against the SPA origin, not the artifact's dir on disk.
+		// To keep wireframes styled, `parseOutputArtifacts` (server side)
+		// inlines adjacent `<link rel="stylesheet">` files (and their
+		// relative `@import`s) into `artifact.body` at parse time, so the
+		// body is self-contained here. Tailwind-CDN / inline-style
+		// wireframes were always fine; adjacent-CSS wireframes now are too.
+		// `resolveEmbeddedAssetUrls` then rewrites relative `<img src>` /
+		// `srcset` / CSS `url(…)` refs to authed tunnel URLs so raster
+		// images load inside the srcDoc. Residual: `.js`/`.svg`/font
+		// sub-resources stay octet-stream-blocked (FB-21), so scripts don't
+		// execute and SVG-as-img / custom fonts degrade to fallbacks.
 		const iframe = (
 			<iframe
-				srcDoc={artifact.body}
+				srcDoc={resolveEmbeddedAssetUrls(artifact.body, artifact.assetUrl)}
 				sandbox="allow-scripts allow-same-origin"
 				title={artifact.name}
 				className="w-full h-[60vh] border-0 bg-white"
@@ -2181,7 +2185,7 @@ function ArtifactThumbnail({
 			className="shrink-0 w-32 h-20 rounded border border-stone-200 dark:border-stone-700 bg-white overflow-hidden relative pointer-events-none"
 		>
 			<iframe
-				srcDoc={artifact.body}
+				srcDoc={resolveEmbeddedAssetUrls(artifact.body, artifact.assetUrl)}
 				sandbox="allow-scripts allow-same-origin"
 				title={`Preview of ${artifact.name || "artifact"}`}
 				tabIndex={-1}

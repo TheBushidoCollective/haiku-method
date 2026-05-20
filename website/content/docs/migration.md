@@ -23,19 +23,19 @@ This guide covers migrating from AI-DLC to H·AI·K·U. Most migration is automa
 
 | Old Command | New Command |
 |-------------|-------------|
-| `/ai-dlc:elaborate` | `/haiku:start` + `/haiku:pickup` |
-| `/ai-dlc:execute` | `/haiku:pickup` |
-| `/ai-dlc:review` | `/haiku:gate-review` |
-| `/ai-dlc:autopilot` | `/haiku:autopilot` |
-| `/ai-dlc:quick` | `/haiku:quick` |
-| `/ai-dlc:operate` | `/haiku:operate` |
-| `/ai-dlc:resume` | `/haiku:pickup` |
-| `/ai-dlc:reset` | `/haiku:reset-intent` (whole intent) or `/haiku:reset-stage` (single stage) |
-| `/ai-dlc:refine` | `/haiku:refine` |
+| `/ai-dlc:elaborate` | `/haiku:haiku-start` + `/haiku:haiku-pickup` |
+| `/ai-dlc:execute` | `/haiku:haiku-pickup` |
+| `/ai-dlc:review` | `/haiku:haiku-gate-review` |
+| `/ai-dlc:autopilot` | `/haiku:haiku-autopilot` |
+| `/ai-dlc:quick` | `/haiku:haiku-quick` |
+| `/ai-dlc:operate` | `/haiku:haiku-operate` |
+| `/ai-dlc:resume` | `/haiku:haiku-pickup` |
+| `/ai-dlc:reset` | `/haiku:haiku-reset-intent` (whole intent) or `/haiku:haiku-reset-stage` (single stage) |
+| `/ai-dlc:refine` | `/haiku:haiku-refine` |
 | `/ai-dlc:followup` | `/haiku:followup` |
 | `/ai-dlc:compound` | `/haiku:compound` |
-| `/ai-dlc:adopt` | `/haiku:adopt` |
-| `/ai-dlc:reflect` | `/haiku:reflect` |
+| `/ai-dlc:adopt` | `/haiku:haiku-adopt` |
+| `/ai-dlc:reflect` | `/haiku:haiku-reflect` |
 | `/ai-dlc:setup` | `.haiku/settings.yml` (direct edit) |
 
 ## Directory Map
@@ -156,14 +156,14 @@ rm -rf .ai-dlc/knowledge     # if it's a symlink
 Intents that were in progress during the migration continue to work:
 
 - **Completed intents** — No action needed. Artifacts remain in `.ai-dlc/` as historical records.
-- **In-progress intents** — Continue using `/haiku:pickup` which reads from both old and new paths.
+- **In-progress intents** — Continue using `/haiku:haiku-pickup` which reads from both old and new paths.
 - **New intents** — Created in `.haiku/intents/` using the new studio/stage model.
 
 ## Breaking Changes
 
 1. **Standalone hat files** — `plugin/hats/*.md` are no longer the primary hat definitions. Hats are now defined as files in `stages/{stage}/hats/`.
-2. **Workflow selection during elaboration** — Replaced by studio selection during `/haiku:start`.
-3. **`/ai-dlc:elaborate`** — Deprecated. Use `/haiku:start` to create intents, then `/haiku:pickup` to execute stages.
+2. **Workflow selection during elaboration** — Replaced by studio selection during `/haiku:haiku-start`.
+3. **`/ai-dlc:elaborate`** — Deprecated. Use `/haiku:haiku-start` to create intents, then `/haiku:haiku-pickup` to execute stages.
 4. **Pass-specific workflow constraints** — Replaced by stage-level hat definitions.
 5. **Custom workflow files** (`.ai-dlc/workflows.yml`) — Replaced by custom studio directories.
 

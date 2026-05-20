@@ -49,7 +49,7 @@ export function resolveStudioFilePath(subpath: string): string | null {
  *    1. Start with the studio's full stage list (from STUDIO.md).
  *    2. If `intent.stages` is an explicit non-empty array, intersect
  *       with studio stages (preserves studio order; rejects unknown
- *       stages). This is how `/haiku:quick` restricts a multi-stage
+ *       stages). This is how `/haiku:haiku-quick` restricts a multi-stage
  *       studio to a single stage without enumerating skip_stages.
  *    3. Apply `intent.skip_stages` filter on the result.
  *

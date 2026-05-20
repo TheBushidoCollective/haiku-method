@@ -3,7 +3,8 @@
 // Usage: node test/run-all.mjs
 
 import { execSync } from "node:child_process"
-import { readdirSync } from "node:fs"
+import { mkdtempSync, readdirSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -14,6 +15,33 @@ import { fileURLToPath } from "node:url"
 // for a heartbeat that never arrives.
 if (!process.env.HAIKU_GATE_ATTACH_GRACE_MS) {
 	process.env.HAIKU_GATE_ATTACH_GRACE_MS = "1000"
+}
+
+// Sandbox the per-project state tree to a single tmpdir for the
+// whole run. Without this, every test that drives the engine adds
+// a `<encoded-path>/` entry under the user's real `~/.haiku/
+// projects/`, and the tree fills with hundreds of dead test-fixture
+// shells. Set it before spawning so every child process inherits.
+// Cleaned up on exit; on a crash, the OS purges /tmp eventually.
+if (!process.env.HAIKU_PROJECTS_ROOT) {
+	const sandbox = mkdtempSync(join(tmpdir(), "haiku-test-projects-"))
+	process.env.HAIKU_PROJECTS_ROOT = sandbox
+	const cleanup = () => {
+		try {
+			rmSync(sandbox, { recursive: true, force: true })
+		} catch {
+			/* best-effort */
+		}
+	}
+	process.on("exit", cleanup)
+	process.on("SIGINT", () => {
+		cleanup()
+		process.exit(130)
+	})
+	process.on("SIGTERM", () => {
+		cleanup()
+		process.exit(143)
+	})
 }
 
 const testDir = dirname(fileURLToPath(import.meta.url))
@@ -37,10 +65,13 @@ for (const file of testFiles) {
 	try {
 		// Default per-file timeout is 60s — catches hangs in the fast
 		// majority of tests. End-to-end mode-coverage files (`e2e-*`)
-		// drive a real intent start → sealed across multiple modes and
-		// can legitimately run 60-120s. Give them a wider budget.
+		// drive a real intent start → sealed across multiple modes; the
+		// software-studio mode sweep alone runs ~150s of real git work via
+		// `npx tsx`, so an 180s budget left it flaking right at the edge.
+		// Give the e2e files a 300s budget — still catches a true hang,
+		// with headroom over the legitimate runtime.
 		const isLongRunning = file.startsWith("e2e-")
-		const timeoutMs = isLongRunning ? 180000 : 60000
+		const timeoutMs = isLongRunning ? 300000 : 60000
 		const output = execSync(`npx tsx "${filePath}"`, {
 			encoding: "utf8",
 			stdio: ["pipe", "pipe", "pipe"],

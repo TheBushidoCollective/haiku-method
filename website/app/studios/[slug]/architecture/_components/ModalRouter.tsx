@@ -468,7 +468,7 @@ export function ModalRouter({
 				<Modal
 					open
 					title="Intent creation"
-					subtitle="user ↔ agent · /haiku:start"
+					subtitle="user ↔ agent · /haiku:haiku-start"
 					onClose={onClose}
 				>
 					<HtmlBlock

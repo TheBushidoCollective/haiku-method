@@ -291,7 +291,7 @@ export function wouldDeadlock(
  *  agent reads `action: "loop_halted"` and is expected to STOP
  *  re-ticking — surface the halt to the user, do not auto-recover. The
  *  message names the loop kind, the offending signature, and a
- *  concrete next-step (file an FB or invoke /haiku:repair).
+ *  concrete next-step (file an FB or invoke /haiku:haiku-repair).
  *
  *  Also fires `haiku.deadlock.halted` telemetry — the engine's hard-
  *  halt counterpart to the existing `haiku.deadlock.suspected` /
@@ -325,7 +325,7 @@ export function buildLoopHaltAction(
 		`**What to do:**\n` +
 		`1. Surface this halt to the user. Don't auto-recover.\n` +
 		`2. Identify what the cursor was waiting for (read the signature above).\n` +
-		`3. Either fix the underlying state (commit the missing artifact, sign the verifier, run \`/haiku:repair\`) or file a feedback explaining why the loop happened.\n` +
+		`3. Either fix the underlying state (commit the missing artifact, sign the verifier, run \`/haiku:haiku-repair\`) or file a feedback explaining why the loop happened.\n` +
 		`4. Once the underlying state has changed, the next \`haiku_run_next\` tick will surface a different action and the loop guard will reset.`
 	return {
 		action: "loop_halted",

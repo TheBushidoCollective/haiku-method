@@ -16,6 +16,10 @@ tags:
 
 The intuition is right. The agent in front of you is far more capable when it has a *role* than when it's asked to be a generalist. We had the same intuition. We arrived at a different architecture for it.
 
+<Callout tone="info" title="The shared insight">
+A specialist beats a generalist. GSTACK puts the specialist in a role prompt the user picks. We put the specialist in a hat the engine picks. Same lever, different layer of the stack.
+</Callout>
+
 ## Where we landed in the same place
 
 <Compare verdict="match" title="Role-shaped constraints beat the generalist">
@@ -32,7 +36,7 @@ The intuition is right. The agent in front of you is far more capable when it ha
     A structured collection of `CLAUDE.md`-style files the host harness reads at session start. The agent operates inside whichever role lens is active. No new interface, no new product — better instructions, organized.
   </Side>
   <Side label="H·AI·K·U">
-    `hats/<hat>.md`, `review-agents/<agent>.md`, `STAGE.md`, `STUDIO.md`. Each role is a markdown file with a defined shape. The engine resolves through a three-tier cascade (stage → studio → global) so the same role can be specialized per studio without forking.
+    Each role is a markdown file with a defined shape — organized by stage, studio, or global default. The same role can be specialized per studio without forking.
   </Side>
 </Compare>
 
@@ -78,7 +82,7 @@ The intuition is right. The agent in front of you is far more capable when it ha
 
 <Compare verdict="win" title="Lifecycle gates between roles">
   <Side>
-    GSTACK's roles operate inside a single agent loop — the agent moves between CEO, engineer, QA mode as the work requires. There's no hard gate between role transitions because there's no engine to enforce one. H·AI·K·U's hat transitions go through `haiku_unit_advance_hat` / `haiku_unit_reject_hat`; review and approval transitions go through gates with named reviewers; intent completion goes through user gates. The engine enforces "you can't skip the verifier" the same way TypeScript enforces "you can't pass a string where a number's expected."
+    GSTACK's roles operate inside a single agent loop — the agent moves between CEO, engineer, QA mode as the work requires. There's no hard gate between role transitions because there's no engine to enforce one. H·AI·K·U's hat transitions are engine-mediated; review and approval transitions go through gates with named reviewers; intent completion goes through user gates. The engine enforces "you can't skip the verifier" the same way TypeScript enforces "you can't pass a string where a number's expected."
   </Side>
 </Compare>
 

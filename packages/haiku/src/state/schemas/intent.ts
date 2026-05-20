@@ -26,7 +26,7 @@
 // with a stable named code.
 //
 // `mode` is engine-managed: set via haiku_select_mode (with elicitation),
-// never via haiku_intent_create or haiku_intent_set. /haiku:change-mode
+// never via haiku_intent_create or haiku_intent_set. /haiku:haiku-change-mode
 // drives mid-flight changes through the same tool.
 
 import { type Static, Type } from "@sinclair/typebox"

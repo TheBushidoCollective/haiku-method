@@ -1,0 +1,54 @@
+---
+title: "The Continuity Contract"
+description: "H·AI·K·U promised that downstream stages execute what upstream stages designed. The promise was a vibe. Three new engine gates make it a contract."
+date: "2026-05-04T15:19:44Z"
+---
+
+We ran intent `out-of-band-human-file-modifications` end-to-end last week. Six stages, thirty-something units, an adversarial review with five critics, a clean intent-completion review. PR [#265](https://github.com/gigsmart/haiku-method/pull/265) opened, CI went green, every gate signed off.
+
+Three of the SPA components the design stage spec'd in `SPA-UI-SPECS.md` shipped as `.tsx` files but no other file in the repo rendered them. Not in production. Not in tests. The unit tests for `KnowledgeUploadPanel`, `DriftBanner`, and `DriftAssessmentsView` covered each component in isolation and passed. The verifier hat advanced each unit. Five adversarial reviewers spent hours arguing about the security posture of the upload routes nobody could trigger from the UI. They found 39 issues. Every single one was about something that *was* there.
+
+Pretend a designer dropped a `hero.html` mockup into `stages/design/artifacts/`, the dev stage built `Hero.tsx` per spec, the test suite passed, the PR opened. Now imagine the only thing in production using `Hero` is the test that asserts it renders without errors. Nobody on your team would notice in review, because review reads the diff and the diff looks fine. The component exists. The test runs. Ship it.
+
+That's the failure we just lived through. The methodology promise — "downstream stages execute what upstream stages designed" — held for the *outputs we declared*. It said nothing about the *deliverables we forgot to declare*, or the components we declared but didn't wire in.
+
+<Callout tone="warn" title="The shape of the miss">
+Five adversarial reviewers. Thirty-nine findings. Every gate green. Three components shipped that no other file in the repo touched. The methodology was a promise. Promises don't catch what nobody looked for.
+</Callout>
+
+## What every gate did and didn't audit
+
+H·AI·K·U has a lot of gates. The pre-tick consistency check rebuilds intent state. Adversarial reviewers fan out to specialist critics. Quality gates run the project's tests.
+
+<Compare verdict="gap" title="What the gates read">
+  <Side label="What they audited">
+    The interior of what shipped. The diff. The tests. The spec against the diff. Whether the code typed, linted, ran, and matched what the unit said it would.
+  </Side>
+  <Side label="What nothing audited">
+    The boundary between stages. Nothing said "design produced eight artifacts; show me where each is used in dev." Nothing said "you declared `DriftBanner.tsx` as an output; show me a place in the app where a user would see it."
+  </Side>
+</Compare>
+
+The cross-stage-consistency reviewer almost caught it. It filed FB-01 — "upstream-reconciliation subsystem implemented but absent from inception/product/design specs" — code with no design provenance. Notice the asymmetry: it caught "code with no design" but not "design with no code." The mandate enumerated one direction and missed the inverse. Five critics, none with the brief to ask the simplest question.
+
+## What lands as the contract
+
+Three pre-tick validators landed in this intent's engine work. They fail the workflow until we either do the work or write down why we didn't.
+
+<KeyPoints title="The three validators">
+1. **Cumulative input coverage.** At every stage's elaboration exit, the engine collects every artifact prior stages produced and checks whether the current stage's units reference each one. Anything orphaned fails the gate. The agent's two options: wire it into a unit, or acknowledge on the record why it isn't relevant.
+2. **Output liveness.** At every stage's review exit and again at intent completion, the engine asks whether anything else in the repo actually references each shipped component. Self-references in the workflow's own metadata don't count. Tests don't count. If nothing else points at it, the gate fails.
+3. **Mode taxonomy.** Per-stage gates under autopilot collapse to auto-advance. Continuous mode honors each stage's review setting verbatim. Discrete mode coerces every stage to external review. One knob per concern, instead of one dial doing the job of two.
+</KeyPoints>
+
+The methodology used to mix two ideas in the same dial: pause for human review, and produce a delivery PR. They're different choices. Now they're different knobs. Under autopilot the only PR is the intent-completion delivery PR. The merge into mainline is the approval signal. No review pane sitting open for nobody to click.
+
+## What changes for you
+
+Write a stage that produces an artifact. Some downstream stage uses it or admits it didn't. Write a unit that produces a `.tsx`. Some other file renders it or you write down why it's a placeholder. Enable autopilot on an intent. The engine doesn't stop until the intent is delivered as a PR, and the PR has the *completed* intent state on it before you ever open it.
+
+<Callout tone="good" title="The new bar">
+Coverage by gate, not by promise. The methodology was a vibe. The methodology is a contract.
+</Callout>
+
+Read the diff that landed it: PR [#265](https://github.com/gigsmart/haiku-method/pull/265). Watch the gate fail on a real intent, then watch what the agent has to write down to make it pass. That's where the trust is.

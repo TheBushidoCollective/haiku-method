@@ -76,7 +76,7 @@ A **Stage** is a typed phase within a studio's pipeline, each focused on a speci
 
 Stages are defined by the studio. The simplest studios (like the default software studio) use only the development stage. Multi-stage studios add design, product, or other discipline-specific stages when cross-functional iteration is needed.
 
-Studios are selected during `/haiku:start` and their stages run automatically via `/haiku:pickup`.
+Studios are selected during `/haiku:haiku-start` and their stages run automatically via `/haiku:haiku-pickup`.
 
 #### Stage Constraints
 
@@ -355,7 +355,7 @@ Human reviews output
 
 ## Execution Modes: Continuous vs Discrete
 
-When creating an intent with `/haiku:start`, you select an execution mode that controls how stages advance.
+When creating an intent with `/haiku:haiku-start`, you select an execution mode that controls how stages advance.
 
 ### Continuous Mode
 
@@ -365,7 +365,7 @@ This is the default. It suits initiatives where the human trusts the review gate
 
 ### Discrete Mode
 
-Discrete mode runs the same stage loop but always stops after each stage completes, regardless of the review gate setting. The human explicitly advances through stages by invoking `/haiku:pickup` again.
+Discrete mode runs the same stage loop but always stops after each stage completes, regardless of the review gate setting. The human explicitly advances through stages by invoking `/haiku:haiku-pickup` again.
 
 This suits larger initiatives, cross-team work, and situations where each stage needs explicit human review before the next begins — for example, when a product stage's outputs must be approved by a different stakeholder than the development stage's outputs.
 
@@ -375,7 +375,7 @@ Both modes execute the same four-step stage loop (elaborate, execute, adversaria
 
 | Aspect | Continuous | Discrete |
 |--------|-----------|----------|
-| **After `auto` gate passes** | Advance to next stage | Stop; wait for `/haiku:pickup` |
+| **After `auto` gate passes** | Advance to next stage | Stop; wait for `/haiku:haiku-pickup` |
 | **After `ask` gate** | Pause for approval, then advance | Pause for approval, then stop |
 | **After `external` gate** | Block until resolved, then advance | Block until resolved, then stop |
 | **After `await` gate** | Block until event, then advance | Block until event, then stop |
@@ -461,7 +461,7 @@ If you `/clear` without the stop hook:
 
 1. Committed artifacts (`.haiku/`) are safe — intent, stage, and unit state are persisted to disk
 2. MCP tools reconstruct full execution context on session start
-3. Run `/haiku:pickup` to continue
+3. Run `/haiku:haiku-pickup` to continue
 
 ## Iteration Through Stages
 
@@ -507,10 +507,10 @@ See the [Design Providers Guide](/docs/guide-design-providers/) for setup instru
 
 Studios ship with parameterized intent templates in `studios/{name}/templates/`. Templates provide pre-filled units with `{{ parameter }}` substitution, so common patterns can be instantiated without manual elaboration.
 
-Use `/haiku:start --template <name> --param key=value` to create an intent from a template. For example:
+Use `/haiku:haiku-start --template <name> --param key=value` to create an intent from a template. For example:
 
 ```
-/haiku:start --template new-feature --param feature_name="User Profiles" --param api_prefix="/api/v2"
+/haiku:haiku-start --template new-feature --param feature_name="User Profiles" --param api_prefix="/api/v2"
 ```
 
 Ten templates ship across seven studios:
@@ -527,21 +527,21 @@ Ten templates ship across seven studios:
 | `product-launch` | marketing | Product launch campaign from research to measurement |
 | `api-documentation` | documentation | API documentation from audit to publish |
 
-Templates define units with completion criteria, dependencies, and stage assignments. Parameters are substituted at instantiation time, producing a fully elaborated intent ready for `/haiku:pickup`.
+Templates define units with completion criteria, dependencies, and stage assignments. Parameters are substituted at instantiation time, producing a fully elaborated intent ready for `/haiku:haiku-pickup`.
 
 ## Operations Phase
 
-After construction and integration complete, many features require ongoing maintenance — scheduled jobs, reactive responses to production events, or periodic human reviews. The operations phase provides a structured way to define and manage these tasks using `/haiku:operate`. Operations are defined as spec files alongside the code and tracked through the same state system as the rest of H·AI·K·U.
+After construction and integration complete, many features require ongoing maintenance — scheduled jobs, reactive responses to production events, or periodic human reviews. The operations phase provides a structured way to define and manage these tasks using `/haiku:haiku-operate`. Operations are defined as spec files alongside the code and tracked through the same state system as the rest of H·AI·K·U.
 
 ### Studio Operation Templates
 
-Studios prescribe operation templates in `studios/{name}/operations/`. When you run `/haiku:operate`, it reads the current studio's templates to offer domain-appropriate operations. For example, the software studio provides deployment, monitoring, and rollback operations; the incident-response studio provides communication and escalation operations.
+Studios prescribe operation templates in `studios/{name}/operations/`. When you run `/haiku:haiku-operate`, it reads the current studio's templates to offer domain-appropriate operations. For example, the software studio provides deployment, monitoring, and rollback operations; the incident-response studio provides communication and escalation operations.
 
 Thirty-eight operation templates ship across twelve studios. Teams can add project-specific operations in `.haiku/studios/{name}/operations/` using the same override mechanism as stages and hats.
 
 ### Studio Reflection Dimensions
 
-Studios prescribe reflection dimensions in `studios/{name}/reflections/`. When you run `/haiku:reflect`, it reads the current studio's dimensions to structure the post-mortem analysis along axes relevant to the domain. The software studio reflects on code quality, test coverage, and architecture decisions; the sales studio reflects on deal velocity, objection handling, and pipeline accuracy.
+Studios prescribe reflection dimensions in `studios/{name}/reflections/`. When you run `/haiku:haiku-reflect`, it reads the current studio's dimensions to structure the post-mortem analysis along axes relevant to the domain. The software studio reflects on code quality, test coverage, and architecture decisions; the sales studio reflects on deal velocity, objection handling, and pipeline accuracy.
 
 Twenty-six reflection dimensions ship across twelve studios. Custom dimensions follow the same project-level override pattern.
 

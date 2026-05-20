@@ -1,0 +1,13 @@
+{
+  "name": "haiku",
+  "version": "9.0.0",
+  "description": "H·AI·K·U methodology — universal lifecycle orchestration with hat-based workflows, completion criteria, and automatic context preservation.",
+  "contextFileName": "GEMINI.md",
+  "mcpServers": {
+    "haiku": {
+      "command": "npx",
+      "args": ["-y", "haiku-method", "mcp"],
+      "cwd": "${extensionPath}"
+    }
+  }
+}

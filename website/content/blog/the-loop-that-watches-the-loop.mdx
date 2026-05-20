@@ -1,0 +1,102 @@
+---
+title: "The Loop That Watches the Loop"
+description: "H·AI·K·U closes a structural loop where the engine learns from running. The agent writes notes per stage, synthesizes them at intent close, and lands corrections back in the cascade."
+date: "2026-05-19T22:00:00Z"
+author: Jason Waldrip
+category: Architecture
+tags:
+  - reflection
+  - self-improvement
+  - engine
+  - workflow-engine
+  - harness
+---
+
+You've shipped the same workflow ten times. Each run, the same hat re-reads the same mandate three times before it picks an interpretation. Each run, the same verifier flags the same surprise. You meant to clean it up. You never quite got to it, because the run was finishing and the next intent was already queued, and nobody on the project is staffed to be the engine's archivist.
+
+That gap — between "we noticed the friction" and "we changed the thing that caused it" — is where most harnesses quietly stiffen. The scaffolding accumulates, the mandates calcify, and the model gets better while the engine stays the same shape it was when the model was worse.
+
+<Callout tone="warn" title="The gap">
+The agent has the freshest view of what felt wrong. The agent disappears the second the intent closes. Nothing it learned during the run survives the run.
+</Callout>
+
+## The shape of the friction
+
+Anthropic's [harness-design post](https://www.anthropic.com/engineering/harness-design-long-running-apps) argues that every piece of scaffolding encodes an assumption about what the model couldn't do alone — and the right discipline is to keep removing pieces as the model gets better. We quoted that paragraph in [H·AI·K·U Is a Harness](/blog/ai-dlc-is-a-harness).
+
+Who notices when an assumption stops being load-bearing? Usually the team. Somebody runs the workflow, feels the friction, posts in Slack, maybe lands a PR a week later. The agent — the entity actually living inside the run — has the freshest, most concrete view of what felt wrong, and then disappears the second the intent closes. Stateless between calls, by design (see [One Instruction at a Time](/blog/one-instruction-at-a-time)). Nothing it learned during the run survives the run.
+
+A workflow engine that doesn't learn from running is a fossil.
+
+## Where the agent can leave notes
+
+So we gave the agent two places to write down what it saw, both part of the cursor's per-stage walk.
+
+<TickSequence>
+  <TickCard label="At each stage close" title="Observations">
+    Right after the approvals sign and right before the engine merges and advances, the agent writes one file. Not bolt counts, not outputs, not feedback restated. The stuff nothing else captures — where a mandate read two ways, where a hat got dispatched against the wrong artifact, where the result surprised the agent given the inputs. A one-line "stage ran clean" is a fine answer. Empty beats invented every time.
+  </TickCard>
+  <TickCard label="At intent close" title="Reflection">
+    The engine hands the agent the full record — every observations file, every feedback file the intent ever had, every unit's iteration count, every active mandate — and asks one question: across the whole run, what diverged, and what corrective should land where?
+  </TickCard>
+</TickSequence>
+
+Opting out is one flag on the intent itself; default is on.
+
+## Two destinations, not a queue
+
+The reflection pass writes its findings to one of two places, and the choice of destination is the whole point.
+
+<Compare verdict="diverge" title="Where each finding lands">
+  <Side label="Cascade can fix it">
+    Ambiguous hat, review agent that misses a class of issue, discovery template pointing at dead ends. The agent writes a project-local overlay directly under `.haiku/`. The cascade picks it up next tick with no rebuild. The PR review is the gate.
+  </Side>
+  <Side label="Cascade can't fix it">
+    Cascade logic, hook behavior, validator boundaries — anything the project can't fix locally. The agent calls `haiku_report` with a structured payload: divergence observed, the file a fix would touch, the proposed change. The pipeline routes it back to the H·AI·K·U team.
+  </Side>
+</Compare>
+
+The decision rule is whether the cascade can fix it. If it can, the agent writes the overlay. If it can't, the agent files the report. There's no third path where the finding lives in a backlog and nobody ever picks it up.
+
+## What reflection isn't
+
+There's no statistical model rewriting prompts based on bolt counts. No auto-grader deciding which mandates to nuke. The agent — fresh invocation, full intent record in front of it — is asked one question at the seal: what did the engine make hard that didn't need to be hard, and what corrective should land where? Five well-grounded findings beat fifty wild guesses, per the prompt's own discipline rules. Every claim has to cite the observation, feedback file, or mandate path that backs it.
+
+The pass is also not a stop-the-world ceremony. The cursor falls straight through to `seal_intent` the next tick after `reflection.md` lands. One tick long. One commit with an `autotune:` prefix (kept for audit-trail stability) carrying the reflection file, every overlay, and every other tracked change from the pass — one diff for the human reviewer to read.
+
+The shape we're aiming for is the harness equivalent of a post-incident review the on-call engineer files before going off-shift. Narrower scope, fresher signal, automatic.
+
+## What we haven't seen yet
+
+The loop is wired. The prompts are written. The cursor checks the flag. No intent has actually run through it end-to-end yet.
+
+<Callout tone="info" title="Wired, not fired">
+No `reflection.md` exists on disk anywhere in this repo. No `observations.md` exists either. No commit on the project starts with `autotune:` carrying a real reflection diff. The first real run is what tells us whether the agent, in the seat, with the full record, actually produces useful corrections — or just turns out polite-sounding restatements of what we already knew.
+</Callout>
+
+One piece of indirect evidence the loop is pointed at a real problem: the studio audit we landed today as commit `bd0a5e019` found roughly 94 `EXECUTION.md` files across the studio tree describing a stale pre/post review model — drift between the engine code and the documentation hats were reading against. That's a textbook reflection finding. The cascade can fix it, an agent in the run should have noticed the mandate didn't match the engine's actual behavior, and the corrective belongs in overlays. We caught it manually instead, the day before this post went up, because the loop hadn't run yet.
+
+The next thing is to fire it on real intents and watch what surfaces. We expect the first run will produce three kinds of output.
+
+<Grid>
+  <Card eyebrow="Hoped-for" title="Clean overlays" accent="good">
+    Real findings that land as project-local mandate revisions the cascade picks up next tick. The next intent inherits the fix by default.
+  </Card>
+  <Card eyebrow="Hoped-for" title="Engine reports" accent="good">
+    Real findings that route correctly to `haiku_report` because the cascade couldn't fix them. They read as general patterns, not project-specific noise.
+  </Card>
+  <Card eyebrow="Expected" title="Noise" accent="warn">
+    Restatements the prompt should have filtered out. Empty observations that should've been "stage ran clean." The proportion tells us whether reflection earns its slot in the walk.
+  </Card>
+  <Card eyebrow="Verdict" title="What this decides" accent="info">
+    Three real overlays beat thirty polite restatements. If the ratio is wrong the first time, the prompt tightens. If the ratio holds, the loop stays default-on.
+  </Card>
+</Grid>
+
+## The smaller engine
+
+Anthropic's harness post said it best: the engine should get smaller as the model gets better. The hard part is figuring out which pieces are still load-bearing, and the team's vantage point is the wrong one to figure it out from. We see the runs in aggregate, after the fact, through PR diffs and Slack threads. The agent sees a single run from inside, while it's happening, with every mandate it had to interpret in front of it.
+
+So we asked it to write that down. The reflection pass at intent close is the diff that turns those notes into a change to the cascade — or a ticket against the engine.
+
+Now we have to actually run it and find out whether the agent in the seat produces something worth reading. The first real reflection it writes is going to tell us more about this loop than the design ever did.

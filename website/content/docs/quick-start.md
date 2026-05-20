@@ -19,15 +19,15 @@ H·AI·K·U uses just two main commands:
 
 | Command | What it does |
 |---------|--------------|
-| `/haiku:start` | Define what you're building and how you'll know it's done |
-| `/haiku:pickup` | Start the autonomous execution loop through the stage pipeline |
+| `/haiku:haiku-start` | Define what you're building and how you'll know it's done |
+| `/haiku:haiku-pickup` | Start the autonomous execution loop through the stage pipeline |
 
 ## Your First Feature
 
 ### Step 1: Create an Intent
 
 ```
-/haiku:start
+/haiku:haiku-start
 ```
 
 The AI guides you through:
@@ -37,18 +37,18 @@ The AI guides you through:
 
 Example session:
 ```
-User: /haiku:start
+User: /haiku:haiku-start
 AI: What do you want to build?
 User: Add user authentication with email/password
 AI: [Asks clarifying questions via interactive prompts]
 AI: Here are the success criteria I captured...
-AI: Intent created! Run /haiku:pickup to start.
+AI: Intent created! Run /haiku:haiku-pickup to start.
 ```
 
 ### Step 2: Run
 
 ```
-/haiku:pickup
+/haiku:haiku-pickup
 ```
 
 The AI now works autonomously through the stage pipeline:
@@ -66,7 +66,7 @@ If the session runs long, the AI will suggest clearing context:
 ```
 AI: "Context getting full. Run /clear to continue."
 User: /clear
-User: /haiku:pickup
+User: /haiku:haiku-pickup
 ```
 
 Your progress is preserved - the AI picks up where it left off.
@@ -75,22 +75,22 @@ Your progress is preserved - the AI picks up where it left off.
 
 | Command | Purpose |
 |---------|---------|
-| `/haiku:gate-review` | Pre-delivery code review -- catches issues before external CI/bots |
-| `/haiku:pickup [slug]` | Resume an existing intent after a break |
-| `/haiku:reset-intent` | Wipe the whole intent (every stage, every branch) and recreate from the preserved title/description |
-| `/haiku:reset-stage` | Wipe a single stage (units, outputs, artifacts, branch) so the agent re-runs it from scratch — other stages stay put |
+| `/haiku:haiku-gate-review` | Pre-delivery code review -- catches issues before external CI/bots |
+| `/haiku:haiku-pickup [slug]` | Resume an existing intent after a break |
+| `/haiku:haiku-reset-intent` | Wipe the whole intent (every stage, every branch) and recreate from the preserved title/description |
+| `/haiku:haiku-reset-stage` | Wipe a single stage (units, outputs, artifacts, branch) so the agent re-runs it from scratch — other stages stay put |
 | `/methodology [question]` | Ask questions about H·AI·K·U |
 
 ## Example: Complete Workflow
 
 ```
-User: /haiku:start
+User: /haiku:haiku-start
 AI: What do you want to build?
 User: Add a dark mode toggle to the settings page
 AI: [Guides through requirements and criteria]
 AI: Intent created!
 
-User: /haiku:pickup
+User: /haiku:haiku-pickup
 AI: [Works autonomously through planner → builder → reviewer]
 AI: Intent complete! All criteria satisfied.
 
@@ -100,11 +100,11 @@ AI: [Creates PR with summary of changes]
 
 ## After Construction
 
-Once your intent is complete, manage ongoing operational tasks with `/haiku:operate`. Define scheduled jobs, reactive handlers, and human review processes as spec files in `.haiku/{intent}/operations/`. See the [Operations Guide](/docs/operations-guide/) for details.
+Once your intent is complete, manage ongoing operational tasks with `/haiku:haiku-operate`. Define scheduled jobs, reactive handlers, and human review processes as spec files in `.haiku/{intent}/operations/`. See the [Operations Guide](/docs/operations-guide/) for details.
 
 ## Next Steps
 
-- [Inception & Planning](/docs/elaboration/) - What to expect during `/haiku:start`
+- [Inception & Planning](/docs/elaboration/) - What to expect during `/haiku:haiku-start`
 - [Core Concepts](/docs/concepts/) - Understand intents, units, and stages
 - [Studios & Stages](/docs/studios/) - Learn about studios and their stage pipelines
 - [Installation](/docs/installation/) - Detailed setup

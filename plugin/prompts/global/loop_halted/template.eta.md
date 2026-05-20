@@ -15,6 +15,6 @@ You **MUST**:
 3. **Help them diagnose.** Read the action signature in the message above. It names the action kind and the target (stage / unit / feedback / role). Whatever the engine was trying to do for that target, that's what's wedged.
 4. **Help them choose a recovery path:**
    - If a missing artifact is the cause: commit it. The next tick will see new state and the halt will lift.
-   - If a verifier or fix-hat won't sign: re-dispatch it manually, or skip via `/haiku:repair`.
+   - If a verifier or fix-hat won't sign: re-dispatch it manually, or skip via `/haiku:haiku-repair`.
    - If the cursor itself is wrong: file a feedback explaining what should have happened, and let the engine route through the fix loop.
 5. **Only after the user has acted** should you call `haiku_run_next` again. The signature must be different for the halt to lift; if it isn't, the halt fires again immediately.

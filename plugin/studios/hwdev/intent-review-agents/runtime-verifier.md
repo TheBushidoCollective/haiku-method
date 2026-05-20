@@ -5,7 +5,7 @@ interpretation: lens
 
 ## Check
 
-Open a view session via `haiku_view({ intent: "<this-intent>" })` and use the bundled `playwright` MCP to navigate to each artifact through the SPA's artifact browser. Call `browser_take_screenshot` at every meaningful step. **Save each screenshot** to disk under `.haiku/intents/<intent>/proof/<artifact-or-check>-<view>.png` using the `Write` tool. The intent-level `proof/` directory is the durable record a human reviewer scrolls when verifying a merged intent.
+Open a view session via `haiku_view({ intent: "<this-intent>" })` and use the bundled `haiku-playwright` MCP to navigate to each artifact through the SPA's artifact browser. Call `browser_take_screenshot` at every meaningful step. **Save each screenshot** to disk under `.haiku/intents/<intent>/proof/<artifact-or-check>-<view>.png` using the `Write` tool. The intent-level `proof/` directory is the durable record a human reviewer scrolls when verifying a merged intent.
 
 The agent **MUST** verify each of the following:
 

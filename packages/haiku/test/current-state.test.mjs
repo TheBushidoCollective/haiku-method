@@ -111,7 +111,12 @@ function fixture(slug, frontmatter, stages = {}) {
 			unitReviews = reviews
 			unitApprovals = approvals
 		} else if (phase === "execute") {
-			// Mid-hat: only first hat advanced.
+			// Mid-hat: only first hat advanced. Reviews are already signed —
+			// the cursor walks the PRE-execute spec review BEFORE any hat
+			// runs, so an executing unit always has its `reviews.*` stamped.
+			// (Without this the derivation correctly reports "review", since
+			// review is checked before execute.)
+			unitReviews = reviews
 			iterations =
 				hats.length > 0
 					? [

@@ -250,18 +250,28 @@ test("elaborate_loop prompt enumerates every unmet signal (Option A composite)",
 			`prompt is missing the per-signal heading for ${signal}`,
 		)
 	}
-	// Concurrent execution reminder is the footer block; verifier nonces
-	// land in the verify_* sub-instructions.
+	// Concurrent execution reminder is the footer block.
 	assert.ok(
 		body.includes("Concurrent execution reminder"),
 		"prompt is missing the concurrent execution reminder",
 	)
+	// File-backed dispatch (2026-05-19): the verify_* verifier prompts
+	// moved into per-intent prompt FILES referenced by
+	// `<subagent prompt_file="...">`. The nonces the verifier needs to
+	// call the seal tools now live in those files, not in the composite
+	// parent body. Read each referenced file and assert the nonces
+	// surface where the verifier actually reads them.
+	const { readFileSync } = await import("node:fs")
+	const promptFiles = [...body.matchAll(/prompt_file="([^"]+)"/g)].map(
+		(m) => m[1],
+	)
+	const verifierBodies = promptFiles.map((pf) => readFileSync(pf, "utf8")).join("\n")
 	assert.ok(
-		body.includes("test-nonce-conv"),
-		"verify_conversation nonce did not surface in the prompt",
+		verifierBodies.includes("test-nonce-conv"),
+		"verify_conversation nonce did not surface in the verifier prompt file",
 	)
 	assert.ok(
-		body.includes("test-nonce-dec"),
-		"verify_decompose nonce did not surface in the prompt",
+		verifierBodies.includes("test-nonce-dec"),
+		"verify_decompose nonce did not surface in the verifier prompt file",
 	)
 })

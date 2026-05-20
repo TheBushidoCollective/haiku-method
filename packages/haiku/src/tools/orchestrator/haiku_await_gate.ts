@@ -569,7 +569,7 @@ export default defineTool({
 						}
 						externalReviewMessage = withAnnouncement(
 							`The user routed stage "${stage}" to external review. The engine opened the MR for you: ${opened.createdUrl}`,
-							`Tell the user: "I opened the MR at ${opened.createdUrl} — review and merge it when you're ready. Run /haiku:pickup after the merge to continue." The MR was created against \`haiku/${slug}/main\` (NOT the repo default) so the workflow engine can detect the merge.`,
+							`Tell the user: "I opened the MR at ${opened.createdUrl} — review and merge it when you're ready. Run /haiku:haiku-pickup after the merge to continue." The MR was created against \`haiku/${slug}/main\` (NOT the repo default) so the workflow engine can detect the merge.`,
 						)
 					} else if (opened.compareUrl) {
 						externalReviewMessage = withAnnouncement(
@@ -585,7 +585,7 @@ export default defineTool({
 				} else {
 					externalReviewMessage = withAnnouncement(
 						`The user routed stage "${stage}" to external review.`,
-						`Submit the work for review through your project's review process. Record the review URL via haiku_run_next { intent: "${slug}", external_review_url: "<url>" }. Run /haiku:pickup again after the PR is merged.`,
+						`Submit the work for review through your project's review process. Record the review URL via haiku_run_next { intent: "${slug}", external_review_url: "<url>" }. Run /haiku:haiku-pickup again after the PR is merged.`,
 					)
 				}
 

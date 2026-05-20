@@ -26,6 +26,20 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUNDLE="$HERE/haiku.mjs"
 SOURCE_ENTRY="$HERE/../../packages/haiku/src/main.ts"
 
+# Pin an ABSOLUTE plugin root for every subprocess. `HERE` is already
+# absolute (`<pluginRoot>/bin`), so the plugin root is its parent. We
+# set CLAUDE_PLUGIN_ROOT only when it's unset OR relative: a relative
+# value (the dev harness exports `CLAUDE_PLUGIN_ROOT=plugin`) breaks any
+# subcommand that runs from a different cwd than the repo root — e.g.
+# `haiku statusline`, which chdir's into the user's project, then
+# resolves `plugin/studios` / `plugin/prompts` against the WRONG
+# directory and silently finds nothing. An already-absolute value
+# (Claude Code's own) is left untouched.
+case "${CLAUDE_PLUGIN_ROOT:-}" in
+/*) : ;;
+*) CLAUDE_PLUGIN_ROOT="$(cd "$HERE/.." && pwd)" && export CLAUDE_PLUGIN_ROOT ;;
+esac
+
 # Detect production install location. `*/.claude/plugins/*` covers the
 # marketplaces dir too — `*` in bash `case` patterns matches `/`.
 IS_PROD=""

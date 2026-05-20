@@ -1312,10 +1312,10 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 								className="call-chip"
 								style={{ fontSize: 9, padding: "2px 8px" }}
 								onClick={() =>
-									setModal({ kind: "skill", skillName: "/haiku:pickup" })
+									setModal({ kind: "skill", skillName: "/haiku:haiku-pickup" })
 								}
 							>
-								/haiku:pickup
+								/haiku:haiku-pickup
 							</button>
 							<div>resumes next stage</div>
 						</div>
@@ -1485,7 +1485,7 @@ export function ArchitectureMap({ initialStudioDir }: ArchitectureMapProps) {
 				>
 					<h3>
 						<span>Intent creation</span>
-						<span className="cs-skill-chip">/haiku:start</span>
+						<span className="cs-skill-chip">/haiku:haiku-start</span>
 						<span className="open-modal-hint">expand ↗</span>
 					</h3>
 					<div className="cs-loop">
@@ -1970,6 +1970,6 @@ function effectiveGate(
 	if (mStage === "discrete")
 		return { type: "external (discrete)", options: ["external"] }
 	if (mStage === "auto")
-		return { type: "auto (autopilot · /haiku:autopilot)", options: ["advance"] }
+		return { type: "auto (autopilot · /haiku:haiku-autopilot)", options: ["advance"] }
 	return stage.gate
 }

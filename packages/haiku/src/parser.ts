@@ -6,6 +6,7 @@ import {
 	isDuplicateKeyError,
 } from "@haiku/shared/frontmatter"
 import matter from "gray-matter"
+import { inlineAdjacentStylesheets, intentDirOf } from "./html-inline.js"
 import { extractSections } from "./markdown.js"
 import { STAGE_INTERNAL_ENTRIES } from "./stage-internal-entries.js"
 import type {
@@ -296,6 +297,24 @@ async function deriveStagePhaseFromDisk(
 	if (unitFmList.length === 0) {
 		return { status: "pending", phase: "elaborate" }
 	}
+	// PRE-execute spec review (`reviews.<role>`). The cursor walks this
+	// between elaborate completion and wave-ready hat dispatch, so it MUST
+	// be checked before execute — a stage awaiting spec review has units
+	// with `started_at: null`, which the wave-ready check below would
+	// otherwise mislabel as "execute" (reported 2026-05-19). Reviews are
+	// stamped before any hat runs, so once execution is underway this
+	// passes and execute fires.
+	const allReviewsStamped = unitFmList.every((fm) => {
+		const r = fm.reviews
+		return (
+			r &&
+			typeof r === "object" &&
+			Object.values(r as Record<string, unknown>).every((v) => Boolean(v))
+		)
+	})
+	if (!allReviewsStamped) {
+		return { status: "in_progress", phase: "review" }
+	}
 	const anyWaveReady = unitFmList.some(
 		(fm) => !fm.started_at || fm.started_at === null,
 	)
@@ -331,17 +350,8 @@ async function deriveStagePhaseFromDisk(
 		// stage flips to `completed` status.
 		return { status: "in_progress", phase: "complete" }
 	}
-	const allReviewsStamped = unitFmList.every((fm) => {
-		const r = fm.reviews
-		return (
-			r &&
-			typeof r === "object" &&
-			Object.values(r as Record<string, unknown>).every((v) => Boolean(v))
-		)
-	})
-	if (!allReviewsStamped) {
-		return { status: "in_progress", phase: "review" }
-	}
+	// Reviews were already confirmed stamped above (pre-execute gate). The
+	// remaining unsigned sign-offs are POST-execute approvals.
 	const allApprovalsStamped = unitFmList.every((fm) => {
 		const a = fm.approvals
 		return (
@@ -585,7 +595,15 @@ async function buildArtifactEntry(
 	}
 	if (OUTPUT_HTML_EXTS.includes(ext)) {
 		try {
-			const content = await readFile(fullPath, "utf-8")
+			const raw = await readFile(fullPath, "utf-8")
+			// Inline adjacent stylesheets so the body styles correctly in the
+			// SPA's srcDoc iframe (which has no artifact base URL). See
+			// `inlineAdjacentStylesheets`.
+			const content = await inlineAdjacentStylesheets(
+				raw,
+				fullPath,
+				intentDirOf(fullPath, relativePath),
+			)
 			return { stage, name, type: "html", content, relativePath }
 		} catch {
 			return null

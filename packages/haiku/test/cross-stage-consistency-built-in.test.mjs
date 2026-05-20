@@ -140,34 +140,21 @@ test("cursor's intent-level walk includes cross-stage-consistency role", async (
 		// cross-stage-consistency in the role list. We sign earlier roles
 		// (spec, continuity) by stamping their approvals to advance the
 		// walk past them, since we only care that cross-stage is reachable.
-		const rolesSeen = []
-		// Inspect the cursor source for the role list — the simplest
-		// check is to grep the `intentRoles` definition. If the array
-		// literal doesn't include "cross-stage-consistency", the test
-		// fails. This is a structural lock complementary to the
-		// behavioral checks above.
-		const cursorSrc = await import("node:fs").then((m) =>
-			m.readFileSync(
-				new URL("../src/orchestrator/workflow/cursor.ts", import.meta.url),
-				"utf8",
-			),
-		)
-		// Find the ternary that defines intentRoles — both branches
-		// must include "cross-stage-consistency". Match starts at the
-		// `isAutopilot` line and runs through both array literals.
-		const intentRolesTernary = cursorSrc.match(
-			/intentRoles[^\n]*=\s*isAutopilot[\s\S]*?\][\s\S]*?\]/,
-		)?.[0]
+		// Behavioral lock against the real `intentReviewRoles` helper (the
+		// single source of truth for the intent-level walk, shared by the
+		// cursor and the progress track). cross-stage-consistency MUST be
+		// present in BOTH the autopilot and non-autopilot role lists —
+		// without it the intent-completion review goes silent on the
+		// cross-stage check. (Pre-2026-05-19 this scraped an inline ternary
+		// in cursor.ts; that ternary was extracted into `intentReviewRoles`,
+		// so we now assert the function's output directly.)
 		assert.ok(
-			intentRolesTernary,
-			"could not locate the intentRoles = isAutopilot ? [...] : [...] ternary in cursor.ts",
+			cursor.intentReviewRoles("autopilot").includes("cross-stage-consistency"),
+			"intentReviewRoles(autopilot) MUST include cross-stage-consistency",
 		)
-		const matches =
-			intentRolesTernary.match(/cross-stage-consistency/g) ?? []
-		assert.equal(
-			matches.length,
-			2,
-			`cursor's intentRoles MUST include cross-stage-consistency in BOTH the autopilot and non-autopilot branches. Got ${matches.length} occurrence(s) in: ${intentRolesTernary}`,
+		assert.ok(
+			cursor.intentReviewRoles("continuous").includes("cross-stage-consistency"),
+			"intentReviewRoles(continuous) MUST include cross-stage-consistency",
 		)
 	} finally {
 		process.chdir(origCwd)

@@ -229,6 +229,57 @@ test("wave: 2 FBs on the SAME target unit dedup — only one in this batch", asy
 	})
 })
 
+test("wave: two files sharing one FB number dedup to a single dispatch (fixloop-bug-f4dd5a92 Bug 3)", async () => {
+	await withWaveRepo("same-id-dedup", async ({ intentDir, slug }) => {
+		// Numbering collision: two distinct feedback files both prefixed
+		// `001-`. `nextActionForFeedback` derives the same FB-001 id for
+		// both, and since both are null-target the target_unit dedup does
+		// NOT catch them — the pre-fix walk emitted FB-001 TWICE, spawning
+		// two subagents racing on one body. (The original report was
+		// intent-scope; stage-scope exercises the same dedup with the
+		// fixture's stage-level fix_hats.)
+		const dir = join(intentDir, "stages", "design", "feedback")
+		for (const title of ["first collision", "second collision"]) {
+			const path = join(
+				dir,
+				`001-${title.replace(/\s+/g, "-")}.md`,
+			)
+			writeFileSync(
+				path,
+				matter.stringify("FB body.\n", {
+					title,
+					status: "pending",
+					origin: "adversarial-review",
+					author: "agent",
+					author_type: "agent",
+					created_at: "2026-05-18T00:00:00Z",
+					triaged_at: "2026-05-18T00:00:00Z",
+					targets: { unit: null, invalidates: [] },
+				}),
+			)
+		}
+		const cursor = await import(`${SRC}/orchestrator/workflow/cursor.ts`)
+		const { walkFeedbackTrack } = cursor.__testOnly
+		const action = walkFeedbackTrack({
+			intentDir,
+			studio: "software",
+			currentStage: "design",
+			intent: { studio: "software", stages: ["design"] },
+		})
+		assert.ok(action, "expected a Track B action")
+		assert.equal(action.kind, "start_feedback_hat")
+		const fb001Count = action.dispatches.filter(
+			(d) => d.feedback_id === "FB-001",
+		).length
+		assert.equal(
+			fb001Count,
+			1,
+			`FB-001 MUST appear at most once per batch; got ${fb001Count}: ${JSON.stringify(action.dispatches)}`,
+		)
+		void slug
+	})
+})
+
 test("wave: intent-scope / null-target FBs batch together unconditionally", async () => {
 	await withWaveRepo("null-target-batch", async ({ intentDir, slug }) => {
 		// 3 FBs all with null target_unit — no per-unit FM write, no

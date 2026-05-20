@@ -51,17 +51,14 @@ import {
 	readStudio,
 	resolveHatPath,
 } from "../../../../studio-reader.js"
-import {
-	batchDispatchDirective,
-	emitSubagentDispatchBlock,
-} from "../../_helpers.js"
+import { buildFbHatDispatchBlock } from "../../../fb-dispatch-builder.js"
+import { batchDispatchDirective } from "../../_helpers.js"
 import { loadTemplate } from "../../_load-template.js"
 import { sharedBlockRef } from "../../_shared/index.js"
 import { definePromptBuilder } from "../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
-const SUBAGENT_TEMPLATE = loadTemplate(import.meta.url, "subagent.eta.md")
 
 /** Resolve the model for a single fix-hat dispatch. Mirrors the
  *  cascade in start_unit.ts so feedback hats and unit hats route
@@ -193,84 +190,23 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 			hat: d.hat,
 			feedbackId: d.feedback_id,
 		})
-		// Walk the three-tier hat cascade (global → studio → stage) so the
-		// subagent's prompt embeds the actual on-disk mandate for THIS
-		// studio, not a hardcoded path. classifier and feedback-assessor
-		// resolve to the global tier; per-stage hats resolve to the stage
-		// tier.
-		const hatPath = d.stage ? resolveHatPath(studio, d.stage, d.hat) : null
-		const hatBody =
-			hatPath && existsSync(hatPath) ? readFileSync(hatPath, "utf8") : ""
-		const fbInt = Number.parseInt(d.feedback_id.replace(/^FB-/i, ""), 10) || 0
-
-		// Render the per-subagent prompt body from the sibling template.
-		// Inlines the hat mandate so the subagent reads ONE file with
-		// everything; the parent never sees this body (it's behind the
-		// `<subagent prompt_file>` ref).
-		const promptBody = eta.renderString(SUBAGENT_TEMPLATE, {
+		const dispatchBlock = buildFbHatDispatchBlock({
 			slug,
-			hat: d.hat,
-			stage: d.stage,
+			studio,
 			feedbackId: d.feedback_id,
-			fbInt,
-			terminal: d.terminal,
-			hatBody,
-		})
-
-		// Derive the bolt number from the FB's iterations so the prompt
-		// filename is `fix-FB-NN-<hat>-<bolt>.prompt.md`. Same convention
-		// review_fix uses. When iterations is missing or unparseable, fall
-		// back to bolt 1 — overwrites the first attempt, which is the
-		// correct behavior since the engine hasn't started a new bolt yet.
-		let bolt = 1
-		try {
-			const fbDir = d.stage
-				? join(stageDir(slug, d.stage), "feedback")
-				: join(intentDir(slug), "feedback")
-			if (existsSync(fbDir)) {
-				const num = d.feedback_id.replace(/^FB-/i, "")
-				const files = readdirSync(fbDir).filter(
-					(f) => f.startsWith(num) && f.endsWith(".md"),
-				)
-				if (files.length > 0) {
-					const fbFm = matter(readFileSync(join(fbDir, files[0]), "utf8"))
-						.data as Record<string, unknown>
-					const iters = Array.isArray(fbFm.iterations) ? fbFm.iterations : []
-					const maxBolt = (iters as Array<{ bolt?: unknown }>).reduce(
-						(acc, it) => {
-							const b = it?.bolt
-							return typeof b === "number" && b > acc ? b : acc
-						},
-						0,
-					)
-					bolt = maxBolt > 0 ? maxBolt : 1
-				}
-			}
-		} catch {
-			/* fall back to bolt 1 */
-		}
-
-		const dispatchBlock = emitSubagentDispatchBlock({
-			unit: `fix-${d.feedback_id}`,
+			stage: d.stage,
 			hat: d.hat,
-			bolt,
-			intent: slug,
-			stage: d.stage || undefined,
-			agentType: "general-purpose",
-			model: resolved?.model,
-			promptBody,
-			heading: `### Subagent — \`${d.feedback_id}\` (stage \`${d.stage || "(intent)"}\`, hat \`${d.hat}\`)`,
+			terminal: d.terminal,
 		})
-
 		return {
 			feedback_id: d.feedback_id,
 			stage: d.stage,
 			hat: d.hat,
 			terminal: d.terminal,
-			fb_int: fbInt,
+			fb_int: Number.parseInt(d.feedback_id.replace(/^FB-/i, ""), 10) || 0,
 			model_tier: resolved?.model,
 			model_source: resolved?.source,
-			hat_path: hatPath,
+			hat_path: d.stage ? resolveHatPath(studio, d.stage, d.hat) : null,
 			dispatch_block: dispatchBlock,
 		}
 	})

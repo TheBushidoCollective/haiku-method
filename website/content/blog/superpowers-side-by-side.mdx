@@ -16,6 +16,10 @@ We already published [the long version of this comparison](/blog/superpowers-and
 
 Jesse Vincent's [Superpowers](https://github.com/obra/superpowers) shipped in October and continues to be the clearest public example of the skills-library approach done well. If you haven't read [Jesse's intro post](https://blog.fsck.com/2025/10/09/superpowers/), start there. The thinking is sharp and the craft is visible. We've learned from reading it.
 
+<Callout tone="info" title="The shared diagnosis">
+Both projects look at the raw coding agent and say "needs discipline." Superpowers gives discipline to the human-agent partnership. We give discipline to the agent so the partnership can dial up or down. Same patient, different prescription.
+</Callout>
+
 ## Where we landed in the same place
 
 <Compare verdict="match" title="Plan separated from implementation">
@@ -79,7 +83,7 @@ Jesse Vincent's [Superpowers](https://github.com/obra/superpowers) shipped in Oc
     The agent. It follows the skill's flowchart, picks up the next step, and proceeds. Hard gates and loud framing keep it on the rails.
   </Side>
   <Side label="H·AI·K·U">
-    The cursor. It reads on-disk state, walks a deterministic state machine, returns exactly one structured action. The agent never has the "what now?" decision.
+    The engine. It reads on-disk state, walks a deterministic state machine, returns exactly one structured action. The agent never has the "what now?" decision.
   </Side>
 </Compare>
 
@@ -88,7 +92,7 @@ Jesse Vincent's [Superpowers](https://github.com/obra/superpowers) shipped in Oc
     Context compaction or `/clear` is fatal mid-run. Start over. Jesse's design keeps sessions short enough that this rarely bites.
   </Side>
   <Side label="H·AI·K·U">
-    Compaction, `/clear`, crash, machine swap — irrelevant. The next `haiku_run_next` reads disk and tells the agent what's next. Nothing was in the conversation to lose.
+    Compaction, `/clear`, crash, machine swap — irrelevant. The next tick reads disk and tells the agent what's next. Nothing was in the conversation to lose.
   </Side>
 </Compare>
 
@@ -111,13 +115,22 @@ Jesse Vincent's [Superpowers](https://github.com/obra/superpowers) shipped in Oc
 
 <Compare verdict="win" title="Composite intents and human handoff">
   <Side>
-    A product launch crosses marketing, engineering, and legal. H·AI·K·U treats that as first-class — multiple studios under one parent with sync points. State on disk means a researcher can start it, a designer can pick up design, a developer can take construction, a security reviewer can gate release. Each human opens a fresh session; the cursor reads state; next action is right there.
+    A product launch crosses marketing, engineering, and legal. H·AI·K·U treats that as first-class — multiple studios under one parent with sync points. State on disk means a researcher can start it, a designer can pick up design, a developer can take construction, a security reviewer can gate release. Each human opens a fresh session; the engine reads state; next action is right there.
   </Side>
 </Compare>
 
 <Compare verdict="win" title="Browseable portfolio">
   <Side>
     A public browsable catalog of in-flight work. Stakeholders can walk the history, read specs, inspect artifacts, and approve checkpoints without running an AI coding tool. The intent directory is a portfolio, not a log.
+  </Side>
+</Compare>
+
+<Compare verdict="diverge" title="The surface for non-developers">
+  <Side label="Superpowers">
+    Has a surface — the skills library is browseable, and Jesse's craft on the interaction shape is visible. Built around the engineer working continuously with the agent.
+  </Side>
+  <Side label="H·AI·K·U">
+    Local SPA per intent. Review sessions render diffs, specs, annotations, and gate verbs in a browser tab. Questions and design-direction requests route there. The browse view shows every intent in the repo with its current stage and open feedback — a portfolio across an entire team's work. A designer leaving a comment, a PM dropping an answer in a question modal, a QA lead approving a gate — none of them have to learn the CLI. Their input lands as feedback the engine treats as first-class at the next tick. Drift flows the other direction: out-of-band file edits get caught pre-tick and reconciled before the agent moves. Same engine, three loop positions per stage — in, on, off — set at elaborate time.
   </Side>
 </Compare>
 

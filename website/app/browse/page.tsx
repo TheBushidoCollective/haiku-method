@@ -132,6 +132,35 @@ export default function BrowsePage() {
 					if (handle?.kind === "directory") {
 						setLoading(true)
 						setError(null)
+						// Dropped handles don't carry recursive read permission
+						// by default. Request it explicitly so the provider can
+						// walk into `.haiku/intents/<slug>/` rather than failing
+						// silently and rendering "No intents found." Falls back
+						// to a clear error if the user denies.
+						const dirHandle = handle as FileSystemDirectoryHandle & {
+							queryPermission?: (opts: {
+								mode: "read" | "readwrite"
+							}) => Promise<PermissionState>
+							requestPermission?: (opts: {
+								mode: "read" | "readwrite"
+							}) => Promise<PermissionState>
+						}
+						if (
+							typeof dirHandle.queryPermission === "function" &&
+							typeof dirHandle.requestPermission === "function"
+						) {
+							let perm = await dirHandle.queryPermission({ mode: "read" })
+							if (perm !== "granted") {
+								perm = await dirHandle.requestPermission({ mode: "read" })
+							}
+							if (perm !== "granted") {
+								setError(
+									"Read permission denied for the dropped folder. Drop again or use the directory picker, and click Allow when the browser asks.",
+								)
+								setLoading(false)
+								return
+							}
+						}
 						const local = new LocalProvider(handle as FileSystemDirectoryHandle)
 						const found = await local.init()
 						if (!found) {
@@ -144,7 +173,14 @@ export default function BrowsePage() {
 						return
 					}
 				} catch (err) {
+					const name = (err as Error).name ?? "Error"
+					const msg = (err as Error).message ?? String(err)
 					console.error("Drop handle error:", err)
+					setError(
+						`Couldn't open the dropped folder (${name}: ${msg}). Try the directory picker instead.`,
+					)
+					setLoading(false)
+					return
 				}
 			}
 		}

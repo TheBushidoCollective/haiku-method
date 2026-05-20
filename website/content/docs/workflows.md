@@ -13,7 +13,7 @@ A studio is a named collection of stages, each with its own hat sequence. Each s
 - The order stages execute
 - Which hats operate within each stage
 
-Studios are selected during `/haiku:start` and can be customized per project.
+Studios are selected during `/haiku:haiku-start` and can be customized per project.
 
 > **Note on operating modes:** The HITL (Human-in-the-Loop) and OHOTL (Observed Human-on-the-Loop) modes listed below are recommendations for how you might interact with each stage. The plugin does not enforce a specific mode per stage -- you choose how much oversight to apply.
 
@@ -34,11 +34,11 @@ The default studio for most development work. In its simplest form, it uses only
 ### Flow
 
 ```
-/haiku:start
+/haiku:haiku-start
     ↓
 Define intent, criteria, units, and studio
     ↓
-/haiku:pickup
+/haiku:haiku-pickup
     ↓
 [Development Stage]
   Planner (HITL): Plan how to build it
@@ -62,11 +62,11 @@ Next unit or intent complete
 **Intent:** Add user profile editing
 
 ```
-/haiku:start: "What do you want to build?"
+/haiku:haiku-start: "What do you want to build?"
 You: "Name, email, avatar image editing on the profile page"
 (Intent and units are now defined)
 
-/haiku:pickup kicks off:
+/haiku:haiku-pickup kicks off:
 
 [Development Stage]
 Planner: "I'll add an /api/profile endpoint, a ProfileForm
@@ -85,9 +85,9 @@ For cross-functional work, the software studio can include design and product st
 **Stages:** Design -> Product -> Development
 
 ```
-/haiku:start (select multi-stage software studio)
+/haiku:haiku-start (select multi-stage software studio)
     ↓
-/haiku:pickup
+/haiku:haiku-pickup
     ↓
 [Design Stage]
   Designer (OHOTL): Create visual designs and UX flows
@@ -231,11 +231,11 @@ status: pending
 Build the API endpoints for analytics data...
 ```
 
-When `/haiku:pickup` processes each unit, it resolves the unit's context independently within the active stage.
+When `/haiku:haiku-pickup` processes each unit, it resolves the unit's context independently within the active stage.
 
 ## Operation and Reflection
 
-Operation and reflection are not studio selections -- they are separate lifecycle phases that run after construction completes. Use `/haiku:operate` to enter the Operation phase and `/haiku:reflect` to enter the Reflection phase. These phases have their own hat sequences and are invoked independently of whichever studio was used during execution. See the [Operations Guide](/docs/operations-guide/) for details on defining and managing operational tasks.
+Operation and reflection are not studio selections -- they are separate lifecycle phases that run after construction completes. Use `/haiku:haiku-operate` to enter the Operation phase and `/haiku:haiku-reflect` to enter the Reflection phase. These phases have their own hat sequences and are invoked independently of whichever studio was used during execution. See the [Operations Guide](/docs/operations-guide/) for details on defining and managing operational tasks.
 
 ## Custom Studios
 

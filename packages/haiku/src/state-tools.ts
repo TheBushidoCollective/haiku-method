@@ -28,7 +28,19 @@ import {
 import { Ajv } from "ajv"
 import matter from "gray-matter"
 import { features, resolvePluginRoot } from "./config.js"
-import { findCurrentStage } from "./orchestrator/workflow/cursor.js"
+import {
+	derivePosition,
+	findCurrentStage,
+	walkFeedbackTrack,
+} from "./orchestrator/workflow/cursor.js"
+import {
+	resolveIntentStages,
+	resolveStageFixHats,
+	resolveStudioFixHats,
+} from "./orchestrator/studio.js"
+import { buildFbHatDispatchBlock } from "./orchestrator/fb-dispatch-builder.js"
+import { buildUnitHatDispatchBlock } from "./orchestrator/unit-dispatch-builder.js"
+import { summarizeStageLoop } from "./orchestrator/units.js"
 import { sanitizeFeedbackBody } from "./state/sanitize-feedback.js"
 
 // V-04 (Symlink TOCTOU): `haiku_human_write` (registered via this module's
@@ -62,6 +74,7 @@ import {
 	getCurrentBranch,
 	getMainlineBranch,
 	isBranchMerged,
+	isMergeInProgress,
 	listIntentBranches,
 	listOrphanDiscreteIntents,
 	mergeUnitWorktree,
@@ -69,7 +82,7 @@ import {
 	readFileFromBranch,
 	removeTempWorktree,
 } from "./git-worktree.js"
-import { withStageLock } from "./locks.js"
+import { withIntentDispatchLock, withStageLock } from "./locks.js"
 import { escalate } from "./model-selection.js"
 import { deriveStageState } from "./orchestrator/workflow/derived-stage-state.js"
 import { reportError } from "./sentry.js"
@@ -1446,7 +1459,7 @@ function repairAllBranches(autoApply: boolean): {
 					// includes the file list; other failures show the raw
 					// git error.
 					const detail = result.isConflict
-						? `Merge conflict consolidating into haiku/${slug}/main on ${result.conflictFiles?.length ?? 0} file(s): ${(result.conflictFiles ?? []).join(", ")}. Resolve on haiku/${slug}/main, commit, then re-run /haiku:repair.`
+						? `Merge conflict consolidating into haiku/${slug}/main on ${result.conflictFiles?.length ?? 0} file(s): ${(result.conflictFiles ?? []).join(", ")}. Resolve on haiku/${slug}/main, commit, then re-run /haiku:haiku-repair.`
 						: `Failed to consolidate stage branches into haiku/${slug}/main: ${result.message}`
 					summaries.push({
 						slug,
@@ -3516,6 +3529,7 @@ import {
 	HAIKU_VIEW_INPUT_SCHEMA,
 	HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA,
 	HAIKU_UNIT_DELETE_INPUT_SCHEMA,
+	HAIKU_UNIT_GET_INPUT_SCHEMA,
 	HAIKU_UNIT_LIST_INPUT_SCHEMA,
 	HAIKU_UNIT_READ_INPUT_SCHEMA,
 	HAIKU_UNIT_REJECT_HAT_INPUT_SCHEMA,
@@ -3557,6 +3571,7 @@ import {
 	validateHaikuStudioStageGetInputSchema,
 	validateHaikuUnitAdvanceHatInputSchema,
 	validateHaikuUnitDeleteInputSchema,
+	validateHaikuUnitGetInputSchema,
 	validateHaikuUnitListInputSchema,
 	validateHaikuUnitReadInputSchema,
 	validateHaikuUnitRejectHatInputSchema,
@@ -3742,6 +3757,30 @@ export function validateUnitFrontmatter(
 			if (!resolves && !resolvesToUnit(entry, context.unit)) {
 				errors.push(
 					`depends_on_unresolved: depends_on entry '${entry}' does not resolve to a unit in stage '${context.stage}'. Sibling units in this stage: [${context.siblingUnits.join(", ")}].`,
+				)
+			}
+		}
+	}
+
+	// Step 3: `inputs:` must be FILE PATHS, not unit names. An entry that
+	// matches the `unit-NNN-slug` shape is a misplaced dependency — the
+	// author meant "this unit reads what unit-005 produces", but a unit
+	// name is not a path the engine can read. Caught here at write time
+	// (the user's directive) rather than wedging the cursor later:
+	// fixloop / unit-014 (admin-portal-reimagine 2026-05-19) declared
+	// `inputs: [unit-005-…, unit-006-…, unit-007-…]`. With no `depends_on`,
+	// the cursor's wave-ready filter (which gates on depends_on) dispatched
+	// it, then `haiku_unit_start`'s input-existence gate refused it — a
+	// unit selected as ready that can never start. Reject the unit-name
+	// shape up front and point the author at the right fields: declare the
+	// ordering in `depends_on`, and put the producing unit's actual output
+	// path in `inputs`.
+	if (Array.isArray(frontmatter.inputs)) {
+		for (const entry of frontmatter.inputs) {
+			if (typeof entry !== "string") continue // already flagged by AJV
+			if (/^unit-\d+-/.test(entry.trim())) {
+				errors.push(
+					`inputs_unit_name_not_path: inputs entry '${entry}' looks like a unit name, but \`inputs:\` must list file PATHS the unit reads (e.g. \`product/ACCEPTANCE-CRITERIA.md\`, a prior-stage artifact, or a sibling unit's declared output file). To express ordering on another unit, add it to \`depends_on:\` and put that unit's actual output path in \`inputs:\`.`,
 				)
 			}
 		}
@@ -4325,6 +4364,19 @@ function enforceStageBranch(
 	intent: string,
 	stage: string | undefined,
 ): { content: Array<{ type: "text"; text: string }>; isError: true } | null {
+	// Merge-state suspension (2026-05-20). While the worktree is mid-merge
+	// (intent-main → stage carrying forward intent-completion closures),
+	// the engine-owned files in the tree may carry conflict markers and the
+	// checkout can't be realigned until the merge is resolved. Branch
+	// enforcement here would hard-block every internal write tool with
+	// `merge_in_progress`, but resolving the conflict REQUIRES those writes.
+	// Suspend the branch-enforcement re-entry so the schema-validating
+	// internal tools (haiku_feedback_write/update, haiku_unit_set/write) can
+	// land the resolution on the conflicted tree. Schema validation in those
+	// handlers stays on; only this ownership/branch prevention lifts. Mirrors
+	// the PreToolUse guard-workflow-fields hook's mid-merge bypass for the
+	// agent's raw Read/Write/Edit.
+	if (isMergeInProgress()) return null
 	const guard = ensureOnStageBranch(intent, stage)
 	if (!guard.ok) {
 		// When the block is a dirty tree, return a structured commit_wip
@@ -4872,7 +4924,7 @@ export const MAX_INTEGRATOR_ATTEMPTS = 3
 export const MAX_CONCURRENT_SUBAGENTS = (() => {
 	const raw = process.env.HAIKU_MAX_CONCURRENT_SUBAGENTS
 	const parsed = raw ? Number.parseInt(raw, 10) : NaN
-	return Number.isFinite(parsed) && parsed > 0 ? parsed : 5
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : 10
 })()
 
 export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number]
@@ -5265,6 +5317,236 @@ export function persistDesignDirectionUploads(opts: {
 export function feedbackDir(slug: string, stage: string): string {
 	if (stage) return join(stageDir(slug, stage), "feedback")
 	return join(intentDir(slug), "feedback")
+}
+
+/** Stamp a claim iteration on a feedback file's FM to mark it
+ *  in-flight for the named hat. Called from `haiku_feedback_advance_hat`
+ *  under `withIntentDispatchLock` after picking the next dispatchable
+ *  item — without the stamp, two concurrent terminal advances could
+ *  both pick the same FB and relay duplicate dispatch blocks.
+ *
+ *  The stamped iteration has `result: null` so the queue walk's
+ *  in-flight predicate (`last.result == null`) skips this FB. The
+ *  subagent's eventual advance_hat call completes the same iteration
+ *  (the lifecycle branch downstream treats a matching pending
+ *  iteration as "fill in" rather than "append"). Best-effort write —
+ *  on any failure, we still return the dispatch block; in the worst
+ *  case two subagents collide and the second one's advance is a noop
+ *  (lifecycle guard). */
+export function stampDispatchClaim(opts: {
+	slug: string
+	stage: string
+	feedbackId: string
+	hat: string
+}): void {
+	const { slug, stage, feedbackId, hat } = opts
+	try {
+		const dir = feedbackDir(slug, stage)
+		if (!existsSync(dir)) return
+		const num = feedbackId.replace(/^FB-/i, "")
+		const file = readdirSync(dir).find(
+			(f) => f.startsWith(num) && f.endsWith(".md"),
+		)
+		if (!file) return
+		const path = join(dir, file)
+		const raw = readFileSync(path, "utf8")
+		const parsed = matter(raw)
+		const fm = parsed.data as Record<string, unknown>
+		const iters = Array.isArray(fm.iterations)
+			? (fm.iterations as Array<Record<string, unknown>>)
+			: []
+		// Idempotent: if the last iteration is already a pending claim
+		// for the same hat, don't double-stamp.
+		const last = iters[iters.length - 1]
+		if (
+			last &&
+			(last.result === null || last.result === undefined) &&
+			last.hat === hat
+		) {
+			return
+		}
+		const maxBolt = iters.reduce<number>((acc, it) => {
+			const b = (it as { bolt?: unknown }).bolt
+			return typeof b === "number" && b > acc ? b : acc
+		}, 0)
+		const bolt = maxBolt > 0 ? maxBolt : 1
+		iters.push({ hat, started_at: timestamp(), result: null, bolt })
+		const newFm = { ...fm, iterations: iters }
+		writeFileSync(path, matter.stringify(`${parsed.content.trimEnd()}\n`, newFm))
+	} catch {
+		/* best-effort */
+	}
+}
+
+/** Derive the cursor's next unit-hat dispatch block for an intent and
+ *  build it. Returns null when the next action isn't a unit-hat dispatch
+ *  (or anything goes wrong). Shared by `haiku_unit_advance_hat` (relay
+ *  the calling unit's next hat) and `haiku_unit_reject_hat` (relay the
+ *  bounced-to prior hat the reject just queued). Both paths run AFTER the
+ *  iteration write + commit, so `derivePosition` already reflects the new
+ *  state — the relay is whatever the cursor says comes next, no
+ *  hand-computed hat math. Wrapped in `withIntentDispatchLock` so a
+ *  concurrent tick can't claim the same slot.
+ *
+ *  `callingUnit` scopes the relay to that unit's OWN chain continuation:
+ *  cross-unit replenishment is left to `haiku_run_next` so N concurrent
+ *  relays can't re-suggest the same in-flight sibling (see body). Omit it
+ *  only for the non-relay (cursor wave) dispatch path. */
+function computeUnitRelayBlock(
+	intentSlug: string,
+	callingUnit?: string,
+): string | null {
+	try {
+		return withIntentDispatchLock(intentSlug, () => {
+			const iDir = intentDir(intentSlug)
+			const iMd = join(iDir, "intent.md")
+			if (!existsSync(iMd)) return null
+			const iFmInline = matter(readFileSync(iMd, "utf8")).data as Record<
+				string,
+				unknown
+			>
+			const studioName =
+				typeof iFmInline.studio === "string"
+					? (iFmInline.studio as string)
+					: ""
+			if (!studioName) return null
+			const pos = derivePosition({
+				slug: intentSlug,
+				intentDir: iDir,
+				studio: studioName,
+			})
+			if (!pos || !pos.action) return null
+			if (pos.action.kind !== "start_unit_hat") return null
+			const stageSel = pos.action.stage
+			const hatSel = pos.action.hat
+			const units = pos.action.units
+			const terminalSel = pos.action.terminal
+			if (!stageSel || !hatSel || !Array.isArray(units) || units.length === 0)
+				return null
+			// The relay continues ONLY the calling unit's own hat chain. When
+			// `callingUnit` is named and the cursor's next dispatch batch
+			// includes it, relay that unit's next hat (a chain continuation —
+			// the calling unit's terminal/reject just freed it for its next
+			// step). Any OTHER wave-ready unit is cross-unit replenishment;
+			// we deliberately DON'T relay it. Reported 2026-05-20
+			// (admin-portal-reimagine #5): when several units' terminal hats
+			// completed in parallel, each returning subagent's relay named a
+			// DIFFERENT unit still running in a sibling — because the cursor
+			// re-dispatches open-iteration units (orphan recovery) and the
+			// concurrent relays couldn't see each other's in-flight picks. A
+			// cross-unit pick from N concurrent relays double-dispatches. So
+			// cross-unit work falls through to `haiku_run_next`, which
+			// dispatches the whole next wave atomically in one batch — no
+			// concurrent relays, no double-suggestion. (When `callingUnit`
+			// is absent — initial wave dispatch via the cursor, not a relay
+			// — the original units[0] pick stands.)
+			const pickedUnit =
+				callingUnit && units.includes(callingUnit) ? callingUnit : null
+			if (callingUnit && !pickedUnit) return null
+			const unit = pickedUnit ?? units[0]
+			return buildUnitHatDispatchBlock({
+				slug: intentSlug,
+				studio: studioName,
+				unit,
+				stage: stageSel,
+				hat: hatSel,
+				terminal: terminalSel,
+			})
+		})
+	} catch {
+		return null
+	}
+}
+
+/** Pick the next UNDISPATCHED feedback file (open, zero iterations —
+ *  never started its fix-hat chain) in stage-then-intent order, stamp a
+ *  first-hat claim on it, and return its first-hat `<subagent>` dispatch
+ *  block. Returns null when there is no undispatched FB.
+ *
+ *  Used by `haiku_feedback_advance_hat`'s TERMINAL relay (slot
+ *  replenishment): when one chain closes, hand the freed slot a brand
+ *  new chain. In-flight FBs (those with an open iteration) are
+ *  deliberately skipped — each is continued by its own chain's
+ *  non-terminal self-relay, so picking one here would double-dispatch.
+ *  Must be called under `withIntentDispatchLock` so two concurrent
+ *  terminal advances can't both claim the same FB; the claim stamps a
+ *  first iteration, removing the FB from the zero-iteration set the
+ *  next concurrent call sees. */
+function pickUndispatchedFbBlock(
+	slug: string,
+	studio: string,
+): string | null {
+	const iDir = intentDir(slug)
+	const intentFm = existsSync(join(iDir, "intent.md"))
+		? (matter(readFileSync(join(iDir, "intent.md"), "utf8")).data as Record<
+				string,
+				unknown
+			>)
+		: {}
+	const currentStage = findCurrentStage(slug, studio, iDir) ?? ""
+	const stages = resolveIntentStages(intentFm, studio)
+	const cutoff = stages.indexOf(currentStage)
+	const stageScopes = cutoff >= 0 ? stages.slice(0, cutoff + 1) : []
+
+	// Build (stageName, feedbackDir) pairs in walk order: prior+current
+	// stages first, then intent scope.
+	const scopes: Array<{ stage: string; dir: string }> = []
+	for (const s of stageScopes) {
+		scopes.push({ stage: s, dir: join(iDir, "stages", s, "feedback") })
+	}
+	scopes.push({ stage: "", dir: join(iDir, "feedback") })
+
+	for (const { stage, dir } of scopes) {
+		if (!existsSync(dir)) continue
+		const files = readdirSync(dir)
+			.filter((f) => f.endsWith(".md"))
+			.sort()
+		for (const file of files) {
+			let fm: Record<string, unknown> | undefined
+			try {
+				fm = parseFrontmatter(readFileSync(join(dir, file), "utf8")).data
+			} catch {
+				fm = undefined
+			}
+			if (!fm) continue
+			// Skip terminal (closed / rejected) FBs.
+			if (
+				typeof fm.status === "string" &&
+				(fm.status === "closed" || fm.status === "rejected")
+			)
+				continue
+			if (fm.closed_at || fm.rejected_at) continue
+			// Only UNDISPATCHED FBs — zero iterations. An FB with any
+			// iteration (open or terminal) is either in-flight (its own
+			// chain self-relays) or already claimed by a concurrent
+			// terminal advance.
+			const iters = Array.isArray(fm.iterations)
+				? (fm.iterations as unknown[])
+				: []
+			if (iters.length > 0) continue
+
+			// Resolve the first fix-hat for this scope. Intent-scope FBs
+			// use the studio `fix_hats:`; stage-scope FBs use the stage's.
+			const fixHats = stage
+				? resolveStageFixHats(studio, stage)
+				: resolveStudioFixHats(studio)
+			if (fixHats.length === 0) continue
+			const firstHat = fixHats[0]
+			const fbNum = file.match(/^(\d+)-/)?.[1] ?? ""
+			if (!fbNum) continue
+			const feedbackId = `FB-${fbNum.padStart(3, "0")}`
+			stampDispatchClaim({ slug, stage, feedbackId, hat: firstHat })
+			return buildFbHatDispatchBlock({
+				slug,
+				studio,
+				feedbackId,
+				stage,
+				hat: firstHat,
+				terminal: fixHats.length === 1,
+			})
+		}
+	}
+	return null
 }
 
 /** Resolve the next sequential NN prefix in a feedback directory. */
@@ -5870,21 +6152,42 @@ export function findFeedbackFile(
 	if (!numMatch) return null
 	const targetNum = Number.parseInt(numMatch[1], 10)
 
-	const files = readdirSync(dir).filter((f) => f.endsWith(".md"))
-	const match = files.find((f) => {
-		const fileNumMatch = f.match(/^(\d+)-/)
-		return fileNumMatch && Number.parseInt(fileNumMatch[1], 10) === targetNum
-	})
-	if (!match) return null
+	// Collect EVERY file whose numeric prefix equals the target. Normally
+	// there's exactly one, but a numbering collision (e.g. a legacy
+	// `01-x.md` alongside a `001-y.md`, both integer 1) leaves two. With
+	// the old `files.find` (first-by-readdir-order, non-deterministic),
+	// the lifecycle guard could resolve the CLOSED duplicate while the
+	// cursor's feedback walk dispatched the OPEN one — the contradictory
+	// "pending AND closed" state that churns `start_feedback_hat` forever
+	// (churn-FB-stuck bug, 2026-05-19). Resolve deterministically AND
+	// prefer the OPEN file, so the guard reads the same FB the cursor
+	// acts on. Sort first so the tiebreak among same-status files is
+	// stable across runs.
+	const matches = readdirSync(dir)
+		.filter((f) => {
+			if (!f.endsWith(".md")) return false
+			const fileNumMatch = f.match(/^(\d+)-/)
+			return !!fileNumMatch && Number.parseInt(fileNumMatch[1], 10) === targetNum
+		})
+		.sort()
+	if (matches.length === 0) return null
 
-	const raw = readFileSync(join(dir, match), "utf8")
-	const parsed = parseFrontmatter(raw)
-	return {
-		path: join(dir, match),
-		filename: match,
-		data: parsed.data,
-		body: parsed.body,
+	const readOne = (filename: string) => {
+		const p = parseFrontmatter(readFileSync(join(dir, filename), "utf8"))
+		return { path: join(dir, filename), filename, data: p.data, body: p.body }
 	}
+
+	if (matches.length === 1) return readOne(matches[0])
+
+	// Multiple files share this number — prefer a non-terminal (open)
+	// one, mirroring what the cursor's walk dispatches. Fall back to the
+	// first (sorted) when all are terminal.
+	for (const f of matches) {
+		const candidate = readOne(f)
+		const status = deriveFeedbackStatus(candidate.data)
+		if (status !== "closed" && status !== "rejected") return candidate
+	}
+	return readOne(matches[0])
 }
 
 /**
@@ -6549,14 +6852,31 @@ export const stateToolDefs: StateToolDef[] = [
 		},
 	},
 	// Unit tools
-	// haiku_unit_get — REMOVED from the agent-callable schema per
-	// architecture §1.1 / §1.2 (FM is workflow engine-only; agent-callable reads must
-	// return body + title only via haiku_unit_read). The case handler in
-	// handleStateTool is retained for workflow engine-internal callers (orchestrator,
-	// state-integrity, etc.) but agents can no longer reach it through MCP.
+	{
+		name: "haiku_unit_get",
+		description: `Read ONE agent-authorable/corrective frontmatter field on a unit. The READ counterpart to haiku_unit_set's corrective exemption: haiku_unit_set replaces the WHOLE \`quality_gates\` (or \`outputs\`) array, so to repair a single wrong gate command/path on an active unit without clobbering the others you must first read the current array, modify one entry, then write it back. Readable fields: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}. FSM-driven fields (${FSM_DRIVEN_UNIT_FIELDS.join(", ")}) return \`unit_field_engine_only\` — engine bookkeeping stays hidden; for the unit body/title use haiku_unit_read.`,
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_GET_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				ok: { type: "boolean" },
+				field: { type: "string" },
+				found: {
+					type: "boolean",
+					description: "True when the field is present (non-null) on the unit.",
+				},
+				value: {
+					type: ["string", "array", "number", "boolean", "null", "object"],
+					description:
+						"The field's current native value (array for quality_gates/outputs/inputs/etc.), or null when absent.",
+				},
+				error: { type: "string" },
+			},
+		},
+	},
 	{
 		name: "haiku_unit_set",
-		description: `Set a field in a unit's frontmatter. \`value\` MUST match the field's declared type in the unit FM schema — array for \`inputs:\` / \`outputs:\` / \`depends_on:\` / \`closes:\` / \`quality_gates:\`, string for \`title:\` / \`model:\`. The handler validates per-field at runtime and rejects mismatches with \`field_type_mismatch\` so type drift never lands in YAML. Agent-authorable fields: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}. FSM-driven (rejected): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}.`,
+		description: `Set a field in a unit's frontmatter. \`value\` MUST match the field's declared type in the unit FM schema — array for \`inputs:\` / \`outputs:\` / \`depends_on:\` / \`closes:\` / \`quality_gates:\`, string for \`title:\` / \`model:\`. The handler validates per-field at runtime and rejects mismatches with \`field_type_mismatch\` so type drift never lands in YAML. Agent-authorable fields: ${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}. FSM-driven (rejected): ${FSM_DRIVEN_UNIT_FIELDS.join(", ")}. CORRECTIVE EXEMPTION: \`outputs\` and \`quality_gates\` stay editable AFTER the unit has started/completed (every other field is forward-only-immutable once active). This is the sanctioned path to repair a broken gate command (wrong workspace name, bad path, wrong invocation) or a missed output without re-opening the unit — it changes how the unit is verified, NOT what it produced, so it is a safe correction, not a workflow-control rewrite. Use it directly to fix gate typos.`,
 		inputSchema: jsonSchemaOf(HAIKU_UNIT_SET_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
@@ -6662,10 +6982,22 @@ export const stateToolDefs: StateToolDef[] = [
 			properties: {
 				ok: { type: "boolean" },
 				unit: { type: "string" },
-				rejecting_hat: { type: "string" },
-				next_dispatched_hat: { type: ["string", "null"] },
-				new_bolt: { type: "number" },
-				reason: { type: "string" },
+				stage: { type: "string" },
+				prev_hat: {
+					type: "string",
+					description:
+						"The prior hat the chain bounced back to (re-dispatched next).",
+				},
+				bolt: { type: "number" },
+				reason: { type: ["string", "null"] },
+				outputs_present: { type: "boolean" },
+				outputs_files_present: { type: "array", items: { type: "string" } },
+				outputs_files_missing: { type: "array", items: { type: "string" } },
+				next_subagent_dispatch_block: {
+					type: ["string", "null"],
+					description:
+						"The bounced-to prior hat's dispatch block — relay it verbatim to re-run that hat. Null when the wave has no more work.",
+				},
 				message: { type: "string" },
 				error: { type: "string" },
 			},
@@ -7055,7 +7387,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 	{
 		name: "haiku_view",
 		description:
-			"Open a tunnelled URL pointing at the SPA's artifact-browser route (viewer mode) or a spawned project dev server (boot mode). Returns a URL the caller should hand to the bundled `playwright` MCP for runtime verification, visual inspection, or any browser-driven check. Non-blocking — closes via `haiku_view_close` or the standard session TTL. Boot mode is not yet implemented; this tool currently serves viewer mode only.",
+			"Open a URL the caller can hand to the bundled `haiku-playwright` MCP for runtime verification, visual inspection, or any browser-driven check. Two modes. **Viewer**: tunneled URL pointing at the SPA's artifact-browser route — for inspecting a single rendered artifact. **Boot**: spawns the project's runnable stack and returns a localhost URL pointing at the primary process. Boot accepts either `command` (single-process app: `[\"uvicorn\", \"app:main\"]`, `[\"bin/dev\"]`, `[\"go\", \"run\", \"./cmd/server\"]`) or `processes` (multi-process stack: api + frontend + db + worker, with `depends_on` order and `primary` naming the Playwright target). The engine allocates ephemeral ports, sets `PORT`/`HOST` env vars, and exposes `<DEP_NAME>_PORT` + `<DEP_NAME>_URL` to dependents for service discovery. Falls back to a `package.json` `dev`/`start` fast-path when neither `command` nor `processes` is supplied. Non-blocking — closes via `haiku_view_close` or the 30-minute session TTL; close kills the whole process group.",
 		inputSchema: jsonSchemaOf(HAIKU_VIEW_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
@@ -7256,7 +7588,7 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 	{
 		name: "haiku_feedback_advance_hat",
 		description:
-			"Advance an FB to the next hat in the stage's `fix_hats:` sequence. Per the architecture's FB-as-unit model: each fixer hat operates on the FB body (via haiku_feedback_write) and then calls this tool to progress. When called on the last hat in the fix_hats sequence, the workflow engine auto-completes the FB (status → closed, closed_by recorded, iteration appended). Mirrors haiku_unit_advance_hat for FBs.",
+			"Advance an FB to the next fix-hat. The response carries `next_subagent_dispatch_block` and a `message` — follow them.",
 		inputSchema: jsonSchemaOf(HAIKU_FEEDBACK_ADVANCE_HAT_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
@@ -7268,6 +7600,7 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 				next_dispatched_hat: { type: ["string", "null"] },
 				closed: { type: "boolean" },
 				bolt: { type: "number" },
+				next_subagent_dispatch_block: { type: ["string", "null"] },
 				message: { type: "string" },
 				error: { type: "string" },
 			},
@@ -7287,6 +7620,11 @@ Use haiku_feedback_update for status transitions and haiku_feedback_reject for r
 				next_dispatched_hat: { type: ["string", "null"] },
 				new_bolt: { type: "number" },
 				reason: { type: "string" },
+				next_subagent_dispatch_block: {
+					type: ["string", "null"],
+					description:
+						"The bounced-to prior hat's dispatch block on the SAME FB — relay it verbatim to re-run that hat. Null when it can't be built.",
+				},
 				message: { type: "string" },
 				error: { type: "string" },
 			},
@@ -7572,21 +7910,56 @@ export function handleStateTool(
 
 		// ── Unit ──
 		case "haiku_unit_get": {
+			const unitGetInputErr = validateToolInput(
+				args,
+				validateHaikuUnitGetInputSchema,
+				"haiku_unit_get",
+			)
+			if (unitGetInputErr) return unitGetInputErr
+			const field = args.field as string
+			// Scope: agent-readable = the agent-authorable/corrective fields
+			// only. FSM-driven fields (iterations/reviews/approvals/
+			// started_at) stay hidden — engine bookkeeping, §1.1. This is the
+			// READ counterpart to haiku_unit_set's corrective exemption: read
+			// quality_gates/outputs, modify one entry, write back via
+			// haiku_unit_set without clobbering the rest (2026-05-20 churn
+			// report fix #1). Body/title still go through haiku_unit_read.
+			if ((FSM_DRIVEN_UNIT_FIELDS as readonly string[]).includes(field)) {
+				return reply(
+					{
+						error: "unit_field_engine_only",
+						field,
+						message: `Field '${field}' is workflow-driven (engine bookkeeping) and is not agent-readable. Engine-only fields: [${FSM_DRIVEN_UNIT_FIELDS.join(", ")}]. Readable corrective/authorable fields: [${AGENT_AUTHORABLE_UNIT_FIELDS.join(", ")}]. For the unit body/title use haiku_unit_read.`,
+					},
+					{ isError: true },
+				)
+			}
 			const path = unitPath(
 				args.intent as string,
 				args.stage as string,
 				args.unit as string,
 			)
-			if (!existsSync(path)) return text("")
+			if (!existsSync(path)) {
+				return reply(
+					{
+						error: "unit_not_found",
+						field,
+						message: `Unit '${args.unit}' not found at stage '${args.stage}' of intent '${args.intent}'.`,
+					},
+					{ isError: true },
+				)
+			}
 			const { data } = parseFrontmatter(readFileSync(path, "utf8"))
-			const val = data[args.field as string]
-			return text(
-				val == null
-					? ""
-					: typeof val === "object"
-						? JSON.stringify(val)
-						: String(val),
-			)
+			const val = data[field]
+			// Structured reply so the agent gets the native value (arrays/
+			// objects like quality_gates parse cleanly) plus a `found` flag
+			// distinguishing "field absent" from "value is empty".
+			return reply({
+				ok: true,
+				field,
+				found: val != null,
+				value: val ?? null,
+			})
 		}
 		case "haiku_unit_set": {
 			// SCHEMA IS THE SSOT — HAIKU_UNIT_SET_INPUT_SCHEMA enforces
@@ -7615,7 +7988,15 @@ export function handleStateTool(
 			//      top-level type.
 			const field = args.field as string
 			const value = args.value
-			if ((FSM_DRIVEN_UNIT_FIELDS as readonly string[]).includes(field)) {
+			// Merge-state suspension (2026-05-20): while mid-merge, lifecycle
+			// and FSM-field preventions lift so the schema-safe internal tools
+			// can resolve engine-owned conflicts (the schema gate below and
+			// the input-schema gate above still run). See enforceStageBranch.
+			const unitSetMergeActive = isMergeInProgress()
+			if (
+				!unitSetMergeActive &&
+				(FSM_DRIVEN_UNIT_FIELDS as readonly string[]).includes(field)
+			) {
 				return reply(
 					{
 						error: "fsm_field_forbidden",
@@ -7663,6 +8044,7 @@ export function handleStateTool(
 				const isLifecycleMutable =
 					field === "outputs" || field === "quality_gates"
 				if (
+					!unitSetMergeActive &&
 					!isLifecycleMutable &&
 					(currentStatus === "active" || currentStatus === "completed")
 				) {
@@ -8024,6 +8406,21 @@ export function handleStateTool(
 			// right view. Idempotent when already aligned.
 			const advBranchErr = enforceStageBranch(args.intent as string, advStage)
 			if (advBranchErr) return advBranchErr
+
+			// 2026-05-19 relay-breadcrumb helper. `computeUnitRelayBlock`
+			// (module scope) walks the cursor and builds the next unit-hat
+			// dispatch block; `appendRelay` frames it for the response.
+			// Both the terminal and mid-chain return paths call them.
+			const appendRelay = (
+				base: string,
+				block: string | null,
+				intentSlug: string,
+			): string => {
+				if (block && block.length > 0) {
+					return `${base}\n\n---\n\nWave still has work — spawn the block below as your next Task call:\n\n${block}`
+				}
+				return `${base}\n\nWave done — call \`haiku_run_next { intent: "${intentSlug}" }\` for the next instruction.`
+			}
 
 			const unitRaw = readFileSync(advPath, "utf8")
 			const { data: unitFm } = parseFrontmatter(unitRaw)
@@ -8430,13 +8827,30 @@ export function handleStateTool(
 						? ""
 						: ` (${mergeResult.message})`
 
-				// v4: no internal _runNext call. The subagent terminates with
-				// a clean signal; the parent agent calls haiku_run_next on the
-				// next tick to drive the cursor forward. run_next is pure
-				// observation — anyone can call it, same answer every time.
-				return text(
-					`completed (last hat) — unit branch merged into ${parentBranchName}${mergeNote}.${pushWarning(completeGit)}`,
+				// Terminal advance: the unit's hat chain is done and its
+				// branch merged, so `computeUnitRelayBlock(intent, thisUnit)`
+				// returns null (this unit is no longer in the cursor's next
+				// dispatch batch). Deliberate — cross-unit wave replenishment
+				// is left to `haiku_run_next`, which dispatches the WHOLE next
+				// wave atomically. Relaying a different unit here would race
+				// the OTHER terminal advances completing in parallel: each
+				// would pick the same next wave-ready / in-flight sibling and
+				// the parent would double-spawn it (admin-portal-reimagine #5,
+				// 2026-05-20). The per-unit chain still self-relays on
+				// NON-terminal advances (below), so a wave costs only one
+				// extra run_next at its drain — no concurrent relays, no
+				// double-suggestion. (.claude/rules/no-agent-mechanics-teaching.md)
+				const terminalPool = summarizeStageLoop(
+					intentDir(args.intent as string),
+					advStage,
 				)
+				const baseTerminalText =
+					`completed (last hat) — unit branch merged into ${parentBranchName}${mergeNote}.` +
+					`\n${args.unit as string}: ${currentHat} done — unit complete` +
+					(terminalPool ? `\n${terminalPool}` : "") +
+					pushWarning(completeGit)
+				const terminalRelay = computeUnitRelayBlock(args.intent as string, args.unit as string)
+				return text(appendRelay(baseTerminalText, terminalRelay, args.intent as string))
 			}
 
 			// ── NOT last hat: advance to next ──
@@ -8547,19 +8961,32 @@ export function handleStateTool(
 				args.intent as string,
 				args.state_file as string | undefined,
 			)
-			// v4: no _buildContinueDispatch synthesis. Each hat is a
-			// fresh subagent dispatched by the parent. The subagent
-			// terminates after this advance_hat call; the parent reads
-			// the result, calls haiku_run_next on the next tick, and
-			// the cursor returns the next start_unit_hat instruction
-			// for this unit. Single-hat-per-subagent — no in-context
-			// hat iteration, no Workflow Result file relay.
+			// 2026-05-19: same engine-emitted relay breadcrumb as the
+			// terminal path. After stamping the next-hat iteration, walk
+			// the cursor under `withIntentDispatchLock` and inline the
+			// next dispatchable `<subagent>` block into the response. For
+			// mid-chain advances the cursor's nextHatForUnit pins on the
+			// same unit's just-stamped iteration — the relay is THIS
+			// unit's next hat, which is exactly what the next tick would
+			// dispatch anyway. Engine threads the chain so the parent
+			// never has to count "after all N return → call run_next".
 			const hatScope = resolveStageScope(args.intent as string, advStage)
-			return text(
-				(hatScope
-					? `advanced to ${nextHat}\n\n${hatScope}`
-					: `advanced to ${nextHat}`) + pushWarning(advGit),
+			// Lead with WHAT happened + WHERE in the hat loop this unit is,
+			// then the stage pool snapshot, so the parent (and the watching
+			// user) can see the wave rather than a bare "advanced to X".
+			// Status only — the relay breadcrumb below still drives the work.
+			const advPosition = `${args.unit as string}: ${currentHat} → ${nextHat} (hat ${nextIdx + 1}/${stageHats.length})`
+			const advPool = summarizeStageLoop(
+				intentDir(args.intent as string),
+				advStage,
 			)
+			const baseAdvancedText =
+				`advanced to ${nextHat}\n${advPosition}` +
+				(advPool ? `\n${advPool}` : "") +
+				(hatScope ? `\n\n${hatScope}` : "") +
+				pushWarning(advGit)
+			const midRelay = computeUnitRelayBlock(args.intent as string, args.unit as string)
+			return text(appendRelay(baseAdvancedText, midRelay, args.intent as string))
 		}
 		case "haiku_unit_reject_hat": {
 			const rejectInputErr = validateToolInput(
@@ -8970,18 +9397,37 @@ export function handleStateTool(
 				args.intent as string,
 				args.state_file as string | undefined,
 			)
-			// v4: no Workflow Result file. Subagent terminates with a
-			// plain message; parent calls run_next on the next tick to
-			// dispatch the prevHat as a fresh subagent.
-			//
 			// Task #24: prefix the success message with `rejectClarityTag`
 			// so the next subagent can't read "rejected for substance" as
 			// "no artifacts on disk." Surface `outputs_present` and the
 			// present/missing file lists in the structured response too —
 			// agents matching on the JSON (rather than the text body) get
 			// the disambiguation without re-parsing prose.
+			// 2026-05-19: a reject BOUNCES the chain back to the prior hat,
+			// and the relay re-dispatches THAT hat inline — the same
+			// engine-emitted breadcrumb the non-terminal advance carries,
+			// just pointing backward. The reject already started a fresh
+			// iteration for `prevHat` and committed, so `derivePosition`
+			// inside `computeUnitRelayBlock` now resolves to that hat. The
+			// old path relied on the parent calling run_next next tick,
+			// which left unit-hat rejects asymmetric with both unit advances
+			// and feedback rejects. Fall back to the run_next message only
+			// when the relay can’t be built.
+			const rejectRelayBlock = computeUnitRelayBlock(args.intent as string, args.unit as string)
 			const successPrefix = rejectClarityTag ? `${rejectClarityTag} ` : ""
-			const successMessage = `${successPrefix}rejected — back to ${prevHat} (iteration ${currentBolt + 1}). Reason: ${rejectReason ?? "(none)"}${pushWarning(rejectGit)}`
+			const rejectPool = summarizeStageLoop(
+				intentDir(args.intent as string),
+				rejectStage,
+			)
+			const rejectBase =
+				`${successPrefix}rejected — back to ${prevHat} (iteration ${currentBolt + 1}). Reason: ${rejectReason ?? "(none)"}` +
+				`\n${args.unit as string}: ${currentHat} → ${prevHat} (bounced back, iteration ${currentBolt + 1})` +
+				(rejectPool ? `\n${rejectPool}` : "") +
+				pushWarning(rejectGit)
+			const successMessage =
+				rejectRelayBlock && rejectRelayBlock.length > 0
+					? `${rejectBase}\n\n---\n\nWave still has work — spawn the block below as your next Task call:\n\n${rejectRelayBlock}`
+					: `${rejectBase}\n\nCall \`haiku_run_next { intent: "${args.intent}" }\` for the next instruction.`
 			return reply({
 				ok: true,
 				unit: args.unit,
@@ -8992,6 +9438,7 @@ export function handleStateTool(
 				outputs_present: outputsPresent,
 				outputs_files_present: presentOutputs,
 				outputs_files_missing: missingOutputsList,
+				next_subagent_dispatch_block: rejectRelayBlock,
 				message: successMessage,
 			})
 		}
@@ -9708,8 +10155,17 @@ export function handleStateTool(
 			const errOut = (error: string, message: string) =>
 				reply({ error, intent: slug, field, message }, { isError: true })
 
+			// Merge-state suspension (2026-05-20): while mid-merge, the
+			// engine-only and immutable-field ownership preventions lift so
+			// the schema-safe intent_set tool can resolve a conflicted
+			// intent.md. The unknown-field check below is a schema gate, not
+			// an ownership guard, so it stays on. See enforceStageBranch.
+			const intentSetMergeActive = isMergeInProgress()
 			// Reject FSM-driven fields up front with a stable code.
-			if ((FSM_DRIVEN_INTENT_FIELDS as readonly string[]).includes(field)) {
+			if (
+				!intentSetMergeActive &&
+				(FSM_DRIVEN_INTENT_FIELDS as readonly string[]).includes(field)
+			) {
 				return errOut(
 					"intent_field_engine_only",
 					`Field '${field}' is workflow engine-managed — agents cannot set it. Engine-only fields: ${FSM_DRIVEN_INTENT_FIELDS.join(", ")}.`,
@@ -9718,7 +10174,7 @@ export function handleStateTool(
 			// Reject immutable fields with a dedicated code so callers
 			// can distinguish "this field exists but you can't change
 			// it" from "this field doesn't exist".
-			if (INTENT_IMMUTABLE_FIELDS.includes(field)) {
+			if (!intentSetMergeActive && INTENT_IMMUTABLE_FIELDS.includes(field)) {
 				return errOut(
 					"intent_field_immutable",
 					`Field '${field}' is immutable after creation.`,
@@ -9796,7 +10252,7 @@ export function handleStateTool(
 			// caller routes through the proper workflow tool.
 			return errOut(
 				"stage_field_engine_only",
-				`Stage state.json is workflow engine-managed — agents cannot set fields directly. Stage fields are mutated by haiku_run_next ticks (start, advance phase, complete) and lifecycle tools (haiku_unit_advance_hat, haiku_feedback_advance_hat). To force a stage transition manually, use /haiku:repair, or file a stage_revisit feedback via \`haiku_feedback({ resolution: "stage_revisit" })\` to re-open the target stage. Field '${field}' on stage '${stage}' of intent '${slug}' was not written.`,
+				`Stage state.json is workflow engine-managed — agents cannot set fields directly. Stage fields are mutated by haiku_run_next ticks (start, advance phase, complete) and lifecycle tools (haiku_unit_advance_hat, haiku_feedback_advance_hat). To force a stage transition manually, use /haiku:haiku-repair, or file a stage_revisit feedback via \`haiku_feedback({ resolution: "stage_revisit" })\` to re-open the target stage. Field '${field}' on stage '${stage}' of intent '${slug}' was not written.`,
 			)
 		}
 
@@ -9808,7 +10264,7 @@ export function handleStateTool(
 				"haiku_dashboard",
 			)
 			if (dashboardInputErr) return dashboardInputErr
-			const empty = "No intents found. Use /haiku:start to create one."
+			const empty = "No intents found. Use /haiku:haiku-start to create one."
 			let root: string
 			try {
 				root = findHaikuRoot()
@@ -10473,7 +10929,7 @@ export function handleStateTool(
 					out += "To promote a backlog item to an intent:\n"
 					out += "1. Read the backlog item file\n"
 					out +=
-						"2. Use /haiku:start to create an intent from its description\n"
+						"2. Use /haiku:haiku-start to create an intent from its description\n"
 					out += "3. Delete the backlog file after the intent is created\n"
 					return md(out)
 				}
@@ -11207,10 +11663,35 @@ export function handleStateTool(
 					: `feedback: reject ${feedbackId} (intent-scope)`,
 			)
 
+			// Reject halts THIS finding's chain and hands the freed slot the
+			// NEXT undispatched feedback (2026-05-19, user directive). An
+			// invalid finding is closed terminally; the inline relay moves
+			// the wave forward to the next finding rather than forcing a
+			// full run_next round-trip. Same slot-replenishment path as a
+			// terminal advance / hat-reject.
+			let rejectNextBlock: string | null = null
+			try {
+				const iMdRej = join(intentDir(intent), "intent.md")
+				const studioRej = existsSync(iMdRej)
+					? ((parseFrontmatter(readFileSync(iMdRej, "utf8")).data.studio as
+							| string
+							| undefined) ?? "")
+					: ""
+				if (studioRej) {
+					rejectNextBlock = withIntentDispatchLock(intent, () =>
+						pickUndispatchedFbBlock(intent, studioRej),
+					)
+				}
+			} catch {
+				/* best-effort */
+			}
 			const rejectResponse: Record<string, unknown> = {
 				feedback_id: feedbackId,
 				status: "rejected",
-				message: `Feedback ${feedbackId} rejected: ${reason}`,
+				next_subagent_dispatch_block: rejectNextBlock,
+				message: rejectNextBlock
+					? `Feedback ${feedbackId} rejected: ${reason}. Relay the \`next_subagent_dispatch_block\` field verbatim as your final message to start the next finding.`
+					: `Feedback ${feedbackId} rejected: ${reason}. No further undispatched findings — call \`haiku_run_next { intent: "${intent}" }\` for the next instruction.`,
 			}
 			return reply(injectPushWarning(rejectResponse, rejectGitResult))
 		}
@@ -11505,8 +11986,17 @@ export function handleStateTool(
 			// Lifecycle enforcement: closed/rejected FBs are terminal and
 			// immutable. Pending and addressed (under-fix) accept body
 			// rewrites — the fixer hat populates the FB body with diagnosis.
+			// Merge-state suspension (2026-05-20): while mid-merge, this
+			// terminal-immutability prevention lifts so the schema-safe FB
+			// write tool can resolve a conflicted feedback file (e.g. an
+			// open-vs-closed conflict carried in by intent-main → stage). The
+			// body still serializes through matter.stringify with the parsed
+			// FM, so the on-disk shape stays valid. See enforceStageBranch.
 			const status = (foundFm.status as string) || "pending"
-			if (status === "closed" || status === "rejected") {
+			if (
+				!isMergeInProgress() &&
+				(status === "closed" || status === "rejected")
+			) {
 				return reply(
 					{
 						error: "lifecycle_violation",
@@ -11694,16 +12184,37 @@ export function handleStateTool(
 				)
 			}
 
-			// Append iteration record for the just-completed (calling) hat.
+			// Append (or fill in) the iteration record for the
+			// just-completed (calling) hat. The dispatch-claim mechanism
+			// (`stampDispatchClaim`) writes a pending iteration
+			// {hat, started_at, result: null, bolt} when the engine picks a
+			// next-dispatchable hat — to mark it in-flight so concurrent
+			// queue walks skip it. If the last iteration is that pending
+			// claim for THIS calling hat, complete it in place; otherwise
+			// append a fresh record (legacy path + first-hat-of-chain
+			// where nothing pre-stamped).
 			const iterations = Array.isArray(advFm.iterations)
 				? (advFm.iterations as Array<Record<string, unknown>>).slice()
 				: []
-			iterations.push({
-				bolt: curBolt,
-				hat: callingHat,
-				completed_at: timestamp(),
-				result: isLast ? "closed" : "advanced",
-			})
+			const lastIter = iterations[iterations.length - 1]
+			const pendingClaim =
+				lastIter &&
+				(lastIter.result === null || lastIter.result === undefined) &&
+				lastIter.hat === callingHat
+			if (pendingClaim) {
+				iterations[iterations.length - 1] = {
+					...lastIter,
+					completed_at: timestamp(),
+					result: isLast ? "closed" : "advanced",
+				}
+			} else {
+				iterations.push({
+					bolt: curBolt,
+					hat: callingHat,
+					completed_at: timestamp(),
+					result: isLast ? "closed" : "advanced",
+				})
+			}
 
 			let newStatus: string = advStatus
 			let closedBy: string | undefined
@@ -11785,20 +12296,139 @@ export function handleStateTool(
 			)
 			const nextDispatchedHat = isLast ? null : fixHats[callingIdx + 1]
 
-			// v4 cursor-is-source-of-truth contract: do NOT build the next
-			// dispatch block inline here. The prior implementation read a
-			// sidecar file written by the previous dispatch — but the
-			// sidecar was keyed to the CALLING hat's bolt, and any path
-			// where the sidecar didn't exist (re-entry, agent retry,
-			// fix-loop kicked off out of band) returned `null` while the
-			// message still said "relay it verbatim". The parent then had
-			// nothing to relay and the next hat never dispatched (task #30,
-			// 2026-05-13).
+			// Engine-emitted breadcrumb (2026-05-19). The cursor's queue
+			// walk after this advance is the same walk it would do on the
+			// next tick — so do it here and surface the next dispatch
+			// block in the response. The subagent relays it verbatim and
+			// the parent spawns it; pool replenishment is the engine's
+			// job, not the agent's. Three outcomes:
+			//   - dispatchable next hat (this FB's next or another FB's
+			//     first) → `next_subagent_dispatch_block` carries the
+			//     `<subagent prompt_file="...">` markup.
+			//   - queue empty, intent still has open FBs (in flight) →
+			//     null block; message says terminate, the wave's other
+			//     in-flight chains will fire the breadcrumb when they
+			//     advance.
+			//   - queue empty, no open FBs → null block; message says
+			//     `call haiku_run_next` to start the next wave.
 			//
-			// Align with `haiku_unit_advance_hat`: just record the state
-			// change and tell the agent to call `haiku_run_next` for the
-			// next instruction. The cursor is pure observation; same answer
-			// every time. No second source of truth for dispatch.
+			// Replaces the 2026-05-13 sidecar approach (task #30): that
+			// read a file keyed to the calling hat's bolt and broke on
+			// re-entry. Inline build via `buildFbHatDispatchBlock` shares
+			// code with the start_feedback_hat prompt builder, so the two
+			// can never disagree.
+			// Race safety: the walk-and-claim is serialized per intent so
+			// two concurrent terminal advances can't both pick the same
+			// next-dispatchable FB. After the pick we stamp a claim
+			// iteration on the target FB so its subsequent walk shows
+			// in-flight; the other concurrent advance's walk skips it and
+			// picks a different dispatchable item (or noop / run_next).
+			let nextSubagentDispatchBlock: string | null = null
+			let waveMessage = ""
+			const studioForRelay = (() => {
+				const iMd = join(intentDir(intentArg), "intent.md")
+				if (!existsSync(iMd)) return ""
+				const fm = matter(readFileSync(iMd, "utf8")).data as Record<
+					string,
+					unknown
+				>
+				return typeof fm.studio === "string" ? fm.studio : ""
+			})()
+
+			if (!isLast && nextDispatchedHat && studioForRelay) {
+				// CHAIN CONTINUATION (2026-05-19, fixloop-bug-f4dd5a92 Bug 2).
+				// A non-terminal advance continues THIS FB's own hat chain —
+				// the relay is THIS FB's next hat, computed deterministically
+				// from `fixHats[callingIdx + 1]`. The prior implementation
+				// walked the global feedback queue and returned dispatches[0],
+				// which for a multi-FB wave (every FB starting at the same
+				// first hat) always resolved to the lowest-numbered FB's first
+				// hat — so no chain ever advanced to its second hat and the
+				// parent re-spawned duplicate first-hat chains in an endless
+				// fan-out. No walk, no claim: this FB is uniquely the advancing
+				// chain's, and its post-advance state is already on disk.
+				try {
+					const nextIsTerminal = callingIdx + 1 === fixHats.length - 1
+					nextSubagentDispatchBlock = buildFbHatDispatchBlock({
+						slug: intentArg,
+						studio: studioForRelay,
+						feedbackId,
+						stage: stageArg ?? "",
+						hat: nextDispatchedHat,
+						terminal: nextIsTerminal,
+					})
+					waveMessage =
+						"Relay the `next_subagent_dispatch_block` field verbatim as your final message."
+				} catch {
+					/* best-effort; fall through to the run_next path below */
+				}
+			} else if (isLast && studioForRelay) {
+				// SLOT REPLENISHMENT. This FB's chain just closed, freeing a
+				// slot. Hand the freed slot the next UNDISPATCHED FB (zero
+				// iterations — never started its chain) so the parent fills it
+				// with a brand new chain. In-flight FBs are NOT picked here —
+				// each is continued by its own chain's self-relay above, so
+				// picking one would double-dispatch. Serialized per intent so
+				// two concurrent terminal advances can't both claim the same
+				// FB; the claim stamps a first iteration, removing the FB from
+				// the zero-iteration set the next concurrent call sees.
+				try {
+					nextSubagentDispatchBlock = withIntentDispatchLock(intentArg, () =>
+						pickUndispatchedFbBlock(intentArg, studioForRelay),
+					)
+					if (nextSubagentDispatchBlock) {
+						waveMessage =
+							"Relay the `next_subagent_dispatch_block` field verbatim as your final message."
+					}
+				} catch {
+					/* best-effort; fall through to the run_next path below */
+				}
+			}
+
+			if (!nextSubagentDispatchBlock) {
+				// Distinguish "queue empty, others in-flight" from "queue
+				// empty, wave done". The former is a noop; the latter
+				// needs run_next to get the next wave. Walk every FB file
+				// (intent-scope + every stage) and check whether any open
+				// FB has a non-terminal last iteration (mid-execution).
+				let anyOpenInFlight = false
+				try {
+					const intentDirForCheck = intentDir(intentArg)
+					const fbDirs: string[] = [join(intentDirForCheck, "feedback")]
+					const stagesRoot = join(intentDirForCheck, "stages")
+					if (existsSync(stagesRoot)) {
+						for (const s of readdirSync(stagesRoot)) {
+							fbDirs.push(join(stagesRoot, s, "feedback"))
+						}
+					}
+					outer: for (const dir of fbDirs) {
+						if (!existsSync(dir)) continue
+						for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
+							const raw = readFileSync(join(dir, f), "utf8")
+							const fm = matter(raw).data as Record<string, unknown>
+							if (typeof fm.status === "string" &&
+								(fm.status === "closed" || fm.status === "rejected"))
+								continue
+							if (fm.closed_at || fm.rejected_at) continue
+							const iters = Array.isArray(fm.iterations)
+								? (fm.iterations as Array<Record<string, unknown>>)
+								: []
+							const last = iters[iters.length - 1]
+							if (last && (last.result === null || last.result === undefined)) {
+								anyOpenInFlight = true
+								break outer
+							}
+						}
+					}
+				} catch {
+					/* if we can't tell, default to run_next safe path */
+				}
+				waveMessage = anyOpenInFlight
+					? "Wave still has in-flight fix-chains; no replenishment available right now. Terminate — sibling subagents will fire their own breadcrumbs when they advance."
+					: isLast
+						? `FB '${feedbackId}' closed by ${closedBy} after '${callingHat}' (last hat in fix_hats sequence ${callingIdx + 1}/${fixHats.length}). Wave done — call \`haiku_run_next { intent: "${intentArg}" }\` for the next instruction.`
+						: `FB '${feedbackId}': '${callingHat}' (${callingIdx + 1}/${fixHats.length}) finished. Wave done — call \`haiku_run_next { intent: "${intentArg}" }\` for the next instruction.`
+			}
 
 			return reply({
 				ok: true,
@@ -11808,9 +12438,8 @@ export function handleStateTool(
 				next_dispatched_hat: nextDispatchedHat,
 				closed: isLast,
 				bolt: curBolt,
-				message: isLast
-					? `FB '${feedbackId}' closed by ${closedBy} after '${callingHat}' (last hat in fix_hats sequence ${callingIdx + 1}/${fixHats.length}). Call \`haiku_run_next\` for the next instruction.`
-					: `FB '${feedbackId}': '${callingHat}' (${callingIdx + 1}/${fixHats.length}) finished; next hat to dispatch is '${nextDispatchedHat}'. Call \`haiku_run_next\` for the dispatch block.`,
+				next_subagent_dispatch_block: nextSubagentDispatchBlock,
+				message: waveMessage,
 			})
 		}
 
@@ -11887,8 +12516,14 @@ export function handleStateTool(
 					fixHatsRej = sd.data.fix_hats as string[]
 				}
 			} else {
-				const studioFixHatPaths = readStudioFixHatPaths(studioNameRej)
-				fixHatsRej = Object.keys(studioFixHatPaths)
+				// Intent-scope chain order is STUDIO.md's declared `fix_hats:`
+				// (via resolveStudioFixHats) — the SAME source the cursor and
+				// the advance path use. Earlier this read
+				// `Object.keys(readStudioFixHatPaths(...))` (readdir order),
+				// which only matched the declared order by alphabetical luck;
+				// a reordered `fix_hats:` would have made the reject bounce to
+				// the wrong "prior" hat while advance walked the right one.
+				fixHatsRej = resolveStudioFixHats(studioNameRej)
 			}
 			if (fixHatsRej.length === 0) {
 				return reply(
@@ -11984,13 +12619,27 @@ export function handleStateTool(
 				)
 			}
 
-			iterations.push({
-				bolt: curBoltRej,
-				hat: callingHatRej,
-				completed_at: timestamp(),
-				result: "rejected",
-				reason: reason || "(no reason provided)",
-			})
+			const lastIterRej = iterations[iterations.length - 1]
+			const pendingClaimRej =
+				lastIterRej &&
+				(lastIterRej.result === null || lastIterRej.result === undefined) &&
+				lastIterRej.hat === callingHatRej
+			if (pendingClaimRej) {
+				iterations[iterations.length - 1] = {
+					...lastIterRej,
+					completed_at: timestamp(),
+					result: "rejected",
+					reason: reason || "(no reason provided)",
+				}
+			} else {
+				iterations.push({
+					bolt: curBoltRej,
+					hat: callingHatRej,
+					completed_at: timestamp(),
+					result: "rejected",
+					reason: reason || "(no reason provided)",
+				})
+			}
 
 			// Auto-escalate model tier on rejection — mirrors the unit
 			// reject_hat path so feedback fix loops inherit the same
@@ -12044,6 +12693,37 @@ export function handleStateTool(
 						}
 					: {}),
 			})
+			// A hat-reject BOUNCES the chain back to the prior hat: the
+			// verifier judged the prior hat's work incomplete, so the
+			// relay re-dispatches THIS SAME FB at the bounced hat on the
+			// new bolt — a fresh iteration of the previous hat, NOT the
+			// next feedback. (Distinct from `haiku_feedback_reject`, which
+			// terminally closes an invalid finding and relays the next
+			// feedback.) Reported 2026-05-19: a reject was relaying the
+			// next undispatched FB, so the bounced hat only re-ran on a
+			// future tick — the chain showed two verifier runs with no
+			// re-run of the hat in between. The bounce target is
+			// `nextDispatchedHatRej` (prior hat, or the same first hat
+			// when there's no earlier one to fall back to). `terminal`
+			// is false: the bounce target is never the chain's last hat.
+			let rejNextBlock: string | null = null
+			if (studioNameRej) {
+				try {
+					rejNextBlock = buildFbHatDispatchBlock({
+						slug: intentArg,
+						studio: studioNameRej,
+						feedbackId,
+						stage: stageArg ?? "",
+						hat: nextDispatchedHatRej,
+						terminal: false,
+					})
+				} catch {
+					/* best-effort; fall through to the run_next message */
+				}
+			}
+			const rejWaveMessage = rejNextBlock
+				? `FB '${feedbackId}' hat '${callingHatRej}' rejected — re-running '${nextDispatchedHatRej}' (bolt ${curBoltRej + 1}). Relay the \`next_subagent_dispatch_block\` field verbatim as your final message.`
+				: `FB '${feedbackId}' hat '${callingHatRej}' rejected — bounced to '${nextDispatchedHatRej}' (bolt ${curBoltRej + 1}). Call \`haiku_run_next { intent: "${intentArg}" }\` to re-dispatch it.`
 			return reply({
 				ok: true,
 				feedback_id: feedbackId,
@@ -12051,10 +12731,8 @@ export function handleStateTool(
 				next_dispatched_hat: nextDispatchedHatRej,
 				new_bolt: curBoltRej + 1,
 				reason,
-				message:
-					callingIdxRej > 0
-						? `FB '${feedbackId}' hat '${callingHatRej}' rejected — sending back to '${nextDispatchedHatRej}', bolt incremented to ${curBoltRej + 1}.`
-						: `FB '${feedbackId}' first hat '${callingHatRej}' rejected — no prior hat to send back to; same hat will retry, bolt incremented to ${curBoltRej + 1}.`,
+				next_subagent_dispatch_block: rejNextBlock,
+				message: rejWaveMessage,
 			})
 		}
 
@@ -12176,7 +12854,7 @@ export function handleStateTool(
 			// When running from source via `bun packages/haiku/src/server.ts`
 			// or `tsx`, the define never fires and the constant stays at
 			// its source-default "dev" sentinel. Use that as the build-kind
-			// discriminator so `/haiku:version` users can immediately tell
+			// discriminator so `/haiku:haiku-version` users can immediately tell
 			// whether they're hitting an in-flight working-tree change or
 			// the shipped bundle.
 			const isDev = MCP_VERSION === "dev"

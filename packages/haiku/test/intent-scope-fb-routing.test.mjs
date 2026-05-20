@@ -171,3 +171,52 @@ test("nextActionForFeedback uses studio fix-hats when stage is empty", async () 
 		rmSync(repoRoot, { recursive: true, force: true })
 	}
 })
+
+test("intent-scope dispatch block inlines the studio fix-hat mandate body (fixloop-bug-f4dd5a92 Bug 1)", async () => {
+	if (!HAS_GIT) return
+	// Sandbox the prompt-file output dir so the dispatch builder writes
+	// somewhere disposable rather than the user's real ~/.haiku.
+	const prevProjects = process.env.HAIKU_PROJECTS_ROOT
+	const sandbox = mkdtempSync(join(tmpdir(), "haiku-fb-mandate-projects-"))
+	process.env.HAIKU_PROJECTS_ROOT = sandbox
+	const repoRoot = makeRepo("mandate-inline")
+	const origCwd = process.cwd()
+	process.chdir(repoRoot)
+	try {
+		const { slug } = seedBugRepro(repoRoot)
+		const { buildFbHatDispatchBlock } = await import(
+			`${SRC}orchestrator/fb-dispatch-builder.ts`
+		)
+		// Intent-scope dispatch (stage: "") for the studio fix-hat
+		// `reconciler`. Pre-fix the builder only resolved stage `hats/`
+		// and skipped entirely when stage was empty, so the subagent
+		// prompt rendered the "(no on-disk mandate file resolved for hat
+		// `reconciler`)" fallback. Now it must resolve the studio-level
+		// `fix-hats/reconciler.md` body.
+		const block = buildFbHatDispatchBlock({
+			slug,
+			studio: "software",
+			feedbackId: "FB-001",
+			stage: "",
+			hat: "reconciler",
+			terminal: false,
+		})
+		const pf = block.match(/prompt_file="([^"]+)"/)?.[1]
+		assert.ok(pf, `dispatch block must carry a prompt_file; got: ${block.slice(0, 300)}`)
+		const body = (await import("node:fs")).readFileSync(pf, "utf8")
+		assert.ok(
+			!/no on-disk mandate file resolved/i.test(body),
+			`intent-scope reconciler dispatch must NOT render the missing-mandate fallback; got:\n${body.slice(0, 600)}`,
+		)
+		assert.ok(
+			/reconciler/i.test(body),
+			`expected the reconciler mandate body inlined; got:\n${body.slice(0, 600)}`,
+		)
+	} finally {
+		process.chdir(origCwd)
+		rmSync(repoRoot, { recursive: true, force: true })
+		rmSync(sandbox, { recursive: true, force: true })
+		if (prevProjects === undefined) delete process.env.HAIKU_PROJECTS_ROOT
+		else process.env.HAIKU_PROJECTS_ROOT = prevProjects
+	}
+})

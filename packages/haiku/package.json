@@ -6,18 +6,19 @@
 	"scripts": {
 		"build": "node scripts/build-mcp.mjs",
 		"build:spa": "node scripts/bundle-haiku-ui.mjs",
+		"gen:harness-commands": "node scripts/gen-harness-commands.mjs",
 		"export:workflow-diagrams": "npx tsx scripts/export-workflow-diagrams.mjs",
 		"postbuild": "if [ -n \"$SENTRY_AUTH_TOKEN\" ]; then sentry-cli sourcemaps upload --url ${SENTRY_URL:-https://sentry.ops.gigsmart.com} --org ${SENTRY_ORG:-gigsmart} --project haiku-mcp --release haiku-mcp@$(node -e \"process.stdout.write(require('../../plugin/.claude-plugin/plugin.json').version)\") ../../plugin/bin/haiku.mjs.map && sentry-cli sourcemaps upload --url ${SENTRY_URL:-https://sentry.ops.gigsmart.com} --org ${SENTRY_ORG:-gigsmart} --project haiku-spa --release haiku-spa@$(node -e \"process.stdout.write(require('../../plugin/.claude-plugin/plugin.json').version)\") review-app/dist/assets/; fi; rm -f ../../plugin/bin/haiku.mjs.map",
 		"typecheck": "tsc --noEmit",
 		"test": "node test/run-all.mjs",
-		"test:parse": "node test/state-tools.test.mjs",
-		"test:helpers": "npx tsx test/helpers.test.mjs",
-		"test:prompts": "npx tsx test/prompts.test.mjs",
-		"test:prompts-registered": "npx tsx test/prompts-registered.test.mjs",
-		"test:state-handlers": "npx tsx test/state-tools-handlers.test.mjs",
-		"test:orchestrator": "npx tsx test/orchestrator.test.mjs",
-		"test:server": "npx tsx test/server-tools.test.mjs",
-		"test:skill-list": "npx tsx test/skill-list.test.mjs"
+		"test:parse": "node scripts/test-single.mjs test/state-tools.test.mjs",
+		"test:helpers": "node scripts/test-single.mjs test/helpers.test.mjs",
+		"test:prompts": "node scripts/test-single.mjs test/prompts.test.mjs",
+		"test:prompts-registered": "node scripts/test-single.mjs test/prompts-registered.test.mjs",
+		"test:state-handlers": "node scripts/test-single.mjs test/state-tools-handlers.test.mjs",
+		"test:orchestrator": "node scripts/test-single.mjs test/orchestrator.test.mjs",
+		"test:server": "node scripts/test-single.mjs test/server-tools.test.mjs",
+		"test:skill-list": "node scripts/test-single.mjs test/skill-list.test.mjs"
 	},
 	"dependencies": {
 		"@anthropic-ai/claude-agent-sdk": "^0.1.0",

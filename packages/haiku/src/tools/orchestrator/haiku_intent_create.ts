@@ -1,6 +1,6 @@
 // tools/orchestrator/haiku_intent_create.ts — Create a new intent.
-// `/haiku:start` always creates a new intent — never resumes. Use
-// `/haiku:pickup` to resume an existing one. Forks `haiku/{slug}/main`
+// `/haiku:haiku-start` always creates a new intent — never resumes. Use
+// `/haiku:haiku-pickup` to resume an existing one. Forks `haiku/{slug}/main`
 // directly off the mainline ref WITHOUT
 // checking out the repo mainline (locked / dirty mainline checkouts
 // in another worktree don't block intent creation, and intent files
@@ -140,7 +140,7 @@ function detectWorkflowMetaPollution(s: string): string | null {
 export default defineTool({
 	name: "haiku_intent_create",
 	description:
-		"Create a new intent. Returns the slug + path. Title is required (crisp 3–8 word summary, ≤80 chars, single line). Studio, mode, and (for quick) stage are selected by the engine on the next haiku_run_next call — the tick blocks on the SPA picker until the user chooses, then continues to real workflow actions. The agent does NOT call select_* tools directly; just call haiku_run_next after creating the intent. Always creates a fresh intent — `/haiku:start` does not resume; use `/haiku:pickup` for that.",
+		"Create a new intent. Returns the slug + path. Title is required (crisp 3–8 word summary, ≤80 chars, single line). Studio, mode, and (for quick) stage are selected by the engine on the next haiku_run_next call — the tick blocks on the SPA picker until the user chooses, then continues to real workflow actions. The agent does NOT call select_* tools directly; just call haiku_run_next after creating the intent. Always creates a fresh intent — `/haiku:haiku-start` does not resume; use `/haiku:haiku-pickup` for that.",
 	inputSchema: {
 		type: "object" as const,
 		properties: {

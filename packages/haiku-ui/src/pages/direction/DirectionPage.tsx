@@ -26,6 +26,7 @@
  * of tweaking knobs on a single one).
  */
 
+import { MarkdownViewer } from "@haiku/shared"
 import { type DesignArchetypeData, paths } from "haiku-api"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
@@ -52,12 +53,29 @@ interface PreviewAnnotation {
 }
 
 interface Props {
-	session: { archetypes?: DesignArchetypeData[]; title?: string }
+	session: {
+		archetypes?: DesignArchetypeData[]
+		title?: string
+		context?: string
+	}
 	sessionId: string
 	wsRef?: React.RefObject<WebSocket | null>
 }
 
 type Mode = "select" | "regenerate"
+
+/** Optional markdown preamble the tool supplied to frame the choice.
+ *  Rendered at the top of both intake and archetype paths so the user
+ *  reads it before picking. Mirrors the "Context" card on QuestionPage. */
+function ContextPreamble({ context }: { context?: string }): React.ReactElement | null {
+	if (!context) return null
+	return (
+		<Card>
+			<SectionHeading>Context</SectionHeading>
+			<MarkdownViewer id="direction-context">{context}</MarkdownViewer>
+		</Card>
+	)
+}
 
 export function DirectionPage({
 	session,
@@ -76,6 +94,7 @@ export function DirectionPage({
 			<IntakePage
 				sessionId={sessionId}
 				title={session.title || "Design Direction"}
+				context={session.context}
 			/>
 		)
 	}
@@ -260,6 +279,8 @@ function ArchetypePage({
 
 	return (
 		<form onSubmit={handleSubmit} noValidate>
+			<ContextPreamble context={session.context} />
+
 			<Card>
 				<ModeToggle
 					mode={mode}
@@ -703,9 +724,11 @@ function readFileAsDataUrl(file: File): Promise<string> {
 function IntakePage({
 	sessionId,
 	title,
+	context,
 }: {
 	sessionId: string
 	title: string
+	context?: string
 }): React.ReactElement {
 	const client = useApiClient()
 	const announce = useAnnounce()
@@ -884,6 +907,8 @@ function IntakePage({
 	const hasFiles = files.length > 0
 	return (
 		<form onSubmit={submitUploads} noValidate>
+			<ContextPreamble context={context} />
+
 			<Card>
 				<div className="mb-4">
 					<h2

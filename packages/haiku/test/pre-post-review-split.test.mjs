@@ -96,17 +96,26 @@ test("dispatch_review engine-bodies render PRE-execute prose (spec checks the SP
 			units: ["unit-01-foo"],
 		},
 	})
-	// Pre-execute markers: "PRE-execute", "no code has landed", "auditing the planned"
+	// Parent prompt signals pre-execute context.
 	assert.ok(
 		/PRE-execute|pre-execute|spec before any code lands|auditing the planned|no code has landed/i.test(
 			out,
 		),
 		`dispatch_review must signal pre-execute context. got: ${out.slice(0, 800)}`,
 	)
-	// Anti-pattern lock: must explicitly warn against evaluating code at pre-exec.
+	// File-backed dispatch (2026-05-19): subagent prompt body lives in
+	// the file referenced by `<subagent prompt_file="...">`. Engine body
+	// + anti-evaluation prose belongs there, not in the parent.
+	const promptFileMatch = out.match(/prompt_file="([^"]+)"/)
 	assert.ok(
-		/no code exists yet|MUST NOT.*evaluate/i.test(out),
-		`pre-execute mandate must warn against evaluating code (none exists yet). got: ${out.slice(0, 800)}`,
+		promptFileMatch,
+		`dispatch_review must emit a file-backed subagent block. got: ${out.slice(0, 800)}`,
+	)
+	const { readFileSync } = await import("node:fs")
+	const subagent = readFileSync(promptFileMatch[1], "utf8")
+	assert.ok(
+		/no code exists yet|MUST NOT.*evaluate/i.test(subagent),
+		`pre-execute mandate must warn against evaluating code (none exists yet). subagent body: ${subagent.slice(0, 800)}`,
 	)
 })
 
@@ -161,19 +170,32 @@ test("both walks: continuity engine body renders distinct prose per phase", asyn
 			units: ["unit-01-foo"],
 		},
 	})
+	// File-backed dispatch: engine-body prose lives in the subagent
+	// prompt files referenced by the parent's <subagent> blocks.
+	const { readFileSync } = await import("node:fs")
+	const reviewSubagentPath = reviewOut.match(/prompt_file="([^"]+)"/)?.[1]
+	const approvalSubagentPath = approvalOut.match(/prompt_file="([^"]+)"/)?.[1]
+	assert.ok(reviewSubagentPath, "dispatch_review must emit a file-backed subagent block")
+	assert.ok(
+		approvalSubagentPath,
+		"dispatch_approval must emit a file-backed subagent block",
+	)
+	const reviewSubagent = readFileSync(reviewSubagentPath, "utf8")
+	const approvalSubagent = readFileSync(approvalSubagentPath, "utf8")
+
 	// Pre-exec continuity is about PLANNED wiring; post-exec is about
 	// BUILT outputs. They must differ.
 	assert.ok(
-		/PLANNED|planned wiring|plans|orphan-output PLANS/i.test(reviewOut),
-		`pre-execute continuity must reference PLANNED wiring. got: ${reviewOut.slice(0, 600)}`,
+		/PLANNED|planned wiring|plans|orphan-output PLANS/i.test(reviewSubagent),
+		`pre-execute continuity must reference PLANNED wiring. subagent body: ${reviewSubagent.slice(0, 600)}`,
 	)
 	assert.ok(
-		/BUILT|built work|declared output path/i.test(approvalOut),
-		`post-execute continuity must reference BUILT work. got: ${approvalOut.slice(0, 600)}`,
+		/BUILT|built work|declared output path/i.test(approvalSubagent),
+		`post-execute continuity must reference BUILT work. subagent body: ${approvalSubagent.slice(0, 600)}`,
 	)
 	assert.notEqual(
-		reviewOut,
-		approvalOut,
+		reviewSubagent,
+		approvalSubagent,
 		"pre- and post-execute continuity bodies must render distinct prose",
 	)
 })

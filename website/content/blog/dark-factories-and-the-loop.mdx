@@ -1,0 +1,152 @@
+---
+title: "Dark Factories and the Loop"
+description: "The dark factory isn't a system you build. It's a knob you turn. H·AI·K·U treats full autonomy as a point-in-time decision, not an architectural commitment."
+date: 2026-02-20
+---
+
+Dan Shapiro recently published [The Five Levels](https://www.danshapiro.com/blog/2026/01/the-five-levels-from-spicy-autocomplete-to-the-software-factory/), a framework for understanding how teams adopt AI in software development. Modeled after NHTSA's driving automation levels, it maps a progression from Level 0 (spicy autocomplete) through Level 5 (the dark factory). Around the same time, StrongDM [went public](https://www.strongdm.com/blog/the-strongdm-software-factory-building-software-with-ai) with their Software Factory — a system where no human writes code and no human reviews code.
+
+The conversation is moving fast. But it's missing something important.
+
+## The Five Levels, Quickly
+
+| Level | Name                  | The Human Is...                     |
+| ----- | --------------------- | ----------------------------------- |
+| 0     | Manual Labor          | Writing code, AI suggests           |
+| 1     | Discrete Tasks        | Delegating bounded tasks            |
+| 2     | Collaborative Pairing | Pair programming with AI            |
+| 3     | Human-in-the-Loop     | Reviewing diffs, managing AI output |
+| 4     | Specification-to-Code | Writing specs, checking results     |
+| 5     | Dark Factory          | Gone. Specs in, software out        |
+
+Shapiro's insight is sharp: each level requires a **role change**, not just a tool upgrade. Going from Level 2 to Level 3, you stop being a coder and become a reviewer. Going from Level 3 to Level 4, you stop being a reviewer and become a product manager. Going to Level 5, you step out entirely.
+
+<Callout tone="info" title="The Level 2 trap">
+Most teams are stuck at Level 2 and don't know it. As Shapiro puts it: "Level 2, and every level after it, *feels* like you are done. But you are not done."
+</Callout>
+
+## The StrongDM Approach
+
+StrongDM's Software Factory is the most public example of Level 5. Three engineers. No human code writing. No human code review. The system has three load-bearing parts.
+
+<KeyPoints title="THE THREE PARTS">
+1. **Attractor.** A non-interactive agent that takes markdown specs and produces code.
+2. **Scenario-based validation.** Behavioral tests with probabilistic "satisfaction" scores replacing code review.
+3. **Digital Twin Universe.** Behavioral clones of third-party services like Okta, Jira, and Slack, for integration testing.
+</KeyPoints>
+
+It works. For StrongDM. But it has a fundamental characteristic worth examining: **darkness is the architecture**. The entire system assumes humans are not in the loop. If you want oversight mid-process, you fight the system. If you want to intervene on a unit of work, you're reaching into a black box.
+
+<Callout tone="warn" title="The bookend model">
+Humans at the front cover (write the spec) and maybe at the back cover (accept the output). Everything between is sealed. That sealing is a feature when the work is routine and a fence when the work is novel.
+</Callout>
+
+## Humans on the Loop
+
+H·AI·K·U takes a different position.
+
+In H·AI·K·U, **humans don't write code either**. That's the same as StrongDM. The AI plans, builds, and reviews. Backpressure — tests, linting, type checks — enforces quality automatically. Completion criteria define done. The agent works through hat-based workflows (planner, builder, reviewer) autonomously.
+
+The difference is where the human *can* exist.
+
+H·AI·K·U is built for **humans on the loop**. The architecture supports observation and intervention at every boundary — between hats, between units, between iterations. But none of it is required. The same system supports three very different working styles, and the choice is yours.
+
+<Grid>
+  <Card eyebrow="Maximum oversight" title="Watch every decision" accent="info">
+    Run in plan mode. Approve each hat transition before it lands. Slow, but you see everything.
+  </Card>
+  <Card eyebrow="Observe passively" title="Step in when needed" accent="good">
+    Let it run. You're not approving every turn, but you're in the room when something looks off.
+  </Card>
+  <Card eyebrow="Hands off" title="Walk away" accent="warn">
+    Full autonomy. Backpressure and completion criteria are the only guardrails. Come back when the PR's open.
+  </Card>
+  <Card eyebrow="The choice can change" title="Per session, per intent" accent="alert">
+    The knob doesn't have to stay put. Different work calls for different oversight, even mid-construction.
+  </Card>
+</Grid>
+
+The dark factory isn't a system you build. It's a knob you turn. Same methodology, same backpressure, same completion criteria, same hat workflows underneath. You just choose how much you're watching.
+
+## Why This Matters
+
+The five levels framework implies a ladder. You climb from Level 2 to Level 3 to Level 4 to Level 5, and Level 5 is the destination. But that framing assumes every task deserves the same level of autonomy.
+
+It doesn't.
+
+<Grid>
+  <Card eyebrow="Routine refactor" title="Let it run dark" accent="good">
+    Well-tested module, well-trodden change. Backpressure does the catching. There's no judgment call worth the cost of human attention.
+  </Card>
+  <Card eyebrow="Security-sensitive change" title="Review the plan first" accent="warn">
+    Authentication, authorization, anything with a blast radius. You want eyes on the plan before code lands, not just on the PR after.
+  </Card>
+  <Card eyebrow="Greenfield in new domain" title="Watch the first iteration" accent="alert">
+    Unfamiliar product surface, unfamiliar libraries. Watch the first bolt land, then let go once the pattern's established.
+  </Card>
+  <Card eyebrow="High-stakes deploy" title="Stay in the room" accent="bad">
+    Production migration, irreversible mutation. The dial swings the other way: HITL through every transition, no exceptions.
+  </Card>
+</Grid>
+
+The level isn't a property of the team. It's a property of the moment.
+
+StrongDM architecturally committed to one point on the spectrum. That's a valid choice for their context — a mature product with known domains, strong behavioral test infrastructure, and a team that has internalized the patterns. But it's a commitment. You can't easily dial it back for a piece of work that needs more oversight.
+
+H·AI·K·U lets you slide freely along the entire spectrum without changing your tools, your process, or your artifacts. The same intent file, the same unit specs, the same completion criteria, the same hat workflow — whether a human is watching or not.
+
+## The Paradigm Shift
+
+A bigger change is underway than any framework of levels can capture. Our roles as software developers are fundamentally changing.
+
+The five levels describe *what humans stop doing* — writing code, reviewing code, managing implementation, and finally, watching at all. But they don't describe **what humans start doing**. That's where the real shift lives.
+
+<Callout tone="info" title="Spec-driven development is the future">
+Not "specs as documentation" — specs as the primary creative artifact. The intent, the completion criteria, the domain model, the non-functional requirements, the risk analysis, the cross-cutting concerns. The spec isn't paperwork before the real work. The spec *is* the work.
+</Callout>
+
+But here's what the dark factory framing gets wrong: it treats this as purely transactional. Spec in, software out. A black box. And when the black box is sealed, something critical is lost.
+
+**Humans stop learning.**
+
+If you write a spec, hand it to a factory, and get back a result — you never see how the problem was decomposed. You never watch an approach fail and get reworked. You never develop intuition about why certain architectural decisions lead to better outcomes. You never build the experience that makes your *next* spec better.
+
+Spec in, spec out is a dead end for human growth. You become a better spec writer by watching specs become software — by observing which criteria were easy to satisfy and which were ambiguous, by seeing where units interacted in unexpected ways, by noticing when your domain model didn't match reality. The dark factory ships software fine. It atrophies the spec writers downstream of it.
+
+This is the case for **staying on the loop**. Not because the agents need you — with good backpressure and clear criteria, they often don't. But because *you* need the loop. Human creativity and domain expertise aren't static resources you bring to the table once and walk away. They grow through engagement. They atrophy through disuse.
+
+The on-the-loop model lets agents do the heavy lifting — planning, building, reviewing, testing — while humans remain engaged enough to learn, to develop intuition, and to bring sharper judgment to the next intent. You're not slowing the process down by watching. You're investing in the quality of your future specifications.
+
+<Callout tone="info" title="The frame">
+The dark factory is a capability, not a destination. Use it when the work is routine and well-understood. Stay on the loop when the work is novel, when the domain is complex, or when you simply want to get better at what you do.
+</Callout>
+
+## What the Future Looks Like
+
+The conversation about dark factories tends toward a binary: either you're running one or you're not. We think that's wrong.
+
+The future isn't dark factories vs. human-supervised development. It's **adaptive autonomy** — systems that support the full range, from tight human oversight to complete darkness, and let you choose based on the work, not the architecture.
+
+Here's what we see coming.
+
+<KeyPoints title="FIVE BETS ABOUT WHAT COMES NEXT">
+1. **Specification is the new implementation.** As implementation becomes automated, the ability to precisely describe *what should exist* — completion criteria, non-functional requirements, risk analysis, cross-cutting concerns — becomes the highest-leverage skill. The hard part of software was never typing the code.
+2. **Backpressure replaces review.** Code review is a bottleneck StrongDM correctly identified as eliminable. The replacement isn't "trust the AI" — it's automated gates that block progress until satisfied. Tests, linting, type checks, security scans. The agent learns to satisfy them because the system won't let it proceed otherwise.
+3. **Context resets become a feature.** StrongDM built cxdb to solve the context-window problem. We took the opposite bet: embrace the reset. Store state in files, inject it at session start, work in deliberate iterations. No custom infrastructure. The repo *is* the memory.
+4. **Teams of agents beat monolithic agents.** One agent with a massive window will always lose to a team of focused agents with clean contexts. H·AI·K·U's construction loop already breaks work into units with independent worktrees; Agent Teams gives each one its own session and its own mailbox.
+5. **The methodology is the moat, not the tooling.** StrongDM's approach is locked to custom infrastructure. H·AI·K·U is tool-agnostic markdown. When a better agent arrives, the methodology adapts. The tooling is replaceable. The discipline isn't.
+</KeyPoints>
+
+## The Knob, Not the Switch
+
+Level 5 is real. Dark factories produce real software. StrongDM proved it.
+
+But the future isn't a binary choice between "human writes code" and "human disappears." It's a spectrum, and the best systems let you move along it freely.
+
+H·AI·K·U is that spectrum. Define your intent with rigor. Elaborate it into units with clear criteria. Let the agents execute through structured workflows with automated quality gates. Watch closely, or don't. The system works either way.
+
+The dark factory is a point-in-time decision, not an identity.
+
+---
+
+*Built with discipline. Shipped with confidence.*

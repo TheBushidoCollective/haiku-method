@@ -1,5 +1,5 @@
 // orchestrator/workflow/debug-ops.ts — Admin/recovery operations for
-// the `/haiku:debug` skill (PR adding `haiku_debug` tool, 2026-05-15).
+// the `/haiku:haiku-debug` skill (PR adding `haiku_debug` tool, 2026-05-15).
 //
 // Every operation here mutates state in ways the normal workflow
 // engine WOULD NOT — bypassing FSM guards, signing approvals without
@@ -191,7 +191,7 @@ export function forceStageComplete(args: {
 		const elabPath = join(stageDir, "elaboration.md")
 		const nowIso = new Date().toISOString()
 		if (!existsSync(elabPath)) {
-			const synthesizedBody = `# Elaboration (synthesized by /haiku:debug)\n\nThis stage's units terminal-advanced through every hat without an elaboration.md being recorded. The debug recovery op synthesized this artifact so the cursor can walk past the elaborate phase.\n`
+			const synthesizedBody = `# Elaboration (synthesized by /haiku:haiku-debug)\n\nThis stage's units terminal-advanced through every hat without an elaboration.md being recorded. The debug recovery op synthesized this artifact so the cursor can walk past the elaborate phase.\n`
 			const fm: Record<string, unknown> = {
 				recorded_at: nowIso,
 				verified_at: nowIso,

@@ -54,8 +54,8 @@ Add the plugin to your Claude settings file manually.
 After installation, verify the plugin is working:
 
 1. Start a new Claude session in your project
-2. Type `/haiku:start` - you should see the inception flow start
-3. If `/haiku:start` works, your installation is successful
+2. Type `/haiku:haiku-start` - you should see the inception flow start
+3. If `/haiku:haiku-start` works, your installation is successful
 
 If commands aren't recognized, restart your Claude session.
 
@@ -83,7 +83,7 @@ your-project/
   ...
 ```
 
-The directory is created automatically when you run `/haiku:start` for the first time.
+The directory is created automatically when you run `/haiku:haiku-start` for the first time.
 
 ### Git Configuration
 
@@ -119,7 +119,7 @@ However, committing is recommended - it provides:
 
 ### Commands Not Recognized
 
-**Symptom:** `/haiku:start` or `/haiku:pickup` don't activate
+**Symptom:** `/haiku:haiku-start` or `/haiku:haiku-pickup` don't activate
 
 **Solutions:**
 1. Restart Claude session

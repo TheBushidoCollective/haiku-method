@@ -1,0 +1,135 @@
+---
+title: "H·AI·K·U Meets Agent Teams"
+description: "H·AI·K·U's construction loop now leverages Claude Code's Agent Teams, turning each unit of work into an independent teammate with its own context, worktree, and permission model."
+date: 2026-02-05
+---
+
+Claude Code recently shipped [Agent Teams](https://code.claude.com/docs/en/agent-teams) - an experimental feature that coordinates multiple independent Claude Code instances working together. Each teammate gets its own context window, can message other teammates directly, and shares a task list for self-coordination.
+
+H·AI·K·U now supports it natively.
+
+## Why Agent Teams Matter for H·AI·K·U
+
+H·AI·K·U's construction loop already breaks work into **units** — focused pieces with clear completion criteria, each running in its own git worktree on its own branch. Previously, these units ran as subagents: constrained workers that execute within the parent session and can only report results back to the caller.
+
+<Callout tone="warn" title="What the subagent model cost us">
+Every unit shared the parent's context budget. Cross-unit signal — "this decision over here changes that assumption over there" — had to flow up to the parent and back down again. A team of five workers pretending to be one brain, with one mailbox the parent had to keep emptying.
+</Callout>
+
+Agent Teams changes the game. Instead of subagents, each unit can now run as a **full independent Claude session**. The difference matters.
+
+<Compare verdict="win" title="Subagents vs Agent Teams">
+  <Side label="Subagents">
+    Share the parent's context budget. Report back to the caller only. Parent manages every coordination decision. Constrained to the lifetime of the parent session.
+  </Side>
+  <Side label="Agent Teams">
+    Own a full context window each. Message any teammate directly. Self-coordinate through a shared task list. Fully independent sessions running side by side.
+  </Side>
+</Compare>
+
+For H·AI·K·U, this means a builder teammate working on the backend can message the reviewer teammate about an architectural decision. A test writer can ask the planner for clarification on acceptance criteria. Teammates collaborate like a real team, not just workers reporting to a manager.
+
+## How It Works
+
+When agent teams are enabled, the construction loop operates as a team. The lead session reads the dependency graph of units and spawns a teammate for each one that's ready to run. From there, the team takes over.
+
+<TickSequence>
+  <TickCard label="Tick 1" title="Lead reads the graph">
+    The lead session looks at the unit dependency graph and picks the units that are ready to start. Nothing else has to finish first.
+  </TickCard>
+  <TickCard label="Tick 2" title="Teammates spawn into worktrees">
+    Each ready unit gets its own teammate, running in that unit's git worktree on its own branch. Fresh context window, full project setup.
+  </TickCard>
+  <TickCard label="Tick 3" title="Teammates work and talk">
+    Teammates execute the current hat's role — plan, build, review — and message each other directly through the shared mailbox when they hit something the other one would want to know.
+  </TickCard>
+  <TickCard label="Tick 4" title="Lead advances the workflow">
+    When a unit's criteria are satisfied, the teammate marks it complete. The lead picks up the signal and advances the next wave.
+  </TickCard>
+</TickSequence>
+
+Each teammate automatically receives H·AI·K·U context via hook injection — the current hat instructions, intent, completion criteria, and workflow state. They start with full project context (CLAUDE.md, MCP servers, skills) just like any Claude session.
+
+## One Mode for the Entire Intent
+
+To make agent teams work cleanly with H·AI·K·U, we moved the operating mode from individual hats to the **intent level**.
+
+Previously, each hat carried its own mode. A builder defaulted to OHOTL, a reviewer to HITL. This scattered autonomy decisions across hat definitions and made it impossible to give a consistent permission model to teammates.
+
+Now you choose your mode once during elaboration. That single decision controls the permission model of every teammate spawned during construction.
+
+<KeyPoints title="THE THREE OVERSIGHT SETTINGS">
+1. **HITL → `plan`.** Teammate plans, lead approves before any implementation lands.
+2. **OHOTL → `acceptEdits`.** Teammate works autonomously, lead can intervene at any boundary.
+3. **AHOTL → `bypassPermissions`.** Full autonomy, constrained only by completion criteria and backpressure.
+</KeyPoints>
+
+Pick the dial setting that matches the work in front of you.
+
+<Grid>
+  <Card eyebrow="Routine refactor" title="Pick AHOTL" accent="good">
+    Well-trodden change in a well-tested module. Backpressure (linting, tests, type checks) catches the regressions. The lead doesn't need to watch.
+  </Card>
+  <Card eyebrow="Unfamiliar territory" title="Pick HITL" accent="warn">
+    Greenfield feature or a part of the system the team hasn't touched in months. Every teammate submits a plan; the lead reviews before code lands.
+  </Card>
+</Grid>
+
+Neither setting is "more advanced." They're points on the same dial, picked per intent.
+
+<Callout tone="info" title="The shift">
+The human decides how much oversight they want. The mode is a property of the work, not the worker.
+</Callout>
+
+## Dynamic Hat Discovery
+
+We also made workflows more composable. Every hat now describes itself in its own definition, so dropping a new hat file into the `hats/` directory makes it available for workflows immediately — no hardcoded table to edit, no registry to update.
+
+The thirteen built-in hats:
+
+| Hat | Role |
+|---|---|
+| Observer | Gathers data about a bug through systematic observation |
+| Hypothesizer | Forms testable theories about bug causes |
+| Experimenter | Tests hypotheses through controlled experiments |
+| Analyst | Evaluates results and implements the confirmed fix |
+| Planner | Creates tactical execution plans for upcoming bolts |
+| Builder | Implements code using backpressure as feedback |
+| Reviewer | Verifies implementation satisfies completion criteria |
+| Test Writer | Creates failing tests that define expected behavior (RED) |
+| Implementer | Writes minimal code to make tests pass (GREEN) |
+| Refactorer | Improves code quality while keeping tests green (REFACTOR) |
+| Designer | Creates visual designs, UI mockups, and UX flows |
+| Red Team | Attempts to break the implementation through security testing |
+| Blue Team | Fixes vulnerabilities identified by Red Team |
+
+Custom workflows reference hats by slug and the system resolves them at runtime — a security-focused studio that runs planner, then builder, then red team, then blue team, then reviewer is one line of configuration in its studio file.
+
+## The Elaboration Flow
+
+Elaboration now asks three questions that shape the entire construction loop.
+
+<KeyPoints title="THREE QUESTIONS, ONE CONVERSATION">
+1. **What are you building?** Define the intent and the completion criteria that say it's done.
+2. **What workflow fits?** Pick from the workflows and hats the system discovers at runtime.
+3. **How much autonomy?** Choose HITL, OHOTL, or AHOTL for the whole intent.
+</KeyPoints>
+
+These decisions are captured once, persisted in the intent file, and inherited by every teammate throughout construction. No per-hat configuration. No mode drift. One conversation that defines how the team operates.
+
+## Try It
+
+Enable agent teams in your Claude Code settings by setting `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in your environment, then install the plugin:
+
+```
+/plugin marketplace add gigsmart/haiku-method
+/plugin install haiku@gigsmart-haiku-method --scope project
+```
+
+Then run `/haiku:elaborate` to define an intent with a mode, and `/haiku:execute` to start the team.
+
+The changes are backwards-compatible. Without agent teams enabled, the construction loop uses subagents as before. Existing intents without a declared mode default to OHOTL.
+
+---
+
+*Units become teammates. Hats become roles. The intent becomes the team charter.*

@@ -49,7 +49,7 @@ export const validateHaikuSelectStudioInputSchema = stateAjv.compile(
 // state — `quick` is hidden once the intent has started a stage, and
 // once an intent IS in `quick` and has started, no other mode is
 // reachable (see `no_modes_available` error code in the handler).
-// /haiku:change-mode drives mid-flight transitions through this
+// /haiku:haiku-change-mode drives mid-flight transitions through this
 // same tool.
 
 export const HAIKU_SELECT_MODE_INPUT_SCHEMA = Type.Object(

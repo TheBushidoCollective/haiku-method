@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "haiku": {
+      "command": "npx",
+      "args": ["-y", "haiku-method", "mcp"]
+    }
+  }
+}

@@ -191,7 +191,24 @@ function derivePhase(
 	//    phase names.
 	if (units.length === 0) return "elaborate"
 
-	// 3. Execute: any unit not past terminal hat advance.
+	// 3. Review: any unit missing a required review role. This is the
+	//    PRE-execute spec review (per-unit `reviews.<role>`) — the cursor
+	//    walks it BETWEEN elaborate completion and wave-ready hat dispatch
+	//    (cursor.ts: dispatch_review fires before start_unit_hat). It MUST
+	//    be checked before execute: a stage whose spec hasn't been signed
+	//    off has units with `started_at: null` and empty iterations, which
+	//    the execute check below would otherwise mislabel as "execute".
+	//    Reviews are stamped before any hat runs, so by the time execute is
+	//    underway this check passes — it only fires for genuine pre-execute
+	//    review. (Reported 2026-05-19: the derivation ordered execute first,
+	//    so the pre-execute spec review read as "execute" / appeared after
+	//    execute on diagnostic surfaces.)
+	for (const role of reviewRoles) {
+		const missing = units.some((u) => !pickReviews(u.fm)[role])
+		if (missing) return "review"
+	}
+
+	// 4. Execute: any unit not past terminal hat advance.
 	if (hats.length > 0) {
 		const allHatsDone = units.every((u) => {
 			const its = pickIterations(u.fm)
@@ -202,13 +219,7 @@ function derivePhase(
 		if (!allHatsDone) return "execute"
 	}
 
-	// 4. Review: any unit missing a required review role.
-	for (const role of reviewRoles) {
-		const missing = units.some((u) => !pickReviews(u.fm)[role])
-		if (missing) return "review"
-	}
-
-	// 5. Gate: any unit missing a required approval role.
+	// 5. Gate: any unit missing a required approval role (POST-execute).
 	for (const role of approvalRoles) {
 		const missing = units.some((u) => !pickApprovals(u.fm)[role])
 		if (missing) return "gate"

@@ -177,7 +177,7 @@ export default function StudiosPage() {
 					<p className="mb-6 text-stone-600 dark:text-stone-400">
 						Any domain with structured work can have a studio. Use{" "}
 						<code className="rounded bg-stone-200 px-1.5 py-0.5 text-sm dark:bg-stone-800">
-							/haiku:scaffold studio &lt;name&gt;
+							/haiku:haiku-scaffold studio &lt;name&gt;
 						</code>{" "}
 						to generate the directory structure, or see the{" "}
 						<Link

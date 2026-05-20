@@ -108,6 +108,22 @@ export interface IntentCurrentState {
 	 *  Mirrors the cursor's `signals_unmet[]` so the SPA can show the
 	 *  reviewer why the loop hasn't advanced yet. */
 	pending_signals?: string[]
+	/** Granular per-stage milestone track — the same ordered milestones
+	 *  the status line shows (elaborate → each review role → execute →
+	 *  each approval role → observations; or the intent-completion tail).
+	 *  Populated by the HTTP layer from `deriveProgressTrack`; omitted in
+	 *  contexts that don't need it (e.g. the status line builds its own).
+	 *  Lets the SPA render a fine-grained stepper instead of the coarse
+	 *  five-phase strip. */
+	milestones?: Array<{
+		key: string
+		label: string
+		status: "done" | "active" | "pending"
+	}>
+	/** Index of the active (first not-done) milestone, or
+	 *  `milestones.length` when every milestone is done. */
+	progress_index?: number
+	progress_total?: number
 }
 
 export interface DiscoveryFrontmatter {

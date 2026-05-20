@@ -122,12 +122,12 @@ const DENY_LIST: Array<{ pattern: RegExp; rule: string; message: string }> = [
 	},
 	{
 		// V-11 — the operator-only baseline-corrupt acknowledgement
-		// marker. Only `/haiku:repair --confirm-baseline-reset ...`
+		// marker. Only `/haiku:haiku-repair --confirm-baseline-reset ...`
 		// (operator-driven) may write this; the agent has no path here.
 		pattern: /(?:^|\/)\.baseline-ack$/,
 		rule: "stages/{stage}/.baseline-ack",
 		message:
-			".baseline-ack is the operator-only baseline-reset acknowledgement marker. Only /haiku:repair --confirm-baseline-reset can write it; the agent has no path. This is the V-11 defence against silent baseline laundering.",
+			".baseline-ack is the operator-only baseline-reset acknowledgement marker. Only /haiku:haiku-repair --confirm-baseline-reset can write it; the agent has no path. This is the V-11 defence against silent baseline laundering.",
 	},
 	{
 		// V-11 — the thrash counter is workflow-engine-managed. Letting

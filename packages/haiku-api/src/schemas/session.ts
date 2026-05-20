@@ -168,6 +168,22 @@ export type PreviousReviewSnapshot = z.infer<
 	typeof PreviousReviewSnapshotSchema
 >
 
+/** One ordered milestone in a stage's (or the intent-completion tail's)
+ *  granular progress track — the same milestones the status line shows
+ *  (elaborate → each pre-execute review role → execute → each
+ *  post-execute approval role → observations; or per-role intent review
+ *  → quality gates → reflection → seal). `key` is stable
+ *  (`review:spec`, `execute`, `approve:quality_gates`); `label` is the
+ *  display word. */
+export const ProgressMilestoneSchema = z
+	.object({
+		key: z.string(),
+		label: z.string(),
+		status: z.enum(["done", "active", "pending"]),
+	})
+	.describe("One milestone in the granular per-stage progress track")
+export type ProgressMilestone = z.infer<typeof ProgressMilestoneSchema>
+
 export const IntentCurrentStateSchema = z
 	.object({
 		studio: z.string(),
@@ -214,6 +230,16 @@ export const IntentCurrentStateSchema = z
 		 *  `signals_unmet[]` so the SPA can show why the loop hasn't
 		 *  advanced. Empty / omitted on other phases. */
 		pending_signals: z.array(z.string()).optional(),
+		/** Granular per-stage milestone track — the same ordered
+		 *  milestones the status line renders, so the SPA can show a
+		 *  fine-grained stepper (each review/approval role as its own
+		 *  pip) instead of the coarse five-phase strip. Omitted when the
+		 *  track can't be derived; the SPA falls back to `phase`. */
+		milestones: z.array(ProgressMilestoneSchema).optional(),
+		/** Index of the active (first not-done) milestone, or
+		 *  `milestones.length` when every milestone is done. */
+		progress_index: z.number().int().nonnegative().optional(),
+		progress_total: z.number().int().nonnegative().optional(),
 	})
 	.describe(
 		"Unified current-state snapshot — derived fresh per request from per-unit frontmatter and branch-merge state. The single source of truth for 'where is this intent right now?'.",
@@ -441,6 +467,9 @@ export const DirectionSessionPayloadSchema = z
 		status: SessionStatusSchema,
 		title: z.string().optional(),
 		intent_slug: z.string().optional(),
+		/** Optional markdown preamble shown above the archetype cards —
+		 *  mirrors `context` on the question payload. */
+		context: z.string().optional(),
 		archetypes: z.array(DesignArchetypeDataSchema).optional(),
 		selection: DirectionSelectionSchema.nullable().optional(),
 	})

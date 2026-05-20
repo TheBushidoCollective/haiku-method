@@ -323,7 +323,7 @@ type ApprovalRecord = { at: string; migrated?: boolean } | boolean | null
  *  the cursor's pre-tick drift handler when the open-FB count crosses
  *  the cascade threshold. The flag is read by the run_next response
  *  enrichment in `preview.ts` so the agent sees a "consider
- *  /haiku:repair — drift baseline may be stale" recommendation. The
+ *  /haiku:haiku-repair — drift baseline may be stale" recommendation. The
  *  flag self-heals: it's stamped on trip AND cleared when the count
  *  drops below threshold on a subsequent tick. */
 function stampDriftCascadeAlarm(args: {
@@ -377,7 +377,7 @@ function stampDriftCascadeAlarm(args: {
  * 2026-05-18 window where this flag was named "autotune" still
  * counts as opt-out.
  */
-function isReflectionEnabled(intentDir: string): boolean {
+export function isReflectionEnabled(intentDir: string): boolean {
 	const intentMdPath = join(intentDir, "intent.md")
 	if (!existsSync(intentMdPath)) return true
 	try {
@@ -392,7 +392,7 @@ function isReflectionEnabled(intentDir: string): boolean {
 	}
 }
 
-function readFm(path: string): { data: UnitFm; body: string } | null {
+export function readFm(path: string): { data: UnitFm; body: string } | null {
 	if (!existsSync(path)) return null
 	try {
 		const raw = readFileSync(path, "utf8")
@@ -490,11 +490,11 @@ function pickReviews(fm: UnitFm): Record<string, ApprovalRecord> {
 	return r as Record<string, ApprovalRecord>
 }
 
-function unitName(unitPath: string): string {
+export function unitName(unitPath: string): string {
 	return basename(unitPath).replace(/\.md$/, "")
 }
 
-function listUnitPaths(stageDir: string): string[] {
+export function listUnitPaths(stageDir: string): string[] {
 	const dir = join(stageDir, "units")
 	if (!existsSync(dir)) return []
 	return readdirSync(dir, { withFileTypes: true })
@@ -881,7 +881,7 @@ export function findCurrentStage(
 	// Use the intent's effective stage list — intersection of studio
 	// stages with `intent.stages` (if set) minus `intent.skip_stages`.
 	// Walking the full studio list would surface stages the intent
-	// explicitly opted out of (e.g. a `/haiku:quick` intent that
+	// explicitly opted out of (e.g. a `/haiku:haiku-quick` intent that
 	// declared only [inception, design, product] in a 6-stage software
 	// studio would otherwise loop trying to elaborate `development`).
 	const stages = resolveIntentStages(intentFm, studio)
@@ -908,7 +908,7 @@ function walkFeedbackTrack(args: {
 	// Walk feedback in stage order: every prior stage's open FBs come
 	// before the current stage's open FBs come before intent-scope.
 	// Use intent-effective stages so an intent scoped to a subset of the
-	// studio's stages (e.g. `/haiku:quick` restricting to 3 stages in a
+	// studio's stages (e.g. `/haiku:haiku-quick` restricting to 3 stages in a
 	// 6-stage studio) doesn't surface FBs from stages the intent opted
 	// out of.
 	const stages = resolveIntentStages(intent, studio)
@@ -994,9 +994,22 @@ function walkFeedbackTrack(args: {
 	//
 	// `null` target_unit means intent-scope or stage-scope-with-no-unit:
 	// no per-unit FM write, no race. All such FBs can batch together.
+	//
+	// Dedup by feedback_id FIRST (fixloop-bug-f4dd5a92 Bug 3). Two
+	// dispatch entries for the SAME FB-NN must never both fire — they'd
+	// spawn two subagents racing on one feedback body's read-modify-
+	// write. This happens when two files in a feedback dir share the
+	// same numeric prefix (a numbering collision from create/move), so
+	// `nextActionForFeedback` derives the same `FB-NN` for both. The
+	// target_unit dedup below does NOT catch this when both are
+	// intent-scope (target_unit === null), so a same-id pair slipped
+	// through as the duplicate FB-001 dispatch in the bug report.
 	const seenUnits = new Set<string>()
+	const seenFbIds = new Set<string>()
 	const batch: FbDispatch[] = []
 	for (const d of dispatches) {
+		if (seenFbIds.has(d.feedback_id)) continue // never double-dispatch one FB
+		seenFbIds.add(d.feedback_id)
 		if (d.target_unit !== null) {
 			if (seenUnits.has(d.target_unit)) continue // serialize same-target
 			seenUnits.add(d.target_unit)
@@ -1019,7 +1032,7 @@ function walkFeedbackTrack(args: {
 	// case too.
 	const verifiedBatch: FbDispatch[] = []
 	for (const d of batch) {
-		const fbNum = d.feedback_id.replace(/^FB-/i, "")
+		const fbInt = Number.parseInt(d.feedback_id.replace(/^FB-/i, ""), 10)
 		const candidateDirs: string[] = []
 		if (d.stage) {
 			candidateDirs.push(join(intentDir, "stages", d.stage, "feedback"))
@@ -1028,12 +1041,31 @@ function walkFeedbackTrack(args: {
 		let stillOpen = true
 		for (const dir of candidateDirs) {
 			if (!existsSync(dir)) continue
-			const matches = readdirSync(dir).filter(
-				(f) => f.startsWith(fbNum) && f.endsWith(".md"),
-			)
-			if (matches.length === 0) continue
-			const fbFm = readFm(join(dir, matches[0]))?.data
-			if (fbFm && isFbTerminal(fbFm)) {
+			// Match the FB id EXACTLY by its leading integer — `startsWith`
+			// on the zero-padded prefix (e.g. "001") also matched "0010-…",
+			// and reading only `matches[0]` made the decision depend on
+			// readdir order. When a reused/duplicated id leaves two files
+			// for the same FB (one open, one closed — the title/body-mismatch
+			// state in the 2026-05-20 livelock report), `matches[0]` flapped:
+			// some ticks read the closed copy (skip) and some read the open
+			// copy (dispatch a CLOSED FB forever). Check EVERY file with this
+			// id and treat the FB as terminal if ANY is terminal — a closed
+			// FB-NN means NN is done, full stop, regardless of a stray
+			// duplicate. Order-independent and correct.
+			const matches = readdirSync(dir).filter((f) => {
+				if (!f.endsWith(".md")) return false
+				const m = /^(\d+)/.exec(f)
+				return m != null && Number.parseInt(m[1], 10) === fbInt
+			})
+			let anyTerminal = false
+			for (const f of matches) {
+				const fbFm = readFm(join(dir, f))?.data
+				if (fbFm && isFbTerminal(fbFm)) {
+					anyTerminal = true
+					break
+				}
+			}
+			if (anyTerminal) {
 				stillOpen = false
 				break
 			}
@@ -1285,7 +1317,6 @@ function walkIntentTrack(args: {
 	//   - discrete + continuous: full role lists. Discrete differs only
 	//                in HOW the user gate dispatches (MR open vs internal
 	//                pop) — handled at dispatch time, not in the role list.
-	const isAutopilot = mode === "autopilot"
 	// Stage-level walks. The two phases are now properly distinct:
 	//
 	// • reviewRoles  → PRE-execute. Audits the SPEC before any code
@@ -1309,14 +1340,12 @@ function walkIntentTrack(args: {
 	// sequential gates), then configured agents (parallel-shaped wave
 	// via per-role serial dispatch today), then user. quality_gates is
 	// post-execute-only — there's nothing to run pre-execute against.
-	const isAutopilotMode = isAutopilot
-	const engineRoles = ["spec", "continuity", "cross-stage-consistency"] as const
-	const reviewRoles: string[] = isAutopilotMode
-		? [...engineRoles]
-		: [...engineRoles, ...reviewAgents, "user"]
-	const approvalRoles: string[] = isAutopilotMode
-		? [...engineRoles, "quality_gates"]
-		: [...engineRoles, "quality_gates", ...reviewAgents, "user"]
+	const { reviewRoles, approvalRoles } = stageRoleLists(
+		studio,
+		stage,
+		mode,
+		reviewAgents,
+	)
 
 	// Elaborate loop — single cursor state, multi-signal payload.
 	//
@@ -1775,7 +1804,7 @@ export function derivePosition(args: {
 			})
 			// Stamp the cascade alarm on the intent FM when tripped so
 			// the run_next response (and downstream UIs) can surface a
-			// "consider /haiku:repair" recommendation. Stamp the
+			// "consider /haiku:haiku-repair" recommendation. Stamp the
 			// CLEARED state too when it un-trips, so the flag self-heals
 			// once the queue drains below threshold.
 			if (intentResult) {
@@ -1845,10 +1874,7 @@ export function derivePosition(args: {
 		// rather than as per-studio mandate files. The inline bodies
 		// render in `intent_review/index.ts`. Only the human gate
 		// (`user`) is mode-conditional: autopilot skips it.
-		const isAutopilot = mode === "autopilot"
-		const intentRoles: string[] = isAutopilot
-			? ["spec", "continuity", "cross-stage-consistency"]
-			: ["spec", "continuity", "cross-stage-consistency", "user"]
+		const intentRoles = intentReviewRoles(mode)
 		for (const role of intentRoles) {
 			if (!intentApprovals[role]) {
 				return {
@@ -1911,6 +1937,44 @@ export function derivePosition(args: {
  *  (so this helper doesn't reach back into per-unit FM) and the resolved
  *  stage directory. Mode bypass for autopilot mirrors the original
  *  cursor block exactly. */
+/** The ordered intent-completion review roles — the engine-built agent
+ *  roles (spec, continuity, cross-stage-consistency), plus the human
+ *  `user` gate in non-autopilot modes. Source of truth for both the
+ *  intent-level cursor walk and the progress track. Done-ness is read
+ *  from intent.md `approvals.<role>` (NOT reviews.*). */
+export function intentReviewRoles(mode: string): string[] {
+	const base = ["spec", "continuity", "cross-stage-consistency"]
+	return mode === "autopilot" ? base : [...base, "user"]
+}
+
+/** The ordered review + approval role lists for a stage — the SINGLE
+ *  source of truth the cursor walks (pre-execute reviews, then
+ *  post-execute approvals) and the progress track renders. Engine roles
+ *  (`spec`, `continuity`, `cross-stage-consistency`) lead both lists;
+ *  `quality_gates` is approval-only (nothing to run pre-execute);
+ *  configured review agents follow; `user` is the terminal human gate.
+ *  Autopilot trims to engine roles (+ quality_gates on approvals) — no
+ *  agent gates, no user gate. Pass `reviewAgents` when the caller has
+ *  already read them (the cursor has); omitted, it reads them here. */
+export function stageRoleLists(
+	studio: string,
+	stage: string,
+	mode: string,
+	reviewAgents?: ReadonlyArray<string>,
+): { reviewRoles: string[]; approvalRoles: string[] } {
+	const agents =
+		reviewAgents ?? Object.keys(readReviewAgentPaths(studio, stage)).sort()
+	const engineRoles = ["spec", "continuity", "cross-stage-consistency"] as const
+	const isAutopilot = mode === "autopilot"
+	const reviewRoles = isAutopilot
+		? [...engineRoles]
+		: [...engineRoles, ...agents, "user"]
+	const approvalRoles = isAutopilot
+		? [...engineRoles, "quality_gates"]
+		: [...engineRoles, "quality_gates", ...agents, "user"]
+	return { reviewRoles, approvalRoles }
+}
+
 export function computeElaborateSignals(args: {
 	slug: string
 	studio: string
@@ -1997,6 +2061,13 @@ export function serializeElaborateSignals(
 		s.signal === "discovery" ? `discovery:${s.agent}` : s.signal,
 	)
 }
+
+// Exported for `state-tools.ts` so `haiku_feedback_advance_hat` /
+// `haiku_unit_advance_hat` can do the same queue walk the cursor would
+// after persisting an iteration — and return the next dispatch block as
+// a breadcrumb in the tool response. Engine emits the next instruction;
+// the agent relays it. See `.claude/rules/no-agent-mechanics-teaching.md`.
+export { walkFeedbackTrack }
 
 // Test-only escape hatch.
 export const __testOnly = {

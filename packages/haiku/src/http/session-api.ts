@@ -12,6 +12,7 @@ import type { FastifyReply } from "fastify"
 import type { ApproveAction, IntentCurrentState } from "haiku-api"
 import { getCurrentState } from "../current-state.js"
 import { discoverReviewUrl } from "../discover-review-url.js"
+import { deriveProgressTrack } from "../orchestrator/workflow/progress-track.js"
 import {
 	resolveIntentStages,
 	resolveStudioStages,
@@ -314,7 +315,33 @@ export function respondSessionApi(
 		const current = session.intent_slug
 			? getCurrentState(session.intent_slug)
 			: null
-		if (current) data.current_state = current
+		if (current) {
+			data.current_state = current
+			// Attach the granular milestone track (the same ordered
+			// milestones the status line shows) so the SPA can render a
+			// fine-grained stepper instead of the coarse five-phase strip.
+			// Best-effort: a derivation failure must never drop the rest of
+			// the payload — the SPA falls back to `phase`.
+			if (session.intent_slug && current.studio) {
+				try {
+					const fm = readIntentFrontmatterFresh(session.intent_slug)
+					const mode = typeof fm?.mode === "string" ? fm.mode : ""
+					const track = deriveProgressTrack({
+						slug: session.intent_slug,
+						studio: current.studio,
+						intentDir: intentDir(session.intent_slug),
+						intentMode: mode,
+					})
+					if (track.total > 0) {
+						current.milestones = track.steps
+						current.progress_index = track.index
+						current.progress_total = track.total
+					}
+				} catch {
+					/* leave milestones unset — SPA falls back to coarse phase */
+				}
+			}
+		}
 		// Track-C drift sweep — same call the cursor makes pre-tick.
 		// Surfaced under `drift` so the SPA's DriftBanner can render
 		// the same set of mutated artifacts the engine would react to
@@ -402,6 +429,7 @@ export function respondSessionApi(
 	if (session.session_type === "design_direction") {
 		data.title = "Design Direction"
 		data.intent_slug = session.intent_slug
+		if (session.context) data.context = session.context
 		data.archetypes = session.archetypes
 		data.selection = session.selection
 	}

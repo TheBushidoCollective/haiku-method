@@ -1,5 +1,5 @@
 // tools/orchestrator/haiku_debug.ts — Admin/recovery operations for
-// corrupt intents (PR adding /haiku:debug skill, 2026-05-15).
+// corrupt intents (PR adding /haiku:haiku-debug skill, 2026-05-15).
 //
 // Every op routes through `runPicker` for SPA-confirmation BEFORE
 // any state mutation runs. The user explicitly required this:
@@ -101,11 +101,20 @@ export default defineTool({
 
 		// All mutating ops require SPA-picker confirmation.
 		const description = describeOp(op, args)
+		// `reason` is the agent's free-text "why we're here" — the cause that
+		// led to this op. We surface it ABOVE the mechanical `describeOp`
+		// "what this op does" so the user reads the context before the
+		// consequences. Omitted cleanly when the agent didn't supply one.
+		const reason =
+			typeof args.reason === "string" && args.reason.trim().length > 0
+				? args.reason.trim()
+				: null
+		const reasonBlock = reason ? `Why: ${reason}\n\n` : ""
 		const picker = await runPicker({
 			intentSlug: slug,
 			kind: "confirm",
 			title: `DEBUG: ${op} on ${slug}`,
-			prompt: `${description}\n\nThis is an ADMIN op that BYPASSES the normal workflow engine. It mutates state in ways the cursor would not. Confirm only if you understand the consequences.`,
+			prompt: `${reasonBlock}${description}\n\nThis is an ADMIN op that BYPASSES the normal workflow engine. It mutates state in ways the cursor would not. Confirm only if you understand the consequences.`,
 			options: [
 				{
 					id: "confirm",

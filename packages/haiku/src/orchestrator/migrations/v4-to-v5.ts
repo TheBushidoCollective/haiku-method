@@ -4,8 +4,8 @@
 // Why this exists:
 //   The 5.0.0 release (commit 8c2698680, 2026-05-13) was an
 //   auto-generated major-version bump triggered by the `/haiku:reset`
-//   skill split (`/haiku:reset` → `/haiku:reset-stage` +
-//   `/haiku:reset-intent`). That's a USER-FACING breaking change at
+//   skill split (`/haiku:reset` → `/haiku:haiku-reset-stage` +
+//   `/haiku:haiku-reset-intent`). That's a USER-FACING breaking change at
 //   the slash-command level — none of the on-disk schemas changed.
 //   Intent FM, unit FM, FB FM, stage state are all forward-compatible
 //   from any 4.x build to 5.0.0.

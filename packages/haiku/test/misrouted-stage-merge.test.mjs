@@ -4,7 +4,7 @@
 // recovery path. The cursor's `findCurrentStage` checks against the
 // intent main branch; if the merge landed on the wrong target the
 // engine has to fast-forward intent main to recover. Without this
-// reconciliation, User B's `/haiku:pickup` wedges forever — the stage
+// reconciliation, User B's `/haiku:haiku-pickup` wedges forever — the stage
 // stays "unmerged" from the cursor's perspective even though it's been
 // merged on the real default branch.
 //

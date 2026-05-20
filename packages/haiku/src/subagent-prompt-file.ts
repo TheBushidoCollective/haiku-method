@@ -9,17 +9,23 @@
 //     intents/<intent-slug>/
 //       prompts/
 //         intent/                            ← intent-scoped dispatches
-//           action-<actionName>.prompt.md
-//           intent-review-<slug>-<role>.prompt.md
-//           intent-fix-<fbId>-<hat>-<bolt>.prompt.md
+//           main-action-<actionName>.prompt.md     ← main agent reads
+//           subagent-intent-review-<slug>-<role>.prompt.md ← subagent reads
+//           subagent-intent-fix-<fbId>-<hat>-<bolt>.prompt.md
 //         stages/<stage>/                    ← per-stage dispatches
-//           action-<actionName>.prompt.md
-//           discovery-<agent>.prompt.md
-//           <unit>-<hat>-<bolt>.prompt.md
-//           <unit>-<hat>-<bolt>.next-relay.md
-//           <unit>-<hat>-<bolt>.result.json
+//           main-action-<actionName>.prompt.md
+//           subagent-discovery-<agent>.prompt.md
+//           subagent-<unit>-<hat>-<bolt>.prompt.md
+//           subagent-<unit>-<hat>-<bolt>.next-relay.md
+//           subagent-<unit>-<hat>-<bolt>.result.json
 //     sessions/<session_id>/
 //       loop-guards.log
+//
+// Naming convention (2026-05-19): `main-` prefix means the main agent
+// reads this file directly; `subagent-` prefix means the engine emits
+// a `<subagent prompt_file="...">` dispatch block pointing at it and
+// the parent passes the path to the Task tool — never reading the body
+// itself. Prefix tells you at a glance who's supposed to open the file.
 //
 // Filenames are deterministic and overwrite on rerun — a single slot
 // per logical prompt, so the user (or an agent) can point at a known
@@ -33,13 +39,14 @@
 import { execFileSync } from "node:child_process"
 import {
 	mkdirSync,
+	mkdtempSync,
 	readdirSync,
 	renameSync,
 	rmSync,
 	statSync,
 	writeFileSync,
 } from "node:fs"
-import { homedir } from "node:os"
+import { homedir, tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { findHaikuRoot } from "./state/shared.js"
 
@@ -109,13 +116,42 @@ function projectKey(): string {
 	return resolveProjectRoot().replace(/\//g, "-")
 }
 
+/** True when this process is running under a test runner. `node --test`
+ *  sets `NODE_TEST_CONTEXT` in every worker; a bare `node foo.test.mjs`
+ *  doesn't, so we also sniff a `.test.` entry in argv and the
+ *  conventional `NODE_ENV=test`. Used only to decide whether an absent
+ *  `HAIKU_PROJECTS_ROOT` should fall back to the real home or to a
+ *  throwaway sandbox. */
+function isUnderTestRunner(): boolean {
+	if (process.env.NODE_TEST_CONTEXT) return true
+	if (process.env.NODE_ENV === "test") return true
+	return process.argv.some((a) => /\.test\.(mjs|js|ts)$/.test(a))
+}
+
+let memoTestSandbox: string | null = null
+
 /** Base directory under which all per-project trees live
  *  (`<base>/<project-key>/...`). Defaults to `~/.haiku/projects/`. Set
  *  `HAIKU_PROJECTS_ROOT` to redirect — tests use it to point at a
- *  tmpdir so the suite doesn't pollute the user's real `~/.haiku/`. */
+ *  tmpdir so the suite doesn't pollute the user's real `~/.haiku/`.
+ *
+ *  Defense-in-depth: if no override is set but we're under a test
+ *  runner, redirect to a per-process tmpdir anyway. The harness
+ *  (`test/run-all.mjs`) already sets the override before spawning, but
+ *  a test run directly (`node --test test/foo.test.mjs`) bypasses it
+ *  and would otherwise mirror every fixture project into the user's
+ *  real `~/.haiku/projects/` — the `e2e-mode-*` / `advance-relay-*`
+ *  leak reported 2026-05-19. Memoized so state stays consistent within
+ *  the process; the OS purges /tmp. */
 function projectsBaseDir(): string {
 	const override = process.env.HAIKU_PROJECTS_ROOT
 	if (override) return override
+	if (isUnderTestRunner()) {
+		if (!memoTestSandbox) {
+			memoTestSandbox = mkdtempSync(join(tmpdir(), "haiku-test-projects-"))
+		}
+		return memoTestSandbox
+	}
 	return join(homedir(), ".haiku", "projects")
 }
 
@@ -204,7 +240,7 @@ export function writeSubagentPrompt(opts: {
 }): SubagentPromptFile {
 	const { unit, hat, bolt, content, intent, stage, omitBolt } = opts
 	const boltPart = omitBolt ? "" : `-${bolt}`
-	const slug = `${unit.replace(/\.md$/, "")}-${hat}${boltPart}`
+	const slug = `subagent-${unit.replace(/\.md$/, "")}-${hat}${boltPart}`
 	const dir = promptsScopeDir(intent, stage)
 	const path = join(dir, `${slug}.prompt.md`)
 	atomicWrite(path, content)
@@ -237,7 +273,7 @@ export function writeActionPromptFile(opts: {
 }): ActionPromptFile {
 	const { action, intent, stage, content } = opts
 	const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, "-")
-	const slug = `action-${safe(action)}`
+	const slug = `main-action-${safe(action)}`
 	const dir = promptsScopeDir(intent, stage)
 	const path = join(dir, `${slug}.prompt.md`)
 	atomicWrite(path, content)
@@ -259,7 +295,7 @@ export function resultPathFor(opts: {
 	stage?: string
 }): string {
 	const { unit, hat, bolt, intent, stage } = opts
-	const slug = `${unit.replace(/\.md$/, "")}-${hat}-${bolt}`
+	const slug = `subagent-${unit.replace(/\.md$/, "")}-${hat}-${bolt}`
 	return join(promptsScopeDir(intent, stage), `${slug}.result.json`)
 }
 
@@ -339,7 +375,7 @@ export function nextRelayPath(opts: {
 	stage?: string
 }): string {
 	const { unit, hat, bolt, intent, stage } = opts
-	const slug = `${unit.replace(/\.md$/, "")}-${hat}-${bolt}`
+	const slug = `subagent-${unit.replace(/\.md$/, "")}-${hat}-${bolt}`
 	return join(promptsScopeDir(intent, stage), `${slug}.next-relay.md`)
 }
 

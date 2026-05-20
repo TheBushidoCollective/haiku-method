@@ -455,7 +455,7 @@ export function engineHandleDriftEvents(args: {
 		console.error(
 			`[haiku] drift cascade alarm tripped for ${args.slug}/${args.stage}: ` +
 				`${openFbKeys.size} open drift FBs ≥ threshold ${DRIFT_CASCADE_THRESHOLD}. ` +
-				`Suppressing new drift FBs this tick. Consider running /haiku:repair ` +
+				`Suppressing new drift FBs this tick. Consider running /haiku:haiku-repair ` +
 				`if this pattern repeats — the witness baseline may be stale.`,
 		)
 	}

@@ -26,6 +26,12 @@ export const HAIKU_DEBUG_INPUT_SCHEMA = Type.Object(
 			description:
 				"Which admin op to run: force_stage_complete, set_intent_field, reset_drift, mutate_feedback, preview_cursor.",
 		}),
+		reason: Type.Optional(
+			Type.String({
+				description:
+					"Why you're running this admin op — the cause that led here (e.g. 'cursor stuck on stage `design` after a manual branch edit; force-completing to unblock'). Surfaced verbatim to the user at the top of the confirmation picker so they have the context to approve or cancel. Plain prose, not a status code.",
+			}),
+		),
 		stage: Type.Optional(
 			Type.String({
 				description: "Target stage (force_stage_complete, mutate_feedback).",

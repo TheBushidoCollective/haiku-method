@@ -25,7 +25,7 @@ Each subagent block below carries a `prompt_file` pointing at a complete, self-c
 <% } %>
 
 <% }) %>
-After all <%= dispatchCount %> subagent<%= plural %> return, call `haiku_run_next { intent: "<%= slug %>" }`.
+Each subagent's `advance_hat` / `reject_hat` return tells you what to do next — relay the next-hat dispatch block, relay the workflow-result line, or call `haiku_run_next` when the response says so. Don't reason about slots or batches; the engine threads that for you.
 
 <%~ fixLoopContractsBlock %>
 <% } %>

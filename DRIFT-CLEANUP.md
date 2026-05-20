@@ -170,7 +170,7 @@ sync.
   cycle (so v8 intents don't break), then dropped from new writes
 - `state.json` classification in `guard-workflow-fields.ts:118` — stale v3
   vestige, hook entry for a file that doesn't exist
-- `/haiku:repair --confirm-baseline-reset` flow + `--diff-shown` /
+- `/haiku:haiku-repair --confirm-baseline-reset` flow + `--diff-shown` /
   `--confirm-diff-hash` flags
 - Almost all of `drift-baseline.ts` — shrinks to ~50 lines for FS-only
   content sidecar storage (optional)

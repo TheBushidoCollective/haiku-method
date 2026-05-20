@@ -411,11 +411,41 @@ export function deriveStageStateFromUnits(
 		name: `u${i}`,
 		fm: u.raw,
 	}))
+	const mode = options.intentMode ?? "continuous"
+	// Approval / review role sets — derive from what the engine has
+	// actually stamped on units. Each studio mounts a different set of
+	// review-agents per stage (design has accessibility / consistency /
+	// inception-coverage; development has runtime-verifier / code-
+	// reviewer; etc.), and autopilot vs continuous changes whether
+	// `user` is required. We don't ship the studio manifest to the
+	// browse-side, so the safe move is: union every `reviews.*` and
+	// `approvals.*` key seen across the stage's units, then check that
+	// every unit has stamped every key. If even one unit added a role
+	// the others haven't signed, the stage is still "awaiting" that
+	// role — same answer the engine would give.
+	const reviewRolesSet = new Set<string>()
+	const approvalRolesSet = new Set<string>()
+	for (const u of units) {
+		const r = (u.raw.reviews as Record<string, unknown> | undefined) ?? {}
+		for (const k of Object.keys(r)) reviewRolesSet.add(k)
+		const a = (u.raw.approvals as Record<string, unknown> | undefined) ?? {}
+		for (const k of Object.keys(a)) approvalRolesSet.add(k)
+	}
+	// Autopilot drops the user gate. If "user" wasn't stamped anywhere
+	// the union won't contain it; if a migrated unit happens to have
+	// it stamped, drop it to match the engine's autopilot walk.
+	if (mode === "autopilot") {
+		reviewRolesSet.delete("user")
+		approvalRolesSet.delete("user")
+	}
+	const reviewRoles = [...reviewRolesSet]
+	const approvalRoles = [...approvalRolesSet]
 	const derived = deriveStageStatePure({
 		stage: options.stage ?? "",
 		units: unitViews,
-		intentMode: options.intentMode ?? "continuous",
-		approvalRoles: ["user"],
+		intentMode: mode,
+		reviewRoles,
+		approvalRoles,
 		elaborationVerified: options.elaborationVerified ?? null,
 	})
 	const status: "pending" | "active" | "complete" =

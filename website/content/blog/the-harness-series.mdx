@@ -16,12 +16,22 @@ The last month was a lot of reading. Anthropic shipped [their harness-design pos
 
 Reading all four in sequence does something useful to your head. You stop thinking about each project as "the right answer" and start thinking about them as bets — different teams looking at the same failure modes and choosing different layers to put the constraint.
 
-We wrote four side-by-side comparisons of H·AI·K·U against each:
+We wrote four side-by-side comparisons of H·AI·K·U against each.
 
-- [Two Harnesses, One Shape](/blog/two-harnesses-one-shape) — Anthropic's post.
-- [GSD and H·AI·K·U](/blog/gsd-and-haiku) — Lex Christopherson's spec-driven dispatch framework.
-- [GSTACK and H·AI·K·U](/blog/gstack-and-haiku) — Garry Tan's 23-role startup library.
-- [Superpowers, Side by Side](/blog/superpowers-side-by-side) — Jesse Vincent's skills library. ([Long-form version](/blog/superpowers-and-haiku) from April.)
+<Grid>
+  <Card eyebrow="Anthropic" title="Two Harnesses, One Shape" accent="info">
+    Where their harness post and ours land on the same answers, and where the bets diverge. [Read it](/blog/two-harnesses-one-shape).
+  </Card>
+  <Card eyebrow="Lex Christopherson" title="GSD and H·AI·K·U" accent="info">
+    A spec-driven dispatch framework. The atomic-plan-per-fresh-window pattern is the cleanest context-rot mitigation we've read. [Read it](/blog/gsd-and-haiku).
+  </Card>
+  <Card eyebrow="Garry Tan" title="GSTACK and H·AI·K·U" accent="info">
+    A 23-role startup library. The strongest articulation of "roles as legibly distinct lenses" we've seen at the prompt layer. [Read it](/blog/gstack-and-haiku).
+  </Card>
+  <Card eyebrow="Jesse Vincent" title="Superpowers, Side by Side" accent="info">
+    A skills library with a real surface. Three things we adopted from it sit in our engine today. [Read it](/blog/superpowers-side-by-side).
+  </Card>
+</Grid>
 
 This post is the anchor — where we ended up on the methodology, what we took from whom, and what we're trying to do.
 
@@ -31,16 +41,47 @@ H·AI·K·U is a workflow engine that hands an agent one action at a time from a
 
 The load-bearing claims:
 
+<KeyPoints title="THE EIGHT CLAIMS">
 1. **The agent shouldn't decide what's next.** The cursor decides, deterministically, from on-disk state. There's no language model in the orchestrator's decision path. ([One Instruction at a Time](/blog/one-instruction-at-a-time).)
 2. **State lives on disk, not in context.** Unit specs, feedback, intent frontmatter, stage outputs — everything material is artifact-shaped. Compaction, `/clear`, crashes, machine swaps don't lose the plan. ([The Scavenger Hunt](/blog/the-scavenger-hunt).)
 3. **Plan → do → verify is the minimum hat sequence.** Every stage has at least three hats; the last is a verifier; the verifier is a separate subagent from the doer. The doer never grades its own output.
 4. **Specs are testable before any code lands.** Acceptance criteria pair with executable `quality_gates:`. Non-zero exit blocks the advance. The toolchain settles what the toolchain can settle; judgment is reserved for the parts that actually need judgment.
 5. **The lifecycle is forward-only.** Completed units don't get re-edited. Corrective work flows through new units authored from upstream elaborate. Feedback is the only way back.
 6. **Workflow shape is data, not prompts.** Studios, stages, hats, review agents, gates, output templates — all markdown files the engine resolves through a three-tier cascade (stage → studio → global, project overlay wins at each tier). New domains ship by adding a studio; new lenses ship by adding a review-agent file.
-7. **Drift gets noticed.** A pre-tick check verifies the agent's premise still matches reality (file hashes against the witness stamps on the unit FM). Long-running agents drift; ours notice before the next tick fires.
-8. **The engine, not the agent, holds the contracts.** A PreToolUse hook guards workflow-managed files — agents go through MCP tools or get rejected with a redirect message. Invariants like "stage branch is always ahead of main" aren't on the agent's checklist; they're hooked.
+7. **Drift gets noticed.** A pre-tick check verifies the agent's premise still matches reality (file hashes against the agent's recorded premise). Long-running agents drift; ours notice before the next tick fires.
+8. **The engine, not the agent, holds the contracts.** A guardrail catches direct edits to workflow-managed files and tells the agent to use the right tool instead. Invariants like "stage branch is always ahead of main" aren't on the agent's checklist; they're hooked.
+</KeyPoints>
 
 That's the engine. The shape of work it runs is up to the studio.
+
+## The surface, and why it matters
+
+A workflow engine without a surface is a CLI for one user — the developer who installed it. That's not the work H·AI·K·U is built for.
+
+Every intent boots a local SPA the engine drives. Review sessions render the diff, the spec, the feedback annotations, and the gate verbs (approve, leave feedback, submit files for drift, tick) in a browser tab. Questions the agent needs to ask route there. Direction requests for design route there. The browse view shows every intent in the repo with its current stage, current gate, current open feedback — a portfolio across an entire team's work, not just the one you're sitting on.
+
+The surface is graded by mode. Same intent, same studio, same engine. The dial is per-stage, set at elaborate time.
+
+<Grid>
+  <Card eyebrow="Continuous" title="In the loop" accent="info">
+    Every gate stops. You weigh in. The agent waits for your call before it advances.
+  </Card>
+  <Card eyebrow="Discrete" title="On the loop" accent="info">
+    Work runs to a PR/MR boundary and stops there for external review. The merge is the approval.
+  </Card>
+  <Card eyebrow="Autopilot" title="Off the loop" accent="info">
+    Gates auto-advance until something blocks. You see the delivery PR, not the steps.
+  </Card>
+  <Card eyebrow="Per-stage" title="Mix and match" accent="good">
+    Interactive discovery, auto-advancing build, external-sign-off security gate — all in the same intent. You set it at elaborate time.
+  </Card>
+</Grid>
+
+The other half is backpressure that flows the other direction. A non-developer leaving a comment on a rendered design isn't filing a ticket into a queue someone reads later — they're adding a feedback file the engine treats as a first-class input at the next tick. The fix-loop dispatches against it. The earliest unaddressed stage gets revisited. A PM dropping a paragraph in the question modal pauses the agent until the answer lands.
+
+Drift is the same mechanism pointed at the agent. The pre-tick gate hashes every file the agent stamped as a premise and compares against the agent's recorded premise. If a file changed out-of-band — a designer edited a mockup, a teammate fixed a typo, a script touched the schema — the agent is told before the next instruction fires. The premise is reconciled or the unit reroutes through elaborate. Long-running agents lose their footing; ours has to re-find it on every step.
+
+Superpowers has a surface. Most don't. We think ours stands above for the work it's aimed at — multi-skilled teams where the designer, the PM, the QA lead, and the engineer all have something to weigh in on, and none of them should have to learn the CLI to do it.
 
 ## What we're trying to do
 
@@ -52,7 +93,14 @@ Deliver a spec that *can* execute as a **dark factory** — lights-out, one shot
 
 Dark factory is the ceiling, not the mandate. Per-stage gates let you keep a human in the loop as much as the work calls for — interactive discovery, auto-advancing build, external sign-off security gate, all in the same intent. The point isn't to remove the human; it's to put the human's effort where it pays back — in the spec, not in babysitting the build.
 
-Doing this across 24 domains — software, gamedev, hwdev, libdev, marketing, legal, finance, HR, sales, product-strategy, compliance, customer-success, data-pipeline, incident-response, documentation, quality-assurance, vendor-management, security-assessment, training, dev-evangelism, migration, executive-strategy, ideation, project-management — is the bet that the structural pattern holds across domains, not just software. The studios share the engine; only the domain shape differs.
+We're betting the structural pattern holds across 24 domains, not just software. The studios share the engine; only the domain shape differs.
+
+<KeyPoints title="THE 24 DOMAINS">
+1. **Engineering surface.** Software, gamedev, hwdev, libdev — code, components, hardware specs, libraries.
+2. **Product surface.** Product-strategy, customer-success, dev-evangelism, ideation — the work of shaping what's built and how it lands.
+3. **Operations surface.** Data-pipeline, incident-response, quality-assurance, migration, vendor-management, security-assessment, project-management — the work that keeps the lights on.
+4. **People and business surface.** HR, finance, legal, compliance, sales, marketing, training, executive-strategy, documentation — the work that runs the company around the build.
+</KeyPoints>
 
 So far: we think it can do it all. The shape holds. The four comparison posts are us pressure-testing that belief against four serious projects working on the same problem with different bets. None of them broke the belief; some of them showed us where we have packaging work to do.
 
@@ -78,8 +126,21 @@ We think Haiku can do it all. The belief survived reading the four projects abov
 
 So: we think the shape is right. We're less sure each layer is sized correctly. The next quarter is mostly cleanup work — let the reflection loop fire on real intents, watch what it surfaces, accept the trims, push back on the additions.
 
-If you're choosing a harness today: read [the GSD comparison](/blog/gsd-and-haiku), [the GSTACK comparison](/blog/gstack-and-haiku), and [the Superpowers comparison](/blog/superpowers-side-by-side) before you choose us. We're not the right tool for every shape of work. We're built for work that has lifecycle structure the engine should hold, across domains where the structure varies. If your shape is "I'm a solo dev building features as fast as a coding agent will let me," GSD might be the right grab. If it's "I'm a founder running a startup with one AI coding tool," GSTACK might be. If it's "I want a disciplined human-in-the-loop coding partner," Superpowers might be.
+If you're choosing a harness today, read the comparisons before you choose us. We're not the right tool for every shape of work.
 
-If it's "I want the work itself — across whatever domain — to run on a workflow my team can audit, hand off between humans, and dial supervision into," that's the shape we're building for.
+<Compare verdict="diverge" title="Pick the bet that matches your work">
+  <Side label="Solo dev, fast features">
+    GSD might be the right grab. Per-window plans, spec-driven dispatch, context-rot mitigation by construction.
+  </Side>
+  <Side label="Founder, startup, one coding tool">
+    GSTACK might be. 23 roles, opinionated startup stack, prompt-layer discipline.
+  </Side>
+  <Side label="Disciplined HITL coding partner">
+    Superpowers might be. Loud framing, skills as orientation, a surface non-developers can touch.
+  </Side>
+  <Side label="Multi-domain work on an auditable workflow">
+    That's the shape we're building for.
+  </Side>
+</Compare>
 
 The harness conversation is bigger than any one of us. The space is better for having four well-argued options. Read the comparisons. Pick the bet that matches your work.

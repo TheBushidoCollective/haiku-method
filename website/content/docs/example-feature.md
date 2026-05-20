@@ -18,7 +18,7 @@ We're adding a **notification system** to a web application. Users should be abl
 ### Starting the Process
 
 ```
-User: /haiku:start
+User: /haiku:haiku-start
 
 I want to add a notification system to our app. Users should
 get notifications for important events and be able to manage them.
@@ -122,7 +122,7 @@ User: Yes, looks good.
 ### Starting the First Unit
 
 ```
-User: /haiku:pickup
+User: /haiku:haiku-pickup
 ```
 
 ### Planner Hat (HITL)
@@ -457,7 +457,7 @@ With the notification system complete, the Builder defined operations for ongoin
 - **`monitor-delivery-latency`** — A reactive agent operation that alerts when notification delivery exceeds 5 seconds
 - **`review-notification-metrics`** — A monthly human process to review delivery rates, open rates, and preference trends
 
-These operation specs live in `.haiku/notifications/operations/` and are managed with `/haiku:operate notifications`. See the [Operations Guide](/docs/operations-guide/) for details.
+These operation specs live in `.haiku/notifications/operations/` and are managed with `/haiku:haiku-operate notifications`. See the [Operations Guide](/docs/operations-guide/) for details.
 
 ## Next Steps
 

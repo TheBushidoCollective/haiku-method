@@ -48,6 +48,7 @@ import {
 	wouldDeadlock,
 } from "./deadlock-detector.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
+import { autoFileMalformedUnitInputs } from "./validate-unit-inputs-gate.js"
 import { ensureNonce } from "./verifier-nonce.js"
 
 /** Result of a single workflow tick. */
@@ -373,6 +374,28 @@ export function runWorkflowTick(
 		// studio config gone), let the cursor walk surface the real
 		// error.
 		emitTelemetry("haiku.self_repair.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Pre-tick read-time input validation: catch units already on disk
+	// whose `inputs:` lists a unit name instead of a file path and
+	// auto-file a deduplicated feedback. The write-time validator in
+	// `haiku_unit_write` stops NEW malformed units; this covers ones
+	// authored before that validator existed (admin-portal-reimagine
+	// unit-014, 2026-05-19). Best-effort — failures here never block the
+	// cursor walk.
+	try {
+		const malformed = autoFileMalformedUnitInputs(slug, iDir, studio)
+		if (malformed.filed.length > 0) {
+			emitTelemetry("haiku.input_validation.feedback_filed", {
+				intent: slug,
+				units: malformed.filed.join(","),
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.input_validation.failed", {
 			intent: slug,
 			error: String((err as Error)?.message ?? err),
 		})

@@ -21,8 +21,9 @@
 //     omitted the cascade starts at the stage's `default_model:` (when
 //     a stage is provided) or the studio's `default_model:`.
 //   - buildInlineSubagentContext — hookless-harness inline context.
-//   - batchDispatchDirective — concurrency-cap discipline (slot pool
-//     vs batch-serial depending on harness capabilities).
+//   - batchDispatchDirective — minimal "spawn in parallel; follow each
+//     subagent's return" directive (engine-threaded chain via the
+//     advance_hat relay breadcrumb; no agent-side pool bookkeeping).
 
 import { existsSync, readFileSync } from "node:fs"
 import { Eta } from "eta"
@@ -101,6 +102,36 @@ export function buildInterpretationBlock(
 		"- If you see something concerning outside the checklist, do NOT log it through this agent. Log it through a different review agent if one exists, or surface it as an out-of-scope observation in your summary.",
 		"- Cite the specific checklist item each finding maps to in the `body:` field so the fix loop can verify scope.",
 	].join("\n")
+}
+
+/** Inline a list of files into a single concatenated block. Used by
+ *  subagent prompt builders to pre-load every file the subagent will
+ *  need to read — the subagent is short-lived and pays a Read-tool
+ *  cost for each separate file, so bundling them into one prompt body
+ *  trades a small upfront token cost for zero Read calls in the
+ *  subagent's session.
+ *
+ *  Use ONLY for subagent prompts. The parent agent's <subagent
+ *  prompt_file="..."> dispatch is written to a tmpfile and the parent
+ *  is explicitly told not to read it (the file is sized for the
+ *  subagent's context), so the expansion stays behind the file-backed
+ *  boundary. Inlining a file the parent will see would just bloat the
+ *  parent's context.
+ *
+ *  Empty heading → skipped silently. Missing file path → skipped
+ *  silently (consistent with `inlineFile`'s behavior). Returns an
+ *  empty string when no entries resolve. */
+export function inlineFiles(
+	entries: Array<{ heading: string; path: string }>,
+): string {
+	if (entries.length === 0) return ""
+	const blocks: string[] = []
+	for (const { heading, path } of entries) {
+		if (!heading || !path) continue
+		const block = inlineFile(path, heading)
+		if (block) blocks.push(block)
+	}
+	return blocks.join("\n")
 }
 
 /** Strip YAML frontmatter and emit a fenced inline block. Frontmatter
@@ -406,69 +437,23 @@ export function readIntentMode(intentDir: string): string {
 	}
 }
 
-/** Render the parent's concurrency-capped dispatch discipline for a
- *  parallel subagent wave. Slot pool when the harness has
- *  backgroundSpawn; batch-serial otherwise. In autopilot the parent
- *  cannot yield, so callers pass `forceForeground: true` to get the
- *  foreground-only single-turn directive even when the harness supports
- *  background spawning. */
+/** Render the parent's dispatch directive for a parallel subagent
+ *  wave. Pre-2026-05-19 this rendered a slot-pool / batch-serial
+ *  protocol that taught the agent how to mete out spawns against
+ *  `MAX_CONCURRENT_SUBAGENTS`. That mechanism moved into the engine:
+ *  each terminal advance emits `next_subagent_dispatch_block`, the
+ *  subagent relays it, the parent spawns it. No agent-side bookkeeping.
+ *  See `.claude/rules/no-agent-mechanics-teaching.md`.
+ *
+ *  The directive now just says "spawn in parallel; follow each
+ *  subagent's return". `count` / `label` / `forceForeground` are kept
+ *  for callsite compatibility but the body is the same across them. */
 export function batchDispatchDirective(
-	count: number,
+	_count: number,
 	label = "subagents",
-	opts: { forceForeground?: boolean } = {},
+	_opts: { forceForeground?: boolean } = {},
 ): string {
-	const backgroundSpawn =
-		opts.forceForeground === true
-			? false
-			: getCapabilities().subagents.backgroundSpawn
-
-	if (count <= MAX_CONCURRENT_SUBAGENTS) {
-		if (backgroundSpawn) {
-			return `**Concurrency cap:** up to ${MAX_CONCURRENT_SUBAGENTS} concurrent background ${label} (env \`HAIKU_MAX_CONCURRENT_SUBAGENTS\`). This wave has ${count} — spawn all ${count} as background ${label} in a single turn and react to completion notifications as they arrive.`
-		}
-		return `**Concurrency cap:** up to ${MAX_CONCURRENT_SUBAGENTS} concurrent ${label} (env \`HAIKU_MAX_CONCURRENT_SUBAGENTS\`). This wave has ${count} — spawn them all in a single turn and wait for every ${label.replace(/s$/, "")} to return before proceeding.`
-	}
-
-	if (backgroundSpawn) {
-		return [
-			`**Concurrency cap:** slot pool of ${MAX_CONCURRENT_SUBAGENTS} concurrent background ${label} (env \`HAIKU_MAX_CONCURRENT_SUBAGENTS\`). This wave has ${count} items; at any moment, at most ${MAX_CONCURRENT_SUBAGENTS} are in flight. A slot frees the instant one completes — fire the next pending item into it.`,
-			"",
-			`**Dispatch protocol:**`,
-			"",
-			`1. **Seed the pool.** In one turn, spawn the first ${MAX_CONCURRENT_SUBAGENTS} items as **background** ${label} (the spawn primitive returns immediately; the subagent runs in the background and the system delivers a completion notification when it finishes). Do NOT block on any spawn.`,
-			"",
-			`2. **On each completion notification**, in the same turn:`,
-			`   - Briefly inspect the result (final-hat closure state is already persisted; deep-read not required).`,
-			`   - If items remain in the queue: spawn exactly ONE new background ${label.replace(/s$/, "")} for the next pending item. The pool stays saturated at ${MAX_CONCURRENT_SUBAGENTS}.`,
-			`   - If the queue is empty: acknowledge and wait — remaining slots are draining.`,
-			"",
-			`3. **Multiple simultaneous completions** may arrive in one turn. Fire one replacement per completion; cap stays at ${MAX_CONCURRENT_SUBAGENTS}.`,
-			"",
-			`4. **Wave exhausted:** when the pool reaches 0 AND the queue is empty, this wave is done.`,
-			"",
-			`5. **No foreground (blocking) spawns** during the pool's lifetime. A foreground spawn stalls the notification stream and breaks the pool.`,
-			"",
-			`6. **Clarification / approval-request returns:** if a ${label.replace(/s$/, "")} returns asking for approval to execute its embedded instructions rather than producing a real result, treat the slot as freed and re-queue or abandon the item per judgment — don't block the pool.`,
-			"",
-			`**Order:** process items in the declared order below so re-entries after interruption are deterministic.`,
-		].join("\n")
-	}
-
-	const batches = Math.ceil(count / MAX_CONCURRENT_SUBAGENTS)
-	const last = count - MAX_CONCURRENT_SUBAGENTS * (batches - 1)
-	const sizes =
-		last === MAX_CONCURRENT_SUBAGENTS
-			? `${batches} batches of ${MAX_CONCURRENT_SUBAGENTS}`
-			: `${batches - 1} batch${batches - 1 === 1 ? "" : "es"} of ${MAX_CONCURRENT_SUBAGENTS} + 1 batch of ${last}`
-	return [
-		`**Concurrency cap:** ${MAX_CONCURRENT_SUBAGENTS} ${label} in flight at a time (env \`HAIKU_MAX_CONCURRENT_SUBAGENTS\`). This wave has ${count} — split into ${sizes}. Your harness has no background-spawn primitive, so this is batch-serial (slower than a true slot pool but equivalent correctness).`,
-		"",
-		`**Batch discipline:**`,
-		`1. Spawn batch 1 (first ${MAX_CONCURRENT_SUBAGENTS}) in a single turn.`,
-		`2. Wait for **every** ${label.replace(/s$/, "")} in that batch to return.`,
-		`3. Spawn batch 2 in the next turn. Repeat until the wave is exhausted.`,
-		`4. Process items in the order listed below so re-entries after interruption are deterministic.`,
-	].join("\n")
+	return `Spawn each \`<subagent>\` block below in a single message (parallel \`Task\` calls). When a ${label.replace(/s$/, "")} returns, do what its final message tells you — spawn the relayed \`<subagent>\` block it carries, call \`haiku_run_next\`, or just acknowledge.`
 }
 
 /** The five completion signals that all live inside the single conceptual

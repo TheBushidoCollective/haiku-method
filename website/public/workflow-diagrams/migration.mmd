@@ -22,8 +22,10 @@ stateDiagram-v2
     state assessment_execute {
       [*] --> assessment_execute_migration_analyst
       assessment_execute_migration_analyst --> assessment_execute_risk_assessor : hat.advance
-      assessment_execute_risk_assessor --> assessment_execute_done : hat.advance
+      assessment_execute_risk_assessor --> assessment_execute_verifier : hat.advance
       assessment_execute_risk_assessor --> assessment_execute_migration_analyst : hat.reject
+      assessment_execute_verifier --> assessment_execute_done : hat.advance
+      assessment_execute_verifier --> assessment_execute_risk_assessor : hat.reject
       assessment_execute_done --> [*]
     }
     assessment_execute --> assessment_review
@@ -75,8 +77,10 @@ stateDiagram-v2
     state mapping_execute {
       [*] --> mapping_execute_schema_mapper
       mapping_execute_schema_mapper --> mapping_execute_compatibility_reviewer : hat.advance
-      mapping_execute_compatibility_reviewer --> mapping_execute_done : hat.advance
+      mapping_execute_compatibility_reviewer --> mapping_execute_verifier : hat.advance
       mapping_execute_compatibility_reviewer --> mapping_execute_schema_mapper : hat.reject
+      mapping_execute_verifier --> mapping_execute_done : hat.advance
+      mapping_execute_verifier --> mapping_execute_compatibility_reviewer : hat.reject
       mapping_execute_done --> [*]
     }
     mapping_execute --> mapping_review

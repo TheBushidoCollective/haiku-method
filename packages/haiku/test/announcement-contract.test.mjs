@@ -8,7 +8,8 @@
 // includes it verbatim.
 
 import assert from "node:assert"
-import { WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK } from "../src/orchestrator/prompts/_shared/index.ts"
+import { sharedBlockContent } from "../src/orchestrator/prompts/_shared/index.ts"
+const WORKFLOW_CONTRACTS_ANNOUNCEMENT_BLOCK = sharedBlockContent("workflow-contracts-announcement")
 import startUnitHat from "../src/orchestrator/prompts/stage/execute/start_unit_hat/index.ts"
 
 let passed = 0

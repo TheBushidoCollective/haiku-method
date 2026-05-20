@@ -16,6 +16,10 @@ Discrete mode used to put everything on a single intent branch. Inception, produ
 
 So we stopped doing that.
 
+<Callout tone="warn" title="The PR that ate the team">
+A single PR that spans inception, product, design, and development is asking the reviewer to hold four different mental models at once. Most reviewers don't. They scan the diff, look for something obviously broken, and approve. The work didn't get reviewed; the volume of it overwhelmed the review.
+</Callout>
+
 ## The branch is the stage
 
 In discrete mode, H·AI·K·U now creates a branch per stage:
@@ -86,7 +90,7 @@ You get ceremony where ceremony helps and speed where speed helps. Same intent, 
 
 There's a subtle problem with per-stage branches: when you run `haiku_dashboard` from the development branch, how does it know the state of the product stage? That state lives on a *different* branch, and `git checkout` -ing five branches to read `state.json` from each would be obnoxious and slow.
 
-It doesn't checkout. It uses `git show haiku/{slug}/{stage}:.haiku/intents/{slug}/stages/{stage}/state.json` to read the state from each branch **without leaving the current worktree.** The dashboard aggregates stage state across all the stage branches in one pass, and you see the whole intent's status regardless of which branch you happen to be sitting on.
+It doesn't checkout. It reads state from each stage branch without checking it out. The dashboard aggregates stage state across all the stage branches in one pass, and you see the whole intent's status regardless of which branch you happen to be sitting on.
 
 It's the kind of thing that's invisible when it works. Which is what you want.
 
@@ -96,10 +100,17 @@ Unit worktrees (H·AI·K·U creates a worktree per unit so parallel execution in
 
 ## Why this matters
 
-Stages used to be a lifecycle concept — a workflow phase, a point in time where the agent was doing "elaboration" or "execution." Now they're also a **version control concept.** A stage is a branch. A stage is a PR. A stage is a unit of review with a clear diff, a clear description, and a clear merge commit.
+Stages used to be a lifecycle concept — a workflow phase, a point in time where the agent was doing "elaboration" or "execution." Now they're also a **version control concept.** A stage is a branch. A stage is a PR. A stage is a unit of review with a clear diff, a clear description, and a clear merge commit. The lifecycle question ("what phase is this in?") and the review question ("what diff am I asking you to read?") now have the same answer.
 
-<Callout tone="info" title="The mental shift">
-A stage isn't just "what phase of the lifecycle is this." It's "what's the diff you're asking your team to review?" Per-stage branches make the two match.
-</Callout>
+The old single-branch model asked one big question. The new model asks four smaller ones.
 
-The old single-branch model was asking one question — "is the work done?" — and answering it with a giant PR. The per-stage model asks four smaller questions — "is the inception done? is the spec done? is the design done? is the code done?" — and answers each with its own PR. Smaller questions get better answers.
+<Compare verdict="diverge" title="One question vs four">
+  <Side label="Old model">
+    "Is the work done?" — one PR, one merge, one approval. Reviewers either tackle the whole thing or rubber-stamp it.
+  </Side>
+  <Side label="New model">
+    "Is inception done? Is the spec done? Is the design done? Is the code done?" — four PRs, four moments to push back, four diffs sized for actual reading.
+  </Side>
+</Compare>
+
+Smaller questions get better answers.

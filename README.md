@@ -30,8 +30,8 @@ No external dependencies. The plugin ships a single binary (`plugin/bin/haiku`) 
 ## Quick Start
 
 ```
-/haiku:start              # Create a new intent — describe what you want to do
-/haiku:pickup              # The orchestrator tells you what to do next
+/haiku:haiku-start              # Create a new intent — describe what you want to do
+/haiku:haiku-pickup              # The orchestrator tells you what to do next
 ```
 
 That's it. The orchestrator (`haiku_run_next`) drives the stage loop. You follow the actions it returns.
@@ -76,17 +76,17 @@ Every stage runs the same five-step cycle:
 
 | Command | Purpose |
 |---------|---------|
-| `/haiku:start` | Create a new intent |
-| `/haiku:pickup` | Advance through stages (orchestrator-driven) |
-| `/haiku:composite` | Create multi-studio intent with sync points |
-| `/haiku:refine` | Amend specs mid-execution or refine upstream stages |
-| `/haiku:gate-review` | Pre-delivery code review |
-| `/haiku:reflect` | Post-completion analysis |
-| `/haiku:operate` | Post-delivery operational tasks |
-| `/haiku:capacity` | Historical throughput analysis |
-| `/haiku:triggers` | Poll providers for events |
-| `/haiku:setup` | Configure providers and quality gates |
-| `/haiku:start --template <name>` | Create from a template (10 templates across 7 studios) |
+| `/haiku:haiku-start` | Create a new intent |
+| `/haiku:haiku-pickup` | Advance through stages (orchestrator-driven) |
+| `/haiku:haiku-composite` | Create multi-studio intent with sync points |
+| `/haiku:haiku-refine` | Amend specs mid-execution or refine upstream stages |
+| `/haiku:haiku-gate-review` | Pre-delivery code review |
+| `/haiku:haiku-reflect` | Post-completion analysis |
+| `/haiku:haiku-operate` | Post-delivery operational tasks |
+| `/haiku:haiku-capacity` | Historical throughput analysis |
+| `/haiku:haiku-triggers` | Poll providers for events |
+| `/haiku:haiku-setup` | Configure providers and quality gates |
+| `/haiku:haiku-start --template <name>` | Create from a template (10 templates across 7 studios) |
 
 ## Architecture
 
@@ -149,7 +149,7 @@ Everything is file-based and overridable:
 .haiku/providers/{type}.md                    # Custom provider instructions
 ```
 
-Use `/haiku:scaffold` to generate any of these.
+Use `/haiku:haiku-scaffold` to generate any of these.
 
 ## Development
 

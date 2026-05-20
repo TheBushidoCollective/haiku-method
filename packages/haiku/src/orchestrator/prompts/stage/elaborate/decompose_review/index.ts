@@ -21,6 +21,12 @@
 // file once instead of two subagents reading the same files for
 // overlapping questions.
 //
+// File-backed dispatch (2026-05-19): the verifier prompt is written to
+// its own per-intent prompt file; the parent only sees a
+// `<subagent prompt_file="...">` pointer. Replaces the legacy
+// fenced-inline body that polluted the parent's context with prose the
+// subagent already reads on its own turn.
+//
 // Mechanically:
 //   - The agent dispatches a subagent (Task tool) with the verifier
 //     prompt below.
@@ -36,12 +42,16 @@
 
 import { join } from "node:path"
 import { Eta } from "eta"
-import { buildConcurrentElaborateLoopBlock } from "../../../_helpers.js"
+import {
+	buildConcurrentElaborateLoopBlock,
+	emitSubagentDispatchBlock,
+} from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
+const SUBAGENT_TEMPLATE = loadTemplate(import.meta.url, "subagent.eta.md")
 
 export default definePromptBuilder((ctx) => {
 	const action = ctx.action as unknown as {
@@ -63,6 +73,27 @@ export default definePromptBuilder((ctx) => {
 		{ slug: intentSlug, stage },
 	)
 
+	const subagentPrompt = eta.renderString(SUBAGENT_TEMPLATE, {
+		stage,
+		intentSlug,
+		intentMdPath,
+		stageMdPath,
+		elabPath,
+		unitsDir,
+		verifierNonce,
+	})
+	const dispatchBlock = emitSubagentDispatchBlock({
+		unit: `verify-${stage}-decompose`,
+		hat: "decompose-verifier",
+		bolt: 1,
+		intent: intentSlug,
+		stage,
+		agentType: "general-purpose",
+		promptBody: subagentPrompt,
+		heading: `### Subagent: decompose verifier (stage \`${stage}\`)`,
+		omitBolt: true,
+	})
+
 	return eta.renderString(TEMPLATE, {
 		stage,
 		intentSlug,
@@ -73,5 +104,6 @@ export default definePromptBuilder((ctx) => {
 		concurrentLoopBlock,
 		verifierNonce,
 		composedMode: ctx.composedMode === true,
+		dispatchBlock,
 	})
 })

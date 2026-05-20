@@ -51,6 +51,7 @@ import {
 	buildPriorRejectBlock,
 	emitSubagentDispatchBlock,
 	inlineFile,
+	inlineFiles,
 	readInterpretation,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
@@ -259,6 +260,23 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 						: found.file,
 				})
 		}
+		// Inline every artifact the assessor needs to verify closure —
+		// unit spec (for `closes:` array), each unit output, and every
+		// claimed-closed FB body. The assessor is one-shot; pre-loading
+		// these files saves a Read tool call per artifact.
+		const unitInline = inlineFile(unitAbsPath, `Unit spec: ${unit}`)
+		const outputsInline = inlineFiles(
+			unitOutputs.map((o) => ({
+				heading: `Unit output: ${o}`,
+				path: join(intentRoot, o),
+			})),
+		)
+		const feedbackInline = inlineFiles(
+			feedbackFiles.map((f) => ({
+				heading: `Feedback ${f.id}`,
+				path: join(intentRoot, f.file),
+			})),
+		)
 		const assessorPrompt = eta.renderString(FEEDBACK_ASSESSOR_TPL, {
 			slug,
 			stage,
@@ -266,12 +284,9 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 			bolt,
 			worktreePath,
 			intentRoot,
-			unitAbsPath,
-			unitOutputPaths: unitOutputs.map((o) => join(intentRoot, o)),
-			feedbackEntries: feedbackFiles.map((f) => ({
-				id: f.id,
-				path: join(intentRoot, f.file),
-			})),
+			unitInline,
+			outputsInline,
+			feedbackInline,
 		})
 		if (unitCaps.subagents.supported) {
 			const assessorBody = inlineCtx

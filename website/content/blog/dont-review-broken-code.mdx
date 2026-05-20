@@ -18,16 +18,18 @@ H·AI·K·U used to do that. It doesn't anymore.
 
 ## The new order
 
-The review phase now runs in two stages:
+The review phase now runs in two stages, hard checks before soft ones.
 
-```
-execute → [quality gates] → [adversarial review] → gate
-             ↑                    ↑
-         cheap, fast          expensive, slow
-         hard failure         taste-driven
-```
+<Compare verdict="diverge" title="Two kinds of check, run in order">
+  <Side label="Quality gates (first)">
+    Tests, lint, typecheck. Cheap. Fast. Machine-verifiable. Hard pass or hard fail. If anything's red, the agent bounces straight back to fix — no reviewer ever spawns.
+  </Side>
+  <Side label="Adversarial review (second)">
+    Security, design, architecture. Expensive. Slow. Taste-driven. Only runs once every gate is green. The reviewers spend their attention on judgement calls, not syntax errors.
+  </Side>
+</Compare>
 
-Quality gates — tests, lint, typecheck, whatever you configured — run **first**. They're the hard, objective, machine-verifiable checks. If any of them fail, the orchestrator returns `fix_quality_gates` and the agent gets bounced back to fix them before a single adversarial reviewer is even spawned. Only when everything's green does the orchestrator advance to the review agents, where the expensive taste-driven work happens.
+Quality gates run first. If any of them fail, the orchestrator returns `fix_quality_gates` and the agent gets bounced back to fix them before a single adversarial reviewer is even spawned. Only when everything's green does the orchestrator advance to the review agents, where the expensive taste-driven work happens.
 
 <Callout tone="good" title="The principle">
 Hard gates catch cheap failures. Soft gates catch expensive failures. Run them in that order — cheap first — or you'll spend a lot of money asking sophisticated reviewers to tell you what `npm test` could have told you for free.
@@ -53,27 +55,28 @@ The `dir` field exists because monorepos exist. Commands resolve relative to the
 
 ## The elaborator now detects your tooling
 
-You don't write this by hand. When an intent is elaborated, the agent is now instructed to **detect the project's tooling** — is there a `package.json` with a test script? Is there a `Cargo.toml`? A `pyproject.toml` with `pytest`? — and populate `quality_gates` in `intent.md` automatically. By the time the intent reaches review for the first time, the gates are already wired up based on what the project actually has.
+You don't write this by hand. When an intent is elaborated, the agent inspects the project and populates `quality_gates` in `intent.md` automatically based on what it finds.
+
+<Grid>
+  <Card title="Node / TS project" accent="info">
+    `package.json` with a `test` script and a typecheck dep gets `npm test` and `tsc --noEmit` wired up by default.
+  </Card>
+  <Card title="Rust project" accent="info">
+    `Cargo.toml` gets `cargo test` and `cargo clippy -- -D warnings`. Tests and lint in one shot.
+  </Card>
+  <Card title="Python project" accent="info">
+    `pyproject.toml` with `pytest` gets `pytest`. Add `ruff` or `mypy` and they get picked up too.
+  </Card>
+  <Card title="Anything else" accent="info">
+    A custom command goes in the same `name` / `command` / `dir` shape. The orchestrator doesn't care what runs underneath; it cares that the exit code is honest.
+  </Card>
+</Grid>
 
 If the elaborator gets it wrong, you fix it once and it's in the frontmatter forever. If it gets it right, you never thought about it.
 
 ## What happens when a gate fails
 
-The agent gets a specific action back:
-
-```
-action: fix_quality_gates
-failures:
-  - name: typecheck
-    command: "tsc --noEmit"
-    dir: packages/haiku
-    exit_code: 2
-    output: |
-      src/orchestrator.ts:1245:14 — error TS2339:
-      Property 'foo' does not exist on type 'Unit'.
-```
-
-It's not "something broke, figure it out." It's the exact gate name, the exact command, the exact exit code, the truncated output with the first few lines of the error. The agent bounces back to execute, fixes the issue, and calls `haiku_run_next` again. The orchestrator re-runs the gates — no human intervention, no review agents, no context switch — and if they pass, advancement resumes.
+The agent doesn't get back "something broke, figure it out." It gets the gate name, the command that failed, and the first few lines of the failure output — enough to land on the specific error without re-running anything. The agent bounces back to execute, fixes the issue, ticks again. The orchestrator re-runs the gates — no human intervention, no review agents, no context switch — and if they pass, advancement resumes.
 
 <KeyPoints title="Why this matters">
   1. **Cheap failures stay cheap.** A typecheck error should cost a typecheck run, not a full review cycle.

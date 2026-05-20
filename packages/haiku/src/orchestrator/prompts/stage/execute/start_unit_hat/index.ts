@@ -3,40 +3,25 @@
 //
 // The cursor returns `start_unit_hat { stage, hat, units: [...], terminal }`
 // when one or more wave-ready units need their next hat. The prompt
-// instructs the parent agent to spawn ONE subagent per listed unit,
-// in parallel. Each subagent runs that unit's hat, calls
+// instructs the parent agent to spawn ONE `<subagent>` block per
+// listed unit, in parallel. Each subagent runs that unit's hat, calls
 // haiku_unit_advance_hat (or _reject_hat) when done, and terminates
-// with a clean signal — no Workflow Result file relay, no in-context
-// hat iteration. The parent reaps all returns, calls haiku_run_next
-// once, and the cursor returns the next instruction.
+// with the engine's plain-text return verbatim — the engine appends a
+// relay breadcrumb that tells the parent what to do next (spawn the
+// next dispatch block, or call run_next).
 //
-// Why batch (not one-per-tick): cursor walks the wave-ready set once,
-// emits all of them; parent dispatches N in parallel. Single tick =
-// whole wave. Mid-wave ticks return null (noop) until all in-flight
-// units terminate.
-//
-// Model routing — mirrors start_unit and start_feedback_hat. Cascade:
-// unit > hat > stage > studio. When a unit was rejected and the
-// model_original/model fields got bumped (haiku→sonnet→opus), the
-// per-unit value is at the top of the cascade so the escalated tier
-// gets picked up on the next bolt automatically.
+// File-backed dispatch (2026-05-19): each per-unit subagent prompt is
+// written to its own file under the per-intent prompts dir and the
+// parent template only embeds `<subagent prompt_file="...">` markup
+// per unit. Replaces the legacy inline prompt prose in the parent
+// template, which duplicated the body in the parent's context.
+// `buildUnitHatDispatchBlock` is the single source of truth for the
+// per-unit prompt body — shared with the advance_hat relay breadcrumb
+// in `state-tools.ts` so the two cannot disagree.
 
-import { existsSync, readFileSync } from "node:fs"
-import { join } from "node:path"
 import { Eta } from "eta"
-import matter from "gray-matter"
-import { features } from "../../../../../config.js"
-import { type ModelTier, resolveModel } from "../../../../../model-selection.js"
-import { stageDir } from "../../../../../state-tools.js"
-import {
-	readHatDefs,
-	readStageDef,
-	readStudio,
-} from "../../../../../studio-reader.js"
-import {
-	batchDispatchDirective,
-	providerSpliceBlock,
-} from "../../../_helpers.js"
+import { buildUnitHatDispatchBlock } from "../../../../unit-dispatch-builder.js"
+import { batchDispatchDirective } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { sharedBlockRef } from "../../../_shared/index.js"
 import { definePromptBuilder } from "../../../define.js"
@@ -44,62 +29,26 @@ import { definePromptBuilder } from "../../../define.js"
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
 
-function resolveUnitModel(opts: {
-	slug: string
-	stage: string
-	unit: string
-	hatModel?: string
-	stageDefault?: string
-	studioDefault?: string
-}): ModelTier | undefined {
-	if (!features.modelSelection) return undefined
-	const { slug, stage, unit, hatModel, stageDefault, studioDefault } = opts
-	let unitModel: string | undefined
-	const unitPath = join(stageDir(slug, stage), "units", `${unit}.md`)
-	if (existsSync(unitPath)) {
-		try {
-			const raw = readFileSync(unitPath, "utf8")
-			unitModel = (matter(raw).data as { model?: string }).model
-		} catch {
-			/* swallow */
-		}
-	}
-	return resolveModel({
-		unit: unitModel,
-		hat: hatModel,
-		stage: stageDefault,
-		studio: studioDefault,
-	}).model
-}
-
-export default definePromptBuilder(({ slug, studio, action, dir }) => {
+export default definePromptBuilder(({ slug, studio, action }) => {
 	const stage = (action.stage as string) || ""
 	const hat = (action.hat as string) || ""
 	const units = (action.units as string[]) || []
 	const terminal = (action.terminal as boolean) || false
 
-	const hatDef = stage ? readHatDefs(studio, stage)?.[hat] : undefined
-	const stageDef = stage ? readStageDef(studio, stage) : undefined
-	const studioData = readStudio(studio)
-	const perUnitModel = new Map<string, ModelTier | undefined>()
-	for (const u of units) {
-		perUnitModel.set(
-			u,
-			resolveUnitModel({
-				slug,
-				stage,
-				unit: u,
-				hatModel: hatDef?.model,
-				stageDefault: stageDef?.data?.default_model as string | undefined,
-				studioDefault: studioData?.data?.default_model as string | undefined,
-			}),
-		)
-	}
-	const someResolved = Array.from(perUnitModel.values()).some(Boolean)
-	const unitLines = units.map((u) => {
-		const m = perUnitModel.get(u)
-		return `\`${u}\`${m ? ` _(model: ${m})_` : ""}`
-	})
+	// Build one file-backed dispatch block per unit. The shared builder
+	// resolves the model cascade, reads prior-hat iteration state, and
+	// writes the per-unit subagent prompt to disk. Returns the
+	// `<subagent prompt_file="...">` markup the parent pastes verbatim.
+	const dispatchBlocks = units.map((unit) =>
+		buildUnitHatDispatchBlock({
+			slug,
+			studio,
+			unit,
+			stage,
+			hat,
+			terminal,
+		}),
+	)
 
 	return eta.renderString(TEMPLATE, {
 		slug,
@@ -107,8 +56,11 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 		hat,
 		terminal,
 		unitCount: units.length,
-		unitLines,
-		someResolved,
+		dispatchBlocks,
+		// Multi-spawn announcement contract: when a wave fans out >1
+		// subagent, the parent announces the batch before spawning so
+		// the user isn't surprised by N parallel Tasks. Single-spawn
+		// dispatches skip it (no panic risk).
 		showAnnouncement: units.length > 1,
 		announcementBlock: sharedBlockRef("workflow-contracts-announcement"),
 		// Unconditional fix-loop / execute workflow contract block.
@@ -117,11 +69,6 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 		// always emitted so the subagent sees the contract every time
 		// regardless of wave size.
 		executeContractsBlock: sharedBlockRef("workflow-contracts-execute"),
-		// Provider splice: workflow providers (git, ticketing) inject
-		// their behavior contracts so hats know to commit/push, update
-		// ticket status, etc. Source providers don't splice here —
-		// they're a decompose-time concern.
-		providerBlock: providerSpliceBlock("execute", dir),
 		batchDirective:
 			units.length > 0 ? batchDispatchDirective(units.length, "subagents") : "",
 	})

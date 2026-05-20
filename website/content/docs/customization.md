@@ -45,7 +45,7 @@ category: engineering
 studio: data-pipeline
 ```
 
-Or specify it per-intent when running `/haiku:start`.
+Or specify it per-intent when running `/haiku:haiku-start`.
 
 ## Creating a Custom Stage
 
@@ -150,7 +150,7 @@ This augments (not replaces) the built-in builder instructions.
 
 H·AI·K·U ships with default instructions for each provider category (ticketing, spec, design, comms). To override them for your project:
 
-1. Run `/haiku:setup` — it offers to create override files during provider configuration
+1. Run `/haiku:haiku-setup` — it offers to create override files during provider configuration
 2. Or manually create `.haiku/providers/{type}.md` (e.g., `.haiku/providers/jira.md`)
 
 The override file replaces the built-in instructions for that provider type. See [Providers](/docs/providers/) for details.
@@ -168,14 +168,14 @@ For all customizable artifacts, H·AI·K·U checks project-level first:
 
 Project-level takes precedence. For hats, project-level **augments** (appends to) the built-in rather than replacing it — unless no built-in exists.
 
-## Scaffolding with `/haiku:scaffold`
+## Scaffolding with `/haiku:haiku-scaffold`
 
-Use `/haiku:scaffold` to generate the directory structure and template files for custom artifacts:
+Use `/haiku:haiku-scaffold` to generate the directory structure and template files for custom artifacts:
 
 ```
-/haiku:scaffold studio data-pipeline
-/haiku:scaffold stage data-pipeline validation
-/haiku:scaffold hat data-pipeline validation data-quality-reviewer
+/haiku:haiku-scaffold studio data-pipeline
+/haiku:haiku-scaffold stage data-pipeline validation
+/haiku:haiku-scaffold hat data-pipeline validation data-quality-reviewer
 ```
 
 This creates the files with the correct frontmatter structure, ready for you to fill in.

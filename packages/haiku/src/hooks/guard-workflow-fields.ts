@@ -120,7 +120,7 @@ function classifyPath(absPath: string): WorkflowPathClassification {
 		return { kind: "stage_state" }
 	}
 	// V-11: operator-only baseline-corrupt acknowledgement marker. Only
-	// /haiku:repair --confirm-baseline-reset (operator-driven) may
+	// /haiku:haiku-repair --confirm-baseline-reset (operator-driven) may
 	// place this; the agent has no path. Block both reads and writes
 	// — a reader could leak the diff hash to an attacker chain.
 	if (/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/\.baseline-ack$/.test(absPath)) {
@@ -198,7 +198,7 @@ function redirectMessage(
 		return (
 			`BLOCKED: Cannot ${op} intent.md via generic ${toolName}. Intent files ` +
 			`are workflow-managed — use haiku_intent_get to read fields, haiku_run_next ` +
-			`to drive the lifecycle, or call /haiku:repair if state is genuinely corrupted. ` +
+			`to drive the lifecycle, or call /haiku:haiku-repair if state is genuinely corrupted. ` +
 			`Direct edits skip the integrity checksum and the workflow engine's invariants.`
 		)
 	}
@@ -214,7 +214,7 @@ function redirectMessage(
 		return (
 			`BLOCKED: Cannot ${op} .baseline-ack via generic ${toolName}. This is the V-11 ` +
 			`operator-only baseline-corrupt acknowledgement marker. Only ` +
-			`/haiku:repair --confirm-baseline-reset --diff-shown --confirm-diff-hash <sha> ` +
+			`/haiku:haiku-repair --confirm-baseline-reset --diff-shown --confirm-diff-hash <sha> ` +
 			`(operator-driven) may write it; the agent has no path here. Reads are also ` +
 			`blocked because the diff hash leaking to an attacker chain would let them ` +
 			`forge a valid-looking ack.`

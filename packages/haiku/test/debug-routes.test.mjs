@@ -1,5 +1,5 @@
 #!/usr/bin/env npx tsx
-// Test suite for /haiku:debug HTTP endpoints.
+// Test suite for /haiku:haiku-debug HTTP endpoints.
 //
 // Covers:
 //  1. GET /api/debug/intents — lists every intent on disk.
@@ -88,7 +88,7 @@ async function test(name, fn) {
 const port = await startHttpServer()
 const baseUrl = `http://127.0.0.1:${port}`
 
-console.log("\n=== /haiku:debug HTTP endpoints ===")
+console.log("\n=== /haiku:haiku-debug HTTP endpoints ===")
 
 await test("GET /api/debug/intents lists the test intent", async () => {
 	const res = await fetch(`${baseUrl}/api/debug/intents`)

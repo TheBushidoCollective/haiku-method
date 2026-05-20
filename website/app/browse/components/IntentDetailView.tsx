@@ -21,6 +21,12 @@ import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
 import { BrowseMarkdown } from "./BrowseMarkdown"
 import { IntentKanban } from "./KanbanView"
+import {
+	KiCanvasViewer,
+	ModelViewer,
+	TracespaceViewer,
+	TscircuitViewer,
+} from "./SpecializedViewers"
 import { UnitDetailView } from "./UnitDetailView"
 
 function titleCase(s: string): string {
@@ -417,8 +423,10 @@ export function IntentDetailView({
 							)
 						})()}
 
-					{/* Intent Content */}
-					{intent.content && (
+					{/* Intent Content — only render when no stage is expanded,
+					    so the stage view stays focused on the stage's units
+					    and feedback without the intent prose underneath. */}
+					{intent.content && !expandedStage && (
 						<section className="mb-8">
 							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
 								Intent Description
@@ -1094,15 +1102,101 @@ function MarkdownArtifactCard({
 }
 
 /** Renders an "other" artifact type as a simple row. */
+/** Dispatch otherwise-unhandled artifact extensions to specialized
+ *  viewers — mirrors the SPA's `/view/<session>?artifact=...` mime
+ *  dispatch so engineering artifacts (KiCad schematics + PCBs,
+ *  Gerber files, glTF/GLB 3D models, tscircuit circuits) render
+ *  inline instead of as a "Download" link. Falls back to the plain
+ *  card when the extension isn't recognized. */
 function OtherArtifactCard({ artifact }: { artifact: HaikuArtifact }) {
+	const lower = artifact.name.toLowerCase()
+	const url = artifact.rawUrl
+	if (url) {
+		if (/\.(kicad_sch|kicad_pcb|kicad_pro)$/.test(lower)) {
+			return (
+				<div className="rounded-lg border border-stone-200 dark:border-stone-700">
+					<div className="border-b border-stone-200 px-4 py-2 dark:border-stone-700">
+						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
+							{artifact.name}
+						</span>
+					</div>
+					<KiCanvasViewer url={url} name={artifact.name} />
+				</div>
+			)
+		}
+		if (/\.(gbr|drl)$/.test(lower)) {
+			return (
+				<div className="rounded-lg border border-stone-200 dark:border-stone-700">
+					<div className="border-b border-stone-200 px-4 py-2 dark:border-stone-700">
+						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
+							{artifact.name}
+						</span>
+					</div>
+					<TracespaceViewer url={url} name={artifact.name} />
+				</div>
+			)
+		}
+		if (/\.(glb|gltf)$/.test(lower)) {
+			return (
+				<div className="rounded-lg border border-stone-200 dark:border-stone-700">
+					<div className="border-b border-stone-200 px-4 py-2 dark:border-stone-700">
+						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
+							{artifact.name}
+						</span>
+					</div>
+					<ModelViewer url={url} name={artifact.name} />
+				</div>
+			)
+		}
+		if (/circuit\.tsx$/.test(lower) || /\.circuit\.tsx$/.test(lower)) {
+			return (
+				<div className="rounded-lg border border-stone-200 dark:border-stone-700">
+					<div className="border-b border-stone-200 px-4 py-2 dark:border-stone-700">
+						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
+							{artifact.name}
+						</span>
+					</div>
+					<TscircuitViewer url={url} name={artifact.name} />
+				</div>
+			)
+		}
+		if (/\.pdf$/.test(lower)) {
+			return (
+				<div className="rounded-lg border border-stone-200 dark:border-stone-700">
+					<div className="border-b border-stone-200 px-4 py-2 dark:border-stone-700">
+						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
+							{artifact.name}
+						</span>
+					</div>
+					<iframe
+						src={url}
+						title={artifact.name}
+						className="h-[85vh] w-full"
+					/>
+				</div>
+			)
+		}
+		if (/\.svg$/.test(lower)) {
+			return (
+				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
+					<div className="mb-2">
+						<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
+							{artifact.name}
+						</span>
+					</div>
+					<img src={url} alt={artifact.name} className="max-w-full" />
+				</div>
+			)
+		}
+	}
 	return (
 		<div className="rounded-lg border border-stone-200 px-4 py-3 dark:border-stone-700">
 			<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
 				{artifact.name}
 			</span>
-			{artifact.rawUrl && (
+			{url && (
 				<a
-					href={artifact.rawUrl}
+					href={url}
 					target="_blank"
 					rel="noopener noreferrer"
 					className="ml-2 text-xs text-teal-600 hover:underline dark:text-teal-400"
@@ -1313,6 +1407,10 @@ function StageDetail({
 
 	return (
 		<div className="space-y-4">
+			{/* Phase stepper — mirrors the SPA's stage-banner stepper so
+			    the user can see WHICH phase the stage is currently in at
+			    a glance, not just whether it's awaiting approval. */}
+			<PhaseStepper phase={stage.phase} stageStatus={stage.status} />
 			{/* Stage header with branch/PR info */}
 			<div className="flex flex-wrap items-center gap-3">
 				<h3 className="text-sm font-semibold text-stone-600 dark:text-stone-300">
@@ -1498,6 +1596,141 @@ function StageDetail({
 /** Compact list of feedback annotations. Each card is collapsed by default;
  *  clicking reveals the body. Distinguishes user-authored (amber) vs
  *  agent-authored (stone) and shows closed-state with strikethrough title. */
+// Mirrors the SPA's stage-banner phase stepper. Browse-side phases:
+// elaborate → execute → review → approve. The derivation in
+// `intent-parsing.ts` already maps the engine's legacy "gate" name
+// to "approve" so the order matches the canonical 5-phase model
+// (architecture §2.1) minus the terminal "complete" pip.
+const STAGE_PHASE_ORDER: ReadonlyArray<
+	"elaborate" | "execute" | "review" | "approve"
+> = ["elaborate", "execute", "review", "approve"]
+const PHASE_LABELS: Record<(typeof STAGE_PHASE_ORDER)[number], string> = {
+	elaborate: "Elaborate",
+	execute: "Execute",
+	review: "Review",
+	approve: "Approve",
+}
+const PHASE_HINTS: Record<(typeof STAGE_PHASE_ORDER)[number], string> = {
+	elaborate: "Hats plan unit files for the stage.",
+	execute: "Hats land code and artifacts for each unit.",
+	review: "Adversarial agents and quality gates audit the work.",
+	approve: "Final gate. Human or external approval, depending on mode.",
+}
+
+function PhaseStepper({
+	phase,
+	stageStatus,
+}: {
+	phase: string | "elaborate" | "execute" | "review" | "approve" | "complete" | ""
+	stageStatus: string
+}) {
+	const isStageComplete =
+		stageStatus === "completed" || stageStatus === "complete"
+	const activeIndex =
+		phase && phase !== "complete"
+			? STAGE_PHASE_ORDER.indexOf(
+					phase as (typeof STAGE_PHASE_ORDER)[number],
+				)
+			: -1
+	return (
+		<div className="inline-flex items-center gap-2">
+			<span className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
+				Phase
+			</span>
+			<ol className="inline-flex items-center gap-1 list-none m-0 p-0">
+				{STAGE_PHASE_ORDER.map((p, i) => {
+					const isActive = i === activeIndex && !isStageComplete
+					const isDone = isStageComplete || activeIndex > i
+					const stateWord = isActive ? "active" : isDone ? "done" : "pending"
+					return (
+						<li key={p} className="flex items-center gap-1">
+							<span
+								className="relative inline-flex items-center justify-center p-1 -m-1 group rounded-md"
+								role="img"
+								aria-label={`${PHASE_LABELS[p]} — ${stateWord}. ${PHASE_HINTS[p]}`}
+								aria-current={isActive ? "step" : undefined}
+							>
+								<span
+									className={`relative inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold leading-none transition-transform group-hover:scale-110 ${
+										isActive
+											? "bg-amber-500 text-white ring-2 ring-amber-300 dark:ring-amber-700 shadow-sm"
+											: isDone
+												? "bg-green-500 text-white"
+												: "bg-stone-300 dark:bg-stone-700 text-stone-700 dark:text-stone-300"
+									}`}
+									aria-hidden="true"
+								>
+									{isDone ? (
+										<svg
+											viewBox="0 0 16 16"
+											className="w-3 h-3"
+											fill="none"
+											stroke="currentColor"
+											strokeWidth="3"
+										>
+											<title>done</title>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												d="M3 8.5l3 3 7-7"
+											/>
+										</svg>
+									) : (
+										<span>{i + 1}</span>
+									)}
+								</span>
+								<span
+									role="tooltip"
+									className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-50"
+								>
+									<span className="block text-xs font-bold text-white dark:text-stone-900 leading-tight">
+										{PHASE_LABELS[p]}
+									</span>
+									<span
+										className={`block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 ${
+											isActive
+												? "text-amber-300 dark:text-amber-600"
+												: isDone
+													? "text-green-300 dark:text-green-600"
+													: "text-stone-300 dark:text-stone-600"
+										}`}
+									>
+										{stateWord}
+									</span>
+									<span className="block text-xs font-normal text-stone-200 dark:text-stone-700 leading-snug mt-1">
+										{PHASE_HINTS[p]}
+									</span>
+									<span
+										aria-hidden="true"
+										className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+									/>
+								</span>
+							</span>
+							{i < STAGE_PHASE_ORDER.length - 1 && (
+								<span
+									className={`w-3 h-0.5 transition-colors ${
+										isDone
+											? "bg-green-400 dark:bg-green-700"
+											: "bg-stone-300 dark:bg-stone-700"
+									}`}
+									aria-hidden="true"
+								/>
+							)}
+						</li>
+					)
+				})}
+			</ol>
+			<span className="text-xs font-mono text-stone-500 dark:text-stone-400">
+				{isStageComplete
+					? "done"
+					: activeIndex >= 0
+						? `${activeIndex + 1}/${STAGE_PHASE_ORDER.length}`
+						: "—"}
+			</span>
+		</div>
+	)
+}
+
 function FeedbackList({
 	feedback,
 	scope,
@@ -1507,20 +1740,72 @@ function FeedbackList({
 	scope: "stage" | "intent"
 	title: string | null
 }) {
+	const [filter, setFilter] = useState<"open" | "closed" | "all">("open")
 	if (feedback.length === 0) return null
-	const visible = feedback
+	const counts = {
+		open: feedback.filter((f) => f.closedAt == null).length,
+		closed: feedback.filter((f) => f.closedAt != null).length,
+		all: feedback.length,
+	}
+	const visible = feedback.filter((f) => {
+		if (filter === "all") return true
+		if (filter === "open") return f.closedAt == null
+		return f.closedAt != null
+	})
+	const FILTERS: Array<{ key: "open" | "closed" | "all"; label: string }> = [
+		{ key: "open", label: "Open" },
+		{ key: "closed", label: "Closed" },
+		{ key: "all", label: "All" },
+	]
 	return (
 		<div className="space-y-2">
-			{title && (
-				<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-					{title} ({visible.length})
-				</h4>
-			)}
-			<div className="space-y-2">
-				{visible.map((fb) => (
-					<FeedbackCard key={fb.id} fb={fb} scope={scope} />
-				))}
+			<div className="flex flex-wrap items-center gap-2">
+				{title && (
+					<h4 className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+						{title}
+					</h4>
+				)}
+				<div className="flex flex-wrap gap-1">
+					{FILTERS.map((f) => {
+						const n = counts[f.key]
+						const active = filter === f.key
+						return (
+							<button
+								key={f.key}
+								type="button"
+								onClick={() => setFilter(f.key)}
+								className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition ${
+									active
+										? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
+										: "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+								}`}
+							>
+								{f.label}
+								<span
+									className={`ml-1.5 ${
+										active
+											? "text-stone-300 dark:text-stone-500"
+											: "text-stone-400 dark:text-stone-500"
+									}`}
+								>
+									{n}
+								</span>
+							</button>
+						)
+					})}
+				</div>
 			</div>
+			{visible.length > 0 ? (
+				<div className="space-y-2">
+					{visible.map((fb) => (
+						<FeedbackCard key={fb.id} fb={fb} scope={scope} />
+					))}
+				</div>
+			) : (
+				<p className="px-2 py-3 text-xs text-stone-500 dark:text-stone-500">
+					No {filter === "all" ? "" : filter} feedback in this scope.
+				</p>
+			)}
 		</div>
 	)
 }

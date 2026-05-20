@@ -17,15 +17,15 @@ Get H·AI·K·U running in your project and deliver your first feature. H·AI·K
 
 | Command | What it does |
 |---------|--------------|
-| `/haiku:start` | Create an intent — define what you're building and select a studio |
-| `/haiku:pickup` | Run the stage pipeline — autonomous execution through each stage |
+| `/haiku:haiku-start` | Create an intent — define what you're building and select a studio |
+| `/haiku:haiku-pickup` | Run the stage pipeline — autonomous execution through each stage |
 
 ## Your First Feature
 
 ### Step 1: Create an Intent
 
 ```
-/haiku:start
+/haiku:haiku-start
 ```
 
 The AI guides you through:
@@ -39,18 +39,18 @@ The AI guides you through:
 Example session:
 
 ```
-User: /haiku:start
+User: /haiku:haiku-start
 AI: What do you want to build?
 User: Add user authentication with email/password
 AI: [Asks clarifying questions via interactive prompts]
 AI: Here are the success criteria I captured...
-AI: Intent created! Run /haiku:pickup to start.
+AI: Intent created! Run /haiku:haiku-pickup to start.
 ```
 
 ### Step 2: Run Stages
 
 ```
-/haiku:pickup
+/haiku:haiku-pickup
 ```
 
 The AI now works through the stages defined by your studio. For the **software studio**, stages progress through:
@@ -71,7 +71,7 @@ If the session runs long, the AI will suggest clearing context:
 ```
 AI: "Context getting full. Run /clear to continue."
 User: /clear
-User: /haiku:pickup
+User: /haiku:haiku-pickup
 ```
 
 Your progress is preserved — the AI picks up where it left off.
@@ -80,26 +80,26 @@ Your progress is preserved — the AI picks up where it left off.
 
 | Command | Purpose |
 |---------|---------|
-| `/haiku:start` | Create a new intent |
-| `/haiku:pickup` | Run the stage pipeline |
-| `/haiku:gate-review` | Pre-delivery code review — catches issues before external CI/bots |
-| `/haiku:pickup [slug]` | Resume an existing intent after a break |
-| `/haiku:quick` | Quick mode for small tasks — skip full pipeline |
-| `/haiku:zap` | Zero-ceremony hat loop — typo/one-liner work, no intent or workflow scaffolding |
-| `/haiku:reset-intent` | Wipe the whole intent (every stage, every branch) and recreate from the preserved title/description |
-| `/haiku:reset-stage` | Wipe a single stage (units, outputs, artifacts, branch) so the agent re-runs it from scratch — other stages stay put |
-| `/haiku:autopilot` | Full autonomous workflow — create, run, review, deliver |
+| `/haiku:haiku-start` | Create a new intent |
+| `/haiku:haiku-pickup` | Run the stage pipeline |
+| `/haiku:haiku-gate-review` | Pre-delivery code review — catches issues before external CI/bots |
+| `/haiku:haiku-pickup [slug]` | Resume an existing intent after a break |
+| `/haiku:haiku-quick` | Quick mode for small tasks — skip full pipeline |
+| `/haiku:haiku-zap` | Zero-ceremony hat loop — typo/one-liner work, no intent or workflow scaffolding |
+| `/haiku:haiku-reset-intent` | Wipe the whole intent (every stage, every branch) and recreate from the preserved title/description |
+| `/haiku:haiku-reset-stage` | Wipe a single stage (units, outputs, artifacts, branch) so the agent re-runs it from scratch — other stages stay put |
+| `/haiku:haiku-autopilot` | Full autonomous workflow — create, run, review, deliver |
 
 ## Example: Complete Workflow
 
 ```
-User: /haiku:start
+User: /haiku:haiku-start
 AI: What do you want to build?
 User: Add a dark mode toggle to the settings page
 AI: [Guides through requirements and criteria]
 AI: Intent created!
 
-User: /haiku:pickup
+User: /haiku:haiku-pickup
 AI: [Works autonomously through inception → development → review]
 AI: Intent complete! All criteria satisfied.
 
@@ -109,7 +109,7 @@ AI: [Creates PR with summary of changes]
 
 ## After Delivery
 
-Once your intent is complete, manage ongoing operational tasks with `/haiku:operate`. Define scheduled jobs, reactive handlers, and human review processes as spec files in `.haiku/{intent}/operations/`. See the [Operations Guide](/docs/operations-guide/) for details.
+Once your intent is complete, manage ongoing operational tasks with `/haiku:haiku-operate`. Define scheduled jobs, reactive handlers, and human review processes as spec files in `.haiku/{intent}/operations/`. See the [Operations Guide](/docs/operations-guide/) for details.
 
 ## What's Different from AI-DLC?
 

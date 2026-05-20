@@ -66,6 +66,32 @@ export const validateHaikuUnitSetInputSchema = stateAjv.compile(
 	HAIKU_UNIT_SET_INPUT_SCHEMA,
 )
 
+// ── haiku_unit_get ────────────────────────────────────────────────
+// Read ONE agent-authorable/corrective frontmatter field. The
+// counterpart to haiku_unit_set's corrective exemption: you can write
+// `quality_gates`/`outputs` on an active unit to repair a wrong gate
+// path, but `haiku_unit_set` replaces the WHOLE array — so without a read
+// you'd clobber the unit's other gates. This tool returns the current
+// value so the agent can read → modify one entry → write back safely
+// (2026-05-20 cross-stage-consistency churn report, fix #1). Scoped: the
+// handler refuses FSM-driven fields (iterations/reviews/approvals/
+// started_at) — engine bookkeeping stays hidden per §1.1.
+export const HAIKU_UNIT_GET_INPUT_SCHEMA = Type.Object(
+	{
+		...intentStageUnit,
+		field: Type.String({
+			minLength: 1,
+			description:
+				"Frontmatter field to read. Agent-authorable/corrective fields only (quality_gates, outputs, inputs, depends_on, model, closes, title, description). FSM-driven fields (iterations, reviews, approvals, started_at) return `unit_field_engine_only`.",
+		}),
+	},
+	{ additionalProperties: false },
+)
+export type HaikuUnitGetInput = Static<typeof HAIKU_UNIT_GET_INPUT_SCHEMA>
+export const validateHaikuUnitGetInputSchema = stateAjv.compile(
+	HAIKU_UNIT_GET_INPUT_SCHEMA,
+)
+
 // ── haiku_unit_list ───────────────────────────────────────────────
 
 export const HAIKU_UNIT_LIST_INPUT_SCHEMA = Type.Object(

@@ -133,8 +133,10 @@ stateDiagram-v2
     state security_execute {
       [*] --> security_execute_threat_modeler
       security_execute_threat_modeler --> security_execute_security_reviewer : hat.advance
-      security_execute_security_reviewer --> security_execute_done : hat.advance
+      security_execute_security_reviewer --> security_execute_verifier : hat.advance
       security_execute_security_reviewer --> security_execute_threat_modeler : hat.reject
+      security_execute_verifier --> security_execute_done : hat.advance
+      security_execute_verifier --> security_execute_security_reviewer : hat.reject
       security_execute_done --> [*]
     }
     security_execute --> security_review

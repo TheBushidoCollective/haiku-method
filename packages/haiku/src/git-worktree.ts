@@ -118,6 +118,37 @@ export function refsHaveIdenticalTrees(refA: string, refB: string): boolean {
 }
 
 /**
+ * Is the worktree mid-merge (or rebase / cherry-pick / revert)? True when
+ * any of the in-progress state markers exist in `$GIT_DIR`. During this
+ * window the engine-owned files in the working tree may carry conflict
+ * markers and partial state that the normal lifecycle/ownership guards
+ * would refuse to touch — but resolving the conflict REQUIRES writing
+ * them. So the internal write tools suspend their lifecycle / ownership /
+ * branch-enforcement preventions while this returns true (schema
+ * validation always stays on — see the guard call sites). Mirrors the
+ * PreToolUse `guard-workflow-fields` hook's `isMidMerge`, which suspends
+ * the same boundary for the agent's raw Read/Write/Edit. Falls back to
+ * "not merging" outside git mode.
+ */
+export function isMergeInProgress(): boolean {
+	if (!isGitRepo()) return false
+	const gitDir = tryRun(["git", "rev-parse", "--git-dir"])
+	if (!gitDir) return false
+	const abs = gitDir.startsWith("/") ? gitDir : join(process.cwd(), gitDir)
+	for (const marker of [
+		"MERGE_HEAD",
+		"REBASE_HEAD",
+		"CHERRY_PICK_HEAD",
+		"REVERT_HEAD",
+		"rebase-merge",
+		"rebase-apply",
+	]) {
+		if (existsSync(join(abs, marker))) return true
+	}
+	return false
+}
+
+/**
  * Combined "is the stage→main merge a no-op?" predicate. Returns true
  * when either condition holds:
  *
@@ -239,6 +270,15 @@ export interface PreCursorSyncResult {
 export function syncBranchDownstream(slug: string): PreCursorSyncResult {
 	if (!isGitRepo())
 		return { ok: true, performed: false, message: "non-git mode" }
+	// NOTE: the sole caller (`haiku_run_next`) runs `reconcileIntentBranches`
+	// — which calls `fetchOrigin()` — immediately before this, so
+	// `origin/<mainline>` already reflects the SHARED latest here. We must
+	// reconcile against THAT, not a stale local mainline (see mainlineRef
+	// below): commits pushed from elsewhere (another machine, CI, a
+	// teammate) otherwise never reach intent-main — the branch silently
+	// falls behind origin, every push rejects non-fast-forward, and the
+	// divergence accumulates (report #1, 2026-05-20: intent main 100
+	// commits behind origin, draft_pr_status failed all session).
 	const mainlineBranch = getMainlineBranch()
 	const intentMain = `haiku/${slug}/main`
 	const currentBranch = getCurrentBranch()
@@ -247,12 +287,38 @@ export function syncBranchDownstream(slug: string): PreCursorSyncResult {
 	// Step 1: mainline → intent main. Skip when intent main doesn't
 	// exist yet (brand-new intent) or trees already match.
 	if (mainlineBranch && intentMain && branchExists(intentMain)) {
-		// Check whether mainline is reachable (local or remote-tracking).
-		const mainlineRef = branchExists(mainlineBranch)
-			? mainlineBranch
-			: tryRun(["git", "rev-parse", "--verify", `origin/${mainlineBranch}`])
-				? `origin/${mainlineBranch}`
-				: ""
+		// Reconcile against the SHARED mainline. Prefer `origin/<mainline>`
+		// (the canonical remote state) over the local branch when the
+		// remote-tracking ref exists and carries commits the local mainline
+		// doesn't — that's exactly the "local is stale behind origin" case
+		// the fetch above just refreshed. Fall back to local mainline when
+		// there's no remote (offline, no origin) or local is already current.
+		const originMainlineRef = tryRun([
+			"git",
+			"rev-parse",
+			"--verify",
+			`origin/${mainlineBranch}`,
+		])
+			? `origin/${mainlineBranch}`
+			: ""
+		const localMainlineExists = branchExists(mainlineBranch)
+		// Use origin when it exists and the local branch is behind it (origin
+		// has commits local lacks). Otherwise local (it's current or ahead).
+		const localBehindOrigin =
+			originMainlineRef &&
+			localMainlineExists &&
+			isAncestor(mainlineBranch, originMainlineRef) &&
+			tryRun([
+				"git",
+				"rev-parse",
+				"--verify",
+				mainlineBranch,
+			]) !== tryRun(["git", "rev-parse", "--verify", originMainlineRef])
+		const mainlineRef = localMainlineExists
+			? localBehindOrigin
+				? originMainlineRef
+				: mainlineBranch
+			: originMainlineRef
 		// Skip the mainline → intent main sync when there's no debt to
 		// discharge: either trees match, or mainline is already an
 		// ancestor of intent main (intent main has accreted commits
@@ -1306,7 +1372,7 @@ export function reconcileMisroutedStageMerges(
 		// main is itself an ancestor of mainline (otherwise we'd
 		// silently drop divergent commits).
 		if (!isAncestor(intentMainRef, mainlineRef)) {
-			result.error = `Stage \`${stageBranch}\` was merged into \`${mainline}\` (the repo default) instead of \`${intentMain}\`, but \`${intentMain}\` has commits that aren't on \`${mainline}\` — fast-forward isn't safe. Resolve manually: \`git checkout ${intentMain} && git merge ${mainline}\` (or \`origin/${mainline}\`), resolve any conflicts, then re-run /haiku:pickup.`
+			result.error = `Stage \`${stageBranch}\` was merged into \`${mainline}\` (the repo default) instead of \`${intentMain}\`, but \`${intentMain}\` has commits that aren't on \`${mainline}\` — fast-forward isn't safe. Resolve manually: \`git checkout ${intentMain} && git merge ${mainline}\` (or \`origin/${mainline}\`), resolve any conflicts, then re-run /haiku:haiku-pickup.`
 			out.push(result)
 			continue
 		}
@@ -1341,7 +1407,7 @@ export function reconcileMisroutedStageMerges(
 					})
 					result.reconciled = true
 				} catch (mergeErr) {
-					result.error = `Fast-forward of \`${intentMain}\` to \`${mainline}\` failed: ${mergeErr instanceof Error ? mergeErr.message : String(mergeErr)}. Reconcile manually: \`git checkout ${intentMain} && git merge origin/${mainline}\`, resolve any conflicts, then re-run /haiku:pickup.`
+					result.error = `Fast-forward of \`${intentMain}\` to \`${mainline}\` failed: ${mergeErr instanceof Error ? mergeErr.message : String(mergeErr)}. Reconcile manually: \`git checkout ${intentMain} && git merge origin/${mainline}\`, resolve any conflicts, then re-run /haiku:haiku-pickup.`
 				}
 			}
 			if (result.reconciled) {
@@ -2533,7 +2599,7 @@ export function ensureOnStageBranch(
 				return {
 					ok: false,
 					branch: current,
-					message: `A git operation is in progress (${marker} present). Finish or abort it before stage-branch enforcement can realign the checkout.`,
+					message: `A git operation is in progress (${marker} present). Resolve the conflicted files, then \`git add\` + \`git commit\` to finish the merge (or \`git merge --abort\` to back out) before stage-branch enforcement can realign the checkout. While ${marker} is present the workflow-file guardrails are SUSPENDED — both raw Read/Write/Edit and the internal MCP write tools' lifecycle/ownership preventions — so you can resolve directly; the schema-safe internal tools still validate. Engine-owned feedback/unit YAML: the more-advanced (terminal/more-iterations/later) state wins, but KEEP feedback that exists only on this not-yet-merged stage branch.`,
 					switched: false,
 					block: "merge_in_progress",
 					target_branch: targetBranch,
@@ -2679,7 +2745,10 @@ export function ensureOnStageBranch(
 					branch: stageBranch,
 					message:
 						conflicts.length > 0
-							? `Merge intent-main → stage '${stage}' left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. Resolve conflicts on '${stageBranch}' (edit files, \`git add\`, \`git commit\`), then retry.`
+							? `Merge intent-main → stage '${stage}' left ${conflicts.length} conflicted file(s): ${conflicts.join(", ")}. ` +
+								`Resolve on '${stageBranch}', then \`git add\` + \`git commit\` and retry.\n\n` +
+								`While this merge is in progress the workflow-file guardrails are SUSPENDED (both raw Read/Write/Edit and the internal MCP write tools' lifecycle/ownership preventions), so you can resolve the conflicts directly. Prefer the schema-safe internal tools (\`haiku_feedback_write\`, \`haiku_unit_set\`, \`haiku_intent_set\`) — their schema validation still runs, so the resolved files stay valid.\n\n` +
+								`Resolution rule for engine-owned feedback/unit YAML: the MORE-ADVANCED state wins. A terminal (closed/rejected) feedback beats an open one; more iterations / a later closure timestamp beats fewer. BUT feedback that exists only on this (incomplete, not-yet-merged) stage branch must be KEPT — intent-main doesn't have it yet, so don't drop it in favor of main's absence.`
 							: `failed to merge main into stage: ${raw}. Resolve manually on '${stageBranch}', then retry.`,
 					switched: false,
 					block: conflicts.length > 0 ? "merge_conflict" : undefined,

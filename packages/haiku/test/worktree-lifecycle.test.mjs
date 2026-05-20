@@ -988,7 +988,7 @@ await test("merges from→to stage branch when toBranch is held by a foreign wor
 // ── consolidateStageBranches conflict pattern ───────────────────────────
 //
 // `consolidateStageBranches` is the orphan-discrete-intent recovery
-// merge — used by /haiku:repair on intents that have stage branches
+// merge — used by /haiku:haiku-repair on intents that have stage branches
 // but no haiku/{slug}/main. Originally it caught merge errors and
 // returned a generic `{success: false, message}`. Audit follow-up
 // upgraded it to the standard pattern: detect conflicts via

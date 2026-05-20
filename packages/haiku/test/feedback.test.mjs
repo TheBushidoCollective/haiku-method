@@ -20,6 +20,7 @@ import {
 	countPendingFeedback,
 	deleteFeedbackFile,
 	deriveAuthorType,
+	deriveFeedbackStatus,
 	FEEDBACK_ORIGINS,
 	feedbackDir,
 	findFeedbackFile,
@@ -1151,6 +1152,42 @@ try {
 			parsed.errors.some((e) => e.path === "/intent"),
 			"Expected an error on /intent",
 		)
+	})
+
+	// ── findFeedbackFile numbering-collision safety ───────────────────────────
+	// Regression for the churn-FB-stuck bug (2026-05-19): two files sharing
+	// one integer prefix (a legacy `01-*.md` next to a `001-*.md`) must
+	// resolve deterministically to the OPEN one, so the lifecycle guard and
+	// the cursor's feedback walk never disagree about whether the FB is
+	// closed.
+	console.log("\n=== findFeedbackFile numbering-collision safety ===")
+
+	test("two files share integer 1 → resolves the OPEN one, not the closed duplicate", () => {
+		const fbDir = join(intentDirPath, "stages", stageName, "feedback")
+		mkdirSync(fbDir, { recursive: true })
+		// Closed duplicate (legacy 2-digit prefix), integer 1.
+		writeFileSync(
+			join(fbDir, "01-closed-dup.md"),
+			"---\ntitle: closed dup\norigin: agent\nauthor_type: agent\ncreated_at: 2026-05-19T00:00:00Z\nclosed_at: 2026-05-19T01:00:00Z\nclosed_by: fix-loop:FB-001:bolt-1\n---\n\nclosed duplicate\n",
+		)
+		// Open file (3-digit prefix), integer 1.
+		writeFileSync(
+			join(fbDir, "001-open-real.md"),
+			"---\ntitle: open real\norigin: agent\nauthor_type: agent\ncreated_at: 2026-05-19T00:00:00Z\nstatus: pending\nclosed_by: null\nbolt: 0\nresolution: null\n---\n\nopen real FB\n",
+		)
+		const found = findFeedbackFile(intentSlug, stageName, "FB-001")
+		assert.ok(found, "expected a match for FB-001")
+		assert.strictEqual(
+			found.filename,
+			"001-open-real.md",
+			`must resolve the OPEN file, not the closed duplicate; got ${found.filename}`,
+		)
+		// And its derived status must be open (pending), so the advance-hat
+		// lifecycle guard would NOT reject it.
+		assert.strictEqual(deriveFeedbackStatus(found.data), "pending")
+		// Cleanup so later sequential-numbering tests aren't perturbed.
+		rmSync(join(fbDir, "01-closed-dup.md"))
+		rmSync(join(fbDir, "001-open-real.md"))
 	})
 
 	// ── Cleanup ───────────────────────────────────────────────────────────────

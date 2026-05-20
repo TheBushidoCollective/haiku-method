@@ -15,7 +15,7 @@ export const HOOKS: HookDef[] = [
 	{
 		group: "guardrails",
 		name: "redirect-plan-mode",
-		desc: "PreToolUse on `EnterPlanMode` (Claude Code only). Denies the call and redirects the user to `/haiku:start` so the workflow engine — not the harness's plan mode — owns intent creation.",
+		desc: "PreToolUse on `EnterPlanMode` (Claude Code only). Denies the call and redirects the user to `/haiku:haiku-start` so the workflow engine — not the harness's plan mode — owns intent creation.",
 		fires: ["call-chip"],
 		file: "packages/haiku/src/hooks/redirect-plan-mode.ts",
 	},

@@ -29,6 +29,7 @@ import { readFile, realpath } from "node:fs/promises"
 import { extname, resolve } from "node:path"
 import type { FastifyReply } from "fastify"
 import { FileServeParamsSchema } from "haiku-api"
+import { inlineAdjacentStylesheets } from "../html-inline.js"
 
 /**
  * FB-21 (defence-in-depth — OOB filesystem drops):
@@ -186,6 +187,52 @@ export async function serveFile(
 	}
 }
 
+const INLINE_HTML_EXTS: ReadonlySet<string> = new Set([".html", ".htm"])
+
+/**
+ * Serve an artifact, inlining adjacent stylesheets when it is HTML.
+ *
+ * HTML is forced to `application/octet-stream; attachment` by `serveFile`
+ * (FB-21 — never serve a renderable `text/html` content-type under the
+ * tunnel origin). The SPA renders HTML artifacts in a `srcDoc` iframe
+ * instead, fetching the bytes through this route. A `srcDoc` document has
+ * no base URL, so a relative `<link rel="stylesheet" href="styles.css">`
+ * resolves against the SPA origin and the wireframe renders unstyled
+ * (reported 2026-05-20 — also affects `haiku_view`'s ViewPage, which
+ * fetches `/stage-artifacts/...` and srcDocs it). Inlining the adjacent
+ * stylesheet here makes the served body self-contained, so it styles
+ * correctly once srcDoc'd — no renderable content-type, no sub-resource
+ * auth. `clampRoot` bounds which CSS files may be inlined (path-traversal
+ * clamp); remote / root-absolute / escaping links are left untouched.
+ *
+ * Non-HTML files delegate straight to `serveFile` (unchanged).
+ */
+export async function serveArtifact(
+	reply: FastifyReply,
+	realPath: string,
+	clampRoot: string,
+): Promise<void> {
+	if (!INLINE_HTML_EXTS.has(extname(realPath).toLowerCase())) {
+		return serveFile(reply, realPath)
+	}
+	let inlined: string
+	try {
+		const raw = await readFile(realPath, "utf-8")
+		const root = await realpath(clampRoot).catch(() => resolve(clampRoot))
+		inlined = await inlineAdjacentStylesheets(raw, realPath, root)
+	} catch {
+		reply.status(404).send("Not found")
+		return
+	}
+	// Same hardened headers `serveFile` applies to HTML: octet-stream +
+	// attachment + nosniff. The bytes are still never a renderable
+	// content-type under the tunnel origin; the SPA fetches + srcDocs them.
+	reply.header("X-Content-Type-Options", "nosniff")
+	reply.header("Content-Type", "application/octet-stream")
+	reply.header("Content-Disposition", "attachment")
+	reply.send(inlined)
+}
+
 export async function serveUnderRoot(
 	reply: FastifyReply,
 	rootDir: string,
@@ -196,5 +243,5 @@ export async function serveUnderRoot(
 		reply.status(403).send({ error: "forbidden_path_traversal" })
 		return
 	}
-	return serveFile(reply, safe.path)
+	return serveArtifact(reply, safe.path, rootDir)
 }

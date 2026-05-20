@@ -122,11 +122,16 @@ const expectedStateTools = [
 	"haiku_intent_get",
 	"haiku_intent_list",
 	"haiku_stage_get",
-	// haiku_unit_get is FSM-internal only per architecture §1.1 / §1.2 — it
-	// exposes frontmatter, which the FM-is-FSM-only rule forbids exposing
-	// to agents. Use haiku_unit_read (body+title only) for agent-callable
-	// reads. The handler is retained for FSM-internal callers but is no
-	// longer registered in the agent-callable schema.
+	// haiku_unit_get is agent-callable again (2026-05-20) but SCOPED: it
+	// reads only the agent-authorable/corrective FM fields (quality_gates,
+	// outputs, inputs, depends_on, model, closes, title, …) and refuses the
+	// FSM-driven fields (iterations/reviews/approvals/started_at) with
+	// `unit_field_engine_only`. It's the read counterpart to haiku_unit_set's
+	// corrective exemption — without it the exemption is write-but-can't-
+	// safely-merge (the whole quality_gates array gets clobbered). The
+	// §1.1 boundary still holds: engine bookkeeping stays hidden; the body/
+	// title still go through haiku_unit_read.
+	"haiku_unit_get",
 	"haiku_unit_read",
 	"haiku_unit_write",
 	"haiku_unit_set",

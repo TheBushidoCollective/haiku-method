@@ -77,8 +77,10 @@ stateDiagram-v2
     state evaluate_execute {
       [*] --> evaluate_execute_evaluator
       evaluate_execute_evaluator --> evaluate_execute_technical_reviewer : hat.advance
-      evaluate_execute_technical_reviewer --> evaluate_execute_done : hat.advance
+      evaluate_execute_technical_reviewer --> evaluate_execute_verifier : hat.advance
       evaluate_execute_technical_reviewer --> evaluate_execute_evaluator : hat.reject
+      evaluate_execute_verifier --> evaluate_execute_done : hat.advance
+      evaluate_execute_verifier --> evaluate_execute_technical_reviewer : hat.reject
       evaluate_execute_done --> [*]
     }
     evaluate_execute --> evaluate_review
@@ -130,8 +132,10 @@ stateDiagram-v2
     state negotiate_execute {
       [*] --> negotiate_execute_negotiator
       negotiate_execute_negotiator --> negotiate_execute_legal_reviewer : hat.advance
-      negotiate_execute_legal_reviewer --> negotiate_execute_done : hat.advance
+      negotiate_execute_legal_reviewer --> negotiate_execute_verifier : hat.advance
       negotiate_execute_legal_reviewer --> negotiate_execute_negotiator : hat.reject
+      negotiate_execute_verifier --> negotiate_execute_done : hat.advance
+      negotiate_execute_verifier --> negotiate_execute_legal_reviewer : hat.reject
       negotiate_execute_done --> [*]
     }
     negotiate_execute --> negotiate_review

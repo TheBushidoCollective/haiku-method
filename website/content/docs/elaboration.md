@@ -4,7 +4,7 @@ description: What to expect during H·AI·K·U inception — the collaborative p
 order: 3
 ---
 
-Inception is the first phase of any H·AI·K·U intent. It's where you and the AI collaboratively define *what* to build, *why* it matters, and *how you'll know it's done*. Run `/haiku:start` to start.
+Inception is the first phase of any H·AI·K·U intent. It's where you and the AI collaboratively define *what* to build, *why* it matters, and *how you'll know it's done*. Run `/haiku:haiku-start` to start.
 
 ## What Inception Produces
 
@@ -18,7 +18,7 @@ By the end of inception, you'll have a set of spec files in `.haiku/{intent-slug
 | `discovery.md` | Technical exploration findings -- API schemas, codebase patterns, data sources |
 | `mockups/` | Wireframes for frontend/design units (if applicable) |
 
-These files are the contract that the execution phase (`/haiku:pickup`) builds against.
+These files are the contract that the execution phase (`/haiku:haiku-pickup`) builds against.
 
 ## The Flow
 
@@ -103,7 +103,7 @@ Two questions about how work will be delivered:
 1. **Delivery strategy** -- One PR for the whole intent, individual PRs per unit, or direct to main
 2. **Source branch** -- Build from the default branch or your current branch
 
-These are per-intent decisions. For project-level defaults, configure them in `/haiku:setup`.
+These are per-intent decisions. For project-level defaults, configure them in `/haiku:haiku-setup`.
 
 ### 9. Quality Gates
 
@@ -131,7 +131,7 @@ Inception is done. You choose what happens next:
 
 Create `.haiku/ELABORATION.md` in your project to provide standing context for every inception session -- domain knowledge, required discovery areas, compliance requirements, team conventions.
 
-### Settings (`/haiku:setup`)
+### Settings (`/haiku:haiku-setup`)
 
 These project-level settings affect inception behavior:
 
@@ -145,28 +145,28 @@ These project-level settings affect inception behavior:
 
 ### Autonomous Mode
 
-When invoked via `/haiku:autopilot`, inception runs with minimal interaction -- making reasonable defaults instead of asking questions. It only pauses for genuine ambiguity, spec contradictions, or unfixable review findings.
+When invoked via `/haiku:haiku-autopilot`, inception runs with minimal interaction -- making reasonable defaults instead of asking questions. It only pauses for genuine ambiguity, spec contradictions, or unfixable review findings.
 
 ## Tips
 
 - **Be specific upfront.** The more detail you give in Step 1, the fewer clarifying questions the AI needs to ask.
 - **Push back on criteria.** If a proposed criterion is vague ("code is clean") or out of scope, say so. Criteria drive everything downstream.
 - **Review domain models carefully.** A wrong domain model means wrong unit specs, which means building the wrong thing. This is the most important checkpoint.
-- **Use `/haiku:start {slug}`** to modify an existing intent that hasn't started execution yet.
+- **Use `/haiku:haiku-start {slug}`** to modify an existing intent that hasn't started execution yet.
 - **Use `/haiku:followup`** to create an iteration intent that builds on a completed one.
 
 ## What Happens After Inception
 
 After inception, the typical flow is:
 
-1. **Run** (`/haiku:pickup`) -- autonomous stage pipeline: stages execute their hat sequences per unit
+1. **Run** (`/haiku:haiku-pickup`) -- autonomous stage pipeline: stages execute their hat sequences per unit
 2. **Integration** -- cross-unit validation after all units complete
 3. **Pre-delivery review** -- full-diff, multi-agent code review before PR creation
 4. **PR creation** -- push and open a pull request
 
-The **pre-delivery review** (`/haiku:gate-review`) deserves special mention. It runs specialized review agents in fresh contexts against the full diff -- catching issues that the per-unit reviewer might miss because it only saw one unit at a time. It reads your project's `REVIEW.md` and `CLAUDE.md` for project-specific review rules, and auto-fixes issues in a loop before the PR is created.
+The **pre-delivery review** (`/haiku:haiku-gate-review`) deserves special mention. It runs specialized review agents in fresh contexts against the full diff -- catching issues that the per-unit reviewer might miss because it only saw one unit at a time. It reads your project's `REVIEW.md` and `CLAUDE.md` for project-specific review rules, and auto-fixes issues in a loop before the PR is created.
 
-You can also run `/haiku:gate-review` standalone -- after `/haiku:quick`, or on any branch before pushing -- to catch issues before they hit external CI or review bots.
+You can also run `/haiku:haiku-gate-review` standalone -- after `/haiku:haiku-quick`, or on any branch before pushing -- to catch issues before they hit external CI or review bots.
 
 ## Next Steps
 

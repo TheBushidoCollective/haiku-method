@@ -1,0 +1,76 @@
+---
+title: "Adopting Existing Features"
+description: "H·AI·K·U now supports reverse-engineering existing codebases into structured intent artifacts, enabling brownfield systems to participate in the full lifecycle."
+date: 2026-03-30
+---
+
+H·AI·K·U had a greenfield problem. Every entry point assumed you were building something new.
+
+Most real teams aren't. They have auth that's been in production for three years. Billing that everyone's afraid to touch. A notifications service that quietly sends ten million emails a week. Telling those teams "the methodology works great, but only for the next thing you build" isn't a serious answer — it just turns the harness into a tool for the easy half of the codebase.
+
+That's the brownfield gap. Closing it was the whole point of `/haiku:haiku-adopt`.
+
+<Callout tone="warn" title="The brownfield gap">
+Before adopt, the only way an existing feature could participate in the methodology was if you re-built it through it. Authentication systems, billing pipelines, notification services — production code that already worked, already had tests, already paged on-call when it failed — were invisible to every operational workflow. The harness treated "your codebase" as "whatever I built this week."
+</Callout>
+
+## What adopt does
+
+Adopt reverse-engineers an existing feature into the same artifact shape the methodology produces from scratch — without touching a single line of production code. The feature already works. The code is already deployed. Adopt doesn't rebuild it. It documents it in the structure the rest of the lifecycle expects, so operations, follow-ups, and reviews can hook into it.
+
+<Compare verdict="diverge" title="What the two paths do">
+  <Side label="Start an intent">
+    Plan the feature, decompose it into units, run the construction loop, ship the code. Every artifact begins life empty and earns its way to done.
+  </Side>
+  <Side label="Adopt an existing feature">
+    Read the code that already shipped, name what's there, write the artifacts as if they'd been built through the methodology — already in the done state. No construction phase, no new code.
+  </Side>
+</Compare>
+
+The result looks exactly like what elaboration would have produced if the feature had been built through the methodology from the start. Every unit has completion criteria. Every criterion points to a real, traceable piece of evidence — a specific test file, a CI check, a deployment configuration. Every artifact is marked completed, because there's no construction phase. The code exists. The work is done. What was missing was the structure.
+
+## How it runs
+
+Adopt walks through seven phases, with a confirmation gate at each boundary.
+
+<KeyPoints title="The seven phases">
+1. **Gather.** A conversation about what the feature does, where it lives, and what matters operationally. Not a form — enough context to know where to look.
+2. **Explore.** Five lenses run in parallel — the code, the git history, the test suite, the CI configuration, and the deployment surface — each as its own focused reading rather than one generalist's blurry summary.
+3. **Propose.** The findings synthesize into a proposed intent with elaborated units. You review the unit boundaries before anything else lands.
+4. **Criteria.** Success criteria get reverse-engineered from the test suite and CI configuration. Each criterion points to concrete evidence — a token-expiry test pinning "rejects expired tokens," a rate-limit test plus the CI step pinning "enforces per-user quotas."
+5. **Operational plan.** Monitoring, incident response, scaling, maintenance — derived from the deployment surface analysis.
+6. **Write.** Artifacts land in the standard location. All units are marked completed.
+7. **Handoff.** A summary of what was created and what's now available.
+</KeyPoints>
+
+The criteria aren't invented. They're extracted from what the codebase already proves about itself. That distinction matters — adopt isn't asking the agent to imagine what good would look like. It's asking the agent to read what's already there and write it down in a structured place.
+
+## Why completed status matters
+
+Every artifact adopt produces is marked completed. That's not a technicality. It's the load-bearing design decision.
+
+Adopt doesn't create work. It creates structure around work that's already done. If adopt generated active units, the execution loop would try to build them — and there's nothing to build. The code exists. The tests pass. Setting completed status tells the rest of the methodology: this feature is real, it's documented, it's ready for operations.
+
+<Callout tone="info" title="The status is the contract">
+Completed means the methodology trusts the artifact as a finished record, not a work item. Without that trust the harness either ignores the feature or tries to rebuild it. Neither one is what you want when the code's been in production for three years.
+</Callout>
+
+
+That's what unlocks the two capabilities that motivated the whole effort.
+
+<Grid>
+  <Card eyebrow="Operations" title="Operate against real features" accent="good">
+    A documented intent plus an operational plan plus completed status lets the operate command target features that have been live for years. Incident drills, scaling reviews, on-call runbooks all become tractable for code the methodology didn't write.
+  </Card>
+  <Card eyebrow="Follow-up" title="Iterate on what exists" accent="good">
+    A completed intent is a starting position for the next change. The system knows what was built, what the criteria were, and what evidence supports them — so the next iteration starts informed, not blank.
+  </Card>
+</Grid>
+
+## From greenfield tool to full lifecycle
+
+Adopt turns the methodology from "covers new work" into "covers the whole lifecycle." New features come in through the normal start path. Existing features come in through adopt. Both produce the same artifact shape, both participate in the same operational workflows, both support the same iteration patterns.
+
+No methodology survives contact with a real codebase if it can't account for what already exists. Teams don't start from zero. They start from years of accumulated decisions, shipped features, and operational knowledge. A lifecycle methodology that ignores that is a toy. One that can absorb it and bring it under governance is a tool.
+
+The brownfield gap is closed. Every feature — whether it was built last week or three years ago — can participate in the same lifecycle.

@@ -15,7 +15,7 @@ export const config: DemoConfig = {
 		{
 			delay: 800,
 			actions: [
-				{ type: "msg", role: "user", label: "you", text: "/haiku:start" },
+				{ type: "msg", role: "user", label: "you", text: "/haiku:haiku-start" },
 			],
 		},
 		{

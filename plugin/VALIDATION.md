@@ -76,7 +76,7 @@ These must ALWAYS be true regardless of studio, stage, or user action.
 
 ## Scenario 1: New Intent Through Full Lifecycle (Software Studio)
 
-**Trigger:** User runs `/haiku:start` with a description.
+**Trigger:** User runs `/haiku:haiku-start` with a description.
 
 ### Expected Flow
 
@@ -87,7 +87,7 @@ These must ALWAYS be true regardless of studio, stage, or user action.
    - [ ] Intent fields set during creation (mode, studio, etc.)
    - [ ] One intent per session — `haiku_intent_create` rejects if session already has an active intent
 
-2. **First `/haiku:pickup`:**
+2. **First `/haiku:haiku-pickup`:**
    - [ ] `haiku_run_next` returns `start_stage` with stage: inception, hats: [architect, elaborator]
    - [ ] Orchestrator performs workflow side effects: writes `state.json` (status: active, phase: elaborate), sets `active_stage`, creates intent branch
    - [ ] Agent follows the returned action
@@ -151,7 +151,7 @@ These must ALWAYS be true regardless of studio, stage, or user action.
 **Trigger:** User creates intent with mode: discrete.
 
 - [ ] After each stage gate passes, `haiku_run_next` returns `stage_complete_discrete` (not `advance_stage`)
-- [ ] Agent stops and tells user to run `/haiku:pickup` for next stage
+- [ ] Agent stops and tells user to run `/haiku:haiku-pickup` for next stage
 - [ ] Even `review: auto` gates stop in discrete mode
 
 ---
@@ -173,7 +173,7 @@ These must ALWAYS be true regardless of studio, stage, or user action.
 
 - [ ] `haiku_run_next` returns `gate_await` — orchestrator enters the gate (sets gate_entered_at)
 - [ ] Agent reports what is being awaited
-- [ ] Intent blocks until user runs `/haiku:pickup` again
+- [ ] Intent blocks until user runs `/haiku:haiku-pickup` again
 - [ ] On resume: agent confirms event occurred, then advances
 
 ---
@@ -192,7 +192,7 @@ These must ALWAYS be true regardless of studio, stage, or user action.
 
 **Trigger:** During development elaboration, agent discovers design stage output is missing a screen.
 
-- [ ] Agent invokes `/haiku:refine stage:design`
+- [ ] Agent invokes `/haiku:haiku-refine stage:design`
 - [ ] A new unit is created in `stages/design/units/`
 - [ ] That unit runs through design stage's hats (designer, design-reviewer)
 - [ ] Updated design output is persisted
@@ -203,19 +203,19 @@ These must ALWAYS be true regardless of studio, stage, or user action.
 
 ## Scenario 7: Template Instantiation
 
-**Trigger:** User runs `/haiku:start --template new-feature --param feature="OAuth login"`.
+**Trigger:** User runs `/haiku:haiku-start --template new-feature --param feature="OAuth login"`.
 
 - [ ] Template resolved from `studios/software/templates/new-feature.md`
 - [ ] Parameters substituted: `{{ feature }}` → "OAuth login" in all criteria
 - [ ] Pre-filled units created in appropriate stages
-- [ ] First `/haiku:pickup` skips elaboration (units already exist)
+- [ ] First `/haiku:haiku-pickup` skips elaboration (units already exist)
 - [ ] `haiku_run_next` returns `advance_phase` from elaborate to execute
 
 ---
 
 ## Scenario 8: Composite Intent
 
-**Trigger:** User runs `/haiku:composite` selecting software + marketing.
+**Trigger:** User runs `/haiku:haiku-composite` selecting software + marketing.
 
 - [ ] Intent created with `composite:` frontmatter listing both studios and their stages
 - [ ] `sync:` rules defined (e.g., marketing:launch waits for software:development)
@@ -241,7 +241,7 @@ These must ALWAYS be true regardless of studio, stage, or user action.
 
 ## Scenario 10: Migration from AI-DLC
 
-**Trigger:** User invokes `/haiku:migrate` (or runs `haiku migrate` directly). Migration is never automatic — see SessionStart in Scenario 13.
+**Trigger:** User invokes `/haiku:haiku-migrate` (or runs `haiku migrate` directly). Migration is never automatic — see SessionStart in Scenario 13.
 
 - [ ] Bare `haiku migrate` is rejected with a candidate list and usage hint
 - [ ] `haiku migrate <slug>` defaults to dry-run; nothing is written
@@ -292,10 +292,10 @@ These must ALWAYS be true regardless of studio, stage, or user action.
 **Trigger:** Various Claude Code lifecycle events.
 
 ### SessionStart
-No SessionStart hooks are registered. `inject-context` and `ensure-deps` were removed in `c0357289` — the orchestrator returns equivalent context on the first `haiku_run_next` call, and `.ai-dlc/` migration is now an explicit user action via `/haiku:migrate` (never automatic).
+No SessionStart hooks are registered. `inject-context` and `ensure-deps` were removed in `c0357289` — the orchestrator returns equivalent context on the first `haiku_run_next` call, and `.ai-dlc/` migration is now an explicit user action via `/haiku:haiku-migrate` (never automatic).
 
 ### PreToolUse
-- [ ] `redirect-plan-mode`: blocks EnterPlanMode, suggests `/haiku:start`
+- [ ] `redirect-plan-mode`: blocks EnterPlanMode, suggests `/haiku:haiku-start`
 - [ ] `inject-state-file`: injects `state_file` arg into `haiku_` MCP tool calls
 - [ ] `guard-workflow-fields`: blocks direct edits to workflow-controlled fields in haiku state files
 - [ ] `prompt-guard`: warns on injection patterns in `.haiku/` file writes
@@ -357,7 +357,7 @@ No SessionStart hooks are registered. `inject-context` and `ensure-deps` were re
 - [ ] During elaboration, the agent reads the stage's STAGE.md `inputs:` to discover required upstream artifacts
 - [ ] The agent reads each referenced artifact definition (from `discovery/` or `outputs/` in the upstream stage) to find the `location:` where the artifact lives
 - [ ] The agent loads the artifact from that location and uses it to inform elaboration
-- [ ] If an input artifact is missing or stale, the agent invokes `/haiku:refine stage:{upstream}` for a scoped side-trip
+- [ ] If an input artifact is missing or stale, the agent invokes `/haiku:haiku-refine stage:{upstream}` for a scoped side-trip
 - [ ] During execution, the agent writes output artifacts to the locations specified in the stage's output definitions
 - [ ] Artifact persistence promotes discovery/output files to their scoped knowledge directories (auto-commit on unit/stage complete)
 

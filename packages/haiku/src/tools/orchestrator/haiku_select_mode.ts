@@ -6,7 +6,7 @@
 //
 // Mode is engine-managed. The agent never types `mode: <value>` into
 // any frontmatter writer — the value flows through this picker tool
-// only. /haiku:start drives a fresh selection; /haiku:change-mode
+// only. /haiku:haiku-start drives a fresh selection; /haiku:haiku-change-mode
 // drives a mid-flight change against an already-started intent.
 //
 // Side effects:

@@ -22,8 +22,10 @@ stateDiagram-v2
     state intake_execute {
       [*] --> intake_execute_paralegal
       intake_execute_paralegal --> intake_execute_risk_assessor : hat.advance
-      intake_execute_risk_assessor --> intake_execute_done : hat.advance
+      intake_execute_risk_assessor --> intake_execute_verifier : hat.advance
       intake_execute_risk_assessor --> intake_execute_paralegal : hat.reject
+      intake_execute_verifier --> intake_execute_done : hat.advance
+      intake_execute_verifier --> intake_execute_risk_assessor : hat.reject
       intake_execute_done --> [*]
     }
     intake_execute --> intake_review

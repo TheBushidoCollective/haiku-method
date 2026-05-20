@@ -16,6 +16,10 @@ Anthropic published [a post on harness design for long-running agent apps](https
 
 Different teams, same problem, similar answers. That's the useful read. The places where we *don't* converge are the interesting part.
 
+<Callout tone="info" title="The validation, stated plainly">
+Two independent teams chasing the same failure modes — context drift, self-evaluation bias, work going off the rails — landed on the same seven structural answers. That's not coincidence. That's the shape of the problem forcing the shape of the solution.
+</Callout>
+
 ## Where we landed in the same place
 
 Seven patterns from their post map cleanly onto something we already have.
@@ -34,7 +38,7 @@ Seven patterns from their post map cleanly onto something we already have.
     "One agent would write a file, another agent would read it and respond either within that file or with a new file." Decouples agents, enables clean session boundaries.
   </Side>
   <Side label="H·AI·K·U">
-    Our whole substrate is files: `.haiku/intents/<slug>/units/*.md`, `feedback/FB-NN.md`, `intent.md`. v4 dropped `state.json` and made outputs-on-disk the only signal the cursor reads.
+    Our whole substrate is files — unit specs, feedback, the intent record, the stage outputs. Their state lives on disk too. We dropped a redundant index file along the way and let the artifacts themselves be the signal.
   </Side>
 </Compare>
 
@@ -70,7 +74,7 @@ Seven patterns from their post map cleanly onto something we already have.
     Evaluator drives the live app through Playwright MCP — navigates, screenshots, asserts. Catches runtime issues invisible in static review.
   </Side>
   <Side label="H·AI·K·U">
-    `haiku_view` returns a URL (boot mode for runnable apps; viewer mode for static artifacts via the SPA artifact-browser with specialized viewers for KiCanvas, Tracespace, model-viewer, tscircuit). Per-studio `runtime-verifier.md` mandates hand it to the bundled headless Playwright MCP and save proof PNGs to `[intent]/[stages/<stage>/]proof/*.png`.
+    Runtime verifiers boot the project's real app, drive it in a headless browser, and save screenshots as proof. Static artifacts get specialized viewers — schematics, gerbers, 3D models, circuits — so the verifier can see what the human reviewer would see. The mandates live with each studio.
   </Side>
 </Compare>
 
@@ -79,7 +83,7 @@ Seven patterns from their post map cleanly onto something we already have.
     "Read logs, identify divergence from expectation, adjust the agent's prompt, run again." Sustained signal turns into structured revisions.
   </Side>
   <Side label="H·AI·K·U">
-    Default-on reflection loop. `record_observations` fires at each stage close (free-form `observations.md` capturing out-of-band churn). `record_reflection` fires at intent close: writes a synthesized `reflection.md`, lands cascade-fixable findings as overlays directly under `.haiku/...`, and reports engine-class findings via `haiku_report` with the stable `[autotune engine-class]` prefix. All in one `autotune:`-prefixed commit; PR review is the human gate.
+    Default-on reflection loop. At each stage close the agent writes a short observations note — what was ambiguous, what surprised it, what the feedback stream didn't already show. At intent close it synthesizes a reflection across every stage, lands the project-fixable findings as local overlays the engine picks up next run, and surfaces engine-class findings through a structured report channel. Everything commits with a marked prefix; PR review is the human gate.
   </Side>
 </Compare>
 
@@ -138,6 +142,12 @@ Seven for seven on the load-bearing patterns. Different vocabularies, same shape
 <Compare verdict="win" title="Cascade resolution for mandates">
   <Side>
     Hats and review agents resolve through a three-tier cascade: stage → studio → global, first hit wins, with project `.haiku/` overriding plugin at each tier. Lets us share defaults and override locally without forking. Their setup looks flat per-task.
+  </Side>
+</Compare>
+
+<Compare verdict="win" title="Surface for non-developers and backpressure both ways">
+  <Side>
+    Every intent boots a local SPA. Review sessions render diffs, specs, annotations, and gate verbs in a browser tab. The browse view shows every intent in the repo with its current stage, gate, and open feedback. Non-engineers — design, PM, QA — interact with the work in the medium it lives in, and their feedback is a first-class input to the next tick. Drift flows the other direction: out-of-band file edits are detected pre-tick and reconciled before the agent moves. Anthropic's post is about the agent surface; it doesn't address the multi-skilled-team surface at all.
   </Side>
 </Compare>
 

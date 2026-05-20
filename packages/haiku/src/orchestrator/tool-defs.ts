@@ -169,7 +169,7 @@ export const orchestratorToolDefs = [
 	},
 	// v9: haiku_baseline_init removed. The premise-witness model has no
 	// baseline.json — witnesses live on the signed slot's FM, and there's
-	// nothing to "establish" out-of-band. The /haiku:repair flow loses
+	// nothing to "establish" out-of-band. The /haiku:haiku-repair flow loses
 	// its --confirm-baseline-reset path along with this tool.
 	{
 		name: "haiku_coverage_acknowledge",

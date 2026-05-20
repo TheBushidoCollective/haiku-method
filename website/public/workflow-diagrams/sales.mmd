@@ -187,8 +187,10 @@ stateDiagram-v2
     state negotiation_execute {
       [*] --> negotiation_execute_negotiator
       negotiation_execute_negotiator --> negotiation_execute_legal_reviewer : hat.advance
-      negotiation_execute_legal_reviewer --> negotiation_execute_done : hat.advance
+      negotiation_execute_legal_reviewer --> negotiation_execute_verifier : hat.advance
       negotiation_execute_legal_reviewer --> negotiation_execute_negotiator : hat.reject
+      negotiation_execute_verifier --> negotiation_execute_done : hat.advance
+      negotiation_execute_verifier --> negotiation_execute_legal_reviewer : hat.reject
       negotiation_execute_done --> [*]
     }
     negotiation_execute --> negotiation_review

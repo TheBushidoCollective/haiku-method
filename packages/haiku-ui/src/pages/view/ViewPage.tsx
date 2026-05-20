@@ -23,6 +23,7 @@ import {
 	TscircuitViewer,
 } from "../../atoms/SpecializedViewers"
 import { resolveStudioApp } from "../../studio-apps/registry"
+import { resolveEmbeddedAssetUrls } from "../review/shared/inline-asset-urls"
 
 export interface ViewPageProps {
 	sessionId: string
@@ -80,7 +81,18 @@ const EXTENSIONS_BY_KIND: Record<RenderKind, readonly string[]> = {
 	// Gerber + drill + pick-and-place. The various Gerber extension
 	// conventions (.gbr, .gbl, .gtl, .gto, .gko, .gm1, .drl, .xln) all
 	// route through Tracespace.
-	gerber: ["gbr", "gbl", "gtl", "gto", "gtp", "gbp", "gko", "gm1", "drl", "xln"],
+	gerber: [
+		"gbr",
+		"gbl",
+		"gtl",
+		"gto",
+		"gtp",
+		"gbp",
+		"gko",
+		"gm1",
+		"drl",
+		"xln",
+	],
 	// glTF 2.0 binary and JSON variants. Rendered by @google/model-viewer.
 	model3d: ["glb", "gltf"],
 	// tscircuit code-defined circuits. The .tsx extension overlaps with
@@ -248,15 +260,7 @@ function ArtifactRenderer({
 		)
 	}
 	if (kind === "html") {
-		return (
-			<iframe
-				title={name}
-				src={url}
-				sandbox="allow-same-origin"
-				className="h-[85vh] w-full rounded border border-stone-200 dark:border-stone-700"
-				data-testid="view-html-frame"
-			/>
-		)
+		return <HtmlRenderer url={url} name={name} />
 	}
 	if (kind === "markdown" || kind === "code" || kind === "text") {
 		return <TextRenderer url={url} kind={kind} />
@@ -287,6 +291,73 @@ function ArtifactRenderer({
 				Download {name}
 			</a>
 		</div>
+	)
+}
+
+/**
+ * HtmlRenderer — renders an HTML artifact (e.g. a wireframe) in a sandboxed
+ * `srcDoc` iframe.
+ *
+ * The file-serve route forces HTML to `application/octet-stream; attachment`
+ * (FB-21 — never a renderable content-type under the tunnel origin), so an
+ * `<iframe src=…>` can't render it directly. We fetch the bytes (the route
+ * already inlined adjacent stylesheets, so the body is self-contained and
+ * styles correctly with no base URL), rewrite relative `<img>`/`srcset`/CSS
+ * `url(…)` refs to authed tunnel URLs via `resolveEmbeddedAssetUrls` (so
+ * raster images load), and set the result as `srcDoc`. `allow-same-origin`
+ * (no `allow-scripts`) lets CSS apply without giving the artifact script
+ * execution under the tunnel origin.
+ */
+function HtmlRenderer({
+	url,
+	name,
+}: {
+	url: string
+	name: string
+}): React.ReactElement {
+	const [html, setHtml] = useState<string | null>(null)
+	const [err, setErr] = useState<string | null>(null)
+	useEffect(() => {
+		let cancelled = false
+		fetch(url)
+			.then((r) => {
+				if (!r.ok) throw new Error(`HTTP ${r.status}`)
+				return r.text()
+			})
+			.then((t) => {
+				// Base = the artifact's tunnel path (drop the `?t=` query) so
+				// embedded refs resolve against the HTML file's dir.
+				if (!cancelled) setHtml(resolveEmbeddedAssetUrls(t, url.split("?")[0]))
+			})
+			.catch((e: unknown) => {
+				if (!cancelled) setErr(e instanceof Error ? e.message : String(e))
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [url])
+	if (err) {
+		return (
+			<div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+				Failed to load artifact: {err}
+			</div>
+		)
+	}
+	if (html === null) {
+		return (
+			<div className="p-4 text-sm text-stone-500 dark:text-stone-400">
+				Loading…
+			</div>
+		)
+	}
+	return (
+		<iframe
+			title={name}
+			srcDoc={html}
+			sandbox="allow-same-origin"
+			className="h-[85vh] w-full rounded border border-stone-200 dark:border-stone-700"
+			data-testid="view-html-frame"
+		/>
 	)
 }
 

@@ -36,13 +36,13 @@ Configure your harness's MCP server list with:
 }
 ```
 
-The skills (`/haiku:start`, `/haiku:pickup`, etc.) are Claude-specific — outside Claude, you drive the workflow by calling MCP tools directly (`haiku_run_next`, `haiku_intent_create`, etc.).
+The skills (`/haiku:haiku-start`, `/haiku:haiku-pickup`, etc.) are Claude-specific — outside Claude, you drive the workflow by calling MCP tools directly (`haiku_run_next`, `haiku_intent_create`, etc.).
 
 ## Quickstart
 
 ```
-/haiku:start              # describe what you want; the plugin scaffolds an intent
-/haiku:pickup             # advance the workflow one tick at a time
+/haiku:haiku-start              # describe what you want; the plugin scaffolds an intent
+/haiku:haiku-pickup             # advance the workflow one tick at a time
 ```
 
 The orchestrator drives the stage loop. It tells you what to do next; you do it; it advances. When a stage finishes, adversarial review agents try to break the output before the gate opens.

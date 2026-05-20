@@ -61,6 +61,15 @@ runStep(
 	"HAIKU_SKIP_WORKFLOW_DIAGRAMS",
 )
 
+// Step 3: derive per-harness command files (Gemini TOML, OpenCode md)
+// from the canonical skills/<name>/SKILL.md sources so they ship in sync.
+runStep(
+	"Generate per-harness commands",
+	"node",
+	[join(__dir, "gen-harness-commands.mjs")],
+	"HAIKU_SKIP_HARNESS_COMMANDS",
+)
+
 // Build define flags — inline env vars at compile time
 const sentryDsn = process.env.HAIKU_SENTRY_DSN_MCP || ""
 

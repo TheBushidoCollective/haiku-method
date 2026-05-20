@@ -1085,7 +1085,7 @@ export function baselineAckMarkerPath(
 /** The on-disk shape of the ack marker. */
 export interface BaselineAckMarker {
 	/** sha256 of the reconstructed-vs-on-disk diff that the operator
-	 *  confirmed via /haiku:repair --confirm-baseline-reset. */
+	 *  confirmed via /haiku:haiku-repair --confirm-baseline-reset. */
 	diff_hash: string
 	/** ISO-8601 timestamp when the operator created this marker. */
 	created_at: string

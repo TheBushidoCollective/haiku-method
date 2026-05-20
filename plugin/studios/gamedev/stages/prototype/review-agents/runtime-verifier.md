@@ -5,7 +5,7 @@ interpretation: lens
 
 ## Check
 
-Open a view session via `haiku_view({ stage: "prototype", mode: "boot" })` when the prototype has a web build / dev server. Use the bundled `playwright` MCP to drive the build. For non-web prototypes, viewer mode renders captured gameplay clips, frame-by-frame screenshots, or design artifacts. Call `browser_take_screenshot` at every meaningful moment in the gameplay loop. **Save each screenshot** to disk under `.haiku/intents/<intent>/stages/prototype/proof/<scenario-or-mechanic>-<frame>.png` using the `Write` tool.
+Open a view session via `haiku_view({ stage: "prototype", mode: "boot" })` when the prototype has a web build / dev server. Use the bundled `haiku-playwright` MCP to drive the build. For non-web prototypes, viewer mode renders captured gameplay clips, frame-by-frame screenshots, or design artifacts. Call `browser_take_screenshot` at every meaningful moment in the gameplay loop. **Save each screenshot** to disk under `.haiku/intents/<intent>/stages/prototype/proof/<scenario-or-mechanic>-<frame>.png` using the `Write` tool.
 
 The agent **MUST** verify each of the following:
 
@@ -15,6 +15,12 @@ The agent **MUST** verify each of the following:
 - **Hit-boxes match visuals.** For interactive entities, the click / collision region matches the rendered sprite (or the design doc's declared tolerance). A 64px sprite with a 16px hit-box at the center is a finding when the design says hit-boxes should match the visual.
 - **Performance hits the prototype's frame-rate target.** Sample frame timing via `browser_evaluate` or the build's debug overlay. Frame drops below the declared target during the core loop are findings even when the gameplay logic is correct.
 - **Per-unit claims hold.** Read every prototype unit body. Each unit's claimed deliverable — a specific mechanic, a particular enemy type, a named level slice — MUST be playable and visible in the booted build.
+- **Concept-art parity — the build looks like what was concepted.** For each mechanic / level / character / UI element this unit owns:
+  1. **Locate the reference.** Walk `stages/concept/artifacts/` for art / sketches / mood boards / mechanic diagrams whose name corresponds to this unit's slug or capability. Read `stages/concept/artifacts/CONCEPT-DOC.md` (or the equivalent the studio used) so you know the color palette, silhouettes, art direction, and named beats the prototype is supposed to honor.
+  2. **Render the reference.** Open each concept artifact via `haiku_view({ stage: "concept", artifact: "<path>", mode: "viewer" })` and screenshot it.
+  3. **Drive the live build to the equivalent moment.** Navigate the booted build to the matching scene / mechanic / character. Screenshot at the same camera framing the concept depicted.
+  4. **Compare.** The built result MUST honor: the color palette declared in the concept doc, the silhouette / proportions of named characters and props, the layout of UI elements (HUD, menu, dialog), the named beats of mechanics (jump arc shape, hit-stop duration, screen-shake intensity). Save concept-vs-build screenshots side by side under `proof/` (e.g. `<unit>-concept-parity-<scene>.png`). "Looks close enough" is not the bar — declared palette and silhouettes either match the concept or they don't.
+  5. **File the finding when they diverge.** Wrong palette, off-model character, missing UI element, mechanic timing that doesn't match — every divergence is a finding. The concept is the contract; the prototype either honors it or doesn't.
 - **Close the session.** Call `haiku_view_close({ session_id })` after all checks complete.
 
 ## Common failure modes to look for

@@ -8,7 +8,7 @@ Complete reference for all H·AI·K·U commands. Commands are MCP prompts invoke
 
 ## Core Commands
 
-### `/haiku:start`
+### `/haiku:haiku-start`
 
 Create a new intent with studio and stage configuration.
 
@@ -20,35 +20,35 @@ Create a new intent with studio and stage configuration.
 
 **Arguments:** `description` (optional) — describe what you want to build. `template` (optional) — instantiate from a studio intent template.
 
-### `/haiku:pickup`
+### `/haiku:haiku-pickup`
 
 Run the stage pipeline for the current intent. Progresses through each stage in order, transitioning through the hats defined in each stage's `STAGE.md`.
 
 **Arguments:** `intent` (optional) — intent slug. Auto-detects if only one active intent.
 
-### `/haiku:gate-review`
+### `/haiku:haiku-gate-review`
 
 Pre-delivery code review using multi-agent specialized review. Spawns parallel agents for correctness, security, performance, architecture, and test quality. Auto-fixes HIGH findings (up to 3 iterations).
 
 **Arguments:** `intent` (optional) — intent slug.
 
-### `/haiku:autopilot`
+### `/haiku:haiku-autopilot`
 
-Full autonomous workflow — create intent, run stages, review, and deliver in one command. Sets mode=autopilot and chains to /haiku:pickup.
+Full autonomous workflow — create intent, run stages, review, and deliver in one command. Sets mode=autopilot and chains to /haiku:haiku-pickup.
 
 **Arguments:** `description` (optional) — feature description.
 
-### `/haiku:quick`
+### `/haiku:haiku-quick`
 
 Quick mode for small tasks — skip full pipeline. Streamlined single-stage workflow for fixes, renames, config changes, and small refactors.
 
 **Arguments:** `stage` (optional) — stage name. `description` (required) — task description.
 
-### `/haiku:zap`
+### `/haiku:haiku-zap`
 
 Zero-ceremony hat loop. No intent file, no unit decomposition, no workflow tick — runs the chosen stage's `hats:` sequence directly against the working tree as a chain of subagents (planner → builder → verifier). Parent skill commits once after the verifier returns `PASS — <summary>` with a confirmed Files list. Capped at 2 retries.
 
-Use for: typos, one-line config tweaks, small bug fixes — work where the cost of a mistake is "edit and re-run." Use `/haiku:quick` or `/haiku:start` for anything that crosses stages or needs traceability.
+Use for: typos, one-line config tweaks, small bug fixes — work where the cost of a mistake is "edit and re-run." Use `/haiku:haiku-quick` or `/haiku:haiku-start` for anything that crosses stages or needs traceability.
 
 **Arguments:** `studio` (optional, defaults to `software`) — studio slug. `stage` (optional, defaults to the studio's primary execution stage, e.g. `development` for `software`) — stage within the studio. `description` (required) — task description.
 
@@ -56,13 +56,13 @@ Use for: typos, one-line config tweaks, small bug fixes — work where the cost 
 
 ## Intent Management
 
-### `/haiku:refine`
+### `/haiku:haiku-refine`
 
 Refine intent or unit specs mid-execution without losing progress. Loads upstream stage context for scoped side-trips.
 
 **Arguments:** `stage` (optional) — upstream stage to refine.
 
-### `/haiku:reflect`
+### `/haiku:haiku-reflect`
 
 Post-completion analysis of a completed intent cycle. Loads metrics and constructs structured analysis prompt.
 
@@ -70,25 +70,25 @@ Post-completion analysis of a completed intent cycle. Loads metrics and construc
 
 ## Knowledge & Analysis
 
-### `/haiku:ideate`
+### `/haiku:haiku-ideate`
 
 Surface high-impact improvement ideas with adversarial filtering. Generates ideas across multiple dimensions and filters via counter-argument.
 
 **Arguments:** `area` (optional) — focus area for brainstorming.
 
-### `/haiku:adopt`
+### `/haiku:haiku-adopt`
 
 Reverse-engineer an existing feature into H·AI·K·U intent artifacts. Explores a shipped feature by reading its code, tests, and docs, then generates intent and unit specs.
 
 **Arguments:** `description` (optional) — feature description.
 
-### `/haiku:capacity`
+### `/haiku:haiku-capacity`
 
 Historical throughput analysis from local artifacts. Analyzes completed intents, units, and bolts to surface velocity trends and bottleneck stages.
 
 **Arguments:** `studio` (optional) — scope analysis to a specific studio.
 
-### `/haiku:changelog`
+### `/haiku:haiku-changelog`
 
 Show the project changelog and release notes.
 
@@ -96,7 +96,7 @@ Show the project changelog and release notes.
 
 ## Quality & Process
 
-### `/haiku:pressure-testing`
+### `/haiku:haiku-pressure-testing`
 
 Adversarial challenge for hat definitions. Applies RED-GREEN-REFACTOR cycle to test hat instructions under pressure types.
 
@@ -104,69 +104,69 @@ Adversarial challenge for hat definitions. Applies RED-GREEN-REFACTOR cycle to t
 
 ## Cross-Studio & Operations
 
-### `/haiku:composite`
+### `/haiku:haiku-composite`
 
 Create a multi-studio intent with sync points. Coordinates work across studios.
 
 **Arguments:** `description` (optional) — what the composite intent addresses.
 
-### `/haiku:triggers`
+### `/haiku:haiku-triggers`
 
 Poll providers for events that unblock `await` gates or trigger new work.
 
 **Arguments:** `category` (optional) — provider category to poll.
 
-### `/haiku:operate`
+### `/haiku:haiku-operate`
 
 Run post-delivery operational tasks from studio templates.
 
 **Arguments:** `operation` (optional) — operation name to execute.
 
-### `/haiku:backlog`
+### `/haiku:haiku-backlog`
 
 Parking lot for ideas not yet ready for planning.
 
 **Arguments:** `action` (optional) — add, list, review, or promote. `description` (optional) — for add action.
 
-### `/haiku:dashboard`
+### `/haiku:haiku-dashboard`
 
 Current intent status overview with per-stage progress.
 
 ## Managing Intents
 
-Archiving is a soft-hide flag on the intent, not a move or delete — `.haiku/intents/{slug}` stays exactly where it is, branches and history untouched. Trigger it with `/haiku:archive <slug>` on anything completed, stale, or paused; archived intents drop out of `/haiku:dashboard`, `/haiku:capacity`, and the default `haiku_intent_list` output. To see them, call `haiku_intent_list` with `include_archived: true` — the response tags each entry with an `archived` field so you can tell what's hidden. Restore with `/haiku:unarchive <slug>` and the intent is back in every default view.
+Archiving is a soft-hide flag on the intent, not a move or delete — `.haiku/intents/{slug}` stays exactly where it is, branches and history untouched. Trigger it with `/haiku:haiku-archive <slug>` on anything completed, stale, or paused; archived intents drop out of `/haiku:haiku-dashboard`, `/haiku:haiku-capacity`, and the default `haiku_intent_list` output. To see them, call `haiku_intent_list` with `include_archived: true` — the response tags each entry with an `archived` field so you can tell what's hidden. Restore with `/haiku:haiku-unarchive <slug>` and the intent is back in every default view.
 
-### `/haiku:archive`
+### `/haiku:haiku-archive`
 
 Soft-hide an intent by setting an `archived` flag in its frontmatter — files stay in `.haiku/intents/{slug}`, history is preserved.
 
 **Arguments:** `intent` (optional) — slug of intent to archive. If omitted, the skill prompts you to pick from the visible intents.
 
-### `/haiku:unarchive`
+### `/haiku:haiku-unarchive`
 
 Clear the `archived` flag so the intent reappears in default list and dashboard views.
 
 **Arguments:** `intent` (optional) — slug of intent to restore. If omitted, the skill prompts you to pick from the archived intents.
 
-### `/haiku:scaffold`
+### `/haiku:haiku-scaffold`
 
 Generate custom studios, stages, hats, and provider overrides.
 
 **Arguments:** `type` (required) — studio, stage, hat, or provider. `name` (required) — name for the artifact. `parent` (optional) — parent context.
 
-### `/haiku:migrate`
+### `/haiku:haiku-migrate`
 
 Migrate legacy .ai-dlc intents to H·AI·K·U format.
 
 **Arguments:** `intent` (optional) — specific intent slug to migrate.
 
-### `/haiku:seed`
+### `/haiku:haiku-seed`
 
 Create intents from studio templates.
 
 **Arguments:** `action` (optional) — plant, list, or check.
 
-### `/haiku:setup`
+### `/haiku:haiku-setup`
 
 Configure H·AI·K·U providers and workspace settings.
 

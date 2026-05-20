@@ -25,7 +25,7 @@ VCS hosting and CI/CD are detected automatically — you don't need to configure
 
 Providers are bidirectional translation layers, not simple API connectors. Each provider has inbound instructions (how to read external data and distill it into H·AI·K·U artifacts), outbound instructions (how to translate H·AI·K·U state into the provider's format), and sync behavior (how to discover events and maintain consistency). The translation is mediated by the AI agent using semantic understanding rather than rigid schema mapping -- a CRM deal record does not contain H·AI·K·U frontmatter, but the agent reads the CRM's native fields and produces H·AI·K·U artifacts. This is what makes providers work across domains where the external tool's data model bears no resemblance to H·AI·K·U's internal representation.
 
-Providers also serve as the coordination layer for cross-studio work. Because H·AI·K·U is a local CLI tool, it cannot maintain always-on triggers or shared state. The provider is the durable layer: a CRM deal closing is visible to any session that polls the CRM via `/haiku:triggers`. A knowledge article written by the sales studio is readable by the customer success studio via the knowledge provider. Cross-studio data flows through providers, not through shared filesystems.
+Providers also serve as the coordination layer for cross-studio work. Because H·AI·K·U is a local CLI tool, it cannot maintain always-on triggers or shared state. The provider is the durable layer: a CRM deal closing is visible to any session that polls the CRM via `/haiku:haiku-triggers`. A knowledge article written by the sales studio is readable by the customer success studio via the knowledge provider. Cross-studio data flows through providers, not through shared filesystems.
 
 ## Configuration
 
@@ -70,7 +70,7 @@ Each provider entry has three fields:
 
 ### During Elaboration
 
-When you run `/haiku:start`, H·AI·K·U uses providers to enrich the process:
+When you run `/haiku:haiku-start`, H·AI·K·U uses providers to enrich the process:
 
 1. **Spec provider** — Searches for existing requirements, PRDs, and design docs related to your intent
 2. **Design provider** — Pulls relevant mockups and component specs

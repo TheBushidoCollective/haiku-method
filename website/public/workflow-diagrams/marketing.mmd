@@ -77,8 +77,10 @@ stateDiagram-v2
     state strategy_execute {
       [*] --> strategy_execute_strategist
       strategy_execute_strategist --> strategy_execute_brand_reviewer : hat.advance
-      strategy_execute_brand_reviewer --> strategy_execute_done : hat.advance
+      strategy_execute_brand_reviewer --> strategy_execute_verifier : hat.advance
       strategy_execute_brand_reviewer --> strategy_execute_strategist : hat.reject
+      strategy_execute_verifier --> strategy_execute_done : hat.advance
+      strategy_execute_verifier --> strategy_execute_brand_reviewer : hat.reject
       strategy_execute_done --> [*]
     }
     strategy_execute --> strategy_review

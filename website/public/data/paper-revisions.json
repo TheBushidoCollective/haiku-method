@@ -305,10 +305,10 @@
     "revisions": [
       {
         "version": "2",
-        "date": "2026-05-14",
-        "commitHash": "9a78e9b",
-        "fullCommitHash": "9a78e9bdb02c503135ee6d3631e82b89d44564c9",
-        "commitMessage": "refactor(prompts): scope/phase reorg + ETA templates + revisit-skill removal + audit fixes",
+        "date": "2026-05-15",
+        "commitHash": "badae2d",
+        "fullCommitHash": "badae2dfc9dfedc414b31202966c1fab3dbb62c4",
+        "commitMessage": "v4 follow-ups: prompts reorg + intent-scope QG + drift cleanup + revisit-skill removal (#363)",
         "stats": {
           "linesAdded": 354,
           "linesRemoved": 1000

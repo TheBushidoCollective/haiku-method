@@ -188,8 +188,10 @@ stateDiagram-v2
     deliver_elaborate_loop --> deliver_review_fix : verifier.fail
     deliver_elaborate_loop --> deliver_review_fix : feedback.pending
     state deliver_execute {
-      [*] --> deliver_execute_publisher
+      [*] --> deliver_execute_delivery_planner
+      deliver_execute_delivery_planner --> deliver_execute_publisher : hat.advance
       deliver_execute_publisher --> deliver_execute_verifier : hat.advance
+      deliver_execute_publisher --> deliver_execute_delivery_planner : hat.reject
       deliver_execute_verifier --> deliver_execute_done : hat.advance
       deliver_execute_verifier --> deliver_execute_publisher : hat.reject
       deliver_execute_done --> [*]

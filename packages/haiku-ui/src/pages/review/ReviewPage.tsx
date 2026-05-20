@@ -227,18 +227,98 @@ function phaseBadgeCopy(
  * reviewer can see where the stage sits in its own lifecycle
  * (elaborate → execute → review → gate).
  */
+interface Milestone {
+	key: string
+	label: string
+	status: "done" | "active" | "pending"
+}
+
 function PhaseStepper({
 	phase,
 	stageStatus,
+	milestones,
+	progressIndex,
 }: {
 	phase: string | null
 	stageStatus: string
+	/** Granular per-stage track (mirrors the status line). When present
+	 *  and non-empty, the stepper renders one pip per milestone instead
+	 *  of the coarse five-phase strip. */
+	milestones?: Milestone[]
+	progressIndex?: number
 }): React.ReactElement {
+	const isStageComplete =
+		stageStatus === "completed" || stageStatus === "complete"
+
+	// Granular track: one pip per cursor milestone (elaborate → each
+	// review role → execute → each approval role → observations; or the
+	// intent-completion tail). Pips are keyed by the stable milestone
+	// `key` so live updates reconcile in place without remounting.
+	if (milestones && milestones.length > 0) {
+		const total = milestones.length
+		const ai =
+			typeof progressIndex === "number"
+				? progressIndex
+				: milestones.findIndex((m) => m.status === "active")
+		const allDone = isStageComplete || ai < 0 || ai >= total
+		const activeLabel = !allDone ? milestones[ai]?.label : undefined
+		return (
+			// biome-ignore lint/a11y/useSemanticElements: minimal grouping; fieldset/legend would impose form semantics
+			<div
+				className="inline-flex items-center gap-2"
+				role="group"
+				aria-label={`Milestone ${allDone ? total : ai + 1} of ${total}`}
+			>
+				<span className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
+					Phase
+				</span>
+				<div className="inline-flex items-center gap-1">
+					{milestones.map((m, i) => {
+						const done = isStageComplete || m.status === "done"
+						const active = !isStageComplete && m.status === "active"
+						return (
+							<div key={m.key} className="flex items-center gap-1" title={m.label}>
+								<span
+									className={`inline-block w-2 h-2 rounded-full transition-colors ${
+										active
+											? "bg-amber-500 ring-2 ring-amber-300 dark:ring-amber-700"
+											: done
+												? "bg-green-500"
+												: "bg-stone-300 dark:bg-stone-700"
+									}`}
+									aria-hidden="true"
+								/>
+								{i < total - 1 && (
+									<span
+										className={`w-2 h-0.5 transition-colors ${
+											done
+												? "bg-green-400 dark:bg-green-700"
+												: "bg-stone-300 dark:bg-stone-700"
+										}`}
+										aria-hidden="true"
+									/>
+								)}
+							</div>
+						)
+					})}
+				</div>
+				<span className="text-xs font-mono text-stone-500 dark:text-stone-400">
+					{allDone ? "done" : `${ai + 1}/${total}`}
+				</span>
+				{activeLabel && (
+					<span className="text-xs text-amber-600 dark:text-amber-400 truncate max-w-[12rem]">
+						{activeLabel}
+					</span>
+				)}
+			</div>
+		)
+	}
+
+	// Coarse fallback — legacy five-phase strip for payloads without a
+	// milestone track.
 	const activeIndex = phase
 		? STAGE_PHASES.indexOf(phase as (typeof STAGE_PHASES)[number])
 		: -1
-	const isStageComplete =
-		stageStatus === "completed" || stageStatus === "complete"
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: minimal grouping; fieldset/legend would impose form semantics
 		<div
@@ -610,6 +690,18 @@ export function ReviewPage({
 											? (session.current_state?.pending_signals ?? null)
 											: null
 									}
+									milestones={
+										// Same scoping as pending_signals — the granular
+										// track is derived for the engine's current stage.
+										selectedStage === activeStage
+											? (session.current_state?.milestones ?? null)
+											: null
+									}
+									progressIndex={
+										selectedStage === activeStage
+											? session.current_state?.progress_index
+											: undefined
+									}
 								/>
 
 								{/* Drift banner — sticky strip between StageBanner and
@@ -665,6 +757,8 @@ function StageBanner({
 	gateBadges,
 	adHoc,
 	pendingSignals,
+	milestones,
+	progressIndex,
 }: {
 	stageName: string
 	stageStatus: string
@@ -681,6 +775,11 @@ function StageBanner({
 	 *  is currently keeping the loop from advancing. Null when the
 	 *  caller is browsing a non-current stage. */
 	pendingSignals?: ReadonlyArray<string> | null
+	/** Granular per-stage milestone track for the current stage (null when
+	 *  browsing another stage). Drives the fine-grained phase stepper;
+	 *  falls back to the coarse five-phase strip when absent. */
+	milestones?: Milestone[] | null
+	progressIndex?: number
 }): React.ReactElement {
 	const statusPill =
 		stageStatus === "current" || stageStatus === "active"
@@ -722,7 +821,12 @@ function StageBanner({
 						<p className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
 							Stage
 						</p>
-						<PhaseStepper phase={stagePhase} stageStatus={stageStatus} />
+						<PhaseStepper
+							phase={stagePhase}
+							stageStatus={stageStatus}
+							milestones={milestones ?? undefined}
+							progressIndex={progressIndex}
+						/>
 					</div>
 					<div className="flex items-center gap-2 mt-1 flex-wrap">
 						<h1 className="text-base font-bold text-stone-900 dark:text-stone-100 leading-tight capitalize">

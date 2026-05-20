@@ -1,22 +1,31 @@
 #!/usr/bin/env npx tsx
 // feedback-advance-hat-dispatch-contract.test.mjs — pins the
-// `haiku_feedback_advance_hat` response shape after task #30
-// (2026-05-13).
+// `haiku_feedback_advance_hat` response shape.
 //
-// Bug: the response carried `next_subagent_dispatch_block: <sidecar
-// contents | null>` and a message instructing the agent to "relay it
-// verbatim". On re-entry (sidecar missing) the field was null and the
-// chain stalled — parent had no block to spawn, next hat never
-// dispatched.
+// History:
+//   - Task #30 (2026-05-13): removed a sidecar-backed
+//     `next_subagent_dispatch_block` field that broke on re-entry
+//     when the sidecar file went missing. Response routed agents to
+//     `haiku_run_next` instead.
+//   - 2026-05-19: restored `next_subagent_dispatch_block` via an
+//     inline build (no sidecar; the engine walks the cursor under
+//     `withIntentDispatchLock` and renders the next dispatch block
+//     using the same code path as the cursor's dispatch prompt
+//     builder). The field is now:
+//       - a `<subagent prompt_file="...">` string when there's a next
+//         dispatchable item — message tells the agent to relay verbatim.
+//       - null when the queue is empty / wave done — message routes to
+//         `haiku_run_next` (or terminate if siblings are mid-chain).
 //
-// Fix (option b — v4 cursor-is-source-of-truth): drop the field and
-// the relay-verbatim message. Tell the agent to call `haiku_run_next`
-// for the next instruction, matching the contract of
-// `haiku_unit_advance_hat`.
+// Engine-bug-30 regression intent (the "never claim a block we didn't
+// emit" check) is preserved: the test asserts the message + the field
+// agree — if the message promises a relay, the field must be a real
+// string; if the field is null, the message must NOT mention relay.
 //
 // This test pins:
-//   - `next_subagent_dispatch_block` is NOT in the response payload
-//   - the message references `haiku_run_next`, not a relay block
+//   - `next_subagent_dispatch_block` IS in the response (string or null)
+//   - the message agrees with the field (relay-when-present,
+//     haiku_run_next-when-absent)
 //   - `next_dispatched_hat` is still present (informational)
 
 import assert from "node:assert/strict"
@@ -50,7 +59,7 @@ function git(cwd, ...args) {
 	}).trim()
 }
 
-test("haiku_feedback_advance_hat response shape: no next_subagent_dispatch_block, message routes to haiku_run_next", async () => {
+test("haiku_feedback_advance_hat response shape: next_subagent_dispatch_block and message agree", async () => {
 	if (!HAS_GIT) return
 	const slug = "test-fb-advance-contract"
 	const stage = "design"
@@ -69,12 +78,13 @@ test("haiku_feedback_advance_hat response shape: no next_subagent_dispatch_block
 
 		// Seed an intent with a single FB on a stage whose fix_hats list
 		// is long enough that advancing one hat leaves a known
-		// next-dispatched-hat. We use the software studio's `review`
+		// next-dispatched-hat. We use the software studio's `design`
 		// stage which ships with a fix_hats: sequence.
 		const intentDir = join(tmp, ".haiku", "intents", slug)
 		mkdirSync(join(intentDir, "stages", stage, "feedback"), {
 			recursive: true,
 		})
+		mkdirSync(join(intentDir, "stages", stage, "units"), { recursive: true })
 		writeFileSync(
 			join(intentDir, "intent.md"),
 			matter.stringify("# test\n", {
@@ -82,6 +92,17 @@ test("haiku_feedback_advance_hat response shape: no next_subagent_dispatch_block
 				studio: "software",
 				mode: "continuous",
 				plugin_version: "5.0.0",
+				stages: [stage],
+			}),
+		)
+		// Wave-ready unit so findCurrentStage pins on `design`.
+		writeFileSync(
+			join(intentDir, "stages", stage, "units", "unit-01-stub.md"),
+			matter.stringify("stub\n", {
+				title: "stub",
+				iterations: [],
+				reviews: {},
+				approvals: {},
 			}),
 		)
 
@@ -100,8 +121,6 @@ test("haiku_feedback_advance_hat response shape: no next_subagent_dispatch_block
 		const stageFm = matter(stageMd).data
 		const fixHats = Array.isArray(stageFm.fix_hats) ? stageFm.fix_hats : []
 		if (fixHats.length < 2) {
-			// Studio doesn't ship a multi-hat fix sequence for this stage.
-			// Test is informational; skip.
 			console.log(
 				`[fb-advance-contract] software/${stage} has fewer than 2 fix_hats (${fixHats.length}). Skipping advance contract test.`,
 			)
@@ -125,7 +144,7 @@ test("haiku_feedback_advance_hat response shape: no next_subagent_dispatch_block
 				iterations: [],
 				reviews: {},
 				approvals: {},
-				targets: { unit: null, invalidates: [] },
+				targets: { unit: "unit-01-stub", invalidates: [] },
 			}),
 		)
 		git(tmp, "add", "-A")
@@ -149,22 +168,38 @@ test("haiku_feedback_advance_hat response shape: no next_subagent_dispatch_block
 		})()
 		assert.ok(parsed, `response must be JSON; got: ${text.slice(0, 200)}`)
 
-		// Contract assertions for the new response shape.
+		// Contract assertions for the 2026-05-19 response shape.
 		assert.strictEqual(
 			Object.hasOwn(parsed, "next_subagent_dispatch_block"),
-			false,
-			`response must NOT include next_subagent_dispatch_block; got keys: ${Object.keys(parsed).join(", ")}`,
+			true,
+			`response must include next_subagent_dispatch_block; got keys: ${Object.keys(parsed).join(", ")}`,
 		)
-		assert.ok(
-			!/relay it verbatim|relay.*verbatim|next-hat dispatch block/i.test(
-				parsed.message ?? "",
-			),
-			`message must not reference relay-verbatim; got: ${parsed.message}`,
-		)
-		assert.ok(
-			/haiku_run_next/.test(parsed.message ?? ""),
-			`message must route the agent to haiku_run_next; got: ${parsed.message}`,
-		)
+		const block = parsed.next_subagent_dispatch_block
+		const message = parsed.message ?? ""
+		if (block === null) {
+			assert.ok(
+				/haiku_run_next|terminate/i.test(message),
+				`when block is null, message must route to haiku_run_next or instruct termination; got: ${message}`,
+			)
+			assert.ok(
+				!/relay.*verbatim|next-hat dispatch block/i.test(message),
+				`when block is null, message must NOT promise a relay; got: ${message}`,
+			)
+		} else {
+			assert.strictEqual(
+				typeof block,
+				"string",
+				`when present, next_subagent_dispatch_block must be a string; got: ${typeof block}`,
+			)
+			assert.ok(
+				block.length > 0,
+				"when present, next_subagent_dispatch_block must be non-empty",
+			)
+			assert.ok(
+				/relay.*verbatim|next_subagent_dispatch_block/i.test(message),
+				`when block is set, message must direct the agent to relay; got: ${message}`,
+			)
+		}
 		// next_dispatched_hat stays as informational.
 		assert.strictEqual(
 			typeof parsed.next_dispatched_hat === "string" ||

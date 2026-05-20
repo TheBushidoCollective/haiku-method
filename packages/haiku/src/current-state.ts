@@ -5,22 +5,21 @@
 // reads through this function so the displayed stage and the workflow
 // engine can never disagree.
 //
-// Resolution rule (matches preTickConsistency#syncActiveStageFromStateJson):
-//   - Walk the studio-declared stage list in order
-//   - First stage whose state.json is NOT done is the current stage
-//   - "Done" means:
-//       status === "completed" AND
-//       gate_outcome !== "blocked" (legacy shape; pre-merge gate state
-//         under the old per-stage external flow) AND
-//       (no git OR the stage branch is merged into intent main)
-//     The merge requirement is the user's "raw git+fs" contract: a
-//     stage is fully done only when its branch has landed in intent
-//     main. Pre-merge, a completed+advanced stage stays current so
-//     active_stage doesn't auto-bump and the next stage doesn't start
-//     from a base that's missing the prior stage's work. The merge IS
-//     the user's "yes, this stage is approved" signal.
-//   - If every stage is done, the last stage is current (intent
-//     awaiting completion review or fully complete)
+// **Stage selection delegates to `findCurrentStage` in cursor.ts** —
+// the same function the workflow engine uses to walk its per-stage
+// track. This is the contract: whatever stage the cursor sits on is
+// the stage the API surfaces. Pre-2026-05-19 this function ran a
+// parallel walk based on `deriveStageState` + branch-merge state,
+// which produced a *stricter* "done" check than the cursor (the cursor
+// moves past a fully-signed stage; the SPA pinned on it until merge).
+// Reported in haiku-bug-report-2026-05-19 (round 3) — the stepper
+// diamond highlighted INCEPTION while the engine was working on
+// DEVELOPMENT.
+//
+// Phase comes from `deriveStageState` against the active stage —
+// elaborate / execute / review / gate. That derivation is also the
+// signal the cursor's per-phase handlers route on, so the SPA's
+// phase indicator never disagrees with what the cursor will emit next.
 //
 // intent.md.active_stage is intentionally not read here. It is a
 // write-only cache that pre-tick keeps in sync with this derivation
@@ -29,17 +28,16 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { branchExists, isBranchMerged } from "./git-worktree.js"
 import {
 	resolveIntentStages,
 	resolveStudioStages,
 } from "./orchestrator/studio.js"
 import {
 	computeElaborateSignals,
+	findCurrentStage,
 	serializeElaborateSignals,
 } from "./orchestrator/workflow/cursor.js"
 import { deriveStageState } from "./orchestrator/workflow/derived-stage-state.js"
-import { isGitRepo } from "./state/shared.js"
 import { intentDir, parseFrontmatter } from "./state-tools.js"
 import type { IntentCurrentState, IntentPhase } from "./types.js"
 
@@ -99,49 +97,19 @@ export function getCurrentState(
 		return { studio, stage: "", phase: "" }
 	}
 
-	let current = fallbackStages[fallbackStages.length - 1]
-	const gitAvailable = isGitRepo()
-	const intentMainBranch = `haiku/${slug}/main`
-	const intentMainExists = gitAvailable && branchExists(intentMainBranch)
 	const intentMode =
 		typeof intent.mode === "string" && (intent.mode as string).length > 0
 			? (intent.mode as string)
 			: "continuous"
-	for (const stage of fallbackStages) {
-		const derived = deriveStageState({
-			slug,
-			studio,
-			stage,
-			intentDir: resolveIntentDir(slug, root),
-			intentMode,
-		})
-		const status = derived.status
-		// v4 derivation never returns "blocked" — that was a v3
-		// state.json shape. Treat completed as done outright.
-		const stateLooksDone = status === "completed"
-		// Merge gate: in git mode (with both stage branch and intent
-		// main present), a completed+advanced stage stays "current"
-		// until its branch has landed in intent main. The merge is the
-		// user's approval signal — pre-merge, the next stage shouldn't
-		// start from a base that's missing this stage's work.
-		//
-		// Fall back to state.json's verdict when:
-		//   - we're not in a git repo (filesystem-only intents), or
-		//   - intent main branch doesn't exist yet (early-lifecycle
-		//     intents before branching, test fixtures with fake slugs),
-		//   - the stage branch doesn't exist (similarly applies).
-		// In all those cases there's no merge concept to gate on.
-		const stageBranch = `haiku/${slug}/${stage}`
-		const canCheckMerge =
-			intentMainExists && gitAvailable && branchExists(stageBranch)
-		const isDone =
-			stateLooksDone &&
-			(!canCheckMerge || isBranchMerged(stageBranch, intentMainBranch))
-		if (!isDone) {
-			current = stage
-			break
-		}
-	}
+	// Delegate stage selection to the cursor's `findCurrentStage`. Same
+	// signal — first stage where `isStageComplete` (every unit's FM signed
+	// + every approval role stamped) is false — so the SPA's diamond and
+	// the cursor's per-stage track can never disagree. When every stage is
+	// complete (intent in completion review or sealed), `findCurrentStage`
+	// returns null; surface the final stage so the SPA still has a target
+	// stage to render under `/stages/<last>`.
+	const cursorStage = findCurrentStage(slug, studio, resolveIntentDir(slug, root))
+	const current = cursorStage ?? fallbackStages[fallbackStages.length - 1]
 
 	const derivedCurrent = deriveStageState({
 		slug,

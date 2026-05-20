@@ -1318,16 +1318,16 @@ request rate, and apply scaling via kubectl.
 - **Agent-owned** — Automated scripts with companion files (`.ts`, `.py`, `.sh`). AI executes these autonomously within defined boundaries.
 - **Human-owned** — Checklist-based runbooks. AI presents the checklist and tracks completion, but humans perform the work.
 
-**The `/haiku:operate` Command:**
+**The `/haiku:haiku-operate` Command:**
 
 A unified interface manages all operational tasks:
 
-- `/haiku:operate` — List all operations across intents
-- `/haiku:operate {intent}` — Status table for one intent's operations
-- `/haiku:operate {intent} {operation}` — Execute an agent script or display a human checklist
-- `/haiku:operate {intent} --deploy [target]` — Generate deployment manifests (Kubernetes CronJob, GitHub Actions, Docker Compose, systemd)
-- `/haiku:operate {intent} --status` — Health check with timestamps
-- `/haiku:operate {intent} --teardown` — Remove deployments while preserving specs
+- `/haiku:haiku-operate` — List all operations across intents
+- `/haiku:haiku-operate {intent}` — Status table for one intent's operations
+- `/haiku:haiku-operate {intent} {operation}` — Execute an agent script or display a human checklist
+- `/haiku:haiku-operate {intent} --deploy [target]` — Generate deployment manifests (Kubernetes CronJob, GitHub Actions, Docker Compose, systemd)
+- `/haiku:haiku-operate {intent} --status` — Health check with timestamps
+- `/haiku:haiku-operate {intent} --teardown` — Remove deployments while preserving specs
 
 **Status Persistence:**
 
@@ -1339,7 +1339,7 @@ The Builder hat produces operation specs during its production phase when the wo
 
 **Stack Configuration:**
 
-Operations integrate with the project's infrastructure stack defined in `.haiku/settings.yml`. The `stack.operations` layer declares the runtime environment (auto-detected from project files when not specified), scheduled task configuration, and reactive handler setup. This allows `/haiku:operate --deploy` to generate platform-appropriate manifests.
+Operations integrate with the project's infrastructure stack defined in `.haiku/settings.yml`. The `stack.operations` layer declares the runtime environment (auto-detected from project files when not specified), scheduled task configuration, and reactive handler setup. This allows `/haiku:haiku-operate --deploy` to generate platform-appropriate manifests.
 
 ---
 
@@ -1391,7 +1391,7 @@ The workflow described above assumes greenfield inception — a team starting fr
 | **Follow Up** | Iterating on a previous intent that already went through the lifecycle | A new intent linked via `iterates_on` to the prior intent | Inception with prior context |
 | **Adopt** | Reverse-engineering an existing feature that was built outside AI-DLC | Completed intent, units, discovery, and operational plan | Operations (skips Construction since code already exists) |
 
-**Adoption** addresses a common gap: features built before AI-DLC was introduced — or built without it — lack intent artifacts, unit decomposition, and operational plans. Without these artifacts, the feature cannot participate in `/haiku:operate` for ongoing operational management or `/haiku:followup` for structured iteration. Adoption bridges this gap by reverse-engineering artifacts from the codebase, git history, tests, and CI configuration.
+**Adoption** addresses a common gap: features built before AI-DLC was introduced — or built without it — lack intent artifacts, unit decomposition, and operational plans. Without these artifacts, the feature cannot participate in `/haiku:haiku-operate` for ongoing operational management or `/haiku:followup` for structured iteration. Adoption bridges this gap by reverse-engineering artifacts from the codebase, git history, tests, and CI configuration.
 
 All artifacts produced by adoption carry `status: completed` because the feature already exists. There is no construction phase — the code is already written, tested, and deployed. Instead, adoption analyzes the existing implementation and produces the same artifact structure that elaboration and construction would have created, enabling the feature to enter the lifecycle at the Operations phase. The user confirms the proposed decomposition at multiple gates: intent and unit breakdown, success criteria with traceable test evidence, and operational plan.
 
@@ -1577,10 +1577,10 @@ frequency: quarterly
 - [ ] Document decision in ADR
 ```
 
-**Managing operations with `/haiku:operate`:**
+**Managing operations with `/haiku:haiku-operate`:**
 
 ```
-$ /haiku:operate rec-engine
+$ /haiku:haiku-operate rec-engine
 ┌─────────────────────────────────┬──────────┬───────┬────────────┐
 │ Operation                       │ Type     │ Owner │ Status     │
 ├─────────────────────────────────┼──────────┼───────┼────────────┤
@@ -1589,7 +1589,7 @@ $ /haiku:operate rec-engine
 │ review-recommendation-quality   │ process  │ human │ pending    │
 └─────────────────────────────────┴──────────┴───────┴────────────┘
 
-$ /haiku:operate rec-engine --deploy k8s-deployment
+$ /haiku:haiku-operate rec-engine --deploy k8s-deployment
 Generated: .haiku/intents/rec-engine/operations/scale-api.deploy.yaml
 Generated: .haiku/intents/rec-engine/operations/rollback-deployment.deploy.yaml
 ```

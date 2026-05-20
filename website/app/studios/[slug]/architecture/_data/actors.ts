@@ -18,10 +18,10 @@ export const ACTORS: Record<string, ActorDef> = {
 		owns: [
 			"The original intent (`intent.md` body)",
 			"Approve / Request Changes / Open PR / External-Review decisions",
-			"Slash commands (clickable in the diagram): `/haiku:start`, `/haiku:pickup`, `/haiku:autopilot`, `/haiku:quick`",
+			"Slash commands (clickable in the diagram): `/haiku:haiku-start`, `/haiku:haiku-pickup`, `/haiku:haiku-autopilot`, `/haiku:haiku-quick`",
 		],
 		notes:
-			"**The slash-command skills are invocation entry points, not modes.** The mode lives on `intent.md` as `intent.mode` and is mode-shaped by the cursor:\n\n• `/haiku:start` — create a new intent and re-tick. The pre-cursor selection chain (`select_studio` → `select_mode` → optionally `select_stage`) blocks until the user picks.\n• `/haiku:pickup` — resume an active intent: just calls `haiku_run_next`. No mode change.\n• `/haiku:autopilot` — sets `intent.mode = autopilot`. The cursor trims the role list for that intent: reviews collapse to `[spec]`, approvals to `[spec, quality_gates]`, and `complete_stage` auto-fires once `quality_gates` is signed. No user gate, no agent reviewers.\n• Stage revisit (no slash command — file a stage_revisit feedback directly via `haiku_feedback({ stage: \"<target>\", resolution: \"stage_revisit\" })` and call `haiku_run_next`). The cursor's Track B walks open feedback by file location and reroutes to the target stage on the next tick. There is no separate `revisit` action; the engine's only verb is `haiku_run_next`.\n• `/haiku:quick` — single-stage intent with `intent.mode = quick`; the `select_stage` pre-cursor gate fires when `intent.stages[]` is empty.\n\n**Mode taxonomy (v4):** `continuous` / `discrete` / `discrete-hybrid` / `autopilot` / `quick`. Older HITL/OHOTL/AHOTL terminology from the AI-DLC paper is deprecated — the cursor branches on `intent.mode`, not on a separate involvement axis.",
+			"**The slash-command skills are invocation entry points, not modes.** The mode lives on `intent.md` as `intent.mode` and is mode-shaped by the cursor:\n\n• `/haiku:haiku-start` — create a new intent and re-tick. The pre-cursor selection chain (`select_studio` → `select_mode` → optionally `select_stage`) blocks until the user picks.\n• `/haiku:haiku-pickup` — resume an active intent: just calls `haiku_run_next`. No mode change.\n• `/haiku:haiku-autopilot` — sets `intent.mode = autopilot`. The cursor trims the role list for that intent: reviews collapse to `[spec]`, approvals to `[spec, quality_gates]`, and `complete_stage` auto-fires once `quality_gates` is signed. No user gate, no agent reviewers.\n• Stage revisit (no slash command — file a stage_revisit feedback directly via `haiku_feedback({ stage: \"<target>\", resolution: \"stage_revisit\" })` and call `haiku_run_next`). The cursor's Track B walks open feedback by file location and reroutes to the target stage on the next tick. There is no separate `revisit` action; the engine's only verb is `haiku_run_next`.\n• `/haiku:haiku-quick` — single-stage intent with `intent.mode = quick`; the `select_stage` pre-cursor gate fires when `intent.stages[]` is empty.\n\n**Mode taxonomy (v4):** `continuous` / `discrete` / `discrete-hybrid` / `autopilot` / `quick`. Older HITL/OHOTL/AHOTL terminology from the AI-DLC paper is deprecated — the cursor branches on `intent.mode`, not on a separate involvement axis.",
 	},
 	agent: {
 		icon: "🤖",
@@ -50,7 +50,7 @@ export const ACTORS: Record<string, ActorDef> = {
 		],
 		owns: [
 			"Workflow-path enforcement (`guard-workflow-fields` denies generic Read/Write/Edit on `units/`, `feedback/`, `intent.md`)",
-			"Plan-mode redirect (`redirect-plan-mode` → `/haiku:start`)",
+			"Plan-mode redirect (`redirect-plan-mode` → `/haiku:haiku-start`)",
 			"Drift attribution (`stamp-agent-write` PostToolUse stamps so agent edits don't surface as `drift_detected`)",
 			"Context-budget warnings (`context-monitor` PostToolUse)",
 			"Edit-after-read recovery hint (`edit-auto-read-hint`)",

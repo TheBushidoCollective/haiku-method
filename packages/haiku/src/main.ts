@@ -107,7 +107,28 @@ if (cmd === "mcp") {
 			console.error(`haiku migrate: ${err.message}`)
 			flushSentry().finally(() => process.exit(1))
 		})
+} else if (cmd === "statusline") {
+	// Status-line mode: render the active intent's stage/phase line for
+	// Claude Code (or `install`/`uninstall` the .claude/settings.json
+	// wiring). Must stay quiet on failure — a status-line command that
+	// errors would spam the prompt — so swallow errors to an empty line
+	// rather than surfacing them.
+	import("./statusline/index.js")
+		.then((m) => m.runStatusline(args))
+		.catch((err) => {
+			reportError(err, { context: "statusline" })
+			if (process.env.HAIKU_STATUSLINE_DEBUG) {
+				console.error(
+					`[haiku statusline] handler error: ${
+						err instanceof Error ? `${err.message}\n${err.stack}` : String(err)
+					}`,
+				)
+			}
+			// No stderr/stdout noise on the render path; install/uninstall
+			// print their own diagnostics.
+			flushSentry().finally(() => process.exit(0))
+		})
 } else {
-	console.error("Usage: haiku <mcp|hook|migrate> [args...]")
+	console.error("Usage: haiku <mcp|hook|migrate|statusline> [args...]")
 	process.exit(1)
 }

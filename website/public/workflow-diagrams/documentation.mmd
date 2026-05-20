@@ -240,8 +240,10 @@ stateDiagram-v2
     publish_elaborate_loop --> publish_review_fix : verifier.fail
     publish_elaborate_loop --> publish_review_fix : feedback.pending
     state publish_execute {
-      [*] --> publish_execute_publisher
+      [*] --> publish_execute_format_planner
+      publish_execute_format_planner --> publish_execute_publisher : hat.advance
       publish_execute_publisher --> publish_execute_verifier : hat.advance
+      publish_execute_publisher --> publish_execute_format_planner : hat.reject
       publish_execute_verifier --> publish_execute_done : hat.advance
       publish_execute_verifier --> publish_execute_publisher : hat.reject
       publish_execute_done --> [*]

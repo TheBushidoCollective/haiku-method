@@ -385,6 +385,11 @@ export interface DesignDirectionSession {
 	session_type: "design_direction"
 	session_id: string
 	intent_slug: string
+	/** Optional markdown preamble shown above the archetype cards.
+	 *  Mirrors `context` on QuestionSession — gives the user the context
+	 *  they need to choose well. Empty string when the tool didn't supply
+	 *  one. */
+	context: string
 	archetypes: DesignArchetypeData[]
 	status: "pending" | "answered"
 	selection: DirectionSelection | null

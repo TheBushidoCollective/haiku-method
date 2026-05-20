@@ -5,7 +5,7 @@ interpretation: lens
 
 ## Check
 
-Prefer `haiku_view({ intent: "<this-intent>", mode: "boot" })` to boot the docs site and drive the published surface. If no boot target detected, that's typically a finding for a documentation intent — the site should be runnable by close. Use the bundled `playwright` MCP. Call `browser_take_screenshot` at every meaningful step. **Save each screenshot** to disk under `.haiku/intents/<intent>/proof/<page-or-flow>-<step>.png` using the `Write` tool.
+Prefer `haiku_view({ intent: "<this-intent>", mode: "boot" })` to boot the docs site and drive the published surface. If no boot target detected, that's typically a finding for a documentation intent — the site should be runnable by close. Use the bundled `haiku-playwright` MCP. Call `browser_take_screenshot` at every meaningful step. **Save each screenshot** to disk under `.haiku/intents/<intent>/proof/<page-or-flow>-<step>.png` using the `Write` tool.
 
 The agent **MUST** verify each of the following:
 

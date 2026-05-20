@@ -10,33 +10,30 @@
 // question: did this exchange engage substantively with *this*
 // intent's goals on *this* stage's scope?
 //
-// Mechanically:
-//   - The agent dispatches a subagent (Task tool) with the verifier
-//     prompt below.
-//   - The verifier reads three files: the elaboration artifact, the
-//     intent body, and STAGE.md.
-//   - Pass: verifier calls `haiku_stage_elaboration_seal` which
-//     stamps `verified_at` on the artifact's frontmatter. Cursor's
-//     next tick advances to discovery / decompose.
-//   - Fail: verifier surfaces the specific gaps. The outer agent
-//     re-engages the user, calls `haiku_stage_elaboration_record`
-//     again (overwriting the artifact, clearing any stale
-//     verified_at), and the cursor re-emits this action for another
-//     verification pass.
+// File-backed dispatch (2026-05-19): the verifier's prompt is written
+// to its own per-intent prompt file and the parent only sees a
+// `<subagent prompt_file="...">` pointer. Pre-2026-05-19 the parent
+// inlined the verifier body in a fenced code block, which polluted
+// the parent's context with prose the subagent would Read for itself
+// — wasted tokens and made the parent's tick longer.
 //
 // Two branches: pre-intent (no stage on the action — verify the
 // intent body itself) vs. per-stage (verify the captured stage
 // elaboration artifact). Both share the same verifier-dispatch
-// shape; the template carries the conditional.
+// shape; the subagent template carries the conditional.
 
 import { join } from "node:path"
 import { Eta } from "eta"
-import { buildConcurrentElaborateLoopBlock } from "../../../_helpers.js"
+import {
+	buildConcurrentElaborateLoopBlock,
+	emitSubagentDispatchBlock,
+} from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 const TEMPLATE = loadTemplate(import.meta.url)
+const SUBAGENT_TEMPLATE = loadTemplate(import.meta.url, "subagent.eta.md")
 
 export default definePromptBuilder((ctx) => {
 	const action = ctx.action as {
@@ -64,6 +61,33 @@ export default definePromptBuilder((ctx) => {
 				stage,
 			})
 
+	// Render the verifier subagent prompt and emit a file-backed
+	// dispatch block. The parent template embeds only the
+	// `<subagent prompt_file="...">` markup; the verifier reads the
+	// full prompt from disk.
+	const subagentPrompt = eta.renderString(SUBAGENT_TEMPLATE, {
+		isPreIntent,
+		intentSlug,
+		stage,
+		intentMdPath,
+		stageMdPath,
+		elabPath,
+		verifierNonce,
+	})
+	const dispatchBlock = emitSubagentDispatchBlock({
+		unit: isPreIntent ? "verify-intent" : `verify-${stage}-elaboration`,
+		hat: "elaborate-verifier",
+		bolt: 1,
+		intent: intentSlug,
+		stage: isPreIntent ? undefined : stage,
+		agentType: "general-purpose",
+		promptBody: subagentPrompt,
+		heading: isPreIntent
+			? "### Subagent: pre-intent elaborate verifier"
+			: `### Subagent: elaborate verifier (stage \`${stage}\`)`,
+		omitBolt: true,
+	})
+
 	return eta.renderString(TEMPLATE, {
 		isPreIntent,
 		intentSlug,
@@ -74,5 +98,6 @@ export default definePromptBuilder((ctx) => {
 		concurrentLoopBlock,
 		composedMode: ctx.composedMode === true,
 		verifierNonce,
+		dispatchBlock,
 	})
 })

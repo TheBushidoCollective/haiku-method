@@ -70,6 +70,18 @@ function StageLayout(): React.ReactElement {
 	const gateBadges = gateModes.map(gateBadgeCopy)
 	const isAdHoc = session.ad_hoc === true
 
+	// Granular phase track. The cursor derives the milestone list for the
+	// engine's CURRENT stage only, so it's meaningful when the banner is
+	// rendering that stage; for a stage the user is just browsing it's
+	// stale, so we fall back to the coarse strip there.
+	const isCurrentStage = stage === activeStage
+	const milestones = isCurrentStage
+		? (session.current_state?.milestones ?? null)
+		: null
+	const progressIndex = isCurrentStage
+		? session.current_state?.progress_index
+		: undefined
+
 	const scopeStyle = bannerHeight
 		? ({ "--header-height": `${bannerHeight}px` } as React.CSSProperties)
 		: undefined
@@ -83,6 +95,8 @@ function StageLayout(): React.ReactElement {
 					stagePhase={stagePhase}
 					gateBadges={gateBadges}
 					adHoc={isAdHoc}
+					milestones={milestones}
+					progressIndex={progressIndex}
 				/>
 			</div>
 			{/* Drift banner — between StageBanner and RereviewBanner per

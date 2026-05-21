@@ -3608,7 +3608,32 @@ export function createUnitWorktree(
 	try {
 		if (existsSync(worktreePath)) return worktreePath
 		mkdirSync(worktreeBase, { recursive: true })
-		tryRun(["git", "branch", unitBranch, stageBranch])
+		// Pick the branch base, in order:
+		//   1. an existing LOCAL unit branch (resume — same machine, worktree
+		//      was reaped but the branch survived),
+		//   2. the pushed REMOTE unit branch (cross-machine / fresh-clone
+		//      pickup — push-on-advance preserved the loop's code; recreate
+		//      from it so prior hats' work isn't lost),
+		//   3. a fresh fork off the stage branch (brand-new unit).
+		const hasLocal = !!tryRun(["git", "branch", "--list", unitBranch])?.trim()
+		if (!hasLocal) {
+			// Refresh the remote-tracking ref (best-effort; a fresh clone may
+			// already have it, an offline run won't).
+			tryRun(["git", "fetch", "origin", unitBranch])
+			const hasRemote = !!tryRun([
+				"git",
+				"rev-parse",
+				"--verify",
+				"--quiet",
+				`refs/remotes/origin/${unitBranch}`,
+			])?.trim()
+			tryRun([
+				"git",
+				"branch",
+				unitBranch,
+				hasRemote ? `origin/${unitBranch}` : stageBranch,
+			])
+		}
 		run(["git", "worktree", "add", worktreePath, unitBranch])
 		return worktreePath
 	} catch {

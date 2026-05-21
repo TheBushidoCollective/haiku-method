@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { test } from "node:test"
@@ -99,6 +99,18 @@ test("unit worktree: pushed on advance, deleted local+remote at terminal merge",
 		assert.ok(
 			remoteHasBranch(bare, unitBranch),
 			"unit branch should be pushed to origin on advance (durability)",
+		)
+
+		// Cross-machine pickup: drop the local worktree + branch (as a fresh
+		// clone would lack), keeping only the pushed remote. createUnitWorktree
+		// must recreate FROM THE REMOTE so the loop's code survives.
+		execFileSync("git", ["worktree", "remove", wt, "--force"], { cwd: repoRoot, stdio: "ignore" })
+		execFileSync("git", ["branch", "-D", unitBranch], { cwd: repoRoot, stdio: "ignore" })
+		const wt2 = createUnitWorktree(slug, unit, stage)
+		assert.ok(wt2, "worktree recreated")
+		assert.ok(
+			existsSync(join(wt2, "work.txt")),
+			"recreated worktree must restore the pushed code (resume, not fork-fresh)",
 		)
 
 		// Terminal merge integrates + reaps the branch local AND remote.

@@ -104,24 +104,9 @@ export function buildStageMilestones(
 	const raw: { key: string; label: string; done: boolean }[] = []
 
 	raw.push({ key: "elaborate", label: "elaborate", done: elaborateDone })
-
-	for (const r of reviewRoles) {
-		raw.push({
-			key: `review:${r.role}`,
-			label: reviewMilestoneLabel(r.role),
-			done: elaborateDone && r.stamped,
-		})
-	}
-
+	raw.push(...rolePips(reviewRoles, "review", elaborateDone))
 	raw.push({ key: "execute", label: "execute", done: executeDone })
-
-	for (const a of approvalRoles) {
-		raw.push({
-			key: `approve:${a.role}`,
-			label: approvalMilestoneLabel(a.role),
-			done: executeDone && a.stamped,
-		})
-	}
+	raw.push(...rolePips(approvalRoles, "approve", executeDone))
 
 	if (observationsDone != null) {
 		raw.push({
@@ -132,4 +117,58 @@ export function buildStageMilestones(
 	}
 
 	return finalizeSteps(raw)
+}
+
+/** Roles that keep their own pip — they're not adversarial peers:
+ *  `spec` is the serial conformance gate that fires first, `quality_gates`
+ *  is the engine-run gate, `user` is the human gate. */
+const DISTINCT_MILESTONE_ROLES = new Set(["spec", "quality_gates", "user"])
+
+/** Turn a walk's role list into milestone steps. Distinct roles
+ *  (spec/quality_gates/user) each get their own pip; the adversarial
+ *  reviewers (continuity, cross-stage-consistency, studio agents) collapse
+ *  into a single "adversarial review/approval" pip with a `(signed/total)`
+ *  count — they fan out in parallel against the same spec/work, so a count
+ *  reflects progress without faking an order between them. A grouped pip is
+ *  done only once its gating phase is done AND every role in it has signed. */
+function rolePips(
+	roles: ReadonlyArray<MilestoneRoleFlag>,
+	walk: "review" | "approve",
+	phaseDone: boolean,
+): { key: string; label: string; done: boolean }[] {
+	const out: { key: string; label: string; done: boolean }[] = []
+	let group: MilestoneRoleFlag[] = []
+	let groupIndex = 0
+	const noun = walk === "review" ? "adversarial review" : "adversarial approval"
+
+	const flush = () => {
+		if (group.length === 0) return
+		const signed = group.filter((r) => r.stamped).length
+		const total = group.length
+		out.push({
+			key: `${walk}:adversarial:${groupIndex}`,
+			label: total > 1 ? `${noun} (${signed}/${total})` : noun,
+			done: phaseDone && group.every((r) => r.stamped),
+		})
+		groupIndex += 1
+		group = []
+	}
+
+	for (const r of roles) {
+		if (DISTINCT_MILESTONE_ROLES.has(r.role)) {
+			flush()
+			out.push({
+				key: `${walk}:${r.role}`,
+				label:
+					walk === "review"
+						? reviewMilestoneLabel(r.role)
+						: approvalMilestoneLabel(r.role),
+				done: phaseDone && r.stamped,
+			})
+		} else {
+			group.push(r)
+		}
+	}
+	flush()
+	return out
 }

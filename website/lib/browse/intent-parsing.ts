@@ -429,23 +429,40 @@ export function deriveStageStateFromUnits(
 	// every unit has stamped every key. If even one unit added a role
 	// the others haven't signed, the stage is still "awaiting" that
 	// role — same answer the engine would give.
-	const reviewRolesSet = new Set<string>()
-	const approvalRolesSet = new Set<string>()
+	// The engine roles (spec, continuity, cross-stage-consistency, plus
+	// quality_gates on the approval side) fire on EVERY stage, so we seed
+	// them up front rather than waiting to see them stamped. That's what
+	// fixes both the "in-progress stage shows only a few phases" truncation
+	// AND the pre-approval blind spot (a stage that's advanced but unsigned
+	// reads as awaiting approval, not complete, because the seeded roles are
+	// unmet). Studio review-agents aren't shipped browse-side, so they're
+	// still unioned from what's stamped on disk; they appear as they sign.
+	// The human `user` gate is required in every non-autopilot mode, so we
+	// seed it last (after the agents); autopilot drops it.
+	const stampedReview = new Set<string>()
+	const stampedApproval = new Set<string>()
 	for (const u of units) {
 		const r = (u.raw.reviews as Record<string, unknown> | undefined) ?? {}
-		for (const k of Object.keys(r)) reviewRolesSet.add(k)
+		for (const k of Object.keys(r)) stampedReview.add(k)
 		const a = (u.raw.approvals as Record<string, unknown> | undefined) ?? {}
-		for (const k of Object.keys(a)) approvalRolesSet.add(k)
+		for (const k of Object.keys(a)) stampedApproval.add(k)
 	}
-	// Autopilot drops the user gate. If "user" wasn't stamped anywhere
-	// the union won't contain it; if a migrated unit happens to have
-	// it stamped, drop it to match the engine's autopilot walk.
-	if (mode === "autopilot") {
-		reviewRolesSet.delete("user")
-		approvalRolesSet.delete("user")
+	const ENGINE_REVIEW = ["spec", "continuity", "cross-stage-consistency"]
+	const ENGINE_APPROVAL = [
+		"spec",
+		"continuity",
+		"cross-stage-consistency",
+		"quality_gates",
+	]
+	const isAutopilot = mode === "autopilot"
+	const orderRoles = (engine: string[], stamped: Set<string>): string[] => {
+		const agents = [...stamped].filter(
+			(r) => !engine.includes(r) && r !== "user",
+		)
+		return [...engine, ...agents, ...(isAutopilot ? [] : ["user"])]
 	}
-	const reviewRoles = [...reviewRolesSet]
-	const approvalRoles = [...approvalRolesSet]
+	const reviewRoles = orderRoles(ENGINE_REVIEW, stampedReview)
+	const approvalRoles = orderRoles(ENGINE_APPROVAL, stampedApproval)
 	const derived = deriveStageStatePure({
 		stage: options.stage ?? "",
 		units: unitViews,
@@ -454,7 +471,7 @@ export function deriveStageStateFromUnits(
 		approvalRoles,
 		elaborationVerified: options.elaborationVerified ?? null,
 	})
-	let status: "pending" | "active" | "complete" =
+	const status: "pending" | "active" | "complete" =
 		derived.status === "completed" ? "complete" : derived.status
 
 	// Per-unit signals we need both for the blind-spot correction below and
@@ -483,44 +500,19 @@ export function deriveStageStateFromUnits(
 			const last = its[its.length - 1] as { result?: unknown }
 			return last?.result === "advance"
 		})
-	const anyApprovalStamped = units.some((u) => {
-		const a = u.raw.approvals
-		return (
-			a !== null &&
-			typeof a === "object" &&
-			!Array.isArray(a) &&
-			Object.keys(a as Record<string, unknown>).length > 0
-		)
-	})
-
-	// Blind-spot correction. Union-based role inference can't see approval
-	// roles that NO unit has stamped yet, so a stage in the post-execute /
-	// pre-approval window (every unit terminal-advanced, `approvals: {}`
-	// everywhere) collapses to "completed" — a vacuous `every()` over an
-	// empty role set — where the engine, knowing the real roles, returns
-	// "gate". Genuinely-complete stages always carry approval stamps (the
-	// engine writes them), so "complete + units advanced + zero approvals
-	// stamped anywhere" uniquely identifies the blind spot. Surface it as
-	// awaiting approval instead. We synthesize a single pending approval
-	// milestone (`user` → "approval gate") so the granular track shows the
-	// gate the coarse phase now reports.
-	const awaitingFirstApproval =
-		status === "complete" && allUnitsAdvanced && !anyApprovalStamped
-	if (awaitingFirstApproval) {
-		status = "active"
-	}
 
 	// Map the derivation's per-stage phase to the canonical 5-phase
 	// model the engine emits (ARCHITECTURE.md §2.1). The pure function
 	// still returns the legacy "gate" name for the post-review,
 	// pre-merge slot; rename it to "approve" so the website matches the
 	// SPA's canonical pill set. A `null` phase from `deriveStageStatePure`
-	// means the stage is past every approval — that's `complete`.
+	// means the stage is past every approval — that's `complete`. With the
+	// engine roles seeded above, a stage that's advanced but unsigned no
+	// longer collapses to "complete" — the unmet seeded approval roles keep
+	// it at "gate", so the old pre-approval blind-spot correction is gone.
 	let phase: "elaborate" | "execute" | "review" | "approve" | "complete" | "" =
 		""
-	if (awaitingFirstApproval) {
-		phase = "approve"
-	} else if (status === "complete") {
+	if (status === "complete") {
 		phase = "complete"
 	} else if (derived.phase === "gate") {
 		phase = "approve"
@@ -528,16 +520,10 @@ export function deriveStageStateFromUnits(
 		phase = derived.phase
 	}
 
-	// Granular milestone track. Flags mirror the pure derivation's own
-	// checks, gathered browse-side from the per-unit FM. Observations is
-	// omitted: the browse has no observations.md signal.
-	const milestoneApprovalRoles =
-		approvalRoles.length === 0 && awaitingFirstApproval
-			? [{ role: "user", stamped: false }]
-			: approvalRoles.map((role) => ({
-					role,
-					stamped: everyUnitStamped("approvals", role),
-				}))
+	// Granular milestone track, built from the same seeded role lists the
+	// status derivation used — so the pips match the phase, and an
+	// in-progress stage shows its full track (every engine role present,
+	// pending until signed) instead of only the roles stamped so far.
 	const milestones = buildStageMilestones({
 		elaborateDone: derived.phase !== "elaborate",
 		reviewRoles: reviewRoles.map((role) => ({
@@ -545,7 +531,10 @@ export function deriveStageStateFromUnits(
 			stamped: everyUnitStamped("reviews", role),
 		})),
 		executeDone: allUnitsAdvanced,
-		approvalRoles: milestoneApprovalRoles,
+		approvalRoles: approvalRoles.map((role) => ({
+			role,
+			stamped: everyUnitStamped("approvals", role),
+		})),
 	})
 
 	return { status, phase, milestones }

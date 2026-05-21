@@ -85,20 +85,20 @@ test("empty unit list => pending", () => {
 	assert.strictEqual(deriveStageStatusFromUnits([]), "pending")
 })
 
-test("every unit terminal-advance + user-approved => complete", () => {
+test("every unit terminal-advance + fully approved => complete", () => {
+	// "Complete" requires every seeded role signed — the engine stamps
+	// spec/continuity/cross-stage-consistency/quality_gates ahead of the
+	// user gate, so a realistic complete unit carries all of them.
+	const fullApprovals = {
+		spec: { at: "2026-05-06T00:00:00Z" },
+		continuity: { at: "2026-05-06T00:00:00Z" },
+		"cross-stage-consistency": { at: "2026-05-06T00:00:00Z" },
+		quality_gates: { at: "2026-05-06T00:00:00Z" },
+		user: { at: "2026-05-06T00:00:00Z" },
+	}
 	const out = deriveStageStatusFromUnits([
-		{
-			raw: {
-				iterations: [{ result: "advance" }],
-				approvals: { user: { at: "2026-05-06T00:00:00Z" } },
-			},
-		},
-		{
-			raw: {
-				iterations: [{ result: "advance" }],
-				approvals: { user: { at: "2026-05-06T00:00:00Z" } },
-			},
-		},
+		{ raw: { iterations: [{ result: "advance" }], approvals: fullApprovals } },
+		{ raw: { iterations: [{ result: "advance" }], approvals: fullApprovals } },
 	])
 	assert.strictEqual(out, "complete")
 })
@@ -391,8 +391,11 @@ body text
 console.log("\n── deriveStageStateFromUnits ──────────────────────────────")
 
 test("returns canonical 5-phase names — no 'gate' leak", () => {
-	// All hats advanced, but no approvals signed → engine pure derivation
-	// returns "gate"; the website wrapper must remap that to "approve".
+	// All reviews signed + hats advanced, but no approvals signed → engine
+	// pure derivation returns "gate"; the website wrapper must remap that to
+	// "approve". Reviews must carry every seeded role (spec/continuity/
+	// cross-stage/user) or the stage reads as still in pre-execute review.
+	const AT = "2026-05-14T00:02:00Z"
 	const u = {
 		raw: {
 			started_at: "2026-05-14T00:00:00Z",
@@ -404,7 +407,12 @@ test("returns canonical 5-phase names — no 'gate' leak", () => {
 					result: "advance",
 				},
 			],
-			reviews: { user: { at: "2026-05-14T00:02:00Z" } },
+			reviews: {
+				spec: { at: AT },
+				continuity: { at: AT },
+				"cross-stage-consistency": { at: AT },
+				user: { at: AT },
+			},
 			approvals: {},
 		},
 	}
@@ -425,13 +433,20 @@ test("autopilot mode bypasses elaborate-verifier signal", () => {
 
 console.log("\n── deriveStageStateFromUnits milestones ───────────────────")
 
-test("milestones: review stamped, hats mid-flight → execute active", () => {
+test("milestones: reviews done, hats mid-flight → execute active", () => {
+	// All seeded autopilot review roles signed (spec + the adversarial
+	// pair), hats mid-flight → review done, execute is the first not-done.
+	const AT = "2026-05-14T00:01:00Z"
 	const r = deriveStageStateFromUnits(
 		[
 			{
 				raw: {
 					started_at: "2026-05-14T00:00:00Z",
-					reviews: { spec: { at: "2026-05-14T00:01:00Z" } },
+					reviews: {
+						spec: { at: AT },
+						continuity: { at: AT },
+						"cross-stage-consistency": { at: AT },
+					},
 					iterations: [{ hat: "implementer", result: null }],
 					approvals: {},
 				},
@@ -439,23 +454,29 @@ test("milestones: review stamped, hats mid-flight → execute active", () => {
 		],
 		{ intentMode: "autopilot" },
 	)
-	// elaborate done, spec review done, execute is the first not-done.
 	const exec = r.milestones.find((m) => m.key === "execute")
-	const review = r.milestones.find((m) => m.key === "review:spec")
-	assert.strictEqual(review?.status, "done")
+	const specReview = r.milestones.find((m) => m.key === "review:spec")
+	const adReview = r.milestones.find((m) => m.key === "review:adversarial:0")
+	assert.strictEqual(specReview?.status, "done")
+	assert.strictEqual(adReview?.status, "done")
 	assert.strictEqual(exec?.status, "active")
 })
 
-test("milestones: awaiting first approval → synthetic approval gate pending", () => {
-	// Units advanced, reviews stamped, but no approvals anywhere — the
-	// blind-spot window. The track must NOT read all-done; it surfaces a
-	// pending approval pip mirroring the corrected "approve" phase.
+test("milestones: advanced + no approvals → seeded approval pip is active", () => {
+	// Reviews done, units advanced, but approvals empty. The seeded engine
+	// approval roles are unmet, so the track shows a pending approval pip
+	// and the phase reads "approve" — no synthetic placeholder needed.
+	const AT = "2026-05-14T00:01:00Z"
 	const r = deriveStageStateFromUnits(
 		[
 			{
 				raw: {
 					started_at: "2026-05-14T00:00:00Z",
-					reviews: { spec: { at: "2026-05-14T00:01:00Z" } },
+					reviews: {
+						spec: { at: AT },
+						continuity: { at: AT },
+						"cross-stage-consistency": { at: AT },
+					},
 					iterations: [{ hat: "implementer", result: "advance" }],
 					approvals: {},
 				},
@@ -465,21 +486,28 @@ test("milestones: awaiting first approval → synthetic approval gate pending", 
 	)
 	assert.strictEqual(r.phase, "approve")
 	const approvalPip = r.milestones.find((m) => m.key.startsWith("approve:"))
-	assert.ok(approvalPip, "expected a synthetic approval milestone")
+	assert.ok(approvalPip, "expected a seeded approval milestone")
 	assert.strictEqual(approvalPip?.status, "active")
 })
 
 test("milestones: fully approved stage → every milestone done", () => {
+	const AT = "2026-05-14T00:02:00Z"
 	const r = deriveStageStateFromUnits(
 		[
 			{
 				raw: {
 					started_at: "2026-05-14T00:00:00Z",
-					reviews: { spec: { at: "2026-05-14T00:01:00Z" } },
+					reviews: {
+						spec: { at: AT },
+						continuity: { at: AT },
+						"cross-stage-consistency": { at: AT },
+					},
 					iterations: [{ hat: "implementer", result: "advance" }],
 					approvals: {
-						spec: { at: "2026-05-14T00:02:00Z" },
-						quality_gates: { at: "2026-05-14T00:03:00Z" },
+						spec: { at: AT },
+						continuity: { at: AT },
+						"cross-stage-consistency": { at: AT },
+						quality_gates: { at: AT },
 					},
 				},
 			},

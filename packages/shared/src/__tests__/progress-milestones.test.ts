@@ -46,7 +46,10 @@ test("approval labels: user → approval gate, quality_gates, cross-stage, defau
 		approvalMilestoneLabel("cross-stage-consistency"),
 		"cross-stage approval",
 	)
-	assert.strictEqual(approvalMilestoneLabel("runtime-verifier"), "runtime-verifier approval")
+	assert.strictEqual(
+		approvalMilestoneLabel("runtime-verifier"),
+		"runtime-verifier approval",
+	)
 })
 
 // ── finalizeSteps ─────────────────────────────────────────────────────
@@ -87,12 +90,14 @@ test("order: elaborate → reviews → execute → approvals → observations", 
 		approvalRoles: [{ role: "quality_gates", stamped: false }],
 		observationsDone: false,
 	})
+	// spec keeps its own pip; continuity is an adversarial reviewer →
+	// collapses into the grouped pip. quality_gates keeps its own pip.
 	assert.deepStrictEqual(
 		steps.map((s) => s.key),
 		[
 			"elaborate",
 			"review:spec",
-			"review:continuity",
+			"review:adversarial:0",
 			"execute",
 			"approve:quality_gates",
 			"observations",
@@ -154,6 +159,76 @@ test("everything done → all steps done, no active", () => {
 		observationsDone: true,
 	})
 	assert.ok(steps.every((s) => s.status === "done"))
+})
+
+// ── adversarial grouping ──────────────────────────────────────────────
+
+test("adversarial reviewers collapse into one grouped pip with a count", () => {
+	const steps = buildStageMilestones({
+		elaborateDone: true,
+		reviewRoles: [
+			{ role: "spec", stamped: true },
+			{ role: "continuity", stamped: true },
+			{ role: "cross-stage-consistency", stamped: false },
+			{ role: "accessibility", stamped: false },
+		],
+		executeDone: false,
+		approvalRoles: [],
+	})
+	const keys = steps.map((s) => s.key)
+	// spec distinct; the 3 adversarial reviewers → one grouped pip.
+	assert.deepStrictEqual(keys, [
+		"elaborate",
+		"review:spec",
+		"review:adversarial:0",
+		"execute",
+	])
+	const group = steps.find((s) => s.key === "review:adversarial:0")
+	// 1 of 3 adversarial reviewers signed → count in the label, still active.
+	assert.match(group?.label ?? "", /adversarial review \(1\/3\)/)
+	assert.strictEqual(group?.status, "active")
+})
+
+test("grouped pip is done only when every adversarial role has signed", () => {
+	const steps = buildStageMilestones({
+		elaborateDone: true,
+		reviewRoles: [
+			{ role: "continuity", stamped: true },
+			{ role: "cross-stage-consistency", stamped: true },
+		],
+		executeDone: false,
+		approvalRoles: [],
+	})
+	const group = steps.find((s) => s.key === "review:adversarial:0")
+	assert.strictEqual(group?.status, "done")
+	assert.match(group?.label ?? "", /adversarial review \(2\/2\)/)
+})
+
+test("quality_gates splits the approval adversarial group, both keep order", () => {
+	const steps = buildStageMilestones({
+		elaborateDone: true,
+		reviewRoles: [],
+		executeDone: true,
+		approvalRoles: [
+			{ role: "spec", stamped: true },
+			{ role: "continuity", stamped: true },
+			{ role: "cross-stage-consistency", stamped: true },
+			{ role: "quality_gates", stamped: false },
+			{ role: "accessibility", stamped: false },
+			{ role: "user", stamped: false },
+		],
+	})
+	// spec | [continuity, cross-stage] | quality_gates | [accessibility] | user
+	assert.deepStrictEqual(
+		steps.filter((s) => s.key.startsWith("approve:")).map((s) => s.key),
+		[
+			"approve:spec",
+			"approve:adversarial:0",
+			"approve:quality_gates",
+			"approve:adversarial:1",
+			"approve:user",
+		],
+	)
 })
 
 console.log(`\n── Result: ${passed} passed, ${failed} failed ───────────`)

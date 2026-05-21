@@ -33,7 +33,11 @@ const STAMP = { at: AT }
 const STAGE = "security"
 const TERMINAL_HAT = "blue-team" // last in security's hats[]
 
-function seedStage(repo, slug, { units = [], elaboration = null, discovery = true } = {}) {
+function seedStage(
+	repo,
+	slug,
+	{ units = [], elaboration = null, discovery = true } = {},
+) {
 	const intentDir = join(repo, ".haiku", "intents", slug)
 	const stageDir = join(intentDir, "stages", STAGE)
 	mkdirSync(join(stageDir, "units"), { recursive: true })
@@ -54,7 +58,10 @@ function seedStage(repo, slug, { units = [], elaboration = null, discovery = tru
 		writeFileSync(join(repo, ".haiku", "knowledge", "THREAT-MODEL.md"), "tm\n")
 	}
 	if (elaboration) {
-		writeFileSync(join(stageDir, "elaboration.md"), matter.stringify("e\n", elaboration))
+		writeFileSync(
+			join(stageDir, "elaboration.md"),
+			matter.stringify("e\n", elaboration),
+		)
 	}
 	for (const u of units) {
 		writeFileSync(
@@ -93,19 +100,22 @@ test("track order matches the cursor walk: elaborate → reviews → execute →
 		const slug = "t-order"
 		seedStage(repo, slug, {
 			elaboration: { verified_at: AT, decompose_verified_at: AT },
-			units: [{ name: "unit-01", fm: { title: "u", inputs: [], iterations: [] } }],
+			units: [
+				{ name: "unit-01", fm: { title: "u", inputs: [], iterations: [] } },
+			],
 		})
 		const t = await track(repo, slug)
 		const keys = t.steps.map((s) => s.key)
+		// spec keeps its own pip (serial conformance gate); continuity +
+		// cross-stage-consistency are adversarial peers → one grouped pip.
+		// quality_gates keeps its own pip on the approval side.
 		assert.deepEqual(keys, [
 			"elaborate",
 			"review:spec",
-			"review:continuity",
-			"review:cross-stage-consistency",
+			"review:adversarial:0",
 			"execute",
 			"approve:spec",
-			"approve:continuity",
-			"approve:cross-stage-consistency",
+			"approve:adversarial:0",
 			"approve:quality_gates",
 			"observations",
 		])
@@ -138,7 +148,9 @@ test("units exist, reviews unstamped: first review role is active (not execute)"
 		const slug = "t-review"
 		seedStage(repo, slug, {
 			elaboration: { verified_at: AT, decompose_verified_at: AT },
-			units: [{ name: "unit-01", fm: { title: "u", inputs: [], iterations: [] } }],
+			units: [
+				{ name: "unit-01", fm: { title: "u", inputs: [], iterations: [] } },
+			],
 		})
 		const t = await track(repo, slug)
 		const active = t.steps[t.index]
@@ -173,7 +185,12 @@ test("reviews stamped, hats mid-flight: execute is active", async () => {
 						reviews,
 						// Non-terminal hat advanced; terminal hat still pending.
 						iterations: [
-							{ hat: "threat-modeler", started_at: AT, completed_at: AT, result: "advance" },
+							{
+								hat: "threat-modeler",
+								started_at: AT,
+								completed_at: AT,
+								result: "advance",
+							},
 						],
 					},
 				},
@@ -195,7 +212,8 @@ test("hats done, approvals partial: the missing approval role is active", async 
 			continuity: STAMP,
 			"cross-stage-consistency": STAMP,
 		}
-		// spec approval signed, continuity missing → approve:continuity active.
+		// spec approval signed, continuity missing → the grouped adversarial
+		// approval pip is the first not-done step.
 		const approvals = { spec: STAMP }
 		seedStage(repo, slug, {
 			elaboration: { verified_at: AT, decompose_verified_at: AT },
@@ -210,8 +228,18 @@ test("hats done, approvals partial: the missing approval role is active", async 
 						approvals,
 						// Terminal hat reached → execute done.
 						iterations: [
-							{ hat: "threat-modeler", started_at: AT, completed_at: AT, result: "advance" },
-							{ hat: TERMINAL_HAT, started_at: AT, completed_at: AT, result: "advance" },
+							{
+								hat: "threat-modeler",
+								started_at: AT,
+								completed_at: AT,
+								result: "advance",
+							},
+							{
+								hat: TERMINAL_HAT,
+								started_at: AT,
+								completed_at: AT,
+								result: "advance",
+							},
 						],
 					},
 				},
@@ -219,7 +247,8 @@ test("hats done, approvals partial: the missing approval role is active", async 
 		})
 		const t = await track(repo, slug)
 		const active = t.steps[t.index]
-		assert.equal(active.key, "approve:continuity")
+		assert.equal(active.key, "approve:adversarial:0")
+		assert.match(active.label, /adversarial approval \(0\/2\)/)
 		assert.equal(t.steps.find((s) => s.key === "execute").status, "done")
 		assert.equal(t.steps.find((s) => s.key === "approve:spec").status, "done")
 	} finally {

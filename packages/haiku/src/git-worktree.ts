@@ -940,10 +940,40 @@ export function openPullRequest(
 	}
 }
 
-/** Push a branch to its origin (creates upstream if missing). Returns
- *  ok:true on success, ok:false with the raw error on failure. Bounded
- *  by `GIT_NETWORK_TIMEOUT_MS` and runs with prompts suppressed so an
- *  unresponsive remote or auth prompt fails fast instead of hanging. */
+/** Whether a unit's branch still exists locally and/or on origin. Used by
+ *  the pickup-recovery gate to decide: worktree gone but branch survives
+ *  (local or remote) → recreatable (resume); neither → the loop's code is
+ *  lost → reset and restart. Best-effort; refreshes the remote-tracking ref
+ *  first so a session that hasn't fetched still sees a pushed branch. */
+export function unitBranchExists(
+	slug: string,
+	unit: string,
+): { local: boolean; remote: boolean } {
+	if (!isGitRepo()) return { local: false, remote: false }
+	const unitBranch = `haiku/${slug}/${unit}`
+	const local = !!tryRun(["git", "branch", "--list", unitBranch])?.trim()
+	tryRun(["git", "fetch", "origin", unitBranch])
+	const remote = !!tryRun([
+		"git",
+		"rev-parse",
+		"--verify",
+		"--quiet",
+		`refs/remotes/origin/${unitBranch}`,
+	])?.trim()
+	return { local, remote }
+}
+
+/** Whether the repo has at least one configured git remote. The pickup-
+ *  recovery gate (`resetLostUnits`) only matters on a CROSS-MACHINE pickup —
+ *  the sole way a unit's worktree branch goes missing in a way reset must
+ *  repair — and that requires a remote (it's how the work crossed machines).
+ *  A no-remote repo's unit branches are always recoverable locally, or the
+ *  work never left this machine, so recovery is a no-op there. */
+export function hasGitRemote(): boolean {
+	if (!isGitRepo()) return false
+	return !!tryRun(["git", "remote"])?.trim()
+}
+
 /** Checkpoint an in-progress unit's worktree: commit any pending work on
  *  its branch and push it to origin. Restart / cross-machine durability —
  *  a unit's hats run on `haiku/<slug>/<unit>` and aren't on the stage

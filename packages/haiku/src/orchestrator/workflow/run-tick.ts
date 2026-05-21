@@ -48,6 +48,7 @@ import {
 	wouldDeadlock,
 } from "./deadlock-detector.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
+import { resetLostUnits } from "./unit-branch-recovery.js"
 import { autoFileMalformedUnitInputs } from "./validate-unit-inputs-gate.js"
 import { ensureNonce } from "./verifier-nonce.js"
 import { writeStatuslineSnapshot } from "../../statusline/snapshot.js"
@@ -375,6 +376,26 @@ export function runWorkflowTick(
 		// studio config gone), let the cursor walk surface the real
 		// error.
 		emitTelemetry("haiku.self_repair.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Pre-tick pickup recovery: a worktree-isolated unit whose worktree AND
+	// branch (local + remote) are all gone has lost its hat-loop code (the
+	// work never reached the stage branch). Reset it so the cursor
+	// re-dispatches the first hat into a fresh worktree. No-op on the common
+	// paths — worktree present (in-flight) or branch recreatable (resume).
+	try {
+		const recovered = resetLostUnits(slug, studio)
+		if (recovered.reset.length > 0) {
+			emitTelemetry("haiku.unit_recovery.reset", {
+				intent: slug,
+				units: recovered.reset.join(","),
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.unit_recovery.failed", {
 			intent: slug,
 			error: String((err as Error)?.message ?? err),
 		})

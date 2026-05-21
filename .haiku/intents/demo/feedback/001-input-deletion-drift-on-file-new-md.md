@@ -4,13 +4,13 @@ status: pending
 origin: drift
 author: engine
 author_type: system
-created_at: '2026-05-18T17:56:35Z'
+created_at: '2026-05-21T02:30:32Z'
 iteration: 0
 visit: 0
-source_ref: 'drift:input_deletion:stages/design/file-NEW.md'
+source_ref: 'drift:input_deletion:stages/design/artifacts/file-NEW.md'
 closed_by: null
 bolt: 0
-triaged_at: '2026-05-18T17:56:35.793Z'
+triaged_at: '2026-05-21T02:30:32.479Z'
 resolution: null
 replies: []
 targets:
@@ -20,7 +20,7 @@ targets:
 
 _Engine-authored drift FB. The premise that 1 signed slot(s) depended on has shifted. Read the file at the path below and classify._
 
-**File**: `stages/design/file-NEW.md` (no longer present on disk)
+**File**: `stages/design/artifacts/file-NEW.md` (no longer present on disk)
 **Kind**: `input_deletion`
 **Witnessed at**: 2026-05-18T17:00:00Z
 

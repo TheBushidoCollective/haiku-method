@@ -147,7 +147,8 @@ stateDiagram-v2
       state product_review_fix_bolt_1 {
         [*] --> product_review_fix_bolt_1_classifier
         product_review_fix_bolt_1_classifier --> product_review_fix_bolt_1_product : fix.advance
-        product_review_fix_bolt_1_product --> product_review_fix_bolt_1_feedback_assessor : fix.advance
+        product_review_fix_bolt_1_product --> product_review_fix_bolt_1_specification : fix.advance
+        product_review_fix_bolt_1_specification --> product_review_fix_bolt_1_feedback_assessor : fix.advance
         product_review_fix_bolt_1_feedback_assessor --> product_review_fix_bolt_1_validated : fix.advance
         product_review_fix_bolt_1_validated --> [*]
       }
@@ -156,7 +157,8 @@ stateDiagram-v2
       state product_review_fix_bolt_2 {
         [*] --> product_review_fix_bolt_2_classifier
         product_review_fix_bolt_2_classifier --> product_review_fix_bolt_2_product : fix.advance
-        product_review_fix_bolt_2_product --> product_review_fix_bolt_2_feedback_assessor : fix.advance
+        product_review_fix_bolt_2_product --> product_review_fix_bolt_2_specification : fix.advance
+        product_review_fix_bolt_2_specification --> product_review_fix_bolt_2_feedback_assessor : fix.advance
         product_review_fix_bolt_2_feedback_assessor --> product_review_fix_bolt_2_validated : fix.advance
         product_review_fix_bolt_2_validated --> [*]
       }
@@ -165,7 +167,8 @@ stateDiagram-v2
       state product_review_fix_bolt_3 {
         [*] --> product_review_fix_bolt_3_classifier
         product_review_fix_bolt_3_classifier --> product_review_fix_bolt_3_product : fix.advance
-        product_review_fix_bolt_3_product --> product_review_fix_bolt_3_feedback_assessor : fix.advance
+        product_review_fix_bolt_3_product --> product_review_fix_bolt_3_specification : fix.advance
+        product_review_fix_bolt_3_specification --> product_review_fix_bolt_3_feedback_assessor : fix.advance
         product_review_fix_bolt_3_feedback_assessor --> product_review_fix_bolt_3_validated : fix.advance
         product_review_fix_bolt_3_validated --> [*]
       }

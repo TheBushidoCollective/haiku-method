@@ -91,7 +91,8 @@ stateDiagram-v2
       state research_review_fix_bolt_1 {
         [*] --> research_review_fix_bolt_1_classifier
         research_review_fix_bolt_1_classifier --> research_review_fix_bolt_1_researcher : fix.advance
-        research_review_fix_bolt_1_researcher --> research_review_fix_bolt_1_feedback_assessor : fix.advance
+        research_review_fix_bolt_1_researcher --> research_review_fix_bolt_1_analyst : fix.advance
+        research_review_fix_bolt_1_analyst --> research_review_fix_bolt_1_feedback_assessor : fix.advance
         research_review_fix_bolt_1_feedback_assessor --> research_review_fix_bolt_1_validated : fix.advance
         research_review_fix_bolt_1_validated --> [*]
       }
@@ -100,7 +101,8 @@ stateDiagram-v2
       state research_review_fix_bolt_2 {
         [*] --> research_review_fix_bolt_2_classifier
         research_review_fix_bolt_2_classifier --> research_review_fix_bolt_2_researcher : fix.advance
-        research_review_fix_bolt_2_researcher --> research_review_fix_bolt_2_feedback_assessor : fix.advance
+        research_review_fix_bolt_2_researcher --> research_review_fix_bolt_2_analyst : fix.advance
+        research_review_fix_bolt_2_analyst --> research_review_fix_bolt_2_feedback_assessor : fix.advance
         research_review_fix_bolt_2_feedback_assessor --> research_review_fix_bolt_2_validated : fix.advance
         research_review_fix_bolt_2_validated --> [*]
       }
@@ -109,7 +111,8 @@ stateDiagram-v2
       state research_review_fix_bolt_3 {
         [*] --> research_review_fix_bolt_3_classifier
         research_review_fix_bolt_3_classifier --> research_review_fix_bolt_3_researcher : fix.advance
-        research_review_fix_bolt_3_researcher --> research_review_fix_bolt_3_feedback_assessor : fix.advance
+        research_review_fix_bolt_3_researcher --> research_review_fix_bolt_3_analyst : fix.advance
+        research_review_fix_bolt_3_analyst --> research_review_fix_bolt_3_feedback_assessor : fix.advance
         research_review_fix_bolt_3_feedback_assessor --> research_review_fix_bolt_3_validated : fix.advance
         research_review_fix_bolt_3_validated --> [*]
       }

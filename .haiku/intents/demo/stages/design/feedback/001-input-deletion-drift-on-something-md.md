@@ -4,13 +4,13 @@ status: pending
 origin: drift
 author: engine
 author_type: system
-created_at: '2026-05-18T19:20:36Z'
+created_at: '2026-05-21T02:30:46Z'
 iteration: 0
 visit: 0
 source_ref: 'drift:input_deletion:stages/design/artifacts/something.md'
 closed_by: null
 bolt: 0
-triaged_at: '2026-05-18T19:20:36.127Z'
+triaged_at: '2026-05-21T02:30:46.114Z'
 resolution: null
 replies: []
 targets:

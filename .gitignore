@@ -72,3 +72,4 @@ terraform.tfvars
 bun.lock
 plugin/bin/haiku.mjs.map
 .claude/scheduled_tasks.lock
+/.haiku/intents/demo

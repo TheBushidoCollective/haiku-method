@@ -23,5 +23,10 @@
       }
     }
   },
-  "teammateMode": "tmux"
+  "teammateMode": "tmux",
+  "statusLine": {
+    "type": "command",
+    "command": "${CLAUDE_PROJECT_DIR}/plugin/bin/haiku statusline",
+    "padding": 0
+  }
 }

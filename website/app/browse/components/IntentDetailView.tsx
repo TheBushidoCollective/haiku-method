@@ -3,6 +3,7 @@
 import type { ProgressStep } from "@haiku/shared/progress-milestones"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { isV4Intent } from "@/lib/browse/intent-parsing"
 import type { ProviderLink } from "@/lib/browse/resolve-links"
 import { resolveLinks } from "@/lib/browse/resolve-links"
 import type {
@@ -235,6 +236,7 @@ export function IntentDetailView({
 				intentSlug={intent.slug}
 				intentTitle={intent.title}
 				intentMode={intent.mode}
+				schemaIsV4={isV4Intent(intent.raw)}
 				provider={provider}
 				assets={intent.assets}
 				host={host || undefined}

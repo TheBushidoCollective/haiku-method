@@ -52,6 +52,10 @@ interface Props {
 	/** Intent mode (autopilot drops the user gate) — drives the expected
 	 *  review/approval role set in the sign-offs section. */
 	intentMode: string
+	/** Whether the intent is v4+ (has the review/approval model). v3 units
+	 *  predate it — the sign-offs section then shows only what's stamped
+	 *  rather than fabricating a matrix of never-signed gates. */
+	schemaIsV4: boolean
 	provider: BrowseProvider
 	assets?: HaikuAsset[]
 	host?: string
@@ -74,6 +78,7 @@ export function UnitDetailView({
 	onBack,
 	onBackToIntent,
 	intentTitle,
+	schemaIsV4,
 }: Props) {
 	const checkedCount = unit.criteria.filter((c) => c.checked).length
 	const totalCriteria = unit.criteria.length
@@ -253,7 +258,11 @@ export function UnitDetailView({
 			)}
 
 			{/* Review + approval sign-offs — every expected role, signed or not */}
-			<SignOffsSection unit={unit} intentMode={intentMode} />
+			<SignOffsSection
+				unit={unit}
+				intentMode={intentMode}
+				schemaIsV4={schemaIsV4}
+			/>
 
 			{/* Feedback targeting this unit */}
 			{feedback.length > 0 && (
@@ -954,33 +963,44 @@ function roleLabel(role: string): string {
 function SignOffsSection({
 	unit,
 	intentMode,
+	schemaIsV4,
 }: {
 	unit: HaikuUnit
 	intentMode: string
+	schemaIsV4: boolean
 }) {
 	const isAutopilot = intentMode === "autopilot"
 	const reviewsRaw = recordOf(unit.raw.reviews)
 	const approvalsRaw = recordOf(unit.raw.approvals)
-	const reviewRoles = seedRoleList(
-		ENGINE_REVIEW_ROLES,
-		Object.keys(reviewsRaw),
-		isAutopilot,
-	)
-	const approvalRoles = seedRoleList(
-		ENGINE_APPROVAL_ROLES,
-		Object.keys(approvalsRaw),
-		isAutopilot,
-	)
+	// v4 seeds the full expected gate set (so pending roles show); v3 has no
+	// review/approval model, so we only surface what's actually stamped and
+	// hide the section when there's nothing — never fabricate a matrix of
+	// gates a v3 unit never had.
+	const reviewRoles = schemaIsV4
+		? seedRoleList(ENGINE_REVIEW_ROLES, Object.keys(reviewsRaw), isAutopilot)
+		: Object.keys(reviewsRaw)
+	const approvalRoles = schemaIsV4
+		? seedRoleList(
+				ENGINE_APPROVAL_ROLES,
+				Object.keys(approvalsRaw),
+				isAutopilot,
+			)
+		: Object.keys(approvalsRaw)
 	const reviews = readSignOffs(reviewsRaw, reviewRoles)
 	const approvals = readSignOffs(approvalsRaw, approvalRoles)
+	if (reviews.length === 0 && approvals.length === 0) return null
 	return (
 		<section className="mb-8">
 			<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
 				Reviews &amp; Approvals
 			</h2>
 			<div className="grid gap-4 sm:grid-cols-2">
-				<SignOffGroup title="Reviews" entries={reviews} />
-				<SignOffGroup title="Approvals" entries={approvals} />
+				{reviews.length > 0 && (
+					<SignOffGroup title="Reviews" entries={reviews} />
+				)}
+				{approvals.length > 0 && (
+					<SignOffGroup title="Approvals" entries={approvals} />
+				)}
 			</div>
 		</section>
 	)

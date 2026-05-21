@@ -3,6 +3,7 @@ import {
 	deriveActiveStageFromStageTree,
 	deriveStageStateFromUnits,
 	deriveV4ActiveStage,
+	isV4Intent,
 	parseElaborationVerified,
 	parseFeedback,
 	parseIntentApprovals,
@@ -210,6 +211,7 @@ export class LocalProvider implements BrowseProvider {
 		const stageNames = (data.stages as string[]) || []
 		const activeStage = (data.active_stage as string) || ""
 		const intentMode = (data.mode as string) || "continuous"
+		const schemaIsV4 = isV4Intent(data)
 
 		// Load stages
 		const stageDirs = await this.listDirs(`.haiku/intents/${slug}/stages`)
@@ -273,6 +275,7 @@ export class LocalProvider implements BrowseProvider {
 					stage: stageName,
 					intentMode,
 					elaborationVerified,
+					schemaIsV4,
 				})
 				status = derived.status
 				stagePhase = derived.phase

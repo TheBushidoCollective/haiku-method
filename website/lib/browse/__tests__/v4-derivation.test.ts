@@ -521,6 +521,31 @@ test("milestones: fully approved stage → every milestone done", () => {
 	)
 })
 
+console.log("\n── schemaIsV4: false (v3 intents) ─────────────────────────")
+
+test("v3 (schemaIsV4=false): no engine-role seeding, empty milestone track", () => {
+	// A v3-shape unit: status/depends_on/bolt only, no review/approval model.
+	const r = deriveStageStateFromUnits(
+		[{ raw: { status: "completed", bolt: 0 } }],
+		{ intentMode: "continuous", schemaIsV4: false },
+	)
+	// No fabricated granular track — the coarse phase strip takes over.
+	assert.deepStrictEqual(r.milestones, [])
+})
+
+test("v3 (schemaIsV4=false): a terminal-advanced unit isn't held by unseeded approvals", () => {
+	// Without seeding, an advanced unit with no approval stamps isn't kept
+	// at "gate" by phantom engine roles — it derives from the union only.
+	const r = deriveStageStateFromUnits(
+		[{ raw: { iterations: [{ result: "advance" }], approvals: {} } }],
+		{ intentMode: "continuous", schemaIsV4: false },
+	)
+	assert.deepStrictEqual(r.milestones, [])
+	// Union approvalRoles is empty → the old vacuous-complete behavior, which
+	// is correct for v3 (it had no per-unit approval gates).
+	assert.strictEqual(r.status, "complete")
+})
+
 console.log("\n── parseElaborationVerified ───────────────────────────────")
 
 test("null when no text", () => {

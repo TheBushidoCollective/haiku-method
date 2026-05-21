@@ -17,6 +17,7 @@ import {
 	deriveActiveStageFromStageTree,
 	deriveStageStateFromUnits,
 	deriveV4ActiveStage,
+	isV4Intent,
 	mergeKnowledge as mergeKnowledgeShared,
 	parseElaborationVerified,
 	parseFeedback,
@@ -637,6 +638,7 @@ export class GitLabProvider implements BrowseProvider {
 		stageNames: string[],
 		ref: string,
 		intentMode: string,
+		schemaIsV4: boolean,
 	): HaikuStageState | null {
 		const basePath = `.haiku/intents/${slug}`
 		const stagePath = `${basePath}/stages/${stageName}`
@@ -733,6 +735,7 @@ export class GitLabProvider implements BrowseProvider {
 				stage: stageName,
 				intentMode,
 				elaborationVerified,
+				schemaIsV4,
 			})
 			status = derived.status
 			phase = derived.phase
@@ -985,6 +988,7 @@ export class GitLabProvider implements BrowseProvider {
 		const stageNames = (frontmatter.stages as string[]) || []
 		const activeStage = (frontmatter.active_stage as string) || ""
 		const intentMode = (frontmatter.mode as string) || "continuous"
+		const schemaIsV4 = isV4Intent(frontmatter)
 
 		// Determine ordered stage list from frontmatter or directory listing
 		const fallbackDirNames = this.deriveStageDirNames(
@@ -1017,6 +1021,7 @@ export class GitLabProvider implements BrowseProvider {
 					stageNames,
 					stageBranchRef.branch,
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -1031,6 +1036,7 @@ export class GitLabProvider implements BrowseProvider {
 					stageNames,
 					intentBranch,
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -1044,6 +1050,7 @@ export class GitLabProvider implements BrowseProvider {
 					stageNames,
 					"HEAD",
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -1233,6 +1240,7 @@ export class GitLabProvider implements BrowseProvider {
 		const stageNames = (frontmatter.stages as string[]) || []
 		const activeStage = (frontmatter.active_stage as string) || ""
 		const intentMode = (frontmatter.mode as string) || "continuous"
+		const schemaIsV4 = isV4Intent(frontmatter)
 		const ref = this.branch || "HEAD"
 
 		const fallbackDirNames = this.deriveStageDirNames(slug, data)
@@ -1248,6 +1256,7 @@ export class GitLabProvider implements BrowseProvider {
 				stageNames,
 				ref,
 				intentMode,
+				schemaIsV4,
 			)
 			if (parsed) stages.push(parsed)
 		}

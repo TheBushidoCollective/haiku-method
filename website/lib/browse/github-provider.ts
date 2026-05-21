@@ -15,6 +15,7 @@ import {
 	deriveActiveStageFromStageTree,
 	deriveStageStateFromUnits,
 	deriveV4ActiveStage,
+	isV4Intent,
 	mergeKnowledge as mergeKnowledgeShared,
 	parseElaborationVerified,
 	parseFeedback,
@@ -533,6 +534,7 @@ export class GitHubProvider implements BrowseProvider {
 		stageNames: string[],
 		ref: string,
 		intentMode: string,
+		schemaIsV4: boolean,
 	): HaikuStageState | null {
 		const entries = stageEntries ?? []
 		const stageEntry = entries.find(
@@ -647,6 +649,7 @@ export class GitHubProvider implements BrowseProvider {
 				stage: stageName,
 				intentMode,
 				elaborationVerified,
+				schemaIsV4,
 			})
 			status = derived.status
 			phase = derived.phase
@@ -815,6 +818,7 @@ export class GitHubProvider implements BrowseProvider {
 		const stageNames = (frontmatter.stages as string[]) || []
 		const activeStage = (frontmatter.active_stage as string) || ""
 		const intentMode = (frontmatter.mode as string) || "continuous"
+		const schemaIsV4 = isV4Intent(frontmatter)
 
 		// Determine ordered stage list from frontmatter or directory listing
 		const fallbackDirNames =
@@ -851,6 +855,7 @@ export class GitHubProvider implements BrowseProvider {
 					stageNames,
 					stageBranchRef.branch,
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -864,6 +869,7 @@ export class GitHubProvider implements BrowseProvider {
 					stageNames,
 					intentBranch ?? "HEAD",
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -877,6 +883,7 @@ export class GitHubProvider implements BrowseProvider {
 					stageNames,
 					"HEAD",
 					intentMode,
+					schemaIsV4,
 				)
 			}
 
@@ -1118,6 +1125,7 @@ export class GitHubProvider implements BrowseProvider {
 		const stageNames = (frontmatter.stages as string[]) || []
 		const activeStage = (frontmatter.active_stage as string) || ""
 		const intentMode = (frontmatter.mode as string) || "continuous"
+		const schemaIsV4 = isV4Intent(frontmatter)
 		const ref = this.branch || "HEAD"
 
 		const fallbackDirNames =
@@ -1137,6 +1145,7 @@ export class GitHubProvider implements BrowseProvider {
 				stageNames,
 				ref,
 				intentMode,
+				schemaIsV4,
 			)
 			if (parsed) stages.push(parsed)
 		}

@@ -142,7 +142,7 @@ export interface IntentRefMeta {
  * `phase` directly, v4 derives the same logical values from
  * `sealed_at` and (eventually) per-unit iterations[].
  */
-function isV4Intent(data: Record<string, unknown>): boolean {
+export function isV4Intent(data: Record<string, unknown>): boolean {
 	const ver = data.plugin_version
 	if (typeof ver !== "string") return false
 	const major = Number.parseInt(ver.split(".")[0] ?? "", 10)
@@ -431,6 +431,11 @@ export function deriveStageStateFromUnits(
 		stage?: string
 		intentMode?: string
 		elaborationVerified?: boolean | null
+		/** Whether the intent is v4+ (has the per-unit review/approval model).
+		 *  v3 intents predate it — don't seed engine roles or fabricate a
+		 *  granular milestone track for them; fall back to the union + the
+		 *  coarse phase strip. Defaults true so v4 callers/tests are unchanged. */
+		schemaIsV4?: boolean
 	} = {},
 ): {
 	status: "pending" | "active" | "complete"
@@ -477,16 +482,16 @@ export function deriveStageStateFromUnits(
 		for (const k of Object.keys(a)) stampedApproval.add(k)
 	}
 	const isAutopilot = mode === "autopilot"
-	const reviewRoles = seedRoleList(
-		ENGINE_REVIEW_ROLES,
-		stampedReview,
-		isAutopilot,
-	)
-	const approvalRoles = seedRoleList(
-		ENGINE_APPROVAL_ROLES,
-		stampedApproval,
-		isAutopilot,
-	)
+	// v3 intents have no review/approval model — don't seed engine roles
+	// (that would fabricate a track of never-signed gates); use only what's
+	// actually stamped, matching the pre-seeding union behavior.
+	const schemaIsV4 = options.schemaIsV4 ?? true
+	const reviewRoles = schemaIsV4
+		? seedRoleList(ENGINE_REVIEW_ROLES, stampedReview, isAutopilot)
+		: [...stampedReview]
+	const approvalRoles = schemaIsV4
+		? seedRoleList(ENGINE_APPROVAL_ROLES, stampedApproval, isAutopilot)
+		: [...stampedApproval]
 	const derived = deriveStageStatePure({
 		stage: options.stage ?? "",
 		units: unitViews,
@@ -547,19 +552,24 @@ export function deriveStageStateFromUnits(
 	// Granular milestone track, built from the same seeded role lists the
 	// status derivation used — so the pips match the phase, and an
 	// in-progress stage shows its full track (every engine role present,
-	// pending until signed) instead of only the roles stamped so far.
-	const milestones = buildStageMilestones({
-		elaborateDone: derived.phase !== "elaborate",
-		reviewRoles: reviewRoles.map((role) => ({
-			role,
-			stamped: everyUnitStamped("reviews", role),
-		})),
-		executeDone: allUnitsAdvanced,
-		approvalRoles: approvalRoles.map((role) => ({
-			role,
-			stamped: everyUnitStamped("approvals", role),
-		})),
-	})
+	// pending until signed) instead of only the roles stamped so far. v3
+	// intents have no review model — return an empty track so the
+	// PhaseStepper falls back to the coarse phase strip rather than
+	// fabricating never-signed gates.
+	const milestones = schemaIsV4
+		? buildStageMilestones({
+				elaborateDone: derived.phase !== "elaborate",
+				reviewRoles: reviewRoles.map((role) => ({
+					role,
+					stamped: everyUnitStamped("reviews", role),
+				})),
+				executeDone: allUnitsAdvanced,
+				approvalRoles: approvalRoles.map((role) => ({
+					role,
+					stamped: everyUnitStamped("approvals", role),
+				})),
+			})
+		: []
 
 	return { status, phase, milestones }
 }

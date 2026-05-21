@@ -42,9 +42,12 @@
 
 import { join } from "node:path"
 import { Eta } from "eta"
+import { readIntentBody } from "../../../../../state-tools.js"
+import { readStageBody } from "../../../../../studio-reader.js"
 import {
 	buildConcurrentElaborateLoopBlock,
 	emitSubagentDispatchBlock,
+	studioReadRef,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
@@ -61,12 +64,32 @@ export default definePromptBuilder((ctx) => {
 	}
 	const stage = action.stage
 	const intentSlug = action.intent ?? ctx.slug
+	const studio = ctx.studio
 	const verifierNonce = action.verifier_nonce ?? ""
 
-	const intentMdPath = join(ctx.dir, "intent.md")
-	const stageMdPath = join(ctx.dir, "stages", stage, "STAGE.md")
+	// intent.md is guarded against generic Read by the workflow hook, and
+	// STAGE.md is studio source — snapshot both via the same readers the
+	// haiku_read_* tools use and emit "Read <snapshot>". elaboration.md is
+	// a live, unguarded project artifact, read at its path.
+	const intentRef = studioReadRef({
+		resolveBody: () => readIntentBody(intentSlug),
+		toolName: "haiku_read_intent",
+		toolArgs: { intent: intentSlug },
+		intent: intentSlug,
+		stage,
+		kind: "intent-goal",
+		name: "intent",
+	})
+	const stageRef = studioReadRef({
+		resolveBody: () => readStageBody(studio, stage),
+		toolName: "haiku_read_stage",
+		toolArgs: { studio, stage },
+		intent: intentSlug,
+		stage,
+		kind: "stage-scope",
+		name: stage,
+	})
 	const elabPath = join(ctx.dir, "stages", stage, "elaboration.md")
-	const unitsDir = join(ctx.dir, "stages", stage, "units")
 
 	const concurrentLoopBlock = buildConcurrentElaborateLoopBlock(
 		"verify_decompose",
@@ -76,10 +99,9 @@ export default definePromptBuilder((ctx) => {
 	const subagentPrompt = eta.renderString(SUBAGENT_TEMPLATE, {
 		stage,
 		intentSlug,
-		intentMdPath,
-		stageMdPath,
+		intentRef,
+		stageRef,
 		elabPath,
-		unitsDir,
 		verifierNonce,
 	})
 	const dispatchBlock = emitSubagentDispatchBlock({
@@ -97,10 +119,7 @@ export default definePromptBuilder((ctx) => {
 	return eta.renderString(TEMPLATE, {
 		stage,
 		intentSlug,
-		intentMdPath,
-		stageMdPath,
 		elabPath,
-		unitsDir,
 		concurrentLoopBlock,
 		verifierNonce,
 		composedMode: ctx.composedMode === true,

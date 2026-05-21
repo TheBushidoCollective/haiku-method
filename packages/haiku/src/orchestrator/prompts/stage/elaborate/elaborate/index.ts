@@ -15,10 +15,13 @@
 //     `intent.mode === "autopilot"`). This builder never fires in
 //     autopilot.
 
-import { existsSync, readFileSync } from "node:fs"
-import { join } from "node:path"
 import { Eta } from "eta"
-import { buildConcurrentElaborateLoopBlock } from "../../../_helpers.js"
+import { readIntentBody } from "../../../../../state-tools.js"
+import { readStageBody } from "../../../../../studio-reader.js"
+import {
+	buildConcurrentElaborateLoopBlock,
+	studioReadRef,
+} from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
 
@@ -30,12 +33,28 @@ export default definePromptBuilder((ctx) => {
 	const stage = action.stage ?? "(unknown)"
 	const intentSlug = action.intent ?? ctx.slug
 
-	const intentMdPath = join(ctx.dir, "intent.md")
-	const intentExcerpt = readFirstNonEmptyChunk(intentMdPath, 400)
-
-	const stageDir = join(ctx.dir, "stages", stage)
-	const stageMdPath = join(stageDir, "STAGE.md")
-	const stageScope = readFirstNonEmptyChunk(stageMdPath, 300)
+	// intent.md is guarded against generic Read; STAGE.md is studio
+	// source. Snapshot both via the haiku_read_* readers and emit "Read
+	// <snapshot>" — the agent gets the FULL body (not a truncated
+	// excerpt) and a followable breadcrumb, no hook-blocked raw Read.
+	const intentRef = studioReadRef({
+		resolveBody: () => readIntentBody(intentSlug),
+		toolName: "haiku_read_intent",
+		toolArgs: { intent: intentSlug },
+		intent: intentSlug,
+		stage,
+		kind: "intent-goal",
+		name: "intent",
+	})
+	const stageRef = studioReadRef({
+		resolveBody: () => readStageBody(ctx.studio, stage),
+		toolName: "haiku_read_stage",
+		toolArgs: { studio: ctx.studio, stage },
+		intent: intentSlug,
+		stage,
+		kind: "stage-scope",
+		name: stage,
+	})
 
 	const concurrentLoopBlock = buildConcurrentElaborateLoopBlock(
 		"conversation",
@@ -45,23 +64,9 @@ export default definePromptBuilder((ctx) => {
 	return eta.renderString(TEMPLATE, {
 		stage,
 		intentSlug,
-		intentMdPath,
-		stageMdPath,
-		intentExcerpt,
-		stageScope,
+		intentRef,
+		stageRef,
 		concurrentLoopBlock,
 		composedMode: ctx.composedMode === true,
 	})
 })
-
-function readFirstNonEmptyChunk(path: string, maxLen: number): string {
-	if (!existsSync(path)) return ""
-	try {
-		const raw = readFileSync(path, "utf8")
-		const trimmed = raw.trim()
-		if (trimmed.length <= maxLen) return trimmed
-		return `${trimmed.slice(0, maxLen)}…`
-	} catch {
-		return ""
-	}
-}

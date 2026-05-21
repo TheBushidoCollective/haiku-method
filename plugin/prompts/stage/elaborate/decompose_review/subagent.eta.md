@@ -3,10 +3,10 @@ You are the decompose-verifier for intent <%= intentSlug %>, stage <%= stage %>.
 Your single job: read the captured conversation, the intent, the stage definition, and every unit spec for this stage. Decide whether the units collectively (a) cover what the conversation agreed on AND (b) carry the intent's stage-relevant requirements forward. The two checks share a verifier because they share an artifact (the unit specs) and a stamp (`decompose_verified_at`); separating them would dispatch two subagents reading the same files for overlapping questions.
 
 Files to read (in order):
-1. <%= elabPath %> — the captured conversation artifact.
-2. <%= intentMdPath %> — the intent (FM and body).
-3. <%= stageMdPath %> — the stage's scope and outputs.
-4. Every unit spec under <%= unitsDir %> — read each via the `haiku_unit_read` tool to ensure you see the canonical body.
+1. `<%= elabPath %>` — the captured conversation artifact (read it directly).
+2. <%~ intentRef %> — the intent goal/body.
+3. <%~ stageRef %> — the stage's scope and outputs.
+4. Every unit spec for this stage — read each via `haiku_unit_read { intent: "<%= intentSlug %>", stage: "<%= stage %>", unit: "<unit-name>" }` (enumerate with `haiku_unit_list`). These return the canonical body with engine frontmatter stripped.
 
 Pass criteria (ALL must be true):
 - **Coverage vs conversation:** Every concrete deliverable the conversation agreed to ship from *this* stage maps to at least one unit's `outputs:` or body.

@@ -24,9 +24,12 @@
 
 import { join } from "node:path"
 import { Eta } from "eta"
+import { readIntentBody } from "../../../../../state-tools.js"
+import { readStageBody } from "../../../../../studio-reader.js"
 import {
 	buildConcurrentElaborateLoopBlock,
 	emitSubagentDispatchBlock,
+	studioReadRef,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
@@ -46,11 +49,30 @@ export default definePromptBuilder((ctx) => {
 	const isPreIntent = !stageRaw
 	const verifierNonce = action.verifier_nonce ?? ""
 
-	const intentMdPath = join(ctx.dir, "intent.md")
 	const stage = isPreIntent ? "" : (stageRaw as string)
-	const stageMdPath = isPreIntent
+	// intent.md is guarded against generic Read; STAGE.md is studio
+	// source — snapshot both via the haiku_read_* readers and emit "Read
+	// <snapshot>". elaboration.md is a live, unguarded artifact (path).
+	const intentRef = studioReadRef({
+		resolveBody: () => readIntentBody(intentSlug),
+		toolName: "haiku_read_intent",
+		toolArgs: { intent: intentSlug },
+		intent: intentSlug,
+		stage: stage || undefined,
+		kind: "intent-goal",
+		name: "intent",
+	})
+	const stageRef = isPreIntent
 		? ""
-		: join(ctx.dir, "stages", stage, "STAGE.md")
+		: studioReadRef({
+				resolveBody: () => readStageBody(ctx.studio, stage),
+				toolName: "haiku_read_stage",
+				toolArgs: { studio: ctx.studio, stage },
+				intent: intentSlug,
+				stage,
+				kind: "stage-scope",
+				name: stage,
+			})
 	const elabPath = isPreIntent
 		? ""
 		: join(ctx.dir, "stages", stage, "elaboration.md")
@@ -69,8 +91,8 @@ export default definePromptBuilder((ctx) => {
 		isPreIntent,
 		intentSlug,
 		stage,
-		intentMdPath,
-		stageMdPath,
+		intentRef,
+		stageRef,
 		elabPath,
 		verifierNonce,
 	})
@@ -92,8 +114,6 @@ export default definePromptBuilder((ctx) => {
 		isPreIntent,
 		intentSlug,
 		stage,
-		intentMdPath,
-		stageMdPath,
 		elabPath,
 		concurrentLoopBlock,
 		composedMode: ctx.composedMode === true,

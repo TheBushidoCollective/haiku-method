@@ -29,6 +29,7 @@ import { join } from "node:path"
 import { Eta } from "eta"
 import matter from "gray-matter"
 import { features } from "../config.js"
+import { createUnitWorktree } from "../git-worktree.js"
 import { type ModelTier, resolveModel } from "../model-selection.js"
 import { stageDir } from "../state-tools.js"
 import {
@@ -136,6 +137,15 @@ export function buildUnitHatDispatchBlock(opts: {
 	terminal: boolean
 }): string {
 	const { slug, studio, unit, stage, hat, terminal } = opts
+	// Isolate the unit's hat loop in its own worktree (branch
+	// `haiku/<slug>/<unit>`, forked from the stage branch) — mirrors the
+	// live discovery pattern (`decompose` dispatch -> createDiscoveryWorktree).
+	// Idempotent: created on the first hat's dispatch, reused by later hats
+	// and by the relay. The already-wired terminal merge (`advance_hat` ->
+	// `mergeUnitWorktree` under `withStageLock`) lands it back atomically.
+	// Returns null in filesystem mode. Phase 1a: create only — routing the
+	// subagent's work + per-hat git ops into the worktree follows.
+	createUnitWorktree(slug, unit, stage)
 	const model = resolveUnitHatModel({ slug, studio, stage, hat, unit })
 	// Snapshot the hat mandate (FM-stripped) into the intent's prompts
 	// refs/ tree and emit a "Read <snapshot>" — the followable breadcrumb.

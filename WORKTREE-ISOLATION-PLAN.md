@@ -59,6 +59,27 @@ The statusline reads hat status from there, branch-agnostic, live per advance.
 Falls back to the stage-branch read when the channel is absent (cold start /
 pre-migration intents).
 
+### Live template: discovery worktrees (already wired in v4)
+
+Discovery is the proven v4 pattern to mirror — it isolates each discovery
+subagent in its own worktree and merges back:
+
+- **Create at dispatch:** `decompose/index.ts:560` calls
+  `createDiscoveryWorktree(slug, stage, name)`, then **remaps the output path
+  into the worktree** (`join(wt, ".haiku/intents/<slug>/…")`) and renders that
+  worktree-relative path into the subagent prompt — that's how the subagent
+  ends up writing inside its worktree.
+- **Merge at completion:** `haiku_discovery_complete.ts:210` does
+  `withStageLock(slug, stage, () => mergeDiscoveryWorktree(...))`.
+
+**`mergeUnitWorktree` is ALREADY wired at terminal advance**
+(`state-tools.ts:9238`, under `withStageLock`) — it just no-ops today because
+no worktree exists. So Phase 3 is largely done; the real gap is creating the
+worktree + routing the unit's work (and per-hat `advance_hat` git ops) into it.
+Units extend discovery's single-shot pattern to a **multi-hat** loop: every
+hat's subagent works in the SAME unit worktree; mid-hat `advance_hat` commits
+to the unit branch via `git -C <wt>`; the terminal advance merges + cleans up.
+
 ### Subagent works in the worktree (the foundational mechanism)
 
 Pre-v4 (`handlers/execute.ts`) created the worktree at dispatch and passed the

@@ -219,6 +219,7 @@ export function IntentDetailView({
 				unit={selectedUnit.unit}
 				stageName={selectedUnit.stage}
 				intentSlug={intent.slug}
+				intentMode={intent.mode}
 				provider={provider}
 				assets={intent.assets}
 				host={host || undefined}

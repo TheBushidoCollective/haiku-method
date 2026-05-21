@@ -22,6 +22,35 @@ import type {
 } from "./types"
 import { normalizeIntentStatus, parseFrontmatter } from "./types"
 
+/** Engine review roles that fire on every stage, in cursor order. */
+export const ENGINE_REVIEW_ROLES = [
+	"spec",
+	"continuity",
+	"cross-stage-consistency",
+] as const
+/** Engine approval roles — the review roles plus the engine quality gate. */
+export const ENGINE_APPROVAL_ROLES = [
+	...ENGINE_REVIEW_ROLES,
+	"quality_gates",
+] as const
+
+/** Build the full expected review/approval role list for a stage or unit:
+ *  the always-present engine roles, then any studio agents seen stamped
+ *  (the browse doesn't ship the studio manifest, so configured agents are
+ *  only known once they sign), then the human `user` gate unless the mode is
+ *  autopilot. Mirrors the engine's `stageRoleLists` ordering so the browse's
+ *  derivation + sign-off display can't drift from what actually runs. */
+export function seedRoleList(
+	engine: ReadonlyArray<string>,
+	stamped: Iterable<string>,
+	isAutopilot: boolean,
+): string[] {
+	const agents = [...new Set(stamped)].filter(
+		(r) => !engine.includes(r) && r !== "user",
+	)
+	return [...engine, ...agents, ...(isAutopilot ? [] : ["user"])]
+}
+
 /** Map a filename to the artifact-type the SPA renders. */
 export function classifyArtifact(name: string): HaikuArtifact["type"] {
 	const lower = name.toLowerCase()
@@ -447,22 +476,17 @@ export function deriveStageStateFromUnits(
 		const a = (u.raw.approvals as Record<string, unknown> | undefined) ?? {}
 		for (const k of Object.keys(a)) stampedApproval.add(k)
 	}
-	const ENGINE_REVIEW = ["spec", "continuity", "cross-stage-consistency"]
-	const ENGINE_APPROVAL = [
-		"spec",
-		"continuity",
-		"cross-stage-consistency",
-		"quality_gates",
-	]
 	const isAutopilot = mode === "autopilot"
-	const orderRoles = (engine: string[], stamped: Set<string>): string[] => {
-		const agents = [...stamped].filter(
-			(r) => !engine.includes(r) && r !== "user",
-		)
-		return [...engine, ...agents, ...(isAutopilot ? [] : ["user"])]
-	}
-	const reviewRoles = orderRoles(ENGINE_REVIEW, stampedReview)
-	const approvalRoles = orderRoles(ENGINE_APPROVAL, stampedApproval)
+	const reviewRoles = seedRoleList(
+		ENGINE_REVIEW_ROLES,
+		stampedReview,
+		isAutopilot,
+	)
+	const approvalRoles = seedRoleList(
+		ENGINE_APPROVAL_ROLES,
+		stampedApproval,
+		isAutopilot,
+	)
 	const derived = deriveStageStatePure({
 		stage: options.stage ?? "",
 		units: unitViews,

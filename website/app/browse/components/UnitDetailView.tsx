@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import {
+	ENGINE_APPROVAL_ROLES,
+	ENGINE_REVIEW_ROLES,
+	seedRoleList,
+} from "@/lib/browse/intent-parsing"
 import { resolveLinks } from "@/lib/browse/resolve-links"
 import type {
 	BrowseProvider,
@@ -42,6 +47,9 @@ interface Props {
 	unit: HaikuUnit
 	stageName: string
 	intentSlug: string
+	/** Intent mode (autopilot drops the user gate) — drives the expected
+	 *  review/approval role set in the sign-offs section. */
+	intentMode: string
 	provider: BrowseProvider
 	assets?: HaikuAsset[]
 	host?: string
@@ -53,6 +61,7 @@ export function UnitDetailView({
 	unit,
 	stageName,
 	intentSlug,
+	intentMode,
 	provider,
 	assets = [],
 	host,
@@ -220,8 +229,8 @@ export function UnitDetailView({
 				</section>
 			)}
 
-			{/* Review + approval sign-offs stamped on the unit */}
-			<SignOffsSection unit={unit} />
+			{/* Review + approval sign-offs — every expected role, signed or not */}
+			<SignOffsSection unit={unit} intentMode={intentMode} />
 
 			{/* Feedback targeting this unit */}
 			{feedback.length > 0 && (
@@ -757,23 +766,37 @@ function GenericRefItem({ ref_ }: { ref_: string }) {
 	)
 }
 
-/** Read review/approval slots off unit FM. A slot present + truthy = signed
- *  (the cursor only writes a role's slot when it signs, so unsigned roles are
- *  simply absent); `at` carries the timestamp. Witness fields (body_sha256,
- *  witnesses[]) are ignored — engine bookkeeping, noise to a reviewer. */
+/** Coerce a unit FM `reviews` / `approvals` value to a record of slots. */
+function recordOf(raw: unknown): Record<string, unknown> {
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
+	return raw as Record<string, unknown>
+}
+
+/** Read a single review/approval slot: present + truthy = signed (the cursor
+ *  only writes a role's slot when it signs); `at` carries the timestamp.
+ *  Witness fields (body_sha256, witnesses[]) are ignored — engine bookkeeping. */
+function slotSignOff(
+	role: string,
+	v: unknown,
+): { role: string; signed: boolean; signedAt: string | null } {
+	const signed = v != null
+	let signedAt: string | null = null
+	if (v && typeof v === "object" && !Array.isArray(v)) {
+		const at = (v as Record<string, unknown>).at
+		if (typeof at === "string") signedAt = at
+	}
+	return { role, signed, signedAt }
+}
+
+/** Map a unit FM record + the full expected role list into ordered sign-off
+ *  entries — signed roles carry a timestamp, expected-but-unsigned roles read
+ *  as pending so a viewer sees who hasn't approved yet. */
 function readSignOffs(
 	raw: unknown,
+	expectedRoles: ReadonlyArray<string>,
 ): Array<{ role: string; signed: boolean; signedAt: string | null }> {
-	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return []
-	return Object.entries(raw as Record<string, unknown>).map(([role, v]) => {
-		const signed = v != null
-		let signedAt: string | null = null
-		if (v && typeof v === "object" && !Array.isArray(v)) {
-			const at = (v as Record<string, unknown>).at
-			if (typeof at === "string") signedAt = at
-		}
-		return { role, signed, signedAt }
-	})
+	const record = recordOf(raw)
+	return expectedRoles.map((role) => slotSignOff(role, record[role]))
 }
 
 /** Human label for a review/approval role. Raw role names read fine; we just
@@ -791,26 +814,42 @@ function roleLabel(role: string): string {
 /**
  * Per-unit review + approval sign-offs. The cursor stamps `reviews.<role>` as
  * each pre-execute reviewer signs the spec and `approvals.<role>` as each
- * post-execute approver signs the work (the `user` gate lands in the same
- * structure, so "all reviews/approvals" covers it). Surfaces who has signed
- * and when, so a viewer can see the audit trail on the unit itself.
+ * post-execute approver signs the work — but only signed roles land in the FM,
+ * so we seed the full expected set (engine roles + the user gate unless
+ * autopilot + any studio agents already seen) and render every one, signed or
+ * pending. That way a viewer sees who hasn't approved yet, not just who has.
+ * Always shown — the engine roles guarantee a non-empty set.
  */
-function SignOffsSection({ unit }: { unit: HaikuUnit }) {
-	const reviews = readSignOffs(unit.raw.reviews)
-	const approvals = readSignOffs(unit.raw.approvals)
-	if (reviews.length === 0 && approvals.length === 0) return null
+function SignOffsSection({
+	unit,
+	intentMode,
+}: {
+	unit: HaikuUnit
+	intentMode: string
+}) {
+	const isAutopilot = intentMode === "autopilot"
+	const reviewsRaw = recordOf(unit.raw.reviews)
+	const approvalsRaw = recordOf(unit.raw.approvals)
+	const reviewRoles = seedRoleList(
+		ENGINE_REVIEW_ROLES,
+		Object.keys(reviewsRaw),
+		isAutopilot,
+	)
+	const approvalRoles = seedRoleList(
+		ENGINE_APPROVAL_ROLES,
+		Object.keys(approvalsRaw),
+		isAutopilot,
+	)
+	const reviews = readSignOffs(reviewsRaw, reviewRoles)
+	const approvals = readSignOffs(approvalsRaw, approvalRoles)
 	return (
 		<section className="mb-8">
 			<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
 				Reviews &amp; Approvals
 			</h2>
 			<div className="grid gap-4 sm:grid-cols-2">
-				{reviews.length > 0 && (
-					<SignOffGroup title="Reviews" entries={reviews} />
-				)}
-				{approvals.length > 0 && (
-					<SignOffGroup title="Approvals" entries={approvals} />
-				)}
+				<SignOffGroup title="Reviews" entries={reviews} />
+				<SignOffGroup title="Approvals" entries={approvals} />
 			</div>
 		</section>
 	)

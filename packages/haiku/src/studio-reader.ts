@@ -152,6 +152,39 @@ export function resolveHatPath(
 }
 
 /**
+ * Resolve a fix-loop-scoped hat mandate. A fix-loop hat corrects ONE
+ * finding through its lens — a different job than the production hat's
+ * author-from-scratch mandate (the `product` / `specification` hats'
+ * production mandates walk the agent through user-collaboration and
+ * blank-page authoring, which misdirects when the job is a one-line
+ * correction). A hat in a stage's `fix_hats:` chain MAY ship a
+ * fix-scoped variant at `stages/<stage>/fix-hats/<hat>.md` (project
+ * `.haiku/` override beats the plugin underlay); when present it wins
+ * over the production `hats/<hat>.md`. Falls back to `resolveHatPath`
+ * so a hat without a fix variant safely reuses its production mandate.
+ */
+export function resolveFixHatPath(
+	studio: string,
+	stage: string,
+	hat: string,
+): string | null {
+	validateIdentifier(studio, "studio")
+	validateIdentifier(stage, "stage")
+	validateIdentifier(hat, "hat")
+	const project = join(process.cwd(), ".haiku")
+	const plugin = resolvePluginRoot()
+	let found: string | null = null
+	for (const dir of [
+		join(plugin, "studios", studio, "stages", stage, "fix-hats"),
+		join(project, "studios", studio, "stages", stage, "fix-hats"),
+	]) {
+		const candidate = join(dir, `${hat}.md`)
+		if (existsSync(candidate)) found = candidate
+	}
+	return found ?? resolveHatPath(studio, stage, hat)
+}
+
+/**
  * Three-tier stage-review-agent resolution cascade (mirrors the hat
  * cascade). Load order (least-specific first, more-specific overrides):
  *

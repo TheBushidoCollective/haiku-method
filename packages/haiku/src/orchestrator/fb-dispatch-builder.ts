@@ -28,7 +28,7 @@ import {
 	readStudio,
 	readStudioFixHatDefs,
 	readStudioFixHatPaths,
-	resolveHatPath,
+	resolveFixHatPath,
 } from "../studio-reader.js"
 import {
 	buildPriorFeedbackRejectBlock,
@@ -136,7 +136,7 @@ export function buildFbHatDispatchBlock(opts: {
 	// on-disk mandate file resolved for the `reconciler` hat" — the
 	// engine dispatched a hat it couldn't define (fixloop-bug-f4dd5a92).
 	const hatPath = stage
-		? resolveHatPath(studio, stage, hat)
+		? resolveFixHatPath(studio, stage, hat)
 		: (readStudioFixHatPaths(studio)[hat] ?? null)
 	// Strip frontmatter (engine bookkeeping — `agent_type`, `model`; the
 	// agent doesn't need it and inlining it raw was the FB-001 leak) and

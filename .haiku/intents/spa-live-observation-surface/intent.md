@@ -1,10 +1,13 @@
 ---
 title: SPA live observation surface
-studio: ''
-status: active
+studio: software
 created_at: '2026-05-21T03:42:26.000Z'
 draft_pr_url: 'https://github.com/gigsmart/haiku-method/pull/373'
 draft_pr_status: draft
+plugin_version: 9.0.0
+approvals: {}
+started_at: null
+sealed_at: null
 ---
 
 # SPA live observation surface

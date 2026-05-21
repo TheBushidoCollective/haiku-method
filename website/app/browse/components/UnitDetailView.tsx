@@ -1066,7 +1066,23 @@ function OutputHtmlCard({
 	const [full, setFull] = useState(false)
 	useEffect(() => {
 		let cancelled = false
-		provider.readFile(repoPath).then((c) => {
+		// Load the source the same way images do — resolveAssetUrl fetches
+		// the raw bytes (a data: URL), which always works. readFile goes
+		// through the git provider's GraphQL `text`, which returns null when
+		// the host flags an HTML file as binary/large, leaving the frame
+		// blank. Fall back to readFile only if the raw path is unavailable.
+		const load = async (): Promise<string | null> => {
+			const url = await provider.resolveAssetUrl?.(repoPath)
+			if (url) {
+				try {
+					return await (await fetch(url)).text()
+				} catch {
+					/* fall through to readFile */
+				}
+			}
+			return provider.readFile(repoPath)
+		}
+		load().then((c) => {
 			if (!cancelled) setHtml(c)
 		})
 		return () => {

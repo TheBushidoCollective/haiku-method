@@ -34,7 +34,43 @@ the terminal hat** (atomic). This reverses the v4 in-place model on purpose.
 - Same shape for feedback fix-chains (`createFixChainWorktree` /
   `mergeFixChainWorktree`, branch `haiku/<slug>/<scope>/fix-<FB>`-ish).
 
-### The metadata split (load-bearing)
+### CONVERGED DESIGN (2026-05-21): code-only isolation, iterations on the stage branch
+
+After working the cursor/durability constraints, the model is **code-only
+isolation** — it satisfies isolation + atomic merge + statusline + restart
+survival with no cursor redesign and no in-flight-signal reinvention:
+
+- **`iterations[]` stay on the STAGE branch** (the durable, cursor-read,
+  restart-surviving signal — v4's "filesystem is the only signal"). The
+  cursor and statusline are **unchanged**.
+- **Only iterations commit to the stage branch — never the work.**
+  `advance_hat` writes the iteration to the main-tree stage-branch unit.md
+  (no code; the subagent's code lives in the worktree, excluded by the
+  `.haiku/worktrees/**` glob).
+- **Code/outputs run in the per-unit worktree on the unit branch**, and the
+  unit branch is **pushed on each advance** so the work survives a CC restart
+  / cross-machine pickup.
+- **Terminal advance** merges the unit branch (code) → stage branch
+  (`mergeUnitWorktree`, already wired), then **deletes the unit branch local
+  AND remote** + the worktree.
+- **Pickup recovery:** if the unit branch is gone (local + remote) but
+  iterations show a later hat, the referenced code is lost → **reset the
+  unit's `iterations[]` and re-dispatch the first hat**. Push-on-advance makes
+  this the rare fallback. (No-remote projects: local branch survives a
+  single-machine restart; cross-machine pickup degrades to reset-and-restart.)
+- **The subagent reads unit body + prior-hat handoffs from the main tree**
+  (iterations are on the stage branch), and does its **code work in the
+  worktree** (dispatch remaps output paths, mirroring discovery's
+  `expectedArtifactPath`). `advance_hat`'s output-existence + scope checks
+  resolve against the worktree.
+
+Why not iterations-on-the-unit-branch: it takes the workflow's source of truth
+off the durable stage branch, forcing a cursor in-flight-signal reinvention
+that can't be made both durable (survive restart) and Rule-1-safe, plus an
+orphan-recovery hole. Code-only isolation avoids all of it and still kills the
+real hazard (the `git add -A` sibling-code sweep was never about iterations).
+
+### The metadata split (load-bearing) — superseded by the converged design above
 
 The cursor (`run_next`) reads per-unit FM **off the stage branch** to manage
 the wave: which units are in-flight (don't re-dispatch), wave-ready, deps

@@ -24,7 +24,10 @@ import {
 	findCurrentStage,
 	isStageComplete,
 } from "../orchestrator/workflow/cursor.js"
-import { deriveProgressTrack } from "../orchestrator/workflow/progress-track.js"
+import {
+	deriveProgressRoleSteps,
+	deriveProgressTrack,
+} from "../orchestrator/workflow/progress-track.js"
 import {
 	findHaikuRoot,
 	intentDir,
@@ -662,15 +665,30 @@ export function resolveStatuslineState(): StatuslineState | null {
 	}
 
 	// Agent chips (second line) for the await phases — the known review /
-	// approval roles we're waiting on a stamp from. Reuse the progress
-	// track (single source of truth with the cursor) and surface every
-	// role in the SAME bucket as the active step: stamped → green,
-	// currently-awaited → light, queued → grey. (No `failed`/red is
-	// emitted: the engine has no per-role failure stamp — a failed review
-	// files feedback and flips to the fix-loop, which the FB bars show.)
+	// approval roles we're waiting on a stamp from, ONE chip per agent. The
+	// pip bar collapses the parallel adversarial reviewers into a single
+	// `(signed/total)` pip; the second line expands them so you can see WHICH
+	// agents have signed and which we're still waiting on — read from the
+	// UNGROUPED role steps (same cursor walk, no `adversarial (n/m)` collapse)
+	// so a count is replaced by named, individually-colored chips. Surface
+	// every role in the SAME bucket as the active step: stamped → green,
+	// currently-awaited → light, queued → grey. (No `failed`/red is emitted:
+	// the engine has no per-role failure stamp — a failed review files
+	// feedback and flips to the fix-loop, which the FB bars show.)
 	let agentChips: AgentChip[] | null = null
 	if (track && (kind === "review" || kind === "approve" || kind === "gate")) {
-		const activeKey = track.steps[track.index]?.key ?? ""
+		const roleSteps = deriveProgressRoleSteps({
+			slug,
+			studio,
+			intentDir: iDir,
+			intentMode: mode,
+		})
+		const firstPending = roleSteps.findIndex((s) => s.status !== "done")
+		const activeStep =
+			firstPending === -1
+				? roleSteps[roleSteps.length - 1]
+				: roleSteps[firstPending]
+		const activeKey = activeStep?.key ?? ""
 		let inBucket: ((k: string) => boolean) | null = null
 		if (activeKey.startsWith("review:") || activeKey.startsWith("intent-review:")) {
 			inBucket = (k) =>
@@ -683,7 +701,7 @@ export function resolveStatuslineState(): StatuslineState | null {
 				k.startsWith("approve:") || k === "intent-quality-gates"
 		}
 		if (inBucket) {
-			const chips = track.steps
+			const chips = roleSteps
 				.filter((s) => inBucket(s.key))
 				.map((s) => ({ id: chipRole(s.key), status: s.status }))
 			if (chips.length > 0) agentChips = chips

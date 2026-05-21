@@ -231,5 +231,43 @@ test("quality_gates splits the approval adversarial group, both keep order", () 
 	)
 })
 
+test("groupAdversarial:false expands each reviewer into its own per-role pip", () => {
+	const steps = buildStageMilestones({
+		elaborateDone: true,
+		reviewRoles: [
+			{ role: "spec", stamped: true },
+			{ role: "continuity", stamped: true },
+			{ role: "cross-stage-consistency", stamped: false },
+			{ role: "runtime-verifier", stamped: false },
+		],
+		executeDone: false,
+		approvalRoles: [],
+		groupAdversarial: false,
+	})
+	// No `adversarial` collapse: every reviewer keeps its own `review:<role>`
+	// pip so the status line can render one chip per agent.
+	assert.deepStrictEqual(
+		steps.map((s) => s.key),
+		[
+			"elaborate",
+			"review:spec",
+			"review:continuity",
+			"review:cross-stage-consistency",
+			"review:runtime-verifier",
+			"execute",
+		],
+	)
+	// Per-agent status survives the expansion: signed → done, the first
+	// unsigned reviewer is the active one we're awaiting, the rest pending.
+	const byKey = Object.fromEntries(steps.map((s) => [s.key, s.status]))
+	assert.strictEqual(byKey["review:spec"], "done")
+	assert.strictEqual(byKey["review:continuity"], "done")
+	assert.strictEqual(byKey["review:cross-stage-consistency"], "active")
+	assert.strictEqual(byKey["review:runtime-verifier"], "pending")
+	// And each carries its own readable label, not a grouped count.
+	const csc = steps.find((s) => s.key === "review:cross-stage-consistency")
+	assert.strictEqual(csc?.label, "cross-stage review")
+})
+
 console.log(`\n── Result: ${passed} passed, ${failed} failed ───────────`)
 process.exit(failed === 0 ? 0 : 1)

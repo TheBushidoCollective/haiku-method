@@ -84,6 +84,12 @@ export interface StageMilestoneInputs {
 	 *  observations signal (the website never does; the engine only adds
 	 *  it when reflection is enabled for the intent). */
 	observationsDone?: boolean | null
+	/** Collapse the parallel adversarial reviewers into one
+	 *  `adversarial review (signed/total)` pip (default `true`). The compact
+	 *  pip bar and both SPA review surfaces want this. Pass `false` to expand
+	 *  each reviewer into its own pip — the status line's second line uses
+	 *  this so every reviewing agent shows as its own chip. */
+	groupAdversarial?: boolean
 }
 
 /** Build the ordered stage milestone list with each marked
@@ -100,13 +106,14 @@ export function buildStageMilestones(
 		executeDone,
 		approvalRoles,
 		observationsDone = null,
+		groupAdversarial = true,
 	} = inputs
 	const raw: { key: string; label: string; done: boolean }[] = []
 
 	raw.push({ key: "elaborate", label: "elaborate", done: elaborateDone })
-	raw.push(...rolePips(reviewRoles, "review", elaborateDone))
+	raw.push(...rolePips(reviewRoles, "review", elaborateDone, groupAdversarial))
 	raw.push({ key: "execute", label: "execute", done: executeDone })
-	raw.push(...rolePips(approvalRoles, "approve", executeDone))
+	raw.push(...rolePips(approvalRoles, "approve", executeDone, groupAdversarial))
 
 	if (observationsDone != null) {
 		raw.push({
@@ -125,33 +132,51 @@ export function buildStageMilestones(
 const DISTINCT_MILESTONE_ROLES = new Set(["spec", "quality_gates", "user"])
 
 /** Turn a walk's role list into milestone steps. Distinct roles
- *  (spec/quality_gates/user) each get their own pip; the adversarial
- *  reviewers (continuity, cross-stage-consistency, studio agents) collapse
- *  into a single "adversarial review/approval" pip with a `(signed/total)`
- *  count — they fan out in parallel against the same spec/work, so a count
- *  reflects progress without faking an order between them. A grouped pip is
- *  done only once its gating phase is done AND every role in it has signed. */
+ *  (spec/quality_gates/user) always get their own pip. The adversarial
+ *  reviewers (continuity, cross-stage-consistency, studio agents) fan out in
+ *  parallel against the same spec/work, so by default they collapse into a
+ *  single "adversarial review/approval" pip with a `(signed/total)` count —
+ *  a count reflects progress without faking an order between them. When
+ *  `group` is false, each reviewer keeps its own `<walk>:<role>` pip instead
+ *  (the status line's second line wants one chip per agent). Either way a pip
+ *  is done only once its gating phase is done AND its role(s) have signed. */
 function rolePips(
 	roles: ReadonlyArray<MilestoneRoleFlag>,
 	walk: "review" | "approve",
 	phaseDone: boolean,
+	group = true,
 ): { key: string; label: string; done: boolean }[] {
 	const out: { key: string; label: string; done: boolean }[] = []
-	let group: MilestoneRoleFlag[] = []
+	let pending: MilestoneRoleFlag[] = []
 	let groupIndex = 0
 	const noun = walk === "review" ? "adversarial review" : "adversarial approval"
 
+	const roleLabel = (role: string) =>
+		walk === "review"
+			? reviewMilestoneLabel(role)
+			: approvalMilestoneLabel(role)
+
 	const flush = () => {
-		if (group.length === 0) return
-		const signed = group.filter((r) => r.stamped).length
-		const total = group.length
-		out.push({
-			key: `${walk}:adversarial:${groupIndex}`,
-			label: total > 1 ? `${noun} (${signed}/${total})` : noun,
-			done: phaseDone && group.every((r) => r.stamped),
-		})
-		groupIndex += 1
-		group = []
+		if (pending.length === 0) return
+		if (group) {
+			const signed = pending.filter((r) => r.stamped).length
+			const total = pending.length
+			out.push({
+				key: `${walk}:adversarial:${groupIndex}`,
+				label: total > 1 ? `${noun} (${signed}/${total})` : noun,
+				done: phaseDone && pending.every((r) => r.stamped),
+			})
+			groupIndex += 1
+		} else {
+			for (const r of pending) {
+				out.push({
+					key: `${walk}:${r.role}`,
+					label: roleLabel(r.role),
+					done: phaseDone && r.stamped,
+				})
+			}
+		}
+		pending = []
 	}
 
 	for (const r of roles) {
@@ -159,14 +184,11 @@ function rolePips(
 			flush()
 			out.push({
 				key: `${walk}:${r.role}`,
-				label:
-					walk === "review"
-						? reviewMilestoneLabel(r.role)
-						: approvalMilestoneLabel(r.role),
+				label: roleLabel(r.role),
 				done: phaseDone && r.stamped,
 			})
 		} else {
-			group.push(r)
+			pending.push(r)
 		}
 	}
 	flush()

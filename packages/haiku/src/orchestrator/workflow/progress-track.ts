@@ -17,6 +17,13 @@
 
 import { existsSync } from "node:fs"
 import { join } from "node:path"
+import {
+	approvalMilestoneLabel,
+	buildStageMilestones,
+	finalizeSteps,
+	type ProgressStep,
+	type StepStatus,
+} from "@haiku/shared"
 import { readStudioReviewAgentPaths } from "../../studio-reader.js"
 import { resolveStageHats } from "../studio.js"
 import {
@@ -30,15 +37,12 @@ import {
 	unitName,
 } from "./cursor.js"
 
-export type StepStatus = "done" | "active" | "pending"
-
-export interface ProgressStep {
-	/** Stable key, e.g. `review:spec`, `execute`, `approve:quality_gates`. */
-	key: string
-	/** Human label for the phase word, e.g. "spec review", "quality gates". */
-	label: string
-	status: StepStatus
-}
+// Milestone order, labels, and the done→active→pending finalize are owned
+// by `@haiku/shared` (`buildStageMilestones`) so this disk-driven track and
+// the website browse UI's VCS-driven track can't drift. This module's job
+// is to GATHER the done-flags from the cursor's on-disk signals and hand
+// them to the shared builder.
+export type { ProgressStep, StepStatus }
 
 export interface ProgressTrack {
 	scope: "stage" | "intent"
@@ -65,24 +69,6 @@ function itersOf(fm: Fm): Array<Record<string, unknown>> {
 		: []
 }
 
-/** Label a review role for the phase word. Engine + agent roles read as
- *  "<role> review"; the human `user` gate reads as "spec gate" (it gates
- *  the pre-execute spec). */
-function reviewLabel(role: string): string {
-	if (role === "user") return "spec gate"
-	if (role === "cross-stage-consistency") return "cross-stage review"
-	return `${role} review`
-}
-
-/** Label an approval role. `quality_gates` and the human `user` gate get
- *  their own words; everything else reads as "<role> approval". */
-function approvalLabel(role: string): string {
-	if (role === "user") return "approval gate"
-	if (role === "quality_gates") return "quality gates"
-	if (role === "cross-stage-consistency") return "cross-stage approval"
-	return `${role} approval`
-}
-
 /** Build the ordered stage milestone list with each marked done. */
 function stageSteps(opts: {
 	slug: string
@@ -100,13 +86,10 @@ function stageSteps(opts: {
 	const hats = resolveStageHats(studio, stage)
 	const { reviewRoles, approvalRoles } = stageRoleLists(studio, stage, mode)
 
-	const steps: { key: string; label: string; done: boolean }[] = []
-
-	// 1. Elaborate loop — one milestone; done when no unmet signals.
+	// 1. Elaborate loop — done when no unmet signals.
 	const elaborateDone =
 		computeElaborateSignals({ slug, studio, stage, stageDir, unitNames, mode })
 			.length === 0
-	steps.push({ key: "elaborate", label: "elaborate", done: elaborateDone })
 
 	const allUnitsStamped = (bucket: "reviews" | "approvals", role: string) =>
 		units.length > 0 &&
@@ -116,16 +99,7 @@ function stageSteps(opts: {
 			),
 		)
 
-	// 2. Pre-execute review roles, in cursor order.
-	for (const role of reviewRoles) {
-		steps.push({
-			key: `review:${role}`,
-			label: reviewLabel(role),
-			done: elaborateDone && allUnitsStamped("reviews", role),
-		})
-	}
-
-	// 3. Execute — done when every unit is past its terminal hat.
+	// 2. Execute — done when every unit is past its terminal hat.
 	const executeDone =
 		units.length > 0 &&
 		(hats.length === 0 ||
@@ -133,31 +107,29 @@ function stageSteps(opts: {
 				const its = itersOf(u.fm)
 				if (its.length === 0) return false
 				const last = its[its.length - 1]
-				return (
-					last.result === "advance" && last.hat === hats[hats.length - 1]
-				)
+				return last.result === "advance" && last.hat === hats[hats.length - 1]
 			}))
-	steps.push({ key: "execute", label: "execute", done: executeDone })
 
-	// 4. Post-execute approval roles, in cursor order.
-	for (const role of approvalRoles) {
-		steps.push({
-			key: `approve:${role}`,
-			label: approvalLabel(role),
-			done: executeDone && allUnitsStamped("approvals", role),
-		})
-	}
+	// 3. Observations — only when reflection is enabled for the intent.
+	const observationsDone = isReflectionEnabled(join(stageDir, "..", ".."))
+		? existsSync(join(stageDir, "observations.md"))
+		: null
 
-	// 5. Observations — only when reflection is enabled.
-	if (isReflectionEnabled(join(stageDir, "..", ".."))) {
-		steps.push({
-			key: "observations",
-			label: "observations",
-			done: existsSync(join(stageDir, "observations.md")),
-		})
-	}
-
-	return finalize(steps)
+	// Order + labels + finalize are owned by the shared builder; we just
+	// supply the done-flags gathered above.
+	return buildStageMilestones({
+		elaborateDone,
+		reviewRoles: reviewRoles.map((role) => ({
+			role,
+			stamped: allUnitsStamped("reviews", role),
+		})),
+		executeDone,
+		approvalRoles: approvalRoles.map((role) => ({
+			role,
+			stamped: allUnitsStamped("approvals", role),
+		})),
+		observationsDone,
+	})
 }
 
 /** Build the intent-level tail (after every stage completes): per-role
@@ -208,23 +180,7 @@ function intentSteps(opts: {
 		label: "seal",
 		done: intentFm.sealed_at != null,
 	})
-	return finalize(steps)
-}
-
-/** Convert the done-flagged list into status-marked steps: every done
- *  step is `done`, the first not-done is `active`, the rest `pending`. */
-function finalize(
-	raw: { key: string; label: string; done: boolean }[],
-): ProgressStep[] {
-	let activeAssigned = false
-	return raw.map((s) => {
-		if (s.done) return { key: s.key, label: s.label, status: "done" as const }
-		if (!activeAssigned) {
-			activeAssigned = true
-			return { key: s.key, label: s.label, status: "active" as const }
-		}
-		return { key: s.key, label: s.label, status: "pending" as const }
-	})
+	return finalizeSteps(steps)
 }
 
 /** Derive the granular progress track for an intent's current scope —

@@ -54,7 +54,7 @@ const stageStatusColors: Record<string, { bg: string; dot: string }> = {
 	},
 	active: {
 		bg: "border-teal-300 dark:border-teal-700",
-		dot: "bg-teal-500 animate-pulse",
+		dot: "bg-amber-500 animate-pulse",
 	},
 	pending: {
 		bg: "border-stone-200 dark:border-stone-700",
@@ -348,8 +348,19 @@ export function IntentDetailView({
 						</h2>
 						<div className="flex flex-wrap items-center gap-1">
 							{intent.stages.map((stage, i) => {
+								// The active stage (where the cursor sits) gets the amber
+								// "active" treatment even when its units haven't started
+								// yet — in pre-execute review a stage derives as "pending"
+								// (no started_at / iterations) though it IS the live stage.
+								const effectiveStatus =
+									stage.status === "complete"
+										? "complete"
+										: stage.name === intent.activeStage
+											? "active"
+											: stage.status
 								const colors =
-									stageStatusColors[stage.status] || stageStatusColors.pending
+									stageStatusColors[effectiveStatus] ||
+									stageStatusColors.pending
 								return (
 									<div key={stage.name} className="flex items-center">
 										<button

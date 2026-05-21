@@ -8,6 +8,14 @@ plugin_version: 9.0.0
 approvals: {}
 started_at: null
 sealed_at: null
+mode: autopilot
+stages:
+  - inception
+  - design
+  - product
+  - development
+  - operations
+  - security
 ---
 
 # SPA live observation surface

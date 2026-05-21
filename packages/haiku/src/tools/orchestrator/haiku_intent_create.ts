@@ -140,7 +140,7 @@ function detectWorkflowMetaPollution(s: string): string | null {
 export default defineTool({
 	name: "haiku_intent_create",
 	description:
-		"Create a new intent. Returns the slug + path. Title is required (crisp 3–8 word summary, ≤80 chars, single line). Studio, mode, and (for quick) stage are selected by the engine on the next haiku_run_next call — the tick blocks on the SPA picker until the user chooses, then continues to real workflow actions. The agent does NOT call select_* tools directly; just call haiku_run_next after creating the intent. Always creates a fresh intent — `/haiku:haiku-start` does not resume; use `/haiku:haiku-pickup` for that.",
+		"Create a new intent. Returns the slug + path. Title is required (crisp 3–8 word summary, ≤80 chars, single line). If the user started the intent from a referenced file (a spec, a doc, a screenshot, a path like `~/Downloads/spec.pdf`, or a dragged-in attachment), READ it and synthesize its relevant substance directly into `description` and `context` — NEVER pass the file path in any field. An absolute path leaks the user's machine layout and the external file won't travel with the intent; the intent must stand on its own from its own text (capture what the file says, not where it lives). Studio, mode, and (for quick) stage are selected by the engine on the next haiku_run_next call — the tick blocks on the SPA picker until the user chooses, then continues to real workflow actions. The agent does NOT call select_* tools directly; just call haiku_run_next after creating the intent. Always creates a fresh intent — `/haiku:haiku-start` does not resume; use `/haiku:haiku-pickup` for that.",
 	inputSchema: {
 		type: "object" as const,
 		properties: {

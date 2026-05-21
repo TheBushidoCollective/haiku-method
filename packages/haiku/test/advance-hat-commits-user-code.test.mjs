@@ -149,12 +149,24 @@ test("haiku_unit_advance_hat commits ALL dirty in-scope files (not just .haiku/*
 		// Don't assert strict success — the software studio's
 		// inception stage may have more hats after researcher and the
 		// merge step may noop. The contract this test pins is:
-		// AFTER the call, the working tree is CLEAN.
+		// AFTER the call, the agent's CODE files are CLEAN (committed).
+		//
+		// Exclude `.haiku/` entries: the advance's relay breadcrumb
+		// idempotently ensures the unit's isolation worktree under
+		// `.haiku/worktrees/`, which is engine bookkeeping the real
+		// clean-tree gate (`uncommittedAgentWork`) explicitly skips
+		// (`path.startsWith(".haiku/")`). In a live run that worktree
+		// already exists from the unit's first hat; here the FM is seeded
+		// directly so the relay creates it fresh. Either way it is NOT
+		// uncommitted agent work — match the engine's semantics.
 		const afterStatus = git(tmp, "status", "--porcelain")
+			.split("\n")
+			.filter((l) => l.trim() && !/\.haiku\//.test(l))
+			.join("\n")
 		assert.strictEqual(
 			afterStatus,
 			"",
-			`post-advance: tree must be clean; got:\n${afterStatus}\n(advance response: ${text.slice(0, 300)})`,
+			`post-advance: agent code tree must be clean (excluding .haiku/ bookkeeping); got:\n${afterStatus}\n(advance response: ${text.slice(0, 300)})`,
 		)
 		// And the previously-dirty files are now committed.
 		const log = git(tmp, "log", "--oneline", "-5")

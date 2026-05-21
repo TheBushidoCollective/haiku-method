@@ -31,6 +31,7 @@ import { features, resolvePluginRoot } from "./config.js"
 import {
 	derivePosition,
 	findCurrentStage,
+	nextHatForUnit,
 	walkFeedbackTrack,
 } from "./orchestrator/workflow/cursor.js"
 import {
@@ -5443,44 +5444,67 @@ function computeUnitRelayBlock(
 					? (iFmInline.studio as string)
 					: ""
 			if (!studioName) return null
+
+			// Relay = continue the CALLING unit's OWN hat chain, computed
+			// directly from that unit's iterations — NOT from the cursor's
+			// collapsed `start_unit_hat` batch. The cursor's `needNextHat`
+			// clause only ever names the smallest-hat-index group in flight
+			// (it dispatches one hat-group per tick), so a unit that just
+			// advanced e.g. product→specification while siblings are still on
+			// product is ABSENT from the cursor's action. Pre-2026-05-21 the
+			// relay gated on `pos.action.units.includes(callingUnit)`, so the
+			// advancing unit fell to a null relay and its subagent parked —
+			// "holding haiku_run_next until the others return" — and the pool
+			// drained hat-by-hat instead of each unit flowing straight through
+			// its own chain. Computing the calling unit's next hat keeps its
+			// slot busy regardless of where its siblings sit (reported
+			// 2026-05-21, automated-starlink-rental-platform/product: 9 units
+			// each advanced one hat then all held).
+			//
+			// Safe from the 2026-05-20 cross-unit double-dispatch
+			// (admin-portal-reimagine #5): a unit's own continuation can only
+			// be relayed by its own returning subagent, never by a sibling's,
+			// so N concurrent relays can never name the same block.
+			// Cross-unit replenishment (refilling a slot a fully-drained unit
+			// freed) still falls to `haiku_run_next`: a TERMINAL unit's
+			// `nextHatForUnit` is null, so its relay is null and the parent
+			// re-ticks, which dispatches the next wave atomically.
+			if (callingUnit) {
+				const found = findUnitFile(intentSlug, callingUnit)
+				if (!found) return null
+				const parsed = parseFrontmatter(readFileSync(found.path, "utf8"))
+				const stageHats = resolveStageHats(intentSlug, found.stage)
+				const next = nextHatForUnit(parsed.data, stageHats)
+				if (!next) return null // unit done → run_next picks up the next wave
+				return buildUnitHatDispatchBlock({
+					slug: intentSlug,
+					studio: studioName,
+					unit: callingUnit,
+					stage: found.stage,
+					hat: next.hat,
+					terminal: next.terminal,
+				})
+			}
+
+			// No calling unit (initial wave dispatch via the cursor, not a
+			// relay): relay the cursor's first dispatchable unit-hat.
 			const pos = derivePosition({
 				slug: intentSlug,
 				intentDir: iDir,
 				studio: studioName,
 			})
-			if (!pos || !pos.action) return null
-			if (pos.action.kind !== "start_unit_hat") return null
+			if (!pos || !pos.action || pos.action.kind !== "start_unit_hat")
+				return null
 			const stageSel = pos.action.stage
 			const hatSel = pos.action.hat
 			const units = pos.action.units
 			const terminalSel = pos.action.terminal
 			if (!stageSel || !hatSel || !Array.isArray(units) || units.length === 0)
 				return null
-			// The relay continues ONLY the calling unit's own hat chain. When
-			// `callingUnit` is named and the cursor's next dispatch batch
-			// includes it, relay that unit's next hat (a chain continuation —
-			// the calling unit's terminal/reject just freed it for its next
-			// step). Any OTHER wave-ready unit is cross-unit replenishment;
-			// we deliberately DON'T relay it. Reported 2026-05-20
-			// (admin-portal-reimagine #5): when several units' terminal hats
-			// completed in parallel, each returning subagent's relay named a
-			// DIFFERENT unit still running in a sibling — because the cursor
-			// re-dispatches open-iteration units (orphan recovery) and the
-			// concurrent relays couldn't see each other's in-flight picks. A
-			// cross-unit pick from N concurrent relays double-dispatches. So
-			// cross-unit work falls through to `haiku_run_next`, which
-			// dispatches the whole next wave atomically in one batch — no
-			// concurrent relays, no double-suggestion. (When `callingUnit`
-			// is absent — initial wave dispatch via the cursor, not a relay
-			// — the original units[0] pick stands.)
-			const pickedUnit =
-				callingUnit && units.includes(callingUnit) ? callingUnit : null
-			if (callingUnit && !pickedUnit) return null
-			const unit = pickedUnit ?? units[0]
 			return buildUnitHatDispatchBlock({
 				slug: intentSlug,
 				studio: studioName,
-				unit,
+				unit: units[0],
 				stage: stageSel,
 				hat: hatSel,
 				terminal: terminalSel,

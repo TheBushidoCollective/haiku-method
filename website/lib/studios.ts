@@ -18,16 +18,36 @@ export interface ReviewAgentDefinition {
 	content: string
 }
 
+/**
+ * Generic markdown artifact (discovery template, output template, phase
+ * override, fix-hat, reflection dimension, operation, intent template, etc.).
+ * Carries the raw frontmatter so callers can surface a name/description without
+ * a bespoke parser per file type.
+ */
+export interface ArtifactDef {
+	name: string
+	content: string
+	data: Record<string, unknown>
+}
+
 export interface StageDefinition {
 	name: string
 	description: string
 	hats: string[]
+	fixHats: string[]
 	review: string
+	elaboration: string
 	inputs: Array<{ stage: string; output: string; kind: "discovery" | "output" }>
 	reviewAgentsInclude: Array<{ stage: string; agents: string[] }>
 	content: string
 	hatDefinitions: HatDefinition[]
 	reviewAgentDefinitions: ReviewAgentDefinition[]
+	// Elaborate-phase artifacts
+	discoveryDefinitions: ArtifactDef[]
+	outputDefinitions: ArtifactDef[]
+	phaseDefinitions: ArtifactDef[]
+	// Fix-loop artifacts (stage-scoped overrides)
+	fixHatDefinitions: ArtifactDef[]
 }
 
 export interface StudioDefinition {
@@ -38,6 +58,12 @@ export interface StudioDefinition {
 	content: string
 	stageDefinitions: StageDefinition[]
 	category: string
+	// Intent-level lifecycle artifacts (studio scope, not per-stage)
+	intentReviewAgentDefinitions: ArtifactDef[]
+	studioFixHatDefinitions: ArtifactDef[]
+	reflectionDefinitions: ArtifactDef[]
+	operationDefinitions: ArtifactDef[]
+	templateDefinitions: ArtifactDef[]
 }
 
 // Categorize studios by domain
@@ -76,6 +102,49 @@ function categorizeStudio(slug: string, rawCategory?: string): string {
 	if (gtm.includes(slug)) return "Go-to-Market"
 	if (ops.includes(slug)) return "Operations"
 	return "General Purpose"
+}
+
+/** Load every `*.md` in a directory as a generic artifact, sorted by filename. */
+function loadArtifactDir(dir: string): ArtifactDef[] {
+	if (!fs.existsSync(dir)) return []
+	return fs
+		.readdirSync(dir)
+		.filter((f) => f.endsWith(".md"))
+		.sort()
+		.map((f) => {
+			const raw = fs.readFileSync(path.join(dir, f), "utf8")
+			const { data, content } = matter(raw)
+			return {
+				name: (data.name as string) || path.basename(f, ".md"),
+				content: content.trim(),
+				data: data as Record<string, unknown>,
+			}
+		})
+}
+
+/**
+ * Best-effort one-line summary for an artifact: the first labelled lead-in
+ * (Focus / Mandate / Purpose / Analyze), else the frontmatter description,
+ * else the first prose line. Used to keep the browser scannable.
+ */
+export function artifactSummary(def: {
+	content: string
+	data?: Record<string, unknown>
+}): string {
+	const labels = ["Focus", "Mandate", "Purpose", "Analyze", "Goal"]
+	for (const label of labels) {
+		const m = def.content.match(
+			new RegExp(`\\*\\*${label}:\\*\\*\\s*(.+?)(?:\\n|$)`),
+		)
+		if (m) return m[1].trim()
+	}
+	const desc = def.data?.description
+	if (typeof desc === "string" && desc.trim()) return desc.trim()
+	const firstProse = def.content
+		.split("\n")
+		.map((l) => l.trim())
+		.find((l) => l && !l.startsWith("#") && !l.startsWith("---"))
+	return firstProse || ""
 }
 
 function parseHat(hatPath: string): HatDefinition | null {
@@ -140,9 +209,11 @@ function parseStage(stageDir: string): StageDefinition | null {
 		name: data.name || path.basename(stageDir),
 		description: data.description || "",
 		hats: data.hats || [],
+		fixHats: data.fix_hats || [],
 		review: Array.isArray(data.review)
 			? data.review.join(", ")
 			: data.review || "ask",
+		elaboration: data.elaboration || "",
 		inputs: (data.inputs || []).map(
 			(i: { stage: string; output?: string; discovery?: string }) => ({
 				stage: i.stage,
@@ -159,6 +230,10 @@ function parseStage(stageDir: string): StageDefinition | null {
 		content: content.trim(),
 		hatDefinitions,
 		reviewAgentDefinitions,
+		discoveryDefinitions: loadArtifactDir(path.join(stageDir, "discovery")),
+		outputDefinitions: loadArtifactDir(path.join(stageDir, "outputs")),
+		phaseDefinitions: loadArtifactDir(path.join(stageDir, "phases")),
+		fixHatDefinitions: loadArtifactDir(path.join(stageDir, "fix-hats")),
 	}
 }
 
@@ -186,6 +261,13 @@ function parseStudio(studioDir: string): StudioDefinition | null {
 		content: content.trim(),
 		stageDefinitions,
 		category: categorizeStudio(slug, data.category as string | undefined),
+		intentReviewAgentDefinitions: loadArtifactDir(
+			path.join(studioDir, "intent-review-agents"),
+		),
+		studioFixHatDefinitions: loadArtifactDir(path.join(studioDir, "fix-hats")),
+		reflectionDefinitions: loadArtifactDir(path.join(studioDir, "reflections")),
+		operationDefinitions: loadArtifactDir(path.join(studioDir, "operations")),
+		templateDefinitions: loadArtifactDir(path.join(studioDir, "templates")),
 	}
 }
 

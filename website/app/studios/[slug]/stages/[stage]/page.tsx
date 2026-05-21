@@ -5,6 +5,13 @@ import ReactMarkdown from "react-markdown"
 import rehypeSlug from "rehype-slug"
 import remarkGfm from "remark-gfm"
 import { getAllStudios, getStudioBySlug } from "@/lib/studios"
+import {
+	ArtifactChip,
+	ExpandableArtifact,
+	PhaseSection,
+	reviewBadge,
+	titleCase,
+} from "../../../_components/studio-ui"
 
 interface Props {
 	params: Promise<{ slug: string; stage: string }>
@@ -27,41 +34,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 	const stage = studio?.stageDefinitions.find((s) => s.name === stageName)
 	if (!(studio && stage)) return { title: "Not Found" }
 	return {
-		title: `${titleCase(stage.name)} - ${titleCase(studio.name)} Studio - H\u00b7AI\u00b7K\u00b7U`,
+		title: `${titleCase(stage.name)} - ${titleCase(studio.name)} Studio - H·AI·K·U`,
 		description: stage.description,
 	}
-}
-
-function titleCase(s: string): string {
-	return s
-		.split("-")
-		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-		.join(" ")
-}
-
-const reviewBadge: Record<string, { label: string; color: string }> = {
-	auto: {
-		label: "Auto",
-		color:
-			"bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-	},
-	ask: {
-		label: "Ask",
-		color:
-			"bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-	},
-	external: {
-		label: "External",
-		color: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
-	},
-	"external, ask": {
-		label: "External / Ask",
-		color: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
-	},
-	await: {
-		label: "Await",
-		color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-	},
 }
 
 export default async function StageDetailPage({ params }: Props) {
@@ -82,6 +57,15 @@ export default async function StageDetailPage({ params }: Props) {
 			? studio.stageDefinitions[stageIndex + 1]
 			: null
 	const badge = reviewBadge[stage.review] || reviewBadge.ask
+
+	const hasElaborateArtifacts =
+		stage.inputs.length > 0 ||
+		stage.discoveryDefinitions.length > 0 ||
+		stage.phaseDefinitions.length > 0 ||
+		stage.outputDefinitions.length > 0
+	const hasReviewAgents =
+		stage.reviewAgentDefinitions.length > 0 ||
+		stage.reviewAgentsInclude.length > 0
 
 	return (
 		<div className="mx-auto max-w-4xl px-4 py-8 lg:py-12">
@@ -107,15 +91,19 @@ export default async function StageDetailPage({ params }: Props) {
 			</nav>
 
 			{/* Header */}
-			<header className="mb-10">
-				<div className="flex items-center gap-3">
+			<header className="mb-8">
+				<div className="mb-2 text-xs font-medium uppercase tracking-wider text-stone-400">
+					{titleCase(studio.name)} · stage {stageIndex + 1} of{" "}
+					{studio.stageDefinitions.length}
+				</div>
+				<div className="flex flex-wrap items-center gap-3">
 					<h1 className="text-4xl font-bold tracking-tight">
 						{titleCase(stage.name)}
 					</h1>
 					<span
 						className={`rounded px-2.5 py-1 text-xs font-medium ${badge.color}`}
 					>
-						{badge.label} review
+						{badge.label} gate
 					</span>
 				</div>
 				<p className="mt-2 text-lg text-stone-600 dark:text-stone-400">
@@ -123,197 +111,10 @@ export default async function StageDetailPage({ params }: Props) {
 				</p>
 			</header>
 
-			{/* Quick Facts */}
-			<section className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-5">
-				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-						Hats
-					</div>
-					<div className="mt-1 text-2xl font-bold">
-						{stage.hatDefinitions.length}
-					</div>
-				</div>
-				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-						Review Agents
-					</div>
-					<div className="mt-1 text-2xl font-bold">
-						{stage.reviewAgentDefinitions.length}
-						{stage.reviewAgentsInclude.length > 0 && (
-							<span className="text-sm font-normal text-stone-400">
-								{" "}
-								+
-								{stage.reviewAgentsInclude.reduce(
-									(acc: number, i: { agents: string[] }) =>
-										acc + i.agents.length,
-									0,
-								)}
-							</span>
-						)}
-					</div>
-				</div>
-				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-						Review
-					</div>
-					<div className="mt-1 text-lg font-semibold">
-						{titleCase(stage.review)}
-					</div>
-				</div>
-				<div className="rounded-lg border border-stone-200 p-4 dark:border-stone-700">
-					<div className="text-xs font-medium uppercase tracking-wider text-stone-400">
-						Inputs
-					</div>
-					<div className="mt-1 text-sm font-medium">
-						{stage.inputs.length > 0
-							? stage.inputs.map((i) => titleCase(i.stage)).join(", ")
-							: "None"}
-					</div>
-				</div>
-			</section>
-
-			{/* Input Dependencies */}
-			{stage.inputs.length > 0 && (
-				<section className="mb-10">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Dependencies
-					</h2>
-					<div className="space-y-2">
-						{stage.inputs.map((inp) => (
-							<div
-								key={`${inp.stage}-${inp.output}`}
-								className="flex items-center gap-2 rounded-lg border border-stone-200 px-4 py-2 dark:border-stone-700"
-							>
-								<Link
-									href={`/studios/${slug}/stages/${inp.stage}/`}
-									className="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400"
-								>
-									{titleCase(inp.stage)}
-								</Link>
-								<svg
-									className="h-4 w-4 text-stone-300"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-									aria-hidden="true"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M14 5l7 7m0 0l-7 7m7-7H3"
-									/>
-								</svg>
-								<span className="text-sm text-stone-600 dark:text-stone-400">
-									{inp.output}
-								</span>
-							</div>
-						))}
-					</div>
-				</section>
-			)}
-
-			{/* Hats */}
-			<section className="mb-10">
-				<h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-stone-400">
-					Hat Sequence
-				</h2>
-				<div className="space-y-6">
-					{stage.hatDefinitions.map((hat, i) => (
-						<div
-							key={hat.name}
-							id={hat.name}
-							className="rounded-xl border border-stone-200 dark:border-stone-700"
-						>
-							<div className="border-b border-stone-200 px-6 py-4 dark:border-stone-700">
-								<div className="flex items-center gap-3">
-									<span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-100 text-xs font-bold text-stone-600 dark:bg-stone-800 dark:text-stone-300">
-										{i + 1}
-									</span>
-									<h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-										{titleCase(hat.name)}
-									</h3>
-								</div>
-							</div>
-							<div className="px-6 py-4">
-								<div className="prose prose-sm prose-gray dark:prose-invert max-w-none">
-									<ReactMarkdown
-										remarkPlugins={[remarkGfm]}
-										rehypePlugins={[rehypeSlug]}
-									>
-										{hat.content}
-									</ReactMarkdown>
-								</div>
-							</div>
-						</div>
-					))}
-				</div>
-			</section>
-
-			{/* Review Agents */}
-			{(stage.reviewAgentDefinitions.length > 0 ||
-				stage.reviewAgentsInclude.length > 0) && (
-				<section className="mb-10">
-					<h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Review Agents
-					</h2>
-					<div className="space-y-4">
-						{stage.reviewAgentDefinitions.map((agent) => (
-							<div
-								key={agent.name}
-								id={`agent-${agent.name}`}
-								className="rounded-xl border border-teal-200 dark:border-teal-800"
-							>
-								<div className="border-b border-teal-200 px-6 py-3 dark:border-teal-800">
-									<h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-										{titleCase(agent.name)}
-									</h3>
-								</div>
-								<div className="px-6 py-4">
-									<div className="prose prose-sm prose-gray dark:prose-invert max-w-none">
-										<ReactMarkdown
-											remarkPlugins={[remarkGfm]}
-											rehypePlugins={[rehypeSlug]}
-										>
-											{agent.content}
-										</ReactMarkdown>
-									</div>
-								</div>
-							</div>
-						))}
-						{stage.reviewAgentsInclude.length > 0 && (
-							<div className="rounded-xl border border-dashed border-stone-300 px-6 py-4 dark:border-stone-600">
-								<h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
-									Included from other stages
-								</h4>
-								<div className="flex flex-wrap gap-2">
-									{stage.reviewAgentsInclude.flatMap((inc) =>
-										inc.agents.map((agentName) => (
-											<Link
-												key={`${inc.stage}-${agentName}`}
-												href={`/studios/${slug}/stages/${inc.stage}/#agent-${agentName}`}
-												className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm hover:border-teal-300 dark:border-stone-700 dark:hover:border-teal-700"
-											>
-												<span className="font-medium">
-													{titleCase(agentName)}
-												</span>
-												<span className="ml-1 text-stone-400">
-													from {titleCase(inc.stage)}
-												</span>
-											</Link>
-										)),
-									)}
-								</div>
-							</div>
-						)}
-					</div>
-				</section>
-			)}
-
-			{/* Stage Body Content (criteria guidance, completion signal) */}
+			{/* Stage overview — STAGE.md prose */}
 			{stage.content && (
-				<section className="mb-10">
-					<div className="prose prose-gray dark:prose-invert max-w-none">
+				<section className="mb-12 rounded-xl border border-stone-200 bg-stone-50/60 px-6 py-5 dark:border-stone-800 dark:bg-stone-900/40">
+					<div className="prose prose-sm prose-stone dark:prose-invert max-w-none prose-headings:scroll-mt-20">
 						<ReactMarkdown
 							remarkPlugins={[remarkGfm]}
 							rehypePlugins={[rehypeSlug]}
@@ -323,6 +124,242 @@ export default async function StageDetailPage({ params }: Props) {
 					</div>
 				</section>
 			)}
+
+			{/* Phase-ordered lifecycle */}
+			<h2 className="mb-6 text-sm font-semibold uppercase tracking-wider text-stone-400">
+				How the engine runs this stage
+			</h2>
+			<div className="space-y-2">
+				{/* 1 — Elaborate */}
+				{hasElaborateArtifacts && (
+					<PhaseSection
+						accent="elaborate"
+						step={1}
+						label="Elaborate"
+						caption={
+							stage.elaboration
+								? `${stage.elaboration} · plan the work, fan out discovery, declare outputs`
+								: "plan the work, fan out discovery, declare outputs"
+						}
+					>
+						<div className="space-y-4">
+							{stage.inputs.length > 0 && (
+								<div>
+									<h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
+										Inputs consumed
+									</h4>
+									<div className="flex flex-wrap gap-2">
+										{stage.inputs.map((inp) => (
+											<Link
+												key={`${inp.stage}-${inp.output}`}
+												href={`/studios/${slug}/stages/${inp.stage}/`}
+												className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs hover:border-teal-300 dark:border-stone-700 dark:hover:border-teal-700"
+											>
+												<span className="font-medium text-stone-700 dark:text-stone-200">
+													{inp.output}
+												</span>
+												<span className="text-stone-400">
+													from {titleCase(inp.stage)}
+												</span>
+											</Link>
+										))}
+									</div>
+								</div>
+							)}
+							{stage.discoveryDefinitions.length > 0 && (
+								<div>
+									<h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
+										Discovery fan-out
+									</h4>
+									<div className="space-y-2">
+										{stage.discoveryDefinitions.map((def) => (
+											<ExpandableArtifact
+												key={def.name}
+												def={def}
+												eyebrow="knowledge artifact"
+											/>
+										))}
+									</div>
+								</div>
+							)}
+							{stage.phaseDefinitions.length > 0 && (
+								<div>
+									<h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
+										Phase guidance
+									</h4>
+									<div className="space-y-2">
+										{stage.phaseDefinitions.map((def) => (
+											<ExpandableArtifact
+												key={def.name}
+												def={def}
+												eyebrow="phase override"
+											/>
+										))}
+									</div>
+								</div>
+							)}
+							{stage.outputDefinitions.length > 0 && (
+								<div>
+									<h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
+										Outputs produced
+									</h4>
+									<div className="grid gap-2 sm:grid-cols-2">
+										{stage.outputDefinitions.map((def) => (
+											<ArtifactChip key={def.name} def={def} />
+										))}
+									</div>
+								</div>
+							)}
+						</div>
+					</PhaseSection>
+				)}
+
+				{/* 2 — Review (pre-execute) */}
+				{hasReviewAgents && (
+					<PhaseSection
+						accent="review"
+						step={2}
+						label="Review"
+						caption="pre-execute · agents audit the planned spec before any code lands"
+					>
+						<div className="space-y-2">
+							{stage.reviewAgentDefinitions.map((agent) => (
+								<ExpandableArtifact
+									key={agent.name}
+									def={agent}
+									id={`agent-${agent.name}`}
+									eyebrow="review agent"
+								/>
+							))}
+							{stage.reviewAgentsInclude.length > 0 && (
+								<div className="rounded-lg border border-dashed border-stone-300 px-4 py-3 dark:border-stone-600">
+									<h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
+										Borrowed from other stages
+									</h4>
+									<div className="flex flex-wrap gap-2">
+										{stage.reviewAgentsInclude.flatMap((inc) =>
+											inc.agents.map((agentName) => (
+												<Link
+													key={`${inc.stage}-${agentName}`}
+													href={`/studios/${slug}/stages/${inc.stage}/#agent-${agentName}`}
+													className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm hover:border-teal-300 dark:border-stone-700 dark:hover:border-teal-700"
+												>
+													<span className="font-medium">
+														{titleCase(agentName)}
+													</span>
+													<span className="ml-1 text-stone-400">
+														from {titleCase(inc.stage)}
+													</span>
+												</Link>
+											)),
+										)}
+									</div>
+								</div>
+							)}
+						</div>
+					</PhaseSection>
+				)}
+
+				{/* 3 — Execute */}
+				{stage.hatDefinitions.length > 0 && (
+					<PhaseSection
+						accent="execute"
+						step={3}
+						label="Execute"
+						caption={`per-unit baton · ${stage.hats
+							.map((h) => titleCase(h))
+							.join(" → ")}`}
+					>
+						<div className="space-y-2">
+							{stage.hatDefinitions.map((hat, i) => (
+								<ExpandableArtifact
+									key={hat.name}
+									def={hat}
+									id={hat.name}
+									eyebrow={`hat ${i + 1}`}
+								/>
+							))}
+						</div>
+					</PhaseSection>
+				)}
+
+				{/* 4 — Approve (post-execute) */}
+				{hasReviewAgents && (
+					<PhaseSection
+						accent="approve"
+						step={4}
+						label="Approve"
+						caption="post-execute · the same review agents re-run against the built work"
+					>
+						<p className="text-sm text-stone-500 dark:text-stone-400">
+							Each agent listed under{" "}
+							<span className="font-medium text-stone-700 dark:text-stone-300">
+								Review
+							</span>{" "}
+							fires a second time here — now auditing the code that landed, not
+							the spec that planned it. Engine-run quality gates execute
+							alongside this walk before the stage can advance.
+						</p>
+					</PhaseSection>
+				)}
+
+				{/* 5 — Fix loop */}
+				{(stage.fixHats.length > 0 || stage.fixHatDefinitions.length > 0) && (
+					<PhaseSection
+						accent="fix"
+						step={5}
+						label="Fix loop"
+						caption="runs only when review or approval opens feedback"
+					>
+						{stage.fixHats.length > 0 && (
+							<div className="mb-3 flex flex-wrap items-center gap-1.5">
+								{stage.fixHats.map((h, i) => (
+									<span key={h} className="flex items-center">
+										<span className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+											{titleCase(h)}
+										</span>
+										{i < stage.fixHats.length - 1 && (
+											<span className="mx-0.5 text-stone-300 dark:text-stone-600">
+												→
+											</span>
+										)}
+									</span>
+								))}
+							</div>
+						)}
+						{stage.fixHatDefinitions.length > 0 && (
+							<div className="space-y-2">
+								{stage.fixHatDefinitions.map((def) => (
+									<ExpandableArtifact
+										key={def.name}
+										def={def}
+										eyebrow="fix-scoped mandate"
+									/>
+								))}
+							</div>
+						)}
+					</PhaseSection>
+				)}
+
+				{/* 6 — Gate */}
+				<PhaseSection
+					accent="gate"
+					step={6}
+					label="Gate"
+					caption="controls advancement to the next stage"
+				>
+					<div className="flex items-center gap-3">
+						<span
+							className={`rounded px-2.5 py-1 text-xs font-medium ${badge.color}`}
+						>
+							{badge.label}
+						</span>
+						<p className="text-sm text-stone-500 dark:text-stone-400">
+							{gateExplanation(stage.review)}
+						</p>
+					</div>
+				</PhaseSection>
+			</div>
 
 			{/* Navigation */}
 			<footer className="mt-12 flex items-center justify-between border-t border-stone-200 pt-8 dark:border-stone-800">
@@ -359,4 +396,21 @@ export default async function StageDetailPage({ params }: Props) {
 			</footer>
 		</div>
 	)
+}
+
+function gateExplanation(review: string): string {
+	switch (review) {
+		case "auto":
+			return "The harness advances automatically — no human in the loop at this gate."
+		case "ask":
+			return "A local review UI opens; a human approves or requests changes via the review tool."
+		case "external":
+			return "Blocks until an external system (GitHub/GitLab) signals approval, usually via branch merge."
+		case "external, ask":
+			return "The user chooses: submit for external review, or approve locally."
+		case "await":
+			return "Blocks until an external event occurs — a customer response, a pipeline, a webhook."
+		default:
+			return "Controls whether work advances to the next stage."
+	}
 }

@@ -20,9 +20,9 @@ import { Eta } from "eta"
 import matter from "gray-matter"
 import { stageDir } from "../../../../../state-tools.js"
 import { resolveReviewAgentPath } from "../../../../../studio-reader.js"
+import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import {
 	emitSubagentDispatchBlock,
-	inlineFile,
 	resolveStudioMandateModel,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
@@ -79,32 +79,44 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	const units = (action.units as string[]) || []
 
 	const engineBodyTpl = ENGINE_APPROVAL_BODIES[role]
-	let engineBody = ""
-	let mandateInline = ""
+	// Mandate (engine body or studio file) is static source — materialize
+	// a snapshot and reference it. Unit SPECS are live artifacts the agent
+	// reads via `haiku_unit_read`. Produced OUTPUTS are heterogeneous
+	// deliverables (code, images, PDFs) the agent opens by path with the
+	// Read tool.
+	let mandatePath = ""
 	let modelTier: string | undefined
 
 	if (engineBodyTpl) {
-		engineBody = eta.renderString(engineBodyTpl, { slug, stage }).trim()
+		const engineBody = eta.renderString(engineBodyTpl, { slug, stage }).trim()
+		mandatePath = materializeReferenceFile({
+			intent: slug,
+			stage: stage || undefined,
+			kind: "engine-body",
+			name: role,
+			body: engineBody,
+		})
 	} else {
-		const mandatePath = resolveReviewAgentPath(studio, stage, role)
-		if (mandatePath) {
-			mandateInline = inlineFile(mandatePath, `Mandate: ${role}`)
-			modelTier = resolveStudioMandateModel({ mandatePath, studio, stage })
+		const srcMandatePath = resolveReviewAgentPath(studio, stage, role)
+		if (srcMandatePath && existsSync(srcMandatePath)) {
+			const body = matter(readFileSync(srcMandatePath, "utf8")).content.trim()
+			if (body) {
+				mandatePath = materializeReferenceFile({
+					intent: slug,
+					stage: stage || undefined,
+					kind: "mandate",
+					name: role,
+					body,
+				})
+			}
+			modelTier = resolveStudioMandateModel({
+				mandatePath: srcMandatePath,
+				studio,
+				stage,
+			})
 		}
 	}
 
-	// Inline each unit spec and collect each unit's declared output
-	// paths. The approval agent reads spec from the inline (no
-	// haiku_unit_read calls) and opens outputs from disk with Read.
-	const unitsDir = stage ? join(stageDir(slug, stage), "units") : ""
-	const unitsInline = unitsDir
-		? units
-				.map((u) => {
-					const file = u.endsWith(".md") ? u : `${u}.md`
-					return inlineFile(join(unitsDir, file), `Unit spec: ${u}`)
-				})
-				.filter((s) => s.length > 0)
-		: []
 	const outputPaths = stage
 		? units
 				.flatMap((u) => readDeclaredOutputPaths(slug, stage, u))
@@ -120,9 +132,8 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		stage,
 		role,
 		isEngineRole: engineBodyTpl !== undefined,
-		engineBody,
-		mandateInline,
-		unitsInline,
+		mandatePath,
+		units,
 		outputPaths,
 		doctrineRef,
 	})

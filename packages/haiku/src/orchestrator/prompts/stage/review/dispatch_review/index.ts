@@ -10,14 +10,13 @@
 // inlined (no Read fan-out, no haiku_unit_read calls for the spec
 // bodies the engine could just hand it directly).
 
-import { join } from "node:path"
+import { existsSync, readFileSync } from "node:fs"
 import { Eta } from "eta"
-import { stageDir } from "../../../../../state-tools.js"
+import matter from "gray-matter"
 import { resolveReviewAgentPath } from "../../../../../studio-reader.js"
+import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import {
 	emitSubagentDispatchBlock,
-	inlineFile,
-	inlineFiles,
 	resolveStudioMandateModel,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
@@ -51,32 +50,45 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	const units = (action.units as string[]) || []
 
 	const engineBodyTpl = ENGINE_REVIEW_BODIES[role]
-	let engineBody = ""
-	let mandateInline = ""
+	// The mandate — engine body or studio review-agent file — is static
+	// source. Materialize it (FM-stripped / rendered) into the intent's
+	// prompts tree and reference THAT snapshot, so the dispatch record is
+	// self-contained and reflection agents can re-read exactly what the
+	// agent audited against. The unit SPECS are live artifacts: the agent
+	// reads each via `haiku_unit_read` (FM-stripped), never an inlined
+	// dispatch-time copy.
+	let mandatePath = ""
 	let modelTier: string | undefined
 
 	if (engineBodyTpl) {
-		engineBody = eta.renderString(engineBodyTpl, { slug, stage }).trim()
+		const engineBody = eta.renderString(engineBodyTpl, { slug, stage }).trim()
+		mandatePath = materializeReferenceFile({
+			intent: slug,
+			stage: stage || undefined,
+			kind: "engine-body",
+			name: role,
+			body: engineBody,
+		})
 	} else {
-		const mandatePath = resolveReviewAgentPath(studio, stage, role)
-		if (mandatePath) {
-			mandateInline = inlineFile(mandatePath, `Mandate: ${role}`)
-			modelTier = resolveStudioMandateModel({ mandatePath, studio, stage })
+		const srcMandatePath = resolveReviewAgentPath(studio, stage, role)
+		if (srcMandatePath && existsSync(srcMandatePath)) {
+			const body = matter(readFileSync(srcMandatePath, "utf8")).content.trim()
+			if (body) {
+				mandatePath = materializeReferenceFile({
+					intent: slug,
+					stage: stage || undefined,
+					kind: "mandate",
+					name: role,
+					body,
+				})
+			}
+			modelTier = resolveStudioMandateModel({
+				mandatePath: srcMandatePath,
+				studio,
+				stage,
+			})
 		}
 	}
-
-	// Inline every unit spec the review agent must audit. The subagent
-	// is one-shot — pre-loading the specs saves N `haiku_unit_read` tool
-	// calls in its session.
-	const unitsDir = stage ? join(stageDir(slug, stage), "units") : ""
-	const unitsInline = unitsDir
-		? units
-				.map((u) => {
-					const file = u.endsWith(".md") ? u : `${u}.md`
-					return inlineFile(join(unitsDir, file), `Unit spec: ${u}`)
-				})
-				.filter((s) => s.length > 0)
-		: []
 
 	// Render the subagent prompt body, then emit a file-backed dispatch
 	// block. The parent never sees the rendered body — only the
@@ -86,9 +98,8 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		stage,
 		role,
 		isEngineRole: engineBodyTpl !== undefined,
-		engineBody,
-		mandateInline,
-		unitsInline,
+		mandatePath,
+		units,
 	})
 
 	const dispatchBlock = emitSubagentDispatchBlock({

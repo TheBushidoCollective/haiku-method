@@ -23,7 +23,13 @@
 // These tests lock both invariants so the check can't silently regress.
 
 import assert from "node:assert/strict"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { test } from "node:test"
@@ -73,7 +79,28 @@ function seedCompletedIntent(root, slug, studio, stages) {
 	return intentDir
 }
 
-test("intent_review prompt builder emits the cross-stage-consistency inline body", async () => {
+// The engine body is no longer inlined into the prompt string — the
+// instruction-file refactor (2026-05-20) materializes it to a snapshot
+// under the intent's `prompts/intent/refs/engine-body/<role>.md` and the
+// subagent prompt references it. Follow the chain to the body content:
+// builder output (parent) → `<subagent prompt_file="...">` → that file's
+// `**Read** \`<ref>\`` → the materialized engine-body content.
+function resolveEngineBodyContent(out) {
+	const promptFile = out.match(/prompt_file="([^"]+)"/)
+	assert.ok(
+		promptFile,
+		`builder output must emit a file-backed subagent dispatch (engine-built-in resolution), not the generic placeholder. got: ${out.slice(0, 500)}`,
+	)
+	const subagentPrompt = readFileSync(promptFile[1], "utf8")
+	const ref = subagentPrompt.match(/\*\*Read\*\*\s+`([^`]+)`/)
+	assert.ok(
+		ref,
+		`subagent prompt must reference a materialized mandate. got: ${subagentPrompt.slice(0, 500)}`,
+	)
+	return readFileSync(ref[1], "utf8")
+}
+
+test("intent_review materializes the cross-stage-consistency engine body", async () => {
 	const { actionPromptBuilders } = await import(
 		`${SRC}orchestrator/prompts/index.ts`
 	)
@@ -88,25 +115,33 @@ test("intent_review prompt builder emits the cross-stage-consistency inline body
 		/cross-stage-consistency|cross stage consistency/i.test(out),
 		`prompt must name the role. got: ${out.slice(0, 500)}`,
 	)
+	// Engine-built-in resolves to a file-backed dispatch, NOT the generic
+	// "no studio-configured mandate" / "audit the intent for the X
+	// standard" fallback placeholder.
 	assert.ok(
-		/internally consistent/i.test(out),
-		"prompt must include the engine-inline mandate body — not fall through to the generic placeholder",
+		!/no studio-configured mandate|audit the intent for the/i.test(out),
+		"must not fall through to the generic placeholder",
+	)
+	const body = resolveEngineBodyContent(out)
+	assert.ok(
+		/internally consistent/i.test(body),
+		"engine body must include the consistency check",
 	)
 	assert.ok(
-		/upstream stages specified/.test(out),
-		"mandate body must include the upstream-alignment check",
+		/upstream stages specified/.test(body),
+		"engine body must include the upstream-alignment check",
 	)
 	assert.ok(
-		/MUST NOT|must not/i.test(out) ||
-			/Anti-patterns|anti-patterns/.test(out),
-		"mandate body must include the anti-patterns block",
+		/MUST NOT|must not/i.test(body) ||
+			/Anti-patterns|anti-patterns/.test(body),
+		"engine body must include the anti-patterns block",
 	)
 })
 
-test("intent_review for a never-cross-stage-shipping studio still emits the inline body (no studio mandate fallthrough)", async () => {
+test("intent_review for a never-cross-stage-shipping studio still gets the engine body (no studio mandate fallthrough)", async () => {
 	// Pick a studio that no longer has any intent-review-agents/ dir
 	// (post-promotion: all of them). The prompt builder must use the
-	// engine-inline body, not a "no mandate file" placeholder.
+	// engine body, not a "no mandate file" placeholder.
 	const { actionPromptBuilders } = await import(
 		`${SRC}orchestrator/prompts/index.ts`
 	)
@@ -116,9 +151,10 @@ test("intent_review for a never-cross-stage-shipping studio still emits the inli
 		studio: "hwdev",
 		action: { kind: "intent_review", role: "cross-stage-consistency" },
 	})
+	const body = resolveEngineBodyContent(out)
 	assert.ok(
-		/internally consistent/i.test(out),
-		"hwdev (which used to ship a custom mandate) must now get the engine-inline body",
+		/internally consistent/i.test(body),
+		"hwdev (which used to ship a custom mandate) must now get the engine body",
 	)
 })
 

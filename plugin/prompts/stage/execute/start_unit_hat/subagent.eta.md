@@ -11,7 +11,7 @@ This unit already ran <%= priorHatsInline.length %> earlier hat(s) this iteratio
 
 ## Procedure (authoritative)
 
-1. **Read the unit live:** `haiku_unit_read { intent: "<%= slug %>", unit: "<%= unit %>" }`. The body carries the completion criteria, prior-hat hand-offs, and the outputs contract. Do NOT plain-`Read` the unit file — the workflow engine guards it; this tool returns body + title with engine frontmatter stripped.
+1. **Read the unit live:** `haiku_unit_read { intent: "<%= slug %>", stage: "<%= stage %>", unit: "<%= unit %>" }`. The body carries the completion criteria, prior-hat hand-offs, and the outputs contract. Do NOT plain-`Read` the unit file — the workflow engine guards it; this tool returns body + title with engine frontmatter stripped.
 2. Read your mandate above. Execute the **<%= hat %>** work against the unit, within the stage's declared scope. Commit inside the unit worktree with a message naming the hat — `haiku: <%= hat %> on <%= unit %>`. Do NOT push.
 3. Track every file you produced in the unit's `outputs:` if it isn't auto-detected.
 4. **Close — end your turn with exactly ONE:**

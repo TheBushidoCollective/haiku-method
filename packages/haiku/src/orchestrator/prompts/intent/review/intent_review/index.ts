@@ -16,11 +16,13 @@
 // once per intent. This builder serializes the per-role drumbeat the
 // cursor walks after that pass.
 
+import { existsSync, readFileSync } from "node:fs"
 import { Eta } from "eta"
+import matter from "gray-matter"
 import { readStudioReviewAgentPaths } from "../../../../../studio-reader.js"
+import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import {
 	emitSubagentDispatchBlock,
-	inlineFile,
 	resolveStudioMandateModel,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
@@ -57,33 +59,49 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		return eta.renderString(TEMPLATE, { slug, role })
 	}
 
-	// Engine-built-in roles render the mandate body from the sibling
-	// engine-bodies/<role>.eta.md template. Renders BEFORE the studio
-	// mandate lookup so an engine role can never be shadowed by a
-	// same-name studio file. The cursor's `intentRoles` walk is the
-	// canonical source for which roles are engine-built — a test locks
-	// that against this map.
+	// Resolve a mandate snapshot for the role — engine body (rendered)
+	// or studio review-agent file (FM-stripped) — materialized into the
+	// intent's prompts tree and referenced by path. Engine roles resolve
+	// BEFORE the studio lookup so a same-name studio file can never shadow
+	// a built-in. Both buckets flow through ONE file-backed subagent
+	// dispatch below; the dispatch record reflects exactly what the
+	// reviewer audited against.
 	const engineBodyTpl = ENGINE_REVIEW_BODIES[role]
+	let mandatePath = ""
+	let mandateModel: string | undefined
+
 	if (engineBodyTpl) {
 		const engineBody = eta.renderString(engineBodyTpl, { slug }).trim()
-		return eta.renderString(TEMPLATE, {
-			slug,
-			role,
-			mandatePath: "",
-			dispatchBlock: "",
-			description: engineBody,
+		mandatePath = materializeReferenceFile({
+			intent: slug,
+			kind: "engine-body",
+			name: role,
+			body: engineBody,
 		})
+	} else {
+		const srcMandatePath = readStudioReviewAgentPaths(studio)[role]
+		if (srcMandatePath && existsSync(srcMandatePath)) {
+			const body = matter(readFileSync(srcMandatePath, "utf8")).content.trim()
+			if (body) {
+				mandatePath = materializeReferenceFile({
+					intent: slug,
+					kind: "mandate",
+					name: role,
+					body,
+				})
+			}
+			mandateModel = resolveStudioMandateModel({
+				mandatePath: srcMandatePath,
+				studio,
+			})
+		}
 	}
 
-	const mandates = readStudioReviewAgentPaths(studio)
-	const mandatePath = mandates[role]
-
 	if (mandatePath) {
-		const mandateModel = resolveStudioMandateModel({ mandatePath, studio })
 		const reviewPrompt = eta.renderString(SUBAGENT_TEMPLATE, {
 			slug,
 			role,
-			mandateInline: inlineFile(mandatePath, `Mandate: ${role}`),
+			mandatePath,
 			doctrineRef: RUNTIME_OBSERVATION_ROLES.has(role)
 				? sharedBlockRef("runtime-verification")
 				: "",

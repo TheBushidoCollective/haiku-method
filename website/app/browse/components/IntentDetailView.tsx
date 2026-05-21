@@ -90,8 +90,12 @@ export function IntentDetailView({
 		unit: HaikuUnit
 		stage: string
 	} | null>(null)
+	// Land on the intent overview (pipeline, feedback, knowledge) rather than
+	// jumping straight into the active stage — only expand a stage when one is
+	// explicitly deep-linked. The active stage is one click away and carries
+	// the amber dot in the pipeline.
 	const [expandedStage, setExpandedStage] = useState<string | null>(
-		initialStage || intent.activeStage || null,
+		initialStage || null,
 	)
 	const stageRefs = useRef<Record<string, HTMLElement | null>>({})
 	const [viewMode, setViewMode] = useState<"pipeline" | "board">("pipeline")
@@ -205,6 +209,16 @@ export function IntentDetailView({
 		}
 	}
 
+	// Jump to the intent overview from anywhere inside it — deselect any unit
+	// and collapse the open stage so the pipeline + intent feedback show.
+	const handleBackToIntent = () => {
+		setSelectedUnit(null)
+		setExpandedStage(null)
+		if (hasPathNav) {
+			window.history.pushState({}, "", browseUrl())
+		}
+	}
+
 	const handleViewModeChange = (mode: "pipeline" | "board") => {
 		setViewMode(mode)
 	}
@@ -219,12 +233,14 @@ export function IntentDetailView({
 				unit={selectedUnit.unit}
 				stageName={selectedUnit.stage}
 				intentSlug={intent.slug}
+				intentTitle={intent.title}
 				intentMode={intent.mode}
 				provider={provider}
 				assets={intent.assets}
 				host={host || undefined}
 				feedback={unitFeedback}
 				onBack={handleBackFromUnit}
+				onBackToIntent={handleBackToIntent}
 			/>
 		)
 	}
@@ -255,9 +271,25 @@ export function IntentDetailView({
 				<div className="flex flex-wrap gap-4 text-sm text-stone-500 dark:text-stone-400">
 					<span>
 						Studio:{" "}
-						<strong className="text-stone-700 dark:text-stone-300">
+						<a
+							href={`/studios/${intent.studio}/`}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="font-semibold text-teal-600 hover:underline dark:text-teal-400"
+							title={`Open the ${titleCase(intent.studio)} studio definition`}
+						>
 							{titleCase(intent.studio)}
-						</strong>
+							<span aria-hidden="true"> ↗</span>
+						</a>{" "}
+						<a
+							href={`/studios/${intent.studio}/architecture/`}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-xs text-stone-400 hover:text-teal-600 hover:underline dark:hover:text-teal-400"
+							title="Open the runtime architecture map"
+						>
+							(architecture)
+						</a>
 					</span>
 					<span>
 						Mode:{" "}
@@ -437,6 +469,7 @@ export function IntentDetailView({
 										provider={provider}
 										providerName={provider.name}
 										slug={intent.slug}
+										studio={intent.studio}
 										host={host || undefined}
 										project={location?.project || ""}
 										onSelectUnit={(unit) =>
@@ -487,19 +520,8 @@ export function IntentDetailView({
 				</section>
 			)}
 
-			{/* Intent-scope Feedback */}
-			{intent.intentFeedback && intent.intentFeedback.length > 0 && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Intent Feedback
-					</h2>
-					<FeedbackList
-						feedback={intent.intentFeedback}
-						scope="intent"
-						title={null}
-					/>
-				</section>
-			)}
+			{/* Intent-scope Feedback (with an All toggle that folds in stage FB) */}
+			<IntentFeedbackSection intent={intent} />
 
 			{/* Knowledge Artifacts */}
 			{intent.knowledge.length > 0 && (
@@ -1406,6 +1428,7 @@ function StageDetail({
 	provider,
 	providerName,
 	slug,
+	studio,
 	host,
 	project,
 	onSelectUnit,
@@ -1415,6 +1438,8 @@ function StageDetail({
 	provider: BrowseProvider
 	providerName: string
 	slug: string
+	/** Studio slug — links the stage to its definition in the studio browser. */
+	studio: string
 	host?: string
 	project?: string
 	onSelectUnit: (u: HaikuUnit) => void
@@ -1483,6 +1508,29 @@ function StageDetail({
 					{titleCase(stage.name)} — {stage.units.length} unit
 					{stage.units.length !== 1 ? "s" : ""}
 				</h3>
+				<a
+					href={`/studios/${studio}/stages/${stage.name}/`}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="inline-flex items-center gap-1 rounded bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-500 transition hover:bg-teal-100 hover:text-teal-700 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-teal-900/30 dark:hover:text-teal-300"
+					title={`Open the ${titleCase(stage.name)} stage definition in the studio browser`}
+				>
+					<svg
+						className="h-3 w-3"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						aria-hidden="true"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth={2}
+							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</svg>
+					Definition
+				</a>
 				{stage.prUrl && stage.prStatus && (
 					<a
 						href={stage.prUrl}
@@ -1920,6 +1968,90 @@ function PhaseStepper({
 						: "—"}
 			</span>
 		</div>
+	)
+}
+
+/**
+ * Intent-level feedback with a scope toggle. "Intent only" shows the
+ * intent-scope findings; "All" folds in every stage's feedback below, each
+ * stage as its own labelled group so cards keep their correct stage scope.
+ * The toggle only appears when there's stage feedback to fold in.
+ */
+function IntentFeedbackSection({ intent }: { intent: HaikuIntentDetail }) {
+	const [scope, setScope] = useState<"intent" | "all">("intent")
+	const intentFb = intent.intentFeedback ?? []
+	const stagesWithFb = intent.stages.filter(
+		(s) => (s.feedback?.length ?? 0) > 0,
+	)
+	const stageFbCount = stagesWithFb.reduce(
+		(n, s) => n + (s.feedback?.length ?? 0),
+		0,
+	)
+	// Nothing anywhere → no section at all.
+	if (intentFb.length === 0 && stageFbCount === 0) return null
+
+	const SCOPES: Array<{ key: "intent" | "all"; label: string; n: number }> = [
+		{ key: "intent", label: "Intent only", n: intentFb.length },
+		{ key: "all", label: "All", n: intentFb.length + stageFbCount },
+	]
+
+	return (
+		<section className="mb-8">
+			<div className="mb-3 flex flex-wrap items-center gap-3">
+				<h2 className="text-sm font-semibold uppercase tracking-wider text-stone-400">
+					Feedback
+				</h2>
+				{stageFbCount > 0 && (
+					<div className="flex flex-wrap gap-1">
+						{SCOPES.map((s) => {
+							const active = scope === s.key
+							return (
+								<button
+									key={s.key}
+									type="button"
+									onClick={() => setScope(s.key)}
+									className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition ${
+										active
+											? "bg-teal-600 text-white"
+											: "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+									}`}
+								>
+									{s.label}
+									<span
+										className={`ml-1.5 ${active ? "text-teal-200" : "text-stone-400 dark:text-stone-500"}`}
+									>
+										{s.n}
+									</span>
+								</button>
+							)
+						})}
+					</div>
+				)}
+			</div>
+			{scope === "intent" ? (
+				intentFb.length > 0 ? (
+					<FeedbackList feedback={intentFb} scope="intent" title={null} />
+				) : (
+					<p className="px-2 py-3 text-xs text-stone-500">
+						No intent-scope feedback. Switch to All to see stage feedback.
+					</p>
+				)
+			) : (
+				<div className="space-y-6">
+					{intentFb.length > 0 && (
+						<FeedbackList feedback={intentFb} scope="intent" title="Intent" />
+					)}
+					{stagesWithFb.map((s) => (
+						<FeedbackList
+							key={s.name}
+							feedback={s.feedback ?? []}
+							scope="stage"
+							title={`${titleCase(s.name)} stage`}
+						/>
+					))}
+				</div>
+			)}
+		</section>
 	)
 }
 

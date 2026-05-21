@@ -47,6 +47,8 @@ interface Props {
 	unit: HaikuUnit
 	stageName: string
 	intentSlug: string
+	/** Intent title for the breadcrumb. */
+	intentTitle: string
 	/** Intent mode (autopilot drops the user gate) — drives the expected
 	 *  review/approval role set in the sign-offs section. */
 	intentMode: string
@@ -54,7 +56,10 @@ interface Props {
 	assets?: HaikuAsset[]
 	host?: string
 	feedback?: HaikuFeedback[]
+	/** Back to the stage view (deselect the unit). */
 	onBack: () => void
+	/** Back to the intent overview (deselect unit + collapse the stage). */
+	onBackToIntent: () => void
 }
 
 export function UnitDetailView({
@@ -67,6 +72,8 @@ export function UnitDetailView({
 	host,
 	feedback = [],
 	onBack,
+	onBackToIntent,
+	intentTitle,
 }: Props) {
 	const checkedCount = unit.criteria.filter((c) => c.checked).length
 	const totalCriteria = unit.criteria.length
@@ -81,14 +88,30 @@ export function UnitDetailView({
 
 	return (
 		<div className="mx-auto max-w-4xl px-4 py-8 lg:py-12">
-			{/* Breadcrumb */}
-			<button
-				type="button"
-				onClick={onBack}
-				className="mb-4 text-sm text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white"
-			>
-				&larr; Back to {titleCase(stageName)}
-			</button>
+			{/* Breadcrumb — Intent › Stage › Unit, the first two clickable so
+			    you can jump straight back to the intent overview or the stage
+			    without bouncing through the portfolio. */}
+			<nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-stone-500 dark:text-stone-400">
+				<button
+					type="button"
+					onClick={onBackToIntent}
+					className="hover:text-stone-900 dark:hover:text-white"
+				>
+					{intentTitle}
+				</button>
+				<span className="text-stone-300 dark:text-stone-600">›</span>
+				<button
+					type="button"
+					onClick={onBack}
+					className="hover:text-stone-900 dark:hover:text-white"
+				>
+					{titleCase(stageName)}
+				</button>
+				<span className="text-stone-300 dark:text-stone-600">›</span>
+				<span className="text-stone-700 dark:text-stone-300">
+					{splitUnitName(unit.name).badge ?? titleCase(unit.name)}
+				</span>
+			</nav>
 
 			{/* Header */}
 			<header className="mb-8">
@@ -469,6 +492,7 @@ const TEXT_EXTENSIONS = new Set([
 	"csv",
 	"xml",
 	"html",
+	"feature",
 ])
 
 function isTextFile(path: string): boolean {
@@ -721,6 +745,8 @@ function DocModal({
 								{displayContent}
 							</ReactMarkdown>
 						</div>
+					) : filePath.endsWith(".feature") ? (
+						<GherkinView content={content} />
 					) : (
 						<pre className="overflow-x-auto text-xs text-stone-600 dark:text-stone-400">
 							{content}
@@ -729,6 +755,111 @@ function DocModal({
 				</div>
 			</div>
 		</div>
+	)
+}
+
+/** Block keywords that head a line (`Feature:`, `Scenario:`, …). */
+const GHERKIN_BLOCK_KEYWORDS = [
+	"Feature",
+	"Background",
+	"Rule",
+	"Scenario Outline",
+	"Scenario Template",
+	"Scenario",
+	"Example",
+	"Examples",
+	"Scenarios",
+]
+/** Step keywords (`Given`, `When`, …) — highlighted, rest of line is plain. */
+const GHERKIN_STEP_KEYWORDS = ["Given", "When", "Then", "And", "But", "*"]
+
+/** Lightweight, dependency-free Gherkin highlighter. Gherkin is line-oriented
+ *  (keywords head the line), so we colorize per line: tags, comments, block
+ *  keywords (`Feature:`/`Scenario:`), step keywords (`Given`/`When`/`Then`),
+ *  docstring fences, and data-table rows. Renders inside a <pre> so spacing
+ *  and indentation are preserved. */
+function GherkinView({ content }: { content: string }): React.ReactElement {
+	let inDocString = false
+	const lines = content.replace(/\r\n/g, "\n").split("\n")
+	return (
+		<pre className="overflow-x-auto text-xs leading-relaxed text-stone-700 dark:text-stone-300">
+			{lines.map((line, i) => {
+				// biome-ignore lint/suspicious/noArrayIndexKey: lines are static, render-once, no reordering
+				const key = `${i}`
+				const trimmed = line.trimStart()
+				const indent = line.slice(0, line.length - trimmed.length)
+
+				if (trimmed.startsWith('"""') || trimmed.startsWith("```")) {
+					inDocString = !inDocString
+					return (
+						<div key={key} className="text-stone-400">
+							{line}
+						</div>
+					)
+				}
+				if (inDocString) {
+					return (
+						<div key={key} className="text-emerald-700 dark:text-emerald-400">
+							{line}
+						</div>
+					)
+				}
+				if (trimmed.startsWith("#")) {
+					return (
+						<div key={key} className="text-stone-400 italic">
+							{line}
+						</div>
+					)
+				}
+				if (trimmed.startsWith("@")) {
+					return (
+						<div key={key} className="text-amber-600 dark:text-amber-400">
+							{line}
+						</div>
+					)
+				}
+				if (trimmed.startsWith("|")) {
+					return (
+						<div key={key} className="text-sky-700 dark:text-sky-400">
+							{line}
+						</div>
+					)
+				}
+				const block = GHERKIN_BLOCK_KEYWORDS.find((kw) =>
+					trimmed.startsWith(`${kw}:`),
+				)
+				if (block) {
+					const rest = trimmed.slice(block.length + 1)
+					return (
+						<div key={key}>
+							{indent}
+							<span className="font-semibold text-violet-700 dark:text-violet-400">
+								{block}:
+							</span>
+							<span className="font-medium text-stone-800 dark:text-stone-200">
+								{rest}
+							</span>
+						</div>
+					)
+				}
+				const step = GHERKIN_STEP_KEYWORDS.find(
+					(kw) => trimmed === kw || trimmed.startsWith(`${kw} `),
+				)
+				if (step) {
+					const rest = trimmed.slice(step.length)
+					return (
+						<div key={key}>
+							{indent}
+							<span className="font-semibold text-teal-700 dark:text-teal-400">
+								{step}
+							</span>
+							{rest}
+						</div>
+					)
+				}
+				return <div key={key}>{line === "" ? " " : line}</div>
+			})}
+		</pre>
 	)
 }
 

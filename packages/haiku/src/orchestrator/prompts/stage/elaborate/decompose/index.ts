@@ -57,12 +57,12 @@ import {
 	resolveIntentStages,
 	resolveStudioFilePath,
 } from "../../../../studio.js"
+import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import { buildOutputRequirements } from "../../../../validators.js"
 import {
 	batchDispatchDirective,
 	buildConcurrentElaborateLoopBlock,
 	emitSubagentDispatchBlock,
-	inlineFile,
 	providerSpliceBlock,
 	readIntentMode,
 	resolveStudioMandateModel,
@@ -527,6 +527,34 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			join(studio, "stages", stage, "STAGE.md"),
 		)
 
+		// The intent goal and stage scope are static-for-this-dispatch
+		// source — materialize FM-stripped snapshots once and reference
+		// them from every discovery subagent. (intent.md is guarded
+		// against generic Read by the workflow hook, so a referenced
+		// snapshot is also how the subagent gets it at all.) The
+		// per-artifact discovery template is materialized inside the loop.
+		const intentRef = existsSync(intentPath)
+			? materializeReferenceFile({
+					intent: slug,
+					stage,
+					kind: "intent-goal",
+					name: "intent",
+					body: (parseFrontmatter(readFileSync(intentPath, "utf8")).body || "").trim(),
+				})
+			: ""
+		const stageRef =
+			stagePath && existsSync(stagePath)
+				? materializeReferenceFile({
+						intent: slug,
+						stage,
+						kind: "stage-scope",
+						name: stage,
+						body: (
+							parseFrontmatter(readFileSync(stagePath, "utf8")).body || ""
+						).trim(),
+					})
+				: ""
+
 		const intentMode = readIntentMode(dir)
 		const isAutopilot = intentMode === "autopilot"
 
@@ -556,6 +584,13 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 							`${a.name.toUpperCase()}.md`,
 						)
 				: null
+			const templateRef = materializeReferenceFile({
+				intent: slug,
+				stage,
+				kind: "discovery-template",
+				name: a.name,
+				body: (parseFrontmatter(readFileSync(a.templatePath, "utf8")).body || "").trim(),
+			})
 			const promptBody = eta.renderString(DISCOVERY_SUBAGENT_TPL, {
 				artifactName: a.name,
 				slug,
@@ -564,12 +599,9 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 				worktree: wt,
 				branchName: wt ? discoveryBranchName(slug, stage, a.name) : "",
 				expectedArtifactPath,
-				intentInline: inlineFile(intentPath, "Intent goal"),
-				stageInline: stagePath ? inlineFile(stagePath, "Stage scope") : "",
-				templateInline: inlineFile(
-					a.templatePath,
-					`Discovery template: ${a.name} (content guide + quality signals + output location)`,
-				),
+				intentRef,
+				stageRef,
+				templateRef,
 			})
 			const discoveryModel = resolveStudioMandateModel({
 				mandatePath: a.templatePath,

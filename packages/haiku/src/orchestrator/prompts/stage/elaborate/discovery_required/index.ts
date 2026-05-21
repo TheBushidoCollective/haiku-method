@@ -15,14 +15,16 @@
 //   - subagent-driven (template has no `tool:`) — spawn one subagent
 //     against the discovery template's body.
 
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { Eta } from "eta"
+import matter from "gray-matter"
 import { resolvePluginRoot } from "../../../../../config.js"
 import { readStageArtifactDefs } from "../../../../../studio-reader.js"
+import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import {
 	buildConcurrentElaborateLoopBlock,
 	emitSubagentDispatchBlock,
-	inlineFile,
 	resolveStudioMandateModel,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
@@ -54,16 +56,11 @@ export default definePromptBuilder((ctx) => {
 
 	let dispatchBlock = ""
 	if (def && !def.tool) {
-		const templatePath = `plugin/studios/${studio}/stages/${stage}/discovery/${agent}.md`
-		const promptBody = eta.renderString(SUBAGENT_TEMPLATE, {
-			agent,
-			stage,
-			slug,
-			unit,
-			resolvedLocation,
-			templateInline: inlineFile(templatePath, `Template: ${agent}`),
-		})
-		const discoveryMandatePath = join(
+		// The discovery template is static studio source — materialize it
+		// (FM-stripped) into the intent's prompts/refs/ tree and reference
+		// THAT snapshot, so the dispatch record reflects exactly what the
+		// agent produced its artifact from.
+		const srcTemplatePath = join(
 			resolvePluginRoot(),
 			"studios",
 			studio,
@@ -72,8 +69,29 @@ export default definePromptBuilder((ctx) => {
 			"discovery",
 			`${agent}.md`,
 		)
+		const rawTpl = existsSync(srcTemplatePath)
+			? readFileSync(srcTemplatePath, "utf8")
+			: ""
+		const tplBody = rawTpl ? matter(rawTpl).content.trim() : ""
+		const templatePath = tplBody
+			? materializeReferenceFile({
+					intent: slug,
+					stage,
+					kind: "discovery-template",
+					name: agent,
+					body: tplBody,
+				})
+			: ""
+		const promptBody = eta.renderString(SUBAGENT_TEMPLATE, {
+			agent,
+			stage,
+			slug,
+			unit,
+			resolvedLocation,
+			templatePath,
+		})
 		const discoveryModel = resolveStudioMandateModel({
-			mandatePath: discoveryMandatePath,
+			mandatePath: srcTemplatePath,
 			studio,
 			stage,
 		})

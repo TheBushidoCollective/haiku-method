@@ -4936,25 +4936,22 @@ export const MAX_FIX_LOOP_BOLTS = 3
 export const MAX_INTEGRATOR_ATTEMPTS = 3
 
 /**
- * Cap on concurrent subagents the parent may have in flight at any point,
- * across ALL parallel-dispatch surfaces: unit wave execution, elaborate
- * discovery fan-out, adversarial review fan-out, and the fix loops
- * (stage-level `review_fix` and studio-level `intent_completion_fix`).
+ * Fix-loop pool width: the max number of fix-hat chains the engine puts
+ * in flight at once. The cursor's Track B (`walkFeedbackTrack`) caps the
+ * initial `start_feedback_hat` batch at this many entries; as each chain
+ * reaches its terminal hat, `pickUndispatchedFbBlock` refills the freed
+ * slot with the next undispatched FB, so the pool runs at a steady width
+ * until the queue drains. This is real slot replenishment, NOT the older
+ * "parent splits the wave into batches of N and runs each to completion"
+ * model — that taught the agent engine mechanics it can't reliably track
+ * (see `.claude/rules/no-agent-mechanics-teaching.md`). The parent just
+ * spawns what the engine hands it and follows each subagent's relay.
  *
- * The Task-tool primitive the parent uses to spawn subagents is batch-
- * synchronous: it fires N in one message and waits for all N to return
- * before the next batch. There is no true slot pool — "free a slot
- * mid-batch and fire another" is not expressible. The practical
- * implementation is batch-serial: the parent takes the full wave of
- * eligible items, splits it into batches of `MAX_CONCURRENT_SUBAGENTS`,
- * and runs each batch to completion before starting the next. Wave
- * boundaries (e.g. ops-engineer across all findings → feedback-assessor
- * across all findings) are still honored — all of a hat's batches finish
- * before the next hat starts.
+ * The statusline reads this constant to size its in-flight bar display.
  *
  * Override with env var `HAIKU_MAX_CONCURRENT_SUBAGENTS`. Invalid values
  * (non-numeric, <= 0) fall back to the default. No upper bound enforced —
- * large numbers effectively disable batching.
+ * large numbers effectively pool all eligible findings at once.
  */
 export const MAX_CONCURRENT_SUBAGENTS = (() => {
 	const raw = process.env.HAIKU_MAX_CONCURRENT_SUBAGENTS

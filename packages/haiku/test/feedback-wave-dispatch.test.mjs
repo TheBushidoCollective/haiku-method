@@ -2,11 +2,14 @@
 //
 // The cursor's Track B batches every open FB ready for its next fix
 // hat into ONE `start_feedback_hat` action, with one dispatch entry
-// per FB (potentially different stages, different hats). Dedup rule:
-// at most one entry per `targets.unit` — same-target FBs serialize
-// across ticks to avoid racing the close hook's
-// `applyFeedbackInvalidations` FM write. Intent-scope / null-target
-// FBs don't race and batch unconditionally.
+// per FB (potentially different stages, different hats). Batch width:
+// deduped by `feedback_id` (never double-dispatch one FB), then capped
+// at MAX_CONCURRENT_SUBAGENTS — the fix-loop pool width that
+// `pickUndispatchedFbBlock` refills as chains close. There is NO
+// target_unit dedup: same-unit FBs pool concurrently (removed
+// 2026-05-21 — it throttled the pool to distinct-unit-count yet never
+// achieved serialization, since the replenishment path ignores
+// target_unit anyway).
 
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
@@ -187,8 +190,8 @@ test("wave: 3 FBs on 3 different units batch into 1 action with 3 dispatches", a
 	})
 })
 
-test("wave: 2 FBs on the SAME target unit dedup — only one in this batch", async () => {
-	await withWaveRepo("same-unit-dedup", async ({ intentDir, slug }) => {
+test("wave: 2 FBs on the SAME target unit BOTH dispatch (no target_unit dedup)", async () => {
+	await withWaveRepo("same-unit-pool", async ({ intentDir, slug }) => {
 		writeFb(intentDir, 1, {
 			stageScope: "design",
 			title: "first FB on unit-01",
@@ -216,15 +219,56 @@ test("wave: 2 FBs on the SAME target unit dedup — only one in this batch", asy
 		})
 		assert.ok(action, "expected a Track B action")
 		assert.equal(action.kind, "start_feedback_hat")
-		// FB-001 (unit-01) + FB-003 (unit-02) batch; FB-002 (also unit-01)
-		// is held back for the next tick — same target_unit as FB-001.
+		// All three dispatch in one wave — same-unit FBs (FB-001, FB-002)
+		// pool concurrently. The fix-loop contract accepts clobber-and-
+		// retry; the close hook's FM write is synchronous + lock-guarded.
 		assert.equal(
 			action.dispatches.length,
-			2,
-			`expected 2 dispatches (FB-002 dedup'd away); got: ${JSON.stringify(action.dispatches)}`,
+			3,
+			`expected 3 dispatches (no target_unit dedup); got: ${JSON.stringify(action.dispatches)}`,
 		)
 		const ids = action.dispatches.map((d) => d.feedback_id).sort()
-		assert.deepEqual(ids, ["FB-001", "FB-003"])
+		assert.deepEqual(ids, ["FB-001", "FB-002", "FB-003"])
+		void slug
+	})
+})
+
+test("wave: batch caps at MAX_CONCURRENT_SUBAGENTS (pool width)", async () => {
+	await withWaveRepo("pool-cap", async ({ intentDir, slug }) => {
+		// 14 open FBs, each on its own unit. The cursor caps the initial
+		// batch at the pool width; slot replenishment dispatches the rest
+		// as chains close. Default cap is 10 (HAIKU_MAX_CONCURRENT_SUBAGENTS
+		// not set in this env).
+		for (let i = 1; i <= 14; i++) {
+			writeFb(intentDir, i, {
+				stageScope: "design",
+				title: `FB on unit-${String(i).padStart(2, "0")}`,
+				targetUnit: `unit-${String(i).padStart(2, "0")}`,
+			})
+		}
+		const cursor = await import(`${SRC}/orchestrator/workflow/cursor.ts`)
+		const stateTools = await import(`${SRC}/state-tools.ts`)
+		const cap = stateTools.MAX_CONCURRENT_SUBAGENTS
+		const { walkFeedbackTrack } = cursor.__testOnly
+		const action = walkFeedbackTrack({
+			intentDir,
+			studio: "software",
+			currentStage: "design",
+			intent: { studio: "software", stages: ["design"] },
+		})
+		assert.ok(action, "expected a Track B action")
+		assert.equal(action.kind, "start_feedback_hat")
+		assert.equal(
+			action.dispatches.length,
+			Math.min(14, cap),
+			`expected batch capped at ${cap}; got: ${action.dispatches.length}`,
+		)
+		// Cap honors stable walk order: the first `cap` FBs by number.
+		const ids = action.dispatches.map((d) => d.feedback_id)
+		const expected = Array.from({ length: Math.min(14, cap) }, (_, i) =>
+			`FB-${String(i + 1).padStart(3, "0")}`,
+		)
+		assert.deepEqual(ids.sort(), expected.sort())
 		void slug
 	})
 })

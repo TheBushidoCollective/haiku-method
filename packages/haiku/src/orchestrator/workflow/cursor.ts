@@ -54,10 +54,15 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import matter from "gray-matter"
-import { findHaikuRoot, MAX_FIX_LOOP_BOLTS } from "../../state-tools.js"
+import {
+	findHaikuRoot,
+	MAX_CONCURRENT_SUBAGENTS,
+	MAX_FIX_LOOP_BOLTS,
+} from "../../state-tools.js"
 import {
 	readReviewAgentPaths,
 	readStageArtifactDefs,
+	readStudioReviewAgentPaths,
 } from "../../studio-reader.js"
 import {
 	resolveIntentStages,
@@ -156,13 +161,17 @@ export type CursorAction =
 			 *  The main agent spawns one subagent per entry in a single
 			 *  parallel Task batch.
 			 *
-			 *  Dedup invariant: at most one entry per `targets.unit` per
-			 *  batch. Closure of two FBs on the same target unit races
-			 *  on the FM write inside `applyFeedbackInvalidations`; the
-			 *  cursor serializes by holding back duplicates to the next
-			 *  tick. Intent-scope FBs (no `targets.unit`) and
-			 *  `targets.invalidates: []` FBs don't race, so they can
-			 *  always batch together. */
+			 *  Batch width: deduped by `feedback_id` (a numbering
+			 *  collision must never double-dispatch one FB), then capped
+			 *  at `MAX_CONCURRENT_SUBAGENTS` — this is the fix-loop's pool
+			 *  width. As each chain closes, `pickUndispatchedFbBlock`
+			 *  (terminal-advance slot replenishment) refills the freed
+			 *  slot with the next undispatched FB. There is NO target_unit
+			 *  dedup: same-unit chains run concurrently (the published
+			 *  fix-loop contract accepts clobber-and-retry; the only
+			 *  shared write, `applyFeedbackInvalidations`, is synchronous
+			 *  and the dispatch claim is taken under
+			 *  `withIntentDispatchLock`). */
 			dispatches: Array<{
 				feedback_id: string
 				stage: string
@@ -962,7 +971,6 @@ function walkFeedbackTrack(args: {
 		stage: string
 		hat: string
 		terminal: boolean
-		target_unit: string | null
 	}
 	const dispatches: FbDispatch[] = []
 
@@ -975,17 +983,9 @@ function walkFeedbackTrack(args: {
 		}
 		// Pull the single FB ID out of the action's dispatches array
 		// (nextActionForFeedback always returns a single-entry array).
-		// Also need the target_unit to enforce the per-unit dedup at
-		// batch-flush time.
 		const entry = action.dispatches[0]
 		if (!entry) return null
-		const fm = readFm(fbPath)?.data ?? {}
-		const targets = (fm.targets as Record<string, unknown> | undefined) ?? {}
-		const targetUnit =
-			typeof targets.unit === "string" && targets.unit.length > 0
-				? targets.unit
-				: null
-		dispatches.push({ ...entry, target_unit: targetUnit })
+		dispatches.push({ ...entry })
 		return null
 	}
 
@@ -1014,35 +1014,44 @@ function walkFeedbackTrack(args: {
 
 	if (dispatches.length === 0) return null
 
-	// Dedup by target_unit. At most one FB per unit per batch — closure
-	// of two FBs on the same unit races on the FM write inside
-	// `applyFeedbackInvalidations` (the close hook's read-modify-write
-	// is not atomic across concurrent subagents). Same-target duplicates
-	// stay in the queue; the next tick dispatches them in a fresh batch
-	// after the prior batch's writes have settled.
+	// Dedup by feedback_id (fixloop-bug-f4dd5a92 Bug 3). Two dispatch
+	// entries for the SAME FB-NN must never both fire — they'd spawn two
+	// subagents racing on one feedback body's read-modify-write. This
+	// happens when two files in a feedback dir share the same numeric
+	// prefix (a numbering collision from create/move), so
+	// `nextActionForFeedback` derives the same `FB-NN` for both.
 	//
-	// `null` target_unit means intent-scope or stage-scope-with-no-unit:
-	// no per-unit FM write, no race. All such FBs can batch together.
-	//
-	// Dedup by feedback_id FIRST (fixloop-bug-f4dd5a92 Bug 3). Two
-	// dispatch entries for the SAME FB-NN must never both fire — they'd
-	// spawn two subagents racing on one feedback body's read-modify-
-	// write. This happens when two files in a feedback dir share the
-	// same numeric prefix (a numbering collision from create/move), so
-	// `nextActionForFeedback` derives the same `FB-NN` for both. The
-	// target_unit dedup below does NOT catch this when both are
-	// intent-scope (target_unit === null), so a same-id pair slipped
-	// through as the duplicate FB-001 dispatch in the bug report.
-	const seenUnits = new Set<string>()
+	// NO target_unit dedup. Pre-2026-05-21 this batch held at most ONE
+	// FB per `targets.unit` per tick, on the theory that two same-unit
+	// closures race on the close hook's `applyFeedbackInvalidations` FM
+	// write. That dedup was both harmful and ineffective:
+	//   - Harmful: it capped the INITIAL fix-loop pool width at the
+	//     distinct-unit count. When adversarial review clusters many
+	//     findings on a few units (the common case for a stage with few
+	//     units), the pool opened at 1-2 chains and the replenishment
+	//     path held it there — the "only 1-2 agents run" symptom.
+	//   - Ineffective: the slot-replenishment path
+	//     (`pickUndispatchedFbBlock` in state-tools.ts) refills a freed
+	//     slot with the next undispatched FB IGNORING target_unit, so
+	//     same-unit chains already ran concurrently the moment any chain
+	//     closed. The dedup never delivered the serialization it claimed.
+	// The real protection is structural, not a cursor-side dedup:
+	//   1. `applyFeedbackInvalidations` is a single SYNCHRONOUS function
+	//      (readFileSync → setFrontmatterField, no await between), so the
+	//      MCP server — which runs one tool handler at a time — cannot
+	//      interleave two calls' read-modify-write on a unit's FM.
+	//   2. Dispatch claims stamp under `withIntentDispatchLock`, so two
+	//      concurrent terminal advances can't double-claim a slot.
+	//   3. The published fix-loop contract
+	//      (`_shared/workflow-contracts-fix-loop.md`) explicitly accepts
+	//      concurrent same-artifact chains: "a chain whose fix was
+	//      clobbered by another chain will leave its finding open, and
+	//      the next bolt will retry. Budget is spent, not lost."
 	const seenFbIds = new Set<string>()
 	const batch: FbDispatch[] = []
 	for (const d of dispatches) {
 		if (seenFbIds.has(d.feedback_id)) continue // never double-dispatch one FB
 		seenFbIds.add(d.feedback_id)
-		if (d.target_unit !== null) {
-			if (seenUnits.has(d.target_unit)) continue // serialize same-target
-			seenUnits.add(d.target_unit)
-		}
 		batch.push(d)
 	}
 
@@ -1103,10 +1112,22 @@ function walkFeedbackTrack(args: {
 	}
 	if (verifiedBatch.length === 0) return null
 
-	const first = verifiedBatch[0]
+	// Cap the initial pool width at MAX_CONCURRENT_SUBAGENTS. This is the
+	// fix-loop's true slot count: the parent spawns this many chains in
+	// one wave, and `pickUndispatchedFbBlock` (terminal-advance slot
+	// replenishment) refills each freed slot with the next undispatched
+	// FB until the queue drains. Without a cap a stage with dozens of
+	// open findings would spawn all of them at once; with it the pool
+	// runs at a steady width. Override via HAIKU_MAX_CONCURRENT_SUBAGENTS.
+	// verifiedBatch is already in stable walk order (stage order, then
+	// readdir-sorted FBs, then intent scope), so the slice is
+	// deterministic across re-ticks.
+	const pooledBatch = verifiedBatch.slice(0, MAX_CONCURRENT_SUBAGENTS)
+
+	const first = pooledBatch[0]
 	return {
 		kind: "start_feedback_hat",
-		dispatches: verifiedBatch.map((d) => ({
+		dispatches: pooledBatch.map((d) => ({
 			feedback_id: d.feedback_id,
 			stage: d.stage,
 			hat: d.hat,
@@ -1119,7 +1140,7 @@ function walkFeedbackTrack(args: {
 		// than the first entry.
 		stage: first?.stage ?? "",
 		hat: first?.hat ?? "",
-		feedback_ids: verifiedBatch.map((d) => d.feedback_id),
+		feedback_ids: pooledBatch.map((d) => d.feedback_id),
 		terminal: first?.terminal ?? false,
 	}
 }
@@ -1897,13 +1918,20 @@ export function derivePosition(args: {
 	// All stages merged → intent-level approvals.
 	if (intentResult) {
 		const intentApprovals = pickApprovals(intentResult.data)
-		// Mode-shaped intent role list. All three agent-side roles
-		// (spec, continuity, cross-stage-consistency) are engine-built-in
-		// — generic enough to apply to every studio, so they live in code
-		// rather than as per-studio mandate files. The inline bodies
-		// render in `intent_review/index.ts`. Only the human gate
-		// (`user`) is mode-conditional: autopilot skips it.
-		const intentRoles = intentReviewRoles(mode)
+		// Mode-shaped intent role list. The three engine-built-in roles
+		// (spec, continuity, cross-stage-consistency) are generic enough to
+		// apply to every studio, so they live in code rather than as
+		// per-studio mandate files; their inline bodies render in
+		// `intent_review/index.ts`. Studio intent-review agents from
+		// `intent-review-agents/` (e.g. runtime-verifier, delivery-verifier)
+		// follow the engine roles — `intentReviewRoles` dedupes them against
+		// the engine base and `intent_review/index.ts` resolves their mandate
+		// bodies. Only the human gate (`user`) is mode-conditional: autopilot
+		// skips it.
+		const studioAgents = Object.keys(
+			readStudioReviewAgentPaths(studio),
+		).sort()
+		const intentRoles = intentReviewRoles(mode, studioAgents)
 		for (const role of intentRoles) {
 			if (!intentApprovals[role]) {
 				return {
@@ -1971,9 +1999,23 @@ export function derivePosition(args: {
  *  `user` gate in non-autopilot modes. Source of truth for both the
  *  intent-level cursor walk and the progress track. Done-ness is read
  *  from intent.md `approvals.<role>` (NOT reviews.*). */
-export function intentReviewRoles(mode: string): string[] {
+export function intentReviewRoles(
+	mode: string,
+	studioAgents: ReadonlyArray<string> = [],
+): string[] {
 	const base = ["spec", "continuity", "cross-stage-consistency"]
-	return mode === "autopilot" ? base : [...base, "user"]
+	// Studio intent-review agents (e.g. runtime-verifier, delivery-verifier)
+	// follow the engine roles. Dedupe against `base` so a studio file that
+	// shadows an engine role (e.g. an `intent-review-agents/cross-stage-
+	// consistency.md`) doesn't double-walk — the engine body wins, same as
+	// `intent_review/index.ts` resolves engine bodies before studio files.
+	// Autopilot keeps the agents (intent-completion verifiers are the final
+	// delivery gate — CI-green still matters when no human is watching) but
+	// drops the terminal `user` gate.
+	const extras = studioAgents.filter((a) => !base.includes(a))
+	return mode === "autopilot"
+		? [...base, ...extras]
+		: [...base, ...extras, "user"]
 }
 
 /** The ordered review + approval role lists for a stage — the SINGLE

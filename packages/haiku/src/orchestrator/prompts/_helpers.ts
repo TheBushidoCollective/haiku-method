@@ -31,10 +31,7 @@ import matter from "gray-matter"
 import { features } from "../../config.js"
 import { getCapabilities } from "../../harness.js"
 import { type ModelTier, sanitizeModel } from "../../model-selection.js"
-import {
-	MAX_CONCURRENT_SUBAGENTS,
-	parseFrontmatter,
-} from "../../state-tools.js"
+import { parseFrontmatter } from "../../state-tools.js"
 import {
 	readModelFromPath,
 	readStageDef,

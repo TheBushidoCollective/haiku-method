@@ -29,6 +29,7 @@ import {
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import {
+	PR_INTERACTION_ROLES,
 	RUNTIME_OBSERVATION_ROLES,
 	sharedBlockRef,
 } from "../../../_shared/index.js"
@@ -111,6 +112,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 			doctrineRef: RUNTIME_OBSERVATION_ROLES.has(role)
 				? sharedBlockRef("runtime-verification")
 				: "",
+			prInteraction: PR_INTERACTION_ROLES.has(role),
 		})
 
 		const dispatchBlock = emitSubagentDispatchBlock({

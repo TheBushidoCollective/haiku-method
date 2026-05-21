@@ -219,6 +219,17 @@ export const RUNTIME_OBSERVATION_ROLES: ReadonlySet<string> = new Set([
 	"runtime-verifier",
 ])
 
+/** Review-agent roles whose subject is the delivery PR on the remote
+ *  (CI status + review conversation) rather than the local artifacts or
+ *  the running app. They are permitted to interact with the PR via the
+ *  VCS CLI (`gh`/`glab`) — read checks, read review threads, post replies,
+ *  resolve threads — but still MUST NOT edit source/specs/units; code
+ *  fixes flow through `haiku_feedback` and the studio fix-hat loop. Shared
+ *  by the intent-review builder so the carve-out stays single-source. */
+export const PR_INTERACTION_ROLES: ReadonlySet<string> = new Set([
+	"delivery-verifier",
+])
+
 export function sharedBlockRef(id: SharedBlockId): string {
 	materializeAllSharedBlocks()
 	const entry = REGISTRY[id]

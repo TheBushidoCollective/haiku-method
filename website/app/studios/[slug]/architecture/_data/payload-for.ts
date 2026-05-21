@@ -566,7 +566,7 @@ export function payloadFor(
 					hook: "MCP tool result",
 					target: "agent's `tool_use_result`",
 					what: opts.isLast
-						? "every stage merged → cursor walks intent-scope approvals (`spec`, `continuity`, `user`) and emits `intent_review { role }` per missing role, then `seal_intent`, then `sealed`."
+						? "every stage merged → cursor walks intent-scope approvals (`spec`, `continuity`, `cross-stage-consistency`, then each studio `intent-review-agents/` role — software: `runtime-verifier`, `delivery-verifier` — then `user`) and emits `intent_review { role }` per missing role, then `seal_intent`, then `sealed`."
 						: "stage merged into intent main; cursor's next tick walks the next stage (the new `firstUnmergedStage`).",
 				},
 				{
@@ -611,7 +611,7 @@ export function payloadFor(
 						},
 					],
 			instructions: opts.isLast
-				? "Final stage's branch is merged. The cursor now walks intent-scope approvals from `intent.md.approvals`: `spec`, `continuity`, `cross-stage-consistency` (engine-built), studio intent-completion review agents (from `plugin/studios/<studio>/intent-review-agents/`, renamed 2026-05-17), and `user` (gated through SPA). Mode-shaped: autopilot trims to engine roles only. Each missing role → `intent_review { role }` (one tick per role). Once every intent-scope approval signs → `seal_intent` (engine performs final rebase + stamps `sealed_at`) → `sealed`."
+				? "Final stage's branch is merged. The cursor now walks intent-scope approvals from `intent.md.approvals`: `spec`, `continuity`, `cross-stage-consistency` (engine-built), then each studio intent-completion review agent (from `plugin/studios/<studio>/intent-review-agents/` — software ships `runtime-verifier` for live-app verification and `delivery-verifier` for CI-green + PR-conversation on the delivery PR), then `user` (gated through SPA). `intentReviewRoles(mode, studioAgents)` appends the studio agents after the engine roles, deduped against them. Mode-shaped: autopilot drops only the `user` gate — the studio verifiers still run (CI-green is a delivery gate that matters most when no human is watching). Each missing role → `intent_review { role }` (one tick per role). Once every intent-scope approval signs → `seal_intent` (engine performs final rebase + stamps `sealed_at`) → `sealed`."
 				: `Cursor returns \`complete_stage { stage: "${stageLower}" }\`. Semantic action ("stage is done") — under a git-backed portfolio the engine merges the stage branch into intent main under \`withIntentMainLock\` as an implementation detail; under filesystem-only backings it transitions stage state. The next instruction is most commonly the next stage's first action (e.g. \`elaborate\` for the conversation gate, or \`discovery_required\` if the next stage declares a tool-driven discovery template). Renamed 2026-05-12 from \`merge_stage\` per the principle "no engine action reflects a git or VCS operation."`,
 		},
 		"feedback-dispatch": {

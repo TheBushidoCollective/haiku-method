@@ -31,13 +31,17 @@ import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
+	branchAheadOfOrigin,
+	branchExists,
 	ensureOnStageBranch,
 	fetchOrigin,
 	getCurrentBranch,
 	hasNoMergeDebt,
+	pushBranchToOrigin,
 	pushStageBranch,
 	reconcileIntentBranches,
 	syncBranchDownstream,
+	uncommittedAgentWork,
 } from "../../git-worktree.js"
 import { adaptInstructions } from "../../harness-instructions.js"
 import {
@@ -422,6 +426,48 @@ export default defineTool({
 				/* non-fatal — if git probe fails, fall through and let the
 				   later guards surface whatever they find */
 			}
+		}
+
+		// Pre-tick clean-tree gate. The engine does NOT author the agent's
+		// commits. When the agent has uncommitted work in the tree, we
+		// block the tick and hand it back to the agent to commit — it can
+		// write commit messages that tell the story of the work, which a
+		// generic engine "wip" commit never could. Only the agent's own
+		// work counts: changes OUTSIDE the engine's `.haiku/` bookkeeping
+		// (state, units, feedback, artifacts), which the engine still
+		// commits at lifecycle points (the `autoCommitDirtyTree` fallbacks
+		// cover mid-merge edges). Runs after the mid-merge detector so a
+		// merge-in-progress (conflict markers look "dirty") routes to its
+		// own recovery message above, not here. Git repos only.
+		const dirtyAgentWork = uncommittedAgentWork()
+		if (dirtyAgentWork.length > 0) {
+			const fileList = dirtyAgentWork.slice(0, 50).join("\n  ")
+			const more =
+				dirtyAgentWork.length > 50
+					? `\n  …and ${dirtyAgentWork.length - 50} more`
+					: ""
+			return text(
+				JSON.stringify(
+					{
+						action: "error",
+						intent: slug,
+						error: "dirty_tree_blocking_tick",
+						dirty_files: dirtyAgentWork,
+						message:
+							"I can't advance the workflow with uncommitted work in the tree. " +
+							"Commit everything first — you author these commits, not the engine, " +
+							"because you know what you just did and can tell the story of the work. " +
+							"Keep the commit messages logical: group related changes into separate, " +
+							"coherent commits (one logical step each), and write messages that explain " +
+							"the WHY of the change — not a single catch-all 'wip' dump. " +
+							"Then re-run `haiku_run_next` to continue.\n\nUncommitted:\n  " +
+							fileList +
+							more,
+					},
+					null,
+					2,
+				),
+			)
 		}
 
 		// Pre-cursor reconciliation: when external review is pending OR
@@ -2101,6 +2147,22 @@ export default defineTool({
 							console.error(
 								`[haiku] auto-push of ${branch} failed: ${pushResult.error}`,
 							)
+						}
+					} else {
+						// No active stage = intent-completion phase: every stage
+						// is merged into intent main. Push intent main so the
+						// delivery PR (intent main → mainline) reflects the full
+						// merged work and its CI runs on it — that's the state
+						// the delivery-verifier audits. Guarded on ahead-of-origin
+						// so a settled intent doesn't fire a network call per tick.
+						const intentMain = `haiku/${slug}/main`
+						if (branchExists(intentMain) && branchAheadOfOrigin(intentMain)) {
+							const mainPush = pushBranchToOrigin(intentMain)
+							if (!mainPush.ok && mainPush.error) {
+								console.error(
+									`[haiku] auto-push of ${intentMain} failed: ${mainPush.error}`,
+								)
+							}
 						}
 					}
 				}

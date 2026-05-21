@@ -2938,6 +2938,43 @@ function autoCommitDirtyTree(
 	}
 }
 
+/** List uncommitted working-tree changes that are the AGENT's work — paths
+ *  OUTSIDE the engine's own `.haiku/` bookkeeping. Backs the pre-tick
+ *  clean-tree gate: the engine no longer commits the agent's source work
+ *  under a generic "wip" message; it blocks the tick and asks the agent to
+ *  author its own commits, which it can do meaningfully because it knows
+ *  what it just did. Engine-owned `.haiku/` writes (state, units, feedback,
+ *  artifacts) stay the engine's job and are excluded here — they're
+ *  committed at lifecycle points, with the `autoCommitDirtyTree` fallbacks
+ *  covering mid-merge edges. Returns [] in a non-git repo or a clean tree. */
+export function uncommittedAgentWork(): string[] {
+	if (!isGitRepo()) return []
+	// `--untracked-files=all` expands new directories to individual files
+	// so the agent gets a precise "commit these" list, not a bare `dir/`.
+	const status = tryRun(["git", "status", "--porcelain", "--untracked-files=all"])
+	if (!status.trim()) return []
+	const files: string[] = []
+	for (const line of status.split("\n")) {
+		if (!line.trim()) continue
+		// Porcelain rows are "XY <path>" (XY from the set [ MADRCU?!]).
+		// We can't assume a fixed 3-char offset: the git output is
+		// whole-string-trimmed, so a first row whose status starts with a
+		// space (e.g. " M" = worktree-modified) arrives left-shifted and a
+		// `slice(3)` would eat the leading char of the path (turning
+		// `.haiku/…` into `haiku/…`). Strip the status code by pattern.
+		// Renames/copies render "XY <old> -> <new>" — take the destination.
+		let path = line.replace(/^[ MADRCU?!]{1,2} +/, "")
+		const arrow = path.indexOf(" -> ")
+		if (arrow !== -1) path = path.slice(arrow + 4).trim()
+		// git quotes paths containing special chars; unwrap them.
+		if (path.startsWith('"') && path.endsWith('"')) path = path.slice(1, -1)
+		// Engine bookkeeping lives under `.haiku/`; agent work lives outside.
+		if (path === ".haiku" || path.startsWith(".haiku/")) continue
+		files.push(path)
+	}
+	return files
+}
+
 /** Parse `git checkout`/`git merge` error output to extract the list of file
  *  paths that would be overwritten by the operation. Used to surface a
  *  precise `dirty_files` list to agents so they can commit exactly the

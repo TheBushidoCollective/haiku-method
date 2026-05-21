@@ -31,10 +31,16 @@ import matter from "gray-matter"
 import { features } from "../config.js"
 import { type ModelTier, resolveModel } from "../model-selection.js"
 import { stageDir } from "../state-tools.js"
-import { readHatDefs, readStageDef, readStudio } from "../studio-reader.js"
+import {
+	readHatBody,
+	readHatDefs,
+	readStageDef,
+	readStudio,
+} from "../studio-reader.js"
 import {
 	buildPriorRejectBlock,
 	emitSubagentDispatchBlock,
+	studioReadRef,
 } from "./prompts/_helpers.js"
 import { loadTemplate } from "./prompts/_load-template.js"
 
@@ -131,10 +137,20 @@ export function buildUnitHatDispatchBlock(opts: {
 }): string {
 	const { slug, studio, unit, stage, hat, terminal } = opts
 	const model = resolveUnitHatModel({ slug, studio, stage, hat, unit })
-	// The subagent reads its hat mandate live via `haiku_read_hat` — a
-	// straight tool call, frontmatter stripped, project overrides honored.
-	// The builder no longer resolves/inlines/snapshots the mandate; the
-	// prompt just tells the agent which hat to read.
+	// Snapshot the hat mandate (FM-stripped) into the intent's prompts
+	// refs/ tree and emit a "Read <snapshot>" — the followable breadcrumb.
+	// Resolution uses the same resolver `haiku_read_hat` would; if it
+	// can't resolve at build time, studioReadRef falls back to the live
+	// `haiku_read_hat` tool-call directive.
+	const mandateRef = studioReadRef({
+		resolveBody: () => readHatBody(studio, stage, hat),
+		toolName: "haiku_read_hat",
+		toolArgs: { studio, stage, hat },
+		intent: slug,
+		stage,
+		kind: "mandate",
+		name: hat,
+	})
 	const priorHatsInline = readPriorHatsForUnit({ slug, stage, unit })
 	// Surface the most-recent rejection reason so a bounced-to hat fixes
 	// the verifier's specific objection on the new bolt rather than
@@ -149,6 +165,7 @@ export function buildUnitHatDispatchBlock(opts: {
 		hat,
 		unit,
 		terminal,
+		mandateRef,
 		priorHatsInline,
 		priorRejectBlock,
 	})

@@ -5,7 +5,7 @@ You are the **terminal** hat in this chain — your `haiku_feedback_advance_hat`
 
 ## Your mandate (reference for HOW — not your task list)
 
-<% if (mandatePath) { %>**Read** `<%= mandatePath %>` — your role's behavior contract for how to evaluate and correct this finding through the **<%= hat %>** lens.<% } else { %>**Call** `haiku_read_hat { studio: "<%= studio %>", stage: "<%= stage %>", hat: "<%= hat %>", fix: true }` — your role's fix-loop behavior contract (frontmatter stripped, project overrides honored). It tells you HOW to correct this finding through the **<%= hat %>** lens.<% } %> It is REFERENCE: the Procedure below is your authoritative task list. Do NOT treat it as a from-scratch authoring brief — you are correcting ONE finding, not producing an artifact from a blank page.
+<%~ mandateRef %> — your role's fix-loop behavior contract for how to correct this finding through the **<%= hat %>** lens. It is REFERENCE: the Procedure below is your authoritative task list. Do NOT treat it as a from-scratch authoring brief — you are correcting ONE finding, not producing an artifact from a blank page.
 
 <% if (priorRejectBlock) { %><%~ priorRejectBlock %>
 

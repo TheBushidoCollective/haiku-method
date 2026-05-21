@@ -42,6 +42,7 @@ import {
 } from "../../studio-reader.js"
 import {
 	formatSubagentDispatchBlock,
+	materializeReferenceFile,
 	writeSubagentPrompt,
 } from "../../subagent-prompt-file.js"
 import { loadTemplate } from "./_load-template.js"
@@ -149,6 +150,66 @@ export function inlineFile(absPath: string, heading: string): string {
 	}
 	if (!body) return ""
 	return `### ${heading}\n\n*Source: \`${absPath}\`*\n\n~~~~\n${body}\n~~~~\n`
+}
+
+/**
+ * Emit a "Read `<snapshot>`" reference for a studio/project asset that a
+ * prompt would otherwise tell the agent to "call `haiku_read_X(...)`"
+ * for. At build time we resolve the asset (caller passes the path its
+ * `haiku_read_X` tool would resolve), snapshot its FM-stripped BODY —
+ * the text, not the tool's JSON envelope — into the intent's
+ * `prompts/<scope>/refs/<kind>/<name>.md` tree, and emit a Read of that
+ * immutable snapshot. The snapshot is the followable breadcrumb for
+ * debugging and reflection: open the dispatched prompt, follow the
+ * Read, see byte-for-byte what the agent was handed.
+ *
+ * Resolution stays single-source — the caller uses the SAME resolver
+ * the tool's handler uses (`resolveHatPath`, `resolveReviewAgentPath`,
+ * …); this helper owns snapshot + emit + fallback only. If the asset
+ * isn't resolvable at build time (`sourcePath` null/absent), fall back
+ * to the live `haiku_read_X` tool-call directive so the agent resolves
+ * it at runtime instead of getting a dangling Read.
+ *
+ * For engine-GENERATED bodies (review/approval engine roles) there is no
+ * source file — the caller materializes the rendered string directly via
+ * `materializeReferenceFile` and emits its own Read; this helper is for
+ * file-backed studio/project assets only.
+ */
+export function studioReadRef(opts: {
+	/** The SAME underlying read the `haiku_read_X` tool handler runs
+	 *  (e.g. `() => readHatBody(studio, stage, hat)`). Returns the
+	 *  FM-stripped body or null. Passing the tool's own reader is what
+	 *  keeps the tool and the snapshot on one resolution path. */
+	resolveBody: () => string | null
+	/** Tool name for the live fallback directive, e.g. `haiku_read_hat`. */
+	toolName: string
+	/** Args rendered in the fallback directive (object-literal form). */
+	toolArgs: Record<string, unknown>
+	/** Intent slug — snapshot scope. */
+	intent: string
+	/** Stage for snapshot placement; omit for intent-scope. */
+	stage?: string
+	/** `refs/<kind>/` subdir. */
+	kind: string
+	/** Snapshot file basename. */
+	name: string
+}): string {
+	const { resolveBody, toolName, toolArgs, intent, stage, kind, name } = opts
+	const body = resolveBody()
+	if (body?.trim()) {
+		const snap = materializeReferenceFile({
+			intent,
+			stage,
+			kind,
+			name,
+			body: body.trim(),
+		})
+		return `**Read** \`${snap}\``
+	}
+	const argStr = Object.entries(toolArgs)
+		.map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+		.join(", ")
+	return `**Call** \`${toolName} { ${argStr} }\``
 }
 
 /** Read a unit's iterations frontmatter and emit a "Prior rejection" block

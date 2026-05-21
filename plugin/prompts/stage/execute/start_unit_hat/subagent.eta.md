@@ -2,7 +2,7 @@ You are the **<%= hat %>** hat on unit **<%= unit %>** in stage **<%= stage %>**
 
 ## Your mandate (reference for HOW — not your task list)
 
-**Call** `haiku_read_hat { studio: "<%= studio %>", stage: "<%= stage %>", hat: "<%= hat %>" }` — your role's authoritative behavior contract (frontmatter stripped, project overrides honored). It tells you HOW to do the **<%= hat %>** work. It is REFERENCE: the Procedure below is your task list.
+<%~ mandateRef %> — your role's authoritative behavior contract (frontmatter stripped, project overrides honored). It tells you HOW to do the **<%= hat %>** work. It is REFERENCE: the Procedure below is your task list.
 <% if (priorHatsInline.length > 0) { %>
 This unit already ran <%= priorHatsInline.length %> earlier hat(s) this iteration (<%= priorHatsInline.join(", ") %>) — their hand-offs live in the unit body's `iterations:`, which `haiku_unit_read` returns.
 <% } %><% if (typeof priorRejectBlock !== "undefined" && priorRejectBlock) { %>

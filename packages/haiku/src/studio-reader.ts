@@ -276,6 +276,57 @@ export function resolveReviewAgentPath(
 }
 
 /**
+ * Resolve a discovery template through the project→plugin cascade
+ * (`studios/{studio}/stages/{stage}/discovery/{name}.md`). Project
+ * `.haiku/` overrides the plugin underlay. Returns the absolute path or
+ * null. Mirrors `resolveReviewAgentPath`; used by `haiku_read_discovery`.
+ */
+export function resolveDiscoveryTemplatePath(
+	studio: string,
+	stage: string,
+	name: string,
+): string | null {
+	validateIdentifier(studio, "studio")
+	validateIdentifier(stage, "stage")
+	validateIdentifier(name, "discovery template")
+	// studioSearchPaths() is [project/.haiku/studios, plugin/studios] —
+	// project FIRST. Take the first hit so a project override wins.
+	for (const base of studioSearchPaths()) {
+		const candidate = join(
+			base,
+			studio,
+			"stages",
+			stage,
+			"discovery",
+			`${name}.md`,
+		)
+		if (existsSync(candidate)) return candidate
+	}
+	return null
+}
+
+/**
+ * Resolve an output template through the project→plugin cascade
+ * (`studios/{studio}/stages/{stage}/outputs/{name}.md`). Project
+ * `.haiku/` overrides the plugin underlay. Returns the absolute path or
+ * null. Used by `haiku_read_output`.
+ */
+export function resolveOutputTemplatePath(
+	studio: string,
+	stage: string,
+	name: string,
+): string | null {
+	validateIdentifier(studio, "studio")
+	validateIdentifier(stage, "stage")
+	validateIdentifier(name, "output template")
+	for (const base of studioSearchPaths()) {
+		const candidate = join(base, studio, "stages", stage, "outputs", `${name}.md`)
+		if (existsSync(candidate)) return candidate
+	}
+	return null
+}
+
+/**
  * Studio-level intent-completion review agents live at
  * `plugin/studios/{studio}/intent-review-agents/*.md` (NOT per-stage).
  * They run once at intent completion, after the final stage gate passes
@@ -302,6 +353,87 @@ export function readStudioReviewAgentPaths(
 		}
 	}
 	return agents
+}
+
+// ── Studio-asset body readers (resolve + FM-strip → body | null) ─────
+//
+// Single resolution path for studio definitions: the `haiku_read_*`
+// tool handlers AND the build-time snapshot (`studioReadRef`) both call
+// these, so the tool and the snapshotted prompt can never drift. Each
+// resolves through the project→plugin cascade and returns the
+// FM-stripped body (engine frontmatter is not for the agent), or null
+// when the asset doesn't exist.
+
+/** Strip FM from a resolved path; null when absent or empty. */
+function readBodyAt(path: string | null): string | null {
+	if (!path || !existsSync(path)) return null
+	const { body } = parseFrontmatter(readFileSync(path, "utf8"))
+	const trimmed = (body || "").trim()
+	return trimmed || null
+}
+
+export function readHatBody(
+	studio: string,
+	stage: string,
+	hat: string,
+	fix = false,
+): string | null {
+	return readBodyAt(
+		fix ? resolveFixHatPath(studio, stage, hat) : resolveHatPath(studio, stage, hat),
+	)
+}
+
+export function readReviewAgentBody(
+	studio: string,
+	stage: string | undefined,
+	role: string,
+): string | null {
+	const path = stage
+		? resolveReviewAgentPath(studio, stage, role)
+		: (readStudioReviewAgentPaths(studio)[role] ?? null)
+	return readBodyAt(path)
+}
+
+export function readDiscoveryBody(
+	studio: string,
+	stage: string,
+	name: string,
+): string | null {
+	return readBodyAt(resolveDiscoveryTemplatePath(studio, stage, name))
+}
+
+export function readOutputBody(
+	studio: string,
+	stage: string,
+	name: string,
+): string | null {
+	return readBodyAt(resolveOutputTemplatePath(studio, stage, name))
+}
+
+export function readPhaseBody(
+	studio: string,
+	stage: string,
+	phase: string,
+): string | null {
+	const override = readPhaseOverride(studio, stage, phase)
+	const trimmed = (override?.body || "").trim()
+	return trimmed || null
+}
+
+export function readStageBody(studio: string, stage: string): string | null {
+	const def = readStageDef(studio, stage)
+	const trimmed = (def?.body || "").trim()
+	return trimmed || null
+}
+
+/** Intent-scope studio fix-hat mandate (studios/{studio}/fix-hats/{hat}.md),
+ *  FM-stripped. The intent-completion fix loop uses these; haiku_read_hat
+ *  is stage-scoped and doesn't cover them. */
+export function readStudioFixHatBody(
+	studio: string,
+	hat: string,
+): string | null {
+	return readBodyAt(readStudioFixHatPaths(studio)[hat] ?? null)
 }
 
 /**

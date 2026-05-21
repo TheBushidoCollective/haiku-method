@@ -223,13 +223,28 @@ export {
 	validateHaikuStageSetInputSchema,
 } from "./inputs/stages.js"
 export type {
+	HaikuReadDiscoveryInput,
 	HaikuReadHatInput,
+	HaikuReadIntentInput,
+	HaikuReadOutputInput,
+	HaikuReadPhaseInput,
+	HaikuReadReviewAgentInput,
 	HaikuReadStageInput,
 } from "./inputs/studio-reads.js"
 export {
+	HAIKU_READ_DISCOVERY_INPUT_SCHEMA,
 	HAIKU_READ_HAT_INPUT_SCHEMA,
+	HAIKU_READ_INTENT_INPUT_SCHEMA,
+	HAIKU_READ_OUTPUT_INPUT_SCHEMA,
+	HAIKU_READ_PHASE_INPUT_SCHEMA,
+	HAIKU_READ_REVIEW_AGENT_INPUT_SCHEMA,
 	HAIKU_READ_STAGE_INPUT_SCHEMA,
+	validateHaikuReadDiscoveryInputSchema,
 	validateHaikuReadHatInputSchema,
+	validateHaikuReadIntentInputSchema,
+	validateHaikuReadOutputInputSchema,
+	validateHaikuReadPhaseInputSchema,
+	validateHaikuReadReviewAgentInputSchema,
 	validateHaikuReadStageInputSchema,
 } from "./inputs/studio-reads.js"
 export type {

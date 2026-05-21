@@ -21,17 +21,18 @@ import matter from "gray-matter"
 import { features } from "../config.js"
 import { type ModelTier, resolveModel } from "../model-selection.js"
 import { intentDir, stageDir } from "../state-tools.js"
-import { materializeReferenceFile } from "../subagent-prompt-file.js"
 import {
+	readHatBody,
 	readHatDefs,
 	readStageDef,
 	readStudio,
+	readStudioFixHatBody,
 	readStudioFixHatDefs,
-	readStudioFixHatPaths,
 } from "../studio-reader.js"
 import {
 	buildPriorFeedbackRejectBlock,
 	emitSubagentDispatchBlock,
+	studioReadRef,
 } from "./prompts/_helpers.js"
 import { loadTemplate } from "./prompts/_load-template.js"
 
@@ -126,35 +127,28 @@ export function buildFbHatDispatchBlock(opts: {
 }): string {
 	const { slug, studio, feedbackId, stage, hat, terminal } = opts
 	const fbInt = Number.parseInt(feedbackId.replace(/^FB-/i, ""), 10) || 0
-	// Resolve the hat mandate. Stage-scope FBs route through the stage's
-	// `hats/` cascade; intent-scope FBs (stage === "") route through the
-	// studio-level `fix-hats/` dir — the `fix_hats:` chain declared on
-	// STUDIO.md (e.g. [reconciler, validator]). Pre-2026-05-19 the
-	// intent-scope branch resolved to `null`, so the subagent prompt
-	// rendered an empty mandate and every reconciler reported "no
-	// on-disk mandate file resolved for the `reconciler` hat" — the
-	// engine dispatched a hat it couldn't define (fixloop-bug-f4dd5a92).
-	// Stage-scope fix hats: the subagent reads its (fix-scoped) mandate
-	// live via `haiku_read_hat { ..., fix: true }` — straight tool call,
-	// frontmatter stripped, project overrides honored. The tool resolves
-	// the fix-scoped variant (stages/<stage>/fix-hats/<hat>.md) over the
-	// production mandate. Intent-scope fix hats (stage === "") resolve a
-	// STUDIO-level fix-hat that haiku_read_hat doesn't cover (it's
-	// stage-scoped), so those still materialize a referenced snapshot.
-	let mandatePath = ""
-	if (!stage) {
-		const src = readStudioFixHatPaths(studio)[hat] ?? null
-		const raw = src && existsSync(src) ? readFileSync(src, "utf8") : ""
-		const body = raw ? matter(raw).content.trim() : ""
-		mandatePath = body
-			? materializeReferenceFile({
-					intent: slug,
-					kind: "mandate",
-					name: hat,
-					body,
-				})
-			: ""
-	}
+	// Snapshot the fix-hat mandate (FM-stripped) and emit "Read
+	// <snapshot>" via the SAME underlying reader the haiku_read_hat tool
+	// uses. Stage-scope FBs resolve the fix-scoped variant
+	// (stages/<stage>/fix-hats/<hat>.md over the production mandate);
+	// intent-scope FBs (stage === "") resolve a STUDIO-level fix-hat
+	// (studios/<studio>/fix-hats/<hat>.md), which haiku_read_hat (being
+	// stage-scoped) doesn't cover — hence the dedicated reader and the
+	// fix-flag-less fallback args.
+	const mandateRef = studioReadRef({
+		resolveBody: () =>
+			stage
+				? readHatBody(studio, stage, hat, true)
+				: readStudioFixHatBody(studio, hat),
+		toolName: "haiku_read_hat",
+		toolArgs: stage
+			? { studio, stage, hat, fix: true }
+			: { studio, hat, fix: true },
+		intent: slug,
+		stage: stage || undefined,
+		kind: "mandate",
+		name: hat,
+	})
 
 	const fbDir = stage
 		? join(stageDir(slug, stage), "feedback")
@@ -210,13 +204,12 @@ export function buildFbHatDispatchBlock(opts: {
 
 	const promptBody = eta.renderString(subagentTemplate(), {
 		slug,
-		studio,
 		hat,
 		stage,
 		feedbackId,
 		fbInt,
 		terminal,
-		mandatePath,
+		mandateRef,
 		priorRejectBlock,
 	})
 

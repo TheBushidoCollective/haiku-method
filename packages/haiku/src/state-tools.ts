@@ -93,10 +93,15 @@ import {
 	readHatDefs,
 	readOperationDefs,
 	readReflectionDefs,
+	readDiscoveryBody,
+	readHatBody,
+	readOutputBody,
+	readPhaseBody,
+	readReviewAgentBody,
 	readStageArtifactDefs,
+	readStageBody,
 	readStageDef,
 	readStudioFixHatPaths,
-	resolveFixHatPath,
 	resolveHatPath,
 	resolveStudio,
 } from "./studio-reader.js"
@@ -2025,6 +2030,17 @@ export function intentDir(slug: string): string {
 	return join(findHaikuRoot(), "intents", slug)
 }
 
+/** Read the intent's body (`intent.md`), FM-stripped. Single source for
+ *  the `haiku_read_intent` tool AND the build-time snapshot thunk — so
+ *  the tool and the snapshotted prompt can't drift. Null when absent. */
+export function readIntentBody(slug: string): string | null {
+	const p = join(intentDir(slug), "intent.md")
+	if (!existsSync(p)) return null
+	const { body } = parseFrontmatter(readFileSync(p, "utf8"))
+	const trimmed = (body || "").trim()
+	return trimmed || null
+}
+
 // ── Intent-status helpers (V-06: shared parser, no substring checks) ───────
 //
 // `isIntentLocked(intentDir)` and `isIntentArchived(intentDir)` are the
@@ -3521,7 +3537,12 @@ import {
 	HAIKU_REPAIR_INPUT_SCHEMA,
 	HAIKU_REVIEW_INPUT_SCHEMA,
 	HAIKU_REVIEW_OPEN_INPUT_SCHEMA,
+	HAIKU_READ_DISCOVERY_INPUT_SCHEMA,
 	HAIKU_READ_HAT_INPUT_SCHEMA,
+	HAIKU_READ_INTENT_INPUT_SCHEMA,
+	HAIKU_READ_OUTPUT_INPUT_SCHEMA,
+	HAIKU_READ_PHASE_INPUT_SCHEMA,
+	HAIKU_READ_REVIEW_AGENT_INPUT_SCHEMA,
 	HAIKU_READ_STAGE_INPUT_SCHEMA,
 	HAIKU_SEED_INPUT_SCHEMA,
 	HAIKU_SETTINGS_GET_INPUT_SCHEMA,
@@ -3567,7 +3588,12 @@ import {
 	validateHaikuReflectInputSchema,
 	validateHaikuReleaseNotesInputSchema,
 	validateHaikuRepairInputSchema,
+	validateHaikuReadDiscoveryInputSchema,
 	validateHaikuReadHatInputSchema,
+	validateHaikuReadIntentInputSchema,
+	validateHaikuReadOutputInputSchema,
+	validateHaikuReadPhaseInputSchema,
+	validateHaikuReadReviewAgentInputSchema,
 	validateHaikuReadStageInputSchema,
 	validateHaikuReviewInputSchema,
 	validateHaikuSeedInputSchema,
@@ -7072,6 +7098,76 @@ export const stateToolDefs: StateToolDef[] = [
 		},
 	},
 	{
+		name: "haiku_read_review_agent",
+		description:
+			"Read a review/approval agent's mandate body, resolved through the project→plugin override cascade and with frontmatter stripped. Pass `stage` for a stage-scope review/approval agent; OMIT `stage` for an intent-completion review agent (studio's intent-review-agents/). Engine-built-in roles (spec/continuity/cross-stage-consistency) are NOT files — they're generated and not readable here. Returns { role, body } as JSON.",
+		inputSchema: jsonSchemaOf(HAIKU_READ_REVIEW_AGENT_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				role: { type: "string" },
+				body: { type: "string", description: "Mandate body (FM stripped)." },
+				error: { type: "string", description: "On not-found." },
+			},
+		},
+	},
+	{
+		name: "haiku_read_intent",
+		description:
+			"Read the intent's body (`.haiku/intents/<slug>/intent.md`), frontmatter stripped. The workflow hook guards this file against generic Read, so this is how a dispatched agent gets the intent goal. Returns { intent, body } as JSON.",
+		inputSchema: jsonSchemaOf(HAIKU_READ_INTENT_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				intent: { type: "string" },
+				body: { type: "string", description: "Intent body (FM stripped)." },
+				error: { type: "string", description: "On not-found." },
+			},
+		},
+	},
+	{
+		name: "haiku_read_discovery",
+		description:
+			"Read a discovery template body, resolved through the project→plugin override cascade and with frontmatter stripped (the `location:`/`tool:` FM is engine bookkeeping). The body is the content guide + quality signals the discovery agent authors its artifact from. Returns { template, body } as JSON.",
+		inputSchema: jsonSchemaOf(HAIKU_READ_DISCOVERY_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				template: { type: "string" },
+				body: { type: "string", description: "Template body (FM stripped)." },
+				error: { type: "string", description: "On not-found." },
+			},
+		},
+	},
+	{
+		name: "haiku_read_phase",
+		description:
+			"Read a stage's phase override body (`phases/<PHASE>.md`), resolved through the project→plugin override cascade and with frontmatter stripped. Returns { phase, body } as JSON; `error: phase_not_found` when the stage ships no override for that phase.",
+		inputSchema: jsonSchemaOf(HAIKU_READ_PHASE_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				phase: { type: "string" },
+				body: { type: "string", description: "Phase override body (FM stripped)." },
+				error: { type: "string", description: "On not-found." },
+			},
+		},
+	},
+	{
+		name: "haiku_read_output",
+		description:
+			"Read an output template body (`outputs/<name>.md`), resolved through the project→plugin override cascade and with frontmatter stripped. The body is the artifact-shape guide the producing hat follows. Returns { name, body } as JSON.",
+		inputSchema: jsonSchemaOf(HAIKU_READ_OUTPUT_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				name: { type: "string" },
+				body: { type: "string", description: "Output template body (FM stripped)." },
+				error: { type: "string", description: "On not-found." },
+			},
+		},
+	},
+	{
 		name: "haiku_unit_delete",
 		description:
 			"Delete a unit. ONLY permitted when the unit's status is `pending`. Active and completed units are immutable per the forward-only lifecycle rule — once a unit has informed downstream work, deleting it would silently invalidate that work. Returns an error naming the rule when called against a non-pending unit.",
@@ -9909,10 +10005,8 @@ export function handleStateTool(
 			const rhStage = args.stage as string
 			const rhHat = args.hat as string
 			const rhFix = args.fix === true
-			const rhPath = rhFix
-				? resolveFixHatPath(rhStudio, rhStage, rhHat)
-				: resolveHatPath(rhStudio, rhStage, rhHat)
-			if (!rhPath || !existsSync(rhPath)) {
+			const rhBody = readHatBody(rhStudio, rhStage, rhHat, rhFix)
+			if (rhBody === null) {
 				return reply(
 					{
 						error: "hat_not_found",
@@ -9925,8 +10019,7 @@ export function handleStateTool(
 					{ isError: true },
 				)
 			}
-			const { body: rhBody } = parseFrontmatter(readFileSync(rhPath, "utf8"))
-			return reply({ hat: rhHat, body: (rhBody || "").trim() })
+			return reply({ hat: rhHat, body: rhBody })
 		}
 
 		case "haiku_read_stage": {
@@ -9938,8 +10031,8 @@ export function handleStateTool(
 			if (readStageErr) return readStageErr
 			const rsStudio = args.studio as string
 			const rsStage = args.stage as string
-			const rsDef = readStageDef(rsStudio, rsStage)
-			if (!rsDef) {
+			const rsBody = readStageBody(rsStudio, rsStage)
+			if (rsBody === null) {
 				return reply(
 					{
 						error: "stage_not_found",
@@ -9950,7 +10043,133 @@ export function handleStateTool(
 					{ isError: true },
 				)
 			}
-			return reply({ stage: rsStage, body: (rsDef.body || "").trim() })
+			return reply({ stage: rsStage, body: rsBody })
+		}
+
+		case "haiku_read_review_agent": {
+			const raErr = validateToolInput(
+				args,
+				validateHaikuReadReviewAgentInputSchema,
+				"haiku_read_review_agent",
+			)
+			if (raErr) return raErr
+			const raStudio = args.studio as string
+			const raStage = (args.stage as string) || ""
+			const raRole = args.role as string
+			const raBody = readReviewAgentBody(raStudio, raStage || undefined, raRole)
+			if (raBody === null) {
+				return reply(
+					{
+						error: "review_agent_not_found",
+						studio: raStudio,
+						stage: raStage || null,
+						role: raRole,
+						message: `No ${raStage ? `stage-scope` : "intent-completion"} review agent '${raRole}' in studio '${raStudio}'${raStage ? ` stage '${raStage}'` : ""}. (Engine-built-in roles like spec/continuity/cross-stage-consistency are generated, not files — they are not readable here.)`,
+					},
+					{ isError: true },
+				)
+			}
+			return reply({ role: raRole, body: raBody })
+		}
+
+		case "haiku_read_intent": {
+			const riErr = validateToolInput(
+				args,
+				validateHaikuReadIntentInputSchema,
+				"haiku_read_intent",
+			)
+			if (riErr) return riErr
+			const riSlug = args.intent as string
+			const riBody = readIntentBody(riSlug)
+			if (riBody === null) {
+				return reply(
+					{
+						error: "intent_not_found",
+						intent: riSlug,
+						message: `No intent.md for '${riSlug}'.`,
+					},
+					{ isError: true },
+				)
+			}
+			return reply({ intent: riSlug, body: riBody })
+		}
+
+		case "haiku_read_discovery": {
+			const rdErr = validateToolInput(
+				args,
+				validateHaikuReadDiscoveryInputSchema,
+				"haiku_read_discovery",
+			)
+			if (rdErr) return rdErr
+			const rdStudio = args.studio as string
+			const rdStage = args.stage as string
+			const rdName = args.template as string
+			const rdBody = readDiscoveryBody(rdStudio, rdStage, rdName)
+			if (rdBody === null) {
+				return reply(
+					{
+						error: "discovery_template_not_found",
+						studio: rdStudio,
+						stage: rdStage,
+						template: rdName,
+						message: `No discovery template '${rdName}' in studio '${rdStudio}' stage '${rdStage}'.`,
+					},
+					{ isError: true },
+				)
+			}
+			return reply({ template: rdName, body: rdBody })
+		}
+
+		case "haiku_read_phase": {
+			const rpErr = validateToolInput(
+				args,
+				validateHaikuReadPhaseInputSchema,
+				"haiku_read_phase",
+			)
+			if (rpErr) return rpErr
+			const rpStudio = args.studio as string
+			const rpStage = args.stage as string
+			const rpPhase = args.phase as string
+			const rpBody = readPhaseBody(rpStudio, rpStage, rpPhase)
+			if (rpBody === null) {
+				return reply(
+					{
+						error: "phase_not_found",
+						studio: rpStudio,
+						stage: rpStage,
+						phase: rpPhase,
+						message: `No '${rpPhase}' phase override for studio '${rpStudio}' stage '${rpStage}'.`,
+					},
+					{ isError: true },
+				)
+			}
+			return reply({ phase: rpPhase, body: rpBody })
+		}
+
+		case "haiku_read_output": {
+			const roErr = validateToolInput(
+				args,
+				validateHaikuReadOutputInputSchema,
+				"haiku_read_output",
+			)
+			if (roErr) return roErr
+			const roStudio = args.studio as string
+			const roStage = args.stage as string
+			const roName = args.name as string
+			const roBody = readOutputBody(roStudio, roStage, roName)
+			if (roBody === null) {
+				return reply(
+					{
+						error: "output_template_not_found",
+						studio: roStudio,
+						stage: roStage,
+						name: roName,
+						message: `No output template '${roName}' in studio '${roStudio}' stage '${roStage}'.`,
+					},
+					{ isError: true },
+				)
+			}
+			return reply({ name: roName, body: roBody })
 		}
 
 		// ── Unit delete (architecture rule §1.3: pending only) ──

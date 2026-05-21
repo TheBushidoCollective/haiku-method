@@ -101,7 +101,7 @@ test("buildUnitHatDispatchBlock forks a per-unit worktree off the stage branch",
 		const { buildUnitHatDispatchBlock } = await import(
 			`${SRC}orchestrator/unit-dispatch-builder.ts`
 		)
-		await withCwd(repoRoot, () =>
+		const block = await withCwd(repoRoot, () =>
 			buildUnitHatDispatchBlock({
 				slug,
 				studio: "software",
@@ -114,6 +114,15 @@ test("buildUnitHatDispatchBlock forks a per-unit worktree off the stage branch",
 
 		const wtPath = join(repoRoot, ".haiku", "worktrees", slug, "unit-01-a")
 		assert.ok(existsSync(wtPath), "unit worktree dir should be created at dispatch")
+
+		// The dispatched subagent prompt directs work INTO the worktree.
+		const pf = block.match(/prompt_file="([^"]+)"/)?.[1]
+		assert.ok(pf && existsSync(pf), "dispatch emits a prompt_file")
+		const prompt = (await import("node:fs")).readFileSync(pf, "utf8")
+		assert.ok(
+			prompt.includes(wtPath) && /isolation worktree/i.test(prompt),
+			"subagent prompt must direct file work into the unit worktree",
+		)
 		const branches = execFileSync("git", ["branch", "--list", `haiku/${slug}/unit-01-a`], {
 			cwd: repoRoot,
 			encoding: "utf8",

@@ -10,9 +10,15 @@ This unit already ran <%= priorHatsInline.length %> earlier hat(s) this iteratio
 <% } %>
 
 ## Procedure (authoritative)
+<% if (typeof worktree !== "undefined" && worktree) { %>
+0. **Work in this unit's isolation worktree.** Your working directory for ALL file edits, writes, and `git` commits this hat is:
 
+       <%= worktree %>
+
+   `cd` there first and do every file operation under it. This unit is isolated on its own branch `haiku/<%= slug %>/<%= unit %>` so the parallel wave can't clobber your edits; the engine merges it back to the stage branch when the unit's last hat lands. Do your code/output work here — NOT in the main checkout. (MCP tools like `haiku_unit_read` / `haiku_unit_advance_hat` are engine-side and resolve correctly regardless of your cwd.)
+<% } %>
 1. **Read the unit live:** `haiku_unit_read { intent: "<%= slug %>", stage: "<%= stage %>", unit: "<%= unit %>" }`. The body carries the completion criteria, prior-hat hand-offs, and the outputs contract. Do NOT plain-`Read` the unit file — the workflow engine guards it; this tool returns body + title with engine frontmatter stripped.
-2. Read your mandate above. Execute the **<%= hat %>** work against the unit, within the stage's declared scope. Commit inside the unit worktree with a message naming the hat — `haiku: <%= hat %> on <%= unit %>`. Do NOT push.
+2. Read your mandate above. Execute the **<%= hat %>** work against the unit, within the stage's declared scope<% if (typeof worktree !== "undefined" && worktree) { %>, inside the worktree from step 0<% } %>. Commit your changes with a message naming the hat — `haiku: <%= hat %> on <%= unit %>`. Do NOT push (the engine handles pushing + the terminal merge).
 3. Track every file you produced in the unit's `outputs:` if it isn't auto-detected.
 4. **Close — end your turn with exactly ONE:**
    - **Success:** `haiku_unit_advance_hat { intent: "<%= slug %>", unit: "<%= unit %>" }`. If `iterations[]` is empty on the first call, prefix with `haiku_unit_start { intent: "<%= slug %>", unit: "<%= unit %>" }` so the engine stamps the in-flight iteration.

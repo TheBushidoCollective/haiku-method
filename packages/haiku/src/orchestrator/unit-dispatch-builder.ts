@@ -143,9 +143,8 @@ export function buildUnitHatDispatchBlock(opts: {
 	// Idempotent: created on the first hat's dispatch, reused by later hats
 	// and by the relay. The already-wired terminal merge (`advance_hat` ->
 	// `mergeUnitWorktree` under `withStageLock`) lands it back atomically.
-	// Returns null in filesystem mode. Phase 1a: create only — routing the
-	// subagent's work + per-hat git ops into the worktree follows.
-	createUnitWorktree(slug, unit, stage)
+	// Returns null in filesystem mode (work happens in-place then).
+	const worktree = createUnitWorktree(slug, unit, stage) ?? ""
 	const model = resolveUnitHatModel({ slug, studio, stage, hat, unit })
 	// Snapshot the hat mandate (FM-stripped) into the intent's prompts
 	// refs/ tree and emit a "Read <snapshot>" — the followable breadcrumb.
@@ -175,6 +174,7 @@ export function buildUnitHatDispatchBlock(opts: {
 		hat,
 		unit,
 		terminal,
+		worktree,
 		mandateRef,
 		priorHatsInline,
 		priorRejectBlock,

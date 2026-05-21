@@ -47,6 +47,7 @@ import {
 	recordTickResult,
 	wouldDeadlock,
 } from "./deadlock-detector.js"
+import { completePendingFixChainMerges } from "./fix-chain-merge-gate.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
 import { resetLostUnits } from "./unit-branch-recovery.js"
 import { autoFileMalformedUnitInputs } from "./validate-unit-inputs-gate.js"
@@ -418,6 +419,27 @@ export function runWorkflowTick(
 		}
 	} catch (err) {
 		emitTelemetry("haiku.input_validation.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Pre-tick fix-chain merge completion: a fix-chain whose terminal close
+	// conflicted on landing its code is left mid-merge in its worktree. Once
+	// the agent resolves + commits + re-ticks, complete the forward-merge
+	// here (before the cursor can advance the stage with stranded fix code).
+	// Returns an integrate_fix_chains action while conflicts remain unresolved;
+	// no-op otherwise. Best-effort never wedges the tick.
+	try {
+		const fixMergeGate = completePendingFixChainMerges(slug, studio)
+		if (fixMergeGate.action) {
+			return broadcastTick(slug, {
+				position: { track: "feedback", action: null },
+				action: fixMergeGate.action,
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.fix_chain_merge.failed", {
 			intent: slug,
 			error: String((err as Error)?.message ?? err),
 		})

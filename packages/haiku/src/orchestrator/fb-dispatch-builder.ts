@@ -19,6 +19,7 @@ import { join } from "node:path"
 import { Eta } from "eta"
 import matter from "gray-matter"
 import { features } from "../config.js"
+import { createFixChainWorktree } from "../git-worktree.js"
 import { type ModelTier, resolveModel } from "../model-selection.js"
 import { intentDir, stageDir } from "../state-tools.js"
 import {
@@ -127,6 +128,15 @@ export function buildFbHatDispatchBlock(opts: {
 }): string {
 	const { slug, studio, feedbackId, stage, hat, terminal } = opts
 	const fbInt = Number.parseInt(feedbackId.replace(/^FB-/i, ""), 10) || 0
+	// Isolate the fix-chain's hat loop in its own worktree (branch
+	// `haiku/<slug>/fix-<scope>-<FB>`, forked from the stage branch for a
+	// stage-scope FB or intent main for an intent-scope FB) — the FB analog of
+	// the unit dispatch's createUnitWorktree. Idempotent: created on the first
+	// fix-hat's dispatch, reused by later hats and the relay. The terminal
+	// merge (haiku_feedback_advance_hat close → mergeFixChainWorktree under
+	// withStageLock) lands it back. Returns "" in filesystem mode.
+	const scope = stage || "intent"
+	const worktree = createFixChainWorktree(slug, scope, feedbackId) ?? ""
 	// Snapshot the fix-hat mandate (FM-stripped) and emit "Read
 	// <snapshot>" via the SAME underlying reader the haiku_read_hat tool
 	// uses. Stage-scope FBs resolve the fix-scoped variant
@@ -209,6 +219,7 @@ export function buildFbHatDispatchBlock(opts: {
 		feedbackId,
 		fbInt,
 		terminal,
+		worktree,
 		mandateRef,
 		priorRejectBlock,
 	})

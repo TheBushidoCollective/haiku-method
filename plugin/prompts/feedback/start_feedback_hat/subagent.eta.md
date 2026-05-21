@@ -11,10 +11,16 @@ You are the **terminal** hat in this chain — your `haiku_feedback_advance_hat`
 
 <% } %>
 ## Procedure (authoritative)
+<% if (typeof worktree !== "undefined" && worktree) { %>
+0. **Work in this fix-chain's isolation worktree.** Your working directory for ALL code edits and `git` commits this hat is:
 
+       <%= worktree %>
+
+   `cd` there first and do every code correction under it. This fix-chain is isolated on its own branch `haiku/<%= slug %>/fix-<%= stage ? stage : "intent" %>-<%= feedbackId %>` so parallel fix-chains can't clobber each other's edits; the engine merges it back to the <% if (stage) { %>stage<% } else { %>intent main<% } %> branch when this chain's terminal hat closes the FB. Do your code work here — NOT in the main checkout. (MCP tools like `haiku_feedback_read` / `haiku_feedback_write` / `haiku_feedback_advance_hat` are engine-side and resolve correctly regardless of your cwd.)
+<% } %>
 1. **Read the finding live:** `haiku_feedback_read { intent: "<%= slug %>"<% if (stage) { %>, stage: "<%= stage %>"<% } %>, feedback_id: <%= fbInt %> }`. This is the artifact you act on — read it now; an earlier hat may have appended classification or notes since dispatch, so don't assume its contents.
 2. Read your mandate above. Decide the ONE targeted correction this finding calls for through your hat's lens.
-3. Make it by editing the FB body via `haiku_feedback_write`. The FB body is the artifact you edit, NOT the unit spec it targets.
+3. Land the correction: make the code fix<% if (typeof worktree !== "undefined" && worktree) { %> inside the worktree from step 0 (commit it — `haiku: <%= hat %> fix for <%= feedbackId %>`; do NOT push, the engine handles pushing + the terminal merge)<% } %>, then record what you did in the FB body via `haiku_feedback_write`. The FB body is where you record the resolution, NOT the unit spec it targets (that stays read-only).
 4. **Close — end your turn with exactly ONE:**
    - **(A) advance** (finding handled, route onward): `haiku_feedback_advance_hat { intent: "<%= slug %>"<% if (stage) { %>, stage: "<%= stage %>"<% } %>, feedback_id: <%= fbInt %><% if (terminal) { %>, reply: "<plain-language what you did — shown to the requester in the SPA>"<% } %> }`
    - **(B) reject_hat** (THIS hat physically can't, another might): `haiku_feedback_reject_hat { intent: "<%= slug %>"<% if (stage) { %>, stage: "<%= stage %>"<% } %>, feedback_id: <%= fbInt %>, reason: "<why this hat can't complete its work>" }`

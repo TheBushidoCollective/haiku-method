@@ -65,10 +65,12 @@ import { closeFeedbackPostHook } from "./feedback-close-hook.js"
 // needed here since the completion-only guard is narrow to status/completed.
 import {
 	addTempWorktree,
+	cleanupFixChainWorktree,
 	commitAndPushFromWorktree,
 	consolidateStageBranches,
 	ensureOnStageBranch,
 	fetchOrigin,
+	fixChainWorktreePath,
 	GIT_NETWORK_TIMEOUT_MS,
 	GIT_NONINTERACTIVE_ENV,
 	getCurrentBranch,
@@ -77,8 +79,10 @@ import {
 	isMergeInProgress,
 	listIntentBranches,
 	listOrphanDiscreteIntents,
+	mergeFixChainWorktree,
 	mergeUnitWorktree,
 	openPullRequest,
+	pushFixChainWorktree,
 	pushUnitWorktree,
 	readFileFromBranch,
 	removeTempWorktree,
@@ -11947,6 +11951,13 @@ export function handleStateTool(
 					: `feedback: reject ${feedbackId} (intent-scope)`,
 			)
 
+			// The finding was invalid — discard any code a fix-hat wrote in this
+			// chain's isolation worktree (it must NOT land on the base branch).
+			// Reaps the worktree + local/remote branch; no-op in filesystem mode
+			// or when no worktree was created. Keeps the pre-tick fix-chain-merge
+			// gate from later trying to merge a rejected finding's code.
+			cleanupFixChainWorktree(intent, stage || "intent", feedbackId)
+
 			// Reject halts THIS finding's chain and hands the freed slot the
 			// NEXT undispatched feedback (2026-05-19, user directive). An
 			// invalid finding is closed terminally; the inline relay moves
@@ -12578,6 +12589,70 @@ export function handleStateTool(
 					hat: nextHat,
 				},
 			)
+
+			// Worktree isolation: the fix-chain's code corrections live on its
+			// own branch `haiku/<slug>/fix-<scope>-<FB>` in a worktree, NOT on
+			// the base branch until now. The FB body / iterations / approval-slot
+			// invalidations just written are .haiku state on the base branch.
+			//   - mid-chain: checkpoint (commit + push) the worktree so the loop
+			//     survives a restart / cross-machine pickup.
+			//   - terminal close: commit the .haiku writes (clean base, mirrors
+			//     the unit terminal merge's gitCommitAll), then merge the
+			//     fix-chain worktree into the base under withStageLock. On
+			//     conflict the worktree is left mid-merge for the agent to
+			//     resolve; the pre-tick fix-chain-merge gate completes it next
+			//     tick. No-op in filesystem mode (no worktree).
+			const fixScope = stageArg || "intent"
+			if (!isLast) {
+				pushFixChainWorktree(intentArg, fixScope, feedbackId)
+			} else {
+				gitCommitAll(`haiku: close fix-chain ${feedbackId}`)
+				const fixMerge = withStageLock(intentArg, fixScope, () =>
+					mergeFixChainWorktree(intentArg, fixScope, feedbackId),
+				)
+				if (!fixMerge.success) {
+					const fixWorktree = fixChainWorktreePath(
+						intentArg,
+						fixScope,
+						feedbackId,
+					)
+					if (fixMerge.isConflict) {
+						// Real content conflict landing the fix-chain on its base.
+						// The FB is already closed on disk; the merge is left
+						// in-progress in the worktree. Hand it to the agent to
+						// resolve — the pre-tick fix-chain-merge gate re-attempts
+						// (MERGE_HEAD path) once they commit and re-tick.
+						return reply(
+							{
+								action: "integrate_fix_chains",
+								intent: intentArg,
+								scope: fixScope,
+								items: [{ feedback_id: feedbackId }],
+								feedback_id: feedbackId,
+								worktree: fixWorktree,
+								conflict_paths: fixMerge.conflictFiles ?? [],
+								message: `Fix-chain ${feedbackId} closed, but landing its code on ${fixScope === "intent" ? `haiku/${intentArg}/main` : `stage '${fixScope}'`} produced conflicts on ${(fixMerge.conflictFiles ?? []).length} file(s): ${(fixMerge.conflictFiles ?? []).join(", ")}. The merge is left in-progress in the fix-chain worktree (${fixWorktree}) — resolve each conflicted file there (the engine can't; they contain code), \`git add\` the resolved files, \`git commit\` to complete the in-worktree merge, then call \`haiku_run_next { intent: "${intentArg}" }\`. The engine forward-merges the resolved chain into ${fixScope === "intent" ? "intent main" : `the stage branch`} on that tick.`,
+							},
+							{ isError: true },
+						)
+					}
+					// Other failure (dirty base worktree, git machinery). Surface
+					// with the real git output; agent commits engine-owned dirty
+					// files and re-ticks so the gate retries the merge.
+					return reply(
+						{
+							action: "merge_failed",
+							intent: intentArg,
+							scope: fixScope,
+							feedback_id: feedbackId,
+							worktree: fixWorktree,
+							error: fixMerge.message,
+							message: `Fix-chain ${feedbackId} closed, but the engine could not merge its code into ${fixScope === "intent" ? `haiku/${intentArg}/main` : `stage '${fixScope}'`}. Git output: ${fixMerge.message}. Commit any engine-owned dirty files on the base branch, then call \`haiku_run_next { intent: "${intentArg}" }\` so the engine retries the merge.`,
+						},
+						{ isError: true },
+					)
+				}
+			}
 			const nextDispatchedHat = isLast ? null : fixHats[callingIdx + 1]
 
 			// Engine-emitted breadcrumb (2026-05-19). The cursor's queue

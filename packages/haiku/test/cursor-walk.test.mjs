@@ -931,18 +931,17 @@ test("cursor: open FB on earlier stage preempts current-stage work", async () =>
 	)
 })
 
-test("cursor: one open-iter unit + one wave-ready sibling → wave-ready dispatches first", async () => {
-	// Pre-2026-05-13: cursor returned noop on the theory that any
-	// open iter was an "in-flight subagent" and you shouldn't
-	// dispatch siblings during a wave. But the in-flight read was
-	// wrong (the parent only calls run_next AFTER all subagents
-	// return), AND it blocked the wave-ready sibling from starting.
+test("cursor: one open-iter unit + one wave-ready sibling → in-flight unit advances first (wave barrier)", async () => {
+	// Wave barrier (2026-05-21): a new wave does not open while any unit
+	// is still in flight (started, with hats remaining). unit-01 has an
+	// open planner iteration, so it's in flight; the cursor advances IT
+	// (re-emits the open hat) and holds unit-02 back even though unit-02
+	// is wave-ready with started_at=null. unit-02 starts on a later tick,
+	// once unit-01 has run all its hats.
 	//
-	// New behavior: wave-ready clause fires first (unit-02 with
-	// started_at=null), so the cursor returns start_unit_hat for
-	// hat[0] dispatching unit-02. The open-iter unit-01 stays
-	// pending for the next tick — it'll be picked up by the
-	// needNextHat clause once unit-02's wave dispatch returns.
+	// Pre-barrier this dispatched unit-02 first (wave-ready took priority
+	// over the in-flight unit). The barrier inverts that so concurrency
+	// stays bounded and waves complete before the next opens.
 	if (!HAS_GIT) return
 	await withTmpRepo("cursor-midwave", async ({ repoRoot, intentDir, slug }) => {
 		makeStudio({ repoRoot, studio: "test" })
@@ -991,12 +990,51 @@ test("cursor: one open-iter unit + one wave-ready sibling → wave-ready dispatc
 		assert.strictEqual(
 			action.action,
 			"start_unit_hat",
-			`wave-ready unit must dispatch; got: ${action.action} — ${action.message ?? ""}`,
+			`in-flight unit must advance; got: ${action.action} — ${action.message ?? ""}`,
 		)
 		assert.strictEqual(action.hat, "planner")
-		// Wave-ready dispatches the wave-ready unit first; the
-		// open-iter unit comes through the next tick.
-		assert.deepStrictEqual(action.units, ["unit-02-wave-ready"])
+		// Barrier: the in-flight unit-01 advances; unit-02 waits for the
+		// next wave (after unit-01 finishes all hats).
+		assert.deepStrictEqual(action.units, ["unit-01-open-iter"])
+	})
+})
+
+test("cursor: wave dispatch is capped at MAX_CONCURRENT_SUBAGENTS", async () => {
+	// 14 independent wave-ready units, no in-flight units. The wave
+	// opens at most MAX_CONCURRENT_SUBAGENTS units (default 10); the rest
+	// wait for the next wave once this one drains. (2026-05-21 cap.)
+	if (!HAS_GIT) return
+	await withTmpRepo("cursor-wave-cap", async ({ repoRoot, intentDir, slug }) => {
+		makeStudio({ repoRoot, studio: "test" })
+		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
+
+		const preExecuteSigned = {
+			...ENGINE_REVIEWS_SIGNED,
+			"code-reviewer": { at: "t" },
+			user: { at: "t" },
+		}
+		for (let i = 1; i <= 14; i++) {
+			writeUnit(intentDir, "design", `unit-${String(i).padStart(2, "0")}`, {
+				title: `u${i}`,
+				depends_on: [],
+				started_at: null,
+				iterations: [],
+				reviews: { ...preExecuteSigned },
+				approvals: {},
+				discovery: {},
+			})
+		}
+
+		const { MAX_CONCURRENT_SUBAGENTS } = await import("../src/state-tools.js")
+		const action = await runTick(repoRoot, slug)
+		assert.strictEqual(action.action, "start_unit_hat")
+		assert.strictEqual(action.hat, "planner")
+		assert.strictEqual(
+			action.units.length,
+			Math.min(14, MAX_CONCURRENT_SUBAGENTS),
+			`wave must cap at ${MAX_CONCURRENT_SUBAGENTS}; got ${action.units.length}`,
+		)
 	})
 })
 

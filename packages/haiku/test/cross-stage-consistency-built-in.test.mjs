@@ -197,3 +197,51 @@ test("cursor's intent-level walk includes cross-stage-consistency role", async (
 		rmSync(tmp, { recursive: true, force: true })
 	}
 })
+
+// The 2026-05-18 promotion above only rescued cross-stage-consistency by
+// inlining it as an engine role — it did NOT restore the general "append
+// studio intent-review agents to the walk" behavior. So runtime-verifier
+// (and any other `intent-review-agents/*.md`) silently stopped firing at
+// intent completion even though the docs + runtime-verification doctrine
+// claim it runs. This locks the general restore: studio agents follow the
+// engine roles, deduped against the engine base, before the `user` gate.
+test("intentReviewRoles appends studio intent-review agents (deduped, before user)", async () => {
+	const cursor = await import(`${SRC}orchestrator/workflow/cursor.ts`)
+	const roles = cursor.intentReviewRoles("continuous", [
+		"cross-stage-consistency", // already an engine role — must not double
+		"delivery-verifier",
+		"runtime-verifier",
+	])
+
+	// Engine roles still lead.
+	assert.deepEqual(
+		roles.slice(0, 3),
+		["spec", "continuity", "cross-stage-consistency"],
+		"engine roles must lead the intent-completion walk",
+	)
+	// Studio agents are present and the engine-role duplicate was dropped.
+	assert.equal(
+		roles.filter((r) => r === "cross-stage-consistency").length,
+		1,
+		"a studio file shadowing an engine role must not double-walk",
+	)
+	assert.ok(
+		roles.includes("delivery-verifier") && roles.includes("runtime-verifier"),
+		"studio intent-review agents MUST be walked",
+	)
+	// `user` is terminal; studio agents come before it.
+	assert.equal(roles[roles.length - 1], "user", "user gate is terminal")
+	assert.ok(
+		roles.indexOf("delivery-verifier") < roles.indexOf("user"),
+		"studio agents run before the human gate",
+	)
+
+	// Autopilot keeps the studio agents (the delivery gate still matters
+	// with no human watching) but drops the user gate.
+	const auto = cursor.intentReviewRoles("autopilot", ["delivery-verifier"])
+	assert.ok(
+		auto.includes("delivery-verifier"),
+		"autopilot MUST still run intent-completion verifiers",
+	)
+	assert.ok(!auto.includes("user"), "autopilot drops the user gate")
+})

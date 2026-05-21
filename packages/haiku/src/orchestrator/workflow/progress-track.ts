@@ -17,6 +17,7 @@
 
 import { existsSync } from "node:fs"
 import { join } from "node:path"
+import { readStudioReviewAgentPaths } from "../../studio-reader.js"
 import { resolveStageHats } from "../studio.js"
 import {
 	computeElaborateSignals,
@@ -172,8 +173,15 @@ function intentSteps(opts: {
 	// (the cursor reads pickApprovals there), NOT `reviews.*`.
 	const intentApprovals = approvalsOf(intentFm)
 
-	// 1. Per-role intent-completion review, in cursor order.
-	for (const role of intentReviewRoles(mode)) {
+	// 1. Per-role intent-completion review, in cursor order. Studio
+	// intent-review agents must mirror the cursor's walk
+	// (`walkIntentTrack`) or the progress UI drifts from what actually
+	// runs — pass the same `intent-review-agents/` set the cursor reads.
+	const intentStudio = (intentFm.studio as string) || ""
+	const intentStudioAgents = intentStudio
+		? Object.keys(readStudioReviewAgentPaths(intentStudio)).sort()
+		: []
+	for (const role of intentReviewRoles(mode, intentStudioAgents)) {
 		steps.push({
 			key: `intent-review:${role}`,
 			label: role === "user" ? "intent gate" : `${role} review`,

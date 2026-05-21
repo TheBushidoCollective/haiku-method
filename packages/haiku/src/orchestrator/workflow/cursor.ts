@@ -1518,13 +1518,41 @@ function walkIntentTrack(args: {
 			})
 			.map((u) => u.name),
 	)
-	const waveReady = units.filter((u) => {
-		if (u.fm.started_at != null) return false
-		const deps = Array.isArray(u.fm.depends_on)
-			? (u.fm.depends_on as string[])
+
+	// In-flight units: started, with at least one hat still to run. This
+	// is the set the `needNextHat` clause below advances; it's also the
+	// wave barrier's "is the current wave still working?" signal.
+	const inFlight = units.filter(
+		(u) => u.fm.started_at != null && nextHatForUnit(u.fm, hats) !== null,
+	)
+
+	// Wave dispatch is capped + barriered (2026-05-21):
+	//   - Cap: a wave is at most MAX_CONCURRENT_SUBAGENTS units, so a
+	//     stage with dozens of independent units doesn't spawn all of
+	//     them at once. (HAIKU_MAX_CONCURRENT_SUBAGENTS overrides.)
+	//   - Barrier: a new wave only opens once the current wave has fully
+	//     drained — every started unit has run ALL its hats. While any
+	//     unit is in flight, `waveReady` is empty and control falls
+	//     through to the `needNextHat` clause, which advances the
+	//     in-flight units' hat chains. The next wave's units wait even if
+	//     their `depends_on` already cleared.
+	// Together these mean: never more than MAX_CONCURRENT_SUBAGENTS units
+	// in flight, and the engine — not the agent's "wait for all before
+	// re-ticking" habit — enforces the wave boundary. The unit relay
+	// (`computeUnitRelayBlock`) already declines cross-unit/next-wave
+	// dispatch and defers it to `haiku_run_next`, so the next wave is
+	// dispatched atomically on the tick after the prior one drains.
+	const depsReady =
+		inFlight.length === 0
+			? units.filter((u) => {
+					if (u.fm.started_at != null) return false
+					const deps = Array.isArray(u.fm.depends_on)
+						? (u.fm.depends_on as string[])
+						: []
+					return deps.every((d) => completedNames.has(d))
+				})
 			: []
-		return deps.every((d) => completedNames.has(d))
-	})
+	const waveReady = depsReady.slice(0, MAX_CONCURRENT_SUBAGENTS)
 
 	// Task #25 pre-dispatch gate: refuse to fire `start_unit_hat` when
 	// any wave-ready unit's FM lacks an `inputs:` field entirely on a

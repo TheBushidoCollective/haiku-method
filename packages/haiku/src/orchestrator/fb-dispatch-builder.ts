@@ -21,6 +21,7 @@ import matter from "gray-matter"
 import { features } from "../config.js"
 import { type ModelTier, resolveModel } from "../model-selection.js"
 import { intentDir, stageDir } from "../state-tools.js"
+import { materializeReferenceFile } from "../subagent-prompt-file.js"
 import {
 	readHatDefs,
 	readStageDef,
@@ -32,7 +33,6 @@ import {
 import {
 	buildPriorFeedbackRejectBlock,
 	emitSubagentDispatchBlock,
-	inlineFile,
 } from "./prompts/_helpers.js"
 import { loadTemplate } from "./prompts/_load-template.js"
 
@@ -138,14 +138,36 @@ export function buildFbHatDispatchBlock(opts: {
 	const hatPath = stage
 		? resolveHatPath(studio, stage, hat)
 		: (readStudioFixHatPaths(studio)[hat] ?? null)
-	const hatBody =
+	// Strip frontmatter (engine bookkeeping — `agent_type`, `model`; the
+	// agent doesn't need it and inlining it raw was the FB-001 leak) and
+	// materialize the agent-facing mandate body into the intent's prompts
+	// tree. The dispatched prompt references THIS snapshot, not the
+	// mutable plugin-source path — so the record reflects exactly what
+	// the subagent read and reflection agents can re-read it.
+	const rawHatBody =
 		hatPath && existsSync(hatPath) ? readFileSync(hatPath, "utf8") : ""
+	const mandateBody = rawHatBody ? matter(rawHatBody).content.trim() : ""
+	const mandatePath = mandateBody
+		? materializeReferenceFile({
+				intent: slug,
+				stage: stage || undefined,
+				kind: "mandate",
+				name: hat,
+				body: mandateBody,
+			})
+		: ""
 
 	const fbDir = stage
 		? join(stageDir(slug, stage), "feedback")
 		: join(intentDir(slug), "feedback")
 	const fbNum = feedbackId.replace(/^FB-/i, "")
-	let fbInline = ""
+	// The FB body is NOT inlined or snapshotted — it's a live, mutable
+	// workflow artifact (an earlier hat may append a `## Classification`
+	// section mid-chain). The subagent prompt instructs the agent to
+	// read it live via `haiku_feedback_read` (which strips engine FM).
+	// We still open the file here for the engine's own bookkeeping: the
+	// bolt counter and the prior-rejection reason (FM-derived state the
+	// read tool intentionally hides).
 	let priorRejectBlock = ""
 	let bolt = 1
 	if (existsSync(fbDir)) {
@@ -154,7 +176,6 @@ export function buildFbHatDispatchBlock(opts: {
 		)
 		if (fbFile) {
 			const fbPath = join(fbDir, fbFile)
-			fbInline = inlineFile(fbPath, `Feedback ${feedbackId}`)
 			// Surface the most-recent rejection reason so a bounced-to hat
 			// addresses the verifier's specific objection on the new bolt
 			// instead of re-rolling a fresh approach the verifier already
@@ -195,8 +216,7 @@ export function buildFbHatDispatchBlock(opts: {
 		feedbackId,
 		fbInt,
 		terminal,
-		hatBody,
-		fbInline,
+		mandatePath,
 		priorRejectBlock,
 	})
 

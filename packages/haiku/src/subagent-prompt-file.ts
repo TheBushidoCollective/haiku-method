@@ -251,6 +251,47 @@ export function writeSubagentPrompt(opts: {
 }
 
 /**
+ * Copy a plugin/studio SOURCE file the generator read — a hat mandate,
+ * output template, engine body, doctrine block — into the per-intent
+ * prompts tree and return the `~/.haiku` path to reference from the
+ * dispatched prompt.
+ *
+ * Why this exists: a dispatch that references a plugin-source path (or
+ * inlines raw plugin content) points at MUTABLE content living outside
+ * the intent's record. A plugin upgrade silently changes what "the
+ * mandate" was, and reflection/observation agents can't see what the
+ * subagent was actually told. Materializing a snapshot makes the prompt
+ * record self-contained: the reference path is immutable, sits beside
+ * the prompt that used it, and is byte-for-byte what the agent read.
+ *
+ * This helper owns ONLY placement + naming. The caller passes the
+ * already-resolved `body` — it strips frontmatter / renders templates
+ * first, so the copy is exactly the agent-facing content (no engine
+ * frontmatter leak). Deterministic name, overwrite-on-rerun, mirroring
+ * `writeSubagentPrompt`. Copies land under
+ * `prompts/<scope>/refs/<kind>/<name>.md`.
+ */
+export function materializeReferenceFile(opts: {
+	intent: string
+	stage?: string
+	/** Reference family — `mandate`, `template`, `engine-body`,
+	 *  `doctrine`, etc. Becomes the `refs/<kind>/` subdir. */
+	kind: string
+	/** Logical name — the hat/role/template basename. */
+	name: string
+	/** Already-resolved, agent-facing content (FM stripped / rendered). */
+	body: string
+}): string {
+	const { intent, stage, kind, name, body } = opts
+	const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, "-")
+	const dir = join(promptsScopeDir(intent, stage), "refs", safe(kind))
+	mkdirSync(dir, { recursive: true })
+	const path = join(dir, `${safe(name).replace(/\.md$/, "")}.md`)
+	atomicWrite(path, body)
+	return path
+}
+
+/**
  * Write a per-action prompt body to the per-intent prompts directory.
  * Mirrors `writeSubagentPrompt` but is keyed by action+stage instead
  * of unit+hat+bolt — used when an orchestrator action emission carries

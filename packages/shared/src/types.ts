@@ -41,6 +41,9 @@ export interface HaikuUnit {
 	startedAt: string | null
 	completedAt: string | null
 	refs: string[]
+	/** Intent-relative paths the unit consumes (upstream outputs, knowledge
+	 *  artifacts, the spec it implements). From the unit FM `inputs:` field. */
+	inputs: string[]
 	outputs: string[]
 	criteria: Array<{ text: string; checked: boolean }>
 	content: string

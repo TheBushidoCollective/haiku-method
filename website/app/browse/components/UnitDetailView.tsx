@@ -256,10 +256,21 @@ export function UnitDetailView({
 				</section>
 			)}
 
+			{/* Inputs (artifacts this unit consumes) */}
+			{unit.inputs.length > 0 && (
+				<ArtifactsSection
+					noun="Input"
+					paths={unit.inputs}
+					intentSlug={intentSlug}
+					provider={provider}
+				/>
+			)}
+
 			{/* Outputs (artifacts produced by this unit) */}
 			{unit.outputs.length > 0 && (
-				<OutputsSection
-					outputs={unit.outputs}
+				<ArtifactsSection
+					noun="Output"
+					paths={unit.outputs}
 					intentSlug={intentSlug}
 					provider={provider}
 				/>
@@ -901,24 +912,28 @@ function dirOf(path: string): string {
 }
 
 /**
- * Unit outputs, made viewable. Outputs are intent-relative paths
- * (`.haiku/intents/<slug>/<output>`). Mockups + images get their own
- * "Visual Outputs" grid (thumbnails open fullscreen); everything else lists
- * below, clickable to view (text in a doc modal, binary as a download). HTML
- * outputs render with relative CSS/images resolved against the provider, so a
- * wireframe authored as `index.html` + `./styles.css` renders correctly.
+ * A unit's intent-relative artifact paths (`.haiku/intents/<slug>/<path>`),
+ * made viewable — used for both `inputs` (consumed) and `outputs` (produced).
+ * Mockups + images get their own "Visual {noun}s" grid (thumbnails open
+ * fullscreen); everything else lists below, clickable to view (text in a doc
+ * modal, binary as a download). HTML renders with relative CSS/images resolved
+ * against the provider, so a wireframe authored as `index.html` +
+ * `./styles.css` renders correctly.
  */
-function OutputsSection({
-	outputs,
+function ArtifactsSection({
+	noun,
+	paths,
 	intentSlug,
 	provider,
 }: {
-	outputs: string[]
+	/** Singular section noun, e.g. "Output" / "Input". */
+	noun: string
+	paths: string[]
 	intentSlug: string
 	provider: BrowseProvider
 }) {
 	const intentPrefix = `.haiku/intents/${intentSlug}/`
-	const classified = outputs.map((path) => ({
+	const classified = paths.map((path) => ({
 		path,
 		kind: classifyOutput(path),
 	}))
@@ -934,7 +949,7 @@ function OutputsSection({
 			{visual.length > 0 && (
 				<section className="mb-8">
 					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Visual Outputs
+						Visual {noun}s
 					</h2>
 					<div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
 						{visual.map((o) =>
@@ -961,7 +976,7 @@ function OutputsSection({
 			{files.length > 0 && (
 				<section className="mb-8">
 					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Outputs
+						{noun}s
 					</h2>
 					<div className="space-y-1">
 						{files.map((o) =>

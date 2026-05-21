@@ -202,6 +202,7 @@ export function parseUnit(
 		status: deriveUnitStatus(data),
 		dependsOn: (data.depends_on as string[]) || [],
 		refs: (data.refs as string[]) || [],
+		inputs: (data.inputs as string[]) || [],
 		outputs: (data.outputs as string[]) || [],
 		bolt: (data.bolt as number) || 0,
 		hat: (data.hat as string) || "",

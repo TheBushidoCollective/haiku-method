@@ -22,6 +22,7 @@ import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
 import { BrowseMarkdown } from "./BrowseMarkdown"
 import { IntentKanban } from "./KanbanView"
+import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
 import {
 	KiCanvasViewer,
 	ModelViewer,
@@ -412,7 +413,9 @@ export function IntentDetailView({
 								>
 									<StageDetail
 										stage={expandedStageData}
+										provider={provider}
 										providerName={provider.name}
+										slug={intent.slug}
 										host={host || undefined}
 										project={location?.project || ""}
 										onSelectUnit={(unit) =>
@@ -761,11 +764,17 @@ function ArtifactFullscreenModal({
 	assets,
 	host,
 	onClose,
+	provider,
+	baseDir,
 }: {
 	artifact: HaikuArtifact
 	assets?: HaikuAsset[]
 	host?: string
 	onClose: () => void
+	/** When present, HTML artifacts render with relative assets (CSS/images)
+	 *  resolved against the provider; otherwise they fall back to raw srcDoc. */
+	provider?: BrowseProvider
+	baseDir?: string
 }) {
 	const handleKeyDown = useCallback(
 		(e: KeyboardEvent) => {
@@ -802,13 +811,25 @@ function ArtifactFullscreenModal({
 				    less trusted than SPA review content. allow-scripts is
 				    enough for the Tailwind CDN script the artifacts use;
 				    deliberately omitting allow-same-origin so a malicious
-				    artifact can't reach this page's origin. */}
-				<iframe
-					srcDoc={artifact.content}
-					title={artifact.name}
-					className="flex-1 border-0"
-					sandbox="allow-scripts"
-				/>
+				    artifact can't reach this page's origin. When the provider
+				    can resolve assets, relative CSS/images are inlined so a
+				    wireframe authored as index.html + ./styles.css renders. */}
+				{provider && baseDir ? (
+					<RenderedHtmlFrame
+						html={artifact.content}
+						baseDir={baseDir}
+						provider={provider}
+						title={artifact.name}
+						className="flex-1 border-0"
+					/>
+				) : (
+					<iframe
+						srcDoc={artifact.content}
+						title={artifact.name}
+						className="flex-1 border-0"
+						sandbox="allow-scripts"
+					/>
+				)}
 			</div>
 		)
 	}
@@ -944,10 +965,14 @@ function ArtifactThumbnail({
 	artifact,
 	host,
 	onClick,
+	provider,
+	baseDir,
 }: {
 	artifact: HaikuArtifact
 	host?: string
 	onClick: () => void
+	provider?: BrowseProvider
+	baseDir?: string
 }) {
 	if (artifact.type === "html" && artifact.content) {
 		return (
@@ -959,15 +984,31 @@ function ArtifactThumbnail({
 				<div className="relative aspect-[4/3] w-full overflow-hidden bg-white dark:bg-stone-900">
 					{/* See note in ArtifactFullscreenModal — sandbox is
 					    deliberately allow-scripts only (no allow-same-origin)
-					    because artifacts come from arbitrary remote repos. */}
-					<iframe
-						srcDoc={artifact.content}
-						title={artifact.name}
-						className="absolute inset-0 h-[300%] w-[300%] origin-top-left border-0"
+					    because artifacts come from arbitrary remote repos.
+					    Relative assets are inlined when the provider can
+					    resolve them so the preview matches the full render. */}
+					<div
+						className="absolute inset-0 h-[300%] w-[300%] origin-top-left"
 						style={{ transform: "scale(0.3333)", pointerEvents: "none" }}
-						tabIndex={-1}
-						sandbox="allow-scripts"
-					/>
+					>
+						{provider && baseDir ? (
+							<RenderedHtmlFrame
+								html={artifact.content}
+								baseDir={baseDir}
+								provider={provider}
+								title={artifact.name}
+								className="h-full w-full border-0"
+							/>
+						) : (
+							<iframe
+								srcDoc={artifact.content}
+								title={artifact.name}
+								className="h-full w-full border-0"
+								tabIndex={-1}
+								sandbox="allow-scripts"
+							/>
+						)}
+					</div>
 				</div>
 				<div className="border-t border-stone-100 px-3 py-2 dark:border-stone-800">
 					<p className="truncate text-xs font-medium text-stone-700 group-hover:text-teal-600 dark:text-stone-300 dark:group-hover:text-teal-400">
@@ -1341,19 +1382,26 @@ function phaseChipClass(phase: string): string {
 
 function StageDetail({
 	stage,
+	provider,
 	providerName,
+	slug,
 	host,
 	project,
 	onSelectUnit,
 	assets,
 }: {
 	stage: HaikuStageState
+	provider: BrowseProvider
 	providerName: string
+	slug: string
 	host?: string
 	project?: string
 	onSelectUnit: (u: HaikuUnit) => void
 	assets?: HaikuAsset[]
 }) {
+	// Repo-root-relative dir stage artifacts live in; relative refs inside an
+	// HTML output (./styles.css, ./img/x.png) resolve against it.
+	const artifactBaseDir = `.haiku/intents/${slug}/stages/${stage.name}/artifacts/`
 	const hasUnits = stage.units.length > 0
 	const hasArtifacts = (stage.artifacts?.length ?? 0) > 0
 	const hasFeedback = (stage.feedback?.length ?? 0) > 0
@@ -1557,6 +1605,8 @@ function StageDetail({
 									key={artifact.name}
 									artifact={artifact}
 									host={host}
+									provider={provider}
+									baseDir={artifactBaseDir}
 									onClick={() => setFullscreenArtifact(artifact)}
 								/>
 							))}
@@ -1583,6 +1633,8 @@ function StageDetail({
 					artifact={fullscreenArtifact}
 					assets={assets}
 					host={host}
+					provider={provider}
+					baseDir={artifactBaseDir}
 					onClose={() => setFullscreenArtifact(null)}
 				/>
 			)}

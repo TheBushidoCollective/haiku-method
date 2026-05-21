@@ -1,3 +1,4 @@
+import { blobToDataUrl, mimeFromPath } from "./html-render"
 import {
 	deriveActiveStageFromStageTree,
 	deriveStageStateFromUnits,
@@ -53,7 +54,9 @@ export class LocalProvider implements BrowseProvider {
 	 * page is open; reload re-creates it. We don't bother revoking —
 	 * the page is small and short-lived.
 	 */
-	async getObjectUrl(path: string): Promise<string | null> {
+	/** Walk the directory handle tree to a File, or null when any segment is
+	 *  missing. Shared by getObjectUrl / readFile / resolveAssetUrl. */
+	private async getFile(path: string): Promise<File | null> {
 		try {
 			const parts = path.split("/").filter(Boolean)
 			let dir: FSDirectoryHandle = this.root
@@ -61,38 +64,32 @@ export class LocalProvider implements BrowseProvider {
 				dir = await dir.getDirectoryHandle(part)
 			}
 			const fileHandle = await dir.getFileHandle(parts[parts.length - 1])
-			const file = await fileHandle.getFile()
-			return URL.createObjectURL(file)
+			return await fileHandle.getFile()
 		} catch (err) {
 			const name = (err as Error).name ?? "Error"
 			if (name !== "NotFoundError") {
-				console.warn(`[browse] getObjectUrl("${path}") failed:`, err)
+				console.warn(`[browse] getFile("${path}") failed:`, err)
 			}
 			return null
 		}
 	}
 
+	async getObjectUrl(path: string): Promise<string | null> {
+		const file = await this.getFile(path)
+		return file ? URL.createObjectURL(file) : null
+	}
+
+	/** Inline a dragged local file as a `data:` URL so it loads inside the
+	 *  sandboxed (opaque-origin) iframe — a parent-origin blob URL is
+	 *  cross-origin-blocked there. */
+	async resolveAssetUrl(path: string): Promise<string | null> {
+		const file = await this.getFile(path)
+		return file ? blobToDataUrl(file, mimeFromPath(path)) : null
+	}
+
 	async readFile(path: string): Promise<string | null> {
-		try {
-			const parts = path.split("/").filter(Boolean)
-			let dir: FSDirectoryHandle = this.root
-			for (const part of parts.slice(0, -1)) {
-				dir = await dir.getDirectoryHandle(part)
-			}
-			const fileHandle = await dir.getFileHandle(parts[parts.length - 1])
-			const file = await fileHandle.getFile()
-			return await file.text()
-		} catch (err) {
-			const name = (err as Error).name ?? "Error"
-			// NotFoundError is expected for opportunistic reads (e.g., a
-			// stage that has no state.json in v4). Surface anything else.
-			if (name !== "NotFoundError") {
-				console.warn(
-					`[browse] readFile("${path}") failed: ${name}: ${(err as Error).message ?? err}`,
-				)
-			}
-			return null
-		}
+		const file = await this.getFile(path)
+		return file ? await file.text() : null
 	}
 
 	async listFiles(dir: string): Promise<string[]> {

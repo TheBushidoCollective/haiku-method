@@ -9,6 +9,7 @@ import ListHaikuBranchesQuery from "./graphql/github/__generated__/operationsLis
 import type { operationsListIntentsQuery$data } from "./graphql/github/__generated__/operationsListIntentsQuery.graphql"
 import ListIntentsQuery from "./graphql/github/__generated__/operationsListIntentsQuery.graphql"
 import ReadFileQuery from "./graphql/github/__generated__/operationsReadFileQuery.graphql"
+import { blobToDataUrl, mimeFromPath } from "./html-render"
 import {
 	classifyArtifact,
 	deriveActiveStageFromStageTree,
@@ -109,6 +110,26 @@ export class GitHubProvider implements BrowseProvider {
 	private expr(path: string): string {
 		const ref = this.branch || "HEAD"
 		return `${ref}:${path}`
+	}
+
+	/** Resolve a repo-root-relative path to a `data:` URL by fetching the raw
+	 *  contents (authed) and inlining the bytes — so an HTML output's relative
+	 *  CSS/images load inside the sandboxed (opaque-origin) iframe, which
+	 *  can't reach parent-origin blob URLs or attach an auth header. Mirrors
+	 *  the artifact rawUrl scheme used at session build
+	 *  (raw.githubusercontent.com/<owner>/<repo>/<ref>/<path>). */
+	async resolveAssetUrl(path: string): Promise<string | null> {
+		try {
+			const ref = this.branch || "HEAD"
+			const url = `https://raw.githubusercontent.com/${this.owner}/${this.repo}/${encodeURIComponent(ref)}/${path}`
+			const headers: Record<string, string> = {}
+			if (this.token) headers.Authorization = `Bearer ${this.token}`
+			const res = await fetch(url, { headers })
+			if (!res.ok) return null
+			return blobToDataUrl(await res.blob(), mimeFromPath(path))
+		} catch {
+			return null
+		}
 	}
 
 	/**

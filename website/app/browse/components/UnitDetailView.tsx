@@ -13,6 +13,7 @@ import type {
 import { formatDate, formatDuration } from "@/lib/browse/types"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
+import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
 
 function titleCase(s: string): string {
 	return s
@@ -234,50 +235,11 @@ export function UnitDetailView({
 
 			{/* Outputs (artifacts produced by this unit) */}
 			{unit.outputs.length > 0 && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Outputs
-					</h2>
-					<div className="space-y-1">
-						{unit.outputs.map((output) => {
-							const fileName = output.split("/").pop() || output
-							const dirPath = output.includes("/")
-								? output.substring(0, output.lastIndexOf("/"))
-								: ""
-							return (
-								<div
-									key={output}
-									className="flex items-center gap-3 rounded-lg border border-stone-200 px-4 py-2.5 dark:border-stone-700"
-								>
-									<svg
-										className="h-4 w-4 flex-shrink-0 text-teal-500"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke="currentColor"
-										aria-hidden="true"
-									>
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={2}
-											d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-										/>
-									</svg>
-									<div className="min-w-0">
-										<p className="truncate text-sm font-mono text-stone-700 dark:text-stone-300">
-											{fileName}
-										</p>
-										{dirPath && (
-											<p className="truncate text-xs text-stone-400">
-												{dirPath}
-											</p>
-										)}
-									</div>
-								</div>
-							)
-						})}
-					</div>
-				</section>
+				<OutputsSection
+					outputs={unit.outputs}
+					intentSlug={intentSlug}
+					provider={provider}
+				/>
 			)}
 
 			{/* Referenced Artifacts (from unit refs) */}
@@ -757,6 +719,436 @@ function GenericRefItem({ ref_ }: { ref_: string }) {
 					<p className="truncate text-xs text-stone-400">{dirPath}</p>
 				)}
 			</div>
+		</div>
+	)
+}
+
+const OUTPUT_IMAGE_EXTS = new Set([
+	"png",
+	"jpg",
+	"jpeg",
+	"gif",
+	"svg",
+	"webp",
+	"avif",
+	"bmp",
+	"ico",
+])
+
+type OutputKind = "image" | "html" | "text" | "other"
+
+/** Classify a unit output by extension. ASCII/binary split: `text` (the
+ *  isTextFile allowlist) and `html` are renderable as text; `image` and
+ *  `other` are binary — `image` previews, `other` downloads. */
+function classifyOutput(path: string): OutputKind {
+	const ext = path.split(".").pop()?.toLowerCase() || ""
+	if (OUTPUT_IMAGE_EXTS.has(ext)) return "image"
+	if (ext === "html" || ext === "htm") return "html"
+	if (isTextFile(path)) return "text"
+	return "other"
+}
+
+function fileNameOf(path: string): string {
+	return path.split("/").pop() || path
+}
+function dirOf(path: string): string {
+	return path.includes("/") ? path.substring(0, path.lastIndexOf("/")) : ""
+}
+
+/**
+ * Unit outputs, made viewable. Outputs are intent-relative paths
+ * (`.haiku/intents/<slug>/<output>`). Mockups + images get their own
+ * "Visual Outputs" grid (thumbnails open fullscreen); everything else lists
+ * below, clickable to view (text in a doc modal, binary as a download). HTML
+ * outputs render with relative CSS/images resolved against the provider, so a
+ * wireframe authored as `index.html` + `./styles.css` renders correctly.
+ */
+function OutputsSection({
+	outputs,
+	intentSlug,
+	provider,
+}: {
+	outputs: string[]
+	intentSlug: string
+	provider: BrowseProvider
+}) {
+	const intentPrefix = `.haiku/intents/${intentSlug}/`
+	const classified = outputs.map((path) => ({
+		path,
+		kind: classifyOutput(path),
+	}))
+	const visual = classified.filter(
+		(o) => o.kind === "image" || o.kind === "html",
+	)
+	const files = classified.filter(
+		(o) => o.kind === "text" || o.kind === "other",
+	)
+
+	return (
+		<>
+			{visual.length > 0 && (
+				<section className="mb-8">
+					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+						Visual Outputs
+					</h2>
+					<div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+						{visual.map((o) =>
+							o.kind === "image" ? (
+								<OutputImageCard
+									key={o.path}
+									path={o.path}
+									repoPath={`${intentPrefix}${o.path}`}
+									provider={provider}
+								/>
+							) : (
+								<OutputHtmlCard
+									key={o.path}
+									path={o.path}
+									repoPath={`${intentPrefix}${o.path}`}
+									baseDir={`${intentPrefix}${dirOf(o.path)}${dirOf(o.path) ? "/" : ""}`}
+									provider={provider}
+								/>
+							),
+						)}
+					</div>
+				</section>
+			)}
+			{files.length > 0 && (
+				<section className="mb-8">
+					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+						Outputs
+					</h2>
+					<div className="space-y-1">
+						{files.map((o) =>
+							o.kind === "text" ? (
+								<OutputTextItem
+									key={o.path}
+									path={o.path}
+									repoPath={`${intentPrefix}${o.path}`}
+									provider={provider}
+								/>
+							) : (
+								<OutputDownloadItem
+									key={o.path}
+									path={o.path}
+									repoPath={`${intentPrefix}${o.path}`}
+									provider={provider}
+								/>
+							),
+						)}
+					</div>
+				</section>
+			)}
+		</>
+	)
+}
+
+/** Image output — resolves to a data URL (works for a dragged folder and a
+ *  private git repo) and previews it; click to view fullscreen. */
+function OutputImageCard({
+	path,
+	repoPath,
+	provider,
+}: {
+	path: string
+	repoPath: string
+	provider: BrowseProvider
+}) {
+	const [url, setUrl] = useState<string | null>(null)
+	const [full, setFull] = useState(false)
+	useEffect(() => {
+		let cancelled = false
+		provider.resolveAssetUrl?.(repoPath).then((u) => {
+			if (!cancelled) setUrl(u)
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [repoPath, provider])
+	return (
+		<>
+			<button
+				type="button"
+				onClick={() => url && setFull(true)}
+				className="group flex flex-col overflow-hidden rounded-lg border border-stone-200 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
+			>
+				<div className="flex h-[150px] w-full items-center justify-center overflow-hidden bg-stone-50 dark:bg-stone-800/50">
+					{url ? (
+						// biome-ignore lint/performance/noImgElement: data URL from provider-resolved bytes; next/image can't consume a data URL via its loader pipeline
+						<img
+							src={url}
+							alt={fileNameOf(path)}
+							className="h-full w-full object-cover"
+						/>
+					) : (
+						<div className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-teal-500" />
+					)}
+				</div>
+				<div className="border-t border-stone-100 px-3 py-2 dark:border-stone-800">
+					<p className="truncate text-xs font-medium text-stone-700 group-hover:text-teal-600 dark:text-stone-300 dark:group-hover:text-teal-400">
+						{fileNameOf(path)}
+					</p>
+				</div>
+			</button>
+			{full && url && (
+				<OutputOverlay name={fileNameOf(path)} onClose={() => setFull(false)}>
+					{/* biome-ignore lint/performance/noImgElement: data URL */}
+					<img
+						src={url}
+						alt={fileNameOf(path)}
+						className="max-h-[85vh] max-w-[90vw] rounded-lg"
+					/>
+				</OutputOverlay>
+			)}
+		</>
+	)
+}
+
+/** HTML output — reads the source, previews it in a scaled iframe with
+ *  relative assets resolved; click to view fullscreen. */
+function OutputHtmlCard({
+	path,
+	repoPath,
+	baseDir,
+	provider,
+}: {
+	path: string
+	repoPath: string
+	baseDir: string
+	provider: BrowseProvider
+}) {
+	const [html, setHtml] = useState<string | null>(null)
+	const [full, setFull] = useState(false)
+	useEffect(() => {
+		let cancelled = false
+		provider.readFile(repoPath).then((c) => {
+			if (!cancelled) setHtml(c)
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [repoPath, provider])
+	return (
+		<>
+			<button
+				type="button"
+				onClick={() => html && setFull(true)}
+				className="group flex flex-col overflow-hidden rounded-lg border border-stone-200 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
+			>
+				<div className="relative aspect-[4/3] w-full overflow-hidden bg-white dark:bg-stone-900">
+					{html ? (
+						<div
+							className="absolute inset-0 h-[300%] w-[300%] origin-top-left"
+							style={{ transform: "scale(0.3333)", pointerEvents: "none" }}
+						>
+							<RenderedHtmlFrame
+								html={html}
+								baseDir={baseDir}
+								provider={provider}
+								title={fileNameOf(path)}
+								className="h-full w-full border-0"
+							/>
+						</div>
+					) : (
+						<div className="flex h-full items-center justify-center">
+							<div className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-teal-500" />
+						</div>
+					)}
+				</div>
+				<div className="border-t border-stone-100 px-3 py-2 dark:border-stone-800">
+					<p className="truncate text-xs font-medium text-stone-700 group-hover:text-teal-600 dark:text-stone-300 dark:group-hover:text-teal-400">
+						{fileNameOf(path)}
+					</p>
+				</div>
+			</button>
+			{full && html && (
+				<OutputOverlay
+					name={fileNameOf(path)}
+					onClose={() => setFull(false)}
+					fill
+				>
+					<RenderedHtmlFrame
+						html={html}
+						baseDir={baseDir}
+						provider={provider}
+						title={fileNameOf(path)}
+						className="h-full w-full flex-1 border-0 bg-white"
+					/>
+				</OutputOverlay>
+			)}
+		</>
+	)
+}
+
+/** Text output — reads the source and opens it in the shared doc modal. */
+function OutputTextItem({
+	path,
+	repoPath,
+	provider,
+}: {
+	path: string
+	repoPath: string
+	provider: BrowseProvider
+}) {
+	const [content, setContent] = useState<string | null>(null)
+	const [open, setOpen] = useState(false)
+	const isMarkdown = path.endsWith(".md")
+	const handleOpen = async () => {
+		if (content === null) {
+			setContent((await provider.readFile(repoPath)) || "(empty)")
+		}
+		setOpen(true)
+	}
+	return (
+		<>
+			<button
+				type="button"
+				onClick={handleOpen}
+				className="flex w-full items-center gap-3 rounded-lg border border-stone-200 px-4 py-2.5 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
+			>
+				<svg
+					className="h-4 w-4 flex-shrink-0 text-teal-500"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					aria-hidden="true"
+				>
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth={2}
+						d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+					/>
+				</svg>
+				<div className="min-w-0">
+					<p className="truncate text-sm font-mono text-stone-700 dark:text-stone-300">
+						{fileNameOf(path)}
+					</p>
+					{dirOf(path) && (
+						<p className="truncate text-xs text-stone-400">{dirOf(path)}</p>
+					)}
+				</div>
+			</button>
+			{open && content !== null && (
+				<DocModal
+					fileName={fileNameOf(path)}
+					filePath={path}
+					content={content}
+					isMarkdown={isMarkdown}
+					onClose={() => setOpen(false)}
+				/>
+			)}
+		</>
+	)
+}
+
+/** Binary / unrecognized output — resolve to a data URL for download. */
+function OutputDownloadItem({
+	path,
+	repoPath,
+	provider,
+}: {
+	path: string
+	repoPath: string
+	provider: BrowseProvider
+}) {
+	const [url, setUrl] = useState<string | null>(null)
+	useEffect(() => {
+		let cancelled = false
+		provider.resolveAssetUrl?.(repoPath).then((u) => {
+			if (!cancelled) setUrl(u)
+		})
+		return () => {
+			cancelled = true
+		}
+	}, [repoPath, provider])
+	const inner = (
+		<>
+			<svg
+				className="h-4 w-4 flex-shrink-0 text-stone-400"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				aria-hidden="true"
+			>
+				<path
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth={1.5}
+					d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+				/>
+			</svg>
+			<div className="min-w-0">
+				<p className="truncate text-sm font-mono text-stone-700 dark:text-stone-300">
+					{fileNameOf(path)}
+				</p>
+				{dirOf(path) && (
+					<p className="truncate text-xs text-stone-400">{dirOf(path)}</p>
+				)}
+			</div>
+		</>
+	)
+	const cls =
+		"flex items-center gap-3 rounded-lg border border-stone-200 px-4 py-2.5 dark:border-stone-700"
+	return url ? (
+		<a
+			href={url}
+			download={fileNameOf(path)}
+			className={`${cls} hover:border-teal-300`}
+		>
+			{inner}
+		</a>
+	) : (
+		<div className={cls}>{inner}</div>
+	)
+}
+
+/** Fullscreen overlay shell for an output preview (image or HTML). Escape /
+ *  backdrop close. `fill` lays the body out as a full-height column (HTML
+ *  iframe); otherwise it centers (image). */
+function OutputOverlay({
+	name,
+	onClose,
+	children,
+	fill,
+}: {
+	name: string
+	onClose: () => void
+	children: React.ReactNode
+	fill?: boolean
+}) {
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") onClose()
+		}
+		document.addEventListener("keydown", onKey)
+		document.body.style.overflow = "hidden"
+		return () => {
+			document.removeEventListener("keydown", onKey)
+			document.body.style.overflow = ""
+		}
+	}, [onClose])
+	return (
+		<div className="fixed inset-0 z-[100] flex flex-col bg-white dark:bg-stone-950">
+			<div className="flex items-center justify-between border-b border-stone-200 px-4 py-2 dark:border-stone-800">
+				<span className="font-mono text-sm text-stone-600 dark:text-stone-400">
+					{name}
+				</span>
+				<button
+					type="button"
+					onClick={onClose}
+					className="rounded-lg px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+				>
+					Close
+				</button>
+			</div>
+			{fill ? (
+				<div className="flex flex-1 flex-col">{children}</div>
+			) : (
+				<div className="flex flex-1 items-center justify-center overflow-auto p-4">
+					{children}
+				</div>
+			)}
 		</div>
 	)
 }

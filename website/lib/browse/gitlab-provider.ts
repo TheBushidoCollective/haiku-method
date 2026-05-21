@@ -11,6 +11,7 @@ import ListFilesQueryArtifact from "./graphql/gitlab/__generated__/operationsLis
 import type { operationsListIntentsTreeQuery$data } from "./graphql/gitlab/__generated__/operationsListIntentsTreeQuery.graphql"
 import ListIntentsTreeQuery from "./graphql/gitlab/__generated__/operationsListIntentsTreeQuery.graphql"
 import ReadFileQuery from "./graphql/gitlab/__generated__/operationsReadFileQuery.graphql"
+import { blobToDataUrl, mimeFromPath } from "./html-render"
 import {
 	classifyArtifact,
 	deriveActiveStageFromStageTree,
@@ -122,6 +123,24 @@ export class GitLabProvider implements BrowseProvider {
 	/** Ref parameter for GraphQL queries. null means HEAD (server default). */
 	private get ref(): string | null {
 		return this.branch || null
+	}
+
+	/** Resolve a repo-root-relative path to a `data:` URL by fetching the raw
+	 *  file (authed) and inlining the bytes — so an HTML output's relative
+	 *  CSS/images load inside the sandboxed (opaque-origin) iframe, which
+	 *  can't reach parent-origin blob URLs or attach an auth header. Mirrors
+	 *  the artifact rawUrl scheme used at session build (files/:path/raw). */
+	async resolveAssetUrl(path: string): Promise<string | null> {
+		try {
+			const encodedPath = encodeURIComponent(path)
+			const ref = this.branch || "HEAD"
+			const url = `https://${this.host}/api/v4/projects/${this.encodedProject}/repository/files/${encodedPath}/raw?ref=${encodeURIComponent(ref)}`
+			const res = await fetch(url, { headers: this.restHeaders() })
+			if (!res.ok) return null
+			return blobToDataUrl(await res.blob(), mimeFromPath(path))
+		} catch {
+			return null
+		}
 	}
 
 	/**

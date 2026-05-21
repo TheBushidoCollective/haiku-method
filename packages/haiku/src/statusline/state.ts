@@ -37,6 +37,7 @@ import type {
 	StatuslineStageDot,
 	StatuslineState,
 } from "./render.js"
+import { readStatuslineSnapshot } from "./snapshot.js"
 
 function readFm(path: string): Record<string, unknown> | null {
 	if (!existsSync(path)) return null
@@ -488,20 +489,29 @@ export function resolveStatuslineState(): StatuslineState | null {
 		}
 	}
 
-	// The cursor's action is the AUTHORITATIVE position — it considers
-	// Track A (per-stage units), Track B (open feedback, which can rewind
-	// to an earlier stage), Track C (drift), and the intent-completion
-	// walk. Drive the status line from it, NOT from `findCurrentStage`
-	// alone: `findCurrentStage` is Track-A-only, so an intent whose stage
-	// units all look complete but which has open feedback (or is in
-	// intent-completion review) would otherwise read as "sealed" when
-	// it's really fix-looping. Reported 2026-05-19 — a churning intent
-	// with a wedged intent-scope FB displayed `sealed`.
+	// POSITION = the action the engine last DISPATCHED, read from the
+	// persisted snapshot the tick writes (`broadcastTick` →
+	// `writeStatuslineSnapshot`). This reflects what the agent is actually
+	// doing, not what a fresh cursor walk predicts next — the status line
+	// runs out-of-band, so a live derive would jump ahead the moment a tool
+	// changed disk state (e.g. a review agent files feedback → "fix-loop"
+	// before the agent picks it up). The per-hat/unit BARS below are still
+	// read live, so progress within a phase stays dynamic; only the
+	// position is frozen until the next tick.
+	//
+	// Cold start (no snapshot — fresh project, or before the first tick of
+	// a restarted agent): fall back to a live derive. The next tick writes
+	// the snapshot and pins the position from then on.
 	let action: CursorAction | null = null
-	try {
-		action = derivePosition({ slug, intentDir: iDir, studio }).action
-	} catch {
-		action = null
+	const snapshot = readStatuslineSnapshot(slug)
+	if (snapshot && snapshot.action) {
+		action = snapshot.action as CursorAction
+	} else {
+		try {
+			action = derivePosition({ slug, intentDir: iDir, studio }).action
+		} catch {
+			action = null
+		}
 	}
 
 	// Pre-intent substance verify: the cursor emits `elaborate_loop` with

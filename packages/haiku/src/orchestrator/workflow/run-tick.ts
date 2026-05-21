@@ -50,6 +50,7 @@ import {
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
 import { autoFileMalformedUnitInputs } from "./validate-unit-inputs-gate.js"
 import { ensureNonce } from "./verifier-nonce.js"
+import { writeStatuslineSnapshot } from "../../statusline/snapshot.js"
 
 /** Result of a single workflow tick. */
 export interface WorkflowTickResult {
@@ -587,6 +588,12 @@ function broadcastTick(
 		slug,
 		finalResult.action as unknown as Record<string, unknown> | null,
 	)
+	// Persist the dispatched POSITION for the status line. This is the
+	// single tick commit point, so the snapshot always reflects the action
+	// the agent was actually handed — the status line reads it instead of
+	// re-deriving the cursor (which would jump ahead of the agent the
+	// moment a tool changes disk state). Best-effort; never blocks a tick.
+	writeStatuslineSnapshot(slug, finalResult.position.action)
 	return finalResult
 }
 

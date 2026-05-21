@@ -59,7 +59,7 @@ test("resetLostUnits resets a lost unit, leaves an in-flight (worktree-present) 
 		).data
 		const hats = Array.isArray(stageFm.hats) ? stageFm.hats : []
 		if (hats.length < 2) return
-		// Both units: started, mid-loop (hats[0] advanced, on hats[1]), NOT complete.
+		// All units: started, mid-loop (hats[0] advanced, on hats[1]), NOT complete.
 		const midIters = [{ hat: hats[0], started_at: AT, completed_at: AT, result: "advance" }]
 		for (const u of ["unit-01-lost", "unit-02-live"]) {
 			writeFileSync(
@@ -74,6 +74,24 @@ test("resetLostUnits resets a lost unit, leaves an in-flight (worktree-present) 
 				}),
 			)
 		}
+		// unit-03-inplace: ran under the PRE-isolation in-place model — no
+		// worktree, no branch, but its declared output is on the stage branch.
+		// Migration safety: must NOT be reset (its work is recoverable in place).
+		writeFileSync(
+			join(stageDir, "units", "unit-03-inplace.md"),
+			matter.stringify("# unit-03-inplace\n", {
+				title: "unit-03-inplace",
+				started_at: AT,
+				inputs: [],
+				outputs: ["inplace-output.txt"],
+				iterations: midIters,
+				reviews: {},
+				approvals: {},
+			}),
+		)
+		// The declared output exists on disk (intent-relative) — as it would be
+		// for in-place work committed to the stage branch.
+		writeFileSync(join(intentDir, "inplace-output.txt"), "in-place work\n")
 		const git = (...a) => execFileSync("git", a, { cwd: repoRoot, stdio: "ignore" })
 		git("init", "-q", "-b", "main")
 		git("config", "user.email", "t@t")
@@ -101,11 +119,21 @@ test("resetLostUnits resets a lost unit, leaves an in-flight (worktree-present) 
 		assert.ok(createUnitWorktree(slug, "unit-02-live", stage), "live worktree created")
 
 		const { reset } = resetLostUnits(slug, "software")
-		assert.deepEqual(reset, ["unit-01-lost"], `only the lost unit resets; got ${reset}`)
+		assert.deepEqual(
+			reset,
+			["unit-01-lost"],
+			`only the lost unit resets (not the in-flight or in-place ones); got ${reset}`,
+		)
 
 		const lost = matter(readFileSync(join(stageDir, "units", "unit-01-lost.md"), "utf8")).data
 		assert.deepEqual(lost.iterations, [], "lost unit iterations cleared")
 		assert.ok(!lost.started_at, "lost unit started_at cleared")
+
+		const inplace = matter(
+			readFileSync(join(stageDir, "units", "unit-03-inplace.md"), "utf8"),
+		).data
+		assert.equal(inplace.iterations.length, 1, "in-place unit (output on disk) NOT reset")
+		assert.equal(inplace.started_at, AT, "in-place unit started_at preserved")
 
 		const live = matter(readFileSync(join(stageDir, "units", "unit-02-live.md"), "utf8")).data
 		assert.equal(live.iterations.length, 1, "in-flight (worktree-present) unit untouched")

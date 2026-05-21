@@ -19,7 +19,12 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { hasGitRemote, unitBranchExists, unitWorktreePath } from "../../git-worktree.js"
-import { intentDir, parseFrontmatter, setFrontmatterField } from "../../state-tools.js"
+import {
+	intentDir,
+	parseFrontmatter,
+	setFrontmatterField,
+	unitOutputExists,
+} from "../../state-tools.js"
 import { resolveStageHats } from "../studio.js"
 import { findCurrentStage } from "./cursor.js"
 
@@ -68,6 +73,20 @@ export function resetLostUnits(slug: string, studio: string): { reset: string[] 
 			// recreate + resume; don't reset.
 			const { local, remote } = unitBranchExists(slug, unit)
 			if (local || remote) continue
+			// Migration safety: a unit run under the PRE-isolation in-place
+			// model has no worktree and no branch, but its work lives on the
+			// stage branch — so its declared outputs exist on the main tree.
+			// A genuinely-lost worktree unit's outputs lived only in the lost
+			// worktree (mid-loop work never reaches the stage branch until the
+			// terminal merge), so none exist on the main tree. Outputs-on-disk
+			// is therefore the clean discriminator: present → don't reset (the
+			// work is recoverable in place), absent → lost, reset.
+			const outputs = Array.isArray(fm.outputs)
+				? (fm.outputs as unknown[]).filter(
+						(o): o is string => typeof o === "string" && o.length > 0,
+					)
+				: []
+			if (outputs.some((o) => unitOutputExists(slug, unit, o))) continue
 			// Lost: reset so the cursor re-dispatches the first hat fresh.
 			setFrontmatterField(path, "iterations", [])
 			setFrontmatterField(path, "started_at", null)

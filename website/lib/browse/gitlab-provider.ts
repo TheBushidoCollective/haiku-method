@@ -397,10 +397,8 @@ export class GitLabProvider implements BrowseProvider {
 				prStatus,
 				prNumber,
 			})
-			// v4 active-stage refinement (see github-provider.ts).
-			const isV4 =
-				typeof intent.raw.plugin_version === "string" &&
-				intent.raw.plugin_version.startsWith("4.")
+			// v4+ active-stage refinement (see github-provider.ts).
+			const isV4 = isV4Intent(intent.raw)
 			if (isV4 && intent.studioStages.length > 0) {
 				const stagesWithUnits = await this.probeStagesWithUnits(
 					slug,

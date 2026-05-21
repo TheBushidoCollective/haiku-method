@@ -414,9 +414,7 @@ export class GitHubProvider implements BrowseProvider {
 			// (cheap directory listing — no per-unit reads) and pick the
 			// last stage that has any unit files. Falls back to stages[0]
 			// when the agent hasn't touched any stage yet.
-			const isV4 =
-				typeof intent.raw.plugin_version === "string" &&
-				intent.raw.plugin_version.startsWith("4.")
+			const isV4 = isV4Intent(intent.raw)
 			if (isV4 && intent.studioStages.length > 0) {
 				const stagesWithUnits = await this.probeStagesWithUnits(
 					slug,

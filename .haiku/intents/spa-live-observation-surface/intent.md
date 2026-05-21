@@ -16,6 +16,15 @@ stages:
   - development
   - operations
   - security
+_pending_review_dispatches:
+  inception:
+    cross-stage-consistency:
+      dispatched_at: '2026-05-21T03:55:28.695Z'
+      units:
+        - unit-001-feature-scope-and-success-criteria
+        - unit-002-technical-landscape-and-constraints
+        - unit-003-competitive-live-observation-patterns
+        - unit-004-risk-inventory-and-open-questions
 ---
 
 # SPA live observation surface

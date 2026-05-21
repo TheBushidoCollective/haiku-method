@@ -1,0 +1,5 @@
+{
+  "declared": true,
+  "declared_at": "2026-05-21T03:54:04Z",
+  "rationale": "Inception here is pure problem-space distillation. The architectural choices this feature actually turns on — full-refetch vs server-pushed diffs for reconciliation, the toast/notification primitive, and dynamic-sort vs frozen-sort during a session — are design-stage decisions and are explicitly surfaced as open questions (each with a proposed default for veto-style approval) in unit-004 rather than resolved here. The hard constraints (no new transport, reuse deriveProgressTrack, import-cycle guard, Zod wire-schema location, reconcile-in-place) were already settled in the originating design session and are recorded as constraints in unit-002, not re-decided. No genuine choice-between-concrete-options sits within the inception scope."
+}

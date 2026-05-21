@@ -15,13 +15,15 @@
  *   - Sort invariant is driven by the sorted index, not DOM insertion order.
  */
 
-import { act, cleanup, fireEvent, render } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
+import { AnnotationModeProvider } from "../../hooks/AnnotationModeContext"
 import {
 	_resetPinCounterForTests,
 	AnnotationCanvas,
 	type AnnotationPin,
 } from "../AnnotationCanvas"
+import { AnnotationModeFab } from "../AnnotationModeFab"
 
 afterEach(() => {
 	cleanup()
@@ -240,6 +242,45 @@ describe("AnnotationCanvas — arrow-key traversal (FB-24 regression guard)", ()
 		expect(getPinButtons(container)).toHaveLength(0)
 		// activeElement should not have jumped to any pin button (there are none).
 		expect(after).toBe(before)
+	})
+})
+
+describe("AnnotationCanvas — global annotation-mode gating", () => {
+	function toolButton(label: "Pin" | "Pen"): HTMLButtonElement {
+		const btn = Array.from(
+			document.querySelectorAll<HTMLButtonElement>("button"),
+		).find(
+			(b) =>
+				b.textContent?.includes(label) &&
+				b.getAttribute("aria-pressed") !== null,
+		)
+		if (!btn) throw new Error(`${label} tool button not found`)
+		return btn
+	}
+
+	it("disables the toolbar under a provider until annotation mode is on", () => {
+		render(
+			<AnnotationModeProvider>
+				<AnnotationCanvas imageUrl="data:image/png;base64,iVBORw0KGgo=" />
+				<AnnotationModeFab />
+			</AnnotationModeProvider>,
+		)
+
+		// Provider present, mode off → Pin/Pen disabled.
+		expect(toolButton("Pin").disabled).toBe(true)
+		expect(toolButton("Pen").disabled).toBe(true)
+
+		// Toggle the global FAB → toolbar comes alive.
+		const fab = screen.getByRole("button", { name: /annotation mode/i })
+		fireEvent.click(fab)
+		expect(toolButton("Pin").disabled).toBe(false)
+		expect(toolButton("Pen").disabled).toBe(false)
+	})
+
+	it("leaves the toolbar usable when rendered without a provider (legacy)", () => {
+		render(<AnnotationCanvas imageUrl="data:image/png;base64,iVBORw0KGgo=" />)
+		expect(toolButton("Pin").disabled).toBe(false)
+		expect(toolButton("Pen").disabled).toBe(false)
 	})
 })
 

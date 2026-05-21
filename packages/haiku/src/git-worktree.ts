@@ -1022,6 +1022,44 @@ export function pushUnitWorktree(slug: string, unit: string): void {
 	}
 }
 
+/** Checkpoint an in-progress fix-chain's worktree — the FB analog of
+ *  `pushUnitWorktree`. A fix-chain's hats run on `haiku/<slug>/fix-<scope>-<FB>`
+ *  in its own worktree and aren't on the base branch (stage or intent main)
+ *  until the terminal merge, so without this a CC restart / cross-machine
+ *  pickup mid-loop loses the chain's progress. Best-effort; no worktree, no
+ *  remote, or a push failure are all silent. */
+export function pushFixChainWorktree(
+	slug: string,
+	scope: string,
+	feedbackId: string,
+): void {
+	if (!isGitRepo()) return
+	const worktreePath = fixChainWorktreePath(slug, scope, feedbackId)
+	if (!existsSync(worktreePath)) return
+	const fixBranch = fixChainBranchName(slug, scope, feedbackId)
+	try {
+		tryRun(["git", "-C", worktreePath, "add", "-A"])
+		const dirty = tryRun(["git", "-C", worktreePath, "status", "--porcelain"])
+		if (dirty && dirty.trim().length > 0) {
+			tryRun([
+				"git",
+				"-C",
+				worktreePath,
+				"commit",
+				"-m",
+				`haiku: checkpoint fix-chain ${feedbackId}`,
+			])
+		}
+		execFileSync(
+			"git",
+			["-C", worktreePath, "push", "origin", `HEAD:refs/heads/${fixBranch}`],
+			{ stdio: "pipe", timeout: GIT_NETWORK_TIMEOUT_MS, env: GIT_NONINTERACTIVE_ENV },
+		)
+	} catch {
+		/* best-effort — local worktree still survives a same-machine restart */
+	}
+}
+
 export function pushBranchToOrigin(branch: string): {
 	ok: boolean
 	error?: string
@@ -4396,11 +4434,18 @@ export function mergeFixChainWorktree(
 			withWorktreeOnBranch(baseBranch, (tmpPath) => mergeHere(tmpPath))
 		}
 
+		// Under worktree isolation the fix-chain branch is an ephemeral,
+		// internal per-loop branch (pushed only for restart / cross-machine
+		// durability while the loop runs), NOT a review surface — the base
+		// branch is what gets reviewed. Once integrated, both the local and
+		// the pushed remote ref are dead, so reap both. Remote delete is
+		// best-effort (no-remote or already-gone is fine).
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
 		deleteBranchWithWarning(
 			fixBranch,
 			`fix-chain merge cleanup for ${slug}/${scope}/${feedbackId}`,
 		)
+		tryRun(["git", "push", "origin", "--delete", fixBranch])
 
 		return {
 			success: true,
@@ -4438,6 +4483,9 @@ export function cleanupFixChainWorktree(
 		fixBranch,
 		`fix-chain cleanup for ${slug}/${scope}/${feedbackId}`,
 	)
+	// Reap the durability push too (best-effort) — a discarded chain's pushed
+	// branch is dead; the next bolt forks fresh from the (advanced) base.
+	tryRun(["git", "push", "origin", "--delete", fixBranch])
 	return {
 		success: true,
 		message: `cleaned up ${fixBranch}`,

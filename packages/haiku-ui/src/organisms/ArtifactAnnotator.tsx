@@ -2,12 +2,14 @@
  * ArtifactAnnotator — draw-on-image annotation widget for stage-review
  * artifacts (HTML wireframes + raster images).
  *
- * Two modes, toggled via the bottom-right pencil FAB:
- *   - Off (default): the overlay is pointer-transparent. The reviewer
- *     can click buttons, scroll, and interact with the mockup like a
- *     normal user.
- *   - On: the overlay captures pointer events. The reviewer drags to
- *     draw strokes; on the first stroke a comment popover opens.
+ * Activation is global, not per-widget: the overlay captures pointer
+ * events only while annotation mode is `active` (the global pen FAB is
+ * on, or Alt/Option is held) — see `AnnotationModeContext`. When it's
+ * off the overlay is pointer-transparent, so the reviewer can click
+ * buttons, scroll, and interact with the mockup like a normal user.
+ * While active, the reviewer drags to draw strokes; on the first stroke
+ * a comment popover opens. A stroke already in flight keeps capturing
+ * even if Alt is released mid-drag, so the gesture finishes cleanly.
  *
  * Submit flow:
  *   1. Reviewer types a comment.
@@ -32,6 +34,7 @@
  */
 
 import { useCallback, useRef, useState } from "react"
+import { useAnnotationMode } from "../hooks/AnnotationModeContext"
 
 // Rose-600 is the annotation red in DESIGN-TOKENS; the canvas 2D
 // strokeStyle accepts raw hex, so we allowlist it here rather than
@@ -70,21 +73,28 @@ export function ArtifactAnnotator({
 	children,
 	onSubmit,
 }: ArtifactAnnotatorProps): React.ReactElement {
+	const mode = useAnnotationMode()
+	// Legacy default when unwrapped: OFF (the overlay was pointer-
+	// transparent until the old per-widget FAB toggled it). With a
+	// provider, the global mode governs.
+	const active = mode.provided ? mode.active : false
 	const wrapperRef = useRef<HTMLDivElement>(null)
 	const svgRef = useRef<SVGSVGElement>(null)
-	// Refs for the floating comment popover + FAB — we hide both for
-	// a frame during capture so `getDisplayMedia` doesn't include our
-	// own UI chrome in the screenshot handed to the AI reviewer.
+	// Ref for the floating comment popover — we hide it (and the global
+	// annotation FAB, found by data attribute) for a frame during capture
+	// so `getDisplayMedia` doesn't include our own UI chrome in the
+	// screenshot handed to the AI reviewer.
 	const popoverRef = useRef<HTMLDivElement>(null)
-	const fabRef = useRef<HTMLButtonElement>(null)
 	const [strokes, setStrokes] = useState<Stroke[]>([])
 	const [drafting, setDrafting] = useState<Stroke | null>(null)
 	const [comment, setComment] = useState("")
 	const [submitting, setSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
-	const [annotating, setAnnotating] = useState(false)
 
 	const hasAnnotation = strokes.length > 0 || drafting !== null
+	// Stay "hot" while a stroke is mid-flight even if the reviewer
+	// released Alt — so a held-Option drag isn't cut off on key-up.
+	const capturing = active || drafting !== null
 
 	const toLocal = useCallback(
 		(event: React.PointerEvent<SVGSVGElement>): Point => {
@@ -132,17 +142,15 @@ export function ArtifactAnnotator({
 		[drafting],
 	)
 
-	/** Clear the current annotation + comment buffer. `exitMode` toggles
-	 *  whether we also leave annotation mode entirely — the Cancel
-	 *  button wants exit; a successful submit wants to stay in mode so
-	 *  the reviewer can immediately draw the next annotation without
-	 *  reopening the FAB. */
-	const clearAll = useCallback((exitMode = true) => {
+	/** Clear the current annotation + comment buffer. Annotation mode
+	 *  itself is global (the pen FAB / held Alt), so clearing a draft
+	 *  never exits the mode — the reviewer stays ready to draw the next
+	 *  one. */
+	const clearAll = useCallback(() => {
 		setStrokes([])
 		setDrafting(null)
 		setComment("")
 		setError(null)
-		if (exitMode) setAnnotating(false)
 	}, [])
 
 	const handleSubmit = useCallback(async () => {
@@ -166,15 +174,18 @@ export function ArtifactAnnotator({
 				height,
 				strokes,
 				artifactName,
-				hideDuringCapture: [popoverRef.current, fabRef.current].filter(
-					Boolean,
-				) as HTMLElement[],
+				hideDuringCapture: [
+					popoverRef.current,
+					// The global pen FAB lives outside this widget — pull it
+					// out of the captured frame by its data attribute.
+					document.querySelector<HTMLElement>("[data-annotation-fab]"),
+				].filter(Boolean) as HTMLElement[],
 			})
 			await onSubmit(trimmed, dataUrl)
 			// Stay in annotation mode — reviewers typically want to
-			// drop several annotations in a single pass. They can exit
-			// via the FAB when done.
-			clearAll(false)
+			// drop several annotations in a single pass. They exit via
+			// the global FAB / releasing Alt when done.
+			clearAll()
 		} catch (err) {
 			const message =
 				err instanceof Error ? err.message : "Failed to submit annotation"
@@ -188,7 +199,7 @@ export function ArtifactAnnotator({
 
 	return (
 		<div className="space-y-3">
-			{annotating && (
+			{active && (
 				<div
 					role="status"
 					aria-live="polite"
@@ -201,7 +212,7 @@ export function ArtifactAnnotator({
 					{hasAnnotation && (
 						<button
 							type="button"
-							onClick={() => clearAll(false)}
+							onClick={clearAll}
 							className="px-2 py-0.5 rounded border border-teal-400 dark:border-teal-600 text-teal-800 dark:text-teal-200 hover:bg-teal-100 dark:hover:bg-teal-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900"
 						>
 							Clear
@@ -216,15 +227,15 @@ export function ArtifactAnnotator({
 				{children}
 				<svg
 					ref={svgRef}
-					className={`absolute inset-0 w-full h-full ${annotating ? "cursor-crosshair" : "pointer-events-none"}`}
-					onPointerDown={annotating ? startStroke : undefined}
-					onPointerMove={annotating ? extendStroke : undefined}
-					onPointerUp={annotating ? finishStroke : undefined}
-					onPointerCancel={annotating ? finishStroke : undefined}
+					className={`absolute inset-0 w-full h-full ${capturing ? "cursor-crosshair" : "pointer-events-none"}`}
+					onPointerDown={active ? startStroke : undefined}
+					onPointerMove={capturing ? extendStroke : undefined}
+					onPointerUp={capturing ? finishStroke : undefined}
+					onPointerCancel={capturing ? finishStroke : undefined}
 					aria-label={
-						annotating ? "Draw annotations on this artifact" : undefined
+						capturing ? "Draw annotations on this artifact" : undefined
 					}
-					aria-hidden={annotating ? undefined : "true"}
+					aria-hidden={capturing ? undefined : "true"}
 				>
 					<title>Annotation overlay</title>
 					{activeStrokes.map((s) => (
@@ -240,45 +251,6 @@ export function ArtifactAnnotator({
 					))}
 				</svg>
 			</div>
-			{/*
-			 * Floating FAB — toggles annotation mode. Rendered via
-			 * `position: fixed` so it stays docked to the viewport
-			 * bottom-right even as the reviewer scrolls through a long
-			 * mockup. Hidden while the comment popover is open so the
-			 * two don't stack on top of each other.
-			 */}
-			{!hasAnnotation && (
-				<button
-					ref={fabRef}
-					type="button"
-					onClick={() => setAnnotating((on) => !on)}
-					aria-pressed={annotating}
-					aria-label={
-						annotating ? "Exit annotation mode" : "Enter annotation mode"
-					}
-					className={`fixed bottom-4 right-4 z-40 inline-flex items-center justify-center rounded-full shadow-lg w-12 h-12 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-900 ${
-						annotating
-							? "bg-teal-700 hover:bg-teal-800 border-teal-800 text-white"
-							: "bg-white dark:bg-stone-900 border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800"
-					}`}
-				>
-					{/* Pencil glyph — single SVG path, no external dep. */}
-					<svg
-						aria-hidden="true"
-						viewBox="0 0 24 24"
-						width="22"
-						height="22"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					>
-						<path d="M12 20h9" />
-						<path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-					</svg>
-				</button>
-			)}
 			{hasAnnotation && (
 				<>
 					{/*
@@ -317,7 +289,7 @@ export function ArtifactAnnotator({
 						<div className="flex items-center gap-2 justify-end">
 							<button
 								type="button"
-								onClick={() => clearAll(true)}
+								onClick={clearAll}
 								disabled={submitting}
 								aria-disabled={submitting || undefined}
 								className="px-3 py-1.5 rounded-md border border-stone-300 dark:border-stone-600 text-xs font-semibold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:bg-stone-100 disabled:text-stone-600 disabled:border-stone-400 dark:disabled:bg-stone-800 dark:disabled:text-stone-300 dark:disabled:border-stone-500 disabled:cursor-not-allowed"

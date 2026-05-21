@@ -77,6 +77,7 @@ export function DirectionPageModule({
 		<SessionShell
 			kind="Design Direction"
 			title={session.title || "Design Direction"}
+			annotatable
 		>
 			<DirectionPage session={session} sessionId={sessionId} wsRef={wsRef} />
 		</SessionShell>

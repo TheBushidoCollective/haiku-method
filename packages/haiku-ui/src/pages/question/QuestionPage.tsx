@@ -8,12 +8,12 @@
  *
  * Annotations follow the same pattern as the review page and the
  * direction page: each reference image is wrapped in <ArtifactAnnotator>
- * so the live image stays interactive by default; the pencil FAB
- * toggles annotation mode; on submit the browser screen-captures the
- * rendered surface (via getDisplayMedia) + composites the reviewer's
- * strokes. The captured screenshots ride along with the answer payload
- * and the MCP tool unpacks them into image content blocks so Claude
- * sees what the reviewer was looking at.
+ * so the live image stays interactive by default; the global pen FAB
+ * (or holding ⌥ Option) toggles annotation mode; on submit the browser
+ * screen-captures the rendered surface (via getDisplayMedia) +
+ * composites the reviewer's strokes. The captured screenshots ride along
+ * with the answer payload and the MCP tool unpacks them into image
+ * content blocks so Claude sees what the reviewer was looking at.
  */
 
 import { MarkdownViewer } from "@haiku/shared"
@@ -191,10 +191,10 @@ export function QuestionPage({
 				<Card>
 					<SectionHeading>Reference image</SectionHeading>
 					<p className="text-sm text-stone-600 dark:text-stone-300 mb-3">
-						The image is interactive by default. Click the pencil FAB
-						(bottom-right) to annotate — draw on the surface, add a comment,
-						submit. Each pass screenshots the rendered image so Claude sees the
-						captured spot.
+						The image is interactive by default. Turn on annotation — the pen
+						button in the bottom-right corner, or hold ⌥ Option — then draw on
+						the surface, add a comment, and submit. Each pass screenshots the
+						rendered image so Claude sees the captured spot.
 					</p>
 					<ArtifactAnnotator
 						artifactName="reference image"

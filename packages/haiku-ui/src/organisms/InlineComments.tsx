@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useAnnotationMode } from "../hooks/AnnotationModeContext"
 
 /** Same djb2-ish non-cryptographic hash used by useSeenTracker.ts.
  *  Collision risk here is "someone deliberately editing the file to
@@ -152,6 +153,16 @@ export function InlineComments({
 	// Safari 17.2+, Chrome 105+, Firefox 141+ all have it.
 	const hasHighlightApi = useHasHighlightApi()
 
+	// Selecting text only offers the "+ Comment" button while annotation
+	// mode is active (global pen FAB on, or Alt/Option held). When it's
+	// off, text selection behaves like plain browser selection — no
+	// popover. Previously-saved highlights still paint regardless; the
+	// gate is on CREATING a new comment, not viewing existing ones.
+	// Unwrapped (no provider), selection-to-comment stays always-on —
+	// the legacy standalone behavior.
+	const mode = useAnnotationMode()
+	const active = mode.provided ? mode.active : true
+
 	const redrawHighlights = useCallback(() => {
 		if (!hasHighlightApi) return
 		const pending = pendingRangeRef.current
@@ -271,6 +282,9 @@ export function InlineComments({
 	}, [currentContentSha, redrawHighlights, existingAnchors])
 
 	function evaluateSelection(): void {
+		// Annotation mode gates new-comment creation. When it's off, a
+		// text selection is just a selection — no popover.
+		if (!active) return
 		// If there's already a pending selection under review, don't
 		// replace it — the reviewer is mid-comment. Clicks inside the
 		// popover don't reach here (handled by the handleUp guard).

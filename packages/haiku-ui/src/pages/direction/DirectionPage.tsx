@@ -67,7 +67,11 @@ type Mode = "select" | "regenerate"
 /** Optional markdown preamble the tool supplied to frame the choice.
  *  Rendered at the top of both intake and archetype paths so the user
  *  reads it before picking. Mirrors the "Context" card on QuestionPage. */
-function ContextPreamble({ context }: { context?: string }): React.ReactElement | null {
+function ContextPreamble({
+	context,
+}: {
+	context?: string
+}): React.ReactElement | null {
 	if (!context) return null
 	return (
 		<Card>
@@ -312,11 +316,11 @@ function ArchetypePage({
 				<Card>
 					<SectionHeading>{selected.name} preview</SectionHeading>
 					<p className="text-sm text-stone-600 dark:text-stone-300 mb-3">
-						The preview is interactive by default. Click the pencil FAB
-						(bottom-right) to enter annotation mode, draw on the surface, and
-						add a comment. Each annotation pass is screenshotted via the
-						browser's screen-share permission so the agent sees what you saw —
-						same pattern as the review UI.
+						The preview is interactive by default. Turn on annotation — the pen
+						button in the bottom-right corner, or hold ⌥ Option — to draw on the
+						surface and add a comment. Each annotation pass is screenshotted via
+						the browser's screen-share permission so the agent sees what you saw
+						— same pattern as the review UI.
 					</p>
 					<ArtifactAnnotator
 						artifactName={selected.name}

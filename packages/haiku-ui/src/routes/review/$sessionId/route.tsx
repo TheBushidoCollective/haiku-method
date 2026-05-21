@@ -41,6 +41,7 @@ import { SessionEndedOverlay } from "../../../molecules/SessionEndedOverlay"
 import { StageProgressStrip } from "../../../molecules/StageProgressStrip"
 import { SubmitSuccess } from "../../../molecules/SubmitSuccess"
 import type { AnnotationPin } from "../../../organisms/AnnotationCanvas"
+import { AnnotationModeFab } from "../../../organisms/AnnotationModeFab"
 import { FeedbackFloatingButton } from "../../../organisms/FeedbackFloatingButton"
 import { FeedbackSheet } from "../../../organisms/FeedbackSheet"
 import type { InlineCommentEntry } from "../../../organisms/InlineComments"
@@ -594,6 +595,11 @@ function ReviewLayoutLoaded({
 					</div>
 
 					{isMobile && <MobileFeedbackSection />}
+
+					{/* Global annotation toggle. On mobile it stacks above the
+					    feedback floating button so the two don't overlap in the
+					    bottom-right corner. */}
+					<AnnotationModeFab stacked={isMobile} />
 				</div>
 			</FeedbackProvider>
 		</ReviewRouteProvider>

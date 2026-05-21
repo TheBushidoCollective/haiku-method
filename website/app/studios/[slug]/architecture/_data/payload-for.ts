@@ -646,13 +646,18 @@ export function payloadFor(
 			],
 			writes: [
 				{
+					path: ".haiku/worktrees/{slug}/fix-{stage}-FB-<NN>/",
+					change:
+						"fixer hats LAND THE ACTUAL FIX — real code/test/artifact changes — in the fix-chain's isolation worktree (branch `haiku/{slug}/fix-{stage}-FB-<NN>`, forked from the stage branch). Pushed on each advance; merged into the stage branch + reaped when the terminal hat closes the FB (`mergeFixChainWorktree` under `withStageLock`). Mirrors a unit's worktree.",
+				},
+				{
 					path: ".haiku/intents/{slug}/stages/{stage}/feedback/<NN>-*.md",
 					change:
-						"fixer hats edit the FB BODY via `haiku_feedback_write`; the flagged unit is read-only context (`haiku_unit_read`). Hat progression via `haiku_feedback_advance_hat` / `_reject_hat`. The terminal hat's advance triggers `close_feedback` on the next tick — engine stamps `closed_at` and applies `targets.invalidates` (clearing approvals on the targeted unit, which routes the cursor back through those approval roles).",
+						"the FB BODY (via `haiku_feedback_write`) records the resolution — what was done / reproduced / now passes; the flagged unit's SPEC is read-only context (`haiku_unit_read`), its code is patchable. Hat progression via `haiku_feedback_advance_hat` / `_reject_hat`. The terminal advance triggers `close_feedback` — engine stamps `closed_at`, merges the fix-chain worktree, and applies `targets.invalidates` (clearing approvals on the targeted unit, routing the cursor back through those approval roles against the corrected code).",
 				},
 			],
 			instructions:
-				"FB-as-unit fix loop. The first hat in `fix_hats:` is conventionally a classifier — it reads the FB body, decides which unit (if any) the finding targets and which approval roles to invalidate on closure, and calls `haiku_feedback_set_targets`. Subsequent hats execute the fix; the terminal hat (typically `feedback-assessor`) validates and calls `haiku_feedback_advance_hat`. Engine auto-stamps `closed_at` and applies invalidations on the next tick. Closed FBs become input to the next iteration of the upstream stage's elaborate phase — completed units are never modified (forward-only).",
+				"FB-as-unit fix loop. The first hat in `fix_hats:` is conventionally a classifier — it reads the FB body, decides which unit (if any) the finding targets and which approval roles to invalidate on closure, and calls `haiku_feedback_set_targets`. Subsequent hats LAND THE FIX on disk in the chain's worktree (a description of the fix is not the fix); the terminal hat (typically `feedback-assessor`) verifies the fix landed (commands pass) and calls `haiku_feedback_advance_hat`. Engine auto-stamps `closed_at`, merges the chain's code into the stage branch, and applies invalidations on the next tick. If the merge conflicts, the pre-tick `completePendingFixChainMerges` gate hands back `integrate_fix_chains` until the agent resolves it. A rejected (invalid) finding's code is discarded — it never lands.",
 		},
 		"drift-detected": {
 			injection: [

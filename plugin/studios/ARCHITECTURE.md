@@ -80,6 +80,18 @@ In v4, status is derived from on-disk FM fields, not stored as an enum:
 
 **Stages are not sealed; only intents are.** Forward-only applies to existing units' bytes (immutable post-merge). A previously-merged stage that gains a new unit (e.g. because the feedback engine added corrective work via a stage revisit) becomes ahead-of-main and the cursor automatically rewinds to it via `firstUnmergedStage`. `complete_stage` is a recurring event, not a terminal one (renamed 2026-05-12 from the prior VCS-named `merge_stage`).
 
+### 1.4 Worktree isolation for unit + fix-chain code
+
+Each unit's hat loop and each fix-chain's hat loop run their **code** in a dedicated git worktree on an ephemeral per-loop branch — units on `haiku/<slug>/<unit>`, fix-chains on `haiku/<slug>/fix-<scope>-<FB>` — both forked from the base branch (the stage branch; intent main for the intent-completion fix loop). Workflow **state** (the unit / FB frontmatter — iterations, reviews, approvals, and the FB body) stays on the BASE branch: the engine's MCP write tools resolve paths through the engine, not the agent's cwd, so a subagent working inside its worktree still stamps state on the base branch. Only the agent's code / output files live in the worktree. This is what lets a parallel wave of subagents run without clobbering each other's edits.
+
+- **Created at dispatch.** `createUnitWorktree` / `createFixChainWorktree` run when the cursor (or the advance-hat relay) builds a hat dispatch block; the subagent template directs the agent to `cd` there. Idempotent — created on the first hat, reused by later hats and across bolts.
+- **Pushed on advance.** Each `*_advance_hat` checkpoints the worktree to its branch (`pushUnitWorktree` / `pushFixChainWorktree`) so a CC restart / cross-machine pickup keeps the loop's code — it isn't on the base branch until the terminal merge.
+- **Merged at terminal.** The terminal advance (a unit's last hat; a fix-chain's closing hat) merges the worktree's branch into the base under `withStageLock`, then reaps the worktree + branch (local AND the pushed remote ref — the per-loop branch is internal, not a review surface). Clean merges complete inline; conflicts leave the worktree mid-merge and the engine hands back `resolve_merge_conflicts` (units) / `integrate_fix_chains` (fix-chains) for the agent to resolve and re-tick.
+- **Conflict re-tick (fix-chains).** The pre-tick `completePendingFixChainMerges` gate re-attempts the merge (via `mergeFixChainWorktree`'s `MERGE_HEAD` re-entry) for advance-closed chains whose worktree survives, BEFORE the cursor can advance the stage over stranded fix code. Open chains are still in their loop; rejected chains had their code discarded (`cleanupFixChainWorktree`) so an invalid finding's code never lands.
+- **Pickup recovery.** `createUnitWorktree` / `createFixChainWorktree` recreate from the pushed remote branch when the local worktree is gone (resume). If the worktree AND branch are gone everywhere (a no-remote project, or a deleted ref), the pre-tick `resetLostUnits` gate clears the unit's iterations so the cursor re-dispatches the first hat into a fresh worktree. Gated on `hasGitRemote()` — recovery only matters when the work could have crossed machines.
+
+This is entirely a git-layer / run-tick concern. **The cursor reads none of it** (Rule 1): worktree creation, pushing, merging, and the recovery / completion gates live in `git-worktree.ts` + `run-tick.ts`, never in `cursor.ts`. Filesystem mode (no git) skips it — units and fix-chains run in place, and all the helpers no-op.
+
 ## 2. Stage anatomy
 
 ### 2.1 Phases (cursor-derived)
@@ -360,6 +372,7 @@ The cursor emits exactly these `kind` values (mapped 1:1 to `OrchestratorAction.
 | `drift_detected` | Cursor Track C | Any signed witness's content hash no longer matches |
 | `start_feedback_hat` | Cursor Track B | Open FB needs its next fix hat dispatched |
 | `close_feedback` | Cursor Track B | Terminal fix hat advanced; engine stamps `closed_at` and applies `targets.invalidates` |
+| `integrate_fix_chains` | `run-tick.ts` pre-cursor gate (`completePendingFixChainMerges`) | An advance-closed fix-chain's worktree merge conflicted on landing its code; the merge is left mid-merge for the agent to resolve, then the gate completes it on the re-tick (§1.4, §6) |
 | `elaborate_review` | Cursor pre-stage walk OR Cursor Track A pre-decompose | Substance verifier dispatch. No `stage` field = pre-intent (verifies intent.md after creation). With `stage` = per-stage (verifies `stages/<stage>/elaboration.md`). Seals via `haiku_intent_seal` or `haiku_stage_elaboration_seal` |
 | `elaborate` | Cursor Track A pre-decompose | Per-stage conversation gate. `stages/<stage>/elaboration.md` is missing on a fresh stage (units.length === 0) and mode != autopilot. Agent surfaces informed questions, captures the agreement via `haiku_stage_elaboration_record` |
 | `discovery_required` | Cursor Track A pre-decompose | Required discovery artifact missing from disk at the studio template's `location:` (output existence is the signal — no FM stamp). When the template declares `tool: <mcp_tool>`, the agent calls that tool which writes the artifact directly (the design-direction picker case). Otherwise the agent fans out a subagent to produce the artifact |
@@ -419,27 +432,28 @@ Findings (FBs) raised by adversarial reviewers are addressed by the fix-loop. Th
 ### 6.1 FB-as-unit
 
 When a fix-loop dispatches against an FB:
-- The FB file IS the unit. The fixer hats read it, edit its body, and complete it via `haiku_feedback_advance_hat` against the FB (the FB-scoped mirror of `haiku_unit_advance_hat`; the unit-scoped tool cannot target an FB).
-- Fixer hats MUST NOT edit unit files. The flagged unit is read-only context (read via `haiku_unit_read`); the fixer's deliverable is the FB body (written via `haiku_feedback_write`) populated with diagnosis, root cause, and recommended action.
-- The same plan-do-verify pattern applies. The stage's `fix_hats:` list typically contains the implementer hat (per the `fix_hats must be implementer` repo convention) followed by `feedback-assessor` as the terminal verifier — minimum 2 entries today; longer chains are encouraged for stages where a planner step adds value before the implementer runs. The terminal hat validates the FB body and calls `haiku_feedback_advance_hat` to close the FB.
-- workflow engine lifecycle enforcement is identical: FBs go pending → active (in fix-loop) → completed.
+- The FB file IS the unit. The fixer hats read it, work the finding, and complete it via `haiku_feedback_advance_hat` against the FB (the FB-scoped mirror of `haiku_unit_advance_hat`; the unit-scoped tool cannot target an FB).
+- **The fixer's deliverable is the actual fix — real code / test / artifact changes on disk** (per the implementer mandate, e.g. `fix-hats/builder.md`: "a plan, a diagnosis, or a description of the fix is not the fix; nothing closes the finding unless you change real files on disk"). That code is landed in the chain's isolation worktree (§1.4) and merged into the base branch when the terminal hat closes the FB. The FB body (written via `haiku_feedback_write`) is the resolution **log** — what was done, what was reproduced, what now passes — NOT a substitute for the change.
+- Fixer hats MUST NOT edit the flagged unit's **spec file** (`units/<unit>.md` is read-only, guard-blocked; read it for context via `haiku_unit_read`). They DO patch the code that unit produced — the unit's bytes are immutable (§1.3), its code outputs are fair game for a corrective fix.
+- The same plan-do-verify pattern applies. The stage's `fix_hats:` list begins with the implementer hat (per the `fix_hats must be implementer` repo convention) and ends with `feedback-assessor` as the terminal verifier — minimum 2 entries today; longer chains are encouraged where a classifier or planner step adds value before the implementer runs. The terminal hat verifies the fix landed (commands pass, artifact correct) and calls `haiku_feedback_advance_hat` to close the FB.
+- workflow engine lifecycle enforcement is identical: FBs go pending → active (in fix-loop) → completed, and the chain's code is isolated → pushed → merged exactly like a unit's (§1.4).
 
-### 6.2 Closed FBs as input to the next iteration
+### 6.2 Closing an FB lands the fix; closed FBs also inform the next iteration
 
-A "completed" FB under the FB-as-unit model means its diagnosis is well-formed and the work-of-record is the FB body. The underlying defect is then patched through the next iteration of the upstream stage's elaborate phase, which consumes the FB body as historical diagnosis when authoring new pending units.
+A "completed" FB means the fixer hats **landed the corrective change** and the terminal `feedback-assessor` verified it. The chain's code merges into the base branch on close (§1.4); the FB body is the resolution log. Closed FBs ALSO become historical diagnosis the next elaborate iteration of the upstream stage can consume when authoring follow-up units — but that is a SECONDARY use for follow-on work, not the primary fix path. The fix itself is the fixer hat's deliverable, landed now, not deferred to a later iteration.
 
 In v4 there is no separate `elaborate_revisit` or `feedback_revisit` action. Instead:
 
-- **Closing a fix-hat FB** stamps `closed_at` AND applies `targets.invalidates` to the targeted unit's approvals (clearing them on disk). The cursor on the next tick walks Track A and routes through whichever approval roles got invalidated, re-running the work needed to re-sign them.
+- **Closing a fix-hat FB** stamps `closed_at`, merges the chain's worktree into the base branch (§1.4), AND applies `targets.invalidates` to the targeted unit's approvals (clearing them on disk). The cursor on the next tick walks Track A and routes through whichever approval roles got invalidated, re-running the review/approval work needed to re-sign them against the now-corrected code.
 - **Cross-stage FB routing** is purely by file location. A finding sitting in `stages/<earlier>/feedback/` rewinds the cursor to that earlier stage's fix loop on the next tick, regardless of where the FB was originally filed. Track B walks every stage from index 0 through the active stage.
 - **Stage rewinds** happen automatically when corrective work commits to an earlier stage's branch. That branch goes ahead of intent main and `firstUnmergedStage` returns it on the next tick, pinning the cursor there until it re-merges.
 
 What's strictly enforced:
-- Existing completed units are never modified by the fix-loop (the hook blocks unit-file edits; fixer prompts forbid them; the FM is engine-only).
-- New corrective work, when authored, becomes new pending units (per §1.3 forward-only).
-- The fixer hat's deliverable is the FB body — diagnosis, root cause, recommended action — written via `haiku_feedback_write`. The flagged unit is read-only context via `haiku_unit_read`.
+- Existing completed units' **spec files** are never modified by the fix-loop (the hook blocks `units/<unit>.md` edits; fixer prompts forbid them; the FM is engine-only). The code those units produced IS patchable — that's how a fixer lands a corrective change.
+- New corrective work that warrants its own scoped spec becomes new pending units (per §1.3 forward-only); an in-place corrective fix lands as code in the chain's worktree (§1.4).
+- The fixer hat lands the actual fix on disk; the FB body (via `haiku_feedback_write`) is the resolution log, and the flagged unit's spec is read-only context (via `haiku_unit_read`).
 
-This is why front-loading matters. By the time a defect surfaces at the gate, the original units that contain it are permanent. Corrective work happens on top of them, never to them.
+This is why front-loading matters. By the time a defect surfaces at the gate, the original units' specs are permanent — but their code can be corrected by a fix-loop without re-opening the spec.
 
 ### 6.3 FB classification (haiku_feedback_set_targets)
 

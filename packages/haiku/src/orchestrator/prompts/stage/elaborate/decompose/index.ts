@@ -47,7 +47,9 @@ import {
 } from "../../../../../state-tools.js"
 import {
 	filterReviewAgentsByScope,
+	readPhaseBody,
 	readPhaseOverride,
+	readReviewAgentBody,
 	readReviewAgentPaths,
 	readStageDef,
 	resolveStageInputs,
@@ -66,6 +68,7 @@ import {
 	providerSpliceBlock,
 	readIntentMode,
 	resolveStudioMandateModel,
+	studioReadRef,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { sharedBlockRef } from "../../../_shared/index.js"
@@ -124,10 +127,6 @@ const DISCOVERY_SUBAGENT_TPL = loadTemplate(
 	import.meta.url,
 	"blocks/discovery-subagent.eta.md",
 )
-const REVIEW_AGENT_LENS_TPL = loadTemplate(
-	import.meta.url,
-	"blocks/review-agent-lens-section.eta.md",
-)
 const SKILL_REGISTRY_TPL = loadTemplate(
 	import.meta.url,
 	"blocks/skill-registry-section.eta.md",
@@ -149,27 +148,17 @@ function readFrontmatter(filePath: string): Record<string, unknown> {
 	return data
 }
 
-/** Strip the YAML frontmatter from a review-agent file body so the
- *  inlined "lens" content is just the mandate prose. */
-function readReviewAgentBody(absPath: string): string {
-	if (!existsSync(absPath)) return ""
-	const raw = readFileSync(absPath, "utf8")
-	try {
-		const { body } = parseFrontmatter(raw)
-		return (body || raw).trim()
-	} catch {
-		return raw.trim()
-	}
-}
 
 /** Build the per-stage review-agent lens section. Pulls every per-stage
  *  review agent that scopes to this stage's declared outputs (via
- *  `applies_to:` glob) and inlines its body under a per-agent
- *  subheading. */
+ *  `applies_to:` glob) and emits a snapshot Read per agent (the same
+ *  resolution `haiku_read_review_agent` uses), so the planner reads each
+ *  lens from an immutable snapshot rather than an inlined body. */
 function buildReviewAgentLensSection(
 	studio: string,
 	stage: string,
 	dir: string,
+	slug: string,
 ): string | null {
 	const agentPaths = filterReviewAgentsByScope(
 		readReviewAgentPaths(studio, stage),
@@ -178,21 +167,23 @@ function buildReviewAgentLensSection(
 	)
 	const names = Object.keys(agentPaths).sort()
 	if (names.length === 0) return null
-	const entries = names
-		.map((name) => {
-			const body = readReviewAgentBody(agentPaths[name])
-			if (!body) return null
-			const heading = name
-				.split(/[-_]/)
-				.map((p) => (p.length === 0 ? p : p[0].toUpperCase() + p.slice(1)))
-				.join(" ")
-			return { heading, body }
+	const lines = names.map((name) => {
+		const heading = name
+			.split(/[-_]/)
+			.map((p) => (p.length === 0 ? p : p[0].toUpperCase() + p.slice(1)))
+			.join(" ")
+		const ref = studioReadRef({
+			resolveBody: () => readReviewAgentBody(studio, stage, name),
+			toolName: "haiku_read_review_agent",
+			toolArgs: { studio, stage, role: name },
+			intent: slug,
+			stage,
+			kind: "review-agent",
+			name,
 		})
-		.filter((e): e is { heading: string; body: string } => e !== null)
-	if (entries.length === 0) return null
-	return eta
-		.renderString(REVIEW_AGENT_LENS_TPL, { preamble: LENS_PREAMBLE, entries })
-		.trimEnd()
+		return `- **${heading}** — ${ref}`
+	})
+	return [LENS_PREAMBLE, "", ...lines].join("\n").trimEnd()
 }
 
 /** Build the "## Available Skills" injection block. */
@@ -291,7 +282,7 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 
 		sections.push(sharedBlockRef("workflow-contracts-elaborate"))
 
-		const lenses = buildReviewAgentLensSection(studio, stage, dir)
+		const lenses = buildReviewAgentLensSection(studio, stage, dir, slug)
 		if (lenses) sections.push(lenses)
 
 		sections.push(eta.renderString(ITERATIVE_DECIDE_TPL, { slug }))
@@ -324,7 +315,7 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 					)}\n\nYou MUST open every file above and read it completely before drafting units. The title is only a handle; the body carries requirements, tests, and acceptance criteria.`,
 			)
 		}
-		const lenses = buildReviewAgentLensSection(studio, stage, dir)
+		const lenses = buildReviewAgentLensSection(studio, stage, dir, slug)
 		if (lenses) sections.push(lenses)
 		const revisitSkillSection = buildSkillRegistrySection()
 		if (revisitSkillSection) sections.push(revisitSkillSection)
@@ -341,11 +332,17 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	if (!composed) sections.push(`## Elaborate: ${stage}`)
 	if (stageDef) sections.push(`${stageDef.body}`)
 
-	const elaborationOverride = readPhaseOverride(studio, stage, "ELABORATION")
-	if (elaborationOverride) {
-		sections.push(
-			`### Phase: Elaboration Override\n\n${elaborationOverride.body}`,
-		)
+	if (readPhaseOverride(studio, stage, "ELABORATION")) {
+		const phaseRef = studioReadRef({
+			resolveBody: () => readPhaseBody(studio, stage, "ELABORATION"),
+			toolName: "haiku_read_phase",
+			toolArgs: { studio, stage, phase: "ELABORATION" },
+			intent: slug,
+			stage,
+			kind: "phase",
+			name: "ELABORATION",
+		})
+		sections.push(`### Phase: Elaboration Override\n\n${phaseRef}`)
 	}
 
 	sections.push(sharedBlockRef("workflow-contracts-elaborate"))
@@ -356,7 +353,7 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	const providerBlock = providerSpliceBlock("elaborate", dir)
 	if (providerBlock) sections.push(providerBlock)
 
-	const lenses = buildReviewAgentLensSection(studio, stage, dir)
+	const lenses = buildReviewAgentLensSection(studio, stage, dir, slug)
 	if (lenses) sections.push(lenses)
 
 	// Upstream context — REFERENCES, not inlined bodies.
@@ -645,6 +642,7 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 		studio,
 		stage,
 		"## Stage Output Expectations\n\nThis stage must ultimately produce the following outputs during execution. Plan units accordingly:",
+		slug,
 	)
 	if (outputExpectations) sections.push(outputExpectations)
 

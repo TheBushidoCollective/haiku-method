@@ -130,7 +130,7 @@ test("fix-chain terminal close merges the worktree's code onto the stage branch 
 		git(wt, "commit", "-q", "-m", "haiku: builder fix for FB-001")
 
 		// Terminal close: advance the last hat. Requires a reply.
-		const resp = handleStateTool("haiku_feedback_advance_hat", {
+		const resp = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: slug,
 			stage,
 			feedback_id: 1,

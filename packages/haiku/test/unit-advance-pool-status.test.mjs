@@ -171,7 +171,7 @@ test("advance_hat return carries a per-unit position line + stage pool snapshot"
 
 		const handleStateTool = (await import(`${SRC}state-tools.ts`)).handleStateTool
 		const resp = await withCwd(repoRoot, () =>
-			handleStateTool("haiku_unit_advance_hat", {
+			handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 				intent: slug,
 				stage,
 				unit: "unit-02-call",

@@ -22,6 +22,7 @@ import { buildBrowseUrl } from "@/lib/browse/url"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
 import { BrowseMarkdown } from "./BrowseMarkdown"
+import { FixHistory } from "./IterationHistory"
 import { IntentKanban } from "./KanbanView"
 import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
 import {
@@ -2301,6 +2302,7 @@ function FeedbackCard({
 							Invalidates: {fb.invalidates.join(", ")}
 						</div>
 					)}
+					<FixHistory iterations={fb.raw.iterations} />
 				</div>
 			)}
 		</div>

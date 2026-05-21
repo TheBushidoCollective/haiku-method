@@ -251,10 +251,33 @@ try {
 			],
 		})
 		const out = buildPriorFeedbackRejectBlock(path)
-		assert.match(out, /Prior fix-bolt rejection/)
+		assert.match(out, /Prior rejection/)
 		assert.match(out, /fix-assessor/)
 		assert.match(out, /bolt 1/)
 		assert.match(out, /Validation guard still missing on payload\.qty/)
+	})
+
+	test("surfaces a forward advance handoff as the baton (message field)", () => {
+		// v9: the most-recent COMPLETED advance hands its `message` baton to
+		// the next fix-hat — not just rejects. Renders the "Handoff from" block.
+		const path = writeUnit("fb-advanced-handoff", {
+			id: "FB-011",
+			status: "pending",
+			iterations: [
+				{
+					bolt: 1,
+					hat: "classifier",
+					started_at: "2026-04-30T00:00:00Z",
+					completed_at: "2026-04-30T00:01:00Z",
+					result: "advanced",
+					message: "Material drift: invalidates the spec reviewer; re-sign needed.",
+				},
+			],
+		})
+		const out = buildPriorFeedbackRejectBlock(path)
+		assert.match(out, /Handoff from/)
+		assert.match(out, /classifier/)
+		assert.match(out, /Material drift: invalidates the spec reviewer/)
 	})
 
 	test("returns empty when no rejected iteration exists (only advanced/closed)", () => {
@@ -298,10 +321,11 @@ try {
 		assert.strictEqual(buildPriorFeedbackRejectBlock(path), "")
 	})
 
-	test("uses 'rejected' (feedback shape) not 'reject' (unit shape)", () => {
-		// Defensive: feedback iteration uses different result vocabulary.
-		// "reject" is unit-shape; the feedback block must NOT match it.
-		const path = writeUnit("fb-wrong-result", {
+	test("frames 'rejected' (feedback shape) as a rejection, not a handoff", () => {
+		// Feedback iteration uses the "rejected" token (not unit-shape
+		// "reject"). A "rejected" result must render the reject framing
+		// ("address this before advancing"), NOT the forward handoff.
+		const path = writeUnit("fb-result-token", {
 			id: "FB-009",
 			status: "pending",
 			iterations: [
@@ -310,12 +334,14 @@ try {
 					hat: "fix-assessor",
 					started_at: "2026-04-30T00:00:00Z",
 					completed_at: "2026-04-30T00:01:00Z",
-					result: "reject", // unit-shape, should not match
-					reason: "should not surface — wrong result token",
+					result: "rejected",
+					message: "guard still missing",
 				},
 			],
 		})
-		assert.strictEqual(buildPriorFeedbackRejectBlock(path), "")
+		const out = buildPriorFeedbackRejectBlock(path)
+		assert.match(out, /Prior rejection/)
+		assert.ok(!out.includes("Handoff from"), "rejected must not read as a handoff")
 	})
 
 	// ── formatSubagentDispatchBlock background attribute ──────────────────────

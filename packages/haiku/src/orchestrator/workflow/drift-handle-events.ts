@@ -369,10 +369,10 @@ ${slots}
 
 ## What to do (classifier hat)
 
-Read the file body and the slots' specs. Decide:
+Read the file body and the slots' specs, decide cosmetic vs material, and **record your determination and reasoning as your handoff \`message\`** when you advance — the body above is the immutable finding (locked once this loop started), so don't rewrite it.
 
-- **Cosmetic** — the premise shifted but the consumers' reasoning is unaffected (e.g., whitespace, comments, doc reword that doesn't change the contract). Advance the hat without setting \`targets.invalidates\`. Closure is a no-op; the witnesses are already current.
-- **Material** — the shift invalidates one or more consumers' signoff. Call \`haiku_feedback_set_targets\` with \`invalidates: [<role>, ...]\` listing the roles whose signature can no longer stand. The close hook will delete those slots; the cursor's next tick will re-emit \`dispatch_review\` for them.
+- **Cosmetic** — the premise shifted but the consumers' reasoning is unaffected (e.g., whitespace, comments, doc reword that doesn't change the contract). Put WHY it's cosmetic in your advance \`message\`, then advance the hat. Closure is a no-op; the witnesses are already current.
+- **Material** — the shift invalidates one or more consumers' signoff. Put WHICH consumers and WHY in your advance \`message\`, AND call \`haiku_feedback_set_targets\` with \`invalidates: [<role>, ...]\` listing the roles whose signature can no longer stand. \`set_targets\` is the invalidation MECHANISM only — your reasoning lives in the handoff \`message\`. The close hook deletes those slots; the next tick re-dispatches them to re-sign against the new premise.
 
 This FB will NOT be re-emitted by the next drift sweep — the witness restamp at file time made the SHA mismatch impossible to detect twice.`
 }

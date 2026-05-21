@@ -140,7 +140,7 @@ test("haiku_unit_advance_hat commits ALL dirty in-scope files (not just .haiku/*
 		process.env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT
 		process.chdir(tmp)
 		const { handleStateTool } = await import(`${SRC}/state-tools.ts`)
-		const resp = handleStateTool("haiku_unit_advance_hat", {
+		const resp = handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 			intent: slug,
 			unit: "unit-01-finding",
 			stage,

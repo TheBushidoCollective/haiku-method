@@ -153,7 +153,7 @@ test("haiku_feedback_advance_hat response shape: next_subagent_dispatch_block an
 		process.env.CLAUDE_PLUGIN_ROOT = PLUGIN_ROOT
 		process.chdir(tmp)
 		const { handleStateTool } = await import(`${SRC}/state-tools.ts`)
-		const resp = handleStateTool("haiku_feedback_advance_hat", {
+		const resp = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: slug,
 			stage,
 			feedback_id: fbId,

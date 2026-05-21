@@ -185,7 +185,7 @@ test("unit advance_hat: mid-chain advance appends a relay block for this unit's 
 			handleStateTool: (await import(`${SRC}state-tools.ts`)).handleStateTool,
 		}))
 		const resp = await withCwd(repoRoot, () =>
-			handleStateTool("haiku_unit_advance_hat", {
+			handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 				intent: slug,
 				stage,
 				unit: "unit-01-stub",
@@ -265,7 +265,7 @@ test("unit advance_hat: queue-empty drain emits a run_next directive instead of 
 			handleStateTool: (await import(`${SRC}state-tools.ts`)).handleStateTool,
 		}))
 		const resp = await withCwd(repoRoot, () =>
-			handleStateTool("haiku_unit_advance_hat", {
+			handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 				intent: slug,
 				stage,
 				unit: "unit-01-stub",

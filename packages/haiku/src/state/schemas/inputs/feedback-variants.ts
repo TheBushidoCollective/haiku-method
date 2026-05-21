@@ -228,6 +228,11 @@ export const validateHaikuFeedbackSetTargetsInputSchema = stateAjv.compile(
 export const HAIKU_FEEDBACK_ADVANCE_HAT_INPUT_SCHEMA = Type.Object(
 	{
 		...fbTargeting,
+		message: Type.String({
+			minLength: 1,
+			description:
+				"REQUIRED handoff message — the baton you pass to the next fix-hat. State what you did about the finding, what you concluded, and what the next hat needs to know to pick up cleanly. Recorded on this iteration and embedded in the next fix-hat's dispatch. Distinct from `reply` (the requester-facing closure note); this is the inter-hat baton.",
+		}),
 		reply: Type.Optional(
 			Type.String({
 				description:
@@ -250,12 +255,11 @@ export const validateHaikuFeedbackAdvanceHatInputSchema = stateAjv.compile(
 export const HAIKU_FEEDBACK_REJECT_HAT_INPUT_SCHEMA = Type.Object(
 	{
 		...fbTargeting,
-		reason: Type.Optional(
-			Type.String({
-				description:
-					"Short explanation of why the current hat's work was rejected (recorded in the FB iteration history).",
-			}),
-		),
+		message: Type.String({
+			minLength: 1,
+			description:
+				"REQUIRED handoff message — the baton back to the fix-hat that gets re-run. Explain why the current hat's work was rejected AND what must change to pass. Recorded on this iteration and embedded in the re-dispatched hat's instruction.",
+		}),
 		state_file: stateFile,
 	},
 	{ additionalProperties: false },

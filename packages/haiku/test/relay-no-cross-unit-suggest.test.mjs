@@ -140,7 +140,7 @@ test("terminal advance does not emit a cross-unit relay block (sibling in flight
 
 		const { handleStateTool } = await import(`${SRC}state-tools.ts`)
 		const resp = await withCwd(repo, () =>
-			handleStateTool("haiku_unit_advance_hat", {
+			handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 				intent: slug,
 				stage,
 				unit: "unit-01-a",

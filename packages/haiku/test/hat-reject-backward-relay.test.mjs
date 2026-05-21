@@ -177,7 +177,7 @@ test("haiku_feedback_reject_hat (stage scope): bounces to the prior hat and rela
 					intent: slug,
 					stage,
 					feedback_id: 1,
-					reason: REJECT_NOTE,
+					message: REJECT_NOTE,
 				}),
 			),
 		)
@@ -267,7 +267,7 @@ test("haiku_feedback_reject_hat (intent scope): validator reject bounces to reco
 				handleStateTool("haiku_feedback_reject_hat", {
 					intent: slug,
 					feedback_id: 1,
-					reason: REJECT_NOTE,
+					message: REJECT_NOTE,
 				}),
 			),
 		)
@@ -373,7 +373,7 @@ test("haiku_unit_reject_hat: bounces to the prior hat and relays IT on the same 
 				intent: slug,
 				stage,
 				unit: "unit-01-stub",
-				reason: REJECT_NOTE,
+				message: REJECT_NOTE,
 			}),
 		)
 		const { text, parsed } = parseResp(resp)

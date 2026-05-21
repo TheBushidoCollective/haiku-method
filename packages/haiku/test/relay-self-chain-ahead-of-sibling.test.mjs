@@ -152,7 +152,7 @@ test("non-terminal advance relays the calling unit's own next hat past a lagging
 
 		const { handleStateTool } = await import(`${SRC}state-tools.ts`)
 		const resp = await withCwd(repo, () =>
-			handleStateTool("haiku_unit_advance_hat", {
+			handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 				intent: slug,
 				stage,
 				unit: "unit-01-a",

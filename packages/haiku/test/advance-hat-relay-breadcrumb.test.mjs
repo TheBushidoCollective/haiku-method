@@ -163,6 +163,7 @@ async function callAdvance(repoRoot, slug, stage, fbId, callingHat, fixHats, opt
 			intent: slug,
 			stage,
 			feedback_id: fbId,
+			message: opts.message ?? "test advance handoff",
 		}
 		if (opts.reply) args.reply = opts.reply
 		const result = await handleStateTool("haiku_feedback_advance_hat", args)
@@ -350,13 +351,13 @@ test("advance_hat: race safety — concurrent terminal advances don't double-pic
 			// a pending claim; the other's walk sees FB-003 as in-flight
 			// and falls through to noop / run_next.
 			const [respA, respB] = await Promise.all([
-				handleStateTool("haiku_feedback_advance_hat", {
+				handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 					intent: slug,
 					stage,
 					feedback_id: 1,
 					reply: "done",
 				}),
-				handleStateTool("haiku_feedback_advance_hat", {
+				handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 					intent: slug,
 					stage,
 					feedback_id: 2,

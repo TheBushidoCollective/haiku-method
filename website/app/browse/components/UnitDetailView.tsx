@@ -18,6 +18,7 @@ import type {
 import { formatDate, formatDuration } from "@/lib/browse/types"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
+import { FixHistory, HatHistory } from "./IterationHistory"
 import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
 
 function titleCase(s: string): string {
@@ -399,6 +400,9 @@ export function UnitDetailView({
 				</section>
 			)}
 
+			{/* Hat history — per-hat handoffs as the unit walked its sequence */}
+			<HatHistory iterations={unit.raw.iterations} />
+
 			{/* Frontmatter Debug (collapsed) */}
 			{Object.keys(unit.raw).length > 0 && (
 				<details className="mt-8">
@@ -485,6 +489,7 @@ function UnitFeedbackCard({ fb }: { fb: HaikuFeedback }) {
 							</div>
 						</div>
 					)}
+					<FixHistory iterations={fb.raw.iterations} />
 				</div>
 			)}
 		</div>

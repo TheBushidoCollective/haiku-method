@@ -33,19 +33,20 @@ more.
      - `drift` origin → `["user"]` (drift always escalates to human).
      - `agent` origin → `[]` (informational; no rerun).
 4. Call `haiku_feedback_set_targets { intent, stage, feedback_id,
-   target_unit, target_invalidates, reasoning: "<one paragraph
-   explaining the classification choice>" }`. The reasoning is
-   stored on `targets.reasoning` (FM) and on the FB body as a
-   `## Classification` section so the reviewer can see why you
-   routed the FB the way you did. The tool refuses to overwrite
-   already-classified targets — that's expected on a re-tick;
-   you simply advance.
-5. Append a `## Classification\n\n<reasoning>` section to the FB body
-   via `haiku_feedback_write` so the SPA's markdown render shows the
-   reasoning directly to the reviewer (the structured FM field is for
-   tooling; the body section is for humans).
-6. Call `haiku_feedback_advance_hat { intent, stage, feedback_id }` to
-   hand off to the next fix-hat.
+   target_unit, target_invalidates }`. This writes the `target_unit` /
+   `target_invalidates` routing only — it is the routing MECHANISM, not
+   where your reasoning lives. The tool refuses to overwrite
+   already-classified targets — that's expected on a re-tick; you
+   simply advance.
+5. Call `haiku_feedback_advance_hat { intent, stage, feedback_id,
+   message: "<one paragraph: your classification + WHY you routed it
+   this way>" }` to hand off to the next fix-hat. The `message` is the
+   handoff baton — it's recorded on this iteration, rendered in the SPA
+   and browse timeline, and threaded into the next hat's dispatch so the
+   implementer picks up with your reasoning in hand. Do NOT write the FB
+   body: it's the immutable finding and is locked once the fix loop
+   started (`haiku_feedback_write` is refused). Your reasoning lives in
+   the handoff `message`.
 
 ## What you do NOT do
 

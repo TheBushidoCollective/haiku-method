@@ -3167,6 +3167,13 @@ export interface UnitIteration {
 	started_at: string
 	completed_at: string | null
 	result: UnitHatResult | null
+	/** The handoff baton recorded when this iteration completed — what
+	 *  the hat did and what the next (or re-run) hat needs to know.
+	 *  Required on every advance/reject via the tool gate; surfaced in the
+	 *  SPA + browse timeline and embedded in the next hat's dispatch. */
+	message?: string
+	/** Deprecated: legacy reject reason. Reads fall back to this when
+	 *  `message` is absent (pre-handoff-message iterations). */
 	reason?: string
 }
 
@@ -3189,12 +3196,47 @@ export function startUnitIteration(unitFile: string, hat: string): void {
 	writeFileSync(unitFile, matter.stringify(body, data))
 }
 
-/** Close the most recent iteration on the unit with a result + optional
- *  reason. No-op if the file doesn't exist or no open iteration is found. */
+/** Lazy on-read migration: normalize legacy iteration `reason` → the
+ *  unified handoff `message` field for a unit or feedback file, persisting
+ *  the change. The v8→v9 migration does this in bulk; this heals any file
+ *  that's read before (or outside) that pass — `haiku_unit_read` /
+ *  `haiku_feedback_read` call it so a reader never sees a stale `reason`.
+ *  Idempotent: writes only when an entry actually changes; a no-op when
+ *  every iteration already carries `message` (or has no `reason`). */
+export function migrateIterationReasonsOnRead(filePath: string): void {
+	if (!existsSync(filePath)) return
+	let parsed: { data: Record<string, unknown>; body: string }
+	try {
+		parsed = parseFrontmatter(readFileSync(filePath, "utf8"))
+	} catch {
+		return
+	}
+	const iters = parsed.data.iterations
+	if (!Array.isArray(iters)) return
+	let changed = false
+	for (const entry of iters) {
+		if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue
+		const rec = entry as Record<string, unknown>
+		if (typeof rec.reason !== "string") continue
+		if (rec.message === undefined && rec.reason.length > 0) rec.message = rec.reason
+		delete rec.reason
+		changed = true
+	}
+	if (!changed) return
+	try {
+		writeFileSync(filePath, matter.stringify(parsed.body, parsed.data))
+	} catch {
+		// Best-effort heal — a write failure must never block a read.
+	}
+}
+
+/** Close the most recent iteration on the unit with a result + the
+ *  handoff message (the baton to the next/re-run hat). No-op if the file
+ *  doesn't exist or no open iteration is found. */
 export function completeUnitIteration(
 	unitFile: string,
 	result: UnitHatResult,
-	reason?: string,
+	message?: string,
 ): void {
 	if (!existsSync(unitFile)) return
 	const { data, body } = parseFrontmatter(readFileSync(unitFile, "utf8"))
@@ -3206,7 +3248,7 @@ export function completeUnitIteration(
 	if (last.completed_at) return
 	last.completed_at = timestamp()
 	last.result = result
-	if (reason) last.reason = reason
+	if (message) last.message = message
 	data.iterations = iters
 	writeFileSync(unitFile, matter.stringify(body, data))
 }
@@ -5657,6 +5699,14 @@ export interface FeedbackIteration {
 	completed_at?: string
 	result?: "advanced" | "closed" | "reopened" | "rejected"
 	commit?: string
+	/** The handoff baton recorded when this fix-hat iteration completed —
+	 *  what the hat did about the finding and what the next (or re-run)
+	 *  fix-hat needs. Required on every advance/reject via the tool gate;
+	 *  surfaced in the SPA + browse timeline and embedded in the next
+	 *  fix-hat's dispatch. */
+	message?: string
+	/** Deprecated: legacy reject reason. Reads fall back to this when
+	 *  `message` is absent (pre-handoff-message iterations). */
 	reason?: string
 }
 
@@ -6086,6 +6136,7 @@ function parseFeedbackIterations(
 				: {}),
 			...(validResult ? { result: result as FeedbackIteration["result"] } : {}),
 			...(typeof e.commit === "string" ? { commit: e.commit } : {}),
+			...(typeof e.message === "string" ? { message: e.message } : {}),
 			...(typeof e.reason === "string" ? { reason: e.reason } : {}),
 		})
 	}
@@ -9224,7 +9275,7 @@ export function handleStateTool(
 				// stamped on the FB itself by `haiku_feedback_advance_hat`
 				// when the terminal fix-hat lands. The unit's `closes:`
 				// field is informational only (a forensic breadcrumb).
-				completeUnitIteration(advPath, "advance")
+				completeUnitIteration(advPath, "advance", args.message as string)
 
 				emitTelemetry("haiku.unit.completed", {
 					intent: args.intent as string,
@@ -9445,7 +9496,7 @@ export function handleStateTool(
 			// bolt count. completeUnitIteration writes the terminal stamp
 			// on the prior hat; startUnitIteration appends a fresh entry
 			// for the next hat.
-			completeUnitIteration(advPath, "advance")
+			completeUnitIteration(advPath, "advance", args.message as string)
 			startUnitIteration(advPath, nextHat)
 			{
 				const sf = args.state_file as string | undefined
@@ -9607,7 +9658,7 @@ export function handleStateTool(
 			// builder — even when 309/617/714 byte stubs already exist on
 			// disk. Prefix the message with a hard tag so the
 			// disambiguation is unmissable.
-			const rejectReasonRaw = (args.reason as string) || undefined
+			const rejectReasonRaw = (args.message as string) || undefined
 			// Declared outputs that actually resolve on disk (across the
 			// main intent dir, the unit worktree, and the repo root).
 			const declaredOutputs = Array.isArray(failData.outputs)
@@ -9994,6 +10045,9 @@ export function handleStateTool(
 					{ isError: true },
 				)
 			}
+			// Lazy heal: normalize any legacy iteration `reason` → `message`
+			// on disk before the read (idempotent; no-op once migrated).
+			migrateIterationReasonsOnRead(path)
 			const { data, body } = parseFrontmatter(readFileSync(path, "utf8"))
 			// Title resolves from FM `title:` if present, else first H1, else
 			// the unit name. We expose ONLY the title and body — every other
@@ -12229,6 +12283,10 @@ export function handleStateTool(
 					{ isError: true },
 				)
 			}
+			// Lazy heal: normalize any legacy iteration `reason` → `message`
+			// on disk (idempotent; no-op once migrated). The returned body is
+			// unaffected — only FM iterations change.
+			migrateIterationReasonsOnRead(foundPath)
 			const fmTitle =
 				typeof foundData?.title === "string" ? (foundData.title as string) : ""
 			const h1Match = foundBody.match(/^#\s+(.+)$/m)
@@ -12303,8 +12361,7 @@ export function handleStateTool(
 			const foundFm = found.data
 
 			// Lifecycle enforcement: closed/rejected FBs are terminal and
-			// immutable. Pending and addressed (under-fix) accept body
-			// rewrites — the fixer hat populates the FB body with diagnosis.
+			// immutable.
 			// Merge-state suspension (2026-05-20): while mid-merge, this
 			// terminal-immutability prevention lifts so the schema-safe FB
 			// write tool can resolve a conflicted feedback file (e.g. an
@@ -12321,6 +12378,28 @@ export function handleStateTool(
 						error: "lifecycle_violation",
 						current_status: status,
 						message: `Cannot rewrite feedback '${feedbackId}' — status is '${status}'. Per the forward-only lifecycle rule, closed and rejected feedback are terminal and immutable. To raise a related concern, file a NEW feedback via haiku_feedback.`,
+					},
+					{ isError: true },
+				)
+			}
+
+			// Body lock: once the fix-hat loop has started (the engine has
+			// stamped at least one iteration — a dispatch claim or a completed
+			// hat), the FB body is FROZEN. It's the immutable record of WHAT
+			// was found; per-hat work belongs in the iteration handoff
+			// `message` (haiku_feedback_advance_hat / haiku_feedback_reject_hat),
+			// not in body rewrites that clobber the finding and the engine
+			// preamble. Mid-merge is the only exception (conflict resolution).
+			const fbIters = Array.isArray(foundFm.iterations)
+				? (foundFm.iterations as unknown[])
+				: []
+			if (!isMergeInProgress() && fbIters.length > 0) {
+				return reply(
+					{
+						error: "body_locked",
+						feedback_id: feedbackId,
+						iterations: fbIters.length,
+						message: `Feedback '${feedbackId}' body is locked — its fix-hat loop has started (${fbIters.length} iteration(s) on record). The body is the immutable finding; record your per-hat work in the handoff \`message\` on haiku_feedback_advance_hat (or haiku_feedback_reject_hat), which the engine threads into the next hat's dispatch. Do not rewrite the body.`,
 					},
 					{ isError: true },
 				)
@@ -12491,6 +12570,8 @@ export function handleStateTool(
 			// terminal hat is the one that owns the user-facing message.
 			const replyArg =
 				typeof args.reply === "string" ? (args.reply as string).trim() : ""
+			const messageArg =
+				typeof args.message === "string" ? (args.message as string).trim() : ""
 			if (isLast && !replyArg) {
 				return reply(
 					{
@@ -12525,6 +12606,7 @@ export function handleStateTool(
 					...lastIter,
 					completed_at: timestamp(),
 					result: isLast ? "closed" : "advanced",
+					...(messageArg ? { message: messageArg } : {}),
 				}
 			} else {
 				iterations.push({
@@ -12532,6 +12614,7 @@ export function handleStateTool(
 					hat: callingHat,
 					completed_at: timestamp(),
 					result: isLast ? "closed" : "advanced",
+					...(messageArg ? { message: messageArg } : {}),
 				})
 			}
 
@@ -12836,7 +12919,7 @@ export function handleStateTool(
 			const intentArg = args.intent as string
 			const stageArg = (args.stage as string) || ""
 			const feedbackId = formatFeedbackId(args.feedback_id as number)
-			const reason = (args.reason as string) || ""
+			const messageArg = (args.message as string) || ""
 			if (!intentArg || !feedbackId) {
 				return reply(
 					{
@@ -13012,7 +13095,7 @@ export function handleStateTool(
 					...lastIterRej,
 					completed_at: timestamp(),
 					result: "rejected",
-					reason: reason || "(no reason provided)",
+					message: messageArg || "(no message provided)",
 				}
 			} else {
 				iterations.push({
@@ -13020,7 +13103,7 @@ export function handleStateTool(
 					hat: callingHatRej,
 					completed_at: timestamp(),
 					result: "rejected",
-					reason: reason || "(no reason provided)",
+					message: messageArg || "(no message provided)",
 				})
 			}
 
@@ -13113,7 +13196,7 @@ export function handleStateTool(
 				rejecting_hat: callingHatRej,
 				next_dispatched_hat: nextDispatchedHatRej,
 				new_bolt: curBoltRej + 1,
-				reason,
+				handoff: messageArg,
 				next_subagent_dispatch_block: rejNextBlock,
 				message: rejWaveMessage,
 			})

@@ -266,9 +266,9 @@ test("haiku_unit_start requires intent, unit", () => {
 	assert.deepStrictEqual(tool.inputSchema.required, ["intent", "unit"])
 })
 
-test("haiku_unit_reject_hat requires intent, unit", () => {
+test("haiku_unit_reject_hat requires intent, unit, message", () => {
 	const tool = stateToolDefs.find((t) => t.name === "haiku_unit_reject_hat")
-	assert.deepStrictEqual(tool.inputSchema.required, ["intent", "unit"])
+	assert.deepStrictEqual(tool.inputSchema.required, ["intent", "unit", "message"])
 })
 
 test("haiku_unit_set requires intent, stage, unit, field, value", () => {

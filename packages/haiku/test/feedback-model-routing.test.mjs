@@ -260,7 +260,7 @@ test("haiku_feedback_reject_hat escalates the FB model tier on rejection (sonnet
 			intent: slug,
 			stage: "design",
 			feedback_id: 1,
-			reason: "needs more context — escalating",
+			message: "needs more context — escalating",
 		})
 		assert.ok(
 			!result.isError,
@@ -337,7 +337,7 @@ test("haiku_feedback_reject_hat does NOT escalate when already at opus (top tier
 			intent: slug,
 			stage: "design",
 			feedback_id: 1,
-			reason: "still stuck",
+			message: "still stuck",
 		})
 		assert.ok(!result.isError)
 

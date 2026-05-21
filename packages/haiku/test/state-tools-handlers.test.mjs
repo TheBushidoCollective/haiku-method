@@ -1387,7 +1387,7 @@ body
 	console.log("\n=== haiku_unit_reject_hat ===")
 
 	test("returns error for missing unit", () => {
-		const result = handleStateTool("haiku_unit_reject_hat", {
+		const result = handleStateTool("haiku_unit_reject_hat", { message: "test reject handoff",
 			intent: intentSlug,
 			unit: "unit-99-missing",
 		})
@@ -1490,7 +1490,7 @@ body
 	console.log("\n=== haiku_unit_advance_hat: inputs not declared ===")
 
 	test("blocks advance when unit has no inputs: field at all", () => {
-		const result = handleStateTool("haiku_unit_advance_hat", {
+		const result = handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			unit: "unit-03-no-inputs-field",
 		})
@@ -1505,7 +1505,7 @@ body
 	console.log("\n=== haiku_unit_advance_hat: outputs backpressure ===")
 
 	test("blocks completion when last hat has empty outputs", () => {
-		const result = handleStateTool("haiku_unit_advance_hat", {
+		const result = handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			unit: "unit-01-no-outputs",
 		})
@@ -1515,7 +1515,7 @@ body
 	})
 
 	test("allows completion when last hat has tracked outputs", () => {
-		const result = handleStateTool("haiku_unit_advance_hat", {
+		const result = handleStateTool("haiku_unit_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			unit: "unit-02-with-outputs",
 		})
@@ -2182,7 +2182,7 @@ Test stage.
 		// computing 0===1=false for length=2, leaving status=addressed
 		// after assessor's advance.
 		// Call 1: fixer claims (no curHat, isFirst). hat → fixer, status → addressed.
-		const r1 = handleStateTool("haiku_feedback_advance_hat", {
+		const r1 = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 3,
@@ -2197,7 +2197,7 @@ Test stage.
 		// requires a `reply` string. Without it the call returns
 		// `reply_required`. Pass one so this regression test still
 		// exercises closure semantics, not the reply guard.
-		const r2 = handleStateTool("haiku_feedback_advance_hat", {
+		const r2 = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 3,
@@ -2265,7 +2265,7 @@ created_at: 2026-05-13T00:00:00Z
 Body for no-relay-promise regression test.
 `,
 		)
-		const result = handleStateTool("haiku_feedback_advance_hat", {
+		const result = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 5,
@@ -2313,7 +2313,7 @@ Body for no-relay-promise regression test.
 		// Same fixture as B4 above, but skipping `reply` on the terminal
 		// call. The handler must reject with the stable named error so
 		// agents and tests can match on it.
-		const r = handleStateTool("haiku_feedback_advance_hat", {
+		const r = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 4,
@@ -2324,7 +2324,7 @@ Body for no-relay-promise regression test.
 	})
 
 	test("haiku_feedback_advance_hat refuses on already-closed FB (FB-002)", () => {
-		const result = handleStateTool("haiku_feedback_advance_hat", {
+		const result = handleStateTool("haiku_feedback_advance_hat", { message: "test advance handoff",
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 2,
@@ -2339,7 +2339,7 @@ Body for no-relay-promise regression test.
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 2,
-			reason: "test",
+			message: "test",
 		})
 		const parsed = JSON.parse(getTextResult(result))
 		assert.strictEqual(parsed.error, "lifecycle_violation")
@@ -2382,7 +2382,7 @@ Body for bounce-loop guard test.
 			intent: intentSlug,
 			stage: "inception",
 			feedback_id: 6,
-			reason: "still no actionable work",
+			message: "still no actionable work",
 		})
 		const parsed = JSON.parse(getTextResult(result))
 		assert.strictEqual(result.isError, true, "guard MUST return isError")

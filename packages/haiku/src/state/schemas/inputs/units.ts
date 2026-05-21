@@ -145,6 +145,11 @@ export const HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA = Type.Object(
 		intent: Type.String({ minLength: 1 }),
 		unit: Type.String({ minLength: 1 }),
 		stage: optionalStage,
+		message: Type.String({
+			minLength: 1,
+			description:
+				"REQUIRED handoff message — the baton you pass to the next hat. State what you did, what you concluded, and what the next hat needs to know to pick up cleanly (decisions made, open questions, where you left off). Recorded on this iteration and embedded in the next hat's dispatch. Not a status line — write it for the hat that reads it next.",
+		}),
 		state_file: stateFile,
 	},
 	{ additionalProperties: false },
@@ -163,12 +168,11 @@ export const HAIKU_UNIT_REJECT_HAT_INPUT_SCHEMA = Type.Object(
 		intent: Type.String({ minLength: 1 }),
 		unit: Type.String({ minLength: 1 }),
 		stage: optionalStage,
-		reason: Type.Optional(
-			Type.String({
-				description:
-					"Short explanation of why the current hat's output was rejected (e.g. 'touch targets <44px on mobile', 'missing dark-mode tokens'). Recorded in the unit's iterations history.",
-			}),
-		),
+		message: Type.String({
+			minLength: 1,
+			description:
+				"REQUIRED handoff message — the baton back to the hat that gets re-run. Explain why the current hat's output was rejected AND what must change to pass (e.g. 'touch targets <44px on mobile — bump to 44px min and re-check the nav row'). Recorded on this iteration and embedded in the re-dispatched hat's instruction.",
+		}),
 		state_file: stateFile,
 	},
 	{ additionalProperties: false },

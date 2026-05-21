@@ -61,6 +61,31 @@ interface V9Outcome {
 	review_slots_backfilled: number
 	approval_slots_stripped: number
 	drift_artifacts_deleted: number
+	iterations_message_migrated: number
+}
+
+/** Migrate the legacy iteration `reason` field to the unified handoff
+ *  `message` field. v9 records a handoff baton on every hat transition
+ *  (advance AND reject) in `iterations[].message`; pre-v9 only rejects
+ *  carried text, in `iterations[].reason`. Move it forward so the SPA /
+ *  browse timeline and the next-hat dispatch read a single field. Leaves
+ *  `message` alone when already present (idempotent); drops `reason`
+ *  once copied. Returns the number of entries changed. */
+function migrateIterationMessages(data: Record<string, unknown>): number {
+	const iters = data.iterations
+	if (!Array.isArray(iters)) return 0
+	let migrated = 0
+	for (const entry of iters) {
+		if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue
+		const rec = entry as Record<string, unknown>
+		if (typeof rec.reason !== "string") continue
+		if (rec.message === undefined && rec.reason.length > 0) {
+			rec.message = rec.reason
+		}
+		delete rec.reason
+		migrated++
+	}
+	return migrated
 }
 
 function migrateOneUnitFile(
@@ -93,8 +118,9 @@ function migrateOneUnitFile(
 				repoRoot,
 				unitInputs,
 			})
+			// `slotRec` IS `reviewsRec[role]` (same object reference) —
+			// mutating it writes through; no re-assignment needed.
 			slotRec.input_witnesses = witnesses
-			reviewsRec[role] = slotRec
 			outcome.review_slots_backfilled++
 			changed = true
 		}
@@ -110,16 +136,55 @@ function migrateOneUnitFile(
 			if (!slot || typeof slot !== "object" || Array.isArray(slot)) continue
 			const slotRec = slot as Record<string, unknown>
 			if (slotRec.witnesses === undefined) continue
+			// `slotRec` IS `approvalsRec[role]` — the delete mutates in
+			// place; no re-assignment needed.
 			delete slotRec.witnesses
-			approvalsRec[role] = slotRec
 			outcome.approval_slots_stripped++
 			changed = true
 		}
 	}
 
+	// (3) Migrate legacy iteration `reason` → unified `message`.
+	const itersMigrated = migrateIterationMessages(data)
+	if (itersMigrated > 0) {
+		outcome.iterations_message_migrated += itersMigrated
+		changed = true
+	}
+
 	if (!changed) return false
 	writeFileSync(unitPath, matter.stringify(parsed.content, data))
 	return true
+}
+
+/** Migrate iteration `reason` → `message` on every feedback file in the
+ *  intent (stage-scope + intent-scope). FB fix-hat iterations carry the
+ *  same handoff baton as unit iterations. */
+function migrateFeedbackIterations(
+	intentDir: string,
+	outcome: V9Outcome,
+): void {
+	const dirs: string[] = [join(intentDir, "feedback")]
+	const stagesDir = join(intentDir, "stages")
+	if (existsSync(stagesDir)) {
+		for (const stageEntry of readdirSync(stagesDir, { withFileTypes: true })) {
+			if (!stageEntry.isDirectory()) continue
+			dirs.push(join(stagesDir, stageEntry.name, "feedback"))
+		}
+	}
+	for (const dir of dirs) {
+		if (!existsSync(dir)) continue
+		for (const file of readdirSync(dir).filter((f) => f.endsWith(".md"))) {
+			const fbPath = join(dir, file)
+			const raw = readFileSync(fbPath, "utf8")
+			const parsed = matter(raw)
+			const data = parsed.data as Record<string, unknown>
+			const migrated = migrateIterationMessages(data)
+			if (migrated > 0) {
+				outcome.iterations_message_migrated += migrated
+				writeFileSync(fbPath, matter.stringify(parsed.content, data))
+			}
+		}
+	}
 }
 
 function deleteIfExists(path: string, outcome: V9Outcome): void {
@@ -172,6 +237,7 @@ export function v8ToV9(ctx: MigrationContext): MigrationStepDetails {
 		review_slots_backfilled: 0,
 		approval_slots_stripped: 0,
 		drift_artifacts_deleted: 0,
+		iterations_message_migrated: 0,
 	}
 
 	const repoRoot = deriveRepoRoot(ctx.intentDir)
@@ -197,11 +263,18 @@ export function v8ToV9(ctx: MigrationContext): MigrationStepDetails {
 		}
 	}
 
+	// Migrate feedback iteration `reason` → `message` (units handled in
+	// migrateOneUnitFile above).
+	migrateFeedbackIterations(ctx.intentDir, outcome)
+
 	// Delete dead drift-baseline sidecar files.
 	purgeDriftArtifacts(ctx.intentDir, outcome)
 
 	details.units_migrated = outcome.units_migrated
 	details.drift_artifacts_deleted = outcome.drift_artifacts_deleted
+	details.review_slots_backfilled = outcome.review_slots_backfilled
+	details.approval_slots_stripped = outcome.approval_slots_stripped
+	details.iterations_message_migrated = outcome.iterations_message_migrated
 
 	// Stamp plugin_version on intent.md.
 	const intentMdPath = join(ctx.intentDir, "intent.md")

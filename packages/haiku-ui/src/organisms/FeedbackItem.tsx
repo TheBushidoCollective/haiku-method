@@ -707,9 +707,9 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 															</code>
 														)}
 													</div>
-													{it.reason && (
+													{(it.message ?? it.reason) && (
 														<div className="mt-0.5 text-stone-600 dark:text-stone-300 [overflow-wrap:anywhere]">
-															{it.reason}
+															{it.message ?? it.reason}
 														</div>
 													)}
 												</li>

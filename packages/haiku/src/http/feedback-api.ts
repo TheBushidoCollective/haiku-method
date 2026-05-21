@@ -130,6 +130,7 @@ export function registerFeedbackRoutes(instance: FastifyInstance): void {
 				inline_anchor: i.inline_anchor ?? null,
 				closure_reply: i.closure_reply ?? undefined,
 				closure_reply_unread: i.closure_reply_unread,
+				iterations: i.iterations,
 				scope: "stage" as const,
 			})),
 		}
@@ -203,6 +204,7 @@ export function registerFeedbackRoutes(instance: FastifyInstance): void {
 				inline_anchor: i.inline_anchor ?? null,
 				closure_reply: i.closure_reply ?? undefined,
 				closure_reply_unread: i.closure_reply_unread,
+				iterations: i.iterations,
 				scope: "intent" as const,
 			})),
 		}

@@ -223,66 +223,39 @@ export function studioReadRef(opts: {
  *
  *  Returns "" when no completed reject is found (first hat / first bolt /
  *  unit file missing). */
-export function buildPriorRejectBlock(unitFilePath: string): string {
-	if (!existsSync(unitFilePath)) return ""
-	let iters: Array<{
-		hat?: unknown
-		completed_at?: unknown
-		result?: unknown
-		reason?: unknown
-	}> = []
-	try {
-		const { data } = parseFrontmatter(readFileSync(unitFilePath, "utf8"))
-		if (Array.isArray(data.iterations)) {
-			iters = data.iterations as typeof iters
-		}
-	} catch {
-		return ""
-	}
-	for (let i = iters.length - 1; i >= 0; i--) {
-		const it = iters[i]
-		if (!it) continue
-		if (!it.completed_at) continue
-		if (it.result !== "reject") continue
-		if (typeof it.reason !== "string" || !it.reason.trim()) continue
-		const hatName = typeof it.hat === "string" ? it.hat : "previous hat"
-		return [
-			"## Prior rejection — address this before advancing",
-			"",
-			`The previous bolt's **${hatName}** hat rejected the work with this reason:`,
-			"",
-			"~~~~",
-			it.reason.trim(),
-			"~~~~",
-			"",
-			"Treat each item as a hard requirement: your hat is NOT done until every issue above is resolved. Reference the specific items in your final commit message and your hat-completion summary so the next reviewer can verify closure. Do NOT call `haiku_unit_advance_hat` while any of these remain open — call `haiku_unit_reject_hat` with what's still outstanding.",
-		].join("\n")
-	}
-	return ""
-}
-
-/** Mirror of `buildPriorRejectBlock` for fix-loop prompts. Reads a
- *  feedback file's `iterations:` frontmatter (shape: FeedbackIteration —
- *  `result: "advanced" | "closed" | "reopened" | "rejected"`) and surfaces
- *  the most-recent `rejected` entry's reason so a fix-loop bolt N+1 hat
- *  knows what the previous attempt was rejected for (assessor reject,
- *  fixer-side `haiku_feedback_reject`, etc).
+/** Shared renderer for the prior-hat handoff baton. Walks a unit's or
+ *  feedback's `iterations:` newest-first and surfaces the most-recent
+ *  COMPLETED iteration's handoff `message` (falling back to the legacy
+ *  `reason` for pre-v9 entries). The framing adapts to the transition:
  *
- *  Returns "" when no rejected iteration is found (first fix bolt, fresh
- *  finding, missing file). */
-export function buildPriorFeedbackRejectBlock(
-	feedbackFilePath: string,
+ *   - a REJECT bounce → a "address this before advancing" block (the
+ *     re-run hat must close the prior objection),
+ *   - a forward ADVANCE → a "Handoff from <prior hat>" baton (what the
+ *     prior hat did + what to pick up).
+ *
+ *  This is how the handoff message becomes visible to the NEXT hat
+ *  (the rally-race baton). Returns "" when no completed iteration with a
+ *  message exists (first hat, fresh artifact, missing file). */
+function renderPriorHandoff(
+	filePath: string,
+	opts: {
+		rejectResults: ReadonlySet<string>
+		rejectAdvanceTool: string
+		rejectHatTool: string
+		fixLoop: boolean
+	},
 ): string {
-	if (!existsSync(feedbackFilePath)) return ""
+	if (!existsSync(filePath)) return ""
 	let iters: Array<{
 		bolt?: unknown
 		hat?: unknown
 		completed_at?: unknown
 		result?: unknown
+		message?: unknown
 		reason?: unknown
 	}> = []
 	try {
-		const { data } = parseFrontmatter(readFileSync(feedbackFilePath, "utf8"))
+		const { data } = parseFrontmatter(readFileSync(filePath, "utf8"))
 		if (Array.isArray(data.iterations)) {
 			iters = data.iterations as typeof iters
 		}
@@ -293,23 +266,70 @@ export function buildPriorFeedbackRejectBlock(
 		const it = iters[i]
 		if (!it) continue
 		if (!it.completed_at) continue
-		if (it.result !== "rejected") continue
-		if (typeof it.reason !== "string" || !it.reason.trim()) continue
-		const hatName = typeof it.hat === "string" ? it.hat : "previous fixer"
-		const boltStr = typeof it.bolt === "number" ? ` (bolt ${it.bolt})` : ""
+		// `message` is the v9 handoff field; `reason` is the legacy reject
+		// text (read until every active artifact has re-stamped).
+		const text =
+			typeof it.message === "string" && it.message.trim()
+				? it.message.trim()
+				: typeof it.reason === "string" && it.reason.trim()
+					? it.reason.trim()
+					: ""
+		if (!text) continue
+		const hatName = typeof it.hat === "string" ? it.hat : "previous hat"
+		const boltStr =
+			opts.fixLoop && typeof it.bolt === "number" ? ` (bolt ${it.bolt})` : ""
+		const isReject =
+			typeof it.result === "string" && opts.rejectResults.has(it.result)
+		if (isReject) {
+			return [
+				"## Prior rejection — address this before advancing",
+				"",
+				`The previous ${opts.fixLoop ? "fix attempt" : "bolt"}'s **${hatName}** hat${boltStr} rejected the work and handed back:`,
+				"",
+				"~~~~",
+				text,
+				"~~~~",
+				"",
+				`Treat each item as a hard requirement: your hat is NOT done until every issue above is resolved. Reference them in your work summary and commit message so the next reviewer can verify closure. Do NOT call \`${opts.rejectAdvanceTool}\` while any remain open — call \`${opts.rejectHatTool}\` with what's still outstanding.`,
+			].join("\n")
+		}
 		return [
-			"## Prior fix-bolt rejection — address this before advancing",
+			`## Handoff from \`${hatName}\`${boltStr}`,
 			"",
-			`The previous fix attempt's **${hatName}** hat${boltStr} was rejected with this reason:`,
+			"The prior hat completed and passed you this baton:",
 			"",
 			"~~~~",
-			it.reason.trim(),
+			text,
 			"~~~~",
 			"",
-			"Treat each item as a hard requirement on this bolt: do NOT repeat the same approach the previous bolt took unless you've identified a meaningfully different root cause. Reference the items by name in your bolt summary and the commit message so the next assessor can verify closure.",
+			"Pick up where it left off — honor its decisions, resolve any open questions it flagged, and don't redo work it already landed.",
 		].join("\n")
 	}
 	return ""
+}
+
+/** Prior-hat handoff baton for UNIT hat dispatch (advance or reject). */
+export function buildPriorRejectBlock(unitFilePath: string): string {
+	return renderPriorHandoff(unitFilePath, {
+		rejectResults: new Set(["reject"]),
+		rejectAdvanceTool: "haiku_unit_advance_hat",
+		rejectHatTool: "haiku_unit_reject_hat",
+		fixLoop: false,
+	})
+}
+
+/** Prior-fixer handoff baton for FIX-LOOP hat dispatch (advance or
+ *  reject). Feedback iterations use `result: "advanced" | "closed" |
+ *  "reopened" | "rejected"`. */
+export function buildPriorFeedbackRejectBlock(
+	feedbackFilePath: string,
+): string {
+	return renderPriorHandoff(feedbackFilePath, {
+		rejectResults: new Set(["rejected"]),
+		rejectAdvanceTool: "haiku_feedback_advance_hat",
+		rejectHatTool: "haiku_feedback_reject_hat",
+		fixLoop: true,
+	})
 }
 
 /** Emit a `<subagent>` block whose body is a tmpfile pointer instead

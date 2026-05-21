@@ -21,6 +21,12 @@ export type {
 export { deriveStageStatePure } from "./derived-stage-state"
 // Formatting utilities
 export { formatDate, formatDuration, titleCase } from "./format"
+// Frontmatter YAML utilities (duplicate-key recovery)
+export {
+	dedupeFrontmatterKeys,
+	dedupeTopLevelYamlKeys,
+	isDuplicateKeyError,
+} from "./frontmatter"
 // Granular per-stage progress milestone track — shared order/labels/
 // finalize so the engine status line and the browse UI can't drift.
 export type {
@@ -35,12 +41,6 @@ export {
 	finalizeSteps,
 	reviewMilestoneLabel,
 } from "./progress-milestones"
-// Frontmatter YAML utilities (duplicate-key recovery)
-export {
-	dedupeFrontmatterKeys,
-	dedupeTopLevelYamlKeys,
-	isDuplicateKeyError,
-} from "./frontmatter"
 export type {
 	CriterionItem,
 	HaikuArtifact,

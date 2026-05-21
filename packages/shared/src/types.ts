@@ -1,5 +1,7 @@
 // Shared H·AI·K·U types used by both the website and review-app
 
+import type { ProgressStep } from "./progress-milestones"
+
 export interface HaikuIntent {
 	slug: string
 	title: string
@@ -61,6 +63,12 @@ export interface HaikuStageState {
 	name: string
 	status: "pending" | "active" | "complete"
 	phase: string
+	/** Granular per-stage milestone track (elaborate → each review role →
+	 *  execute → each approval role), derived from per-unit FM. Mirrors the
+	 *  status-line / SPA track so the browse PhaseStepper can render a
+	 *  fine-grained strip. Absent/empty on stages derived from a legacy
+	 *  state.json or with no units — the stepper falls back to coarse phases. */
+	milestones?: ProgressStep[]
 	startedAt: string | null
 	completedAt: string | null
 	gateOutcome: string | null

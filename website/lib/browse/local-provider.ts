@@ -266,6 +266,7 @@ export class LocalProvider implements BrowseProvider {
 			//      intents where state.json is missing for whatever reason)
 			let status: "pending" | "active" | "complete" = "pending"
 			let stagePhase: HaikuStageState["phase"] = v3Phase
+			let stageMilestones: HaikuStageState["milestones"]
 			if (stateStatus === "active") status = "active"
 			else if (stateStatus === "completed") status = "complete"
 			else if (units.length > 0 || stateRaw == null) {
@@ -278,6 +279,7 @@ export class LocalProvider implements BrowseProvider {
 				})
 				status = derived.status
 				stagePhase = derived.phase
+				stageMilestones = derived.milestones
 			} else if (stageName === activeStage) status = "active"
 			else if (stageNames.indexOf(stageName) < stageNames.indexOf(activeStage))
 				status = "complete"
@@ -345,6 +347,7 @@ export class LocalProvider implements BrowseProvider {
 				name: stageName,
 				status,
 				phase: stagePhase,
+				milestones: stageMilestones,
 				startedAt: stageStartedAt,
 				completedAt: stageCompletedAt,
 				gateOutcome,

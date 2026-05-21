@@ -10,6 +10,10 @@ import {
 	type DerivedUnitView,
 	deriveStageStatePure,
 } from "@haiku/shared/derived-stage-state"
+import {
+	buildStageMilestones,
+	type ProgressStep,
+} from "@haiku/shared/progress-milestones"
 import type {
 	HaikuArtifact,
 	HaikuFeedback,
@@ -286,11 +290,7 @@ export function parseFeedback(
 	// Resolution drives the cursor's routing. Surfaced here so the SPA
 	// can label each FB with how the engine will act on it next tick.
 	const resolutionRaw = data.resolution
-	const resolution:
-		| "question"
-		| "inline_fix"
-		| "stage_revisit"
-		| null =
+	const resolution: "question" | "inline_fix" | "stage_revisit" | null =
 		resolutionRaw === "question" ||
 		resolutionRaw === "inline_fix" ||
 		resolutionRaw === "stage_revisit"
@@ -406,6 +406,12 @@ export function deriveStageStateFromUnits(
 ): {
 	status: "pending" | "active" | "complete"
 	phase: "elaborate" | "execute" | "review" | "approve" | "complete" | ""
+	/** Granular per-stage milestone track (elaborate → each review role →
+	 *  execute → each approval role), built from the same role union +
+	 *  per-unit stamps the coarse phase is derived from. Same shape the
+	 *  status line + SPA render; the browse PhaseStepper consumes it for a
+	 *  fine-grained strip and falls back to the coarse phases when empty. */
+	milestones: ProgressStep[]
 } {
 	const unitViews: DerivedUnitView[] = units.map((u, i) => ({
 		name: `u${i}`,
@@ -448,8 +454,62 @@ export function deriveStageStateFromUnits(
 		approvalRoles,
 		elaborationVerified: options.elaborationVerified ?? null,
 	})
-	const status: "pending" | "active" | "complete" =
+	let status: "pending" | "active" | "complete" =
 		derived.status === "completed" ? "complete" : derived.status
+
+	// Per-unit signals we need both for the blind-spot correction below and
+	// for the milestone track. `everyUnitStamped` mirrors the union rule the
+	// role lists came from; `allUnitsAdvanced` mirrors deriveStatus's
+	// terminal-advance check under the browse's hats=[] ("any advance is
+	// terminal") semantics; `anyApprovalStamped` tells genuinely-complete
+	// stages (the engine always writes approval stamps) apart from the
+	// pre-approval window.
+	const everyUnitStamped = (bucket: "reviews" | "approvals", role: string) =>
+		units.length > 0 &&
+		units.every((u) => {
+			const slot = u.raw[bucket]
+			return (
+				slot !== null &&
+				typeof slot === "object" &&
+				!Array.isArray(slot) &&
+				Boolean((slot as Record<string, unknown>)[role])
+			)
+		})
+	const allUnitsAdvanced =
+		units.length > 0 &&
+		units.every((u) => {
+			const its = u.raw.iterations
+			if (!Array.isArray(its) || its.length === 0) return false
+			const last = its[its.length - 1] as { result?: unknown }
+			return last?.result === "advance"
+		})
+	const anyApprovalStamped = units.some((u) => {
+		const a = u.raw.approvals
+		return (
+			a !== null &&
+			typeof a === "object" &&
+			!Array.isArray(a) &&
+			Object.keys(a as Record<string, unknown>).length > 0
+		)
+	})
+
+	// Blind-spot correction. Union-based role inference can't see approval
+	// roles that NO unit has stamped yet, so a stage in the post-execute /
+	// pre-approval window (every unit terminal-advanced, `approvals: {}`
+	// everywhere) collapses to "completed" — a vacuous `every()` over an
+	// empty role set — where the engine, knowing the real roles, returns
+	// "gate". Genuinely-complete stages always carry approval stamps (the
+	// engine writes them), so "complete + units advanced + zero approvals
+	// stamped anywhere" uniquely identifies the blind spot. Surface it as
+	// awaiting approval instead. We synthesize a single pending approval
+	// milestone (`user` → "approval gate") so the granular track shows the
+	// gate the coarse phase now reports.
+	const awaitingFirstApproval =
+		status === "complete" && allUnitsAdvanced && !anyApprovalStamped
+	if (awaitingFirstApproval) {
+		status = "active"
+	}
+
 	// Map the derivation's per-stage phase to the canonical 5-phase
 	// model the engine emits (ARCHITECTURE.md §2.1). The pure function
 	// still returns the legacy "gate" name for the post-review,
@@ -458,14 +518,37 @@ export function deriveStageStateFromUnits(
 	// means the stage is past every approval — that's `complete`.
 	let phase: "elaborate" | "execute" | "review" | "approve" | "complete" | "" =
 		""
-	if (status === "complete") {
+	if (awaitingFirstApproval) {
+		phase = "approve"
+	} else if (status === "complete") {
 		phase = "complete"
 	} else if (derived.phase === "gate") {
 		phase = "approve"
 	} else if (derived.phase) {
 		phase = derived.phase
 	}
-	return { status, phase }
+
+	// Granular milestone track. Flags mirror the pure derivation's own
+	// checks, gathered browse-side from the per-unit FM. Observations is
+	// omitted: the browse has no observations.md signal.
+	const milestoneApprovalRoles =
+		approvalRoles.length === 0 && awaitingFirstApproval
+			? [{ role: "user", stamped: false }]
+			: approvalRoles.map((role) => ({
+					role,
+					stamped: everyUnitStamped("approvals", role),
+				}))
+	const milestones = buildStageMilestones({
+		elaborateDone: derived.phase !== "elaborate",
+		reviewRoles: reviewRoles.map((role) => ({
+			role,
+			stamped: everyUnitStamped("reviews", role),
+		})),
+		executeDone: allUnitsAdvanced,
+		approvalRoles: milestoneApprovalRoles,
+	})
+
+	return { status, phase, milestones }
 }
 
 /** Back-compat wrapper for the historical signature — returns just the

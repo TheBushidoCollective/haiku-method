@@ -16,10 +16,10 @@ import {
 	deriveActiveStageFromStageTree,
 	deriveStageStateFromUnits,
 	deriveV4ActiveStage,
-	parseElaborationVerified,
-	parseIntentApprovals,
 	mergeKnowledge as mergeKnowledgeShared,
+	parseElaborationVerified,
 	parseFeedback,
+	parseIntentApprovals,
 	parseIntentFromRaw as parseIntentFromRawShared,
 	parseStageStateJson,
 } from "./intent-parsing"
@@ -683,8 +683,13 @@ export class GitLabProvider implements BrowseProvider {
 		// v4 intents have no state.json (deleted by the migrator); the
 		// dual-path falls through to per-unit derivation.
 		const stateBlob = data.blobByPath.get(`${stagePath}/state.json`)
-		const { phase: v3Phase, startedAt, completedAt, gateOutcome, stateStatus } =
-			parseStageStateJson(stateBlob)
+		const {
+			phase: v3Phase,
+			startedAt,
+			completedAt,
+			gateOutcome,
+			stateStatus,
+		} = parseStageStateJson(stateBlob)
 
 		// elaboration.md verification — load the file's frontmatter so the
 		// derivation can tell whether the elaborate gate has cleared. v4
@@ -701,6 +706,7 @@ export class GitLabProvider implements BrowseProvider {
 		//   3. v3 active_stage / stage-order fallback
 		let status: "pending" | "active" | "complete" = "pending"
 		let phase: HaikuStageState["phase"] = v3Phase
+		let milestones: HaikuStageState["milestones"]
 		if (stateStatus === "active") status = "active"
 		else if (stateStatus === "completed") status = "complete"
 		else if (units.length > 0 || stateBlob == null) {
@@ -711,6 +717,7 @@ export class GitLabProvider implements BrowseProvider {
 			})
 			status = derived.status
 			phase = derived.phase
+			milestones = derived.milestones
 		} else if (stageName === activeStage) status = "active"
 		else if (stageNames.indexOf(stageName) < stageNames.indexOf(activeStage))
 			status = "complete"
@@ -719,6 +726,7 @@ export class GitLabProvider implements BrowseProvider {
 			name: stageName,
 			status,
 			phase,
+			milestones,
 			startedAt,
 			completedAt,
 			gateOutcome,
@@ -1050,10 +1058,8 @@ export class GitLabProvider implements BrowseProvider {
 		// here would always read empty — we'd fall back to the wrong
 		// stage in the UI. The per-stage status above is already derived
 		// from the stage-branch trust source.
-		const stageStatusByName: Record<
-			string,
-			"pending" | "active" | "complete"
-		> = {}
+		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
+			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
 		const refinedActiveStage =
 			deriveV4ActiveStage(orderedStages, stageStatusByName) || activeStage
@@ -1212,8 +1218,7 @@ export class GitLabProvider implements BrowseProvider {
 
 		const fallbackDirNames = this.deriveStageDirNames(slug, data)
 
-		const orderedStages =
-			stageNames.length > 0 ? stageNames : fallbackDirNames
+		const orderedStages = stageNames.length > 0 ? stageNames : fallbackDirNames
 		const stages: HaikuStageState[] = []
 		for (const stageName of orderedStages) {
 			const parsed = this.parseStageFromBlobs(
@@ -1230,10 +1235,8 @@ export class GitLabProvider implements BrowseProvider {
 
 		// Cursor walk: pick the active stage from the per-stage status
 		// we just derived, mirroring engine getCurrentState.
-		const stageStatusByName: Record<
-			string,
-			"pending" | "active" | "complete"
-		> = {}
+		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
+			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
 		const refinedActiveStage =
 			deriveV4ActiveStage(orderedStages, stageStatusByName) || activeStage

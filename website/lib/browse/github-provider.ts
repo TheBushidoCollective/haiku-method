@@ -589,8 +589,13 @@ export class GitHubProvider implements BrowseProvider {
 		const stateEntry = stageChildren.find(
 			(e) => e.name === "state.json" && e.type === "blob",
 		)
-		const { phase: v3Phase, startedAt, completedAt, gateOutcome, stateStatus } =
-			parseStageStateJson(stateEntry?.object?.text)
+		const {
+			phase: v3Phase,
+			startedAt,
+			completedAt,
+			gateOutcome,
+			stateStatus,
+		} = parseStageStateJson(stateEntry?.object?.text)
 
 		// elaboration.md verification — load the file's frontmatter so the
 		// derivation can tell whether the elaborate gate has cleared. v4
@@ -613,6 +618,7 @@ export class GitHubProvider implements BrowseProvider {
 		//   3. v3 active_stage / stage-order fallback
 		let status: "pending" | "active" | "complete" = "pending"
 		let phase: HaikuStageState["phase"] = v3Phase
+		let milestones: HaikuStageState["milestones"]
 		if (stateStatus === "active") status = "active"
 		else if (stateStatus === "completed") status = "complete"
 		else if (units.length > 0 || stateEntry == null) {
@@ -623,6 +629,7 @@ export class GitHubProvider implements BrowseProvider {
 			})
 			status = derived.status
 			phase = derived.phase
+			milestones = derived.milestones
 		} else if (stageName === activeStage) status = "active"
 		else if (stageNames.indexOf(stageName) < stageNames.indexOf(activeStage))
 			status = "complete"
@@ -631,6 +638,7 @@ export class GitHubProvider implements BrowseProvider {
 			name: stageName,
 			status,
 			phase,
+			milestones,
 			startedAt,
 			completedAt,
 			gateOutcome,
@@ -882,10 +890,8 @@ export class GitHubProvider implements BrowseProvider {
 		// stage in the UI. The per-stage status above is already derived
 		// from the stage-branch trust source, so the walk reflects what
 		// the cursor would see.
-		const stageStatusByName: Record<
-			string,
-			"pending" | "active" | "complete"
-		> = {}
+		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
+			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
 		const refinedActiveStage =
 			deriveV4ActiveStage(orderedStages, stageStatusByName) || activeStage
@@ -1099,8 +1105,7 @@ export class GitHubProvider implements BrowseProvider {
 				.map((e) => e.name)
 				.sort() ?? []
 
-		const orderedStages =
-			stageNames.length > 0 ? stageNames : fallbackDirNames
+		const orderedStages = stageNames.length > 0 ? stageNames : fallbackDirNames
 		const stages: HaikuStageState[] = []
 		for (const stageName of orderedStages) {
 			const parsed = this.parseStageFromTree(
@@ -1119,10 +1124,8 @@ export class GitHubProvider implements BrowseProvider {
 		// we just derived, mirroring engine getCurrentState. v4 dropped
 		// intent.md.active_stage, so trusting the FM here would always
 		// show the wrong stage for v4 intents.
-		const stageStatusByName: Record<
-			string,
-			"pending" | "active" | "complete"
-		> = {}
+		const stageStatusByName: Record<string, "pending" | "active" | "complete"> =
+			{}
 		for (const s of stages) stageStatusByName[s.name] = s.status
 		const refinedActiveStage =
 			deriveV4ActiveStage(orderedStages, stageStatusByName) || activeStage

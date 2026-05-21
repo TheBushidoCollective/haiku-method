@@ -1,5 +1,6 @@
 "use client"
 
+import type { ProgressStep } from "@haiku/shared/progress-milestones"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { ProviderLink } from "@/lib/browse/resolve-links"
@@ -1168,11 +1169,7 @@ function OtherArtifactCard({ artifact }: { artifact: HaikuArtifact }) {
 							{artifact.name}
 						</span>
 					</div>
-					<iframe
-						src={url}
-						title={artifact.name}
-						className="h-[85vh] w-full"
-					/>
+					<iframe src={url} title={artifact.name} className="h-[85vh] w-full" />
 				</div>
 			)
 		}
@@ -1233,8 +1230,7 @@ function IntentApprovalsCard({
 		},
 		user: {
 			label: "User",
-			tooltip:
-				"User approval — the human signs off on the intent as a whole.",
+			tooltip: "User approval — the human signs off on the intent as a whole.",
 		},
 		intent_quality_gates: {
 			label: "Intent quality gates",
@@ -1248,10 +1244,7 @@ function IntentApprovalsCard({
 				const meta = ENGINE_ROLES[a.role]
 				const isDerived = a.role === "intent_quality_gates"
 				return (
-					<div
-						key={a.role}
-						className="flex items-center justify-between gap-3"
-					>
+					<div key={a.role} className="flex items-center justify-between gap-3">
 						<div className="flex items-center gap-2">
 							<span
 								className={`rounded-full w-2 h-2 ${
@@ -1410,7 +1403,11 @@ function StageDetail({
 			{/* Phase stepper — mirrors the SPA's stage-banner stepper so
 			    the user can see WHICH phase the stage is currently in at
 			    a glance, not just whether it's awaiting approval. */}
-			<PhaseStepper phase={stage.phase} stageStatus={stage.status} />
+			<PhaseStepper
+				phase={stage.phase}
+				stageStatus={stage.status}
+				milestones={stage.milestones}
+			/>
 			{/* Stage header with branch/PR info */}
 			<div className="flex flex-wrap items-center gap-3">
 				<h3 className="text-sm font-semibold text-stone-600 dark:text-stone-300">
@@ -1620,17 +1617,127 @@ const PHASE_HINTS: Record<(typeof STAGE_PHASE_ORDER)[number], string> = {
 function PhaseStepper({
 	phase,
 	stageStatus,
+	milestones,
 }: {
-	phase: string | "elaborate" | "execute" | "review" | "approve" | "complete" | ""
+	phase:
+		| string
+		| "elaborate"
+		| "execute"
+		| "review"
+		| "approve"
+		| "complete"
+		| ""
 	stageStatus: string
+	/** Granular per-stage milestone track (elaborate → each review role →
+	 *  execute → each approval role), derived browse-side from per-unit FM.
+	 *  When present and non-empty the stepper renders one bubble per
+	 *  milestone instead of the coarse four-phase strip; falls back when
+	 *  absent (legacy state.json stages, no units). */
+	milestones?: ProgressStep[]
 }) {
 	const isStageComplete =
 		stageStatus === "completed" || stageStatus === "complete"
+
+	// ── Granular track ────────────────────────────────────────────────
+	// Labels arrive pre-worded from the shared builder ("spec review",
+	// "quality gates"); we don't re-derive them. Small dots (not the
+	// numbered bubbles the coarse strip uses) so an 8–12 milestone stage
+	// stays compact, with the active milestone's label after the count.
+	if (milestones && milestones.length > 0) {
+		const total = milestones.length
+		const ai = milestones.findIndex((m) => m.status === "active")
+		const allDone = isStageComplete || ai < 0
+		const activeLabel = !allDone ? milestones[ai]?.label : undefined
+		const groupAriaLabel = allDone
+			? "All milestones complete"
+			: `Milestone ${ai + 1} of ${total}`
+		return (
+			// biome-ignore lint/a11y/useSemanticElements: role=group on a div is the right minimal grouping
+			<div
+				className="inline-flex items-center gap-2"
+				role="group"
+				aria-label={groupAriaLabel}
+			>
+				<span className="text-xs font-bold uppercase tracking-widest text-teal-600 dark:text-teal-400 leading-none">
+					Phase
+				</span>
+				<ol className="inline-flex items-center gap-1 list-none m-0 p-0">
+					{milestones.map((m, i) => {
+						const done = isStageComplete || m.status === "done"
+						const active = !isStageComplete && m.status === "active"
+						const stateWord = active ? "active" : done ? "done" : "pending"
+						return (
+							<li key={m.key} className="flex items-center gap-1">
+								<span
+									className="relative inline-flex items-center justify-center p-1 -m-1 group rounded-md"
+									role="img"
+									aria-label={`${m.label} — ${stateWord}`}
+									aria-current={active ? "step" : undefined}
+								>
+									<span
+										className={`inline-block w-2.5 h-2.5 rounded-full transition-transform group-hover:scale-125 ${
+											active
+												? "bg-amber-500 ring-2 ring-amber-300 dark:ring-amber-700"
+												: done
+													? "bg-green-500"
+													: "bg-stone-300 dark:bg-stone-700"
+										}`}
+										aria-hidden="true"
+									/>
+									<span
+										role="tooltip"
+										className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-50"
+									>
+										<span className="block text-xs font-bold text-white dark:text-stone-900 leading-tight capitalize">
+											{m.label}
+										</span>
+										<span
+											className={`block text-xs font-medium uppercase tracking-wide leading-tight mt-0.5 ${
+												active
+													? "text-amber-300 dark:text-amber-600"
+													: done
+														? "text-green-300 dark:text-green-600"
+														: "text-stone-300 dark:text-stone-600"
+											}`}
+										>
+											{stateWord}
+										</span>
+										<span
+											aria-hidden="true"
+											className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+										/>
+									</span>
+								</span>
+								{i < total - 1 && (
+									<span
+										className={`w-2 h-0.5 transition-colors ${
+											done
+												? "bg-green-400 dark:bg-green-700"
+												: "bg-stone-300 dark:bg-stone-700"
+										}`}
+										aria-hidden="true"
+									/>
+								)}
+							</li>
+						)
+					})}
+				</ol>
+				<span className="text-xs font-mono text-stone-500 dark:text-stone-400">
+					{allDone ? "done" : `${ai + 1}/${total}`}
+				</span>
+				{activeLabel && (
+					<span className="text-xs text-amber-600 dark:text-amber-400 truncate max-w-[12rem] capitalize">
+						{activeLabel}
+					</span>
+				)}
+			</div>
+		)
+	}
+
+	// ── Coarse fallback ───────────────────────────────────────────────
 	const activeIndex =
 		phase && phase !== "complete"
-			? STAGE_PHASE_ORDER.indexOf(
-					phase as (typeof STAGE_PHASE_ORDER)[number],
-				)
+			? STAGE_PHASE_ORDER.indexOf(phase as (typeof STAGE_PHASE_ORDER)[number])
 			: -1
 	return (
 		<div className="inline-flex items-center gap-2">

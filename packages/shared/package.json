@@ -19,6 +19,10 @@
 		"./derived-stage-state": {
 			"types": "./src/derived-stage-state.ts",
 			"default": "./src/derived-stage-state.ts"
+		},
+		"./progress-milestones": {
+			"types": "./src/progress-milestones.ts",
+			"default": "./src/progress-milestones.ts"
 		}
 	},
 	"scripts": {

@@ -423,6 +423,76 @@ test("autopilot mode bypasses elaborate-verifier signal", () => {
 	assert.strictEqual(r.phase, "elaborate")
 })
 
+console.log("\n── deriveStageStateFromUnits milestones ───────────────────")
+
+test("milestones: review stamped, hats mid-flight → execute active", () => {
+	const r = deriveStageStateFromUnits(
+		[
+			{
+				raw: {
+					started_at: "2026-05-14T00:00:00Z",
+					reviews: { spec: { at: "2026-05-14T00:01:00Z" } },
+					iterations: [{ hat: "implementer", result: null }],
+					approvals: {},
+				},
+			},
+		],
+		{ intentMode: "autopilot" },
+	)
+	// elaborate done, spec review done, execute is the first not-done.
+	const exec = r.milestones.find((m) => m.key === "execute")
+	const review = r.milestones.find((m) => m.key === "review:spec")
+	assert.strictEqual(review?.status, "done")
+	assert.strictEqual(exec?.status, "active")
+})
+
+test("milestones: awaiting first approval → synthetic approval gate pending", () => {
+	// Units advanced, reviews stamped, but no approvals anywhere — the
+	// blind-spot window. The track must NOT read all-done; it surfaces a
+	// pending approval pip mirroring the corrected "approve" phase.
+	const r = deriveStageStateFromUnits(
+		[
+			{
+				raw: {
+					started_at: "2026-05-14T00:00:00Z",
+					reviews: { spec: { at: "2026-05-14T00:01:00Z" } },
+					iterations: [{ hat: "implementer", result: "advance" }],
+					approvals: {},
+				},
+			},
+		],
+		{ intentMode: "autopilot" },
+	)
+	assert.strictEqual(r.phase, "approve")
+	const approvalPip = r.milestones.find((m) => m.key.startsWith("approve:"))
+	assert.ok(approvalPip, "expected a synthetic approval milestone")
+	assert.strictEqual(approvalPip?.status, "active")
+})
+
+test("milestones: fully approved stage → every milestone done", () => {
+	const r = deriveStageStateFromUnits(
+		[
+			{
+				raw: {
+					started_at: "2026-05-14T00:00:00Z",
+					reviews: { spec: { at: "2026-05-14T00:01:00Z" } },
+					iterations: [{ hat: "implementer", result: "advance" }],
+					approvals: {
+						spec: { at: "2026-05-14T00:02:00Z" },
+						quality_gates: { at: "2026-05-14T00:03:00Z" },
+					},
+				},
+			},
+		],
+		{ intentMode: "autopilot" },
+	)
+	assert.strictEqual(r.status, "complete")
+	assert.ok(
+		r.milestones.every((m) => m.status === "done"),
+		"every milestone should be done for a fully-approved stage",
+	)
+})
+
 console.log("\n── parseElaborationVerified ───────────────────────────────")
 
 test("null when no text", () => {

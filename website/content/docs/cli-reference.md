@@ -62,11 +62,7 @@ Refine intent or unit specs mid-execution without losing progress. Loads upstrea
 
 **Arguments:** `stage` (optional) — upstream stage to refine.
 
-### `/haiku:haiku-reflect`
-
-Post-completion analysis of a completed intent cycle. Loads metrics and constructs structured analysis prompt.
-
-**Arguments:** `intent` (optional) — intent slug.
+Reflection has no command — when an intent completes, the engine analyzes the run automatically along the active studio's reflection dimensions and writes the reflection artifact before sealing the intent.
 
 ## Knowledge & Analysis
 
@@ -102,7 +98,7 @@ Adversarial challenge for hat definitions. Applies RED-GREEN-REFACTOR cycle to t
 
 **Arguments:** `hat` (optional) — hat name to test.
 
-## Cross-Studio & Operations
+## Cross-Studio & Triggers
 
 ### `/haiku:haiku-composite`
 
@@ -115,12 +111,6 @@ Create a multi-studio intent with sync points. Coordinates work across studios.
 Poll providers for events that unblock `await` gates or trigger new work.
 
 **Arguments:** `category` (optional) — provider category to poll.
-
-### `/haiku:haiku-operate`
-
-Run post-delivery operational tasks from studio templates.
-
-**Arguments:** `operation` (optional) — operation name to execute.
 
 ### `/haiku:haiku-backlog`
 

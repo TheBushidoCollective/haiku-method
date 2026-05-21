@@ -16,21 +16,22 @@ inputs:
 
 # Certify
 
-Sign off on quality and release readiness against the strategy's exit criteria. This stage produces the certification record — every exit criterion evaluated with evidence, every unresolved defect listed with risk-acceptance status, and the release / defer / block determination with rationale that audits cleanly.
+The closing stage of the QA lifecycle: sign off on quality and release readiness against the strategy's exit criteria. This produces the certification record — every exit criterion evaluated with evidence, every unresolved defect listed with its risk-acceptance status, and the release / defer / block determination with audit-clean rationale.
 
-## Per-unit baton
+## Scope
 
-Units in this stage are **certification surfaces** — each surface evaluates a defined set of exit criteria (functional, performance, security smoke, accessibility, regression, compliance, etc.).
+Release-readiness sign-off: evaluating each exit criterion against the evidence, accounting for known issues, and recording a determination an authority can stand behind. Certify decides *whether to ship*, not what the data means (analyze) or what happened in the run (execute-tests).
 
-- `certifier` → `reviewer`: per-criterion evaluation with cited evidence + known-issues list with risk-acceptance status + release / defer / block determination with rationale.
-- `reviewer` → `verifier`: independently-validated certification (release-readiness confirmed or findings filed against evidence / determination).
+## What to do
 
-The baton is the certification surface: drafted determination → independently-validated determination ready for external sign-off.
+- Evaluate every exit criterion the strategy set, each backed by cited evidence rather than assertion.
+- List every unresolved defect with an explicit risk-acceptance status — nothing shipped on silence.
+- State the release / defer / block determination with rationale that would survive an audit.
+- Pull the supporting evidence from the analyze and execute-tests records rather than re-deriving it.
 
-## Inputs and outputs
+## What NOT to do
 
-The frontmatter declares the I/O contract. `analyze/quality-report`, `execute-tests/test-results`, and `plan/test-strategy` all feed in; outputs (certification-report) feed external sign-off and any downstream release / deployment flow.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, certifier, feedback-assessor]` dispatches per finding. The classifier routes; `certifier` is the implementer (re-evaluating exit criteria, re-compiling known issues, sharpening rationale); the assessor decides closure. The gate is `external` — certification is the artifact a real authority signs (product owner, release manager, compliance lead, audit body). The plugin waits on the external signal; project overlays at `.haiku/studios/quality-assurance/stages/certify/` may add house conventions (organization sign-off ladder, internal audit-trail location, regulatory submission templates) without modifying the plugin defaults.
+- Don't re-run the analysis or re-interpret results — consume what analyze produced; dispute it as feedback if it's wrong.
+- Don't waive an exit criterion without recording the risk acceptance.
+- Don't ship a determination whose rationale a reviewer couldn't trace to evidence.
+- Don't leave an unresolved defect off the record.

@@ -12,22 +12,22 @@ inputs:
 
 # Launch
 
-Take the approved content and put it live: define the activation sequence across channels, verify prerequisites are in place before each go-live (tracking pixels before paid traffic, landing pages before email sends), publish on schedule, and log what actually happened. This is the operational stage — units are launch steps, not assets.
+Take the approved content and put it live: sequence the activations across channels, verify each prerequisite before go-live, publish on schedule, and log what actually happened. This is the operational stage of the campaign — once channels activate, the cost of recall is real, so readiness is confirmed before each step fires.
 
-## Per-unit baton
+## Scope
 
-Each launch unit walks the three hats in `plan → do → verify` order:
+Coordinating and executing the multi-channel activation. Launch decides *what goes live, in what order, with which tracking, and when* — not the assets themselves (content) or the results analysis (measure). Units are launch steps with preconditions, an action, and a post-condition check; the output is the campaign log measure reads.
 
-- **`campaign-manager`** (plan) — sequences the activations, declares preconditions / actions / post-condition checks per step, names the rollback path
-- **`channel-coordinator`** (do) — executes the step on the appropriate channel category (paid, owned, earned, direct), confirms delivery, logs actual timestamps and initial signals
-- **`verifier`** (verify) — confirms preconditions were met, the post-condition check produced a pass signal, and the campaign log captured what's needed for the `measure` stage
+## What to do
 
-A unit here is one launch step (e.g. "activate email send", "enable paid placement", "publish landing page"). Steps with dependencies declare them so the engine can sequence correctly.
+- Sequence the activations and declare per-step preconditions, the action, and a post-condition check before firing.
+- Verify prerequisites are actually in place before each go-live — tracking pixels before paid traffic, landing pages before email sends.
+- Publish on schedule and log actual timestamps, channel, tracking, and initial signals.
+- Name a rollback or recall path for steps where one is possible.
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes `content/assets` (approved, channel-ready content from the content stage). Produces a campaign log — the source of truth for what went live when, on which channel, with which tracking — which the `measure` stage reads to attribute results.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, campaign-manager, feedback-assessor]` dispatches per finding. The gate is `ask` — the user confirms each readiness check locally before the launch actually fires, because once channels are activated the cost of recall is real.
+- Don't author or rewrite assets here — that's the content stage; launch distributes what was approved.
+- Don't analyze or attribute results; that's measure reading the log you produce.
+- Don't fire a step whose preconditions or tracking aren't confirmed in place.
+- Don't activate channels the content and strategy didn't scope.

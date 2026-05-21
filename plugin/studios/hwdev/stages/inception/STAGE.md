@@ -10,35 +10,22 @@ inputs: []
 
 # Inception
 
-Understand the market, user problem, and business case for the hardware
-product. Same shape as application-development inception — what are we
-building and why, who would buy it, what is the competitive landscape, what
-is the unit-economics envelope. Hardware-specific constraints (safety,
-regulatory frameworks, manufacturing feasibility, environmental envelope)
-are NOT decided here; they surface in the `requirements` stage. Inception
-identifies *which markets and product class* matter so requirements knows
-what regulatory and safety frameworks to plan against.
+The opening stage of the hardware lifecycle: understand the market, the user problem, and the business case for the product. What are we building and why, who would buy it, what's the competitive landscape, what's the unit-economics envelope — answered with evidence before any engineering decision gets made.
 
-## Per-unit baton
+## Scope
 
-Each inception unit walks `plan → do → verify`:
+Market and business understanding: the user problem, the competitive landscape, the addressable segments, and the unit-economics envelope. Inception decides *which markets and product class matter* — so the requirements stage knows which regulatory and safety frameworks to plan against. It does not decide the hardware constraints themselves.
 
-- **`researcher`** (plan) frames an investigable knowledge topic, gathers
-  raw findings from primary and secondary sources, and records citations
-  inline.
-- **`distiller`** (do) turns raw findings into a structured, decision-ready
-  knowledge artifact — segments named, alternatives priced, gaps articulated.
-- **`verifier`** (verify) checks the artifact for substance, citation,
-  internal consistency, and decision-register accountability — body-only,
-  no frontmatter interpretation.
+## What to do
 
-## Fix loop and gate
+- Investigate the market and user problem from cited primary and secondary sources, not assumption.
+- Name the addressable segments and price the alternatives so the business case is decision-ready.
+- Identify the product class precisely enough that requirements can map it to the right regulatory regimes.
+- Articulate the gaps in what's known rather than papering over them.
 
-When review feedback opens, `fix_hats: [classifier, researcher,
-feedback-assessor]` dispatches per finding: the classifier routes the
-finding to the right unit or stage; the researcher re-investigates and
-edits the FB body with diagnosis; the assessor independently decides
-closure. The gate is `ask` — a local human review through the review UI
-is enough for market / business-case sign-off in most cases. Projects that
-want external review (executive signoff, board review) override the gate
-to `[external, ask]` in a project overlay.
+## What NOT to do
+
+- Don't decide safety, regulatory, manufacturing-feasibility, or environmental constraints — those belong to requirements.
+- Don't specify the product's functional behavior or design — those are downstream stages.
+- Don't commit to a product class you can't ground in market evidence.
+- Don't leave an unknown unstated; an unexamined gap here becomes a wrong framework choice in requirements.

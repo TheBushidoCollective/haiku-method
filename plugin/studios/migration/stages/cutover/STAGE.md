@@ -17,22 +17,22 @@ review-agents-include:
 
 # Cutover
 
-Plan and execute the production cutover. This is the operational stage of the migration studio: units are operational steps (preconditions → action → post-condition check, with a named rollback or an explicit "forward-fix only" rationale). The output is the cutover runbook — the artifact the on-call team executes during the maintenance window.
+Plan and execute the production cutover: the runbook the on-call team follows during the maintenance window, with a rollback procedure or an explicit forward-fix rationale for every step. This is the operational stage of the migration — the point where the validated work goes live, and the point of no return is real.
 
-## Per-unit baton
+## Scope
 
-Each cutover unit walks three hats in `plan → do → verify` order:
+Authoring and executing the cutover runbook. Cutover decides *how the production switch happens, in what order, with what go/no-go gates and rollback paths* — not whether the migration is correct (validation) or how the data moves (migrate). Units are operational steps: preconditions, action, post-condition check, and a named rollback or a stated reason none exists.
 
-- **`cutover-coordinator`** (plan / do for sequencing) reads the validation report and produces the step's runbook entry — preconditions, owner, expected duration, action, post-condition check, go/no-go criteria, communication triggers.
-- **`rollback-engineer`** (do for the reversal path) consumes the runbook entry and produces the matching rollback procedure — the explicit steps to undo this action, the point-of-no-return marker if the step is irreversible, the data-sync strategy for writes that arrive during the maintenance window.
-- **`verifier`** (verify) validates that preconditions, action, post-condition, and rollback (or rationale for none) are all stated, and that the post-condition produces a mechanical pass/fail signal. Advances or rejects.
+## What to do
 
-The baton is the runbook step itself, accumulating across the chain: coordinator's step + rollback-engineer's reversal pair into one unit body, and the verifier confirms both halves are concrete.
+- Sequence each step with preconditions, owner, expected duration, action, post-condition check, and go/no-go criteria.
+- Pair every step with its rollback procedure, or state explicitly why the step is forward-fix only and mark the point of no return.
+- Define a data-sync strategy for writes that arrive during the maintenance window.
+- Make each post-condition produce a mechanical pass/fail signal the on-call team can act on without judgment calls.
 
-## Inputs and outputs
+## What NOT to do
 
-Cutover consumes `validation/validation-report` plus the upstream review agents `migrate/data-integrity` and `validation/parity`. Output is `CUTOVER-RUNBOOK.md` (every step, every owner, every checkpoint, every rollback procedure, the communication plan, the point-of-no-return marker).
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, cutover-coordinator, feedback-assessor]` dispatches per finding. The classifier routes; `cutover-coordinator` re-authors the runbook step; `feedback-assessor` closes. The gate is `external` — the runbook must be approved through the team's actual change-management surface (incident-management platform, change ticket, on-call lead signoff) before cutover proceeds. Project overlays MUST configure this surface; the plugin default does not assume a specific tool.
+- Don't proceed on a migration the validation stage hasn't signed off, including the rollback rehearsal.
+- Don't change migration code or mappings here; cutover executes, it doesn't rebuild.
+- Don't write a step with no rollback and no stated forward-fix rationale.
+- Don't self-advance the cutover gate — the runbook proceeds through the team's actual change-management approval.

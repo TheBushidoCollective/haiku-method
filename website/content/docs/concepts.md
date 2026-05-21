@@ -529,23 +529,11 @@ Ten templates ship across seven studios:
 
 Templates define units with completion criteria, dependencies, and stage assignments. Parameters are substituted at instantiation time, producing a fully elaborated intent ready for `/haiku:haiku-pickup`.
 
-## Operations Phase
+## Reflection
 
-After construction and integration complete, many features require ongoing maintenance — scheduled jobs, reactive responses to production events, or periodic human reviews. The operations phase provides a structured way to define and manage these tasks using `/haiku:haiku-operate`. Operations are defined as spec files alongside the code and tracked through the same state system as the rest of H·AI·K·U.
-
-### Studio Operation Templates
-
-Studios prescribe operation templates in `studios/{name}/operations/`. When you run `/haiku:haiku-operate`, it reads the current studio's templates to offer domain-appropriate operations. For example, the software studio provides deployment, monitoring, and rollback operations; the incident-response studio provides communication and escalation operations.
-
-Thirty-eight operation templates ship across twelve studios. Teams can add project-specific operations in `.haiku/studios/{name}/operations/` using the same override mechanism as stages and hats.
-
-### Studio Reflection Dimensions
-
-Studios prescribe reflection dimensions in `studios/{name}/reflections/`. When you run `/haiku:haiku-reflect`, it reads the current studio's dimensions to structure the post-mortem analysis along axes relevant to the domain. The software studio reflects on code quality, test coverage, and architecture decisions; the sales studio reflects on deal velocity, objection handling, and pipeline accuracy.
+When an intent completes, the engine automatically reflects on the run before sealing it — no command to invoke. Studios prescribe reflection dimensions in `studios/{name}/reflections/`, and the engine reads the active studio's dimensions to structure the post-mortem analysis along axes relevant to the domain. The software studio reflects on code quality, test coverage, and architecture decisions; the sales studio reflects on deal velocity, objection handling, and pipeline accuracy.
 
 Twenty-six reflection dimensions ship across twelve studios. Custom dimensions follow the same project-level override pattern.
-
-See the [Operations Guide](/docs/operations-guide/) for a full walkthrough.
 
 ## Next Steps
 
@@ -553,4 +541,3 @@ See the [Operations Guide](/docs/operations-guide/) for a full walkthrough.
 - **[The Hat System](/docs/hats/)** - Understand each hat's responsibilities within stages
 - **[CLI Reference](/docs/cli-reference/)** - Full command reference
 - **[Example: Feature Implementation](/docs/example-feature/)** - See concepts in action
-- **[Operations Guide](/docs/operations-guide/)** - Manage ongoing operational tasks

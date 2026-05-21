@@ -263,20 +263,6 @@ export const validateHaikuZapInputSchema = stateAjv.compile(
 	HAIKU_ZAP_INPUT_SCHEMA,
 )
 
-// ── haiku_reflect ─────────────────────────────────────────────────
-
-export const HAIKU_REFLECT_INPUT_SCHEMA = Type.Object(
-	{
-		intent: Type.String({ minLength: 1 }),
-		state_file: stateFile,
-	},
-	{ additionalProperties: false },
-)
-export type HaikuReflectInput = Static<typeof HAIKU_REFLECT_INPUT_SCHEMA>
-export const validateHaikuReflectInputSchema = stateAjv.compile(
-	HAIKU_REFLECT_INPUT_SCHEMA,
-)
-
 // ── haiku_review ──────────────────────────────────────────────────
 
 export const HAIKU_REVIEW_INPUT_SCHEMA = Type.Object(

@@ -16,20 +16,22 @@ gate-protocol:
 
 # Proposal
 
-The proposal stage turns a qualified opportunity into the artifacts the prospect actually evaluates: a tailored business case, the technical solution architecture, and the demo / proof-of-value script. Per architecture §4.1 this is still a research/distillation stage (the artifact IS knowledge — the proposal document — not built code), and per-unit hats walk the standard plan-do-verify pattern.
+Turn a qualified opportunity into the artifacts the prospect actually evaluates: a tailored business case, the technical solution architecture, and the demo or proof-of-value script. This is where the deal stops being an internal assessment and becomes something the buyer can say yes to.
 
-## Per-unit baton
+## Scope
 
-- **`proposal-writer`** (plan/do) takes the deal brief and writes the unit's slice of the proposal — outcomes tied to the prospect's named pain points, quantified ROI with stated assumptions, competitive differentiation, references relevant to this prospect's industry and scale.
-- **`solution-architect`** (do) validates technical feasibility for the prospect's actual environment, designs the solution shape that fits their existing infrastructure, and flags implementation risks or prerequisites that affect timeline or scope.
-- **`verifier`** (verify) validates the unit body for substance, citation, internal consistency, and decision-register alignment.
+The buyer-facing offer: outcomes tied to the prospect's named pains, quantified ROI with stated assumptions, competitive differentiation, and a solution shape that fits their actual environment. Proposal decides *what we're putting in front of the prospect* — not whether they qualify (qualification) or what terms get signed (negotiation).
 
-The two non-verify hats produce different surfaces of the same proposal — the writer owns the business narrative; the architect owns the technical shape. They are NOT redundant; the rally-race test (§2.3) holds because the writer's draft is incomplete until the architect grounds it in a deliverable solution, and the architect's solution is unsellable until the writer ties it to outcomes the buyer cares about.
+## What to do
 
-## Inputs and outputs
+- Anchor every claim in the prospect's named pain points and the seller's real references for their industry and scale.
+- Quantify ROI with assumptions stated openly, so the business case survives the buyer's own scrutiny.
+- Ground the solution architecture in the prospect's actual infrastructure, and surface implementation risks or prerequisites that affect scope or timeline.
+- Keep the business narrative and the technical shape consistent — the offer is unsellable if either side overpromises what the other can't deliver.
 
-The stage consumes `qualification/deal-brief`. It produces the intent-scope `PROPOSAL-DOC.md` (declared in `discovery/`) which the negotiation stage uses as its anchoring artifact.
+## What NOT to do
 
-## Fix loop and gate
-
-`fix_hats: [classifier, proposal-writer, feedback-assessor]` dispatches per finding. The gate is `[ask, await]` — the user chooses between local approval (deal desk / sales engineering signoff in the team's review tool) and `await` for the prospect's evaluation response (the proposal has gone out; nothing should advance until the prospect engages). The `gate-protocol` block escalates to comms after 7 days of silence so a stalled deal doesn't sit hidden in the backlog.
+- Don't re-litigate qualification — if the deal no longer qualifies, that's a revisit upstream, not a softer proposal.
+- Don't negotiate terms or concede pricing here; that's negotiation.
+- Don't promise a solution shape the architecture can't actually deliver.
+- Don't ship ROI numbers whose assumptions you can't state.

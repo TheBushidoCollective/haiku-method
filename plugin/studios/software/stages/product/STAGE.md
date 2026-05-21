@@ -25,22 +25,20 @@ outputs:
 
 # Product
 
-Define behavioral specifications and acceptance criteria — the contract that hands the design over to development. This stage produces three artifact families per unit (`ACCEPTANCE-CRITERIA.md`, `.feature` files under `features/`, `DATA-CONTRACTS.md`) plus one intent-scope `COVERAGE-MAPPING.md`.
+Define the behavioral contract that hands the design over to development: the acceptance criteria, executable scenarios, and data contracts that say what the system must do and how its success is judged.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the three hats in `plan → do → verify` order:
+Behavioral specification — observable behavior, acceptance criteria, and the data shapes that cross boundaries. Not the visual design (that came in upstream), not the implementation (that's development's call).
 
-- **`product`** (plan) reads design + inception, writes the AC for this slice of behavior
-- **`specification`** (do) turns the AC into Gherkin scenarios + data contracts
-- **`validator`** (verify) builds the coverage matrix and either advances or rejects to the responsible hat
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+- Write acceptance criteria from the user's perspective: what they can do and how you'd know it worked.
+- Make every criterion verifiable — pair it with a concrete scenario or check, not a vague intent.
+- Cover the behavior the design implies, including the failure and edge paths, and prove the coverage.
 
-## Inputs and outputs
+## What NOT to do
 
-The frontmatter above declares the canonical I/O contract. Upstream `inception/discovery` and `design/{design-brief, design-tokens}` feed in; the four outputs feed `development` and any downstream certification stages.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, product, specification, feedback-assessor]` dispatches per finding. The classifier routes; `product` re-authors the AC for AC findings, and `specification` re-authors the `.feature` files / `DATA-CONTRACTS.md` for behavioral-spec and contract findings (those are the specification hat's artifacts) — both implementers are in the chain so a contract finding lands with the hat that owns the contract instead of thrashing against a hat that can't edit it. The gate is `[external, ask]` — the user picks between submitting the AC for external review (e.g., engineering signoff in a docs platform) or local approval. Project overlays at `.haiku/studios/software/stages/product/` may add house-style conventions (section numbering, design-system tokens, doc-platform headers) without modifying the plugin defaults.
+- Don't redesign the interface or restate visual decisions — reference the design, don't relitigate it.
+- Don't choose implementation, frameworks, or data storage; specify the contract, not the mechanism.
+- Don't write criteria no one can check, and don't leave behavior the design shows unspecified.

@@ -91,8 +91,6 @@ import { sealIntentState } from "./state-integrity.js"
 import {
 	listStudios,
 	readHatDefs,
-	readOperationDefs,
-	readReflectionDefs,
 	readDiscoveryBody,
 	readHatBody,
 	readOutputBody,
@@ -3532,7 +3530,6 @@ import {
 	HAIKU_KNOWLEDGE_LIST_INPUT_SCHEMA,
 	HAIKU_KNOWLEDGE_READ_INPUT_SCHEMA,
 	HAIKU_RECONCILIATION_ACKNOWLEDGE_INPUT_SCHEMA,
-	HAIKU_REFLECT_INPUT_SCHEMA,
 	HAIKU_RELEASE_NOTES_INPUT_SCHEMA,
 	HAIKU_REPAIR_INPUT_SCHEMA,
 	HAIKU_REVIEW_INPUT_SCHEMA,
@@ -3585,7 +3582,6 @@ import {
 	validateHaikuKnowledgeListInputSchema,
 	validateHaikuKnowledgeReadInputSchema,
 	validateHaikuReconciliationAcknowledgeInputSchema,
-	validateHaikuReflectInputSchema,
 	validateHaikuReleaseNotesInputSchema,
 	validateHaikuRepairInputSchema,
 	validateHaikuReadDiscoveryInputSchema,
@@ -7515,16 +7511,6 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 		},
 	},
 	{
-		name: "haiku_reflect",
-		description:
-			"Returns detailed reflection data for an intent — per-stage summaries, unit completion counts, bolt counts, and analysis instructions.",
-		inputSchema: jsonSchemaOf(HAIKU_REFLECT_INPUT_SCHEMA),
-		outputSchema: {
-			type: "object",
-			properties: { message: { type: "string" } },
-		},
-	},
-	{
 		name: "haiku_review",
 		description:
 			"Runs a git diff against main/upstream and returns formatted pre-delivery code review instructions with diff, stats, review guidelines, and review-agent config.",
@@ -11068,210 +11054,6 @@ export function handleStateTool(
 				zapResult,
 				zapResult.error ? { isError: true } : undefined,
 			)
-		}
-
-		// ── Reflect ──
-		case "haiku_reflect": {
-			const reflectInputErr = validateToolInput(
-				args,
-				validateHaikuReflectInputSchema,
-				"haiku_reflect",
-			)
-			if (reflectInputErr) return reflectInputErr
-			const intentSlug = args.intent as string
-			let root: string
-			try {
-				root = findHaikuRoot()
-			} catch {
-				return text("No .haiku directory found.")
-			}
-			const intentFile = join(root, "intents", intentSlug, "intent.md")
-			if (!existsSync(intentFile))
-				return text(`Intent '${intentSlug}' not found.`)
-
-			const { data: intentData } = parseFrontmatter(
-				readFileSync(intentFile, "utf8"),
-			)
-			// v3↔v4 dual-path:
-			//   - v3: status/completed_at on intent.md
-			//   - v4: sealed_at — synthesize "completed" / "active"
-			const isV4 = typeof intentData.plugin_version === "string"
-			const v4Sealed =
-				typeof intentData.sealed_at === "string" && intentData.sealed_at
-					? (intentData.sealed_at as string)
-					: ""
-			const intentStatusDisplay = isV4
-				? v4Sealed
-					? "completed"
-					: "active"
-				: (intentData.status as string) || "unknown"
-			const intentCompletedDisplay = isV4
-				? v4Sealed || "in progress"
-				: (intentData.completed_at as string) || "in progress"
-			let out = "## Intent Metadata\n"
-			out += `- Slug: ${intentSlug}\n`
-			out += `- Studio: ${intentData.studio || "none"}\n`
-			out += `- Mode: ${intentData.mode || "interactive"}\n`
-			out += `- Status: ${intentStatusDisplay}\n`
-			out += `- Created: ${intentData.created_at || "unknown"}\n`
-			out += `- Completed: ${intentCompletedDisplay}\n`
-			if (isV4) {
-				out += `- Schema: v${(intentData.plugin_version as string).split(".")[0]} (plugin_version=${intentData.plugin_version})\n`
-			}
-
-			const stagesPath = join(root, "intents", intentSlug, "stages")
-			if (existsSync(stagesPath)) {
-				out += "\n## Per-Stage Summary\n"
-				for (const stage of readdirSync(stagesPath)) {
-					const stateJsonPath = join(stagesPath, stage, "state.json")
-					const hasV3State = existsSync(stateJsonPath)
-					const state = hasV3State ? readJson(stateJsonPath) : {}
-					out += `\n### ${stage}\n`
-
-					// Read units first — needed for v4 derivation.
-					const unitsDir = join(stagesPath, stage, "units")
-					const unitFms: Array<Record<string, unknown>> = []
-					const unitNames: string[] = []
-					if (existsSync(unitsDir)) {
-						for (const f of readdirSync(unitsDir).filter((x) =>
-							x.endsWith(".md"),
-						)) {
-							const { data: ud } = parseFrontmatter(
-								readFileSync(join(unitsDir, f), "utf8"),
-							)
-							unitFms.push(ud)
-							unitNames.push(f.replace(".md", ""))
-						}
-					}
-
-					// Stage status: v3 state.json wins, else derive from
-					// units (v4 path: every unit terminal-advance + user
-					// approved → completed; any started → active; else
-					// pending).
-					let stageStatusDisplay: string
-					if (hasV3State && typeof state.status === "string") {
-						stageStatusDisplay = state.status as string
-					} else if (unitFms.length === 0) {
-						stageStatusDisplay = "pending"
-					} else {
-						let anyStarted = false
-						let allComplete = true
-						for (const ud of unitFms) {
-							const iters = ud.iterations
-							const hasIter = Array.isArray(iters) && iters.length > 0
-							const last = hasIter
-								? (iters as Array<{ result?: string }>)[iters.length - 1]
-								: undefined
-							const lastAdvance = last?.result === "advance"
-							const approvals =
-								(ud.approvals as Record<string, unknown> | undefined) || {}
-							const userApproved = approvals.user != null
-							if (hasIter) anyStarted = true
-							if (!(lastAdvance && userApproved)) allComplete = false
-						}
-						stageStatusDisplay = allComplete
-							? "completed"
-							: anyStarted
-								? "active"
-								: "pending"
-					}
-					out += `- Status: ${stageStatusDisplay}\n`
-					if (hasV3State) {
-						out += `- Phase: ${state.phase || ""}\n`
-						out += `- Started: ${state.started_at || "not started"}\n`
-						out += `- Completed: ${state.completed_at || "in progress"}\n`
-					}
-
-					if (unitFms.length > 0) {
-						let completedUnits = 0
-						let totalIterations = 0
-						const unitDetails: string[] = []
-						for (let i = 0; i < unitFms.length; i++) {
-							const ud = unitFms[i]
-							const uName = unitNames[i]
-							// v3 unit metrics: bolt, hat, status
-							// v4 derivation: iterations[].length, last.hat, last.result
-							const iters = ud.iterations
-							const iterCount = Array.isArray(iters) ? iters.length : 0
-							const v3Bolt = (ud.bolt as number) || 0
-							const display_iters = iterCount > 0 ? iterCount : v3Bolt
-							totalIterations += display_iters
-							const lastIter =
-								Array.isArray(iters) && iters.length > 0
-									? (iters[iters.length - 1] as {
-											hat?: string
-											result?: string
-										})
-									: null
-							const v3Status = ud.status as string | undefined
-							const isCompleted =
-								v3Status === "completed" || lastIter?.result === "advance"
-							if (isCompleted) completedUnits++
-							const display_hat =
-								v3Status === undefined
-									? lastIter?.hat || "none"
-									: (ud.hat as string) || "none"
-							const display_status =
-								v3Status ??
-								(lastIter?.result === "advance"
-									? "completed"
-									: lastIter?.result === "reject"
-										? "rejected"
-										: lastIter
-											? "in_progress"
-											: "pending")
-							unitDetails.push(
-								`  - ${uName}: status=${display_status}, iterations=${display_iters}, last_hat=${display_hat}`,
-							)
-						}
-						out += `- Units: ${completedUnits}/${unitFms.length} completed, Total iterations: ${totalIterations}\n`
-						if (unitDetails.length > 0) out += `${unitDetails.join("\n")}\n`
-					}
-				}
-			}
-
-			const studio = (intentData.studio as string) || ""
-			if (studio) {
-				const dims = readReflectionDefs(studio)
-				if (Object.keys(dims).length > 0) {
-					out += "\n## Reflection Dimensions\n\n"
-					out += "Analyze this intent along each dimension below:\n\n"
-					for (const [name, content] of Object.entries(dims)) {
-						out += `### ${name}\n\n${content}\n\n`
-					}
-				} else {
-					out += "\n## Analysis Instructions\n"
-					out +=
-						"1. Execution patterns — which units went smoothly, which required retries\n"
-					out += "2. Criteria satisfaction\n"
-					out += "3. Process observations\n"
-					out += "4. Blocker analysis\n"
-				}
-			} else {
-				out += "\n## Analysis Instructions\n"
-				out +=
-					"1. Execution patterns — which units went smoothly, which required retries\n"
-				out += "2. Criteria satisfaction\n"
-				out += "3. Process observations\n"
-				out += "4. Blocker analysis\n"
-			}
-			// Studio operations — surface available post-intent operations
-			if (studio) {
-				const ops = readOperationDefs(studio)
-				if (Object.keys(ops).length > 0) {
-					out += "\n## Available Operations\n\n"
-					out +=
-						"The following post-delivery operations are defined for this studio:\n\n"
-					for (const [name, content] of Object.entries(ops)) {
-						out += `### ${name}\n\n${content}\n\n`
-					}
-				}
-			}
-
-			out += "\n## Output\n"
-			out +=
-				"Write reflection.md and settings-recommendations.md to the intent directory.\n"
-			return text(out)
 		}
 
 		// ── Review ──

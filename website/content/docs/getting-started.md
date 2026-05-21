@@ -109,7 +109,7 @@ AI: [Creates PR with summary of changes]
 
 ## After Delivery
 
-Once your intent is complete, manage ongoing operational tasks with `/haiku:haiku-operate`. Define scheduled jobs, reactive handlers, and human review processes as spec files in `.haiku/{intent}/operations/`. See the [Operations Guide](/docs/operations-guide/) for details.
+When your intent completes, the engine reflects on the run automatically before sealing it — synthesizing what happened along the active studio's reflection dimensions. There's no command to invoke; the reflection artifact is written as part of intent completion.
 
 ## What's Different from AI-DLC?
 

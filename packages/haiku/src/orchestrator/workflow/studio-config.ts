@@ -121,11 +121,10 @@ export interface StageConfig {
 	readonly gate: StageGate
 	/** Stage-level model default — falls through to studio default. */
 	readonly defaultModel?: ModelTier
-	/** Phase override bodies, when the stage ships custom
-	 *  ELABORATION.md / EXECUTION.md / REVIEW.md files. */
+	/** Stage elaboration guidance body, when the stage ships a custom
+	 *  ELABORATION.md — additive prompt content spliced into the elaborate
+	 *  prompt, not an engine phase override. */
 	readonly elaborationOverride?: string
-	readonly executionOverride?: string
-	readonly reviewOverride?: string
 	/** Discovery templates — one subagent per template fan-out during
 	 *  the elaborate phase. */
 	readonly discoveryTemplates: readonly DiscoveryTemplateConfig[]

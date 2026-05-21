@@ -12,22 +12,22 @@ inputs:
 
 # Remediate
 
-Take the gap report and close the gaps. This is the only build-class stage in the compliance lifecycle — units here are discrete pieces of executable work (config changes, code changes, policy authorship) with concrete acceptance criteria and verify-commands. The intent-scope `REMEDIATION-LOG.md` records what was changed, where, and how to confirm the change actually addresses the gap.
+Take the ranked gap list and close the gaps. This is the build-class stage of the compliance lifecycle: units are discrete pieces of executable work — config changes, code changes, policy authorship — each with concrete acceptance criteria and a way to confirm the change actually addresses the gap.
 
-## Per-unit baton
+## Scope
 
-Each remediation unit walks the three hats in `plan → do → verify` order:
+Implementing the technical and governance changes that satisfy the open controls, and recording how each change is verified. Remediate decides *how to close each gap and prove it closed* — not whether the gap was correctly graded (that's a revisit to assess) and not how the evidence is packaged for the auditor (that's document).
 
-- **`remediation-engineer`** (plan / do for technical controls) reads the gap, designs the technical change (config, code, infrastructure), implements it, and pairs every acceptance criterion with a verify-command
-- **`policy-writer`** (do for governance controls) drafts or updates the policy / procedure / standard required by the gap, mapping each policy clause back to the controls it satisfies
-- **`verifier`** (verify) runs the unit's verify-commands, confirms the body substantively matches the spec, and either advances or rejects to the responsible hat
+## What to do
 
-Some units will use only the engineer (pure technical control), some only the policy-writer (pure governance control), some both — the chain accommodates either.
+- Trace every change back to the specific gap and control it closes; leave no gap addressed by guesswork.
+- Pair each technical acceptance criterion with an executable verify-command, and map each policy clause to the control it satisfies.
+- Build changes that are verifiable in isolation, so closure is demonstrable rather than asserted.
+- Keep technical and governance remediation distinct even when one gap needs both.
 
-## Inputs and outputs
+## What NOT to do
 
-`assess/gap-report` feeds in. The output `REMEDIATION-LOG.md` is intent-scope and feeds `document` (every change needs an evidence trail) and indirectly `certify` (the auditor reads the log to confirm gap closure).
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, remediation-engineer, feedback-assessor]` dispatches per finding — `remediation-engineer` re-implements the technical change or routes governance-only findings via classifier to `policy-writer` through a separate dispatch. The gate is `ask`: a human approves locally because remediation often touches production systems and the cost of an unreviewed change in this domain is high. Project overlays may declare the project's actual stack (test runners, deployment platforms, policy-management systems) so verify-commands resolve correctly.
+- Don't re-grade a control or reopen the scope boundary — a wrong finding is a revisit upstream, not a quiet reinterpretation here.
+- Don't assemble the auditor-facing evidence package — that's the document stage.
+- Don't claim a gap closed without a verify-command or a clause-to-control mapping that proves it.
+- Don't add changes the gap list doesn't call for.

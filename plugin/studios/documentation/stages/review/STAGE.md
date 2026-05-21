@@ -12,22 +12,22 @@ inputs:
 
 # Review
 
-Polish the verified draft. Review is the validation stage between drafting and publication — editorial pass on voice, terminology, and consistency; subject-matter pass on mental-model accuracy and missing edge cases; verification pass on the unit body itself.
+The validation stage of the documentation lifecycle, between drafting and publication: polish the verified draft for clarity and confirm it's accurate, complete, and true to operational reality.
 
-## Per-unit baton
+## Scope
 
-Each review unit walks three hats in `plan → do → verify` order:
+The editorial pass (voice, terminology, consistency, cross-references) and the subject-matter pass (mental-model accuracy, misleading simplifications, missing edge cases). Review decides *whether the content reads clearly and holds up* — it does not write the original content (draft) or ship it to the platform (publish).
 
-- **`editor`** (plan / do) reads the draft and produces an editorial pass — clarity, voice, terminology consistency, ambiguity, broken cross-references — without altering technical meaning
-- **`subject-matter-expert`** (do / depth pass) validates the mental model the draft conveys, flags misleading simplifications and missing edge cases, and confirms the documentation matches operational reality
-- **`verifier`** (verify) confirms the unit body has stated preconditions, action, post-condition check, and rollback notes where applicable before advancing
+## What to do
 
-The baton: drafted content → editorially-improved content → SME-validated content with surfaced gaps → validated review artifact.
+- Edit for clarity, voice, terminology consistency, and broken cross-references without altering technical meaning.
+- Validate the mental model the draft conveys against operational reality.
+- Flag misleading simplifications and missing edge cases as anchored, severity-rated findings.
+- Route a technical defect back to the draft stage rather than rewriting the substance here.
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes the draft stage's `draft-documentation`. Produces `REVIEW-REPORT.md` — the marked-up content plus a list of findings with severity, anchored to specific draft sections.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, editor, feedback-assessor]` dispatches per finding. The classifier targets the FB; the editor revises (looping back to the writer in the draft stage when the finding is technical, via cross-stage feedback routing); the assessor decides closure. The gate is `ask` — the user signs off on the review pass before content moves to publish.
+- Don't author new content or re-draft sections from scratch — that's the draft stage.
+- Don't format or publish to the platform — that's publish.
+- Don't change technical meaning under the cover of an editorial edit; that belongs to the writer.
+- Don't close a finding without anchoring it to the specific section it's about.

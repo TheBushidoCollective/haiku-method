@@ -18,26 +18,20 @@ inputs:
 
 # Design
 
-Where the work gets its shape. The designer translates the elaborated problem into wireframes, component states, interaction specs, and layout rules that downstream stages can build against. Scope is visual and interaction design only — not product contracts, not implementation.
+Where the work gets its shape: translate the elaborated problem into the wireframes, component states, interaction specs, and layout rules that downstream stages build against.
 
-## Per-unit baton
+## Scope
 
-Each design unit walks `designer-prep → designer → design-reviewer`:
+Visual and interaction design for user-facing surfaces — what the work looks like and how it behaves to the touch. Not the behavioral contract (product), not implementation (development).
 
-- **`designer-prep`** (plan) reads the project's existing design system — tokens, atoms, primitives, layout utilities — and produces `DESIGN-SYSTEM-ANCHOR.md` with concrete specs cited to source. This is the baton; the designer cannot produce coherent UI without it.
-- **`designer`** (do) translates the elaborated problem into wireframes, component states, interaction specs, layout rules — all referencing the anchor's tokens / atoms by name, never freelancing values.
-- **`design-reviewer`** (verify) confirms the design references real anchor entries, covers every state the brief requires, and is internally consistent.
+## What to do
 
-Detailed process lives in each hat's md file. The discovery picker (`pick_design_direction`) is the engine-level gate that fires before `designer-prep` to lock the visual direction.
+- Reference the project's existing design system — its tokens, atoms, and primitives — by name, citing source.
+- Cover every state the problem requires: default, empty, loading, error, and the edges in between.
+- Keep designs internally consistent and concrete enough that development can build from them without guessing.
 
-## Inputs and outputs
+## What NOT to do
 
-The frontmatter above declares the canonical I/O contract — upstream `inception/discovery` feeds in. Outputs are design artifacts (wireframes, component specs, interaction definitions, layout rules) plus the `DESIGN-BRIEF.md` and `DESIGN-TOKENS.md` that the product stage consumes.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, designer, feedback-assessor]` dispatches per finding. The gate is `[external, ask]` — the user picks between submitting design artifacts for external review or local approval. Project overlays at `.haiku/studios/software/stages/design/` may add team-specific design-system tokens, named design tools, or platform-specific export formats without modifying the plugin defaults.
-
-## Why `designer-prep` is absent from `fix_hats`
-
-The fix loop dispatches `designer` (and `feedback-assessor`) against open feedback — `designer-prep` is intentionally NOT in `fix_hats`. Mirrors the development stage's omission of `planner`: plan-class hats produce upstream baton artifacts (here, `DESIGN-SYSTEM-ANCHOR.md`), not the visual deliverables under review. If a finding targets the anchor itself (wrong color cited, missing state) — which means the plan was wrong — the correct response is a stage revisit that re-runs the full chain, not a fix-loop dispatch that would invoke `designer` against a baton it doesn't author. Do NOT add `designer-prep` here without first changing the architecture's plan-vs-do split.
+- Don't invent values — colors, spacing, type — that the design system already defines.
+- Don't specify behavior, acceptance criteria, or data contracts; that's the product stage.
+- Don't write code or choose implementation technology.

@@ -93,10 +93,6 @@ const sectionDefinitions: { title: string; slugs: string[] }[] = [
 		slugs: ["index"],
 	},
 	{
-		title: "After You Build",
-		slugs: ["operations-guide", "operation-schema"],
-	},
-	{
 		title: "Role Guides",
 		slugs: [
 			"guide-developer",

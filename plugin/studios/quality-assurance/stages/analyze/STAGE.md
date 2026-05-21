@@ -14,22 +14,22 @@ inputs:
 
 # Analyze
 
-Turn the test results into actionable quality insight. This stage produces the quality report — defect density, severity distribution, pass rates, defect-pattern clusters, root-cause categorization, trend analysis against historical baselines, and a release / defer / block recommendation. Descriptive numbers alone are not analysis; the value is in what the data means and what to do about it.
+Turn raw test results into actionable quality insight: defect density and distribution, pass rates, defect-pattern clusters, root-cause categorization, trend analysis against baselines, and a release / defer / block recommendation. Descriptive numbers alone aren't analysis — the value is in what the data means and what to do about it.
 
-## Per-unit baton
+## Scope
 
-Units in this stage are **analysis findings** — typically one slice per quality dimension, area, or trend question identified by the upstream strategy. Each unit walks the three hats in `plan → do → verify` order:
+Interpretation of the results: patterns, root causes, statistical rigor, trends, and a defensible recommendation. Analyze decides *what the test data means*, not what happened during the run (execute-tests) or whether the product is signed off (certify).
 
-- **`analyst`** (plan / do for findings) reads the test results, surfaces patterns and root-cause hypotheses, recommends actions
-- **`statistician`** (do for rigor) validates the metric math, checks sample-size sufficiency, applies trend / significance analysis where applicable
-- **`verifier`** (verify) validates substance, citation, internal consistency, decision-register consistency
+## What to do
 
-The baton is the unit body: pattern hypotheses → rigorously-validated findings → validated artifact.
+- Move past description to meaning — name the defect patterns, the likely root causes, and the actions they imply.
+- Hold the metric math to real statistical rigor: check sample sufficiency and apply significance/trend analysis where it applies.
+- Compare against historical baselines so a number reads as better, worse, or in line — not just a value in isolation.
+- Make the release / defer / block recommendation explicit and tie it to the evidence behind it.
 
-## Inputs and outputs
+## What NOT to do
 
-The frontmatter declares the I/O contract. `execute-tests/test-results` and `plan/test-strategy` feed in; outputs (quality-report) feed `certify`.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, analyst, feedback-assessor]` dispatches per finding. The classifier routes; `analyst` is the implementer (re-doing analysis where a finding is gap, citation, or rigor); the assessor decides closure. The gate is `ask` — a human reviews the analysis before it feeds into certification, because the release / defer / block recommendation is a judgment call. Project overlays at `.haiku/studios/quality-assurance/stages/analyze/` may add house conventions (organization-specific baseline datasets, named historical comparison periods, internal reporting templates) without modifying the plugin defaults.
+- Don't sign off on release readiness against exit criteria — that's certify's call.
+- Don't re-run tests or re-author cases; gaps in the data are feedback to execute-tests or design-tests.
+- Don't present raw numbers as conclusions without saying what they mean.
+- Don't assert a root cause or trend the evidence doesn't support.

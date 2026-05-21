@@ -6,7 +6,6 @@ import rehypeSlug from "rehype-slug"
 import remarkGfm from "remark-gfm"
 import { getAllStudios, getStudioBySlug } from "@/lib/studios"
 import {
-	ArtifactChip,
 	ExpandableArtifact,
 	PhaseSection,
 	reviewBadge,
@@ -203,9 +202,13 @@ export default async function StageDetailPage({ params }: Props) {
 									<h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
 										Outputs produced
 									</h4>
-									<div className="grid gap-2 sm:grid-cols-2">
+									<div className="space-y-2">
 										{stage.outputDefinitions.map((def) => (
-											<ArtifactChip key={def.name} def={def} />
+											<ExpandableArtifact
+												key={def.name}
+												def={def}
+												eyebrow="output template"
+											/>
 										))}
 									</div>
 								</div>
@@ -289,62 +292,55 @@ export default async function StageDetailPage({ params }: Props) {
 						accent="approve"
 						step={4}
 						label="Approve"
-						caption="post-execute · the same review agents re-run against the built work"
+						caption="post-execute · the same agents re-run against the built work"
 					>
-						<p className="text-sm text-stone-500 dark:text-stone-400">
-							Each agent listed under{" "}
-							<span className="font-medium text-stone-700 dark:text-stone-300">
-								Review
-							</span>{" "}
-							fires a second time here — now auditing the code that landed, not
-							the spec that planned it. Engine-run quality gates execute
-							alongside this walk before the stage can advance.
+						<p className="mb-3 text-sm text-stone-500 dark:text-stone-400">
+							The agents below fire a second time here — now auditing the code
+							that landed, not the spec that planned it. Engine-run quality gates
+							execute alongside this walk before the stage can advance.
 						</p>
-					</PhaseSection>
-				)}
-
-				{/* 5 — Fix loop */}
-				{(stage.fixHats.length > 0 || stage.fixHatDefinitions.length > 0) && (
-					<PhaseSection
-						accent="fix"
-						step={5}
-						label="Fix loop"
-						caption="runs only when review or approval opens feedback"
-					>
-						{stage.fixHats.length > 0 && (
-							<div className="mb-3 flex flex-wrap items-center gap-1.5">
-								{stage.fixHats.map((h, i) => (
-									<span key={h} className="flex items-center">
-										<span className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-											{titleCase(h)}
-										</span>
-										{i < stage.fixHats.length - 1 && (
-											<span className="mx-0.5 text-stone-300 dark:text-stone-600">
-												→
-											</span>
+						<div className="space-y-2">
+							{stage.reviewAgentDefinitions.map((agent) => (
+								<ExpandableArtifact
+									key={agent.name}
+									def={agent}
+									id={`approve-agent-${agent.name}`}
+									eyebrow="approval agent"
+								/>
+							))}
+							{stage.reviewAgentsInclude.length > 0 && (
+								<div className="rounded-lg border border-dashed border-stone-300 px-4 py-3 dark:border-stone-600">
+									<h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-stone-400">
+										Borrowed from other stages
+									</h4>
+									<div className="flex flex-wrap gap-2">
+										{stage.reviewAgentsInclude.flatMap((inc) =>
+											inc.agents.map((agentName) => (
+												<Link
+													key={`${inc.stage}-${agentName}`}
+													href={`/studios/${slug}/stages/${inc.stage}/#agent-${agentName}`}
+													className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm hover:border-teal-300 dark:border-stone-700 dark:hover:border-teal-700"
+												>
+													<span className="font-medium">
+														{titleCase(agentName)}
+													</span>
+													<span className="ml-1 text-stone-400">
+														from {titleCase(inc.stage)}
+													</span>
+												</Link>
+											)),
 										)}
-									</span>
-								))}
-							</div>
-						)}
-						{stage.fixHatDefinitions.length > 0 && (
-							<div className="space-y-2">
-								{stage.fixHatDefinitions.map((def) => (
-									<ExpandableArtifact
-										key={def.name}
-										def={def}
-										eyebrow="fix-scoped mandate"
-									/>
-								))}
-							</div>
-						)}
+									</div>
+								</div>
+							)}
+						</div>
 					</PhaseSection>
 				)}
 
-				{/* 6 — Gate */}
+				{/* 5 — Gate */}
 				<PhaseSection
 					accent="gate"
-					step={6}
+					step={5}
 					label="Gate"
 					caption="controls advancement to the next stage"
 				>
@@ -360,6 +356,38 @@ export default async function StageDetailPage({ params }: Props) {
 					</div>
 				</PhaseSection>
 			</div>
+
+			{/* Fix loop — a separate track (Track B), not a step in the linear walk */}
+			{stage.fixHatChain.length > 0 && (
+				<section className="mt-12 rounded-xl border-l-4 border border-amber-300 bg-amber-50/40 px-6 py-5 dark:border-amber-800/60 dark:bg-amber-950/20">
+					<div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+						<h2 className="text-sm font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+							Fix loop
+						</h2>
+						<span className="text-xs text-stone-500 dark:text-stone-400">
+							a separate track · {stage.fixHatChain
+								.map((h) => titleCase(h.name))
+								.join(" → ")}
+						</span>
+					</div>
+					<p className="mt-2 max-w-2xl text-sm text-stone-600 dark:text-stone-400">
+						Not a step in the walk above. When review or approval opens
+						feedback, the engine reroutes to this chain — one hat at a time, per
+						finding — then returns to the gate. It runs only when there&apos;s a
+						finding to fix.
+					</p>
+					<div className="mt-4 space-y-2">
+						{stage.fixHatChain.map((hat, i) => (
+							<ExpandableArtifact
+								key={`${hat.name}-${i}`}
+								def={hat}
+								id={`fix-${hat.name}`}
+								eyebrow={`fix-hat ${i + 1}`}
+							/>
+						))}
+					</div>
+				</section>
+			)}
 
 			{/* Navigation */}
 			<footer className="mt-12 flex items-center justify-between border-t border-stone-200 pt-8 dark:border-stone-800">

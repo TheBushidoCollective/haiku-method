@@ -4,7 +4,7 @@ description: Reverse-engineer an existing feature into H·AI·K·U intent artifa
 
 # Adopt
 
-Reverse-engineer an existing feature into H·AI·K·U intent artifacts for `/haiku:haiku-operate`.
+Reverse-engineer an existing feature into H·AI·K·U intent artifacts.
 
 ## Process
 

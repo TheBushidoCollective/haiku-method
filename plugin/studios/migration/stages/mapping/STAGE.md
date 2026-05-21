@@ -12,19 +12,22 @@ inputs:
 
 # Mapping
 
-Translate the assessment inventory into an executable mapping spec — every source field, every transformation rule, every dropped or derived value, every constraint difference. This is the design stage of the migration studio: units are mapping surfaces (entity-by-entity mappings, integration mappings, derived-field mappings), and the output is the contract that the migrate stage implements.
+Translate the assessment inventory into an executable mapping spec — every source field, every transformation rule, every dropped or derived value, every constraint difference. This is the design stage of the migration: it produces the contract the migrate stage implements verbatim, so anything not in the spec is not in the migration.
 
-## Per-unit baton
+## Scope
 
-- `schema-mapper` → `compatibility-reviewer`: field-level mapping table (source field, target field, transform rule, null / encoding behavior).
-- `compatibility-reviewer` → `verifier`: compatibility findings keyed to mapping rows (type mismatches, constraint conflicts, semantic gaps, downstream-consumer impact).
+Field-level and entity-level mapping plus compatibility analysis. Mapping decides *how source maps to target and what transforms apply* — not what's in scope (assessment), how the mapping is coded (migrate), or whether the result reconciles (validation). The output is a contract: the migrate stage builds exactly what the spec says and nothing it doesn't.
 
-The baton is the mapping rows: every compatibility finding MUST cite the row(s) it flags. A finding floating free of the table is a sign the table is missing a row.
+## What to do
 
-## Inputs and outputs
+- Author the field-level mapping tables — source field, target field, transform rule, null and encoding behavior — for each entity surface.
+- Surface compatibility issues (type mismatches, constraint conflicts, semantic gaps, downstream-consumer impact) and key each finding to the mapping row it flags.
+- Make every transformation rule precise enough that the migrate stage can implement it without guessing.
+- Account for dropped and derived values explicitly, so nothing falls through silently.
 
-Mapping consumes `assessment/migration-inventory` and produces `MAPPING-SPEC.md` (the per-entity mapping tables + transformation rules + the compatibility analysis). The migrate stage consumes this spec verbatim — anything not in the spec is not in the migration.
+## What NOT to do
 
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, schema-mapper, feedback-assessor]` dispatches per finding. The classifier routes to the right unit; `schema-mapper` re-authors the affected mapping row(s); `feedback-assessor` closes. The gate is `ask` — local approval after the review agents and the user have signed off on the spec. Project overlays may add house conventions for representing transformations (Liquibase changelog format, dbt model conventions, ETL DAG snippets) without modifying the plugin defaults.
+- Don't write the migration code — that's the migrate stage building against this spec.
+- Don't re-inventory the source or re-classify risk; consume the assessment inventory as given.
+- Don't leave a compatibility finding floating free of the mapping row it concerns.
+- Don't leave a transformation underspecified — an ambiguous rule becomes a data defect downstream.

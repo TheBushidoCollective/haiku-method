@@ -14,22 +14,22 @@ inputs:
 
 # Develop
 
-Build the actual training materials called for by the curriculum plan — facilitator guides, participant workbooks, slides, videos, exercises, assessment instruments, job aids. This is the build-class stage of the training lifecycle: every output is something a facilitator or a learner will hold and use during delivery.
+The build-class stage of the training lifecycle: produce the actual materials the curriculum plan calls for — facilitator guides, participant workbooks, slides, videos, exercises, assessment instruments, job aids. Every output is something a facilitator or learner will hold and use during delivery.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the three hats in `plan → do → verify` order:
+Material production against the curriculum plan: authoring each asset to the declared instructional strategy, then editing for consistency, audience-appropriate language, accessibility, and accuracy. Develop decides *what the learner actually uses* — not how the curriculum is structured (design) or how it's delivered (deliver).
 
-- **`developer`** (plan / do) authors the materials for one curriculum element — facilitator guide, participant materials, exercises, assessment instruments — following the instructional strategy declared in the curriculum plan
-- **`editor`** (do — quality pass) reviews for consistency across modules, audience-appropriate language, accessibility (alt text, captions, contrast), and accuracy
-- **`verifier`** (verify) validates the artifact against the unit's acceptance criteria, citing concrete pass/fail signals — advances or rejects to the responsible hat
+## What to do
 
-The detailed process for each role lives in the hat's md file. This stage's job is to enforce the chain.
+- Build each asset to the instructional strategy and objectives the curriculum plan declared, not to a fresh interpretation.
+- Keep language and structure consistent across modules so the program reads as one program.
+- Bake accessibility in — alt text, captions, contrast — rather than retrofitting it.
+- Hold each material to the unit's acceptance criteria with concrete pass/fail signals before it advances.
 
-## Inputs and outputs
+## What NOT to do
 
-Reads `design/curriculum-plan` and `needs-analysis/needs-assessment` for every unit. Output is `TRAINING-MATERIALS.md` per unit — an index that points to the produced asset set (facilitator guide path, participant materials path, assessment instrument path, accessibility-check notes).
-
-## Fix loop and gate
-
-Review feedback dispatches the `fix_hats: [classifier, developer, feedback-assessor]` chain. Gate is `ask` — the user approves the materials before delivery is scheduled, because issues caught here are cheap to fix and impossibly expensive to fix mid-cohort. Project overlays at `.haiku/studios/training/stages/develop/` may add house conventions (organization-specific authoring tool, brand templates, named accessibility standard, internal review workflow) without modifying the plugin defaults.
+- Don't redesign the curriculum or change the assessment strategy — that's a revisit to design.
+- Don't run sessions or manage delivery logistics; that's deliver.
+- Don't ship materials that miss accessibility requirements or contradict the curriculum plan.
+- Don't advance an asset that doesn't meet its acceptance criteria.

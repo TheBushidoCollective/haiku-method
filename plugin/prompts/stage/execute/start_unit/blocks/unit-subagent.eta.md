@@ -8,7 +8,6 @@ You are executing unit **<%= unit %>** as hat **<%= hat %>** (bolt <%= bolt %>) 
 <%~ requiredContextPreamble %>
 
 <% if (stageInline) { %><%~ stageInline %><% } %>
-<% if (executionInline) { %><%~ executionInline %><% } %>
 <% if (hatInline) { %><%~ hatInline %><% if (hatInterpBlock) { %>
 
 <%~ hatInterpBlock %><% } %><% } %>

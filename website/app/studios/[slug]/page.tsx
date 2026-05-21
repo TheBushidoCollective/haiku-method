@@ -49,9 +49,6 @@ export default async function StudioDetailPage({ params }: Props) {
 		studio.intentReviewAgentDefinitions.length > 0 ||
 		studio.studioFixHatDefinitions.length > 0 ||
 		studio.reflectionDefinitions.length > 0
-	const hasCapabilities =
-		studio.operationDefinitions.length > 0 ||
-		studio.templateDefinitions.length > 0
 
 	return (
 		<div className="mx-auto max-w-4xl px-4 py-8 lg:py-12">
@@ -321,43 +318,6 @@ export default async function StudioDetailPage({ params }: Props) {
 											def={def}
 											eyebrow="dimension"
 										/>
-									))}
-								</div>
-							</PhaseSection>
-						)}
-					</div>
-				</section>
-			)}
-
-			{/* Studio capabilities — invoked outside the linear lifecycle */}
-			{hasCapabilities && (
-				<section className="mb-14">
-					<h2 className="mb-6 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Studio capabilities
-					</h2>
-					<div className="space-y-8">
-						{studio.templateDefinitions.length > 0 && (
-							<PhaseSection
-								accent="neutral"
-								label="Intent templates"
-								caption="starting points for a new intent in this studio"
-							>
-								<div className="space-y-2">
-									{studio.templateDefinitions.map((def) => (
-										<ExpandableArtifact key={def.name} def={def} />
-									))}
-								</div>
-							</PhaseSection>
-						)}
-						{studio.operationDefinitions.length > 0 && (
-							<PhaseSection
-								accent="neutral"
-								label="Operations"
-								caption="run via /haiku:haiku-operate after delivery"
-							>
-								<div className="space-y-2">
-									{studio.operationDefinitions.map((def) => (
-										<ExpandableArtifact key={def.name} def={def} />
 									))}
 								</div>
 							</PhaseSection>

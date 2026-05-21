@@ -12,25 +12,22 @@ inputs:
 
 # Polish
 
-Tune game feel, fix bugs, optimize performance for target platforms, and integrate final audio and visual feedback (the "juice" that makes a hit register, a pickup feel satisfying, a transition land cleanly). Players cannot articulate the difference between a great game and a polished great game — but they feel it, and it's the difference between a 70 and an 85.
+The stage that trades time for perceived quality: tune game feel, fix bugs, hit platform performance targets, and add the juice that makes a hit register and a pickup feel satisfying. Players can't articulate the difference between a great game and a polished great game, but they feel it — it's the difference between a 70 and an 85.
 
-Polish is where you trade time for perceived quality. It's also where scope creep becomes fatal — new content added in polish rarely ships at quality and almost always pushes the release date.
+## Scope
 
-## Per-unit baton
+Refinement of the existing build: feel tuning, bug fixing, performance optimization, and final audio/visual feedback. Polish decides *how good the finished game feels* — not what content exists (production already built it), and not how it ships (release). Nothing new gets added here.
 
-Each unit walks the four hats in `plan → do-tune → do-perf → verify` order:
+## What to do
 
-- **`gameplay-engineer`** (plan + do-fix) fixes gameplay bugs and edge cases surfaced by playtests and QA — polish-phase engineering is reactive, not new construction
-- **`tuner`** (do-feel) tunes game feel: timing, responsiveness, juice, pacing, difficulty curves. Numbers-and-feedback work; the gap between functional and great
-- **`performance-engineer`** (do-perf) optimizes the game to meet platform performance targets — frame rate, load times, memory, thermal behavior on handhelds and mobile
-- **`qa`** (verify) finds bugs and regressions before players do, validates fixes on the actual build, and certifies the unit is polish-complete
+- Fix gameplay bugs and edge cases surfaced by playtests and QA; polish-phase engineering is reactive, not new construction.
+- Tune feel — timing, responsiveness, juice, pacing, difficulty curves — to close the gap between functional and great.
+- Optimize to meet platform performance targets: frame rate, load times, memory, thermals on handhelds and mobile.
+- Validate every fix on the actual build before treating a unit as polish-complete.
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+## What NOT to do
 
-## Inputs and outputs
-
-The frontmatter declares `production/game-build` as input. Polish consumes the production build and produces a `POLISHED-BUILD` artifact that release stage submits to storefronts and certification.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, gameplay-engineer, feedback-assessor]` dispatches per finding. Polish-fix means re-tuning, re-fixing, or re-optimizing — never adding new content. The gate is `[external, ask]` — the user picks between external review (e.g., a publisher beta signoff, a platform pre-cert pass) or local approval.
+- Don't add new content — in polish it rarely ships at quality and almost always pushes the release date.
+- Don't reopen production-scope systems work or rebuild what production delivered.
+- Don't certify a fix you only verified on a dev build.
+- Don't carry an unresolved regression into release.

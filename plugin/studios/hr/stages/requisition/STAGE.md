@@ -10,24 +10,22 @@ inputs: []
 
 # Requisition
 
-The opening stage of the hiring lifecycle. Turns a vague need ("we need to hire someone") into a defensible role specification that downstream sourcing, screening, and interview stages can act on. Every later stage reads this stage's output as authoritative — bad requisition decisions compound into the entire pipeline.
+The opening stage of the hiring lifecycle: turn a vague need ("we need to hire someone") into a defensible role specification. Every later stage — sourcing, screening, interview, offer — reads this stage's output as authoritative, so a weak requisition decision compounds through the entire pipeline.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the three hats in `plan → do → verify` order:
+Role definition: the business need, the must-have versus nice-to-have competencies, the budget envelope, and the market-tested job description that follows from them. Requisition decides *what role we're hiring for and why* — not who fills it (sourcing, screening, interview) or what they're paid in the end (offer).
 
-- **`hiring-manager`** (plan) names the business need, the gap this role fills, the must-have vs nice-to-have competencies, and the budget envelope
-- **`recruiter`** (do) translates that into a market-tested job description: realistic requirements, an attractive value proposition, a sourcing plan, and a defensible compensation range
-- **`verifier`** (verify) checks the artifact for substance, internal consistency, and decision-register alignment — advances or rejects
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+- Name the business need and the gap this role fills before writing a single requirement.
+- Separate must-have competencies from nice-to-haves so downstream screening has a clear bar.
+- Translate the need into a realistic, market-tested job description with an honest value proposition and sourcing plan.
+- Set a defensible compensation range tied to the budget envelope and market data.
 
-## Inputs and outputs
+## What NOT to do
 
-There are no upstream stages — requisition is the entry point. The single output is `JOB-SPEC.md` at intent scope, consumed by every downstream stage (sourcing pulls outreach context, screening pulls must-have criteria, interview pulls competencies, offer pulls compensation framing).
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, hiring-manager, feedback-assessor]` dispatches per finding. The classifier routes the finding; `hiring-manager` re-authors the affected section (a recruiter-only fix risks losing the underlying business framing); the assessor decides closure independently. The gate is `ask` — a human approver signs off locally because requisition decisions touch budget, headcount, and equity-band placement that the agent should not seal alone.
-
-Sensitive topic note: requirements language can inadvertently encode protected-class signals (age, gender, parental-status proxies). When the artifact touches these areas, defer to human review and, where applicable, jurisdictional employment counsel — the plugin does not dispense legal interpretations.
+- Don't source, screen, or evaluate candidates — that's for the stages downstream.
+- Don't inflate requirements past what the role actually needs; over-specified bars distort the whole pipeline.
+- Don't leave the budget envelope or comp range unstated for a later stage to guess at.
+- Don't encode protected-class signals (age, gender, parental-status proxies) in requirements language; where the artifact touches these areas, defer to human review and, where applicable, jurisdictional employment counsel — the plugin does not dispense legal interpretations.

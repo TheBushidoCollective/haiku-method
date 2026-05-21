@@ -331,8 +331,16 @@ export function resolveOutputTemplatePath(
  * `plugin/studios/{studio}/intent-review-agents/*.md` (NOT per-stage).
  * They run once at intent completion, after the final stage gate passes
  * but before `intent_complete`. Their scope is the whole intent, not a
- * single stage. Project overrides plugin. Subagent reads each file.
- * Returns name → absolute path.
+ * single stage. Subagent reads each file. Returns name → absolute path.
+ *
+ * Two-tier cascade (more-specific wins): a GLOBAL tier at
+ * `{plugin}/intent-review-agents/*.md` (sibling of `studios/`, the same
+ * shape as the global `hats/` and `review-agents/` tiers) is read first,
+ * then the per-studio tier overrides it by agent name. Global agents
+ * apply to every studio unless a studio ships its own file of the same
+ * name. Project `.haiku/` overrides plugin at each tier. This is how
+ * `delivery-verifier` (a CI/PR-green gate that SKIPs gracefully when
+ * there's no remote) reaches every studio from one source.
  *
  * The directory was renamed from `review-agents/` to `intent-review-agents/`
  * (2026-05-18) to free the studio-level `review-agents/` slot for the
@@ -345,13 +353,18 @@ export function readStudioReviewAgentPaths(
 ): Record<string, string> {
 	validateIdentifier(studio, "studio")
 	const agents: Record<string, string> = {}
-	for (const base of [...studioSearchPaths()].reverse()) {
-		const agentsDir = join(base, studio, "intent-review-agents")
-		if (!existsSync(agentsDir)) continue
-		for (const f of readdirSync(agentsDir).filter((f) => f.endsWith(".md"))) {
-			agents[f.replace(/\.md$/, "")] = join(agentsDir, f)
+	// plugin-first so project overrides (last write wins).
+	const bases = [...studioSearchPaths()].reverse()
+	const collect = (dir: string) => {
+		if (!existsSync(dir)) return
+		for (const f of readdirSync(dir).filter((f) => f.endsWith(".md"))) {
+			agents[f.replace(/\.md$/, "")] = join(dir, f)
 		}
 	}
+	// Global tier (sibling of studios/) — lowest precedence.
+	for (const base of bases) collect(join(base, "..", "intent-review-agents"))
+	// Studio tier — overrides global by agent name.
+	for (const base of bases) collect(join(base, studio, "intent-review-agents"))
 	return agents
 }
 
@@ -949,8 +962,9 @@ export function resolveStudio(identifier: string): StudioInfo | null {
 	return null
 }
 
-/** Read a phase override file for a stage (e.g. ELABORATION.md, EXECUTION.md).
- *  Returns frontmatter + body, or null if no override exists. */
+/** Read a stage's phase-guidance file (today only ELABORATION.md — additive
+ *  prompt content, not an engine override). Returns frontmatter + body, or
+ *  null if the stage ships none. */
 export function readPhaseOverride(
 	studio: string,
 	stage: string,
@@ -972,22 +986,6 @@ export function readPhaseOverride(
 		}
 	}
 	return null
-}
-
-/** Read operation definitions for a studio (project overrides plugin for same-named ops) */
-export function readOperationDefs(studio: string): Record<string, string> {
-	validateIdentifier(studio, "studio")
-	const ops: Record<string, string> = {}
-	const paths = studioSearchPaths()
-	// Reverse so plugin loads first, then project overwrites
-	for (const base of [...paths].reverse()) {
-		const opsDir = join(base, studio, "operations")
-		if (!existsSync(opsDir)) continue
-		for (const f of readdirSync(opsDir).filter((f) => f.endsWith(".md"))) {
-			ops[f.replace(/\.md$/, "")] = readFileSync(join(opsDir, f), "utf8")
-		}
-	}
-	return ops
 }
 
 /** Read reflection dimension definitions for a studio (project overrides plugin for same-named dims) */

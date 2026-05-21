@@ -16,47 +16,22 @@ inputs:
 
 # Design
 
-Electrical schematic, PCB layout, mechanical enclosure, and bill of materials.
-Every design decision must trace back to a requirement — unjustified
-components add cost, unjustified features add risk. Component selection
-matters: lead times, second sources, and end-of-life status are part of the
-design contract, not an afterthought.
+Produce the physical design of the hardware: electrical schematic, PCB layout, mechanical enclosure, and bill of materials. Every decision here traces back to a requirement — unjustified components add cost, unjustified features add risk — and component sourcing is part of the contract, not an afterthought.
 
-## Per-unit baton
+## Scope
 
-Each design unit walks `plan → do → verify` across the hat list:
+The design artifacts against the requirements: schematic, sourced BOM, mechanical envelope and thermal path, and a manufacturable PCB layout. Design decides *how the product is engineered to meet its requirements* — not what the requirements are (requirements) and not how it's built at volume (manufacturing).
 
-- **`electrical-engineer`** (plan / do for schematic + BOM) reads
-  requirements, picks a topology, selects components, and produces the
-  schematic + sourced BOM block for this slice of the product.
-- **`mechanical-engineer`** (do for enclosure / thermal) develops the
-  mechanical envelope, mounting, and thermal path that lives with the
-  electrical artifact for this unit.
-- **`pcb-designer`** (do for layout) translates the schematic into a
-  manufacturable PCB layout that meets EMC, thermal, and mechanical
-  constraints.
-- **`design-reviewer`** (verify) integrates schematic, layout, mechanical,
-  and BOM into one coherent review and either advances the unit or rejects
-  back to the responsible hat.
+## What to do
 
-Detailed process for each role lives in that hat's md file.
+- Trace every design decision back to a requirement; if nothing requires a component or feature, it doesn't belong.
+- Select components with lead time, second sources, and end-of-life status treated as design constraints.
+- Make the layout manufacturable — meeting EMC, thermal, and mechanical constraints, not just electrically correct.
+- Integrate schematic, layout, mechanical, and BOM into one coherent design that holds together as a whole.
 
-## Fix loop and gate
+## What NOT to do
 
-When review feedback opens, `fix_hats: [classifier, electrical-engineer,
-pcb-designer, feedback-assessor]` dispatches per finding — the classifier
-routes; the electrical and PCB hats land the corrective edits depending on
-whether the finding is schematic-scope or layout-scope; the assessor
-independently decides closure. The gate is `[external, ask]` — design review
-typically wants a real human signoff (engineering peer review, hardware
-review board, or fab-house DFM signoff submitted via the team's chosen
-review surface).
-
-## Tooling
-
-The plugin default is tool-agnostic. Concrete EDA / CAD / simulator / fab
-commands and house conventions belong in a project overlay at
-`.haiku/studios/hwdev/stages/design/`. The plugin defaults reference
-artifact categories (schematic source, PCB source, mechanical CAD, BOM CSV,
-Gerbers, drill, pick-and-place) without prescribing the tool that produces
-them.
+- Don't change or reinterpret the requirements to make the design easier — a wrong requirement is a revisit upstream.
+- Don't define the assembly process or production ramp — that's manufacturing.
+- Don't add an unjustified component or feature that no requirement calls for.
+- Don't treat sourcing risk (long lead times, single-source, EOL parts) as someone else's problem to discover later.

@@ -113,7 +113,7 @@ export const HAIKU_READ_PHASE_INPUT_SCHEMA = Type.Object(
 		phase: Type.String({
 			minLength: 1,
 			description:
-				"Phase name (e.g. ELABORATION, EXECUTION). Case-insensitive — resolved as phases/<PHASE>.md.",
+				"Phase name (e.g. ELABORATION). Case-insensitive — resolved as phases/<PHASE>.md.",
 		}),
 	},
 	{ additionalProperties: false },

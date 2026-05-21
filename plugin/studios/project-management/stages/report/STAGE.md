@@ -19,22 +19,22 @@ outputs:
 
 # Report
 
-Turn raw tracking data into stakeholder-ready communication: an executive dashboard, role-tailored status reports, and clearly-surfaced decisions or escalations needing action. Report is downstream of `track` — accuracy here depends entirely on tracking quality upstream, and the verifier's job is to catch the cases where presentation has drifted from the underlying data.
+Turn raw tracking data into stakeholder-ready communication: an executive dashboard, role-tailored status reports, and clearly surfaced decisions or escalations that need action. Report is downstream of track — its accuracy depends entirely on tracking quality, and its job is to present that data faithfully, not to reinterpret it.
 
-## Per-unit baton
+## Scope
 
-Each unit is a reporting surface — a dashboard panel, a role-specific status report (executive, sponsor, team lead, dependent team), a forecast view, or a decision/escalation callout. The three hats walk it in `plan → do → verify` order:
+Dashboards, audience-tailored status reports, forecasts, and decision/escalation callouts. Report decides *how project state is communicated and to whom* — not what the underlying state is (track), what the plan was (plan), or what success means (charter). Units are reporting surfaces: a dashboard panel, a role-specific report, a forecast, an escalation.
 
-- **`reporter`** (plan) designs the visualization, picks the metrics and objective health thresholds, and forecasts based on actual velocity (not the original plan)
-- **`communicator`** (do) tailors the content for each audience, surfaces required decisions and action items, and sets the cadence / channel for each stakeholder group
-- **`verifier`** (verify) checks the body for accurate data sourcing, objective (not subjective) health indicators, and explicit action-item callouts — advances or rejects to the responsible hat
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+- Pick metrics and objective health thresholds, and forecast from actual velocity rather than the original plan.
+- Tailor the content for each audience — executive, sponsor, team lead, dependent team — and set the cadence and channel per group.
+- Surface required decisions and action items explicitly so stakeholders know what's being asked of them.
+- Source every figure to the tracking data so presentation never drifts from reality.
 
-## Inputs and outputs
+## What NOT to do
 
-The report stage consumes `track/discovery/status-report` (the data), `plan/discovery/project-plan` (the baseline), and `charter/discovery/project-charter` (the success criteria). Its output is `PROJECT-DASHBOARD.md`, consumed by `close` (the run of dashboards becomes the project history) and by stakeholders directly.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, reporter, communicator, feedback-assessor]` dispatches per finding — `reporter` owns the data/forecast layer, `communicator` owns the audience-shaped report (the report is the communicator's artifact), so a finding lands with the hat that owns the flagged artifact. The gate is `ask` — local approval before the report goes to stakeholders catches data inaccuracies and tone issues. Project overlays at `.haiku/studios/project-management/stages/report/` may add audience-specific templates, branded dashboard layouts, or integration with a specific reporting tool without modifying the plugin defaults.
+- Don't invent or adjust the underlying numbers — report presents what track recorded; a data problem is a revisit to track.
+- Don't accept or close deliverables; that's the close stage.
+- Don't use a subjective health indicator where an objective threshold applies.
+- Don't let presentation drift from the source data, or omit a decision the data demands.

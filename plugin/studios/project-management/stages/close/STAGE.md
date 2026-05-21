@@ -23,20 +23,20 @@ outputs:
 
 Formally close the project: confirm deliverable acceptance against the charter, transfer ownership of any ongoing surfaces, resolve or defer open items, run the retrospective, and archive documentation so future projects can learn from this one. Close is the last contract — anything not captured here is lost institutional knowledge.
 
-## Per-unit baton
+## Scope
 
-Each unit is a closeout surface — a deliverable acceptance, an ownership transfer, an open-item disposition, a lesson learned, or an archival step. The three hats walk it in `plan → do → verify` order:
+Deliverable acceptance, ownership transfer, open-item disposition, the retrospective, and the archive. Close decides *whether the project is done, who owns what's left, and what was learned* — not what was promised (charter) or how state was tracked and reported (track, report). Units are closeout surfaces.
 
-- **`closer`** (plan) verifies each charter deliverable against acceptance criteria, obtains formal sponsor sign-off, and dispositions every open item (assigned to an owner with a date, or formally deferred with rationale)
-- **`archivist`** (do) facilitates the retrospective, captures lessons learned categorized as process / technical / organizational, organizes documentation for retrievability, and writes the project-summary record
-- **`verifier`** (verify) checks the body for formal acceptance evidence, owner-and-date on every open item, project-specific (not generic) lessons, and accessible archive structure — advances or rejects to the responsible hat
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+- Verify each charter deliverable against its acceptance criteria and obtain formal sponsor sign-off.
+- Disposition every open item — assigned to an owner with a date, or formally deferred with a stated rationale.
+- Run the retrospective and capture lessons learned, categorized as process, technical, or organizational.
+- Organize the documentation so a future project can actually retrieve and learn from it.
 
-## Inputs and outputs
+## What NOT to do
 
-The close stage consumes `report/discovery/project-dashboard`, `track/discovery/status-report`, and `charter/discovery/project-charter`. Its outputs are `RETROSPECTIVE.md` (the team's recorded reflection) and `LESSONS-LEARNED.md` (the cross-project transferable insights).
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, closer, archivist, feedback-assessor]` dispatches per finding — `closer` owns the retrospective / closeout disposition, `archivist` owns the archived record, so a finding lands with the hat that owns the flagged artifact. The gate is `ask` — sponsor and team review of closeout artifacts before formal sign-off. Project overlays may add organization-specific lessons-learned repositories, archive-platform integration, or formal-closure workflow integration with a specific PM tool without modifying the plugin defaults.
+- Don't accept a deliverable that doesn't meet its charter criteria, or sign off with criteria unproven.
+- Don't reopen planning, tracking, or reporting; close accepts the work, it doesn't redo it.
+- Don't leave an open item without an owner and a date, or defer one without rationale.
+- Don't record generic lessons ("communicate better") instead of project-specific, transferable ones.

@@ -12,22 +12,22 @@ inputs:
 
 # Migrate
 
-Implement the mapping spec as runnable migration code — extractors, transforms, loaders, idempotency keys, dry-run modes, checkpointing. This is the build stage of the migration studio: units are execution-class (discrete pieces of work with acceptance criteria and executable verify commands), and the output is the migration code itself plus the integration-test evidence that it does what the spec says.
+Implement the mapping spec as runnable migration code — extractors, transforms, loaders, idempotency keys, dry-run modes, checkpointing — and prove it does what the spec says with integration-test evidence. This is the build stage of the migration: units are execution work with acceptance criteria and executable verify commands.
 
-## Per-unit baton
+## Scope
 
-Each migrate unit walks three hats in `plan → do → verify` order:
+Implementation of the mapping spec plus the integration-test evidence that the implementation honors it. Migrate decides *how the data actually moves* — not what maps to what (mapping) or whether the migrated target reconciles against the source (validation). The mapping spec is the contract; the code implements it and nothing beyond it.
 
-- **`migration-engineer`** (plan / do) reads the mapping rows for this entity / surface and implements the migration logic — extract, transform, load, error handling, idempotency, dry-run support, checkpointing.
-- **`integration-tester`** (do for test evidence) consumes the implementation and produces the integration-test results against a non-production target — happy path, edge cases derived from the mapping spec, idempotency proof (re-run produces no duplicates), failure-injection results.
-- **`verifier`** (verify) validates the unit body against the migrate-stage verify rules (spec match, executable verify-commands, acceptance criteria paired with concrete pass/fail signals). Advances or rejects to the responsible hat.
+## What to do
 
-The baton is the unit's body content accumulating on disk: implementation references mapping-spec rows; tests reference implementation behaviors; verifier reads both.
+- Implement extract, transform, and load for each entity surface against its mapping rows, with error handling, idempotency, dry-run support, and checkpointing.
+- Produce integration-test evidence against a non-production target: happy path, mapping-derived edge cases, and an idempotency proof that a re-run produces no duplicates.
+- Trace every implementation behavior back to a mapping-spec row and every test back to a behavior.
+- Keep verify commands executable so the result is mechanically checkable.
 
-## Inputs and outputs
+## What NOT to do
 
-Migrate consumes `mapping/mapping-spec` and produces `MIGRATION-ARTIFACTS.md` (the index of migration scripts / adapters / transforms with their entry points, dry-run invocations, and integration-test evidence). The validation stage consumes the artifacts to run reconciliation.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, migration-engineer, feedback-assessor]` dispatches per finding. The classifier routes; `migration-engineer` re-authors the affected script or test; `feedback-assessor` closes. The gate is `ask` — local approval once the integration tests pass and the data-integrity review agent has signed off.
+- Don't reinterpret or extend the mapping spec — a wrong spec is a revisit to mapping, not a change made in the code.
+- Don't run reconciliation or parity testing here; that's validation against the artifacts you produce.
+- Don't advance with failing integration tests or an unproven idempotency claim.
+- Don't migrate a surface the mapping spec didn't cover.

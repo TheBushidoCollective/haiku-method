@@ -12,22 +12,22 @@ inputs:
 
 # Design Tests
 
-Design the test cases, traceability, and automation strategy that turns the test strategy into executable artifacts. This stage produces a structured test-suite spec — explicit test cases with preconditions / steps / expected results, a traceability matrix linking each test to a requirement, and an automation feasibility assessment.
+Turn the test strategy into executable test artifacts: explicit test cases, a traceability matrix back to requirements, and an assessment of which cases to automate. This is where the strategy's intent becomes something a tester or a framework can actually run.
 
-## Per-unit baton
+## Scope
 
-Units in this stage are **test-design slices** — typically one slice per feature area, integration boundary, or quality dimension declared by the upstream plan. Each unit walks the three hats in `plan → do → verify` order:
+Test design and automation strategy — case definition (preconditions, steps, expected results), requirement traceability, and automation feasibility. Design-tests decides *what the tests are*, not what to test (that's plan), whether they pass (execute-tests), or what failures mean (analyze).
 
-- **`designer`** (plan / do for cases) reads the strategy slice, designs the test cases — boundary, equivalence-partition, decision-table, state-transition where applicable — and writes the traceability matrix
-- **`automator`** (do for automation) reads the designed cases and produces the automation feasibility assessment (which cases automate, which stay manual, why, what framework category each lands in)
-- **`verifier`** (verify) validates substance, upstream trace, internal coherence, decision-register consistency
+## What to do
 
-The baton is the unit body: test cases → cases-plus-automation-strategy → validated artifact.
+- Trace every test case back to a requirement or quality dimension the strategy named — leave no case unanchored and no in-scope requirement uncovered.
+- Apply real design techniques (boundary, equivalence partition, decision table, state transition) rather than happy-path-only cases.
+- Decide which cases automate and which stay manual, and justify each call against cost and stability.
+- Write cases precise enough that someone other than the author could run them and get the same result.
 
-## Inputs and outputs
+## What NOT to do
 
-The frontmatter declares the I/O contract. `plan/test-strategy` feeds in; the outputs (test-suite spec) feed `execute-tests`.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, designer, feedback-assessor]` dispatches per finding. The classifier routes; `designer` is the implementer (re-authoring cases or trace); the assessor decides closure. The gate is `auto` — once the verifier and review-agent lens pass, the workflow engine advances. Project overlays at `.haiku/studios/quality-assurance/stages/design-tests/` may add house conventions (specific framework choices, ticketing-system links, internal templates) without modifying the plugin defaults.
+- Don't redefine scope or risk priority — that's a revisit to plan, not a quiet reinterpretation here.
+- Don't execute the cases or capture results; designing and running are separate stages.
+- Don't leave a strategy-named area without coverage.
+- Don't write cases whose expected result is ambiguous or unverifiable.

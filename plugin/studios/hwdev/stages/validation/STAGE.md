@@ -18,43 +18,22 @@ inputs:
 
 # Validation
 
-Hardware-in-the-loop testing, environmental testing (temperature,
-humidity, vibration, ESD, drop), and regulatory certification.
-Validation failures mean going back to `design` or `firmware` — this is
-where hardware projects find out whether their assumptions held, and the
-cost of being wrong grows with every downstream stage that already
-happened.
+Find out whether the design and firmware actually meet the requirements: hardware-in-the-loop testing, environmental testing (temperature, humidity, vibration, ESD, drop), and regulatory certification. This is where the project learns whether its assumptions held — and the cost of being wrong grows with every stage that already happened.
 
-Regulatory certification is often gated by an external lab with its own
-schedule. Plan for cert slots early; "we'll just submit when we're
-ready" is how launches slip by months. Cert lab choice, scope of work,
-and submission packaging belong in a project overlay; the plugin default
-names categories of cert work, not specific labs or framework versions.
+## Scope
 
-## Per-unit baton
+Verification of the built product against its requirements: functional and environmental test campaigns, regression sweeps, and regulatory cert. Validation decides *whether the product meets what requirements demanded* — not what those requirements are (requirements), and not how the product gets built at volume (manufacturing). A failure here is a revisit to design or firmware.
 
-Each validation unit walks `plan → do → verify`:
+## What to do
 
-- **`test-engineer`** (plan / do for functional / environmental) builds
-  and runs the HIL rig, environmental tests, and regression sweep against
-  functional requirements; records evidence in the agreed shape.
-- **`compliance-officer`** (do for cert) coordinates regulatory cert
-  submissions, runs pre-scans before formal submission, and tracks lab
-  results.
-- **`validation-lead`** (do for plan + judgement) owns the overall
-  validation plan, coordinates between test-engineer and
-  compliance-officer, and judges release readiness based on aggregate
-  results.
-- **`verifier`** (verify) checks each verification-surface unit for
-  scoped boundary, named method + threshold + evidence shape, and
-  mechanical pass / fail — body only.
+- Test against the functional and safety requirements with named methods, thresholds, and evidence shapes — not ad-hoc checks.
+- Build and run the HIL rig and environmental campaigns, recording evidence in the agreed shape.
+- Plan cert-lab slots early; "we'll submit when we're ready" is how launches slip — run pre-scans before formal submission.
+- Judge release readiness on aggregate results, with each verification surface scoped to a clean pass/fail.
 
-## Fix loop and gate
+## What NOT to do
 
-When review feedback opens, `fix_hats: [classifier, test-engineer,
-feedback-assessor]` dispatches per finding. The test-engineer is the
-implementer because most validation findings are about test scope,
-method, or evidence-shape gaps that need the originating role to fix.
-The gate is `await` — validation completion typically blocks on an
-external event (cert-lab return, environmental-chamber run finishing,
-field-trial cohort reporting) rather than a synchronous review.
+- Don't edit the design or firmware in place to make a test pass — file the finding and route it back upstream.
+- Don't redefine requirements to match what the hardware happens to do.
+- Don't declare a regulatory framework satisfied on an informal scan in place of the lab's formal return.
+- Don't sign off release readiness with a verification surface left ambiguous or unmeasured.

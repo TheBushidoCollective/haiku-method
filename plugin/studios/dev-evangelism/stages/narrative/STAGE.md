@@ -15,24 +15,22 @@ outputs:
 
 # Narrative
 
-Narrative is the design / synthesis stage of the dev-evangelism lifecycle. It takes the research stage's audience landscape and turns it into a story — the problem-solution-outcome arc, the hook, the small set of takeaways the audience should leave with, and the audience-to-message mapping that every downstream creator will execute against.
+The synthesis stage of the dev-evangelism lifecycle: turn the audience landscape into a story. This is the contract the create stage executes against — the problem-solution-outcome arc, the hook, the few takeaways the audience should leave with, and the audience-to-message mapping.
 
-Narrative does NOT produce content assets. It produces the contract that the create stage executes against. A weak narrative produces beautiful content nobody reads; a strong narrative survives translation into multiple formats without losing its point.
+## Scope
 
-## Per-unit baton
+Shaping the story and the messaging that survives translation into any format. Narrative decides *what we're saying and why it lands* — it does not produce content assets (create) or research the audience from scratch (research). A weak narrative produces beautiful content nobody reads; a strong one keeps its point across every format.
 
-Units here are **story components** (the hook, the central conflict, the resolution, per-segment messaging). Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`storyteller`** (plan / do for the arc) reads the audience landscape and drafts the arc, hook, and 3-or-fewer takeaways for this story slice
-- **`editor`** (do for clarity / fit) refines the arc — strips jargon that excludes target segments, tightens tone to match the audience's actual reading patterns, and flags any technical claim that needs a demo or code proof to be credible
-- **`verifier`** (verify) validates the resulting story artifact against substance / citation / consistency rules and advances or rejects to the responsible hat
+- Draft the arc, hook, and a small set of takeaways (three or fewer) grounded in the audience landscape.
+- Map each message to the segment it's meant for, so creators know who each beat is aimed at.
+- Strip jargon that excludes target segments and tune tone to how the audience actually reads.
+- Flag any technical claim that needs a demo or code proof to be credible downstream.
 
-The baton is the story arc evolving from skeleton (storyteller) to polished, audience-fit, and demo-flagged (editor) to validated (verifier).
+## What NOT to do
 
-## Inputs and outputs
-
-Upstream `research/audience-landscape` feeds in. The output is the intent-scope `NARRATIVE-BRIEF.md` containing the arc, takeaways, audience-to-message mapping, and editorial guidance for the create stage.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, storyteller, feedback-assessor]` dispatches per finding. The gate is `ask` — the narrative is the last load-bearing decision before content production starts, so a human reviews the arc and takeaways before the create stage spins up.
+- Don't write the actual content assets, decks, or demos — that's the create stage.
+- Don't re-map the audience or re-scout topics — carry forward what research established.
+- Don't ship more than a handful of takeaways; a diluted story translates into forgettable content.
+- Don't leave a load-bearing claim unflagged for the proof it will need.

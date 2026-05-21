@@ -10,22 +10,22 @@ inputs: []
 
 # Audit
 
-Assess the existing documentation surface, identify gaps against what readers actually need, and rank them so the rest of the studio works on the right things in the right order. Audit is the research stage of this studio — its units are knowledge topics ("what's the current state of the API reference?", "which onboarding flows lack docs?"), not execution work.
+The opening stage of the documentation lifecycle: take stock of the existing documentation surface and decide what's worth writing or updating, in what order. This is the research stage — its units are knowledge topics ("what's the current state of the API reference?", "which flows lack docs?"), not writing work.
 
-## Per-unit baton
+## Scope
 
-Each audit unit walks the three hats in `plan → do → verify` order:
+Inventorying what documentation exists, judging its currency and accuracy, and ranking the gaps against what readers actually need. Audit decides *what to write and in what priority* — it does not design the structure (outline) or write any content (draft).
 
-- **`auditor`** (plan) takes a documentation area and inventories what currently exists, with currency and accuracy assessments per item
-- **`gap-analyst`** (do) reads the inventory, identifies gaps against reader needs, and ranks them by user impact
-- **`verifier`** (verify) confirms the knowledge artifact's substance, citations, and internal consistency before advancing
+## What to do
 
-The baton across the chain: scoped doc area → inventory with currency flags → ranked gap list with severity and recommended doc type → validated artifact.
+- Inventory each documentation area and assess every item for currency and accuracy.
+- Identify gaps against real reader needs, not against an idealized table of contents.
+- Rank gaps by user impact, and recommend the doc type each gap calls for.
+- Ground each finding in the actual state of the docs, not in assumptions about them.
 
-## Inputs and outputs
+## What NOT to do
 
-The audit stage takes no upstream inputs (it's the first stage in the studio). It produces `AUDIT-REPORT.md` — the prioritized gap analysis that drives outlining.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, auditor, feedback-assessor]` dispatches per finding. The classifier targets the FB to the unit, the auditor re-inventories or re-ranks, the assessor decides closure. The gate is `auto` — once the artifacts pass review and the user (or autopilot) advances, the audit hands off to outline.
+- Don't design the information architecture or sequence the docs — that's the outline stage.
+- Don't write prose, code samples, or visuals — that's draft.
+- Don't rank a gap without tying it to reader impact.
+- Don't flag an item as stale or accurate without checking it.

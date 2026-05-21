@@ -388,7 +388,6 @@ plugin/
         review-agents/{agent}.md # adversarial review mandates
         discovery/{artifact}.md # knowledge artifact definitions (research, specs, models)
         outputs/{artifact}.md   # work product definitions (code, config, deliverables)
-      operations/{op}.md        # post-delivery operation templates
       reflections/{dim}.md      # reflection analysis dimensions
       templates/{template}.md   # intent templates with parameters
 

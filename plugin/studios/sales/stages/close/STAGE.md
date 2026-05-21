@@ -12,18 +12,22 @@ inputs:
 
 # Close
 
-Close is the operational stage of the sales lifecycle — verbal agreement turns into a fully executed contract, the prospect becomes a customer, and the relationship hands to the team that will deliver the work. Per architecture §4.5 this is operational (units are operational steps — secure signature, verify PO, package handoff, write win/loss). The artifact is the `HANDOFF-PACKAGE.md` that customer success or implementation inherits.
+The operational stage of the sales lifecycle: a verbal agreement becomes a fully executed contract, the prospect becomes a customer, and the relationship hands to the team that will deliver the work. The artifact is a handoff package complete enough that the receiving team starts from the full picture, not just the contract.
 
-## Per-unit baton
+## Scope
 
-- **`closer`** (plan/do) drives the deal across the line — confirms final terms, sequences signature collection through the buyer's procurement process, verifies purchase order and payment terms, and ensures no verbal commitment goes undocumented before contract execution.
-- **`handoff-coordinator`** (do) packages the full deal context — relationship history, named contacts, commitments made during sales, known risks or sensitivities — so the receiving team starts from a complete picture, not from the contract alone.
-- **`verifier`** (verify) validates the unit body for substance, citation, internal consistency, and that nothing live to the prospect is missing from the closed record.
+Deal execution and handoff: securing signature through the buyer's procurement process, verifying purchase order and payment terms, packaging deal context for the post-sale team, and capturing the win/loss record. Close decides *that the deal is done and cleanly handed off* — not what terms were agreed (negotiation).
 
-## Inputs and outputs
+## What to do
 
-The stage consumes `negotiation/terms`. It produces the intent-scope `HANDOFF-PACKAGE.md` (declared in `discovery/`) which is the seam between sales and whichever post-sale team owns the relationship next.
+- Drive signature collection through the buyer's actual procurement and contracting process, confirming final terms before execution.
+- Verify the purchase order and payment terms rather than assuming they match what was negotiated.
+- Package the full relationship context — history, named contacts, commitments made during the sale, known risks — so the receiving team isn't starting from the contract alone.
+- Document every verbal commitment before contract execution; nothing live to the prospect should be missing from the closed record.
 
-## Fix loop and gate
+## What NOT to do
 
-`fix_hats: [classifier, closer, feedback-assessor]` dispatches per finding. The gate is `[external, await]` — `external` because contract execution is signaled by the prospect's countersignature in the contracting system (DocuSign-equivalent, e-signature platform, or wet-ink for some industries), `await` for the procurement / legal steps that the seller doesn't control. Project overlays may add team-specific handoff templates, named CRM stage-transition rules, or win/loss capture frameworks without modifying the plugin defaults.
+- Don't reopen or renegotiate terms — that's a revisit to negotiation, not a close-stage move.
+- Don't hand off a deal with undocumented commitments or an unverified PO.
+- Don't skip the win/loss capture; the next deal learns from this one.
+- Don't treat handoff as throwing the contract over the wall — an incomplete package is an unfinished close.

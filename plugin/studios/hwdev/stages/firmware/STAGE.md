@@ -14,36 +14,22 @@ inputs:
 
 # Firmware
 
-Implement the embedded software that runs on the hardware platform.
-Firmware operates under constraints that application development does
-not face: memory, flash, and power budgets are finite; real-time
-deadlines are often hard; field updates may require physical access; and
-debugging is much harder than on host-side code. Safety-critical paths
-must be traceable to a documented hazard mitigation and provably correct
-— "it works on the bench" is not validation for code shipping in a
-physical product.
+Implement the embedded software that runs on the hardware platform. Firmware works under constraints application development never faces — finite memory, flash, and power budgets; hard real-time deadlines; field updates that may need physical access; and far harder debugging. "It works on the bench" is not validation for code shipping inside a physical product.
 
-## Per-unit baton
+## Scope
 
-- `firmware-engineer` → `reviewer`: implementation + tests + on-target
-  measurements for this unit's scope.
-- `reviewer` → `verifier`: lens-reviewed unit (requirements / safety /
-  resource-budget concerns confirmed or findings filed).
+The embedded software against the design and requirements: the implementation, its tests, and the on-target measurements that prove it fits the budgets. Firmware decides *how the platform behaves in software* — not the hardware design it runs on (design) and not the final validation of the whole product (validation).
 
-## Fix loop and gate
+## What to do
 
-When review feedback opens, `fix_hats: [classifier, firmware-engineer,
-feedback-assessor]` dispatches per finding: the classifier routes; the
-firmware-engineer lands the corrective edits and tests; the assessor
-independently decides closure. The gate is `[external, ask]` — firmware
-that ships into a physical product typically wants peer-review signoff
-external to the agent loop.
+- Implement against the functional requirements and the design's actual hardware, not an idealized board.
+- Respect the memory, flash, power, and timing budgets, and measure them on real hardware rather than assuming.
+- Trace every safety-critical path to a documented hazard mitigation and make it provably correct.
+- Ship tests and on-target measurements alongside the implementation, not as a follow-up.
 
-## Tooling
+## What NOT to do
 
-The plugin default does not prescribe a firmware toolchain. Compiler,
-debugger, RTOS choice, build system, and on-target test harness belong
-in a project overlay at `.haiku/studios/hwdev/stages/firmware/`. The
-plugin defaults reference toolchain capabilities generically (build,
-flash, run on target, measure resource usage, measure timing) without
-naming a vendor.
+- Don't redesign the hardware or change the schematic to suit the software — that's a revisit to design.
+- Don't run the product's validation campaign (HIL, environmental, cert) — that's the validation stage.
+- Don't treat a bench pass as validation for a safety-critical path.
+- Don't exceed a resource budget and leave it for validation to discover.

@@ -192,31 +192,3 @@ export function ExpandableArtifact({
 		</details>
 	)
 }
-
-/** A compact non-expandable chip for naming an artifact (e.g. an output). */
-export function ArtifactChip({
-	def,
-	eyebrow,
-}: {
-	def: ArtifactDef
-	eyebrow?: string
-}) {
-	const summary = artifactSummary(def)
-	return (
-		<div className="rounded-lg border border-stone-200 bg-white px-4 py-3 dark:border-stone-700 dark:bg-stone-900">
-			{eyebrow && (
-				<span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wider text-stone-400">
-					{eyebrow}
-				</span>
-			)}
-			<span className="block text-sm font-semibold text-stone-900 dark:text-stone-100">
-				{titleCase(def.name)}
-			</span>
-			{summary && (
-				<p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400 line-clamp-2">
-					{summary}
-				</p>
-			)}
-		</div>
-	)
-}

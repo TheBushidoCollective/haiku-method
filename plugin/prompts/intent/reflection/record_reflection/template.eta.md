@@ -13,13 +13,25 @@ All of these already exist on disk — read what's there, don't re-derive what's
 - **Unit iterations + outputs** — every unit's FM has `iterations: N` (bolt count) + `outputs:` list. Tells you which hats took multiple bolts and which outputs landed clean on the first try.
 - **Mandate files** — `plugin/hats/<hat>.md`, `plugin/studios/<studio>/hats/<hat>.md`, `plugin/studios/<studio>/stages/<stage>/hats/<hat>.md`, plus the equivalent `review-agents/` and `fix-hats/` cascades. Read the active mandate for any hat/agent that produced signal (FB, observation, high bolt count) to ground the finding.
 
+<% if (it.dimensions && it.dimensions.length) { %>
+## Reflection dimensions for this studio
+
+This studio defines its own analytical lenses. Walk the run through **each** dimension below — they tell you *what* to look at; the synthesis and any landed fix decide *where* the finding goes. A dimension with nothing to report gets one honest line saying so; don't manufacture findings to fill it.
+
+<% it.dimensions.forEach(function (d) { %>
+### <%= d.name %>
+
+<%= d.body %>
+
+<% }) %>
+<% } %>
 ## What to produce
 
 Three outputs land in the working tree, all in a single commit at the end:
 
 ### 1. `.haiku/intents/<%= it.slug %>/reflection.md` — required, always
 
-A free-form synthesized recap of the run. Sections to cover:
+A free-form synthesized recap of the run.<% if (it.dimensions && it.dimensions.length) { %> Lead with one section per studio dimension above (<%= it.dimensions.map(function (d) { return d.name }).join(", ") %>), each carrying its findings or an honest "nothing this cycle." Then cover the cross-cutting sections below.<% } %> Sections to cover:
 
 - **Patterns across stages** — what diverged consistently, not in just one stage
 - **Mandate ambiguity findings** — where multiple observations / FBs point at the same unclear mandate

@@ -15,38 +15,22 @@ review-agents-include:
 
 # Validation
 
-Prove that the transformed data conforms to the model and the business rules,
-under both nominal and edge-case conditions. This stage builds the data-
-quality test suite that runs every time the pipeline executes, plus the
-reconciliation checks that compare source row counts and key totals against
-the target. A pipeline without validation is a pipeline that ships bad data
-silently — and the consumers find out before the on-call does.
+Prove that the transformed data conforms to the model and the business rules, under both nominal and edge-case conditions. This stage builds the runtime safety net every pipeline execution leans on — a pipeline without it ships bad data silently, and the consumers find out before the on-call does.
 
-## Per-unit baton
+## Scope
 
-Each validation unit is one **verification surface** — typically one target
-table or one business-rule family.
+Building the executable data-quality suite plus the reconciliation checks that compare source counts and key totals against the target. Validation decides *what "correct data" means in checks and what passes* — it does not fix the transformation logic it tests (that's a revisit to transformation) or deploy anything (deployment).
 
-- `validator` → `data-quality-reviewer`: executable checks (schema compliance,
-  uniqueness, not-null, referential integrity, value ranges, row-count
-  reconciliation, business-rule assertions) with pass / fail / warning semantics.
-- `data-quality-reviewer` → `verifier`: coverage-reviewed suite (assertion
-  quality confirmed or findings filed against gaps / threshold / debug-context).
+## What to do
 
-The stage also imports the `correctness` review agent from `extraction` so
-end-to-end source-to-target faithfulness is reviewed in the same pass.
+- Cover schema compliance, uniqueness, not-null, referential integrity, value ranges, row-count reconciliation, and business-rule assertions for each verification surface.
+- Give every check explicit pass / fail / warning semantics and a stated threshold.
+- Test edge-case conditions, not just the happy path the transformation already handles.
+- Record each check's scope, threshold, and latest run result so the suite is auditable.
 
-## Inputs and outputs
+## What NOT to do
 
-Modeled data from transformation is the input. The stage produces
-`VALIDATION-REPORT.md` (intent-scope) — the catalog of every check, its
-scope, its threshold, and the most recent run result — plus the executable
-test definitions referenced by the report.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, validator, feedback-assessor]` dispatches per finding.
-The gate is `ask` — a human approves the validation suite before deployment,
-because the suite is the runtime safety net for everything downstream.
-Project overlays may add team-specific assertion libraries, threshold
-defaults, or alerting conventions without modifying plugin defaults.
+- Don't fix the model or transformation code when a check fails — file the finding back to transformation.
+- Don't build connectors or modify staging — that's extraction.
+- Don't deploy or operationalize the pipeline — that's deployment.
+- Don't pass a surface with a check left unwritten; an untested rule is a silent failure waiting to happen.

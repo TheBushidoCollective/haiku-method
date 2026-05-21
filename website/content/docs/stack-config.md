@@ -213,5 +213,5 @@ stack:
 
 ## Next Steps
 
-- **[Operations Guide](/docs/operations-guide/)** — Walkthrough of the operations phase
-- **[Operation File Reference](/docs/operation-schema/)** — Schema reference for operation spec files
+- **[Providers](/docs/providers/)** — Connect ticketing, design, spec, and comms integrations
+- **[Studios & Stages](/docs/studios/)** — Lifecycle templates and their stage pipelines

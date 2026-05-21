@@ -10,22 +10,22 @@ inputs: []
 
 # Research
 
-Audience research, competitive analysis, and market positioning. This stage produces the foundational knowledge that every downstream marketing decision rests on: who the audience is, what they're already hearing from competitors, and where the unowned conversational space sits.
+The opening stage of a marketing campaign: build the foundational understanding every downstream decision rests on — who the audience is, what competitors are already saying to them, and where the unowned conversational space sits. This is where market reality gets established before any strategy or messaging is shaped.
 
-## Per-unit baton
+## Scope
 
-Each research unit walks the three hats in `plan → do → verify` order:
+Audience research, competitive analysis, and positioning landscape. Research decides *what's true about the market and the audience* — not what the campaign will say about it (strategy), what assets carry that message (content), or how results are measured (measure). Units here are knowledge topics; downstream stages author their own work against the findings.
 
-- **`market-researcher`** (plan) — frames the topic, surveys the competitive and category landscape, gathers sourced evidence
-- **`audience-analyst`** (do) — turns raw findings into segmented, behavior-grounded audience and positioning artifacts
-- **`verifier`** (verify) — confirms the artifact is substantive, sourced, and internally consistent before advancing
+## What to do
 
-Detailed per-hat process lives in each hat's md file — this stage enforces the chain, not the contents.
+- Survey the competitive and category landscape and gather sourced evidence for each claim.
+- Define audience segments grounded in real behavior, not internal assumptions about who the buyer is.
+- Locate the positioning gaps — the conversational space competitors haven't claimed.
+- Keep findings substantive and traceable so the strategy stage can build on them without re-doing the work.
 
-## Inputs and outputs
+## What NOT to do
 
-The stage has no upstream inputs (it kicks off the studio). Outputs are knowledge artifacts — market brief, segment definitions, positioning landscape — that the `strategy` stage consumes. Units are research topics, not execution tickets; the strategy stage authors its own units against these findings.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, market-researcher, feedback-assessor]` dispatches per finding: the classifier routes, the market-researcher re-authors against the cited gap, and the assessor decides closure. The gate is `auto` — research findings move forward without explicit human signoff, on the assumption that the strategy stage's collaborative elaboration will catch anything load-bearing before it shapes campaign decisions.
+- Don't set campaign goals or write the messaging framework — that's the strategy stage's job.
+- Don't produce campaign assets or copy; this stage informs content, it doesn't create it.
+- Don't assert a market or audience claim you can't source.
+- Don't narrow to a single positioning before the landscape is mapped — that decision belongs downstream.

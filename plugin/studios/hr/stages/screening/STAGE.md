@@ -14,23 +14,22 @@ inputs:
 
 # Screening
 
-Apply the requisition's must-have bar consistently across the sourced pipeline, producing a ranked shortlist for the interview stage. Screening is where calibration matters most: small inconsistencies in how the criteria are applied (a candidate who got the benefit of the doubt; another who didn't) compound into systematically biased shortlists. The shortlist this stage produces is what the interview stage spends real human time on.
+Apply the requisition's must-have bar consistently across the sourced pipeline and produce a ranked shortlist for interview. This is where calibration matters most — the shortlist this stage produces is what the interview stage spends real human time on.
 
-## Per-unit baton
+## Scope
 
-Each unit is a candidate batch from the sourcing pipeline.
+Qualification and ranking against fixed criteria: per-candidate dispositions and a ranked shortlist. Screening decides *who is worth a human interview* — not who enters the funnel (sourcing) or what the bar should be (requisition). It works the existing pipeline against the existing criteria; it doesn't change either.
 
-- `screener` → `assessor`: per-candidate pass/fail dispositions with cited evidence + edge-case flags.
-- `assessor` → `verifier`: ranked shortlist (composite scores, calibration rationale, pool-composition observations).
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+- Apply the must-have criteria the same way to every candidate; consistency is the whole point of this stage.
+- Cite the evidence behind each pass/fail call so a disposition is auditable, not a gut read.
+- Flag edge cases explicitly rather than silently giving one candidate the benefit of the doubt and not another.
+- Composite the dispositions into a ranked shortlist with a stated calibration rationale.
 
-## Inputs and outputs
+## What NOT to do
 
-Upstream inputs are `requisition/job-spec` (must-have criteria, success outcomes, seniority calibration) and `sourcing/candidate-pipeline` (the screening-eligible candidates with outreach context). The single output is `SCREENING-REPORT.md` at intent scope — every screened candidate's evaluation with score, evidence, and disposition, plus the ranked shortlist for interview.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, screener, feedback-assessor]` dispatches per finding. The classifier routes; the screener re-applies criteria with the updated framing; the assessor decides closure. The gate is `auto` — screening decisions can be re-run cheaply if the shortlist is wrong, so harness advancement is appropriate once the review agents close.
-
-Sensitive topic note: screening decisions are where disparate-impact patterns most often surface. The consistency review agent looks for these signals; where findings touch protected-class fairness or jurisdictional employment law, defer to human review and, where applicable, jurisdictional employment counsel — the plugin does not dispense legal interpretations.
+- Don't source new candidates or expand the pipeline — work what sourcing handed you.
+- Don't conduct interviews or make a hire/no-hire call — that's the interview stage.
+- Don't reinterpret the requisition's bar to fit a candidate you like.
+- Don't let inconsistent application compound into a biased shortlist; where findings touch protected-class fairness or jurisdictional employment law, defer to human review and, where applicable, jurisdictional employment counsel — the plugin does not dispense legal interpretations.

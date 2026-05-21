@@ -10,43 +10,22 @@ inputs: []
 
 # Discovery
 
-Map the data landscape before any code is written. This stage turns the user's
-"we need to move data from A to B" into a documented inventory of every source
-system, every target system, every schema in scope, the volumes and growth
-curves, and the freshness / completeness / accuracy SLAs the pipeline will
-have to honor. Downstream stages read this stage's output as ground truth —
-if a column type is wrong here, the transformation stage will encode the
-wrong type, and the validation stage will pass the wrong values.
+The opening stage of the data-pipeline lifecycle: map the data landscape before any code is written. This is where "we need to move data from A to B" becomes a documented, ground-truth inventory the rest of the pipeline is built against.
 
-## Per-unit baton
+## Scope
 
-Each discovery unit is one **source-system knowledge artifact**. The unit
-walks the three hats in `plan → do → verify` order:
+Documenting what exists — every source and target system, every in-scope schema, the volumes and growth curves, and the freshness / completeness / accuracy SLAs the pipeline must honor. Discovery decides *what the data landscape actually is* — it does not build connectors (extraction), model data (transformation), or test anything (validation).
 
-- **`data-architect`** (plan) maps the source-target landscape, picks the
-  integration pattern (batch / streaming / CDC), and writes the architecture
-  brief
-- **`schema-analyst`** (do) profiles the actual schema and data — types,
-  nullability, cardinality, encoding, value distributions — and records what
-  the source really looks like, not what its docs claim
-- **`verifier`** (verify) validates the artifact body-only: substance,
-  citation, internal consistency, decision-register accountability
+## What to do
 
-Detailed process for each role lives in the per-hat md.
+- Profile the real source schema and data — types, nullability, cardinality, encoding, value distributions — and record what's true, not what the docs claim.
+- Capture volumes, growth curves, and the SLAs the pipeline will be held to.
+- Name the integration pattern per source (batch, streaming, CDC) with the reason it fits.
+- Document the landscape clearly enough that a downstream stage can rely on it as ground truth.
 
-## Inputs and outputs
+## What NOT to do
 
-Discovery has no upstream stage — it bootstraps the intent. Its primary output
-is `SOURCE-CATALOG.md`, an intent-scope knowledge artifact that every later
-stage consumes. The catalog is a research artifact, not a build spec — it
-documents what exists, not what to do.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, data-architect, feedback-assessor]` dispatches per
-finding. The gate is `auto` because discovery's deliverable is knowledge for
-downstream stages — the engine validates substance via the verifier hat and
-the completeness review agent, then moves on. Project overlays at
-`.haiku/studios/data-pipeline/stages/discovery/` may add site-specific
-documentation conventions or required source-system fields without modifying
-the plugin defaults.
+- Don't build connectors or extraction jobs — that's the extraction stage.
+- Don't define the target data model or write transformation code — that's transformation.
+- Don't write a build spec; this stage produces a knowledge artifact describing what exists.
+- Don't record a column type or distribution you haven't actually verified — a wrong fact here propagates through every later stage.

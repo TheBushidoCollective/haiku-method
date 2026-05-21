@@ -16,24 +16,22 @@ inputs:
 
 # Reporting
 
-Package the analytical outputs of the cycle for the audiences that consume them: executives get a few decisive headlines with action, departmental leaders get their slice at line-item granularity, finance partners get the underlying data with full traceability. Each audience gets the detail level that supports its decisions — no more, no less.
+Package the cycle's analytical outputs for the audiences that consume them. Executives get a few decisive headlines with action, departmental leaders get their slice at line-item granularity, finance partners get the underlying data with full traceability. This is where the numbers become a story each audience can act on.
 
-The stage produces one intent-scope artifact (`FINANCIAL-REPORTS.md` under `stages/reporting/artifacts/`) plus per-unit report deliverables (narrative reports, dashboards, and required-disclosure sections).
+## Scope
 
-## Per-unit baton
+Communication of existing analysis: narratives, dashboards, and disclosures tailored per audience, each at the detail level that supports its decisions. Reporting decides *how the cycle's results are presented and to whom* — not the analysis itself, which the upstream stages already produced.
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`reporter`** (plan) reads the variance report, budget plan, and forecast model, identifies the audience for this unit, structures the report (executive vs operational vs partner), and writes the narrative and required disclosures
-- **`visualizer`** (do) designs the dashboard and visualizations that support the narrative — appropriate chart types, consistent scales, drill-down paths from summary to detail
-- **`verifier`** (verify) reads the unit body and advances or rejects on substance, source traceability (every number ties back to an upstream artifact), internal consistency, and decision-register alignment
+- Match each report's depth and framing to its audience — no more detail than that audience's decisions require, no less.
+- Trace every number back to an upstream artifact so the report is verifiable, not just plausible.
+- Pair the narrative with visualizations that genuinely support it — right chart type, consistent scales, a path from summary to detail.
+- Cover required disclosures completely and in the right place.
 
-Detailed process lives in each hat's md file.
+## What NOT to do
 
-## Inputs and outputs
-
-Upstream `analysis/variance-report`, `budget/budget-plan`, and `forecast/forecast-model` feed in. The output `financial-reports` is stakeholder-facing and feeds the `close` stage for period sign-off.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, reporter, feedback-assessor]` dispatches per finding — classifier targets the affected report or dashboard, `reporter` re-authors the affected section (narrative or disclosure), `feedback-assessor` decides closure. The gate is `ask` because reports are stakeholder-facing — a local human reviews tone, accuracy, and disclosure completeness before close. Project overlays may add house-style report templates, branded dashboard themes, or organization-specific disclosure requirements.
+- Don't perform new analysis or recompute variances — consume the analysis stage's output; a gap there is a revisit upstream.
+- Don't show a number you can't trace to its source.
+- Don't over-disclose to one audience or under-disclose to another to make a report look cleaner.
+- Don't let visual polish paper over a tone or accuracy problem a human should catch.

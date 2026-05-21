@@ -449,16 +449,6 @@ Total: ~2.5 hours for a complete notification system with 24 tests.
 4. Wrote all code and tests
 5. Verified completion criteria
 
-## After Construction: Operations
-
-With the notification system complete, the Builder defined operations for ongoing maintenance:
-
-- **`clear-expired-notifications`** — A scheduled agent operation running nightly to purge notifications older than 90 days
-- **`monitor-delivery-latency`** — A reactive agent operation that alerts when notification delivery exceeds 5 seconds
-- **`review-notification-metrics`** — A monthly human process to review delivery rates, open rates, and preference trends
-
-These operation specs live in `.haiku/notifications/operations/` and are managed with `/haiku:haiku-operate notifications`. See the [Operations Guide](/docs/operations-guide/) for details.
-
 ## Next Steps
 
 - **[Example: Bug Fix](/docs/example-bugfix/)** - See the hypothesis workflow

@@ -101,9 +101,6 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 	const stagePath = resolveStudioFilePath(
 		join(studio, "stages", stage, "STAGE.md"),
 	)
-	const executionPath = resolveStudioFilePath(
-		join(studio, "stages", stage, "phases", "EXECUTION.md"),
-	)
 	const hatPath = resolveStudioFilePath(
 		join(studio, "stages", stage, "hats", `${hat}.md`),
 	)
@@ -346,9 +343,6 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 		worktreeAndTimeoutsBlock: WORKTREE_AND_TIMEOUTS,
 		requiredContextPreamble: REQUIRED_CONTEXT_PREAMBLE,
 		stageInline: stagePath ? inlineFile(stagePath, "Stage scope") : "",
-		executionInline: executionPath
-			? inlineFile(executionPath, "Execute-phase focus")
-			: "",
 		hatInline: hatPath ? inlineFile(hatPath, `Hat: ${hat}`) : "",
 		hatInterpBlock,
 		unitInline: inlineFile(unitAbsPath, `Unit spec: ${unit}`),

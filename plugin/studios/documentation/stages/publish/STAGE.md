@@ -17,17 +17,22 @@ review-agents-include:
 
 # Publish
 
-Take the reviewed draft and ship it to the docs platform — formatted to the platform's conventions, with every link, code block, image, and cross-reference verified. Publish is where invisible defects (broken links, malformed code fences, missing alt text, stale anchors) surface; catching them here is cheaper than catching them when a reader hits a 404.
+The terminal stage of the documentation lifecycle: ship the reviewed draft to the docs platform, formatted to its conventions, with every link, code block, image, and cross-reference verified. This is where the invisible defects surface — broken links, malformed fences, missing alt text, stale anchors — and catching them here is cheaper than catching them at a reader's 404.
 
-## Per-unit baton
+## Scope
 
-- `format-planner` → `publisher`: publish plan (platform conventions, embed shapes, anchor strategy, asset destinations).
-- `publisher` → `verifier`: published artifact + publish record (URL, version, indexed timestamp).
+Formatting to the platform, verifying every embedded reference, and recording the publish. Publish decides *how the content goes live and that it's intact on the platform* — it does not write or edit content (draft, review). Content defects route back upstream; this stage owns the mechanics of shipping.
 
-## Inputs and outputs
+## What to do
 
-The frontmatter above declares the canonical I/O contract — upstream `draft/draft-documentation` and `review/review-report` feed in. This stage pulls in `draft/accuracy` as a review agent so accuracy concerns from the drafting stage stay attached during publish. The output is a published doc artifact at the platform's canonical URL plus a publish record (URL, version, search-indexed timestamp).
+- Format the content to the platform's conventions — embed shapes, anchors, asset destinations.
+- Verify every link, code block, image, and cross-reference actually resolves.
+- Record the publish: canonical URL, version, and search-indexed timestamp.
+- Route a content or accuracy defect back to the stage that owns it rather than patching prose here.
 
-## Fix loop and gate
+## What NOT to do
 
-When review feedback opens, `fix_hats: [classifier, publisher, feedback-assessor]` dispatches per finding. The gate is `auto` — publishing is mechanical enough that the engine's spec gate plus the stage's `formatting` review agent suffice as the bar. Project overlays at `.haiku/studios/documentation/stages/publish/` may add team-specific docs platforms, named link checkers, or platform-specific embed conventions without modifying the plugin defaults.
+- Don't rewrite prose or restructure content — that's the draft and review stages.
+- Don't re-litigate editorial or technical findings — they were resolved upstream.
+- Don't publish with a broken link, a malformed code block, or a missing asset.
+- Don't ship without a recorded publish artifact at the canonical URL.

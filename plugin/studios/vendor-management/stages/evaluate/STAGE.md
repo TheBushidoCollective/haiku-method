@@ -12,17 +12,22 @@ inputs:
 
 # Evaluate
 
-Score and shortlist vendor responses against the RFP's evaluation criteria. This stage takes the RFP and the scoring methodology produced by `requirements` and produces a comparative scorecard that the negotiation stage will use to drive its counter-positions.
+Score and shortlist vendor responses against the RFP's evaluation criteria. This stage takes the solicitation and scoring methodology from requirements and produces a comparative scorecard that negotiate uses to drive its counter-positions.
 
-## Per-unit baton
+## Scope
 
-- `evaluator` → `technical-reviewer`: scorecard rows + score rationale per vendor.
-- `technical-reviewer` → `verifier`: scorecard rows confirmed (or findings filed against rows that didn't survive verification).
+Comparative vendor assessment: scoring each response against the established criteria, documenting rationale, running TCO analysis, and producing a defensible ranking and shortlist. Evaluate decides *which vendors advance and why* — not what was asked for (requirements) or what terms get agreed (negotiate).
 
-## Inputs and outputs
+## What to do
 
-`requirements/rfp-document` feeds in. The output is the vendor scorecard (`outputs/VENDOR-SCORECARD.md`) — a per-vendor ranking with documented rationale, TCO analysis, and verified technical assessment — which feeds `negotiate`.
+- Score every vendor against the criteria requirements defined, applying them consistently across responses.
+- Document the rationale for each score so the shortlist would survive a stakeholder challenge.
+- Run TCO analysis that captures the real cost of ownership, not just headline price.
+- Ground technical assessments in verification, not vendor claims taken at face value.
 
-## Fix loop and gate
+## What NOT to do
 
-When review feedback opens, `fix_hats: [classifier, evaluator, feedback-assessor]` dispatches per finding — the classifier routes, the evaluator re-runs the affected scoring or rationale, and the assessor independently decides closure. The gate is `ask` — a human stakeholder approves the shortlist locally before negotiation contact begins. Project overlays may add house-style scoring schemes, organization-specific TCO categories, or industry-specific verification protocols without modifying the plugin defaults.
+- Don't change the evaluation criteria mid-scoring — a wrong criterion is a revisit to requirements.
+- Don't open negotiation or make commitments to vendors; that's negotiate.
+- Don't rank a vendor on an unverified technical claim.
+- Don't ship a shortlist whose ranking you can't justify from documented rationale.

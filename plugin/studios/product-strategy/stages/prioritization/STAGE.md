@@ -12,20 +12,22 @@ inputs:
 
 # Prioritization
 
-Turn the opportunity list into a defensible ordering. Every ranking is a trade-off; this stage makes the trade-off explicit, anchors it in evidence, and pressure-tests it against stakeholders who aren't in the room.
+Turn the opportunity list into a defensible ordering. Every ranking is a trade-off; this stage makes the trade-off explicit, anchors it in the user evidence, and pressure-tests it against the stakeholders who aren't in the room. It's the decision point where trade-offs can no longer be deferred.
 
-## Per-unit baton
+## Scope
 
-Each prioritization unit walks `plan → do → verify`:
+Scoring and ranking opportunities against a chosen framework. Prioritization decides *what matters most and why* — not what the opportunities are (discovery, user-research) or how the chosen order is sequenced into a plan (roadmap). The output is a ranked, evidence-anchored matrix with its trade-offs named.
 
-- **`prioritizer`** (plan / score) applies a chosen prioritization framework (RICE, ICE, MoSCoW, weighted scoring, or another the team uses) to the opportunities in the unit's topic. Captures the framework choice, the weights, and the reasoning per score.
-- **`stakeholder-proxy`** (do / pressure-test) represents absent stakeholders — business, engineering, sales, support — and surfaces the objections the ranking will face once it leaves this stage. Updates the artifact with documented stakeholder constraints.
-- **`verifier`** (verify) validates the artifact body-only — consistent framework application, evidence behind each estimate, named trade-offs — and advances or rejects with a specific criterion.
+## What to do
 
-## Inputs and outputs
+- Apply a prioritization framework (RICE, ICE, MoSCoW, weighted scoring, or the team's own) consistently, and capture the framework choice, the weights, and the reasoning per score.
+- Anchor every estimate in the user-research signal rather than internal preference.
+- Pressure-test the ranking against absent stakeholders — business, engineering, sales, support — and document the objections it will face.
+- Make the trade-offs explicit so the order is defensible once it leaves this stage.
 
-Consumes `user-research/insights-report` so prioritization is grounded in real user signal, not internal preference. Produces `discovery/PRIORITY-MATRIX.md` per topic, which feeds `roadmap`.
+## What NOT to do
 
-## Fix loop and gate
-
-`fix_hats: [classifier, prioritizer, feedback-assessor]` reopens the scoring on findings. The gate is `ask` — prioritization is the decision point where the user can no longer defer trade-offs, so the human review is load-bearing. Project overlays at `.haiku/studios/product-strategy/stages/prioritization/` may pin a specific prioritization framework, scoring conventions, or links into the team's prioritization tool of record.
+- Don't introduce new opportunities or re-research users — prioritization ranks what the upstream stages found.
+- Don't build the roadmap or sequence delivery; that's the next stage consuming this matrix.
+- Don't apply the framework inconsistently across opportunities, or score from preference instead of evidence.
+- Don't bury the trade-offs — an unstated trade-off resurfaces as a stakeholder objection later.

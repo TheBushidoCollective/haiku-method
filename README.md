@@ -81,8 +81,6 @@ Every stage runs the same five-step cycle:
 | `/haiku:haiku-composite` | Create multi-studio intent with sync points |
 | `/haiku:haiku-refine` | Amend specs mid-execution or refine upstream stages |
 | `/haiku:haiku-gate-review` | Pre-delivery code review |
-| `/haiku:haiku-reflect` | Post-completion analysis |
-| `/haiku:haiku-operate` | Post-delivery operational tasks |
 | `/haiku:haiku-capacity` | Historical throughput analysis |
 | `/haiku:haiku-triggers` | Poll providers for events |
 | `/haiku:haiku-setup` | Configure providers and quality gates |
@@ -143,7 +141,6 @@ Everything is file-based and overridable:
 .haiku/studios/{name}/stages/{stage}/STAGE.md # Custom stage
 .haiku/studios/{name}/stages/{stage}/hats/    # Custom hats
 .haiku/studios/{name}/stages/{stage}/review-agents/ # Custom review agents
-.haiku/studios/{name}/operations/             # Custom operations
 .haiku/studios/{name}/reflections/            # Custom reflections
 .haiku/studios/{name}/templates/              # Custom intent templates
 .haiku/providers/{type}.md                    # Custom provider instructions

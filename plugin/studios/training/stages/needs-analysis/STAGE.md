@@ -10,22 +10,22 @@ inputs: []
 
 # Needs Analysis
 
-Establish whether training is the right intervention, who needs it, and what they need to be able to do at the end of it. This is the upstream knowledge stage for the entire training lifecycle — the rest of the studio consumes what you produce here. If the needs are wrong, every later stage delivers the wrong program well.
+The upstream knowledge stage for the entire training lifecycle: establish whether training is even the right intervention, who needs it, and what they must be able to do at the end. If the needs are wrong here, every later stage delivers the wrong program well.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the three hats in `plan → do → verify` order:
+Diagnosing the gap and defining objectives: performance data, audience profile, competency baseline, the gap between current and target performance, and whether training (vs process, tooling, or hiring) is the right lever. Needs-analysis decides *what problem the program must solve and for whom* — not how the curriculum is structured (design) or built (develop).
 
-- **`analyst`** (plan) gathers performance data, audience profile, and the competency baseline; quantifies the gap between current and target performance
-- **`consultant`** (do) interprets the gap, confirms training is the right lever (vs. process / tooling / hiring), and recommends modality and learning objectives
-- **`verifier`** (verify) validates the captured artifact for substance, citation, and internal consistency — advances or rejects to the responsible hat
+## What to do
 
-The detailed process for each role lives in the hat's md file. This stage's job is to enforce the chain.
+- Quantify the gap between current and target performance with real data, not assumed deficiency.
+- Confirm training is actually the right lever before recommending a program — sometimes the answer is process or tooling.
+- Profile the audience well enough that design can make modality and sequencing choices.
+- Write learning objectives concrete enough that evaluate can later measure against them.
 
-## Inputs and outputs
+## What NOT to do
 
-This is the lifecycle's entry stage — no upstream stage feeds it. Output is `NEEDS-ASSESSMENT.md` per unit: an investigation of one population, role, or capability gap. Every downstream stage (`design`, `develop`, `deliver`, `evaluate`) reads these.
-
-## Fix loop and gate
-
-Review feedback dispatches the `fix_hats: [classifier, analyst, feedback-assessor]` chain. Gate is `auto` — the workflow engine advances once review agents sign off, since needs analysis tends to iterate within the studio rather than gate on an external stakeholder review. Project overlays at `.haiku/studios/training/stages/needs-analysis/` may add house conventions (specific competency frameworks, stakeholder-interview templates, organization-specific role taxonomies) without touching the plugin defaults.
+- Don't design curriculum structure, module sequence, or assessment strategy — that's design.
+- Don't author materials or build content.
+- Don't recommend training when the evidence points to a non-training cause of the gap.
+- Don't leave the target outcome so vague that no later stage can check against it.

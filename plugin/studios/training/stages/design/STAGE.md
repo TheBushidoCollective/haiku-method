@@ -12,22 +12,22 @@ inputs:
 
 # Design
 
-Translate the needs assessment into a curriculum architecture — learning objectives, module sequence, instructional strategies, assessment plan, and delivery modality. The output is a designed solution that the `develop` stage executes against, not yet the materials themselves.
+Translate the needs assessment into a curriculum architecture: learning objectives, module sequence, instructional strategies, assessment plan, and delivery modality. The output is a designed solution the develop stage builds against — the blueprint, not the materials themselves.
 
-## Per-unit baton
+## Scope
 
-Each unit walks the three hats in `plan → do → verify` order:
+Curriculum architecture and instructional strategy: objective definition (to Bloom's taxonomy), module structure and sequence, the assessment plan, and modality choice. Design decides *how the program is shaped to close the gap* — not whether training is the right call (needs-analysis) or what the materials look like (develop).
 
-- **`designer`** (plan) reads the needs assessment and produces a curriculum element — module structure, learning objectives written to Bloom's taxonomy, instructional strategy choice, assessment plan
-- **`subject-expert`** (do) validates content accuracy and practical relevance, supplies real-world examples / scenarios / case material, flags outdated content
-- **`verifier`** (verify) validates the design artifact for substance, traceability to upstream needs, and internal coherence — advances or rejects to the responsible hat
+## What to do
 
-The detailed process for each role lives in the hat's md file. This stage's job is to enforce the chain.
+- Trace every design decision back to a need the upstream assessment identified.
+- Write learning objectives to a real taxonomy so develop and evaluate have something measurable to build and test against.
+- Choose instructional strategy, modality, and assessment approach deliberately — these choices compound across every later stage.
+- Ground content choices in subject-matter accuracy and real-world relevance, flagging anything outdated.
 
-## Inputs and outputs
+## What NOT to do
 
-Reads `needs-analysis/needs-assessment` for every unit. Output is `CURRICULUM-PLAN.md` per unit — the designed curriculum element that downstream stages build, deliver, and evaluate against.
-
-## Fix loop and gate
-
-Review feedback dispatches the `fix_hats: [classifier, designer, feedback-assessor]` chain. Gate is `ask` — the user approves the curriculum design locally before development begins, because design decisions (modality choice, assessment strategy, module sequencing) compound across every later stage. Project overlays at `.haiku/studios/training/stages/design/` may add house conventions (organization-specific competency model, branded instructional templates, named delivery channels) without modifying the plugin defaults.
+- Don't reopen whether training is the right intervention — that's a revisit to needs-analysis.
+- Don't author the actual materials, slides, or workbooks; that's develop.
+- Don't pick a modality or assessment strategy you can't tie back to the audience and the gap.
+- Don't leave a learning objective the develop stage couldn't build toward.

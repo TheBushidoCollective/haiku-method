@@ -10,24 +10,22 @@ inputs: []
 
 # Forecast
 
-Develop the revenue and cost projections that anchor every downstream finance stage. This is the first stage in the studio — no inputs from prior finance stages — so its job is to ground the cycle in evidence: market signals, historical performance, leading indicators, and explicitly stated assumptions.
+The opening stage of the finance cycle: ground the period in evidence and project where revenue and costs are headed. Every downstream stage — budget, analysis, reporting, close — anchors to the numbers and assumptions this stage establishes.
 
-The stage produces one intent-scope artifact (`FORECAST-MODEL.md` under `stages/forecast/artifacts/`) plus per-unit projection workings. The model lays out base / optimistic / pessimistic scenarios with distinct driver assumptions — not a single number with a confidence interval slapped on it.
+## Scope
 
-## Per-unit baton
+Revenue and cost projection: the data foundation, the drivers, the scenarios, and the assumptions behind them. Forecast decides *what we expect to happen and why* — not how resources get allocated against it (budget), and not how actuals compare to it later (analysis).
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`analyst`** (plan) gathers and validates the data — market reports, internal historical actuals, named leading indicators — and writes the data foundation the forecaster will project from
-- **`forecaster`** (do) builds the projection model with explicit drivers, scenario assumptions, and sensitivity tests against the analyst's foundation
-- **`verifier`** (verify) reads the unit body and either advances or rejects on substance, citation, internal consistency, and decision-register alignment
+- Build the projection from named evidence — market signals, historical actuals, leading indicators — not from a desired outcome worked backward.
+- State every assumption explicitly so a later stage can challenge it on its own terms.
+- Lay out distinct scenarios (base, optimistic, pessimistic) with different driver assumptions, not one number with a confidence band stapled on.
+- Stress-test the drivers for sensitivity so the budget stage knows which inputs actually move the result.
 
-Detailed process lives in each hat's md file — this stage enforces the chain, not its contents.
+## What NOT to do
 
-## Inputs and outputs
-
-This stage has no upstream finance inputs. It MAY draw on intent-level context (strategic plan, prior-period actuals) provided through `intent.md`. The output `forecast-model` feeds `budget`, `analysis`, and `reporting`.
-
-## Fix loop and gate
-
-Open findings dispatch `fix_hats: [classifier, analyst, feedback-assessor]` per finding. The classifier sets targets; `analyst` re-grounds the affected projection slice in evidence; `feedback-assessor` decides closure. The gate is `ask` — a local human reviews scenario plausibility before the budget stage consumes the model. Project overlays at `.haiku/studios/finance/stages/forecast/` may add house-style conventions (specific FP&A platform output formats, internal driver naming, sensitivity matrix templates) without modifying the plugin defaults.
+- Don't allocate budget or set departmental targets — that's the budget stage's job.
+- Don't compare projections to actuals or attribute variance — there are no actuals yet; that belongs to analysis.
+- Don't bury an assumption inside a number; an unexamined driver here propagates through the whole cycle.
+- Don't present a single point estimate as if it were certainty.

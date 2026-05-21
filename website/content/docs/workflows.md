@@ -233,9 +233,9 @@ Build the API endpoints for analytics data...
 
 When `/haiku:haiku-pickup` processes each unit, it resolves the unit's context independently within the active stage.
 
-## Operation and Reflection
+## Reflection
 
-Operation and reflection are not studio selections -- they are separate lifecycle phases that run after construction completes. Use `/haiku:haiku-operate` to enter the Operation phase and `/haiku:haiku-reflect` to enter the Reflection phase. These phases have their own hat sequences and are invoked independently of whichever studio was used during execution. See the [Operations Guide](/docs/operations-guide/) for details on defining and managing operational tasks.
+Reflection is not a studio selection or a command you invoke -- it runs automatically when an intent completes. As the engine seals the intent, it synthesizes the run along the active studio's reflection dimensions and writes the reflection artifact without any manual step.
 
 ## Custom Studios
 

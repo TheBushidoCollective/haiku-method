@@ -13,22 +13,22 @@ outputs:
 
 # Charter
 
-Define the business case, scope, stakeholders, and measurable success criteria. The charter is the contract every later stage reads — `plan` decomposes against it, `track` measures against it, `close` accepts against it. A weak charter cascades downstream: scope drift, unclear authority, success without proof.
+The opening stage of a project: define the business case, scope, stakeholders, and measurable success criteria. The charter is the contract every later stage reads — plan decomposes against it, track measures against it, close accepts against it. A weak charter cascades downstream into scope drift, unclear authority, and "success" no one can prove.
 
-## Per-unit baton
+## Scope
 
-Each unit is a charter element (business case, scope boundary, success criterion, stakeholder, governance decision). The three hats walk it in `plan → do → verify` order:
+The business case, scope boundaries, stakeholder map, governance, and success criteria. Charter decides *why the project exists, what's in and out, who decides, and what done means* — not how the work breaks down (plan), how progress is measured (track), or how it's accepted (close). Units are charter elements.
 
-- **`sponsor`** (plan) frames the business case, defines measurable success criteria, and establishes governance and decision rights
-- **`scoper`** (do) translates the frame into explicit in-scope / out-of-scope boundaries, constraints, assumptions, and the stakeholder map
-- **`verifier`** (verify) checks the body for substance, source citation, internal consistency, and decision-register accountability — advances or rejects to the responsible hat
+## What to do
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+- Frame the business case and define success criteria measurable enough that close can accept against them.
+- Draw explicit in-scope and out-of-scope boundaries, with the constraints and assumptions stated.
+- Establish governance and decision rights so authority is clear before the work starts.
+- Map the stakeholders — who's accountable, consulted, and informed.
 
-## Inputs and outputs
+## What NOT to do
 
-The charter stage has no upstream inputs — it's the first stage of the studio. Its output is `PROJECT-CHARTER.md`, which every downstream stage consumes.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, sponsor, scoper, feedback-assessor]` dispatches per finding. The classifier routes the FB to the right charter element; `sponsor` re-frames the business case / sponsorship intent, and `scoper` re-authors the charter element (the charter is the scoper's artifact); the assessor independently decides closure. Both implementers are in the chain so a finding lands with the hat that owns the flagged artifact. The gate is `external` — sponsor sign-off typically happens outside the plugin (signed charter document, kickoff approval). Project overlays at `.haiku/studios/project-management/stages/charter/` may add house-style numbering, doc-platform conventions, or specific PM-tool integration without modifying the plugin defaults.
+- Don't decompose the work or build the schedule — that's the plan stage reading this charter.
+- Don't track progress or accept deliverables; those are the track and close stages.
+- Don't leave scope boundaries fuzzy or success criteria unmeasurable — the ambiguity compounds downstream.
+- Don't self-advance the gate — the charter is committed through the sponsor's actual sign-off.

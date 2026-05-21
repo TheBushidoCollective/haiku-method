@@ -12,21 +12,22 @@ inputs:
 
 # Resolve
 
-Build the permanent fix. The mitigate stage stopped the bleeding with a reversible action; the investigate stage produced a root cause. The resolve stage's job is to land a code or system change that actually addresses the root cause, ships a regression test that would have caught this incident before it reached production, and includes a plan to remove the temporary mitigation once the permanent fix is verified. This is also where the team checks whether the same class of defect exists elsewhere in the codebase — a fix that only patches the one instance leaves the underlying weakness in place for the next surface to hit.
+Build the permanent fix. Mitigate stopped the bleeding with a reversible action; investigate produced the root cause. Resolve lands the code or system change that actually addresses that cause, ships a regression test that would have caught the incident, and plans the removal of the temporary mitigation once the fix is verified.
 
-## Per-unit baton
+## Scope
 
-A unit here is one discrete fix — one code change, one schema migration, one config-system change, one infrastructure remediation.
+The durable fix and its safety net: the change that addresses the root cause, a regression test that fails without it, a deployment plan, the mitigation-cleanup plan, and a check for the same defect class elsewhere. Resolve decides *how the incident is fixed for good* — not why it happened (investigate) or how impact was stopped in the moment (mitigate).
 
-- `engineer` → `reviewer`: `RESOLUTION-SUMMARY.md` slice (diff, regression test that fails without the fix, deployment plan with rollback criteria, mitigation-cleanup plan).
-- `reviewer` → `verifier`: lens-reviewed fix (root-cause / test / deployment confirmed or findings filed).
+## What to do
 
-The engineer carries plan-and-do together because the fix IS the plan; separating them adds coordination cost without adding rigor. Larger architectural fixes that exceed one engineer's scope should split into multiple resolve units.
+- Address the diagnosed root cause itself, not the symptom the mitigation papered over.
+- Ship a regression test that fails without the fix — proof it would have caught this incident.
+- Plan the deployment with rollback criteria and a plan to remove the temporary mitigation once verified.
+- Check whether the same class of defect exists elsewhere; a one-instance patch leaves the weakness for the next surface.
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes `mitigate/mitigation-log` — the record of what mitigation is currently in place and what it's holding back. Also consumes (indirectly through the unit body) `investigate/root-cause` — the diagnosed cause that the fix must address. Produces `RESOLUTION-SUMMARY.md` containing the fix details, regression-test references, deployment plan, mitigation-cleanup plan, and check for related defects elsewhere in the codebase.
-
-## Fix loop and gate
-
-When review feedback opens against a fix, `fix_hats: [classifier, engineer, feedback-assessor]` dispatches per finding. The engineer re-owns the corrected fix. The gate is `ask` because the permanent fix is a deliberate code change that benefits from a human approval round — by this point the incident is mitigated and urgency has dropped, so a synchronous human review is appropriate rather than the time-pressured `auto` of the triage and investigate stages.
+- Don't rely on the mitigation as the fix — it's a holding action that resolve is meant to retire.
+- Don't redo the diagnosis or re-litigate the root cause; consume investigate's output.
+- Don't land a fix without a regression test that proves it.
+- Don't patch the single instance and walk away from the broader defect class.

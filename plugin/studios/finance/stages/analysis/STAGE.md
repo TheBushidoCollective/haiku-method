@@ -14,19 +14,22 @@ inputs:
 
 # Analysis
 
-Compare actuals to budget and forecast, classify each material variance, and translate the resulting variance landscape into corrective-action recommendations. This is the diagnostic stage of the lifecycle: budget says what was supposed to happen, forecast says what was projected, actuals reveal what actually happened, and analysis explains the gap.
+The diagnostic stage of the finance cycle: explain the gap between what was planned and what actually happened. Budget said what was supposed to happen, forecast said what was projected, actuals reveal what occurred — analysis says why they differ and what to do about it.
 
-The stage produces one intent-scope artifact (`VARIANCE-REPORT.md` under `stages/analysis/artifacts/`) plus per-unit variance workings.
+## Scope
 
-## Per-unit baton
+Variance diagnosis: comparing actuals against budget and forecast, classifying each material variance, and recommending corrective action. Analysis decides *why the gap exists and how to respond* — not what the targets should have been (budget), and not how the findings reach stakeholders (reporting).
 
-- `analyst` → `auditor`: variance table with classification (structural / timing / operational), evidence, and recommended corrective action per material variance.
-- `auditor` → `verifier`: data-source-confirmed variance table (methodology validated or findings filed against attributions).
+## What to do
 
-## Inputs and outputs
+- Classify each material variance by cause — structural, timing, or operational — not just by size.
+- Tie every variance back to its data source so the attribution is auditable, not asserted.
+- Translate the variance landscape into specific corrective-action recommendations, not just a table of deltas.
+- Apply a consistent materiality threshold so attention lands where it changes a decision.
 
-Upstream `budget/budget-plan` and `forecast/forecast-model` feed in. The output `variance-report` feeds `reporting` (stakeholder communication) and `close` (period sign-off context).
+## What NOT to do
 
-## Fix loop and gate
-
-`fix_hats: [classifier, analyst, feedback-assessor]` dispatches per finding — classifier targets the affected variance, `analyst` re-runs the calculation or re-attributes the root cause, `feedback-assessor` decides closure. The gate is `auto` because the substantive review happens at the next stage (`reporting`) where the variance report becomes stakeholder-facing. Project overlays may add house-style variance categorization, materiality threshold tables, or organization-specific dimension hierarchies.
+- Don't reset targets or reallocate the budget — surface the recommendation; the actual change is a revisit to budget.
+- Don't reproject the forecast to make a variance disappear.
+- Don't package findings for stakeholders or build dashboards — that's reporting.
+- Don't report a variance you can't trace to its source.

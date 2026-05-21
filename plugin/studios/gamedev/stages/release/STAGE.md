@@ -12,24 +12,22 @@ inputs:
 
 # Release
 
-Submit the polished build to storefronts and platform holders, pass platform certification, and stand up the post-launch patch pipeline. Platform-specific requirements vary widely — console certification programs are hard gates that can fail for reasons unrelated to the game's quality, mobile stores have their own review cycles, and digital storefronts each have their own submission cadence.
+The terminal stage of the gamedev lifecycle: get the polished build into players' hands and keep it healthy. Submit to storefronts and platform holders, pass platform certification, and stand up the post-launch patch pipeline. This stage ships and sustains the game; it does not change it.
 
-The patch pipeline matters as much as the initial submission. Games ship with bugs that QA didn't catch; the ability to ship a hotfix within days is what separates a launch disaster from a launch hiccup.
+## Scope
 
-## Per-unit baton
+Shipping and sustaining the build: storefront submission, platform certification, and the patch/hotfix pipeline that survives launch. Release decides *how the finished game reaches and stays live for players* — not its content (production) or its feel (polish). Platform requirements vary widely and many are hard gates outside the team's control.
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`release-engineer`** (plan + do) builds, packages, and submits to target storefronts and platform holders. Owns the submission pipeline, the patch pipeline, and the post-launch hotfix loop
-- **`platform-cert-specialist`** (do-refine) walks each platform's certification checklist and preps the build to pass — every platform has its own requirements program (console first-party certification programs, mobile store review cycles, digital storefront submission policies)
-- **`verifier`** (verify) validates each unit body for preconditions / action / post-condition completeness and rollback declaration
+- Build, package, and submit to each target storefront and platform holder on its own submission cadence.
+- Walk every platform's certification checklist and prep the build to pass it — cert can fail for reasons unrelated to game quality.
+- Stand up the patch pipeline so a hotfix can ship within days; that's what separates a launch hiccup from a launch disaster.
+- Treat fixes here as operational — re-cutting a submission build or re-running a cert pass, not reworking the game.
 
-Detailed process lives in each hat's md file — this stage's role is to enforce the chain, not to repeat it.
+## What NOT to do
 
-## Inputs and outputs
-
-The frontmatter declares `polish/game-build` as input. Release produces the `RELEASE` artifact: submitted builds across each named platform plus the live patch pipeline that survives launch.
-
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, release-engineer, feedback-assessor]` dispatches per finding. Release-stage fixes are operational — re-cutting a submission build, re-running a certification pass, fixing the patch pipeline before launch day. The gate is `await` — release waits for the external event (platform certification result, storefront approval) rather than asking the user to approve locally. The submission has been made; the world responds.
+- Don't change gameplay, content, or feel to clear certification — a quality problem is a revisit to polish, not a patch jammed into submission.
+- Don't treat the initial submission as the finish line and skip the patch pipeline.
+- Don't assume one platform's cert outcome generalizes to the others.
+- Don't ship without a working path to push a post-launch fix.

@@ -12,22 +12,22 @@ inputs:
 
 # Communicate
 
-A decision that isn't communicated well is a decision that gets unwound during execution. This stage turns the decision brief into the artifacts that actually move the organization: tailored messaging for each stakeholder group, a sequenced rollout plan with named owners, and a FAQ that anticipates the hard questions before they're asked in public.
+The terminal stage of the executive-strategy lifecycle: turn the ratified decision into the artifacts that actually move the organization. A decision that isn't communicated well is a decision that gets unwound during execution.
 
-Units in this stage are **communication and rollout artifacts** — one per stakeholder audience or rollout workstream (e.g. "employee all-hands package", "investor letter", "customer notification", "phase-one rollout plan"). The stage output `COMMS-PACKAGE.md` aggregates the messaging, materials, plan, and FAQ.
+## Scope
 
-## Per-unit baton
+Building tailored messaging per stakeholder group, a sequenced rollout plan with named owners, and a FAQ that anticipates the hard questions before they're asked in public. Communicate decides *how the decision is conveyed and rolled out* — it does not make or revisit the decision (decide). One unit per stakeholder audience or rollout workstream.
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`communicator`** (plan) builds the messaging framework — what we say, to whom, through which channel, anticipating their concerns
-- **`planner`** (do) sequences rollout actions with dependencies, owners, milestones, and contingency plans
-- **`verifier`** (verify) checks messaging consistency across audiences, named owners, measurable milestones, and FAQ coverage
+- Build the messaging framework: what we say, to whom, through which channel, anticipating their concerns.
+- Sequence the rollout with dependencies, named owners, measurable milestones, and contingency plans.
+- Keep the message consistent across audiences while tailoring it to each one's concerns.
+- Write a FAQ that gets ahead of the hard questions rather than reacting to them.
 
-## Inputs and outputs
+## What NOT to do
 
-Consumes `decide/decision-brief`. Produces `comms-package` at intent scope: messaging framework, audience-specific materials, rollout calendar, FAQ.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, communicator, feedback-assessor]` dispatches per finding. The gate is `ask` — local human approval, because the communicator's words become the organization's words; the user needs to read what's about to go out. Project overlays may add house-style voice guides, channel templates, and rollout-tracking conventions without modifying the plugin defaults.
+- Don't reopen or relitigate the decision — carry forward what the decide stage ratified.
+- Don't ship messaging that contradicts itself across audiences.
+- Don't sequence a rollout step without an owner and a measurable milestone.
+- Don't put words in the organization's mouth that the decision brief doesn't support.

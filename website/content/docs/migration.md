@@ -28,14 +28,14 @@ This guide covers migrating from AI-DLC to H·AI·K·U. Most migration is automa
 | `/ai-dlc:review` | `/haiku:haiku-gate-review` |
 | `/ai-dlc:autopilot` | `/haiku:haiku-autopilot` |
 | `/ai-dlc:quick` | `/haiku:haiku-quick` |
-| `/ai-dlc:operate` | `/haiku:haiku-operate` |
+| `/ai-dlc:operate` | _(removed — no equivalent)_ |
 | `/ai-dlc:resume` | `/haiku:haiku-pickup` |
 | `/ai-dlc:reset` | `/haiku:haiku-reset-intent` (whole intent) or `/haiku:haiku-reset-stage` (single stage) |
 | `/ai-dlc:refine` | `/haiku:haiku-refine` |
 | `/ai-dlc:followup` | `/haiku:followup` |
 | `/ai-dlc:compound` | `/haiku:compound` |
 | `/ai-dlc:adopt` | `/haiku:haiku-adopt` |
-| `/ai-dlc:reflect` | `/haiku:haiku-reflect` |
+| `/ai-dlc:reflect` | _(removed — reflection runs automatically at intent completion)_ |
 | `/ai-dlc:setup` | `.haiku/settings.yml` (direct edit) |
 
 ## Directory Map

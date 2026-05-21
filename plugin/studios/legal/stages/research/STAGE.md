@@ -15,22 +15,22 @@ outputs:
 
 # Research
 
-Take the intake brief and produce a structured research memo per knowledge topic. Research is a research-class stage: each unit corresponds to one investigable question — a specific regulatory regime, a contract-term pattern, a recent enforcement action, a comparable precedent. The output is a `RESEARCH-MEMO.md` per unit that the draft stage and the responsible attorney will consume when shaping the document.
+Take the intake brief and build the legal-research foundation the drafting stage will rely on: the applicable rules, the controlling precedent, the regulatory regimes, and the open questions. This stage gathers and summarizes legal materials so the attorney can apply judgment — it does not supply the judgment itself.
 
-This stage gathers and summarizes legal materials. It does NOT render legal opinions or strategy. Conclusions presented as "the law requires X" must cite the primary source and must be reviewed by a licensed attorney before any action.
+## Scope
 
-## Per-unit baton
+Investigation and synthesis of legal sources for the matter's questions. Research decides *what the materials say* and *what's settled vs. contested* — not what the document should contain (draft), and not whether the final document is sufficient (review). Any statement of the form "the law requires X" must rest on a cited primary source.
 
-Each unit walks the three hats in `plan → do → verify` order:
+## What to do
 
-- **`researcher`** (plan / do for gathering) — identifies the relevant primary and secondary sources for the unit's topic, captures the citation, and surfaces what's settled vs. what's contested
-- **`analyst`** (do for synthesis) — turns raw findings into the structured memo: applicable rules, key precedent or guidance, open questions, and a recommendation for the attorney's review (NOT for execution)
-- **`verifier`** (verify) — confirms citations are real and current, sources are authoritative, and the analysis traces back to the intake brief
+- Identify the relevant primary and secondary sources for each question, and capture exact, current citations.
+- Separate what's settled from what's contested, and name the open questions the attorney needs to weigh.
+- Synthesize raw findings into a structured memo that traces back to the intake brief's facts.
+- Frame conclusions as input for the attorney's review, not as directions for execution.
 
-## Inputs and outputs
+## What NOT to do
 
-Frontmatter declares `intake/legal-brief` as input and one output: `RESEARCH-MEMO.md` per unit at intent scope. The memo feeds `draft`, `review`, and `execute`. New research topics get new units; completed memos are immutable.
-
-## Fix loop and gate
-
-`fix_hats: [classifier, researcher, analyst, feedback-assessor]` dispatches per finding. Classifier routes; `researcher` re-frames a finding about scope or direction, and `analyst` re-authors the affected memo section (the memo is the analyst's artifact — a corrected citation, an added jurisdictional consideration); assessor closes. Both implementers are in the chain so a finding lands with the hat that owns the flagged artifact. The gate is `auto`. The licensed attorney is the gate for legal judgment — the workflow's `auto` advance only means the artifact is internally well-formed.
+- Don't present an analysis as a legal opinion or a strategy decision — that's the attorney's domain.
+- Don't draft document language; the memo informs the draft, it isn't the draft.
+- Don't cite a source you haven't confirmed is real and current, and don't let an uncited assertion stand as law.
+- Don't reach beyond the questions the brief raised; new questions become new units.

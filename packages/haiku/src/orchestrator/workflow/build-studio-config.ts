@@ -282,14 +282,13 @@ function buildStageConfig(
 			required: a.required,
 		}))
 
-	// Phase overrides.
+	// Stage elaboration guidance (additive prompt content, not an engine
+	// override — spliced into the elaborate prompt by the decompose builder).
 	const elaborationOverride = readPhaseOverride(
 		studioDir,
 		stageName,
 		"ELABORATION",
 	)
-	const executionOverride = readPhaseOverride(studioDir, stageName, "EXECUTION")
-	const reviewOverride = readPhaseOverride(studioDir, stageName, "REVIEW")
 
 	return {
 		name: stageName,
@@ -301,8 +300,6 @@ function buildStageConfig(
 		gate: parseGate(data.review),
 		defaultModel: parseModel(data.default_model),
 		elaborationOverride: elaborationOverride?.body,
-		executionOverride: executionOverride?.body,
-		reviewOverride: reviewOverride?.body,
 		discoveryTemplates,
 		outputTemplates,
 		body,

@@ -17,20 +17,22 @@ review-agents-include:
 
 # Certify
 
-The external-audit stage. The internal lifecycle has produced scope, findings, remediations, and an evidence package — now an external auditor evaluates the result and either issues a certification, requires changes, or raises follow-up findings. Units here are operational steps with preconditions, actions, and post-condition checks: schedule the auditor, hand over evidence in the requested format, respond to inquiries, resolve findings.
+The external-audit stage and the terminus of the compliance lifecycle. The internal work has produced scope, findings, remediations, and an evidence package; now an external auditor evaluates the result and either certifies, requires changes, or raises follow-up findings. This stage runs that relationship to a resolved outcome.
 
-## Per-unit baton
+## Scope
 
-Each certify unit walks the three hats in `plan → do → verify` order:
+Coordinating the auditor relationship and resolving findings — schedule the audit, hand over evidence in the requested format, respond to inquiries, and drive every finding to closure. Certify owns *the external attestation process and finding resolution* — it does not re-run the upstream assessment or remediation, though it may surface a finding that sends work back there.
 
-- **`audit-liaison`** (plan / do) coordinates the auditor relationship — submits evidence per the auditor's request format, anticipates follow-up questions, schedules stakeholder interviews
-- **`finding-resolver`** (do for closure) responds to each auditor finding with root cause analysis plus remediation evidence OR documented risk acceptance — every finding gets a tracked resolution path
-- **`verifier`** (verify) validates that each unit body names concrete preconditions, an unambiguous action, a verifiable post-condition, and a rollback procedure where applicable
+## What to do
 
-## Inputs and outputs
+- Submit evidence in the auditor's requested format and anticipate the follow-up questions before they're asked.
+- Give every auditor finding a tracked resolution path: root-cause plus remediation evidence, or documented risk acceptance.
+- Treat the external auditor's decision as the authoritative signal; align internal stakeholders before that conversation, not during it.
+- Record what was submitted, what came back, and how each finding was resolved.
 
-`document/evidence-package` feeds in. This stage also pulls in upstream review lenses (`assess.thoroughness`, `remediate.effectiveness`) so cross-stage findings surface here before certification rather than during the audit itself. The terminal output is the intent-scope `AUDIT-READINESS.md` — the record of what was submitted, what findings came back, and how each was resolved.
+## What NOT to do
 
-## Fix loop and gate
-
-When review feedback opens, `fix_hats: [classifier, audit-liaison, feedback-assessor]` dispatches per finding — `audit-liaison` re-submits or re-formats material, escalating to `finding-resolver` via classifier when the finding requires a substantive response rather than a procedural fix. The gate is `[external, await]`: the auditor's decision is the approval signal, and the stage blocks waiting for that external event. There is no local fallback because no local sign-off can substitute for the external attestation that is the whole point of this stage. Project overlays may add the specific auditor's portal conventions, naming schemes, and submission formats.
+- Don't re-do the assessment or re-author remediations inline — route a substantive finding back to the stage that owns it.
+- Don't reformat or re-collect the evidence package from scratch — that was the document stage's job.
+- Don't substitute a local sign-off for the external attestation; the auditor's decision is the whole point of this stage.
+- Don't leave a finding without an owned, tracked resolution.

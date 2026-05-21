@@ -10,14 +10,16 @@
 // inlined (no Read fan-out, no haiku_unit_read calls for the spec
 // bodies the engine could just hand it directly).
 
-import { existsSync, readFileSync } from "node:fs"
 import { Eta } from "eta"
-import matter from "gray-matter"
-import { resolveReviewAgentPath } from "../../../../../studio-reader.js"
+import {
+	readReviewAgentBody,
+	resolveReviewAgentPath,
+} from "../../../../../studio-reader.js"
 import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import {
 	emitSubagentDispatchBlock,
 	resolveStudioMandateModel,
+	studioReadRef,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
@@ -57,31 +59,33 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	// agent audited against. The unit SPECS are live artifacts: the agent
 	// reads each via `haiku_unit_read` (FM-stripped), never an inlined
 	// dispatch-time copy.
-	let mandatePath = ""
+	let mandateRef = ""
 	let modelTier: string | undefined
 
 	if (engineBodyTpl) {
+		// Engine roles are GENERATED (rendered eta), not studio files —
+		// snapshot the rendered body directly; no reader/tool applies.
 		const engineBody = eta.renderString(engineBodyTpl, { slug, stage }).trim()
-		mandatePath = materializeReferenceFile({
+		const snap = materializeReferenceFile({
 			intent: slug,
 			stage: stage || undefined,
 			kind: "engine-body",
 			name: role,
 			body: engineBody,
 		})
+		mandateRef = `**Read** \`${snap}\``
 	} else {
+		mandateRef = studioReadRef({
+			resolveBody: () => readReviewAgentBody(studio, stage, role),
+			toolName: "haiku_read_review_agent",
+			toolArgs: { studio, stage, role },
+			intent: slug,
+			stage: stage || undefined,
+			kind: "mandate",
+			name: role,
+		})
 		const srcMandatePath = resolveReviewAgentPath(studio, stage, role)
-		if (srcMandatePath && existsSync(srcMandatePath)) {
-			const body = matter(readFileSync(srcMandatePath, "utf8")).content.trim()
-			if (body) {
-				mandatePath = materializeReferenceFile({
-					intent: slug,
-					stage: stage || undefined,
-					kind: "mandate",
-					name: role,
-					body,
-				})
-			}
+		if (srcMandatePath) {
 			modelTier = resolveStudioMandateModel({
 				mandatePath: srcMandatePath,
 				studio,
@@ -98,7 +102,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		stage,
 		role,
 		isEngineRole: engineBodyTpl !== undefined,
-		mandatePath,
+		mandateRef,
 		units,
 	})
 

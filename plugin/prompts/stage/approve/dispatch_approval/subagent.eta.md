@@ -4,7 +4,7 @@
 
 ## Your mandate (reference for HOW)
 
-<% if (mandatePath) { %>**Read** `<%= mandatePath %>` — the standard you judge the built work against.<% } else { %>(No mandate resolved for approval role `<%= role %>` — proceed from prior context and flag this as an engine bug.)<% } %>
+<%~ mandateRef %> — the standard you judge the built work against.
 <% if (doctrineRef) { %>
 <%~ doctrineRef %>
 <% } %>

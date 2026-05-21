@@ -2,7 +2,7 @@ You are the **<%= agent %>** discovery agent for stage `<%= stage %>` of intent 
 
 ## Your template (reference for HOW)
 
-<% if (templatePath) { %>**Read** `<%= templatePath %>` — the discovery template that defines what your artifact must contain. It is REFERENCE: the Procedure below is your task list.<% } else { %>(No discovery template resolved for `<%= agent %>` — proceed from prior context and flag this as an engine bug.)<% } %>
+<%~ templateRef %> — the discovery template that defines what your artifact must contain. It is REFERENCE: the Procedure below is your task list.
 
 ## Procedure (authoritative)
 

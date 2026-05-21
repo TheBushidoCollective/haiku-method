@@ -19,11 +19,15 @@ import { join } from "node:path"
 import { Eta } from "eta"
 import matter from "gray-matter"
 import { stageDir } from "../../../../../state-tools.js"
-import { resolveReviewAgentPath } from "../../../../../studio-reader.js"
+import {
+	readReviewAgentBody,
+	resolveReviewAgentPath,
+} from "../../../../../studio-reader.js"
 import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import {
 	emitSubagentDispatchBlock,
 	resolveStudioMandateModel,
+	studioReadRef,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import {
@@ -84,31 +88,31 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	// reads via `haiku_unit_read`. Produced OUTPUTS are heterogeneous
 	// deliverables (code, images, PDFs) the agent opens by path with the
 	// Read tool.
-	let mandatePath = ""
+	let mandateRef = ""
 	let modelTier: string | undefined
 
 	if (engineBodyTpl) {
 		const engineBody = eta.renderString(engineBodyTpl, { slug, stage }).trim()
-		mandatePath = materializeReferenceFile({
+		const snap = materializeReferenceFile({
 			intent: slug,
 			stage: stage || undefined,
 			kind: "engine-body",
 			name: role,
 			body: engineBody,
 		})
+		mandateRef = `**Read** \`${snap}\``
 	} else {
+		mandateRef = studioReadRef({
+			resolveBody: () => readReviewAgentBody(studio, stage, role),
+			toolName: "haiku_read_review_agent",
+			toolArgs: { studio, stage, role },
+			intent: slug,
+			stage: stage || undefined,
+			kind: "mandate",
+			name: role,
+		})
 		const srcMandatePath = resolveReviewAgentPath(studio, stage, role)
-		if (srcMandatePath && existsSync(srcMandatePath)) {
-			const body = matter(readFileSync(srcMandatePath, "utf8")).content.trim()
-			if (body) {
-				mandatePath = materializeReferenceFile({
-					intent: slug,
-					stage: stage || undefined,
-					kind: "mandate",
-					name: role,
-					body,
-				})
-			}
+		if (srcMandatePath) {
 			modelTier = resolveStudioMandateModel({
 				mandatePath: srcMandatePath,
 				studio,
@@ -132,7 +136,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		stage,
 		role,
 		isEngineRole: engineBodyTpl !== undefined,
-		mandatePath,
+		mandateRef,
 		units,
 		outputPaths,
 		doctrineRef,

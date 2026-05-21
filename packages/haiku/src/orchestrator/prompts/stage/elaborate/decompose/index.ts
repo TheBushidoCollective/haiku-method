@@ -44,13 +44,16 @@ import { getCapabilities } from "../../../../../harness.js"
 import {
 	listInstalledSkills,
 	parseFrontmatter,
+	readIntentBody,
 } from "../../../../../state-tools.js"
 import {
 	filterReviewAgentsByScope,
+	readDiscoveryBody,
 	readPhaseBody,
 	readPhaseOverride,
 	readReviewAgentBody,
 	readReviewAgentPaths,
+	readStageBody,
 	readStageDef,
 	resolveStageInputs,
 	studioSearchPaths,
@@ -59,7 +62,6 @@ import {
 	resolveIntentStages,
 	resolveStudioFilePath,
 } from "../../../../studio.js"
-import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import { buildOutputRequirements } from "../../../../validators.js"
 import {
 	batchDispatchDirective,
@@ -524,33 +526,30 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			join(studio, "stages", stage, "STAGE.md"),
 		)
 
-		// The intent goal and stage scope are static-for-this-dispatch
-		// source — materialize FM-stripped snapshots once and reference
-		// them from every discovery subagent. (intent.md is guarded
-		// against generic Read by the workflow hook, so a referenced
-		// snapshot is also how the subagent gets it at all.) The
-		// per-artifact discovery template is materialized inside the loop.
-		const intentRef = existsSync(intentPath)
-			? materializeReferenceFile({
-					intent: slug,
-					stage,
-					kind: "intent-goal",
-					name: "intent",
-					body: (parseFrontmatter(readFileSync(intentPath, "utf8")).body || "").trim(),
-				})
-			: ""
-		const stageRef =
-			stagePath && existsSync(stagePath)
-				? materializeReferenceFile({
-						intent: slug,
-						stage,
-						kind: "stage-scope",
-						name: stage,
-						body: (
-							parseFrontmatter(readFileSync(stagePath, "utf8")).body || ""
-						).trim(),
-					})
-				: ""
+		// Snapshot the intent goal + stage scope once via the same readers
+		// haiku_read_intent / haiku_read_stage use, and reference them from
+		// every discovery subagent. (intent.md is guarded against generic
+		// Read by the workflow hook, so a referenced snapshot is also how
+		// the subagent gets it at all.) The per-artifact discovery template
+		// is snapshotted inside the loop.
+		const intentRef = studioReadRef({
+			resolveBody: () => readIntentBody(slug),
+			toolName: "haiku_read_intent",
+			toolArgs: { intent: slug },
+			intent: slug,
+			stage,
+			kind: "intent-goal",
+			name: "intent",
+		})
+		const stageRef = studioReadRef({
+			resolveBody: () => readStageBody(studio, stage),
+			toolName: "haiku_read_stage",
+			toolArgs: { studio, stage },
+			intent: slug,
+			stage,
+			kind: "stage-scope",
+			name: stage,
+		})
 
 		const intentMode = readIntentMode(dir)
 		const isAutopilot = intentMode === "autopilot"
@@ -581,12 +580,14 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 							`${a.name.toUpperCase()}.md`,
 						)
 				: null
-			const templateRef = materializeReferenceFile({
+			const templateRef = studioReadRef({
+				resolveBody: () => readDiscoveryBody(studio, stage, a.name),
+				toolName: "haiku_read_discovery",
+				toolArgs: { studio, stage, template: a.name },
 				intent: slug,
 				stage,
 				kind: "discovery-template",
 				name: a.name,
-				body: (parseFrontmatter(readFileSync(a.templatePath, "utf8")).body || "").trim(),
 			})
 			const promptBody = eta.renderString(DISCOVERY_SUBAGENT_TPL, {
 				artifactName: a.name,

@@ -2,7 +2,7 @@ You are the **<%= role %>** intent-completion review agent for intent **<%= slug
 
 ## Your mandate (reference for HOW)
 
-**Read** `<%= mandatePath %>` — the standard you audit the intent against.
+<%~ mandateRef %> — the standard you audit the intent against.
 <% if (typeof doctrineRef !== "undefined" && doctrineRef) { %>
 <%~ doctrineRef %>
 

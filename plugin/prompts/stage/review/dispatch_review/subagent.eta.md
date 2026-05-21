@@ -4,7 +4,7 @@
 
 ## Your mandate (reference for HOW)
 
-<% if (mandatePath) { %>**Read** `<%= mandatePath %>` — the standard you audit each spec against.<% } else { %>(No mandate resolved for review role `<%= role %>` — proceed from prior context and flag this as an engine bug.)<% } %>
+<%~ mandateRef %> — the standard you audit each spec against.
 
 ## Units to review
 

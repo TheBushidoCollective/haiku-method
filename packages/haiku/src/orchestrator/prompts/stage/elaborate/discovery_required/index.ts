@@ -15,17 +15,17 @@
 //   - subagent-driven (template has no `tool:`) — spawn one subagent
 //     against the discovery template's body.
 
-import { existsSync, readFileSync } from "node:fs"
-import { join } from "node:path"
 import { Eta } from "eta"
-import matter from "gray-matter"
-import { resolvePluginRoot } from "../../../../../config.js"
-import { readStageArtifactDefs } from "../../../../../studio-reader.js"
-import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
+import {
+	readDiscoveryBody,
+	readStageArtifactDefs,
+	resolveDiscoveryTemplatePath,
+} from "../../../../../studio-reader.js"
 import {
 	buildConcurrentElaborateLoopBlock,
 	emitSubagentDispatchBlock,
 	resolveStudioMandateModel,
+	studioReadRef,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
@@ -56,42 +56,29 @@ export default definePromptBuilder((ctx) => {
 
 	let dispatchBlock = ""
 	if (def && !def.tool) {
-		// The discovery template is static studio source — materialize it
-		// (FM-stripped) into the intent's prompts/refs/ tree and reference
-		// THAT snapshot, so the dispatch record reflects exactly what the
-		// agent produced its artifact from.
-		const srcTemplatePath = join(
-			resolvePluginRoot(),
-			"studios",
-			studio,
-			"stages",
+		// Snapshot the discovery template via the same reader
+		// haiku_read_discovery uses (cascade-aware — project override
+		// honored, which the prior plugin-only resolution missed) and emit
+		// a "Read <snapshot>" breadcrumb.
+		const templateRef = studioReadRef({
+			resolveBody: () => readDiscoveryBody(studio, stage, agent),
+			toolName: "haiku_read_discovery",
+			toolArgs: { studio, stage, template: agent },
+			intent: slug,
 			stage,
-			"discovery",
-			`${agent}.md`,
-		)
-		const rawTpl = existsSync(srcTemplatePath)
-			? readFileSync(srcTemplatePath, "utf8")
-			: ""
-		const tplBody = rawTpl ? matter(rawTpl).content.trim() : ""
-		const templatePath = tplBody
-			? materializeReferenceFile({
-					intent: slug,
-					stage,
-					kind: "discovery-template",
-					name: agent,
-					body: tplBody,
-				})
-			: ""
+			kind: "discovery-template",
+			name: agent,
+		})
 		const promptBody = eta.renderString(SUBAGENT_TEMPLATE, {
 			agent,
 			stage,
 			slug,
 			unit,
 			resolvedLocation,
-			templatePath,
+			templateRef,
 		})
 		const discoveryModel = resolveStudioMandateModel({
-			mandatePath: srcTemplatePath,
+			mandatePath: resolveDiscoveryTemplatePath(studio, stage, agent) ?? undefined,
 			studio,
 			stage,
 		})

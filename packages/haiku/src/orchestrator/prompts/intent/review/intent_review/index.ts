@@ -16,14 +16,16 @@
 // once per intent. This builder serializes the per-role drumbeat the
 // cursor walks after that pass.
 
-import { existsSync, readFileSync } from "node:fs"
 import { Eta } from "eta"
-import matter from "gray-matter"
-import { readStudioReviewAgentPaths } from "../../../../../studio-reader.js"
+import {
+	readReviewAgentBody,
+	readStudioReviewAgentPaths,
+} from "../../../../../studio-reader.js"
 import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import {
 	emitSubagentDispatchBlock,
 	resolveStudioMandateModel,
+	studioReadRef,
 } from "../../../_helpers.js"
 import { loadTemplate } from "../../../_load-template.js"
 import {
@@ -67,41 +69,45 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	// dispatch below; the dispatch record reflects exactly what the
 	// reviewer audited against.
 	const engineBodyTpl = ENGINE_REVIEW_BODIES[role]
-	let mandatePath = ""
+	let mandateRef = ""
 	let mandateModel: string | undefined
 
 	if (engineBodyTpl) {
+		// Engine role — rendered, not a studio file. Snapshot directly.
 		const engineBody = eta.renderString(engineBodyTpl, { slug }).trim()
-		mandatePath = materializeReferenceFile({
+		const snap = materializeReferenceFile({
 			intent: slug,
 			kind: "engine-body",
 			name: role,
 			body: engineBody,
 		})
+		mandateRef = `**Read** \`${snap}\``
 	} else {
-		const srcMandatePath = readStudioReviewAgentPaths(studio)[role]
-		if (srcMandatePath && existsSync(srcMandatePath)) {
-			const body = matter(readFileSync(srcMandatePath, "utf8")).content.trim()
-			if (body) {
-				mandatePath = materializeReferenceFile({
-					intent: slug,
-					kind: "mandate",
-					name: role,
-					body,
-				})
-			}
+		// Studio intent-completion review agent — resolve via the same
+		// reader haiku_read_review_agent uses; only spawn when it resolves
+		// (else fall through to the generic fallback below).
+		const body = readReviewAgentBody(studio, undefined, role)
+		if (body) {
+			mandateRef = studioReadRef({
+				resolveBody: () => body,
+				toolName: "haiku_read_review_agent",
+				toolArgs: { studio, role },
+				intent: slug,
+				kind: "mandate",
+				name: role,
+			})
 			mandateModel = resolveStudioMandateModel({
-				mandatePath: srcMandatePath,
+				mandatePath: readStudioReviewAgentPaths(studio)[role],
 				studio,
 			})
 		}
 	}
 
-	if (mandatePath) {
+	if (mandateRef) {
 		const reviewPrompt = eta.renderString(SUBAGENT_TEMPLATE, {
 			slug,
 			role,
-			mandatePath,
+			mandateRef,
 			doctrineRef: RUNTIME_OBSERVATION_ROLES.has(role)
 				? sharedBlockRef("runtime-verification")
 				: "",
@@ -121,7 +127,9 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		return eta.renderString(TEMPLATE, {
 			slug,
 			role,
-			mandatePath,
+			// Parent template keys its "spawn the subagent" branch on a
+			// truthy mandatePath; mandateRef is truthy whenever we resolved.
+			mandatePath: mandateRef,
 			dispatchBlock,
 			description: "",
 		})

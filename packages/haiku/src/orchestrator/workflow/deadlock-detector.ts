@@ -118,6 +118,31 @@ export function actionSignatureForDeadlock(
 	action: Record<string, unknown> | null | undefined,
 ): string {
 	if (!action) return "null"
+	// Batch dispatches carry their items in `dispatches[]`
+	// (start_feedback_hat: {feedback_id, hat}) or `units[]`
+	// (start_unit_hat) — NOT in the top-level feedback_id/unit fields. If
+	// the signature ignores the batch contents, every start_feedback_hat
+	// tick looks identical: a healthy fix loop that advances different
+	// FBs each tick would false-halt after HALT_THRESHOLD, and a genuine
+	// no-op loop on one stuck batch couldn't be told apart from progress.
+	// Fold the per-item identity in (sorted, so item order can't make an
+	// equivalent batch look different). A stable stuck batch → stable
+	// signature → halts; an evolving batch (items progressing) → changing
+	// signature → no false halt.
+	const dispatches = action.dispatches
+	const fbBatch = Array.isArray(dispatches)
+		? dispatches
+				.map((d) => {
+					const o = (d ?? {}) as Record<string, unknown>
+					return `${o.feedback_id ?? ""}:${o.hat ?? ""}`
+				})
+				.sort()
+				.join(",")
+		: null
+	const units = action.units
+	const unitBatch = Array.isArray(units)
+		? [...(units as unknown[])].map((u) => String(u)).sort().join(",")
+		: null
 	return JSON.stringify({
 		action: action.action ?? null,
 		stage: action.stage ?? null,
@@ -125,6 +150,8 @@ export function actionSignatureForDeadlock(
 		feedback_id: action.feedback_id ?? null,
 		role: action.role ?? null,
 		hat: action.hat ?? null,
+		fb_batch: fbBatch,
+		unit_batch: unitBatch,
 	})
 }
 

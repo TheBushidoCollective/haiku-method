@@ -44,6 +44,72 @@ test("deadlock-detector: same action twice in a row reaches threshold", () => {
 	)
 })
 
+test("deadlock-detector: a STABLE stuck fix-hat batch repeats to a halt (the no-op loop)", () => {
+	// FB-011/012/013 stalled at `addressed`: the cursor re-dispatched the
+	// same start_feedback_hat batch every tick because the subagents did
+	// the work but never called advance/reject. The batch is identical
+	// each tick → signature must be stable → wouldDeadlock halts.
+	__resetDeadlockDetector()
+	const stuckBatch = {
+		action: "start_feedback_hat",
+		dispatches: [
+			{ feedback_id: "FB-011", stage: "product", hat: "product" },
+			{ feedback_id: "FB-012", stage: "product", hat: "product" },
+			{ feedback_id: "FB-013", stage: "product", hat: "product" },
+		],
+	}
+	recordTickResult("slug-noop", stuckBatch) // 1
+	recordTickResult("slug-noop", stuckBatch) // 2
+	recordTickResult("slug-noop", stuckBatch) // 3
+	const verdict = wouldDeadlock("slug-noop", stuckBatch)
+	assert.ok(verdict, "a stable stuck fix-hat batch must trip the loop halt")
+	assert.strictEqual(verdict.kind, "repeat")
+})
+
+test("deadlock-detector: an EVOLVING fix-hat batch (progress) does NOT false-halt", () => {
+	// Healthy progress: each tick the same FBs advance to the next hat, so
+	// the batch's (feedback_id, hat) set changes. Signature must change →
+	// no halt, even across many ticks. Pre-fix, all start_feedback_hat
+	// ticks collapsed to one signature and this would have halted at 4.
+	__resetDeadlockDetector()
+	const tick = (hat) => ({
+		action: "start_feedback_hat",
+		dispatches: [{ feedback_id: "FB-001", stage: "product", hat }],
+	})
+	const hats = ["classifier", "product", "specification", "feedback-assessor"]
+	for (const h of hats) {
+		assert.strictEqual(
+			wouldDeadlock("slug-progress", tick(h)),
+			null,
+			`advancing through '${h}' must not halt`,
+		)
+		recordTickResult("slug-progress", tick(h))
+	}
+	assert.strictEqual(
+		__getTickHistoryForTests("slug-progress").count,
+		1,
+		"each distinct hat is a fresh signature; counter never accumulates",
+	)
+})
+
+test("deadlock-detector: batch signature is order-independent", () => {
+	const a = actionSignatureForDeadlock({
+		action: "start_feedback_hat",
+		dispatches: [
+			{ feedback_id: "FB-002", stage: "s", hat: "h" },
+			{ feedback_id: "FB-001", stage: "s", hat: "h" },
+		],
+	})
+	const b = actionSignatureForDeadlock({
+		action: "start_feedback_hat",
+		dispatches: [
+			{ feedback_id: "FB-001", stage: "s", hat: "h" },
+			{ feedback_id: "FB-002", stage: "s", hat: "h" },
+		],
+	})
+	assert.strictEqual(a, b, "same batch in different order = same signature")
+})
+
 test("deadlock-detector: changing action signature resets the counter", () => {
 	__resetDeadlockDetector()
 	recordTickResult("slug-b", { action: "dispatch_review", role: "spec" })

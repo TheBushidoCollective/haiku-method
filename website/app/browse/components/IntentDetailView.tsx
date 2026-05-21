@@ -38,6 +38,15 @@ function titleCase(s: string): string {
 		.join(" ")
 }
 
+/** Split a `unit-NNN-slug` name into a "Unit NNN" badge label + a
+ *  title-cased name. Falls back to the whole name title-cased when it
+ *  doesn't match the unit-number convention. */
+function splitUnitName(name: string): { badge: string | null; title: string } {
+	const m = name.match(/^unit-(\d+)-(.+)$/)
+	if (m) return { badge: `Unit ${m[1]}`, title: titleCase(m[2]) }
+	return { badge: null, title: titleCase(name) }
+}
+
 const stageStatusColors: Record<string, { bg: string; dot: string }> = {
 	complete: {
 		bg: "border-green-200 dark:border-green-900",
@@ -1550,9 +1559,21 @@ function StageDetail({
 								>
 									<div className="flex items-center justify-between">
 										<div className="flex items-center gap-3">
-											<span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-												{titleCase(unit.name)}
-											</span>
+											{(() => {
+												const { badge, title } = splitUnitName(unit.name)
+												return (
+													<div className="flex items-center gap-2 min-w-0">
+														{badge && (
+															<span className="flex-shrink-0 rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[10px] font-medium text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+																{badge}
+															</span>
+														)}
+														<span className="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">
+															{title}
+														</span>
+													</div>
+												)
+											})()}
 											<span
 												className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${unitStatusColors[unit.status] || unitStatusColors.pending}`}
 											>

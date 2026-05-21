@@ -22,6 +22,14 @@ function titleCase(s: string): string {
 		.join(" ")
 }
 
+/** Split a `unit-NNN-slug` name into a "Unit NNN" badge label + a
+ *  title-cased name. Falls back to the whole name when it doesn't match. */
+function splitUnitName(name: string): { badge: string | null; title: string } {
+	const m = name.match(/^unit-(\d+)-(.+)$/)
+	if (m) return { badge: `Unit ${m[1]}`, title: titleCase(m[2]) }
+	return { badge: null, title: titleCase(name) }
+}
+
 const FIELD_LABELS: Record<string, string> = {
 	ticket: "Ticket",
 	epic: "Epic",
@@ -76,9 +84,21 @@ export function UnitDetailView({
 			{/* Header */}
 			<header className="mb-8">
 				<div className="flex items-center gap-3">
-					<h1 className="text-2xl font-bold tracking-tight">
-						{titleCase(unit.name)}
-					</h1>
+					{(() => {
+						const { badge, title } = splitUnitName(unit.name)
+						return (
+							<div className="flex items-center gap-2 min-w-0">
+								{badge && (
+									<span className="flex-shrink-0 rounded-md bg-stone-100 px-2 py-1 font-mono text-xs font-medium text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+										{badge}
+									</span>
+								)}
+								<h1 className="truncate text-2xl font-bold tracking-tight">
+									{title}
+								</h1>
+							</div>
+						)
+					})()}
 					<StatusBadge status={unit.status} />
 				</div>
 				<p className="mt-1 text-sm text-stone-500 dark:text-stone-400">

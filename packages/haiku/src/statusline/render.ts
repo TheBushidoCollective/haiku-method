@@ -39,6 +39,12 @@ export interface StatuslineStageDot {
 	status: "done" | "active" | "pending"
 }
 
+/** Per-hat status within a unit/feedback progress bar. `done` = the hat
+ *  advanced (green), `active` = its iteration is open / in progress
+ *  (yellow), `rejected` = its most recent result was a reject (red),
+ *  `pending` = not reached yet (faint empty pip). */
+export type HatSegment = "done" | "active" | "rejected" | "pending"
+
 export interface StatuslineState {
 	/** Intent slug. */
 	intent: string
@@ -79,6 +85,30 @@ export interface StatuslineState {
 	 *   - in-stage   (a stage active): elaborate → review → execute → approve
 	 *   - post-stage (intent completion): intent-review → reflect → seal */
 	phaseTrack: { index: number; total: number } | null
+	/** Per-item hat-progress bars for the live pool, rendered as a SECOND
+	 *  line below the main line. During `execute`: one entry per in-flight
+	 *  unit. During `fixloop`: one entry per open feedback. Each entry's
+	 *  `id` is the prefixed item label (`U-03`, `FB-012`); `segments` is one
+	 *  status per hat in the item's sequence, derived from that hat's most
+	 *  recent iteration outcome: `done` (advanced — green), `active` (open,
+	 *  in progress — yellow), `rejected` (last result was a reject — red),
+	 *  `pending` (not reached — faint empty). So the bar shows true per-hat
+	 *  state, including a bounce-back. Absent/null/empty for every other
+	 *  phase (and an idle pool) → no second line. Capped at the concurrency
+	 *  limit by the caller so the line can't overflow. */
+	itemBars?: Array<{ id: string; segments: HatSegment[] }> | null
+	/** Per-agent status chips for the SECOND line during the await phases
+	 *  (pre-execute review, post-execute approval, quality gates, the
+	 *  intent-completion review). One chip per known review/approval role
+	 *  we're waiting on a stamp from, colored by `status`: `done` = stamped
+	 *  (green), `active` = currently being awaited (light), `pending` =
+	 *  queued (grey), `failed` = a failure signal (red). Mutually exclusive
+	 *  with `itemBars` — a phase is either dispatching work (bars) or
+	 *  awaiting sign-offs (chips). Null/empty → no agent chips. */
+	agentChips?: Array<{
+		id: string
+		status: "done" | "active" | "pending" | "failed"
+	}> | null
 }
 
 // ── glyphs ───────────────────────────────────────────────────────────
@@ -92,6 +122,32 @@ const GATED = "⊘"
 const DOT = "·"
 const PIP_DONE = "▰"
 const PIP_PENDING = "▱"
+// Leader for the second (per-item pool) line.
+const ITEM_LEADER = "↳"
+// Per-hat segment colors for the unit/feedback bars, tuned to read on the
+// near-white chip box: green done, gold/amber active, soft red rejected,
+// faint empty pending. (Pure yellow is invisible on white, so "active"
+// uses a gold/amber that reads as yellow with contrast.)
+const SEG_FG: Record<HatSegment, string> = {
+	done: "\x1b[38;5;71m", // green = hat advanced
+	active: "\x1b[1;38;5;172m", // amber/gold = hat in progress
+	rejected: "\x1b[1;38;5;167m", // soft red = hat last rejected
+	pending: "\x1b[38;5;250m", // faint = not reached
+}
+// Agent-status chip palette (the await-phase second line). Pastel solid
+// boxes — `bg`/`fg` paint the box body, `mark` is the NO_COLOR-legible
+// status glyph appended to the role name (so status survives when bg is
+// stripped). Pastel fills with dark text keep contrast high without the
+// harshness of saturated bg blocks.
+const AGENT_CHIP: Record<
+	"done" | "active" | "pending" | "failed",
+	{ bg: string; fg: string; mark: string }
+> = {
+	done: { bg: "\x1b[48;5;151m", fg: "\x1b[1;38;5;22m", mark: " ✓" }, // pastel green = stamped
+	active: { bg: "\x1b[48;5;254m", fg: "\x1b[1;38;5;238m", mark: " ▸" }, // near-white = being awaited
+	pending: { bg: "\x1b[48;5;248m", fg: "\x1b[38;5;240m", mark: "" }, // soft grey = queued
+	failed: { bg: "\x1b[48;5;217m", fg: "\x1b[1;38;5;124m", mark: " ✗" }, // pastel red = failure signal
+}
 // Combining long stroke overlay — fakes a strikethrough per-character for
 // the no-color path (where ANSI SGR 9 is stripped). Color mode uses real
 // ANSI strikethrough (C.strike) instead; this keeps the "struck" semantic
@@ -125,6 +181,12 @@ const C = {
 	sealed: "\x1b[38;5;71m", // green
 	blocked: "\x1b[38;5;203m", // red
 	setup: "\x1b[38;5;245m", // grey (intent-level setup phases)
+	// second-line item "chip" (a bg box per unit/feedback). Set the bg
+	// once per chip and switch FG (not bg) per pip, resetting only at the
+	// chip's end — a per-pip C.reset would clear the bg mid-box.
+	chipBg: "\x1b[48;5;254m", // pastel near-white box fill
+	chipLabel: "\x1b[1;38;5;238m", // dark bold label on the light box
+	chipPending: "\x1b[38;5;250m", // faint empty pip on the light box
 } as const
 
 function phaseColor(kind: StatuslinePhaseKind, gated: boolean): string {
@@ -222,5 +284,57 @@ export function renderStatusline(
 	if (studio) groups.push(studio)
 	groups.push(where)
 	if (aggregate) groups.push(aggregate)
-	return groups.join(` ${delim} `)
+	const mainLine = groups.join(` ${delim} `)
+
+	// ── second line: per-item hat-progress "chips" for the live pool ──
+	// One chip per in-flight unit (execute) or open feedback (fix-loop):
+	// `↳ ▏ U-01 ▰▰▱▱▱ ▏ ▏ U-02 ▰▱▱▱▱ ▏` / `▏ FB-012 ▰▰▱ ▏`. Each `id`
+	// already carries its `U-`/`FB-` prefix (built in state.ts). Same pip
+	// language as the phase bar — hats before the current are done (white
+	// ▰), the current hat is phase-hued (▰), later hats pending (dim ▱) —
+	// so a chip fills left-to-right as the item walks its hats, and a
+	// fix-loop bounce visibly shrinks it.
+	//
+	// In COLOR mode each chip is a dark-grey background box: set the bg
+	// once, switch only the FG per pip, and reset at the chip's end (a
+	// per-pip reset would clear the box mid-way). NO_COLOR has no bg, so we
+	// fall back to plain `U-01 ▰▰▱▱▱` separated by double spaces.
+	// A unit/feedback chip: a solid pastel box whose pip bar colors each
+	// hat by its real status — green done, amber active, red rejected,
+	// faint pending. NO_COLOR drops the bg/color and renders any non-pending
+	// hat as a filled pip, pending as empty (`U-01 ▰▰▱▱▱`).
+	const barChip = (it: { id: string; segments: HatSegment[] }): string => {
+		if (!color) {
+			const bar = it.segments
+				.map((s) => (s === "pending" ? PIP_PENDING : PIP_DONE))
+				.join("")
+			return `${it.id} ${bar}`
+		}
+		const pips = it.segments
+			.map((s) => `${SEG_FG[s]}${s === "pending" ? PIP_PENDING : PIP_DONE}`)
+			.join("")
+		return `${C.chipBg} ${C.chipLabel}${it.id} ${pips} ${C.reset}`
+	}
+
+	// An agent chip: a solid pastel status box (no bar). The box color IS
+	// the status — pastel green stamped, near-white being-awaited, grey
+	// queued, pastel red failed. NO_COLOR keeps the status legible via the
+	// `mark` glyph appended to the role name.
+	const agentChip = (a: { id: string; status: "done" | "active" | "pending" | "failed" }): string => {
+		const st = AGENT_CHIP[a.status] ?? AGENT_CHIP.pending
+		if (!color) return `${a.id}${st.mark}`
+		return `${st.bg}${st.fg} ${a.id}${st.mark} ${C.reset}`
+	}
+
+	// Second line: dispatch-phase work bars OR await-phase agent chips
+	// (mutually exclusive). Neither → no second line.
+	const sep = color ? " " : "  "
+	let second = ""
+	if (state.itemBars && state.itemBars.length > 0) {
+		second = state.itemBars.map(barChip).join(sep)
+	} else if (state.agentChips && state.agentChips.length > 0) {
+		second = state.agentChips.map(agentChip).join(sep)
+	}
+	if (!second) return mainLine
+	return `${mainLine}\n${paint(C.dim, ITEM_LEADER)} ${second}`
 }

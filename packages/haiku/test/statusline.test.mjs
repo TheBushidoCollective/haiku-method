@@ -242,6 +242,82 @@ test("renderStatusline: non-fix-loop phase never renders a struck position", asy
 	assert.ok(!line.includes("\x1b[9m"), "non-fix-loop must not strike anything")
 })
 
+test("renderStatusline: itemBars emit a second line of per-item hat bars (NO_COLOR)", async () => {
+	const { renderStatusline } = await import(`${SRC}statusline/render.ts`)
+	const out = renderStatusline(
+		{
+			intent: "demo",
+			studio: "software",
+			stages: [{ name: "development", status: "active" }],
+			activeStage: "development",
+			phaseLabel: "execute",
+			phaseKind: "execute",
+			gated: false,
+			aggregate: "1/4 units",
+			phaseTrack: null,
+			itemBars: [
+				// just started: active first, rest pending
+				{ id: "U-03", segments: ["active", "pending", "pending", "pending", "pending"] },
+				// 2 done + active + 2 pending
+				{ id: "U-07", segments: ["done", "done", "active", "pending", "pending"] },
+			],
+		},
+		{ color: false },
+	)
+	const lines = out.split("\n")
+	assert.equal(lines.length, 2, `expected two lines; got: ${JSON.stringify(out)}`)
+	// Prefixed ids + bars. NO_COLOR collapses done/active to ▰, pending ▱.
+	assert.equal(lines[1], "↳ U-03 ▰▱▱▱▱  U-07 ▰▰▰▱▱")
+})
+
+test("renderStatusline: absent/empty itemBars emit no second line", async () => {
+	const { renderStatusline } = await import(`${SRC}statusline/render.ts`)
+	const base = {
+		intent: "demo",
+		studio: "",
+		stages: [{ name: "design", status: "active" }],
+		activeStage: "design",
+		phaseLabel: "execute",
+		phaseKind: "execute",
+		gated: false,
+		aggregate: "",
+		phaseTrack: null,
+	}
+	assert.ok(!renderStatusline(base, { color: false }).includes("\n"), "no field → one line")
+	assert.ok(
+		!renderStatusline({ ...base, itemBars: [] }, { color: false }).includes("\n"),
+		"empty array → one line",
+	)
+	assert.ok(
+		!renderStatusline({ ...base, itemBars: null }, { color: false }).includes("\n"),
+		"null → one line",
+	)
+})
+
+test("renderStatusline: itemBars color each hat by status (green/amber/red)", async () => {
+	const { renderStatusline } = await import(`${SRC}statusline/render.ts`)
+	const out = renderStatusline(
+		{
+			intent: "demo",
+			studio: "software",
+			stages: [{ name: "development", status: "active" }],
+			activeStage: "development",
+			phaseLabel: "execute",
+			phaseKind: "execute",
+			gated: false,
+			aggregate: "",
+			phaseTrack: null,
+			itemBars: [{ id: "U-01", segments: ["done", "rejected", "active"] }],
+		},
+		{ color: true },
+	)
+	const line2 = out.split("\n")[1]
+	assert.ok(out.includes("\n"), "color mode still emits the second line")
+	assert.ok(/\x1b\[38;5;71m▰/.test(line2), "done hat → green (71)")
+	assert.ok(/\x1b\[1;38;5;167m▰/.test(line2), "rejected hat → red (167)")
+	assert.ok(/\x1b\[1;38;5;172m▰/.test(line2), "active hat → amber (172)")
+})
+
 // ── state resolution (disk) ──────────────────────────────────────────
 
 function seedIntent(repoRoot, slug, stage, opts = {}) {
@@ -524,4 +600,339 @@ test("install with no prior statusLine, uninstall removes it cleanly", async () 
 		process.chdir(orig)
 		rmSync(repoRoot, { recursive: true, force: true })
 	}
+})
+
+// ── itemBars (second-line pool) state resolution ─────────────────────
+
+test("resolveStatuslineState: execute phase populates itemBars for in-flight units", async () => {
+	if (!HAS_GIT) return
+	const repoRoot = mkdtempSync(join(tmpdir(), "haiku-sl-bars-"))
+	const orig = process.cwd()
+	try {
+		const slug = "sl-bars"
+		const stage = "security"
+		const AT = "2026-05-20T00:00:00Z"
+		const ER = {
+			spec: { signed_at: AT, agent: "e" },
+			continuity: { signed_at: AT, agent: "e" },
+			"cross-stage-consistency": { signed_at: AT, agent: "e" },
+		}
+		const intentDir = join(repoRoot, ".haiku", "intents", slug)
+		const stageDir = join(intentDir, "stages", stage)
+		mkdirSync(join(stageDir, "units"), { recursive: true })
+		mkdirSync(join(stageDir, "feedback"), { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("body\n", {
+				title: "bars",
+				studio: "software",
+				mode: "autopilot",
+				stages: [stage],
+			}),
+		)
+		const kn = join(repoRoot, ".haiku", "knowledge")
+		mkdirSync(kn, { recursive: true })
+		writeFileSync(join(kn, "THREAT-MODEL.md"), "x\n")
+		writeFileSync(join(kn, "VULN-REPORT.md"), "x\n")
+		writeFileSync(
+			join(stageDir, "elaboration.md"),
+			matter.stringify("e\n", { verified_at: AT, decompose_verified_at: AT }),
+		)
+		const hats = matter(
+			readFileSync(
+				join(REPO_ROOT, "plugin", "studios", "software", "stages", stage, "STAGE.md"),
+				"utf8",
+			),
+		).data.hats
+		if (!Array.isArray(hats) || hats.length < 2) return
+		// done (all hats advanced) → excluded
+		writeFileSync(
+			join(stageDir, "units", "unit-01-done.md"),
+			matter.stringify("d\n", {
+				title: "unit-01-done",
+				started_at: AT,
+				inputs: [],
+				iterations: hats.map((h) => ({ hat: h, started_at: AT, completed_at: AT, result: "advance" })),
+				reviews: ER,
+				approvals: {},
+			}),
+		)
+		// started, no completed iteration yet → first hat active (real model:
+		// iterations are written only on completion, no open entry on disk).
+		writeFileSync(
+			join(stageDir, "units", "unit-02-a.md"),
+			matter.stringify("a\n", {
+				title: "unit-02-a",
+				started_at: AT,
+				inputs: [],
+				iterations: [],
+				reviews: ER,
+				approvals: {},
+			}),
+		)
+		// hats[0] advanced → hats[1] is the active (next) hat.
+		writeFileSync(
+			join(stageDir, "units", "unit-03-b.md"),
+			matter.stringify("b\n", {
+				title: "unit-03-b",
+				started_at: AT,
+				inputs: [],
+				iterations: [
+					{ hat: hats[0], started_at: AT, completed_at: AT, result: "advance" },
+				],
+				reviews: ER,
+				approvals: {},
+			}),
+		)
+		// not started → excluded
+		writeFileSync(
+			join(stageDir, "units", "unit-04-c.md"),
+			matter.stringify("c\n", {
+				title: "unit-04-c",
+				started_at: null,
+				inputs: [],
+				iterations: [],
+				reviews: ER,
+				approvals: {},
+			}),
+		)
+		process.chdir(repoRoot)
+		const { resolveStatuslineState } = await import(`${SRC}statusline/state.ts`)
+		const state = resolveStatuslineState()
+		assert.ok(state, "expected a state")
+		assert.equal(state.phaseKind, "execute", `expected execute; got ${state.phaseKind}`)
+		assert.ok(Array.isArray(state.itemBars), "itemBars must be populated in execute")
+		// Only the two in-flight units, in numeric order. done + pending excluded.
+		const pend = (n) => Array(n).fill("pending")
+		assert.deepEqual(
+			state.itemBars,
+			[
+				// just started → first hat active
+				{ id: "U-02", segments: ["active", ...pend(hats.length - 1)] },
+				// hats[0] advanced → hats[1] active
+				{ id: "U-03", segments: ["done", "active", ...pend(hats.length - 2)] },
+			],
+			`got: ${JSON.stringify(state.itemBars)}`,
+		)
+	} finally {
+		process.chdir(orig)
+		rmSync(repoRoot, { recursive: true, force: true })
+	}
+})
+
+// ── agent chips (await-phase second line) ────────────────────────────
+
+test("renderStatusline: agentChips render status marks on the second line (NO_COLOR)", async () => {
+	const { renderStatusline } = await import(`${SRC}statusline/render.ts`)
+	const out = renderStatusline(
+		{
+			intent: "demo",
+			studio: "software",
+			stages: [{ name: "design", status: "active" }],
+			activeStage: "design",
+			phaseLabel: "continuity review",
+			phaseKind: "review",
+			gated: false,
+			aggregate: "7 units",
+			phaseTrack: { index: 1, total: 4 },
+			agentChips: [
+				{ id: "spec", status: "done" },
+				{ id: "continuity", status: "active" },
+				{ id: "cross-stage", status: "pending" },
+			],
+		},
+		{ color: false },
+	)
+	const lines = out.split("\n")
+	assert.equal(lines.length, 2)
+	// done → ✓, active → ▸, pending → no mark.
+	assert.equal(lines[1], "↳ spec ✓  continuity ▸  cross-stage")
+})
+
+test("renderStatusline: agentChips color the bubble bg by status", async () => {
+	const { renderStatusline } = await import(`${SRC}statusline/render.ts`)
+	const out = renderStatusline(
+		{
+			intent: "demo",
+			studio: "software",
+			stages: [{ name: "design", status: "active" }],
+			activeStage: "design",
+			phaseLabel: "spec review",
+			phaseKind: "review",
+			gated: false,
+			aggregate: "",
+			phaseTrack: null,
+			agentChips: [
+				{ id: "spec", status: "done" },
+				{ id: "continuity", status: "active" },
+				{ id: "cross-stage", status: "pending" },
+			],
+		},
+		{ color: true },
+	)
+	const line2 = out.split("\n")[1]
+	assert.ok(/\x1b\[48;5;151m/.test(line2), "stamped role → pastel green bg (151)")
+	assert.ok(/\x1b\[48;5;254m/.test(line2), "awaited role → near-white bg (254)")
+	assert.ok(/\x1b\[48;5;248m/.test(line2), "queued role → soft grey bg (248)")
+})
+
+test("renderStatusline: itemBars take precedence over agentChips when both present", async () => {
+	const { renderStatusline } = await import(`${SRC}statusline/render.ts`)
+	const out = renderStatusline(
+		{
+			intent: "demo",
+			studio: "software",
+			stages: [{ name: "design", status: "active" }],
+			activeStage: "design",
+			phaseLabel: "execute",
+			phaseKind: "execute",
+			gated: false,
+			aggregate: "",
+			phaseTrack: null,
+			itemBars: [{ id: "U-01", segments: ["active", "pending", "pending"] }],
+			agentChips: [{ id: "spec", status: "done" }],
+		},
+		{ color: false },
+	)
+	const line2 = out.split("\n")[1]
+	assert.ok(/U-01/.test(line2) && /▰/.test(line2), "bars win")
+	assert.ok(!/spec/.test(line2), "agent chips suppressed when bars present")
+})
+
+// ── sealed intent renders all-done (no active/sealed contradiction) ───
+
+test("resolveStatuslineState: sealed intent on its branch renders all stages done", async () => {
+	if (!HAS_GIT) return
+	const repoRoot = mkdtempSync(join(tmpdir(), "haiku-sl-sealed2-"))
+	const orig = process.cwd()
+	try {
+		const slug = "sealed-done"
+		const stage = "security"
+		const intentDir = join(repoRoot, ".haiku", "intents", slug)
+		const stageDir = join(intentDir, "stages", stage)
+		mkdirSync(join(stageDir, "units"), { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("body\n", {
+				title: "sealed",
+				studio: "software",
+				mode: "continuous",
+				stages: ["inception", "design", stage],
+				sealed_at: "2026-05-20T00:00:00Z",
+			}),
+		)
+		execFileSync("git", ["init", "-q", "-b", "main", repoRoot], { stdio: "ignore" })
+		execFileSync("git", ["config", "user.email", "t@t"], { cwd: repoRoot })
+		execFileSync("git", ["config", "user.name", "t"], { cwd: repoRoot })
+		execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: repoRoot })
+		execFileSync("git", ["add", "-A"], { cwd: repoRoot, stdio: "ignore" })
+		execFileSync("git", ["commit", "-q", "-m", "seed"], { cwd: repoRoot, stdio: "ignore" })
+		// On the intent's branch → pickActiveIntent's branch match returns it
+		// despite sealed_at (the case that produced the contradiction).
+		execFileSync("git", ["checkout", "-q", "-b", `haiku/${slug}/main`], {
+			cwd: repoRoot,
+			stdio: "ignore",
+		})
+		process.chdir(repoRoot)
+		const { resolveStatuslineState } = await import(`${SRC}statusline/state.ts`)
+		const state = resolveStatuslineState()
+		assert.ok(state, "sealed intent on its branch should still render a line")
+		assert.equal(state.phaseKind, "sealed")
+		assert.equal(state.activeStage, "", "no active stage when sealed")
+		assert.ok(
+			state.stages.every((s) => s.status === "done"),
+			`every stage must be done when sealed; got: ${JSON.stringify(state.stages)}`,
+		)
+		assert.equal(state.itemBars ?? null, null)
+		assert.equal(state.agentChips ?? null, null)
+	} finally {
+		process.chdir(orig)
+		rmSync(repoRoot, { recursive: true, force: true })
+	}
+})
+
+// ── isPastAllStages: intent-completion vs stage-scoped actions ────────
+
+test("isPastAllStages: intent-completion actions are past all stages, stage-scoped are not", async () => {
+	const { isPastAllStages } = await import(`${SRC}statusline/state.ts`)
+	// Intent-scope completion kinds (no stage) → true.
+	assert.equal(isPastAllStages({ kind: "intent_review", role: "continuity" }), true)
+	assert.equal(isPastAllStages({ kind: "record_reflection" }), true)
+	assert.equal(isPastAllStages({ kind: "seal_intent" }), true)
+	assert.equal(isPastAllStages({ kind: "sealed" }), true)
+	// Stage-scoped actions → false (they carry a stage; the active dot is real).
+	assert.equal(
+		isPastAllStages({ kind: "dispatch_review", role: "continuity", stage: "development" }),
+		false,
+		"a STAGE's continuity review is not past all stages",
+	)
+	assert.equal(isPastAllStages({ kind: "start_unit_hat", stage: "design", units: [] }), false)
+	assert.equal(isPastAllStages({ kind: "dispatch_approval", role: "spec", stage: "design" }), false)
+	// Fix-loop is deliberately NOT treated as completion even at intent scope
+	// (a mid-intent intent-scope finding can be open while stages run).
+	assert.equal(
+		isPastAllStages({ kind: "start_feedback_hat", dispatches: [{ feedback_id: "FB-001", stage: "", hat: "x", terminal: true }] }),
+		false,
+	)
+	assert.equal(isPastAllStages(null), false)
+})
+
+// ── hatSegments: per-hat status from iterations ──────────────────────
+
+test("hatSegments: derives done/active/rejected/pending from iteration history", async () => {
+	const { hatSegments } = await import(`${SRC}statusline/state.ts`)
+	const hats = ["planner", "builder", "reviewer", "verifier"]
+	// Nothing run yet → first hat active.
+	assert.deepEqual(hatSegments([], hats), ["active", "pending", "pending", "pending"])
+	// planner advanced → builder is the active (next) hat.
+	assert.deepEqual(
+		hatSegments([{ hat: "planner", result: "advance" }], hats),
+		["done", "active", "pending", "pending"],
+	)
+	// builder just rejected → builder stays red (retrying), nothing else active.
+	assert.deepEqual(
+		hatSegments(
+			[
+				{ hat: "planner", result: "advance" },
+				{ hat: "builder", result: "reject" },
+			],
+			hats,
+		),
+		["done", "rejected", "pending", "pending"],
+	)
+	// builder rejected then re-advanced → red clears to green, reviewer active.
+	assert.deepEqual(
+		hatSegments(
+			[
+				{ hat: "planner", result: "advance" },
+				{ hat: "builder", result: "reject" },
+				{ hat: "builder", result: "advance" },
+			],
+			hats,
+		),
+		["done", "done", "active", "pending"],
+	)
+	// last hat in progress (prior all advanced) → verifier active.
+	assert.deepEqual(
+		hatSegments(
+			[
+				{ hat: "planner", result: "advance" },
+				{ hat: "builder", result: "advance" },
+				{ hat: "reviewer", result: "advance" },
+			],
+			hats,
+		),
+		["done", "done", "done", "active"],
+	)
+	// defensive: an open (null-result) iteration marks its hat active.
+	assert.deepEqual(
+		hatSegments(
+			[
+				{ hat: "planner", result: "advance" },
+				{ hat: "builder", result: null },
+			],
+			hats,
+		),
+		["done", "active", "pending", "pending"],
+	)
 })

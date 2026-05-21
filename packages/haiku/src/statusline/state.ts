@@ -12,7 +12,12 @@
 import { execFileSync } from "node:child_process"
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
-import { resolveIntentStages, resolveStageHats } from "../orchestrator/studio.js"
+import {
+	resolveIntentStages,
+	resolveStageFixHats,
+	resolveStageHats,
+	resolveStudioFixHats,
+} from "../orchestrator/studio.js"
 import {
 	type CursorAction,
 	derivePosition,
@@ -20,9 +25,16 @@ import {
 	isStageComplete,
 } from "../orchestrator/workflow/cursor.js"
 import { deriveProgressTrack } from "../orchestrator/workflow/progress-track.js"
-import { findHaikuRoot, intentDir, parseFrontmatter } from "../state-tools.js"
+import {
+	findHaikuRoot,
+	intentDir,
+	MAX_CONCURRENT_SUBAGENTS,
+	parseFrontmatter,
+} from "../state-tools.js"
 import type {
+	HatSegment,
 	StatuslinePhaseKind,
+	StatuslineStageDot,
 	StatuslineState,
 } from "./render.js"
 
@@ -118,6 +130,31 @@ function actionStage(action: CursorAction | null): string {
 		if (typeof s === "string" && s.length > 0) return s
 	}
 	return ""
+}
+
+/** Intent-completion cursor kinds — the actions the engine emits ONLY
+ *  after every stage has merged. A fix-loop is deliberately excluded: an
+ *  intent-scope finding can be filed mid-intent (e.g. from the SPA) while
+ *  stages are still active, so it does NOT imply completion. */
+const INTENT_COMPLETION_KINDS = new Set([
+	"intent_review",
+	"record_reflection",
+	"seal_intent",
+	"sealed",
+])
+
+/** True when the cursor action is intent-scope AND signals the intent is
+ *  past every stage. The status line renders an all-done pipeline for
+ *  these instead of falling back to `findCurrentStage`, which on the
+ *  merged main branch mis-reports the first stage as active (the
+ *  "●○○○○○ inception … continuity review" contradiction, 2026-05-20).
+ *  Exported for unit testing the decision in isolation. */
+export function isPastAllStages(action: CursorAction | null): boolean {
+	return (
+		!!action &&
+		actionStage(action) === "" &&
+		INTENT_COMPLETION_KINDS.has(action.kind)
+	)
 }
 
 /** Compact a review/approval role for the one-line phase word.
@@ -232,6 +269,148 @@ function feedbackProgress(
 	return { closed, total }
 }
 
+type ItemBar = { id: string; segments: HatSegment[] }
+type AgentChip = {
+	id: string
+	status: "done" | "active" | "pending" | "failed"
+}
+
+/** Numeric tag of a unit/feedback file: `unit-03-foo.md` → "03",
+ *  `012-bar.md` → "012". Empty when there's no leading number. */
+function fileNumber(name: string): string {
+	const m = name.match(/^(?:unit-)?(\d+)/)
+	return m?.[1] ?? ""
+}
+
+/** Short agent-chip label for a progress-track step key:
+ *  `review:spec` → "spec", `intent-review:cross-stage-consistency` →
+ *  "cross-stage", `intent-quality-gates` / `approve:quality_gates` →
+ *  "quality", any `*:user` gate → "gate". */
+function chipRole(key: string): string {
+	const role = key.includes(":") ? key.slice(key.indexOf(":") + 1) : key
+	if (role === "cross-stage-consistency") return "cross-stage"
+	if (key === "intent-quality-gates" || role === "quality_gates") return "quality"
+	if (role === "user") return "gate"
+	return role
+}
+
+const ADVANCE_RESULTS = new Set(["advance", "advanced", "closed"])
+const REJECT_RESULTS = new Set(["reject", "rejected"])
+
+/** Per-hat status segments for a unit/feedback bar, over a hat sequence.
+ *  Iterations are only written when a hat COMPLETES (advance/reject) —
+ *  there is no open/in-progress entry on disk — so the ACTIVE hat is the
+ *  one after the last completed iteration, not the last iteration itself.
+ *
+ *  Each hat's base status comes from its MOST RECENT iteration result:
+ *  advance/advanced/closed → done (green), reject/rejected → rejected
+ *  (red, stays red while it retries), none → pending. Then the single
+ *  active hat (yellow) is derived: after an advance, the next hat in the
+ *  sequence is up; after a reject, the rejecting hat keeps its red (the
+ *  retry isn't a separate active slot); before any iteration, the first
+ *  hat is up. (If an open `result: null` entry ever appears, that hat is
+ *  the active one — handled defensively.) */
+export function hatSegments(
+	iters: Array<Record<string, unknown>>,
+	hats: string[],
+): HatSegment[] {
+	const recent = new Map<string, unknown>()
+	for (const it of iters) {
+		if (typeof it.hat === "string") recent.set(it.hat, it.result)
+	}
+	const segs: HatSegment[] = hats.map((h) => {
+		const r = recent.get(h)
+		if (r === undefined) return "pending"
+		if (typeof r === "string" && ADVANCE_RESULTS.has(r)) return "done"
+		if (typeof r === "string" && REJECT_RESULTS.has(r)) return "rejected"
+		return "pending"
+	})
+	if (hats.length === 0) return segs
+	if (iters.length === 0) {
+		segs[0] = "active"
+		return segs
+	}
+	const last = iters[iters.length - 1]
+	const lastIdx =
+		typeof last.hat === "string" ? hats.indexOf(last.hat) : -1
+	if (last.result === null || last.result === undefined) {
+		// Defensive: an open iteration (engine writes one in some flows) —
+		// that hat is the active one.
+		if (lastIdx >= 0) segs[lastIdx] = "active"
+	} else if (typeof last.result === "string" && ADVANCE_RESULTS.has(last.result)) {
+		const next = lastIdx + 1
+		if (next >= 0 && next < hats.length && segs[next] === "pending") {
+			segs[next] = "active"
+		}
+	}
+	// reject: the rejecting hat stays `rejected` (red); no separate active.
+	return segs
+}
+
+/** One progress bar per IN-FLIGHT unit on a stage (started, not yet
+ *  through its last hat). `index` is the current hat's position in the
+ *  stage's hat sequence; `total` the sequence length. Completed and
+ *  not-yet-started units are excluded — the second line shows the LIVE
+ *  pool, not the whole roster. */
+function unitBars(
+	studio: string,
+	stage: string,
+	iDir: string,
+): ItemBar[] {
+	const unitsDir = join(iDir, "stages", stage, "units")
+	if (!existsSync(unitsDir)) return []
+	const hats = resolveStageHats(studio, stage)
+	if (hats.length === 0) return []
+	const lastHat = hats[hats.length - 1]
+	const out: ItemBar[] = []
+	for (const f of readdirSync(unitsDir)
+		.filter((n) => n.endsWith(".md"))
+		.sort()) {
+		const fm = readFm(join(unitsDir, f))
+		if (!fm) continue
+		const started =
+			typeof fm.started_at === "string" && (fm.started_at as string).length > 0
+		if (!started) continue
+		const iters = Array.isArray(fm.iterations)
+			? (fm.iterations as Array<Record<string, unknown>>)
+			: []
+		const last = iters[iters.length - 1]
+		const complete =
+			!!last && last.result === "advance" && last.hat === lastHat
+		if (complete) continue
+		out.push({ id: `U-${fileNumber(f)}`, segments: hatSegments(iters, hats) })
+	}
+	return out
+}
+
+/** One progress bar per OPEN feedback in a directory, walked over the
+ *  given fix-hat sequence. Closed/rejected FBs are excluded. A
+ *  zero-iteration (queued) FB reads as an empty bar; a dispatched one
+ *  fills to its current fix-hat. */
+function feedbackBars(dir: string, fixHats: string[]): ItemBar[] {
+	if (!existsSync(dir) || fixHats.length === 0) return []
+	const out: ItemBar[] = []
+	for (const f of readdirSync(dir)
+		.filter((n) => n.endsWith(".md"))
+		.sort()) {
+		const fm = readFm(join(dir, f))
+		if (!fm) continue
+		const closed =
+			(typeof fm.closed_at === "string" && (fm.closed_at as string).length > 0) ||
+			fm.status === "closed"
+		const rejected =
+			(typeof fm.rejected_at === "string" &&
+				(fm.rejected_at as string).length > 0) ||
+			fm.status === "rejected"
+		if (closed || rejected) continue
+		const iters = Array.isArray(fm.iterations)
+			? (fm.iterations as Array<Record<string, unknown>>)
+			: []
+		out.push({ id: `FB-${fileNumber(f)}`, segments: hatSegments(iters, fixHats) })
+	}
+	return out
+}
+
 /** Resolve the current project's status-line state, or null when there
  *  is nothing haiku-shaped to show (caller falls back to the OG line). */
 export function resolveStatuslineState(): StatuslineState | null {
@@ -285,6 +464,35 @@ export function resolveStatuslineState(): StatuslineState | null {
 		return null
 	}
 
+	// Sealed intent. We only get here for one on its OWN branch —
+	// `pickActiveIntent`'s `haiku/<slug>/…` branch match bypasses the
+	// sealed filter so the line keeps showing while you're parked on the
+	// finished work. A sealed intent is complete by definition, so render
+	// an all-done pipeline + the "sealed" word directly. Do NOT run it
+	// through the `findCurrentStage`/`isStageComplete` derivation below:
+	// on the merged main branch those mis-report the FIRST stage as active
+	// and the rest pending, which is what produced the contradiction
+	// reported 2026-05-20 ("⬣⬡⬡⬡⬡⬡ inception … sealed" on a finished
+	// intent — active stage AND sealed at once).
+	if (
+		typeof intentFm.sealed_at === "string" &&
+		(intentFm.sealed_at as string).length > 0
+	) {
+		return {
+			intent: slug,
+			studio,
+			stages: stageList.map((name) => ({ name, status: "done" as const })),
+			activeStage: "",
+			phaseLabel: "sealed",
+			phaseKind: "sealed",
+			gated: false,
+			aggregate: "",
+			phaseTrack: null,
+			itemBars: null,
+			agentChips: null,
+		}
+	}
+
 	// The cursor's action is the AUTHORITATIVE position — it considers
 	// Track A (per-stage units), Track B (open feedback, which can rewind
 	// to an earlier stage), Track C (drift), and the intent-completion
@@ -310,29 +518,45 @@ export function resolveStatuslineState(): StatuslineState | null {
 
 	const { kind, label, gated } = describeAction(action)
 
-	// The stage the action targets (its own `stage`, or the first
-	// dispatch's stage for a feedback batch). Empty for intent-scope
-	// actions (intent_review, intent-scope fix-loop, seal). Fall back to
-	// the Track-A current stage for actions that don't carry one.
-	const actStage =
-		actionStage(action) || findCurrentStage(slug, studio, iDir) || ""
+	// Is this an INTENT-SCOPE action — one the cursor only emits AFTER every
+	// stage has merged (intent-completion review, reflection, seal) or an
+	// intent-scope fix-loop on an intent-level finding? Those carry no
+	// stage. They mean "past all stages", so the pipeline is fully done.
+	// We must NOT fall back to `findCurrentStage` for them: on the merged
+	// main branch it reads the FIRST stage as still-incomplete and reports
+	// it active, producing the contradiction reported 2026-05-20 — an
+	// intent in intent-completion `continuity review` rendering
+	// `●○○○○○ inception` instead of an all-done pipeline.
+	const pastAllStages = isPastAllStages(action)
 
-	// Build the pipeline: done = isStageComplete, active = the action's
-	// stage, pending = the rest. When the action is intent-scope (no
-	// stage), there's no active dot — every stage shows its completion
-	// state, and the phase word carries what's happening (fix-loop /
-	// intent review / sealed).
-	let sawActive = false
-	const stages = stageList.map((name) => {
-		if (actStage && name === actStage) {
-			sawActive = true
-			return { name, status: "active" as const }
-		}
-		if (!sawActive && isStageComplete(iDir, studio, name, mode)) {
-			return { name, status: "done" as const }
-		}
-		return { name, status: "pending" as const }
-	})
+	// The stage the action targets (its own `stage`, or the first
+	// dispatch's stage for a feedback batch). Fall back to the Track-A
+	// current stage only for stage-scoped actions that don't carry one.
+	const actStage = pastAllStages
+		? ""
+		: actionStage(action) || findCurrentStage(slug, studio, iDir) || ""
+
+	// Build the pipeline. Intent-scope (past all stages) → every stage
+	// done, no active dot; the phase word carries what's happening (intent
+	// review / reflection / intent-scope fix-loop). Otherwise: done =
+	// isStageComplete up to the active stage, active = the action's stage,
+	// pending = the rest.
+	let stages: StatuslineStageDot[]
+	if (pastAllStages) {
+		stages = stageList.map((name) => ({ name, status: "done" as const }))
+	} else {
+		let sawActive = false
+		stages = stageList.map((name) => {
+			if (actStage && name === actStage) {
+				sawActive = true
+				return { name, status: "active" as const }
+			}
+			if (!sawActive && isStageComplete(iDir, studio, name, mode)) {
+				return { name, status: "done" as const }
+			}
+			return { name, status: "pending" as const }
+		})
+	}
 	const activeStage = actStage
 
 	// Aggregate counter, phase-appropriate.
@@ -388,8 +612,9 @@ export function resolveStatuslineState(): StatuslineState | null {
 	// is parked at (the first not-done step). Surface its label so the
 	// renderer can show it struck-through, left of "fix-loop".
 	let actualPhase = ""
+	let track: ReturnType<typeof deriveProgressTrack> | null = null
 	try {
-		const track = deriveProgressTrack({
+		track = deriveProgressTrack({
 			slug,
 			studio,
 			intentDir: iDir,
@@ -403,6 +628,61 @@ export function resolveStatuslineState(): StatuslineState | null {
 		}
 	} catch {
 		phaseTrack = null
+		track = null
+	}
+
+	// Per-item pool bars (second line). During execute → in-flight units;
+	// during fix-loop → open feedback (stage-scope under the stage's
+	// fix-hats, plus any intent-scope FBs under the studio's). Capped at
+	// the concurrency limit so the line tracks the real pool and can't
+	// overflow. Null for every other phase (and an idle pool) → no line 2.
+	let itemBars: ItemBar[] | null = null
+	if (kind === "execute" && activeStage) {
+		const bars = unitBars(studio, activeStage, iDir)
+		if (bars.length > 0) itemBars = bars.slice(0, MAX_CONCURRENT_SUBAGENTS)
+	} else if (kind === "fixloop") {
+		const bars: ItemBar[] = []
+		if (activeStage) {
+			bars.push(
+				...feedbackBars(
+					join(iDir, "stages", activeStage, "feedback"),
+					resolveStageFixHats(studio, activeStage),
+				),
+			)
+		}
+		bars.push(
+			...feedbackBars(join(iDir, "feedback"), resolveStudioFixHats(studio)),
+		)
+		if (bars.length > 0) itemBars = bars.slice(0, MAX_CONCURRENT_SUBAGENTS)
+	}
+
+	// Agent chips (second line) for the await phases — the known review /
+	// approval roles we're waiting on a stamp from. Reuse the progress
+	// track (single source of truth with the cursor) and surface every
+	// role in the SAME bucket as the active step: stamped → green,
+	// currently-awaited → light, queued → grey. (No `failed`/red is
+	// emitted: the engine has no per-role failure stamp — a failed review
+	// files feedback and flips to the fix-loop, which the FB bars show.)
+	let agentChips: AgentChip[] | null = null
+	if (track && (kind === "review" || kind === "approve" || kind === "gate")) {
+		const activeKey = track.steps[track.index]?.key ?? ""
+		let inBucket: ((k: string) => boolean) | null = null
+		if (activeKey.startsWith("review:") || activeKey.startsWith("intent-review:")) {
+			inBucket = (k) =>
+				k.startsWith("review:") || k.startsWith("intent-review:")
+		} else if (
+			activeKey.startsWith("approve:") ||
+			activeKey === "intent-quality-gates"
+		) {
+			inBucket = (k) =>
+				k.startsWith("approve:") || k === "intent-quality-gates"
+		}
+		if (inBucket) {
+			const chips = track.steps
+				.filter((s) => inBucket(s.key))
+				.map((s) => ({ id: chipRole(s.key), status: s.status }))
+			if (chips.length > 0) agentChips = chips
+		}
 	}
 
 	return {
@@ -416,5 +696,7 @@ export function resolveStatuslineState(): StatuslineState | null {
 		aggregate,
 		phaseTrack,
 		actualPhase,
+		itemBars,
+		agentChips,
 	}
 }

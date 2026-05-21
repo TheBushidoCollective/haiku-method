@@ -114,8 +114,10 @@ test("dispatch_review engine-bodies render PRE-execute prose (spec checks the SP
 	const { readFileSync } = await import("node:fs")
 	const subagent = readFileSync(promptFileMatch[1], "utf8")
 	assert.ok(
-		/no code exists yet|MUST NOT.*evaluate/i.test(subagent),
-		`pre-execute mandate must warn against evaluating code (none exists yet). subagent body: ${subagent.slice(0, 800)}`,
+		/no code exists yet|no code has landed|nothing is built on disk|MUST NOT.*evaluate/i.test(
+			subagent,
+		),
+		`pre-execute mandate must signal there's no code yet (audit specs, don't evaluate work). subagent body: ${subagent.slice(0, 800)}`,
 	)
 })
 

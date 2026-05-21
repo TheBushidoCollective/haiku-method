@@ -1097,21 +1097,28 @@ function OutputHtmlCard({
 				className="group flex flex-col overflow-hidden rounded-lg border border-stone-200 text-left transition hover:border-teal-300 hover:shadow-sm dark:border-stone-700 dark:hover:border-teal-700"
 			>
 				<div className="relative aspect-[4/3] w-full overflow-hidden bg-white dark:bg-stone-900">
-					{html ? (
-						<div
-							className="absolute inset-0 h-[300%] w-[300%] origin-top-left"
-							style={{ transform: "scale(0.3333)", pointerEvents: "none" }}
-						>
-							<RenderedHtmlFrame
-								html={html}
-								baseDir={baseDir}
-								provider={provider}
-								title={fileNameOf(path)}
-								className="h-full w-full border-0"
-							/>
-						</div>
-					) : (
-						<div className="flex h-full items-center justify-center">
+					{/* The scaled frame mounts once (not swapped in from a
+					    spinner) — an iframe whose parent is reconciled into a
+					    scale() transform via attribute update on a reused node
+					    fails to paint its srcDoc. Mirrors the stage thumbnail,
+					    which renders the frame synchronously. The spinner
+					    overlays while the source loads; html="" keeps the iframe
+					    blank until then, and RenderedHtmlFrame swaps in the
+					    resolved doc on the existing element. */}
+					<div
+						className="absolute inset-0 h-[300%] w-[300%] origin-top-left"
+						style={{ transform: "scale(0.3333)", pointerEvents: "none" }}
+					>
+						<RenderedHtmlFrame
+							html={html ?? ""}
+							baseDir={baseDir}
+							provider={provider}
+							title={fileNameOf(path)}
+							className="h-full w-full border-0"
+						/>
+					</div>
+					{html === null && (
+						<div className="absolute inset-0 flex items-center justify-center">
 							<div className="h-5 w-5 animate-spin rounded-full border-2 border-stone-300 border-t-teal-500" />
 						</div>
 					)}

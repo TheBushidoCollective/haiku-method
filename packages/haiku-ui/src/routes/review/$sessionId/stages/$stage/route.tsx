@@ -70,14 +70,22 @@ function StageLayout(): React.ReactElement {
 	const gateBadges = gateModes.map(gateBadgeCopy)
 	const isAdHoc = session.ad_hoc === true
 
-	// Granular phase track. The cursor derives the milestone list for the
-	// engine's CURRENT stage only, so it's meaningful when the banner is
-	// rendering that stage; for a stage the user is just browsing it's
-	// stale, so we fall back to the coarse strip there.
+	// Granular phase track. The cursor derives the LIVE milestone list
+	// (with active marker + progress index) for the engine's CURRENT
+	// stage; the session payload additionally ships a per-stage track
+	// (`stage_milestones`) so a COMPLETED stage renders the same
+	// fine-grained dot stepper instead of falling back to the coarse
+	// four-checkmark strip. On a completed stage every pip is forced done
+	// by the stage status, so its stale per-step flags don't matter. A
+	// still-pending stage keeps the coarse strip (its milestone flags
+	// would read as "not started," not "done").
 	const isCurrentStage = stage === activeStage
+	const isCompletedStage = stageStatus === "completed"
 	const milestones = isCurrentStage
 		? (session.current_state?.milestones ?? null)
-		: null
+		: isCompletedStage
+			? (session.stage_milestones?.[stage] ?? null)
+			: null
 	const progressIndex = isCurrentStage
 		? session.current_state?.progress_index
 		: undefined

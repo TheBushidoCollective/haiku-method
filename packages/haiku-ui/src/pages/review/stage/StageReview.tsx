@@ -2273,9 +2273,7 @@ function resolveStageSummary(
 	session: ReviewPageSessionData,
 	stageName: string,
 ): string | null {
-	const summaries = (
-		session as unknown as { stage_summaries?: Record<string, string> }
-	).stage_summaries
+	const summaries = session.stage_summaries
 	if (summaries && typeof summaries[stageName] === "string") {
 		return summaries[stageName]
 	}

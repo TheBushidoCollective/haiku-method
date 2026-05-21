@@ -12,7 +12,10 @@ import type { FastifyReply } from "fastify"
 import type { ApproveAction, IntentCurrentState } from "haiku-api"
 import { getCurrentState } from "../current-state.js"
 import { discoverReviewUrl } from "../discover-review-url.js"
-import { deriveProgressTrack } from "../orchestrator/workflow/progress-track.js"
+import {
+	deriveProgressTrack,
+	deriveStageMilestones,
+} from "../orchestrator/workflow/progress-track.js"
 import {
 	resolveIntentStages,
 	resolveStudioStages,
@@ -23,7 +26,7 @@ import {
 } from "../orchestrator/workflow/drift-sweep.js"
 import { getSession, type ReviewSession } from "../sessions.js"
 import { intentDir, parseFrontmatter } from "../state-tools.js"
-import { readStudioReviewAgentPaths } from "../studio-reader.js"
+import { readStageDef, readStudioReviewAgentPaths } from "../studio-reader.js"
 
 function titleCase(s: string): string {
 	return s
@@ -339,6 +342,61 @@ export function respondSessionApi(
 					}
 				} catch {
 					/* leave milestones unset — SPA falls back to coarse phase */
+				}
+			}
+		}
+		// Per-stage summaries + granular milestone tracks for EVERY stage
+		// (not just the engine-active one) so the SPA's Overview tab shows
+		// the studio-definition summary and the SAME fine-grained dot
+		// stepper on completed/upcoming stages — not a blank summary and a
+		// different (coarse) stepper. The summary is the stage's STAGE.md
+		// `description` frontmatter ("from studio definition"); the
+		// milestone LIST is studio-config driven so it's correct for any
+		// stage even when its merged unit FM is stale on disk (the SPA
+		// forces every pip done from the stage status on completed stages).
+		// Best-effort: a read failure must never drop the rest of the
+		// payload.
+		{
+			const slug = session.intent_slug
+			const fm = slug ? readIntentFrontmatterFresh(slug) : {}
+			const studio =
+				(current?.studio as string) || (fm.studio as string) || ""
+			if (slug && studio) {
+				try {
+					const mode = typeof fm?.mode === "string" ? fm.mode : ""
+					const intentStages = resolveIntentStages(fm, studio)
+					const stages =
+						intentStages.length > 0
+							? intentStages
+							: resolveStudioStages(studio)
+					const dir = intentDir(slug)
+					const milestonesByStage: Record<string, unknown> = {}
+					const summaries: Record<string, string> = {}
+					for (const st of stages) {
+						try {
+							const steps = deriveStageMilestones({
+								slug,
+								studio,
+								intentDir: dir,
+								stage: st,
+								mode,
+							})
+							if (steps.length > 0) milestonesByStage[st] = steps
+						} catch {
+							/* skip this stage's track — others still ship */
+						}
+						const def = readStageDef(studio, st)
+						const desc = def?.data?.description
+						if (typeof desc === "string" && desc.trim()) {
+							summaries[st] = desc.trim()
+						}
+					}
+					if (Object.keys(milestonesByStage).length > 0)
+						data.stage_milestones = milestonesByStage
+					if (Object.keys(summaries).length > 0)
+						data.stage_summaries = summaries
+				} catch {
+					/* leave both unset — SPA falls back to its defaults */
 				}
 			}
 		}

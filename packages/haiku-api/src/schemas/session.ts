@@ -305,6 +305,18 @@ export const ReviewSessionPayloadSchema = z
 		intent_mockups: z.array(LooseRecord).optional(),
 		unit_mockups: z.record(z.array(LooseRecord)).optional(),
 		stage_states: z.record(StageStateInfoSchema).optional(),
+		/** Per-stage studio-definition summary keyed by stage name — the
+		 *  stage's STAGE.md `description` frontmatter. Surfaced in the
+		 *  SPA's Overview tab as "Stage Summary (from studio definition)".
+		 *  Built server-side so the SPA never reads the plugin tree. */
+		stage_summaries: z.record(z.string()).optional(),
+		/** Per-stage granular milestone track keyed by stage name, so the
+		 *  SPA renders the SAME fine-grained dot stepper on every stage —
+		 *  completed and upcoming — not only the engine-active stage (whose
+		 *  live track rides on `current_state.milestones`). On a completed
+		 *  stage the SPA forces every pip done from the stage status, so the
+		 *  per-step flags here only need the correct ordered LIST. */
+		stage_milestones: z.record(z.array(ProgressMilestoneSchema)).optional(),
 		current_state: IntentCurrentStateSchema.optional(),
 		knowledge_files: z.array(KnowledgeFileSchema).optional(),
 		stage_artifacts: z.array(StageArtifactSchema).optional(),

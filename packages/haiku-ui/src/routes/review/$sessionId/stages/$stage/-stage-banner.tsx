@@ -72,7 +72,12 @@ export function PhaseStepper({
 			typeof progressIndex === "number"
 				? progressIndex
 				: milestones.findIndex((m) => m.status === "active")
-		const allDone = isStageComplete || ai < 0 || ai >= total
+		// `ai < 0` means no milestone is marked active. That's "all done"
+		// only when at least one milestone IS done — otherwise it's a track
+		// that hasn't started (every pip pending), which must NOT read as
+		// complete. A completed stage short-circuits to done regardless.
+		const anyDone = milestones.some((m) => m.status === "done")
+		const allDone = isStageComplete || ai >= total || (ai < 0 && anyDone)
 		const activeLabel = !allDone ? milestones[ai]?.label : undefined
 		const groupAriaLabel = allDone
 			? "All milestones complete"
@@ -115,7 +120,7 @@ export function PhaseStepper({
 									/>
 									<span
 										role="tooltip"
-										className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-50"
+										className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-50"
 									>
 										<span className="block text-xs font-bold text-white dark:text-stone-900 leading-tight capitalize">
 											{m.label}
@@ -133,7 +138,7 @@ export function PhaseStepper({
 										</span>
 										<span
 											aria-hidden="true"
-											className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+											className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
 										/>
 									</span>
 								</span>
@@ -251,7 +256,7 @@ export function PhaseStepper({
 								</span>
 								<span
 									role="tooltip"
-									className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-50"
+									className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-max max-w-xs rounded-lg bg-stone-900 dark:bg-stone-50 px-3 py-2 text-xs shadow-xl ring-1 ring-stone-700 dark:ring-stone-200 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 z-50"
 								>
 									<span className="block text-xs font-bold text-white dark:text-stone-900 leading-tight">
 										{title}
@@ -273,7 +278,7 @@ export function PhaseStepper({
 									{/* caret triangle anchoring the card to the bubble */}
 									<span
 										aria-hidden="true"
-										className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
+										className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-px w-2 h-2 rotate-45 bg-stone-900 dark:bg-stone-50 ring-1 ring-stone-700 dark:ring-stone-200"
 									/>
 								</span>
 							</span>

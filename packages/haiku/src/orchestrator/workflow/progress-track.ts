@@ -69,15 +69,19 @@ function itersOf(fm: Fm): Array<Record<string, unknown>> {
 		: []
 }
 
-/** Build the ordered stage milestone list with each marked done. */
+/** Build the ordered stage milestone list with each marked done. Pass
+ *  `groupAdversarial: false` to expand each parallel reviewer into its own
+ *  step (the status line's per-agent second line); the default groups them
+ *  into one `(signed/total)` pip for the compact bar + SPA surfaces. */
 function stageSteps(opts: {
 	slug: string
 	studio: string
 	stage: string
 	stageDir: string
 	mode: string
+	groupAdversarial?: boolean
 }): ProgressStep[] {
-	const { slug, studio, stage, stageDir, mode } = opts
+	const { slug, studio, stage, stageDir, mode, groupAdversarial = true } = opts
 	const unitPaths = listUnitPaths(stageDir)
 	const units = unitPaths
 		.map((p) => ({ name: unitName(p), fm: (readFm(p)?.data ?? {}) as Fm }))
@@ -129,6 +133,7 @@ function stageSteps(opts: {
 			stamped: allUnitsStamped("approvals", role),
 		})),
 		observationsDone,
+		groupAdversarial,
 	})
 }
 
@@ -210,4 +215,53 @@ export function deriveProgressTrack(opts: {
 		index: firstPending === -1 ? steps.length : firstPending,
 		total: steps.length,
 	}
+}
+
+/** The active scope's milestone steps with each parallel reviewer kept as
+ *  its OWN step (no `adversarial (n/m)` collapse). The status line's second
+ *  line maps these to one chip per reviewing/approving agent — the compact
+ *  pip bar (`deriveProgressTrack`) stays grouped. Returns the intent-tail
+ *  steps verbatim when every stage is done (that tail is already per-role),
+ *  so a single call covers both scopes. */
+export function deriveProgressRoleSteps(opts: {
+	slug: string
+	studio: string
+	intentDir: string
+	intentMode: string
+}): ProgressStep[] {
+	const { slug, studio, intentDir, intentMode } = opts
+	const activeStage = findCurrentStage(slug, studio, intentDir)
+	if (!activeStage) return intentSteps({ intentDir, mode: intentMode })
+	return stageSteps({
+		slug,
+		studio,
+		stage: activeStage,
+		stageDir: join(intentDir, "stages", activeStage),
+		mode: intentMode,
+		groupAdversarial: false,
+	})
+}
+
+/** Derive the granular milestone track for a SPECIFIC stage (not just the
+ *  cursor's active one). The milestone LIST (order + labels) is studio-config
+ *  driven via `stageSteps`, so it's correct for any stage regardless of which
+ *  branch's unit FM is on disk; the per-step done-flags may be stale for an
+ *  already-merged stage (unit FM frozen at fork), but callers that render a
+ *  completed stage force every pip done from the stage status. Used by the
+ *  review session payload so the SPA shows the SAME fine-grained stepper on
+ *  every stage, not only the active one. */
+export function deriveStageMilestones(opts: {
+	slug: string
+	studio: string
+	intentDir: string
+	stage: string
+	mode: string
+}): ProgressStep[] {
+	return stageSteps({
+		slug: opts.slug,
+		studio: opts.studio,
+		stage: opts.stage,
+		stageDir: join(opts.intentDir, "stages", opts.stage),
+		mode: opts.mode,
+	})
 }

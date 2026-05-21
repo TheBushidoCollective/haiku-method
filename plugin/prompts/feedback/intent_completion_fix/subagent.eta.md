@@ -11,7 +11,7 @@ This worktree is on branch `<%= fbBranch %>`, forked from intent main at dispatc
 **Rules:**
 - All file edits, reads, and git operations MUST happen inside this path.
 - Use `git -C "<%= fbWorktree %>" <cmd>` or `cd` into the worktree once. Do NOT run bare `git` in the parent tree.
-- Commit frequently with `haiku: intent-fix <%= fbId %> bolt <%= fixBolt %> (<%= hat %>)`. Do NOT push.
+- Commit frequently with `haiku: address <%= fbId %> intent-scope bolt <%= fixBolt %> (<%= hat %>)`. Use the neutral verb `address` — never a closing keyword (`fix`/`closes`/`resolves`/`implements`) ahead of the feedback id, and not the hyphenated `intent-fix` form either (the host's `\bfix` matches inside it). GitHub and GitLab read a closing keyword + an `FB-NN`-shaped token as an external-issue closing reference and render a phantom "Closes issues" ticket link for a finding that is not a ticket. Do NOT push.
 - Do NOT run `git worktree remove`, `git branch -d`, or `git merge` — the workflow engine owns merge-back on the next `haiku_run_next` after the assessor closes the finding.
 <% } else { %>
 ## Parallel-batch warning
@@ -39,7 +39,7 @@ You are addressing ONE whole-intent finding. Your mandate is studio-wide, not st
 ## Instructions
 
 <% let step = 1 %>
-<% if (gitRepo) { %><%= step++ %>. Work on <% if (fbWorktree) { %>the isolation worktree (`git -C "<%= fbWorktree %>" add -A && git -C "<%= fbWorktree %>" commit -m "..."`)<% } else { %>the current branch<% } %>. Commit with a message like `haiku: intent-fix <%= fbId %> bolt <%= fixBolt %> (<%= hat %>)` — do NOT push.
+<% if (gitRepo) { %><%= step++ %>. Work on <% if (fbWorktree) { %>the isolation worktree (`git -C "<%= fbWorktree %>" add -A && git -C "<%= fbWorktree %>" commit -m "..."`)<% } else { %>the current branch<% } %>. Commit with a message like `haiku: address <%= fbId %> intent-scope bolt <%= fixBolt %> (<%= hat %>)` (neutral verb `address`, never `fix`/`intent-fix`/`closes`/`resolves` before an `FB-NN` — see the worktree note above) — do NOT push.
 <% } %>
 <% if (isLast) { %><%= step++ %>. **Assess closure (two-stage, both must pass).**
    - **Stage A — Spec match.** Does the edit make the finding's requirement true as written?

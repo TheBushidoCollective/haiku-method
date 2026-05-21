@@ -11,7 +11,7 @@ This worktree is on branch `<%= fbBranch %>`, forked from the stage branch at di
 **Rules:**
 - All file edits, reads of stage artifacts, and git operations MUST happen inside this path.
 - Use `git -C "<%= fbWorktree %>" <cmd>` for every git command, or `cd` into it once and operate there. Do NOT run bare `git` in the parent tree — you will commit on the wrong branch.
-- Commit frequently inside the worktree with messages like `haiku: fix <%= fbId %> bolt <%= fixBolt %> (<%= hat %>)`. Do NOT push.
+- Commit frequently inside the worktree with messages like `haiku: address <%= fbId %> bolt <%= fixBolt %> (<%= hat %>)`. Use the neutral verb `address`, NOT `fix`/`closes`/`resolves` — GitHub and GitLab parse a closing keyword followed by an `FB-NN`-shaped token as an external-issue closing reference and render a phantom "Closes issues" ticket link for a finding that is not a ticket. Do NOT push.
 - Do NOT run `git worktree remove`, `git branch -d`, or `git merge` — the workflow engine owns the merge-back on the next `haiku_run_next` after this chain's final hat closes the finding.
 <% } else { %>
 ## Parallel-batch warning
@@ -41,7 +41,7 @@ You are NOT wearing this hat to build a new unit. You are wearing it to resolve 
 ## Instructions
 
 <% let step = 1 %>
-<% if (gitRepo) { %><%= step++ %>. Work on <% if (fbWorktree) { %>the isolation worktree (`git -C "<%= fbWorktree %>" add -A && git -C "<%= fbWorktree %>" commit -m "..."`)<% } else { %>the current branch<% } %>. Commit the fix with a message like `haiku: fix <%= fbId %> bolt <%= fixBolt %> (<%= hat %>)` — do NOT push.
+<% if (gitRepo) { %><%= step++ %>. Work on <% if (fbWorktree) { %>the isolation worktree (`git -C "<%= fbWorktree %>" add -A && git -C "<%= fbWorktree %>" commit -m "..."`)<% } else { %>the current branch<% } %>. Commit the fix with a message like `haiku: address <%= fbId %> bolt <%= fixBolt %> (<%= hat %>)` (neutral verb `address`, never `fix`/`closes`/`resolves` before an `FB-NN` — see the worktree note above) — do NOT push.
 <% } %>
 <% if (isLast) { %><%= step++ %>. **Assess closure (two-stage, both must pass).**
    - **Stage A — Spec match.** Read the edited artifact(s) and the feedback body. Does the edit make the finding's requirement true as written? A partial gesture is not a fix.

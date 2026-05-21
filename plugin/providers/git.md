@@ -17,6 +17,7 @@ H·AI·K·U is always git-backed when a `.git/` directory is present. This contr
 
 - Never run `git checkout`, `git merge`, `git branch -d`, or create branches manually during workflow operations. The engine owns branch topology, merge semantics, worktree creation, and stage-branch enforcement.
 - Commit substantive work (unit body edits, artifact writes, code changes) before calling `haiku_unit_advance_hat`. The engine commits state files (state.json, unit/intent frontmatter) on its own ticks; it does NOT commit your edits to artifact bodies or source files.
+- **Never pair a VCS issue-closing keyword with a feedback ID.** GitHub and GitLab parse `Closes`/`Fixes`/`Resolves`/`Implements` followed by an `ABC-123`-shaped token as an external-issue closing reference. H·AI·K·U feedback IDs (`FB-07`) match that shape, so `Fixes FB-07` in a commit message or PR/MR description makes the host render a phantom "Closes issues FB-07" link for a finding that is not a ticket — and queues a non-existent issue for closure on merge. Describe the change itself; the feedback linkage already lives in the unit's `closes:` frontmatter. If you must name the finding for traceability use a neutral phrasing — `addresses FB-07`, `per FB-07` — never a closing verb.
 - Treat `git push` failures as non-fatal — the engine retries on the next tick. Don't block on a transient remote outage.
 - If a stage's review gate is `external`, the engine looks for branch-merge or PR-approval signals. Don't manually flip frontmatter to fake the signal — open the actual PR and let the gate clear.
 

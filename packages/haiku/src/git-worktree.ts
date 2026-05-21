@@ -4246,12 +4246,29 @@ export function createFixChainWorktree(
 	try {
 		if (existsSync(worktreePath)) return worktreePath
 		mkdirSync(worktreeBase, { recursive: true })
-		// Recreate the branch at the current base HEAD if it doesn't exist.
-		// If it does exist (e.g., a prior bolt allocated it and didn't clean
-		// up), leave its commits alone — the worktree add below will check
-		// it out unchanged.
+		// Pick the branch base, in order (mirrors createUnitWorktree):
+		//   1. an existing LOCAL fix-chain branch (resume — same machine, a
+		//      prior bolt allocated it and didn't clean up; leave its commits),
+		//   2. the pushed REMOTE fix-chain branch (cross-machine / fresh-clone
+		//      pickup — pushFixChainWorktree checkpointed it mid-loop),
+		//   3. a fresh fork off the base branch (brand-new chain / lost branch).
 		if (!branchExists(fixBranch)) {
-			tryRun(["git", "branch", fixBranch, baseBranch])
+			// Refresh the remote-tracking ref (best-effort; a fresh clone may
+			// not have fetched it yet).
+			tryRun(["git", "fetch", "origin", fixBranch])
+			const hasRemote = !!tryRun([
+				"git",
+				"rev-parse",
+				"--verify",
+				"--quiet",
+				`refs/remotes/origin/${fixBranch}`,
+			])?.trim()
+			tryRun([
+				"git",
+				"branch",
+				fixBranch,
+				hasRemote ? `origin/${fixBranch}` : baseBranch,
+			])
 		}
 		run(["git", "worktree", "add", worktreePath, fixBranch])
 		return worktreePath

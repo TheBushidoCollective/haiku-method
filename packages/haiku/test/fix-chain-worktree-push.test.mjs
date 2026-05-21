@@ -82,12 +82,25 @@ test("fix-chain worktree: pushed on advance, deleted local+remote at terminal me
 		const wt = createFixChainWorktree(slug, stage, feedbackId)
 		assert.ok(wt, "fix-chain worktree created")
 
-		// Fixer hat lands a code correction in the worktree, then advance pushes.
+		// Fixer hat lands a code correction in the worktree, then advance pushes
+		// (pushFixChainWorktree commits the worktree's dirty files itself).
 		writeFileSync(join(wt, "fix.txt"), "fix-hat correction\n")
 		pushFixChainWorktree(slug, stage, feedbackId)
 		assert.ok(
 			remoteHasBranch(bare, fixBranch),
 			"fix-chain branch should be pushed to origin on advance (durability)",
+		)
+
+		// Cross-machine pickup: drop the local worktree + branch (a fresh clone
+		// would lack them), keeping only the pushed remote. createFixChainWorktree
+		// must recreate FROM THE REMOTE so the loop's code survives.
+		execFileSync("git", ["worktree", "remove", wt, "--force"], { cwd: repoRoot, stdio: "ignore" })
+		execFileSync("git", ["branch", "-D", fixBranch], { cwd: repoRoot, stdio: "ignore" })
+		const wt2 = createFixChainWorktree(slug, stage, feedbackId)
+		assert.ok(wt2, "fix-chain worktree recreated")
+		assert.ok(
+			existsSync(join(wt2, "fix.txt")),
+			"recreated worktree must restore the pushed code (resume, not fork-fresh)",
 		)
 
 		// Terminal close integrates the chain + reaps the branch local AND remote.

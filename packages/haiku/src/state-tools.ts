@@ -79,6 +79,7 @@ import {
 	listOrphanDiscreteIntents,
 	mergeUnitWorktree,
 	openPullRequest,
+	pushUnitWorktree,
 	readFileFromBranch,
 	removeTempWorktree,
 } from "./git-worktree.js"
@@ -9442,6 +9443,11 @@ export function handleStateTool(
 			const advGit = gitCommitAll(
 				`haiku: advance hat to ${nextHat} on ${args.unit as string}`,
 			)
+			// Checkpoint the unit's worktree to its (pushed) branch so the
+			// in-progress hat loop survives a CC restart / cross-machine
+			// pickup — the work isn't on the stage branch until the terminal
+			// merge. Best-effort + no-op when the unit runs in-place.
+			pushUnitWorktree(args.intent as string, args.unit as string)
 			syncSessionMetadata(
 				args.intent as string,
 				args.state_file as string | undefined,

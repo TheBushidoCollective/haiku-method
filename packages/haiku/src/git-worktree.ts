@@ -944,6 +944,54 @@ export function openPullRequest(
  *  ok:true on success, ok:false with the raw error on failure. Bounded
  *  by `GIT_NETWORK_TIMEOUT_MS` and runs with prompts suppressed so an
  *  unresponsive remote or auth prompt fails fast instead of hanging. */
+/** Checkpoint an in-progress unit's worktree: commit any pending work on
+ *  its branch and push it to origin. Restart / cross-machine durability —
+ *  a unit's hats run on `haiku/<slug>/<unit>` and aren't on the stage
+ *  branch until the terminal merge, so without this a CC restart on
+ *  another machine would lose the loop's progress. Best-effort: no
+ *  worktree, no remote, or a push failure are all silent (a single-machine
+ *  restart still survives via the on-disk worktree; cross-machine loss
+ *  degrades to the reset-and-restart recovery path). */
+export function pushUnitWorktree(slug: string, unit: string): void {
+	if (!isGitRepo()) return
+	const worktreePath = unitWorktreePath(slug, unit)
+	if (!existsSync(worktreePath)) return
+	const unitBranch = `haiku/${slug}/${unit}`
+	try {
+		tryRun(["git", "-C", worktreePath, "add", "-A"])
+		const dirty = tryRun([
+			"git",
+			"-C",
+			worktreePath,
+			"status",
+			"--porcelain",
+		])
+		if (dirty && dirty.trim().length > 0) {
+			tryRun([
+				"git",
+				"-C",
+				worktreePath,
+				"commit",
+				"-m",
+				`haiku: checkpoint ${unit}`,
+			])
+		}
+		execFileSync(
+			"git",
+			[
+				"-C",
+				worktreePath,
+				"push",
+				"origin",
+				`HEAD:refs/heads/${unitBranch}`,
+			],
+			{ stdio: "pipe", timeout: GIT_NETWORK_TIMEOUT_MS, env: GIT_NONINTERACTIVE_ENV },
+		)
+	} catch {
+		/* best-effort — local worktree still survives a same-machine restart */
+	}
+}
+
 export function pushBranchToOrigin(branch: string): {
 	ok: boolean
 	error?: string
@@ -3738,14 +3786,24 @@ export function mergeUnitWorktree(
 			withWorktreeOnBranch(stageBranch, (tmpPath) => mergeHere(tmpPath))
 		}
 
-		// Reap the unit worktree and local branch — its work is now on the
-		// stage branch. Do NOT delete the remote unit branch here: if the
-		// team opened a PR/MR against it for review, deletion would yank
-		// the source out from under the review. Remote branch cleanup, if
-		// desired, should happen at stage-complete (after fan-in) or be
-		// driven by the review provider.
+		// Reap the unit worktree + local AND remote branch — its work is now
+		// on the stage branch. Under worktree isolation the unit branch is an
+		// ephemeral, internal per-hat-loop branch (pushed only for restart /
+		// cross-machine durability while the loop runs), NOT a review surface
+		// — the STAGE branch is what gets reviewed. So once the unit is
+		// integrated, both the local and the pushed remote ref are dead and
+		// safe to delete; leaving the remote around just accumulates stale
+		// `haiku/<slug>/<unit>` refs. Remote delete is best-effort (no-remote
+		// or already-gone is fine).
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
 		deleteBranchWithWarning(unitBranch, `unit-merge cleanup for ${unit}`)
+		tryRun([
+			"git",
+			"push",
+			"origin",
+			"--delete",
+			unitBranch,
+		])
 
 		return {
 			success: true,

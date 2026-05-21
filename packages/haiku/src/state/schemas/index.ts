@@ -223,6 +223,16 @@ export {
 	validateHaikuStageSetInputSchema,
 } from "./inputs/stages.js"
 export type {
+	HaikuReadHatInput,
+	HaikuReadStageInput,
+} from "./inputs/studio-reads.js"
+export {
+	HAIKU_READ_HAT_INPUT_SCHEMA,
+	HAIKU_READ_STAGE_INPUT_SCHEMA,
+	validateHaikuReadHatInputSchema,
+	validateHaikuReadStageInputSchema,
+} from "./inputs/studio-reads.js"
+export type {
 	HaikuUnitAdvanceHatInput,
 	HaikuUnitDeleteInput,
 	HaikuUnitListInput,

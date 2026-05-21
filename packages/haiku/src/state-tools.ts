@@ -96,6 +96,7 @@ import {
 	readStageArtifactDefs,
 	readStageDef,
 	readStudioFixHatPaths,
+	resolveFixHatPath,
 	resolveHatPath,
 	resolveStudio,
 } from "./studio-reader.js"
@@ -3520,6 +3521,8 @@ import {
 	HAIKU_REPAIR_INPUT_SCHEMA,
 	HAIKU_REVIEW_INPUT_SCHEMA,
 	HAIKU_REVIEW_OPEN_INPUT_SCHEMA,
+	HAIKU_READ_HAT_INPUT_SCHEMA,
+	HAIKU_READ_STAGE_INPUT_SCHEMA,
 	HAIKU_SEED_INPUT_SCHEMA,
 	HAIKU_SETTINGS_GET_INPUT_SCHEMA,
 	HAIKU_SETTINGS_SET_INPUT_SCHEMA,
@@ -3564,6 +3567,8 @@ import {
 	validateHaikuReflectInputSchema,
 	validateHaikuReleaseNotesInputSchema,
 	validateHaikuRepairInputSchema,
+	validateHaikuReadHatInputSchema,
+	validateHaikuReadStageInputSchema,
 	validateHaikuReviewInputSchema,
 	validateHaikuSeedInputSchema,
 	validateHaikuSettingsGetInputSchema,
@@ -7033,6 +7038,40 @@ export const stateToolDefs: StateToolDef[] = [
 		},
 	},
 	{
+		name: "haiku_read_hat",
+		description:
+			"Read a hat mandate body, resolved through the project→plugin override cascade and with frontmatter stripped (engine bookkeeping; not for the agent). Dispatch prompts instruct the agent to call this for its role's behavior contract instead of carrying an inlined copy. Pass `fix: true` from a fix-loop dispatch to prefer the fix-scoped mandate (`stages/<stage>/fix-hats/<hat>.md`, falling back to the production `hats/<hat>.md`). Returns { hat, body } as JSON.",
+		inputSchema: jsonSchemaOf(HAIKU_READ_HAT_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				hat: { type: "string" },
+				body: {
+					type: "string",
+					description: "Hat mandate markdown body (frontmatter stripped).",
+				},
+				error: { type: "string", description: "On not-found." },
+			},
+		},
+	},
+	{
+		name: "haiku_read_stage",
+		description:
+			"Read a stage's STAGE.md body, resolved through the project→plugin override cascade and with frontmatter stripped. Dispatch prompts instruct the agent to call this for the stage scope instead of carrying an inlined copy. Returns { stage, body } as JSON.",
+		inputSchema: jsonSchemaOf(HAIKU_READ_STAGE_INPUT_SCHEMA),
+		outputSchema: {
+			type: "object",
+			properties: {
+				stage: { type: "string" },
+				body: {
+					type: "string",
+					description: "STAGE.md markdown body (frontmatter stripped).",
+				},
+				error: { type: "string", description: "On not-found." },
+			},
+		},
+	},
+	{
 		name: "haiku_unit_delete",
 		description:
 			"Delete a unit. ONLY permitted when the unit's status is `pending`. Active and completed units are immutable per the forward-only lifecycle rule — once a unit has informed downstream work, deleting it would silently invalidate that work. Returns an error naming the rule when called against a non-pending unit.",
@@ -9852,6 +9891,66 @@ export function handleStateTool(
 			const title =
 				fmTitle || (h1Match ? h1Match[1].trim() : (args.unit as string))
 			return reply({ title, body })
+		}
+
+		// ── Studio-definition reads (override-cascade + FM-stripped) ──
+		// Dispatch prompts call these for a straight tool read of a hat
+		// mandate or stage scope, honoring project `.haiku/` overrides and
+		// stripping engine frontmatter — instead of carrying an inlined
+		// snapshot in the prompt body.
+		case "haiku_read_hat": {
+			const readHatErr = validateToolInput(
+				args,
+				validateHaikuReadHatInputSchema,
+				"haiku_read_hat",
+			)
+			if (readHatErr) return readHatErr
+			const rhStudio = args.studio as string
+			const rhStage = args.stage as string
+			const rhHat = args.hat as string
+			const rhFix = args.fix === true
+			const rhPath = rhFix
+				? resolveFixHatPath(rhStudio, rhStage, rhHat)
+				: resolveHatPath(rhStudio, rhStage, rhHat)
+			if (!rhPath || !existsSync(rhPath)) {
+				return reply(
+					{
+						error: "hat_not_found",
+						studio: rhStudio,
+						stage: rhStage,
+						hat: rhHat,
+						fix: rhFix,
+						message: `No ${rhFix ? "fix-scoped or production " : ""}mandate for hat '${rhHat}' in studio '${rhStudio}' stage '${rhStage}'.`,
+					},
+					{ isError: true },
+				)
+			}
+			const { body: rhBody } = parseFrontmatter(readFileSync(rhPath, "utf8"))
+			return reply({ hat: rhHat, body: (rhBody || "").trim() })
+		}
+
+		case "haiku_read_stage": {
+			const readStageErr = validateToolInput(
+				args,
+				validateHaikuReadStageInputSchema,
+				"haiku_read_stage",
+			)
+			if (readStageErr) return readStageErr
+			const rsStudio = args.studio as string
+			const rsStage = args.stage as string
+			const rsDef = readStageDef(rsStudio, rsStage)
+			if (!rsDef) {
+				return reply(
+					{
+						error: "stage_not_found",
+						studio: rsStudio,
+						stage: rsStage,
+						message: `No STAGE.md for studio '${rsStudio}' stage '${rsStage}'.`,
+					},
+					{ isError: true },
+				)
+			}
+			return reply({ stage: rsStage, body: (rsDef.body || "").trim() })
 		}
 
 		// ── Unit delete (architecture rule §1.3: pending only) ──

@@ -28,7 +28,6 @@ import {
 	readStudio,
 	readStudioFixHatDefs,
 	readStudioFixHatPaths,
-	resolveFixHatPath,
 } from "../studio-reader.js"
 import {
 	buildPriorFeedbackRejectBlock,
@@ -135,27 +134,27 @@ export function buildFbHatDispatchBlock(opts: {
 	// rendered an empty mandate and every reconciler reported "no
 	// on-disk mandate file resolved for the `reconciler` hat" — the
 	// engine dispatched a hat it couldn't define (fixloop-bug-f4dd5a92).
-	const hatPath = stage
-		? resolveFixHatPath(studio, stage, hat)
-		: (readStudioFixHatPaths(studio)[hat] ?? null)
-	// Strip frontmatter (engine bookkeeping — `agent_type`, `model`; the
-	// agent doesn't need it and inlining it raw was the FB-001 leak) and
-	// materialize the agent-facing mandate body into the intent's prompts
-	// tree. The dispatched prompt references THIS snapshot, not the
-	// mutable plugin-source path — so the record reflects exactly what
-	// the subagent read and reflection agents can re-read it.
-	const rawHatBody =
-		hatPath && existsSync(hatPath) ? readFileSync(hatPath, "utf8") : ""
-	const mandateBody = rawHatBody ? matter(rawHatBody).content.trim() : ""
-	const mandatePath = mandateBody
-		? materializeReferenceFile({
-				intent: slug,
-				stage: stage || undefined,
-				kind: "mandate",
-				name: hat,
-				body: mandateBody,
-			})
-		: ""
+	// Stage-scope fix hats: the subagent reads its (fix-scoped) mandate
+	// live via `haiku_read_hat { ..., fix: true }` — straight tool call,
+	// frontmatter stripped, project overrides honored. The tool resolves
+	// the fix-scoped variant (stages/<stage>/fix-hats/<hat>.md) over the
+	// production mandate. Intent-scope fix hats (stage === "") resolve a
+	// STUDIO-level fix-hat that haiku_read_hat doesn't cover (it's
+	// stage-scoped), so those still materialize a referenced snapshot.
+	let mandatePath = ""
+	if (!stage) {
+		const src = readStudioFixHatPaths(studio)[hat] ?? null
+		const raw = src && existsSync(src) ? readFileSync(src, "utf8") : ""
+		const body = raw ? matter(raw).content.trim() : ""
+		mandatePath = body
+			? materializeReferenceFile({
+					intent: slug,
+					kind: "mandate",
+					name: hat,
+					body,
+				})
+			: ""
+	}
 
 	const fbDir = stage
 		? join(stageDir(slug, stage), "feedback")
@@ -211,6 +210,7 @@ export function buildFbHatDispatchBlock(opts: {
 
 	const promptBody = eta.renderString(subagentTemplate(), {
 		slug,
+		studio,
 		hat,
 		stage,
 		feedbackId,

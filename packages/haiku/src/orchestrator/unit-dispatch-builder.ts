@@ -31,13 +31,7 @@ import matter from "gray-matter"
 import { features } from "../config.js"
 import { type ModelTier, resolveModel } from "../model-selection.js"
 import { stageDir } from "../state-tools.js"
-import { materializeReferenceFile } from "../subagent-prompt-file.js"
-import {
-	readHatDefs,
-	readStageDef,
-	readStudio,
-	resolveHatPath,
-} from "../studio-reader.js"
+import { readHatDefs, readStageDef, readStudio } from "../studio-reader.js"
 import {
 	buildPriorRejectBlock,
 	emitSubagentDispatchBlock,
@@ -137,26 +131,10 @@ export function buildUnitHatDispatchBlock(opts: {
 }): string {
 	const { slug, studio, unit, stage, hat, terminal } = opts
 	const model = resolveUnitHatModel({ slug, studio, stage, hat, unit })
-	// Strip frontmatter (engine bookkeeping) and materialize the
-	// agent-facing mandate into the intent's prompts tree, then reference
-	// THAT snapshot — not the mutable plugin-source path. The dispatch
-	// record reflects exactly what the subagent read; reflection agents
-	// can re-read it. Mirrors the fix-hat dispatch builder.
-	const srcHatPath = resolveHatPath(studio, stage, hat) ?? ""
-	const rawMandate =
-		srcHatPath && existsSync(srcHatPath)
-			? readFileSync(srcHatPath, "utf8")
-			: ""
-	const mandateBody = rawMandate ? matter(rawMandate).content.trim() : ""
-	const mandatePath = mandateBody
-		? materializeReferenceFile({
-				intent: slug,
-				stage,
-				kind: "mandate",
-				name: hat,
-				body: mandateBody,
-			})
-		: ""
+	// The subagent reads its hat mandate live via `haiku_read_hat` — a
+	// straight tool call, frontmatter stripped, project overrides honored.
+	// The builder no longer resolves/inlines/snapshots the mandate; the
+	// prompt just tells the agent which hat to read.
 	const priorHatsInline = readPriorHatsForUnit({ slug, stage, unit })
 	// Surface the most-recent rejection reason so a bounced-to hat fixes
 	// the verifier's specific objection on the new bolt rather than
@@ -166,11 +144,11 @@ export function buildUnitHatDispatchBlock(opts: {
 	const priorRejectBlock = buildPriorRejectBlock(unitFile)
 	const promptBody = eta.renderString(subagentTemplate(), {
 		slug,
+		studio,
 		stage,
 		hat,
 		unit,
 		terminal,
-		mandatePath,
 		priorHatsInline,
 		priorRejectBlock,
 	})

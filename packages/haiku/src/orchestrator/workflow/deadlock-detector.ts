@@ -12,11 +12,18 @@
 // pattern that repeatedly shipped past CI tests because it spans tick
 // boundaries.
 //
-// State is in-memory per-slug. A wedge requires multiple ticks in a
-// short window, which means the same MCP server process. Lost on
-// restart is intentional — the next session starts with no priors.
-// Avoiding an on-disk cache also keeps the engine's "outputs are the
-// signal, not bookkeeping artifacts" principle intact.
+// State is per-slug, held in-memory and backed by a per-intent file
+// under `~/.haiku/projects/<key>/intents/<slug>/.deadlock-history.json`
+// (NOT the git-tracked project `.haiku/`). The on-disk backing is
+// load-through: a cold process (after an MCP restart) rehydrates the
+// last entry so a no-op loop that spans a reconnect keeps accumulating
+// toward the halt instead of resetting to zero on every restart — the
+// FB-011/012/013 stall survived precisely because reconnects during
+// debugging wiped the in-memory count. Staleness is keyed on the
+// entry's last-update time (`updated_at`): an actively-ticked loop
+// stays live; a walked-away session older than STALE_AGE_MS is treated
+// as fresh on return, so a rapid reconnect-loop accumulates but a
+// next-day session never inherits a stale halt.
 //
 // What this does NOT do:
 //   - Halt the workflow. The detector only emits telemetry. The
@@ -25,12 +32,19 @@
 //     user / agent still has to investigate. The signal is meant for
 //     dashboards (Sentry/OTel), not for engine logic.
 
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { intentRuntimeStatePath } from "../../subagent-prompt-file.js"
 import { emitTelemetry } from "../../telemetry.js"
 
 interface TickEntry {
 	signature: string
 	count: number
 	first_seen: string
+	/** Last time this entry was written. Drives staleness on rehydrate —
+	 *  an entry not touched within STALE_AGE_MS is treated as fresh, so a
+	 *  next-day session never inherits a stale halt while a rapid
+	 *  reconnect-loop keeps accumulating. */
+	updated_at: string
 	/** Recent signatures observed for this intent. Used for the
 	 *  alternating-wedge (churn) detector below. Bounded to
 	 *  `CHURN_WINDOW`. */
@@ -42,6 +56,51 @@ interface TickEntry {
 }
 
 const tickHistory: Map<string, TickEntry> = new Map()
+
+/** Slugs whose on-disk history file has been written this process —
+ *  lets `__resetDeadlockDetector` clean disk too, for test isolation. */
+const persistedSlugs = new Set<string>()
+
+const HISTORY_FILENAME = ".deadlock-history.json"
+
+/** Load the entry for a slug: memory first, else rehydrate from the
+ *  per-intent file (after an MCP restart). Stale entries (not updated
+ *  within STALE_AGE_MS) are discarded so a returning session starts
+ *  clean. */
+function loadEntry(slug: string): TickEntry | undefined {
+	const mem = tickHistory.get(slug)
+	if (mem) return mem
+	try {
+		const p = intentRuntimeStatePath(slug, HISTORY_FILENAME)
+		if (!existsSync(p)) return undefined
+		const raw = JSON.parse(readFileSync(p, "utf8")) as TickEntry
+		const stamp = raw.updated_at ?? raw.first_seen
+		if (!stamp || Date.now() - new Date(stamp).getTime() > STALE_AGE_MS) {
+			return undefined
+		}
+		tickHistory.set(slug, raw)
+		return raw
+	} catch {
+		return undefined
+	}
+}
+
+/** Persist the entry: memory + per-intent file. Best-effort on the
+ *  write — a failed persist degrades to in-memory-only, never throws
+ *  into the tick. */
+function saveEntry(slug: string, entry: TickEntry): void {
+	tickHistory.set(slug, entry)
+	try {
+		writeFileSync(
+			intentRuntimeStatePath(slug, HISTORY_FILENAME),
+			JSON.stringify(entry),
+			"utf8",
+		)
+		persistedSlugs.add(slug)
+	} catch {
+		/* in-memory-only fallback */
+	}
+}
 
 /** Threshold for "this looks wedged." Two repeats means the agent
  *  invoked run_next, got an action, dispatched it (or tried to),
@@ -171,7 +230,7 @@ export function recordTickResult(
 ): void {
 	const signature = actionSignatureForDeadlock(action)
 	const now = new Date().toISOString()
-	const prev = tickHistory.get(slug)
+	const prev = loadEntry(slug)
 
 	// Per claude-bot review on PR #367: when the engine has just SWAPPED
 	// the cursor's action for `loop_halted`, we still want to track that
@@ -197,6 +256,7 @@ export function recordTickResult(
 			signature,
 			count: newCount,
 			first_seen: prev.first_seen,
+			updated_at: now,
 			recent,
 			// Once the chain of identical signatures continues, the
 			// churn-fired flag carries forward — repeat A→A→A doesn't
@@ -228,6 +288,7 @@ export function recordTickResult(
 			signature,
 			count: 1,
 			first_seen: prev.first_seen,
+			updated_at: now,
 			recent,
 			churn_fired: isInWindow ? prev.churn_fired : false,
 		}
@@ -259,12 +320,13 @@ export function recordTickResult(
 			signature,
 			count: 1,
 			first_seen: now,
+			updated_at: now,
 			recent: isHaltMarker ? [] : [signature],
 			churn_fired: false,
 		}
 	}
 
-	tickHistory.set(slug, entry)
+	saveEntry(slug, entry)
 	pruneStale()
 }
 
@@ -293,7 +355,7 @@ export function wouldDeadlock(
 	| { kind: "churn"; distinct: number; window: number }
 	| null {
 	const signature = actionSignatureForDeadlock(action)
-	const prev = tickHistory.get(slug)
+	const prev = loadEntry(slug)
 	if (!prev) return null
 	// Repeat-halt check: the next tick would make this the (count + 1)-th
 	// consecutive identical signature.
@@ -362,18 +424,38 @@ export function buildLoopHaltAction(
 	}
 }
 
-/** Test-only: reset detector state between test runs. */
+/** Test-only: reset detector state between test runs. Clears both the
+ *  in-memory map and any per-intent files this process persisted, so a
+ *  reused slug in a later test doesn't rehydrate a stale entry. */
 export function __resetDeadlockDetector(): void {
+	tickHistory.clear()
+	for (const slug of persistedSlugs) {
+		try {
+			rmSync(intentRuntimeStatePath(slug, HISTORY_FILENAME), { force: true })
+		} catch {
+			/* ignore */
+		}
+	}
+	persistedSlugs.clear()
+}
+
+/** Test-only: simulate an MCP restart — drop the in-memory map but
+ *  leave the on-disk history intact, so the next access rehydrates from
+ *  disk (the reconnect-survives-the-loop path). */
+export function __simulateRestartForTests(): void {
 	tickHistory.clear()
 }
 
-/** Test-only: peek at the recorded history for an intent. */
+/** Test-only: peek at the recorded history for an intent. Goes through
+ *  the load path so a rehydrate-from-disk assertion works after a
+ *  simulated restart (in-memory map cleared, file intact). */
 export function __getTickHistoryForTests(slug: string): {
 	signature: string
 	count: number
 	first_seen: string
+	updated_at?: string
 	recent: string[]
 	churn_fired: boolean
 } | null {
-	return tickHistory.get(slug) ?? null
+	return loadEntry(slug) ?? null
 }

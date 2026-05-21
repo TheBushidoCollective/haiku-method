@@ -23,6 +23,7 @@ const {
 	wouldDeadlock,
 	buildLoopHaltAction,
 	__resetDeadlockDetector,
+	__simulateRestartForTests,
 	__getTickHistoryForTests,
 	actionSignatureForDeadlock,
 } = await import("../src/orchestrator/workflow/deadlock-detector.ts")
@@ -90,6 +91,32 @@ test("deadlock-detector: an EVOLVING fix-hat batch (progress) does NOT false-hal
 		1,
 		"each distinct hat is a fresh signature; counter never accumulates",
 	)
+})
+
+test("deadlock-detector: count survives an MCP restart (persisted on-disk)", () => {
+	// The in-memory count resetting on every MCP reconnect is exactly why
+	// the FB-011/012/013 no-op loop survived: each reconnect zeroed the
+	// counter before it could reach HALT_THRESHOLD. Persistence fixes that
+	// — the count rehydrates from disk so the loop still escalates.
+	__resetDeadlockDetector()
+	const stuck = {
+		action: "start_feedback_hat",
+		dispatches: [{ feedback_id: "FB-011", stage: "product", hat: "product" }],
+	}
+	recordTickResult("slug-restart", stuck) // 1
+	recordTickResult("slug-restart", stuck) // 2
+	recordTickResult("slug-restart", stuck) // 3
+	// MCP restarts: in-memory map is wiped, the on-disk file remains.
+	__simulateRestartForTests()
+	// The next tick's pre-check rehydrates count=3 from disk; one more
+	// would be the 4th identical signature → halt.
+	const verdict = wouldDeadlock("slug-restart", stuck)
+	assert.ok(
+		verdict,
+		"a no-op loop spanning a restart must still reach the halt — count rehydrates from disk",
+	)
+	assert.strictEqual(verdict.kind, "repeat")
+	assert.strictEqual(verdict.count, 4)
 })
 
 test("deadlock-detector: batch signature is order-independent", () => {

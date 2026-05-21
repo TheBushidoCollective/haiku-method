@@ -197,6 +197,22 @@ export function sessionLogPath(filename: string): string {
 	return join(sessionLogsDir(), filename)
 }
 
+/**
+ * Resolve a path for per-intent engine runtime state under the intent's
+ * tree (`~/.haiku/projects/<key>/intents/<slug>/<filename>`). NOT inside
+ * `prompts/` (those are the user-facing dispatch record) and NOT in the
+ * git-tracked project `.haiku/` — this is engine bookkeeping that must
+ * survive an MCP restart but never lands in the repo. Used by the
+ * deadlock detector to persist its tick history so a no-op loop spanning
+ * a reconnect still escalates. Creates the directory if needed.
+ */
+export function intentRuntimeStatePath(slug: string, filename: string): string {
+	const safe = slug.replace(/[^A-Za-z0-9._-]+/g, "-")
+	const dir = join(projectRootDir(), "intents", safe)
+	mkdirSync(dir, { recursive: true })
+	return join(dir, filename)
+}
+
 /** Result type for action-prompt writes (e.g. elaborate). Only `path` is
  *  returned because action-prompt callers set the action's `message` field
  *  themselves — they never consume the pre-built instruction string. */

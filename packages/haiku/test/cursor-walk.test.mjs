@@ -816,6 +816,59 @@ test("run_next: reflection-on stage merges only after observations.md is recorde
 	)
 })
 
+test("run_next: the TERMINAL stage also records observations before it closes", async () => {
+	if (!HAS_GIT) return
+	// The last/only stage routes to the intent-completion walk (the cursor
+	// returns intent_review, stage ""), which the synthesis used to skip —
+	// so observations were recorded for every stage EXCEPT the last
+	// (2026-05-20 probe). Case (e) synthesizes complete_stage for the stage
+	// we're physically on whenever the cursor's answer leaves it (including
+	// intent-scope), so the terminal stage's close also hits the gate.
+	await withTmpRepo(
+		"obs-gate-terminal",
+		async ({ repoRoot, intentDir, slug }) => {
+			// Single-stage studio → "design" IS the terminal stage.
+			makeStudio({ repoRoot, studio: "test" })
+			makeIntent({ intentDir, slug, studio: "test", extraFm: { autotune: true } })
+			seedVerifiedElaboration({ intentDir, stage: "design" })
+			writeUnit(intentDir, "design", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				started_at: "t",
+				iterations: [
+					{ hat: "planner", started_at: "t", completed_at: "t", result: "advance" },
+					{ hat: "builder", started_at: "t", completed_at: "t", result: "advance" },
+					{ hat: "verifier", started_at: "t", completed_at: "t", result: "advance" },
+				],
+				reviews: { spec: { at: "t" }, "code-reviewer": { at: "t" }, user: { at: "t" } },
+				approvals: {
+					spec: { at: "t" },
+					"code-reviewer": { at: "t" },
+					user: { at: "t" },
+					quality_gates: { at: "t" },
+				},
+				discovery: {},
+			})
+			process.chdir(repoRoot)
+			execFileSync("git", ["checkout", "-q", `haiku/${slug}/design`], {
+				cwd: repoRoot,
+				stdio: "ignore",
+			})
+
+			// Terminal stage signed, no observations.md → must record
+			// observations before advancing to intent completion (NOT route
+			// straight to intent_review / seal).
+			const first = await runNextOnce(slug)
+			assert.strictEqual(
+				first.action,
+				"record_observations",
+				`terminal stage must record observations before close; got: ${first.action} — ${JSON.stringify(first).slice(0, 200)}`,
+			)
+			assert.strictEqual(first.stage, "design")
+		},
+	)
+})
+
 test("cursor: open FB on earlier stage preempts current-stage work", async () => {
 	if (!HAS_GIT) return
 	await withTmpRepo(

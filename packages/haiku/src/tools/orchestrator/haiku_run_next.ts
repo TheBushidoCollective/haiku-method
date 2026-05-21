@@ -889,11 +889,19 @@ export default defineTool({
 				here.startsWith(stagePrefix) && here !== `${stagePrefix}main`
 					? here.slice(stagePrefix.length)
 					: null
+			// Fire when the cursor's answer doesn't target the stage we're
+			// physically on — either it advanced to a LATER stage
+			// (`result.stage` = the next stage, cases b/c) OR it moved to
+			// intent scope (`result.stage` empty/undefined, e.g.
+			// `intent_review` after the FINAL stage's units completed —
+			// case (e)). In both, `hereStage` owes its close. Without the
+			// case-(e) arm, the terminal stage never routed through
+			// complete_stage, so it never merged here AND its
+			// record_observations gate never fired (2026-05-20: observations
+			// recorded for every stage EXCEPT the last).
 			if (
 				hereStage &&
-				typeof result.stage === "string" &&
-				result.stage.length > 0 &&
-				result.stage !== hereStage
+				!(typeof result.stage === "string" && result.stage === hereStage)
 			) {
 				const iDir = intentDir(slug)
 				const intentFile = join(iDir, "intent.md")

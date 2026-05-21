@@ -255,14 +255,34 @@ export function IntentDetailView({
 		<div
 			className={`mx-auto px-4 py-8 lg:py-12 ${viewMode === "board" ? "max-w-full" : "max-w-5xl"}`}
 		>
-			{/* Header */}
-			<button
-				type="button"
-				onClick={onBack}
-				className="mb-4 text-sm text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white"
-			>
-				&larr; Back to Portfolio
-			</button>
+			{/* Header breadcrumb — Portfolio › Intent › Stage. When a stage is
+			    expanded the intent title collapses back to the overview, so
+			    you're never stranded with only "Back to Portfolio". */}
+			<nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-stone-500 dark:text-stone-400">
+				<button
+					type="button"
+					onClick={onBack}
+					className="hover:text-stone-900 dark:hover:text-white"
+				>
+					&larr; Portfolio
+				</button>
+				{expandedStage && (
+					<>
+						<span className="text-stone-300 dark:text-stone-600">›</span>
+						<button
+							type="button"
+							onClick={handleBackToIntent}
+							className="hover:text-stone-900 dark:hover:text-white"
+						>
+							{intent.title}
+						</button>
+						<span className="text-stone-300 dark:text-stone-600">›</span>
+						<span className="text-stone-700 dark:text-stone-300">
+							{titleCase(expandedStage)}
+						</span>
+					</>
+				)}
+			</nav>
 
 			<header className="mb-8">
 				<h1 className="mb-2 text-3xl font-bold tracking-tight">
@@ -505,91 +525,98 @@ export function IntentDetailView({
 				</>
 			)}
 
-			{/* Intent-scope Approvals — surfaces the engine's
+			{/* Intent-overview sections — only on the overview, never under an
+			    expanded stage (the stage view stays scoped to its own units,
+			    artifacts, and stage feedback). */}
+			{!expandedStage && (
+				<>
+					{/* Intent-scope Approvals — surfaces the engine's
 			    intent-completion approval roles so a viewer can see
 			    which gates have signed (spec / continuity / user /
 			    intent_quality_gates plus any studio-defined intent-review
 			    roles). The engine writes these to intent.md.approvals
 			    when each completion gate fires. */}
-			{intent.intentApprovals && intent.intentApprovals.length > 0 && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Intent Approvals
-					</h2>
-					<IntentApprovalsCard approvals={intent.intentApprovals} />
-				</section>
-			)}
+					{intent.intentApprovals && intent.intentApprovals.length > 0 && (
+						<section className="mb-8">
+							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+								Intent Approvals
+							</h2>
+							<IntentApprovalsCard approvals={intent.intentApprovals} />
+						</section>
+					)}
 
-			{/* Intent-scope Feedback (with an All toggle that folds in stage FB) */}
-			<IntentFeedbackSection intent={intent} />
+					{/* Intent-scope Feedback (with an All toggle that folds in stage FB) */}
+					<IntentFeedbackSection intent={intent} />
 
-			{/* Knowledge Artifacts */}
-			{intent.knowledge.length > 0 && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Knowledge Artifacts
-					</h2>
-					<div className="space-y-2">
-						{intent.knowledge.map((kf) => (
-							<KnowledgeFileCard
-								key={kf.name}
-								file={kf}
-								assets={intent.assets}
-								host={host || undefined}
-								basePath={`.haiku/intents/${intent.slug}/knowledge`}
-							/>
-						))}
-					</div>
-				</section>
-			)}
+					{/* Knowledge Artifacts */}
+					{intent.knowledge.length > 0 && (
+						<section className="mb-8">
+							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+								Knowledge Artifacts
+							</h2>
+							<div className="space-y-2">
+								{intent.knowledge.map((kf) => (
+									<KnowledgeFileCard
+										key={kf.name}
+										file={kf}
+										assets={intent.assets}
+										host={host || undefined}
+										basePath={`.haiku/intents/${intent.slug}/knowledge`}
+									/>
+								))}
+							</div>
+						</section>
+					)}
 
-			{/* Operations */}
-			{intent.operations.length > 0 && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Operations
-					</h2>
-					<div className="space-y-2">
-						{intent.operations.map((kf) => (
-							<KnowledgeFileCard
-								key={kf.name}
-								file={kf}
-								assets={intent.assets}
-								host={host || undefined}
-								basePath={`.haiku/intents/${intent.slug}/operations`}
-							/>
-						))}
-					</div>
-				</section>
-			)}
+					{/* Operations */}
+					{intent.operations.length > 0 && (
+						<section className="mb-8">
+							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+								Operations
+							</h2>
+							<div className="space-y-2">
+								{intent.operations.map((kf) => (
+									<KnowledgeFileCard
+										key={kf.name}
+										file={kf}
+										assets={intent.assets}
+										host={host || undefined}
+										basePath={`.haiku/intents/${intent.slug}/operations`}
+									/>
+								))}
+							</div>
+						</section>
+					)}
 
-			{/* Reflection */}
-			{intent.reflection && (
-				<section className="mb-8">
-					<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
-						Reflection
-					</h2>
-					<div className="rounded-xl border border-stone-200 p-6 dark:border-stone-700">
-						<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
-							<BrowseMarkdown
-								assets={intent.assets}
-								host={host || undefined}
-								basePath={`.haiku/intents/${intent.slug}`}
-							>
-								{intent.reflection}
-							</BrowseMarkdown>
-						</div>
-					</div>
-				</section>
-			)}
+					{/* Reflection */}
+					{intent.reflection && (
+						<section className="mb-8">
+							<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+								Reflection
+							</h2>
+							<div className="rounded-xl border border-stone-200 p-6 dark:border-stone-700">
+								<div className="prose prose-sm prose-stone dark:prose-invert max-w-none">
+									<BrowseMarkdown
+										assets={intent.assets}
+										host={host || undefined}
+										basePath={`.haiku/intents/${intent.slug}`}
+									>
+										{intent.reflection}
+									</BrowseMarkdown>
+								</div>
+							</div>
+						</section>
+					)}
 
-			{/* Assets */}
-			{intent.assets.length > 0 && host && (
-				<AssetsSection
-					assets={intent.assets}
-					host={host}
-					onSelect={setLightboxAsset}
-				/>
+					{/* Assets */}
+					{intent.assets.length > 0 && host && (
+						<AssetsSection
+							assets={intent.assets}
+							host={host}
+							onSelect={setLightboxAsset}
+						/>
+					)}
+				</>
 			)}
 
 			{/* Asset Lightbox */}

@@ -404,6 +404,65 @@ test("resolveStatuslineState: no .haiku/ returns null", async () => {
 	}
 })
 
+test("resolveStatuslineState: multiple live intents, no intent branch → null", async () => {
+	if (!HAS_GIT) return
+	const repoRoot = mkdtempSync(join(tmpdir(), "haiku-sl-multi-"))
+	const orig = process.cwd()
+	try {
+		seedIntent(repoRoot, "sl-multi-a", "security")
+		seedIntent(repoRoot, "sl-multi-b", "security")
+		execFileSync("git", ["init", "-q", "-b", "main", repoRoot], { stdio: "ignore" })
+		execFileSync("git", ["config", "user.email", "t@t"], { cwd: repoRoot })
+		execFileSync("git", ["config", "user.name", "t"], { cwd: repoRoot })
+		execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: repoRoot })
+		execFileSync("git", ["add", "-A"], { cwd: repoRoot, stdio: "ignore" })
+		execFileSync("git", ["commit", "-q", "-m", "seed"], { cwd: repoRoot, stdio: "ignore" })
+		// A non-intent branch (refactor/feature/main) — names neither intent.
+		execFileSync("git", ["checkout", "-q", "-b", "refactor/some-work"], {
+			cwd: repoRoot,
+			stdio: "ignore",
+		})
+		process.chdir(repoRoot)
+		const { resolveStatuslineState } = await import(`${SRC}statusline/state.ts`)
+		assert.equal(
+			resolveStatuslineState(),
+			null,
+			"with several live intents and no intent branch there's no signal — fall back to the OG line",
+		)
+	} finally {
+		process.chdir(orig)
+		rmSync(repoRoot, { recursive: true, force: true })
+	}
+})
+
+test("resolveStatuslineState: multiple live intents, on one's branch → that intent", async () => {
+	if (!HAS_GIT) return
+	const repoRoot = mkdtempSync(join(tmpdir(), "haiku-sl-multi-br-"))
+	const orig = process.cwd()
+	try {
+		seedIntent(repoRoot, "sl-br-a", "security")
+		seedIntent(repoRoot, "sl-br-b", "security")
+		execFileSync("git", ["init", "-q", "-b", "main", repoRoot], { stdio: "ignore" })
+		execFileSync("git", ["config", "user.email", "t@t"], { cwd: repoRoot })
+		execFileSync("git", ["config", "user.name", "t"], { cwd: repoRoot })
+		execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: repoRoot })
+		execFileSync("git", ["add", "-A"], { cwd: repoRoot, stdio: "ignore" })
+		execFileSync("git", ["commit", "-q", "-m", "seed"], { cwd: repoRoot, stdio: "ignore" })
+		execFileSync("git", ["checkout", "-q", "-b", "haiku/sl-br-b/development"], {
+			cwd: repoRoot,
+			stdio: "ignore",
+		})
+		process.chdir(repoRoot)
+		const { resolveStatuslineState } = await import(`${SRC}statusline/state.ts`)
+		const state = resolveStatuslineState()
+		assert.ok(state, "branch names an intent → render it")
+		assert.equal(state.intent, "sl-br-b")
+	} finally {
+		process.chdir(orig)
+		rmSync(repoRoot, { recursive: true, force: true })
+	}
+})
+
 // ── fallback resolution (chain back through settings + saved record) ──
 
 /** Build a temp project root (+ .haiku) and a temp home, returning paths

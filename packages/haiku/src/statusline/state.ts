@@ -62,9 +62,16 @@ function currentBranch(): string {
 /** Pick the active intent slug for the current tree. Priority:
  *   1. Git branch `haiku/<slug>/<...>` → that slug (the branch IS the
  *      "which intent am I on" signal).
- *   2. Exactly one non-sealed, non-archived intent → that one.
- *   3. Most-recently-modified non-sealed intent (by intent.md mtime).
- *  Returns null when no live intent exists. */
+ *   2. Exactly one non-sealed, non-archived intent → that one (unambiguous;
+ *      a fresh project with a single intent shows it even before the first
+ *      stage branch is checked out).
+ *  Returns null when no live intent exists, OR when there are multiple live
+ *  intents and the branch names none of them. We deliberately do NOT guess
+ *  "most-recently-modified" here: on a non-intent branch (a feature/refactor
+ *  branch, `main`, etc.) with several live intents in the tree there is no
+ *  signal for which one you're working, and guessing commandeers the status
+ *  line for an intent you aren't on (reported 2026-05-20 — the line showed on
+ *  `refactor/…` because it picked the most-recently-touched intent.md). */
 function pickActiveIntent(haikuRoot: string): string | null {
 	const intentsDir = join(haikuRoot, "intents")
 	if (!existsSync(intentsDir)) return null
@@ -97,24 +104,12 @@ function pickActiveIntent(haikuRoot: string): string | null {
 			return false
 		return true
 	})
-	if (live.length === 0) return null
 	if (live.length === 1) return live[0]
 
-	// Most-recently-touched intent.md wins.
-	let best = live[0]
-	let bestMtime = 0
-	for (const slug of live) {
-		try {
-			const mtime = statSync(join(intentsDir, slug, "intent.md")).mtimeMs
-			if (mtime > bestMtime) {
-				bestMtime = mtime
-				best = slug
-			}
-		} catch {
-			/* skip */
-		}
-	}
-	return best
+	// 0 live intents, or >1 with no branch naming one → no signal. Returning
+	// null lets the CLI fall back to the user's original status line instead
+	// of pinning an arbitrary intent the user isn't actually working.
+	return null
 }
 
 /** The stage a cursor action targets, or "" for intent-scope actions. */

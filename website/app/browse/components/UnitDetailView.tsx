@@ -200,6 +200,9 @@ export function UnitDetailView({
 				</section>
 			)}
 
+			{/* Review + approval sign-offs stamped on the unit */}
+			<SignOffsSection unit={unit} />
+
 			{/* Feedback targeting this unit */}
 			{feedback.length > 0 && (
 				<section className="mb-8">
@@ -719,6 +722,128 @@ function GenericRefItem({ ref_ }: { ref_: string }) {
 					<p className="truncate text-xs text-stone-400">{dirPath}</p>
 				)}
 			</div>
+		</div>
+	)
+}
+
+/** Read review/approval slots off unit FM. A slot present + truthy = signed
+ *  (the cursor only writes a role's slot when it signs, so unsigned roles are
+ *  simply absent); `at` carries the timestamp. Witness fields (body_sha256,
+ *  witnesses[]) are ignored — engine bookkeeping, noise to a reviewer. */
+function readSignOffs(
+	raw: unknown,
+): Array<{ role: string; signed: boolean; signedAt: string | null }> {
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return []
+	return Object.entries(raw as Record<string, unknown>).map(([role, v]) => {
+		const signed = v != null
+		let signedAt: string | null = null
+		if (v && typeof v === "object" && !Array.isArray(v)) {
+			const at = (v as Record<string, unknown>).at
+			if (typeof at === "string") signedAt = at
+		}
+		return { role, signed, signedAt }
+	})
+}
+
+/** Human label for a review/approval role. Raw role names read fine; we just
+ *  tidy the multi-word engine roles and the special gates. */
+function roleLabel(role: string): string {
+	if (role === "user") return "User"
+	if (role === "quality_gates") return "Quality Gates"
+	if (role === "cross-stage-consistency") return "Cross-stage Consistency"
+	return role
+		.split(/[-_]/)
+		.map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+		.join(" ")
+}
+
+/**
+ * Per-unit review + approval sign-offs. The cursor stamps `reviews.<role>` as
+ * each pre-execute reviewer signs the spec and `approvals.<role>` as each
+ * post-execute approver signs the work (the `user` gate lands in the same
+ * structure, so "all reviews/approvals" covers it). Surfaces who has signed
+ * and when, so a viewer can see the audit trail on the unit itself.
+ */
+function SignOffsSection({ unit }: { unit: HaikuUnit }) {
+	const reviews = readSignOffs(unit.raw.reviews)
+	const approvals = readSignOffs(unit.raw.approvals)
+	if (reviews.length === 0 && approvals.length === 0) return null
+	return (
+		<section className="mb-8">
+			<h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">
+				Reviews &amp; Approvals
+			</h2>
+			<div className="grid gap-4 sm:grid-cols-2">
+				{reviews.length > 0 && (
+					<SignOffGroup title="Reviews" entries={reviews} />
+				)}
+				{approvals.length > 0 && (
+					<SignOffGroup title="Approvals" entries={approvals} />
+				)}
+			</div>
+		</section>
+	)
+}
+
+function SignOffGroup({
+	title,
+	entries,
+}: {
+	title: string
+	entries: Array<{ role: string; signed: boolean; signedAt: string | null }>
+}) {
+	return (
+		<div className="rounded-xl border border-stone-200 dark:border-stone-700">
+			<div className="border-b border-stone-100 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-stone-400 dark:border-stone-800">
+				{title}
+			</div>
+			<ul className="divide-y divide-stone-100 dark:divide-stone-800">
+				{entries.map(({ role, signed, signedAt }) => (
+					<li
+						key={role}
+						className="flex items-center justify-between gap-3 px-4 py-2.5"
+					>
+						<div className="flex items-center gap-2 min-w-0">
+							<span
+								className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
+									signed
+										? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+										: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+								}`}
+							>
+								{signed ? (
+									<svg
+										className="h-3 w-3"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										aria-hidden="true"
+									>
+										<title>signed</title>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth={3}
+											d="M5 13l4 4L19 7"
+										/>
+									</svg>
+								) : (
+									<span
+										className="h-1.5 w-1.5 rounded-full bg-current"
+										aria-hidden="true"
+									/>
+								)}
+							</span>
+							<span className="truncate text-sm text-stone-700 dark:text-stone-300">
+								{roleLabel(role)}
+							</span>
+						</div>
+						<span className="flex-shrink-0 text-xs text-stone-400">
+							{signedAt ? formatDate(signedAt) : signed ? "signed" : "pending"}
+						</span>
+					</li>
+				))}
+			</ul>
 		</div>
 	)
 }

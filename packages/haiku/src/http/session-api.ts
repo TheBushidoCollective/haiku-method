@@ -13,10 +13,6 @@ import type { ApproveAction, IntentCurrentState } from "haiku-api"
 import { getCurrentState } from "../current-state.js"
 import { discoverReviewUrl } from "../discover-review-url.js"
 import {
-	deriveProgressTrack,
-	deriveStageMilestones,
-} from "../orchestrator/workflow/progress-track.js"
-import {
 	resolveIntentStages,
 	resolveStudioStages,
 } from "../orchestrator/studio.js"
@@ -24,6 +20,10 @@ import {
 	type DriftEvent,
 	runDriftSweep,
 } from "../orchestrator/workflow/drift-sweep.js"
+import {
+	deriveProgressTrack,
+	deriveStageMilestones,
+} from "../orchestrator/workflow/progress-track.js"
 import { getSession, type ReviewSession } from "../sessions.js"
 import { intentDir, parseFrontmatter } from "../state-tools.js"
 import { readStageDef, readStudioReviewAgentPaths } from "../studio-reader.js"
@@ -359,16 +359,13 @@ export function respondSessionApi(
 		{
 			const slug = session.intent_slug
 			const fm = slug ? readIntentFrontmatterFresh(slug) : {}
-			const studio =
-				(current?.studio as string) || (fm.studio as string) || ""
+			const studio = (current?.studio as string) || (fm.studio as string) || ""
 			if (slug && studio) {
 				try {
 					const mode = typeof fm?.mode === "string" ? fm.mode : ""
 					const intentStages = resolveIntentStages(fm, studio)
 					const stages =
-						intentStages.length > 0
-							? intentStages
-							: resolveStudioStages(studio)
+						intentStages.length > 0 ? intentStages : resolveStudioStages(studio)
 					const dir = intentDir(slug)
 					const milestonesByStage: Record<string, unknown> = {}
 					const summaries: Record<string, string> = {}

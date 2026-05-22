@@ -36,10 +36,7 @@ const SUBAGENT_TEMPLATE = loadTemplate(import.meta.url, "subagent.eta.md")
 // cascade resolver and the inlineFile path.
 const ENGINE_REVIEW_BODIES: Record<string, string> = {
 	spec: loadTemplate(import.meta.url, "engine-bodies/spec.eta.md"),
-	continuity: loadTemplate(
-		import.meta.url,
-		"engine-bodies/continuity.eta.md",
-	),
+	continuity: loadTemplate(import.meta.url, "engine-bodies/continuity.eta.md"),
 	"cross-stage-consistency": loadTemplate(
 		import.meta.url,
 		"engine-bodies/cross_stage_consistency.eta.md",
@@ -123,15 +120,18 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 	type DispatchEntry = { role: string; units: string[] }
 	const dispatches: DispatchEntry[] = Array.isArray(action.dispatches)
 		? (action.dispatches as DispatchEntry[])
-		: [{ role: (action.role as string) || "", units: (action.units as string[]) || [] }]
+		: [
+				{
+					role: (action.role as string) || "",
+					units: (action.units as string[]) || [],
+				},
+			]
 
 	const blocks = dispatches.map((d) =>
 		buildRoleBlock({ slug, studio, stage, role: d.role, units: d.units }),
 	)
 
-	const allDispatchBlocks = blocks
-		.map((b) => b.dispatchBlock)
-		.join("\n\n")
+	const allDispatchBlocks = blocks.map((b) => b.dispatchBlock).join("\n\n")
 
 	const allUnits = [...new Set(dispatches.flatMap((d) => d.units))]
 

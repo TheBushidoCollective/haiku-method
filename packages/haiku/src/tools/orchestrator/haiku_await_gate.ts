@@ -152,9 +152,7 @@ function stampGateApproval(
 		// witness model — output mutation is not drift, so nothing is
 		// witnessed here.
 		if (isPreExecute) {
-			const unitInputs = Array.isArray(fm.inputs)
-				? (fm.inputs as string[])
-				: []
+			const unitInputs = Array.isArray(fm.inputs) ? (fm.inputs as string[]) : []
 			records.user = buildReviewRecord(unitPath, {
 				intentDir: intentDirAbs,
 				unitInputs,

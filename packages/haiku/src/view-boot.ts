@@ -31,7 +31,7 @@ import type { ChildProcess } from "node:child_process"
 import { spawn } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { createServer } from "node:net"
-import { dirname, isAbsolute, join } from "node:path"
+import { isAbsolute, join } from "node:path"
 import matter from "gray-matter"
 import { getSession } from "./sessions.js"
 
@@ -175,10 +175,7 @@ export interface BootDetection {
  * trusts it. Use this when `haiku_view` was called with an explicit
  * `command` argument.
  */
-export function bootFromAgent(
-	command: string[],
-	cwd: string,
-): BootDetection {
+export function bootFromAgent(command: string[], cwd: string): BootDetection {
 	if (command.length === 0) {
 		throw new Error("bootFromAgent: command must have at least one entry")
 	}
@@ -216,17 +213,16 @@ export function detectBootTarget(cwd: string): BootDetection | null {
 		return null
 	}
 	const scripts = pkg.scripts ?? {}
-	const script = typeof scripts.dev === "string"
-		? "dev"
-		: typeof scripts.start === "string"
-			? "start"
-			: null
+	const script =
+		typeof scripts.dev === "string"
+			? "dev"
+			: typeof scripts.start === "string"
+				? "start"
+				: null
 	if (!script) return null
 
 	const pm = detectPackageManager(cwd)
-	const command = pm === "npm"
-		? ["npm", "run", script]
-		: [pm, "run", script]
+	const command = pm === "npm" ? ["npm", "run", script] : [pm, "run", script]
 	return {
 		command,
 		cwd,

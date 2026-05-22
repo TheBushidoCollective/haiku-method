@@ -16,9 +16,13 @@
 // Rule 1 forbids the cursor from doing). Push-on-advance makes the lost case
 // rare; the common pickup is handled by createUnitWorktree's remote recreate.
 
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { hasGitRemote, unitBranchExists, unitWorktreePath } from "../../git-worktree.js"
+import {
+	hasGitRemote,
+	unitBranchExists,
+	unitWorktreePath,
+} from "../../git-worktree.js"
 import {
 	intentDir,
 	parseFrontmatter,
@@ -28,7 +32,10 @@ import {
 import { resolveStageHats } from "../studio.js"
 import { findCurrentStage } from "./cursor.js"
 
-export function resetLostUnits(slug: string, studio: string): { reset: string[] } {
+export function resetLostUnits(
+	slug: string,
+	studio: string,
+): { reset: string[] } {
 	const reset: string[] = []
 	try {
 		// Recovery is only meaningful on a CROSS-MACHINE pickup — the sole way
@@ -57,7 +64,8 @@ export function resetLostUnits(slug: string, studio: string): { reset: string[] 
 				continue
 			}
 			const started =
-				typeof fm.started_at === "string" && (fm.started_at as string).length > 0
+				typeof fm.started_at === "string" &&
+				(fm.started_at as string).length > 0
 			const iters = Array.isArray(fm.iterations)
 				? (fm.iterations as Array<Record<string, unknown>>)
 				: []

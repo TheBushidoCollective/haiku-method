@@ -45,13 +45,13 @@ import {
 } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
-import { resolveInputWitnesses } from "../workflow/sign-slot.js"
 import {
 	emptyMigrationDetails,
 	type MigrationContext,
 	type MigrationStepDetails,
 	registerMigrator,
 } from "../migrate-registry.js"
+import { resolveInputWitnesses } from "../workflow/sign-slot.js"
 
 const SOURCE_VERSION = "8.0.0"
 const TARGET_VERSION = "9.0.0"
@@ -105,7 +105,7 @@ function migrateOneUnitFile(
 	const reviews = data.reviews
 	if (reviews && typeof reviews === "object" && !Array.isArray(reviews)) {
 		const reviewsRec = reviews as Record<string, unknown>
-		for (const [role, slot] of Object.entries(reviewsRec)) {
+		for (const [, slot] of Object.entries(reviewsRec)) {
 			if (!slot || typeof slot !== "object" || Array.isArray(slot)) continue
 			const slotRec = slot as Record<string, unknown>
 			// Only backfill signed slots (have `at`). Unsigned placeholders
@@ -132,7 +132,7 @@ function migrateOneUnitFile(
 	const approvals = data.approvals
 	if (approvals && typeof approvals === "object" && !Array.isArray(approvals)) {
 		const approvalsRec = approvals as Record<string, unknown>
-		for (const [role, slot] of Object.entries(approvalsRec)) {
+		for (const [, slot] of Object.entries(approvalsRec)) {
 			if (!slot || typeof slot !== "object" || Array.isArray(slot)) continue
 			const slotRec = slot as Record<string, unknown>
 			if (slotRec.witnesses === undefined) continue
@@ -254,9 +254,7 @@ export function v8ToV9(ctx: MigrationContext): MigrationStepDetails {
 				f.endsWith(".md"),
 			)) {
 				const unitPath = join(unitsDir, file)
-				if (
-					migrateOneUnitFile(unitPath, ctx.intentDir, repoRoot, outcome)
-				) {
+				if (migrateOneUnitFile(unitPath, ctx.intentDir, repoRoot, outcome)) {
 					outcome.units_migrated++
 				}
 			}

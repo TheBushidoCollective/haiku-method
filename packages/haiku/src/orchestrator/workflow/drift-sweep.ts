@@ -262,7 +262,9 @@ function stageProducedRelPaths(
 		// witness keys are intent-relative. Strip the intent-dir prefix so
 		// the two compare directly.
 		const prefix = `.haiku/intents/${slug}/`
-		return resolved.startsWith(prefix) ? resolved.slice(prefix.length) : resolved
+		return resolved.startsWith(prefix)
+			? resolved.slice(prefix.length)
+			: resolved
 	}
 	try {
 		for (const def of readStageArtifactDefs(studio, stage)) {
@@ -398,9 +400,7 @@ export function runDriftSweep(args: {
 			// resolution in resolveInputWitnesses().
 			const inputWitnesses = pickInputWitnesses(record)
 			if (inputWitnesses) {
-				for (const [path, storedSha] of Object.entries(
-					inputWitnesses.files,
-				)) {
+				for (const [path, storedSha] of Object.entries(inputWitnesses.files)) {
 					// Resolution rule mirrors sign-slot.ts's resolveInputWitnesses:
 					// try intent-relative first (covers `stages/`, `knowledge/`,
 					// `feedback/`, `intent.md`), fall back to repo-relative
@@ -458,9 +458,7 @@ export function runDriftSweep(args: {
 						})
 					}
 				}
-				for (const [dirRel, inventory] of Object.entries(
-					inputWitnesses.dirs,
-				)) {
+				for (const [dirRel, inventory] of Object.entries(inputWitnesses.dirs)) {
 					// Same three-step resolution as for files (intent-rel,
 					// repo-rel, then strip-legacy-prefix-and-retry-intent-rel).
 					const intentRelative = join(args.intentDir, dirRel)

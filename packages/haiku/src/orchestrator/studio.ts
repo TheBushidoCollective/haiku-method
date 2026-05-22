@@ -17,7 +17,7 @@
 //                                    "external" / compound CSV)
 //   - resolveStageMetadata         — STAGE.md description + body
 
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
 import { resolvePluginRoot } from "../config.js"

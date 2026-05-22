@@ -225,7 +225,8 @@ export function enrichActionWithPreview(action: OrchestratorAction): void {
 
 		case "external_review_requested":
 			tell_user = `Stage '${stage}' needs external review — submit the work through your project's review process.`
-			next_step = "After external approval, run /haiku:haiku-pickup to continue."
+			next_step =
+				"After external approval, run /haiku:haiku-pickup to continue."
 			break
 
 		case "awaiting_external_review":

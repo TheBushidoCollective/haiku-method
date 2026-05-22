@@ -94,7 +94,11 @@ type FbOnDisk = { path: string; data: Record<string, unknown> }
  *  at stage scope, or `intent_quality_gates` at intent scope) — open or
  *  closed. Counts prior fix-loop attempts and lets the deferral close the
  *  still-open ones. */
-function gateFbsFor(slug: string, stage: string, sourceRef: string): FbOnDisk[] {
+function gateFbsFor(
+	slug: string,
+	stage: string,
+	sourceRef: string,
+): FbOnDisk[] {
 	const dir = stage
 		? join(intentDir(slug), "stages", stage, "feedback")
 		: join(intentDir(slug), "feedback")

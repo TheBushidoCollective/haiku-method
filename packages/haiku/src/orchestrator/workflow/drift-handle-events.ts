@@ -58,10 +58,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
-import {
-	setFrontmatterField,
-	writeFeedbackFile,
-} from "../../state-tools.js"
+import { setFrontmatterField, writeFeedbackFile } from "../../state-tools.js"
 import type { DriftEvent } from "./drift-sweep.js"
 import { bodySha256, buildReviewRecord, outputSha256 } from "./sign-slot.js"
 
@@ -193,7 +190,7 @@ function collectOpenDriftFbKeys(intentDir: string): Set<GroupKey> {
 			// source_ref shape: `drift:<kind>:<file>` (legacy) or
 			// `drift:<kind>:<file>:<sha>` (new). Match on (kind, file)
 			// regardless of sha tail.
-			const m = ref.match(/^drift:([^:]+):([^]+)$/)
+			const m = ref.match(/^drift:([^:]+):([\s\S]+)$/)
 			if (!m) continue
 			const kind = m[1] ?? ""
 			let rest = m[2] ?? ""
@@ -326,8 +323,7 @@ function restampIntentApprovalSlot(args: {
 	const raw = readFileSync(intentMdPath, "utf8")
 	const parsed = matter(raw)
 	const fm = parsed.data as Record<string, unknown>
-	const approvals =
-		(fm.approvals as Record<string, unknown> | undefined) ?? {}
+	const approvals = (fm.approvals as Record<string, unknown> | undefined) ?? {}
 	const slot = approvals[args.role]
 	if (!slot || typeof slot !== "object" || Array.isArray(slot)) return
 	const slotRec = slot as Record<string, unknown>
@@ -465,11 +461,7 @@ export function engineHandleDriftEvents(args: {
 		// happens regardless of FB dedup outcome — keeps witness state
 		// internally consistent even when an FB is already open for
 		// this group.
-		const absFile = resolveWitnessedFile(
-			group.file,
-			args.intentDir,
-			repoRoot,
-		)
+		const absFile = resolveWitnessedFile(group.file, args.intentDir, repoRoot)
 		const currentSha = absFile ? currentShaForWitness(absFile, group.file) : ""
 		for (const slot of group.slots) {
 			if (slot.unit === "(intent)") {
@@ -542,8 +534,7 @@ export function engineHandleDriftEvents(args: {
 		const isInputClassDrift =
 			group.kind === "input_mutation" || group.kind === "input_deletion"
 		if (isInputClassDrift && !isInDriftTrackedSurface(group.file)) {
-			summary.fbs_untracked_skipped =
-				(summary.fbs_untracked_skipped ?? 0) + 1
+			summary.fbs_untracked_skipped = (summary.fbs_untracked_skipped ?? 0) + 1
 			continue
 		}
 

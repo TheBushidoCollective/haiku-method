@@ -123,9 +123,7 @@ export function bodyMatchesStoredHash(
 	} catch {
 		body = raw
 	}
-	const legacyOnDisk = createHash("sha256")
-		.update(body, "utf8")
-		.digest("hex")
+	const legacyOnDisk = createHash("sha256").update(body, "utf8").digest("hex")
 	if (legacyOnDisk === storedHash) return true
 	// Strip a single trailing newline (matter.stringify always adds
 	// AT MOST one), then re-hash.

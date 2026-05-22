@@ -59,7 +59,9 @@ export function writeStatuslineSnapshot(slug: string, action: unknown): void {
  *  unreadable / written for a different intent. Defensive parse: a
  *  malformed or mismatched snapshot reads as null so the caller derives
  *  live (cold-start / boot path). */
-export function readStatuslineSnapshot(slug: string): StatuslineSnapshot | null {
+export function readStatuslineSnapshot(
+	slug: string,
+): StatuslineSnapshot | null {
 	try {
 		const path = intentRuntimeStatePath(slug, SNAPSHOT_FILE)
 		if (!existsSync(path)) return null

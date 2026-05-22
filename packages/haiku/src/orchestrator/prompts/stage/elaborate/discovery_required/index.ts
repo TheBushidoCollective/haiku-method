@@ -78,7 +78,8 @@ export default definePromptBuilder((ctx) => {
 			templateRef,
 		})
 		const discoveryModel = resolveStudioMandateModel({
-			mandatePath: resolveDiscoveryTemplatePath(studio, stage, agent) ?? undefined,
+			mandatePath:
+				resolveDiscoveryTemplatePath(studio, stage, agent) ?? undefined,
 			studio,
 			stage,
 		})

@@ -21,15 +21,15 @@
 // is a no-op once the FB is open; closing/fixing the unit lets it
 // re-fire only if the malformed shape returns.
 
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import matter from "gray-matter"
-import { findCurrentStage } from "./cursor.js"
 import {
 	readFeedbackFiles,
 	stageDir,
 	writeFeedbackFile,
 } from "../../state-tools.js"
+import { findCurrentStage } from "./cursor.js"
 
 const UNIT_NAME_INPUT = /^unit-\d+-/
 
@@ -65,7 +65,7 @@ export function autoFileMalformedUnitInputs(
 	try {
 		for (const fb of readFeedbackFiles(slug, stage)) {
 			const ref = (fb as { source_ref?: unknown }).source_ref
-			const closed = (fb as { closed_at?: unknown; status?: unknown })
+			const closed = fb as { closed_at?: unknown; status?: unknown }
 			if (
 				closed.closed_at ||
 				(typeof closed.status === "string" && closed.status === "closed") ||

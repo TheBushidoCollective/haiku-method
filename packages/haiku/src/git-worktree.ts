@@ -989,13 +989,7 @@ export function pushUnitWorktree(slug: string, unit: string): void {
 	const unitBranch = `haiku/${slug}/${unit}`
 	try {
 		tryRun(["git", "-C", worktreePath, "add", "-A"])
-		const dirty = tryRun([
-			"git",
-			"-C",
-			worktreePath,
-			"status",
-			"--porcelain",
-		])
+		const dirty = tryRun(["git", "-C", worktreePath, "status", "--porcelain"])
 		if (dirty && dirty.trim().length > 0) {
 			tryRun([
 				"git",
@@ -1008,14 +1002,12 @@ export function pushUnitWorktree(slug: string, unit: string): void {
 		}
 		execFileSync(
 			"git",
-			[
-				"-C",
-				worktreePath,
-				"push",
-				"origin",
-				`HEAD:refs/heads/${unitBranch}`,
-			],
-			{ stdio: "pipe", timeout: GIT_NETWORK_TIMEOUT_MS, env: GIT_NONINTERACTIVE_ENV },
+			["-C", worktreePath, "push", "origin", `HEAD:refs/heads/${unitBranch}`],
+			{
+				stdio: "pipe",
+				timeout: GIT_NETWORK_TIMEOUT_MS,
+				env: GIT_NONINTERACTIVE_ENV,
+			},
 		)
 	} catch {
 		/* best-effort — local worktree still survives a same-machine restart */
@@ -1053,7 +1045,11 @@ export function pushFixChainWorktree(
 		execFileSync(
 			"git",
 			["-C", worktreePath, "push", "origin", `HEAD:refs/heads/${fixBranch}`],
-			{ stdio: "pipe", timeout: GIT_NETWORK_TIMEOUT_MS, env: GIT_NONINTERACTIVE_ENV },
+			{
+				stdio: "pipe",
+				timeout: GIT_NETWORK_TIMEOUT_MS,
+				env: GIT_NONINTERACTIVE_ENV,
+			},
 		)
 	} catch {
 		/* best-effort — local worktree still survives a same-machine restart */
@@ -3067,7 +3063,12 @@ export function uncommittedAgentWork(): string[] {
 	if (!isGitRepo()) return []
 	// `--untracked-files=all` expands new directories to individual files
 	// so the agent gets a precise "commit these" list, not a bare `dir/`.
-	const status = tryRun(["git", "status", "--porcelain", "--untracked-files=all"])
+	const status = tryRun([
+		"git",
+		"status",
+		"--porcelain",
+		"--untracked-files=all",
+	])
 	if (!status.trim()) return []
 	const files: string[] = []
 	for (const line of status.split("\n")) {
@@ -3890,13 +3891,7 @@ export function mergeUnitWorktree(
 		// or already-gone is fine).
 		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
 		deleteBranchWithWarning(unitBranch, `unit-merge cleanup for ${unit}`)
-		tryRun([
-			"git",
-			"push",
-			"origin",
-			"--delete",
-			unitBranch,
-		])
+		tryRun(["git", "push", "origin", "--delete", unitBranch])
 
 		return {
 			success: true,

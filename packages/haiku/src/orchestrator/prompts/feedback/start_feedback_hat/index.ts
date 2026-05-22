@@ -165,8 +165,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 			const closedAt = fm.closed_at
 			if (closedAt instanceof Date) return false
 			if (typeof closedAt === "string" && closedAt.length > 0) return false
-			if (typeof fm.status === "string" && fm.status === "closed")
-				return false
+			if (typeof fm.status === "string" && fm.status === "closed") return false
 			if (
 				typeof fm.closed_by === "string" &&
 				(fm.closed_by as string).startsWith("fix-loop:")

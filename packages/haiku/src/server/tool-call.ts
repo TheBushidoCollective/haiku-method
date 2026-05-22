@@ -57,15 +57,6 @@ import {
 } from "../sessions.js"
 import { buildStageArtifactUrl } from "../stage-artifact-url.js"
 import {
-	type BootProcessSpec,
-	bootFromAgent,
-	detectBootTarget,
-	killBootSession,
-	readBootRecipe,
-	spawnBoot,
-	spawnBootGroup,
-} from "../view-boot.js"
-import {
 	type HaikuAwaitDesignDirectionInput,
 	type HaikuAwaitVisualAnswerInput,
 	type HaikuViewCloseInput,
@@ -96,6 +87,15 @@ import {
 	openTunnel,
 } from "../tunnel.js"
 import { buildUnitOutputPreviews } from "../unit-output-preview.js"
+import {
+	type BootProcessSpec,
+	bootFromAgent,
+	detectBootTarget,
+	killBootSession,
+	readBootRecipe,
+	spawnBoot,
+	spawnBootGroup,
+} from "../view-boot.js"
 
 /**
  * Build the per-unit output preview map and the inverse
@@ -813,11 +813,7 @@ export async function handleToolCall(
 		// Group path — agent supplied a process graph.
 		let processGroup: BootProcessSpec[] | null = null
 		let primaryName: string | null = null
-		if (
-			wantsBoot &&
-			validated.processes &&
-			validated.processes.length > 0
-		) {
+		if (wantsBoot && validated.processes && validated.processes.length > 0) {
 			if (validated.command && validated.command.length > 0) {
 				return {
 					content: [
@@ -950,9 +946,7 @@ export async function handleToolCall(
 		let studio: string | undefined
 		try {
 			const parsed = await parseIntent(intentDirAbs)
-			const fm = parsed?.frontmatter as
-				| { studio?: unknown }
-				| undefined
+			const fm = parsed?.frontmatter as { studio?: unknown } | undefined
 			if (fm && typeof fm.studio === "string" && fm.studio) {
 				studio = fm.studio
 			}
@@ -983,11 +977,11 @@ export async function handleToolCall(
 				let primaryPid: number
 				let processesPayload:
 					| Array<{
-						name: string
-						port: number | null
-						command: string
-						pid: number
-					}>
+							name: string
+							port: number | null
+							command: string
+							pid: number
+					  }>
 					| undefined
 				if (processGroup && primaryName) {
 					const group = await spawnBootGroup(
@@ -1051,7 +1045,9 @@ export async function handleToolCall(
 								error: "haiku_view_boot_failed",
 								message: err instanceof Error ? err.message : String(err),
 								boot_command: processGroup
-									? processGroup.map((p) => `${p.name}: ${p.command.join(" ")}`).join("; ")
+									? processGroup
+											.map((p) => `${p.name}: ${p.command.join(" ")}`)
+											.join("; ")
 									: detection?.description,
 							}),
 						},
@@ -1071,7 +1067,9 @@ export async function handleToolCall(
 		if (validated.stage) params.set("stage", validated.stage)
 		if (validated.artifact) params.set("artifact", validated.artifact)
 		const query = params.toString()
-		const viewUrl = query ? `${base}${base.includes("?") ? "&" : "?"}${query}` : base
+		const viewUrl = query
+			? `${base}${base.includes("?") ? "&" : "?"}${query}`
+			: base
 
 		return {
 			content: [
@@ -1185,7 +1183,8 @@ export async function handleToolCall(
 			)
 			if (existsSync(intentMdPath)) {
 				const intentRaw = await readFile(intentMdPath, "utf-8")
-				const intentMode = (parseFrontmatter(intentRaw).data.mode as string) || ""
+				const intentMode =
+					(parseFrontmatter(intentRaw).data.mode as string) || ""
 				if (intentMode === "autopilot") {
 					const manifest = await resolveDesignDirectionManifestLocation(
 						input.intent_slug,
@@ -1205,10 +1204,7 @@ export async function handleToolCall(
 					if (input.archetypes) {
 						archetypes = input.archetypes
 					} else if (input.archetypes_file) {
-						const raw = await readFile(
-							resolve(input.archetypes_file),
-							"utf-8",
-						)
+						const raw = await readFile(resolve(input.archetypes_file), "utf-8")
 						archetypes = z.array(DesignArchetypeSchema).parse(JSON.parse(raw))
 					}
 					const chosen = archetypes[0]
@@ -1774,7 +1770,7 @@ function writeDesignDirectionManifest(args: {
 		bodyLines.push(
 			"# Design Direction (autopilot)",
 			"",
-			"Auto-selected by the workflow engine because `intent.mode === \"autopilot\"`. No SPA picker was shown; the agent drives the rest of the design phase from this anchor.",
+			'Auto-selected by the workflow engine because `intent.mode === "autopilot"`. No SPA picker was shown; the agent drives the rest of the design phase from this anchor.',
 		)
 	} else {
 		bodyLines.push("# Design Direction", "")
@@ -1791,10 +1787,7 @@ function writeDesignDirectionManifest(args: {
 	if (args.comments) {
 		bodyLines.push("", `**Comments:** ${args.comments}`)
 	}
-	writeFileSync(
-		args.absPath,
-		matter.stringify(`${bodyLines.join("\n")}\n`, fm),
-	)
+	writeFileSync(args.absPath, matter.stringify(`${bodyLines.join("\n")}\n`, fm))
 }
 
 /**

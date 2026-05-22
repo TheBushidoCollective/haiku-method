@@ -10,7 +10,7 @@
 // `derivePosition`) operates on the right tree.
 
 import { execFileSync } from "node:child_process"
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 import {
 	resolveIntentStages,
@@ -182,16 +182,18 @@ function describeAction(action: CursorAction | null): {
 			return { kind: "fixloop", label: "question", gated: true }
 		case "dispatch_review": {
 			const dispatches = (action as { dispatches?: unknown[] }).dispatches
-			const label = dispatches && dispatches.length > 1
-				? "adversarial review"
-				: `${shortRole(action.role)} review`
+			const label =
+				dispatches && dispatches.length > 1
+					? "adversarial review"
+					: `${shortRole(action.role)} review`
 			return { kind: "review", label, gated: false }
 		}
 		case "dispatch_approval": {
 			const dispatches = (action as { dispatches?: unknown[] }).dispatches
-			const label = dispatches && dispatches.length > 1
-				? "adversarial approval"
-				: `${shortRole(action.role)} approval`
+			const label =
+				dispatches && dispatches.length > 1
+					? "adversarial approval"
+					: `${shortRole(action.role)} approval`
 			return { kind: "approve", label, gated: false }
 		}
 		case "dispatch_quality_gates":
@@ -207,7 +209,11 @@ function describeAction(action: CursorAction | null): {
 		case "record_observations":
 			return { kind: "complete", label: "observations", gated: false }
 		case "intent_review":
-			return { kind: "review", label: `${shortRole(action.role)} review`, gated: false }
+			return {
+				kind: "review",
+				label: `${shortRole(action.role)} review`,
+				gated: false,
+			}
 		case "record_reflection":
 			return { kind: "complete", label: "reflection", gated: false }
 		case "seal_intent":
@@ -294,7 +300,8 @@ function fileNumber(name: string): string {
 function chipRole(key: string): string {
 	const role = key.includes(":") ? key.slice(key.indexOf(":") + 1) : key
 	if (role === "cross-stage-consistency") return "cross-stage"
-	if (key === "intent-quality-gates" || role === "quality_gates") return "quality"
+	if (key === "intent-quality-gates" || role === "quality_gates")
+		return "quality"
 	if (role === "user") return "gate"
 	return role
 }
@@ -336,13 +343,15 @@ export function hatSegments(
 		return segs
 	}
 	const last = iters[iters.length - 1]
-	const lastIdx =
-		typeof last.hat === "string" ? hats.indexOf(last.hat) : -1
+	const lastIdx = typeof last.hat === "string" ? hats.indexOf(last.hat) : -1
 	if (last.result === null || last.result === undefined) {
 		// Defensive: an open iteration (engine writes one in some flows) —
 		// that hat is the active one.
 		if (lastIdx >= 0) segs[lastIdx] = "active"
-	} else if (typeof last.result === "string" && ADVANCE_RESULTS.has(last.result)) {
+	} else if (
+		typeof last.result === "string" &&
+		ADVANCE_RESULTS.has(last.result)
+	) {
 		const next = lastIdx + 1
 		if (next >= 0 && next < hats.length && segs[next] === "pending") {
 			segs[next] = "active"
@@ -357,11 +366,7 @@ export function hatSegments(
  *  stage's hat sequence; `total` the sequence length. Completed and
  *  not-yet-started units are excluded — the second line shows the LIVE
  *  pool, not the whole roster. */
-function unitBars(
-	studio: string,
-	stage: string,
-	iDir: string,
-): ItemBar[] {
+function unitBars(studio: string, stage: string, iDir: string): ItemBar[] {
 	const unitsDir = join(iDir, "stages", stage, "units")
 	if (!existsSync(unitsDir)) return []
 	const hats = resolveStageHats(studio, stage)
@@ -380,8 +385,7 @@ function unitBars(
 			? (fm.iterations as Array<Record<string, unknown>>)
 			: []
 		const last = iters[iters.length - 1]
-		const complete =
-			!!last && last.result === "advance" && last.hat === lastHat
+		const complete = !!last && last.result === "advance" && last.hat === lastHat
 		if (complete) continue
 		out.push({ id: `U-${fileNumber(f)}`, segments: hatSegments(iters, hats) })
 	}
@@ -401,7 +405,8 @@ function feedbackBars(dir: string, fixHats: string[]): ItemBar[] {
 		const fm = readFm(join(dir, f))
 		if (!fm) continue
 		const closed =
-			(typeof fm.closed_at === "string" && (fm.closed_at as string).length > 0) ||
+			(typeof fm.closed_at === "string" &&
+				(fm.closed_at as string).length > 0) ||
 			fm.status === "closed"
 		const rejected =
 			(typeof fm.rejected_at === "string" &&
@@ -411,7 +416,10 @@ function feedbackBars(dir: string, fixHats: string[]): ItemBar[] {
 		const iters = Array.isArray(fm.iterations)
 			? (fm.iterations as Array<Record<string, unknown>>)
 			: []
-		out.push({ id: `FB-${fileNumber(f)}`, segments: hatSegments(iters, fixHats) })
+		out.push({
+			id: `FB-${fileNumber(f)}`,
+			segments: hatSegments(iters, fixHats),
+		})
 	}
 	return out
 }
@@ -705,15 +713,17 @@ export function resolveStatuslineState(): StatuslineState | null {
 		const activeIsAdversarial =
 			activeStep != null && !SINGLE_ACTOR_ROLES.has(rawRoleOf(activeKey))
 		let inBucket: ((k: string) => boolean) | null = null
-		if (activeKey.startsWith("review:") || activeKey.startsWith("intent-review:")) {
+		if (
+			activeKey.startsWith("review:") ||
+			activeKey.startsWith("intent-review:")
+		) {
 			inBucket = (k) =>
 				k.startsWith("review:") || k.startsWith("intent-review:")
 		} else if (
 			activeKey.startsWith("approve:") ||
 			activeKey === "intent-quality-gates"
 		) {
-			inBucket = (k) =>
-				k.startsWith("approve:") || k === "intent-quality-gates"
+			inBucket = (k) => k.startsWith("approve:") || k === "intent-quality-gates"
 		}
 		if (inBucket && activeIsAdversarial) {
 			// List ONLY the adversarial roles in the active bucket — the
@@ -721,7 +731,9 @@ export function resolveStatuslineState(): StatuslineState | null {
 			// bucket, the trailing user gate) are filtered out so the row is
 			// purely the agents running in parallel.
 			const chips = roleSteps
-				.filter((s) => inBucket(s.key) && !SINGLE_ACTOR_ROLES.has(rawRoleOf(s.key)))
+				.filter(
+					(s) => inBucket(s.key) && !SINGLE_ACTOR_ROLES.has(rawRoleOf(s.key)),
+				)
 				.map((s) => ({ id: chipRole(s.key), status: s.status }))
 			if (chips.length > 0) agentChips = chips
 		}

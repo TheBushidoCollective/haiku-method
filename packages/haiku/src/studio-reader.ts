@@ -320,7 +320,14 @@ export function resolveOutputTemplatePath(
 	validateIdentifier(stage, "stage")
 	validateIdentifier(name, "output template")
 	for (const base of studioSearchPaths()) {
-		const candidate = join(base, studio, "stages", stage, "outputs", `${name}.md`)
+		const candidate = join(
+			base,
+			studio,
+			"stages",
+			stage,
+			"outputs",
+			`${name}.md`,
+		)
 		if (existsSync(candidate)) return candidate
 	}
 	return null
@@ -392,7 +399,9 @@ export function readHatBody(
 	fix = false,
 ): string | null {
 	return readBodyAt(
-		fix ? resolveFixHatPath(studio, stage, hat) : resolveHatPath(studio, stage, hat),
+		fix
+			? resolveFixHatPath(studio, stage, hat)
+			: resolveHatPath(studio, stage, hat),
 	)
 }
 

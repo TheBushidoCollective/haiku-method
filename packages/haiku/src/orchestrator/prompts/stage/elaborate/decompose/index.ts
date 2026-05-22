@@ -150,7 +150,6 @@ function readFrontmatter(filePath: string): Record<string, unknown> {
 	return data
 }
 
-
 /** Build the per-stage review-agent lens section. Pulls every per-stage
  *  review agent that scopes to this stage's declared outputs (via
  *  `applies_to:` glob) and emits a snapshot Read per agent (the same

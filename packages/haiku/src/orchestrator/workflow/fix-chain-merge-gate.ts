@@ -32,6 +32,7 @@ import {
 	mergeFixChainWorktree,
 } from "../../git-worktree.js"
 import { withStageLock } from "../../locks.js"
+import type { OrchestratorAction } from "../../orchestrator.js"
 import {
 	deriveFeedbackStatus,
 	feedbackDir,
@@ -40,7 +41,6 @@ import {
 	isGitRepo,
 	parseFrontmatter,
 } from "../../state-tools.js"
-import type { OrchestratorAction } from "../../orchestrator.js"
 import { resolveIntentStages } from "../studio.js"
 
 interface PendingFixMerge {

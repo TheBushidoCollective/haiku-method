@@ -52,10 +52,8 @@ let _subagentTemplate: string | null = null
 function subagentTemplate(): string {
 	if (_subagentTemplate === null) {
 		_subagentTemplate = loadTemplate(
-			new URL(
-				"./prompts/feedback/start_feedback_hat/index.ts",
-				import.meta.url,
-			).href,
+			new URL("./prompts/feedback/start_feedback_hat/index.ts", import.meta.url)
+				.href,
 			"subagent.eta.md",
 		)
 	}

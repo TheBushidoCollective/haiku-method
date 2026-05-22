@@ -200,7 +200,10 @@ export function actionSignatureForDeadlock(
 		: null
 	const units = action.units
 	const unitBatch = Array.isArray(units)
-		? [...(units as unknown[])].map((u) => String(u)).sort().join(",")
+		? [...(units as unknown[])]
+				.map((u) => String(u))
+				.sort()
+				.join(",")
 		: null
 	// `elaborate_loop` is the same multi-item shape as the batch dispatches
 	// above, just on a different field: ONE action kind whose payload lists

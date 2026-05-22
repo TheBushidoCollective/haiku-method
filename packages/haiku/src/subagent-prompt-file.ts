@@ -168,13 +168,7 @@ function promptsScopeDir(intentSlug: string, stage?: string): string {
 	const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, "-")
 	const intentSafe = safe(intentSlug)
 	const tail = stage ? join("stages", safe(stage)) : "intent"
-	const dir = join(
-		projectRootDir(),
-		"intents",
-		intentSafe,
-		"prompts",
-		tail,
-	)
+	const dir = join(projectRootDir(), "intents", intentSafe, "prompts", tail)
 	mkdirSync(dir, { recursive: true })
 	return dir
 }

@@ -14,12 +14,7 @@
 // is purely additive and disappears cleanly when you're not in an intent.
 
 import { execFileSync } from "node:child_process"
-import {
-	existsSync,
-	mkdirSync,
-	readFileSync,
-	writeFileSync,
-} from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { resolvePluginRoot } from "../config.js"
@@ -66,7 +61,10 @@ function findHaikuDir(startDir: string): string | null {
 
 /** Read the saved fallback record from project `.haiku/` (preferred) or
  *  the global `~/.haiku/`. `home` is injectable for tests. */
-function readFallback(cwd: string, home: string = homedir()): FallbackRecord | null {
+function readFallback(
+	cwd: string,
+	home: string = homedir(),
+): FallbackRecord | null {
 	const candidates: string[] = []
 	const projectHaiku = findHaikuDir(cwd)
 	if (projectHaiku) candidates.push(join(projectHaiku, FALLBACK_FILE))
@@ -202,9 +200,7 @@ async function render(): Promise<void> {
 			)
 	}
 	if (debug && !state)
-		process.stderr.write(
-			`[haiku statusline] no state (cwd=${process.cwd()})\n`,
-		)
+		process.stderr.write(`[haiku statusline] no state (cwd=${process.cwd()})\n`)
 	if (state) {
 		process.stdout.write(renderStatusline(state))
 		return
@@ -264,7 +260,10 @@ function selfCommand(): string {
 	return "haiku statusline"
 }
 
-function settingsTarget(global: boolean, cwd: string): {
+function settingsTarget(
+	global: boolean,
+	cwd: string,
+): {
 	settingsPath: string
 	haikuDir: string
 } {
@@ -335,7 +334,9 @@ function uninstall(args: string[]): void {
 	try {
 		settings = JSON.parse(readFileSync(settingsPath, "utf8"))
 	} catch {
-		console.error(`haiku statusline uninstall: ${settingsPath} is not valid JSON`)
+		console.error(
+			`haiku statusline uninstall: ${settingsPath} is not valid JSON`,
+		)
 		process.exit(1)
 	}
 
@@ -343,8 +344,9 @@ function uninstall(args: string[]): void {
 	let restored: unknown = null
 	if (existsSync(fallbackPath)) {
 		try {
-			restored = (JSON.parse(readFileSync(fallbackPath, "utf8")) as FallbackRecord)
-				.statusLine
+			restored = (
+				JSON.parse(readFileSync(fallbackPath, "utf8")) as FallbackRecord
+			).statusLine
 		} catch {
 			/* leave restored null */
 		}

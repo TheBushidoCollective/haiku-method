@@ -320,7 +320,10 @@ export function renderStatusline(
 	// the status — pastel green stamped, near-white being-awaited, grey
 	// queued, pastel red failed. NO_COLOR keeps the status legible via the
 	// `mark` glyph appended to the role name.
-	const agentChip = (a: { id: string; status: "done" | "active" | "pending" | "failed" }): string => {
+	const agentChip = (a: {
+		id: string
+		status: "done" | "active" | "pending" | "failed"
+	}): string => {
 		const st = AGENT_CHIP[a.status] ?? AGENT_CHIP.pending
 		if (!color) return `${a.id}${st.mark}`
 		return `${st.bg}${st.fg} ${a.id}${st.mark} ${C.reset}`

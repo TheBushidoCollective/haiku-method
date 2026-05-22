@@ -22,6 +22,7 @@ import { buildBrowseUrl } from "@/lib/browse/url"
 import { AssetLightbox } from "./AssetLightbox"
 import { AuthenticatedMedia } from "./AuthenticatedMedia"
 import { BrowseMarkdown } from "./BrowseMarkdown"
+import { RESOLUTION_BADGES } from "./feedback-badges"
 import { FixHistory } from "./IterationHistory"
 import { IntentKanban } from "./KanbanView"
 import { RenderedHtmlFrame } from "./RenderedHtmlFrame"
@@ -333,6 +334,24 @@ export function IntentDetailView({
 						</strong>
 					</span>
 					{(() => {
+						// Total open feedback across every stage + intent scope, so
+						// you can see at a glance whether anything's outstanding
+						// without opening each stage.
+						const openFb = [
+							...intent.stages.flatMap((s) => s.feedback ?? []),
+							...(intent.intentFeedback ?? []),
+						].filter((f) => f.closedAt == null).length
+						if (openFb === 0) return null
+						return (
+							<span>
+								Feedback:{" "}
+								<strong className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+									{openFb} open
+								</strong>
+							</span>
+						)
+					})()}
+					{(() => {
 						// Schema indicator chip — mirrors the SPA's Schema
 						// badge. v4 stamps `plugin_version` on intent.md;
 						// v3 has no field. The reviewer should be able to
@@ -417,6 +436,9 @@ export function IntentDetailView({
 								const colors =
 									stageStatusColors[effectiveStatus] ||
 									stageStatusColors.pending
+								const openFb = (stage.feedback ?? []).filter(
+									(f) => f.closedAt == null,
+								).length
 								return (
 									<div key={stage.name} className="flex items-center">
 										<button
@@ -445,6 +467,14 @@ export function IntentDetailView({
 												<span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
 													{titleCase(stage.name)}
 												</span>
+												{openFb > 0 && (
+													<span
+														className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+														title={`${openFb} open feedback item${openFb !== 1 ? "s" : ""} in this stage`}
+													>
+														{openFb} feedback
+													</span>
+												)}
 											</div>
 											<div className="mt-0.5 text-xs text-stone-400">
 												{stage.units.length} unit
@@ -2162,44 +2192,6 @@ function FeedbackList({
 			)}
 		</div>
 	)
-}
-
-/** Resolution chip metadata. The `tooltip` field surfaces the engine's
- *  routing rule for each kind so viewers know what will happen on the
- *  next `run_next`:
- *    - question   → cursor preempts as `feedback_question` (Track-B);
- *                   the agent reads the body and answers, no fix-hat
- *                   chain runs.
- *    - inline_fix → cursor dispatches the stage's `fix_hats:` chain
- *                   against the FB body in place; resolution-of-record
- *                   is the closure_reply written by the terminal hat.
- *    - stage_revisit → cursor walks back to the FB's stage and reopens
- *                      its elaborate phase; corrective units land in the
- *                      next bolt rather than mutating completed work. */
-const RESOLUTION_BADGES: Record<
-	"question" | "inline_fix" | "stage_revisit",
-	{ label: string; classes: string; tooltip: string }
-> = {
-	question: {
-		label: "Question",
-		classes:
-			"bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
-		tooltip:
-			"Question — the cursor pauses on this finding (feedback_question) and asks the agent to answer the body. No fix-hat chain runs.",
-	},
-	inline_fix: {
-		label: "Inline fix",
-		classes: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",
-		tooltip:
-			"Inline fix — the engine dispatches the stage's fix-hat chain against this finding in place. The terminal hat's closure reply is the resolution-of-record.",
-	},
-	stage_revisit: {
-		label: "Stage revisit",
-		classes:
-			"bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-		tooltip:
-			"Stage revisit — the cursor walks back to this finding's stage and reopens its elaborate phase. Corrective units land in the next bolt; completed work isn't mutated.",
-	},
 }
 
 function FeedbackCard({

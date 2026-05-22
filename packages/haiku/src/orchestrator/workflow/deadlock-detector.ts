@@ -202,6 +202,32 @@ export function actionSignatureForDeadlock(
 	const unitBatch = Array.isArray(units)
 		? [...(units as unknown[])].map((u) => String(u)).sort().join(",")
 		: null
+	// `elaborate_loop` is the same multi-item shape as the batch dispatches
+	// above, just on a different field: ONE action kind whose payload lists
+	// every currently-unmet completion signal in `signals_unmet[]`
+	// (conversation, verify_conversation, discovery:<agent>, decompose,
+	// verify_decompose). The agent clears them one-per-tick — each verifier
+	// signal needs its own subagent dispatch tick — so a perfectly healthy
+	// elaborate phase emits `elaborate_loop`/<stage> on 4+ consecutive ticks,
+	// each making real on-disk progress (elaboration.md, verified_at, units,
+	// decompose_verified_at) but resolving a DIFFERENT signal. If the
+	// signature ignores the unmet-signal set, all those ticks collapse to one
+	// value and the no-progress halt fires on the 4th tick, BEFORE the last
+	// signal can clear (admin-portal-reimagine, security stage, 2026-05-22).
+	// Fold the unmet-signal set in (sorted, stable): an evolving set →
+	// changing signature → counter resets, no false halt; a genuinely stuck
+	// signal (a verifier that won't sign, the same set every tick) → stable
+	// signature → halts correctly. Same contract as fb_batch/unit_batch.
+	const signals = action.signals_unmet
+	const signalSet = Array.isArray(signals)
+		? signals
+				.map((s) => {
+					const o = (s ?? {}) as Record<string, unknown>
+					return o.agent ? `${o.signal ?? ""}:${o.agent}` : `${o.signal ?? ""}`
+				})
+				.sort()
+				.join(",")
+		: null
 	return JSON.stringify({
 		action: action.action ?? null,
 		stage: action.stage ?? null,
@@ -211,6 +237,7 @@ export function actionSignatureForDeadlock(
 		hat: action.hat ?? null,
 		fb_batch: fbBatch,
 		unit_batch: unitBatch,
+		signals: signalSet,
 	})
 }
 

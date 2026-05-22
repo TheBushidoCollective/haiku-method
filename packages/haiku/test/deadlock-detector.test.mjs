@@ -93,6 +93,101 @@ test("deadlock-detector: an EVOLVING fix-hat batch (progress) does NOT false-hal
 	)
 })
 
+test("deadlock-detector: an EVOLVING elaborate_loop (clearing signals one per tick) does NOT false-halt", () => {
+	// admin-portal-reimagine, security stage, 2026-05-22: the cursor
+	// emitted elaborate_loop/security 4 consecutive ticks and halted. Each
+	// tick had REAL on-disk progress — a different signal cleared
+	// (conversation → verify_conversation → decompose → verify_decompose) —
+	// but the pre-fix signature ignored signals_unmet, so all 4 collapsed to
+	// one value and the 4th tripped the repeat halt BEFORE the last signal
+	// could clear. Folding the unmet-signal set into the signature breaks the
+	// chain on every step of genuine progress.
+	__resetDeadlockDetector()
+	const tick = (signals_unmet) => ({
+		action: "elaborate_loop",
+		stage: "security",
+		signals_unmet,
+	})
+	// The natural cadence: each tick a different signal remains, because the
+	// agent cleared the prior one and re-ticked for the next instruction.
+	const progression = [
+		[{ signal: "conversation" }, { signal: "decompose" }],
+		[{ signal: "verify_conversation" }, { signal: "decompose" }],
+		[{ signal: "decompose" }],
+		[{ signal: "verify_decompose" }],
+	]
+	for (const signals of progression) {
+		assert.strictEqual(
+			wouldDeadlock("slug-elab-progress", tick(signals)),
+			null,
+			`clearing toward ${JSON.stringify(signals)} must not halt`,
+		)
+		recordTickResult("slug-elab-progress", tick(signals))
+	}
+	assert.strictEqual(
+		__getTickHistoryForTests("slug-elab-progress").count,
+		1,
+		"each distinct unmet-signal set is a fresh signature; counter never accumulates",
+	)
+})
+
+test("deadlock-detector: a STABLE elaborate_loop (same signal stuck every tick) still halts", () => {
+	// The other half of the contract: a verifier that won't sign leaves the
+	// SAME signal unmet tick after tick. That's a real wedge — the signature
+	// stays stable and the repeat halt must still fire.
+	__resetDeadlockDetector()
+	const stuck = {
+		action: "elaborate_loop",
+		stage: "security",
+		signals_unmet: [{ signal: "verify_decompose" }],
+	}
+	recordTickResult("slug-elab-stuck", stuck) // 1
+	recordTickResult("slug-elab-stuck", stuck) // 2
+	recordTickResult("slug-elab-stuck", stuck) // 3
+	const verdict = wouldDeadlock("slug-elab-stuck", stuck)
+	assert.ok(verdict, "a stuck elaborate signal must still trip the halt")
+	assert.strictEqual(verdict.kind, "repeat")
+	assert.strictEqual(verdict.count, 4)
+})
+
+test("deadlock-detector: elaborate_loop signal set is order-independent", () => {
+	const a = actionSignatureForDeadlock({
+		action: "elaborate_loop",
+		stage: "security",
+		signals_unmet: [{ signal: "decompose" }, { signal: "conversation" }],
+	})
+	const b = actionSignatureForDeadlock({
+		action: "elaborate_loop",
+		stage: "security",
+		signals_unmet: [{ signal: "conversation" }, { signal: "decompose" }],
+	})
+	assert.strictEqual(a, b, "same unmet-signal set in different order = same signature")
+})
+
+test("deadlock-detector: elaborate_loop discovery signals fold in the agent name", () => {
+	// Two discovery templates outstanding vs one is genuine progress — the
+	// agent identity has to be part of the signature or clearing one of two
+	// discovery artifacts would look like a no-op tick.
+	const two = actionSignatureForDeadlock({
+		action: "elaborate_loop",
+		stage: "design",
+		signals_unmet: [
+			{ signal: "discovery", agent: "research", units: [] },
+			{ signal: "discovery", agent: "design-direction", units: [] },
+		],
+	})
+	const one = actionSignatureForDeadlock({
+		action: "elaborate_loop",
+		stage: "design",
+		signals_unmet: [{ signal: "discovery", agent: "research", units: [] }],
+	})
+	assert.notStrictEqual(
+		two,
+		one,
+		"clearing one of two discovery artifacts must change the signature",
+	)
+})
+
 test("deadlock-detector: count survives an MCP restart (persisted on-disk)", () => {
 	// The in-memory count resetting on every MCP reconnect is exactly why
 	// the FB-011/012/013 no-op loop survived: each reconnect zeroed the

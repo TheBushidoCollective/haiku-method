@@ -193,6 +193,141 @@ export function stashPendingIntentReview(slug: string, role: string): void {
  * the stamp is the safe default (the unit stays un-witnessed until
  * the FB is properly resolved).
  */
+/**
+ * Stamp `reviews.<role>` / `approvals.<role>` on each unit in a single
+ * pending (stage, role) dispatch entry. Skips units the review pass
+ * flagged with a still-open invalidating FB (filed after dispatch) — they
+ * stay un-stamped so the cursor reroutes through the slot once the FB
+ * closes. Returns the per-unit stamped / skipped split.
+ *
+ * Shared by `drainPendingDispatches` (the bulk fallback path) and
+ * `stampSingleDispatch` (the per-role synchronous closure — see
+ * `haiku_review_stamp`). The two must stamp identically; pulling the
+ * per-unit body into one function is the only way to guarantee that.
+ */
+function stampUnitsForDispatch(opts: {
+	intentDir: string
+	stage: string
+	role: string
+	units: string[]
+	dispatchedAt: string | undefined
+	kind: "review" | "approval"
+}): { stamped: string[]; skipped: string[] } {
+	const { intentDir, stage, role, units, dispatchedAt, kind } = opts
+	const stamped: string[] = []
+	const skipped: string[] = []
+	for (const unitName of units) {
+		const unitPath = join(intentDir, "stages", stage, "units", `${unitName}.md`)
+		if (!existsSync(unitPath)) continue
+
+		if (
+			dispatchedAt &&
+			hasOpenInvalidatingFeedback({
+				intentDir,
+				stage,
+				targetUnit: unitName,
+				role,
+				sinceIso: dispatchedAt,
+			})
+		) {
+			// Review pass found an issue against this unit. Skip stamping;
+			// the FB's close handler will re-route the cursor through the
+			// slot once it's resolved.
+			skipped.push(unitName)
+			continue
+		}
+
+		const raw = readFileSync(unitPath, "utf8")
+		const parsed = parseFrontmatter(raw)
+		const fm = parsed.data as Record<string, unknown>
+
+		if (kind === "review") {
+			const reviews =
+				fm.reviews && typeof fm.reviews === "object"
+					? { ...(fm.reviews as Record<string, unknown>) }
+					: {}
+			// Pass intentDir + unitInputs so the signed record includes the
+			// input_witnesses block — the premise snapshot drift uses to
+			// detect input changes.
+			const unitInputs = Array.isArray(fm.inputs) ? (fm.inputs as string[]) : []
+			reviews[role] = buildReviewRecord(unitPath, { intentDir, unitInputs })
+			setFrontmatterField(unitPath, "reviews", reviews)
+		} else {
+			const outputs = Array.isArray(fm.outputs) ? (fm.outputs as string[]) : []
+			const approvals =
+				fm.approvals && typeof fm.approvals === "object"
+					? { ...(fm.approvals as Record<string, unknown>) }
+					: {}
+			approvals[role] = buildApprovalRecord(intentDir, outputs)
+			setFrontmatterField(unitPath, "approvals", approvals)
+		}
+		stamped.push(unitName)
+	}
+	return { stamped, skipped }
+}
+
+/**
+ * Stamp ONE (stage, role) dispatch entry synchronously and remove just
+ * that entry from the pending map (NOT the whole field). This is the
+ * decoupled review/approval closure: a review-agent subagent calls
+ * `haiku_review_stamp` when it finishes, the engine stamps its role's
+ * units here, and the subagent terminates — WITHOUT a `haiku_run_next`
+ * tick.
+ *
+ * Why it exists (the loop-halt false positive, automated-starlink-rental-
+ * platform 2026-05-22): review agents used to self-stamp by calling
+ * `haiku_run_next`, which ALSO computes and returns the global next
+ * action. In a parallel review fan-out, every sibling's self-stamp tick
+ * returned the SAME `start_feedback_hat` fix dispatch (the findings the
+ * wave just filed) — returned but never consumed, because spawning the
+ * fix hats is the PARENT's job after the whole wave closes. Four such
+ * pulls tripped the inter-tick loop guard on a perfectly healthy
+ * review→fix transition. Stamping a single role here, with no cursor
+ * walk, removes both the false signature and the coordination smell:
+ * only the parent's wave-level tick pulls the fix dispatch, and it pulls
+ * it once.
+ *
+ * Returns `found: false` when there's no pending entry for (stage, role)
+ * — the dispatch was never stashed, or a sibling/bulk drain already
+ * stamped it. Idempotent: a second call is a clean no-op.
+ */
+export function stampSingleDispatch(
+	slug: string,
+	kind: "review" | "approval",
+	stage: string,
+	role: string,
+): { found: boolean; stamped: string[]; skipped: string[] } {
+	const intent = readIntentFm(slug)
+	if (!intent) return { found: false, stamped: [], skipped: [] }
+	const field =
+		kind === "review" ? PENDING_REVIEW_FIELD : PENDING_APPROVAL_FIELD
+	const pending = readPendingMap(intent.fm, field)
+	const entry = pending[stage]?.[role]
+	if (!entry || !Array.isArray(entry.units)) {
+		return { found: false, stamped: [], skipped: [] }
+	}
+	const intentDir = join(findHaikuRoot(), "intents", slug)
+	const { stamped, skipped } = stampUnitsForDispatch({
+		intentDir,
+		stage,
+		role,
+		units: entry.units,
+		dispatchedAt: entry.dispatched_at,
+		kind,
+	})
+	// Remove just this (stage, role) entry; leave sibling roles' pending
+	// entries intact so their own closures still stamp them.
+	const perStage = { ...(pending[stage] ?? {}) }
+	delete perStage[role]
+	if (Object.keys(perStage).length === 0) {
+		delete pending[stage]
+	} else {
+		pending[stage] = perStage
+	}
+	setFrontmatterField(intent.path, field, pending)
+	return { found: true, stamped, skipped }
+}
+
 export function drainPendingDispatches(slug: string): boolean {
 	const intent = readIntentFm(slug)
 	if (!intent) return false
@@ -211,67 +346,15 @@ export function drainPendingDispatches(slug: string): boolean {
 			for (const role of Object.keys(perStage)) {
 				const entry = perStage[role]
 				if (!entry || !Array.isArray(entry.units)) continue
-				const dispatchedAt = entry.dispatched_at
-
-				for (const unitName of entry.units) {
-					const unitPath = join(
-						intentDir,
-						"stages",
-						stage,
-						"units",
-						`${unitName}.md`,
-					)
-					if (!existsSync(unitPath)) continue
-
-					if (
-						dispatchedAt &&
-						hasOpenInvalidatingFeedback({
-							intentDir,
-							stage,
-							targetUnit: unitName,
-							role,
-							sinceIso: dispatchedAt,
-						})
-					) {
-						// Review pass found an issue against this unit. Skip
-						// stamping; the FB's close handler will re-route the
-						// cursor through the slot once it's resolved.
-						continue
-					}
-
-					const raw = readFileSync(unitPath, "utf8")
-					const parsed = parseFrontmatter(raw)
-					const fm = parsed.data as Record<string, unknown>
-
-					if (kind === "review") {
-						const reviews =
-							fm.reviews && typeof fm.reviews === "object"
-								? { ...(fm.reviews as Record<string, unknown>) }
-								: {}
-						// Pass intentDir + unitInputs so the signed record
-						// includes the input_witnesses block — the premise
-						// snapshot drift uses to detect input changes.
-						const unitInputs = Array.isArray(fm.inputs)
-							? (fm.inputs as string[])
-							: []
-						reviews[role] = buildReviewRecord(unitPath, {
-							intentDir,
-							unitInputs,
-						})
-						setFrontmatterField(unitPath, "reviews", reviews)
-					} else {
-						const outputs = Array.isArray(fm.outputs)
-							? (fm.outputs as string[])
-							: []
-						const approvals =
-							fm.approvals && typeof fm.approvals === "object"
-								? { ...(fm.approvals as Record<string, unknown>) }
-								: {}
-						approvals[role] = buildApprovalRecord(intentDir, outputs)
-						setFrontmatterField(unitPath, "approvals", approvals)
-					}
-					stamped = true
-				}
+				const result = stampUnitsForDispatch({
+					intentDir,
+					stage,
+					role,
+					units: entry.units,
+					dispatchedAt: entry.dispatched_at,
+					kind,
+				})
+				if (result.stamped.length > 0) stamped = true
 			}
 		}
 		// Clear the field — the next tick will re-stash if the cursor

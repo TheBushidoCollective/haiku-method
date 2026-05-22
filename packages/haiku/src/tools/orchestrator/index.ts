@@ -24,6 +24,7 @@ import haiku_intent_reset from "./haiku_intent_reset.js"
 import haiku_intent_seal from "./haiku_intent_seal.js"
 import haiku_intent_unarchive from "./haiku_intent_unarchive.js"
 import haiku_record_agent_write from "./haiku_record_agent_write.js"
+import haiku_review_stamp from "./haiku_review_stamp.js"
 import haiku_run_next from "./haiku_run_next.js"
 import haiku_select_mode from "./haiku_select_mode.js"
 import haiku_select_stage from "./haiku_select_stage.js"
@@ -48,6 +49,7 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 			haiku_intent_seal,
 			haiku_intent_unarchive,
 			haiku_record_agent_write,
+			haiku_review_stamp,
 			haiku_run_next,
 			haiku_select_mode,
 			haiku_select_stage,

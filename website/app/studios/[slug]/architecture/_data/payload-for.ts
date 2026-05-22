@@ -192,11 +192,11 @@ export function payloadFor(
 				{
 					path: ".haiku/intents/{slug}/stages/{stage}/units/<unit>.md",
 					change:
-						"after the review-agent subagent terminates clean, the engine signs `reviews.<role>: { at, body_sha256, ... }` on each reviewed unit (the witness for Track C drift). Findings flow through `haiku_feedback` (origin: `adversarial-review`).",
+						"the review-agent subagent CLOSES by calling `haiku_review_stamp { kind: \"review\", stage, role }`, which signs `reviews.<role>: { at, body_sha256, ... }` on each unit it didn't flag (the witness for Track C drift) and returns a terminal ack — NO cursor walk. Findings flow through `haiku_feedback` (origin: `adversarial-review`). The subagent does NOT call `haiku_run_next`: decoupling stamping from the next-action walk is what stopped parallel review siblings from each pulling the wave's `start_feedback_hat` fix dispatch and tripping the inter-tick loop guard (automated-starlink-rental-platform, 2026-05-22).",
 				},
 			],
 			instructions:
-				"Cursor's PRE-execute review track (audits SPEC before any code lands). Each tick returns `dispatch_review { role, units }` for the next missing role. Agent dispatches the review-agent subagent with a tool whitelist of `haiku_unit_read` + `haiku_feedback`. The subagent files findings (which Track B picks up on the next tick via `start_feedback_hat`); when the subagent terminates clean, the engine stamps `reviews.<role>` on each listed unit. Once every non-user role is signed, the cursor advances to `user_gate { gate_kind: \"spec\" }` (skipped under autopilot). Only after this whole walk completes does the cursor advance to `start_unit_hat` for wave dispatch.",
+				"Cursor's PRE-execute review track (audits SPEC before any code lands). Each tick returns `dispatch_review { role, units }` (or one batched dispatch carrying `dispatches[]` for the parallel adversarial roles). Agent dispatches the review-agent subagent(s) with a tool whitelist of `haiku_unit_read` + `haiku_feedback` + `haiku_review_stamp`. Each subagent files findings (which Track B picks up via `start_feedback_hat`) then closes with `haiku_review_stamp`, which stamps `reviews.<role>` on its listed units and removes only that role's pending entry. The PARENT calls `haiku_run_next` once the whole wave terminates — that single tick pulls the fix dispatch (if findings) or advances to `user_gate { gate_kind: \"spec\" }` / `start_unit_hat`.",
 		},
 		"prereview-to-gate": {
 			injection: [
@@ -509,11 +509,11 @@ export function payloadFor(
 				{
 					path: ".haiku/intents/{slug}/stages/{stage}/units/<unit>.md",
 					change:
-						"after the approval agent terminates clean, the engine signs `approvals.<role>: { at, body_sha256, witnesses: [<output paths>] }`. Witnesses are the drift surface Track C sweeps every subsequent tick.",
+						"the approval agent CLOSES by calling `haiku_review_stamp { kind: \"approval\", stage, role }`, which signs `approvals.<role>: { at, body_sha256, witnesses: [<output paths>] }` on each unit it didn't flag and returns a terminal ack — no cursor walk, no `haiku_run_next`. Witnesses are the drift surface Track C sweeps every subsequent tick.",
 				},
 			],
 			instructions:
-				"Approval agents focus on built artifacts (architecture, performance, security, test coverage) — they audit the WORK, not the spec (the pre-execute review walk already approved the spec). Each role gets its own tick. After every studio approval signs, the cursor returns `user_gate { gate_kind: \"approval\" }` (skipped under autopilot, where `complete_stage` auto-fires once the engine-role and quality_gates set is signed).",
+				"Approval agents focus on built artifacts (architecture, performance, security, test coverage) — they audit the WORK, not the spec (the pre-execute review walk already approved the spec). Each subagent closes with `haiku_review_stamp` (not `haiku_run_next` — same decouple as the pre-execute review track, so parallel approval siblings can't trip the loop guard). The PARENT ticks once the wave closes. After every studio approval signs, the cursor returns `user_gate { gate_kind: \"approval\" }` (skipped under autopilot, where `complete_stage` auto-fires once the engine-role and quality_gates set is signed).",
 		},
 		"review-to-gate": {
 			injection: [

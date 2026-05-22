@@ -77,6 +77,11 @@ export {
 	HAIKU_DISCOVERY_COMPLETE_INPUT_SCHEMA,
 	validateHaikuDiscoveryCompleteInputSchema,
 } from "./inputs/discovery.js"
+export type { HaikuReviewStampInput } from "./inputs/review-stamp.js"
+export {
+	HAIKU_REVIEW_STAMP_INPUT_SCHEMA,
+	validateHaikuReviewStampInputSchema,
+} from "./inputs/review-stamp.js"
 export type {
 	HaikuFeedbackAdvanceHatInput,
 	HaikuFeedbackDeleteInput,

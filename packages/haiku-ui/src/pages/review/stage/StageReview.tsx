@@ -455,6 +455,7 @@ export function StageReview({
 		}, [feedback])
 
 	const stageSummary = resolveStageSummary(session, stageName)
+	const stageBrief = resolveStageBrief(session, stageName)
 	const seen = useSeenTracker(seenScopeId)
 
 	// Detail mode: when set, the active tab renders a single-item focused
@@ -617,6 +618,7 @@ export function StageReview({
 				<OverviewTab
 					stageName={stageName}
 					stageSummary={stageSummary}
+					stageBrief={stageBrief}
 					units={units}
 					knowledge={knowledgeVMs}
 					outputs={outputVMs}
@@ -864,6 +866,7 @@ export function StageReview({
 function OverviewTab({
 	stageName,
 	stageSummary,
+	stageBrief,
 	units,
 	knowledge,
 	outputs,
@@ -877,6 +880,7 @@ function OverviewTab({
 }: {
 	stageName: string
 	stageSummary: string | null
+	stageBrief: string | null
 	units: ParsedUnit[]
 	knowledge: ArtifactViewModel[]
 	outputs: ArtifactViewModel[]
@@ -899,6 +903,18 @@ function OverviewTab({
 					Start walkthrough →
 				</button>
 			</div>
+
+			{stageBrief && (
+				<Card as="article" ariaLabelledBy="stage-brief-heading">
+					<SectionHeading id="stage-brief-heading" variant="eyebrow">
+						Brief{" "}
+						<span className="font-normal normal-case text-stone-500">
+							(what this stage delivers)
+						</span>
+					</SectionHeading>
+					<MarkdownViewer id={`brief-${stageName}`}>{stageBrief}</MarkdownViewer>
+				</Card>
+			)}
 
 			<Card as="article" ariaLabelledBy="stage-summary-heading">
 				<SectionHeading id="stage-summary-heading" variant="eyebrow">
@@ -2276,6 +2292,19 @@ function resolveStageSummary(
 	const summaries = session.stage_summaries
 	if (summaries && typeof summaries[stageName] === "string") {
 		return summaries[stageName]
+	}
+	return null
+}
+
+/** The per-stage user-facing BRIEF (markdown) — the plain-language summary
+ *  the briefer wrote before the gate. Shown first in the Overview tab. */
+function resolveStageBrief(
+	session: ReviewPageSessionData,
+	stageName: string,
+): string | null {
+	const briefs = session.stage_briefs
+	if (briefs && typeof briefs[stageName] === "string" && briefs[stageName]) {
+		return briefs[stageName]
 	}
 	return null
 }

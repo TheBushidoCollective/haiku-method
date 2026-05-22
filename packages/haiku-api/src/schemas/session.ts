@@ -310,6 +310,13 @@ export const ReviewSessionPayloadSchema = z
 		 *  SPA's Overview tab as "Stage Summary (from studio definition)".
 		 *  Built server-side so the SPA never reads the plugin tree. */
 		stage_summaries: z.record(z.string()).optional(),
+		/** Per-stage user-facing BRIEF (markdown) keyed by stage name — the
+		 *  plain-language summary the briefer subagent wrote before the
+		 *  review gate, describing the planned work for the human reviewer.
+		 *  The first thing shown at the gate and a website-browse stage
+		 *  surface. Built server-side (engine reads BRIEF.md); the focused
+		 *  work agents never read it. Absent when the stage has no brief. */
+		stage_briefs: z.record(z.string()).optional(),
 		/** Per-stage granular milestone track keyed by stage name, so the
 		 *  SPA renders the SAME fine-grained dot stepper on every stage —
 		 *  completed and upcoming — not only the engine-active stage (whose

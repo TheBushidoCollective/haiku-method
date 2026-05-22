@@ -372,6 +372,7 @@ export function respondSessionApi(
 					const dir = intentDir(slug)
 					const milestonesByStage: Record<string, unknown> = {}
 					const summaries: Record<string, string> = {}
+					const briefs: Record<string, string> = {}
 					for (const st of stages) {
 						try {
 							const steps = deriveStageMilestones({
@@ -390,11 +391,25 @@ export function respondSessionApi(
 						if (typeof desc === "string" && desc.trim()) {
 							summaries[st] = desc.trim()
 						}
+						// Per-stage user-facing BRIEF — the plain-language summary
+						// the briefer wrote before the gate. Surfaced to the SPA
+						// review surface (first thing at the gate) and the website
+						// browse stage view. Read server-side; agents never read it.
+						try {
+							const briefPath = join(dir, "stages", st, "BRIEF.md")
+							if (existsSync(briefPath)) {
+								const body = readFileSync(briefPath, "utf8").trim()
+								if (body) briefs[st] = body
+							}
+						} catch {
+							/* skip this stage's brief — others still ship */
+						}
 					}
 					if (Object.keys(milestonesByStage).length > 0)
 						data.stage_milestones = milestonesByStage
 					if (Object.keys(summaries).length > 0)
 						data.stage_summaries = summaries
+					if (Object.keys(briefs).length > 0) data.stage_briefs = briefs
 				} catch {
 					/* leave both unset — SPA falls back to its defaults */
 				}

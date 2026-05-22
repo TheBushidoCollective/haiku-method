@@ -19,9 +19,12 @@ Read each unit's spec live via `haiku_unit_read` (returns body + title, engine f
 <% for (const o of outputPaths) { %>- `<%= o %>`
 <% } %><% if (outputPaths.length === 0) { %>_(no outputs declared yet — surface this as a finding if the spec promised something)_
 <% } %>
+<% if (existingFeedback) { %>
+<%~ existingFeedback %>
+<% } %>
 ## Procedure (authoritative)
 
 1. Read your mandate. For each unit, read its spec (above) and note what it promised to produce.
 2. Read each declared output path on disk via `Read`. Evaluate the built work against the mandate.
-3. If any output diverges from what its spec promised, file feedback: `haiku_feedback({ intent: "<%= slug %>", stage: "<%= stage %>", origin: "<% if (isEngineRole) { %>engine-review<% } else { %>adversarial-review<% } %>", author: "<%= role %>", source_ref: "<%= role %>:approval", target_unit: "<unit-name>", target_invalidates: ["<%= role %>"], title: "<short>", body: "<concrete + citation>" })`.
+3. If any output diverges from what its spec promised, FIRST check the existing-feedback list above — if the divergence is already captured there, do NOT re-file it. Otherwise file feedback: `haiku_feedback({ intent: "<%= slug %>", stage: "<%= stage %>", origin: "<% if (isEngineRole) { %>engine-review<% } else { %>adversarial-review<% } %>", author: "<%= role %>", source_ref: "<%= role %>:approval", target_unit: "<unit-name>", target_invalidates: ["<%= role %>"], title: "<short>", body: "<concrete + citation>" })`.
 4. **Close — when done with every unit, call `haiku_review_stamp { intent: "<%= slug %>", kind: "approval", stage: "<%= stage %>", role: "<%= role %>" }`**, then terminate with a one-line summary of how many findings you logged. That call IS your closure: the engine stamps `approvals.<%= role %>` on every unit you didn't flag and returns a terminal ack. Do NOT call `haiku_run_next` — driving the workflow is your parent's job once the whole approval wave closes. A turn that ends without `haiku_review_stamp` leaves the approval unstamped and re-dispatches.

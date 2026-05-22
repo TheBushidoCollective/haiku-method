@@ -23,6 +23,7 @@ import {
 } from "../../../../../studio-reader.js"
 import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import {
+	buildExistingFeedbackBlock,
 	emitSubagentDispatchBlock,
 	resolveStudioMandateModel,
 	studioReadRef,
@@ -113,6 +114,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 				? sharedBlockRef("runtime-verification")
 				: "",
 			prInteraction: PR_INTERACTION_ROLES.has(role),
+			existingFeedback: buildExistingFeedbackBlock(slug, ""),
 		})
 
 		const dispatchBlock = emitSubagentDispatchBlock({

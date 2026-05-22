@@ -31,7 +31,7 @@ import matter from "gray-matter"
 import { features } from "../../config.js"
 import { getCapabilities } from "../../harness.js"
 import { type ModelTier, sanitizeModel } from "../../model-selection.js"
-import { parseFrontmatter } from "../../state-tools.js"
+import { parseFrontmatter, readFeedbackFiles } from "../../state-tools.js"
 import {
 	readModelFromPath,
 	readStageDef,
@@ -330,6 +330,65 @@ export function buildPriorFeedbackRejectBlock(
 		rejectHatTool: "haiku_feedback_reject_hat",
 		fixLoop: true,
 	})
+}
+
+/** Build the "existing feedback — don't re-raise" context block for a
+ *  review / approval / intent-review subagent.
+ *
+ *  Review agents that re-flag a finding the engine is already tracking
+ *  (open, being fixed, addressed, answered) — or one a human/agent already
+ *  decided (closed, dismissed) — burn a fix-loop cycle on noise and erode
+ *  trust in the review. So we hand every review subagent the findings
+ *  already on its scope and tell it to dedupe.
+ *
+ *  Scope: for a stage walk (`stage` set) we read the stage's own findings
+ *  PLUS the intent-scope dir (cross-cutting findings the studio-completion
+ *  review filed); for an intent-completion walk (`stage` empty) we read just
+ *  the intent-scope dir. Each is rendered as `FB-NN [status · origin · scope]
+ *  title — gist`. Returns "" when nothing is on record. Capped so a
+ *  long-running stage doesn't bloat every dispatch. */
+export function buildExistingFeedbackBlock(slug: string, stage: string): string {
+	const items: ReturnType<typeof readFeedbackFiles> = []
+	try {
+		const stageItems = stage ? readFeedbackFiles(slug, stage) : []
+		const intentItems = readFeedbackFiles(slug, "")
+		const seen = new Set<string>()
+		for (const it of [...stageItems, ...intentItems]) {
+			if (seen.has(it.file)) continue
+			seen.add(it.file)
+			items.push(it)
+		}
+	} catch {
+		return ""
+	}
+	if (items.length === 0) return ""
+
+	const CAP = 50
+	const shown = items.slice(0, CAP)
+	const lines = shown.map((it) => {
+		const scopeTag = it.file.includes("/stages/") ? "stage" : "intent"
+		const gistRaw = (it.body || "")
+			.replace(/```[\s\S]*?```/g, " ")
+			.replace(/\s+/g, " ")
+			.trim()
+		const gist = gistRaw.length > 140 ? `${gistRaw.slice(0, 140)}…` : gistRaw
+		return `- \`${it.id}\` [${it.status} · ${it.origin} · ${scopeTag}] ${it.title}${
+			gist ? ` — ${gist}` : ""
+		}`
+	})
+	const overflow =
+		items.length > CAP ? `\n_(+${items.length - CAP} more on record)_` : ""
+
+	return [
+		"## Existing feedback on this scope — do NOT re-raise",
+		"",
+		"These findings are already on record — open, being fixed, addressed, answered, closed, or dismissed. Read them BEFORE you file anything. If your observation is already captured here, do NOT file a duplicate: the engine is already tracking it, or a human/agent already decided it. Reserve new findings for genuinely new problems this list doesn't cover. If you think an existing finding was resolved wrong, say so in your closing summary instead of re-filing it.",
+		"",
+		...lines,
+		overflow,
+	]
+		.join("\n")
+		.trimEnd()
 }
 
 /** Emit a `<subagent>` block whose body is a tmpfile pointer instead

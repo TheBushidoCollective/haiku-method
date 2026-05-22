@@ -18,9 +18,12 @@ Your subject is the delivery PR on the remote, so you MAY interact with it throu
 
 You MUST NOT write, edit, or create any file. Your ONLY output channel is `haiku_feedback` (intent scope — omit `stage`).
 <% } %>
+<% if (typeof existingFeedback !== "undefined" && existingFeedback) { %>
+<%~ existingFeedback %>
+<% } %>
 ## Instructions (authoritative)
 
 1. Read your mandate above, then the intent artifacts under `.haiku/intents/<%= slug %>/stages/*/` and `.haiku/intents/<%= slug %>/knowledge/`.
 2. Audit the intent-as-a-whole through your mandate's lens.
-3. For each issue: `haiku_feedback({ intent: "<%= slug %>", title, body, origin: "studio-review", author: "<%= role %>" })`. Omit `stage`.
+3. For each issue, FIRST check the existing-feedback list above — if it's already captured there (open or already decided), do NOT re-file it. Otherwise: `haiku_feedback({ intent: "<%= slug %>", title, body, origin: "studio-review", author: "<%= role %>" })`. Omit `stage`.
 4. **Close — return a one-line summary of how many findings you logged.** Terminating clean (no findings) is what the engine reads as your sign-off; findings route to the fix loop next tick.

@@ -450,18 +450,45 @@ export function readStudioFixHatBody(
 }
 
 /**
- * Studio-level fix hats live at `plugin/studios/{studio}/fix-hats/*.md`
- * (NOT per-stage). They are dispatched against intent-scope feedback
+ * Two-tier studio fix-hat cascade (mirrors the global→studio shape of
+ * the hat / review-agent cascades). Load order, least-specific first
+ * (later entries override earlier by hat name):
+ *
+ *   1. `{plugin}/fix-hats/`                          ── global
+ *   2. `{project}/.haiku/fix-hats/`                  ── global project override
+ *   3. `{plugin}/studios/{studio}/fix-hats/`         ── studio
+ *   4. `{project}/.haiku/studios/{studio}/fix-hats/` ── studio project override
+ *
+ * The global tier lets a fix-hat that's identical across every studio
+ * (e.g. `validator`, the intent-completion fix verifier) live in ONE
+ * file instead of N copies; a studio that needs a tailored mandate drops
+ * `studios/{studio}/fix-hats/{hat}.md` and it wins by name.
+ */
+function fixHatDirCascade(studio: string): string[] {
+	const project = join(process.cwd(), ".haiku")
+	const plugin = resolvePluginRoot()
+	return [
+		join(plugin, "fix-hats"),
+		join(project, "fix-hats"),
+		join(plugin, "studios", studio, "fix-hats"),
+		join(project, "studios", studio, "fix-hats"),
+	]
+}
+
+/**
+ * Studio-level fix hats live at `plugin/fix-hats/*.md` (global) or
+ * `plugin/studios/{studio}/fix-hats/*.md` (studio override), NOT
+ * per-stage. They are dispatched against intent-scope feedback
  * produced by the studio-level review agents. They run at intent
  * completion time to reconcile cross-stage artifacts against studio-wide
- * standards — different mandate than stage-owned hats. Project overrides
- * plugin. Returns name → HatDef (content + agent_type + model).
+ * standards — different mandate than stage-owned hats. Resolved via the
+ * `fixHatDirCascade` (global → studio, project overrides plugin at each
+ * tier). Returns name → HatDef (content + agent_type + model).
  */
 export function readStudioFixHatDefs(studio: string): Record<string, HatDef> {
 	validateIdentifier(studio, "studio")
 	const hats: Record<string, HatDef> = {}
-	for (const base of [...studioSearchPaths()].reverse()) {
-		const hatsDir = join(base, studio, "fix-hats")
+	for (const hatsDir of fixHatDirCascade(studio)) {
 		if (!existsSync(hatsDir)) continue
 		for (const f of readdirSync(hatsDir).filter((f) => f.endsWith(".md"))) {
 			const raw = readFileSync(join(hatsDir, f), "utf8")
@@ -483,8 +510,7 @@ export function readStudioFixHatDefs(studio: string): Record<string, HatDef> {
 export function readStudioFixHatPaths(studio: string): Record<string, string> {
 	validateIdentifier(studio, "studio")
 	const hats: Record<string, string> = {}
-	for (const base of [...studioSearchPaths()].reverse()) {
-		const hatsDir = join(base, studio, "fix-hats")
+	for (const hatsDir of fixHatDirCascade(studio)) {
 		if (!existsSync(hatsDir)) continue
 		for (const f of readdirSync(hatsDir).filter((f) => f.endsWith(".md"))) {
 			hats[f.replace(/\.md$/, "")] = join(hatsDir, f)

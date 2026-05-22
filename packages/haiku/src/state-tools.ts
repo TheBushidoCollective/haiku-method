@@ -105,7 +105,6 @@ import {
 	readStageArtifactDefs,
 	readStageBody,
 	readStageDef,
-	readStudioFixHatPaths,
 	resolveHatPath,
 	resolveStudio,
 } from "./studio-reader.js"
@@ -12496,9 +12495,15 @@ export function handleStateTool(
 			}
 
 			// Resolve fix_hats sequence. Stage-scoped: from STAGE.md.
-			// Intent-scoped: from the studio's `fix-hats/` directory (mirrors
-			// how the orchestrator's intent_completion_fix dispatch resolves
-			// the chain — Object.keys(readStudioFixHatPaths(studio)) order).
+			// Intent-scoped: via `resolveStudioFixHats` — the SAME ordered
+			// source the cursor and the reject path use (STUDIO.md `fix_hats:`
+			// if declared, else the alphabetical cascade fallback). Must NOT
+			// re-derive order from `Object.keys(readStudioFixHatPaths)`: with
+			// the global fix-hat tier, cascade insertion order (global hats
+			// first) no longer matches a studio's declared chain — software's
+			// `[builder, reconciler, validator]` would resolve as
+			// `[reconciler, validator, builder]` and the advance would mis-
+			// sequence against the cursor's view.
 			let fixHats: string[] = []
 			const intentFmPath = join(intentDir(intentArg), "intent.md")
 			let studioName = "software"
@@ -12514,9 +12519,8 @@ export function handleStateTool(
 					fixHats = sd.data.fix_hats as string[]
 				}
 			} else {
-				// Intent-scope FB — use studio-level fix-hats.
-				const studioFixHatPaths = readStudioFixHatPaths(studioName)
-				fixHats = Object.keys(studioFixHatPaths)
+				// Intent-scope FB — use studio-level fix-hats (ordered).
+				fixHats = resolveStudioFixHats(studioName)
 			}
 			if (fixHats.length === 0) {
 				return reply(
@@ -12526,7 +12530,7 @@ export function handleStateTool(
 						scope: stageArg ? "stage" : "intent",
 						message: stageArg
 							? `Stage '${stageArg}' has no \`fix_hats:\` configured in STAGE.md. The fix-loop FB-as-unit model requires a fix_hats sequence.`
-							: `Studio '${studioName}' has no fix-hats in \`plugin/studios/${studioName}/fix-hats/\`. Intent-completion fix loops require at least one studio-level fix-hat.`,
+							: `Studio '${studioName}' has no fix-hats (looked in the global \`plugin/fix-hats/\` and studio \`plugin/studios/${studioName}/fix-hats/\`). Intent-completion fix loops require at least one fix-hat.`,
 					},
 					{ isError: true },
 				)
@@ -12999,7 +13003,7 @@ export function handleStateTool(
 						scope: stageArg ? "stage" : "intent",
 						message: stageArg
 							? `Stage '${stageArg}' has no \`fix_hats:\` configured.`
-							: `Studio '${studioNameRej}' has no fix-hats in \`plugin/studios/${studioNameRej}/fix-hats/\`.`,
+							: `Studio '${studioNameRej}' has no fix-hats (looked in the global \`plugin/fix-hats/\` and studio \`plugin/studios/${studioNameRej}/fix-hats/\`).`,
 					},
 					{ isError: true },
 				)

@@ -104,7 +104,7 @@ test("every studio-level fix_hat resolves to a studio fix-hat mandate file", asy
 			if (typeof hat !== "string" || hat.length === 0) continue
 			if (!paths[hat]) {
 				misses.push(
-					`${studio}: studio-level fix_hat \`${hat}\` has no file in studios/${studio}/fix-hats/`,
+					`${studio}: studio-level fix_hat \`${hat}\` has no file in the global plugin/fix-hats/ or studios/${studio}/fix-hats/ cascade`,
 				)
 			}
 		}
@@ -113,6 +113,42 @@ test("every studio-level fix_hat resolves to a studio fix-hat mandate file", asy
 		misses.length,
 		0,
 		`unbacked studio fix_hats:\n${misses.join("\n")}`,
+	)
+})
+
+test("EVERY studio resolves a non-empty, fully-backed intent-completion fix chain (global tier)", async () => {
+	// Most studios DON'T declare `fix_hats:` on STUDIO.md — they rely on
+	// `resolveStudioFixHats`'s directory fallback, which after the global
+	// `plugin/fix-hats/` consolidation MUST walk the global tier too. If the
+	// fallback only enumerated `studios/<studio>/fix-hats/` (now empty for the
+	// 23 generic studios), the chain would resolve to [] and the cursor would
+	// surface a `user_gate` instead of running the intent-completion fix loop.
+	// This locks: (a) every studio gets a non-empty chain, (b) chain ORDER
+	// (resolveStudioFixHats) and mandate PATHS (readStudioFixHatPaths) agree
+	// on the SAME set of names — the agreement the cursor + advance + reject
+	// all depend on.
+	const { resolveStudioFixHats } = await import(`${SRC}orchestrator/studio.ts`)
+	const { readStudioFixHatPaths } = await import(`${SRC}studio-reader.ts`)
+	const misses = []
+	for (const studio of studios) {
+		const order = resolveStudioFixHats(studio)
+		if (order.length === 0) {
+			misses.push(`${studio}: intent-completion fix chain resolved to EMPTY`)
+			continue
+		}
+		const paths = readStudioFixHatPaths(studio)
+		for (const hat of order) {
+			if (!paths[hat]) {
+				misses.push(
+					`${studio}: chain hat \`${hat}\` (from resolveStudioFixHats) has no mandate path (from readStudioFixHatPaths)`,
+				)
+			}
+		}
+	}
+	assert.equal(
+		misses.length,
+		0,
+		`studios with broken intent-completion chains:\n${misses.join("\n")}`,
 	)
 })
 

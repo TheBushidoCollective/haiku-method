@@ -133,15 +133,23 @@ export function resolveStudioFixHats(studio: string): string[] {
 			break
 		}
 	}
-	// Fallback: enumerate the studio's fix-hats directory and return
-	// the names alphabetically. Same source-of-truth as
-	// `readStudioFixHatPaths` (the per-hat-mandate-file resolver).
+	// Fallback: enumerate the fix-hats cascade and return the names
+	// alphabetically. MUST walk the SAME tiers as `readStudioFixHatPaths`
+	// (the per-hat-mandate-file resolver): the global tier (`plugin/fix-hats/`,
+	// project `.haiku/fix-hats/`) PLUS the studio tier (`studios/<studio>/
+	// fix-hats/`). A global-only fix hat (e.g. the shared `validator` /
+	// `reconciler`) must show up in the chain for studios that ship no local
+	// copy — otherwise the dispatch sees an empty chain and surfaces a
+	// `user_gate` instead of running the intent-completion fix loop. Order is
+	// alphabetical regardless of which tier supplied the file, matching the
+	// pre-consolidation behavior when every studio carried its own copies.
 	const names: string[] = []
-	for (const base of [
-		join(process.cwd(), ".haiku", "studios"),
-		join(pluginRoot, "studios"),
+	for (const fixHatsDir of [
+		join(pluginRoot, "fix-hats"),
+		join(process.cwd(), ".haiku", "fix-hats"),
+		join(pluginRoot, "studios", dir, "fix-hats"),
+		join(process.cwd(), ".haiku", "studios", dir, "fix-hats"),
 	]) {
-		const fixHatsDir = join(base, dir, "fix-hats")
 		if (!existsSync(fixHatsDir)) continue
 		for (const f of readdirSync(fixHatsDir).filter((f) => f.endsWith(".md"))) {
 			const name = f.replace(/\.md$/, "")

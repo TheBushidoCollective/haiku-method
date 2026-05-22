@@ -59,6 +59,7 @@ import {
 	MAX_CONCURRENT_SUBAGENTS,
 	MAX_FIX_LOOP_BOLTS,
 } from "../../state-tools.js"
+import { RUNTIME_OBSERVATION_ROLES } from "../review-role-classes.js"
 import {
 	readReviewAgentPaths,
 	readStageArtifactDefs,
@@ -1482,6 +1483,35 @@ function walkIntentTrack(args: {
 		for (const role of reviewRoles) {
 			const missing = units
 				.filter((u) => {
+					// Pre-execute review is forward-only per unit: it audits the
+					// SPEC *before* any code lands. Once a unit has started
+					// executing (started_at set, or any iteration recorded) its
+					// spec is frozen — `haiku_unit_write` refuses non-pending
+					// units — so re-running a pre-execute review on it can only
+					// churn: the only remediation the engine offers (the fix
+					// loop) is contractually barred from editing the spec doc
+					// (`workflow-contracts-fix-loop.md` — "the feedback file IS
+					// the scope; do NOT synthesize a new unit spec"). A
+					// post-execute code-finding closure that invalidates
+					// `reviews.<role>` on an already-executed unit must therefore
+					// NOT re-trigger a pre-execute review here; that divergence
+					// belongs to the post-execute `dispatch_approval` walk (it
+					// audits the WORK, which the fix loop CAN change) or to a
+					// corrective unit. Skipping started units is what gives the
+					// stage a convergence path instead of an A↔B review↔fix
+					// churn the loop guard can only halt, never resolve.
+					//
+					// Frozen-spec ↔ fix-loop non-convergence churn — bug reports
+					// 2026-05-20 admin-portal-reimagine/development (FB-034→037
+					// re-filing a verbatim finding against unit-005's frozen
+					// spec) and twelve-week-plan-accountability-app/security
+					// (cross-stage-consistency re-flagging unit-09's stale gate
+					// path). In normal flow no unit executes until every unit's
+					// pre-execute reviews are stamped, so this filter only fires
+					// on the invalidation re-entry — the exact churn path.
+					const started =
+						u.fm.started_at != null || pickIterations(u.fm).length > 0
+					if (started) return false
 					const reviews = pickReviews(u.fm)
 					return !reviews[role]
 				})
@@ -2172,9 +2202,19 @@ export function stageRoleLists(
 	// Autopilot drops ONLY the terminal human `user` gate.
 	const adversarialRoles = ["continuity", "cross-stage-consistency", ...agents]
 	const isAutopilot = mode === "autopilot"
+	// PRE-execute review audits the planned SPEC, before any code lands.
+	// Runtime-observation roles (e.g. `runtime-verifier`) DRIVE the live,
+	// built work — there is nothing to observe before execution, so they are
+	// dropped from the review walk and fire only in the POST-execute approval
+	// walk (and at intent completion). The static engine reviewers
+	// (`continuity`, `cross-stage-consistency`) audit the spec and stay in
+	// both. See `orchestrator/review-role-classes` for the classification.
+	const preExecuteAdversarialRoles = adversarialRoles.filter(
+		(role) => !RUNTIME_OBSERVATION_ROLES.has(role),
+	)
 	const reviewRoles = isAutopilot
-		? ["spec", ...adversarialRoles]
-		: ["spec", ...adversarialRoles, "user"]
+		? ["spec", ...preExecuteAdversarialRoles]
+		: ["spec", ...preExecuteAdversarialRoles, "user"]
 	// Post-execute order: `spec` (serial conformance) → the adversarial
 	// fan-out → `quality_gates` (engine-run mechanical gate) → `user`.
 	//

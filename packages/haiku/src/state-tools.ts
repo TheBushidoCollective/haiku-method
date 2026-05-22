@@ -9708,15 +9708,24 @@ export function handleStateTool(
 			// The reviewer is wrong about a verifiable fact; we don't
 			// promote that mistake into iterations history.
 			//
-			// Strict gate: only reject reasons that explicitly invoke
-			// absence ("missing", "no artifacts", "empty", "not
-			// produced", "no files", "no output") trigger this refusal.
-			// Content-quality rejects ("the prose is shallow", "the
-			// design doesn't address Q13") pass through untouched —
-			// those are legitimate reviewer judgments the doer needs to
-			// hear.
+			// Strict gate: only reject reasons that claim the DELIVERABLE
+			// FILES THEMSELVES are absent trigger this refusal — the
+			// stale-worktree hallucination this guard exists to catch
+			// (reviewer in an unseeded worktree reports every output file
+			// "missing from disk"). Content-quality rejects pass through
+			// untouched, including ones that use absence words about
+			// CONTENT inside a present file: "the prose is shallow", "the
+			// design doesn't address Q13", and crucially "feature file is
+			// missing scenario X" / "no scenario for role-change". The old
+			// gate matched bare `missing`/`empty`, which false-tripped on
+			// those legitimate content gaps and blocked the validator from
+			// rejecting present-but-incomplete files (product-validator
+			// thrash, bug report 2026-05-21). Tightened so the absence
+			// language must attach to the artifact/output/file/disk itself
+			// — "missing scenario" is a content gap; "outputs missing from
+			// disk" is a file-absence claim.
 			const reasonImpliesMissing = rejectReasonRaw
-				? /\b(missing|no\s+artifacts?|empty|no\s+files?|not\s+produced|no\s+output)\b/.test(
+				? /\b(no\s+(?:files?|outputs?|artifacts?)\b|not\s+produced\b|nothing\s+(?:was\s+)?(?:written|produced|created)\b|(?:files?|outputs?|artifacts?)\s+(?:are\s+|were\s+)?(?:missing|absent)\b|missing\s+from\s+disk\b|empty\s+(?:files?|outputs?|artifacts?)\b)/.test(
 						rejectReasonRaw.toLowerCase(),
 					)
 				: false

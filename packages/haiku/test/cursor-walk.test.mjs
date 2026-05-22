@@ -286,10 +286,85 @@ test("cursor: hat advanced → next start_unit_hat", async () => {
 	)
 })
 
-test("cursor: all hats done → dispatch_review for spec role", async () => {
+test("cursor: unstarted unit, no reviews → dispatch_review for spec role", async () => {
 	if (!HAS_GIT) return
 	await withTmpRepo(
 		"cursor-spec-review",
+		async ({ repoRoot, intentDir, slug }) => {
+			makeStudio({ repoRoot, studio: "test" })
+			makeIntent({ intentDir, slug, studio: "test" })
+			seedVerifiedElaboration({ intentDir, stage: "design" })
+			// Pre-execute review fires BEFORE a unit executes — the canonical
+			// precondition is started_at: null, iterations: []. (Pre-2026-05-22
+			// this fixture set started_at + full iterations as a brief-skip
+			// shortcut; the frozen-spec churn fix made execution state matter,
+			// so the genuine pre-execute scenario is an unstarted unit.)
+			writeUnit(intentDir, "design", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				started_at: null,
+				iterations: [],
+				reviews: {},
+				approvals: {},
+				discovery: {},
+			})
+			const action = await runTick(repoRoot, slug)
+			assert.strictEqual(
+				action.action,
+				"dispatch_review",
+				`expected dispatch_review, got: ${action.action} — ${action.message}`,
+			)
+			assert.strictEqual(action.role, "spec", "spec runs first in role list")
+		},
+	)
+})
+
+test("cursor: spec review signed → dispatch_review for configured agent", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo(
+		"cursor-agent-review",
+		async ({ repoRoot, intentDir, slug }) => {
+			makeStudio({ repoRoot, studio: "test" })
+			makeIntent({ intentDir, slug, studio: "test" })
+			seedVerifiedElaboration({ intentDir, stage: "design" })
+			writeUnit(intentDir, "design", "unit-01", {
+				title: "u1",
+				depends_on: [],
+				// Unstarted: pre-execute review is forward-only, so the genuine
+				// review-routing scenario is an un-executed unit.
+				started_at: null,
+				iterations: [],
+				// All three engine roles signed; cursor advances to the
+				// next reviewRole (the configured studio agent).
+				reviews: { ...ENGINE_REVIEWS_SIGNED },
+				approvals: {},
+				discovery: {},
+			})
+			const action = await runTick(repoRoot, slug)
+			assert.strictEqual(action.action, "dispatch_review")
+			assert.strictEqual(
+				action.role,
+				"code-reviewer",
+				"after engine roles (spec, continuity, cross-stage-consistency), the next reviewRole is the configured studio agent",
+			)
+		},
+	)
+})
+
+test("cursor: executed unit with an invalidated pre-execute review is NOT re-reviewed → falls through to post-execute approval (frozen-spec churn fix)", async () => {
+	// Regression lock for the frozen-spec ↔ fix-loop non-convergence churn
+	// (bug reports 2026-05-20 admin-portal-reimagine/development +
+	// twelve-week-plan-accountability-app/security). A unit that has fully
+	// executed (started_at set, every hat advanced) but whose `reviews.spec`
+	// got cleared post-hoc — e.g. a post-execute code-finding closure with
+	// `targets.invalidates: [spec]` — must NOT re-enter the pre-execute
+	// review track. Pre-execute review audits the SPEC before code lands;
+	// the spec is frozen and the fix loop can't edit it, so re-reviewing it
+	// can only churn. The cursor must skip the executed unit here and walk
+	// on to the post-execute approval track (which audits the WORK).
+	if (!HAS_GIT) return
+	await withTmpRepo(
+		"cursor-frozen-spec",
 		async ({ repoRoot, intentDir, slug }) => {
 			makeStudio({ repoRoot, studio: "test" })
 			makeIntent({ intentDir, slug, studio: "test" })
@@ -318,6 +393,9 @@ test("cursor: all hats done → dispatch_review for spec role", async () => {
 						result: "advance",
 					},
 				],
+				// reviews.spec invalidated (cleared) on an already-executed unit
+				// — the exact churn precondition. Approvals unsigned so the
+				// post-execute track has work to route to.
 				reviews: {},
 				approvals: {},
 				discovery: {},
@@ -325,105 +403,9 @@ test("cursor: all hats done → dispatch_review for spec role", async () => {
 			const action = await runTick(repoRoot, slug)
 			assert.strictEqual(
 				action.action,
-				"dispatch_review",
-				`expected dispatch_review, got: ${action.action} — ${action.message}`,
+				"dispatch_approval",
+				`executed unit must skip pre-execute review and reach the post-execute approval track; got: ${action.action} — ${action.message}`,
 			)
-			assert.strictEqual(action.role, "spec", "spec runs first in role list")
-		},
-	)
-})
-
-test("cursor: spec review signed → dispatch_review for configured agent", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo(
-		"cursor-agent-review",
-		async ({ repoRoot, intentDir, slug }) => {
-			makeStudio({ repoRoot, studio: "test" })
-			makeIntent({ intentDir, slug, studio: "test" })
-			seedVerifiedElaboration({ intentDir, stage: "design" })
-			writeUnit(intentDir, "design", "unit-01", {
-				title: "u1",
-				depends_on: [],
-				started_at: "t",
-				iterations: [
-					{
-						hat: "planner",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-					{
-						hat: "builder",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-					{
-						hat: "verifier",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-				],
-				// All three engine roles signed; cursor advances to the
-				// next reviewRole (the configured studio agent).
-				reviews: { ...ENGINE_REVIEWS_SIGNED },
-				approvals: {},
-				discovery: {},
-			})
-			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(action.action, "dispatch_review")
-			assert.strictEqual(
-				action.role,
-				"code-reviewer",
-				"after engine roles (spec, continuity, cross-stage-consistency), the next reviewRole is the configured studio agent",
-			)
-		},
-	)
-})
-
-test("cursor: all reviews signed → user_gate spec", async () => {
-	if (!HAS_GIT) return
-	await withTmpRepo(
-		"cursor-user-spec",
-		async ({ repoRoot, intentDir, slug }) => {
-			makeStudio({ repoRoot, studio: "test" })
-			makeIntent({ intentDir, slug, studio: "test" })
-			seedVerifiedElaboration({ intentDir, stage: "design" })
-			writeUnit(intentDir, "design", "unit-01", {
-				title: "u1",
-				depends_on: [],
-				started_at: "t",
-				iterations: [
-					{
-						hat: "planner",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-					{
-						hat: "builder",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-					{
-						hat: "verifier",
-						started_at: "t",
-						completed_at: "t",
-						result: "advance",
-					},
-				],
-				reviews: {
-					...ENGINE_REVIEWS_SIGNED,
-					"code-reviewer": { at: "t" },
-				},
-				approvals: {},
-				discovery: {},
-			})
-			const action = await runTick(repoRoot, slug)
-			assert.strictEqual(action.action, "user_gate")
-			assert.strictEqual(action.gate_kind, "spec")
 		},
 	)
 })

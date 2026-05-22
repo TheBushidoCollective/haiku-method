@@ -252,31 +252,37 @@ function applyResponse(intentDir, action, repoRoot, slug) {
 		// drift_detected case retired 2026-05-17 — engine handles drift
 		// internally (see orchestrator/workflow/drift-handle-events.ts).
 		case "dispatch_review": {
-			const unitFiles = existsSync(unitsDir)
-				? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-				: []
-			for (const f of unitFiles) {
-				const path = join(unitsDir, f)
-				const fm = readFm(path)
-				const reviews =
-					fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
-				reviews[action.role] = buildReviewRecord(path)
-				writeFm(path, { ...fm, reviews })
+			const reviewDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+			for (const d of reviewDispatches) {
+				const unitFiles = existsSync(unitsDir)
+					? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+					: []
+				for (const f of unitFiles) {
+					const path = join(unitsDir, f)
+					const fm = readFm(path)
+					const reviews =
+						fm.reviews && typeof fm.reviews === "object" ? fm.reviews : {}
+					reviews[d.role] = buildReviewRecord(path)
+					writeFm(path, { ...fm, reviews })
+				}
 			}
 			break
 		}
 		case "dispatch_approval": {
-			const unitFiles = existsSync(unitsDir)
-				? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
-				: []
-			for (const f of unitFiles) {
-				const path = join(unitsDir, f)
-				const fm = readFm(path)
-				const outputs = Array.isArray(fm.outputs) ? fm.outputs : []
-				const approvals =
-					fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
-				approvals[action.role] = buildApprovalRecord(intentDir, outputs)
-				writeFm(path, { ...fm, approvals })
+			const approvalDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+			for (const d of approvalDispatches) {
+				const unitFiles = existsSync(unitsDir)
+					? readdirSync(unitsDir).filter((f) => f.endsWith(".md"))
+					: []
+				for (const f of unitFiles) {
+					const path = join(unitsDir, f)
+					const fm = readFm(path)
+					const outputs = Array.isArray(fm.outputs) ? fm.outputs : []
+					const approvals =
+						fm.approvals && typeof fm.approvals === "object" ? fm.approvals : {}
+					approvals[d.role] = buildApprovalRecord(intentDir, outputs)
+					writeFm(path, { ...fm, approvals })
+				}
 			}
 			break
 		}
@@ -431,13 +437,23 @@ test("e2e: drift introduced after stage A signed → FB → fix loop → seal", 
 			// Inject out-of-band drift while stage A is still the active
 			// stage (drift sweep is per active stage; once stage A
 			// merges into main the active stage advances to B and A's
-			// drift would be invisible). dispatch_quality_gates is the
-			// last per-unit action before merge_stage and reviews/
-			// approvals are stamped on the unit by then.
+			// drift would be invisible). We inject at the adversarial
+			// `dispatch_approval` fan-out — the unit's reviews (the body
+			// witness the sweep compares against) are stamped by then, and
+			// `quality_gates` is still PENDING after it (the post-execute
+			// order is spec → adversarial → quality_gates → user). That
+			// leaves one more tick where stage A is the active stage, so
+			// the next tick's sweep runs on A with the drift commit present.
+			// Injecting at `dispatch_quality_gates` instead would be too
+			// late: it's the last per-unit approval, so stage A goes
+			// complete the moment it's stamped and the sweep window closes.
 			if (
 				!driftInjected &&
-				action.action === "dispatch_quality_gates" &&
-				action.stage === "a"
+				action.action === "dispatch_approval" &&
+				action.stage === "a" &&
+				(action.dispatches ?? [{ role: action.role }]).every(
+					(d) => d.role !== "spec",
+				)
 			) {
 				applyResponse(intentDir, action, repoRoot, slug)
 				// Stage the unit signing as a real commit so the drift

@@ -518,6 +518,11 @@ test("cursor: spec approval signed → dispatch_quality_gates (engine actor)", a
 			},
 			approvals: {
 				...ENGINE_APPROVALS_SIGNED,
+				// quality_gates trails the adversarial fan-out, so the agent
+				// reviewer signs before the walk reaches quality_gates. Sign it
+				// here so this test isolates the quality_gates → engine-actor
+				// transition (not the agent dispatch that precedes it).
+				"code-reviewer": { at: "t" },
 			},
 			discovery: {},
 		})

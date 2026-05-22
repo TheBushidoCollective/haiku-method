@@ -33,6 +33,24 @@ const STAMP = { at: AT }
 const STAGE = "security"
 const TERMINAL_HAT = "blue-team" // last in security's hats[]
 
+// Autopilot keeps the studio review agents, so the adversarial pip is only
+// "done" once those agents have signed too — not just the engine pair.
+// Derive the exact role set the cursor walks for this stage so the fixtures
+// stamp the SAME roles (security ships its own review agents beyond
+// continuity + cross-stage-consistency). `stampRoles` builds a stamp map.
+const { stageRoleLists } = await import(`${SRC}orchestrator/workflow/cursor.ts`)
+const { reviewRoles: SECURITY_REVIEW_ROLES } = stageRoleLists(
+	"software",
+	STAGE,
+	"autopilot",
+)
+// Count of adversarial reviewers (everything but the serial spec/user gates)
+// — the denominator of the grouped `adversarial (signed/total)` pip.
+const SECURITY_ADVERSARIAL_COUNT = SECURITY_REVIEW_ROLES.filter(
+	(r) => r !== "spec" && r !== "user",
+).length
+const stampRoles = (roles) => Object.fromEntries(roles.map((r) => [r, STAMP]))
+
 function seedStage(
 	repo,
 	slug,
@@ -168,11 +186,9 @@ test("reviews stamped, hats mid-flight: execute is active", async () => {
 	const repo = mkdtempSync(join(tmpdir(), "haiku-track-exec-"))
 	try {
 		const slug = "t-exec"
-		const reviews = {
-			spec: STAMP,
-			continuity: STAMP,
-			"cross-stage-consistency": STAMP,
-		}
+		// All review roles signed (incl. the studio agents autopilot keeps)
+		// → reviews complete → execute is the active step.
+		const reviews = stampRoles(SECURITY_REVIEW_ROLES)
 		seedStage(repo, slug, {
 			elaboration: { verified_at: AT, decompose_verified_at: AT },
 			units: [
@@ -207,13 +223,10 @@ test("hats done, approvals partial: the missing approval role is active", async 
 	const repo = mkdtempSync(join(tmpdir(), "haiku-track-approve-"))
 	try {
 		const slug = "t-approve"
-		const reviews = {
-			spec: STAMP,
-			continuity: STAMP,
-			"cross-stage-consistency": STAMP,
-		}
-		// spec approval signed, continuity missing → the grouped adversarial
-		// approval pip is the first not-done step.
+		// All reviews signed (incl. studio agents); on the approval side only
+		// spec is signed → the grouped adversarial approval pip is the first
+		// not-done step.
+		const reviews = stampRoles(SECURITY_REVIEW_ROLES)
 		const approvals = { spec: STAMP }
 		seedStage(repo, slug, {
 			elaboration: { verified_at: AT, decompose_verified_at: AT },
@@ -248,7 +261,10 @@ test("hats done, approvals partial: the missing approval role is active", async 
 		const t = await track(repo, slug)
 		const active = t.steps[t.index]
 		assert.equal(active.key, "approve:adversarial:0")
-		assert.match(active.label, /adversarial approval \(0\/2\)/)
+		assert.match(
+			active.label,
+			new RegExp(`adversarial approval \\(0/${SECURITY_ADVERSARIAL_COUNT}\\)`),
+		)
 		assert.equal(t.steps.find((s) => s.key === "execute").status, "done")
 		assert.equal(t.steps.find((s) => s.key === "approve:spec").status, "done")
 	} finally {

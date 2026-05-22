@@ -180,14 +180,20 @@ function describeAction(action: CursorAction | null): {
 			return { kind: "fixloop", label: "fix-loop", gated: false }
 		case "feedback_question":
 			return { kind: "fixloop", label: "question", gated: true }
-		case "dispatch_review":
-			return { kind: "review", label: `${shortRole(action.role)} review`, gated: false }
-		case "dispatch_approval":
-			return {
-				kind: "approve",
-				label: `${shortRole(action.role)} approval`,
-				gated: false,
-			}
+		case "dispatch_review": {
+			const dispatches = (action as { dispatches?: unknown[] }).dispatches
+			const label = dispatches && dispatches.length > 1
+				? "adversarial review"
+				: `${shortRole(action.role)} review`
+			return { kind: "review", label, gated: false }
+		}
+		case "dispatch_approval": {
+			const dispatches = (action as { dispatches?: unknown[] }).dispatches
+			const label = dispatches && dispatches.length > 1
+				? "adversarial approval"
+				: `${shortRole(action.role)} approval`
+			return { kind: "approve", label, gated: false }
+		}
 		case "dispatch_quality_gates":
 			return { kind: "approve", label: "quality gates", gated: false }
 		case "user_gate":
@@ -664,17 +670,21 @@ export function resolveStatuslineState(): StatuslineState | null {
 		if (bars.length > 0) itemBars = bars.slice(0, MAX_CONCURRENT_SUBAGENTS)
 	}
 
-	// Agent chips (second line) for the await phases — the known review /
-	// approval roles we're waiting on a stamp from, ONE chip per agent. The
-	// pip bar collapses the parallel adversarial reviewers into a single
-	// `(signed/total)` pip; the second line expands them so you can see WHICH
-	// agents have signed and which we're still waiting on — read from the
-	// UNGROUPED role steps (same cursor walk, no `adversarial (n/m)` collapse)
-	// so a count is replaced by named, individually-colored chips. Surface
-	// every role in the SAME bucket as the active step: stamped → green,
-	// currently-awaited → light, queued → grey. (No `failed`/red is emitted:
-	// the engine has no per-role failure stamp — a failed review files
-	// feedback and flips to the fix-loop, which the FB bars show.)
+	// Agent chips (second line) belong to ONE phase: the adversarial
+	// review/approval fan-out. That's the only phase where multiple agents
+	// run at once (continuity, cross-stage-consistency, the studio review
+	// agents), so it's the only phase whose per-agent breakdown carries
+	// information. spec, quality_gates, and the user gate are single-actor —
+	// exactly one thing runs, so a chip row would just restate the phase
+	// label. The pip bar already collapses the fan-out into a single
+	// `(signed/total)` pip; this second line expands THAT pip into named,
+	// individually-colored chips so you can see which agents have signed and
+	// which we're still waiting on (stamped → green, awaited → light, queued
+	// → grey). No `failed`/red: the engine has no per-role failure stamp — a
+	// failed review files feedback and flips to the fix-loop (the FB bars).
+	const SINGLE_ACTOR_ROLES = new Set(["spec", "quality_gates", "user"])
+	const rawRoleOf = (key: string) =>
+		key.includes(":") ? key.slice(key.indexOf(":") + 1) : key
 	let agentChips: AgentChip[] | null = null
 	if (track && (kind === "review" || kind === "approve" || kind === "gate")) {
 		const roleSteps = deriveProgressRoleSteps({
@@ -689,6 +699,11 @@ export function resolveStatuslineState(): StatuslineState | null {
 				? roleSteps[roleSteps.length - 1]
 				: roleSteps[firstPending]
 		const activeKey = activeStep?.key ?? ""
+		// Only surface chips when the ACTIVE step is an adversarial reviewer.
+		// When spec / quality_gates / the user gate is active, the phase is
+		// single-actor and the chip row is suppressed entirely.
+		const activeIsAdversarial =
+			activeStep != null && !SINGLE_ACTOR_ROLES.has(rawRoleOf(activeKey))
 		let inBucket: ((k: string) => boolean) | null = null
 		if (activeKey.startsWith("review:") || activeKey.startsWith("intent-review:")) {
 			inBucket = (k) =>
@@ -700,9 +715,13 @@ export function resolveStatuslineState(): StatuslineState | null {
 			inBucket = (k) =>
 				k.startsWith("approve:") || k === "intent-quality-gates"
 		}
-		if (inBucket) {
+		if (inBucket && activeIsAdversarial) {
+			// List ONLY the adversarial roles in the active bucket — the
+			// parallel fan-out. Single-actor roles (spec done earlier in the
+			// bucket, the trailing user gate) are filtered out so the row is
+			// purely the agents running in parallel.
 			const chips = roleSteps
-				.filter((s) => inBucket(s.key))
+				.filter((s) => inBucket(s.key) && !SINGLE_ACTOR_ROLES.has(rawRoleOf(s.key)))
 				.map((s) => ({ id: chipRole(s.key), status: s.status }))
 			if (chips.length > 0) agentChips = chips
 		}

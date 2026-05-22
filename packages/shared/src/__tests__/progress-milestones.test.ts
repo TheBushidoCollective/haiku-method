@@ -204,7 +204,12 @@ test("grouped pip is done only when every adversarial role has signed", () => {
 	assert.match(group?.label ?? "", /adversarial review \(2\/2\)/)
 })
 
-test("quality_gates splits the approval adversarial group, both keep order", () => {
+test("FAILURE MODE: quality_gates wedged BETWEEN agents splits the fan-out into two groups", () => {
+	// Documents WHY `stageRoleLists` trails quality_gates: a distinct role
+	// in the middle of the adversarial agents flushes the pending group, so
+	// the agents render as two separate "adversarial approval" pips. The
+	// engine avoids this by ordering quality_gates after every agent (see
+	// the next test); this pins the builder rule that makes that necessary.
 	const steps = buildStageMilestones({
 		elaborateDone: true,
 		reviewRoles: [],
@@ -229,6 +234,43 @@ test("quality_gates splits the approval adversarial group, both keep order", () 
 			"approve:user",
 		],
 	)
+})
+
+test("CORRECT ordering: quality_gates trailing the agents keeps the fan-out in ONE group", () => {
+	// The order `stageRoleLists` actually produces: spec leads, every
+	// adversarial agent fans out contiguously, then quality_gates and the
+	// user gate close the walk. All agents collapse into a single pip.
+	const steps = buildStageMilestones({
+		elaborateDone: true,
+		reviewRoles: [],
+		executeDone: true,
+		approvalRoles: [
+			{ role: "spec", stamped: false },
+			{ role: "continuity", stamped: false },
+			{ role: "cross-stage-consistency", stamped: false },
+			{ role: "observability", stamped: false },
+			{ role: "reliability", stamped: false },
+			{ role: "quality_gates", stamped: false },
+			{ role: "user", stamped: false },
+		],
+	})
+	const approveKeys = steps
+		.filter((s) => s.key.startsWith("approve:"))
+		.map((s) => s.key)
+	// spec | [continuity, cross-stage, observability, reliability] | quality_gates | user
+	assert.deepStrictEqual(approveKeys, [
+		"approve:spec",
+		"approve:adversarial:0",
+		"approve:quality_gates",
+		"approve:user",
+	])
+	// exactly one adversarial group, counting all four agents
+	const advGroups = approveKeys.filter((k) =>
+		k.startsWith("approve:adversarial:"),
+	)
+	assert.deepStrictEqual(advGroups, ["approve:adversarial:0"])
+	const group = steps.find((s) => s.key === "approve:adversarial:0")
+	assert.match(group?.label ?? "", /adversarial approval \(0\/4\)/)
 })
 
 test("groupAdversarial:false expands each reviewer into its own per-role pip", () => {

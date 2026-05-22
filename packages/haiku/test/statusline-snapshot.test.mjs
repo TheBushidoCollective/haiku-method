@@ -142,11 +142,19 @@ test("a real workflow tick persists the dispatched position (broadcastTick → s
 	const slug = "snap-tick"
 	const stage = "security"
 	const AT = "2026-05-20T00:00:00Z"
-	const ER = {
-		spec: { signed_at: AT, agent: "e" },
-		continuity: { signed_at: AT, agent: "e" },
-		"cross-stage-consistency": { signed_at: AT, agent: "e" },
-	}
+	// Reviews must be COMPLETE for the seeded wave to dispatch start_unit_hat
+	// (execute). Autopilot keeps the studio review agents, so stamp every
+	// review role the cursor walks for this stage — derive them so the
+	// fixture can't drift from the studio config.
+	const { stageRoleLists } = await import(
+		`${SRC}orchestrator/workflow/cursor.ts`
+	)
+	const ER = Object.fromEntries(
+		stageRoleLists("software", stage, "autopilot").reviewRoles.map((r) => [
+			r,
+			{ signed_at: AT, agent: "e" },
+		]),
+	)
 	const repoRoot = mkdtempSync(join(tmpdir(), "haiku-snap-tick-"))
 	const intentDir = join(repoRoot, ".haiku", "intents", slug)
 	const stageDir = join(intentDir, "stages", stage)

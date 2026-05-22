@@ -671,11 +671,19 @@ test("resolveStatuslineState: execute phase populates itemBars for in-flight uni
 		const slug = "sl-bars"
 		const stage = "security"
 		const AT = "2026-05-20T00:00:00Z"
-		const ER = {
-			spec: { signed_at: AT, agent: "e" },
-			continuity: { signed_at: AT, agent: "e" },
-			"cross-stage-consistency": { signed_at: AT, agent: "e" },
-		}
+		// Reviews must be COMPLETE for the phase to advance to execute.
+		// Autopilot keeps the studio review agents, so stamp every review
+		// role the cursor walks for this stage (not just the engine pair) —
+		// derive them so the fixture can't drift from the studio config.
+		const { stageRoleLists } = await import(
+			`${SRC}orchestrator/workflow/cursor.ts`
+		)
+		const ER = Object.fromEntries(
+			stageRoleLists("software", stage, "autopilot").reviewRoles.map((r) => [
+				r,
+				{ signed_at: AT, agent: "e" },
+			]),
+		)
 		const intentDir = join(repoRoot, ".haiku", "intents", slug)
 		const stageDir = join(intentDir, "stages", stage)
 		mkdirSync(join(stageDir, "units"), { recursive: true })
@@ -904,6 +912,97 @@ test("resolveStatuslineState: sealed intent on its branch renders all stages don
 		)
 		assert.equal(state.itemBars ?? null, null)
 		assert.equal(state.agentChips ?? null, null)
+	} finally {
+		process.chdir(orig)
+		rmSync(repoRoot, { recursive: true, force: true })
+	}
+})
+
+test("resolveStatuslineState: agent chips appear ONLY in adversarial review, not spec review", async () => {
+	if (!HAS_GIT) return
+	const repoRoot = mkdtempSync(join(tmpdir(), "haiku-sl-chips-"))
+	const orig = process.cwd()
+	try {
+		const slug = "sl-chips"
+		const stage = "security"
+		const AT = "2026-05-20T00:00:00Z"
+		const { stageRoleLists } = await import(
+			`${SRC}orchestrator/workflow/cursor.ts`
+		)
+		const reviewRoles = stageRoleLists("software", stage, "autopilot").reviewRoles
+		// The parallel adversarial group = every review role but the serial
+		// spec/user gates. Security ships studio agents on top of the engine
+		// pair, so this is >2.
+		const adversarial = reviewRoles.filter((r) => r !== "spec" && r !== "user")
+		const intentDir = join(repoRoot, ".haiku", "intents", slug)
+		const stageDir = join(intentDir, "stages", stage)
+		mkdirSync(join(stageDir, "units"), { recursive: true })
+		mkdirSync(join(stageDir, "feedback"), { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("body\n", {
+				title: "chips",
+				studio: "software",
+				mode: "autopilot",
+				stages: [stage],
+			}),
+		)
+		const kn = join(repoRoot, ".haiku", "knowledge")
+		mkdirSync(kn, { recursive: true })
+		writeFileSync(join(kn, "THREAT-MODEL.md"), "x\n")
+		writeFileSync(join(kn, "VULN-REPORT.md"), "x\n")
+		writeFileSync(
+			join(stageDir, "elaboration.md"),
+			matter.stringify("e\n", { verified_at: AT, decompose_verified_at: AT }),
+		)
+		const unitPath = join(stageDir, "units", "unit-01.md")
+		const writeUnit = (reviews) =>
+			writeFileSync(
+				unitPath,
+				matter.stringify("u\n", {
+					title: "u",
+					inputs: [],
+					started_at: null,
+					iterations: [],
+					reviews,
+					approvals: {},
+				}),
+			)
+		process.chdir(repoRoot)
+		const { resolveStatuslineState } = await import(`${SRC}statusline/state.ts`)
+
+		// Phase 1 — nothing stamped → the serial spec gate is active. spec is
+		// single-actor, so the second-line chip row is SUPPRESSED.
+		writeUnit({})
+		let state = resolveStatuslineState()
+		assert.equal(state.phaseLabel, "spec review")
+		assert.equal(
+			state.agentChips ?? null,
+			null,
+			"spec review is single-actor — no parallel chips",
+		)
+
+		// Phase 2 — spec signed, the adversarial group still pending → the
+		// phase is the parallel fan-out. NOW the chips appear: one per
+		// adversarial agent, and spec (single-actor, already done) is NOT
+		// among them.
+		writeUnit({ spec: { signed_at: AT, agent: "e" } })
+		state = resolveStatuslineState()
+		assert.equal(state.phaseLabel, "adversarial review")
+		assert.ok(
+			Array.isArray(state.agentChips) && state.agentChips.length > 0,
+			"adversarial review must surface the parallel agent chips",
+		)
+		const chipIds = state.agentChips.map((c) => c.id)
+		assert.ok(
+			!chipIds.includes("spec"),
+			`spec must not be a chip in adversarial review; got ${chipIds.join(", ")}`,
+		)
+		assert.equal(
+			state.agentChips.length,
+			adversarial.length,
+			`expected one chip per adversarial agent (${adversarial.length}); got ${chipIds.join(", ")}`,
+		)
 	} finally {
 		process.chdir(orig)
 		rmSync(repoRoot, { recursive: true, force: true })

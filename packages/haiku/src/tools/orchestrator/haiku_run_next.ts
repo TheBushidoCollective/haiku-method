@@ -1028,29 +1028,33 @@ export default defineTool({
 
 		// Stash dispatch_review / dispatch_approval action context on
 		// intent.md so the next tick's drainPendingDispatches stamps
-		// reviews.<role> / approvals.<role>. Without this, the cursor
-		// would re-emit the same dispatch action forever — the prompt
-		// promises "the engine stamps the sigs" but no engine code
-		// stamped them before this fix. See dispatch-stamps.ts for the
-		// full lifecycle contract.
+		// reviews.<role> / approvals.<role>. Batched dispatches (parallel
+		// adversarial roles) stash each role independently — they stamp
+		// independently. See dispatch-stamps.ts for the full lifecycle.
 		if (
 			(result.action === "dispatch_review" ||
 				result.action === "dispatch_approval") &&
-			typeof result.stage === "string" &&
-			typeof result.role === "string" &&
-			Array.isArray(result.units)
+			typeof result.stage === "string"
 		) {
 			try {
 				const { stashPendingDispatch } = await import(
 					"../../orchestrator/workflow/dispatch-stamps.js"
 				)
-				stashPendingDispatch(
-					slug,
-					result.action === "dispatch_review" ? "review" : "approval",
-					result.stage as string,
-					result.role as string,
-					result.units as string[],
-				)
+				const kind = result.action === "dispatch_review" ? "review" : "approval"
+				const dispatches = Array.isArray(result.dispatches)
+					? (result.dispatches as Array<{ role: string; units: string[] }>)
+					: typeof result.role === "string" && Array.isArray(result.units)
+						? [{ role: result.role as string, units: result.units as string[] }]
+						: []
+				for (const d of dispatches) {
+					stashPendingDispatch(
+						slug,
+						kind,
+						result.stage as string,
+						d.role,
+						d.units,
+					)
+				}
 			} catch (err) {
 				console.error(
 					`[haiku_run_next] stashPendingDispatch failed: ${err instanceof Error ? err.message : String(err)}`,

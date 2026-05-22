@@ -46,12 +46,13 @@ test("cursor ordering: reviewRoles walk comes BEFORE wave-ready hat dispatch", (
 	// functions (isUnitFullyApproved also iterates approvalRoles). Use
 	// `dispatch_review` / `dispatch_approval` action emissions as the
 	// unique anchor for the cursor-track walks.
-	// Match `return { kind: "..." ` to skip the type-union declarations
-	// at the top of the file. Only the cursor-walk emissions use the
-	// return shape.
-	const reviewEmitIdx = src.indexOf('return { kind: "dispatch_review"')
+	// Match `return {` + `kind: "..."` (allowing a newline between, since
+	// the batched-dispatch emissions span multiple lines) to skip the
+	// type-union declarations at the top of the file — only the cursor-walk
+	// emissions use the `return {` shape.
+	const reviewEmitIdx = src.search(/return \{\s*kind: "dispatch_review"/)
 	const waveReadyIdx = src.indexOf("if (waveReady.length > 0)")
-	const approvalEmitIdx = src.indexOf('return { kind: "dispatch_approval"')
+	const approvalEmitIdx = src.search(/return \{\s*kind: "dispatch_approval"/)
 	assert.ok(reviewEmitIdx > 0, "dispatch_review emission must exist in cursor.ts")
 	assert.ok(waveReadyIdx > 0, "waveReady dispatch must exist in cursor.ts")
 	assert.ok(
@@ -68,15 +69,96 @@ test("cursor ordering: reviewRoles walk comes BEFORE wave-ready hat dispatch", (
 	)
 })
 
-test("cursor: reviewRoles AND approvalRoles both include the three engine roles", () => {
-	const src = readFileSync(CURSOR_PATH, "utf8")
-	const block = src.match(
-		/const engineRoles[\s\S]*?const approvalRoles[\s\S]*?\][\s\S]*?\]/,
-	)?.[0]
-	assert.ok(block, "could not locate the engineRoles + lists block")
+test("cursor: reviewRoles AND approvalRoles both lead with the three engine roles in order", async () => {
+	const { stageRoleLists } = await import(
+		`${SRC}orchestrator/workflow/cursor.ts`
+	)
+	// Behavioral check (not source grep): both walks must lead with the
+	// engine roles spec → continuity → cross-stage-consistency, in order.
+	const agents = ["observability", "reliability"]
+	const { reviewRoles, approvalRoles } = stageRoleLists(
+		"software",
+		"operations",
+		"interactive",
+		agents,
+	)
+	const engine = ["spec", "continuity", "cross-stage-consistency"]
+	assert.deepStrictEqual(
+		reviewRoles.slice(0, 3),
+		engine,
+		`reviewRoles must lead with the engine roles in order. got: ${reviewRoles}`,
+	)
+	assert.deepStrictEqual(
+		approvalRoles.slice(0, 3),
+		engine,
+		`approvalRoles must lead with the engine roles in order. got: ${approvalRoles}`,
+	)
+})
+
+test("stageRoleLists: autopilot KEEPS the studio review agents, drops only the human user gate", async () => {
+	const { stageRoleLists } = await import(
+		`${SRC}orchestrator/workflow/cursor.ts`
+	)
+	// Pass agents explicitly so the assertion doesn't depend on what's on
+	// disk for any particular stage — we're testing the mode logic.
+	const agents = ["observability", "reliability"]
+	const auto = stageRoleLists("software", "operations", "autopilot", agents)
+	const inter = stageRoleLists("software", "operations", "interactive", agents)
+
+	// Autopilot is exactly when the automated adversarial reviewers matter
+	// most (no human watching) — they MUST still run in parallel. Mirrors
+	// `intentReviewRoles`, which keeps its agents in autopilot.
 	assert.ok(
-		/"spec"[\s\S]*"continuity"[\s\S]*"cross-stage-consistency"/.test(block),
-		`engineRoles MUST include all three checks in order. got: ${block}`,
+		auto.reviewRoles.includes("observability") &&
+			auto.reviewRoles.includes("reliability"),
+		`autopilot reviewRoles must keep the studio agents. got: ${auto.reviewRoles}`,
+	)
+	assert.ok(
+		auto.approvalRoles.includes("observability") &&
+			auto.approvalRoles.includes("reliability"),
+		`autopilot approvalRoles must keep the studio agents. got: ${auto.approvalRoles}`,
+	)
+	// Only the HUMAN gate drops in autopilot — automated roles always run.
+	assert.ok(
+		!auto.reviewRoles.includes("user") && !auto.approvalRoles.includes("user"),
+		`autopilot must drop the user gate. got: ${auto.reviewRoles} / ${auto.approvalRoles}`,
+	)
+	assert.ok(
+		inter.reviewRoles.includes("user") && inter.approvalRoles.includes("user"),
+		"interactive must keep the user gate",
+	)
+})
+
+test("stageRoleLists: quality_gates TRAILS the adversarial fan-out so the agents stay contiguous (one group)", async () => {
+	const { stageRoleLists } = await import(
+		`${SRC}orchestrator/workflow/cursor.ts`
+	)
+	const agents = ["observability", "reliability"]
+	const { approvalRoles } = stageRoleLists(
+		"software",
+		"operations",
+		"interactive",
+		agents,
+	)
+	// quality_gates wedged between the engine reviewers and the studio
+	// agents would split one parallel "adversarial approval" milestone into
+	// two. It MUST come after every adversarial agent (only the user gate
+	// after it) so they collapse into a single fan-out pip.
+	const qgIdx = approvalRoles.indexOf("quality_gates")
+	const lastAgentIdx = Math.max(
+		approvalRoles.indexOf("continuity"),
+		approvalRoles.indexOf("cross-stage-consistency"),
+		approvalRoles.indexOf("observability"),
+		approvalRoles.indexOf("reliability"),
+	)
+	assert.ok(
+		qgIdx > lastAgentIdx,
+		`quality_gates (idx ${qgIdx}) must trail every adversarial agent (last idx ${lastAgentIdx}). got: ${approvalRoles}`,
+	)
+	assert.strictEqual(
+		approvalRoles[approvalRoles.length - 1],
+		"user",
+		"user gate is terminal in interactive mode",
 	)
 })
 

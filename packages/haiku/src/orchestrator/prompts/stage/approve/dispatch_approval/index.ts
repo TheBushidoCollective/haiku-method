@@ -77,17 +77,16 @@ function readDeclaredOutputPaths(
 	}
 }
 
-export default definePromptBuilder(({ slug, studio, action }) => {
-	const stage = (action.stage as string) || ""
-	const role = (action.role as string) || ""
-	const units = (action.units as string[]) || []
-
+/** Build one subagent dispatch block for a single approval role. */
+function buildRoleBlock(opts: {
+	slug: string
+	studio: string
+	stage: string
+	role: string
+	units: string[]
+}): { dispatchBlock: string; isEngineRole: boolean } {
+	const { slug, studio, stage, role, units } = opts
 	const engineBodyTpl = ENGINE_APPROVAL_BODIES[role]
-	// Mandate (engine body or studio file) is static source — materialize
-	// a snapshot and reference it. Unit SPECS are live artifacts the agent
-	// reads via `haiku_unit_read`. Produced OUTPUTS are heterogeneous
-	// deliverables (code, images, PDFs) the agent opens by path with the
-	// Read tool.
 	let mandateRef = ""
 	let modelTier: string | undefined
 
@@ -155,13 +154,36 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		omitBolt: true,
 	})
 
+	return { dispatchBlock, isEngineRole: engineBodyTpl !== undefined }
+}
+
+export default definePromptBuilder(({ slug, studio, action }) => {
+	const stage = (action.stage as string) || ""
+
+	type DispatchEntry = { role: string; units: string[] }
+	const dispatches: DispatchEntry[] = Array.isArray(action.dispatches)
+		? (action.dispatches as DispatchEntry[])
+		: [{ role: (action.role as string) || "", units: (action.units as string[]) || [] }]
+
+	const blocks = dispatches.map((d) =>
+		buildRoleBlock({ slug, studio, stage, role: d.role, units: d.units }),
+	)
+
+	const allDispatchBlocks = blocks
+		.map((b) => b.dispatchBlock)
+		.join("\n\n")
+
+	const allUnits = [...new Set(dispatches.flatMap((d) => d.units))]
+
 	return eta.renderString(TEMPLATE, {
 		slug,
 		stage,
-		role,
-		units,
-		unitCount: units.length,
-		isEngineRole: engineBodyTpl !== undefined,
-		dispatchBlock,
+		dispatches,
+		dispatchCount: dispatches.length,
+		role: dispatches[0]?.role ?? "",
+		units: allUnits,
+		unitCount: allUnits.length,
+		isEngineRole: blocks[0]?.isEngineRole ?? false,
+		dispatchBlock: allDispatchBlocks,
 	})
 })

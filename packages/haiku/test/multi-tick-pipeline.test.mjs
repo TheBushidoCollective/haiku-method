@@ -396,7 +396,10 @@ test("multi-tick: 3-stage continuous intent walks from elaborate to sealed", {
 						break
 					}
 					case "dispatch_review": {
-						stampReviewRole(intentDir, action.stage, action.units, action.role)
+						const reviewDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+						for (const d of reviewDispatches) {
+							stampReviewRole(intentDir, action.stage, d.units, d.role)
+						}
 						break
 					}
 					case "user_gate": {
@@ -410,12 +413,10 @@ test("multi-tick: 3-stage continuous intent walks from elaborate to sealed", {
 						break
 					}
 					case "dispatch_approval": {
-						stampApprovalRole(
-							intentDir,
-							action.stage,
-							action.units,
-							action.role,
-						)
+						const approvalDispatches = action.dispatches || [{ role: action.role, units: action.units }]
+						for (const d of approvalDispatches) {
+							stampApprovalRole(intentDir, action.stage, d.units, d.role)
+						}
 						break
 					}
 					case "dispatch_quality_gates": {

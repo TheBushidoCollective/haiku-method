@@ -73,6 +73,12 @@ import {
 import { engineHandleDriftEvents } from "./drift-handle-events.js"
 import { runDriftSweep } from "./drift-sweep.js"
 
+// Roles that dispatch as serial sequential gates (one per tick).
+// Everything else (continuity, cross-stage-consistency, studio agents)
+// batches into a single parallel dispatch. Mirrors
+// DISTINCT_MILESTONE_ROLES in progress-milestones.ts.
+const SERIAL_REVIEW_ROLES = new Set(["spec", "quality_gates", "user"])
+
 // ── CursorAction discriminated union ─────────────────────────────────
 
 /**
@@ -210,12 +216,20 @@ export type CursorAction =
 	| {
 			kind: "dispatch_review"
 			stage: string
+			/** Per-role dispatch entries. Adversarial roles (continuity,
+			 *  cross-stage-consistency, studio agents) batch into one action
+			 *  so the parent spawns them in parallel. Serial gates (spec,
+			 *  user) emit a single-element array. */
+			dispatches: Array<{ role: string; units: string[] }>
+			/** Backward-compat alias: first dispatch's role. */
 			role: string
+			/** Backward-compat alias: first dispatch's units. */
 			units: string[]
 	  }
 	| {
 			kind: "dispatch_approval"
 			stage: string
+			dispatches: Array<{ role: string; units: string[] }>
 			role: string
 			units: string[]
 	  }
@@ -1455,30 +1469,74 @@ function walkIntentTrack(args: {
 
 	// Every elaborate-loop signal is met → pre-execute review track.
 	// Walks reviewRoles per-unit, stamping `reviews.<role>` as each
-	// fires. Engine-built-in roles (spec/continuity/cross-stage-
-	// consistency) fire first as cheap sequential gates against the
-	// unit specs; configured agents follow; user gate (`gate_kind:
-	// "spec"`) gates the pre-execute phase. Only when every
-	// reviewRoles role is signed does the cursor advance to wave-ready
-	// hat dispatch (execute).
+	// fires. Serial gates (`spec`, `user`) dispatch one-at-a-time.
+	// Adversarial roles (continuity, cross-stage-consistency, studio
+	// agents) batch into a single `dispatch_review` action with
+	// `dispatches[]` so the parent spawns them in parallel.
 	//
 	// Why pre-execute: catching a misaligned spec before code lands is
 	// vastly cheaper than catching it post-execute. The post-execute
 	// `dispatch_approval` walk fires the same engine roles AGAINST THE
 	// WORK (different mandate prose, different sibling dir) for the
 	// final sign-off before complete_stage.
-	for (const role of reviewRoles) {
-		const missing = units
-			.filter((u) => {
-				const reviews = pickReviews(u.fm)
-				return !reviews[role]
-			})
-			.map((u) => u.name)
-		if (missing.length === 0) continue
-		if (role === "user") {
-			return { kind: "user_gate", stage, gate_kind: "spec", units: missing }
+	{
+		const pendingAdversarial: Array<{ role: string; units: string[] }> = []
+		for (const role of reviewRoles) {
+			const missing = units
+				.filter((u) => {
+					const reviews = pickReviews(u.fm)
+					return !reviews[role]
+				})
+				.map((u) => u.name)
+			if (missing.length === 0) continue
+			if (role === "user") {
+				// Flush any pending adversarial roles before the user gate.
+				if (pendingAdversarial.length > 0) {
+					const first = pendingAdversarial[0]
+					return {
+						kind: "dispatch_review",
+						stage,
+						dispatches: pendingAdversarial,
+						role: first.role,
+						units: first.units,
+					}
+				}
+				return { kind: "user_gate", stage, gate_kind: "spec", units: missing }
+			}
+			if (SERIAL_REVIEW_ROLES.has(role)) {
+				// Serial gate — flush any pending adversarial batch first.
+				if (pendingAdversarial.length > 0) {
+					const first = pendingAdversarial[0]
+					return {
+						kind: "dispatch_review",
+						stage,
+						dispatches: pendingAdversarial,
+						role: first.role,
+						units: first.units,
+					}
+				}
+				return {
+					kind: "dispatch_review",
+					stage,
+					dispatches: [{ role, units: missing }],
+					role,
+					units: missing,
+				}
+			}
+			// Adversarial role — collect for parallel dispatch.
+			pendingAdversarial.push({ role, units: missing })
 		}
-		return { kind: "dispatch_review", stage, role, units: missing }
+		// Flush any remaining adversarial roles after the loop.
+		if (pendingAdversarial.length > 0) {
+			const first = pendingAdversarial[0]
+			return {
+				kind: "dispatch_review",
+				stage,
+				dispatches: pendingAdversarial,
+				role: first.role,
+				units: first.units,
+			}
+		}
 	}
 
 	// 5. Wave logic removed 2026-05-13.
@@ -1704,26 +1762,68 @@ function walkIntentTrack(args: {
 	//
 	//    Walk approvalRoles which may include `quality_gates`
 	//    (engine-run, not subagent-dispatched).
-	for (const role of approvalRoles) {
-		const missing = units
-			.filter((u) => {
-				const approvals = pickApprovals(u.fm)
-				return !approvals[role]
-			})
-			.map((u) => u.name)
-		if (missing.length === 0) continue
-		if (role === "user") {
+	{
+		const pendingAdversarial: Array<{ role: string; units: string[] }> = []
+		for (const role of approvalRoles) {
+			const missing = units
+				.filter((u) => {
+					const approvals = pickApprovals(u.fm)
+					return !approvals[role]
+				})
+				.map((u) => u.name)
+			if (missing.length === 0) continue
+			if (role === "user") {
+				if (pendingAdversarial.length > 0) {
+					const first = pendingAdversarial[0]
+					return {
+						kind: "dispatch_approval",
+						stage,
+						dispatches: pendingAdversarial,
+						role: first.role,
+						units: first.units,
+					}
+				}
+				return {
+					kind: "user_gate",
+					stage,
+					gate_kind: "approval",
+					units: missing,
+				}
+			}
+			if (SERIAL_REVIEW_ROLES.has(role)) {
+				if (pendingAdversarial.length > 0) {
+					const first = pendingAdversarial[0]
+					return {
+						kind: "dispatch_approval",
+						stage,
+						dispatches: pendingAdversarial,
+						role: first.role,
+						units: first.units,
+					}
+				}
+				if (role === "quality_gates") {
+					return { kind: "dispatch_quality_gates", stage, units: missing }
+				}
+				return {
+					kind: "dispatch_approval",
+					stage,
+					dispatches: [{ role, units: missing }],
+					role,
+					units: missing,
+				}
+			}
+			pendingAdversarial.push({ role, units: missing })
+		}
+		if (pendingAdversarial.length > 0) {
+			const first = pendingAdversarial[0]
 			return {
-				kind: "user_gate",
+				kind: "dispatch_approval",
 				stage,
-				gate_kind: "approval",
-				units: missing,
+				dispatches: pendingAdversarial,
+				role: first.role,
+				units: first.units,
 			}
 		}
-		if (role === "quality_gates") {
-			return { kind: "dispatch_quality_gates", stage, units: missing }
-		}
-		return { kind: "dispatch_approval", stage, role, units: missing }
 	}
 
 	// 8a. Reflection observations (2026-05-18). ON by default; opt
@@ -2048,13 +2148,16 @@ export function intentReviewRoles(
 
 /** The ordered review + approval role lists for a stage — the SINGLE
  *  source of truth the cursor walks (pre-execute reviews, then
- *  post-execute approvals) and the progress track renders. Engine roles
- *  (`spec`, `continuity`, `cross-stage-consistency`) lead both lists;
- *  `quality_gates` is approval-only (nothing to run pre-execute);
- *  configured review agents follow; `user` is the terminal human gate.
- *  Autopilot trims to engine roles (+ quality_gates on approvals) — no
- *  agent gates, no user gate. Pass `reviewAgents` when the caller has
- *  already read them (the cursor has); omitted, it reads them here. */
+ *  post-execute approvals) and the progress track renders. `spec` leads
+ *  both lists (the serial conformance gate), then the adversarial fan-out
+ *  (`continuity`, `cross-stage-consistency`, configured studio agents).
+ *  On the approval walk `quality_gates` runs AFTER the fan-out (it's the
+ *  final automated certification — see the body comment), then `user` is
+ *  the terminal human gate. Reviews carry no `quality_gates` (nothing to
+ *  run pre-execute). Autopilot keeps the full adversarial fan-out
+ *  (engine roles + studio agents) and `quality_gates`; it drops ONLY the
+ *  human `user` gate. Pass `reviewAgents` when the caller has already read
+ *  them (the cursor has); omitted, it reads them here. */
 export function stageRoleLists(
 	studio: string,
 	stage: string,
@@ -2063,14 +2166,43 @@ export function stageRoleLists(
 ): { reviewRoles: string[]; approvalRoles: string[] } {
 	const agents =
 		reviewAgents ?? Object.keys(readReviewAgentPaths(studio, stage)).sort()
-	const engineRoles = ["spec", "continuity", "cross-stage-consistency"] as const
+	// `spec` is the serial conformance gate that leads both walks;
+	// `continuity` + `cross-stage-consistency` are the engine-built
+	// adversarial reviewers that fan out alongside the studio review
+	// agents. The whole group runs in parallel in BOTH modes — autopilot
+	// keeps the studio agents (they're the only adversarial backstop when
+	// no human is watching, so trimming them would strip enforcement
+	// exactly when nothing else enforces it; mirrors `intentReviewRoles`).
+	// Autopilot drops ONLY the terminal human `user` gate.
+	const adversarialRoles = ["continuity", "cross-stage-consistency", ...agents]
 	const isAutopilot = mode === "autopilot"
 	const reviewRoles = isAutopilot
-		? [...engineRoles]
-		: [...engineRoles, ...agents, "user"]
+		? ["spec", ...adversarialRoles]
+		: ["spec", ...adversarialRoles, "user"]
+	// Post-execute order: `spec` (serial conformance) → the adversarial
+	// fan-out → `quality_gates` (engine-run mechanical gate) → `user`.
+	//
+	// `quality_gates` runs LAST of the automated checks — after the
+	// adversarial fan-out, just before the human gate (and terminal in
+	// autopilot, where there is no human after). It must, because quality
+	// gates are the FINAL automated certification of the work: they run
+	// the unit's own test/typecheck/lint commands and stamp pass/fail. If
+	// they ran earlier and the adversarial fix loop then changed the code,
+	// the stamp would certify the PRE-fix version — the work would merge
+	// with gates that never ran against what actually landed. Running them
+	// after adversarial review settles means they always certify the final
+	// state. Cheaper-first would save review tokens, but a stale gate is a
+	// correctness bug, not a cost; correctness wins.
+	//
+	// Keeping `quality_gates` after the whole adversarial group also leaves
+	// that group (`continuity`, `cross-stage-consistency`, studio agents)
+	// contiguous, so it collapses into a single parallel "adversarial
+	// approval" fan-out pip rather than being split by a gate in the
+	// middle. `quality_gates` itself stays its own serial tick (it's in
+	// `SERIAL_REVIEW_ROLES`) — never folded into the fan-out.
 	const approvalRoles = isAutopilot
-		? [...engineRoles, "quality_gates"]
-		: [...engineRoles, "quality_gates", ...agents, "user"]
+		? ["spec", ...adversarialRoles, "quality_gates"]
+		: ["spec", ...adversarialRoles, "quality_gates", "user"]
 	return { reviewRoles, approvalRoles }
 }
 

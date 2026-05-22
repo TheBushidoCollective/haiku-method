@@ -46,25 +46,20 @@ const ENGINE_REVIEW_BODIES: Record<string, string> = {
 	),
 }
 
-export default definePromptBuilder(({ slug, studio, action }) => {
-	const stage = (action.stage as string) || ""
-	const role = (action.role as string) || ""
-	const units = (action.units as string[]) || []
-
+/** Build one subagent dispatch block for a single role. */
+function buildRoleBlock(opts: {
+	slug: string
+	studio: string
+	stage: string
+	role: string
+	units: string[]
+}): { dispatchBlock: string; isEngineRole: boolean } {
+	const { slug, studio, stage, role, units } = opts
 	const engineBodyTpl = ENGINE_REVIEW_BODIES[role]
-	// The mandate — engine body or studio review-agent file — is static
-	// source. Materialize it (FM-stripped / rendered) into the intent's
-	// prompts tree and reference THAT snapshot, so the dispatch record is
-	// self-contained and reflection agents can re-read exactly what the
-	// agent audited against. The unit SPECS are live artifacts: the agent
-	// reads each via `haiku_unit_read` (FM-stripped), never an inlined
-	// dispatch-time copy.
 	let mandateRef = ""
 	let modelTier: string | undefined
 
 	if (engineBodyTpl) {
-		// Engine roles are GENERATED (rendered eta), not studio files —
-		// snapshot the rendered body directly; no reader/tool applies.
 		const engineBody = eta.renderString(engineBodyTpl, { slug, stage }).trim()
 		const snap = materializeReferenceFile({
 			intent: slug,
@@ -94,9 +89,6 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		}
 	}
 
-	// Render the subagent prompt body, then emit a file-backed dispatch
-	// block. The parent never sees the rendered body — only the
-	// `<subagent prompt_file="...">` pointer.
 	const subagentPrompt = eta.renderString(SUBAGENT_TEMPLATE, {
 		slug,
 		stage,
@@ -119,13 +111,39 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 		omitBolt: true,
 	})
 
+	return { dispatchBlock, isEngineRole: engineBodyTpl !== undefined }
+}
+
+export default definePromptBuilder(({ slug, studio, action }) => {
+	const stage = (action.stage as string) || ""
+
+	// Batched dispatches: iterate `dispatches[]` to build one subagent
+	// block per role. Fall back to the legacy single-role shape for
+	// backward compat with older snapshots / tests.
+	type DispatchEntry = { role: string; units: string[] }
+	const dispatches: DispatchEntry[] = Array.isArray(action.dispatches)
+		? (action.dispatches as DispatchEntry[])
+		: [{ role: (action.role as string) || "", units: (action.units as string[]) || [] }]
+
+	const blocks = dispatches.map((d) =>
+		buildRoleBlock({ slug, studio, stage, role: d.role, units: d.units }),
+	)
+
+	const allDispatchBlocks = blocks
+		.map((b) => b.dispatchBlock)
+		.join("\n\n")
+
+	const allUnits = [...new Set(dispatches.flatMap((d) => d.units))]
+
 	return eta.renderString(TEMPLATE, {
 		slug,
 		stage,
-		role,
-		units,
-		unitCount: units.length,
-		isEngineRole: engineBodyTpl !== undefined,
-		dispatchBlock,
+		dispatches,
+		dispatchCount: dispatches.length,
+		role: dispatches[0]?.role ?? "",
+		units: allUnits,
+		unitCount: allUnits.length,
+		isEngineRole: blocks[0]?.isEngineRole ?? false,
+		dispatchBlock: allDispatchBlocks,
 	})
 })

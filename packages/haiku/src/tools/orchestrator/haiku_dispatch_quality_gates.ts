@@ -38,7 +38,7 @@ import {
 	statSync,
 	writeFileSync,
 } from "node:fs"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import matter from "gray-matter"
 import { buildApprovalRecord } from "../../orchestrator/workflow/sign-slot.js"
 import {
@@ -331,9 +331,27 @@ function runIntentScope(intent: string) {
 		)
 	}
 
+	// Resolve repo root for gate cwd. A gate command's path (e.g.
+	// `! grep -rL 'tokens.css' .haiku/intents/.../artifacts`) is written
+	// relative to the repo root, but `process.cwd()` is only the repo root
+	// by luck — when it isn't, the gate runs in the wrong directory and
+	// fails (exit 1) even though it passes in a shell at the root, re-filing
+	// the same false-positive FBs on every dispatch (bug report 2026-05-20,
+	// `wireframes-link-shared-tokens`). Mirror the stage-scope runner
+	// (`runInlineQualityGates`): anchor on `git rev-parse --show-toplevel`,
+	// fall back to cwd only if that fails.
+	let repoRoot = process.cwd()
+	try {
+		repoRoot = execSync("git rev-parse --show-toplevel", {
+			encoding: "utf8",
+		}).trim()
+	} catch {
+		/* not a git repo / git unavailable — use cwd */
+	}
+
 	const failures: IntentGateFailure[] = []
 	for (const gate of distinctGates) {
-		const cwd = gate.dir ? join(process.cwd(), gate.dir) : process.cwd()
+		const cwd = gate.dir ? resolve(repoRoot, gate.dir) : repoRoot
 		try {
 			execSync(gate.command, {
 				stdio: "pipe",

@@ -18,6 +18,8 @@ You were dispatched for **<%= feedbackId %>**. Whatever your hat's job is — cl
 - **Another unit's or finding's state is never a blocker for this one.** Findings and units are handled concurrently and land along the way; the state of another is never a reason to gate or fail this one.
 - **Cross-cutting gaps are new feedback, not scope you fold in.** If this finding exposes something that spans other units or the stage as a whole, file it with `haiku_feedback` and keep this work tight — don't grow this finding's handling to swallow it.
 
+> **Before you start — make the `haiku_*` tools callable.** This whole turn ends in a `haiku_feedback_*` closure call, and you also `haiku_feedback_read` the finding. If any `haiku_*` tool isn't already in your available tools, your harness has *deferred* its schema (it's listed by name but not loaded) — fetch/load it (e.g. via a tool-search for the exact name) BEFORE you call it. Do NOT report a closure tool as "unavailable / not in my function list" and stop — that leaves the FB un-stamped and the engine re-dispatches you forever. The deferred-schema dead-end was a real loop (haiku-model fix-hats, bug report 2026-05-19); loading the tool first is all it takes.
+
 ## Procedure (authoritative)
 <% if (typeof worktree !== "undefined" && worktree) { %>
 0. **Work in this fix-chain's isolation worktree.** Your working directory for ALL code edits and `git` commits this hat is:

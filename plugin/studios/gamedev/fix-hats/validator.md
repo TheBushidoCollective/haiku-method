@@ -1,6 +1,6 @@
 ---
 agent_type: general-purpose
-model: haiku
+model: sonnet
 ---
 **Focus:** Independently verify that the reconciler's fix resolves the intent-scope feedback. You are the terminal hat — the workflow engine trusts your closure decision.
 

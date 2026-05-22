@@ -143,7 +143,7 @@ let memoTestSandbox: string | null = null
  *  real `~/.haiku/projects/` — the `e2e-mode-*` / `advance-relay-*`
  *  leak reported 2026-05-19. Memoized so state stays consistent within
  *  the process; the OS purges /tmp. */
-function projectsBaseDir(): string {
+export function projectsBaseDir(): string {
 	const override = process.env.HAIKU_PROJECTS_ROOT
 	if (override) return override
 	if (isUnderTestRunner()) {

@@ -20,11 +20,11 @@
 
 import { execFileSync } from "node:child_process"
 import { mkdirSync, writeFileSync } from "node:fs"
-import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { Eta } from "eta"
 import { MAX_STAGE_ITERATIONS } from "../../../state-tools.js"
 import { findHaikuRoot } from "../../../state/shared.js"
+import { projectsBaseDir } from "../../../subagent-prompt-file.js"
 import { loadTemplate } from "../_load-template.js"
 
 // Every shared block loads its template LAZILY (on first access),
@@ -165,15 +165,16 @@ function resolveSharedProjectRoot(): string {
 
 /** Resolve `<projects-root>/<project-key>/shared/`. Project-scoped:
  *  the same rules apply across every intent in the project, so we
- *  write the files once and reference them from every prompt. The
- *  base path defaults to `~/.haiku/projects/`; set
- *  `HAIKU_PROJECTS_ROOT` to redirect (tests point this at a tmpdir
- *  to avoid polluting the user's real home). */
+ *  write the files once and reference them from every prompt. The base
+ *  path comes from `projectsBaseDir()` (the single source of truth):
+ *  `HAIKU_PROJECTS_ROOT` override → per-process tmpdir sandbox under a
+ *  test runner → real `~/.haiku/projects/`. Routing through it (rather
+ *  than a private `homedir()` fallback) is what keeps a bare
+ *  `node --test foo.test.mjs` from mirroring `shared/` trees into the
+ *  user's real home — the leak seen 2026-05-21. */
 function sharedDir(): string {
 	const key = resolveSharedProjectRoot().replace(/\//g, "-")
-	const base =
-		process.env.HAIKU_PROJECTS_ROOT ?? join(homedir(), ".haiku", "projects")
-	return join(base, key, "shared")
+	return join(projectsBaseDir(), key, "shared")
 }
 
 /** Write all shared blocks to disk. Re-runs on every cold start of

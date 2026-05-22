@@ -147,9 +147,10 @@ function stampGateApproval(
 			fm[targetField] && typeof fm[targetField] === "object"
 				? (fm[targetField] as Record<string, unknown>)
 				: {}
-		// Reviews witness the unit body + input premises; approvals
-		// witness the declared output paths (legacy — to be dropped
-		// in Phase 6 of the drift cleanup).
+		// Reviews witness the unit body + input premises; approvals are
+		// bookkeeping-only (just the `at` timestamp) under the premise-
+		// witness model — output mutation is not drift, so nothing is
+		// witnessed here.
 		if (isPreExecute) {
 			const unitInputs = Array.isArray(fm.inputs)
 				? (fm.inputs as string[])
@@ -159,8 +160,7 @@ function stampGateApproval(
 				unitInputs,
 			})
 		} else {
-			const outputs = Array.isArray(fm.outputs) ? (fm.outputs as string[]) : []
-			records.user = buildApprovalRecord(intentDirAbs, outputs)
+			records.user = buildApprovalRecord()
 		}
 		setFrontmatterField(unitPath, targetField, records)
 	}

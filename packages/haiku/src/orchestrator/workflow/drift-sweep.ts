@@ -58,27 +58,12 @@ import { isDriftDetectionDisabled } from "./drift-baseline.js"
 import {
 	bodyMatchesStoredHash,
 	bodySha256,
+	DIR_INVENTORY_SKIP,
 	fileSha256,
+	isTextBodyExtension,
 	normalizeInputPath,
 	outputSha256,
 } from "./sign-slot.js"
-
-/** Files inside a witnessed directory that the sweep ignores when
- *  diffing inventory. Mirrors sign-slot.ts's DIR_INVENTORY_SKIP — must
- *  stay in sync or sign-time and check-time disagree on what counts as
- *  "in the inventory." */
-const DIR_INVENTORY_SKIP_SWEEP: ReadonlySet<string> = new Set([
-	".DS_Store",
-	"Thumbs.db",
-	".git",
-	".gitignore",
-	"action-log.jsonl",
-	"drift-markers.json",
-	"baseline.json",
-	"baseline-content",
-	".baseline-ack",
-	"baseline-thrash.json",
-])
 
 function listDirFiles(absDir: string): string[] {
 	if (!existsSync(absDir)) return []
@@ -91,7 +76,7 @@ function listDirFiles(absDir: string): string[] {
 	const out: string[] = []
 	for (const name of names) {
 		if (name.startsWith(".")) continue
-		if (DIR_INVENTORY_SKIP_SWEEP.has(name)) continue
+		if (DIR_INVENTORY_SKIP.has(name)) continue
 		try {
 			if (statSync(join(absDir, name)).isFile()) out.push(name)
 		} catch {
@@ -448,15 +433,16 @@ export function runDriftSweep(args: {
 						continue
 					}
 					// Files were stored with outputSha256 strategy
-					// (body-hash for md/text, full-file for binary).
+					// (body-hash for text-with-FM, full-file for binary).
 					// Same strategy here so sign-time and check-time
-					// hashes align per-extension. For markdown bodies,
-					// use the dual-strategy compare so legacy (pre-
-					// canonicalization-fix) witnesses don't false-drift.
-					const ext = abs.slice(abs.lastIndexOf(".")).toLowerCase()
-					const isMarkdown =
-						ext === ".md" || ext === ".markdown" || ext === ".mdx"
-					const mismatched = isMarkdown
+					// hashes align per-extension. Classify with the SHARED
+					// `isTextBodyExtension` (the same set `outputSha256`
+					// uses) rather than a hardcoded list that drifts from
+					// `TEXT_BODY_EXTENSIONS` — every text-body extension
+					// then gets the dual-strategy `bodyMatchesStoredHash`
+					// compare so legacy (pre-canonicalization-fix)
+					// witnesses don't false-drift.
+					const mismatched = isTextBodyExtension(abs)
 						? !bodyMatchesStoredHash(abs, storedSha)
 						: (() => {
 								const cur = outputSha256(abs)
@@ -535,24 +521,39 @@ export function runDriftSweep(args: {
 							continue
 						}
 						const currentSha = fileSha256(fileAbs)
-						if (currentSha && currentSha !== storedSha) {
+						// Same baton exemption as the direct-file path above:
+						// a file inside a witnessed dir that is ALSO a current-
+						// stage output is the stage's own output evolving in the
+						// loop, not premise drift — skip it to avoid the
+						// input==output cascade.
+						const memberRel = join(dirRel, filename)
+						if (
+							currentSha &&
+							currentSha !== storedSha &&
+							!stageProducedRel.has(memberRel)
+						) {
 							events.push({
 								unit: unitName,
 								role,
 								kind: "input_mutation",
-								file: join(dirRel, filename),
+								file: memberRel,
 								since: at,
 							})
 						}
 					}
-					// New files inside the dir = addition drift.
+					// New files inside the dir = addition drift (unless the new
+					// file is a current-stage output — same baton exemption).
 					for (const name of currentNames) {
-						if (inventory[name] === undefined) {
+						const memberRel = join(dirRel, name)
+						if (
+							inventory[name] === undefined &&
+							!stageProducedRel.has(memberRel)
+						) {
 							events.push({
 								unit: unitName,
 								role,
 								kind: "input_addition",
-								file: join(dirRel, name),
+								file: memberRel,
 								since: at,
 							})
 						}

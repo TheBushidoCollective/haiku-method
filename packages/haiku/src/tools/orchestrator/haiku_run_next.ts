@@ -1158,11 +1158,13 @@ export default defineTool({
 						invalidates,
 					})
 				}
-				// Refresh witnessed signed_at on the targeted unit when
-				// this is a drift FB — otherwise the drift sweep keeps
-				// finding the same commit past the original sign time.
-				// `targets` and `targetUnit` are reused from the
-				// invalidations block above — same FB, same fields.
+				// Refresh the witnessed CONTENT (body + input premises) on
+				// the targeted unit when this is a drift FB — otherwise the
+				// sweep keeps re-detecting the same content mismatch past the
+				// fix. The sweep compares content hashes, not timestamps, so
+				// we refresh the witnesses and PRESERVE each slot's `at`.
+				// `targets`/`targetUnit` are reused from the invalidations
+				// block above — same FB.
 				if (fbFm.origin === "drift" && targetUnit) {
 					const unitPath = join(
 						findHaikuRoot(),
@@ -1175,15 +1177,12 @@ export default defineTool({
 					)
 					if (existsSync(unitPath)) {
 						const intentDirAbs = join(findHaikuRoot(), "intents", slug)
-						const { buildApprovalRecord, buildReviewRecord } = await import(
+						const { buildReviewRecord } = await import(
 							"../../orchestrator/workflow/sign-slot.js"
 						)
 						const raw = readFileSync(unitPath, "utf8")
 						const parsed = parseFrontmatter(raw)
 						const fm = parsed.data as Record<string, unknown>
-						const outputs = Array.isArray(fm.outputs)
-							? (fm.outputs as string[])
-							: []
 						const reviews =
 							fm.reviews && typeof fm.reviews === "object"
 								? { ...(fm.reviews as Record<string, unknown>) }
@@ -1191,21 +1190,37 @@ export default defineTool({
 						const unitInputs = Array.isArray(fm.inputs)
 							? (fm.inputs as string[])
 							: []
-						for (const role of Object.keys(reviews)) {
-							reviews[role] = buildReviewRecord(unitPath, {
+						// Refresh each signed review's witness (body +
+						// input premises) to current content, but PRESERVE
+						// the slot's `at` — the restamp is engine
+						// bookkeeping, not a re-signature, so the audit
+						// trail survives (mirrors drift-handle-events.ts).
+						let reviewsChanged = false
+						for (const [role, slot] of Object.entries(reviews)) {
+							if (!slot || typeof slot !== "object" || Array.isArray(slot)) {
+								continue
+							}
+							const slotRec = slot as Record<string, unknown>
+							if (typeof slotRec.at !== "string") continue
+							const rebuilt = buildReviewRecord(unitPath, {
 								intentDir: intentDirAbs,
 								unitInputs,
 							})
+							reviews[role] = {
+								...slotRec,
+								body_sha256: rebuilt.body_sha256,
+								input_witnesses: rebuilt.input_witnesses,
+							}
+							reviewsChanged = true
 						}
-						const approvals =
-							fm.approvals && typeof fm.approvals === "object"
-								? { ...(fm.approvals as Record<string, unknown>) }
-								: {}
-						for (const role of Object.keys(approvals)) {
-							approvals[role] = buildApprovalRecord(intentDirAbs, outputs)
+						if (reviewsChanged) {
+							setFrontmatterField(unitPath, "reviews", reviews)
 						}
-						setFrontmatterField(unitPath, "reviews", reviews)
-						setFrontmatterField(unitPath, "approvals", approvals)
+						// Approvals are bookkeeping-only under the premise-
+						// witness model — they witness no file content, so a
+						// drift close never re-stamps them. Doing so would
+						// clobber each approval's sign-off `at` (who approved
+						// when) for zero drift-detection benefit.
 					}
 				}
 				// pre-tick merge + cursor walk handle branch alignment

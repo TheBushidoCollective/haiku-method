@@ -86,6 +86,14 @@ export function resetLostUnits(slug: string, studio: string): { reset: string[] 
 						(o): o is string => typeof o === "string" && o.length > 0,
 					)
 				: []
+			// Outputs-on-disk is the recoverability discriminator. A unit
+			// that COMPLETED in-place is already exempted above (terminal
+			// advance on the last hat). What's left here is a mid-loop unit
+			// with no worktree and no branch: if a declared output survives
+			// on the tree its work is recoverable in place (don't reset); a
+			// unit declaring NO outputs has no recoverable signal and is
+			// genuinely lost mid-loop — reset so the cursor re-dispatches
+			// the first hat fresh (pinned by unit-branch-recovery.test.mjs).
 			if (outputs.some((o) => unitOutputExists(slug, unit, o))) continue
 			// Lost: reset so the cursor re-dispatches the first hat fresh.
 			setFrontmatterField(path, "iterations", [])

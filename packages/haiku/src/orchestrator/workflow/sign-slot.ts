@@ -163,11 +163,20 @@ const TEXT_BODY_EXTENSIONS: ReadonlySet<string> = new Set([
  *  witness with what humans actually changed. */
 export function outputSha256(absolutePath: string): string {
 	if (!existsSync(absolutePath)) return ""
-	const ext = absolutePath.slice(absolutePath.lastIndexOf(".")).toLowerCase()
-	if (TEXT_BODY_EXTENSIONS.has(ext)) {
+	if (isTextBodyExtension(absolutePath)) {
 		return bodySha256(absolutePath)
 	}
 	return fileSha256(absolutePath)
+}
+
+/** True when a path's extension is body-hashed (frontmatter stripped) by
+ *  `outputSha256` — the canonical "is this a text-with-frontmatter file"
+ *  test. Exported so the drift sweep classifies input files the SAME way
+ *  sign-time does, instead of re-hardcoding a partial extension list that
+ *  silently drifts from `TEXT_BODY_EXTENSIONS`. */
+export function isTextBodyExtension(absolutePath: string): boolean {
+	const ext = absolutePath.slice(absolutePath.lastIndexOf(".")).toLowerCase()
+	return TEXT_BODY_EXTENSIONS.has(ext)
 }
 
 /** Build the witnesses map for an approvals slot: { <relPath>: <sha256> }
@@ -268,7 +277,7 @@ export interface InputWitnesses {
  *  bookkeeping (action-log, drift-markers from the legacy layer) and
  *  OS / VCS noise. Their presence/edit/deletion is never "drift" in
  *  any meaningful sense. */
-const DIR_INVENTORY_SKIP = new Set<string>([
+export const DIR_INVENTORY_SKIP: ReadonlySet<string> = new Set<string>([
 	".DS_Store",
 	"Thumbs.db",
 	".git",

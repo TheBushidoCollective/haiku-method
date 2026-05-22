@@ -262,6 +262,15 @@ export type CursorAction =
 	// the stage merge so the per-intent reflection pass at intent
 	// close sees the full signal across stages.
 	| { kind: "record_observations"; stage: string }
+	// User-facing stage BRIEF (2026-05-22) — fires once per stage in the
+	// PRE-execute review walk, after the adversarial reviews sign off on the
+	// spec and BEFORE the review user gate. A dedicated briefer subagent
+	// reads the planned units + intent + inputs + knowledge and writes a
+	// human-readable `BRIEF.md`; it's the first thing the user sees when the
+	// gate opens, a persistent repo artifact, and a website-browse surface.
+	// User-facing only — the focused work agents never read it. Forward-only
+	// (see `stageOwesBrief`): never interrupts a stage already executing.
+	| { kind: "write_brief"; stage: string }
 	| { kind: "intent_review"; role: string }
 	// Reflection (2026-05-19) — fires once at intent close, after
 	// every intent-scope approval is signed but before seal_intent.
@@ -410,6 +419,21 @@ export function isReflectionEnabled(intentDir: string): boolean {
 		if (fm.reflection === false) return false
 		if (fm.autotune === false) return false
 		return true
+	} catch {
+		return true
+	}
+}
+
+/** The per-stage user-facing BRIEF is ON by default; opt out per intent
+ *  with `brief: false` on intent.md frontmatter. Mirrors
+ *  `isReflectionEnabled`. */
+export function isBriefEnabled(intentDir: string): boolean {
+	const intentMdPath = join(intentDir, "intent.md")
+	if (!existsSync(intentMdPath)) return true
+	try {
+		const raw = readFileSync(intentMdPath, "utf8")
+		const fm = matter(raw).data as { brief?: unknown }
+		return fm.brief !== false
 	} catch {
 		return true
 	}
@@ -878,6 +902,31 @@ export function stageOwesObservations(
 ): boolean {
 	if (!isReflectionEnabled(intentDir)) return false
 	return !existsSync(join(intentDir, "stages", stage, "observations.md"))
+}
+
+/**
+ * Does this stage still owe its user-facing `BRIEF.md` before the
+ * pre-execute review gate? The brief summarizes the planned work (units,
+ * intent, inputs, knowledge) for the human reviewing the spec before any
+ * code lands. It fires in the review walk AFTER the adversarial reviews and
+ * BEFORE the review user gate.
+ *
+ * Forward-only — exactly like `stageOwesObservations`, it must never pull a
+ * stage backwards. The brief window is "reviews signed, execution not yet
+ * started": `anyUnitStarted` short-circuits it so a stage already mid-execute
+ * (or any legacy/in-flight intent that started building before this feature
+ * shipped) is never interrupted to write a brief. A fresh stage hits this
+ * window once, between review sign-off and the first hat dispatch.
+ */
+export function stageOwesBrief(
+	intentDir: string,
+	stage: string,
+	anyUnitStarted: boolean,
+): boolean {
+	if (!isBriefEnabled(intentDir)) return false
+	if (existsSync(join(intentDir, "stages", stage, "BRIEF.md"))) return false
+	if (anyUnitStarted) return false
+	return true
 }
 
 /**
@@ -1481,6 +1530,7 @@ function walkIntentTrack(args: {
 	// final sign-off before complete_stage.
 	{
 		const pendingAdversarial: Array<{ role: string; units: string[] }> = []
+		let userMissing: string[] | null = null
 		for (const role of reviewRoles) {
 			const missing = units
 				.filter((u) => {
@@ -1490,18 +1540,10 @@ function walkIntentTrack(args: {
 				.map((u) => u.name)
 			if (missing.length === 0) continue
 			if (role === "user") {
-				// Flush any pending adversarial roles before the user gate.
-				if (pendingAdversarial.length > 0) {
-					const first = pendingAdversarial[0]
-					return {
-						kind: "dispatch_review",
-						stage,
-						dispatches: pendingAdversarial,
-						role: first.role,
-						units: first.units,
-					}
-				}
-				return { kind: "user_gate", stage, gate_kind: "spec", units: missing }
+				// Defer the user gate — the BRIEF fires between the adversarial
+				// reviews and the gate so the human reads the brief first.
+				userMissing = missing
+				continue
 			}
 			if (SERIAL_REVIEW_ROLES.has(role)) {
 				// Serial gate — flush any pending adversarial batch first.
@@ -1526,7 +1568,7 @@ function walkIntentTrack(args: {
 			// Adversarial role — collect for parallel dispatch.
 			pendingAdversarial.push({ role, units: missing })
 		}
-		// Flush any remaining adversarial roles after the loop.
+		// Flush any remaining adversarial roles before the brief / gate.
 		if (pendingAdversarial.length > 0) {
 			const first = pendingAdversarial[0]
 			return {
@@ -1536,6 +1578,25 @@ function walkIntentTrack(args: {
 				role: first.role,
 				units: first.units,
 			}
+		}
+		// Every spec + adversarial review has signed. Write the user-facing
+		// BRIEF before the review user gate — it summarizes the planned work
+		// (units, intent, inputs, knowledge) and is the first thing the human
+		// sees at the gate. Fires in every mode (in autopilot/auto there's
+		// simply no gate after it). Forward-only: `stageOwesBrief` short-
+		// circuits once any unit has started executing, so an in-flight stage
+		// is never interrupted to write a brief.
+		{
+			const anyUnitStarted = units.some(
+				(u) => Boolean(u.fm.started_at) || pickIterations(u.fm).length > 0,
+			)
+			if (stageOwesBrief(intentDir, stage, anyUnitStarted)) {
+				return { kind: "write_brief", stage }
+			}
+		}
+		// Brief written → the deferred review user gate.
+		if (userMissing) {
+			return { kind: "user_gate", stage, gate_kind: "spec", units: userMissing }
 		}
 	}
 

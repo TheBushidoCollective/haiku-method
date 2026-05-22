@@ -194,6 +194,8 @@ function describeAction(action: CursorAction | null): {
 				: `${shortRole(action.role)} approval`
 			return { kind: "approve", label, gated: false }
 		}
+		case "write_brief":
+			return { kind: "review", label: "writing brief", gated: false }
 		case "dispatch_quality_gates":
 			return { kind: "approve", label: "quality gates", gated: false }
 		case "user_gate":

@@ -537,11 +537,22 @@ export function makeStudio({
  * No "switch to main, compute, switch back" dance. No activeStageHint.
  * The disk after pre-tick merge IS the source of truth.
  */
-export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
+export async function runTickWithBranchAlignment(
+	repoRootOrSlug,
+	maybeSlug,
+	opts = {},
+) {
 	// Two call shapes: (repoRoot, slug) or (slug) — when slug-only the
 	// caller has already chdir'd to repoRoot.
 	const slug = maybeSlug ?? repoRootOrSlug
 	const repoRoot = maybeSlug ? repoRootOrSlug : process.cwd()
+	// The pre-execute BRIEF (2026-05-22): when the cursor returns
+	// `write_brief`, mirror what the briefer subagent does in production —
+	// write `BRIEF.md` and re-tick — so full-lifecycle harnesses advance
+	// past the new step transparently. Tests that want to OBSERVE the
+	// `write_brief` action (cursor-walk brief tests) pass
+	// `{ autoBrief: false }`.
+	const autoBrief = opts.autoBrief !== false
 	const origCwd = process.cwd()
 	process.chdir(repoRoot)
 	try {
@@ -556,7 +567,7 @@ export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 			"../src/orchestrator/workflow/cursor.js"
 		)
 		const { parseFrontmatter } = await import("../src/state-tools.js")
-		const { existsSync, readFileSync } = await import("node:fs")
+		const { existsSync, readFileSync, writeFileSync } = await import("node:fs")
 		const { join } = await import("node:path")
 		const { execFileSync } = await import("node:child_process")
 		clearStudioCache()
@@ -622,7 +633,38 @@ export async function runTickWithBranchAlignment(repoRootOrSlug, maybeSlug) {
 			}
 		}
 		if (pendingMergeStage) return pendingMergeStage
-		return dispatchOrchestratorAction(slug, "")
+		const action = dispatchOrchestratorAction(slug, "")
+		if (autoBrief && action?.action === "write_brief" && action.stage) {
+			// Briefer stand-in: write BRIEF.md on the (already-aligned) stage
+			// branch, then re-tick. Writing the brief doesn't move the active
+			// stage, so alignment stays put and the next walk sees the file.
+			const briefPath = join(
+				repoRoot,
+				".haiku",
+				"intents",
+				slug,
+				"stages",
+				action.stage,
+				"BRIEF.md",
+			)
+			writeFileSync(briefPath, "# Brief (test fixture)\n")
+			// Commit on the (already-aligned) stage branch — mirrors the
+			// brief being committed with the stage in production.
+			try {
+				execFileSync("git", ["add", "-A"], { cwd: repoRoot, stdio: "ignore" })
+				execFileSync("git", ["commit", "-q", "-m", "test: stage brief"], {
+					cwd: repoRoot,
+					stdio: "ignore",
+				})
+			} catch {
+				/* filesystem-mode or nothing to commit — non-fatal */
+			}
+			// Re-dispatch in place: we're already on the aligned branch with
+			// BRIEF.md on disk, so the cursor advances past the brief without
+			// re-running the branch reconciliation dance.
+			return dispatchOrchestratorAction(slug, "")
+		}
+		return action
 	} finally {
 		process.chdir(origCwd)
 	}

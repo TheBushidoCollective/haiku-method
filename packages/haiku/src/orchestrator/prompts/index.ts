@@ -61,6 +61,7 @@ import complete_stage from "./stage/complete/complete_stage/index.js"
 import record_observations from "./stage/complete/record_observations/index.js"
 import record_reflection from "./intent/reflection/record_reflection/index.js"
 // ── stage/ ────────────────────────────────────────────────────────
+import write_brief from "./stage/review/write_brief/index.js"
 import elaborate_loop from "./stage/elaborate/elaborate_loop/index.js"
 import blocked from "./stage/error/blocked/index.js"
 import coverage_review_required from "./stage/error/coverage_review_required/index.js"
@@ -98,6 +99,7 @@ export const actionPromptBuilders: ReadonlyMap<string, PromptBuilder> = new Map<
 	["start_unit", start_unit],
 	["start_unit_hat", start_unit_hat],
 	["dispatch_review", dispatch_review],
+	["write_brief", write_brief],
 	["dispatch_approval", dispatch_approval],
 	["dispatch_quality_gates", dispatch_quality_gates],
 	["user_gate", user_gate],

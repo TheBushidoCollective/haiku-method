@@ -80,6 +80,7 @@ interface WorkflowPathClassification {
 		| "settings"
 		| "baseline_ack"
 		| "baseline_thrash"
+		| "brief"
 		| null
 	intent?: string
 	stage?: string
@@ -118,6 +119,13 @@ function classifyPath(absPath: string): WorkflowPathClassification {
 	}
 	if (/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/state\.json$/.test(absPath)) {
 		return { kind: "stage_state" }
+	}
+	// The per-stage user-facing BRIEF. Read-blocked for the focused work
+	// agents (it's authored by the briefer, surfaced to the human at the
+	// gate, and served to the website/SPA server-side — never read by an
+	// agent). Writes stay open so the briefer can author it.
+	if (/\.haiku\/intents\/[^/]+\/stages\/[^/]+\/BRIEF\.md$/.test(absPath)) {
+		return { kind: "brief" }
 	}
 	// V-11: operator-only baseline-corrupt acknowledgement marker. Only
 	// /haiku:haiku-repair --confirm-baseline-reset (operator-driven) may
@@ -210,6 +218,14 @@ function redirectMessage(
 			`forward-only lifecycle invariants.`
 		)
 	}
+	if (cls.kind === "brief") {
+		return (
+			`BLOCKED: Cannot ${op} BRIEF.md. The stage brief is USER-FACING only — ` +
+			`it's written by the briefer subagent for the human reviewing the plan at ` +
+			`the gate, and you should never read it. Stay focused on your own mandate ` +
+			`(your unit spec, your hat's job); the brief is not an input to your work.`
+		)
+	}
 	if (cls.kind === "baseline_ack") {
 		return (
 			`BLOCKED: Cannot ${op} .baseline-ack via generic ${toolName}. This is the V-11 ` +
@@ -266,6 +282,12 @@ export async function guardWorkflowFields(
 	const absPath = resolve(process.cwd(), filePath)
 	const cls = classifyPath(absPath)
 	if (cls.kind === null) return
+
+	// BRIEF.md is user-facing only: deny READ to the focused work agents
+	// (the briefer authors it; the human reads it at the gate; the
+	// website/SPA serve it server-side). Writes/edits stay open so the
+	// briefer can author or refresh it.
+	if (cls.kind === "brief" && toolName !== "Read") return
 
 	// Merge-conflict short-circuit: when the repo is mid-merge / rebase /
 	// cherry-pick, the workflow-managed file on disk likely contains

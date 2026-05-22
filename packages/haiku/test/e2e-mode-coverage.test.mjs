@@ -281,6 +281,13 @@ function applyResponse(intentDir, action, root, slug) {
 			}
 			break
 		}
+		case "write_brief": {
+			// Briefer stand-in: write the user-facing BRIEF.md so the cursor
+			// advances past the pre-execute brief step (to the user gate, or
+			// straight to execute in auto/autopilot).
+			writeFileSync(join(stageDir, "BRIEF.md"), "# Brief (test fixture)\n")
+			break
+		}
 		case "dispatch_review": {
 			const reviewDispatches = action.dispatches || [{ role: action.role, units: action.units }]
 			for (const d of reviewDispatches) {

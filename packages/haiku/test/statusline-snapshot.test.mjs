@@ -177,6 +177,9 @@ test("a real workflow tick persists the dispatched position (broadcastTick → s
 		join(stageDir, "elaboration.md"),
 		matter.stringify("e\n", { verified_at: AT, decompose_verified_at: AT }),
 	)
+	// Seed the pre-execute BRIEF so the cursor walks past the brief step to
+	// the seeded wave dispatch (reviews are pre-signed below).
+	writeFileSync(join(stageDir, "BRIEF.md"), "# Brief\n")
 	writeFileSync(
 		join(stageDir, "units", "unit-01-a.md"),
 		matter.stringify("a\n", {

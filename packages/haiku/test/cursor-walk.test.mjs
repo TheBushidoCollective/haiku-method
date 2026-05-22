@@ -130,10 +130,12 @@ function writeUnit(intentDir, stage, name, fm, body = "") {
 
 /**
  * Drive a tick — alias for `runTickWithBranchAlignment` so tests call
- * the same dance the production engine performs.
+ * the same dance the production engine performs. `opts` forwards through
+ * (e.g. `{ autoBrief: false }` to observe the raw `write_brief` action
+ * instead of letting the fixture auto-write BRIEF.md and re-tick).
  */
-async function runTick(repoRoot, slug) {
-	return runTickWithBranchAlignment(repoRoot, slug)
+async function runTick(repoRoot, slug, opts) {
+	return runTickWithBranchAlignment(repoRoot, slug, opts)
 }
 
 // ── Track A scenarios ────────────────────────────────────────────────
@@ -426,6 +428,100 @@ test("cursor: all reviews signed → user_gate spec", async () => {
 			assert.strictEqual(action.gate_kind, "spec")
 		},
 	)
+})
+
+// ── Stage BRIEF (2026-05-22): pre-execute, after adversarial review,
+// before the user gate. User-facing summary of the planned work. ──────
+
+const PRE_EXECUTE_UNIT = {
+	title: "u1",
+	depends_on: [],
+	started_at: null,
+	iterations: [],
+	approvals: {},
+	discovery: {},
+}
+
+test("cursor: reviews signed, units not started, no BRIEF → write_brief before the user gate", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo("cursor-brief", async ({ repoRoot, intentDir, slug }) => {
+		makeStudio({ repoRoot, studio: "test" })
+		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
+		writeUnit(intentDir, "design", "unit-01", {
+			...PRE_EXECUTE_UNIT,
+			reviews: { ...ENGINE_REVIEWS_SIGNED, "code-reviewer": { at: "t" } },
+		})
+		// Spec + adversarial reviews signed, nothing executing yet, no BRIEF.md
+		// → the briefer fires before the (still-pending) user gate.
+		// autoBrief:false so we observe write_brief instead of the fixture
+		// auto-writing the brief and re-ticking.
+		let action = await runTick(repoRoot, slug, { autoBrief: false })
+		assert.strictEqual(
+			action.action,
+			"write_brief",
+			`expected write_brief, got ${action.action} — ${action.message ?? ""}`,
+		)
+		assert.strictEqual(action.stage, "design")
+		// Once BRIEF.md exists the cursor advances to the review user gate.
+		onStageBranch(repoRoot, slug, "design", () => {
+			writeFileSync(
+				join(intentDir, "stages", "design", "BRIEF.md"),
+				"# Brief\nWhat this stage delivers.\n",
+			)
+		})
+		action = await runTick(repoRoot, slug, { autoBrief: false })
+		assert.strictEqual(action.action, "user_gate")
+		assert.strictEqual(action.gate_kind, "spec")
+	})
+})
+
+test("cursor: brief is forward-only — a stage already executing is never pulled back to write one", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo("cursor-brief-fwd", async ({ repoRoot, intentDir, slug }) => {
+		makeStudio({ repoRoot, studio: "test" })
+		makeIntent({ intentDir, slug, studio: "test" })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
+		writeUnit(intentDir, "design", "unit-01", {
+			title: "u1",
+			depends_on: [],
+			started_at: "t",
+			iterations: [
+				{ hat: "planner", started_at: "t", completed_at: "t", result: "advance" },
+			],
+			reviews: { ...ENGINE_REVIEWS_SIGNED, "code-reviewer": { at: "t" } },
+			approvals: {},
+			discovery: {},
+		})
+		// Unit has started executing; no BRIEF.md exists. The brief must NOT
+		// fire — it would interrupt an in-flight stage (the grandfather case
+		// for any intent already past this point when the feature shipped).
+		const action = await runTick(repoRoot, slug, { autoBrief: false })
+		assert.notStrictEqual(
+			action.action,
+			"write_brief",
+			`forward-only: a started stage must not be pulled back to write_brief; got ${action.action}`,
+		)
+	})
+})
+
+test("cursor: brief opt-out (brief: false) → straight to the user gate, no write_brief", async () => {
+	if (!HAS_GIT) return
+	await withTmpRepo("cursor-brief-opt", async ({ repoRoot, intentDir, slug }) => {
+		makeStudio({ repoRoot, studio: "test" })
+		makeIntent({ intentDir, slug, studio: "test", extraFm: { brief: false } })
+		seedVerifiedElaboration({ intentDir, stage: "design" })
+		writeUnit(intentDir, "design", "unit-01", {
+			...PRE_EXECUTE_UNIT,
+			reviews: { ...ENGINE_REVIEWS_SIGNED, "code-reviewer": { at: "t" } },
+		})
+		const action = await runTick(repoRoot, slug, { autoBrief: false })
+		assert.strictEqual(
+			action.action,
+			"user_gate",
+			`brief: false must skip the briefer; got ${action.action}`,
+		)
+	})
 })
 
 test("cursor: all reviews + user signed → dispatch_approval spec (post-execute track)", async () => {

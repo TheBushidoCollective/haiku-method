@@ -1009,6 +1009,69 @@ test("resolveStatuslineState: agent chips appear ONLY in adversarial review, not
 	}
 })
 
+test("resolveStatuslineState: discovery agents surface as chips during elaborate_loop", async () => {
+	if (!HAS_GIT) return
+	const repoRoot = mkdtempSync(join(tmpdir(), "haiku-sl-disc-"))
+	const orig = process.cwd()
+	try {
+		const slug = "sl-disc"
+		const stage = "security"
+		const AT = "2026-05-22T00:00:00Z"
+		const intentDir = join(repoRoot, ".haiku", "intents", slug)
+		const stageDir = join(intentDir, "stages", stage)
+		mkdirSync(join(stageDir, "units"), { recursive: true })
+		mkdirSync(join(stageDir, "feedback"), { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("body\n", {
+				title: "disc",
+				studio: "software",
+				mode: "autopilot",
+				stages: [stage],
+			}),
+		)
+		// Conversation captured + decompose verified + a unit on disk → the
+		// only unmet elaborate signals are the missing discovery artifacts
+		// (.haiku/knowledge/ is empty, so every required discovery template
+		// fires its signal). `computeElaborateSignals` skips non-tool
+		// discoveries when no units exist, hence the unit-01 seed.
+		writeFileSync(
+			join(stageDir, "elaboration.md"),
+			matter.stringify("e\n", { verified_at: AT, decompose_verified_at: AT }),
+		)
+		writeFileSync(
+			join(stageDir, "units", "unit-01.md"),
+			matter.stringify("u\n", {
+				title: "u",
+				started_at: null,
+				inputs: [],
+				iterations: [],
+				reviews: {},
+				approvals: {},
+			}),
+		)
+		process.chdir(repoRoot)
+		const { resolveStatuslineState } = await import(`${SRC}statusline/state.ts`)
+		const state = resolveStatuslineState()
+		assert.ok(state, "expected a state")
+		// Cursor sits in the elaborate phase with discovery signals pending.
+		assert.equal(state.phaseKind, "elaborate")
+		// One chip per discovery template configured for the stage; all
+		// missing → every chip is "active" (the parallel fan-out being run).
+		assert.ok(
+			Array.isArray(state.agentChips) && state.agentChips.length > 0,
+			`expected discovery chips; got ${JSON.stringify(state.agentChips)}`,
+		)
+		assert.ok(
+			state.agentChips.every((c) => c.status === "active"),
+			`every chip should be active when no artifacts exist; got ${JSON.stringify(state.agentChips)}`,
+		)
+	} finally {
+		process.chdir(orig)
+		rmSync(repoRoot, { recursive: true, force: true })
+	}
+})
+
 // ── isPastAllStages: intent-completion vs stage-scoped actions ────────
 
 test("isPastAllStages: intent-completion actions are past all stages, stage-scoped are not", async () => {

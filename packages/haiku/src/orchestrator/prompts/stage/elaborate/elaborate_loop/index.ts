@@ -170,7 +170,35 @@ export default definePromptBuilder((ctx) => {
 		"Read each block, decide which signals you can move forward this tick (often more than one), execute, then call `haiku_run_next` to re-evaluate the loop. The cursor stays in `elaborate_loop` until every signal flips on disk.",
 	)
 
-	for (const entry of signals) {
+	// Consolidate every `discovery` signal into ONE discoveryRequiredBuilder
+	// call with `dispatches[]` — so the prompt renders ONE "Discovery"
+	// section with N subagent blocks (matching the parallel-batched shape of
+	// `dispatch_review`), instead of N separate sections. Non-discovery
+	// signals keep their per-signal rendering.
+	const discoverySignals = signals.filter((s) => s.signal === "discovery")
+	const otherSignals = signals.filter((s) => s.signal !== "discovery")
+
+	if (discoverySignals.length > 0) {
+		const subAction: Record<string, unknown> = {
+			stage,
+			intent: intentSlug,
+			action: "discovery_required",
+			signal: "discovery",
+			dispatches: discoverySignals.map((s) => ({
+				agent: s.agent ?? "",
+				units: s.units ?? [],
+			})),
+		}
+		const subCtx: PromptBuilderContext = {
+			...ctx,
+			action: subAction as PromptBuilderContext["action"],
+			composedMode: true,
+		}
+		const body = discoveryRequiredBuilder(subCtx) ?? ""
+		sections.push(`### ${headingFor("discovery")}\n\n${body.trim()}`)
+	}
+
+	for (const entry of otherSignals) {
 		const subAction = synthesizedAction(parent, entry)
 		const subCtx: PromptBuilderContext = {
 			...ctx,

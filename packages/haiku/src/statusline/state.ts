@@ -28,6 +28,7 @@ import {
 	deriveProgressRoleSteps,
 	deriveProgressTrack,
 } from "../orchestrator/workflow/progress-track.js"
+import { readStageArtifactDefs } from "../studio-reader.js"
 import {
 	findHaikuRoot,
 	intentDir,
@@ -726,6 +727,47 @@ export function resolveStatuslineState(): StatuslineState | null {
 				.filter((s) => inBucket(s.key) && !SINGLE_ACTOR_ROLES.has(rawRoleOf(s.key)))
 				.map((s) => ({ id: chipRole(s.key), status: s.status }))
 			if (chips.length > 0) agentChips = chips
+		}
+	}
+
+	// Discovery chips — when the cursor is in `elaborate_loop` with at least
+	// one pending discovery signal, show one chip per discovery template
+	// configured for the stage. Same "parallel fan-out" idea as adversarial
+	// review: discovery agents run in parallel (multiple Task calls in one
+	// response), so the row shows them all — present-on-disk agents are
+	// `done`, missing agents (in `signals_unmet[]`) are `active`.
+	if (
+		!agentChips &&
+		action &&
+		(action as { kind?: string }).kind === "elaborate_loop" &&
+		activeStage &&
+		studio
+	) {
+		const sigs = (action as { signals_unmet?: Array<{ signal?: string; agent?: string }> })
+			.signals_unmet
+		if (Array.isArray(sigs)) {
+			const missing = new Set(
+				sigs
+					.filter((s) => s.signal === "discovery" && typeof s.agent === "string" && s.agent)
+					.map((s) => s.agent as string),
+			)
+			if (missing.size > 0) {
+				try {
+					// Only REQUIRED discoveries become signals (and chips). A
+					// non-required def is never in signals_unmet, so it isn't
+					// running — surfacing it as "done" would be a lie.
+					const defs = readStageArtifactDefs(studio, activeStage).filter(
+						(d) => d.kind === "discovery" && d.required,
+					)
+					const chips: AgentChip[] = defs.map((def) => ({
+						id: def.name,
+						status: missing.has(def.name) ? "active" : "done",
+					}))
+					if (chips.length > 0) agentChips = chips
+				} catch {
+					/* studio/stage unreadable — skip discovery chips */
+				}
+			}
 		}
 	}
 

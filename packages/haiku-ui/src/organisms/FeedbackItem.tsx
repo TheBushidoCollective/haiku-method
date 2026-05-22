@@ -106,14 +106,9 @@ const RESOLUTION_LABELS: Record<
 function FeedbackBody({
 	title,
 	body,
-	previewText,
 }: {
 	title: string
 	body: string
-	/** When provided, the truncated preview text is rendered as a plain
-	 *  string instead of the full markdown body. The "Read more" button
-	 *  in `FeedbackItem` opens a slide-over with the full body. */
-	previewText?: string
 }): React.ReactElement {
 	const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(
 		null,
@@ -124,18 +119,6 @@ function FeedbackBody({
 		e.preventDefault()
 		setLightbox({ src: target.src, alt: target.alt || "Attachment" })
 	}, [])
-	// Preview path: render the truncated string in a paragraph so the
-	// sidebar column stays scannable. Avoid the full markdown pipeline
-	// (no code blocks, no headings, no images) — those routinely blow
-	// past the narrow column and waste vertical real estate. The user
-	// gets the rich render in the slide-over.
-	if (typeof previewText === "string") {
-		return (
-			<p className="text-xs text-stone-700 dark:text-stone-300 [overflow-wrap:anywhere]">
-				{previewText}
-			</p>
-		)
-	}
 	return (
 		<>
 			{/* biome-ignore lint/a11y/noStaticElementInteractions: click delegation on the markdown body catches img clicks; each img already has alt text, and the lightbox trigger is accessible via the image's focusable wrapping. */}
@@ -166,28 +149,20 @@ function FeedbackBody({
 	)
 }
 
-/** Compute a preview string from a markdown body. Strips obvious
- *  markdown noise (heading markers, code-fence markers) and collapses
- *  whitespace so the truncated preview reads as plain prose. */
-function buildPreviewText(body: string): {
-	preview: string
-	truncated: boolean
-} {
+/** Decide whether a body is long enough to height-clamp inline. Measures
+ *  the body with obvious markdown noise stripped (code fences, heading
+ *  markers, emphasis) and whitespace collapsed, so the decision tracks
+ *  visible prose length rather than raw-syntax length. The body itself is
+ *  always rendered as full markdown — this only gates the clamp + "Read
+ *  more" affordance. */
+function buildPreviewText(body: string): { truncated: boolean } {
 	const cleaned = body
 		.replace(/```[\s\S]*?```/g, " [code] ")
 		.replace(/^#{1,6}\s+/gm, "")
 		.replace(/[*_`~]+/g, "")
 		.replace(/\s+/g, " ")
 		.trim()
-	if (cleaned.length <= INLINE_PREVIEW_BUDGET) {
-		return { preview: cleaned, truncated: false }
-	}
-	// Trim back to a word boundary so the preview doesn't cut mid-word.
-	const sliced = cleaned.slice(0, INLINE_PREVIEW_BUDGET)
-	const lastSpace = sliced.lastIndexOf(" ")
-	const safe =
-		lastSpace > INLINE_PREVIEW_BUDGET - 60 ? sliced.slice(0, lastSpace) : sliced
-	return { preview: `${safe}…`, truncated: true }
+	return { truncated: cleaned.length > INLINE_PREVIEW_BUDGET }
 }
 
 export interface FeedbackItemProps {
@@ -272,9 +247,11 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 		const [replySubmitting, setReplySubmitting] = useState(false)
 		const [replyError, setReplyError] = useState<string | null>(null)
 		const [expandedPanelOpen, setExpandedPanelOpen] = useState(false)
-		// Build the preview lazily so we don't re-walk the body on every
-		// render. Body content is immutable per FB read.
-		const { preview, truncated } = useMemo(
+		// Decide whether the body is long enough to clamp inline (the full
+		// body still renders as markdown — we only gate the height-clamp +
+		// "Read more" affordance on this). Computed lazily; body content is
+		// immutable per FB read.
+		const { truncated } = useMemo(
 			() => buildPreviewText(item.body),
 			[item.body],
 		)
@@ -420,6 +397,16 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 					onKeyDown={handleKeyDown}
 				>
 					<div className="flex items-center gap-2 mb-1 flex-wrap">
+						{/* Leading FB-NN identifier chip. Promoted out of the grey
+						    subtext into a prominent monospace badge so reviewers can
+						    correlate the card against an FB id the agent references in
+						    chat at a glance — it's the first thing the eye lands on. */}
+						<span
+							className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+							title={`Feedback identifier ${item.feedback_id}`}
+						>
+							{item.feedback_id}
+						</span>
 						<FeedbackOriginIcon origin={item.origin} showLabel />
 						<FeedbackStatusBadge status={item.status} />
 						{item.scope === "intent" && (
@@ -468,17 +455,27 @@ export const FeedbackItem = forwardRef<HTMLDivElement, FeedbackItemProps>(
 						{item.title}
 					</p>
 					<p className="text-xs text-stone-600 dark:text-stone-300">
-						{item.feedback_id} · Visit {item.visit} ·{" "}
-						{originLabels[item.origin]}
+						Visit {item.visit} · {originLabels[item.origin]}
 					</p>
 					{isExpanded && (
 						<div className="mt-2">
-							<div className="text-xs text-stone-700 dark:text-stone-300 feedback-markdown prose prose-stone prose-sm dark:prose-invert max-w-none">
-								<FeedbackBody
-									title={item.title}
-									body={item.body}
-									previewText={truncated ? preview : undefined}
-								/>
+							{/* Always render the body as markdown — even when truncated.
+							    A long finding gets a height-clamped markdown preview
+							    (so the narrow sidebar card stays bounded) with "Read
+							    more" opening the full slide-over; we no longer strip
+							    markdown to a plain paragraph for the inline view, which
+							    made every >280-char finding render as an unformatted
+							    wall of text. */}
+							<div
+								className={[
+									"text-xs text-stone-700 dark:text-stone-300 feedback-markdown prose prose-stone prose-sm dark:prose-invert max-w-none",
+									truncated &&
+										"relative max-h-52 overflow-hidden [mask-image:linear-gradient(to_bottom,black_70%,transparent_100%)]",
+								]
+									.filter(Boolean)
+									.join(" ")}
+							>
+								<FeedbackBody title={item.title} body={item.body} />
 							</div>
 							{truncated && (
 								<button

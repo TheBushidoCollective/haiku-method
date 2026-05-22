@@ -24,6 +24,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-01"
+          >
+            FB-01
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
           >
             <span
@@ -51,11 +57,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-01
-           · Visit 
+          Visit 
           1
-           ·
-           
+           · 
           Review Agent
         </p>
       </div>
@@ -77,6 +81,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-01"
+          >
+            FB-01
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
           >
             <span
@@ -104,11 +114,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-01
-           · Visit 
+          Visit 
           1
-           ·
-           
+           · 
           Review Agent
         </p>
       </div>
@@ -130,6 +138,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-01"
+          >
+            FB-01
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
           >
             <span
@@ -157,11 +171,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-01
-           · Visit 
+          Visit 
           1
-           ·
-           
+           · 
           Review Agent
         </p>
       </div>
@@ -183,6 +195,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-01"
+          >
+            FB-01
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
           >
             <span
@@ -210,11 +228,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-01
-           · Visit 
+          Visit 
           1
-           ·
-           
+           · 
           Review Agent
         </p>
         <div
@@ -311,6 +327,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-01"
+          >
+            FB-01
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
           >
             <span
@@ -338,11 +360,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-01
-           · Visit 
+          Visit 
           1
-           ·
-           
+           · 
           Review Agent
         </p>
       </div>
@@ -364,6 +384,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-01"
+          >
+            FB-01
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
           >
             <span
@@ -391,11 +417,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-01
-           · Visit 
+          Visit 
           1
-           ·
-           
+           · 
           Review Agent
         </p>
       </div>
@@ -421,6 +445,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-02"
+          >
+            FB-02
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -456,11 +486,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-02
-           · Visit 
+          Visit 
           2
-           ·
-           
+           · 
           Comment
         </p>
       </div>
@@ -482,6 +510,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-02"
+          >
+            FB-02
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -517,11 +551,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-02
-           · Visit 
+          Visit 
           2
-           ·
-           
+           · 
           Comment
         </p>
       </div>
@@ -543,6 +575,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-02"
+          >
+            FB-02
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -578,11 +616,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-02
-           · Visit 
+          Visit 
           2
-           ·
-           
+           · 
           Comment
         </p>
       </div>
@@ -604,6 +640,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-02"
+          >
+            FB-02
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -639,24 +681,115 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-02
-           · Visit 
+          Visit 
           2
-           ·
-           
+           · 
           Comment
         </p>
         <div
           class="mt-2"
         >
           <div
-            class="text-xs text-stone-700 dark:text-stone-300 feedback-markdown prose prose-stone prose-sm dark:prose-invert max-w-none"
+            class="text-xs text-stone-700 dark:text-stone-300 feedback-markdown prose prose-stone prose-sm dark:prose-invert max-w-none relative max-h-52 overflow-hidden [mask-image:linear-gradient(to_bottom,black_70%,transparent_100%)]"
           >
-            <p
-              class="text-xs text-stone-700 dark:text-stone-300 [overflow-wrap:anywhere]"
+            <div
+              class="feedback-body-attachment-host [&_img]:cursor-zoom-in [&_img]:transition-opacity [&_img:hover]:opacity-90"
             >
-              The test bypasses the browser keyboard path: - Expected: simulate a real keydown of Escape on the sheet. - Actual: calls dialog.close() imperatively via the test-only API. - This sidesteps the onOpenChange callback we actually ship. - It also hides a real bug where autoFocus on…
-            </p>
+              <div
+                class="prose prose-sm prose-stone dark:prose-invert max-w-none min-w-0 [overflow-wrap:anywhere]
+        prose-code:bg-stone-100 prose-code:dark:bg-stone-800 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:[overflow-wrap:anywhere]
+        prose-pre:bg-stone-100 prose-pre:dark:bg-stone-800 prose-pre:rounded-lg prose-pre:overflow-x-auto prose-pre:max-w-full prose-pre:whitespace-pre-wrap
+        prose-table:border-collapse prose-th:border prose-th:border-stone-300 prose-th:dark:border-stone-600 prose-th:px-3 prose-th:py-1.5
+        prose-td:border prose-td:border-stone-300 prose-td:dark:border-stone-600 prose-td:px-3 prose-td:py-1.5 "
+                id="feedback-body"
+              >
+                <p>
+                  The test bypasses the browser keyboard path:
+                </p>
+                
+
+                <ul>
+                  
+
+                  <li>
+                    Expected: simulate a real 
+                    <em>
+                      keydown
+                    </em>
+                     of 
+                    <code>
+                      Escape
+                    </code>
+                     on the sheet.
+                  </li>
+                  
+
+                  <li>
+                    Actual: calls 
+                    <code>
+                      dialog.close()
+                    </code>
+                     imperatively via the 
+                    <strong>
+                      test-only
+                    </strong>
+                     API.
+                    
+
+                    <ul>
+                      
+
+                      <li>
+                        This sidesteps the 
+                        <code>
+                          onOpenChange
+                        </code>
+                         callback we actually ship.
+                      </li>
+                      
+
+                      <li>
+                        It also hides a real bug where 
+                        <code>
+                          autoFocus
+                        </code>
+                         on the primary action     swallows the keystroke in Safari.
+                      </li>
+                      
+
+                    </ul>
+                    
+
+                  </li>
+                  
+
+                </ul>
+                
+
+                <p>
+                  See 
+                  <a
+                    href="packages/haiku-ui/src/organisms/FeedbackSheet.tsx:88"
+                  >
+                    FeedbackSheet.tsx:88
+                  </a>
+                   and compare with the 
+                  <a
+                    href="https://www.radix-ui.com/docs"
+                  >
+                    Radix dialog reference
+                  </a>
+                  .
+                </p>
+                
+
+                <p>
+                  <em>
+                    Blocker for external-review gate.
+                  </em>
+                </p>
+              </div>
+            </div>
           </div>
           <button
             aria-expanded="false"
@@ -710,6 +843,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-02"
+          >
+            FB-02
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -745,11 +884,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-02
-           · Visit 
+          Visit 
           2
-           ·
-           
+           · 
           Comment
         </p>
       </div>
@@ -771,6 +908,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-02"
+          >
+            FB-02
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -806,11 +949,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-02
-           · Visit 
+          Visit 
           2
-           ·
-           
+           · 
           Comment
         </p>
       </div>
@@ -836,6 +977,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-03"
+          >
+            FB-03
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -871,11 +1018,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-03
-           · Visit 
+          Visit 
           3
-           ·
-           
+           · 
           Annotation
         </p>
       </div>
@@ -897,6 +1042,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-03"
+          >
+            FB-03
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -932,11 +1083,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-03
-           · Visit 
+          Visit 
           3
-           ·
-           
+           · 
           Annotation
         </p>
       </div>
@@ -958,6 +1107,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-03"
+          >
+            FB-03
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -993,11 +1148,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-03
-           · Visit 
+          Visit 
           3
-           ·
-           
+           · 
           Annotation
         </p>
       </div>
@@ -1019,6 +1172,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-03"
+          >
+            FB-03
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -1054,11 +1213,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-03
-           · Visit 
+          Visit 
           3
-           ·
-           
+           · 
           Annotation
         </p>
         <div
@@ -1131,6 +1288,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-03"
+          >
+            FB-03
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -1166,11 +1329,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-03
-           · Visit 
+          Visit 
           3
-           ·
-           
+           · 
           Annotation
         </p>
       </div>
@@ -1192,6 +1353,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-03"
+          >
+            FB-03
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
           >
             <span
@@ -1227,11 +1394,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-03
-           · Visit 
+          Visit 
           3
-           ·
-           
+           · 
           Annotation
         </p>
       </div>
@@ -1257,6 +1422,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-04"
+          >
+            FB-04
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
           >
             <span
@@ -1292,11 +1463,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-04
-           · Visit 
+          Visit 
           4
-           ·
-           
+           · 
           PR Comment
         </p>
       </div>
@@ -1318,6 +1487,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-04"
+          >
+            FB-04
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
           >
             <span
@@ -1353,11 +1528,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-04
-           · Visit 
+          Visit 
           4
-           ·
-           
+           · 
           PR Comment
         </p>
       </div>
@@ -1379,6 +1552,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-04"
+          >
+            FB-04
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
           >
             <span
@@ -1414,11 +1593,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-04
-           · Visit 
+          Visit 
           4
-           ·
-           
+           · 
           PR Comment
         </p>
       </div>
@@ -1440,6 +1617,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-04"
+          >
+            FB-04
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
           >
             <span
@@ -1475,11 +1658,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-04
-           · Visit 
+          Visit 
           4
-           ·
-           
+           · 
           PR Comment
         </p>
         <div
@@ -1563,6 +1744,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-04"
+          >
+            FB-04
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
           >
             <span
@@ -1598,11 +1785,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-04
-           · Visit 
+          Visit 
           4
-           ·
-           
+           · 
           PR Comment
         </p>
       </div>
@@ -1624,6 +1809,12 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
           class="flex items-center gap-2 mb-1 flex-wrap"
         >
           <span
+            class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] font-bold font-mono leading-none bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+            title="Feedback identifier FB-04"
+          >
+            FB-04
+          </span>
+          <span
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
           >
             <span
@@ -1659,11 +1850,9 @@ exports[`FeedbackItem — state matrix > renders every (status × interaction) c
         <p
           class="text-xs text-stone-600 dark:text-stone-300"
         >
-          FB-04
-           · Visit 
+          Visit 
           4
-           ·
-           
+           · 
           PR Comment
         </p>
       </div>

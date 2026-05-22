@@ -248,6 +248,30 @@ function discoveryOutputPath(
  * allowed to evolve"); this extends the same logic to a file that is
  * simultaneously an input-witness AND a current-stage output.
  */
+/**
+ * Normalize a declared `location:` / `outputs:` / `inputs:` path to the
+ * intent-relative form that the input-witness keys use. Resolves the
+ * `{intent-slug}` template and strips a leading `.haiku/intents/<slug>/`
+ * (repo-relative declarations) so a produced path compares equal to a
+ * witness key regardless of which form the unit author wrote it in.
+ * Witness keys are always intent-relative (sign-slot's resolveInputWitnesses
+ * resolves intent-relative first), so this is the canonical compare form.
+ *
+ * This is load-bearing for the input==output baton exemption: unit
+ * `outputs:` in the wild come in three shapes — repo-relative
+ * (`.haiku/intents/<slug>/stages/design/artifacts/X.md`), intent-relative
+ * (`stages/design/artifacts/X.md`), and templated (`{intent-slug}/...`).
+ * Before this normalization the produced-set stored them verbatim, so a
+ * repo-relative output never matched the intent-relative witness key and
+ * the suppression silently missed — drift re-fired on every hat append to
+ * a file that is simultaneously an input and an output of the same stage.
+ */
+function toIntentRelPath(loc: string, slug: string): string {
+	const resolved = loc.replace(/\{intent-slug\}/g, slug)
+	const prefix = `.haiku/intents/${slug}/`
+	return resolved.startsWith(prefix) ? resolved.slice(prefix.length) : resolved
+}
+
 function stageProducedRelPaths(
 	intentDir: string,
 	studio: string,
@@ -256,17 +280,9 @@ function stageProducedRelPaths(
 ): Set<string> {
 	const slug = basename(intentDir)
 	const out = new Set<string>()
-	const toIntentRel = (loc: string): string => {
-		const resolved = loc.replace(/\{intent-slug\}/g, slug)
-		// Locations are repo-relative (`.haiku/intents/<slug>/...`); the
-		// witness keys are intent-relative. Strip the intent-dir prefix so
-		// the two compare directly.
-		const prefix = `.haiku/intents/${slug}/`
-		return resolved.startsWith(prefix) ? resolved.slice(prefix.length) : resolved
-	}
 	try {
 		for (const def of readStageArtifactDefs(studio, stage)) {
-			if (def.location) out.add(toIntentRel(def.location))
+			if (def.location) out.add(toIntentRelPath(def.location, slug))
 		}
 	} catch {
 		/* studio/stage unreadable — produced set stays empty (no exemption) */
@@ -275,7 +291,13 @@ function stageProducedRelPaths(
 		const ufm = readFm(unitPath)
 		const outputs = ufm && Array.isArray(ufm.outputs) ? ufm.outputs : []
 		for (const o of outputs) {
-			if (typeof o === "string" && o.length > 0) out.add(o)
+			// Normalize to the intent-relative witness-key form (not verbatim)
+			// so a repo-relative / templated output still matches its
+			// consumer's witness key — the fix for the input==output baton
+			// suppression silently missing on non-intent-relative outputs.
+			if (typeof o === "string" && o.length > 0) {
+				out.add(toIntentRelPath(o, slug))
+			}
 		}
 	}
 	return out
@@ -346,6 +368,24 @@ export function runDriftSweep(args: {
 		args.stage,
 		unitPaths,
 	)
+
+	// A witnessed input is the stage's OWN output (an in-loop baton) when
+	// its path — in either the declared or the normalized intent-relative
+	// form — matches a current-stage produced path. Such a file is BOTH an
+	// input and an output of THIS stage; its in-loop edits, rewrites, and
+	// transient mid-loop absence are the stage producing its own
+	// deliverable, NOT premise drift. It must not fire `input_mutation`,
+	// `input_deletion`, OR `input_addition`, all of which would re-trigger
+	// the review/fix loop on every producing-hat write and never converge
+	// (the input==output cascade — 2026-05-20 report). Checking both the
+	// raw witness key and its normalized form covers witness keys that were
+	// themselves stored repo-relative. (Genuinely-missing upstream inputs
+	// are still caught at unit start by the `unit_inputs_missing` gate —
+	// drift is about premise CHANGE after sign-off, not initial presence,
+	// so suppressing same-stage-produced deletion here hides nothing.)
+	const driftSlug = basename(args.intentDir)
+	const isStageProduced = (p: string): boolean =>
+		stageProducedRel.has(p) || stageProducedRel.has(toIntentRelPath(p, driftSlug))
 
 	for (const unitPath of unitPaths) {
 		const fm = readFm(unitPath)
@@ -423,13 +463,19 @@ export function runDriftSweep(args: {
 						}
 					}
 					if (abs === null) {
-						events.push({
-							unit: unitName,
-							role,
-							kind: "input_deletion",
-							file: path,
-							since: at,
-						})
+						// Same baton exemption as input_mutation below: a
+						// stage-produced file that's transiently absent (its
+						// producing hat hasn't (re)written it yet this loop) is
+						// in-loop output, not premise drift — don't fire.
+						if (!isStageProduced(path)) {
+							events.push({
+								unit: unitName,
+								role,
+								kind: "input_deletion",
+								file: path,
+								since: at,
+							})
+						}
 						continue
 					}
 					// Files were stored with outputSha256 strategy
@@ -448,7 +494,7 @@ export function runDriftSweep(args: {
 								const cur = outputSha256(abs)
 								return Boolean(cur) && cur !== storedSha
 							})()
-					if (mismatched && !stageProducedRel.has(path)) {
+					if (mismatched && !isStageProduced(path)) {
 						events.push({
 							unit: unitName,
 							role,
@@ -497,40 +543,45 @@ export function runDriftSweep(args: {
 					// the missing dir gets skipped (resolveInputWitnesses
 					// line 359), the inventory is cleared, no further drift.
 					if (dirAbs === null) {
-						events.push({
-							unit: unitName,
-							role,
-							kind: "input_deletion",
-							file: dirRel,
-							since: at,
-						})
+						if (!isStageProduced(dirRel)) {
+							events.push({
+								unit: unitName,
+								role,
+								kind: "input_deletion",
+								file: dirRel,
+								since: at,
+							})
+						}
 						continue
 					}
 					const currentNames = listDirFiles(dirAbs)
 					// Check stored entries: mutation or deletion.
 					for (const [filename, storedSha] of Object.entries(inventory)) {
+						// Baton exemption (same as the direct-file path above):
+						// a file inside a witnessed dir that is ALSO a current-
+						// stage output is the stage's own deliverable evolving in
+						// the loop, not premise drift — exempt it from deletion,
+						// mutation, AND addition to avoid the input==output
+						// cascade.
+						const memberRel = join(dirRel, filename)
 						const fileAbs = join(dirAbs, filename)
 						if (!existsSync(fileAbs)) {
-							events.push({
-								unit: unitName,
-								role,
-								kind: "input_deletion",
-								file: join(dirRel, filename),
-								since: at,
-							})
+							if (!isStageProduced(memberRel)) {
+								events.push({
+									unit: unitName,
+									role,
+									kind: "input_deletion",
+									file: memberRel,
+									since: at,
+								})
+							}
 							continue
 						}
 						const currentSha = fileSha256(fileAbs)
-						// Same baton exemption as the direct-file path above:
-						// a file inside a witnessed dir that is ALSO a current-
-						// stage output is the stage's own output evolving in the
-						// loop, not premise drift — skip it to avoid the
-						// input==output cascade.
-						const memberRel = join(dirRel, filename)
 						if (
 							currentSha &&
 							currentSha !== storedSha &&
-							!stageProducedRel.has(memberRel)
+							!isStageProduced(memberRel)
 						) {
 							events.push({
 								unit: unitName,
@@ -547,7 +598,7 @@ export function runDriftSweep(args: {
 						const memberRel = join(dirRel, name)
 						if (
 							inventory[name] === undefined &&
-							!stageProducedRel.has(memberRel)
+							!isStageProduced(memberRel)
 						) {
 							events.push({
 								unit: unitName,

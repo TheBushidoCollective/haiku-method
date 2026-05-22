@@ -57,7 +57,6 @@ import { readStageArtifactDefs } from "../../studio-reader.js"
 import { isDriftDetectionDisabled } from "./drift-baseline.js"
 import {
 	bodyMatchesStoredHash,
-	bodySha256,
 	DIR_INVENTORY_SKIP,
 	fileSha256,
 	isTextBodyExtension,

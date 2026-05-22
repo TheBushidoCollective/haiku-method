@@ -59,12 +59,12 @@ import {
 	MAX_CONCURRENT_SUBAGENTS,
 	MAX_FIX_LOOP_BOLTS,
 } from "../../state-tools.js"
-import { RUNTIME_OBSERVATION_ROLES } from "../review-role-classes.js"
 import {
 	readReviewAgentPaths,
 	readStageArtifactDefs,
 	readStudioReviewAgentPaths,
 } from "../../studio-reader.js"
+import { RUNTIME_OBSERVATION_ROLES } from "../review-role-classes.js"
 import {
 	resolveIntentStages,
 	resolveStageFixHats,
@@ -483,13 +483,6 @@ function isFbTerminal(fm: UnitFm | FbFm): boolean {
 	return false
 }
 
-/** Back-compat alias for the renamed predicate. Internal callers
- *  migrate to `isFbTerminal`; this thin wrapper exists so anything that
- *  still imports the old name (or any unindexed call site) keeps
- *  working until the next refactor sweep. */
-function isFbClosed(fm: UnitFm | FbFm): boolean {
-	return isFbTerminal(fm)
-}
 
 // readClarifyQuestions deleted 2026-05-08 along with the
 // clarify_required cursor action. Stages that need pre-decompose Q&A

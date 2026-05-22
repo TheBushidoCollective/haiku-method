@@ -211,25 +211,16 @@ export function sharedBlockContent(id: SharedBlockId): string {
 	return REGISTRY[id].content()
 }
 
-/** Review-agent roles that DRIVE the live work (runtime observation)
- *  rather than read it statically. They inherit the `runtime-verification`
- *  doctrine and are permitted to write evidence captures under `proof/`
- *  (but never source). Shared by every dispatch builder so the set stays
- *  single-source. */
-export const RUNTIME_OBSERVATION_ROLES: ReadonlySet<string> = new Set([
-	"runtime-verifier",
-])
-
-/** Review-agent roles whose subject is the delivery PR on the remote
- *  (CI status + review conversation) rather than the local artifacts or
- *  the running app. They are permitted to interact with the PR via the
- *  VCS CLI (`gh`/`glab`) — read checks, read review threads, post replies,
- *  resolve threads — but still MUST NOT edit source/specs/units; code
- *  fixes flow through `haiku_feedback` and the studio fix-hat loop. Shared
- *  by the intent-review builder so the carve-out stays single-source. */
-export const PR_INTERACTION_ROLES: ReadonlySet<string> = new Set([
-	"delivery-verifier",
-])
+/** Review-role classification sets. Defined in the neutral
+ *  `orchestrator/review-role-classes` module (a leaf with no heavy deps) so
+ *  the workflow role-list builder can read the same classification without
+ *  importing this Eta-laden prompt registry. Re-exported here so the dispatch
+ *  builders keep their existing `_shared` import surface. See that module for
+ *  what each set means and how it gates phases + scope carve-outs. */
+export {
+	PR_INTERACTION_ROLES,
+	RUNTIME_OBSERVATION_ROLES,
+} from "../../review-role-classes.js"
 
 export function sharedBlockRef(id: SharedBlockId): string {
 	materializeAllSharedBlocks()

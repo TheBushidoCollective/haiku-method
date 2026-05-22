@@ -129,6 +129,46 @@ test("stageRoleLists: autopilot KEEPS the studio review agents, drops only the h
 	)
 })
 
+test("stageRoleLists: runtime-observation roles are EXCLUDED pre-execute, KEPT post-execute", async () => {
+	const { stageRoleLists } = await import(
+		`${SRC}orchestrator/workflow/cursor.ts`
+	)
+	// runtime-verifier DRIVES the live, built app — there's nothing to
+	// observe before execution, so it must NOT appear in the pre-execute
+	// reviewRoles (which audit the spec), but MUST appear in the
+	// post-execute approvalRoles (which audit the built work). A static
+	// studio agent (`reliability`) is the control: it stays in both.
+	const agents = ["runtime-verifier", "reliability"]
+	for (const mode of ["interactive", "autopilot"]) {
+		const { reviewRoles, approvalRoles } = stageRoleLists(
+			"software",
+			"development",
+			mode,
+			agents,
+		)
+		assert.ok(
+			!reviewRoles.includes("runtime-verifier"),
+			`[${mode}] runtime-verifier must NOT be in pre-execute reviewRoles. got: ${reviewRoles}`,
+		)
+		assert.ok(
+			approvalRoles.includes("runtime-verifier"),
+			`[${mode}] runtime-verifier MUST be in post-execute approvalRoles. got: ${approvalRoles}`,
+		)
+		// Control: a static studio agent is unaffected — present in both.
+		assert.ok(
+			reviewRoles.includes("reliability") &&
+				approvalRoles.includes("reliability"),
+			`[${mode}] static studio agents stay in both walks. review: ${reviewRoles} / approval: ${approvalRoles}`,
+		)
+		// The static engine reviewers also stay pre-execute.
+		assert.ok(
+			reviewRoles.includes("continuity") &&
+				reviewRoles.includes("cross-stage-consistency"),
+			`[${mode}] static engine reviewers stay pre-execute. got: ${reviewRoles}`,
+		)
+	}
+})
+
 test("stageRoleLists: quality_gates TRAILS the adversarial fan-out so the agents stay contiguous (one group)", async () => {
 	const { stageRoleLists } = await import(
 		`${SRC}orchestrator/workflow/cursor.ts`

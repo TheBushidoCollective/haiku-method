@@ -164,3 +164,86 @@ test("unit-output baton (declared in outputs:) is also exempt from input_mutatio
 		assert.equal(mut.length, 0, `a unit-output baton must NOT fire input_mutation; got: ${JSON.stringify(result.events)}`)
 	})
 })
+
+test("unit-output baton declared REPO-RELATIVE is normalized + still exempt from input_mutation", async () => {
+	await withIntent("repo-rel-out", async ({ intentDir }) => {
+		const shared = join(intentDir, "knowledge", "SHARED-BATON.md")
+		writeFileSync(shared, matter.stringify("v1\n", { title: "s" }))
+		// unit-02 declares the SAME file as an output, but in REPO-RELATIVE
+		// form (`.haiku/intents/<slug>/knowledge/...`). The consumer's witness
+		// key is intent-relative (`knowledge/SHARED-BATON.md`). Before path
+		// normalization, the produced-set stored the repo-relative string
+		// verbatim, so the `.has()` baton check never matched and drift
+		// re-fired on every in-loop write — the actual gap behind "I keep
+		// seeing drift on same-stage input==output files".
+		const u2 = join(intentDir, "stages", "design", "units", "unit-02.md")
+		writeFileSync(
+			u2,
+			matter.stringify("Spec.\n", {
+				title: "unit-02",
+				started_at: "2026-05-01T00:00:00Z",
+				inputs: [],
+				outputs: [".haiku/intents/repo-rel-out/knowledge/SHARED-BATON.md"],
+				iterations: [{ hat: "verifier", started_at: "2026-05-01T00:00:00Z", completed_at: "2026-05-01T00:00:00Z", result: "advance" }],
+				reviews: {},
+				approvals: {},
+				discovery: {},
+			}),
+		)
+		await signUnitWithInput(intentDir, "unit-01", "knowledge/SHARED-BATON.md")
+		writeFileSync(shared, matter.stringify("v1\nv2 appended\n", { title: "s" }))
+
+		const result = await sweep(intentDir)
+		const mut = result.events.filter(
+			(e) => e.kind === "input_mutation" && e.file === "knowledge/SHARED-BATON.md",
+		)
+		assert.equal(mut.length, 0, `a repo-relative-declared output baton must normalize + be exempt; got: ${JSON.stringify(result.events)}`)
+	})
+})
+
+test("stage-produced baton that's transiently ABSENT does NOT fire input_deletion (in-loop output, not premise drift)", async () => {
+	await withIntent("del-baton", async ({ intentDir }) => {
+		const shared = join(intentDir, "knowledge", "SHARED-BATON.md")
+		writeFileSync(shared, matter.stringify("v1\n", { title: "s" }))
+		// unit-02 owns the file as an output; unit-01 witnessed it as input.
+		const u2 = join(intentDir, "stages", "design", "units", "unit-02.md")
+		writeFileSync(
+			u2,
+			matter.stringify("Spec.\n", {
+				title: "unit-02",
+				started_at: "2026-05-01T00:00:00Z",
+				inputs: [],
+				outputs: ["knowledge/SHARED-BATON.md"],
+				iterations: [{ hat: "verifier", started_at: "2026-05-01T00:00:00Z", completed_at: "2026-05-01T00:00:00Z", result: "advance" }],
+				reviews: {},
+				approvals: {},
+				discovery: {},
+			}),
+		)
+		await signUnitWithInput(intentDir, "unit-01", "knowledge/SHARED-BATON.md")
+		// The producing hat is mid-loop: the baton is transiently gone.
+		rmSync(shared)
+
+		const result = await sweep(intentDir)
+		const del = result.events.filter(
+			(e) => e.kind === "input_deletion" && e.file === "knowledge/SHARED-BATON.md",
+		)
+		assert.equal(del.length, 0, `a stage-produced baton's transient absence must NOT fire input_deletion; got: ${JSON.stringify(result.events)}`)
+	})
+})
+
+test("CONTROL: a NON-produced upstream input that's deleted STILL fires input_deletion", async () => {
+	await withIntent("del-upstream", async ({ intentDir }) => {
+		// Not a discovery location, not any unit's output → genuinely external.
+		const upstream = join(intentDir, "knowledge", "UPSTREAM-GONE.md")
+		writeFileSync(upstream, matter.stringify("here\n", { title: "u" }))
+		await signUnitWithInput(intentDir, "unit-01", "knowledge/UPSTREAM-GONE.md")
+		rmSync(upstream)
+
+		const result = await sweep(intentDir)
+		const del = result.events.filter(
+			(e) => e.kind === "input_deletion" && e.file === "knowledge/UPSTREAM-GONE.md",
+		)
+		assert.ok(del.length >= 1, `external input deletion must still fire (suppression must be scoped to stage-produced only); got: ${JSON.stringify(result.events)}`)
+	})
+})

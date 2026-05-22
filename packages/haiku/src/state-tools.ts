@@ -4152,6 +4152,77 @@ export function timestamp(): string {
 }
 
 /**
+ * Idempotently ensure the repo's root `.gitignore` excludes the engine's
+ * worktree pool (`.haiku/worktrees/`). Each entry under that dir is a *linked
+ * git worktree*; if it isn't ignored, the worktree dirs surface as untracked,
+ * a `git add` walking into them stages each as a gitlink (mode 160000 — the
+ * worktree's `.git` file makes git treat it as a submodule), and the pre-tick
+ * clean-tree gate trips on churn the engine fully owns.
+ *
+ * This is the PRIMARY defense against worktree-gitlink leaks (issue #262
+ * concern 3): with the pool gitignored, a bare `git add` skips it natively —
+ * no fragile `:(exclude)` pathspec needed (and that pathspec actively breaks
+ * once the dir is ignored: combined with an explicit `.haiku` pathspec, git's
+ * "paths are ignored — use -f" guard exits non-zero, failing the whole add).
+ *
+ * Called at the head of every worktree creation (`createUnitWorktree`,
+ * `createDiscoveryWorktree`, `createFixChainWorktree`) — i.e. before any
+ * worktree physically lands under `.haiku/worktrees/`, so by the time a state
+ * commit walks `.haiku/` the pool is already ignored and the bare `git add`
+ * skips it. We can't assume the user ran `/haiku:haiku-setup`. Writes + commits
+ * the entry only when it's missing (idempotent, no-op when already present);
+ * the commit uses an explicit `.gitignore` pathspec so it never sweeps
+ * unrelated staged work — and crucially never lands inside a state commit or a
+ * merge-sensitive window. Best-effort — never throws.
+ */
+export function ensureWorktreesGitignored(): void {
+	if (!isGitRepo()) return
+	try {
+		const gitignorePath = join(primaryRepoRoot(), ".gitignore")
+		const entry = ".haiku/worktrees/"
+		let existing = ""
+		try {
+			if (existsSync(gitignorePath))
+				existing = readFileSync(gitignorePath, "utf8")
+		} catch {
+			/* unreadable — fall through and (re)write */
+		}
+		// Accept the slash-free variant too so we don't double-write a repo
+		// that ignored `.haiku/worktrees` by hand.
+		const present = existing
+			.split("\n")
+			.map((l) => l.trim())
+			.some((l) => l === entry || l === ".haiku/worktrees")
+		if (present) return
+		const banner =
+			"# H·AI·K·U engine worktree pool — each entry is a linked git worktree; never commit these."
+		const prefix = existing && !existing.endsWith("\n") ? "\n" : ""
+		const separator = existing ? "\n" : ""
+		writeFileSync(
+			gitignorePath,
+			`${existing}${prefix}${separator}${banner}\n${entry}\n`,
+		)
+		execFileSync("git", ["add", "--", ".gitignore"], {
+			encoding: "utf8",
+			stdio: "pipe",
+		})
+		execFileSync(
+			"git",
+			[
+				"commit",
+				"-m",
+				"chore(haiku): gitignore engine worktree pool (.haiku/worktrees/)",
+				"--",
+				".gitignore",
+			],
+			{ encoding: "utf8", stdio: "pipe" },
+		)
+	} catch {
+		/* non-fatal — worst case the user sees the worktree pool as untracked */
+	}
+}
+
+/**
  * Stage `.haiku/` for a state commit while defending against worktree-gitlink
  * leaks (issue #262 concern 3).
  *
@@ -4159,25 +4230,26 @@ export function timestamp(): string {
  * worktrees under `.haiku/worktrees/{slug}/{unit-or-fix}/`. A bare
  * `git add .haiku` walks into those directories and stages each as a
  * gitlink (mode 160000), because the worktree's `.git` file makes git
- * treat it as a submodule. `.gitignore` does not protect entries that are
- * already tracked, and a gitlink committed once on a parent commit will
- * keep coming back as a phantom `D` after `haiku_repair`'s naive cleanup.
+ * treat it as a submodule.
  *
  * Defense in depth:
- *   1. Pathspec exclude on the add → blocks NEW gitlinks under
- *      `.haiku/worktrees/` from entering the index.
+ *   1. The repo `.gitignore` excludes the worktree pool (written by
+ *      `ensureWorktreesGitignored()` before any worktree is created), so the
+ *      bare `git add` below skips it natively. We do NOT use a
+ *      `:(exclude).haiku/worktrees/**` pathspec: once the dir is ignored, that
+ *      pathspec makes `git add` exit non-zero on git's ignored-path guard,
+ *      failing the commit.
  *   2. `git rm --cached -r --ignore-unmatch -- .haiku/worktrees/` →
- *      untracks any LEGACY gitlinks already in the index on this branch.
- *      `--cached` leaves the working tree alone, so the worktree keeps
- *      functioning. `--ignore-unmatch` keeps this a no-op when there's
- *      nothing to clean.
+ *      untracks any LEGACY gitlinks already in the index on this branch
+ *      (`.gitignore` does not protect already-tracked entries). `--cached`
+ *      leaves the working tree alone, so the worktree keeps functioning;
+ *      `--ignore-unmatch` keeps this a no-op when there's nothing to clean.
  */
 function stageHaikuStateForCommit(haikuRoot: string): void {
-	execFileSync(
-		"git",
-		["add", "--", ":(exclude,glob,top).haiku/worktrees/**", haikuRoot],
-		{ encoding: "utf8", stdio: "pipe" },
-	)
+	execFileSync("git", ["add", "--", haikuRoot], {
+		encoding: "utf8",
+		stdio: "pipe",
+	})
 	try {
 		execFileSync(
 			"git",
@@ -4233,23 +4305,20 @@ export function gitCommitAll(message: string): {
 } {
 	if (!isGitRepo()) return { committed: false, pushed: false }
 	try {
-		// Stage every dirty path in the worktree — `git add -A` covers
-		// modifications, deletions, and untracked files. Exclude
-		// `.haiku/worktrees/**` to mirror `stageHaikuStateForCommit`'s
-		// long-standing rule (those are linked-worktree trees, not part
-		// of the primary's content).
-		execFileSync(
-			"git",
-			[
-				"add",
-				"-A",
-				"--",
-				":(exclude,glob,top).haiku/worktrees/**",
-				findHaikuRoot(),
-				".",
-			],
-			{ encoding: "utf8", stdio: "pipe" },
-		)
+		// Stage every dirty path with `git add -A`. The worktree pool
+		// (`.haiku/worktrees/**`, linked-worktree trees) is kept out by the
+		// repo `.gitignore` — `ensureWorktreesGitignored()` writes that entry
+		// before any worktree is ever created, so a bare add skips it
+		// natively. We deliberately do NOT pass a `:(exclude).haiku/worktrees/**`
+		// pathspec: once the dir is ignored, combining that exclude with the
+		// explicit `.haiku` / `.` pathspecs trips git's "paths are ignored —
+		// use -f" guard and the add exits non-zero, silently aborting the
+		// commit and leaving engine state staged-but-uncommitted (which then
+		// breaks the very next merge — see fix-chain-merge-on-close).
+		execFileSync("git", ["add", "-A", "--", findHaikuRoot(), "."], {
+			encoding: "utf8",
+			stdio: "pipe",
+		})
 		execFileSync("git", ["commit", "-m", message, "--allow-empty"], {
 			encoding: "utf8",
 			stdio: "pipe",

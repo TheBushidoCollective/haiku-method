@@ -36,7 +36,11 @@ import { migrateIntent } from "./orchestrator/migrate-registry.js"
 // migrate-registry — without that registration, the post-merge sweep's
 // `migrateIntent("0", "4.0.0")` would throw "no migration path."
 import { hasV3CruftInIntent } from "./orchestrator/migrations/v0-to-v4.js"
-import { isGitRepo, primaryRepoRoot } from "./state-tools.js"
+import {
+	ensureWorktreesGitignored,
+	isGitRepo,
+	primaryRepoRoot,
+} from "./state-tools.js"
 import { emitTelemetry } from "./telemetry.js"
 
 /** Default cap for git network ops (fetch / push / ls-remote). Without
@@ -3669,6 +3673,8 @@ export function createUnitWorktree(
 	// Seed `.gitattributes` BEFORE the fork — see notes in
 	// `createFixChainWorktree`.
 	ensureIntentGitAttributes(slug)
+	// Guarantee the worktree pool is ignored before any worktree lands in it.
+	ensureWorktreesGitignored()
 	const unitBranch = `haiku/${slug}/${unit}`
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
 	const worktreePath = join(worktreeBase, unit)
@@ -3972,6 +3978,8 @@ export function createDiscoveryWorktree(
 	// Seed `.gitattributes` BEFORE the fork — see notes in
 	// `createFixChainWorktree`.
 	ensureIntentGitAttributes(slug)
+	// Guarantee the worktree pool is ignored before any worktree lands in it.
+	ensureWorktreesGitignored()
 	const discBranch = discoveryBranchName(slug, stage, template)
 	const worktreePath = discoveryWorktreePath(slug, stage, template)
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)
@@ -4239,6 +4247,8 @@ export function createFixChainWorktree(
 	// no merge=union when it later merges back, and any concurrent
 	// JSONL appends still trip the integrator cap.
 	ensureIntentGitAttributes(slug)
+	// Guarantee the worktree pool is ignored before any worktree lands in it.
+	ensureWorktreesGitignored()
 	const fixBranch = fixChainBranchName(slug, scope, feedbackId)
 	const worktreePath = fixChainWorktreePath(slug, scope, feedbackId)
 	const worktreeBase = join(primaryRepoRoot(), ".haiku", "worktrees", slug)

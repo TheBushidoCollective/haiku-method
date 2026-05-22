@@ -9,9 +9,9 @@ Open the ad-hoc review pane for the active intent.
 
 ## What this does
 
-Calls `haiku_review_open` (NOT `haiku_review` — that's the diff-review workflow at `/haiku:haiku-gate-review`). The tool spawns a session-scoped review URL pointing at the SPA, launches the browser, and BLOCKS until the user clicks Done / Request Changes or the 30-minute timeout fires. The pane is ad-hoc — it shows the standard review UI but swaps Approve for Done/Close so it never accidentally mutates workflow state.
+Calls `haiku_review_open` (NOT `haiku_review` — that's the diff-review workflow at `/haiku:haiku-gate-review`). The tool spawns a session-scoped review URL pointing at the SPA, launches the browser, and returns immediately — it does NOT block. The pane is ad-hoc — it shows the standard review UI but swaps Approve for Done/Close so it never accidentally mutates workflow state. Keep working after calling it; the user reads the pane at their own pace and closes it with Done when finished.
 
-Feedback the user leaves on the pane routes through the normal fix-loop on the next `haiku_run_next`. Closing with "Done" returns "no changes requested"; "Request Changes" returns a nudge to run the workflow forward so the durable feedback gets picked up.
+Feedback the user leaves on the pane persists to disk as feedback files and routes through the normal fix-loop on the next `haiku_run_next` — nothing here waits on it. (Only an actual gate blocks: that's `/haiku:haiku-pickup`/`haiku_run_next` driving to a `gate`-typed stage, which the engine handles via `haiku_await_gate`, not this browse pane.)
 
 ## How to invoke
 

@@ -572,86 +572,29 @@ export async function handleToolCall(
 
 		launchBrowserBestEffort(reviewUrl, "Ad-hoc review")
 
-		// Block until the reviewer hits Done or Request Changes (or the
-		// pane times out). The UI posts a `decide` frame (WS) or
-		// POSTs `/review/:id/decide` (HTTP) — both write
-		// `session.pending_decision` and broadcast a
-		// `pending_decision_changed` event, exactly like the
-		// gate-review path. We mirror `awaitGateReviewSession`'s
-		// consumption pattern: wake on every state change, look for
-		// `pending_decision`, drain it, return.
+		// Non-blocking by design. /haiku:haiku-show is a browse surface,
+		// not a gate — there is no workflow decision to wait on, so we
+		// return as soon as the pane is open and let the agent keep
+		// working. The user reads the pane at their own pace; the SPA's
+		// "Done" button closes its own tab (window.close()) and POSTs a
+		// decision the decide route uses to reap this session server-side
+		// (see /review/:id/decide). If the user just closes the tab
+		// instead, the session TTL evicts it. Any feedback the user
+		// leaves persists to disk as FB files and the next
+		// `haiku_run_next` routes it through the normal fix-loop — nothing
+		// here has to block on it.
 		//
-		// Drain on entry too: the reviewer may have decided before the
-		// agent re-entered this tool (rare but legal) — the queued
-		// decision should be picked up immediately.
-		try {
-			const drainPending = (): {
-				decision: string
-				feedback?: string
-			} | null => {
-				const cur = getSession(session.session_id)
-				if (!cur || cur.session_type !== "review") return null
-				if (!cur.pending_decision) return null
-				const queued = cur.pending_decision
-				updateSession(session.session_id, { pending_decision: null })
-				return { decision: queued.decision, feedback: queued.feedback }
-			}
-
-			while (true) {
-				const queued = drainPending()
-				if (queued) {
-					if (queued.decision === "changes_requested") {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: `Ad-hoc review closed with Request Changes on stage "${activeStage || "(unspecified)"}". Pending feedback is already persisted on disk — call \`haiku_run_next\` to route it through the normal fix-loop / revisit path.`,
-								},
-							],
-						}
-					}
-					return {
-						content: [
-							{
-								type: "text" as const,
-								text: `Ad-hoc review closed with Done — no changes requested. No workflow action needed.`,
-							},
-						],
-					}
-				}
-
-				let timedOut = false
-				try {
-					await waitForSession(session.session_id, 30 * 60 * 1000, signal)
-				} catch (err) {
-					if (signal?.aborted) throw err
-					timedOut = true
-				}
-
-				if (timedOut) break
-				if (hasPresenceLost(session.session_id)) {
-					console.error(
-						`[haiku] Ad-hoc review ${session.session_id} lost presence — continuing to wait (no reopen)`,
-					)
-				}
-			}
-
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: `Ad-hoc review pane at ${reviewUrl} timed out after 30 minutes without a Done or Request Changes click. Any feedback the reviewer typed is still persisted on disk; the next \`haiku_run_next\` will see it if present.`,
-					},
-				],
-			}
-		} finally {
-			closeSessionConnection(session.session_id, "ad-hoc review closed")
-			clearHeartbeat(session.session_id)
-			if (isRemoteReviewEnabled()) {
-				clearE2EKey(session.session_id)
-				closeTunnel()
-			}
-			deleteSession(session.session_id)
+		// (A 30-minute wait-for-decision loop used to live here, pinning
+		// the agent on what is purely a viewing pane. Only an ACTUAL gate
+		// blocks now: that path returns above via `gate_kind` and the
+		// caller's follow-up `haiku_await_gate`.)
+		return {
+			content: [
+				{
+					type: "text" as const,
+					text: `Ad-hoc review pane open at ${reviewUrl} (stage "${activeStage || "(unspecified)"}"). Non-blocking — keep working. The user browses and closes the pane with Done when finished; any feedback they leave persists to disk and the next \`haiku_run_next\` routes it through the normal fix-loop. No workflow action is required here.`,
+				},
+			],
 		}
 	}
 

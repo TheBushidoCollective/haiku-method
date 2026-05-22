@@ -30,6 +30,7 @@ import {
 	buildReviewRecord,
 } from "../orchestrator/workflow/sign-slot.js"
 import {
+	deleteSession,
 	type DirectionSelection,
 	getSession,
 	type QuestionAnnotations,
@@ -40,6 +41,8 @@ import {
 	updateQuestionSession,
 	updateSession,
 } from "../sessions.js"
+import { clearE2EKey, closeTunnel, isRemoteReviewEnabled } from "../tunnel.js"
+import { closeSessionConnection } from "./ws.js"
 import {
 	gitCommitStateBackgroundPush,
 	intentDir,
@@ -134,7 +137,28 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 			parsed.data.decision === "approved" ? "approved" : "changes_requested"
 		const feedback = parsed.data.feedback ?? ""
 		const annotations = parsed.data.annotations as ReviewAnnotations | undefined
-		// Live-session model: queue the decision into pending_decision
+		const payload: ReviewDecisionResponse = { ok: true, decision, feedback }
+
+		// Ad-hoc panes (/haiku:haiku-show) are non-blocking — the tool
+		// returned the moment the pane opened, so there's no awaiter to
+		// drain a queued decision. The user just clicked Done / Request
+		// Changes; acknowledge and reap the session right away so it
+		// doesn't linger until the 4h TTL. Any feedback they left is
+		// already persisted as FB files on disk and the next
+		// `haiku_run_next` routes it through the normal fix-loop — none of
+		// it depends on this session surviving.
+		if (session.ad_hoc) {
+			reply.send(payload)
+			closeSessionConnection(req.params.sessionId, "ad-hoc review closed")
+			if (isRemoteReviewEnabled()) {
+				clearE2EKey(req.params.sessionId)
+				closeTunnel()
+			}
+			deleteSession(req.params.sessionId)
+			return
+		}
+
+		// Gate-bound review: queue the decision into pending_decision
 		// rather than terminally setting status="decided". This is what
 		// awaitGateReviewSession drains on entry / on each wake. Mirrors
 		// the WS `decide` handler in http/ws.ts so HTTP and WebSocket
@@ -156,7 +180,6 @@ export function registerSessionRoutes(instance: FastifyInstance): void {
 				queued: true,
 			})
 		}
-		const payload: ReviewDecisionResponse = { ok: true, decision, feedback }
 		reply.send(payload)
 	})
 

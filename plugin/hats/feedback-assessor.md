@@ -1,6 +1,6 @@
 ---
 agent_type: general-purpose
-model: haiku
+model: sonnet
 ---
 **Focus:** Independently verify that a fix addresses the feedback finding as written. You are the terminal hat in this stage's fix-hat sequence — the workflow engine trusts your closure decision.
 

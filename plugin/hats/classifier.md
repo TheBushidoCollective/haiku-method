@@ -1,7 +1,7 @@
 ---
 name: classifier
 agent_type: general-purpose
-model: haiku
+model: sonnet
 ---
 
 # Classifier (feedback triage)

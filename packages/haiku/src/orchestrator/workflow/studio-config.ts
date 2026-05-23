@@ -102,6 +102,13 @@ export interface ReviewAgentInclude {
 /** Per-stage configuration. */
 export interface StageConfig {
 	readonly name: string
+	/** What the stage produces, from STAGE.md `produces:`. `"build"` stages
+	 *  ship executable artifacts and require a `quality_gates:` field on every
+	 *  producing unit (enforced at `haiku_unit_write`); `"knowledge"` stages
+	 *  produce docs judged on substance/citation and carry no such requirement.
+	 *  Defaults to `"knowledge"` when absent — the lenient default, so only
+	 *  stages that explicitly opt in to `produces: build` change behavior. */
+	readonly produces: "build" | "knowledge"
 	/** Hat sequence executed during the execute phase. The fix loop
 	 *  uses `fixHats` instead. */
 	readonly hats: readonly HatConfig[]

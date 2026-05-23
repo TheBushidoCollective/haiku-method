@@ -292,6 +292,10 @@ function buildStageConfig(
 
 	return {
 		name: stageName,
+		// `produces: build` opts the stage into the build-class unit contract
+		// (producing units must declare `quality_gates:`). Anything else —
+		// including absent — is the lenient `knowledge` default.
+		produces: data.produces === "build" ? "build" : "knowledge",
 		hats,
 		fixHats,
 		reviewAgents,

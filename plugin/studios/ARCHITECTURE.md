@@ -276,6 +276,8 @@ hats: [threat-modeler, security-engineer, security-reviewer, red-team, blue-team
 
 **This is the only stage role where execution-unit specs (with `depends_on:`, `quality_gates:`, executable verify-commands) make sense.** They're authored in build-stage's elaborate phase, NOT in upstream stages.
 
+**Machine-enforced via `produces: build` on STAGE.md.** A build stage declares `produces: build` in its frontmatter (default when absent: `knowledge`). On a `produces: build` stage, `haiku_unit_write` requires every unit that declares non-empty `outputs:` to also declare a `quality_gates:` field — *presence*, not non-empty (mirrors the `inputs:` rule): an explicit `quality_gates: []` is a deliberate, reviewable "this unit defers verification" choice, whereas a missing key is an invisible gap (a producing unit that completes with nothing verifying its artifact). Knowledge stages (research/distillation §4.1, design/synthesis §4.2) carry no such requirement — their criteria are substance/citation, judged by adversarial review, not executable commands. Enforcement lives ONLY in the write-time validator (`validateUnitFrontmatter`, called solely from the pending-only `haiku_unit_write`); the cursor never revalidates, so in-flight active/completed units are never retroactively blocked. The `produces` value is surfaced on `StageConfig`. Resolver: write handler reads `STAGE.md` `produces:` via `readStageDef`.
+
 **Examples:** software/development, hwdev/firmware, hwdev/manufacturing, libdev/development.
 
 ### 4.4 Validation / certification stages

@@ -1,6 +1,7 @@
 ---
 name: prototype
 description: Playable vertical slice that proves the fun before production
+produces: build
 hats: [prototype-engineer, game-designer, playtester, verifier]
 fix_hats: [classifier, prototype-engineer, feedback-assessor]
 review: [external, ask]

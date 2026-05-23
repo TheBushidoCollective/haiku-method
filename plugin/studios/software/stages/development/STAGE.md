@@ -1,6 +1,7 @@
 ---
 name: development
 description: Implement the specification through code
+produces: build
 hats: [planner, builder, reviewer]
 fix_hats: [classifier, builder, feedback-assessor]
 review: [external, ask]

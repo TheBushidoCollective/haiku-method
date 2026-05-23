@@ -3802,6 +3802,11 @@ export function validateUnitFrontmatter(
 		unit: string
 		/** Names of all sibling units (without .md), used for DAG validation. */
 		siblingUnits: string[]
+		/** What the unit's stage produces, from STAGE.md `produces:`. Build
+		 *  stages require a `quality_gates:` field on producing units; knowledge
+		 *  stages don't. Absent / "knowledge" = lenient (the safe default), so
+		 *  callers that don't resolve it get no new requirement. */
+		stageProduces?: "build" | "knowledge"
 	},
 ): { valid: true } | { valid: false; errors: string[] } {
 	const errors: string[] = []
@@ -3861,6 +3866,33 @@ export function validateUnitFrontmatter(
 					`inputs_unit_name_not_path: inputs entry '${entry}' looks like a unit name, but \`inputs:\` must list file PATHS the unit reads (e.g. \`product/ACCEPTANCE-CRITERIA.md\`, a prior-stage artifact, or a sibling unit's declared output file). To express ordering on another unit, add it to \`depends_on:\` and put that unit's actual output path in \`inputs:\`.`,
 				)
 			}
+		}
+	}
+
+	// Step 4: build-class producing units must DECLARE a `quality_gates:`
+	// field. A unit in a `produces: build` stage that ships an artifact
+	// (non-empty `outputs:`) but carries no `quality_gates:` key would
+	// execute and complete with nothing verifying its output — the silent
+	// "unverifiable unit" gap. We require the field's PRESENCE, not a
+	// non-empty list (mirrors the `inputs:` rule): an explicit `[]` is a
+	// deliberate, reviewable "this unit defers verification" choice, whereas
+	// a missing key is an invisible omission. Knowledge stages (the default)
+	// produce docs judged on substance/citation, not executable gates, so
+	// this never fires there — keeping every knowledge studio untouched.
+	// Write-time ONLY (this validator runs solely from haiku_unit_write,
+	// which is pending-only): in-flight active/completed units are immutable
+	// and never revalidated, so nothing already running is retroactively
+	// blocked.
+	if (context.stageProduces === "build") {
+		const outs = Array.isArray(frontmatter.outputs)
+			? (frontmatter.outputs as unknown[])
+			: []
+		const declaresOutputs = outs.length > 0
+		const hasGatesField = "quality_gates" in frontmatter
+		if (declaresOutputs && !hasGatesField) {
+			errors.push(
+				`build_unit_missing_quality_gates: unit '${context.unit}' declares \`outputs:\` in build-class stage '${context.stage}' but has no \`quality_gates:\` field — it would complete with nothing verifying its artifact. Add \`quality_gates:\` (an explicit empty list \`[]\` is allowed when the unit genuinely defers verification to a sibling test unit, but the field MUST be present so the omission is a deliberate, reviewable choice rather than a silent gap).`,
+			)
 		}
 	}
 
@@ -10450,6 +10482,29 @@ export function handleStateTool(
 			}
 			if (!siblingUnits.includes(unitName)) siblingUnits.push(unitName)
 
+			// Resolve what this stage produces (STAGE.md `produces:`) so the
+			// validator can require a `quality_gates:` field on build-class
+			// producing units. Best-effort: any failure falls back to the
+			// lenient "knowledge" default, so a missing/odd studio config never
+			// blocks a write. Read via the same cascade as the rest of the
+			// engine (project `.haiku/` overrides plugin).
+			let stageProduces: "build" | "knowledge" = "knowledge"
+			try {
+				const intentMdPath = join(intentDir(intentArg), "intent.md")
+				if (existsSync(intentMdPath)) {
+					const studioName =
+						(parseFrontmatter(readFileSync(intentMdPath, "utf8")).data
+							.studio as string) || ""
+					const resolved = studioName ? resolveStudio(studioName) : null
+					if (resolved) {
+						const sd = readStageDef(resolved.dir, stageArg)
+						if (sd && sd.data.produces === "build") stageProduces = "build"
+					}
+				}
+			} catch {
+				/* default knowledge — never block a write on config resolution */
+			}
+
 			// FM validation (AJV consumes UNIT_FRONTMATTER_SCHEMA for static
 			// rules; context-dependent checks run as additional steps).
 			const validation = validateUnitFrontmatter(fmInput, {
@@ -10457,6 +10512,7 @@ export function handleStateTool(
 				stage: stageArg,
 				unit: unitName,
 				siblingUnits,
+				stageProduces,
 			})
 			if (!validation.valid) {
 				return reply(

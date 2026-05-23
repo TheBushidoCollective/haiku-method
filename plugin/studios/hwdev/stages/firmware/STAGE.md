@@ -1,6 +1,7 @@
 ---
 name: firmware
 description: Embedded software for the hardware platform
+produces: build
 hats: [firmware-engineer, reviewer, verifier]
 fix_hats: [classifier, firmware-engineer, feedback-assessor]
 review: [external, ask]

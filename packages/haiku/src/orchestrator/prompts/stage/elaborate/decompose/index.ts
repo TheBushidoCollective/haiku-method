@@ -647,6 +647,18 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	)
 	if (outputExpectations) sections.push(outputExpectations)
 
+	// Build-class stages: every producing unit must carry a `quality_gates:`
+	// field. `haiku_unit_write` rejects a build-stage unit that declares
+	// `outputs:` but omits `quality_gates:`, so authoring it up front avoids a
+	// round-trip. (Content directive, not workflow mechanics — it tells the
+	// agent what to put in the spec, per the build/knowledge distinction this
+	// stage's ELABORATION describes.)
+	if (stageDef?.data?.produces === "build") {
+		sections.push(
+			"## Build-Class Units: Declare Verification\n\nThis is a **build** stage — every unit that declares `outputs:` MUST also declare a `quality_gates:` field. Pair each produced artifact with the executable check that verifies it (the verify-command pattern in this stage's elaboration guidance). If a unit genuinely defers verification to a sibling test unit, declare an explicit empty list (`quality_gates: []`) — but the field must be present so the choice is deliberate and reviewable. `haiku_unit_write` will reject a producing unit that omits it.",
+		)
+	}
+
 	// Detect design stages and add MCP provider instructions.
 	const stageHats = (stageDef?.data?.hats as string[]) || []
 	const isDesignStage =

@@ -1,6 +1,7 @@
 ---
 name: development
 description: Implement the library against the API contract from inception
+produces: build
 hats: [planner, builder, reviewer]
 fix_hats: [classifier, builder, feedback-assessor]
 review: [external, ask]

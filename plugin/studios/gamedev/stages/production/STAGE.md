@@ -1,6 +1,7 @@
 ---
 name: production
 description: Content and systems at scale
+produces: build
 hats: [gameplay-engineer, content-author, systems-designer, reviewer]
 fix_hats: [classifier, gameplay-engineer, feedback-assessor]
 review: [external, ask]

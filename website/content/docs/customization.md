@@ -82,6 +82,7 @@ inputs:
 | `description` | string | yes | What this stage accomplishes |
 | `hats` | list | yes | Ordered hat sequence — agents execute in this order |
 | `review` | enum | yes | `auto`, `ask`, `external`, `await`, or `[external, ask]` |
+| `produces` | enum | no | `build` or `knowledge` (default `knowledge`). Set `produces: build` for stages that ship executable artifacts (code, firmware): any unit declaring `outputs:` must then also declare a `quality_gates:` field (an explicit `[]` is allowed), so a producing unit can't be authored with nothing verifying it. Knowledge stages (research, design, docs) need no gates and should leave this unset. |
 | `gate-protocol` | object | no | Timeout duration, timeout action (`escalate`, `auto-advance`, `block`), and pre-conditions |
 | `unit_types` | list | no | Constrains which unit types this stage processes |
 | `inputs` | list | no | Artifacts required from prior stages |

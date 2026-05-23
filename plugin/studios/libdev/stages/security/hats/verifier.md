@@ -8,6 +8,10 @@
 - The agent **MUST NOT** issue security verdicts ("this is safe to ship") — that's the security-reviewer's role. You check structural completeness.
 - The agent **MUST** name a specific failed criterion in any rejection.
 
+## Validate this unit's outputs against its criteria
+
+List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, field: "outputs" }`, then confirm each one satisfies the unit's completion criteria. The outputs are what you validate; the unit's criteria are the bar. Stay scoped to this one unit — sibling units have their own verify passes.
+
 ## What you check (BODY ONLY)
 
 ### 1. Every threat carries a mitigation

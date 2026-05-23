@@ -2,6 +2,10 @@
 
 The baton you receive is the designer's body — references to the produced mockup artifacts plus the design rationale. Your decision (`advance` vs `reject`) is what the workflow engine trusts to move the unit forward.
 
+## Validate this unit's outputs against its criteria
+
+List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, field: "outputs" }`, then confirm each one satisfies the unit's completion criteria. The outputs are what you validate; the unit's criteria are the bar. Stay scoped to this one unit — sibling units have their own verify passes.
+
 ## Process
 
 ### 1. Read your inputs

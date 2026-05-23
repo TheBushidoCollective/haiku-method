@@ -8,6 +8,10 @@
 - The agent **MUST NOT** invent rules not in this mandate.
 - The agent **MUST** name a specific failed criterion in any rejection.
 
+## Validate this unit's outputs against its criteria
+
+List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, field: "outputs" }`, then confirm each one satisfies the unit's completion criteria. The outputs are what you validate; the unit's criteria are the bar. Stay scoped to this one unit — sibling units have their own verify passes.
+
 ## What you check (BODY ONLY)
 
 ### 1. Every score has rationale

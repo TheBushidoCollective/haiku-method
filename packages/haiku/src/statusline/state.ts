@@ -725,7 +725,23 @@ export function resolveStatuslineState(): StatuslineState | null {
 			// purely the agents running in parallel.
 			const chips = roleSteps
 				.filter((s) => inBucket(s.key) && !SINGLE_ACTOR_ROLES.has(rawRoleOf(s.key)))
-				.map((s) => ({ id: chipRole(s.key), status: s.status }))
+				.map((s) => ({
+						// These reviewers are spawned in ONE parent response —
+						// they all run at once, so the serial active/pending split
+						// finalizeSteps produces (first-not-done active, rest
+						// queued) is wrong here: there's no queue behind a parallel
+						// fan-out. Collapse every not-done role to `active`
+						// (in-flight); keep `done` for the stamped ones. The row
+						// reads "signed (green ✓) vs still-running (light ▸)" with
+						// no agent falsely singled out as the current one. The
+						// compact pip bar still uses the serial finalizeSteps
+						// status; only this chip row, which mirrors true
+						// concurrency, overrides it.
+						id: chipRole(s.key),
+						status: (s.status === "done" ? "done" : "active") as
+							| "done"
+							| "active",
+					}))
 			if (chips.length > 0) agentChips = chips
 		}
 	}

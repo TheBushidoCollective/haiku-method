@@ -1003,6 +1003,46 @@ test("resolveStatuslineState: agent chips appear ONLY in adversarial review, not
 			adversarial.length,
 			`expected one chip per adversarial agent (${adversarial.length}); got ${chipIds.join(", ")}`,
 		)
+		// Parallel fan-out: with nothing stamped yet, EVERY adversarial chip is
+		// in-flight at once — no serial "first active, rest queued". So all are
+		// `active`; none `pending`/`done`.
+		assert.ok(
+			state.agentChips.every((c) => c.status === "active"),
+			`all adversarial chips must be active (parallel fan-out); got ${state.agentChips
+				.map((c) => `${c.id}:${c.status}`)
+				.join(", ")}`,
+		)
+
+		// Phase 3 — ONE adversarial agent stamped, the rest still running. The
+		// stamped one flips to `done`; every other stays `active`. NO chip is
+		// `pending` — there's no queue behind a parallel fan-out. (This is the
+		// exact scenario the status line used to mis-render: one `active` ▸ and
+		// the rest grey `pending`.)
+		const firstAdv = adversarial[0]
+		writeUnit({
+			spec: { signed_at: AT, agent: "e" },
+			[firstAdv]: { signed_at: AT, agent: "e" },
+		})
+		state = resolveStatuslineState()
+		assert.ok(
+			Array.isArray(state.agentChips) && state.agentChips.length > 0,
+			"adversarial review must still surface chips with one signed",
+		)
+		assert.equal(
+			state.agentChips.filter((c) => c.status === "pending").length,
+			0,
+			`no chip may be pending in a parallel fan-out; got ${state.agentChips
+				.map((c) => `${c.id}:${c.status}`)
+				.join(", ")}`,
+		)
+		assert.ok(
+			state.agentChips.some((c) => c.status === "done"),
+			"the stamped adversarial agent must read as done",
+		)
+		assert.ok(
+			state.agentChips.some((c) => c.status === "active"),
+			"the unstamped adversarial agents must read as active (in-flight)",
+		)
 	} finally {
 		process.chdir(orig)
 		rmSync(repoRoot, { recursive: true, force: true })

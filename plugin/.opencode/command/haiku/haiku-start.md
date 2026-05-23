@@ -6,6 +6,8 @@ description: Start a new H·AI·K·U intent — describe what you want to accomp
 
 ## Process
 
+**If the user starts the intent with a referenced file** — a spec, a doc, a screenshot, a path like `~/Downloads/spec.pdf`, or a dragged-in attachment — read it and **synthesize its relevant substance directly into the `description` and `context` you author below.** NEVER store, quote, or reference the file's path in any field. An absolute path leaks the user's machine layout, and the external file won't travel with the intent — the intent must stand on its own from its own text. The path is throwaway; the synthesized content is the durable record. (Read PDFs/images natively; capture what they *say*, not where they live.)
+
 1. **Prelaborate** — If the user's description is short (under 2 sentences) or vague, ask 2-3 targeted questions via `AskUserQuestion` to understand scope, desired outcome, and constraints. Fold answers into a richer description (3-5 sentences).
 
 2. **Quick context scan** — Glance at the project structure (2-3 tool calls max) to understand the tech stack and project purpose. This informs studio selection later.

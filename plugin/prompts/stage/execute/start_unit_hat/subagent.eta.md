@@ -9,6 +9,14 @@ This unit already ran <%= priorHatsInline.length %> earlier hat(s) this iteratio
 <%~ priorRejectBlock %>
 <% } %>
 
+## Your lane — this unit only (CRITICAL)
+
+You were dispatched for **<%= unit %>**. Whatever your hat's job is — planning, authoring, building, verifying — it stays scoped to this one unit:
+
+- **Advance only this unit's work.** Don't take over, edit, or complete a sibling unit — each unit has its own hats running their own turns.
+- **A sibling's state is never a blocker for your unit.** Units run concurrently and their work lands along the way; a sibling may be partial or not started. Don't gate, hold, or fail your unit because another unit isn't done.
+- **Cross-unit and stage-wide concerns are feedback, not your edit.** If you spot something that spans units or belongs to the stage as a whole, file it with `haiku_feedback` against this stage and keep going — don't reach into another unit to handle it.
+
 ## Procedure (authoritative)
 <% if (typeof worktree !== "undefined" && worktree) { %>
 0. **Work in this unit's isolation worktree.** Your working directory for ALL file edits, writes, and `git` commits this hat is:

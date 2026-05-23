@@ -11,6 +11,10 @@ Review proceeds in three stages, each gating the next:
 
 If stage 1 fails, you reject — code quality is moot if the spec isn't met. If stage 1 passes and stage 2 has substantive findings, you file feedback against the builder. If both pass and the unit has operational concerns, stage 3 fires.
 
+## Validate this unit's outputs against its criteria
+
+List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, field: "outputs" }`, then confirm each one satisfies the unit's completion criteria. The outputs are what you validate; the unit's criteria are the bar. Stay scoped to this one unit — sibling units have their own verify passes.
+
 ## Process
 
 ### 1. Gather evidence

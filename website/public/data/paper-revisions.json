@@ -305,10 +305,10 @@
     "revisions": [
       {
         "version": "2",
-        "date": "2026-05-15",
-        "commitHash": "badae2d",
-        "fullCommitHash": "badae2dfc9dfedc414b31202966c1fab3dbb62c4",
-        "commitMessage": "v4 follow-ups: prompts reorg + intent-scope QG + drift cleanup + revisit-skill removal (#363)",
+        "date": "2026-05-21",
+        "commitHash": "eeb55aa",
+        "fullCommitHash": "eeb55aa4b3b3926802e109a70796af6ab019c525",
+        "commitMessage": "chore: checkpoint in-flight skill/phase consolidation refactor",
         "stats": {
           "linesAdded": 354,
           "linesRemoved": 1000

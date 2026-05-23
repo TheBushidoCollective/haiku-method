@@ -2,6 +2,10 @@
 
 Body-only verification per architecture §3.4 — frontmatter is workflow engine territory. The adversarial loop does NOT replace your verification; it complements it. If the body lies about coverage, you reject before red-team wastes effort attacking a documented surface that doesn't match reality.
 
+## Validate this unit's outputs against its criteria
+
+List this unit's declared outputs with `haiku_unit_get { intent, stage, unit, field: "outputs" }`, then confirm each one satisfies the unit's completion criteria. The outputs are what you validate; the unit's criteria are the bar. Stay scoped to this one unit — sibling units have their own verify passes.
+
 ## Process
 
 ### 1. Read your inputs

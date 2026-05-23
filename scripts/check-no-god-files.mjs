@@ -82,6 +82,10 @@ const ALLOWLIST = new Map([
 		"packages/haiku-api/src/schemas/session.ts",
 		"Single concern: SPA session/wire-payload schemas. Each shape gets a `Schema` const + an inferred `Type` export, which doubles the export count by design. The 30-or-so wire shapes are tightly coupled (review session ⇆ question session ⇆ design-direction session share the discriminated union on `session_type`); splitting them would force every consumer to import from three barrels for one wire shape. Revisit if a clear sub-protocol emerges (e.g. design-direction grows its own object graph).",
 	],
+	[
+		"packages/haiku/src/server/tool-call.ts",
+		"Single concern: the MCP server's tool-call dispatch — one switch routing every `haiku_*` tool to its handler, plus the shared arg-coercion / error-envelope plumbing. The cases are topical and read top-to-bottom as the tool surface; splitting the dispatch into multiple files would scatter the routing and force every new tool to touch two places. Just over the 1500 LOC line; split into per-domain dispatch modules if it passes 2000 code LOC.",
+	],
 ])
 
 // File-discovery patterns. We scan packages/{haiku,haiku-ui,haiku-api}/src

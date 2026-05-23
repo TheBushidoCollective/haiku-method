@@ -33,7 +33,7 @@
 // when the modification time advances. Edits during dev (or via
 // project overlay drops) propagate without an MCP restart.
 
-import { readFileSync, statSync } from "node:fs"
+import { existsSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { resolvePluginRoot } from "../../config.js"
@@ -154,12 +154,40 @@ function readWithCache(absPath: string): string {
  * convention; pass an explicit name for the `_shared` multi-file
  * pattern (`announcement.md`, `subagent-error-recovery.md`, etc.).
  */
+/**
+ * Resolve `<pluginPromptsRoot>` for the `@canon:` (sentinel) branch, robust
+ * across both runtimes:
+ *
+ *   - **Bundled binary** — `resolvePluginRoot()` self-resolves from the
+ *     bundle's argv/location (the bundle sits at `plugin/bin/`, so walking up
+ *     finds the plugin root). `<root>/prompts` exists → use it.
+ *   - **Dev / test (running source under tsx)** — `resolvePluginRoot()` is
+ *     unreliable: the `packages/haiku/src/**` module tree isn't under the
+ *     plugin marker (`plugin/` is a SIBLING of `packages/`, not an ancestor),
+ *     and `CLAUDE_PLUGIN_ROOT` may be unset or relative. THIS module, however,
+ *     lives under the prompts tree, so `devModeContext(import.meta.url)`
+ *     derives `<repoRoot>/plugin/prompts` directly from its own path.
+ *
+ * Without this fallback, a `@canon:` call hard-coded in source (rather than
+ * produced by the build-time canonicalize) can't resolve in test mode — the
+ * resolvePluginRoot-only path returns a non-existent/relative root.
+ */
+function canonPluginPromptsRoot(): string {
+	const fromResolve = join(resolvePluginRoot(), "prompts")
+	if (existsSync(fromResolve)) return fromResolve
+	try {
+		return devModeContext(import.meta.url).pluginPromptsRoot
+	} catch {
+		return fromResolve
+	}
+}
+
 export function loadTemplate(source: string, name = "template.eta.md"): string {
 	let rel: string
 	let pluginPromptsRoot: string
 	if (source.startsWith(SENTINEL_PREFIX)) {
 		rel = source.slice(SENTINEL_PREFIX.length)
-		pluginPromptsRoot = join(resolvePluginRoot(), "prompts")
+		pluginPromptsRoot = canonPluginPromptsRoot()
 	} else {
 		const ctx = devModeContext(source)
 		rel = ctx.rel

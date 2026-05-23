@@ -25,7 +25,11 @@ import { loadTemplate } from "../../../_load-template.js"
 import { definePromptBuilder } from "../../../define.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
-const TEMPLATE = loadTemplate(import.meta.url)
+// `@canon:` sentinel: the canonicalize esbuild plugin skipped this file's
+// `loadTemplate(import.meta.url)` call (its sibling builders got rewritten), so
+// the dev-mode form survived into the production bundle and crashed at boot.
+// `@canon:` resolves in both runtimes (see _load-template's canonPluginPromptsRoot).
+const TEMPLATE = loadTemplate("@canon:intent/reflection/record_reflection")
 
 /** Strip a leading YAML frontmatter block so the prompt shows only the body. */
 function stripFrontmatter(raw: string): string {

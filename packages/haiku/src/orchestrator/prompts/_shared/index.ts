@@ -42,7 +42,15 @@ const eta = new Eta({ autoEscape: false, useWith: true })
 function memoTemplate(name: string): () => string {
 	let cached: string | null = null
 	return () => {
-		if (cached === null) cached = loadTemplate(import.meta.url, name)
+		// `@canon:_shared` rather than `import.meta.url`: `name` is a VARIABLE,
+		// and the canonicalize esbuild plugin only rewrites
+		// `loadTemplate(import.meta.url, "string-literal")` calls — a variable
+		// name arg survives as a dev-mode call into the bundle and crashes at
+		// boot. This file is at orchestrator/prompts/_shared/, so the canonical
+		// rel is `_shared`; blocks live at `plugin/prompts/_shared/<name>`.
+		// `@canon:` resolves in both runtimes (see _load-template's
+		// canonPluginPromptsRoot).
+		if (cached === null) cached = loadTemplate("@canon:_shared", name)
 		return cached
 	}
 }

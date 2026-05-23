@@ -20,11 +20,18 @@ import { loadTemplate } from "../prompts/_load-template.js"
 
 const eta = new Eta({ autoEscape: false, useWith: true })
 
+// `@canon:` sentinel form (not `import.meta.url`): this file lives under
+// `orchestrator/engine-reviews/`, OUTSIDE the `orchestrator/prompts/` scope the
+// canonicalize esbuild plugin rewrites — a raw `import.meta.url` call survives
+// into the production bundle and crashes at boot. Templates live at
+// `plugin/prompts/engine-reviews/`. `@canon:` resolves in both runtimes via
+// `_load-template`'s `canonPluginPromptsRoot()` (resolvePluginRoot in the
+// bundle, module-derived in dev/test).
 const ENGINE_REVIEW_TEMPLATES: Record<string, string> = {
-	spec: loadTemplate(import.meta.url, "spec.eta.md"),
-	continuity: loadTemplate(import.meta.url, "continuity.eta.md"),
+	spec: loadTemplate("@canon:engine-reviews", "spec.eta.md"),
+	continuity: loadTemplate("@canon:engine-reviews", "continuity.eta.md"),
 	"cross-stage-consistency": loadTemplate(
-		import.meta.url,
+		"@canon:engine-reviews",
 		"cross_stage_consistency.eta.md",
 	),
 }

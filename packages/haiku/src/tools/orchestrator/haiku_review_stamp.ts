@@ -56,7 +56,7 @@ const CLOSURE_HINT =
 export default defineTool({
 	name: "haiku_review_stamp",
 	description:
-		"Review/approval/intent-review subagent CLOSURE. Records your own `reviews.<role>` / `approvals.<role>` witness and returns a terminal ack — call this INSTEAD of `haiku_run_next` when you finish reviewing. `kind: review|approval` requires `stage`; `kind: intent_review` omits it. Returns `{ ok: true, stamped: [...], skipped: [...] }` (skipped = units you flagged with an open finding; they stay un-stamped so the cursor reroutes through them on close), or `{ ok: true, found: false }` when nothing was pending for your role (already stamped — clean no-op). Never walks the cursor and never returns a fix dispatch, so it can't trip the inter-tick loop guard.",
+		"Review/approval subagent CLOSURE. Records your own `reviews.<role>` / `approvals.<role>` witness and returns a terminal ack — call this INSTEAD of `haiku_run_next` when you finish reviewing. `kind: review|approval` both require `stage`. Returns `{ ok: true, stamped: [...], skipped: [...] }` (skipped = units you flagged with an open finding; they stay un-stamped so the cursor reroutes through them on close), or `{ ok: true, found: false }` when nothing was pending for your role (already stamped — clean no-op). Never walks the cursor and never returns a fix dispatch, so it can't trip the inter-tick loop guard. NOTE: intent-completion review agents (`intent_review` actions) do NOT call this tool — they terminate directly; the parent drain handles their stamp.",
 	inputSchema: jsonSchemaOf(HAIKU_REVIEW_STAMP_INPUT_SCHEMA),
 	async handle(args) {
 		const inputErr = validateToolInput(

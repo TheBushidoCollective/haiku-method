@@ -55,11 +55,14 @@ const eta = new Eta({ autoEscape: false, useWith: true })
 let _subagentTemplate: string | null = null
 function subagentTemplate(): string {
 	if (_subagentTemplate === null) {
+		// `@canon:` sentinel: this builder lives outside `orchestrator/prompts/`,
+		// so the canonicalize plugin doesn't rewrite it. The old
+		// `new URL("./prompts/…", import.meta.url)` trick resolved in dev but
+		// pointed outside the prompts tree in the production bundle (crash).
+		// `@canon:` resolves in both runtimes (see _load-template's
+		// canonPluginPromptsRoot). Template at `plugin/prompts/stage/execute/start_unit_hat/`.
 		_subagentTemplate = loadTemplate(
-			new URL(
-				"./prompts/stage/execute/start_unit_hat/index.ts",
-				import.meta.url,
-			).href,
+			"@canon:stage/execute/start_unit_hat",
 			"subagent.eta.md",
 		)
 	}

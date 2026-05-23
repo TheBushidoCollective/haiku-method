@@ -520,10 +520,6 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			.map((a) => `\`${a.name}\``)
 			.join(", ")
 		const plural = discoveryArtifacts.length !== 1 ? "s" : ""
-		const _intentPath = join(dir, "intent.md")
-		const _stagePath = resolveStudioFilePath(
-			join(studio, "stages", stage, "STAGE.md"),
-		)
 
 		// Snapshot the intent goal + stage scope once via the same readers
 		// haiku_read_intent / haiku_read_stage use, and reference them from

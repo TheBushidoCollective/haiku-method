@@ -51,9 +51,12 @@ const eta = new Eta({ autoEscape: false, useWith: true })
 let _subagentTemplate: string | null = null
 function subagentTemplate(): string {
 	if (_subagentTemplate === null) {
+		// `@canon:` sentinel — see unit-dispatch-builder.ts: this builder is
+		// outside `orchestrator/prompts/`, so the import.meta.url/new-URL form
+		// crashes in the production bundle. `@canon:` resolves in both runtimes.
+		// Template at `plugin/prompts/feedback/start_feedback_hat/`.
 		_subagentTemplate = loadTemplate(
-			new URL("./prompts/feedback/start_feedback_hat/index.ts", import.meta.url)
-				.href,
+			"@canon:feedback/start_feedback_hat",
 			"subagent.eta.md",
 		)
 	}

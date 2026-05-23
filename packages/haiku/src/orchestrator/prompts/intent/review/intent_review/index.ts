@@ -42,10 +42,7 @@ import { definePromptBuilder } from "../../../define.js"
 // in sync (a test locks this).
 const ENGINE_REVIEW_BODIES: Record<string, string> = {
 	spec: loadTemplate(import.meta.url, "engine-bodies/spec.eta.md"),
-	continuity: loadTemplate(
-		import.meta.url,
-		"engine-bodies/continuity.eta.md",
-	),
+	continuity: loadTemplate(import.meta.url, "engine-bodies/continuity.eta.md"),
 	"cross-stage-consistency": loadTemplate(
 		import.meta.url,
 		"engine-bodies/cross_stage_consistency.eta.md",

@@ -467,7 +467,7 @@ export const HAIKU_VIEW_INPUT_SCHEMA = Type.Object(
 			Type.Array(Type.String({ minLength: 1 }), {
 				minItems: 1,
 				description:
-					"Single-process boot — explicit command argv (e.g. `[\"uvicorn\", \"app:main\"]`, `[\"bin/dev\"]`, `[\"go\", \"run\", \"./cmd/server\"]`). Engine spawns with `PORT` + `HOST` env vars set so the dev server binds where the supervisor expects. Use this for one-process apps. For monorepos / stacks (api + frontend + db + worker), use `processes` instead.",
+					'Single-process boot — explicit command argv (e.g. `["uvicorn", "app:main"]`, `["bin/dev"]`, `["go", "run", "./cmd/server"]`). Engine spawns with `PORT` + `HOST` env vars set so the dev server binds where the supervisor expects. Use this for one-process apps. For monorepos / stacks (api + frontend + db + worker), use `processes` instead.',
 			}),
 		),
 		cwd: Type.Optional(
@@ -489,25 +489,25 @@ export const HAIKU_VIEW_INPUT_SCHEMA = Type.Object(
 						command: Type.Array(Type.String({ minLength: 1 }), {
 							minItems: 1,
 							description:
-								"Argv for this process (e.g. `[\"npm\", \"run\", \"api\"]`, `[\"redis-server\"]`, `[\"docker\", \"compose\", \"up\", \"postgres\"]`).",
+								'Argv for this process (e.g. `["npm", "run", "api"]`, `["redis-server"]`, `["docker", "compose", "up", "postgres"]`).',
 						}),
 						cwd: Type.Optional(
 							Type.String({
 								description:
-									"Working directory for this process, relative to the intent dir. Defaults to the intent dir when omitted (e.g. `\"backend\"` for `packages/backend/` in a monorepo).",
+									'Working directory for this process, relative to the intent dir. Defaults to the intent dir when omitted (e.g. `"backend"` for `packages/backend/` in a monorepo).',
 							}),
 						),
 						port_env: Type.Optional(
 							Type.String({
 								minLength: 1,
 								description:
-									"Env-var name the engine assigns the allocated ephemeral port to. Defaults to `PORT`. Override when the process expects a different name (e.g. `\"RAILS_PORT\"`, `\"API_PORT\"`).",
+									'Env-var name the engine assigns the allocated ephemeral port to. Defaults to `PORT`. Override when the process expects a different name (e.g. `"RAILS_PORT"`, `"API_PORT"`).',
 							}),
 						),
 						ready_url: Type.Optional(
 							Type.String({
 								description:
-									"Optional HTTP URL the supervisor polls to confirm this process is ready before starting dependents (e.g. `\"http://127.0.0.1:{port}/healthz\"`). Use `{port}` as the placeholder for the allocated port. Falls back to TCP port-bind detection when omitted.",
+									'Optional HTTP URL the supervisor polls to confirm this process is ready before starting dependents (e.g. `"http://127.0.0.1:{port}/healthz"`). Use `{port}` as the placeholder for the allocated port. Falls back to TCP port-bind detection when omitted.',
 							}),
 						),
 						depends_on: Type.Optional(

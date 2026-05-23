@@ -31,7 +31,7 @@ const runAllPath = join(testDir, "run-all.mjs")
 
 const REQUIRED_FILES = [
 	"drift-baseline.test.mjs",
-	"drift-markers.test.mjs",
+	"drift-input-witnesses.test.mjs",
 	"drift-mid-flight-e2e.test.mjs",
 	"drift-scenarios.test.mjs",
 	"cursor-walk.test.mjs",

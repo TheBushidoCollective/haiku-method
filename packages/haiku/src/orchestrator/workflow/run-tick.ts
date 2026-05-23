@@ -34,7 +34,7 @@ import "../migrations/v5-to-v6.js"
 import "../migrations/v6-to-v7.js"
 import "../migrations/v7-to-v8.js"
 import "../migrations/v8-to-v9.js"
-import { purgeDeadSidecars } from "./purge-dead-sidecars.js"
+import { writeStatuslineSnapshot } from "../../statusline/snapshot.js"
 import { killAllOrphanedBootSessions } from "../../view-boot.js"
 import { hasV3CruftInIntent } from "../migrations/v0-to-v4.js"
 import {
@@ -48,11 +48,11 @@ import {
 	wouldDeadlock,
 } from "./deadlock-detector.js"
 import { completePendingFixChainMerges } from "./fix-chain-merge-gate.js"
+import { purgeDeadSidecars } from "./purge-dead-sidecars.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
 import { resetLostUnits } from "./unit-branch-recovery.js"
 import { autoFileMalformedUnitInputs } from "./validate-unit-inputs-gate.js"
 import { ensureNonce } from "./verifier-nonce.js"
-import { writeStatuslineSnapshot } from "../../statusline/snapshot.js"
 
 /** Result of a single workflow tick. */
 export interface WorkflowTickResult {

@@ -108,7 +108,11 @@ export function getCurrentState(
 	// complete (intent in completion review or sealed), `findCurrentStage`
 	// returns null; surface the final stage so the SPA still has a target
 	// stage to render under `/stages/<last>`.
-	const cursorStage = findCurrentStage(slug, studio, resolveIntentDir(slug, root))
+	const cursorStage = findCurrentStage(
+		slug,
+		studio,
+		resolveIntentDir(slug, root),
+	)
 	const current = cursorStage ?? fallbackStages[fallbackStages.length - 1]
 
 	const derivedCurrent = deriveStageState({

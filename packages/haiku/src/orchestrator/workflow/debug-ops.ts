@@ -347,9 +347,7 @@ export function resetDrift(args: {
 				fm.reviews && typeof fm.reviews === "object"
 					? { ...(fm.reviews as Record<string, unknown>) }
 					: {}
-			const unitInputs = Array.isArray(fm.inputs)
-				? (fm.inputs as string[])
-				: []
+			const unitInputs = Array.isArray(fm.inputs) ? (fm.inputs as string[]) : []
 			for (const role of Object.keys(reviews)) {
 				reviews[role] = buildReviewRecord(unitPath, {
 					intentDir: dir,

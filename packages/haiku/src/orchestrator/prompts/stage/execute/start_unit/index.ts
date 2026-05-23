@@ -27,13 +27,6 @@ import { Eta } from "eta"
 import { features } from "../../../../../config.js"
 import { getCapabilities } from "../../../../../harness.js"
 import { type ModelTier, resolveModel } from "../../../../../model-selection.js"
-// Import directly from the source modules to avoid a circular dep
-// through `orchestrator.js`'s re-export barrel: orchestrator.js loads
-// `prompts/index.js` (the prompt-builder map), which loads this file.
-// Going through the barrel produces a TDZ on `start_unit` at the map
-// construction site.
-import { buildOutputRequirements } from "../../../../validators.js"
-import { resolveStudioFilePath } from "../../../../studio.js"
 import {
 	listInstalledSkills,
 	parseFrontmatter,
@@ -45,6 +38,13 @@ import {
 	readStudio,
 	resolveStageInputs,
 } from "../../../../../studio-reader.js"
+import { resolveStudioFilePath } from "../../../../studio.js"
+// Import directly from the source modules to avoid a circular dep
+// through `orchestrator.js`'s re-export barrel: orchestrator.js loads
+// `prompts/index.js` (the prompt-builder map), which loads this file.
+// Going through the barrel produces a TDZ on `start_unit` at the map
+// construction site.
+import { buildOutputRequirements } from "../../../../validators.js"
 import {
 	buildInlineSubagentContext,
 	buildInterpretationBlock,
@@ -317,9 +317,7 @@ export default definePromptBuilder(({ slug, studio, action, dir }) => {
 	}
 
 	const isFirstHat = hat === (hats[0] || "")
-	const installedIndex = new Map(
-		listInstalledSkills().map((s) => [s.slug, s]),
-	)
+	const installedIndex = new Map(listInstalledSkills().map((s) => [s.slug, s]))
 	const skillLines =
 		unitApplicableSkills.length > 0
 			? unitApplicableSkills.map((s) => {

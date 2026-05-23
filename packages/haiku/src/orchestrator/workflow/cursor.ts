@@ -484,8 +484,7 @@ function isFbTerminal(fm: UnitFm | FbFm): boolean {
 		// Truthy covers string + Date + any non-empty value. Empty
 		// string and null fall through to the other signals.
 		if (fm.closed_at instanceof Date) return true
-		if (typeof fm.closed_at === "string" && fm.closed_at.length > 0)
-			return true
+		if (typeof fm.closed_at === "string" && fm.closed_at.length > 0) return true
 	}
 	// Same Date/string handling for the rejection timestamp. v4 FB
 	// derivation treats `rejected_at` as the highest-priority terminal
@@ -508,13 +507,6 @@ function isFbTerminal(fm: UnitFm | FbFm): boolean {
 	return false
 }
 
-/** Back-compat alias for the renamed predicate. Internal callers
- *  migrate to `isFbTerminal`; this thin wrapper exists so anything that
- *  still imports the old name (or any unindexed call site) keeps
- *  working until the next refactor sweep. */
-function isFbClosed(fm: UnitFm | FbFm): boolean {
-	return isFbTerminal(fm)
-}
 
 // readClarifyQuestions deleted 2026-05-08 along with the
 // clarify_required cursor action. Stages that need pre-decompose Q&A
@@ -1501,8 +1493,7 @@ function walkIntentTrack(args: {
 			readFm(join(intentDir, "intent.md"))?.data ?? {},
 			studio,
 		)
-		const isFirstStage =
-			intentStages.length > 0 && intentStages[0] === stage
+		const isFirstStage = intentStages.length > 0 && intentStages[0] === stage
 		if (!isFirstStage) {
 			const missingInputs = units
 				.filter((u) => !("inputs" in u.fm))
@@ -2147,9 +2138,7 @@ export function derivePosition(args: {
 		// the engine base and `intent_review/index.ts` resolves their mandate
 		// bodies. Only the human gate (`user`) is mode-conditional: autopilot
 		// skips it.
-		const studioAgents = Object.keys(
-			readStudioReviewAgentPaths(studio),
-		).sort()
+		const studioAgents = Object.keys(readStudioReviewAgentPaths(studio)).sort()
 		const intentRoles = intentReviewRoles(mode, studioAgents)
 		for (const role of intentRoles) {
 			if (!intentApprovals[role]) {

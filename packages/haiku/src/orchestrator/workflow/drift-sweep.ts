@@ -57,7 +57,6 @@ import { readStageArtifactDefs } from "../../studio-reader.js"
 import { isDriftDetectionDisabled } from "./drift-baseline.js"
 import {
 	bodyMatchesStoredHash,
-	bodySha256,
 	DIR_INVENTORY_SKIP,
 	fileSha256,
 	isTextBodyExtension,
@@ -438,9 +437,7 @@ export function runDriftSweep(args: {
 			// resolution in resolveInputWitnesses().
 			const inputWitnesses = pickInputWitnesses(record)
 			if (inputWitnesses) {
-				for (const [path, storedSha] of Object.entries(
-					inputWitnesses.files,
-				)) {
+				for (const [path, storedSha] of Object.entries(inputWitnesses.files)) {
 					// Resolution rule mirrors sign-slot.ts's resolveInputWitnesses:
 					// try intent-relative first (covers `stages/`, `knowledge/`,
 					// `feedback/`, `intent.md`), fall back to repo-relative
@@ -504,9 +501,7 @@ export function runDriftSweep(args: {
 						})
 					}
 				}
-				for (const [dirRel, inventory] of Object.entries(
-					inputWitnesses.dirs,
-				)) {
+				for (const [dirRel, inventory] of Object.entries(inputWitnesses.dirs)) {
 					// Same three-step resolution as for files (intent-rel,
 					// repo-rel, then strip-legacy-prefix-and-retry-intent-rel).
 					const intentRelative = join(args.intentDir, dirRel)

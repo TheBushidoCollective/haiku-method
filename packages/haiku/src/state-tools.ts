@@ -28,20 +28,20 @@ import {
 import { Ajv } from "ajv"
 import matter from "gray-matter"
 import { features, resolvePluginRoot } from "./config.js"
+import { buildFbHatDispatchBlock } from "./orchestrator/fb-dispatch-builder.js"
+import {
+	resolveIntentStages,
+	resolveStageFixHats,
+	resolveStudioFixHats,
+} from "./orchestrator/studio.js"
+import { buildUnitHatDispatchBlock } from "./orchestrator/unit-dispatch-builder.js"
+import { summarizeStageLoop } from "./orchestrator/units.js"
 import {
 	derivePosition,
 	findCurrentStage,
 	nextHatForUnit,
 	walkFeedbackTrack,
 } from "./orchestrator/workflow/cursor.js"
-import {
-	resolveIntentStages,
-	resolveStageFixHats,
-	resolveStudioFixHats,
-} from "./orchestrator/studio.js"
-import { buildFbHatDispatchBlock } from "./orchestrator/fb-dispatch-builder.js"
-import { buildUnitHatDispatchBlock } from "./orchestrator/unit-dispatch-builder.js"
-import { summarizeStageLoop } from "./orchestrator/units.js"
 import { sanitizeFeedbackBody } from "./state/sanitize-feedback.js"
 
 // V-04 (Symlink TOCTOU): `haiku_human_write` (registered via this module's
@@ -96,9 +96,9 @@ import { logSessionEvent, writeHaikuMetadata } from "./session-metadata.js"
 import { sealIntentState } from "./state-integrity.js"
 import {
 	listStudios,
-	readHatDefs,
 	readDiscoveryBody,
 	readHatBody,
+	readHatDefs,
 	readOutputBody,
 	readPhaseBody,
 	readReviewAgentBody,
@@ -3217,7 +3217,8 @@ export function migrateIterationReasonsOnRead(filePath: string): void {
 		if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue
 		const rec = entry as Record<string, unknown>
 		if (typeof rec.reason !== "string") continue
-		if (rec.message === undefined && rec.reason.length > 0) rec.message = rec.reason
+		if (rec.message === undefined && rec.reason.length > 0)
+			rec.message = rec.reason
 		delete rec.reason
 		changed = true
 	}
@@ -3576,11 +3577,6 @@ import {
 	HAIKU_INTENT_SET_INPUT_SCHEMA,
 	HAIKU_KNOWLEDGE_LIST_INPUT_SCHEMA,
 	HAIKU_KNOWLEDGE_READ_INPUT_SCHEMA,
-	HAIKU_RECONCILIATION_ACKNOWLEDGE_INPUT_SCHEMA,
-	HAIKU_RELEASE_NOTES_INPUT_SCHEMA,
-	HAIKU_REPAIR_INPUT_SCHEMA,
-	HAIKU_REVIEW_INPUT_SCHEMA,
-	HAIKU_REVIEW_OPEN_INPUT_SCHEMA,
 	HAIKU_READ_DISCOVERY_INPUT_SCHEMA,
 	HAIKU_READ_HAT_INPUT_SCHEMA,
 	HAIKU_READ_INTENT_INPUT_SCHEMA,
@@ -3588,6 +3584,11 @@ import {
 	HAIKU_READ_PHASE_INPUT_SCHEMA,
 	HAIKU_READ_REVIEW_AGENT_INPUT_SCHEMA,
 	HAIKU_READ_STAGE_INPUT_SCHEMA,
+	HAIKU_RECONCILIATION_ACKNOWLEDGE_INPUT_SCHEMA,
+	HAIKU_RELEASE_NOTES_INPUT_SCHEMA,
+	HAIKU_REPAIR_INPUT_SCHEMA,
+	HAIKU_REVIEW_INPUT_SCHEMA,
+	HAIKU_REVIEW_OPEN_INPUT_SCHEMA,
 	HAIKU_SEED_INPUT_SCHEMA,
 	HAIKU_SETTINGS_GET_INPUT_SCHEMA,
 	HAIKU_SETTINGS_SET_INPUT_SCHEMA,
@@ -3595,9 +3596,6 @@ import {
 	HAIKU_STAGE_SET_INPUT_SCHEMA,
 	HAIKU_STUDIO_GET_INPUT_SCHEMA,
 	HAIKU_STUDIO_STAGE_GET_INPUT_SCHEMA,
-	HAIKU_VIEW_CLOSE_INPUT_SCHEMA,
-	HAIKU_VIEW_INPUT_SCHEMA,
-	HAIKU_ZAP_INPUT_SCHEMA,
 	HAIKU_UNIT_ADVANCE_HAT_INPUT_SCHEMA,
 	HAIKU_UNIT_DELETE_INPUT_SCHEMA,
 	HAIKU_UNIT_GET_INPUT_SCHEMA,
@@ -3607,6 +3605,9 @@ import {
 	HAIKU_UNIT_SET_INPUT_SCHEMA,
 	HAIKU_UNIT_START_INPUT_SCHEMA,
 	HAIKU_UNIT_WRITE_INPUT_SCHEMA,
+	HAIKU_VIEW_CLOSE_INPUT_SCHEMA,
+	HAIKU_VIEW_INPUT_SCHEMA,
+	HAIKU_ZAP_INPUT_SCHEMA,
 	INTENT_IMMUTABLE_FIELDS,
 	UNIT_FRONTMATTER_SCHEMA,
 	validateHaikuBacklogInputSchema,
@@ -3628,9 +3629,6 @@ import {
 	validateHaikuIntentSetInputSchema,
 	validateHaikuKnowledgeListInputSchema,
 	validateHaikuKnowledgeReadInputSchema,
-	validateHaikuReconciliationAcknowledgeInputSchema,
-	validateHaikuReleaseNotesInputSchema,
-	validateHaikuRepairInputSchema,
 	validateHaikuReadDiscoveryInputSchema,
 	validateHaikuReadHatInputSchema,
 	validateHaikuReadIntentInputSchema,
@@ -3638,6 +3636,9 @@ import {
 	validateHaikuReadPhaseInputSchema,
 	validateHaikuReadReviewAgentInputSchema,
 	validateHaikuReadStageInputSchema,
+	validateHaikuReconciliationAcknowledgeInputSchema,
+	validateHaikuReleaseNotesInputSchema,
+	validateHaikuRepairInputSchema,
 	validateHaikuReviewInputSchema,
 	validateHaikuSeedInputSchema,
 	validateHaikuSettingsGetInputSchema,
@@ -3646,7 +3647,6 @@ import {
 	validateHaikuStageSetInputSchema,
 	validateHaikuStudioGetInputSchema,
 	validateHaikuStudioStageGetInputSchema,
-	validateHaikuZapInputSchema,
 	validateHaikuUnitAdvanceHatInputSchema,
 	validateHaikuUnitDeleteInputSchema,
 	validateHaikuUnitGetInputSchema,
@@ -3656,6 +3656,7 @@ import {
 	validateHaikuUnitSetInputSchema,
 	validateHaikuUnitStartInputSchema,
 	validateHaikuUnitWriteInputSchema,
+	validateHaikuZapInputSchema,
 	validateIntentFrontmatterSchema as validateIntentSchema,
 	validateUnitFrontmatterSchema as validateUnitSchema,
 } from "./state/schemas/index.js"
@@ -5548,7 +5549,10 @@ export function stampDispatchClaim(opts: {
 		const bolt = maxBolt > 0 ? maxBolt : 1
 		iters.push({ hat, started_at: timestamp(), result: null, bolt })
 		const newFm = { ...fm, iterations: iters }
-		writeFileSync(path, matter.stringify(`${parsed.content.trimEnd()}\n`, newFm))
+		writeFileSync(
+			path,
+			matter.stringify(`${parsed.content.trimEnd()}\n`, newFm),
+		)
 	} catch {
 		/* best-effort */
 	}
@@ -5582,9 +5586,7 @@ function computeUnitRelayBlock(
 				unknown
 			>
 			const studioName =
-				typeof iFmInline.studio === "string"
-					? (iFmInline.studio as string)
-					: ""
+				typeof iFmInline.studio === "string" ? (iFmInline.studio as string) : ""
 			if (!studioName) return null
 
 			// Relay = continue the CALLING unit's OWN hat chain, computed
@@ -5671,10 +5673,7 @@ function computeUnitRelayBlock(
  *  terminal advances can't both claim the same FB; the claim stamps a
  *  first iteration, removing the FB from the zero-iteration set the
  *  next concurrent call sees. */
-function pickUndispatchedFbBlock(
-	slug: string,
-	studio: string,
-): string | null {
+function pickUndispatchedFbBlock(slug: string, studio: string): string | null {
 	const iDir = intentDir(slug)
 	const intentFm = existsSync(join(iDir, "intent.md"))
 		? (matter(readFileSync(join(iDir, "intent.md"), "utf8")).data as Record<
@@ -6375,7 +6374,9 @@ export function findFeedbackFile(
 		.filter((f) => {
 			if (!f.endsWith(".md")) return false
 			const fileNumMatch = f.match(/^(\d+)-/)
-			return !!fileNumMatch && Number.parseInt(fileNumMatch[1], 10) === targetNum
+			return (
+				!!fileNumMatch && Number.parseInt(fileNumMatch[1], 10) === targetNum
+			)
 		})
 		.sort()
 	if (matches.length === 0) return null
@@ -7321,7 +7322,10 @@ export const stateToolDefs: StateToolDef[] = [
 			type: "object",
 			properties: {
 				phase: { type: "string" },
-				body: { type: "string", description: "Phase override body (FM stripped)." },
+				body: {
+					type: "string",
+					description: "Phase override body (FM stripped).",
+				},
 				error: { type: "string", description: "On not-found." },
 			},
 		},
@@ -7335,7 +7339,10 @@ export const stateToolDefs: StateToolDef[] = [
 			type: "object",
 			properties: {
 				name: { type: "string" },
-				body: { type: "string", description: "Output template body (FM stripped)." },
+				body: {
+					type: "string",
+					description: "Output template body (FM stripped).",
+				},
 				error: { type: "string", description: "On not-found." },
 			},
 		},
@@ -7713,7 +7720,7 @@ Forbidden FM fields (workflow-driven, mutating these returns \`fsm_field_forbidd
 	{
 		name: "haiku_view",
 		description:
-			"Open a URL the caller can hand to the bundled `haiku-playwright` MCP for runtime verification, visual inspection, or any browser-driven check. Two modes. **Viewer**: tunneled URL pointing at the SPA's artifact-browser route — for inspecting a single rendered artifact. **Boot**: spawns the project's runnable stack and returns a localhost URL pointing at the primary process. Boot accepts either `command` (single-process app: `[\"uvicorn\", \"app:main\"]`, `[\"bin/dev\"]`, `[\"go\", \"run\", \"./cmd/server\"]`) or `processes` (multi-process stack: api + frontend + db + worker, with `depends_on` order and `primary` naming the Playwright target). The engine allocates ephemeral ports, sets `PORT`/`HOST` env vars, and exposes `<DEP_NAME>_PORT` + `<DEP_NAME>_URL` to dependents for service discovery. Falls back to a `package.json` `dev`/`start` fast-path when neither `command` nor `processes` is supplied. Non-blocking — closes via `haiku_view_close` or the 30-minute session TTL; close kills the whole process group.",
+			'Open a URL the caller can hand to the bundled `haiku-playwright` MCP for runtime verification, visual inspection, or any browser-driven check. Two modes. **Viewer**: tunneled URL pointing at the SPA\'s artifact-browser route — for inspecting a single rendered artifact. **Boot**: spawns the project\'s runnable stack and returns a localhost URL pointing at the primary process. Boot accepts either `command` (single-process app: `["uvicorn", "app:main"]`, `["bin/dev"]`, `["go", "run", "./cmd/server"]`) or `processes` (multi-process stack: api + frontend + db + worker, with `depends_on` order and `primary` naming the Playwright target). The engine allocates ephemeral ports, sets `PORT`/`HOST` env vars, and exposes `<DEP_NAME>_PORT` + `<DEP_NAME>_URL` to dependents for service discovery. Falls back to a `package.json` `dev`/`start` fast-path when neither `command` nor `processes` is supplied. Non-blocking — closes via `haiku_view_close` or the 30-minute session TTL; close kills the whole process group.',
 		inputSchema: jsonSchemaOf(HAIKU_VIEW_INPUT_SCHEMA),
 		outputSchema: {
 			type: "object",
@@ -8138,7 +8145,7 @@ function zapRoleInstructions(role: ZapRole): string {
 	}
 	return [
 		"1. Read the prior hat's output above and the hat mandate.",
-		"2. Apply your hat's role to the task. If your mandate is \"build/implement,\" write the code. If your mandate is \"critique/refine prior output,\" critique it and emit a revised plan or revised work as appropriate.",
+		'2. Apply your hat\'s role to the task. If your mandate is "build/implement," write the code. If your mandate is "critique/refine prior output," critique it and emit a revised plan or revised work as appropriate.',
 		"3. If you wrote or modified files, run any project quality gates (tests, lint, typecheck) and fix failures.",
 		"4. Do NOT commit. Leave changes uncommitted in the working tree — the parent skill commits once at the end after the verifier passes.",
 		"5. Return a summary:",
@@ -8291,7 +8298,7 @@ function buildZapInstructions(args: ZapArgs): Record<string, unknown> {
 	lines.push("### 1. Scope check")
 	lines.push("")
 	lines.push(
-		"If the task spans multiple stages (e.g. \"redesign the auth flow AND implement the backend AND write the tests\"), recommend `/haiku:haiku-quick` or `/haiku:haiku-start` and explain why instead of zapping it through one stage's hat loop. If the task is vague (no clear action/target, under one sentence), ask ONE focused `AskUserQuestion` with pre-populated options — do NOT run a full elaboration.",
+		'If the task spans multiple stages (e.g. "redesign the auth flow AND implement the backend AND write the tests"), recommend `/haiku:haiku-quick` or `/haiku:haiku-start` and explain why instead of zapping it through one stage\'s hat loop. If the task is vague (no clear action/target, under one sentence), ask ONE focused `AskUserQuestion` with pre-populated options — do NOT run a full elaboration.',
 	)
 	lines.push("")
 	lines.push("### 2. Run the hat loop")
@@ -8311,11 +8318,11 @@ function buildZapInstructions(args: ZapArgs): Record<string, unknown> {
 	)
 	lines.push("")
 	lines.push(
-		"**On FAIL:** surface the reason. If the retry counter is **< 2**, ask via `AskUserQuestion` (options `[\"Retry the hat loop with this failure as context\", \"Abandon — I'll fix it manually\"]`). On retry: increment the counter, leave the working tree untouched (prior uncommitted changes carry forward), and re-run from step 2 prepending a `## Prior failure context: <FAIL reason>` block to the task. If the counter is **2 or more**, do NOT offer retry — tell the user zap isn't converging (two retries used, 3 total attempts), suggest discarding via `git restore .` and bailing to `/haiku:haiku-start`, then stop. On abandon: leave changes in place and stop.",
+		'**On FAIL:** surface the reason. If the retry counter is **< 2**, ask via `AskUserQuestion` (options `["Retry the hat loop with this failure as context", "Abandon — I\'ll fix it manually"]`). On retry: increment the counter, leave the working tree untouched (prior uncommitted changes carry forward), and re-run from step 2 prepending a `## Prior failure context: <FAIL reason>` block to the task. If the counter is **2 or more**, do NOT offer retry — tell the user zap isn\'t converging (two retries used, 3 total attempts), suggest discarding via `git restore .` and bailing to `/haiku:haiku-start`, then stop. On abandon: leave changes in place and stop.',
 	)
 	lines.push("")
 	lines.push(
-		"**If a hat subagent errors out** (no output / throws / crashes): treat it as a `FAIL` with reason `\"<hat> subagent errored: <error>\"` and route through the FAIL path above. Don't silently retry.",
+		'**If a hat subagent errors out** (no output / throws / crashes): treat it as a `FAIL` with reason `"<hat> subagent errored: <error>"` and route through the FAIL path above. Don\'t silently retry.',
 	)
 	lines.push("")
 	lines.push("## Commit safety")
@@ -8340,9 +8347,7 @@ function buildZapInstructions(args: ZapArgs): Record<string, unknown> {
 		const def = hatDefs[hat]
 		const hatBody = def ? def.content.trim() : ""
 		const hatPath = resolveHatPath(studioDir, stage, hat)
-		lines.push(
-			`### Hat ${i + 1}/${total}: ${hat} (${role} role)`,
-		)
+		lines.push(`### Hat ${i + 1}/${total}: ${hat} (${role} role)`)
 		lines.push("")
 		if (!def) {
 			lines.push(
@@ -9514,8 +9519,13 @@ export function handleStateTool(
 					`\n${args.unit as string}: ${currentHat} done — unit complete` +
 					(terminalPool ? `\n${terminalPool}` : "") +
 					pushWarning(completeGit)
-				const terminalRelay = computeUnitRelayBlock(args.intent as string, args.unit as string)
-				return text(appendRelay(baseTerminalText, terminalRelay, args.intent as string))
+				const terminalRelay = computeUnitRelayBlock(
+					args.intent as string,
+					args.unit as string,
+				)
+				return text(
+					appendRelay(baseTerminalText, terminalRelay, args.intent as string),
+				)
 			}
 
 			// ── NOT last hat: advance to next ──
@@ -9655,8 +9665,13 @@ export function handleStateTool(
 				(advPool ? `\n${advPool}` : "") +
 				(hatScope ? `\n\n${hatScope}` : "") +
 				pushWarning(advGit)
-			const midRelay = computeUnitRelayBlock(args.intent as string, args.unit as string)
-			return text(appendRelay(baseAdvancedText, midRelay, args.intent as string))
+			const midRelay = computeUnitRelayBlock(
+				args.intent as string,
+				args.unit as string,
+			)
+			return text(
+				appendRelay(baseAdvancedText, midRelay, args.intent as string),
+			)
 		}
 		case "haiku_unit_reject_hat": {
 			const rejectInputErr = validateToolInput(
@@ -10092,7 +10107,10 @@ export function handleStateTool(
 			// which left unit-hat rejects asymmetric with both unit advances
 			// and feedback rejects. Fall back to the run_next message only
 			// when the relay can’t be built.
-			const rejectRelayBlock = computeUnitRelayBlock(args.intent as string, args.unit as string)
+			const rejectRelayBlock = computeUnitRelayBlock(
+				args.intent as string,
+				args.unit as string,
+			)
 			const successPrefix = rejectClarityTag ? `${rejectClarityTag} ` : ""
 			const rejectPool = summarizeStageLoop(
 				intentDir(args.intent as string),
@@ -11271,10 +11289,7 @@ export function handleStateTool(
 			)
 			if (zapInputErr) return zapInputErr
 			const zapResult = buildZapInstructions(args as unknown as ZapArgs)
-			return reply(
-				zapResult,
-				zapResult.error ? { isError: true } : undefined,
-			)
+			return reply(zapResult, zapResult.error ? { isError: true } : undefined)
 		}
 
 		// ── Review ──
@@ -13010,8 +13025,10 @@ export function handleStateTool(
 						for (const f of readdirSync(dir).filter((n) => n.endsWith(".md"))) {
 							const raw = readFileSync(join(dir, f), "utf8")
 							const fm = matter(raw).data as Record<string, unknown>
-							if (typeof fm.status === "string" &&
-								(fm.status === "closed" || fm.status === "rejected"))
+							if (
+								typeof fm.status === "string" &&
+								(fm.status === "closed" || fm.status === "rejected")
+							)
 								continue
 							if (fm.closed_at || fm.rejected_at) continue
 							const iters = Array.isArray(fm.iterations)
@@ -13465,7 +13482,9 @@ export function handleStateTool(
 			const info: Record<string, string> = {
 				mcp_version: MCP_VERSION,
 				plugin_version: getPluginVersion(),
-				build_kind: isDev ? "dev (source via bun/tsx)" : "prod (compiled bundle)",
+				build_kind: isDev
+					? "dev (source via bun/tsx)"
+					: "prod (compiled bundle)",
 				runtime: `${process.release?.name ?? "node"} ${process.version}`,
 				entry: process.argv[1] ?? "",
 			}

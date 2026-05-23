@@ -129,7 +129,6 @@ export function closeFeedbackPostHook(args: CloseFeedbackPostHookArgs): void {
 			})
 		}
 	}
-
 }
 
 /** Restamp `body_sha256` on every signed review/approval role on the
@@ -163,7 +162,9 @@ function restampSurvivingWitnesses(args: {
 	): Record<string, unknown> | null => {
 		const slots = fm[fieldName]
 		if (!slots || typeof slots !== "object" || Array.isArray(slots)) return null
-		const next: Record<string, unknown> = { ...(slots as Record<string, unknown>) }
+		const next: Record<string, unknown> = {
+			...(slots as Record<string, unknown>),
+		}
 		let changed = false
 		for (const [role, slot] of Object.entries(next)) {
 			if (invalidatesSet.has(role)) continue

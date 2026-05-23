@@ -691,10 +691,12 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 	// use AskUserQuestion" allowance — in autopilot there is NO in-elaboration
 	// human interaction at all (the pre-intent conversation is the only one).
 	const autopilotDirective = isAutopilot
-		? "\n\n**Autopilot — zero user interaction.** You are driving this intent autonomously; the only human touchpoint is the pre-intent conversation, which already happened. Do NOT call `AskUserQuestion`, `ask_user_visual_question`, `pick_design_direction`, or any other user-facing prompt during elaboration — not even for a \"genuine blocker\". Resolve every ambiguity yourself from the codebase, prior-stage outputs, established conventions, and the intent description: make the most defensible call and record the reasoning in the unit body, never as a question."
+		? '\n\n**Autopilot — zero user interaction.** You are driving this intent autonomously; the only human touchpoint is the pre-intent conversation, which already happened. Do NOT call `AskUserQuestion`, `ask_user_visual_question`, `pick_design_direction`, or any other user-facing prompt during elaboration — not even for a "genuine blocker". Resolve every ambiguity yourself from the codebase, prior-stage outputs, established conventions, and the intent description: make the most defensible call and record the reasoning in the unit body, never as a question.'
 		: ""
 	const tail = eta.renderString(ELABORATE_OUTPUT_TAIL_TPL, { slug, stage })
-	sections.push(`${SCOPE_HEADER}\n\n${mechanicsBlock}${autopilotDirective}\n\n${tail}`)
+	sections.push(
+		`${SCOPE_HEADER}\n\n${mechanicsBlock}${autopilotDirective}\n\n${tail}`,
+	)
 
 	// Ticketing-provider guidance was previously injected here as an
 	// inline block when `.haiku/settings.yml` contained the string

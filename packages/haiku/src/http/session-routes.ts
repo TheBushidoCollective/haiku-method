@@ -30,8 +30,8 @@ import {
 	buildReviewRecord,
 } from "../orchestrator/workflow/sign-slot.js"
 import {
-	deleteSession,
 	type DirectionSelection,
+	deleteSession,
 	getSession,
 	type QuestionAnnotations,
 	type QuestionAnswer,
@@ -41,8 +41,6 @@ import {
 	updateQuestionSession,
 	updateSession,
 } from "../sessions.js"
-import { clearE2EKey, closeTunnel, isRemoteReviewEnabled } from "../tunnel.js"
-import { closeSessionConnection } from "./ws.js"
 import {
 	gitCommitStateBackgroundPush,
 	intentDir,
@@ -56,10 +54,12 @@ import {
 	timestamp,
 	writeJson,
 } from "../state-tools.js"
+import { clearE2EKey, closeTunnel, isRemoteReviewEnabled } from "../tunnel.js"
 import { logFeedbackAction } from "./action-log.js"
 import { requireTunnelAuth } from "./auth.js"
 import { respondSessionApi } from "./session-api.js"
 import { parseBodyWithSchema } from "./validation.js"
+import { closeSessionConnection } from "./ws.js"
 
 export function registerSessionRoutes(instance: FastifyInstance): void {
 	// ── SPA shell routes (no auth; token lives in URL fragment) ────────

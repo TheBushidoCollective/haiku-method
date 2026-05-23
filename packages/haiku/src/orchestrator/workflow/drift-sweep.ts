@@ -384,7 +384,8 @@ export function runDriftSweep(args: {
 	// so suppressing same-stage-produced deletion here hides nothing.)
 	const driftSlug = basename(args.intentDir)
 	const isStageProduced = (p: string): boolean =>
-		stageProducedRel.has(p) || stageProducedRel.has(toIntentRelPath(p, driftSlug))
+		stageProducedRel.has(p) ||
+		stageProducedRel.has(toIntentRelPath(p, driftSlug))
 
 	for (const unitPath of unitPaths) {
 		const fm = readFm(unitPath)
@@ -591,10 +592,7 @@ export function runDriftSweep(args: {
 					// file is a current-stage output — same baton exemption).
 					for (const name of currentNames) {
 						const memberRel = join(dirRel, name)
-						if (
-							inventory[name] === undefined &&
-							!isStageProduced(memberRel)
-						) {
+						if (inventory[name] === undefined && !isStageProduced(memberRel)) {
 							events.push({
 								unit: unitName,
 								role,

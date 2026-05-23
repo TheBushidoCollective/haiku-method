@@ -60,8 +60,6 @@ import advance_phase from "./stage/complete/advance_phase/index.js"
 import advance_stage from "./stage/complete/advance_stage/index.js"
 import complete_stage from "./stage/complete/complete_stage/index.js"
 import record_observations from "./stage/complete/record_observations/index.js"
-// ── stage/ ────────────────────────────────────────────────────────
-import write_brief from "./stage/review/write_brief/index.js"
 import elaborate_loop from "./stage/elaborate/elaborate_loop/index.js"
 import blocked from "./stage/error/blocked/index.js"
 import coverage_review_required from "./stage/error/coverage_review_required/index.js"
@@ -82,6 +80,8 @@ import start_unit from "./stage/execute/start_unit/index.js"
 import start_unit_hat from "./stage/execute/start_unit_hat/index.js"
 import user_gate from "./stage/gate/user_gate/index.js"
 import dispatch_review from "./stage/review/dispatch_review/index.js"
+// ── stage/ ────────────────────────────────────────────────────────
+import write_brief from "./stage/review/write_brief/index.js"
 import start_stage from "./stage/start_stage/index.js"
 
 import type { PromptBuilder } from "./types.js"

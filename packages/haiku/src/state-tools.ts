@@ -40,7 +40,6 @@ import {
 	derivePosition,
 	findCurrentStage,
 	nextHatForUnit,
-	walkFeedbackTrack,
 } from "./orchestrator/workflow/cursor.js"
 import { sanitizeFeedbackBody } from "./state/sanitize-feedback.js"
 
@@ -5637,8 +5636,7 @@ function computeUnitRelayBlock(
 				intentDir: iDir,
 				studio: studioName,
 			})
-			if (!pos || !pos.action || pos.action.kind !== "start_unit_hat")
-				return null
+			if (!pos?.action || pos.action.kind !== "start_unit_hat") return null
 			const stageSel = pos.action.stage
 			const hatSel = pos.action.hat
 			const units = pos.action.units

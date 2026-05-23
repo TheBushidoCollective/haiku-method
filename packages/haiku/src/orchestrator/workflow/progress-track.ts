@@ -18,7 +18,6 @@
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import {
-	approvalMilestoneLabel,
 	buildStageMilestones,
 	finalizeSteps,
 	type ProgressStep,

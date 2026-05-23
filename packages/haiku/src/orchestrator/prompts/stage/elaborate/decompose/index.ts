@@ -520,8 +520,8 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			.map((a) => `\`${a.name}\``)
 			.join(", ")
 		const plural = discoveryArtifacts.length !== 1 ? "s" : ""
-		const intentPath = join(dir, "intent.md")
-		const stagePath = resolveStudioFilePath(
+		const _intentPath = join(dir, "intent.md")
+		const _stagePath = resolveStudioFilePath(
 			join(studio, "stages", stage, "STAGE.md"),
 		)
 

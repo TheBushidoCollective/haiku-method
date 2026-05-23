@@ -347,7 +347,10 @@ export function buildPriorFeedbackRejectBlock(
  *  the intent-scope dir. Each is rendered as `FB-NN [status · origin · scope]
  *  title — gist`. Returns "" when nothing is on record. Capped so a
  *  long-running stage doesn't bloat every dispatch. */
-export function buildExistingFeedbackBlock(slug: string, stage: string): string {
+export function buildExistingFeedbackBlock(
+	slug: string,
+	stage: string,
+): string {
 	const items: ReturnType<typeof readFeedbackFiles> = []
 	try {
 		const stageItems = stage ? readFeedbackFiles(slug, stage) : []

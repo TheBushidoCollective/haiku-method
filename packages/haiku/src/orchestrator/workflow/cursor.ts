@@ -59,12 +59,12 @@ import {
 	MAX_CONCURRENT_SUBAGENTS,
 	MAX_FIX_LOOP_BOLTS,
 } from "../../state-tools.js"
-import { RUNTIME_OBSERVATION_ROLES } from "../review-role-classes.js"
 import {
 	readReviewAgentPaths,
 	readStageArtifactDefs,
 	readStudioReviewAgentPaths,
 } from "../../studio-reader.js"
+import { RUNTIME_OBSERVATION_ROLES } from "../review-role-classes.js"
 import {
 	resolveIntentStages,
 	resolveStageFixHats,
@@ -506,7 +506,6 @@ function isFbTerminal(fm: UnitFm | FbFm): boolean {
 	}
 	return false
 }
-
 
 // readClarifyQuestions deleted 2026-05-08 along with the
 // clarify_required cursor action. Stages that need pre-decompose Q&A

@@ -28,13 +28,13 @@ import {
 	deriveProgressRoleSteps,
 	deriveProgressTrack,
 } from "../orchestrator/workflow/progress-track.js"
-import { readStageArtifactDefs } from "../studio-reader.js"
 import {
 	findHaikuRoot,
 	intentDir,
 	MAX_CONCURRENT_SUBAGENTS,
 	parseFrontmatter,
 } from "../state-tools.js"
+import { readStageArtifactDefs } from "../studio-reader.js"
 import type {
 	HatSegment,
 	StatuslinePhaseKind,
@@ -233,7 +233,7 @@ function describeAction(action: CursorAction | null): {
 /** Count units on a stage that have completed their full hat sequence
  *  (last iteration is a terminal `advance` on the stage's last hat). */
 function unitProgress(
-	slug: string,
+	_slug: string,
 	studio: string,
 	stage: string,
 	iDir: string,
@@ -524,7 +524,7 @@ export function resolveStatuslineState(): StatuslineState | null {
 	// the snapshot and pins the position from then on.
 	let action: CursorAction | null = null
 	const snapshot = readStatuslineSnapshot(slug)
-	if (snapshot && snapshot.action) {
+	if (snapshot?.action) {
 		action = snapshot.action as CursorAction
 	} else {
 		try {
@@ -771,12 +771,18 @@ export function resolveStatuslineState(): StatuslineState | null {
 		activeStage &&
 		studio
 	) {
-		const sigs = (action as { signals_unmet?: Array<{ signal?: string; agent?: string }> })
-			.signals_unmet
+		const sigs = (
+			action as { signals_unmet?: Array<{ signal?: string; agent?: string }> }
+		).signals_unmet
 		if (Array.isArray(sigs)) {
 			const missing = new Set(
 				sigs
-					.filter((s) => s.signal === "discovery" && typeof s.agent === "string" && s.agent)
+					.filter(
+						(s) =>
+							s.signal === "discovery" &&
+							typeof s.agent === "string" &&
+							s.agent,
+					)
 					.map((s) => s.agent as string),
 			)
 			if (missing.size > 0) {

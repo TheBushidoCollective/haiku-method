@@ -40,7 +40,6 @@ import type {
 	ReviewAnnotations,
 } from "../sessions.js"
 import {
-	clearHeartbeat,
 	createDesignDirectionSession,
 	createQuestionSession,
 	createSession,
@@ -79,13 +78,7 @@ import {
 import { readStageArtifactDefs } from "../studio-reader.js"
 import { withAnnouncement } from "../tools/orchestrator/_announce.js"
 import { orchestratorToolHandlers } from "../tools/orchestrator/index.js"
-import {
-	buildReviewUrl,
-	clearE2EKey,
-	closeTunnel,
-	isRemoteReviewEnabled,
-	openTunnel,
-} from "../tunnel.js"
+import { buildReviewUrl, isRemoteReviewEnabled, openTunnel } from "../tunnel.js"
 import { buildUnitOutputPreviews } from "../unit-output-preview.js"
 import {
 	type BootProcessSpec,
@@ -1667,7 +1660,7 @@ async function resolveDesignDirectionManifestLocation(
 	const dd = defs.find(
 		(d) => d.kind === "discovery" && d.tool === "pick_design_direction",
 	)
-	if (!dd || !dd.location) return null
+	if (!dd?.location) return null
 	const resolvedRel = dd.location.replace(/\{intent-slug\}/g, intentSlug)
 	// Discovery template locations are repo-root-relative (start with
 	// `.haiku/intents/...`); join from the haiku root's parent so the

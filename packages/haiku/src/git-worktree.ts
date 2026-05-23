@@ -3716,6 +3716,90 @@ export function createUnitWorktree(
 }
 
 /**
+ * True when `rel` (a repo-relative path) is an engine-owned workflow STATE
+ * file under intent `slug` — the FM-bearing files the engine writes via MCP
+ * tools (cwd-independent), for which the BASE branch is the single source of
+ * truth: `intent.md`, every unit spec, every feedback file, and the per-stage
+ * json sidecars.
+ *
+ * Deliberately NARROW. Agent-produced content under the intent dir —
+ * `stages/<s>/artifacts/*`, `features/*`, `proof/*`, decomposed knowledge
+ * docs, and any code outside `.haiku/` — is NOT engine-owned: a unit/fix-chain
+ * worktree branch legitimately contributes those, so they must survive the
+ * merge. Only the workflow's own bookkeeping is force-restored.
+ */
+function isEngineOwnedStatePath(rel: string, slug: string): boolean {
+	const base = `.haiku/intents/${slug}/`
+	if (!rel.startsWith(base)) return false
+	const sub = rel.slice(base.length)
+	if (sub === "intent.md") return true
+	// Intent-scope feedback.
+	if (/^feedback\/[^/]+\.md$/.test(sub)) return true
+	// Stage-scope unit specs + feedback (the FM-bearing CRUDL state).
+	if (/^stages\/[^/]+\/units\/[^/]+\.md$/.test(sub)) return true
+	if (/^stages\/[^/]+\/feedback\/[^/]+\.md$/.test(sub)) return true
+	// Per-stage engine json sidecars.
+	if (/^stages\/[^/]+\/(state|baseline)\.json$/.test(sub)) return true
+	return false
+}
+
+/**
+ * Re-assert the base branch as the source of truth for engine-owned workflow
+ * state after a `--no-commit` merge of a unit/fix-chain worktree branch.
+ *
+ * Why this exists: a worktree branch carries a frozen-at-fork snapshot of the
+ * WHOLE `.haiku/` tree, and the per-tick migration / pre-cursor sync can
+ * rewrite sibling units inside it. When such a file changed on only the
+ * worktree side, git's 3-way merge auto-resolves it to that (stale) side with
+ * NO conflict marker — silently reverting the base branch's authoritative
+ * frontmatter. (Observed 2026-05-22: rich units reverting to the v3
+ * `status: pending` skeleton, then wrongly blamed on the migration.)
+ *
+ * The previous guard force-checked-out a hardcoded 3-path list with
+ * `checkout --ours`, which (a) named only the merged unit, leaving every
+ * SIBLING unit, feedback file, and `intent.md` exposed, and (b) `--ours` is a
+ * no-op on conflict-FREE paths, so it never touched the silent-auto-resolve
+ * case that actually bites. This restores EVERY engine-owned state file
+ * present on `baseRef` to that committed version — reverting silent reverts
+ * and resolving any conflict on those paths to "ours" — in one pass.
+ *
+ * Enumerates from `baseRef` (the merge's "ours") so a file the worktree only
+ * MODIFIED or DELETED is restored. A file the worktree ADDED that `baseRef`
+ * lacks isn't enumerated (left as-is) — but the worktree never legitimately
+ * creates units/feedback (that's MCP on the base branch), so that case is a
+ * non-event. Best-effort per path; `tryRun` swallows no-op checkouts.
+ */
+function restoreEngineStateFromBase(
+	gitC: string[],
+	baseRef: string,
+	slug: string,
+): void {
+	const intentPrefix = `.haiku/intents/${slug}`
+	const tracked = tryRun([
+		"git",
+		...gitC,
+		"ls-tree",
+		"-r",
+		"--name-only",
+		baseRef,
+		"--",
+		intentPrefix,
+	])
+		.split("\n")
+		.map((l) => l.trim())
+		.filter(Boolean)
+	for (const rel of tracked) {
+		if (!isEngineOwnedStatePath(rel, slug)) continue
+		// `checkout <baseRef> -- <rel>` overwrites the index + worktree with
+		// baseRef's blob for that path, regardless of whether the merge left a
+		// conflict or silently auto-resolved to the worktree side — closing the
+		// hole `checkout --ours` (conflict-only) left open.
+		tryRun(["git", ...gitC, "checkout", baseRef, "--", rel])
+		tryRun(["git", ...gitC, "add", "--", rel])
+	}
+}
+
+/**
  * Merge a unit's branch into its STAGE branch, using a temporary worktree
  * so the MCP's parent checkout is never touched. Cleans up the unit
  * worktree and the unit branch when done.
@@ -3773,31 +3857,27 @@ export function mergeUnitWorktree(
 		// "branch already used by worktree"). Otherwise use a temp worktree
 		// so we don't disturb whatever branch the user happens to be on.
 		//
-		// State-overwrite handling (engine-owned files always take stage side):
-		// the unit branch carries frozen-at-fork copies of stage state files
-		// — `stages/<stage>/units/<unit>.md`, `stages/<stage>/state.json`,
-		// `stages/<stage>/baseline.json`. When git merges and there's no
-		// conflict marker (because, say, the unit branch never touched them
-		// after fork), git silently takes one side or the other based on
-		// 3-way merge math, and we've seen the unit-branch's stale state.json
-		// overwrite the stage's advanced state.json — regressing phase from
-		// `review` back to `elaborate`. To prevent that, we use
-		// `git merge --no-commit --no-ff` to stage the merge without committing,
-		// then force-checkout the engine-owned files to "ours" (the stage
-		// side, which is the authoritative live workflow engine state), then
-		// commit. This makes state regression impossible regardless of
-		// whether git would have flagged a conflict.
+		// State-overwrite handling (the stage branch is authoritative for
+		// engine-owned workflow state): the unit branch carries a
+		// frozen-at-fork snapshot of the WHOLE `.haiku/` tree, and the per-tick
+		// migration / pre-cursor sync can rewrite ANY unit/feedback/intent file
+		// inside it. When such a file changed on only the unit-branch side,
+		// git's 3-way merge silently auto-resolves it to that stale side with
+		// no conflict marker — reverting the stage branch's authoritative
+		// frontmatter (observed 2026-05-22: rich units reverting to the v3
+		// `status: pending` skeleton, misattributed to the migration). So we
+		// `git merge --no-commit --no-ff` to stage the merge without
+		// committing, re-assert EVERY engine-owned state file from the stage
+		// branch (`restoreEngineStateFromBase`), then commit. Generalises the
+		// old 3-path `checkout --ours` guard, which named only the merged unit
+		// (leaving sibling units, feedback, and intent.md exposed) and no-op'd
+		// on the conflict-free reverts that actually bite.
 		//
-		// True conflicts on agent-authored content (e.g. an artifact file
-		// edited differently on both sides) still surface as unresolved
-		// `--diff-filter=U` paths, and the merge fails loudly so the caller
-		// can return a structured `merge_conflict` action listing them.
+		// True conflicts on agent-authored content (artifacts, code edited on
+		// both sides) still surface as unresolved `--diff-filter=U` paths after
+		// the engine-state restore, so the merge fails loudly and the caller
+		// returns a structured `merge_conflict` action listing them.
 		const onStageBranch = getCurrentBranch() === stageBranch
-		const engineOwnedRelPaths = [
-			`.haiku/intents/${slug}/stages/${stage}/units/${unit}.md`,
-			`.haiku/intents/${slug}/stages/${stage}/state.json`,
-			`.haiku/intents/${slug}/stages/${stage}/baseline.json`,
-		]
 		const mergeHere = (cwd?: string) => {
 			const gitC = (cwd ? ["-C", cwd] : []) as string[]
 			const mergeArgs = [
@@ -3815,22 +3895,13 @@ export function mergeUnitWorktree(
 				mergeErr = err
 			}
 
-			// Always force engine-owned files back to stage ("ours") side
-			// before committing — independent of whether they appear in the
-			// conflict list. This closes the silent-overwrite path that bit
-			// us when the unit branch's frozen state.json overwrote the
-			// stage's advanced state.json on a conflict-free merge.
-			for (const relPath of engineOwnedRelPaths) {
-				// `checkout --ours` is a no-op when the path doesn't exist
-				// in the merge result; tryRun swallows that.
-				tryRun(["git", ...gitC, "checkout", "--ours", "--", relPath])
-				tryRun(["git", ...gitC, "add", "--", relPath])
-			}
-
 			// If git refused the merge before applying it (e.g. dirty
 			// working tree on the parent), `git status` will report no
 			// in-progress merge — re-throw the original error so the
-			// caller can classify it.
+			// caller can classify it. Checked BEFORE the engine-state
+			// re-assert: a refused merge applied nothing, so running
+			// `git checkout` over engine paths would only risk clobbering
+			// uncommitted parent-tree work for no benefit.
 			const inProgress = tryRun([
 				"git",
 				...gitC,
@@ -3845,11 +3916,16 @@ export function mergeUnitWorktree(
 				return
 			}
 
-			// After auto-resolving engine-owned paths, look for remaining
-			// real conflicts. Any unmerged path that isn't engine-owned is
-			// agent-authored content the workflow engine cannot resolve;
-			// surface it as a real conflict.
-			const conflicts = tryRun([
+			// Merge applied — re-assert the stage branch as source of truth for
+			// ALL engine-owned state. Reverts silent auto-resolves AND resolves
+			// any conflict on those paths to "ours" in one pass, across every
+			// unit/feedback/intent file (not just the merged unit).
+			restoreEngineStateFromBase(gitC, stageBranch, slug)
+
+			// After re-asserting engine-owned paths to "ours", any remaining
+			// unmerged path is agent-authored content (artifacts, code) the
+			// workflow engine cannot resolve — surface it as a real conflict.
+			const realConflicts = tryRun([
 				"git",
 				...gitC,
 				"diff",
@@ -3858,9 +3934,6 @@ export function mergeUnitWorktree(
 			])
 				.split("\n")
 				.filter(Boolean)
-			const realConflicts = conflicts.filter(
-				(p) => !engineOwnedRelPaths.includes(p),
-			)
 			if (realConflicts.length > 0) {
 				const e = new Error(
 					`merge_conflict: real conflicts on agent-authored content require resolution: ${realConflicts.join(", ")}`,
@@ -4442,14 +4515,57 @@ export function mergeFixChainWorktree(
 		}
 
 		// Forward-merge the (now-reconciled) fix-chain into the base branch.
+		// Same engine-state hazard as `mergeUnitWorktree`: the fix-chain branch
+		// carries a frozen-at-fork snapshot of sibling units / feedback /
+		// intent.md, and a silent 3-way auto-resolve can revert the base
+		// branch's authoritative frontmatter. So merge `--no-commit`, re-assert
+		// every engine-owned state file from the base branch, then commit.
 		const onBaseBranch = getCurrentBranch() === baseBranch
 		const mergeHere = (cwd?: string) => {
+			const gitC = (cwd ? ["-C", cwd] : []) as string[]
+			let mergeErr: unknown = null
+			try {
+				run(["git", ...gitC, "merge", fixBranch, "--no-commit", "--no-ff"])
+			} catch (err) {
+				mergeErr = err
+			}
+			// Confirm a merge actually applied before touching engine paths —
+			// a refused merge (dirty tree) applied nothing, so re-asserting
+			// would only risk clobbering uncommitted work.
+			const inProgress = tryRun([
+				"git",
+				...gitC,
+				"rev-parse",
+				"--quiet",
+				"--verify",
+				"MERGE_HEAD",
+			])
+			if (!inProgress) {
+				if (mergeErr) throw mergeErr
+				return
+			}
+			restoreEngineStateFromBase(gitC, baseBranch, slug)
+			const realConflicts = tryRun([
+				"git",
+				...gitC,
+				"diff",
+				"--name-only",
+				"--diff-filter=U",
+			])
+				.split("\n")
+				.filter(Boolean)
+			if (realConflicts.length > 0) {
+				const e = new Error(
+					`merge_conflict: real conflicts on agent-authored content require resolution: ${realConflicts.join(", ")}`,
+				)
+				;(e as unknown as { conflictPaths: string[] }).conflictPaths =
+					realConflicts
+				throw e
+			}
 			run([
 				"git",
-				...(cwd ? ["-C", cwd] : []),
-				"merge",
-				fixBranch,
-				"--no-ff",
+				...gitC,
+				"commit",
 				"--no-edit",
 				"-m",
 				`haiku: merge fix-chain ${feedbackId} into ${scope}`,
@@ -4479,6 +4595,20 @@ export function mergeFixChainWorktree(
 			message: `merged ${fixBranch} → ${baseBranch}`,
 		}
 	} catch (err) {
+		// A real (agent-content) conflict at the forward-merge surfaces as a
+		// structured isConflict envelope — matching the sync-step path above and
+		// mergeUnitWorktree — so the caller can dispatch the integrator instead
+		// of treating it as a hard failure.
+		const conflictPaths = (err as { conflictPaths?: string[] } | null)
+			?.conflictPaths
+		if (Array.isArray(conflictPaths) && conflictPaths.length > 0) {
+			return {
+				success: false,
+				isConflict: true,
+				conflictFiles: conflictPaths,
+				message: `merge conflict in ${conflictPaths.length} file(s) while merging fix-chain ${feedbackId} into ${scope}: ${conflictPaths.join(", ")}`,
+			}
+		}
 		return {
 			success: false,
 			message: err instanceof Error ? err.message : String(err),

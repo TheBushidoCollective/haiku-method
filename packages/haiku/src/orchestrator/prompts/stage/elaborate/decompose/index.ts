@@ -58,10 +58,7 @@ import {
 	resolveStageInputs,
 	studioSearchPaths,
 } from "../../../../../studio-reader.js"
-import {
-	resolveIntentStages,
-	resolveStudioFilePath,
-} from "../../../../studio.js"
+import { resolveIntentStages } from "../../../../studio.js"
 import { buildOutputRequirements } from "../../../../validators.js"
 import {
 	batchDispatchDirective,
@@ -560,7 +557,6 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			kind: "stage-scope",
 			name: stage,
 		})
-
 
 		let fanOutText = `## Discovery Fan-Out (REQUIRED)\n\nThis stage produces ${discoveryArtifacts.length} discovery artifact${plural}: ${artifactNames}.\n\n${sharedBlockRef("workflow-contracts-announcement")}\n\n**Spawn one subagent per artifact** using the \`prompt_file\` attribute on each \`<subagent>\` block — pass \`"Read <prompt_file> and execute its instructions exactly."\` as the spawn prompt (substituting the attribute's path). Each subagent writes inside its own isolation worktree, then calls \`haiku_discovery_complete { intent, stage, template }\` to hand the merge-back over to the engine (which takes a per-stage lock so parallel siblings serialize cleanly).\n\n${batchDispatchDirective(discoveryArtifacts.length, "discovery subagents", { forceForeground: isAutopilot })}\n\n`
 

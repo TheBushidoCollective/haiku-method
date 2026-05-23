@@ -214,8 +214,23 @@ export function buildElaboratePromptBody(ctx: PromptBuilderContext): string {
 function renderElaborate(ctx: PromptBuilderContext): string {
 	const { slug, studio, action, dir } = ctx
 	const stage = action.stage as string
-	const elaboration = (action.elaboration as string) || "collaborative"
 	const stageDef = readStageDef(studio, stage)
+	// Elaboration mechanics by mode. Autopilot is fully autonomous — the ONLY
+	// human touchpoint is the pre-intent conversation, so it forces the
+	// autonomous path regardless of the stage's declared default and bans
+	// in-elaboration user questions (see the autopilot directive on the
+	// mechanics block below). Every other mode honors the stage's
+	// `elaboration:` field from STAGE.md, defaulting to collaborative.
+	//
+	// (`action.elaboration` was never populated by the cursor, so the prior
+	// `action.elaboration || "collaborative"` pinned EVERY mode — autopilot
+	// included — to the ask-the-user collaborative path. That's the autopilot
+	// "agent keeps asking me questions during elaboration" bug.)
+	const intentMode = readIntentMode(dir)
+	const isAutopilot = intentMode === "autopilot"
+	const elaboration = isAutopilot
+		? "autonomous"
+		: (stageDef?.data?.elaboration as string) || "collaborative"
 	const iteration =
 		(action.iteration as number) || (action.visits as number) || 0
 	const completedUnits = (action.completed_units as string[]) || []
@@ -546,8 +561,6 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 			name: stage,
 		})
 
-		const intentMode = readIntentMode(dir)
-		const isAutopilot = intentMode === "autopilot"
 
 		let fanOutText = `## Discovery Fan-Out (REQUIRED)\n\nThis stage produces ${discoveryArtifacts.length} discovery artifact${plural}: ${artifactNames}.\n\n${sharedBlockRef("workflow-contracts-announcement")}\n\n**Spawn one subagent per artifact** using the \`prompt_file\` attribute on each \`<subagent>\` block — pass \`"Read <prompt_file> and execute its instructions exactly."\` as the spawn prompt (substituting the attribute's path). Each subagent writes inside its own isolation worktree, then calls \`haiku_discovery_complete { intent, stage, template }\` to hand the merge-back over to the engine (which takes a per-stage lock so parallel siblings serialize cleanly).\n\n${batchDispatchDirective(discoveryArtifacts.length, "discovery subagents", { forceForeground: isAutopilot })}\n\n`
 
@@ -678,8 +691,14 @@ function renderElaborate(ctx: PromptBuilderContext): string {
 		elaboration === "collaborative"
 			? COLLABORATIVE_MECHANICS
 			: AUTONOMOUS_MECHANICS
+	// Autopilot supersedes the autonomous block's "when you DO need user input,
+	// use AskUserQuestion" allowance — in autopilot there is NO in-elaboration
+	// human interaction at all (the pre-intent conversation is the only one).
+	const autopilotDirective = isAutopilot
+		? "\n\n**Autopilot — zero user interaction.** You are driving this intent autonomously; the only human touchpoint is the pre-intent conversation, which already happened. Do NOT call `AskUserQuestion`, `ask_user_visual_question`, `pick_design_direction`, or any other user-facing prompt during elaboration — not even for a \"genuine blocker\". Resolve every ambiguity yourself from the codebase, prior-stage outputs, established conventions, and the intent description: make the most defensible call and record the reasoning in the unit body, never as a question."
+		: ""
 	const tail = eta.renderString(ELABORATE_OUTPUT_TAIL_TPL, { slug, stage })
-	sections.push(`${SCOPE_HEADER}\n\n${mechanicsBlock}\n\n${tail}`)
+	sections.push(`${SCOPE_HEADER}\n\n${mechanicsBlock}${autopilotDirective}\n\n${tail}`)
 
 	// Ticketing-provider guidance was previously injected here as an
 	// inline block when `.haiku/settings.yml` contained the string

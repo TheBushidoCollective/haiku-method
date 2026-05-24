@@ -48,6 +48,7 @@ import {
 	wouldDeadlock,
 } from "./deadlock-detector.js"
 import { completePendingFixChainMerges } from "./fix-chain-merge-gate.js"
+import { reconcileOrphanedHatSequences } from "./hat-sequence-migration.js"
 import { purgeDeadSidecars } from "./purge-dead-sidecars.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
 import { resetLostUnits } from "./unit-branch-recovery.js"
@@ -397,6 +398,26 @@ export function runWorkflowTick(
 		}
 	} catch (err) {
 		emitTelemetry("haiku.unit_recovery.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Reconcile units whose recorded iterations name a hat the stage's
+	// sequence no longer has (a studio/override `hats:` change — e.g. the
+	// security reshape dropped red/blue from the per-unit loop). Trim each
+	// unit's iterations to its current hat set; the cursor then reads
+	// loop-complete or pending correctly. Findings survive as FBs. Idempotent.
+	try {
+		const orphan = reconcileOrphanedHatSequences(slug)
+		if (orphan.reconciled.length > 0) {
+			emitTelemetry("haiku.hat_sequence.reconciled", {
+				intent: slug,
+				units: orphan.reconciled.join(","),
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.hat_sequence.reconcile_failed", {
 			intent: slug,
 			error: String((err as Error)?.message ?? err),
 		})

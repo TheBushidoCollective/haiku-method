@@ -31,7 +31,7 @@ process.env.CLAUDE_PLUGIN_ROOT = join(REPO_ROOT, "plugin")
 const AT = "2026-05-19T00:00:00Z"
 const STAMP = { at: AT }
 const STAGE = "security"
-const TERMINAL_HAT = "blue-team" // last in security's hats[]
+const TERMINAL_HAT = "security-reviewer" // last in security's hats[] (red/blue-team moved to stage adversarial review + fix-loop, 2026-05-23)
 
 // Autopilot keeps the studio review agents, so the adversarial pip is only
 // "done" once those agents have signed too — not just the engine pair.

@@ -1,6 +1,9 @@
-**Focus:** Verify-class hat for the security stage. Validate that the security-engineer's body content for THIS attack surface unit substantively addresses every threat the threat-modeler identified. You are the **verify** role for the plan-do-verify triplet — the terminal hat in the per-unit hat chain before the adversarial loop (`red-team` → `blue-team`) fires.
+---
+role: verify
+---
+**Focus:** Verify-class hat for the security stage. Validate that the security-engineer's body content for THIS attack surface unit substantively addresses every threat the threat-modeler identified. You are the **verify** role for the plan-do-verify triplet — the TERMINAL hat in the per-unit hat chain. After the unit's hats complete, the stage's adversarial review (the `red-team` review agent) probes the integrated surface and files findings that route through the fix-loop.
 
-Body-only verification per architecture §3.4 — frontmatter is workflow engine territory. The adversarial loop does NOT replace your verification; it complements it. If the body lies about coverage, you reject before red-team wastes effort attacking a documented surface that doesn't match reality.
+Body-only verification per architecture §3.4 — frontmatter is workflow engine territory. The stage's adversarial review does NOT replace your verification; it complements it. If the body lies about coverage, you reject now — before the adversarial review wastes effort attacking a documented surface that doesn't match reality.
 
 ## Validate this unit's outputs against its criteria
 
@@ -39,10 +42,8 @@ Apply each criterion in order. Any single failure is a hard reject naming the fa
 
 ### 3. Issue verdict
 
-- All criteria pass → call `haiku_unit_advance_hat`. The adversarial loop (`red-team` → `blue-team`) fires next on this unit.
-- Any criterion fails → call `haiku_unit_reject_hat` with a message naming the specific failed criterion. The cursor rewinds to the responsible hat (typically `security-engineer`) within this unit.
-
-If the failure traces back to a missing input from the threat-modeler (e.g., the surface scope itself is incoherent), file feedback against the upstream hat via `haiku_feedback` rather than rejecting the current unit — rejection only rewinds within the current chain.
+- All criteria pass → call `haiku_unit_advance_hat`. This unit's hats are complete; the stage's adversarial review (the `red-team` review agent) probes the integrated surface next.
+- Any criterion fails → call `haiku_unit_reject_hat` with a message naming the specific failed criterion. The reject routes to the hat that can fix it: a build defect rewinds to `security-engineer` (the default — the nearest build hat); a defect in the threat model itself (incoherent surface scope, a missing-threat premise) is a PLAN defect — name `target_hat: "threat-modeler"` so the reject rewinds to the planner to revise the model, then the builder rebuilds against it. Rejecting in-loop is correct; you do NOT file feedback for an in-stage defect.
 
 ## Anti-patterns (RFC 2119)
 
@@ -52,7 +53,7 @@ If the failure traces back to a missing input from the threat-modeler (e.g., the
 - The agent **MUST NOT** reject for stylistic preferences. Substantive gaps only.
 - The agent **MUST** name a specific failed criterion in any rejection
 - The agent **MUST NOT** invent rules not in this mandate. Stage scope is the contract.
-- The agent **MUST NOT** execute attacks or run scanners — that is the `red-team` hat's job after this verify role passes
+- The agent **MUST NOT** execute attacks or run scanners — that is the `red-team` review agent's job (stage-level adversarial review, after the unit's hats pass)
 - The agent **MUST NOT** fix gaps — the verifier routes failures via reject, never authors corrective content
 - The agent **MUST NOT** approve a control claim that lacks both a test reference and an honest gap acknowledgment
 - The agent **MUST NOT** accept "the WAF will catch it" as the primary mitigation — compensating controls belong in residual risk, not in coverage

@@ -10070,7 +10070,7 @@ export function handleStateTool(
 						outputs_present: outputsPresent,
 						outputs_files_present: presentOutputs,
 						outputs_files_missing: missingOutputsList,
-						message: `${rejectClarityTag ? `${rejectClarityTag} ` : ""}Unit has exceeded ${MAX_UNIT_BOLTS} bolt iterations. Escalate to the user — this unit may need to be redesigned, split, or have a persistent scope violation manually reverted (\`git reset --hard $(git merge-base HEAD haiku/${args.intent as string}/${rejectStage})\`)`,
+						message: `${rejectClarityTag ? `${rejectClarityTag} ` : ""}Unit has exceeded ${MAX_UNIT_BOLTS} bolt iterations. Escalate to the user — this unit needs structural intervention, not another retry. To restart it clean (e.g. the spec premise was wrong, or the work should redo from scratch), reset it: \`haiku_unit_reset { intent: "${args.intent as string}", stage: "${rejectStage}", unit: "${args.unit as string}" }\` — returns the unit to pending and discards its worktree (siblings + the stage branch untouched); then rewrite the spec with haiku_unit_write if needed and re-run. Or split it into smaller units.`,
 					},
 					{ isError: true },
 				)

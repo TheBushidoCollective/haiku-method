@@ -4645,6 +4645,34 @@ export function cleanupFixChainWorktree(
 }
 
 /**
+ * Discard a single unit's worktree and branch WITHOUT merging — the unit
+ * track's analog of `cleanupFixChainWorktree`. Removes the worktree, deletes
+ * the local unit branch (`haiku/<slug>/<unit>`), and best-effort reaps the
+ * pushed remote branch. The unit's in-progress code is discarded; the stage
+ * branch and every sibling unit are untouched (each lives on its own
+ * branch). Used by `haiku_unit_reset` to roll a bolt-capped / mis-specified
+ * unit back to a clean, re-runnable state. No-op in non-git environments.
+ */
+export function cleanupUnitWorktree(
+	slug: string,
+	unit: string,
+): { success: boolean; message: string } {
+	if (!isGitRepo()) return { success: true, message: "no git" }
+	const unitBranch = `haiku/${slug}/${unit}`
+	const worktreePath = unitWorktreePath(slug, unit)
+
+	if (existsSync(worktreePath)) {
+		tryRun(["git", "worktree", "remove", worktreePath, "--force"])
+	}
+	deleteBranchWithWarning(unitBranch, `unit reset for ${slug}/${unit}`)
+	// Reap the durability push (best-effort) — a reset unit's pushed branch
+	// is dead; a fresh re-run forks anew from the stage branch.
+	tryRun(["git", "push", "origin", "--delete", unitBranch])
+	tryRun(["git", "worktree", "prune"])
+	return { success: true, message: `reset unit worktree ${unitBranch}` }
+}
+
+/**
  * Clean up all worktrees for an intent.
  */
 export function cleanupIntentWorktrees(slug: string): void {

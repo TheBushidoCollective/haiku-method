@@ -30,6 +30,7 @@ import {
 	HAIKU_STAGE_ELABORATION_RECORD_INPUT_SCHEMA,
 	HAIKU_STAGE_ELABORATION_SEAL_INPUT_SCHEMA,
 	HAIKU_STAGE_RESET_INPUT_SCHEMA,
+	HAIKU_UNIT_RESET_INPUT_SCHEMA,
 } from "../state/schemas/index.js"
 import { jsonSchemaOf } from "../state/schemas/inputs/_validate.js"
 
@@ -143,6 +144,12 @@ export const orchestratorToolDefs = [
 		description:
 			"Reset ONE stage of an intent: wipe its units, outputs, artifacts, elaboration, feedback, and stage branch. The intent's other stages are untouched. Use after fixing the stage's hat instructions or studio config when the user wants the agent to re-run that stage cleanly. Requires user confirmation via the SPA picker.",
 		inputSchema: jsonSchemaOf(HAIKU_STAGE_RESET_INPUT_SCHEMA),
+	},
+	{
+		name: "haiku_unit_reset",
+		description:
+			"Reset ONE unit back to pending: clear its iterations/reviews/approvals so it can be re-authored or re-run, and discard its worktree + branch (rolling its in-progress code back to the stage baseline). Sibling units and the stage branch are untouched. Use when a unit hits the bolt cap or its spec premise was wrong from the start — the recovery path the escalation message points to. Requires user confirmation via the SPA picker.",
+		inputSchema: jsonSchemaOf(HAIKU_UNIT_RESET_INPUT_SCHEMA),
 	},
 	{
 		name: "haiku_intent_archive",

@@ -33,6 +33,7 @@ import haiku_stage_decompose_seal from "./haiku_stage_decompose_seal.js"
 import haiku_stage_elaboration_record from "./haiku_stage_elaboration_record.js"
 import haiku_stage_elaboration_seal from "./haiku_stage_elaboration_seal.js"
 import haiku_stage_reset from "./haiku_stage_reset.js"
+import haiku_unit_reset from "./haiku_unit_reset.js"
 
 export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 	(
@@ -58,6 +59,7 @@ export const orchestratorToolHandlers: ReadonlyMap<string, ToolDef> = new Map(
 			haiku_stage_elaboration_record,
 			haiku_stage_elaboration_seal,
 			haiku_stage_reset,
+			haiku_unit_reset,
 		] satisfies ToolDef[]
 	).map((t) => [t.name, t]),
 )

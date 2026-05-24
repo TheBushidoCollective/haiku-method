@@ -410,6 +410,27 @@ export const validateHaikuStageResetInputSchema = stateAjv.compile(
 	HAIKU_STAGE_RESET_INPUT_SCHEMA,
 )
 
+// ── haiku_unit_reset ──────────────────────────────────────────────
+
+export const HAIKU_UNIT_RESET_INPUT_SCHEMA = Type.Object(
+	{
+		intent: Type.String({ minLength: 1, description: "Intent slug" }),
+		stage: Type.String({
+			minLength: 1,
+			description: "Stage the unit lives in",
+		}),
+		unit: Type.String({
+			minLength: 1,
+			description: "Unit to reset (e.g. 'unit-06-pii-masking-granularity')",
+		}),
+	},
+	{ additionalProperties: false },
+)
+export type HaikuUnitResetInput = Static<typeof HAIKU_UNIT_RESET_INPUT_SCHEMA>
+export const validateHaikuUnitResetInputSchema = stateAjv.compile(
+	HAIKU_UNIT_RESET_INPUT_SCHEMA,
+)
+
 // ── haiku_repair ──────────────────────────────────────────────────
 
 export const HAIKU_REPAIR_INPUT_SCHEMA = Type.Object(

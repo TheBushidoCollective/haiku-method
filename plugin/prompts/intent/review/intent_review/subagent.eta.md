@@ -21,6 +21,9 @@ You MUST NOT write, edit, or create any file. Your ONLY output channel is `haiku
 <% if (typeof existingFeedback !== "undefined" && existingFeedback) { %>
 <%~ existingFeedback %>
 <% } %>
+<% if (typeof decisions !== "undefined" && decisions) { %>
+<%~ decisions %>
+<% } %>
 ## Instructions (authoritative)
 
 1. Read your mandate above, then the intent artifacts under `.haiku/intents/<%= slug %>/stages/*/` and `.haiku/intents/<%= slug %>/knowledge/`.

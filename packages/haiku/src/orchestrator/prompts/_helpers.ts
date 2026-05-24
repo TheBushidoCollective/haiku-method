@@ -25,13 +25,19 @@
 //     subagent's return" directive (engine-threaded chain via the
 //     advance_hat relay breadcrumb; no agent-side pool bookkeeping).
 
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { Eta } from "eta"
 import matter from "gray-matter"
 import { features } from "../../config.js"
 import { getCapabilities } from "../../harness.js"
 import { type ModelTier, sanitizeModel } from "../../model-selection.js"
-import { parseFrontmatter, readFeedbackFiles } from "../../state-tools.js"
+import {
+	intentDir,
+	parseFrontmatter,
+	readDecisionLog,
+	readFeedbackFiles,
+} from "../../state-tools.js"
 import {
 	readModelFromPath,
 	readStageDef,
@@ -451,6 +457,59 @@ export function buildExistingFeedbackBlock(
 		"",
 		...lines,
 		overflow,
+	]
+		.join("\n")
+		.trimEnd()
+}
+
+/** Build the "decisions already made — don't re-litigate" context block
+ *  for a review / approval / intent-review subagent.
+ *
+ *  BUG-5 (oscillating contradiction findings): when sealed upstream
+ *  artifacts contradict each other (e.g. ACCEPTANCE-CRITERIA says
+ *  `ceil()`, DATA-CONTRACTS says `round()`), review lenses re-derive the
+ *  tension as a fresh finding every round — fixing toward one doc trips
+ *  the other on the next pass. The owner records the ruling once via
+ *  `haiku_decision_record` ("AC is authoritative; the divergence is
+ *  flagged for upstream reconciliation"), but nothing surfaced that
+ *  ruling TO the lenses, so they kept re-flagging it. This block hands
+ *  every reviewer the recorded decisions across the whole intent (any
+ *  stage can record a decision a downstream lens needs to respect) and
+ *  tells it not to re-open a settled call.
+ *
+ *  Aggregates `stages/<stage>/decisions.jsonl` across every stage of the
+ *  intent — a cross-stage contradiction is recorded wherever it surfaced,
+ *  and a lens in any stage must see it. Returns "" when nothing is on
+ *  record. */
+export function buildDecisionsBlock(slug: string): string {
+	const stagesDir = join(intentDir(slug), "stages")
+	if (!existsSync(stagesDir)) return ""
+	const lines: string[] = []
+	try {
+		for (const entry of readdirSync(stagesDir, { withFileTypes: true })) {
+			if (!entry.isDirectory()) continue
+			for (const dec of readDecisionLog(slug, entry.name)) {
+				const topic = String(dec.decision ?? "").trim()
+				const choice = String(dec.choice ?? "").trim()
+				if (!topic || !choice) continue
+				const src = dec.source === "user" ? "user" : "agent-acknowledged"
+				const why =
+					typeof dec.rationale === "string" && dec.rationale.trim()
+						? ` — ${dec.rationale.trim()}`
+						: ""
+				lines.push(`- **${topic}** → chose \`${choice}\` (${src})${why}`)
+			}
+		}
+	} catch {
+		return ""
+	}
+	if (lines.length === 0) return ""
+	return [
+		"## Decisions already made — do NOT re-litigate",
+		"",
+		"These are rulings the owner (or the agent, acknowledged) has already made on this intent — including how to resolve contradictions between upstream artifacts. A finding that re-opens one of these is churn: the call stands. If an upstream doc still contradicts the ruling, that's a known divergence flagged for reconciliation, NOT a fresh finding — do not re-file it. Only raise it if you have genuinely new information the decision didn't account for, and say so explicitly.",
+		"",
+		...lines,
 	]
 		.join("\n")
 		.trimEnd()

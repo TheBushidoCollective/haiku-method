@@ -3110,7 +3110,7 @@ function appendDecisionLogLine(
 
 /** Read all decision-log entries for a stage. Returns an empty array
  *  when the log doesn't exist yet (fresh stage with no decisions). */
-function readDecisionLog(
+export function readDecisionLog(
 	slug: string,
 	stage: string,
 ): Array<Record<string, unknown>> {

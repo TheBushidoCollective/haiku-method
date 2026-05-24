@@ -15,6 +15,9 @@ Read each unit's spec live via `haiku_unit_read` (returns body + title, engine f
 <% if (existingFeedback) { %>
 <%~ existingFeedback %>
 <% } %>
+<% if (typeof decisions !== "undefined" && decisions) { %>
+<%~ decisions %>
+<% } %>
 ## Procedure (authoritative)
 
 1. Read your mandate, then read each unit spec above.

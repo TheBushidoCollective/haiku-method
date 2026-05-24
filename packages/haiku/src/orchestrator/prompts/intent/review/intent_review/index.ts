@@ -23,6 +23,7 @@ import {
 } from "../../../../../studio-reader.js"
 import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import {
+	buildDecisionsBlock,
 	buildExistingFeedbackBlock,
 	emitSubagentDispatchBlock,
 	resolveStudioMandateModel,
@@ -112,6 +113,7 @@ export default definePromptBuilder(({ slug, studio, action }) => {
 				: "",
 			prInteraction: PR_INTERACTION_ROLES.has(role),
 			existingFeedback: buildExistingFeedbackBlock(slug, ""),
+			decisions: buildDecisionsBlock(slug),
 		})
 
 		const dispatchBlock = emitSubagentDispatchBlock({

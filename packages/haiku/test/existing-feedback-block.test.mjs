@@ -84,10 +84,71 @@ test("buildExistingFeedbackBlock: lists stage + intent-scope findings with dedup
 		assert.match(block, /do NOT re-raise/i)
 		assert.match(block, /do NOT file a duplicate/i)
 		// Both findings listed with id + status + origin + scope tag.
-		assert.match(block, /`FB-001`.*adversarial-review.*stage.*Missing null guard/)
+		assert.match(
+			block,
+			/`FB-001`.*adversarial-review.*stage.*Missing null guard/,
+		)
 		assert.match(block, /`FB-002`.*studio-review.*intent.*Cross-stage drift/)
 		// A gist of the body comes through.
 		assert.match(block, /dereferences/)
+	} finally {
+		process.chdir(origCwd)
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})
+
+function seedDecision(root, slug, stage, entry) {
+	const dir = join(root, ".haiku", "intents", slug, "stages", stage)
+	mkdirSync(dir, { recursive: true })
+	writeFileSync(join(dir, "decisions.jsonl"), `${JSON.stringify(entry)}\n`, {
+		flag: "a",
+	})
+}
+
+test("buildDecisionsBlock: empty when no decisions on record", async () => {
+	const { buildDecisionsBlock } = await import(
+		`${SRC}orchestrator/prompts/_helpers.ts`
+	)
+	const tmp = mkdtempSync(join(tmpdir(), "haiku-dec-block-"))
+	const origCwd = process.cwd()
+	try {
+		mkdirSync(join(tmp, ".haiku", "intents", "demo", "stages", "development"), {
+			recursive: true,
+		})
+		process.chdir(tmp)
+		assert.strictEqual(buildDecisionsBlock("demo"), "")
+	} finally {
+		process.chdir(origCwd)
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})
+
+test("buildDecisionsBlock: surfaces recorded decisions across stages so lenses don't re-litigate (BUG-5)", async () => {
+	const { buildDecisionsBlock } = await import(
+		`${SRC}orchestrator/prompts/_helpers.ts`
+	)
+	const tmp = mkdtempSync(join(tmpdir(), "haiku-dec-block-"))
+	const origCwd = process.cwd()
+	try {
+		// The owner ruled on overage rounding in the development stage; a
+		// development-stage lens (or any lens) must see it and stop
+		// re-flagging the ceil/round contradiction every review round.
+		seedDecision(tmp, "demo", "development", {
+			decision: "overage rounding: ceil vs round across AC and DATA-CONTRACTS",
+			options: ["ceil()", "round()"],
+			choice: "ceil()",
+			source: "user",
+			rationale:
+				"AC-CRON-05 is authoritative; DATA-CONTRACTS divergence flagged for upstream reconciliation.",
+			recorded_at: "2026-05-23T00:00:00Z",
+		})
+		process.chdir(tmp)
+
+		const block = buildDecisionsBlock("demo")
+		assert.match(block, /do NOT re-litigate/i)
+		assert.match(block, /overage rounding/)
+		assert.match(block, /ceil\(\)/)
+		assert.match(block, /authoritative/)
 	} finally {
 		process.chdir(origCwd)
 		rmSync(tmp, { recursive: true, force: true })

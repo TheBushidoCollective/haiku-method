@@ -17,6 +17,7 @@ import {
 } from "../../../../../studio-reader.js"
 import { materializeReferenceFile } from "../../../../../subagent-prompt-file.js"
 import {
+	buildDecisionsBlock,
 	buildExistingFeedbackBlock,
 	emitSubagentDispatchBlock,
 	resolveStudioMandateModel,
@@ -95,6 +96,7 @@ function buildRoleBlock(opts: {
 		mandateRef,
 		units,
 		existingFeedback: buildExistingFeedbackBlock(slug, stage),
+		decisions: buildDecisionsBlock(slug),
 	})
 
 	const dispatchBlock = emitSubagentDispatchBlock({

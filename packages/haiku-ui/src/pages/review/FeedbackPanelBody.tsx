@@ -104,7 +104,14 @@ export function FeedbackPanelBody({
 			// this carve-out, toggling unread-replies returns zero rows.
 			next = next.filter((item) => item.status === activeStatus)
 		}
-		return next
+		// Severity-first ordering — surface blockers at the top of the
+		// browse list so the human's eye lands on what the engine also
+		// fixes first (blocker → high → medium → low; unclassified ranks
+		// as medium). Stable sort preserves the incoming FB-number order
+		// within a severity band.
+		const rank = (sev: string | null | undefined): number =>
+			sev === "blocker" ? 0 : sev === "high" ? 1 : sev === "low" ? 3 : 2
+		return [...next].sort((a, b) => rank(a.severity) - rank(b.severity))
 	}, [items, activeStatus, unreadReplyOnly, showAgentItems])
 
 	return (

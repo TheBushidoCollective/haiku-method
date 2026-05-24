@@ -132,7 +132,21 @@ export function runWorkflowTick(
 		// some units v4 but left others v3 still triggers re-migration.
 		const v3CruftPresent =
 			sourceMajor === targetMajor && hasV3CruftInIntent(iDir)
-		if (sourceMajor !== targetMajor || v3CruftPresent) {
+		// No-regress invariant: NEVER migrate an intent DOWN. If the intent's
+		// on-disk major is ABOVE the computed target major — a transient low
+		// `getPluginVersion()` read during a concurrent version bump, or an
+		// older engine opening a newer intent — skip migration entirely.
+		// Downgrading the schema stamp is data-lossy and was the 9.0.0→8.0.0
+		// regression in the migration-livelock report ("stamp the running
+		// engine's version, never a lower one"). The intent keeps its higher
+		// version; the cursor walks it as-is.
+		if (sourceMajor > targetMajor) {
+			emitTelemetry("haiku.migrate.skipped_no_regress", {
+				intent: slug,
+				source: sourceVersion,
+				target,
+			})
+		} else if (sourceMajor < targetMajor || v3CruftPresent) {
 			// Use the major's canonical schema anchor (e.g. "4.0.0"),
 			// not the running build version (e.g. "4.0.2"). The
 			// migration registry edges are keyed by schema generation

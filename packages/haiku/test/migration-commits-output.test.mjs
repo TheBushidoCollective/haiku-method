@@ -116,3 +116,60 @@ test("the migrated action commits its .haiku output (no dirty tree left behind)"
 		rmSync(tmp, { recursive: true, force: true })
 	}
 })
+
+test("no-regress: an intent stamped ABOVE the engine version is never migrated down", async () => {
+	if (!HAS_GIT) return
+	const slug = "future-intent"
+	const tmp = mkdtempSync(join(tmpdir(), "haiku-noregress-"))
+	const orig = process.cwd()
+	try {
+		git(tmp, "init", "-q", "-b", "main")
+		git(tmp, "config", "user.email", "t@haiku")
+		git(tmp, "config", "user.name", "haiku-test")
+		git(tmp, "config", "commit.gpgsign", "false")
+		const iDir = join(tmp, ".haiku", "intents", slug)
+		mkdirSync(join(iDir, "stages", "design", "units"), { recursive: true })
+		// Stamp the intent at a major FAR above the running engine (9.x) — as
+		// if an older engine opened a newer intent, or getPluginVersion read a
+		// stale-low value during a concurrent bump.
+		writeFileSync(
+			join(iDir, "intent.md"),
+			[
+				"---",
+				'title: "Future"',
+				"studio: software",
+				"mode: continuous",
+				"plugin_version: 99.0.0",
+				"stages: [design]",
+				"---",
+				"",
+				"# body",
+			].join("\n"),
+		)
+		git(tmp, "add", "-A")
+		git(tmp, "commit", "-q", "-m", "seed v99 intent")
+
+		process.chdir(tmp)
+		const result = runWorkflowTick(slug, tmp)
+		// MUST NOT attempt to migrate (downgrade) the intent.
+		assert.notStrictEqual(
+			result.action?.action,
+			"migrated",
+			"must not migrate a future-versioned intent",
+		)
+		// intent.md must still carry the higher version — never regressed.
+		const committed = git(tmp, "show", `HEAD:.haiku/intents/${slug}/intent.md`)
+		assert.match(
+			committed,
+			/plugin_version: 99\.0\.0/,
+			"must not downgrade the version stamp",
+		)
+	} finally {
+		try {
+			process.chdir(orig)
+		} catch {
+			process.chdir(tmpdir())
+		}
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})

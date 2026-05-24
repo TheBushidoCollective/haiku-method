@@ -178,7 +178,7 @@ try {
 		assert.strictEqual(buildPriorRejectBlock(path), "")
 	})
 
-	test("picks the LAST completed reject when multiple exist", () => {
+	test("latest reject is the PRIMARY directive; older entries render as de-weighted background (tiered)", () => {
 		const path = writeUnit("u-multi-reject", {
 			name: "u-multi-reject",
 			hat: "builder",
@@ -213,8 +213,20 @@ try {
 			],
 		})
 		const out = buildPriorRejectBlock(path)
+		// Tiered baton (full-chain visibility, not equal weight): the LATEST
+		// reject is the PRIMARY actionable directive; older entries are still
+		// surfaced — as de-weighted, context-only BACKGROUND — not dropped.
 		assert.match(out, /newer reason/)
-		assert.ok(!out.includes("older reason"), "must not surface older reason")
+		const bgIdx = out.indexOf("Earlier in this chain")
+		assert.ok(bgIdx > 0, "older entries render under a background section")
+		assert.ok(
+			out.indexOf("newer reason") < bgIdx,
+			"latest reject is the primary directive, before the background",
+		)
+		assert.ok(
+			out.indexOf("older reason") > bgIdx,
+			"older reject appears in the background, not as a competing directive",
+		)
 	})
 
 	// ── buildPriorFeedbackRejectBlock (fix-loop iteration shape) ──────────────
@@ -270,7 +282,8 @@ try {
 					started_at: "2026-04-30T00:00:00Z",
 					completed_at: "2026-04-30T00:01:00Z",
 					result: "advanced",
-					message: "Material drift: invalidates the spec reviewer; re-sign needed.",
+					message:
+						"Material drift: invalidates the spec reviewer; re-sign needed.",
 				},
 			],
 		})
@@ -341,7 +354,10 @@ try {
 		})
 		const out = buildPriorFeedbackRejectBlock(path)
 		assert.match(out, /Prior rejection/)
-		assert.ok(!out.includes("Handoff from"), "rejected must not read as a handoff")
+		assert.ok(
+			!out.includes("Handoff from"),
+			"rejected must not read as a handoff",
+		)
 	})
 
 	// ── formatSubagentDispatchBlock background attribute ──────────────────────

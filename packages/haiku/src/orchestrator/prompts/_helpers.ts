@@ -262,6 +262,17 @@ function renderPriorHandoff(
 	} catch {
 		return ""
 	}
+	// Collect every completed iteration that carries a handoff message,
+	// newest-first. The most recent is the PRIMARY (actionable) baton; the
+	// rest become de-weighted BACKGROUND so a bounced-to hat can see the
+	// whole chain (full-chain visibility) WITHOUT treating ten old notes as
+	// ten current directives. Visible ≠ equal weight.
+	const entries: Array<{
+		hatName: string
+		boltStr: string
+		isReject: boolean
+		text: string
+	}> = []
 	for (let i = iters.length - 1; i >= 0; i--) {
 		const it = iters[i]
 		if (!it) continue
@@ -275,37 +286,68 @@ function renderPriorHandoff(
 					? it.reason.trim()
 					: ""
 		if (!text) continue
-		const hatName = typeof it.hat === "string" ? it.hat : "previous hat"
-		const boltStr =
-			opts.fixLoop && typeof it.bolt === "number" ? ` (bolt ${it.bolt})` : ""
-		const isReject =
-			typeof it.result === "string" && opts.rejectResults.has(it.result)
-		if (isReject) {
-			return [
+		entries.push({
+			hatName: typeof it.hat === "string" ? it.hat : "previous hat",
+			boltStr:
+				opts.fixLoop && typeof it.bolt === "number" ? ` (bolt ${it.bolt})` : "",
+			isReject:
+				typeof it.result === "string" && opts.rejectResults.has(it.result),
+			text,
+		})
+	}
+	if (entries.length === 0) return ""
+
+	// PRIMARY — the single most-recent baton, framed as the directive.
+	const p = entries[0]
+	const primaryBlock = p.isReject
+		? [
 				"## Prior rejection — address this before advancing",
 				"",
-				`The previous ${opts.fixLoop ? "fix attempt" : "bolt"}'s **${hatName}** hat${boltStr} rejected the work and handed back:`,
+				`The previous ${opts.fixLoop ? "fix attempt" : "bolt"}'s **${p.hatName}** hat${p.boltStr} rejected the work and handed back:`,
 				"",
 				"~~~~",
-				text,
+				p.text,
 				"~~~~",
 				"",
 				`Treat each item as a hard requirement: your hat is NOT done until every issue above is resolved. Reference them in your work summary and commit message so the next reviewer can verify closure. Do NOT call \`${opts.rejectAdvanceTool}\` while any remain open — call \`${opts.rejectHatTool}\` with what's still outstanding.`,
 			].join("\n")
-		}
-		return [
-			`## Handoff from \`${hatName}\`${boltStr}`,
-			"",
-			"The prior hat completed and passed you this baton:",
-			"",
-			"~~~~",
-			text,
-			"~~~~",
-			"",
-			"Pick up where it left off — honor its decisions, resolve any open questions it flagged, and don't redo work it already landed.",
-		].join("\n")
-	}
-	return ""
+		: [
+				`## Handoff from \`${p.hatName}\`${p.boltStr}`,
+				"",
+				"The prior hat completed and passed you this baton:",
+				"",
+				"~~~~",
+				p.text,
+				"~~~~",
+				"",
+				"Pick up where it left off — honor its decisions, resolve any open questions it flagged, and don't redo work it already landed.",
+			].join("\n")
+
+	// BACKGROUND — older chain entries, collapsed to gists and explicitly
+	// fenced off so they inform without competing with the primary directive.
+	const BG_CAP = 8
+	const GIST = 240
+	const older = entries.slice(1, 1 + BG_CAP)
+	if (older.length === 0) return primaryBlock
+	const bgLines = older.map((e) => {
+		const flat = e.text
+			.replace(/```[\s\S]*?```/g, " ")
+			.replace(/\s+/g, " ")
+			.trim()
+		const gist = flat.length > GIST ? `${flat.slice(0, GIST)}…` : flat
+		return `- **${e.hatName}**${e.boltStr} ${e.isReject ? "rejected" : "handed off"}: ${gist}`
+	})
+	const remaining = entries.length - 1 - older.length
+	const overflow = remaining > 0 ? [`_(+${remaining} earlier)_`] : []
+	const backgroundBlock = [
+		"### Earlier in this chain — context only, do NOT act on this",
+		"",
+		"Background from prior hats on this work item, newest first. This is reference, not your task: act on the block above, stay in your hat's lane, and do not jump ahead, re-open settled decisions, or do another hat's job.",
+		"",
+		...bgLines,
+		...overflow,
+	].join("\n")
+	return `${primaryBlock}\n\n${backgroundBlock}`
 }
 
 /** Prior-hat handoff baton for UNIT hat dispatch (advance or reject). */

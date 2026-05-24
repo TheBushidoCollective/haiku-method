@@ -182,11 +182,11 @@ If a paragraph passes more than one test, split it. Duplication across layers is
 
 ## 3. Hat sequence pattern: plan → do → verify
 
-Every stage's `hats:` list MUST follow `plan → do → verify`, in that order, as the leading three roles. Additional hats (e.g., adversarial loops) MAY follow but never precede.
+Every stage's `hats:` list MUST follow `plan → do → verify`, in that order. Additional plan/do/verify roles MAY appear (e.g. two do hats), but the sequence is plan-do-verify roles only — adversarial review is NOT an in-loop hat (§3.5).
 
 ```yaml
 hats: [planner, doer, verifier]                           # minimum
-hats: [planner, doer, verifier, red-team, blue-team]      # plan-do-verify + adversarial
+hats: [threat-modeler, security-engineer, security-reviewer]  # plan-do-verify; adversarial review is stage-level (§3.5)
 ```
 
 ### 3.1 Hat-name discipline (CRITICAL)
@@ -202,7 +202,9 @@ Reserved phase names that MUST NOT be used as hat names: `elaborate`, `execute`,
 | Build / execution | `planner`, `architect` | `builder`, `engineer`, `implementer` | `reviewer`, `verifier` |
 | Validation / certification | `analyst`, `planner` | `tester`, `validator` | `auditor`, `certifier` |
 | Operational | `coordinator`, `planner` | `operator`, `executor` | `verifier`, `qa` |
-| Adversarial | `threat-modeler` | `red-team`, `attacker` | `blue-team`, `security-reviewer` |
+| Security / adversarial-backed | `threat-modeler` | `security-engineer` | `security-reviewer` |
+
+(For adversarial-backed stages the per-unit loop is still plain plan-do-verify; the adversarial layer — `red-team`/blue-team-equivalent — lives at the stage level as a review-agent + fix-loop, NOT as do/verify hats. See §3.5.)
 
 ### 3.2 Plan role
 
@@ -227,14 +229,24 @@ Examples of illegitimate verify-role rules (these are workflow engine responsibi
 - ❌ Is the YAML frontmatter schema valid?
 - ❌ Does the unit's `inputs:` match the prior stage's `outputs:`?
 
-### 3.5 Adversarial loops
+### 3.5 Adversarial review is a STAGE concern, NOT in-loop hats
 
-Studios with adversarial workflows (security-assessment, software/security, etc.) MAY include adversarial hats AFTER the plan-do-verify triplet. Adversarial hats are exempt from the body-only rule but the plan-do-verify front loop is mandatory.
+Adversarial workflows (software/security, security-assessment, ideation/review) do **NOT** staple adversarial hats onto the per-unit `hats:` sequence. That was the old model — `red-team`/`blue-team` after the verify hat — and it's removed (2026-05-23). It was a category error: an adversarial agent can't build (so a reject from it has no builder to bounce to — it ping-pongs verifier→verifier to the bolt cap), its real findings are cross-unit *integration* properties invisible from any one unit's isolated worktree (a control defined but registered nowhere), and its stated deliverable — augment the unit body — is impossible while the unit is active.
+
+The per-unit loop stays **plan → do → verify**. Adversarial review runs at the **stage** level, as two existing mechanisms working together across cursor ticks — never a nested loop inside a subagent:
+
+- **The attacker = a stage review-agent** (`review-agents/<agent>.md`; e.g. software/security's `red-team`). It fires post-execute against the **integrated** stage surface (every unit's merged work), files findings as feedback, and signs off only as an **earned negative** — it re-attacks each approval walk and approves only when a genuine probe pass lands zero findings AND every prior finding is closed.
+- **The defender = the fix-loop** (`fix_hats:`). A finding becomes a fix-loop work item; the build hat (e.g. `security-engineer`) lands the patch; the terminal closure verifier re-attacks the patch at the **threat-class** level before closing. A stage-scoped `fix-hats/feedback-assessor.md` carries that rigor — the surviving role of the old blue-team.
+
+The red/blue dynamic is therefore: review-agent attacks → FB → fix-loop defends → closure verifier re-attacks → review-agent re-attacks the patched surface on the next walk, until a pass is clean. All flat cursor-driven dispatches; the loop lives across ticks, not in nested subagents.
 
 ```yaml
 # software/security — units = attack surfaces
-hats: [threat-modeler, security-engineer, security-reviewer, red-team, blue-team, attack-resolver]
-#       ↑ plan          ↑ do                ↑ verify         ↑ adversarial loop  ↑ adversarial verify
+hats: [threat-modeler, security-engineer, security-reviewer]   # plan → do → verify (per unit)
+#       ↑ plan          ↑ do                ↑ verify
+# Adversarial review is NOT in `hats:` — it's review-agents/red-team.md (stage-level,
+# earned-negative sign-off) + the fix_hats loop (security-engineer + an
+# adversarial-closure feedback-assessor). See Reviews-vs-Approvals + the fix-loop (§5–6).
 ```
 
 ## 4. Stage roles in detail
@@ -515,7 +527,8 @@ Phase 2 verifier rollout:
 - The 29 stages without explicit `verifier` already end in a verify-class hat (`reviewer`, `validator`, `assessor`, `auditor`, `qa`, etc.).
 
 Phase 3 adversarial-loop restructure:
-- ✅ All 3 previously-flagged adversarial-loop stages (software/security, security-assessment/exploitation, ideation/review) restructured to put plan-do-verify before adversarial hats per §3.5. Added 6 new hat mandate files for the new plan/do/verify roles inserted (security-engineer, attack-strategist, exploit-reviewer, review-planner, synthesizer, reviewer).
+- ✅ All 3 previously-flagged adversarial-loop stages (software/security, security-assessment/exploitation, ideation/review) restructured to put plan-do-verify before adversarial hats. Added 6 new hat mandate files for the new plan/do/verify roles inserted (security-engineer, attack-strategist, exploit-reviewer, review-planner, synthesizer, reviewer).
+- ⏳ **SUPERSEDED by the 2026-05-23 reshape (§3.5).** Putting adversarial hats *after* plan-do-verify in the per-unit loop was itself the bug (a verify reject had no builder to bounce to → bolt-cap deadlock). software/security is now fully reshaped: adversarial hats removed from `hats:`, red-team → a stage review-agent, blue-team → the fix-loop closure verifier. `security-assessment/exploitation` and `ideation/review` still carry in-loop adversarial/multi-verify hats and are the remaining propagation targets.
 
 Reconciled in v4:
 - Architecture document itself, with the boundary rules, lifecycle, hat patterns, FB-as-unit fix-loop semantic, stage-role taxonomy, and the cursor model in §5.

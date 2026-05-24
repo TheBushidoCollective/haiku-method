@@ -25,6 +25,7 @@ import {
 } from "../../git-worktree.js"
 import {
 	intentDir,
+	isGitRepo,
 	parseFrontmatter,
 	setFrontmatterField,
 	unitOutputExists,
@@ -112,4 +113,76 @@ export function resetLostUnits(
 		/* best-effort — recovery never blocks the tick */
 	}
 	return { reset }
+}
+
+/** Generous default lease TTL: longer than any plausible single-hat runtime.
+ *  A subagent holding a lease past this is presumed dead. Env-overridable. */
+const STALE_LEASE_TTL_MS =
+	Number.parseInt(process.env.HAIKU_UNIT_LEASE_TTL_MS ?? "", 10) || 45 * 60_000
+
+/** Clear stale dispatch leases so the cursor's `needNextHat` re-dispatches a
+ *  unit whose leased subagent died. The lease (`dispatched_at` on the open
+ *  iter) makes `needNextHat` skip an in-flight unit so a mid-wave run_next
+ *  can't double-dispatch it — but a subagent that dies mid-hat (worktree
+ *  intact, so `resetLostUnits` doesn't catch it) would otherwise be skipped
+ *  forever, wedging the wave. Two clear signals, both pre-tick (Rule 1: the
+ *  cursor must not write):
+ *
+ *   1. Worktree GONE (git mode) — the subagent is dead; clear the lease so the
+ *      open hat re-dispatches (createUnitWorktree recreates from the surviving
+ *      branch, or resetLostUnits already reset it when branch is gone too).
+ *      Timer-free and primary. Complements resetLostUnits, which leaves the
+ *      "worktree gone, branch survives" case for in-place resume.
+ *   2. Worktree INTACT but lease older than TTL — the one death timer-free
+ *      detection can't see. Bounded wall-clock fallback. A false positive
+ *      costs one idempotent re-dispatch into the partial worktree, which is
+ *      safe: advance_hat's output gate refuses to merge incomplete work.
+ *
+ *  Filesystem mode has no worktrees, so the worktree-gone signal is inert
+ *  (gated on isGitRepo); fs mode relies on the TTL alone. */
+export function recoverStaleLeasedUnits(
+	slug: string,
+	studio: string,
+): { cleared: string[] } {
+	const cleared: string[] = []
+	try {
+		const iDir = intentDir(slug)
+		const stage = findCurrentStage(slug, studio, iDir)
+		if (!stage) return { cleared }
+		const unitsDir = join(iDir, "stages", stage, "units")
+		if (!existsSync(unitsDir)) return { cleared }
+		const gitMode = isGitRepo()
+		const now = Date.now()
+		for (const f of readdirSync(unitsDir).filter((n) => n.endsWith(".md"))) {
+			const path = join(unitsDir, f)
+			let fm: Record<string, unknown>
+			try {
+				fm = parseFrontmatter(readFileSync(path, "utf8")).data
+			} catch {
+				continue
+			}
+			const iters = Array.isArray(fm.iterations)
+				? (fm.iterations as Array<Record<string, unknown>>)
+				: []
+			if (iters.length === 0) continue
+			const last = iters[iters.length - 1]
+			// Only leased OPEN iters can be stale.
+			if (!last || last.result !== null) continue
+			const lease =
+				typeof last.dispatched_at === "string" ? last.dispatched_at : ""
+			if (!lease) continue
+			const unit = f.replace(/\.md$/, "")
+			const worktreeGone = gitMode && !existsSync(unitWorktreePath(slug, unit))
+			const leaseAgeMs = now - Date.parse(lease)
+			const ttlExceeded =
+				Number.isFinite(leaseAgeMs) && leaseAgeMs > STALE_LEASE_TTL_MS
+			if (!worktreeGone && !ttlExceeded) continue // subagent presumed alive
+			last.dispatched_at = null
+			setFrontmatterField(path, "iterations", iters)
+			cleared.push(unit)
+		}
+	} catch {
+		/* best-effort — recovery never blocks the tick */
+	}
+	return { cleared }
 }

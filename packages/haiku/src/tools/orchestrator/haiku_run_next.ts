@@ -1062,6 +1062,37 @@ export default defineTool({
 			}
 		}
 
+		// Lease the dispatched unit hats: stamp `dispatched_at` on each
+		// dispatched unit's open iter so the cursor's `needNextHat` clause
+		// won't re-dispatch them on a mid-wave run_next (the unit-015-class
+		// double-dispatch). The mid-chain relay leases its own unit inside
+		// computeUnitRelayBlock; this covers the cursor wave/needNextHat
+		// dispatch path. Best-effort — a missed stamp just falls back to the
+		// prior re-dispatch behavior, never blocks the dispatch.
+		if (
+			result.action === "start_unit_hat" &&
+			typeof result.stage === "string" &&
+			typeof result.hat === "string" &&
+			Array.isArray(result.units)
+		) {
+			try {
+				const { stampUnitHatLease } = await import("../../state-tools.js")
+				for (const unit of result.units as string[]) {
+					if (typeof unit !== "string") continue
+					stampUnitHatLease({
+						slug,
+						stage: result.stage as string,
+						unit,
+						hat: result.hat as string,
+					})
+				}
+			} catch (err) {
+				console.error(
+					`[haiku_run_next] stampUnitHatLease failed: ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}
+
 		// Same shape for intent_review (non-user roles). The user role
 		// goes through haiku_await_gate which stamps approvals.user
 		// directly — no stashing needed there. Agent roles (spec,

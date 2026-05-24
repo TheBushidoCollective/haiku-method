@@ -5818,6 +5818,48 @@ export function stampDispatchClaim(opts: {
 	}
 }
 
+/** Stamp a dispatch LEASE (`dispatched_at`) on a unit's OPEN iteration when
+ *  its hat is dispatched — the unit-hat analog of `stampDispatchClaim` for
+ *  feedback. A live lease tells the cursor's `needNextHat` clause "a subagent
+ *  is running this hat right now," so a mid-wave `run_next` won't re-dispatch
+ *  the in-flight unit (the unit-015-class double-dispatch). Called from BOTH
+ *  dispatch paths: `haiku_run_next`'s `start_unit_hat` emit AND the mid-chain
+ *  relay in `computeUnitRelayBlock` (omitting the relay path would leave a
+ *  relayed unit's open iter unleased and re-dispatchable). The lease clears
+ *  itself: advance/reject open a FRESH leaseless iter via startUnitIteration,
+ *  and the cursor only reads the last iter. Idempotent + best-effort: a
+ *  re-stamp or a missing/odd unit is a no-op, never blocks dispatch. Only the
+ *  OPEN last iter is stamped, and only when its hat matches — never an
+ *  already-terminal entry. */
+export function stampUnitHatLease(opts: {
+	slug: string
+	stage: string
+	unit: string
+	hat: string
+}): void {
+	const { slug, stage, unit, hat } = opts
+	try {
+		const path = unitPath(slug, stage, unit)
+		if (!existsSync(path)) return
+		const parsed = matter(readFileSync(path, "utf8"))
+		const fm = parsed.data as Record<string, unknown>
+		const iters = Array.isArray(fm.iterations)
+			? (fm.iterations as Array<Record<string, unknown>>)
+			: []
+		const last = iters[iters.length - 1]
+		// Only lease the OPEN iter for the dispatched hat. A terminal entry,
+		// a hat mismatch, or an already-leased iter → no-op.
+		if (!last || last.result !== null || last.hat !== hat) return
+		if (typeof last.dispatched_at === "string" && last.dispatched_at.length > 0)
+			return
+		last.dispatched_at = timestamp()
+		setFrontmatterField(path, "iterations", iters)
+	} catch {
+		/* best-effort — a lease that fails to stamp just means the existing
+		 * re-dispatch behavior, not a crash */
+	}
+}
+
 /** Derive the cursor's next unit-hat dispatch block for an intent and
  *  build it. Returns null when the next action isn't a unit-hat dispatch
  *  (or anything goes wrong). Shared by `haiku_unit_advance_hat` (relay
@@ -5880,7 +5922,7 @@ function computeUnitRelayBlock(
 				const stageHats = resolveStageHats(intentSlug, found.stage)
 				const next = nextHatForUnit(parsed.data, stageHats)
 				if (!next) return null // unit done → run_next picks up the next wave
-				return buildUnitHatDispatchBlock({
+				const relayBlock = buildUnitHatDispatchBlock({
 					slug: intentSlug,
 					studio: studioName,
 					unit: callingUnit,
@@ -5888,6 +5930,18 @@ function computeUnitRelayBlock(
 					hat: next.hat,
 					terminal: next.terminal,
 				})
+				// Lease the freshly-opened next-hat iter: this relay is the
+				// dispatch, so mark it running. Without this, a relayed unit's
+				// open iter stays unleased and a concurrent terminal-advance →
+				// run_next could re-dispatch it (the gap the run_next-only stamp
+				// would miss). Under withIntentDispatchLock — race-safe.
+				stampUnitHatLease({
+					slug: intentSlug,
+					stage: found.stage,
+					unit: callingUnit,
+					hat: next.hat,
+				})
+				return relayBlock
 			}
 
 			// No calling unit (initial wave dispatch via the cursor, not a

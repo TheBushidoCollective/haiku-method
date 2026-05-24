@@ -145,7 +145,6 @@ export type {
 	HaikuStageResetInput,
 	HaikuStudioGetInput,
 	HaikuStudioStageGetInput,
-	HaikuUnitResetInput,
 	HaikuViewCloseInput,
 	HaikuViewInput,
 	HaikuZapInput,

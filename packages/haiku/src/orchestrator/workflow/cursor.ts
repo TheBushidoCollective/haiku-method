@@ -345,6 +345,15 @@ type Iteration = {
 	// iteration shape on disk.
 	result: "advance" | "reject" | "advanced" | "closed" | "rejected" | null
 	reason?: string | null
+	// Dispatch lease. Stamped on the OPEN iter (result === null) when its
+	// hat is dispatched (run_next start_unit_hat emit, or the mid-chain relay
+	// in computeUnitRelayBlock). A live lease means "a subagent is running
+	// this hat right now" — the `needNextHat` clause skips it so a mid-wave
+	// run_next doesn't re-dispatch an in-flight unit (the double-dispatch in
+	// the unit-015-class report). advance/reject open a FRESH leaseless iter,
+	// so the lease clears itself; an open iter with NO dispatched_at is a
+	// fresh pre-open or first-hat → eligible for dispatch (crash recovery).
+	dispatched_at?: string | null
 }
 
 // Approval slot shapes the cursor accepts as "stamped":
@@ -1779,16 +1788,53 @@ function walkIntentTrack(args: {
 	}
 
 	// 7. Units that need their next hat (started but not yet done).
+	//
+	// Dispatch-lease skip: if a unit's OPEN iter (result === null) carries a
+	// `dispatched_at` lease, a subagent is running that hat right now — skip
+	// it. This is the fix for the unit-015-class double-dispatch: a mid-wave
+	// run_next (one unit terminal-advanced, parent re-ticked to pick up the
+	// next wave) used to re-emit start_unit_hat for the STILL-RUNNING wave
+	// siblings, because their open iters looked like "needs dispatch." The
+	// lease distinguishes "dispatched and running" (skip) from "fresh
+	// pre-open / first hat" (dispatch — crash recovery preserved, since a
+	// freshly-opened iter has no lease). `nextHatForUnit` is intentionally
+	// left unchanged (crash-recovery contract, cursor §nextHatForUnit), so
+	// `inFlight` still counts leased units and the wave barrier stays closed.
 	const needNextHat: { unit: string; hat: string; terminal: boolean }[] = []
+	let leasedSkipped = false
 	for (const u of units) {
 		if (u.fm.started_at == null) continue
 		const next = nextHatForUnit(u.fm, hats)
 		if (next === null) continue
+		const iters = Array.isArray(u.fm.iterations)
+			? (u.fm.iterations as Iteration[])
+			: []
+		const last = iters[iters.length - 1]
+		if (
+			last &&
+			last.result === null &&
+			typeof last.dispatched_at === "string" &&
+			last.dispatched_at.length > 0
+		) {
+			leasedSkipped = true
+			continue
+		}
 		needNextHat.push({
 			unit: u.name,
 			hat: next.hat,
 			terminal: next.terminal,
 		})
+	}
+
+	// Wave-draining guard: every in-flight unit is leased (running its own
+	// subagent) and nothing fresh is dispatchable. Return null → the run_next
+	// handler surfaces the existing mid-wave `noop` ("in-flight subagents are
+	// still working — wait, then retick"). Without this, a lease-emptied
+	// needNextHat would fall through into the post-execute review/approval
+	// track mid-build. Guarded on inFlight > 0, so an all-complete stage is
+	// unaffected and still proceeds to its gate.
+	if (needNextHat.length === 0 && leasedSkipped && inFlight.length > 0) {
+		return null
 	}
 
 	// Task #25 pre-dispatch gate for the needs-next-hat path. Same

@@ -51,7 +51,10 @@ import { completePendingFixChainMerges } from "./fix-chain-merge-gate.js"
 import { reconcileOrphanedHatSequences } from "./hat-sequence-migration.js"
 import { purgeDeadSidecars } from "./purge-dead-sidecars.js"
 import { selfRepairMissingApprovals } from "./self-repair-approvals.js"
-import { resetLostUnits } from "./unit-branch-recovery.js"
+import {
+	recoverStaleLeasedUnits,
+	resetLostUnits,
+} from "./unit-branch-recovery.js"
 import { autoFileMalformedUnitInputs } from "./validate-unit-inputs-gate.js"
 import { ensureNonce } from "./verifier-nonce.js"
 
@@ -425,6 +428,28 @@ export function runWorkflowTick(
 			emitTelemetry("haiku.unit_recovery.reset", {
 				intent: slug,
 				units: recovered.reset.join(","),
+			})
+		}
+	} catch (err) {
+		emitTelemetry("haiku.unit_recovery.failed", {
+			intent: slug,
+			error: String((err as Error)?.message ?? err),
+		})
+	}
+
+	// Pre-tick stale-lease recovery: a unit whose dispatch lease outlived its
+	// subagent (worktree gone, or the lease aged past TTL) would be skipped
+	// forever by the cursor's `needNextHat` lease filter, wedging the wave.
+	// Clear the lease so the open hat re-dispatches. Runs AFTER resetLostUnits
+	// (which handles the worktree+branch-both-gone case by full reset); this
+	// handles the worktree-gone-branch-survives and worktree-intact-but-dead
+	// cases by clearing just the lease.
+	try {
+		const released = recoverStaleLeasedUnits(slug, studio)
+		if (released.cleared.length > 0) {
+			emitTelemetry("haiku.unit_recovery.lease_cleared", {
+				intent: slug,
+				units: released.cleared.join(","),
 			})
 		}
 	} catch (err) {

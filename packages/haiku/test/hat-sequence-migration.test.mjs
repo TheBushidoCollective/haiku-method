@@ -168,3 +168,45 @@ test("no orphan hats → no-op (idempotent)", async () => {
 		rmSync(tmp, { recursive: true, force: true })
 	}
 })
+
+test("trim drops ONLY orphan-hat entries — hat-absent entries survive", async () => {
+	// Reviewer edge case (PR #372): a unit with BOTH an orphaned-hat iteration
+	// AND a hat-absent iteration. `isOrphan` is true only for a present-but-
+	// invalid hat, so a hat-absent entry is NOT an orphan and must be kept.
+	// The old `validHats.has(hat)` filter would have silently dropped it.
+	const hatAbsent = { started_at: t, completed_at: t, result: "advance" }
+	const { slug, tmp, unitsDir } = setup({
+		"unit-04-mixed": [
+			adv("threat-modeler"),
+			hatAbsent, // structurally normal — no hat field, not an orphan
+			adv("red-team"), // orphan after the reshape
+		],
+	})
+	const orig = process.cwd()
+	try {
+		process.chdir(tmp)
+		const { reconcileOrphanedHatSequences } = await import(
+			`${SRC}/orchestrator/workflow/hat-sequence-migration.ts`
+		)
+		const res = reconcileOrphanedHatSequences(slug)
+		assert.deepStrictEqual(
+			res.reconciled,
+			["security/unit-04-mixed"],
+			"the mixed unit reconciles (it has an orphan)",
+		)
+		const mixed = itersOf(unitsDir, "unit-04-mixed")
+		assert.strictEqual(mixed.length, 2, "orphan dropped, hat-absent retained")
+		assert.deepStrictEqual(
+			mixed.map((i) => i.hat ?? "<absent>"),
+			["threat-modeler", "<absent>"],
+			"red-team orphan trimmed; the hat-absent entry survives",
+		)
+	} finally {
+		try {
+			process.chdir(orig)
+		} catch {
+			process.chdir(tmpdir())
+		}
+		rmSync(tmp, { recursive: true, force: true })
+	}
+})

@@ -71,9 +71,11 @@ export function reconcileOrphanedHatSequences(slug: string): {
 				typeof it?.hat === "string" && !validHats.has(it.hat)
 			if (!iters.some(isOrphan)) continue
 
-			const trimmed = iters.filter(
-				(it) => typeof it?.hat === "string" && validHats.has(it.hat),
-			)
+			// Drop ONLY orphaned-hat entries — the logical inverse of the guard
+			// above. Using `!isOrphan` (rather than `validHats.has(it.hat)`)
+			// keeps hat-absent entries, which are structurally normal, not
+			// orphaned; a `validHats.has` filter would silently lose them.
+			const trimmed = iters.filter((it) => !isOrphan(it))
 			// Clone before mutating: gray-matter caches parses by content string,
 			// so an in-place edit would poison that cache for any later read of
 			// the same content.

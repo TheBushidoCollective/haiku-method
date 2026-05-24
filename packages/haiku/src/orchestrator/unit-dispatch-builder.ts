@@ -26,7 +26,6 @@
 
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { Eta } from "eta"
 import matter from "gray-matter"
 import { features } from "../config.js"
 import { createUnitWorktree } from "../git-worktree.js"
@@ -39,13 +38,11 @@ import {
 	readStudio,
 } from "../studio-reader.js"
 import {
-	buildPriorRejectBlock,
-	emitSubagentDispatchBlock,
-	studioReadRef,
-} from "./prompts/_helpers.js"
+	buildHatDispatchBlock,
+	type HatLoopTarget,
+} from "./hat-loop-dispatch.js"
+import { buildPriorRejectBlock, studioReadRef } from "./prompts/_helpers.js"
 import { loadTemplate } from "./prompts/_load-template.js"
-
-const eta = new Eta({ autoEscape: false, useWith: true })
 
 // The subagent template lives next to the start_unit_hat prompt
 // builder. Loaded lazily + memoized (no module-init filesystem I/O) so
@@ -140,57 +137,64 @@ export function buildUnitHatDispatchBlock(opts: {
 	terminal: boolean
 }): string {
 	const { slug, studio, unit, stage, hat, terminal } = opts
-	// Isolate the unit's hat loop in its own worktree (branch
-	// `haiku/<slug>/<unit>`, forked from the stage branch) — mirrors the
-	// live discovery pattern (`decompose` dispatch -> createDiscoveryWorktree).
-	// Idempotent: created on the first hat's dispatch, reused by later hats
-	// and by the relay. The already-wired terminal merge (`advance_hat` ->
-	// `mergeUnitWorktree` under `withStageLock`) lands it back atomically.
-	// Returns null in filesystem mode (work happens in-place then).
-	const worktree = createUnitWorktree(slug, unit, stage) ?? ""
-	const model = resolveUnitHatModel({ slug, studio, stage, hat, unit })
-	// Snapshot the hat mandate (FM-stripped) into the intent's prompts
-	// refs/ tree and emit a "Read <snapshot>" — the followable breadcrumb.
-	// Resolution uses the same resolver `haiku_read_hat` would; if it
-	// can't resolve at build time, studioReadRef falls back to the live
-	// `haiku_read_hat` tool-call directive.
-	const mandateRef = studioReadRef({
-		resolveBody: () => readHatBody(studio, stage, hat),
-		toolName: "haiku_read_hat",
-		toolArgs: { studio, stage, hat },
-		intent: slug,
-		stage,
-		kind: "mandate",
-		name: hat,
-	})
-	const priorHatsInline = readPriorHatsForUnit({ slug, stage, unit })
-	// Surface the most-recent rejection reason so a bounced-to hat fixes
-	// the verifier's specific objection on the new bolt rather than
-	// re-rolling a fresh implementation the verifier already rejected.
-	// Empty on the first bolt (no prior rejection on disk).
 	const unitFile = join(stageDir(slug, stage), "units", `${unit}.md`)
-	const priorRejectBlock = buildPriorRejectBlock(unitFile)
-	const promptBody = eta.renderString(subagentTemplate(), {
+	// Lazily memoize the prior-advance hat list — used by both the bolt
+	// number and the template's "N prior handoffs" context, read once.
+	let priorHatsCache: string[] | null = null
+	const priorHats = () =>
+		(priorHatsCache ??= readPriorHatsForUnit({ slug, stage, unit }))
+
+	const target: HatLoopTarget = {
 		slug,
-		studio,
-		stage,
-		hat,
-		unit,
-		terminal,
-		worktree,
-		mandateRef,
-		priorHatsInline,
-		priorRejectBlock,
-	})
-	return emitSubagentDispatchBlock({
-		unit,
-		hat,
-		bolt: priorHatsInline.length + 1,
-		intent: slug,
-		stage,
-		agentType: "general-purpose",
-		model,
-		promptBody,
-		heading: `### Subagent — \`${unit}\` (stage \`${stage}\`, hat \`${hat}\`)`,
-	})
+		emitStage: stage || undefined,
+		dispatchId: unit,
+		// Isolate the unit's hat loop in its own worktree (branch
+		// `haiku/<slug>/<unit>`, forked from the stage branch). Idempotent:
+		// created on the first hat's dispatch, reused by later hats and the
+		// relay; the terminal `advance_hat` -> `mergeUnitWorktree` lands it
+		// back. Returns "" in filesystem mode (work happens in-place).
+		ensureWorktree: () => createUnitWorktree(slug, unit, stage) ?? "",
+		// Snapshot the hat mandate (FM-stripped) into the intent refs/ tree
+		// and emit a followable "Read <snapshot>" breadcrumb, resolved via the
+		// same resolver `haiku_read_hat` uses (falls back to the live tool
+		// call if it can't resolve at build time).
+		mandateRef: (h) =>
+			studioReadRef({
+				resolveBody: () => readHatBody(studio, stage, h),
+				toolName: "haiku_read_hat",
+				toolArgs: { studio, stage, hat: h },
+				intent: slug,
+				stage,
+				kind: "mandate",
+				name: h,
+			}),
+		// Surface the most-recent rejection so a bounced-to hat fixes the
+		// verifier's specific objection rather than re-rolling. Empty on bolt 1.
+		priorHandoffBlock: () => buildPriorRejectBlock(unitFile),
+		resolveModel: (h) =>
+			resolveUnitHatModel({ slug, studio, stage, hat: h, unit }),
+		bolt: () => priorHats().length + 1,
+		template: () => subagentTemplate(),
+		templateVars: ({
+			hat: h,
+			terminal: term,
+			worktree,
+			mandateRef,
+			priorRejectBlock,
+		}) => ({
+			slug,
+			studio,
+			stage,
+			hat: h,
+			unit,
+			terminal: term,
+			worktree,
+			mandateRef,
+			priorHatsInline: priorHats(),
+			priorRejectBlock,
+		}),
+		heading: (h) =>
+			`### Subagent — \`${unit}\` (stage \`${stage}\`, hat \`${h}\`)`,
+	}
+	return buildHatDispatchBlock(target, hat, terminal)
 }

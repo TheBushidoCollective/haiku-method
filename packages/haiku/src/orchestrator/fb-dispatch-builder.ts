@@ -16,7 +16,6 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { Eta } from "eta"
 import matter from "gray-matter"
 import { features } from "../config.js"
 import { createFixChainWorktree } from "../git-worktree.js"
@@ -31,13 +30,14 @@ import {
 	readStudioFixHatDefs,
 } from "../studio-reader.js"
 import {
+	buildHatDispatchBlock,
+	type HatLoopTarget,
+} from "./hat-loop-dispatch.js"
+import {
 	buildPriorFeedbackRejectBlock,
-	emitSubagentDispatchBlock,
 	studioReadRef,
 } from "./prompts/_helpers.js"
 import { loadTemplate } from "./prompts/_load-template.js"
-
-const eta = new Eta({ autoEscape: false, useWith: true })
 
 // The subagent template lives next to the prompt builder that
 // originally owned it; canonicalize-prompt-templates resolves the
@@ -129,111 +129,105 @@ export function buildFbHatDispatchBlock(opts: {
 }): string {
 	const { slug, studio, feedbackId, stage, hat, terminal } = opts
 	const fbInt = Number.parseInt(feedbackId.replace(/^FB-/i, ""), 10) || 0
-	// Isolate the fix-chain's hat loop in its own worktree (branch
-	// `haiku/<slug>/fix-<scope>-<FB>`, forked from the stage branch for a
-	// stage-scope FB or intent main for an intent-scope FB) — the FB analog of
-	// the unit dispatch's createUnitWorktree. Idempotent: created on the first
-	// fix-hat's dispatch, reused by later hats and the relay. The terminal
-	// merge (haiku_feedback_advance_hat close → mergeFixChainWorktree under
-	// withStageLock) lands it back. Returns "" in filesystem mode.
 	const scope = stage || "intent"
-	const worktree = createFixChainWorktree(slug, scope, feedbackId) ?? ""
-	// Snapshot the fix-hat mandate (FM-stripped) and emit "Read
-	// <snapshot>" via the SAME underlying reader the haiku_read_hat tool
-	// uses. Stage-scope FBs resolve the fix-scoped variant
-	// (stages/<stage>/fix-hats/<hat>.md over the production mandate);
-	// intent-scope FBs (stage === "") resolve a STUDIO-level fix-hat
-	// (studios/<studio>/fix-hats/<hat>.md), which haiku_read_hat (being
-	// stage-scoped) doesn't cover — hence the dedicated reader and the
-	// fix-flag-less fallback args.
-	const mandateRef = studioReadRef({
-		resolveBody: () =>
-			stage
-				? readHatBody(studio, stage, hat, true)
-				: readStudioFixHatBody(studio, hat),
-		toolName: "haiku_read_hat",
-		toolArgs: stage
-			? { studio, stage, hat, fix: true }
-			: { studio, hat, fix: true },
-		intent: slug,
-		stage: stage || undefined,
-		kind: "mandate",
-		name: hat,
-	})
 
-	const fbDir = stage
-		? join(stageDir(slug, stage), "feedback")
-		: join(intentDir(slug), "feedback")
-	const fbNum = feedbackId.replace(/^FB-/i, "")
-	// The FB body is NOT inlined or snapshotted — it's a live, mutable
-	// workflow artifact (an earlier hat may append a `## Classification`
-	// section mid-chain). The subagent prompt instructs the agent to
-	// read it live via `haiku_feedback_read` (which strips engine FM).
-	// We still open the file here for the engine's own bookkeeping: the
-	// bolt counter and the prior-rejection reason (FM-derived state the
-	// read tool intentionally hides).
-	let priorRejectBlock = ""
-	let bolt = 1
-	if (existsSync(fbDir)) {
-		const fbFile = readdirSync(fbDir).find(
-			(f) => f.startsWith(fbNum) && f.endsWith(".md"),
-		)
-		if (fbFile) {
-			const fbPath = join(fbDir, fbFile)
-			// Surface the most-recent rejection reason so a bounced-to hat
-			// addresses the verifier's specific objection on the new bolt
-			// instead of re-rolling a fresh approach the verifier already
-			// turned down. Empty on the first bolt (no prior rejection).
-			priorRejectBlock = buildPriorFeedbackRejectBlock(fbPath)
-			try {
-				const fbFm = matter(readFileSync(fbPath, "utf8")).data as Record<
-					string,
-					unknown
-				>
-				const iters = Array.isArray(fbFm.iterations) ? fbFm.iterations : []
-				const maxBolt = (iters as Array<{ bolt?: unknown }>).reduce(
-					(acc, it) => {
-						const b = it?.bolt
-						return typeof b === "number" && b > acc ? b : acc
-					},
-					0,
-				)
-				bolt = maxBolt > 0 ? maxBolt : 1
-			} catch {
-				/* fall back to bolt 1 */
+	// The FB body is NOT inlined — it's a live, mutable artifact (an earlier
+	// hat may append a `## Classification` section); the subagent reads it
+	// live via `haiku_feedback_read`. We open the file here only for the
+	// engine's own bookkeeping the read tool hides: the bolt counter and the
+	// prior-rejection baton. Read once, lazily, memoized.
+	let fbStateCache: { priorRejectBlock: string; bolt: number } | null = null
+	const fbState = () => {
+		if (fbStateCache) return fbStateCache
+		const fbDir = stage
+			? join(stageDir(slug, stage), "feedback")
+			: join(intentDir(slug), "feedback")
+		const fbNum = feedbackId.replace(/^FB-/i, "")
+		let priorRejectBlock = ""
+		let bolt = 1
+		if (existsSync(fbDir)) {
+			const fbFile = readdirSync(fbDir).find(
+				(f) => f.startsWith(fbNum) && f.endsWith(".md"),
+			)
+			if (fbFile) {
+				const fbPath = join(fbDir, fbFile)
+				priorRejectBlock = buildPriorFeedbackRejectBlock(fbPath)
+				try {
+					const fbFm = matter(readFileSync(fbPath, "utf8")).data as Record<
+						string,
+						unknown
+					>
+					const iters = Array.isArray(fbFm.iterations) ? fbFm.iterations : []
+					const maxBolt = (iters as Array<{ bolt?: unknown }>).reduce(
+						(acc, it) => {
+							const b = it?.bolt
+							return typeof b === "number" && b > acc ? b : acc
+						},
+						0,
+					)
+					bolt = maxBolt > 0 ? maxBolt : 1
+				} catch {
+					/* fall back to bolt 1 */
+				}
 			}
 		}
+		fbStateCache = { priorRejectBlock, bolt }
+		return fbStateCache
 	}
 
-	const resolved = resolveFixHatModel({
+	const target: HatLoopTarget = {
 		slug,
-		studio,
-		stage,
-		hat,
-		feedbackId,
-	})
-
-	const promptBody = eta.renderString(subagentTemplate(), {
-		slug,
-		hat,
-		stage,
-		feedbackId,
-		fbInt,
-		terminal,
-		worktree,
-		mandateRef,
-		priorRejectBlock,
-	})
-
-	return emitSubagentDispatchBlock({
-		unit: `fix-${feedbackId}`,
-		hat,
-		bolt,
-		intent: slug,
-		stage: stage || undefined,
-		agentType: "general-purpose",
-		model: resolved?.model,
-		promptBody,
-		heading: `### Subagent — \`${feedbackId}\` (stage \`${stage || "(intent)"}\`, hat \`${hat}\`)`,
-	})
+		emitStage: stage || undefined,
+		dispatchId: `fix-${feedbackId}`,
+		// Isolate the fix-chain's hat loop in its own worktree (branch
+		// `haiku/<slug>/fix-<scope>-<FB>`, forked from the stage branch for a
+		// stage-scope FB or intent main for an intent-scope FB). Idempotent;
+		// the terminal close -> mergeFixChainWorktree lands it back. "" in
+		// filesystem mode.
+		ensureWorktree: () => createFixChainWorktree(slug, scope, feedbackId) ?? "",
+		// Snapshot the fix-hat mandate via the SAME reader haiku_read_hat uses.
+		// Stage-scope FBs resolve the fix-scoped variant; intent-scope FBs
+		// (stage === "") resolve a STUDIO-level fix-hat, which the stage-scoped
+		// haiku_read_hat doesn't cover — hence the dedicated reader + args.
+		mandateRef: (h) =>
+			studioReadRef({
+				resolveBody: () =>
+					stage
+						? readHatBody(studio, stage, h, true)
+						: readStudioFixHatBody(studio, h),
+				toolName: "haiku_read_hat",
+				toolArgs: stage
+					? { studio, stage, hat: h, fix: true }
+					: { studio, hat: h, fix: true },
+				intent: slug,
+				stage: stage || undefined,
+				kind: "mandate",
+				name: h,
+			}),
+		priorHandoffBlock: () => fbState().priorRejectBlock,
+		resolveModel: (h) =>
+			resolveFixHatModel({ slug, studio, stage, hat: h, feedbackId })?.model,
+		bolt: () => fbState().bolt,
+		template: () => subagentTemplate(),
+		templateVars: ({
+			hat: h,
+			terminal: term,
+			worktree,
+			mandateRef,
+			priorRejectBlock,
+		}) => ({
+			slug,
+			hat: h,
+			stage,
+			feedbackId,
+			fbInt,
+			terminal: term,
+			worktree,
+			mandateRef,
+			priorRejectBlock,
+		}),
+		heading: (h) =>
+			`### Subagent — \`${feedbackId}\` (stage \`${stage || "(intent)"}\`, hat \`${h}\`)`,
+	}
+	return buildHatDispatchBlock(target, hat, terminal)
 }

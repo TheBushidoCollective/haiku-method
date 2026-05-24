@@ -4586,6 +4586,36 @@ export function gitCommitState(message: string): {
 }
 
 /**
+ * Like `gitCommitState`, but a NO-OP when the `.haiku/` tree has no
+ * uncommitted changes. `gitCommitState` commits with `--allow-empty`, so an
+ * unconditional call after an idempotent write (e.g. a re-run migrator that
+ * stamps already-stamped files with zero diff) would create an empty commit —
+ * moving HEAD and manufacturing phantom merge debt (broke
+ * post-migration-merge-debt-noop). Use this when the writes you want to
+ * capture MAY have been a no-op. Scoped to the `.haiku/` root so unrelated
+ * agent code in the tree never gates the decision.
+ */
+export function gitCommitStateIfDirty(message: string): {
+	committed: boolean
+	pushed: boolean
+	pushError?: string
+} {
+	if (!isGitRepo()) return { committed: false, pushed: false }
+	try {
+		const status = execFileSync(
+			"git",
+			["status", "--porcelain", "--", findHaikuRoot()],
+			{ encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+		).trim()
+		if (!status) return { committed: false, pushed: false }
+	} catch {
+		// status check failed (non-git already handled above) — fall through
+		// to a best-effort commit rather than silently dropping real changes.
+	}
+	return gitCommitState(message)
+}
+
+/**
  * Like `gitCommitState`, but commits synchronously and pushes in the
  * background via an unref'd child process. Use for HTTP mutation
  * handlers where the caller is waiting on an HTTP response — pushing

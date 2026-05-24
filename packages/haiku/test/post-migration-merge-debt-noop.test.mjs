@@ -48,6 +48,15 @@ const __dirname = dirname(__filename)
 // derivePosition past the intent track entirely.
 process.env.CLAUDE_PLUGIN_ROOT = resolve(__dirname, "..", "..", "..", "plugin")
 
+// Stamp the fixture at the CURRENT engine version so no incidental
+// migration fires — this test exercises merge_stage no-op synthesis, not
+// migration. (The fixture used to hardcode `plugin_version: 4.0.0`, which
+// was same-major when written but is now a cross-major v4→v9 migration on
+// every load — and once the migrator commits its output, that migration
+// moves intent-main HEAD, perturbing the HEAD-stability assertion below.)
+const { getPluginVersion } = await import("../src/version.ts")
+const ENGINE_VERSION = getPluginVersion()
+
 const HAS_GIT = (() => {
 	try {
 		execFileSync("git", ["--version"], { stdio: "ignore" })
@@ -91,7 +100,7 @@ title: Admin portal reimagine
 studio: software
 mode: continuous
 autotune: false
-plugin_version: 4.0.0
+plugin_version: ${ENGINE_VERSION}
 stages: [inception, design]
 verified_at: '2026-04-27T19:00:00Z'
 ---

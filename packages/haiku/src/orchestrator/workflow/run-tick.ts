@@ -19,7 +19,7 @@ import { join } from "node:path"
 import matter from "gray-matter"
 import { broadcastIntent } from "../../intent-broadcaster.js"
 import type { OrchestratorAction } from "../../orchestrator.js"
-import { intentDir } from "../../state-tools.js"
+import { gitCommitStateIfDirty, intentDir } from "../../state-tools.js"
 import { emitTelemetry } from "../../telemetry.js"
 import { getPluginVersion } from "../../version.js"
 import { migrateIntent } from "../migrate-registry.js"
@@ -168,6 +168,23 @@ export function runWorkflowTick(
 				// preserved in unit/feedback frontmatter, and the deleted
 				// files are v3-only artifacts v4 doesn't read or write.
 				if (migrateResult.steps > 0) {
+					// Commit the migrator's own .haiku/ output immediately, so the
+					// migration is a self-contained committed step. Without this,
+					// the rewritten intent/unit/feedback files sit uncommitted in
+					// the working tree; a later downstream-sync
+					// `restoreEngineStateFromBase(HEAD)` would check them back out
+					// to the pre-migration commit — reverting the migration and
+					// re-firing it next tick (the migration-livelock residual).
+					// Commit ONLY when the migration actually changed files:
+					// gitCommitStateIfDirty no-ops on a clean .haiku tree. The
+					// migrators are idempotent, so `steps > 0` can mean "re-ran the
+					// chain over already-migrated files with zero diff" — an
+					// unconditional (--allow-empty) commit there would move HEAD and
+					// manufacture phantom merge debt. Stages only .haiku, never
+					// unrelated agent code.
+					gitCommitStateIfDirty(
+						`haiku: migrate ${slug} to ${schemaTarget}${v3CruftPresent ? " (v3-cruft cleanup)" : ""}`,
+					)
 					const d = migrateResult.details
 					const lines: string[] = []
 					if (v3CruftPresent) {

@@ -22,7 +22,13 @@
 
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { test } from "node:test"
@@ -378,7 +384,9 @@ test("haiku_unit_reject_hat: bounces to the prior hat and relays IT on the same 
 		)
 		const { text, parsed } = parseResp(resp)
 		if (resp?.isError) {
-			console.log(`[reject unit] returned error pre-relay; skipping. ${text.slice(0, 200)}`)
+			console.log(
+				`[reject unit] returned error pre-relay; skipping. ${text.slice(0, 200)}`,
+			)
 			return
 		}
 		assert.ok(parsed, "response must be JSON")
@@ -387,7 +395,14 @@ test("haiku_unit_reject_hat: bounces to the prior hat and relays IT on the same 
 			hats[0],
 			`reject must bounce to the prior hat (${hats[0]}); got ${parsed.prev_hat}`,
 		)
-		assert.strictEqual(parsed.bolt, 3, "bolt must be iterations.length + 1")
+		// Bolt counts REJECTS (convergence-failure cycles), not iterations.length.
+		// This fixture has zero completed rejects (one advance + the in-flight
+		// verify being rejected now), so this is the unit's first bolt → 1.
+		assert.strictEqual(
+			parsed.bolt,
+			1,
+			"bolt counts rejects (first reject = bolt 1), not iterations.length",
+		)
 		const block = parsed.next_subagent_dispatch_block
 		assert.strictEqual(typeof block, "string", "relay block must be a string")
 		assert.ok(block.length > 0, "relay block must be non-empty")
@@ -406,6 +421,105 @@ test("haiku_unit_reject_hat: bounces to the prior hat and relays IT on the same 
 		assert.ok(
 			/spawn the block below/i.test(parsed.message),
 			`message must direct the agent to spawn the relay; got: ${parsed.message.slice(0, 200)}`,
+		)
+	} finally {
+		rmSync(repo, { recursive: true, force: true })
+	}
+})
+
+// ── unit-015 regression: bolt counts REJECTS, not iterations.length ──────────
+// A unit deep in a 3-hat sequence with only ONE completed reject must NOT hit
+// the cap. Pre-2026-05-24 the cap counted iterations.length, so this fixture
+// (length 5) returned max_bolts_exceeded on the very next reject — one
+// legitimate fix cycle killed the unit. Now the cap counts rejects: 1 done +
+// this one = bolt 2, well under MAX_UNIT_BOLTS=5, so it relays normally.
+test("haiku_unit_reject_hat: iterations.length 5 but 1 reject → bolt 2, NOT max_bolts_exceeded", async () => {
+	if (!HAS_GIT) return
+	const slug = "bolt-accounting"
+	const stage = "security"
+	const hats = stageHats(stage)
+	if (hats.length < 2) {
+		console.log(`[bolt] software/${stage} has <2 hats; skipping`)
+		return
+	}
+	const repo = initRepo("bolt")
+	try {
+		const intentDir = join(repo, ".haiku", "intents", slug)
+		const stageDir = join(intentDir, "stages", stage)
+		mkdirSync(join(stageDir, "units"), { recursive: true })
+		writeFileSync(
+			join(intentDir, "intent.md"),
+			matter.stringify("body\n", {
+				title: "bolt accounting test",
+				studio: "software",
+				mode: "autopilot",
+				stages: [stage],
+			}),
+		)
+		const at = "2026-05-24T00:00:00Z"
+		const engineReviews = {
+			spec: { signed_at: at, agent: "engine:spec" },
+			continuity: { signed_at: at, agent: "engine:continuity" },
+			"cross-stage-consistency": {
+				signed_at: at,
+				agent: "engine:cross-stage-consistency",
+			},
+		}
+		// iterations.length === 5, but only ONE completed reject (hats[2]).
+		// The in-flight hats[2] is the reject being attempted now.
+		writeFileSync(
+			join(stageDir, "units", "unit-01-deep.md"),
+			matter.stringify("unit body\n", {
+				title: "unit-01-deep",
+				started_at: at,
+				inputs: [],
+				iterations: [
+					{ hat: hats[0], started_at: at, completed_at: at, result: "advance" },
+					{ hat: hats[1], started_at: at, completed_at: at, result: "advance" },
+					{
+						hat: hats[2],
+						started_at: at,
+						completed_at: at,
+						result: "reject",
+						reason: "missing X",
+					},
+					{ hat: hats[1], started_at: at, completed_at: at, result: "advance" },
+					{ hat: hats[2], started_at: at, completed_at: null, result: null },
+				],
+				reviews: engineReviews,
+				approvals: {},
+			}),
+		)
+		git(repo, "add", "-A")
+		git(repo, "commit", "-q", "-m", "seed")
+		git(repo, "branch", `haiku/${slug}/main`)
+		git(repo, "checkout", "-q", "-b", `haiku/${slug}/${stage}`)
+
+		const { handleStateTool } = await import(`${SRC}state-tools.ts`)
+		const resp = await withCwd(repo, () =>
+			handleStateTool("haiku_unit_reject_hat", {
+				intent: slug,
+				stage,
+				unit: "unit-01-deep",
+				// Distinct reason so the same-reason loop escalation never fires.
+				message: "BOLTNOTE-different-reason-AC-7-uncovered",
+			}),
+		)
+		const { text, parsed } = parseResp(resp)
+		assert.ok(
+			!resp?.isError,
+			`reject must NOT error (no cap, no escalation); got: ${text.slice(0, 240)}`,
+		)
+		assert.ok(parsed, "response must be JSON")
+		assert.notStrictEqual(
+			parsed.error,
+			"max_bolts_exceeded",
+			"a unit with 1 reject and length-5 iterations must NOT be capped — that was the unit-015 wedge",
+		)
+		assert.strictEqual(
+			parsed.bolt,
+			2,
+			"bolt counts rejects: 1 prior + this one = 2 (not iterations.length 5)",
 		)
 	} finally {
 		rmSync(repo, { recursive: true, force: true })

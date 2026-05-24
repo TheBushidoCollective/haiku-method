@@ -2838,20 +2838,27 @@ export interface StageIteration {
 export const MAX_STAGE_ITERATIONS = 2
 
 /**
- * Maximum number of bolts (full hat-sequence iterations) a unit can run.
+ * Maximum number of BOLTS a unit can run before it needs structural
+ * intervention. A bolt is a CONVERGENCE-FAILURE CYCLE — a reject — NOT a hat
+ * dispatch. The initial plan→do→verify pass is bolt 0; each reject is one
+ * bolt (see `countUnitBolts`).
  *
- * Used by THREE distinct rejection paths — keep them coupled here so the
- * limit doesn't silently diverge if one is tuned:
- *   - `haiku_unit_advance_hat`: per-hat `run_quality_gates: true` auto-reject
- *     when gates fail (counts as a bolt; same hat retries).
- *   - `haiku_unit_reject_hat`: explicit reject by the agent (drops back one
- *     hat, increments bolt).
- *   - `haiku_unit_increment_bolt`: agent-driven increment (rare; legacy).
+ * This metric is deliberately decoupled from hat-sequence LENGTH. Counting
+ * `iterations.length` (the pre-2026-05-24 model) punished longer sequences: a
+ * 3-hat plan-do-verify unit hit the cap after ~1.6 review rounds because each
+ * dispatch — plan, do, verify, re-do, re-verify — consumed the budget. That
+ * is the unit-015 wedge: one legitimate fix cycle nearly exhausted the unit.
+ * Counting rejects instead gives every unit the same N real retry cycles
+ * regardless of how many hats its stage declares.
  *
- * Exceeding this cap surfaces `max_bolts_exceeded` to the user — the unit
- * needs structural intervention (spec rewrite, manual revert, split), not
- * another retry. Tune at this single source if the cap proves wrong in
- * practice; do NOT inline a different number elsewhere.
+ * v4: the only consumer is `haiku_unit_reject_hat` (the per-hat advance
+ * auto-reject and `haiku_unit_increment_bolt` were both removed). The
+ * per-FB fix-chain has its own explicit `bolt:` counter — a separate
+ * mechanism, already attempt-counted, untouched by this metric.
+ *
+ * Exceeding the cap surfaces `max_bolts_exceeded`. The reject-loop escalation
+ * (`REJECT_LOOP_MIN_REPEATS` consecutive same-reason rejects) still fires
+ * earlier for genuine non-convergence. Tune at this single source.
  */
 export const MAX_UNIT_BOLTS = 5
 
@@ -2872,6 +2879,22 @@ export const REJECT_LOOP_MIN_REPEATS = 3
 export function normalizeRejectReason(reason: string | undefined): string {
 	if (!reason) return ""
 	return reason.replace(/\s+/g, " ").trim().toLowerCase().slice(0, 100)
+}
+
+/** Count a unit's BOLTS — convergence-failure cycles, i.e. completed reject
+ *  iterations. A bolt is a reject (a verify hat sending the unit back), NOT a
+ *  hat dispatch: the initial plan→do→verify pass is bolt 0, each reject is one
+ *  bolt. Counting rejects (not `iterations.length`) decouples MAX_UNIT_BOLTS
+ *  from hat-sequence length — a 3-hat unit and a 5-hat unit get the same
+ *  number of real retry cycles before the cap, instead of the longer sequence
+ *  dying in ~1.6 rounds (the unit-015 wedge, 2026-05-24). The in-flight entry
+ *  (`result === null`) is naturally excluded — it isn't a reject yet. */
+export function countUnitBolts(iterations: UnitIteration[]): number {
+	let n = 0
+	for (const it of iterations) {
+		if (it.result === "reject") n++
+	}
+	return n
 }
 
 /** Walk `iterations[]` backward from the most-recent COMPLETED reject
@@ -10083,10 +10106,12 @@ export function handleStateTool(
 				)
 			}
 			const currentHat = _failLast.hat
-			// Bolt is derived from iterations.length. The "next bolt"
-			// after this reject is iterations.length + 1 (the new entry
-			// the reject will append for the prior hat).
-			const currentBolt = _failIters.length
+			// Bolt = convergence-failure count, i.e. completed rejects so far
+			// (NOT iterations.length — that counted hat dispatches and made the
+			// cap punish longer hat sequences; the unit-015 wedge). `currentBolt
+			// + 1` is the bolt this reject would make. See `countUnitBolts` /
+			// MAX_UNIT_BOLTS.
+			const currentBolt = countUnitBolts(_failIters)
 
 			// ── Task #24 prep: classify the reject reason so the response
 			// can disambiguate "files exist, content is the problem" from
